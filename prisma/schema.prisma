@@ -30,6 +30,9 @@ model User {
   voiceSessions      VoiceSession[]
   assistantActions   AssistantAction[]
   activityLogs       ActivityLog[]
+  pushSubscriptions  PushSubscription[]
+  memories           UserMemory[]
+  workSessions       TaskWorkSession[]
 }
 
 model UserPreference {
@@ -56,6 +59,9 @@ model UserPreference {
   transcriptRetentionDays Int      @default(30)
   audioRetentionHours     Int      @default(0)
   defaultCalendarId       String?
+  phoneNumber             String?
+  personalizationEnabled  Boolean  @default(false)
+  personalizationConsentAt DateTime?
   createdAt               DateTime @default(now())
   updatedAt               DateTime @updatedAt
 }
@@ -120,6 +126,7 @@ model Task {
   startAt              DateTime?
   dueAt                DateTime?
   durationMin          Int       @default(30)
+  energyLevel          String    @default("MEDIUM")
   reminderAt           DateTime?
   waitingOn            String?
   assignee             String?
@@ -135,6 +142,10 @@ model Task {
   notifyEmail          Boolean   @default(true)
   notifySms            Boolean   @default(false)
   critical             Boolean   @default(false)
+  actualDurationMin    Int?
+  startedAt            DateTime?
+  postponeCount        Int       @default(0)
+  lastRescheduledAt    DateTime?
 
   subtasks     Subtask[]
   reminders    Reminder[]
@@ -143,6 +154,22 @@ model Task {
   dependents   TaskDependency[]  @relation("TaskBlocks")
   tags         TaskTag[]
   activities   ActivityLog[]
+  workSessions TaskWorkSession[]
+}
+
+model TaskWorkSession {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  taskId      String
+  task        Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  startedAt   DateTime
+  endedAt     DateTime?
+  durationMin Int?
+  createdAt   DateTime @default(now())
+
+  @@index([userId, startedAt])
+  @@index([taskId, startedAt])
 }
 
 model Subtask {
@@ -200,6 +227,35 @@ model CalendarConnection {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
   events        CalendarEvent[]
+
+  @@unique([userId, provider, calendarId])
+}
+
+model PushSubscription {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  userAgent String   @default("")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model UserMemory {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  key        String
+  value      String
+  kind       String   @default("preference")
+  confidence Float    @default(1)
+  source     String   @default("assistant")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([userId, key])
 }
 
 model CalendarEvent {

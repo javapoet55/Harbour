@@ -75,9 +75,11 @@ export async function tickReminders(now = new Date()) {
     const title = reminder.task?.title ?? 'Harbor reminder';
     const body = reminder.offsetLabel;
     let result: { id: string; status: 'SENT' | 'FAILED'; reason?: string } = { id: '', status: 'FAILED', reason: 'unknown' };
-    if (channel === 'push') result = await pushProvider.send({ title, body });
+    if (channel === 'push') result = await pushProvider.send({ userId: reminder.userId, title, body });
     if (channel === 'email') result = await emailProvider.send({ to: reminder.user.email, subject: title, text: body });
-    if (channel === 'sms') result = await smsProvider.send({ to: reminder.user.email, text: `${title}: ${body}` });
+    if (channel === 'sms') result = prefs.phoneNumber
+      ? await smsProvider.send({ to: prefs.phoneNumber, text: `${title}: ${body}` })
+      : { id: '', status: 'FAILED', reason: 'No SMS phone number configured' };
 
     await prisma.notificationAttempt.create({
       data: {

@@ -121,7 +121,7 @@ export function VoiceDock() {
             <p className="mt-1 text-[var(--muted)]">{turn.visual.summary}</p>
             {turn.confirmation && (
               <div className="mt-3 flex gap-2">
-                <button type="button" className="harbor-btn harbor-btn-brand" onClick={() => void submit('yes', turn.confirmation?.actionId)}>Save it</button>
+                <button type="button" className="harbor-btn harbor-btn-brand" onClick={() => void submit('yes', turn.confirmation?.actionId)}>Apply changes</button>
                 <button type="button" className="harbor-btn" onClick={() => { setTurn(null); setState('idle'); }}>Cancel</button>
               </div>
             )}

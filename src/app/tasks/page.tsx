@@ -5,7 +5,7 @@ export default function TasksPage() {
   return (
     <Authed>
       <h1 className="mb-4 text-3xl font-semibold">Tasks</h1>
-      <TaskBrowser filter={(task) => task.status !== 'COMPLETED' && task.status !== 'CANCELLED'} />
+      <TaskBrowser view="open" />
     </Authed>
   );
 }

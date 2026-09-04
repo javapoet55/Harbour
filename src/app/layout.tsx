@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from 'next';
+import type { ReactNode } from 'react';
 import { Geist } from 'next/font/google';
 import './globals.css';
 
@@ -14,7 +15,7 @@ export const viewport: Viewport = {
   themeColor: '#3d5a80',
 };
 
-export default function RootLayout({ children }: LayoutProps<'/'>) {
+export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en" className={`${geist.variable} h-full`}>
       <body className="min-h-full antialiased">{children}</body>

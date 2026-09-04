@@ -34,10 +34,16 @@ Press the microphone on any screen. If the browser has no speech recognition, ty
 - Email/password session auth
 - My Day, Inbox, Calendar, Tasks, Waiting For, Planner, Notifications, Settings
 - Deterministic intent engine plus grounded answers from the user’s own data
+- Structured conversational agent for multi-action requests, references, clarification, and remembered preferences (with deterministic offline fallback)
+- Contextual follow-ups and corrections with superseded proposals, assistant-turn history, dependency validation, and approval-before-write
+- Intelligent slot scheduling across calendar availability, deadlines, priority, task dependencies, energy level, learned duration, and working hours
+- Debounced full-text task search, smart status/priority/timing filters, guarded bulk updates, and recurring tasks with intervals, weekdays, end dates, occurrence limits, month-end safety, and yearly schedules
 - Confirmation before creating, completing, deleting, or rescheduling
 - Reminder ticker with push → email → SMS escalation (providers default to mocks)
 - Drag a task onto a calendar day
 - AI daily planner that recommends without writing until you approve
+- Continuous replanning that detects meetings, delays, urgent work, and capacity risk; moves tasks only after approval
+- Consent-gated personal predictions for duration, completion, work timing, postponement, reminders, interruptions, overtime, and daily capacity
 - Local mock calendar sync with Google/Outlook provider interfaces
 - Unit tests for dates, time zones, intents, recurrence, and escalation
 

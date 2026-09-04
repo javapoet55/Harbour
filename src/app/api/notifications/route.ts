@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { requireUser } from '@/server/auth';
 import { prisma } from '@/server/db';
 import { acknowledgeReminder, tickReminders } from '@/server/reminders';
+import { emailProvider, pushProvider, smsProvider } from '@/providers';
 
 export async function GET() {
   const user = await requireUser();
@@ -15,16 +16,31 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-  const user = await requireUser();
   const body = await req.json().catch(() => ({}));
   if (body.action === 'tick') {
+    const cronSecret = process.env.HARBOR_CRON_SECRET;
+    if (cronSecret) {
+      const supplied = req.headers.get('authorization');
+      if (supplied !== `Bearer ${cronSecret}`) return NextResponse.json({ error: 'Invalid cron authorization.' }, { status: 401 });
+    } else {
+      await requireUser();
+    }
     return NextResponse.json(await tickReminders());
   }
+  const user = await requireUser();
   if (body.action === 'ack' && body.reminderId) {
     await acknowledgeReminder(user.id, body.reminderId);
     return NextResponse.json({ ok: true });
   }
   if (body.action === 'test') {
+    const channel = body.channel === 'email' || body.channel === 'sms' ? body.channel : 'push';
+    const result = channel === 'email'
+      ? await emailProvider.send({ to: user.email, subject: 'Harbour test notification', text: 'Your email notifications are working.' })
+      : channel === 'sms'
+        ? user.preference?.phoneNumber
+          ? await smsProvider.send({ to: user.preference.phoneNumber, text: 'Harbour: your SMS notifications are working.' })
+          : { id: '', status: 'FAILED' as const, reason: 'Add a phone number in Settings first.' }
+        : await pushProvider.send({ userId: user.id, title: 'Harbour test', body: 'Your browser notifications are working.' });
     await prisma.notificationAttempt.create({
       data: {
         reminder: {
@@ -36,13 +52,14 @@ export async function POST(req: Request) {
             idempotencyKey: `test:${user.id}:${Date.now()}`,
           },
         },
-        channel: 'push',
-        status: 'SENT',
-        sentAt: new Date(),
-        providerId: 'test-notification',
+        channel,
+        status: result.status,
+        failureReason: result.reason,
+        sentAt: result.status === 'SENT' ? new Date() : null,
+        providerId: result.id,
       },
     });
-    return NextResponse.json({ ok: true, message: 'Test notification recorded as sent.' });
+    return NextResponse.json({ ok: result.status === 'SENT', message: result.status === 'SENT' ? `Test ${channel} sent.` : `Test ${channel} failed: ${result.reason}` }, { status: result.status === 'SENT' ? 200 : 502 });
   }
   return NextResponse.json({ error: 'Unknown action' }, { status: 400 });
 }

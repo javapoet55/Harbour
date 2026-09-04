@@ -47,6 +47,24 @@ export type PlanPayload = {
   };
 };
 
+export type ReplanPayload = {
+  spoken: string;
+  actionId: string | null;
+  generatedAt: string;
+  kept: number;
+  moves: Array<{
+    taskId: string;
+    title: string;
+    fromStartAt: string | null;
+    toStartAt: string;
+    fromLabel: string;
+    toLabel: string;
+    reason: string;
+    reasonLabel: string;
+  }>;
+  risks: Array<{ taskId: string; title: string; reason: 'no_capacity' | 'deadline_at_risk' }>;
+};
+
 export type PreferenceForm = {
   workStart: string;
   workEnd: string;
@@ -60,4 +78,6 @@ export type PreferenceForm = {
   smsEnabled: boolean;
   morningSummary: boolean;
   eveningSummary: boolean;
+  phoneNumber: string | null;
+  personalizationEnabled: boolean;
 };

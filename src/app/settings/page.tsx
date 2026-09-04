@@ -4,10 +4,26 @@ import { useEffect, useState } from 'react';
 import { Authed } from '@/components/authed';
 import type { PreferenceForm } from '@/lib/types';
 
+type Connection = { id: string; provider: string; accountEmail: string; calendarName: string; visible: boolean; writeEnabled: boolean; status: string; lastSyncedAt: string | null };
+
 export default function SettingsPage() {
   const [pref, setPref] = useState<PreferenceForm | null>(null);
   const [timeZone, setTimeZone] = useState('');
-  const [saved, setSaved] = useState('');
+  const [saved, setSaved] = useState(() => {
+    if (typeof window === 'undefined') return '';
+    const query = new URLSearchParams(window.location.search);
+    const status = query.get('calendar');
+    if (status?.endsWith('-connected')) return 'Calendar connected and synchronized.';
+    if (status === 'error') return `Calendar connection failed: ${query.get('detail') || 'unknown error'}`;
+    return '';
+  });
+  const [connections, setConnections] = useState<Connection[]>([]);
+  const [defaultCalendarId, setDefaultCalendarId] = useState<string | null>(null);
+
+  async function loadConnections() {
+    const data = await fetch('/api/calendar/connections').then((r) => r.json());
+    setConnections(data.connections ?? []); setDefaultCalendarId(data.defaultCalendarId ?? null);
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -18,6 +34,9 @@ export default function SettingsPage() {
         setPref(data.user?.preference ?? null);
         setTimeZone(data.user?.timeZone ?? '');
       });
+    fetch('/api/calendar/connections').then((r) => r.json()).then((data) => {
+      if (!cancelled) { setConnections(data.connections ?? []); setDefaultCalendarId(data.defaultCalendarId ?? null); }
+    });
     return () => {
       cancelled = true;
     };
@@ -35,7 +54,18 @@ export default function SettingsPage() {
   async function sync() {
     const res = await fetch('/api/calendar/sync', { method: 'POST' });
     const data = await res.json();
-    setSaved(`Calendar sync finished. ${data.results?.[0] ? 'Last synchronized just now.' : 'No connections.'}`);
+    setSaved(data.error ? `Calendar sync failed: ${data.error}` : `Calendar sync finished. ${data.results?.length ? `${data.results.reduce((sum: number, item: { created?: number; updated?: number; deleted?: number }) => sum + (item.created || 0) + (item.updated || 0) + (item.deleted || 0), 0)} changes processed.` : 'No connections.'}`);
+    await loadConnections();
+  }
+
+  async function updateConnection(id: string, body: Record<string, unknown>) {
+    await fetch('/api/calendar/connections', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, ...body }) });
+    await loadConnections();
+  }
+
+  async function disconnect(id: string) {
+    await fetch(`/api/calendar/connections?id=${encodeURIComponent(id)}`, { method: 'DELETE' });
+    await loadConnections(); setSaved('Calendar disconnected. Imported events were removed with the connection.');
   }
 
   if (!pref) return <Authed><p>Loading settings…</p></Authed>;
@@ -76,6 +106,13 @@ export default function SettingsPage() {
             Enable spoken replies
           </label>
           <p className="mt-2 text-xs text-[var(--muted)]">Transcripts are kept {pref.transcriptRetentionDays} days. Raw audio is not stored in this MVP.</p>
+          <div className="mt-4 border-t border-[var(--line)] pt-4">
+            <label className="flex items-start gap-2 text-sm">
+              <input className="mt-1" type="checkbox" checked={pref.personalizationEnabled} onChange={(e) => setPref({ ...pref, personalizationEnabled: e.target.checked })} />
+              <span><strong>Personalized predictions</strong><br /><span className="text-xs text-[var(--muted)]">Learn from task timing, completion, postponements, and reminder outcomes. Off by default.</span></span>
+            </label>
+            <button type="button" className="harbor-btn mt-3" onClick={async () => { await fetch('/api/insights', { method: 'DELETE' }); setSaved('Learned timing and prediction data erased.'); }}>Erase learned data</button>
+          </div>
         </section>
         <section className="harbor-card p-4">
           <h2 className="font-semibold">Notifications</h2>
@@ -85,11 +122,31 @@ export default function SettingsPage() {
               {key.replace(/([A-Z])/g, ' $1')}
             </label>
           ))}
+          <label className="mt-3 block text-sm">SMS phone number (E.164)
+            <input className="harbor-input mt-1" placeholder="+15551234567" value={pref.phoneNumber ?? ''} onChange={(e) => setPref({ ...pref, phoneNumber: e.target.value || null })} />
+          </label>
+          <p className="mt-2 text-xs text-[var(--muted)]">Enable browser push and send delivery tests from Notification Center.</p>
         </section>
         <section className="harbor-card p-4">
           <h2 className="font-semibold">Calendars and privacy</h2>
-          <p className="mt-2 text-sm text-[var(--muted)]">Google and Outlook use provider interfaces. Without client IDs, Harbor syncs the local mock calendar and records last-synced time.</p>
-          <button type="button" className="harbor-btn mt-3" onClick={() => void sync()}>Synchronize calendars</button>
+          <p className="mt-2 text-sm text-[var(--muted)]">Connect a primary calendar with OAuth. Tokens are encrypted at rest and never sent to the browser.</p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <a className="harbor-btn harbor-btn-brand" href="/api/calendar/oauth/google/start">Connect Google</a>
+            <a className="harbor-btn harbor-btn-brand" href="/api/calendar/oauth/microsoft/start">Connect Outlook</a>
+            <button type="button" className="harbor-btn" onClick={() => void sync()}>Synchronize now</button>
+          </div>
+          <div className="mt-4 space-y-3">
+            {connections.map((connection) => (
+              <div key={connection.id} className="rounded-xl border border-[var(--line)] p-3 text-sm">
+                <div className="flex items-start justify-between gap-3"><div><p className="font-medium">{connection.calendarName}</p><p className="text-xs text-[var(--muted)]">{connection.provider} · {connection.accountEmail} · {connection.status}</p></div><button className="text-xs text-red-700" type="button" onClick={() => void disconnect(connection.id)}>Disconnect</button></div>
+                <div className="mt-2 flex flex-wrap gap-3 text-xs">
+                  <label><input type="checkbox" checked={connection.visible} onChange={(e) => void updateConnection(connection.id, { visible: e.target.checked })} /> Visible</label>
+                  <label><input type="checkbox" checked={connection.writeEnabled} onChange={(e) => void updateConnection(connection.id, { writeEnabled: e.target.checked })} /> Allow Harbour writes</label>
+                  <label><input type="radio" name="default-calendar" checked={defaultCalendarId === connection.id} onChange={() => void updateConnection(connection.id, { makeDefault: true })} /> Default</label>
+                </div>
+              </div>
+            ))}
+          </div>
           <p className="mt-3 text-xs text-[var(--muted)]">Export and account deletion are available from support in production. This demo account can be reset with <code>yarn db:reset</code>.</p>
         </section>
       </div>

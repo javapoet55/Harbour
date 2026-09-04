@@ -1,12 +1,15 @@
 export type EmailMessage = { to: string; subject: string; text: string };
 export type SmsMessage = { to: string; text: string };
-export type PushMessage = { title: string; body: string; url?: string };
+export type PushMessage = { userId: string; title: string; body: string; url?: string };
 export type CalendarWrite = {
   title: string;
   startAt: Date;
   endAt: Date;
   notes?: string;
   externalId?: string;
+  allDay?: boolean;
+  location?: string;
+  deleted?: boolean;
 };
 
 export interface EmailProvider {
@@ -26,7 +29,7 @@ export interface PushProvider {
 
 export interface CalendarProvider {
   name: string;
-  list(from: Date, to: Date): Promise<CalendarWrite[]>;
+  list(from: Date, to: Date, syncToken?: string | null): Promise<{ events: CalendarWrite[]; syncToken?: string }>;
   upsert(event: CalendarWrite): Promise<{ externalId: string }>;
   remove(externalId: string): Promise<void>;
 }

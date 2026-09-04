@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
-  Bell, CalendarDays, CircleCheck, Inbox, Mic, MoreHorizontal, Sparkles, Sun, Timer,
+  BarChart3, Bell, CalendarDays, CircleCheck, Inbox, Mic, MoreHorizontal, Sparkles, Sun, Timer,
 } from 'lucide-react';
 import { VoiceDock } from './voice-dock';
 import { cn } from '@/lib/utils';
@@ -15,6 +15,7 @@ const DESKTOP = [
   { href: '/tasks', label: 'Tasks', icon: CircleCheck },
   { href: '/waiting', label: 'Waiting For', icon: Timer },
   { href: '/planner', label: 'AI Planner', icon: Sparkles },
+  { href: '/insights', label: 'Insights', icon: BarChart3 },
   { href: '/notifications', label: 'Notifications', icon: Bell },
   { href: '/settings', label: 'Settings', icon: MoreHorizontal },
 ];

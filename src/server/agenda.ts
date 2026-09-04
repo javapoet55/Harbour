@@ -25,6 +25,7 @@ export async function listEventsInRange(userId: string, from: Date, to: Date) {
     where: {
       userId,
       deletedAt: null,
+      OR: [{ connectionId: null }, { connection: { visible: true } }],
       startAt: { lte: to },
       endAt: { gte: from },
     },

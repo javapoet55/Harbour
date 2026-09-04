@@ -21,6 +21,8 @@ async function main() {
   await prisma.assistantAction.deleteMany();
   await prisma.voiceSession.deleteMany();
   await prisma.activityLog.deleteMany();
+  await prisma.userMemory.deleteMany();
+  await prisma.taskWorkSession.deleteMany();
   await prisma.taskTag.deleteMany();
   await prisma.subtask.deleteMany();
   await prisma.recurrenceRule.deleteMany();
