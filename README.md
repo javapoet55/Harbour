@@ -1,19 +1,17 @@
-# Harbor
+# Harbour
 
 Voice-first personal to-do and calendar. Ask what is coming up, capture tasks in natural language, and keep reminders honest.
 
-Harbor lives in `apps/harbor` and is **not** a Yarn workspace member, so it never shares the CSAgentIQ FSM database, auth, Prisma client, or Turbo pipeline.
+This repository is the standalone Harbour app, copied from the `harbor` branch of `javapoet55/home-services-latest`. It has its own SQLite database, auth, and Prisma client.
 
 ## Demo
 
 ```bash
-cd apps/harbor
 cp .env.example .env
 npm install
 npx prisma generate
 npx prisma db push
 npm run db:seed
-# Harbor reads HARBOR_DATABASE_URL, not the FSM DATABASE_URL.
 npm run dev
 ```
 
@@ -29,7 +27,7 @@ Try:
 - “Remind me to call the dentist tomorrow at 9 AM.”
 - “Can I finish everything tomorrow?”
 
-Press the microphone on any screen. If the browser has no speech recognition, type the same request. Harbor still reads the answer aloud with the Web Speech API when available.
+Press the microphone on any screen. If the browser has no speech recognition, type the same request. Harbour still reads the answer aloud with the Web Speech API when available.
 
 ## What this slice includes
 
