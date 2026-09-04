@@ -1,0 +1,9 @@
+{
+  "name": "Harbor",
+  "short_name": "Harbor",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f4f1ea",
+  "theme_color": "#3d5a80",
+  "description": "Voice-first personal to-do and calendar assistant."
+}

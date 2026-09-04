@@ -1,0 +1,303 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("HARBOR_DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String
+  passwordHash String
+  timeZone     String   @default("America/Los_Angeles")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  deletedAt    DateTime?
+
+  preference         UserPreference?
+  lists              TaskList[]
+  projects           Project[]
+  categories         Category[]
+  tags               Tag[]
+  tasks              Task[]
+  events             CalendarEvent[]
+  calendarConnections CalendarConnection[]
+  reminders          Reminder[]
+  voiceSessions      VoiceSession[]
+  assistantActions   AssistantAction[]
+  activityLogs       ActivityLog[]
+}
+
+model UserPreference {
+  id                      String   @id @default(cuid())
+  userId                  String   @unique
+  user                    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workingDays             String   @default("1,2,3,4,5")
+  workStart               String   @default("09:00")
+  workEnd                 String   @default("17:00")
+  quietStart              String   @default("21:00")
+  quietEnd                String   @default("07:00")
+  defaultDurationMin      Int      @default(30)
+  defaultReminderMinutes  Int      @default(30)
+  confirmationLevel       String   @default("CHANGES_AND_DELETES")
+  pushEnabled             Boolean  @default(true)
+  emailEnabled            Boolean  @default(true)
+  smsEnabled              Boolean  @default(false)
+  morningSummary          Boolean  @default(true)
+  eveningSummary          Boolean  @default(true)
+  weeklySummary           Boolean  @default(true)
+  escalateToEmailMinutes  Int      @default(15)
+  escalateToSmsMinutes    Int      @default(45)
+  voiceEnabled            Boolean  @default(true)
+  transcriptRetentionDays Int      @default(30)
+  audioRetentionHours     Int      @default(0)
+  defaultCalendarId       String?
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+}
+
+model TaskList {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name      String
+  kind      String    @default("CUSTOM")
+  sortOrder Int       @default(0)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+  tasks     Task[]
+}
+
+model Project {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name      String
+  color     String    @default("#5b6abf")
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+  tasks     Task[]
+}
+
+model Category {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name      String
+  kind      String   @default("personal")
+  tasks     Task[]
+}
+
+model Tag {
+  id     String     @id @default(cuid())
+  userId String
+  user   User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name   String
+  tasks  TaskTag[]
+}
+
+model Task {
+  id                   String    @id @default(cuid())
+  userId               String
+  user                 User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  listId               String?
+  list                 TaskList? @relation(fields: [listId], references: [id])
+  projectId            String?
+  project              Project?  @relation(fields: [projectId], references: [id])
+  categoryId           String?
+  category             Category? @relation(fields: [categoryId], references: [id])
+  title                String
+  notes                String    @default("")
+  kind                 String    @default("TASK")
+  status               String    @default("INBOX")
+  priority             String    @default("NORMAL")
+  startAt              DateTime?
+  dueAt                DateTime?
+  durationMin          Int       @default(30)
+  reminderAt           DateTime?
+  waitingOn            String?
+  assignee             String?
+  timeZone             String    @default("America/Los_Angeles")
+  calendarEventId      String?
+  externalEventId      String?
+  idempotencyKey       String?   @unique
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+  completedAt          DateTime?
+  deletedAt            DateTime?
+  notifyPush           Boolean   @default(true)
+  notifyEmail          Boolean   @default(true)
+  notifySms            Boolean   @default(false)
+  critical             Boolean   @default(false)
+
+  subtasks     Subtask[]
+  reminders    Reminder[]
+  recurrence   RecurrenceRule?
+  dependencies TaskDependency[]  @relation("TaskDepends")
+  dependents   TaskDependency[]  @relation("TaskBlocks")
+  tags         TaskTag[]
+  activities   ActivityLog[]
+}
+
+model Subtask {
+  id          String    @id @default(cuid())
+  taskId      String
+  task        Task      @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  title       String
+  completedAt DateTime?
+  sortOrder   Int       @default(0)
+}
+
+model TaskTag {
+  taskId String
+  tagId  String
+  task   Task   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  tag    Tag    @relation(fields: [tagId], references: [id], onDelete: Cascade)
+  @@id([taskId, tagId])
+}
+
+model TaskDependency {
+  id           String @id @default(cuid())
+  taskId       String
+  dependsOnId  String
+  task         Task   @relation("TaskDepends", fields: [taskId], references: [id], onDelete: Cascade)
+  dependsOn    Task   @relation("TaskBlocks", fields: [dependsOnId], references: [id], onDelete: Cascade)
+}
+
+model RecurrenceRule {
+  id          String    @id @default(cuid())
+  taskId      String    @unique
+  task        Task      @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  frequency   String
+  interval    Int       @default(1)
+  byWeekday   String?
+  until       DateTime?
+  count       Int?
+}
+
+model CalendarConnection {
+  id            String    @id @default(cuid())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider      String
+  accountEmail  String
+  calendarId    String
+  calendarName  String
+  visible       Boolean   @default(true)
+  writeEnabled  Boolean   @default(false)
+  syncToken     String?
+  lastSyncedAt  DateTime?
+  status        String    @default("connected")
+  accessToken   String?
+  refreshToken  String?
+  tokenExpiresAt DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  events        CalendarEvent[]
+}
+
+model CalendarEvent {
+  id            String    @id @default(cuid())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  connectionId  String?
+  connection    CalendarConnection? @relation(fields: [connectionId], references: [id])
+  title         String
+  notes         String    @default("")
+  startAt       DateTime
+  endAt         DateTime
+  allDay        Boolean   @default(false)
+  location      String    @default("")
+  source        String    @default("harbor")
+  externalId    String?
+  syncKey       String?   @unique
+  timeZone      String    @default("America/Los_Angeles")
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  deletedAt     DateTime?
+}
+
+model Reminder {
+  id          String    @id @default(cuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  taskId      String?
+  task        Task?     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  fireAt      DateTime
+  offsetLabel String
+  channelPlan String    @default("push,email")
+  critical    Boolean   @default(false)
+  status      String    @default("SCHEDULED")
+  idempotencyKey String @unique
+  acknowledgedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  attempts    NotificationAttempt[]
+}
+
+model NotificationAttempt {
+  id           String    @id @default(cuid())
+  reminderId   String
+  reminder     Reminder  @relation(fields: [reminderId], references: [id], onDelete: Cascade)
+  channel      String
+  status       String
+  failureReason String?
+  retryCount   Int       @default(0)
+  providerId   String?
+  sentAt       DateTime?
+  deliveredAt  DateTime?
+  openedAt     DateTime?
+  createdAt    DateTime  @default(now())
+}
+
+model VoiceSession {
+  id          String    @id @default(cuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status      String    @default("idle")
+  locale      String    @default("en-US")
+  createdAt   DateTime  @default(now())
+  transcripts VoiceTranscript[]
+  actions     AssistantAction[]
+}
+
+model VoiceTranscript {
+  id         String       @id @default(cuid())
+  sessionId  String
+  session    VoiceSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  text       String
+  corrected  String?
+  confidence Float?
+  createdAt  DateTime     @default(now())
+}
+
+model AssistantAction {
+  id           String        @id @default(cuid())
+  userId       String
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sessionId    String?
+  session      VoiceSession? @relation(fields: [sessionId], references: [id])
+  intent       String
+  payloadJson  String
+  confirmation String        @default("NONE")
+  executed     Boolean       @default(false)
+  resultJson   String        @default("{}")
+  createdAt    DateTime      @default(now())
+}
+
+model ActivityLog {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  taskId    String?
+  task      Task?    @relation(fields: [taskId], references: [id])
+  kind      String
+  summary   String
+  createdAt DateTime @default(now())
+}

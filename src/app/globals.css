@@ -1,0 +1,90 @@
+@import "tailwindcss";
+
+:root {
+  --bg: #f4f1ea;
+  --bg-elev: #fffdf8;
+  --ink: #1f2430;
+  --muted: #5d6573;
+  --faint: #8b919c;
+  --line: #e4ddd0;
+  --brand: #3d5a80;
+  --brand-soft: #d7e3f4;
+  --accent: #c45c26;
+  --danger: #b42318;
+  --ok: #2f6f4e;
+  --warn: #9a6700;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition: none !important; }
+}
+
+html, body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+}
+
+.harbor-shell {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 240px 1fr;
+}
+
+@media (max-width: 860px) {
+  .harbor-shell { grid-template-columns: 1fr; }
+  .harbor-side { display: none; }
+}
+
+.harbor-card {
+  background: var(--bg-elev);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  box-shadow: 0 1px 2px rgba(31, 36, 48, 0.04);
+}
+
+.harbor-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  min-height: 2.4rem;
+  padding: 0 0.9rem;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--bg-elev);
+  color: var(--ink);
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.harbor-btn:focus-visible,
+.harbor-input:focus-visible,
+button:focus-visible,
+a:focus-visible,
+input:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--brand) 45%, white);
+  outline-offset: 2px;
+}
+
+.harbor-btn-brand {
+  background: var(--brand);
+  border-color: var(--brand);
+  color: white;
+}
+
+.harbor-input {
+  width: 100%;
+  min-height: 2.5rem;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: white;
+  padding: 0 0.8rem;
+  color: var(--ink);
+}
+
+.mic[data-state='listening'] { background: #fee2e2; color: #991b1b; }
+.mic[data-state='processing'] { background: #fef3c7; color: #92400e; }
+.mic[data-state='speaking'] { background: var(--brand-soft); color: var(--brand); }
+.mic[data-state='confirm'] { background: #faeeda; color: var(--accent); }
+.mic[data-state='error'] { background: #fee2e2; color: var(--danger); }
