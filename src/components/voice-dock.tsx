@@ -18,6 +18,30 @@ export function VoiceDock() {
   const [turn, setTurn] = useState<Turn | null>(null);
   const [error, setError] = useState('');
   const recRef = useRef<SpeechRecognition | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const audioUrlRef = useRef<string | null>(null);
+  const speechRequestRef = useRef<AbortController | null>(null);
+  const turnRequestRef = useRef(0);
+  const [audioUrl, setAudioUrl] = useState<string | null>(null);
+  const [voiceLoading, setVoiceLoading] = useState(false);
+  const [voiceError, setVoiceError] = useState('');
+
+  useEffect(() => () => {
+    turnRequestRef.current++;
+    speechRequestRef.current?.abort();
+    audioRef.current?.pause();
+    if (audioUrlRef.current) URL.revokeObjectURL(audioUrlRef.current);
+  }, []);
+
+  function stopVoice() {
+    speechRequestRef.current?.abort();
+    audioRef.current?.pause();
+    if (audioUrlRef.current) URL.revokeObjectURL(audioUrlRef.current);
+    audioUrlRef.current = null;
+    setAudioUrl(null);
+    setVoiceLoading(false);
+    setVoiceError('');
+  }
 
   useEffect(() => {
     const Ctor = typeof window !== 'undefined'
@@ -43,6 +67,8 @@ export function VoiceDock() {
 
   async function submit(transcript: string, confirmActionId?: string) {
     if (!transcript.trim() && !confirmActionId) return;
+    const requestId = ++turnRequestRef.current;
+    stopVoice();
     setState('processing');
     setError('');
     try {
@@ -52,26 +78,46 @@ export function VoiceDock() {
         body: JSON.stringify({ transcript, confirmActionId }),
       });
       const data = await res.json();
+      if (requestId !== turnRequestRef.current) return;
       if (!res.ok) throw new Error(data.error || 'Assistant failed');
       setTurn(data);
-      setState(data.confirmation ? 'confirm' : 'speaking');
-      speak(data.spoken);
+      setState(data.confirmation ? 'confirm' : 'idle');
+      void speak(data.spoken);
     } catch (err) {
+      if (requestId !== turnRequestRef.current) return;
       setState('error');
       setError(err instanceof Error ? err.message : 'Something went wrong');
     }
   }
 
-  function speak(phrase: string) {
-    if (typeof window === 'undefined' || !window.speechSynthesis) return;
-    window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(phrase);
-    utterance.rate = 1.02;
-    utterance.onend = () => setState((current) => (current === 'confirm' ? 'confirm' : 'idle'));
-    window.speechSynthesis.speak(utterance);
+  async function speak(phrase: string) {
+    const controller = new AbortController();
+    speechRequestRef.current = controller;
+    setVoiceLoading(true);
+    try {
+      const response = await fetch('/api/speech', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: phrase }), signal: controller.signal,
+      });
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Voice unavailable. You can still read the answer.');
+      }
+      const blob = await response.blob();
+      if (controller.signal.aborted) return;
+      const url = URL.createObjectURL(blob);
+      audioUrlRef.current = url;
+      setAudioUrl(url);
+    } catch (err) {
+      if (!controller.signal.aborted) setVoiceError(err instanceof Error ? err.message : 'Voice unavailable.');
+    } finally {
+      if (!controller.signal.aborted) setVoiceLoading(false);
+    }
   }
 
   function listen() {
+    turnRequestRef.current++;
+    stopVoice();
     setError('');
     setTurn(null);
     if (!recRef.current) {
@@ -119,10 +165,21 @@ export function VoiceDock() {
           <div className="mt-3 rounded-xl bg-[var(--bg)] p-3 text-sm">
             <p className="font-semibold">{turn.visual.rangeLabel}</p>
             <p className="mt-1 whitespace-pre-wrap text-[var(--muted)]">{turn.spoken || turn.visual.summary}</p>
+            <p className="mt-2 text-xs text-[var(--muted)]">AI-generated voice · OpenAI Coral</p>
+            {voiceLoading && <p role="status" className="mt-1 text-xs">Preparing voice…</p>}
+            {voiceError && <p role="status" className="mt-1 text-xs">{voiceError}</p>}
+            {audioUrl && <audio
+              ref={audioRef} src={audioUrl} controls autoPlay className="mt-2 w-full"
+              aria-label="Play Harbour’s AI-generated response"
+              onPlay={() => setState((current) => current === 'confirm' ? current : 'speaking')}
+              onPause={() => setState((current) => current === 'confirm' ? current : 'idle')}
+              onEnded={() => setState((current) => current === 'confirm' ? current : 'idle')}
+              onError={() => setVoiceError('Audio could not be played. You can still read the answer.')}
+            />}
             {turn.confirmation && (
               <div className="mt-3 flex gap-2">
                 <button type="button" className="harbor-btn harbor-btn-brand" onClick={() => void submit('yes', turn.confirmation?.actionId)}>Apply changes</button>
-                <button type="button" className="harbor-btn" onClick={() => { setTurn(null); setState('idle'); }}>Cancel</button>
+                <button type="button" className="harbor-btn" onClick={() => { stopVoice(); setTurn(null); setState('idle'); }}>Cancel</button>
               </div>
             )}
           </div>
