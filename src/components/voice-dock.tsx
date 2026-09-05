@@ -25,6 +25,16 @@ export function VoiceDock() {
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [voiceLoading, setVoiceLoading] = useState(false);
   const [voiceError, setVoiceError] = useState('');
+  const dockRef = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    if (!dockRef.current) return;
+    const observer = new ResizeObserver(([entry]) => {
+      document.documentElement.style.setProperty('--voice-dock-height', `${entry.target.getBoundingClientRect().height}px`);
+    });
+    observer.observe(dockRef.current);
+    return () => { observer.disconnect(); document.documentElement.style.removeProperty('--voice-dock-height'); };
+  }, []);
 
   useEffect(() => () => {
     turnRequestRef.current++;
@@ -130,7 +140,7 @@ export function VoiceDock() {
   }
 
   return (
-    <section className="fixed inset-x-3 bottom-[4.6rem] z-40 md:bottom-6 md:left-[272px] md:right-6" aria-label="Voice assistant">
+    <section ref={dockRef} className="harbor-voice-dock fixed inset-x-3 z-40 md:bottom-6 md:left-[272px] md:right-6" aria-label="Voice assistant">
       <div className="harbor-card mx-auto max-w-3xl p-2 shadow-lg sm:p-3">
         <div className="flex items-center gap-2">
           <button
@@ -162,7 +172,7 @@ export function VoiceDock() {
         <p className="mt-2 hidden text-xs uppercase tracking-wide text-[var(--faint)] sm:block">Voice is {state.replace('-', ' ')}</p>
         {error && <p className="mt-2 text-sm text-[var(--danger)]">{error}</p>}
         {turn && (
-          <div className="mt-3 rounded-xl bg-[var(--bg)] p-3 text-sm">
+          <div className="mt-3 max-h-[32dvh] overflow-y-auto overscroll-contain rounded-xl bg-[var(--bg)] p-3 text-sm">
             <p className="font-semibold">{turn.visual.rangeLabel}</p>
             <p className="mt-1 whitespace-pre-wrap text-[var(--muted)]">{turn.spoken || turn.visual.summary}</p>
             <p className="mt-2 text-xs text-[var(--muted)]">AI-generated voice · OpenAI Coral</p>

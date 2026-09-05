@@ -91,3 +91,17 @@ input:focus-visible {
 .mic[data-state='speaking'] { background: var(--brand-soft); color: var(--brand); }
 .mic[data-state='confirm'] { background: #faeeda; color: var(--accent); }
 .mic[data-state='error'] { background: #fee2e2; color: var(--danger); }
+
+.harbor-main { padding-bottom: calc(var(--voice-dock-height, 100px) + 3rem); }
+.harbor-voice-dock { bottom: 1.5rem; }
+
+@media (max-width: 767px) {
+  .harbor-main { padding-bottom: calc(var(--voice-dock-height, 80px) + 6rem + env(safe-area-inset-bottom)); }
+  .harbor-voice-dock { bottom: calc(4.6rem + env(safe-area-inset-bottom)); }
+  .harbor-shell > div > header { padding-top: max(0.75rem, env(safe-area-inset-top)); }
+  .harbor-btn { min-height: 44px; }
+  .harbor-input { min-height: 44px; font-size: 16px; }
+  .harbor-task-row { display: grid; grid-template-columns: 18px minmax(0, 1fr); column-gap: 12px; row-gap: 8px; }
+  .harbor-task-row > div:last-child { grid-column: 2; justify-self: end; }
+  .harbor-task-row > div > button, .harbor-task-row p { overflow-wrap: anywhere; }
+}

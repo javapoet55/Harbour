@@ -76,7 +76,7 @@ export function AppShell({
           <div><p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[var(--faint)]">Harbor</p><p className="text-sm font-semibold">{userName}</p></div>
           <div className="flex size-10 items-center justify-center rounded-full bg-[var(--brand)] text-sm font-bold text-white" aria-label={`${userName} profile`}>{userName.split(/\s+/).map((part) => part[0]).join('').slice(0, 2).toUpperCase()}</div>
         </header>
-        <main className="flex-1 px-3 py-4 pb-44 sm:px-4 md:px-8 md:py-5 md:pb-28">{children}</main>
+        <main className="harbor-main min-w-0 flex-1 px-3 py-4 sm:px-4 md:px-8 md:py-5">{children}</main>
         <VoiceDock />
         <nav className="fixed inset-x-0 bottom-0 z-30 flex justify-around border-t border-[var(--line)] bg-[color:var(--bg-elev)]/95 px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2 shadow-[0_-4px_18px_rgba(31,36,48,0.08)] backdrop-blur md:hidden" aria-label="Mobile">
           {MOBILE.map((item) => {

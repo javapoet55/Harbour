@@ -131,8 +131,8 @@ export function TodayBoard() {
 
   return (
     <div className="space-y-4 sm:space-y-5">
-      <header className="flex flex-wrap items-start justify-between gap-4">
-        <div><p className="text-sm text-[var(--muted)]">{formatDay(new Date(), data.timeZone)}</p>
+      <header className="flex items-start justify-between gap-3 sm:gap-4">
+        <div className="min-w-0 flex-1"><p className="text-sm text-[var(--muted)]">{formatDay(new Date(), data.timeZone)}</p>
         <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">{hello}.</h1>
         <p className="mt-1 max-w-2xl text-sm text-[var(--muted)] sm:text-base">Ask what is coming up, capture a task by voice, and Harbor will keep the reminders honest.</p></div>
         <Weather />
@@ -150,7 +150,7 @@ export function TodayBoard() {
         <Card title="Today’s to-do tasks" titleClassName="text-sm font-extrabold uppercase tracking-wide text-[#283c55]" action={<button type="button" onClick={() => setCriticalFirst((value) => !value)} className={`flex h-9 w-9 items-center justify-center rounded-full border text-[#315b8a] transition ${criticalFirst ? 'border-[#7da9e8] bg-[#edf4fc]' : 'border-[var(--line)] bg-white'}`} aria-label={criticalFirst ? 'Critical-first sorting is on. Show schedule order' : 'Sort critical tasks first'} title={criticalFirst ? 'Critical tasks first' : 'Sort critical tasks first'}><SortIcon /></button>}>
           {displayedTodayTasks.length === 0 ? <p className="text-sm text-[var(--muted)]">No tasks due today.</p> : displayedTodayTasks.map((task) => {
             const isCritical = Boolean(task.critical || task.priority === 'CRITICAL');
-            return <div key={task.id} className={`flex items-start gap-3 border-b border-[var(--line)] px-2 py-3 last:border-0 ${isCritical ? 'rounded-xl bg-[#fff7f6]' : ''}`}>
+            return <div key={task.id} className={`harbor-task-row flex items-start gap-3 border-b border-[var(--line)] px-2 py-3 last:border-0 ${isCritical ? 'rounded-xl bg-[#fff7f6]' : ''}`}>
               <button type="button" className="mt-0.5 h-[18px] w-[18px] shrink-0 rounded-full border-2 border-[#d6a91f] bg-[#fffdf3] transition hover:bg-[#fff1a8] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#315b8a]" onClick={() => void complete(task.id)} aria-label={`Complete ${task.title}`} title="Mark complete" />
               <div className="min-w-0 flex-1">
                 <button type="button" className={`rounded text-left font-medium hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#315b8a] ${isCritical ? 'text-[#b42318]' : 'hover:text-[var(--brand)]'}`} onClick={() => setEditingTask(task)} aria-label={`Open details for ${task.title}`}>{task.title}</button>
