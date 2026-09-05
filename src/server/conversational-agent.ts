@@ -208,11 +208,11 @@ async function executePlan(userId: string, plan: AgentPlan) {
 }
 
 function turn(plan: AgentPlan, confirmation?: { prompt: string; actionId: string } | null): AssistantTurn {
-  const lines = plan.actions.map(describeAction).filter(Boolean);
+  const lines = plan.actions.filter((action) => action.type !== 'NOOP').map(describeAction).filter(Boolean);
   const spoken = plan.needs_clarification ? plan.clarification_question || plan.response : plan.response || plan.interpretation;
   return {
     transcript: '', intent: { intent: 'UNKNOWN', confidence: 1, confirmationRequired: Boolean(confirmation), raw: '' }, spoken,
-    visual: { summary: plan.interpretation, appointments: [], tasks: lines, overdue: [], next: plan.needs_clarification ? spoken : confirmation ? 'Review the proposed changes and confirm to apply them.' : plan.response, rangeLabel: plan.needs_clarification ? 'Clarification needed' : lines.length ? 'Proposed changes' : 'Assistant' },
+    visual: { summary: plan.interpretation, appointments: [], tasks: lines, overdue: [], next: plan.needs_clarification ? spoken : confirmation ? 'Review the proposed changes and confirm to apply them.' : plan.response, rangeLabel: plan.needs_clarification ? 'Clarification needed' : confirmation ? 'Proposed changes' : 'Assistant' },
     confirmation,
   };
 }
