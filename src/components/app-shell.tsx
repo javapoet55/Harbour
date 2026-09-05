@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
-  BarChart3, Bell, CalendarDays, CircleCheck, Inbox, Mic, MoreHorizontal, Sparkles, Sun, Timer,
+  BarChart3, Bell, CalendarDays, CircleCheck, Inbox, MoreHorizontal, Sparkles, Sun, Timer, Plus,
 } from 'lucide-react';
 import { VoiceDock } from './voice-dock';
 import { cn } from '@/lib/utils';
@@ -23,7 +23,6 @@ const DESKTOP = [
 const MOBILE = [
   { href: '/', label: 'Today', icon: Sun },
   { href: '/calendar', label: 'Calendar', icon: CalendarDays },
-  { href: '/voice', label: 'Voice', icon: Mic },
   { href: '/tasks', label: 'Tasks', icon: CircleCheck },
   { href: '/settings', label: 'More', icon: MoreHorizontal },
 ];
@@ -72,9 +71,9 @@ export function AppShell({
       </aside>
 
       <div className="flex min-w-0 flex-col">
-        <header className="sticky top-0 z-20 flex items-center justify-between border-b border-[var(--line)] bg-[color:var(--bg-elev)]/95 px-4 py-3 backdrop-blur md:hidden">
-          <div><p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[var(--faint)]">Harbor</p><p className="text-sm font-semibold">{userName}</p></div>
-          <div className="flex size-10 items-center justify-center rounded-full bg-[var(--brand)] text-sm font-bold text-white" aria-label={`${userName} profile`}>{userName.split(/\s+/).map((part) => part[0]).join('').slice(0, 2).toUpperCase()}</div>
+        <header className="mobile-brand-header sticky top-0 z-20 flex items-center justify-between px-5 py-3 md:hidden">
+          <p className="text-base font-bold uppercase tracking-[0.18em] text-[#203b61]">Harbor</p>
+          <div className="flex gap-3">{pathname === '/' ? <button className="mobile-add-button" aria-label="Add a task" onClick={() => window.dispatchEvent(new Event('harbor:quick-add'))}><Plus size={24} /></button> : <Link className="mobile-add-button" href="/" aria-label="Go to Today"><Sun size={23} /></Link>}<Link href="/settings" className="mobile-avatar" aria-label={`${userName} profile and settings`}>{userName.split(/\s+/).map((part) => part[0]).join('').slice(0, 2).toUpperCase()}</Link></div>
         </header>
         <main className="harbor-main min-w-0 flex-1 px-3 py-4 sm:px-4 md:px-8 md:py-5">{children}</main>
         <VoiceDock />

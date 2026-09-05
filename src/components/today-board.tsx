@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { formatDay } from '@/lib/time';
 import type { AgendaPayload } from '@/lib/types';
+import { MobileDay } from './mobile-day';
 
 export function TodayBoard() {
   const [data, setData] = useState<AgendaPayload | null>(null);
@@ -71,12 +72,12 @@ export function TodayBoard() {
     return data?.events.filter((e) => inDay(e.startAt) === todayKey) ?? [];
   }, [data, todayKey, timeZone]);
 
-  async function addTask(e: React.FormEvent) {
-    e.preventDefault();
-    if (!title.trim() || !todayKey || adding) return;
+  async function addTask(e?: React.FormEvent, mobileTitle?: string) {
+    e?.preventDefault();
+    const submittedTitle = (mobileTitle ?? title).trim();
+    if (!submittedTitle || !todayKey || adding) return;
     setAdding(true);
     setError('');
-    const submittedTitle = title.trim();
     try {
       const parts = Object.fromEntries(new Intl.DateTimeFormat('en-US', { timeZone: data.timeZone, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(new Date()).map((part) => [part.type, part.value]));
       const res = await fetch('/api/tasks', {
@@ -88,6 +89,7 @@ export function TodayBoard() {
       setTitle('');
       await load();
     } catch (reason) {
+      if (mobileTitle) throw reason;
       setError(reason instanceof Error ? reason.message : 'Could not add that task.');
     } finally {
       setAdding(false);
@@ -131,6 +133,8 @@ export function TodayBoard() {
 
   return (
     <div className="space-y-4 sm:space-y-5">
+      <MobileDay data={data} tasks={displayedTodayTasks} completed={completedToday} weather={<Weather />} criticalFirst={criticalFirst} toggleSort={() => setCriticalFirst((value) => !value)} openTask={setEditingTask} complete={complete} restore={restore} add={(value) => addTask(undefined, value)} />
+      <div className="hidden space-y-5 md:block">
       <header className="flex items-start justify-between gap-3 sm:gap-4">
         <div className="min-w-0 flex-1"><p className="text-sm text-[var(--muted)]">{formatDay(new Date(), data.timeZone)}</p>
         <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">{hello}.</h1>
@@ -181,12 +185,13 @@ export function TodayBoard() {
           {completedToday.length ? <ul className="space-y-1 text-sm">{completedToday.map((task) => <li key={task.id}><button type="button" onClick={() => void restore(task.id)} className="group flex min-h-8 w-full items-center gap-2 rounded-md px-1 text-left text-[var(--muted)] transition hover:bg-[#edf4fc] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#315b8a]" aria-label={`Restore ${task.title} to today's to-do list`} title="Restore to today's to-do list"><span aria-hidden="true" className="text-[var(--ok)]">✓</span><span className="line-through group-hover:no-underline">{task.title}</span></button></li>)}</ul> : <p className="text-sm text-[var(--muted)]">No tasks completed today.</p>}
         </Card></div>
       </section>
-      {editingTask ? <TaskDetailSheet task={editingTask} timeZone={data.timeZone} onClose={() => setEditingTask(null)} onSaved={async () => { setEditingTask(null); await load(); }} onComplete={async () => { await complete(editingTask.id); setEditingTask(null); }} /> : null}
+      </div>
+      {editingTask ? <TaskDetailSheet task={editingTask} timeZone={data.timeZone} focusControl={<button type="button" className="harbor-btn w-full" onClick={() => toggleFocus(editingTask.id)}>{focusTaskId === editingTask.id ? `${focusRunning ? 'Pause' : 'Resume'} focus · ${String(Math.floor(focusSeconds / 60)).padStart(2, '0')}:${String(focusSeconds % 60).padStart(2, '0')}` : 'Start a 25-minute focus session'}</button>} onClose={() => setEditingTask(null)} onSaved={async () => { setEditingTask(null); await load(); }} onComplete={async () => { await complete(editingTask.id); setEditingTask(null); }} /> : null}
     </div>
   );
 }
 
-function TaskDetailSheet({ task, timeZone, onClose, onSaved, onComplete }: { task: AgendaPayload['tasks'][number]; timeZone: string; onClose: () => void; onSaved: () => Promise<void>; onComplete: () => Promise<void> }) {
+function TaskDetailSheet({ task, timeZone, focusControl, onClose, onSaved, onComplete }: { task: AgendaPayload['tasks'][number]; timeZone: string; focusControl: React.ReactNode; onClose: () => void; onSaved: () => Promise<void>; onComplete: () => Promise<void> }) {
   const scheduledAt = task.startAt ?? task.dueAt;
   const localParts = scheduledAt ? Object.fromEntries(new Intl.DateTimeFormat('en-US', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(new Date(scheduledAt)).map((part) => [part.type, part.value])) : null;
   const [title, setTitle] = useState(task.title);
@@ -245,6 +250,7 @@ function TaskDetailSheet({ task, timeZone, onClose, onSaved, onComplete }: { tas
           <button type="button" onClick={onClose} className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--brand-soft)] text-xl text-[var(--brand)]" aria-label="Close task details">×</button>
         </header>
         <div className="space-y-6 p-5 sm:p-7">
+          {focusControl}
           <label className="block"><span className="mb-2 block text-xs font-bold uppercase tracking-wide text-[var(--faint)]">Task</span><input autoFocus className="harbor-input text-lg font-semibold" value={title} onChange={(event) => setTitle(event.target.value)} /></label>
 
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
