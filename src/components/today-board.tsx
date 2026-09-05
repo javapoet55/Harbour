@@ -306,7 +306,7 @@ function SortIcon() { return <svg aria-hidden="true" viewBox="0 0 24 24" classNa
 function Card({ title, children, action, titleClassName }: { title: string; children: React.ReactNode; action?: React.ReactNode; titleClassName?: string }) {
   return (
     <section className="harbor-card p-4">
-      <div className="mb-3 flex items-center justify-between gap-3"><h2 className={titleClassName ?? 'text-sm font-bold uppercase tracking-wide text-[var(--faint)]'}>{title}</h2>{action}</div>
+      <div className="mb-3 flex items-center justify-between gap-3"><h2 className={titleClassName ?? 'text-sm font-extrabold uppercase tracking-wide text-[#283c55]'}>{title}</h2>{action}</div>
       {children}
     </section>
   );
