@@ -30,4 +30,11 @@ describe('intent parsing', () => {
     const parsed = parseIntent('Cancel my reminder for the dentist appointment.');
     expect(needsConfirmation(parsed, 'CHANGES_AND_DELETES')).toBe(true);
   });
+
+  it('recognizes complete briefings, this week, and upcoming deadlines', () => {
+    expect(parseIntent('Harbor, brief me').intent).toBe('BRIEF_ME');
+    expect(parseIntent('Brief me for the rest of my week').intent).toBe('LIST_THIS_WEEK');
+    expect(parseIntent('What does this week look like?').intent).toBe('LIST_THIS_WEEK');
+    expect(parseIntent('What upcoming deadlines do I have?').intent).toBe('LIST_DEADLINES');
+  });
 });

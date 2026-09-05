@@ -7,6 +7,7 @@ import { highPriority, overdueTasks, snapshotForRange, waitingTasks } from './ag
 import { completeTask, createTask, deleteTask, localWhen, scheduleTask } from './tasks';
 import { scheduleDefaultReminders } from './reminders';
 import { buildDailyPlan } from './planner';
+import { buildCompleteBriefing } from './briefing';
 
 export type AssistantTurn = {
   transcript: string;
@@ -127,6 +128,16 @@ function previewAction(intent: ParsedIntent, timeZone: string) {
 async function executeIntent(userId: string, timeZone: string, intent: ParsedIntent, executeWrites: boolean) {
   const today = tzToday(timeZone);
 
+  if (intent.intent === 'BRIEF_ME') return buildCompleteBriefing(userId, intent.days ?? 7);
+  if (intent.intent === 'LIST_THIS_WEEK') {
+    const weekday = today.getUTCDay();
+    return buildCompleteBriefing(userId, weekday === 0 ? 1 : 8 - weekday);
+  }
+  if (intent.intent === 'LIST_DEADLINES') {
+    const briefing = await buildCompleteBriefing(userId, intent.days ?? 7);
+    const spoken = briefing.deadlineLines.length ? `Your upcoming deadlines are ${briefing.deadlineLines.join('; ')}.` : 'You have no deadlines in the next seven days.';
+    return { spoken, visual: { summary: spoken, appointments: [], tasks: briefing.deadlineLines, overdue: [], next: briefing.conflictSummary, rangeLabel: 'Upcoming deadlines' } };
+  }
   if (intent.intent === 'LIST_TODAY') return speakRange(userId, timeZone, 1, 'today');
   if (intent.intent === 'LIST_TOMORROW') {
     const snap = await snapshotForRange(userId, timeZone, 2);

@@ -72,15 +72,19 @@ export function AppShell({
       </aside>
 
       <div className="flex min-w-0 flex-col">
-        <main className="flex-1 px-4 py-5 pb-28 md:px-8">{children}</main>
+        <header className="sticky top-0 z-20 flex items-center justify-between border-b border-[var(--line)] bg-[color:var(--bg-elev)]/95 px-4 py-3 backdrop-blur md:hidden">
+          <div><p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[var(--faint)]">Harbor</p><p className="text-sm font-semibold">{userName}</p></div>
+          <div className="flex size-10 items-center justify-center rounded-full bg-[var(--brand)] text-sm font-bold text-white" aria-label={`${userName} profile`}>{userName.split(/\s+/).map((part) => part[0]).join('').slice(0, 2).toUpperCase()}</div>
+        </header>
+        <main className="flex-1 px-3 py-4 pb-44 sm:px-4 md:px-8 md:py-5 md:pb-28">{children}</main>
         <VoiceDock />
-        <nav className="fixed inset-x-0 bottom-0 z-30 flex justify-around border-t border-[var(--line)] bg-[var(--bg-elev)] px-2 py-2 md:hidden" aria-label="Mobile">
+        <nav className="fixed inset-x-0 bottom-0 z-30 flex justify-around border-t border-[var(--line)] bg-[color:var(--bg-elev)]/95 px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2 shadow-[0_-4px_18px_rgba(31,36,48,0.08)] backdrop-blur md:hidden" aria-label="Mobile">
           {MOBILE.map((item) => {
             const Icon = item.icon;
             const active = pathname === item.href;
             return (
-              <Link key={item.href} href={item.href} className={cn('flex flex-col items-center gap-1 px-2 text-[11px]', active ? 'text-[var(--brand)]' : 'text-[var(--muted)]')}>
-                <Icon className="size-5" aria-hidden />
+              <Link key={item.href} href={item.href} className={cn('flex min-h-12 min-w-14 flex-col items-center justify-center gap-0.5 rounded-xl px-2 text-[11px] font-medium', active ? 'bg-[var(--brand-soft)] text-[var(--brand)]' : 'text-[var(--muted)]')}>
+                <Icon className="size-5" strokeWidth={active ? 2.5 : 2} aria-hidden />
                 {item.label}
               </Link>
             );

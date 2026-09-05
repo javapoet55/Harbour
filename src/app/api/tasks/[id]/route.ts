@@ -31,6 +31,12 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
       await generateReplanProposal(user.id);
       return NextResponse.json({ task });
     }
+    if (body.status === 'PLANNED') {
+      const task = await updateTask(user.id, id, { status: 'PLANNED', completedAt: null });
+      await pushTaskToExternal(user.id, id);
+      await generateReplanProposal(user.id);
+      return NextResponse.json({ task });
+    }
     if (body.startAt || body.date) {
       const startAt = body.date
         ? zonedDateTime(String(body.date), String(body.time || '09:00'), user.timeZone)
@@ -48,8 +54,16 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
     if (typeof body.priority === 'string') data.priority = body.priority;
     if (typeof body.waitingOn === 'string' || body.waitingOn === null) data.waitingOn = body.waitingOn;
     if (typeof body.durationMin === 'number') data.durationMin = body.durationMin;
+    if (typeof body.critical === 'boolean') data.critical = body.critical;
     if (['LOW', 'MEDIUM', 'HIGH'].includes(body.energyLevel)) data.energyLevel = body.energyLevel;
     const task = await updateTask(user.id, id, data);
+    if (Array.isArray(body.subtasks)) {
+      const titles = body.subtasks.map((item: unknown) => typeof item === 'string' ? item.trim() : '').filter(Boolean).slice(0, 50);
+      await prisma.$transaction([
+        prisma.subtask.deleteMany({ where: { taskId: id, task: { userId: user.id } } }),
+        ...titles.map((title: string, sortOrder: number) => prisma.subtask.create({ data: { taskId: id, title, sortOrder } })),
+      ]);
+    }
     if (body.recurrence === null) await prisma.recurrenceRule.deleteMany({ where: { taskId: id, task: { userId: user.id } } });
     else if (body.recurrence?.frequency && ['DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY'].includes(String(body.recurrence.frequency).toUpperCase())) {
       const recurrence = { frequency: String(body.recurrence.frequency).toUpperCase(), interval: Math.max(1, Number(body.recurrence.interval) || 1), byWeekday: Array.isArray(body.recurrence.byWeekday) ? body.recurrence.byWeekday.join(',') : null, until: body.recurrence.until ? new Date(body.recurrence.until) : null, count: body.recurrence.count ? Math.max(1, Number(body.recurrence.count)) : null };

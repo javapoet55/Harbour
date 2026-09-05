@@ -84,8 +84,8 @@ export function VoiceDock() {
   }
 
   return (
-    <section className="fixed inset-x-4 bottom-16 z-40 md:bottom-6 md:left-[272px] md:right-6" aria-label="Voice assistant">
-      <div className="harbor-card mx-auto max-w-3xl p-3 shadow-lg">
+    <section className="fixed inset-x-3 bottom-[4.6rem] z-40 md:bottom-6 md:left-[272px] md:right-6" aria-label="Voice assistant">
+      <div className="harbor-card mx-auto max-w-3xl p-2 shadow-lg sm:p-3">
         <div className="flex items-center gap-2">
           <button
             type="button"
@@ -104,16 +104,16 @@ export function VoiceDock() {
             }}
           >
             <input
-              className="harbor-input"
+              className="harbor-input min-w-0"
               value={text}
               onChange={(e) => setText(e.target.value)}
               placeholder="Ask Harbor, or press the microphone"
               aria-label="Text assistant"
             />
-            <button type="submit" className="harbor-btn harbor-btn-brand">Ask</button>
+            <button type="submit" className="harbor-btn harbor-btn-brand px-3">Ask</button>
           </form>
         </div>
-        <p className="mt-2 text-xs uppercase tracking-wide text-[var(--faint)]">Voice is {state.replace('-', ' ')}</p>
+        <p className="mt-2 hidden text-xs uppercase tracking-wide text-[var(--faint)] sm:block">Voice is {state.replace('-', ' ')}</p>
         {error && <p className="mt-2 text-sm text-[var(--danger)]">{error}</p>}
         {turn && (
           <div className="mt-3 rounded-xl bg-[var(--bg)] p-3 text-sm">

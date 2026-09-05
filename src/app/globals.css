@@ -31,9 +31,12 @@ html, body {
   grid-template-columns: 240px 1fr;
 }
 
-@media (max-width: 860px) {
+@media (max-width: 767px) {
   .harbor-shell { grid-template-columns: 1fr; }
   .harbor-side { display: none; }
+  .harbor-card { border-radius: 16px; }
+  .harbor-btn { min-height: 2.75rem; }
+  .harbor-input { min-height: 2.75rem; font-size: 16px; }
 }
 
 .harbor-card {

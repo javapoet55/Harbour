@@ -16,6 +16,9 @@ export const INTENTS = [
   'RESCHEDULE_TASK',
   'CREATE_RECURRING_TASK',
   'PLAN_TOMORROW',
+  'BRIEF_ME',
+  'LIST_THIS_WEEK',
+  'LIST_DEADLINES',
   'GENERAL_HELP',
   'UNKNOWN',
 ] as const;
@@ -45,6 +48,16 @@ function clean(text: string) {
 export function parseIntent(input: string): ParsedIntent {
   const raw = clean(input);
   const text = raw.toLowerCase();
+
+  if (/\b(this week|rest of (?:my|the) week|weekly briefing)\b/.test(text)) {
+    return { intent: 'LIST_THIS_WEEK', confidence: 0.95, confirmationRequired: false, raw };
+  }
+  if (/\b(brief me|daily briefing|complete briefing|morning briefing)\b/.test(text)) {
+    return { intent: 'BRIEF_ME', confidence: 0.98, days: 7, confirmationRequired: false, raw };
+  }
+  if (/\b(upcoming deadlines?|deadlines? (?:are )?(?:coming|due)|what is due)\b/.test(text)) {
+    return { intent: 'LIST_DEADLINES', confidence: 0.95, days: 7, confirmationRequired: false, raw };
+  }
 
   const daysMatch = text.match(/next (\d+) days?/) || text.match(/during the next (\d+) days?/);
   if (daysMatch) {

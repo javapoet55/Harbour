@@ -9,6 +9,7 @@ import { zonedDateTime } from '@/lib/time';
 import { applyReplanProposal, generateReplanProposal } from './replanner';
 import { runConversationalAgent } from './conversational-agent';
 import { buildPersonalizedInsights, erasePersonalizationData } from './predictions';
+import { buildCompleteBriefing } from './briefing';
 
 const prisma = new PrismaClient();
 
@@ -207,5 +208,31 @@ describe('task and reminder integration', () => {
     await erasePersonalizationData(userA);
     expect(await prisma.taskWorkSession.count({ where: { userId: userA } })).toBe(0);
     expect((await prisma.task.findUniqueOrThrow({ where: { id: measured.id } })).actualDurationMin).toBeNull();
+  });
+
+  it('produces one grounded briefing and bypasses the LLM for the brief-me intent', async () => {
+    const now = new Date('2026-09-05T16:00:00Z');
+    await createTask({ userId: userA, title: 'Briefing critical deadline', priority: 'CRITICAL', startAt: new Date('2026-09-05T17:00:00Z'), dueAt: new Date('2026-09-05T18:00:00Z'), durationMin: 30 });
+    const briefing = await buildCompleteBriefing(userA, 7, now);
+    expect(briefing.spoken).toContain('Today:');
+    expect(briefing.spoken).toContain('Tomorrow:');
+    expect(briefing.spoken).toContain('Upcoming deadlines:');
+    expect(briefing.spoken).toContain('Overdue:');
+    expect(briefing.spoken).toContain('Schedule conflicts:');
+    expect(briefing.spoken).toContain('Top 3 focus items');
+    expect(briefing.top3.some((task) => task.title === 'Briefing critical deadline')).toBe(true);
+
+    const previousKey = process.env.OPENAI_API_KEY;
+    process.env.OPENAI_API_KEY = 'must-not-be-used';
+    const remote = vi.fn(() => { throw new Error('LLM should not be called for deterministic briefing'); });
+    vi.stubGlobal('fetch', remote);
+    try {
+      const turn = await runConversationalAgent(userA, 'Harbor, brief me');
+      expect(turn.visual.rangeLabel).toContain('Complete');
+      expect(remote).not.toHaveBeenCalled();
+    } finally {
+      vi.unstubAllGlobals();
+      if (previousKey === undefined) delete process.env.OPENAI_API_KEY; else process.env.OPENAI_API_KEY = previousKey;
+    }
   });
 });

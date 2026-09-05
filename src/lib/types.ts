@@ -7,6 +7,13 @@ export type AgendaTask = {
   startAt: string | null;
   durationMin: number;
   waitingOn?: string | null;
+  completedAt?: string | null;
+  createdAt: string;
+  notes?: string;
+  energyLevel?: string;
+  critical?: boolean;
+  subtasks?: Array<{ id: string; title: string; completedAt: string | null }>;
+  recurrence?: { frequency: string; interval: number } | null;
 };
 
 export type AgendaEvent = {

@@ -3,6 +3,7 @@ import { prisma } from './db';
 import { runAssistantTurn, type AssistantTurn } from './assistant';
 import { scheduleDefaultReminders } from './reminders';
 import { pushTaskToExternal } from './calendar-sync';
+import { parseIntent } from '@/lib/intent';
 
 const ACTION_TYPES = ['CREATE_TASK', 'UPDATE_TASK', 'COMPLETE_TASK', 'DELETE_TASK', 'RESCHEDULE_TASK', 'SET_REMINDER', 'NOOP'] as const;
 type ActionType = typeof ACTION_TYPES[number];
@@ -217,6 +218,8 @@ function turn(plan: AgentPlan, confirmation?: { prompt: string; actionId: string
 }
 
 export async function runConversationalAgent(userId: string, transcript: string, confirmActionId?: string): Promise<AssistantTurn> {
+  const deterministic = parseIntent(transcript);
+  if (!confirmActionId && ['BRIEF_ME', 'LIST_THIS_WEEK', 'LIST_DEADLINES'].includes(deterministic.intent)) return runAssistantTurn(userId, transcript);
   if (!process.env.OPENAI_API_KEY) return runAssistantTurn(userId, transcript, confirmActionId);
   if (confirmActionId) {
     const pending = await prisma.assistantAction.findFirst({ where: { id: confirmActionId, userId, intent: 'AGENT_PLAN', executed: false } });

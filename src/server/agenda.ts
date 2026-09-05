@@ -15,7 +15,7 @@ export async function listTasksInRange(userId: string, from: Date, to: Date) {
         { startAt: { gte: from, lte: to } },
       ],
     },
-    include: { category: true, project: true, subtasks: true, reminders: true },
+    include: { category: true, project: true, subtasks: true, reminders: true, recurrence: true, dependencies: { select: { dependsOnId: true, dependsOn: { select: { status: true } } } } },
     orderBy: [{ startAt: 'asc' }, { dueAt: 'asc' }],
   });
 }

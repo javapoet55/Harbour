@@ -2,6 +2,7 @@ import { listEventsInRange, listTasksInRange } from './agenda';
 import { endOfLocalDay, startOfLocalDay } from '@/lib/time';
 import { prisma } from './db';
 import { personalizedTaskDurations } from './predictions';
+import { rankFocusTasks } from '@/lib/focus-ranking';
 
 export async function buildDailyPlan(userId: string, timeZone: string, ymdValue: string) {
   const user = await prisma.user.findUniqueOrThrow({
@@ -25,7 +26,8 @@ export async function buildDailyPlan(userId: string, timeZone: string, ymdValue:
   const available = Math.max(0, workMinutes - meetingMinutes);
   const openTasks = tasks.filter((t) => t.status !== 'COMPLETED' && t.status !== 'CANCELLED');
   const needed = openTasks.reduce((sum, task) => sum + minutesFor(task), 0);
-  const ranked = [...openTasks].sort((a, b) => priorityRank(b.priority) - priorityRank(a.priority) || (a.dueAt?.getTime() ?? 0) - (b.dueAt?.getTime() ?? 0));
+  const rankedIds = rankFocusTasks(openTasks.map((task) => ({ id: task.id, title: task.title, priority: task.priority, status: task.status, dueAt: task.dueAt, startAt: task.startAt, postponeCount: task.postponeCount, dependencyBlocked: task.dependencies.some((edge) => edge.dependsOn.status !== 'COMPLETED') }))).map((task) => task.id);
+  const ranked = [...openTasks].sort((a, b) => rankedIds.indexOf(a.id) - rankedIds.indexOf(b.id));
   const keep: typeof ranked = [];
   const move: typeof ranked = [];
   let used = 0;
@@ -57,11 +59,4 @@ export async function buildDailyPlan(userId: string, timeZone: string, ymdValue:
     keepIds: keep.map((t) => t.id),
     moveIds: move.map((t) => t.id),
   };
-}
-
-function priorityRank(priority: string) {
-  if (priority === 'CRITICAL') return 4;
-  if (priority === 'HIGH') return 3;
-  if (priority === 'NORMAL') return 2;
-  return 1;
 }
