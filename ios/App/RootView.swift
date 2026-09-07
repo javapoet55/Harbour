@@ -142,13 +142,14 @@ private struct TodayDesignPreview: View {
 private struct TaskDesignPreview: View {
     @StateObject private var model = AppModel()
     @State private var loaded = false
+    @State private var selectedTab: NexdoTab = .tasks
 
     var body: some View {
         Group {
             if ProcessInfo.processInfo.arguments.contains("-task-editor-preview") {
                 NavigationStack { TaskEditor(task: nil) }
             } else {
-                NexdoTabShell(selection: .constant(.tasks))
+                NexdoTabShell(selection: $selectedTab)
             }
         }
             .environmentObject(model)
@@ -921,12 +922,13 @@ private struct TodayScheduleRow: View {
 }
 
 private struct TodayBackdrop: View {
+    var subtle = false
     var body: some View {
         ZStack {
-            Color(uiColor: .systemGroupedBackground)
+            Color(uiColor: subtle ? .systemBackground : .systemGroupedBackground)
             LinearGradient(colors: [Color.nexdoBlue.opacity(0.10), Color.nexdoMagenta.opacity(0.08), Color.clear], startPoint: .topLeading, endPoint: .center)
-            Circle().fill(Color.nexdoBlue.opacity(0.12)).frame(width: 280).blur(radius: 18).offset(x: -170, y: -360)
-            Circle().fill(Color.nexdoMagenta.opacity(0.10)).frame(width: 260).blur(radius: 18).offset(x: 190, y: -250)
+            Circle().fill(Color.nexdoBlue.opacity(0.12)).frame(width: 280).blur(radius: 18).offset(x: -170, y: -360).opacity(subtle ? 0.25 : 1)
+            Circle().fill(Color.nexdoMagenta.opacity(0.10)).frame(width: 260).blur(radius: 18).offset(x: 190, y: -250).opacity(subtle ? 0.25 : 1)
         }
         .ignoresSafeArea()
         .accessibilityHidden(true)
@@ -1017,7 +1019,7 @@ private struct TasksView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                TodayBackdrop()
+                TodayBackdrop(subtle: true)
                 VStack(alignment: .leading, spacing: 16) {
                     TodayTopBar(name: model.profile?.name ?? "", temperature: model.weather.map { Int($0.current.temperature.rounded()) }, add: { adding = true }, account: { account = true })
                         .padding(.top, 8)
