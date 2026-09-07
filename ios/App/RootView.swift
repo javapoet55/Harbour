@@ -49,20 +49,30 @@ private struct NexdoTabShell: View {
     @Binding var selection: NexdoTab
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var voiceInfo = false
+    @State private var showingAsk = false
+    private var activeTab: NexdoTab { showingAsk ? .askAI : selection }
 
     var body: some View {
         ZStack {
             Group {
                 switch selection {
                 case .today:
-                    TodayView(onAsk: { selection = .askAI }, onCalendar: { selection = .calendar })
+                    TodayView(onAsk: { showingAsk = true }, onCalendar: { selection = .calendar })
                 case .tasks: TasksView()
-                case .askAI: AskView()
+                case .askAI: TodayView(onAsk: { showingAsk = true }, onCalendar: { selection = .calendar })
                 case .calendar: CalendarView()
                 }
             }
             .id(selection)
             .transition(.opacity.combined(with: .scale(scale: 0.985)))
+        }
+        .blur(radius: showingAsk ? 2 : 0)
+        .sheet(isPresented: $showingAsk) {
+            AskNexdoView()
+                .presentationDetents([.fraction(0.84)])
+                .presentationDragIndicator(.visible)
+                .presentationCornerRadius(28)
+                .presentationBackgroundInteraction(.disabled)
         }
         .animation(reduceMotion ? nil : .snappy(duration: 0.28), value: selection)
         .alert("Voice input", isPresented: $voiceInfo) { Button("OK", role: .cancel) {} } message: { Text("Voice input isn’t available in the native app yet. Tap Ask Nexdo to type your question.") }
@@ -71,7 +81,7 @@ private struct NexdoTabShell: View {
                 FocusSessionStrip()
                 if selection != .askAI {
                     HStack(spacing: 0) {
-                        Button { selection = .askAI } label: {
+                        Button { showingAsk = true } label: {
                             Text("Ask Nexdo…").font(.body).foregroundStyle(Color.nexdoSecondary)
                                 .frame(maxWidth: .infinity, minHeight: 52, alignment: .leading)
                                 .contentShape(Rectangle())
@@ -92,20 +102,20 @@ private struct NexdoTabShell: View {
 
                 HStack(spacing: 4) {
                     ForEach(NexdoTab.allCases) { tab in
-                        Button { selection = tab } label: {
+                        Button { if tab == .askAI { showingAsk = true } else { selection = tab } } label: {
                             VStack(spacing: 4) {
                                 Image(systemName: tab.icon)
-                                    .font(.system(size: 19, weight: selection == tab ? .semibold : .regular))
-                                Text(tab.title).font(.caption2.weight(selection == tab ? .semibold : .regular))
+                                    .font(.system(size: 19, weight: activeTab == tab ? .semibold : .regular))
+                                Text(tab.title).font(.caption2.weight(activeTab == tab ? .semibold : .regular))
                             }
-                            .foregroundStyle(selection == tab ? Color.nexdoIndigo : Color.nexdoSecondary)
+                            .foregroundStyle(activeTab == tab ? Color.nexdoIndigo : Color.nexdoSecondary)
                             .frame(maxWidth: .infinity, minHeight: 52)
-                            .background(selection == tab ? Color.nexdoIndigo.opacity(0.10) : .clear, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                            .background(activeTab == tab ? Color.nexdoIndigo.opacity(0.10) : .clear, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                             .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
                         .accessibilityLabel(tab.title)
-                        .accessibilityAddTraits(selection == tab ? .isSelected : [])
+                        .accessibilityAddTraits(activeTab == tab ? .isSelected : [])
                     }
                 }
                 .padding(.horizontal, 8)
@@ -1478,60 +1488,6 @@ private struct EventRow: View {
                 Text(ServerDate.time(event.startAt, timeZone: timeZone)).font(.caption).foregroundStyle(.secondary)
             }
         }.padding(.vertical, 4)
-    }
-}
-
-private struct AskView: View {
-    @EnvironmentObject var model: AppModel
-    @State private var prompt = ""
-    private let suggestions = ["What’s my day looking like?", "Do I have any conflicts?", "What should I focus on today?", "Fix my afternoon.", "I have 45 minutes free. What should I do?"]
-    var body: some View {
-        NavigationStack {
-            List {
-                if !model.aiConsent {
-                    Section("Before using Ask AI") {
-                        Text("Nexdo sends your question and relevant task and calendar information—including titles, notes, times, preferences, and conversation context—to OpenAI to generate answers. Do not include information you do not want shared. AI can make mistakes; review proposed changes before approving them.")
-                        Link("OpenAI data privacy information", destination: URL(string: "https://openai.com/policies/privacy-policy/")!)
-                        Button("Allow sharing with OpenAI") { model.aiConsent = true }
-                        Text("Optional. Tasks and Calendar work without AI. You can withdraw permission in Account; withdrawal stops future requests, not previous processing.").font(.footnote).foregroundStyle(.secondary)
-                    }
-                } else {
-                    if let turn = model.turn {
-                        Section { Text(turn.visual.summary) }
-                        if let sections = turn.visual.sections, !sections.isEmpty {
-                            ForEach(Array(sections.enumerated()), id: \.offset) { _, section in
-                                Section(section.title) { ForEach(Array(section.items.enumerated()), id: \.offset) { _, item in Text(item) } }
-                            }
-                        } else { Section { Text(turn.spoken) } }
-                        if let confirmation = turn.confirmation {
-                            Section("Review proposed changes") {
-                                Text(confirmation.prompt)
-                                ForEach(Array((turn.visual.tasks ?? []).enumerated()), id: \.offset) { _, detail in Text(detail) }
-                                ForEach(Array((turn.executive?.proposedScheduleChanges ?? []).enumerated()), id: \.offset) { _, change in
-                                    VStack(alignment: .leading, spacing: 6) {
-                                        Text(change.title).bold()
-                                        Text("From: \(change.before ?? "Unscheduled")")
-                                        Text("To: \(change.after) · \(change.durationMin) min")
-                                        Text(change.reason).font(.footnote)
-                                    }
-                                }
-                                Button("Approve changes") { Task { await model.ask("yes", accept: true) } }.disabled(model.busy)
-                                Button("Keep my current plan", role: .cancel) { Task { await model.ask("no", accept: false) } }.disabled(model.busy)
-                            }
-                        }
-                    } else {
-                        Section("Start with a question") {
-                            ForEach(suggestions, id: \.self) { text in Button(text) { Task { await model.ask(text) } }.disabled(model.busy) }
-                        }
-                    }
-                    Section("Follow up") {
-                        TextField("Ask Nexdo…", text: $prompt, axis: .vertical).lineLimit(1...6)
-                        Button("Send") { let text = prompt; prompt = ""; Task { await model.ask(text) } }
-                            .disabled(model.busy || prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || prompt.count > 4000)
-                    }
-                }
-            }.navigationTitle("Ask Nexdo")
-        }
     }
 }
 

@@ -225,16 +225,20 @@ final class AppModel: ObservableObject {
     }
 
     @discardableResult
-    func ask(_ text: String, accept: Bool? = nil) async {
-        guard aiConsent else { return }
+    @discardableResult
+    func ask(_ text: String, accept: Bool? = nil) async -> Bool {
+        guard aiConsent, !busy, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, text.count <= 4000 else { return false }
         let proposal = turn?.confirmation?.actionId
-        if accept != nil && proposal == nil { return }
-        await perform {
+        if accept != nil && proposal == nil { return false }
+        var succeeded = false
+        await perform(errorMessage: "Nexdo couldn’t complete that request. Please try again.") {
             let request = AssistantRequest(transcript: text, contextActionId: contextID, confirmActionId: accept == true ? proposal : nil, rejectActionId: accept == false ? proposal : nil)
             let result: AssistantTurn = try await api.request("/api/assistant", method: "POST", body: JSONEncoder().encode(request))
             turn = result; contextID = result.contextActionId
+            succeeded = true
             if accept == true { try await load() }
         }
+        return succeeded
     }
     func withdrawConsent() { aiConsent = false; turn = nil; contextID = nil }
     func reset() async {
