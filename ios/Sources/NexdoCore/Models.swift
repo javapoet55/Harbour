@@ -30,6 +30,13 @@ public struct NexdoTask: Decodable, Identifiable, Sendable {
     public let notes: String?
     public let startAt: String?
     public let dueAt: String?
+    public var energyLevel: String? = nil
+    public var splittable: Bool? = nil
+    public var critical: Bool? = nil
+    public var minFocusMin: Int? = nil
+    public var timeZone: String? = nil
+    public var subtasks: [TaskStep]? = nil
+    public var recurrence: TaskRecurrence? = nil
     public var isDone: Bool { status == "COMPLETED" }
 }
 public struct TasksResponse: Decodable, Sendable {
@@ -167,4 +174,19 @@ public enum ServerDate {
         formatter.dateFormat = "yyyy-MM-dd"
         return formatter.string(from: date)
     }
+}
+
+public struct TaskStep: Codable, Identifiable, Equatable, Sendable {
+    public var id: String
+    public var title: String
+    public var completedAt: String?
+    public var sortOrder: Int
+}
+
+public struct TaskRecurrence: Codable, Equatable, Sendable {
+    public var frequency: String
+    public var interval: Int
+    public var byWeekday: String?
+    public var until: String?
+    public var count: Int?
 }

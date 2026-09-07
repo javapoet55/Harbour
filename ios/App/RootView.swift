@@ -68,6 +68,7 @@ private struct NexdoTabShell: View {
         .alert("Voice input", isPresented: $voiceInfo) { Button("OK", role: .cancel) {} } message: { Text("Voice input isn’t available in the native app yet. Tap Ask Nexdo to type your question.") }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             VStack(spacing: 0) {
+                FocusSessionStrip()
                 if selection != .askAI {
                     HStack(spacing: 0) {
                         Button { selection = .askAI } label: {
@@ -542,9 +543,9 @@ private struct NexdoLogoMark: View {
     }
 }
 
-private extension Color {
-    static let nexdoInk = Color(red: 0.03, green: 0.06, blue: 0.18)
-    static let nexdoSecondary = Color(red: 0.34, green: 0.36, blue: 0.50)
+extension Color {
+    static let nexdoInk = Color(uiColor: UIColor { $0.userInterfaceStyle == .dark ? .label : UIColor(red: 0.03, green: 0.06, blue: 0.18, alpha: 1) })
+    static let nexdoSecondary = Color(uiColor: UIColor { $0.userInterfaceStyle == .dark ? .secondaryLabel : UIColor(red: 0.34, green: 0.36, blue: 0.50, alpha: 1) })
     static let nexdoBlue = Color(red: 0.02, green: 0.58, blue: 0.96)
     static let nexdoIndigo = Color(red: 0.24, green: 0.16, blue: 0.94)
     static let nexdoPurple = Color(red: 0.52, green: 0.08, blue: 0.96)
@@ -1012,6 +1013,7 @@ private struct TasksView: View {
     @State private var account = false
     @State private var filters = false
     @State private var selectionInfo = false
+    @State private var editing: NexdoTask?
     private var visibleTasks: [NexdoTask] {
         model.taskQuery.results(model.tasks, timeZone: model.profile?.timeZone ?? model.agenda?.timeZone ?? TimeZone.current.identifier)
     }
@@ -1091,6 +1093,11 @@ private struct TasksView: View {
             .toolbar(.hidden, for: .navigationBar)
             .sheet(isPresented: $adding) { NavigationStack { TaskEditor(task: nil) } }
             .sheet(isPresented: $account) { AccountView() }
+            .sheet(item: $editing) { task in
+                NavigationStack { TaskEditor(task: task) }
+                    .presentationDetents([.large])
+                    .presentationCornerRadius(30)
+            }
             .sheet(isPresented: $filters) {
                 NavigationStack {
                     Form {
@@ -1109,7 +1116,7 @@ private struct TasksView: View {
             }
             .alert("Select tasks", isPresented: $selectionInfo) {
                 Button("OK", role: .cancel) {}
-            } message: { Text("Bulk actions aren’t available yet. Use a task’s completion circle or open it to edit.") }
+            } message: { Text("Bulk actions aren’t available yet. Open a task to edit or complete it.") }
         }
     }
 
@@ -1131,30 +1138,23 @@ private struct TasksView: View {
     }
 
     private func taskCard(_ task: NexdoTask) -> some View {
-        HStack(spacing: 8) {
-            Button { Task { await model.complete(task) } } label: {
+        Button { editing = task } label: {
+            HStack(spacing: 12) {
                 Image(systemName: task.isDone ? "checkmark.circle.fill" : "circle")
-                    .font(.system(size: 23, weight: .ultraLight))
-                    .foregroundStyle(task.isDone ? Color.nexdoIndigo : Color.nexdoSecondary)
-                    .frame(width: 44, height: 44)
-            }.buttonStyle(.plain).disabled(model.busy)
-                .accessibilityLabel("\(task.isDone ? "Restore" : "Complete") \(task.title)")
-                .accessibilityValue(task.isDone ? "Completed" : "Open")
-            NavigationLink { TaskEditor(task: task).toolbar(.visible, for: .navigationBar) } label: {
-                HStack {
-                    VStack(alignment: .leading, spacing: 5) {
-                        Text(task.title).font(.body).foregroundStyle(Color.nexdoInk).strikethrough(task.isDone)
-                        Text(taskSubtitle(task)).font(.caption).foregroundStyle(Color.nexdoSecondary)
-                    }
-                    Spacer(minLength: 8)
-                    Image(systemName: "chevron.right").font(.caption).foregroundStyle(Color.nexdoSecondary).accessibilityHidden(true)
-                }.frame(maxWidth: .infinity, minHeight: 44, alignment: .leading).contentShape(Rectangle())
-            }.buttonStyle(.plain).accessibilityElement(children: .combine).accessibilityHint("Opens task details")
-        }
-        .padding(.vertical, 12).padding(.leading, 8).padding(.trailing, 18)
-        .background(.background.opacity(0.88), in: RoundedRectangle(cornerRadius: 17))
-        .overlay(RoundedRectangle(cornerRadius: 17).stroke(Color.nexdoSecondary.opacity(0.16)))
-        .shadow(color: Color.nexdoSecondary.opacity(0.04), radius: 3, y: 2)
+                    .font(.title2).foregroundStyle(Color.nexdoSecondary).accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(task.title).font(.body).foregroundStyle(Color.nexdoInk).strikethrough(task.isDone)
+                    Text(taskSubtitle(task)).font(.caption).foregroundStyle(Color.nexdoSecondary)
+                }
+                Spacer(minLength: 8)
+                Image(systemName: "chevron.right").font(.caption).foregroundStyle(Color.nexdoSecondary).accessibilityHidden(true)
+            }
+            .padding(.vertical, 18).padding(.horizontal, 18)
+            .frame(maxWidth: .infinity, minHeight: 72, alignment: .leading)
+            .background(.background.opacity(0.88), in: RoundedRectangle(cornerRadius: 17))
+            .overlay(RoundedRectangle(cornerRadius: 17).stroke(Color.nexdoSecondary.opacity(0.16)))
+            .contentShape(RoundedRectangle(cornerRadius: 17))
+        }.buttonStyle(.plain).accessibilityElement(children: .combine).accessibilityHint("Opens task details")
     }
 
     private func taskSubtitle(_ task: NexdoTask) -> String {
@@ -1184,6 +1184,14 @@ private struct TaskEditor: View {
     private let commonDurations = [15, 30, 45, 60]
 
     var body: some View {
+        if let task {
+            TaskDetailsView(task: task).toolbar(.hidden, for: .navigationBar)
+        } else {
+            creationForm
+        }
+    }
+
+    private var creationForm: some View {
         ZStack {
             NexdoTaskBackdrop()
 
@@ -1329,8 +1337,9 @@ private enum TaskFilter: String, CaseIterable, Identifiable {
     var emptyMessage: String { self == .completed ? "Completed work will appear here." : "Create a task when something new comes up." }
 }
 
-private enum NexdoTheme {
+enum NexdoTheme {
     static let gradient = LinearGradient(colors: [.nexdoMagenta, .nexdoIndigo, .nexdoBlue], startPoint: .leading, endPoint: .trailing)
+    static let saveGradient = LinearGradient(colors: [.nexdoBlue, .nexdoIndigo, .nexdoMagenta], startPoint: .leading, endPoint: .trailing)
 }
 
 private struct TaskBadge: View {
