@@ -25,13 +25,13 @@ final class AppModel: ObservableObject {
     private let api = try! APIClient(baseURL: URL(string: "https://harbour-production-f8a0.up.railway.app")!)
     private struct Ignore: Decodable, Sendable {}
 
-    func perform(_ action: () async throws -> Void) async {
+    func perform(errorMessage: String? = nil, _ action: () async throws -> Void) async {
         guard !busy else { return }
         busy = true
         defer { busy = false }
         do { try await action() }
         catch APIError.signedOut { await reset(); error = "Please sign in again. Your session ended or the credentials were incorrect." }
-        catch { self.error = "Couldn’t complete the request. Refresh to check the current state before retrying." }
+        catch { self.error = errorMessage ?? (tasksLoadFailed ? "Couldn’t load your tasks. Please refresh to try again." : error.localizedDescription) }
     }
     func login(email: String, password: String) async {
         await perform {
@@ -97,15 +97,14 @@ final class AppModel: ObservableObject {
         catch { tasksLoadFailed = true; throw error }
         tasks = taskData.tasks
         let (agendaData, intelligenceData, weatherData) = try await (agendaResponse, intelligenceResponse, weatherResponse)
-        tasks = taskData.tasks
         agenda = agendaData
         scheduleIntelligence = intelligenceData
         weather = weatherData
     }
-    func refresh() async { await perform { try await load() } }
+    func refresh() async { await perform(errorMessage: "Couldn’t refresh your data. Please try again.") { try await load() } }
     func saveTask(id: String?, title: String, notes: String, duration: Int) async -> Bool {
         var saved = false
-        await perform {
+        await perform(errorMessage: "Couldn’t update your task. Refresh to check its current state before retrying.") {
             struct Input: Encodable { let title: String; let notes: String; let durationMin: Int }
             let _: Ignore = try await api.request(id.map { "/api/tasks/\($0.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed)!)" } ?? "/api/tasks", method: id == nil ? "POST" : "PATCH", body: JSONEncoder().encode(Input(title: title, notes: notes, durationMin: duration)))
             saved = true
@@ -114,7 +113,7 @@ final class AppModel: ObservableObject {
         return saved
     }
     func complete(_ task: NexdoTask) async {
-        await perform {
+        await perform(errorMessage: "Couldn’t update your task. Refresh to check its current state before retrying.") {
             let _: Ignore = try await api.request("/api/tasks/\(task.id)", method: "PATCH", body: JSONEncoder().encode(["status": task.isDone ? "PLANNED" : "COMPLETED"]))
             try await load()
         }
