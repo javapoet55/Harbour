@@ -11,14 +11,16 @@ export async function GET(req: Request) {
   url.searchParams.set('latitude', latitude.toFixed(4));
   url.searchParams.set('longitude', longitude.toFixed(4));
   url.searchParams.set('current', 'temperature_2m,apparent_temperature,weather_code,wind_speed_10m');
+  url.searchParams.set('daily', 'weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max');
+  url.searchParams.set('forecast_days', '5');
   url.searchParams.set('temperature_unit', 'fahrenheit');
   url.searchParams.set('wind_speed_unit', 'mph');
   url.searchParams.set('timezone', 'auto');
   try {
-    const response = await fetch(url, { next: { revalidate: 600 } });
+    const response = await fetch(url, { next: { revalidate: 600 }, signal: AbortSignal.timeout(12000) });
     if (!response.ok) throw new Error(`Weather provider returned ${response.status}`);
     const payload = await response.json();
-    return NextResponse.json({ current: payload.current, units: payload.current_units });
+    return NextResponse.json({ current: payload.current, units: payload.current_units, daily: payload.daily, timezone: payload.timezone });
   } catch {
     return NextResponse.json({ error: 'Weather is temporarily unavailable.' }, { status: 502 });
   }

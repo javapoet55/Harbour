@@ -41,3 +41,74 @@ private func fixture(_ id: String, due: String?, status: String = "PLANNED", not
     query.priority = "LOW"
     #expect(query.results(tasks, timeZone: "America/Los_Angeles", now: now, calendar: calendar).isEmpty)
 }
+
+@Test func newlyCreatedTaskIsRevealedUnderTodayAcrossFilters() throws {
+    let task = try fixture("Created on iPhone", due: ISO8601DateFormatter().string(from: Date()))
+    var query = TaskQuery()
+    query.search = "unrelated"
+    query.status = "Completed"
+    query.priority = "LOW"
+    query.earliestFirst = false
+    #expect(query.results([task], timeZone: "America/Los_Angeles").isEmpty)
+    query.revealCreatedTask()
+    #expect(query.results([task], timeZone: "America/Los_Angeles").map(\.id) == [task.id])
+    #expect(query.date == .today)
+    #expect(!query.earliestFirst)
+}
+
+@Test func scheduledTasksWithoutDeadlineAppearOnTheirScheduledDay() throws {
+    let data = Data(#"{"id":"scheduled","title":"Scheduled task","status":"PLANNED","priority":"NORMAL","durationMin":30,"startAt":"2026-09-07T16:00:00Z","dueAt":null}"#.utf8)
+    let task = try JSONDecoder().decode(NexdoTask.self, from: data)
+    let now = try #require(ServerDate.parse("2026-09-07T20:00:00Z"))
+    #expect(TaskQuery().results([task], timeZone: "America/Los_Angeles", now: now).map(\.id) == [task.id])
+}
+
+@Test func coupledDueDatePrefersScheduledTime() throws {
+    let data = Data(#"{"id":"deadline","title":"Deadline task","status":"PLANNED","priority":"NORMAL","durationMin":30,"startAt":"2026-09-07T16:00:00Z","dueAt":"2026-09-08T16:00:00Z"}"#.utf8)
+    let task = try JSONDecoder().decode(NexdoTask.self, from: data)
+    let now = try #require(ServerDate.parse("2026-09-07T20:00:00Z"))
+    #expect(TaskQuery().results([task], timeZone: "America/Los_Angeles", now: now).map(\.id) == [task.id])
+}
+
+@Test func staleDueDateDoesNotHideScheduledTaskFromToday() throws {
+    let scheduled = Data(#"{"id":"coupled","title":"Edited scheduled task","status":"PLANNED","priority":"NORMAL","durationMin":30,"startAt":"2026-09-07T16:00:00Z","dueAt":"2026-09-08T16:00:00Z"}"#.utf8)
+    let task = try JSONDecoder().decode(NexdoTask.self, from: scheduled)
+    let stale = Data(#"{"id":"uncoupled","title":"Deadline task","status":"PLANNED","priority":"NORMAL","durationMin":30,"startAt":null,"dueAt":"2026-09-07T16:00:00Z"}"#.utf8)
+    let uncoupled = try JSONDecoder().decode(NexdoTask.self, from: stale)
+    let now = try #require(ServerDate.parse("2026-09-07T20:00:00Z"))
+    let query = TaskQuery()
+    #expect(query.results([task, uncoupled], timeZone: "America/Los_Angeles", now: now).map(\.id) == ["coupled", "uncoupled"])
+}
+
+@Test func createSendsTodayAndEditPreservesSchedule() throws {
+    let now = try #require(ServerDate.parse("2026-09-08T02:30:00Z"))
+    let input = TaskSaveInput(title: "Today task", notes: "", durationMin: 30, isNew: true, now: now)
+    #expect(ServerDate.day(try #require(input.startAt), timeZone: "America/Los_Angeles") == "2026-09-07")
+    #expect(ServerDate.day(try #require(input.startAt), timeZone: "Asia/Kolkata") == "2026-09-08")
+    let edit = TaskSaveInput(title: "Rename", notes: "", durationMin: 30, isNew: false, now: now)
+    let json = try #require(try JSONSerialization.jsonObject(with: JSONEncoder().encode(edit)) as? [String: Any])
+    #expect(json["startAt"] == nil)
+}
+
+@Test func tomorrowSelectionUsesCalendarDaysAcrossDST() throws {
+    let now = try #require(ServerDate.parse("2026-03-07T20:00:00Z"))
+    let zone = try #require(TimeZone(identifier: "America/Los_Angeles"))
+    let tomorrow = TaskCreationDate.tomorrow.resolve(customDate: now, timeZone: zone, now: now)
+    #expect(tomorrow.timeIntervalSince(now) == 23 * 3600)
+    var query = TaskQuery()
+    query.revealCreatedTask(scheduledAt: tomorrow, timeZone: zone.identifier, now: now)
+    #expect(query.date == .tomorrow)
+    let input = TaskSaveInput(title: "Tomorrow", notes: "", durationMin: 30, isNew: true, now: now, scheduledAt: tomorrow)
+    #expect(input.startAt.flatMap(ServerDate.parse) == tomorrow)
+}
+
+@Test func customDateIsPersistedAndVisibleAfterCreation() throws {
+    let now = try #require(ServerDate.parse("2026-09-07T20:30:00Z"))
+    let custom = try #require(ServerDate.parse("2026-09-15T07:00:00Z"))
+    let zone = try #require(TimeZone(identifier: "America/Los_Angeles"))
+    let selected = TaskCreationDate.custom.resolve(customDate: custom, timeZone: zone, now: now)
+    #expect(ServerDate.day(ISO8601DateFormatter().string(from: selected), timeZone: zone.identifier) == "2026-09-15")
+    var query = TaskQuery()
+    query.revealCreatedTask(scheduledAt: selected, timeZone: zone.identifier, now: now)
+    #expect(query.date == .all)
+}

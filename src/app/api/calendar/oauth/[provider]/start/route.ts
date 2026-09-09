@@ -9,5 +9,6 @@ export async function GET(_req: Request, ctx: { params: Promise<{ provider: stri
   const user = await requireUser();
   const { provider } = await ctx.params;
   if (!valid(provider)) return NextResponse.json({ error: 'Unsupported provider.' }, { status: 400 });
-  return NextResponse.redirect(oauthAuthorizationUrl(provider, await createOAuthState(user.id, provider)));
+  const native = new URL(_req.url).searchParams.get('native') === '1';
+  return NextResponse.redirect(oauthAuthorizationUrl(provider, await createOAuthState(user.id, provider, native)));
 }

@@ -1,4 +1,4 @@
-import type { CalendarProvider, EmailProvider, LanguageModel, PushProvider, SmsProvider, SpeechProvider } from './types';
+import type { EmailProvider, PushProvider, SmsProvider } from './types';
 import webpush from 'web-push';
 import { prisma } from '@/server/db';
 
@@ -8,7 +8,7 @@ export const emailProvider: EmailProvider = {
   name: configured(process.env.SENDGRID_API_KEY) ? 'sendgrid' : 'mock-email',
   async send(message) {
     if (!configured(process.env.SENDGRID_API_KEY)) {
-      console.info('[harbor.email.mock]', message.subject, '→', message.to);
+      if (process.env.NODE_ENV === 'production') return { id: '', status: 'FAILED', reason: 'Email provider is not configured' };
       return { id: `mock-email-${Date.now()}`, status: 'SENT' };
     }
     const from = process.env.SENDGRID_FROM_EMAIL;
@@ -19,9 +19,9 @@ export const emailProvider: EmailProvider = {
         headers: { Authorization: `Bearer ${process.env.SENDGRID_API_KEY}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ personalizations: [{ to: [{ email: message.to }] }], from: { email: from, name: process.env.SENDGRID_FROM_NAME || 'Harbour' }, subject: message.subject, content: [{ type: 'text/plain', value: message.text }] }),
       });
-      if (!response.ok) return { id: '', status: 'FAILED', reason: `SendGrid ${response.status}: ${(await response.text()).slice(0, 200)}` };
+      if (!response.ok) return { id: '', status: 'FAILED', reason: `SendGrid ${response.status}` };
       return { id: response.headers.get('x-message-id') || `sendgrid-${Date.now()}`, status: 'SENT' };
-    } catch (error) { return { id: '', status: 'FAILED', reason: error instanceof Error ? error.message : 'SendGrid request failed' }; }
+    } catch { return { id: '', status: 'FAILED', reason: 'SendGrid request failed' }; }
   },
 };
 
@@ -29,7 +29,7 @@ export const smsProvider: SmsProvider = {
   name: configured(process.env.TWILIO_ACCOUNT_SID) ? 'twilio' : 'mock-sms',
   async send(message) {
     if (!configured(process.env.TWILIO_ACCOUNT_SID)) {
-      console.info('[harbor.sms.mock]', message.text);
+      if (process.env.NODE_ENV === 'production') return { id: '', status: 'FAILED', reason: 'SMS provider is not configured' };
       return { id: `mock-sms-${Date.now()}`, status: 'SENT' };
     }
     const sid = process.env.TWILIO_ACCOUNT_SID!;
@@ -43,9 +43,9 @@ export const smsProvider: SmsProvider = {
         body: new URLSearchParams({ To: message.to, From: from, Body: message.text }),
       });
       const payload = await response.json() as { sid?: string; message?: string };
-      if (!response.ok) return { id: '', status: 'FAILED', reason: payload.message || `Twilio ${response.status}` };
+      if (!response.ok) return { id: '', status: 'FAILED', reason: `Twilio ${response.status}` };
       return { id: payload.sid || `twilio-${Date.now()}`, status: 'SENT' };
-    } catch (error) { return { id: '', status: 'FAILED', reason: error instanceof Error ? error.message : 'Twilio request failed' }; }
+    } catch { return { id: '', status: 'FAILED', reason: 'Twilio request failed' }; }
   },
 };
 
@@ -55,7 +55,7 @@ export const pushProvider: PushProvider = {
     const publicKey = process.env.VAPID_PUBLIC_KEY;
     const privateKey = process.env.VAPID_PRIVATE_KEY;
     if (!publicKey || !privateKey) {
-      console.info('[harbor.push.mock]', message.title, message.body);
+      if (process.env.NODE_ENV === 'production') return { id: '', status: 'FAILED', reason: 'Push provider is not configured' };
       return { id: `mock-push-${Date.now()}`, status: 'SENT' };
     }
     webpush.setVapidDetails(process.env.VAPID_SUBJECT || 'mailto:admin@example.com', publicKey, privateKey);
@@ -70,39 +70,11 @@ export const pushProvider: PushProvider = {
       } catch (error) {
         const status = (error as { statusCode?: number }).statusCode;
         if (status === 404 || status === 410) await prisma.pushSubscription.delete({ where: { endpoint: subscription.endpoint } });
-        failures.push(error instanceof Error ? error.message : 'Web Push failed');
+        failures.push(`Web Push failed${status ? ` (${status})` : ''}`);
       }
     }
     return ids.length ? { id: ids.join(','), status: 'SENT', reason: failures.length ? failures.join('; ') : undefined } : { id: '', status: 'FAILED', reason: failures.join('; ') };
   },
 };
 
-export const speechProvider: SpeechProvider = {
-  name: 'browser-speech',
-  async synthesize() {
-    return { useBrowserTts: true };
-  },
-};
-
-export const languageModel: LanguageModel = {
-  name: configured(process.env.OPENAI_API_KEY) ? 'openai' : 'extractive',
-  async complete(prompt) {
-    if (!configured(process.env.OPENAI_API_KEY)) {
-      return prompt.slice(0, 400);
-    }
-    return prompt.slice(0, 400);
-  },
-};
-
-export const mockCalendar: CalendarProvider = {
-  name: 'harbor-local',
-  async list() {
-    return { events: [] };
-  },
-  async upsert(event) {
-    return { externalId: event.externalId ?? `harbor-${Date.now()}` };
-  },
-  async remove() {},
-};
-
-export type { CalendarProvider };
+export type { CalendarProvider } from './types';

@@ -1,0 +1,252 @@
+--- /dev/null
++++ b/src/server/projects.ts
+@@ -0,0 +1,65 @@
++import type { Prisma } from '@/generated/prisma';
++import { prisma } from './db';
++import { z } from 'zod';
++
++export const projectInput = z.object({
++  name: z.string().trim().min(1).max(80),
++  color: z.string().regex(/^#[0-9a-fA-F]{6}$/).transform(value => value.toLowerCase()),
++}).strict();
++export function parseProjectId(value: unknown): string | null {
++  const result = z.string().min(1).max(100).nullable().safeParse(value);
++  if (!result.success) throw new Error('INVALID_PROJECT');
++  return result.data;
++}
++export async function ownedProject(db: Prisma.TransactionClient, userId: string, id: string) {
++  const project = await db.project.findFirst({ where: { id, userId, deletedAt: null } });
++  if (!project) throw new Error('NOT_FOUND');
++  return project;
++}
++export async function validateProjectAssignment(db: Prisma.TransactionClient, userId: string, id: string | null) {
++  if (id !== null) await ownedProject(db, userId, id);
++}
++export const projectTaskScope = { deletedAt: null, status: { not: 'CANCELLED' } } as const;
++
++export async function listProjects(userId: string) {
++  const { projects, groups } = await prisma.$transaction(async tx => {
++    const projects = await tx.project.findMany({ where: { userId, deletedAt: null }, orderBy: [{ updatedAt: 'desc' }, { id: 'asc' }], select: { id: true, name: true, color: true, createdAt: true, updatedAt: true } });
++    const groups = await tx.task.groupBy({ by: ['projectId', 'status'], where: { userId, ...projectTaskScope }, _count: { _all: true } });
++    return { projects, groups };
++  });
++  const counts = new Map<string | null, { completedTaskCount: number; totalTaskCount: number }>();
++  for (const group of groups) {
++    const count = counts.get(group.projectId) ?? { completedTaskCount: 0, totalTaskCount: 0 };
++    count.totalTaskCount += group._count._all;
++    if (group.status === 'COMPLETED') count.completedTaskCount += group._count._all;
++    counts.set(group.projectId, count);
++  }
++  return { projects: projects.map(project => ({ ...project, ...(counts.get(project.id) ?? { completedTaskCount: 0, totalTaskCount: 0 }) })), unassignedTaskCount: counts.get(null)?.totalTaskCount ?? 0 };
++}
++export async function saveProject(userId: string, id: string | null, body: unknown) {
++  const parsed = projectInput.safeParse(body);
++  if (!parsed.success) throw new Error('INVALID_PROJECT');
++  return prisma.$transaction(async tx => {
++    if (id) await ownedProject(tx, userId, id);
++    const project = id ? await tx.project.update({ where: { id }, data: parsed.data }) : await tx.project.create({ data: { userId, ...parsed.data } });
++    const [totalTaskCount, completedTaskCount] = await Promise.all([
++      tx.task.count({ where: { userId, projectId: project.id, ...projectTaskScope } }),
++      tx.task.count({ where: { userId, projectId: project.id, deletedAt: null, status: 'COMPLETED' } }),
++    ]);
++    return { id: project.id, name: project.name, color: project.color, createdAt: project.createdAt, updatedAt: project.updatedAt, totalTaskCount, completedTaskCount };
++  });
++}
++export async function deleteProject(userId: string, id: string) {
++  return prisma.$transaction(async tx => {
++    await ownedProject(tx, userId, id);
++    await tx.task.updateMany({ where: { userId, projectId: id }, data: { projectId: null } });
++    await tx.project.update({ where: { id }, data: { deletedAt: new Date() } });
++    return { ok: true };
++  });
++}
++export async function projectTasks(userId: string, id: string) {
++  return prisma.$transaction(async tx => {
++    await ownedProject(tx, userId, id);
++    return tx.task.findMany({ where: { userId, projectId: id, ...projectTaskScope }, include: { subtasks: true, recurrence: true }, orderBy: [{ createdAt: 'desc' }, { id: 'asc' }] });
++  });
++}
+--- /dev/null
++++ b/src/app/api/projects/route.ts
+@@ -0,0 +1,12 @@
++import { NextResponse } from 'next/server';
++import { requireUser } from '@/server/auth';
++import { listProjects, saveProject } from '@/server/projects';
++import { jsonError } from '@/lib/http';
++export async function GET() {
++  try { const user = await requireUser(); return NextResponse.json(await listProjects(user.id), { headers: { 'Cache-Control': 'private, no-store' } }); }
++  catch (error) { return jsonError(error); }
++}
++export async function POST(request: Request) {
++  try { const user = await requireUser(); return NextResponse.json({ project: await saveProject(user.id, null, await request.json().catch(() => null)) }, { status: 201 }); }
++  catch (error) { return jsonError(error); }
++}
+--- /dev/null
++++ b/src/app/api/projects/[id]/route.ts
+@@ -0,0 +1,13 @@
++import { NextResponse } from 'next/server';
++import { requireUser } from '@/server/auth';
++import { saveProject, deleteProject } from '@/server/projects';
++import { jsonError } from '@/lib/http';
++type Context = { params: Promise<{ id: string }> };
++export async function PATCH(request: Request, context: Context) {
++  try { const user = await requireUser(); const { id } = await context.params; return NextResponse.json({ project: await saveProject(user.id, id, await request.json().catch(() => null)) }); }
++  catch (error) { return jsonError(error); }
++}
++export async function DELETE(_request: Request, context: Context) {
++  try { const user = await requireUser(); const { id } = await context.params; return NextResponse.json(await deleteProject(user.id, id)); }
++  catch (error) { return jsonError(error); }
++}
+--- /dev/null
++++ b/src/app/api/projects/[id]/tasks/route.ts
+@@ -0,0 +1,8 @@
++import { NextResponse } from 'next/server';
++import { requireUser } from '@/server/auth';
++import { projectTasks } from '@/server/projects';
++import { jsonError } from '@/lib/http';
++export async function GET(_request: Request, context: { params: Promise<{ id: string }> }) {
++  try { const user = await requireUser(); const { id } = await context.params; return NextResponse.json({ tasks: await projectTasks(user.id, id), timeZone: user.timeZone }, { headers: { 'Cache-Control': 'private, no-store' } }); }
++  catch (error) { return jsonError(error); }
++}
+--- a/src/server/tasks.ts
++++ b/src/server/tasks.ts
+@@ -1,5 +1,6 @@
+ import type { Prisma } from '@/generated/prisma';
+ import { prisma } from './db';
++import { validateProjectAssignment } from './projects';
+ import { zonedDateTime } from '@/lib/time';
+ import { nextOccurrence } from '@/lib/recurrence';
+ 
+@@ -23,14 +24,18 @@
+   critical?: boolean;
+   listId?: string | null;
+   idempotencyKey?: string;
++  projectId?: string | null;
+ }) {
+   if (input.idempotencyKey) {
+     const existing = await prisma.task.findUnique({ where: { idempotencyKey: input.idempotencyKey } });
+     if (existing) return existing;
+   }
+-  return prisma.task.create({
++  return prisma.$transaction(async tx => {
++    await validateProjectAssignment(tx, input.userId, input.projectId ?? null);
++    return tx.task.create({
+     data: {
+       userId: input.userId,
++      projectId: input.projectId ?? null,
+       title: input.title.trim(),
+       notes: input.notes ?? '',
+       kind: input.kind ?? 'TASK',
+@@ -46,12 +51,16 @@
+       idempotencyKey: input.idempotencyKey,
+     },
+   });
++  });
+ }
+ 
+ export async function updateTask(userId: string, id: string, data: Prisma.TaskUpdateInput) {
+-  const existing = await prisma.task.findFirst({ where: { id, userId, deletedAt: null } });
+-  if (!existing) throw new Error('NOT_FOUND');
+-  return prisma.task.update({ where: { id }, data });
++  return prisma.$transaction(async tx => {
++    const existing = await tx.task.findFirst({ where: { id, userId, deletedAt: null } });
++    if (!existing) throw new Error('NOT_FOUND');
++    if (data.project?.connect?.id) await validateProjectAssignment(tx, userId, data.project.connect.id);
++    return tx.task.update({ where: { id }, data });
++  });
+ }
+ 
+ export async function completeTask(userId: string, id: string) {
+--- a/src/app/api/tasks/route.ts
++++ b/src/app/api/tasks/route.ts
+@@ -1,3 +1,5 @@
++import { parseProjectId } from '@/server/projects';
++import { jsonError } from '@/lib/http';
+ import { NextResponse } from 'next/server';
+ import { requireUser } from '@/server/auth';
+ import { createTask } from '@/server/tasks';
+@@ -33,6 +35,7 @@
+ }
+ 
+ export async function POST(req: Request) {
++  try {
+   const user = await requireUser();
+   const body = await req.json();
+   const startAt = body.startAt
+@@ -42,6 +45,7 @@
+       : null;
+   const task = await createTask({
+     userId: user.id,
++    projectId: body.projectId === undefined ? undefined : parseProjectId(body.projectId),
+     title: String(body.title ?? '').trim(),
+     notes: body.notes,
+     priority: body.priority,
+@@ -60,4 +64,5 @@
+   if (startAt) await pushTaskToExternal(user.id, task.id);
+   await generateReplanProposal(user.id);
+   return NextResponse.json({ task });
++  } catch (error) { return jsonError(error); }
+ }
+--- a/src/app/api/tasks/[id]/route.ts
++++ b/src/app/api/tasks/[id]/route.ts
+@@ -1,3 +1,4 @@
++import { parseProjectId } from '@/server/projects';
+ import { NextResponse } from 'next/server';
+ import type { Prisma } from '@/generated/prisma';
+ import { requireUser } from '@/server/auth';
+@@ -14,6 +15,9 @@
+     const user = await requireUser();
+     const { id } = await ctx.params;
+     const body = await req.json();
++    if (body.projectId !== undefined && (body.status !== undefined || body.startAt || body.date || body.focusAction)) {
++      return NextResponse.json({ error: 'Save the project assignment separately from status or schedule changes.' }, { status: 400 });
++    }
+     if (body.status === 'COMPLETED') {
+       const task = await completeTask(user.id, id);
+       await pushTaskToExternal(user.id, id);
+@@ -48,6 +52,10 @@
+       return NextResponse.json({ task });
+     }
+     const data: Prisma.TaskUpdateInput = {};
++    if (body.projectId !== undefined) {
++      const projectId = parseProjectId(body.projectId);
++      data.project = projectId === null ? { disconnect: true } : { connect: { id: projectId } };
++    }
+     if (typeof body.title === 'string') data.title = body.title;
+     if (typeof body.notes === 'string') data.notes = body.notes;
+     if (typeof body.status === 'string') data.status = body.status;
+--- a/src/lib/http.ts
++++ b/src/lib/http.ts
+@@ -2,6 +2,7 @@
+ import { log } from './logger';
+ 
+ export function jsonError(err: unknown) {
++  if (err instanceof Error && err.message === 'INVALID_PROJECT') return NextResponse.json({ error: 'Enter a project name of 1–80 characters and a valid color.' }, { status: 400 });
+   if (err instanceof Error && err.message === 'UNAUTHENTICATED') {
+     return NextResponse.json({ error: 'Sign in required.' }, { status: 401 });
+   }
+--- a/prisma/schema.prisma
++++ b/prisma/schema.prisma
+@@ -90,6 +90,7 @@
+   updatedAt DateTime  @updatedAt
+   deletedAt DateTime?
+   tasks     Task[]
++  @@index([userId, deletedAt, updatedAt])
+ }
+ 
+ model Category {
+@@ -156,6 +157,7 @@
+   tags         TaskTag[]
+   activities   ActivityLog[]
+   workSessions TaskWorkSession[]
++  @@index([userId, projectId, deletedAt, status])
+ }
+ 
+ model TaskWorkSession {
+--- /dev/null
++++ b/prisma/migrations/9_project_indexes/migration.sql
+@@ -0,0 +1,4 @@
++-- Existing Project and Task.projectId tables/foreign key are retained.
++-- No task assignments or task data are changed.
++CREATE INDEX "Project_userId_deletedAt_updatedAt_idx" ON "Project"("userId", "deletedAt", "updatedAt");
++CREATE INDEX "Task_userId_projectId_deletedAt_status_idx" ON "Task"("userId", "projectId", "deletedAt", "status");

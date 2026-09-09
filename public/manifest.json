@@ -1,9 +1,23 @@
 {
-  "name": "Harbor",
-  "short_name": "Harbor",
+  "name": "Nexdo",
+  "short_name": "Nexdo",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#f4f1ea",
-  "theme_color": "#3d5a80",
-  "description": "Voice-first personal to-do and calendar assistant."
+  "background_color": "#faf9ff",
+  "theme_color": "#5032f5",
+  "description": "Voice-first personal to-do and calendar assistant.",
+  "icons": [
+    {
+      "src": "/nexdo-app-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/nexdo-app-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
 }

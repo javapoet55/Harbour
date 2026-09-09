@@ -5,8 +5,13 @@ import { highPriority, snapshotForRange, unscheduledTasks, waitingTasks } from '
 export async function GET(req: Request) {
   try {
     const user = await requireUser();
-    const days = Number(new URL(req.url).searchParams.get('days') ?? '3');
-    const snap = await snapshotForRange(user.id, user.timeZone, Math.min(31, Math.max(1, days)));
+    const params = new URL(req.url).searchParams;
+    const days = Number(params.get('days') ?? '3');
+    const from = params.get('from') ?? undefined;
+    if (!Number.isInteger(days) || days < 1 || days > 42 || (from && (!/^\d{4}-\d{2}-\d{2}$/.test(from) || !Number.isFinite(Date.parse(from)) || new Date(from).toISOString().slice(0, 10) !== from))) {
+      return NextResponse.json({ error: 'Provide a valid date and 1–42 days.' }, { status: 400 });
+    }
+    const snap = await snapshotForRange(user.id, user.timeZone, days, new Date(), from);
     const [waiting, unscheduled, important] = await Promise.all([
       waitingTasks(user.id),
       unscheduledTasks(user.id),

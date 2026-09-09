@@ -6,6 +6,13 @@ describe('intent parsing', () => {
     expect(parseIntent('What do I have today?').intent).toBe('LIST_TODAY');
   });
 
+  it.each(["What's my day looking like?", 'What’s my day looking like?'])(
+    'routes the day shortcut to a read-only day summary: %s',
+    (prompt) => {
+      expect(parseIntent(prompt)).toMatchObject({ intent: 'LIST_TODAY', confirmationRequired: false });
+    },
+  );
+
   it('understands the next three and five days', () => {
     expect(parseIntent('What is coming up during the next three days?')).toMatchObject({ intent: 'LIST_NEXT_N_DAYS', days: 3 });
     expect(parseIntent('Show me everything important during the next five days.')).toMatchObject({ intent: 'LIST_NEXT_N_DAYS', days: 5 });
@@ -32,9 +39,28 @@ describe('intent parsing', () => {
   });
 
   it('recognizes complete briefings, this week, and upcoming deadlines', () => {
-    expect(parseIntent('Harbor, brief me').intent).toBe('BRIEF_ME');
+    expect(parseIntent('Harbor, brief me')).toMatchObject({ intent: 'BRIEF_ME', days: 5 });
     expect(parseIntent('Brief me for the rest of my week').intent).toBe('LIST_THIS_WEEK');
     expect(parseIntent('What does this week look like?').intent).toBe('LIST_THIS_WEEK');
     expect(parseIntent('What upcoming deadlines do I have?').intent).toBe('LIST_DEADLINES');
+  });
+
+  it('recognizes schedule intelligence and approval-safe schedule fixes', () => {
+    expect(parseIntent('Do I have any conflicts?')).toMatchObject({ intent: 'SCHEDULE_INTELLIGENCE', confirmationRequired: false });
+    expect(parseIntent('Can everything due today actually fit?').intent).toBe('SCHEDULE_INTELLIGENCE');
+    expect(parseIntent('Fix my afternoon.')).toMatchObject({ intent: 'FIX_SCHEDULE', confirmationRequired: true });
+  });
+});
+
+
+describe('briefing display ranges', () => {
+  it('uses five days for default briefing and deadlines', () => {
+    expect(parseIntent('Nexdo, brief me')).toMatchObject({ intent: 'BRIEF_ME', days: 5 });
+    expect(parseIntent('Show upcoming deadlines')).toMatchObject({ intent: 'LIST_DEADLINES', days: 5 });
+  });
+  it('honors explicitly requested report ranges', () => {
+    expect(parseIntent('Nexdo, brief me for the next 5 days')).toMatchObject({ intent: 'BRIEF_ME', days: 5 });
+    expect(parseIntent('Give me a complete briefing for the next 7 days')).toMatchObject({ intent: 'BRIEF_ME', days: 7 });
+    expect(parseIntent('Show upcoming deadlines in the next 3 days')).toMatchObject({ intent: 'LIST_DEADLINES', days: 3 });
   });
 });

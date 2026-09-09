@@ -6,6 +6,7 @@ const prisma = new PrismaClient();
 const TZ = 'America/Los_Angeles';
 
 async function main() {
+  if (process.env.NODE_ENV === 'production') throw new Error('Demo seeding is disabled in production.');
   const email = (process.env.HARBOR_DEMO_EMAIL || 'alex@harbor.app').toLowerCase();
   const password = process.env.HARBOR_DEMO_PASSWORD || 'harbor-demo';
   const today = tzToday(TZ);
@@ -40,7 +41,7 @@ async function main() {
   const user = await prisma.user.create({
     data: {
       email,
-      name: 'Alex Chen',
+      name: 'Rohit Kumar',
       passwordHash: await bcrypt.hash(password, 10),
       timeZone: TZ,
       preference: {
@@ -64,7 +65,7 @@ async function main() {
       provider: 'google',
       accountEmail: email,
       calendarId: 'primary',
-      calendarName: 'Alex — Work',
+      calendarName: 'Rohit — Work',
       visible: true,
       writeEnabled: true,
       lastSyncedAt: new Date(),
@@ -252,7 +253,7 @@ async function main() {
     ],
   });
 
-  console.log(`Seeded Harbor demo user ${email} / ${password}`);
+  console.log('Seeded the local demo account. Credentials are not logged.');
 }
 
 main()

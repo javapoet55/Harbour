@@ -1,7 +1,7 @@
 self.addEventListener('push', (event) => {
-  let data = { title: 'Harbour', body: 'You have a reminder.', url: '/notifications' };
+  let data = { title: 'Nexdo', body: 'You have a reminder.', url: '/notifications' };
   try { data = { ...data, ...event.data.json() }; } catch {}
-  event.waitUntil(self.registration.showNotification(data.title, { body: data.body, icon: '/favicon.ico', badge: '/favicon.ico', data: { url: data.url } }));
+  event.waitUntil(self.registration.showNotification(data.title, { body: data.body, icon: '/nexdo-app-192.png', data: { url: data.url } }));
 });
 
 self.addEventListener('notificationclick', (event) => {

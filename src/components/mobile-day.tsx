@@ -8,12 +8,12 @@ import type { AgendaPayload, AgendaTask } from '@/lib/types';
 
 type Props = {
   data: AgendaPayload; tasks: AgendaTask[]; completed: AgendaTask[];
-  weather: React.ReactNode; criticalFirst: boolean; toggleSort: () => void;
+  weather: React.ReactNode; snapshot: React.ReactNode; criticalFirst: boolean; toggleSort: () => void;
   openTask: (task: AgendaTask) => void; complete: (id: string) => Promise<void>;
   restore: (id: string) => Promise<void>; add: (title: string) => Promise<void>;
 };
 
-export function MobileDay({ data, tasks, completed, weather, criticalFirst, toggleSort, openTask, complete, restore, add }: Props) {
+export function MobileDay({ data, tasks, completed, weather, snapshot, criticalFirst, toggleSort, openTask, complete, restore, add }: Props) {
   const [days, setDays] = useState(1);
   const router = useRouter();
   const [now, setNow] = useState(() => Date.now());
@@ -28,9 +28,8 @@ export function MobileDay({ data, tasks, completed, weather, criticalFirst, togg
   const dayOf = (iso: string) => new Intl.DateTimeFormat('en-CA', { timeZone: data.timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(iso));
   const time = (iso: string) => new Intl.DateTimeFormat('en-US', { timeZone: data.timeZone, hour: 'numeric', minute: '2-digit' }).format(new Date(iso));
   const dateLabel = (day: string, options: Intl.DateTimeFormatOptions) => new Intl.DateTimeFormat('en-US', { ...options, timeZone: 'UTC' }).format(new Date(`${day}T12:00:00Z`));
-  const hour = Number(new Intl.DateTimeFormat('en-US', { timeZone: data.timeZone, hour: 'numeric', hourCycle: 'h23' }).format(new Date()));
+  const hour = Number(new Intl.DateTimeFormat('en-US', { timeZone: data.timeZone, hour: 'numeric', hourCycle: 'h23' }).format(new Date(now)));
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
-  const nextEvent = [...data.events].filter((event) => dayOf(event.startAt) === today && new Date(event.endAt).getTime() > now).sort((a, b) => a.startAt.localeCompare(b.startAt))[0];
   const rangeDays = data.range.days.slice(0, days);
   const itemsFor = (day: string) => [
     ...data.events.filter((event) => dayOf(event.startAt) === day).map((event) => ({ id: event.id, title: event.title, at: event.startAt, duration: Math.round((Date.parse(event.endAt) - Date.parse(event.startAt)) / 60000), task: null as AgendaTask | null })),
@@ -58,10 +57,10 @@ export function MobileDay({ data, tasks, completed, weather, criticalFirst, togg
   return <div className="mobile-day md:hidden">
     <header className="mobile-greeting"><div><h1>{greeting}{name ? `, ${name}` : ''}</h1><p>{dateLabel(today, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}</p></div>{weather}</header>
     <div className="mobile-segments" role="group" aria-label="Agenda range">{[1, 3, 5].map((count) => <button key={count} aria-pressed={days === count} onClick={() => setDays(count)}>{count === 1 ? 'Today' : `${count} days`}</button>)}</div>
-    {data.overdue.length > 0 && <details className="mobile-overdue"><summary><AlertCircle size={22} /><span><strong>{data.overdue.length} overdue</strong> · {data.overdue[0].title}</span><ChevronRight size={18} /></summary><div>{data.overdue.map((task) => <button key={task.id} onClick={() => openTask(task)}>{task.title}<ChevronRight size={16} /></button>)}</div></details>}
+    {days !== 1 && data.overdue.length > 0 && <details className="mobile-overdue"><summary><AlertCircle size={22} /><span><strong>{data.overdue.length} overdue</strong> · {data.overdue[0].title}</span><ChevronRight size={18} /></summary><div>{data.overdue.map((task) => <button key={task.id} onClick={() => openTask(task)}>{task.title}<ChevronRight size={16} /></button>)}</div></details>}
     {failure && <p role="alert" className="text-sm text-[var(--danger)]">{failure}</p>}
     {days === 1 ? <>
-      {nextEvent ? <Link href="/calendar" className="mobile-next"><span className="mobile-eyebrow">Next up</span><div><strong>{time(nextEvent.startAt)}</strong><CalendarDays size={22} /><span><b>{nextEvent.title}</b><small>{Math.round((Date.parse(nextEvent.endAt) - Date.parse(nextEvent.startAt)) / 60000)} min · Calendar</small></span><ChevronRight size={18} /></div></Link> : <div className="mobile-next"><span className="mobile-eyebrow">Your calendar</span><p className="mt-2 text-sm">No more appointments today.</p><Link href="/calendar" className="mt-2 inline-block text-sm text-[#24558b]">View calendar →</Link></div>}
+      {snapshot}
       <div className="mobile-section-heading"><h2>Today’s tasks</h2><span>{tasks.length} {tasks.length === 1 ? 'task' : 'tasks'}</span><button aria-label="Sort critical tasks first" aria-pressed={criticalFirst} onClick={toggleSort}><ListFilter size={20} /></button></div>
       <div className="mobile-task-list">{tasks.length ? tasks.map((task) => <div className="mobile-task" key={task.id}>
         <button className="mobile-check" aria-label={`Complete ${task.title}`} onClick={() => void action(() => complete(task.id))} />

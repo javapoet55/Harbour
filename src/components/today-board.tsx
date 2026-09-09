@@ -4,26 +4,23 @@ import { useEffect, useMemo, useState } from 'react';
 import { formatDay } from '@/lib/time';
 import type { AgendaPayload } from '@/lib/types';
 import { MobileDay } from './mobile-day';
+import { TodaySnapshot, useTodaySnapshot } from './today-snapshot';
+import { useRouter } from 'next/navigation';
+import { useFocusSession, FocusSessionControl } from './focus-session';
 
 export function TodayBoard() {
   const [data, setData] = useState<AgendaPayload | null>(null);
+  const router = useRouter();
+  const snapshot = useTodaySnapshot(data);
   const [error, setError] = useState('');
   const [title, setTitle] = useState('');
   const [adding, setAdding] = useState(false);
-  const [focusTaskId, setFocusTaskId] = useState<string | null>(null);
-  const [focusSeconds, setFocusSeconds] = useState(25 * 60);
-  const [focusRunning, setFocusRunning] = useState(false);
+  const focus = useFocusSession();
+  const focusTaskId = focus.session?.taskId;
+  const focusSeconds = focus.seconds;
+  const focusRunning = Boolean(focus.session?.endsAt && focusSeconds > 0);
   const [editingTask, setEditingTask] = useState<AgendaPayload['tasks'][number] | null>(null);
   const [criticalFirst, setCriticalFirst] = useState(true);
-
-  useEffect(() => {
-    if (!focusRunning) return;
-    const timer = window.setInterval(() => setFocusSeconds((seconds) => {
-      if (seconds <= 1) { setFocusRunning(false); return 0; }
-      return seconds - 1;
-    }), 1000);
-    return () => window.clearInterval(timer);
-  }, [focusRunning]);
 
   async function load() {
     const res = await fetch('/api/agenda?days=5');
@@ -34,18 +31,35 @@ export function TodayBoard() {
     setData(await res.json());
   }
 
+  function openSnapshotTask(id: string) {
+    const task = [...(data?.tasks ?? []), ...(data?.overdue ?? []), ...(data?.unscheduled ?? [])].find((item) => item.id === id);
+    if (task) setEditingTask(task);
+    else router.push('/tasks');
+  }
+
   useEffect(() => {
-    let cancelled = false;
-    fetch('/api/agenda?days=5')
-      .then((res) => (res.ok ? res.json() : Promise.reject(new Error('load'))))
-      .then((payload: AgendaPayload) => {
-        if (!cancelled) setData(payload);
-      })
-      .catch(() => {
-        if (!cancelled) setError('Could not load your day.');
-      });
+    let request: AbortController | undefined;
+    const refresh = () => {
+      request?.abort();
+      const controller = new AbortController();
+      request = controller;
+      fetch('/api/agenda?days=5', { signal: controller.signal, cache: 'no-store' })
+        .then((res) => (res.ok ? res.json() : Promise.reject(new Error('load'))))
+        .then((payload: AgendaPayload) => { if (!controller.signal.aborted) { setData(payload); setError(''); } })
+        .catch(() => { if (!controller.signal.aborted) setError('Could not load your day.'); });
+    };
+    const resume = () => { if (document.visibilityState === 'visible') refresh(); };
+    refresh();
+    const interval = window.setInterval(resume, 60_000);
+    window.addEventListener('focus', resume);
+    window.addEventListener('harbor:tasks-updated', refresh);
+    document.addEventListener('visibilitychange', resume);
     return () => {
-      cancelled = true;
+      request?.abort();
+      window.clearInterval(interval);
+      window.removeEventListener('focus', resume);
+      window.removeEventListener('harbor:tasks-updated', refresh);
+      document.removeEventListener('visibilitychange', resume);
     };
   }, []);
 
@@ -99,7 +113,7 @@ export function TodayBoard() {
   async function complete(id: string) {
     const response = await fetch(`/api/tasks/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'COMPLETED' }) });
     if (!response.ok) { setError('Could not complete that task.'); return; }
-    if (focusTaskId === id) { setFocusRunning(false); setFocusTaskId(null); setFocusSeconds(25 * 60); }
+    if (focusTaskId === id) focus.stop();
     await load();
   }
 
@@ -121,26 +135,29 @@ export function TodayBoard() {
   }
 
   function toggleFocus(taskId: string) {
-    if (focusTaskId !== taskId || focusSeconds === 0) { setFocusTaskId(taskId); setFocusSeconds(25 * 60); setFocusRunning(true); return; }
-    setFocusRunning((running) => !running);
+    if (focusTaskId !== taskId || focusSeconds === 0) { void focus.start(taskId, data?.tasks.find((task) => task.id === taskId)?.title ?? 'Focus'); return; }
+    focus.toggle();
   }
 
-  if (error) return <p className="text-[var(--danger)]">{error}</p>;
+  if (error && !data) return <p role="alert" className="text-[var(--danger)]">{error} <button type="button" className="underline" onClick={() => void load().catch(() => setError('Could not load your day.'))}>Try again</button></p>;
   if (!data) return <p className="text-[var(--muted)]">Loading your day…</p>;
 
-  const greetingHour = new Date().getHours();
+  const greetingHour = Number(new Intl.DateTimeFormat('en-US', { timeZone: data.timeZone, hour: 'numeric', hourCycle: 'h23' }).format(new Date()));
   const hello = greetingHour < 12 ? 'Good morning' : greetingHour < 17 ? 'Good afternoon' : 'Good evening';
 
   return (
     <div className="space-y-4 sm:space-y-5">
-      <MobileDay data={data} tasks={displayedTodayTasks} completed={completedToday} weather={<Weather />} criticalFirst={criticalFirst} toggleSort={() => setCriticalFirst((value) => !value)} openTask={setEditingTask} complete={complete} restore={restore} add={(value) => addTask(undefined, value)} />
+      {error && <p role="alert" className="text-sm text-[var(--danger)]">{error} Showing your last loaded tasks.</p>}
+      <MobileDay data={data} tasks={displayedTodayTasks} completed={completedToday} weather={<Weather />} snapshot={<TodaySnapshot {...snapshot} onOpenTask={openSnapshotTask} />} criticalFirst={criticalFirst} toggleSort={() => setCriticalFirst((value) => !value)} openTask={setEditingTask} complete={complete} restore={restore} add={(value) => addTask(undefined, value)} />
       <div className="hidden space-y-5 md:block">
       <header className="flex items-start justify-between gap-3 sm:gap-4">
         <div className="min-w-0 flex-1"><p className="text-sm text-[var(--muted)]">{formatDay(new Date(), data.timeZone)}</p>
         <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">{hello}.</h1>
-        <p className="mt-1 max-w-2xl text-sm text-[var(--muted)] sm:text-base">Ask what is coming up, capture a task by voice, and Harbor will keep the reminders honest.</p></div>
+        <p className="mt-1 max-w-2xl text-sm text-[var(--muted)] sm:text-base">Ask what is coming up, capture a task by voice, and Nexdo will keep the reminders honest.</p></div>
         <Weather />
       </header>
+
+      <TodaySnapshot {...snapshot} onOpenTask={openSnapshotTask} />
 
       <form onSubmit={addTask} className="flex flex-col gap-2 sm:flex-row">
         <input className="harbor-input" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Quick add a task" aria-label="Quick add task" />
@@ -191,7 +208,7 @@ export function TodayBoard() {
   );
 }
 
-function TaskDetailSheet({ task, timeZone, focusControl, onClose, onSaved, onComplete }: { task: AgendaPayload['tasks'][number]; timeZone: string; focusControl: React.ReactNode; onClose: () => void; onSaved: () => Promise<void>; onComplete: () => Promise<void> }) {
+export function TaskDetailSheet({ task, timeZone, focusControl, onClose, onSaved, onComplete }: { task: AgendaPayload['tasks'][number]; timeZone: string; focusControl?: React.ReactNode; onClose: () => void; onSaved: () => Promise<void>; onComplete: () => Promise<void> }) {
   const scheduledAt = task.startAt ?? task.dueAt;
   const localParts = scheduledAt ? Object.fromEntries(new Intl.DateTimeFormat('en-US', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(new Date(scheduledAt)).map((part) => [part.type, part.value])) : null;
   const [title, setTitle] = useState(task.title);
@@ -199,6 +216,8 @@ function TaskDetailSheet({ task, timeZone, focusControl, onClose, onSaved, onCom
   const [priority, setPriority] = useState(task.priority);
   const [duration, setDuration] = useState(task.durationMin);
   const [energy, setEnergy] = useState(task.energyLevel ?? 'MEDIUM');
+  const [splittable, setSplittable] = useState(task.splittable ?? false);
+  const [minFocusMin, setMinFocusMin] = useState(task.minFocusMin ?? 15);
   const [date, setDate] = useState(localParts ? `${localParts.year}-${localParts.month}-${localParts.day}` : '');
   const [time, setTime] = useState(localParts ? `${localParts.hour}:${localParts.minute}` : '09:00');
   const [recurrence, setRecurrence] = useState(task.recurrence?.frequency ?? 'NONE');
@@ -228,7 +247,7 @@ function TaskDetailSheet({ task, timeZone, focusControl, onClose, onSaved, onCom
     setSaving(true);
     setError('');
     try {
-      const details = await fetch(`/api/tasks/${task.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: title.trim(), notes, priority, durationMin: duration, energyLevel: energy, critical, subtasks, recurrence: recurrence === 'NONE' ? null : { frequency: recurrence, interval: 1 } }) });
+      const details = await fetch(`/api/tasks/${task.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: title.trim(), notes, priority, durationMin: duration, energyLevel: energy, splittable, minFocusMin, critical, subtasks, recurrence: recurrence === 'NONE' ? null : { frequency: recurrence, interval: 1 } }) });
       if (!details.ok) throw new Error('Could not save the task details.');
       if (date) {
         const schedule = await fetch(`/api/tasks/${task.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ date, time, durationMin: duration }) });
@@ -242,6 +261,15 @@ function TaskDetailSheet({ task, timeZone, focusControl, onClose, onSaved, onCom
     }
   }
 
+  async function markComplete() {
+    if (saving || task.status === 'COMPLETED') return;
+    setSaving(true);
+    setError('');
+    try { await onComplete(); }
+    catch (reason) { setError(reason instanceof Error ? reason.message : 'Could not complete the task.'); }
+    finally { setSaving(false); }
+  }
+
   return <div className="fixed inset-0 z-50 flex items-end justify-center bg-[#172033]/45 backdrop-blur-[2px] sm:items-center sm:p-6" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
     <section className="max-h-[94dvh] w-full overflow-y-auto rounded-t-[28px] bg-[#fffdf8] shadow-2xl sm:max-w-2xl sm:rounded-[28px]" role="dialog" aria-modal="true" aria-labelledby="task-detail-title">
       <form onSubmit={save}>
@@ -250,7 +278,7 @@ function TaskDetailSheet({ task, timeZone, focusControl, onClose, onSaved, onCom
           <button type="button" onClick={onClose} className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--brand-soft)] text-xl text-[var(--brand)]" aria-label="Close task details">×</button>
         </header>
         <div className="space-y-6 p-5 sm:p-7">
-          {focusControl}
+          {focusControl ?? <FocusSessionControl taskId={task.id} title={task.title} />}
           <label className="block"><span className="mb-2 block text-xs font-bold uppercase tracking-wide text-[var(--faint)]">Task</span><input autoFocus className="harbor-input text-lg font-semibold" value={title} onChange={(event) => setTitle(event.target.value)} /></label>
 
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
@@ -259,6 +287,10 @@ function TaskDetailSheet({ task, timeZone, focusControl, onClose, onSaved, onCom
             <DetailField label="Energy"><select className="harbor-input" value={energy} onChange={(event) => setEnergy(event.target.value)}><option value="LOW">Low</option><option value="MEDIUM">Medium</option><option value="HIGH">High</option></select></DetailField>
           </div>
 
+          <div className="rounded-2xl border border-[var(--line)] bg-white p-4">
+            <label className="flex items-center gap-3"><input type="checkbox" checked={splittable} onChange={(event) => setSplittable(event.target.checked)} /><span>Can make progress in shorter sessions</span></label>
+            {splittable && <label className="mt-3 block text-sm">Smallest useful session<select className="harbor-input mt-1" value={minFocusMin} onChange={(event) => setMinFocusMin(Number(event.target.value))}>{[5, 10, 15, 25, 30, 45, 60].map((minutes) => <option key={minutes} value={minutes}>{minutes} minutes</option>)}</select></label>}
+          </div>
           <div className="rounded-2xl border border-[var(--line)] bg-white p-4">
             <p className="mb-3 text-xs font-bold uppercase tracking-wide text-[var(--faint)]">Schedule</p>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2"><DetailField label="Date"><input type="date" className="harbor-input" value={date} onChange={(event) => setDate(event.target.value)} /></DetailField><DetailField label="Start time"><input type="time" className="harbor-input" value={time} onChange={(event) => setTime(event.target.value)} /></DetailField></div>
@@ -274,7 +306,7 @@ function TaskDetailSheet({ task, timeZone, focusControl, onClose, onSaved, onCom
           <label className="block"><span className="mb-2 block text-xs font-bold uppercase tracking-wide text-[var(--faint)]">Notes</span><textarea className="min-h-28 w-full resize-y rounded-2xl border border-[var(--line)] bg-white p-3 text-base focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#315b8a]" value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Context, links, or anything you need to remember…" /></label>
           {error ? <p className="text-sm text-[var(--danger)]" role="alert">{error}</p> : null}
         </div>
-        <footer className="sticky bottom-0 flex gap-3 border-t border-[var(--line)] bg-[#fffdf8]/95 p-4 backdrop-blur sm:px-7"><button type="button" className="harbor-btn" onClick={() => void onComplete()}>Mark complete</button><button type="submit" className="harbor-btn harbor-btn-brand flex-1" disabled={saving || !title.trim()}>{saving ? 'Saving…' : 'Save changes'}</button></footer>
+        <footer className="sticky bottom-0 flex gap-3 border-t border-[var(--line)] bg-[#fffdf8]/95 p-4 backdrop-blur sm:px-7"><button type="button" className="harbor-btn" disabled={saving || task.status === 'COMPLETED'} onClick={() => void markComplete()}>{task.status === 'COMPLETED' ? 'Done' : 'Mark complete'}</button><button type="submit" className="harbor-btn harbor-btn-brand flex-1" disabled={saving || !title.trim()}>{saving ? 'Saving…' : 'Save changes'}</button></footer>
       </form>
     </section>
   </div>;

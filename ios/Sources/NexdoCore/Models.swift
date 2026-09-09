@@ -15,6 +15,9 @@ public struct Profile: Decodable, Sendable {
     public let name: String
     public let email: String
     public let timeZone: String
+    public var photo: String? = nil
+    public var preference: ProfilePreferences? = nil
+    public var nextAction: NextActionPreference? = nil
 }
 public struct ProfileResponse: Decodable, Sendable { public let user: Profile }
 public struct PasswordResetResponse: Decodable, Sendable {
@@ -30,6 +33,7 @@ public struct NexdoTask: Decodable, Identifiable, Sendable {
     public let notes: String?
     public let startAt: String?
     public let dueAt: String?
+    public var projectId: String? = nil
     public var energyLevel: String? = nil
     public var splittable: Bool? = nil
     public var critical: Bool? = nil
@@ -62,10 +66,74 @@ public struct Agenda: Decodable, Sendable {
 public struct WeatherResponse: Decodable, Sendable {
     public struct Current: Decodable, Sendable {
         public let temperature: Double
+        public let weatherCode: Int?
 
-        enum CodingKeys: String, CodingKey { case temperature = "temperature_2m" }
+        enum CodingKeys: String, CodingKey {
+            case temperature = "temperature_2m"
+            case weatherCode = "weather_code"
+        }
+
+        public var conditionSymbol: String {
+            switch weatherCode ?? -1 {
+            case 0: return "sun.max.fill"
+            case 1, 2: return "cloud.sun.fill"
+            case 3: return "cloud.fill"
+            case 45, 48: return "cloud.fog.fill"
+            case 51...57: return "cloud.drizzle.fill"
+            case 61...67, 80...82: return "cloud.rain.fill"
+            case 71...77, 85, 86: return "cloud.snow.fill"
+            case 95...99: return "cloud.bolt.rain.fill"
+            default: return "thermometer.medium"
+            }
+        }
     }
     public let current: Current
+    public let daily: Daily?
+    public let timezone: String?
+
+    public struct Daily: Decodable, Sendable {
+        public let time: [String]
+        public let weatherCode: [Int?]
+        public let high: [Double?]
+        public let low: [Double?]
+        public let rain: [Int?]
+        enum CodingKeys: String, CodingKey {
+            case time
+            case weatherCode = "weather_code"
+            case high = "temperature_2m_max"
+            case low = "temperature_2m_min"
+            case rain = "precipitation_probability_max"
+        }
+        public var days: [Day] {
+            time.indices.prefix(5).map { index in
+                Day(id: time[index], code: weatherCode.indices.contains(index) ? weatherCode[index] : nil,
+                    high: high.indices.contains(index) ? high[index] : nil,
+                    low: low.indices.contains(index) ? low[index] : nil,
+                    rain: rain.indices.contains(index) ? rain[index] : nil)
+            }
+        }
+    }
+    public struct Day: Identifiable, Sendable {
+        public let id: String
+        public let code: Int?
+        public let high: Double?
+        public let low: Double?
+        public let rain: Int?
+        public var symbol: String { Current(temperature: 0, weatherCode: code).conditionSymbol }
+        public var condition: String {
+            switch code ?? -1 {
+            case 0: "Clear"
+            case 1, 2: "Partly cloudy"
+            case 3: "Cloudy"
+            case 45, 48: "Fog"
+            case 51...57: "Drizzle"
+            case 61...67, 80...82: "Rain"
+            case 71...77, 85, 86: "Snow"
+            case 95...99: "Thunderstorms"
+            default: "Conditions unavailable"
+            }
+        }
+    }
 }
 public struct ScheduleIntelligenceResponse: Decodable, Sendable {
     public struct Today: Decodable, Sendable {
@@ -112,6 +180,7 @@ public struct ScheduleIntelligenceResponse: Decodable, Sendable {
     public let today: Today
 }
 public struct AssistantTurn: Decodable, Sendable {
+    public let createdTaskId: String?
     public struct Executive: Decodable, Sendable {
         public struct Change: Decodable, Sendable {
             public let taskId: String
@@ -124,7 +193,7 @@ public struct AssistantTurn: Decodable, Sendable {
         public let proposedScheduleChanges: [Change]
     }
     public struct Section: Decodable, Sendable { public let title: String; public let items: [String] }
-    public struct Visual: Decodable, Sendable { public let summary: String; public let sections: [Section]?; public let tasks: [String]? }
+    public struct Visual: Decodable, Sendable { public let summary: String; public let sections: [Section]?; public let tasks: [String]?; public var appointments: [String]? = nil; public var overdue: [String]? = nil; public var next: String? = nil }
     public struct Confirmation: Decodable, Sendable { public let actionId: String; public let prompt: String }
     public let spoken: String
     public let visual: Visual

@@ -6,13 +6,16 @@ import './globals.css';
 const geist = Geist({ subsets: ['latin'], variable: '--font-geist-sans' });
 
 export const metadata: Metadata = {
-  title: 'Harbor — voice to-do and calendar',
+  title: 'Nexdo — voice to-do and calendar',
   description: 'Ask what is coming up, capture tasks naturally, and never miss an important commitment.',
   manifest: '/manifest.json',
+  applicationName: 'Nexdo',
+  appleWebApp: { capable: true, title: 'Nexdo', statusBarStyle: 'default' },
+  icons: { icon: '/favicon.ico', apple: '/nexdo-app-180.png' },
 };
 
 export const viewport: Viewport = {
-  themeColor: '#3d5a80',
+  themeColor: '#5032f5',
   width: 'device-width',
   initialScale: 1,
   viewportFit: 'cover',

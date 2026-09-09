@@ -13,6 +13,7 @@ model User {
   email        String   @unique
   name         String
   passwordHash String
+  photo        String?
   timeZone     String   @default("America/Los_Angeles")
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
@@ -33,6 +34,37 @@ model User {
   pushSubscriptions  PushSubscription[]
   memories           UserMemory[]
   workSessions       TaskWorkSession[]
+  authIdentities     AuthIdentity[]
+  passwordResetTokens PasswordResetToken[]
+}
+
+model AuthIdentity {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider  String
+  subject   String
+  refreshToken String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([provider, subject])
+  @@unique([userId, provider])
+  @@index([userId])
+}
+
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  codeHash  String
+  expiresAt DateTime
+  usedAt    DateTime?
+  attempts  Int       @default(0)
+  createdAt DateTime  @default(now())
+
+  @@index([userId, createdAt])
+  @@index([expiresAt])
 }
 
 model UserPreference {
@@ -89,6 +121,7 @@ model Project {
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
   tasks     Task[]
+  @@index([userId, deletedAt, updatedAt])
 }
 
 model Category {
@@ -126,6 +159,8 @@ model Task {
   startAt              DateTime?
   dueAt                DateTime?
   durationMin          Int       @default(30)
+  splittable           Boolean   @default(false)
+  minFocusMin          Int       @default(15)
   energyLevel          String    @default("MEDIUM")
   reminderAt           DateTime?
   waitingOn            String?
@@ -155,6 +190,7 @@ model Task {
   tags         TaskTag[]
   activities   ActivityLog[]
   workSessions TaskWorkSession[]
+  @@index([userId, projectId, deletedAt, status])
 }
 
 model TaskWorkSession {

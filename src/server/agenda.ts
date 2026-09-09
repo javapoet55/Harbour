@@ -1,6 +1,6 @@
 import type { Prisma } from '@/generated/prisma';
 import { prisma } from './db';
-import { rangeForNextNDays, startOfLocalDay, tzToday, ymd } from '@/lib/time';
+import { rangeForNextNDays, startOfLocalDay, tzToday, ymd, zonedDateTime } from '@/lib/time';
 
 const openStatuses = ['INBOX', 'PLANNED', 'IN_PROGRESS', 'WAITING'];
 
@@ -20,8 +20,8 @@ export async function listTasksInRange(userId: string, from: Date, to: Date) {
   });
 }
 
-export async function listEventsInRange(userId: string, from: Date, to: Date) {
-  return prisma.calendarEvent.findMany({
+export async function listEventsInRange(userId: string, from: Date, to: Date, db: Prisma.TransactionClient = prisma) {
+  return db.calendarEvent.findMany({
     where: {
       userId,
       deletedAt: null,
@@ -43,7 +43,7 @@ export async function overdueTasks(userId: string, timeZone: string, now = new D
       dueAt: { lt: todayStart },
     },
     orderBy: { dueAt: 'asc' },
-    include: { category: true, project: true },
+    include: { category: true, project: true, subtasks: true, recurrence: true },
   });
 }
 
@@ -56,6 +56,7 @@ export async function unscheduledTasks(userId: string) {
       startAt: null,
     },
     orderBy: { dueAt: 'asc' },
+    include: { subtasks: true, recurrence: true },
   });
 }
 
@@ -78,8 +79,8 @@ export async function highPriority(userId: string) {
   });
 }
 
-export async function snapshotForRange(userId: string, timeZone: string, days: number, now = new Date()) {
-  const range = rangeForNextNDays(days, timeZone, now);
+export async function snapshotForRange(userId: string, timeZone: string, days: number, now = new Date(), from?: string) {
+  const range = rangeForNextNDays(days, timeZone, from ? zonedDateTime(from, '12:00', timeZone) : now);
   const [tasks, events, overdue] = await Promise.all([
     listTasksInRange(userId, range.start, range.end),
     listEventsInRange(userId, range.start, range.end),

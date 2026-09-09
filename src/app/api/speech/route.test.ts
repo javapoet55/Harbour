@@ -15,6 +15,13 @@ it('requires authentication before calling the speech provider', async () => {
   expect(provider).not.toHaveBeenCalled();
 });
 
+it('honors disabled spoken replies without calling OpenAI', async () => {
+  vi.mocked(requireUser).mockResolvedValue({ preference: { voiceEnabled: false } } as Awaited<ReturnType<typeof requireUser>>);
+  const provider = vi.fn(); vi.stubGlobal('fetch', provider);
+  expect((await POST(request('Hello'))).status).toBe(403);
+  expect(provider).not.toHaveBeenCalled();
+});
+
 it('rejects invalid or oversized input without provider usage', async () => {
   const provider = vi.fn(); vi.stubGlobal('fetch', provider);
   for (const text of ['', 12, 'a'.repeat(4001)]) expect((await POST(request(text))).status).toBe(400);

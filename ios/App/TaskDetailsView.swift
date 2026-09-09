@@ -40,8 +40,7 @@ struct TaskDetailsView: View {
                                 .modifier(DetailInput(focused: focus == .title))
                         }.id(Field.title)
                         metadata
-                        Toggle("Can make progress in shorter sessions", isOn: $draft.splittable)
-                            .toggleStyle(DetailCheckboxStyle())
+                        field("PROJECT") { ProjectAssignmentField(projectID: $draft.projectId) }
                         schedule
                         field("REPEAT") {
                             menu("Repeat", value: $draft.recurrence, options: ["NONE", "DAILY", "WEEKLY", "MONTHLY", "YEARLY"])
@@ -105,7 +104,7 @@ struct TaskDetailsView: View {
             } else {
                 Button("Start a 25-minute focus session") {
                     run { try await model.startFocus(currentTask) }
-                }.buttonStyle(DetailOutlineButton()).disabled(currentTask.isDone || !["INBOX", "PLANNED", "IN_PROGRESS"].contains(currentTask.status))
+                }.buttonStyle(DetailOutlineButton(animatedBorder: true)).disabled(currentTask.isDone || !["INBOX", "PLANNED", "IN_PROGRESS"].contains(currentTask.status))
             }
             Button(currentTask.status == "IN_PROGRESS" ? "Task in progress" : "Start task") {
                 run { try await model.changeTaskStatus(currentTask, status: "IN_PROGRESS") }
@@ -131,28 +130,30 @@ struct TaskDetailsView: View {
                     .accessibilityLabel("Estimate").accessibilityValue("\(draft.duration) minutes")
                 }
             }
-            field("ENERGY") { menu("Energy level", value: $draft.energy, options: ["LOW", "MEDIUM", "HIGH"]) }
-                .frame(maxWidth: typeSize.isAccessibilitySize ? .infinity : 190, alignment: .leading)
         }
     }
 
     private var schedule: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: 8) {
             sectionLabel("SCHEDULE")
             if draft.schedule != nil {
-                field("DATE") {
+                let layout = typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: 8)) : AnyLayout(HStackLayout(spacing: 12))
+                layout {
                     DatePicker("Schedule date", selection: scheduleBinding, displayedComponents: .date)
-                        .datePickerStyle(.compact).modifier(DetailInput())
-                }
-                field("START TIME") {
+                        .datePickerStyle(.compact).labelsHidden()
+                        .accessibilityLabel("Schedule date")
+                        .frame(minHeight: 44)
                     DatePicker("Start time", selection: scheduleBinding, displayedComponents: .hourAndMinute)
-                        .datePickerStyle(.compact).modifier(DetailInput())
+                        .datePickerStyle(.compact).labelsHidden()
+                        .accessibilityLabel("Start time")
+                        .frame(minHeight: 44)
                 }
             } else {
                 Button { draft.schedule = Date() } label: { Label("Set date and start time", systemImage: "calendar") }
                     .buttonStyle(DetailOutlineButton())
             }
-        }.padding(16).background(.background, in: RoundedRectangle(cornerRadius: 17))
+        }.frame(maxWidth: .infinity, alignment: .leading)
+            .padding(12).background(.background, in: RoundedRectangle(cornerRadius: 17))
             .overlay(RoundedRectangle(cornerRadius: 17).stroke(Color.nexdoIndigo.opacity(0.16)))
     }
 
@@ -196,7 +197,7 @@ struct TaskDetailsView: View {
                     try await model.changeTaskStatus(currentTask, status: currentTask.isDone ? "PLANNED" : "COMPLETED")
                     dismiss()
                 }
-            }.buttonStyle(DetailOutlineButton())
+            }.buttonStyle(DetailOutlineButton(greenBackground: true))
                 .accessibilityLabel(currentTask.isDone ? "Mark task incomplete" : "Mark task complete")
                 .disabled(!draft.isValid)
             Button {
@@ -274,14 +275,45 @@ private struct DetailInput: ViewModifier {
 }
 
 private struct DetailOutlineButton: ButtonStyle {
+    var animatedBorder = false
+    var greenBackground = false
     @Environment(\.dynamicTypeSize) private var typeSize
+    @Environment(\.isEnabled) private var isEnabled
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label.font(.subheadline.weight(.semibold)).foregroundStyle(Color.nexdoInk)
+        configuration.label.font(.subheadline.weight(.semibold)).foregroundStyle(greenBackground ? Color.white : Color.nexdoInk)
             .frame(maxWidth: .infinity, minHeight: 44).padding(.horizontal, 14)
             .padding(.vertical, typeSize.isAccessibilitySize ? 8 : 0)
-            .background(Color(uiColor: .systemBackground), in: RoundedRectangle(cornerRadius: 13))
-            .overlay(RoundedRectangle(cornerRadius: 13).stroke(Color.nexdoIndigo.opacity(0.16)))
-            .opacity(configuration.isPressed ? 0.65 : 1)
+            .background {
+                if greenBackground {
+                    RoundedRectangle(cornerRadius: 13).fill(LinearGradient(
+                        colors: [Color(red: 0.04, green: 0.43, blue: 0.26), Color(red: 0.02, green: 0.32, blue: 0.23)],
+                        startPoint: .leading, endPoint: .trailing))
+                } else {
+                    RoundedRectangle(cornerRadius: 13).fill(Color(uiColor: .systemBackground))
+                }
+            }
+            .overlay {
+                if animatedBorder { FocusButtonBorder() }
+                else if !greenBackground { RoundedRectangle(cornerRadius: 13).stroke(Color.nexdoIndigo.opacity(0.16)) }
+            }
+            .opacity(!isEnabled ? 0.45 : configuration.isPressed ? 0.65 : 1)
+    }
+}
+
+private struct FocusButtonBorder: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.isEnabled) private var isEnabled
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 30, paused: reduceMotion || scenePhase != .active || !isEnabled)) { context in
+            let phase = reduceMotion ? 0 : context.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 6) / 6
+            RoundedRectangle(cornerRadius: 13).strokeBorder(
+                AngularGradient(colors: [.nexdoBlue, .nexdoIndigo, .nexdoMagenta, .nexdoBlue], center: .center, angle: .degrees(phase * 360)),
+                lineWidth: 2)
+        }
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
     }
 }
 

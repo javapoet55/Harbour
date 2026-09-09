@@ -1,0 +1,67 @@
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+const session = vi.hoisted(() => ({ id: '' }));
+vi.mock('@/server/auth', () => ({ requireUser: async () => {
+  if (!session.id) throw new Error('UNAUTHENTICATED');
+  return { id: session.id, timeZone: 'America/Los_Angeles' };
+} }));
+vi.mock('@/server/reminders', () => ({ scheduleDefaultReminders: vi.fn() }));
+vi.mock('@/server/calendar-sync', () => ({ pushTaskToExternal: vi.fn() }));
+vi.mock('@/server/replanner', () => ({ generateReplanProposal: vi.fn() }));
+import { prisma } from '@/server/db';
+import { POST as createTask } from '../tasks/route';
+import { PATCH as editTask } from '../tasks/[id]/route';
+import { GET, POST } from './route';
+import { PATCH, DELETE } from './[id]/route';
+import { GET as tasks } from './[id]/tasks/route';
+const request = (method: string, body?: unknown) => new Request('https://test.invalid/api/projects', { method, ...(body === undefined ? {} : { body: JSON.stringify(body), headers: { 'content-type': 'application/json' } }) });
+const context = (id: string) => ({ params: Promise.resolve({ id }) });
+describe('Projects HTTP contract', () => {
+  const users: string[] = [];
+  beforeAll(async () => {
+    for (const name of ['owner', 'other']) users.push((await prisma.user.create({ data: { name, email: `${name}-${Date.now()}-project-routes@test.invalid`, passwordHash: 'unused' } })).id);
+  });
+  afterAll(async () => { await prisma.user.deleteMany({ where: { id: { in: users } } }); });
+  it('rejects unauthenticated calls before accessing project data', async () => {
+    session.id = '';
+    expect((await GET()).status).toBe(401);
+    expect((await POST(request('POST', { name: 'Home', color: '#8875ff' }))).status).toBe(401);
+    expect((await PATCH(request('PATCH', {}), context('missing'))).status).toBe(401);
+    expect((await DELETE(request('DELETE'), context('missing'))).status).toBe(401);
+    expect((await tasks(request('GET'), context('missing'))).status).toBe(401);
+  });
+  it('returns the native contract, validates bodies, scopes reads/writes, and unassigns on deletion', async () => {
+    session.id = users[0];
+    expect((await POST(request('POST', { name: ' ', color: '#8875ff' }))).status).toBe(400);
+    expect((await POST(new Request('https://test.invalid', { method: 'POST', body: '{' }))).status).toBe(400);
+    const created = await POST(request('POST', { name: '  Home  ', color: '#8875FF' }));
+    expect(created.status).toBe(201);
+    const { project } = await created.json();
+    expect(project).toMatchObject({ name: 'Home', color: '#8875ff', totalTaskCount: 0 });
+    const taskResponse = await createTask(request('POST', { title: 'Keep task', projectId: project.id }));
+    expect(taskResponse.status).toBe(200);
+    const { task } = await taskResponse.json();
+    expect(task.projectId).toBe(project.id);
+    const unassign = await editTask(request('PATCH', { projectId: null }), context(task.id));
+    expect((await unassign.json()).task.projectId).toBeNull();
+    const assign = await editTask(request('PATCH', { projectId: project.id }), context(task.id));
+    expect((await assign.json()).task.projectId).toBe(project.id);
+    const renameTask = await editTask(request('PATCH', { title: 'Still assigned' }), context(task.id));
+    expect((await renameTask.json()).task.projectId).toBe(project.id);
+    const list = await GET();
+    expect(list.headers.get('cache-control')).toBe('private, no-store');
+    expect((await list.json()).projects[0].totalTaskCount).toBe(1);
+    expect((await (await tasks(request('GET'), context(project.id))).json()).tasks[0].id).toBe(task.id);
+    session.id = users[1];
+    expect((await createTask(request('POST', { title: 'Invalid assignment', projectId: project.id }))).status).toBe(404);
+    expect((await editTask(request('PATCH', { projectId: null }), context(task.id))).status).toBe(404);
+    expect((await (await GET()).json()).projects).toEqual([]);
+    expect((await tasks(request('GET'), context(project.id))).status).toBe(404);
+    expect((await PATCH(request('PATCH', { name: 'Stolen', color: '#8875ff' }), context(project.id))).status).toBe(404);
+    expect((await DELETE(request('DELETE'), context(project.id))).status).toBe(404);
+    session.id = users[0];
+    expect((await PATCH(request('PATCH', { name: 'Renamed', color: '#35bce6' }), context(project.id))).status).toBe(200);
+    expect((await DELETE(request('DELETE'), context(project.id))).status).toBe(200);
+    expect(await prisma.task.findUniqueOrThrow({ where: { id: task.id } })).toMatchObject({ projectId: null, deletedAt: null });
+    expect((await (await GET()).json()).unassignedTaskCount).toBe(1);
+  });
+});

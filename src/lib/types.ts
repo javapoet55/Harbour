@@ -6,6 +6,8 @@ export type AgendaTask = {
   dueAt: string | null;
   startAt: string | null;
   durationMin: number;
+  splittable?: boolean;
+  minFocusMin?: number;
   waitingOn?: string | null;
   completedAt?: string | null;
   createdAt: string;
@@ -21,6 +23,7 @@ export type AgendaEvent = {
   title: string;
   startAt: string;
   endAt: string;
+  allDay?: boolean;
 };
 
 export type AgendaPayload = {

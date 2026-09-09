@@ -6,6 +6,7 @@ struct NativeFocusSession {
     let endsAt: Date
     let workSessionID: String?
     let token: String
+    let serverBacked: Bool
 }
 
 enum TaskEditError: LocalizedError {
@@ -27,11 +28,11 @@ struct FocusSessionStrip: View {
     var body: some View {
         if let session = model.focusSession {
             TimelineView(.periodic(from: .now, by: 1)) { context in
-                let remaining = max(0, Int(session.endsAt.timeIntervalSince(context.date).rounded(.up)))
+                let remaining = FocusClock.remainingSeconds(until: session.endsAt, now: context.date)
                 HStack {
                     VStack(alignment: .leading, spacing: 4) {
                         Text(remaining == 0 ? "Focus finished" : session.title).font(.subheadline.weight(.semibold))
-                        Text(String(format: "%02d:%02d", remaining / 60, remaining % 60)).monospacedDigit()
+                        Text(FocusClock.label(seconds: remaining)).monospacedDigit()
                             .accessibilityLabel("\(remaining / 60) minutes, \(remaining % 60) seconds remaining")
                     }
                     Spacer()

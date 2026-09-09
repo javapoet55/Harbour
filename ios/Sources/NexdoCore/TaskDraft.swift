@@ -3,6 +3,7 @@ import Foundation
 /// An edit buffer for the existing task contract. Unchanged relationships are omitted:
 /// the server replaces all step rows when `subtasks` is present.
 public struct TaskDraft: Equatable, Sendable {
+    public var projectId: String?
     public var title: String
     public var notes: String
     public var priority: String
@@ -15,6 +16,7 @@ public struct TaskDraft: Equatable, Sendable {
     public var steps: [TaskStep]
 
     public init(task: NexdoTask) {
+        projectId = task.projectId
         title = task.title; notes = task.notes ?? ""; priority = task.priority
         duration = task.durationMin; energy = task.energyLevel ?? "MEDIUM"
         splittable = task.splittable ?? false; critical = task.critical ?? false
@@ -30,6 +32,7 @@ public struct TaskDraft: Equatable, Sendable {
 
     public func detailsBody(comparedTo original: TaskDraft) throws -> Data {
         var fields: [String: Any] = [:]
+        if projectId != original.projectId { fields["projectId"] = projectId.map { $0 as Any } ?? NSNull() }
         if title != original.title { fields["title"] = title.trimmingCharacters(in: .whitespacesAndNewlines) }
         if notes != original.notes { fields["notes"] = notes }
         if priority != original.priority { fields["priority"] = priority }

@@ -21,6 +21,23 @@ public struct TaskQuery {
     public var earliestFirst = true
     public init() {}
 
+    /// Creation schedules a task for today. Reveal it without stale search filters.
+    public mutating func revealCreatedTask(scheduledAt: Date? = nil, timeZone: String = TimeZone.current.identifier, now: Date = Date()) {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: timeZone) ?? .current
+        let selected = scheduledAt ?? now
+        if calendar.isDate(selected, inSameDayAs: now) { date = .today }
+        else if let tomorrow = calendar.date(byAdding: .day, value: 1, to: now), calendar.isDate(selected, inSameDayAs: tomorrow) { date = .tomorrow }
+        else { date = .all }
+        search = ""
+        status = "Open"
+        priority = "All"
+    }
+
+    private func effectiveDate(for task: NexdoTask) -> Date? {
+        return (task.startAt ?? task.dueAt).flatMap(ServerDate.parse)
+    }
+
     public func results(_ tasks: [NexdoTask], timeZone: String, now: Date = Date(), calendar supplied: Calendar = Calendar(identifier: .gregorian)) -> [NexdoTask] {
         var calendar = supplied
         calendar.timeZone = TimeZone(identifier: timeZone) ?? .current
@@ -40,12 +57,12 @@ public struct TaskQuery {
             guard priority == "All" || task.priority == priority else { return false }
             guard term.isEmpty || task.title.localizedStandardContains(term) || (task.notes?.localizedStandardContains(term) ?? false) else { return false }
             if date != .all {
-                guard let interval, let value = task.dueAt, let due = ServerDate.parse(value), due >= interval.start, due < interval.end else { return false }
+                guard let interval, let due = effectiveDate(for: task), due >= interval.start, due < interval.end else { return false }
             }
             return true
         }.sorted { lhs, rhs in
-            let left = lhs.dueAt.flatMap(ServerDate.parse) ?? .distantFuture
-            let right = rhs.dueAt.flatMap(ServerDate.parse) ?? .distantFuture
+            let left = effectiveDate(for: lhs) ?? .distantFuture
+            let right = effectiveDate(for: rhs) ?? .distantFuture
             if left == right { return lhs.id < rhs.id }
             return earliestFirst ? left < right : left > right
         }

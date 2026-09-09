@@ -5,7 +5,8 @@ export const runtime = 'nodejs';
 
 export async function POST(req: Request) {
   try {
-    await requireUser();
+    const user = await requireUser();
+    if (user?.preference?.voiceEnabled === false) return Response.json({ error: 'Spoken replies are disabled in Settings.' }, { status: 403 });
     const body = await req.json().catch(() => null);
     if (typeof body?.text !== 'string' || !body.text.trim() || body.text.length > 4000) {
       return Response.json({ error: 'Speech requires between 1 and 4,000 characters.' }, { status: 400 });

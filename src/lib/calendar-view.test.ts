@@ -1,0 +1,14 @@
+import { describe, expect, it } from 'vitest';
+import { itemsOnDay, monthDays, shiftDay, shiftMonth, weekStart } from './calendar-view';
+import type { AgendaPayload, AgendaTask } from './types';
+
+const data: AgendaPayload = { timeZone: 'America/Los_Angeles', range: { from: '', to: '', days: [] }, tasks: [], events: [], overdue: [], unscheduled: [], waiting: [], important: [] };
+const task: AgendaTask = { id: 't', title: 'Proposal', status: 'PLANNED', priority: 'CRITICAL', startAt: '2026-09-04T16:00:00Z', dueAt: '2026-09-05T22:00:00Z', durationMin: 60, createdAt: '2026-09-01T12:00:00Z' };
+describe('calendar views', () => {
+  it('uses full Monday-to-Sunday weeks across month boundaries', () => { expect(weekStart('2026-09-04')).toBe('2026-08-31'); expect(shiftDay(weekStart('2026-09-04'), 6)).toBe('2026-09-06'); });
+  it('creates a complete Sunday-first month grid and navigates years', () => { const days = monthDays('2026-09-04'); expect(days).toHaveLength(35); expect(days[0]).toBe('2026-08-30'); expect(days[34]).toBe('2026-10-03'); expect(monthDays('2026-08-01')).toHaveLength(42); expect(shiftMonth('2026-12-31', 1)).toBe('2027-01-01'); expect(shiftMonth('2026-01-31', -1)).toBe('2025-12-01'); });
+  it('places tasks by account time zone and shows separate deadlines without duplicating duration', () => { const payload = { ...data, tasks: [task] }; expect(itemsOnDay(payload, '2026-09-04', '2026-09-05')[0].duration).toBe(60); const deadline = itemsOnDay(payload, '2026-09-05', '2026-09-05')[0]; expect(deadline.deadlineOnly).toBe(true); expect(deadline.duration).toBe(0); });
+  it('excludes completed and undated tasks and avoids same-day duplicates', () => { const payload = { ...data, tasks: [{ ...task, dueAt: task.startAt }, { ...task, id: 'done', status: 'COMPLETED' }, { ...task, id: 'none', startAt: null, dueAt: null }] }; expect(itemsOnDay(payload, '2026-09-04', '2026-09-05')).toHaveLength(1); expect(itemsOnDay(payload, '2026-09-04', '2026-09-05')[0].overdue).toBe(true); });
+  it('clips cross-midnight events and respects exclusive midnight ends', () => { const payload = { ...data, events: [{ id: 'e', title: 'Night call', startAt: '2026-09-05T06:00:00Z', endAt: '2026-09-05T08:00:00Z' }] }; expect(itemsOnDay(payload, '2026-09-04', '2026-09-05')[0].duration).toBe(60); expect(itemsOnDay(payload, '2026-09-05', '2026-09-05')[0].duration).toBe(60); expect(itemsOnDay({ ...payload, events: [{ ...payload.events[0], endAt: '2026-09-05T07:00:00Z' }] }, '2026-09-05', '2026-09-05')).toHaveLength(0); });
+  it('handles daylight-saving days using calendar dates', () => { expect(shiftDay('2026-03-08', 1)).toBe('2026-03-09'); const payload = { ...data, events: [{ id: 'all', title: 'All day', startAt: '2026-03-08T08:00:00Z', endAt: '2026-03-09T07:00:00Z', allDay: true }] }; const item = itemsOnDay(payload, '2026-03-08', '2026-03-08')[0]; expect(item.allDay).toBe(true); expect(item.duration).toBe(23 * 60); });
+});

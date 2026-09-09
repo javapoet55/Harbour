@@ -16,6 +16,13 @@ export const INTENTS = [
   'RESCHEDULE_TASK',
   'CREATE_RECURRING_TASK',
   'PLAN_TOMORROW',
+  'SCHEDULE_INTELLIGENCE',
+  'FIX_SCHEDULE',
+  'FOCUS_TODAY',
+  'DRIVING_BRIEFING',
+  'FREE_WINDOW',
+  'NEXT_ACTION',
+  'COMPARE_TASKS',
   'BRIEF_ME',
   'LIST_THIS_WEEK',
   'LIST_DEADLINES',
@@ -49,14 +56,44 @@ export function parseIntent(input: string): ParsedIntent {
   const raw = clean(input);
   const text = raw.toLowerCase();
 
+  if (/\bshould i\b.+\bor\b/.test(text)) return { intent: 'COMPARE_TASKS', confidence: .94, confirmationRequired: false, raw };
+  if (!/\bi have\b/.test(text) && /\bwhat should i (?:do|work on) (?:next|now)\b|\bwhat(?:['’]s| is) (?:the )?most important thing right now\b|\bwhat(?:['’]s| is) my next priority\b/.test(text)) {
+    return { intent: 'NEXT_ACTION', confidence: .98, confirmationRequired: false, raw };
+  }
+  if (/\b(?:meeting (?:ran|runs|is running) (?:\d+ minutes? )?late|i(?:['’]m| am) (?:running|starting) late|my day (?:went|has gone) off schedule)\b/.test(text)) {
+    return { intent: 'FIX_SCHEDULE', confidence: .94, confirmationRequired: true, raw };
+  }
+
+  if (/\b(driving home|evening briefing|brief me on my day|anything important before i get home|what(?:['’]s| is) left today)\b/.test(text)) {
+    return { intent: 'DRIVING_BRIEFING', confidence: .98, confirmationRequired: false, raw };
+  }
+  const available = text.match(/\bi have\s+(\d+(?:\.\d+)?)\s*(minutes?|mins?|hours?|hrs?)\b/);
+  if (available || /\bi have (?:an?|one|half an) hour\b|\bwhat can i (?:get done|do) before my next meeting\b/.test(text)) {
+    const durationMin = available ? Number(available[1]) * (/h/.test(available[2]) ? 60 : 1) : /half an hour/.test(text) ? 30 : /\bhour\b/.test(text) ? 60 : undefined;
+    return { intent: 'FREE_WINDOW', confidence: .98, durationMin: durationMin === undefined ? undefined : Math.max(1, Math.min(480, Math.floor(durationMin))), confirmationRequired: false, raw };
+  }
+  if (/\bwhat should i (?:focus on|do|work on)(?: today| next)?\b|\bwhat are my priorities\b|\bwhat(?:['’]s| is) (?:most )?important(?: today)?\b|\b(?:pick|show) my top 3\b/.test(text)) {
+    return { intent: 'FOCUS_TODAY', confidence: .98, confirmationRequired: false, raw };
+  }
+  if (/\b((?:fix|optimize) (?:my )?(?:afternoon|schedule|day)|reorganize the rest of my day|my afternoon is too busy|(?:can you )?make everything fit|make room this afternoon)\b/.test(text)) {
+    return { intent: 'FIX_SCHEDULE', confidence: 0.94, confirmationRequired: true, raw };
+  }
+  if (/\b(do i have (?:any )?conflicts?|can everything due today (?:actually )?fit|is my schedule (?:at )?risk)\b/.test(text)) {
+    return { intent: 'SCHEDULE_INTELLIGENCE', confidence: 0.95, confirmationRequired: false, raw };
+  }
+  if (/\b(what(?:['’]s| is) my day looking like|how is my day looking)\b/.test(text)) {
+    return { intent: 'LIST_TODAY', confidence: 0.95, confirmationRequired: false, raw };
+  }
+
   if (/\b(this week|rest of (?:my|the) week|weekly briefing)\b/.test(text)) {
     return { intent: 'LIST_THIS_WEEK', confidence: 0.95, confirmationRequired: false, raw };
   }
+  const reportDays = Math.max(1, Math.min(30, Number(text.match(/\b(?:next\s+)?(\d+)[ -]days?\b/)?.[1] ?? 5)));
   if (/\b(brief me|daily briefing|complete briefing|morning briefing)\b/.test(text)) {
-    return { intent: 'BRIEF_ME', confidence: 0.98, days: 7, confirmationRequired: false, raw };
+    return { intent: 'BRIEF_ME', confidence: 0.98, days: reportDays, confirmationRequired: false, raw };
   }
   if (/\b(upcoming deadlines?|deadlines? (?:are )?(?:coming|due)|what is due)\b/.test(text)) {
-    return { intent: 'LIST_DEADLINES', confidence: 0.95, days: 7, confirmationRequired: false, raw };
+    return { intent: 'LIST_DEADLINES', confidence: 0.95, days: reportDays, confirmationRequired: false, raw };
   }
 
   const daysMatch = text.match(/next (\d+) days?/) || text.match(/during the next (\d+) days?/);

@@ -3,10 +3,12 @@ import { prisma } from './db';
 import { readUserId } from './session';
 
 export async function login(email: string, password: string) {
+  if (process.env.NODE_ENV === 'production' && password === 'harbor-demo') return null;
+  if (!password || Buffer.byteLength(password, 'utf8') > 72) return null;
   const user = await prisma.user.findFirst({
     where: { email: email.trim().toLowerCase(), deletedAt: null },
   });
-  if (!user) return null;
+  if (!user || !user.passwordHash) return null;
   const ok = await bcrypt.compare(password, user.passwordHash);
   if (!ok) return null;
   return user;

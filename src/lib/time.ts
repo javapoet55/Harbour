@@ -53,6 +53,8 @@ export function zonedDateTime(ymdValue: string, hm: string, timeZone: string): D
     if (diff === 0) break;
     guess.setTime(guess.getTime() + diff);
   }
+  const resolved = partsInZone(guess, timeZone);
+  if (resolved.year !== year || resolved.month !== month || resolved.day !== day || resolved.hour !== hour || resolved.minute !== minute) throw new Error('INVALID_LOCAL_TIME');
   return guess;
 }
 

@@ -2,6 +2,7 @@ import type { CalendarConnection } from '@/generated/prisma';
 import type { CalendarProvider, CalendarWrite } from './types';
 import { decryptCredential, encryptCredential } from '@/lib/credentials';
 import { prisma } from '@/server/db';
+import { zonedDateTime } from '@/lib/time';
 
 export type OAuthProvider = 'google' | 'microsoft';
 type TokenResponse = { access_token: string; refresh_token?: string; expires_in?: number; error?: string; error_description?: string };
@@ -55,6 +56,7 @@ async function tokenRequest(provider: OAuthProvider, params: Record<string, stri
   const cfg = oauthConfig(provider);
   const response = await fetch(cfg.token, {
     method: 'POST',
+    signal: AbortSignal.timeout(15000),
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({ client_id: cfg.clientId, client_secret: cfg.clientSecret, redirect_uri: cfg.redirectUri, scope: cfg.scope, ...params }),
   });
@@ -126,34 +128,33 @@ async function accessToken(connection: CalendarConnection) {
 }
 
 async function api(url: string, token: string, init?: RequestInit) {
-  const response = await fetch(url, { ...init, headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', ...(init?.headers || {}) } });
+  const response = await fetch(url, { ...init, signal: init?.signal ?? AbortSignal.timeout(15000), headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', ...(init?.headers || {}) } });
   if (!response.ok) {
-    const detail = await response.text();
-    const error = new Error(`Calendar provider returned ${response.status}: ${detail.slice(0, 300)}`);
+    const error = new Error(`Calendar provider returned ${response.status}`);
     Object.assign(error, { status: response.status });
     throw error;
   }
   return response.status === 204 ? null : response.json();
 }
 
-function googleProvider(connection: CalendarConnection, token: string): CalendarProvider {
+function googleProvider(connection: CalendarConnection, token: string, fallbackTimeZone: string): CalendarProvider {
   const base = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(connection.calendarId)}/events`;
   return {
     name: 'google',
     async list(from, to, syncToken) {
       const url = new URL(base);
+      url.searchParams.set('singleEvents', 'true'); url.searchParams.set('showDeleted', 'true');
       if (syncToken) url.searchParams.set('syncToken', syncToken);
       else {
         url.searchParams.set('timeMin', from.toISOString()); url.searchParams.set('timeMax', to.toISOString());
-        url.searchParams.set('singleEvents', 'true'); url.searchParams.set('showDeleted', 'true');
       }
       const events: CalendarWrite[] = [];
       let nextSyncToken = syncToken || undefined;
       while (url) {
-        const page = await api(url.toString(), token) as { items?: GoogleEvent[]; nextPageToken?: string; nextSyncToken?: string };
+        const page = await api(url.toString(), token) as { items?: GoogleEvent[]; nextPageToken?: string; nextSyncToken?: string; timeZone?: string };
         for (const item of page.items || []) {
-          const start = item.start?.dateTime || `${item.start?.date}T00:00:00Z`;
-          const end = item.end?.dateTime || `${item.end?.date}T00:00:00Z`;
+          const start = item.start?.date ? zonedDateTime(item.start.date, '00:00', page.timeZone || fallbackTimeZone) : new Date(item.start?.dateTime || 0);
+          const end = item.end?.date ? zonedDateTime(item.end.date, '00:00', page.timeZone || fallbackTimeZone) : new Date(item.end?.dateTime || 0);
           events.push({ externalId: item.id, title: item.summary || '(Untitled)', notes: item.description || '', startAt: new Date(start), endAt: new Date(end), allDay: Boolean(item.start?.date), location: item.location || '', deleted: item.status === 'cancelled' });
         }
         nextSyncToken = page.nextSyncToken || nextSyncToken;
@@ -205,6 +206,7 @@ function microsoftProvider(connection: CalendarConnection, token: string): Calen
 }
 
 export async function calendarProviderFor(connection: CalendarConnection) {
+  if (connection.provider === 'mock' && process.env.NODE_ENV === 'production') throw new Error('Mock calendars are disabled in production');
   if (connection.provider === 'mock') return {
     name: 'mock',
     async list() { return { events: [], syncToken: `mock-${Date.now()}` }; },
@@ -212,7 +214,10 @@ export async function calendarProviderFor(connection: CalendarConnection) {
     async remove() {},
   } satisfies CalendarProvider;
   const token = await accessToken(connection);
-  if (connection.provider === 'google') return googleProvider(connection, token);
+  if (connection.provider === 'google') {
+    const user = await prisma.user.findUniqueOrThrow({ where: { id: connection.userId }, select: { timeZone: true } });
+    return googleProvider(connection, token, user.timeZone);
+  }
   if (connection.provider === 'microsoft') return microsoftProvider(connection, token);
   throw new Error(`Unsupported calendar provider: ${connection.provider}`);
 }

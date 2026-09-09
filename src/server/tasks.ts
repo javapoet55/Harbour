@@ -1,5 +1,6 @@
 import type { Prisma } from '@/generated/prisma';
 import { prisma } from './db';
+import { validateProjectAssignment } from './projects';
 import { zonedDateTime } from '@/lib/time';
 import { nextOccurrence } from '@/lib/recurrence';
 
@@ -23,35 +24,47 @@ export async function createTask(input: {
   critical?: boolean;
   listId?: string | null;
   idempotencyKey?: string;
+  projectId?: string | null;
 }) {
+  if (!input.title.trim() || input.title.length > 200 || (input.durationMin !== undefined && (!Number.isInteger(input.durationMin) || input.durationMin < 1 || input.durationMin > 1440))) throw new Error('INVALID_TASK');
+  if ([input.startAt, input.dueAt].some((date) => date && !Number.isFinite(+date))) throw new Error('INVALID_TASK');
   if (input.idempotencyKey) {
-    const existing = await prisma.task.findUnique({ where: { idempotencyKey: input.idempotencyKey } });
+    const existing = await prisma.task.findFirst({ where: { idempotencyKey: input.idempotencyKey, userId: input.userId } });
     if (existing) return existing;
   }
-  return prisma.task.create({
-    data: {
-      userId: input.userId,
-      title: input.title.trim(),
-      notes: input.notes ?? '',
-      kind: input.kind ?? 'TASK',
-      status: input.status ?? 'PLANNED',
-      priority: input.priority ?? 'NORMAL',
-      startAt: input.startAt ?? null,
-      dueAt: input.dueAt ?? input.startAt ?? null,
-      durationMin: input.durationMin ?? 30,
-      energyLevel: input.energyLevel ?? 'MEDIUM',
-      waitingOn: input.waitingOn ?? null,
-      critical: input.critical ?? false,
-      listId: input.listId ?? null,
-      idempotencyKey: input.idempotencyKey,
-    },
+  const user = await prisma.user.findUniqueOrThrow({ where: { id: input.userId }, select: { timeZone: true } });
+  return prisma.$transaction(async tx => {
+    await validateProjectAssignment(tx, input.userId, input.projectId ?? null);
+    return tx.task.create({
+      data: {
+        userId: input.userId,
+        timeZone: user.timeZone,
+        title: input.title.trim(),
+        notes: input.notes ?? '',
+        kind: input.kind ?? 'TASK',
+        status: input.status ?? 'PLANNED',
+        priority: input.priority ?? 'NORMAL',
+        startAt: input.startAt ?? null,
+        dueAt: input.dueAt ?? input.startAt ?? null,
+        durationMin: input.durationMin ?? 30,
+        energyLevel: input.energyLevel ?? 'MEDIUM',
+        waitingOn: input.waitingOn ?? null,
+        critical: input.critical ?? false,
+        listId: input.listId ?? null,
+        projectId: input.projectId ?? null,
+        idempotencyKey: input.idempotencyKey,
+      },
+    });
   });
 }
 
 export async function updateTask(userId: string, id: string, data: Prisma.TaskUpdateInput) {
-  const existing = await prisma.task.findFirst({ where: { id, userId, deletedAt: null } });
-  if (!existing) throw new Error('NOT_FOUND');
-  return prisma.task.update({ where: { id }, data });
+  return prisma.$transaction(async tx => {
+    const existing = await tx.task.findFirst({ where: { id, userId, deletedAt: null } });
+    if (!existing) throw new Error('NOT_FOUND');
+    if (data.project?.connect?.id) await validateProjectAssignment(tx, userId, data.project.connect.id);
+    return tx.task.update({ where: { id }, data });
+  });
 }
 
 export async function completeTask(userId: string, id: string) {
@@ -81,6 +94,7 @@ export async function completeTask(userId: string, id: string) {
           userId, listId: task.listId, projectId: task.projectId, categoryId: task.categoryId, title: task.title, notes: task.notes, kind: task.kind,
           status: 'PLANNED', priority: task.priority, startAt: nextStart, dueAt: task.dueAt ? new Date(nextStart.getTime() + dueOffset) : null,
           durationMin: task.durationMin, energyLevel: task.energyLevel, timeZone: task.timeZone, notifyPush: task.notifyPush, notifyEmail: task.notifyEmail,
+          splittable: task.splittable, minFocusMin: task.minFocusMin,
           notifySms: task.notifySms, critical: task.critical, dependencies: { create: task.dependencies.map((dependency) => ({ dependsOnId: dependency.dependsOnId })) },
           recurrence: { create: { frequency: task.recurrence.frequency, interval: task.recurrence.interval, byWeekday: task.recurrence.byWeekday, until: task.recurrence.until, count: task.recurrence.count ? task.recurrence.count - 1 : null } },
         } });
@@ -90,14 +104,27 @@ export async function completeTask(userId: string, id: string) {
   });
 }
 
-export async function startTask(userId: string, id: string, now = new Date()) {
-  return prisma.$transaction(async (tx) => {
+export async function startTask(userId: string, id: string, now = new Date(), db?: Prisma.TransactionClient) {
+  const start = async (tx: Prisma.TransactionClient) => {
     const task = await tx.task.findFirst({ where: { id, userId, deletedAt: null }, include: { user: { include: { preference: true } }, workSessions: { where: { endedAt: null } } } });
     if (!task) throw new Error('NOT_FOUND');
     if (task.user.preference?.personalizationEnabled && task.workSessions.length === 0) {
       await tx.taskWorkSession.create({ data: { userId, taskId: id, startedAt: now } });
     }
     return tx.task.update({ where: { id }, data: { status: 'IN_PROGRESS', startedAt: task.user.preference?.personalizationEnabled ? (task.startedAt ?? now) : task.startedAt } });
+  };
+  return db ? start(db) : prisma.$transaction(start);
+}
+
+/** Close only the caller's captured work segment; retries cannot change recorded time. */
+export async function finishFocusWork(userId: string, taskId: string, sessionId: string, endedAt: Date, now = new Date()) {
+  return prisma.$transaction(async (tx) => {
+    const session = await tx.taskWorkSession.findFirst({ where: { id: sessionId, userId, taskId } });
+    if (!session) throw new Error('NOT_FOUND');
+    if (session.endedAt) return session;
+    const end = new Date(Math.max(session.startedAt.getTime(), Math.min(now.getTime(), endedAt.getTime())));
+    await tx.taskWorkSession.updateMany({ where: { id: sessionId, userId, endedAt: null }, data: { endedAt: end, durationMin: Math.max(0, Math.round((end.getTime() - session.startedAt.getTime()) / 60_000)) } });
+    return tx.taskWorkSession.findUniqueOrThrow({ where: { id: sessionId } });
   });
 }
 
@@ -107,13 +134,16 @@ export async function deleteTask(userId: string, id: string) {
 
 export async function scheduleTask(userId: string, id: string, startAt: Date, durationMin?: number) {
   const duration = durationMin ?? 30;
+  if (!Number.isFinite(+startAt) || !Number.isInteger(duration) || duration < 1 || duration > 1440) throw new Error('INVALID_TASK');
   return prisma.$transaction(async (tx) => {
     const task = await tx.task.findFirst({ where: { id, userId, deletedAt: null }, include: { user: { include: { preference: true } } } });
     if (!task) throw new Error('NOT_FOUND');
     const postponed = Boolean(task.user.preference?.personalizationEnabled && task.startAt && startAt.getTime() > task.startAt.getTime());
+    const startAndDueCoupled = task.dueAt == null || (task.startAt != null && task.dueAt.getTime() === task.startAt.getTime());
+    const shiftedDueAt = startAndDueCoupled ? new Date(startAt.getTime() + duration * 60_000) : task.dueAt;
     return tx.task.update({ where: { id }, data: {
       startAt,
-      dueAt: task.dueAt ?? new Date(startAt.getTime() + duration * 60_000),
+      dueAt: shiftedDueAt,
       durationMin: duration,
       status: 'PLANNED',
       postponeCount: postponed ? { increment: 1 } : undefined,

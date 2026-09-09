@@ -8,6 +8,8 @@ type Connection = { id: string; provider: string; accountEmail: string; calendar
 
 export default function SettingsPage() {
   const [pref, setPref] = useState<PreferenceForm | null>(null);
+  const [name, setName] = useState('');
+  const [nextAction, setNextAction] = useState({ enabled: false, switchingThreshold: 10 });
   const [timeZone, setTimeZone] = useState('');
   const [saved, setSaved] = useState(() => {
     if (typeof window === 'undefined') return '';
@@ -32,6 +34,8 @@ export default function SettingsPage() {
       .then((data) => {
         if (cancelled) return;
         setPref(data.user?.preference ?? null);
+        setName(data.user?.name ?? '');
+        if (data.user?.nextAction) setNextAction(data.user.nextAction);
         setTimeZone(data.user?.timeZone ?? '');
       });
     fetch('/api/calendar/connections').then((r) => r.json()).then((data) => {
@@ -43,11 +47,13 @@ export default function SettingsPage() {
   }, []);
 
   async function save() {
-    await fetch('/api/settings', {
+    const response = await fetch('/api/settings', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ timeZone, preference: pref }),
+      body: JSON.stringify({ name, timeZone, preference: pref, nextAction }),
     });
+    if (!response.ok) { setSaved('Could not save settings. Please check your values and retry.'); return; }
+    window.dispatchEvent(new Event('harbor:tasks-updated'));
     setSaved('Saved. Relative dates now use this time zone.');
   }
 
@@ -76,6 +82,9 @@ export default function SettingsPage() {
       <div className="mt-5 grid gap-4 md:grid-cols-2">
         <section className="harbor-card p-4">
           <h2 className="font-semibold">Profile and time</h2>
+          <label className="mt-3 block text-sm">Display name
+            <input className="harbor-input mt-1" value={name} onChange={(e) => setName(e.target.value)} maxLength={80} />
+          </label>
           <label className="mt-3 block text-sm">Time zone
             <input className="harbor-input mt-1" value={timeZone} onChange={(e) => setTimeZone(e.target.value)} />
           </label>
@@ -116,6 +125,9 @@ export default function SettingsPage() {
         </section>
         <section className="harbor-card p-4">
           <h2 className="font-semibold">Notifications</h2>
+          <label className="mt-3 flex items-start gap-2 text-sm"><input type="checkbox" checked={nextAction.enabled} onChange={(e) => setNextAction({ ...nextAction, enabled: e.target.checked })} /><span><strong>Suggest my next action</strong><br />Show a quiet card on Today when a useful opening appears. No push alerts; respects work hours, quiet hours, and active focus.</span></label>
+          <label className="mt-3 block text-sm">Protect my current focus<select className="harbor-input mt-1" value={nextAction.switchingThreshold} onChange={(e) => setNextAction({ ...nextAction, switchingThreshold: Number(e.target.value) })}><option value={5}>Flexible — allow meaningful improvements</option><option value={10}>Balanced — avoid small distractions</option><option value={25}>Strong — prefer continuing</option></select></label>
+          <p className="mt-2 text-xs text-[var(--muted)]">Active timer state is stored only to protect your current focus. Timing history is learned only with Personalized predictions enabled.</p>
           {(['pushEnabled', 'emailEnabled', 'smsEnabled', 'morningSummary', 'eveningSummary'] as const).map((key) => (
             <label key={key} className="mt-2 flex items-center gap-2 text-sm">
               <input type="checkbox" checked={pref[key]} onChange={(e) => setPref({ ...pref, [key]: e.target.checked })} />
@@ -141,7 +153,7 @@ export default function SettingsPage() {
                 <div className="flex items-start justify-between gap-3"><div><p className="font-medium">{connection.calendarName}</p><p className="text-xs text-[var(--muted)]">{connection.provider} · {connection.accountEmail} · {connection.status}</p></div><button className="text-xs text-red-700" type="button" onClick={() => void disconnect(connection.id)}>Disconnect</button></div>
                 <div className="mt-2 flex flex-wrap gap-3 text-xs">
                   <label><input type="checkbox" checked={connection.visible} onChange={(e) => void updateConnection(connection.id, { visible: e.target.checked })} /> Visible</label>
-                  <label><input type="checkbox" checked={connection.writeEnabled} onChange={(e) => void updateConnection(connection.id, { writeEnabled: e.target.checked })} /> Allow Harbour writes</label>
+                  <label><input type="checkbox" checked={connection.writeEnabled} onChange={(e) => void updateConnection(connection.id, { writeEnabled: e.target.checked })} /> Allow Nexdo writes</label>
                   <label><input type="radio" name="default-calendar" checked={defaultCalendarId === connection.id} onChange={() => void updateConnection(connection.id, { makeDefault: true })} /> Default</label>
                 </div>
               </div>

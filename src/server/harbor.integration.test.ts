@@ -10,6 +10,7 @@ import { applyReplanProposal, generateReplanProposal } from './replanner';
 import { runConversationalAgent } from './conversational-agent';
 import { buildPersonalizedInsights, erasePersonalizationData } from './predictions';
 import { buildCompleteBriefing } from './briefing';
+import { getScheduleIntelligence } from './schedule-intelligence';
 
 const prisma = new PrismaClient();
 
@@ -213,6 +214,13 @@ describe('task and reminder integration', () => {
   it('produces one grounded briefing and bypasses the LLM for the brief-me intent', async () => {
     const now = new Date('2026-09-05T16:00:00Z');
     await createTask({ userId: userA, title: 'Briefing critical deadline', priority: 'CRITICAL', startAt: new Date('2026-09-05T17:00:00Z'), dueAt: new Date('2026-09-05T18:00:00Z'), durationMin: 30 });
+    await createTask({ userId: userA, title: 'Outside five-day briefing', startAt: new Date('2026-09-10T17:00:00Z'), dueAt: new Date('2026-09-10T18:00:00Z'), durationMin: 30 });
+    const defaultBriefing = await buildCompleteBriefing(userA, undefined, now);
+    expect(defaultBriefing.visual.summary).toContain('5-day');
+    expect(defaultBriefing.visual.summary).toContain('Calendar appointment');
+    expect(defaultBriefing.visual.sections.map((section) => section.title)).toEqual(['At a glance', 'Deadlines & schedule', 'Top 3 focus items', 'Overdue']);
+    expect(defaultBriefing.visual.sections[0].items[2]).toMatch(/^Next 5 days:/);
+    expect(defaultBriefing.deadlineLines.join(' ')).not.toContain('Outside five-day briefing');
     const briefing = await buildCompleteBriefing(userA, 7, now);
     expect(briefing.spoken).toContain('Today:');
     expect(briefing.spoken).toContain('Tomorrow:');
@@ -234,5 +242,25 @@ describe('task and reminder integration', () => {
       vi.unstubAllGlobals();
       if (previousKey === undefined) delete process.env.OPENAI_API_KEY; else process.env.OPENAI_API_KEY = previousKey;
     }
+  });
+
+  it('loads Today from owned visible calendars and tasks without writing schedule changes', async () => {
+    const morning = new Date('2026-10-05T11:30:00Z'); // 7:30 AM in User B’s New York time zone.
+    const startAt = new Date('2026-10-05T13:00:00Z');
+    const endAt = new Date('2026-10-05T14:00:00Z');
+    const hidden = await prisma.calendarConnection.create({ data: { userId: userB, provider: 'mock', accountEmail: 'b@harbor.test', calendarId: 'hidden', calendarName: 'Hidden', visible: false } });
+    await prisma.calendarEvent.createMany({ data: [
+      { userId: userB, title: 'Visible meeting', startAt, endAt },
+      { userId: userB, title: 'Hidden meeting', startAt, endAt, connectionId: hidden.id },
+      { userId: userA, title: 'Other user private appointment', startAt, endAt },
+    ] });
+    const saved = await prisma.task.create({ data: { userId: userB, title: 'Snapshot presentation', priority: 'CRITICAL', status: 'PLANNED', dueAt: new Date('2026-10-05T18:00:00Z'), durationMin: 60 } });
+    const actionCount = await prisma.assistantAction.count({ where: { userId: userB } });
+    const result = await getScheduleIntelligence(userB, morning, { scope: 'today', bufferMinutes: 30 });
+    expect(result.today).toMatchObject({ day: '2026-10-05', timeZone: 'America/New_York', commitments: 2, appointments: 1, tasks: 1, bufferMinutes: 30 });
+    expect(result.today.timeline.map((item) => item.title)).toEqual(['Visible meeting', 'Snapshot presentation']);
+    expect(result.today.recommendation.startAt).toBe('2026-10-05T14:30:00.000Z');
+    expect(await prisma.task.findUniqueOrThrow({ where: { id: saved.id } })).toEqual(saved);
+    expect(await prisma.assistantAction.count({ where: { userId: userB } })).toBe(actionCount);
   });
 });

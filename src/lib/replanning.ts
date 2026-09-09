@@ -1,4 +1,5 @@
 import { addDays, parseYmd, tzToday, ymd, zonedDateTime } from './time';
+import { freeSlots } from './schedule-intelligence';
 
 export type ReplanTask = {
   id: string;
@@ -13,7 +14,7 @@ export type ReplanTask = {
   updatedAt: Date;
 };
 
-export type ReplanEvent = { id: string; title: string; startAt: Date; endAt: Date; externalId?: string | null };
+export type ReplanEvent = { id: string; title: string; startAt: Date; endAt: Date; allDay?: boolean; externalId?: string | null };
 export type ReplanMove = {
   taskId: string;
   title: string;
@@ -40,7 +41,7 @@ function priorityScore(task: ReplanTask, now: number) {
   return base + overdue + active + dueSoon;
 }
 
-function workWindows(timeZone: string, workingDays: string, workStart: string, workEnd: string, horizonDays: number, now: Date) {
+export function workWindows(timeZone: string, workingDays: string, workStart: string, workEnd: string, horizonDays: number, now: Date, alignmentMinutes = 15) {
   const allowed = new Set(workingDays.split(',').map(Number));
   const today = tzToday(timeZone, now);
   const windows: Window[] = [];
@@ -50,7 +51,8 @@ function workWindows(timeZone: string, workingDays: string, workStart: string, w
     const dayValue = ymd(day);
     const start = zonedDateTime(dayValue, workStart, timeZone).getTime();
     const end = zonedDateTime(dayValue, workEnd, timeZone).getTime();
-    if (end > now.getTime()) windows.push({ start: Math.max(start, Math.ceil(now.getTime() / 900_000) * 900_000), end });
+    const current = alignmentMinutes > 0 ? Math.ceil(now.getTime() / (alignmentMinutes * 60000)) * alignmentMinutes * 60000 : now.getTime();
+    if (end > now.getTime()) windows.push({ start: Math.max(start, current), end });
   }
   return windows;
 }
@@ -59,24 +61,16 @@ function containingWindow(start: number, end: number, windows: Window[]) {
   return windows.some((window) => start >= window.start && end <= window.end);
 }
 
-function findSlot(durationMs: number, windows: Window[], busy: Interval[], deadline?: number, notBefore?: number, energyLevel = 'MEDIUM') {
+function findSlot(durationMs: number, windows: Window[], busy: Interval[], deadline?: number, notBefore?: number, energyLevel = 'MEDIUM', strictDeadline = false) {
   const search = (respectDeadline: boolean) => {
     const choices: number[] = [];
     for (const window of windows) {
-      let cursor = Math.max(window.start, notBefore ?? window.start);
-      const relevant = busy.filter((item) => item.end > window.start && item.start < window.end).sort((a, b) => a.start - b.start);
-      for (const item of relevant) {
-        if (cursor + durationMs <= item.start && (!respectDeadline || !deadline || cursor + durationMs <= deadline)) {
-          choices.push(cursor);
-          const latest = item.start - durationMs;
-          if (latest !== cursor && (!respectDeadline || !deadline || latest + durationMs <= deadline)) choices.push(latest);
+      const end = respectDeadline && deadline ? Math.min(window.end, deadline) : window.end;
+      for (const slot of freeSlots(Math.max(window.start, notBefore ?? window.start), end, busy)) {
+        if (slot.end - slot.start >= durationMs) {
+          choices.push(slot.start);
+          if (slot.end - durationMs !== slot.start) choices.push(slot.end - durationMs);
         }
-        cursor = Math.max(cursor, item.end);
-      }
-      if (cursor + durationMs <= window.end && (!respectDeadline || !deadline || cursor + durationMs <= deadline)) {
-        choices.push(cursor);
-        const latest = window.end - durationMs;
-        if (latest !== cursor && latest >= (notBefore ?? window.start) && (!respectDeadline || !deadline || latest + durationMs <= deadline)) choices.push(latest);
       }
     }
     if (!choices.length) return null;
@@ -89,7 +83,7 @@ function findSlot(durationMs: number, windows: Window[], busy: Interval[], deadl
       return energyPenalty(a) - energyPenalty(b) || a - b;
     })[0];
   };
-  return search(true) ?? search(false);
+  return search(true) ?? (strictDeadline ? null : search(false));
 }
 
 export function buildReplan(input: {
@@ -101,25 +95,53 @@ export function buildReplan(input: {
   workEnd: string;
   horizonDays?: number;
   now?: Date;
+  windowStart?: Date;
+  windowEnd?: Date;
+  protectedTaskIds?: string[];
+  priorityScores?: Record<string, number>;
+  bufferMinutes?: number;
+  strictDeadlines?: boolean;
+  deferCollisionValidation?: boolean;
 }) {
   const now = input.now ?? new Date();
   const horizonDays = input.horizonDays ?? 7;
-  const windows = workWindows(input.timeZone, input.workingDays, input.workStart, input.workEnd, horizonDays, now);
-  const busy: Interval[] = input.events.map((event) => ({ start: event.startAt.getTime(), end: event.endAt.getTime(), kind: 'event' }));
+  const windows = workWindows(input.timeZone, input.workingDays, input.workStart, input.workEnd, horizonDays, now)
+    .map((window) => ({ start: Math.max(window.start, input.windowStart ? +input.windowStart : window.start), end: Math.min(window.end, input.windowEnd ? +input.windowEnd : window.end) })).filter((window) => window.end > window.start);
+  const buffer = Math.max(0, input.bufferMinutes ?? 0) * 60_000;
+  const busy: Interval[] = input.events.map((event) => ({ start: +event.startAt - (event.allDay ? 0 : buffer), end: +event.endAt + (event.allDay ? 0 : buffer), kind: 'event' }));
+  const protectedIds = new Set(input.protectedTaskIds ?? []);
+  for (const task of input.tasks) if (protectedIds.has(task.id) && task.startAt) busy.push({ start: +task.startAt, end: +task.startAt + task.durationMin * 60_000, kind: 'task' });
+  const score = (task: ReplanTask) => input.priorityScores?.[task.id] ?? priorityScore(task, +now);
   const candidates = input.tasks
-    .filter((task) => !['COMPLETED', 'CANCELLED', 'WAITING'].includes(task.status))
-    .sort((a, b) => priorityScore(b, now.getTime()) - priorityScore(a, now.getTime()) || (a.dueAt?.getTime() ?? Number.MAX_SAFE_INTEGER) - (b.dueAt?.getTime() ?? Number.MAX_SAFE_INTEGER));
+    .filter((task) => !['COMPLETED', 'CANCELLED', 'WAITING'].includes(task.status) && !protectedIds.has(task.id))
+    .sort((a, b) => score(b) - score(a) || (a.dueAt?.getTime() ?? Number.MAX_SAFE_INTEGER) - (b.dueAt?.getTime() ?? Number.MAX_SAFE_INTEGER));
   const moves: ReplanMove[] = [];
   const risks: ReplanRisk[] = [];
-  let kept = 0;
+  let kept = input.tasks.filter((task) => protectedIds.has(task.id)).length;
   const scheduledEnds = new Map<string, number>();
   const openIds = new Set(candidates.map((task) => task.id));
 
-  // Dependencies are always considered before the tasks they unblock.
-  candidates.sort((a, b) => Number((a.dependsOnIds ?? []).includes(b.id)) - Number((b.dependsOnIds ?? []).includes(a.id)) || priorityScore(b, now.getTime()) - priorityScore(a, now.getTime()));
+  // Stable topological traversal handles chains and cycles, not only adjacent pairs.
+  const ordered: ReplanTask[] = [];
+  const visiting = new Set<string>();
+  const visited = new Set<string>();
+  const invalid = new Set<string>();
+  const byId = new Map(candidates.map((task) => [task.id, task]));
+  const visit = (task: ReplanTask): boolean => {
+    if (visiting.has(task.id)) { invalid.add(task.id); return false; }
+    if (visited.has(task.id)) return !invalid.has(task.id);
+    visiting.add(task.id);
+    for (const id of task.dependsOnIds ?? []) {
+      const dependency = byId.get(id);
+      if (!dependency || !visit(dependency)) invalid.add(task.id);
+    }
+    visiting.delete(task.id); visited.add(task.id); ordered.push(task);
+    return !invalid.has(task.id);
+  };
+  candidates.forEach(visit);
 
-  for (const task of candidates) {
-    const durationMs = Math.max(15, task.durationMin || 30) * 60_000;
+  for (const task of ordered) {
+    const durationMs = Math.max(5, task.durationMin || 30) * 60_000;
     const original = task.startAt?.getTime() ?? null;
     const originalEnd = original === null ? null : original + durationMs;
     const inPast = original !== null && original < now.getTime();
@@ -127,7 +149,7 @@ export function buildReplan(input: {
     const outsideHours = original !== null && originalEnd !== null && !containingWindow(original, originalEnd, windows);
     const blocked = original !== null && originalEnd !== null && busy.some((item) => overlaps(original, originalEnd, item));
 
-    const unresolvedExternalDependency = (task.dependsOnIds ?? []).some((id) => !openIds.has(id) && !scheduledEnds.has(id));
+    const unresolvedExternalDependency = invalid.has(task.id) || (task.dependsOnIds ?? []).some((id) => !openIds.has(id) || !scheduledEnds.has(id));
     const dependencyReadyAt = (task.dependsOnIds ?? []).reduce((latest, id) => Math.max(latest, scheduledEnds.get(id) ?? now.getTime()), now.getTime());
     const dependencyConflict = original !== null && dependencyReadyAt > original;
     if (unresolvedExternalDependency) {
@@ -135,7 +157,7 @@ export function buildReplan(input: {
       continue;
     }
 
-    if (original !== null && originalEnd !== null && !inPast && !outsideHours && !blocked && !dependencyConflict) {
+    if (original !== null && originalEnd !== null && !inPast && !outsideHours && !blocked && !dependencyConflict && !(input.strictDeadlines && task.dueAt && originalEnd > +task.dueAt)) {
       busy.push({ start: original, end: originalEnd, kind: 'task' });
       scheduledEnds.set(task.id, originalEnd);
       kept += 1;
@@ -143,7 +165,7 @@ export function buildReplan(input: {
       continue;
     }
 
-    const slot = findSlot(durationMs, windows, busy, task.dueAt?.getTime(), dependencyReadyAt, task.energyLevel ?? 'MEDIUM');
+    const slot = findSlot(durationMs, windows, busy, task.dueAt?.getTime(), dependencyReadyAt, task.energyLevel ?? 'MEDIUM', input.strictDeadlines);
     if (slot === null) {
       risks.push({ taskId: task.id, title: task.title, reason: 'no_capacity' });
       continue;
@@ -165,5 +187,30 @@ export function buildReplan(input: {
     moves.push({ taskId: task.id, title: task.title, fromStartAt: task.startAt?.toISOString() ?? null, toStartAt: new Date(slot).toISOString(), durationMin: task.durationMin, reason, expectedUpdatedAt: task.updatedAt.toISOString() });
   }
 
+  if (!input.deferCollisionValidation) retainSafeMoves(input.tasks, moves, risks);
   return { moves, risks, kept, horizonDays, generatedAt: now.toISOString(), rangeStart: ymd(tzToday(input.timeZone, now)), rangeEnd: ymd(addDays(parseYmd(ymd(tzToday(input.timeZone, now))), horizonDays - 1)) };
+}
+
+export function retainSafeMoves(tasks: ReplanTask[], moves: ReplanMove[], risks: ReplanRisk[]) {
+  // A task we could not move keeps its real original block. Reject any new collision,
+  // repeating because dropping one move restores another original block.
+  let changed = true;
+  while (changed) {
+    changed = false;
+    const moved = new Set(moves.map((move) => move.taskId));
+    const retained = tasks.filter((task) => !moved.has(task.id) && task.startAt && !['COMPLETED', 'CANCELLED'].includes(task.status));
+    for (let i = moves.length - 1; i >= 0; i--) {
+      const move = moves[i];
+      const start = +new Date(move.toStartAt);
+      const dependencyInvalid = (tasks.find((task) => task.id === move.taskId)?.dependsOnIds ?? []).some((id) => {
+        const dependency = tasks.find((task) => task.id === id);
+        const planned = moves.find((candidate) => candidate.taskId === id);
+        return !dependency || !(planned || dependency.startAt) || +(planned ? new Date(planned.toStartAt) : dependency.startAt!) + dependency.durationMin * 60000 > start;
+      });
+      if (dependencyInvalid || retained.some((task) => task.id !== move.taskId && start < +task.startAt! + task.durationMin * 60000 && start + move.durationMin * 60000 > +task.startAt!)) {
+        moves.splice(i, 1); changed = true;
+        if (!risks.some((risk) => risk.taskId === move.taskId)) risks.push({ taskId: move.taskId, title: move.title, reason: 'no_capacity' });
+      }
+    }
+  }
 }

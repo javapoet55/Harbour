@@ -3,12 +3,13 @@ import { listEventsInRange, overdueTasks } from './agenda';
 import { buildPersonalizedInsights, personalizedTaskDurations } from './predictions';
 import { rankFocusTasks } from '@/lib/focus-ranking';
 import { buildReplan } from '@/lib/replanning';
+import { analyzeSchedule } from '@/lib/schedule-intelligence';
 import { addDays, endOfLocalDay, formatDay, formatTime, startOfLocalDay, tzToday, ymd } from '@/lib/time';
 
 const OPEN = ['INBOX', 'PLANNED', 'IN_PROGRESS'];
 const localDay = (date: Date, timeZone: string) => new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(date);
 
-export async function buildCompleteBriefing(userId: string, days = 7, now = new Date()) {
+export async function buildCompleteBriefing(userId: string, days = 5, now = new Date()) {
   const user = await prisma.user.findUniqueOrThrow({ where: { id: userId }, include: { preference: true } });
   const today = tzToday(user.timeZone, now);
   const todayKey = ymd(today);
@@ -42,19 +43,34 @@ export async function buildCompleteBriefing(userId: string, days = 7, now = new 
   const deadlines = tasks.filter((task) => task.dueAt && task.dueAt >= now && task.dueAt <= end).sort((a, b) => a.dueAt!.getTime() - b.dueAt!.getTime());
   const conflicts = replan.moves.filter((move) => move.reason === 'meeting_conflict');
   const risks = replan.risks;
-  const topText = top3.length ? top3.map((task, index) => `${index + 1}. ${task.title}, because ${task.reasons.slice(0, 2).join(' and ')}`).join('; ') : 'none';
+  const intelligence = analyzeSchedule({ events, tasks: tasks.map((task) => ({ ...task, dependencyBlocked: task.dependencies.some((edge) => edge.dependsOn.status !== 'COMPLETED') })), timeZone: user.timeZone, workingDays: user.preference?.workingDays ?? '1,2,3,4,5', workStart: user.preference?.workStart ?? '09:00', workEnd: user.preference?.workEnd ?? '17:00', now });
   const deadlineText = deadlines.length ? deadlines.slice(0, 4).map((task) => `${task.title}, ${formatDay(task.dueAt!, user.timeZone)} at ${formatTime(task.dueAt!, user.timeZone)}`).join('; ') : 'none in this period';
   const conflictText = conflicts.length || risks.length ? `${conflicts.length} calendar conflict${conflicts.length === 1 ? '' : 's'} and ${risks.length} capacity or deadline risk${risks.length === 1 ? '' : 's'}` : 'none detected';
-  const spoken = `Here is your complete ${days}-day briefing. Today: ${todayEvents.length} appointment${todayEvents.length === 1 ? '' : 's'} and ${todayTasks.length} task${todayTasks.length === 1 ? '' : 's'}. Tomorrow: ${tomorrowEvents.length} appointment${tomorrowEvents.length === 1 ? '' : 's'} and ${tomorrowTasks.length} task${tomorrowTasks.length === 1 ? '' : 's'}. Across the next ${days} days: ${events.length} appointments and ${tasks.length} open tasks. Upcoming deadlines: ${deadlineText}. Overdue: ${overdue.length ? overdue.map((task) => task.title).slice(0, 4).join(', ') : 'none'}. Schedule conflicts: ${conflictText}. Your Top 3 focus items are ${topText}.`;
+  const overview = [
+    `Today: ${todayEvents.length} Calendar appointment${todayEvents.length === 1 ? '' : 's'} and ${todayTasks.length} task${todayTasks.length === 1 ? '' : 's'}.`,
+    `Tomorrow: ${tomorrowEvents.length} Calendar appointment${tomorrowEvents.length === 1 ? '' : 's'} and ${tomorrowTasks.length} task${tomorrowTasks.length === 1 ? '' : 's'}.`,
+    `Next ${days} days: ${events.length} Calendar appointments and ${tasks.length} open tasks.`,
+    `${intelligence.conflicts.length} require attention.`,
+  ];
+  const overdueLines = overdue.length ? overdue.map((task) => task.title).slice(0, 4) : ['Nothing overdue.'];
+  const focusLines = top3.length ? top3.map((task, index) => `${index + 1}. ${task.title} — ${task.reasons.slice(0, 2).join(', ')}`) : ['No open focus items.'];
+  const sections = [
+    { title: 'At a glance', items: overview },
+    { title: 'Deadlines & schedule', items: [`Upcoming deadlines: ${deadlineText}.`, `Schedule conflicts: ${conflictText}.`, ...(intelligence.conflicts.slice(0, 2).map((conflict) => `${conflict.title}: ${conflict.explanation}`))] },
+    { title: 'Top 3 focus items', items: focusLines },
+    { title: 'Overdue', items: overdueLines },
+  ];
+  const spoken = `Here is your complete ${days}-day briefing.\n\n${sections.map((section) => `${section.title}:\n${section.items.join('\n')}`).join('\n\n')}`;
   return {
     spoken,
     visual: {
-      summary: spoken,
+      summary: `Your ${days}-day plan is ready. ${overview[0]} ${overview[1]}`,
       appointments: [...todayEvents, ...tomorrowEvents].map((event) => `${formatDay(event.startAt, user.timeZone)}: ${event.title} at ${formatTime(event.startAt, user.timeZone)}`),
       tasks: top3.map((task, index) => `${index + 1}. ${task.title} — ${task.reasons.join(', ')}`),
       overdue: overdue.map((task) => task.title),
       next: `Deadlines: ${deadlineText}. Conflicts: ${conflictText}.`,
       rangeLabel: `Complete ${days}-day briefing`,
+      sections,
     },
     deadlines: deadlines.map((task) => task.id), deadlineLines: deadlines.map((task) => `${task.title}, ${formatDay(task.dueAt!, user.timeZone)} at ${formatTime(task.dueAt!, user.timeZone)}`),
     conflicts: conflicts.map((move) => move.taskId), conflictSummary: conflictText, risks, top3,

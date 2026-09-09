@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addDays, parseYmd, rangeForNextNDays, tzToday, ymd, zonedDateTime } from './time';
-
+import { startOfLocalDay, endOfLocalDay, zonedDateTime, formatTime, addDays, parseYmd, rangeForNextNDays, tzToday, ymd } from './time';
 describe('date ranges', () => {
   it('computes the next three days from a Pacific afternoon', () => {
     const now = new Date('2026-09-04T20:30:00.000Z');
@@ -43,5 +42,21 @@ describe('time zones', () => {
 describe('calendar math', () => {
   it('adds days on UTC anchors so a west-coast browser cannot shift the date', () => {
     expect(ymd(addDays(parseYmd('2026-09-04'), 1))).toBe('2026-09-05');
+  });
+});
+
+describe('timezone boundaries', () => {
+  it('rejects the nonexistent spring-forward wall clock instead of silently changing it', () => {
+    expect(() => zonedDateTime('2026-03-08', '02:30', 'America/Los_Angeles')).toThrow('INVALID_LOCAL_TIME');
+    expect(() => zonedDateTime('2026-02-30', '09:00', 'America/Los_Angeles')).toThrow('INVALID_LOCAL_TIME');
+  });
+  it('uses 23-hour and 25-hour local days across DST', () => {
+    for (const [day, hours] of [['2026-03-08', 23], ['2026-11-01', 25]] as const) {
+      expect(+endOfLocalDay(day, 'America/Los_Angeles') + 1 - +startOfLocalDay(day, 'America/Los_Angeles')).toBe(hours * 3600000);
+    }
+  });
+  it('retains local time with fractional offsets and both sides of a clock change', () => {
+    expect(zonedDateTime('2026-09-08', '09:00', 'Asia/Kolkata').toISOString()).toBe('2026-09-08T03:30:00.000Z');
+    for (const day of ['2026-03-07', '2026-03-08', '2026-11-01', '2026-11-02']) expect(formatTime(zonedDateTime(day, '09:00', 'America/Los_Angeles'), 'America/Los_Angeles')).toBe('9:00 AM');
   });
 });

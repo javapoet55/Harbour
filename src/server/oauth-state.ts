@@ -1,17 +1,20 @@
 import { SignJWT, jwtVerify } from 'jose';
 import type { OAuthProvider } from '@/providers/calendar';
+import { sessionSigningKey } from './session-key';
 
-function key() {
-  return new TextEncoder().encode(process.env.HARBOR_SESSION_SECRET || 'harbor-dev-session-secret-change-me');
+export async function createOAuthState(userId: string, provider: OAuthProvider, native = false) {
+  return new SignJWT({ sub: userId, provider, native, purpose: 'calendar-oauth' })
+    .setProtectedHeader({ alg: 'HS256' }).setIssuedAt().setExpirationTime('10m').sign(sessionSigningKey());
 }
 
-export async function createOAuthState(userId: string, provider: OAuthProvider) {
-  return new SignJWT({ sub: userId, provider, purpose: 'calendar-oauth' })
-    .setProtectedHeader({ alg: 'HS256' }).setIssuedAt().setExpirationTime('10m').sign(key());
+export async function isNativeOAuthState(token: string, provider: OAuthProvider) {
+  const { payload } = await jwtVerify(token, sessionSigningKey(), { algorithms: ['HS256'] });
+  if (payload.purpose !== 'calendar-oauth' || payload.provider !== provider || typeof payload.sub !== 'string') throw new Error('Invalid OAuth state');
+  return payload.native === true;
 }
 
 export async function verifyOAuthState(token: string, provider: OAuthProvider) {
-  const { payload } = await jwtVerify(token, key());
+  const { payload } = await jwtVerify(token, sessionSigningKey(), { algorithms: ['HS256'] });
   if (payload.purpose !== 'calendar-oauth' || payload.provider !== provider || typeof payload.sub !== 'string') throw new Error('Invalid OAuth state');
   return payload.sub;
 }

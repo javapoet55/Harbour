@@ -8,6 +8,9 @@ import { completeTask, createTask, deleteTask, localWhen, scheduleTask } from '.
 import { scheduleDefaultReminders } from './reminders';
 import { buildDailyPlan } from './planner';
 import { buildCompleteBriefing } from './briefing';
+import { buildTodayBriefing, getScheduleIntelligence } from './schedule-intelligence';
+import { handleExecutiveTurn } from './executive-companion';
+import type { ExecutiveRecommendation } from '@/lib/executive-contract';
 
 export type AssistantTurn = {
   transcript: string;
@@ -20,9 +23,13 @@ export type AssistantTurn = {
     overdue: string[];
     next: string;
     rangeLabel: string;
+    sections?: Array<{ title: string; items: string[] }>;
   };
   confirmation?: { prompt: string; actionId: string } | null;
   createdTaskId?: string;
+  executive?: ExecutiveRecommendation;
+  voiceEnabled?: boolean;
+  contextActionId?: string;
 };
 
 function itemLine(title: string, when: Date | null, timeZone: string) {
@@ -30,6 +37,10 @@ function itemLine(title: string, when: Date | null, timeZone: string) {
 }
 
 export async function runAssistantTurn(userId: string, transcript: string, confirmActionId?: string): Promise<AssistantTurn> {
+  if (['FOCUS_TODAY', 'FIX_SCHEDULE', 'DRIVING_BRIEFING', 'FREE_WINDOW', 'NEXT_ACTION', 'COMPARE_TASKS'].includes(parseIntent(transcript).intent)) {
+    const executive = await handleExecutiveTurn(userId, transcript, { confirmActionId });
+    if (executive) return executive;
+  }
   const started = Date.now();
   inc('voice.requests');
   const user = await prisma.user.findUniqueOrThrow({
@@ -128,17 +139,24 @@ function previewAction(intent: ParsedIntent, timeZone: string) {
 async function executeIntent(userId: string, timeZone: string, intent: ParsedIntent, executeWrites: boolean) {
   const today = tzToday(timeZone);
 
-  if (intent.intent === 'BRIEF_ME') return buildCompleteBriefing(userId, intent.days ?? 7);
+  if (intent.intent === 'BRIEF_ME') return buildCompleteBriefing(userId, intent.days ?? 5);
+  if (intent.intent === 'SCHEDULE_INTELLIGENCE') {
+    const intelligence = await getScheduleIntelligence(userId);
+    const attention = intelligence.conflicts.length;
+    const spoken = attention ? `${attention} schedule issue${attention === 1 ? '' : 's'} need attention. ${intelligence.conflicts[0].explanation}` : `Your schedule is clear. You have ${intelligence.commitmentsToday} calendar commitments today and ${Math.round(intelligence.availableMinutes / 60 * 10) / 10} usable hours remaining.`;
+    return { spoken, visual: { summary: spoken, appointments: [], tasks: intelligence.priorities.slice(0, 3).map((task, index) => `${index + 1}. ${task.title} — ${task.reasons.join(', ')}`), overdue: [], next: attention ? intelligence.conflicts[0].recommendedAction : 'Keep your highest-priority task protected.', rangeLabel: 'Schedule intelligence', sections: [{ title: 'Today', items: [`${intelligence.commitmentsToday} calendar commitments`, `${Math.round(intelligence.availableMinutes / 60 * 10) / 10} usable hours remaining`] }, { title: attention ? 'Needs attention' : 'All clear', items: attention ? intelligence.conflicts.map((conflict) => `${conflict.title}: ${conflict.explanation}`) : ['No hard, buffer, workload, or priority conflicts found.'] }, { title: 'Top priority', items: intelligence.priorities.slice(0, 3).map((task) => `${task.title} — ${task.reasons.join(', ')}`) }] } };
+  }
   if (intent.intent === 'LIST_THIS_WEEK') {
     const weekday = today.getUTCDay();
     return buildCompleteBriefing(userId, weekday === 0 ? 1 : 8 - weekday);
   }
   if (intent.intent === 'LIST_DEADLINES') {
-    const briefing = await buildCompleteBriefing(userId, intent.days ?? 7);
-    const spoken = briefing.deadlineLines.length ? `Your upcoming deadlines are ${briefing.deadlineLines.join('; ')}.` : 'You have no deadlines in the next seven days.';
+    const days = intent.days ?? 5;
+    const briefing = await buildCompleteBriefing(userId, days);
+    const spoken = briefing.deadlineLines.length ? `Your upcoming deadlines are ${briefing.deadlineLines.join('; ')}.` : `You have no deadlines in the next ${days} days.`;
     return { spoken, visual: { summary: spoken, appointments: [], tasks: briefing.deadlineLines, overdue: [], next: briefing.conflictSummary, rangeLabel: 'Upcoming deadlines' } };
   }
-  if (intent.intent === 'LIST_TODAY') return speakRange(userId, timeZone, 1, 'today');
+  if (intent.intent === 'LIST_TODAY') return buildTodayBriefing(userId);
   if (intent.intent === 'LIST_TOMORROW') {
     const snap = await snapshotForRange(userId, timeZone, 2);
     const tomorrow = snap.range.days[1];

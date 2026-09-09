@@ -1,21 +1,25 @@
 import { prisma } from './db';
+import type { Prisma } from '@/generated/prisma';
 import { addDays, endOfLocalDay, tzToday, ymd } from '@/lib/time';
 import { completionProbability, confidence, localHour, median, smoothedRate, timeBucket } from '@/lib/predictions';
+import { calendarBusy, freeSlots, minutesIn, withoutTaskMirrors } from '@/lib/schedule-intelligence';
+import { workWindows } from '@/lib/replanning';
+import { listEventsInRange } from './agenda';
 
 type SchedulableTask = { id: string; categoryId: string | null; projectId: string | null; kind: string; durationMin: number };
 function taskSegment(task: SchedulableTask) { return task.categoryId ? `category:${task.categoryId}` : task.projectId ? `project:${task.projectId}` : `kind:${task.kind}`; }
 
-export async function personalizedTaskDurations(userId: string, tasks: SchedulableTask[]) {
-  const preference = await prisma.userPreference.findUnique({ where: { userId } });
+export async function personalizedTaskDurations(userId: string, tasks: SchedulableTask[], db: Prisma.TransactionClient = prisma) {
+  const preference = await db.userPreference.findUnique({ where: { userId } });
   const result = new Map(tasks.map((task) => [task.id, task.durationMin]));
   if (!preference?.personalizationEnabled || !tasks.length) return result;
-  const history = await prisma.task.findMany({ where: { userId, actualDurationMin: { not: null }, ...(preference.personalizationConsentAt ? { updatedAt: { gte: preference.personalizationConsentAt } } : {}) }, select: { categoryId: true, projectId: true, kind: true, actualDurationMin: true } });
+  const history = await db.task.findMany({ where: { userId, deletedAt: null, status: 'COMPLETED', actualDurationMin: { gt: 0 }, ...(preference.personalizationConsentAt ? { updatedAt: { gte: preference.personalizationConsentAt } } : {}) }, select: { categoryId: true, projectId: true, kind: true, actualDurationMin: true } });
   const groups = new Map<string, number[]>();
   for (const sample of history) groups.set(taskSegment({ ...sample, id: '', durationMin: sample.actualDurationMin || 0 }), [...(groups.get(taskSegment({ ...sample, id: '', durationMin: sample.actualDurationMin || 0 })) || []), sample.actualDurationMin!]);
   for (const task of tasks) {
     const samples = groups.get(taskSegment(task)) || [];
     const prediction = median(samples);
-    if (samples.length >= 3 && prediction !== null) result.set(task.id, Math.max(5, Math.round(prediction)));
+    if (samples.length >= 3 && prediction !== null) result.set(task.id, Math.max(task.durationMin, 5, Math.round(prediction)));
   }
   return result;
 }
@@ -97,16 +101,17 @@ export async function buildPersonalizedInsights(userId: string, now = new Date()
   const categoryPrediction = new Map(durationInsights.map((item) => [item.category, item]));
   const requiredMinutes = dueSoon.reduce((sum, task) => {
     const prediction = categoryPrediction.get(label(task));
-    return sum + (prediction && prediction.samples >= 3 ? prediction.actualMedian : task.durationMin);
+    return sum + (prediction && prediction.samples >= 3 ? Math.max(task.durationMin, prediction.actualMedian) : task.durationMin);
   }, 0);
-  const allowedDays = new Set(user.preference.workingDays.split(',').map(Number));
   const workMinutes = (Number(user.preference.workEnd.split(':')[0]) * 60 + Number(user.preference.workEnd.split(':')[1])) - (Number(user.preference.workStart.split(':')[0]) * 60 + Number(user.preference.workStart.split(':')[1]));
-  let workingDayCount = 0;
-  const today = tzToday(user.timeZone, now);
-  for (let i = 0; i < 7; i += 1) if (allowedDays.has(addDays(today, i).getUTCDay())) workingDayCount += 1;
-  const meetings = await prisma.calendarEvent.findMany({ where: { userId, deletedAt: null, startAt: { lte: horizonEnd }, endAt: { gte: now } }, select: { startAt: true, endAt: true } });
-  const meetingMinutes = meetings.reduce((sum, event) => sum + Math.max(0, Math.round((event.endAt.getTime() - event.startAt.getTime()) / 60_000)), 0);
-  const availableMinutes = Math.max(0, workingDayCount * workMinutes - meetingMinutes);
+  const [meetings, bufferMemory] = await Promise.all([
+    listEventsInRange(userId, now, horizonEnd),
+    prisma.userMemory.findUnique({ where: { userId_key: { userId, key: 'preference:buffer_minutes' } } }),
+  ]);
+  const requestedBuffer = Number(bufferMemory?.value ?? 15);
+  const buffer = Number.isFinite(requestedBuffer) ? Math.max(0, Math.min(120, requestedBuffer)) : 15;
+  const windows = workWindows(user.timeZone, user.preference.workingDays, user.preference.workStart, user.preference.workEnd, 7, now);
+  const availableMinutes = minutesIn(windows.flatMap((window) => freeSlots(window.start, window.end, calendarBusy(withoutTaskMirrors(meetings, tasks), buffer))));
 
   const interruptionByReason = interruptions.reduce<Record<string, number>>((bag, item) => { const reason = item.summary.match(/\(([^)]+)\)$/)?.[1] || 'other'; bag[reason] = (bag[reason] || 0) + 1; return bag; }, {});
   return {

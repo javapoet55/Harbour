@@ -1,12 +1,14 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
+import { NexdoLogo } from '@/components/nexdo-logo';
 import { useRouter } from 'next/navigation';
 
 export default function LoginPage() {
   const router = useRouter();
-  const [email, setEmail] = useState('alex@harbor.app');
-  const [password, setPassword] = useState('harbor-demo');
+  const [email, setEmail] = useState(process.env.NODE_ENV === 'production' ? '' : 'alex@harbor.app');
+  const [password, setPassword] = useState(process.env.NODE_ENV === 'production' ? '' : 'harbor-demo');
   const [error, setError] = useState('');
 
   async function onSubmit(e: React.FormEvent) {
@@ -27,9 +29,9 @@ export default function LoginPage() {
 
   return (
     <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center px-5">
-      <p className="text-xs font-bold uppercase tracking-[0.18em] text-[var(--faint)]">Harbor</p>
+      <Link href="/welcome" className="nexdo-login-brand" aria-label="Nexdo home"><NexdoLogo priority /></Link>
       <h1 className="mt-2 text-3xl font-semibold">Ask what is coming up.</h1>
-      <p className="mt-2 text-[var(--muted)]">The demo account is already filled in. Sign in to hear today, the next three days, and your reminders.</p>
+      <p className="mt-2 text-[var(--muted)]">Sign in to see your tasks, calendar, and personal briefing.</p>
       <form onSubmit={onSubmit} className="harbor-card mt-6 space-y-3 p-5">
         <label className="block text-sm font-medium">
           Email
