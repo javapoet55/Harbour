@@ -33,6 +33,7 @@ public struct NexdoTask: Decodable, Identifiable, Sendable {
     public let notes: String?
     public let startAt: String?
     public let dueAt: String?
+    public var completedAt: String? = nil
     public var projectId: String? = nil
     public var energyLevel: String? = nil
     public var splittable: Bool? = nil

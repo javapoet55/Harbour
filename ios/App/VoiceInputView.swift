@@ -75,7 +75,7 @@ struct VoiceInputView: View {
             }
             .background(LinearGradient(colors: [.nexdoBlue.opacity(0.07), .nexdoMagenta.opacity(0.05), Color(uiColor: .systemBackground)], startPoint: .topLeading, endPoint: .bottomTrailing))
             .navigationTitle("Executive AI Assistant").navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Close") { stop(); dismiss() } } }
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Close") { closeVoiceInput() } } }
             .interactiveDismissDisabled(phase != .idle).tint(.nexdoIndigo)
             .task { if !began && consented { began = true; begin() } }
             .onReceive(capture.$audio) { if let audio = $0 { respond(audio) } }
@@ -92,6 +92,12 @@ struct VoiceInputView: View {
         operation?.cancel(); operation = nil
         capture.cancel(); playback.stop(); phase = .idle
     }
+
+    private func closeVoiceInput() {
+        stop()
+        dismiss()
+    }
+
     private func begin() { began = true; speak(greeting, isGreeting: true) }
     private func listen() {
         guard active, consented else { return }

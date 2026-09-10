@@ -4,12 +4,15 @@ import CryptoKit
 
 struct RootView: View {
     @StateObject private var model = AppModel()
+    @ObservedObject private var taskActions = TaskActionCoordinator.shared
     @Environment(\.scenePhase) private var phase
     @State private var selectedTab: NexdoTab = .today
     var body: some View {
         Group {
             #if DEBUG
-            if ProcessInfo.processInfo.arguments.contains("-projects-design-preview") {
+            if ProcessInfo.processInfo.arguments.contains("-weekly-summary-preview") {
+                WeeklySummaryPreview()
+            } else if ProcessInfo.processInfo.arguments.contains("-projects-design-preview") {
                 ProjectsDesignPreview()
             } else if ProcessInfo.processInfo.arguments.contains("-calendar-design-preview") {
                 CalendarDesignPreview()
@@ -28,6 +31,13 @@ struct RootView: View {
         }
         .environmentObject(model)
         .tint(.nexdoIndigo)
+        .onChange(of: model.profile?.id) { _, id in taskActions.activate(userID: id) }
+        .onReceive(model.$tasks) { tasks in
+            if let id = model.profile?.id { taskActions.synchronize(tasks: tasks, userID: id) }
+        }
+        .sheet(item: $taskActions.route) { route in
+            TaskActionView(actionID: route.id, preferred: route.preferred).environmentObject(model)
+        }
         .overlay(alignment: .top) { if model.busy { ProgressView("Updating…").padding(8).background(.regularMaterial, in: Capsule()).accessibilityAddTraits(.updatesFrequently) } }
         .alert("Unable to complete request", isPresented: Binding(get: { model.error != nil }, set: { if !$0 { model.error = nil } })) {
             Button("OK") { model.error = nil }
@@ -58,6 +68,9 @@ private struct NexdoTabShell: View {
     private var activeTab: NexdoTab { showingAsk ? .askAI : selection }
 
     var body: some View {
+        // Give navigation screens a physically smaller viewport. An outer
+        // safeAreaInset is not reliably retained by pushed destinations.
+        VStack(spacing: 0) {
         ZStack {
             Group {
                 switch selection {
@@ -71,6 +84,8 @@ private struct NexdoTabShell: View {
             .id(selection)
             .transition(.opacity.combined(with: .scale(scale: 0.985)))
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .clipped()
         .blur(radius: showingAsk ? 2 : 0)
         .sheet(isPresented: $showingAsk) {
             AskNexdoView(initialPrompt: askPrompt)
@@ -80,7 +95,6 @@ private struct NexdoTabShell: View {
                 .presentationBackgroundInteraction(.disabled)
         }
         .animation(reduceMotion ? nil : .snappy(duration: 0.28), value: selection)
-        .safeAreaInset(edge: .bottom, spacing: 12) {
             VStack(spacing: 0) {
                 FocusSessionStrip()
                 HStack(spacing: 4) {
@@ -109,12 +123,19 @@ private struct NexdoTabShell: View {
                 .background(.ultraThinMaterial)
                 .overlay(alignment: .top) { Divider().opacity(0.45) }
             }
+            .fixedSize(horizontal: false, vertical: true)
             .background { Color(uiColor: .systemBackground).ignoresSafeArea(edges: .bottom) }
         }
     }
 }
 
 #if DEBUG
+private struct WeeklySummaryPreview: View {
+    @StateObject private var model = WeeklySummaryPreviewProtocol.model()
+    @State private var selection: NexdoTab = .today
+    var body: some View { NexdoTabShell(selection: $selection).environmentObject(model) }
+}
+
 private struct ProjectsDesignPreview: View {
     @StateObject private var model = ProjectsPreviewProtocol.model()
     @State private var selection: NexdoTab = .tasks
@@ -432,9 +453,12 @@ private struct SignUpView: View {
             }
             .navigationTitle("Create your account")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { closeSignUp() } } }
         }
         .presentationDetents([.large])
+    }
+    private func closeSignUp() {
+        dismiss()
     }
 
     private func create() {
@@ -485,12 +509,15 @@ private struct PasswordResetView: View {
             }
             .navigationTitle("Reset password")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { closePasswordReset() } } }
             .alert("Password updated", isPresented: $complete) {
-                Button("Sign In") { dismiss() }
+                Button("Sign In") { closePasswordReset() }
             } message: { Text("You can now sign in with your new password.") }
         }
         .presentationDetents([.large])
+    }
+    private func closePasswordReset() {
+        dismiss()
     }
 
     private func requestCode() {
@@ -597,6 +624,7 @@ private struct TodayScheduleItem: Identifiable {
 
 private struct TodayView: View {
     @EnvironmentObject private var model: AppModel
+    @ObservedObject private var actionCoordinator = TaskActionCoordinator.shared
     let onAsk: () -> Void
     let onCalendar: () -> Void
     let onPlanWeek: (String) -> Void
@@ -605,6 +633,8 @@ private struct TodayView: View {
     @State private var showingAccount = false
     @State private var editing: NexdoTask?
     @State private var showingWeeklySummary = false
+    @State private var showingOverdueTasks = false
+    @State private var showingAttention = false
 
     private var timeZone: String { model.agenda?.timeZone ?? model.profile?.timeZone ?? TimeZone.current.identifier }
     private var selectedDays: Set<String> { Set(model.agenda?.range.days.prefix(range.rawValue) ?? []) }
@@ -636,11 +666,13 @@ private struct TodayView: View {
         }
         let taskItems = agenda.tasks.filter { task in
             guard !task.isDone, task.status != "CANCELLED", let date = task.startAt ?? task.dueAt else { return false }
-            return selectedDays.contains(ServerDate.day(date, timeZone: agenda.timeZone) ?? "")
+            let zone = task.timeZone ?? agenda.timeZone
+            return selectedDays.contains(ServerDate.day(date, timeZone: zone) ?? "")
         }.map { task in
             let value = task.startAt ?? task.dueAt!
+            let zone = task.timeZone ?? agenda.timeZone
             return TodayScheduleItem(id: "task:\(task.id)", sourceId: task.id, title: task.title, dateValue: value,
-                                     timeLabel: task.startAt == nil ? "Due \(ServerDate.time(value, timeZone: agenda.timeZone))" : ServerDate.time(value, timeZone: agenda.timeZone),
+                                     timeLabel: task.startAt == nil ? "Due \(ServerDate.time(value, timeZone: zone))" : ServerDate.time(value, timeZone: zone),
                                      detail: task.startAt == nil ? "Task deadline" : "Planned task", task: task, isPast: false)
         }
         return (eventItems + taskItems).sorted {
@@ -651,6 +683,19 @@ private struct TodayView: View {
     private var counts: (appointments: Int, tasks: Int) {
         let events = schedule.filter { $0.task == nil }.count
         return (events, schedule.count - events)
+    }
+
+    private func remainingSchedule(_ queue: TodayActionQueue) -> [TodayScheduleItem] {
+        guard range == .today else { return schedule }
+        var result = schedule.filter { item in item.task.map { !$0.isDone && $0.status != "CANCELLED" && !queue.reservedTaskIDs.contains($0.id) } ?? true }
+        for action in queue.laterActions {
+            guard let task = model.tasks.first(where: { $0.id == action.taskId }), let date = action.notificationDate else { continue }
+            let value = ISO8601DateFormatter().string(from: date)
+            result.append(TodayScheduleItem(id: "task:\(task.id)", sourceId: task.id, title: task.title, dateValue: value,
+                timeLabel: ServerDate.time(value, timeZone: timeZone), detail: "Nexdo Action", task: task, isPast: false))
+        }
+        var seen = Set<String>()
+        return result.sorted { (ServerDate.parse($0.dateValue) ?? .distantFuture) < (ServerDate.parse($1.dateValue) ?? .distantFuture) }.filter { seen.insert($0.task.map { "task:\($0.id)" } ?? $0.id).inserted }
     }
 
     private var greeting: String {
@@ -674,6 +719,9 @@ private struct TodayView: View {
         NavigationStack {
             ZStack {
                 TodayBackdrop()
+                TimelineView(.periodic(from: .now, by: 60)) { context in
+                let queue = TodayActionQueue(actions: range == .today ? actionCoordinator.actions : [], tasks: model.tasks,
+                    now: context.date, timeZone: TimeZone(identifier: timeZone) ?? .current)
                 ScrollView {
                     LazyVStack(spacing: 16) {
                         TodayTopBar(
@@ -713,6 +761,15 @@ private struct TodayView: View {
                         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                         .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(Color.nexdoIndigo.opacity(0.12)))
 
+                        if queue.hasImmediateActions {
+                            HStack {
+                                Button { onPlanWeek("Give me today's daily briefing, prioritizing my due contact actions and upcoming calendar commitments.") } label: {
+                                    Label("Daily Briefing", systemImage: "chart.bar.xaxis").font(.headline)
+                                }
+                                Spacer()
+                                Button("Weekly Summary") { showingWeeklySummary = true }.font(.caption)
+                            }.padding(16).background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 20))
+                        } else {
                         Button { showingWeeklySummary = true } label: {
                             HStack(spacing: 14) {
                                 Image(systemName: "chart.bar.xaxis")
@@ -730,6 +787,11 @@ private struct TodayView: View {
                         }
                         .buttonStyle(.plain)
                         .accessibilityHint("Opens your weekly progress report")
+                        }
+
+                        if range == .today {
+                            TodayActionsView(queue: queue, now: context.date, onTask: { id in editing = model.tasks.first { $0.id == id } })
+                        }
 
                         TodayIntelligenceCard(
                             range: range,
@@ -737,9 +799,12 @@ private struct TodayView: View {
                             taskCount: counts.tasks,
                             availableMinutes: range == .today ? model.scheduleIntelligence?.today.availableMinutes : nil,
                             attentionCount: range == .today ? (model.scheduleIntelligence?.today.attention.count ?? model.agenda?.overdue.count ?? 0) : (model.agenda?.overdue.count ?? 0),
-                            schedule: schedule,
+                            schedule: remainingSchedule(queue),
                             recommendation: range == .today ? model.scheduleIntelligence?.today.recommendation : nil,
+                            actionRecommendation: queue.recommendation,
+                            showsSummary: !queue.hasImmediateActions,
                             onOpenTask: { editing = $0 },
+                            onAttention: { showingAttention = true },
                             onAsk: onAsk,
                             onCalendar: onCalendar
                         )
@@ -747,17 +812,17 @@ private struct TodayView: View {
                         if range == .today, let attention = model.scheduleIntelligence?.today.attention, !attention.isEmpty {
                             VStack(alignment: .leading, spacing: 12) {
                                 Label("Needs your attention", systemImage: "exclamationmark.triangle.fill")
-                                    .font(.headline).foregroundStyle(Color.nexdoInk)
+                                    .font(.headline).foregroundStyle(.red)
                                 ForEach(attention) { item in
-                                    VStack(alignment: .leading, spacing: 6) {
-                                        Text(item.label.uppercased()).font(.caption2.bold()).foregroundStyle(.orange)
-                                        Text(item.title).font(.headline).foregroundStyle(Color.nexdoInk)
-                                        Text(item.explanation).font(.subheadline).foregroundStyle(Color.nexdoSecondary)
+                                    if item.id == "overdue" {
+                                        Button { showingOverdueTasks = true } label: {
+                                            attentionCard(item, opensTasks: true)
+                                        }
+                                        .buttonStyle(.plain)
+                                        .accessibilityHint("Shows all unfinished overdue tasks")
+                                    } else {
+                                        attentionCard(item, opensTasks: false)
                                     }
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                    .padding(16)
-                                    .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                                    .accessibilityElement(children: .combine)
                                 }
                             }
                             .padding(18)
@@ -772,6 +837,7 @@ private struct TodayView: View {
                 .scrollIndicators(.hidden)
                 .clipped()
                 .refreshable { await model.refresh() }
+                }
             }
             .toolbar(.hidden, for: .navigationBar)
             .sheet(isPresented: $adding) { NavigationStack { TaskEditor(task: nil) } }
@@ -781,11 +847,67 @@ private struct TodayView: View {
                     .presentationDetents([.large])
                     .presentationCornerRadius(30)
             }
+            .navigationDestination(isPresented: $showingAttention) {
+                attentionDetails
+            }
+            .navigationDestination(isPresented: $showingOverdueTasks) {
+                OverdueTasksView()
+            }
             .navigationDestination(isPresented: $showingWeeklySummary) {
                 WeeklySummaryView(onPlanNextWeek: onPlanWeek)
             }
         }
     }
+
+    @ViewBuilder private var attentionDetails: some View {
+        if range != .today || model.scheduleIntelligence == nil {
+            OverdueTasksView()
+        } else {
+            List {
+                let items = model.scheduleIntelligence?.today.attention ?? []
+                if items.isEmpty {
+                    ContentUnavailableView("Nothing needs attention", systemImage: "checkmark.circle")
+                }
+                ForEach(items) { item in
+                    if item.id == "overdue" {
+                        NavigationLink { OverdueTasksView() } label: {
+                            attentionCard(item, opensTasks: false)
+                        }
+                    } else if let task = model.tasks.first(where: { $0.id == item.taskId }) {
+                        NavigationLink { TaskEditor(task: task) } label: {
+                            attentionCard(item, opensTasks: false)
+                        }
+                    } else {
+                        attentionCard(item, opensTasks: false)
+                    }
+                }
+            }
+            .navigationTitle("Needs your attention")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar(.visible, for: .navigationBar)
+            .refreshable { await model.refresh(); await model.refreshScheduleIntelligence() }
+        }
+    }
+
+    private func attentionCard(_ item: ScheduleIntelligenceResponse.Today.AttentionItem, opensTasks: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(item.label.uppercased()).font(.caption2.bold()).foregroundStyle(.red)
+            HStack {
+                Text(item.title).font(.headline).foregroundStyle(Color.nexdoInk)
+                if opensTasks {
+                    Spacer()
+                    Image(systemName: "chevron.right").foregroundStyle(Color.nexdoSecondary)
+                }
+            }
+            Text(item.explanation).font(.subheadline).foregroundStyle(Color.nexdoSecondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(16)
+        .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .contentShape(RoundedRectangle(cornerRadius: 16))
+        .accessibilityElement(children: .combine)
+    }
+
 }
 
 struct TodayTopBar: View {
@@ -793,7 +915,8 @@ struct TodayTopBar: View {
     @State private var showingWeather = false
     let name: String
     let temperature: Int?
-    let add: () -> Void
+    var showsWeather = true
+    let add: (() -> Void)?
     let account: () -> Void
 
     var body: some View {
@@ -803,33 +926,36 @@ struct TodayTopBar: View {
                 VStack(alignment: .leading, spacing: -2) {
                     HStack(spacing: 3) {
                         Text("Nexdo").font(.system(size: 24, weight: .bold, design: .rounded)).foregroundStyle(Color.nexdoInk)
-                        Image(systemName: "sparkles").font(.system(size: 14.4)).foregroundStyle(Color.nexdoIndigo)
+                        Image(systemName: "sparkles").font(.system(size: 17.28)).foregroundStyle(Color.nexdoIndigo)
                     }
-                    Text("GET MORE DONE WITH AI").font(.system(size: 6, weight: .bold)).tracking(0.6).foregroundStyle(Color.nexdoSecondary)
+                    Text("GET MORE DONE WITH AI").font(.system(size: 8, weight: .bold)).tracking(0.35).foregroundStyle(Color.nexdoSecondary)
+                        .lineLimit(1).minimumScaleFactor(0.8)
                 }
             }
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("Nexdo")
 
             Spacer(minLength: 6)
-            Button { showingWeather = true } label: {
-                ZStack {
-                    Circle().fill(NexdoTheme.gradient)
-                    VStack(spacing: 1) {
-                        Image(systemName: model.weather?.current.conditionSymbol ?? "thermometer.medium")
-                            .font(.system(size: 12, weight: .semibold))
-                        Text(temperature.map { "\($0)°" } ?? "–°")
-                            .font(.system(size: 13, weight: .bold)).minimumScaleFactor(0.75)
+            if showsWeather {
+                Button { showingWeather = true } label: {
+                    ZStack {
+                        Circle().fill(NexdoTheme.gradient)
+                        VStack(spacing: 1) {
+                            Image(systemName: model.weather?.current.conditionSymbol ?? "thermometer.medium")
+                                .font(.system(size: 12, weight: .semibold))
+                            Text(temperature.map { "\($0)°" } ?? "–°")
+                                .font(.system(size: 13, weight: .bold)).minimumScaleFactor(0.75)
+                        }
+                        .foregroundStyle(.white)
                     }
-                    .foregroundStyle(.white)
+                    .frame(width: 44, height: 44)
                 }
-                .frame(width: 44, height: 44)
+                .buttonStyle(.plain)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(temperature.map { "San Ramon weather, \($0) degrees Fahrenheit" } ?? "Weather temporarily unavailable")
+                .accessibilityHint("Opens the five-day forecast")
             }
-            .buttonStyle(.plain)
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel(temperature.map { "San Ramon weather, \($0) degrees Fahrenheit" } ?? "Weather temporarily unavailable")
-            .accessibilityHint("Opens the five-day forecast")
-            TodayHeaderButton(icon: "plus", label: "Add a task", action: add)
+            if let add { TodayHeaderButton(icon: "plus", label: "Add a task", action: add) }
 
             Button(action: account) {
                 ProfileAvatar(name: name, size: 44)
@@ -844,7 +970,7 @@ struct TodayTopBar: View {
     }
 }
 
-private struct TodayHeaderButton: View {
+struct TodayHeaderButton: View {
     let icon: String
     let label: String
     let action: () -> Void
@@ -867,7 +993,10 @@ private struct TodayIntelligenceCard: View {
     let attentionCount: Int
     let schedule: [TodayScheduleItem]
     let recommendation: ScheduleIntelligenceResponse.Today.Recommendation?
+    var actionRecommendation: String? = nil
+    var showsSummary = true
     let onOpenTask: (NexdoTask) -> Void
+    let onAttention: () -> Void
     let onAsk: () -> Void
     let onCalendar: () -> Void
 
@@ -880,6 +1009,7 @@ private struct TodayIntelligenceCard: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            if showsSummary {
             VStack(alignment: .leading, spacing: 12) {
                 Label(range == .today ? "Your day, in focus" : "Your next \(range.rawValue) days", systemImage: "sparkles")
                     .font(.subheadline.bold()).foregroundStyle(Color.nexdoIndigo)
@@ -890,10 +1020,14 @@ private struct TodayIntelligenceCard: View {
                     .font(.subheadline).foregroundStyle(Color.nexdoSecondary)
                 HStack(spacing: 10) {
                     if attentionCount > 0 {
-                        Label("\(attentionCount) thing\(attentionCount == 1 ? " needs" : "s need") attention", systemImage: "exclamationmark.circle")
-                            .font(.caption.bold()).foregroundStyle(Color(red: 0.66, green: 0.18, blue: 0.12))
-                            .padding(.horizontal, 10).padding(.vertical, 7)
-                            .background(Color(red: 1, green: 0.88, blue: 0.82), in: Capsule())
+                        Button(action: onAttention) {
+                            Label("\(attentionCount) thing\(attentionCount == 1 ? " needs" : "s need") attention", systemImage: "exclamationmark.circle")
+                                .font(.caption.bold()).foregroundStyle(Color(red: 0.66, green: 0.18, blue: 0.12))
+                                .padding(.horizontal, 10).padding(.vertical, 7)
+                                .background(Color(red: 1, green: 0.88, blue: 0.82), in: Capsule())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityHint("Shows the items that need your attention")
                     } else {
                         Label("Nothing needs attention", systemImage: "checkmark.circle")
                             .font(.caption.bold()).foregroundStyle(.green)
@@ -905,10 +1039,11 @@ private struct TodayIntelligenceCard: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(18)
             .background(LinearGradient(colors: [Color.nexdoBlue.opacity(0.08), Color.nexdoMagenta.opacity(0.09)], startPoint: .topLeading, endPoint: .bottomTrailing))
+            }
 
             VStack(alignment: .leading, spacing: 0) {
                 HStack {
-                    Text("On your schedule").font(.headline).foregroundStyle(Color.nexdoInk)
+                    Text(showsSummary ? "On your schedule" : "Later Today").font(.headline).foregroundStyle(Color.nexdoInk)
                     Spacer()
                     Button(action: onCalendar) { Label("View day", systemImage: "chevron.down").labelStyle(.titleAndIcon).font(.caption) }
                         .accessibilityLabel("Open Calendar")
@@ -941,7 +1076,7 @@ private struct TodayIntelligenceCard: View {
                 Button(action: onAsk) {
                     VStack(alignment: .leading, spacing: 8) {
                         Label("What should I do next?", systemImage: "sparkles").font(.subheadline.bold()).foregroundStyle(Color.nexdoIndigo)
-                        Text(recommendation?.explanation ?? "Ask Nexdo to prioritize your actual tasks and calendar commitments.")
+                        Text(actionRecommendation ?? recommendation?.explanation ?? "Ask Nexdo to prioritize your actual tasks and calendar commitments.")
                             .font(.subheadline).foregroundStyle(Color.nexdoSecondary).multilineTextAlignment(.leading)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -1007,6 +1142,8 @@ private struct TaskRow: View {
     @EnvironmentObject var model: AppModel
     let task: NexdoTask
 
+    private var taskZone: String { task.timeZone ?? model.profile?.timeZone ?? TimeZone.current.identifier }
+
     private var priorityColor: Color {
         switch task.priority {
         case "CRITICAL": return .red
@@ -1018,7 +1155,7 @@ private struct TaskRow: View {
 
     private var scheduleLabel: String? {
         guard let value = task.startAt ?? task.dueAt else { return nil }
-        return ServerDate.time(value, timeZone: model.profile?.timeZone ?? TimeZone.current.identifier)
+        return ServerDate.time(value, timeZone: taskZone)
     }
 
     var body: some View {
@@ -1091,13 +1228,24 @@ struct TasksView: View {
             ZStack {
                 TodayBackdrop(subtle: true)
                 VStack(alignment: .leading, spacing: 16) {
-                    TodayTopBar(name: model.profile?.name ?? "", temperature: model.weather.map { Int($0.current.temperature.rounded()) }, add: { adding = true }, account: { account = true })
+                    TodayTopBar(name: model.profile?.name ?? "", temperature: model.weather.map { Int($0.current.temperature.rounded()) }, showsWeather: false, add: nil, account: { account = true })
                         .padding(.top, 8)
-                    Text("Tasks").font(.largeTitle.bold()).foregroundStyle(Color.nexdoInk).accessibilityHeading(.h1)
+                    HStack {
+                        Text("Tasks").font(.largeTitle.bold()).foregroundStyle(Color.nexdoInk).accessibilityHeading(.h1)
+                        Spacer()
+                        if !showingProjects {
+                            Button { filters = true } label: {
+                                Image(systemName: "slider.horizontal.3").font(.title3)
+                                    .frame(width: 48, height: 50)
+                                    .background(Color.nexdoIndigo.opacity(0.08), in: RoundedRectangle(cornerRadius: 16))
+                                    .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.nexdoIndigo.opacity(0.16)))
+                            }.accessibilityLabel("Task filters")
+                        }
+                    }
                     Picker("Tasks or Projects", selection: $showingProjects) {
                         Text("Tasks").tag(false)
                         Text("Projects").tag(true)
-                    }.pickerStyle(.segmented)
+                    }.pickerStyle(.segmented).frame(height: 53)
                     if showingProjects { ProjectsView() } else {
 
                     HStack(spacing: 10) {
@@ -1115,12 +1263,7 @@ struct TasksView: View {
                         .padding(.horizontal, 14).frame(minHeight: 50)
                         .background(.background.opacity(0.9), in: RoundedRectangle(cornerRadius: 16))
                         .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.nexdoIndigo.opacity(0.16)))
-                        Button { filters = true } label: {
-                            Image(systemName: "slider.horizontal.3").font(.title3)
-                                .frame(width: 48, height: 50)
-                                .background(Color.nexdoIndigo.opacity(0.08), in: RoundedRectangle(cornerRadius: 16))
-                                .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.nexdoIndigo.opacity(0.16)))
-                        }.accessibilityLabel("Task filters")
+                        TodayHeaderButton(icon: "plus", label: "Add a task") { adding = true }
                     }
                     ViewThatFits(in: .horizontal) {
                         datePills
@@ -1220,9 +1363,10 @@ struct TasksView: View {
 
     private func taskSubtitle(_ task: NexdoTask) -> String {
         var parts: [String] = []
+        let zone = task.timeZone ?? model.profile?.timeZone ?? TimeZone.current.identifier
         if let value = task.startAt ?? task.dueAt, let date = ServerDate.parse(value) {
             let formatter = DateFormatter()
-            formatter.timeZone = TimeZone(identifier: model.profile?.timeZone ?? "") ?? .current
+            formatter.timeZone = TimeZone(identifier: zone) ?? .current
             formatter.dateStyle = model.taskQuery.date == .today || model.taskQuery.date == .tomorrow ? .none : .short
             formatter.timeStyle = .short
             let prefix = task.startAt == nil ? "Due " : ""
@@ -1245,6 +1389,7 @@ struct TaskEditor: View {
     @State private var duration = 30
     @State private var notesExpanded = false
     @State private var dateChoice: TaskCreationDate = .today
+    @State private var dateExplicitlyChosen = false
     @State private var customDate = Date()
     @State private var showingDatePicker = false
     @Environment(\.dynamicTypeSize) private var typeSize
@@ -1306,6 +1451,10 @@ struct TaskEditor: View {
                     Divider().opacity(0.45)
                     TaskEditorLabel(title: "DATE", icon: "calendar")
                     dateButtons
+                    if let detected = DeterministicTaskActionDetector().detect(title: title) {
+                        Text("Nexdo Action: contact \(detected.contactName). Schedule: \(resolvedCreationDate.formatted(date: .abbreviated, time: .shortened)).")
+                            .font(.caption).foregroundStyle(Color.nexdoSecondary)
+                    }
 
                     Divider().opacity(0.45)
                     TaskEditorLabel(title: "TIME ESTIMATE", icon: "clock")
@@ -1351,9 +1500,10 @@ struct TaskEditor: View {
         .navigationTitle("New Task")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .cancellationAction) { Button("Close") { dismiss() }.tint(TaskCreationStyle.accent).foregroundStyle(TaskCreationStyle.accent).disabled(model.busy) }
+            ToolbarItem(placement: .cancellationAction) { Button("Close") { closeTaskEditor() }.tint(TaskCreationStyle.accent).foregroundStyle(TaskCreationStyle.accent).disabled(model.busy) }
             ToolbarItemGroup(placement: .keyboard) { Spacer(); Button("Done") { focusedField = nil } }
         }
+        .onDisappear { focusedField = nil }
         .interactiveDismissDisabled(model.busy)
         .sheet(isPresented: $showingDatePicker) {
             NavigationStack {
@@ -1378,6 +1528,7 @@ struct TaskEditor: View {
                 Button {
                     focusedField = nil
                     dateChoice = choice
+                    dateExplicitlyChosen = true
                     if choice == .custom { showingDatePicker = true }
                 } label: {
                     Text(choice == .custom && dateChoice == .custom ? customDateLabel : choice.rawValue)
@@ -1402,14 +1553,24 @@ struct TaskEditor: View {
         !model.busy && !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
+    private var resolvedCreationDate: Date {
+        if !dateExplicitlyChosen, let date = DeterministicTaskActionDetector().detect(title: title)?.scheduledAt { return date }
+        return dateChoice.resolve(customDate: customDate, timeZone: accountTimeZone)
+    }
+
     private func save() {
         guard canSave else { return }
         focusedField = nil
         Task {
-            if await model.saveTask(id: task?.id, title: title.trimmingCharacters(in: .whitespacesAndNewlines), notes: notes, duration: duration, scheduledAt: dateChoice.resolve(customDate: customDate, timeZone: accountTimeZone), projectId: projectID) {
+            if await model.saveTask(id: task?.id, title: title.trimmingCharacters(in: .whitespacesAndNewlines), notes: notes, duration: duration, scheduledAt: resolvedCreationDate, projectId: projectID) {
                 dismiss()
             }
         }
+    }
+
+    private func closeTaskEditor() {
+        focusedField = nil
+        dismiss()
     }
 }
 

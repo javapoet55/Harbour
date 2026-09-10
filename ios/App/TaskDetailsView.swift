@@ -31,6 +31,7 @@ struct TaskDetailsView: View {
             ScrollViewReader { proxy in
                 ScrollView {
                     VStack(alignment: .leading, spacing: 24) {
+                        TaskActionCard(task: currentTask)
                         actions
                         field("TASK") {
                             TextField("Task title", text: $draft.title)
@@ -76,6 +77,7 @@ struct TaskDetailsView: View {
         .toolbar {
             ToolbarItemGroup(placement: .keyboard) { Spacer(); Button("Done") { focus = nil } }
         }
+        .onDisappear { focus = nil }
         .alert("Task details", isPresented: Binding(get: { message != nil }, set: { if !$0 { message = nil } })) {
             Button("OK", role: .cancel) {}
         } message: { Text(message ?? "") }
@@ -88,7 +90,7 @@ struct TaskDetailsView: View {
                 Text("Shape the work").font(.title3.weight(.semibold)).accessibilityAddTraits(.isHeader)
             }
             Spacer()
-            Button { dismiss() } label: {
+            Button { closeTaskDetails() } label: {
                 Image(systemName: "xmark").font(.subheadline.weight(.semibold))
                     .foregroundStyle(Color.nexdoIndigo).frame(width: 44, height: 44)
                     .background(Color.nexdoIndigo.opacity(0.09), in: Circle())
@@ -241,6 +243,11 @@ struct TaskDetailsView: View {
             do { try await action() }
             catch { message = (error as? TaskEditError)?.errorDescription ?? "Couldn’t update your task. Your edits are still here. Please try again." }
         }
+    }
+
+    private func closeTaskDetails() {
+        focus = nil
+        dismiss()
     }
 
     private func sectionLabel(_ title: String) -> some View {

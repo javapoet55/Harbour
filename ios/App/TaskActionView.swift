@@ -1,0 +1,252 @@
+import SwiftUI
+import MessageUI
+
+struct TaskActionCard: View {
+    @ObservedObject private var coordinator = TaskActionCoordinator.shared
+    let task: NexdoTask
+    @State private var showing = false
+    var body: some View {
+        if let action = coordinator.action(for: task.id), !task.isDone, task.status != "CANCELLED" {
+            Button { showing = true } label: {
+                VStack(alignment: .leading, spacing: 6) {
+                    Label("Nexdo Action", systemImage: "sparkles").font(.subheadline.bold()).foregroundStyle(Color.nexdoIndigo)
+                    Text("Contact \(action.contactName)").font(.headline).foregroundStyle(Color.nexdoInk)
+                    Text("Call • Message • Email").font(.subheadline).foregroundStyle(Color.nexdoSecondary)
+                    if action.status == .cancelled {
+                        Text("Reminder dismissed. Tap to take action.").font(.caption).foregroundStyle(Color.nexdoSecondary)
+                    } else if action.status == .completed || action.status == .executing {
+                        Text("Review the outcome or mark your task complete.").font(.caption).foregroundStyle(Color.nexdoSecondary)
+                    } else if let date = action.notificationDate, date > Date(), action.status == .scheduled || action.status == .pending {
+                        Text("Reminder: \(date.formatted(date: .abbreviated, time: .shortened))").font(.caption).foregroundStyle(Color.nexdoSecondary)
+                    } else {
+                        Text("Set a schedule to receive an action reminder.").font(.caption).foregroundStyle(Color.nexdoSecondary)
+                    }
+                    if let notice = coordinator.notice { Text(notice).font(.caption).foregroundStyle(.orange) }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading).padding(16)
+                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 18))
+                .overlay(RoundedRectangle(cornerRadius: 18).stroke(Color.nexdoIndigo.opacity(0.18)))
+            }
+            .buttonStyle(.plain).accessibilityLabel("Nexdo Action: contact \(action.contactName)")
+            .accessibilityIdentifier("taskAction.card")
+            .sheet(isPresented: $showing) {
+                TaskActionView(actionID: action.id, preferred: action.preferredAction)
+            }
+        }
+    }
+}
+
+struct TaskActionView: View {
+    @EnvironmentObject private var model: AppModel
+    @Environment(\.dismiss) private var dismiss
+    @ObservedObject private var coordinator = TaskActionCoordinator.shared
+    let actionID: String
+    let preferred: TaskActionChannel?
+    var startSelectedAction = false
+    @State private var channel: TaskActionChannel?
+    @State private var contacts: [ActionContact] = []
+    @State private var contact: ActionContact?
+    @State private var addresses: [ActionContact.Address] = []
+    @State private var selectedAddress: ActionContact.Address?
+    @State private var busy = false
+    @State private var error: String?
+    @State private var receipt: String?
+    @State private var confirmCall = false
+    @State private var composer: Composer?
+    @State private var resolution: Task<Void, Never>?
+private let resolver: any TaskActionContactResolver = AppleTaskActionContacts()
+    private let emailService: any TaskActionEmailService = NativeTaskActionEmailService()
+    private struct Composer: Identifiable {
+        let id = UUID()
+        let channel: TaskActionChannel
+        let recipient: String
+        let name: String
+        let context: String?
+    }
+    private var action: TaskAction? { coordinator.actions.first { $0.id == actionID } }
+    private var task: NexdoTask? { model.tasks.first { $0.id == action?.taskId } }
+    private var usable: Bool { task.map { !$0.isDone && $0.status != "CANCELLED" } ?? false }
+    private var isRoutedAction: Bool { coordinator.route?.id == actionID }
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 18) {
+                    if let action, usable {
+                        Text("Time to contact \(action.contactName)").font(.title2.bold())
+                        Text("How would you like to get in touch?").foregroundStyle(Color.nexdoSecondary)
+                        ForEach(TaskActionChannel.allCases, id: \.self) { option in
+                            Button { resolve(option) } label: {
+                                HStack {
+                                    Label(title(option), systemImage: icon(option))
+                                    Spacer()
+                                    if (channel ?? preferred) == option { Image(systemName: "checkmark") }
+                                }.padding(14).frame(maxWidth: .infinity)
+                                    .background(Color.nexdoIndigo.opacity(0.08), in: RoundedRectangle(cornerRadius: 14))
+                            }.buttonStyle(.plain).disabled(busy)
+                                .accessibilityIdentifier("taskAction.\(option.rawValue)")
+                                .accessibilityLabel("\(title(option)) \(action.contactName)")
+                        }
+                        if busy { ProgressView("Finding contact…") }
+                        if !contacts.isEmpty {
+                            Text("Choose the correct contact").font(.headline)
+                            ForEach(contacts) { candidate in
+                                Button { choose(candidate) } label: {
+                                    VStack(alignment: .leading) {
+                                        Text(candidate.name)
+                                        Text(candidate.phones.first?.value ?? candidate.emails.first?.value ?? "No contact details")
+                                            .font(.caption).foregroundStyle(.secondary)
+                                    }.frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, 8)
+                                }.accessibilityIdentifier("taskAction.contact.\(candidate.id)")
+                            }
+                        }
+                        if !addresses.isEmpty {
+                            Text("Choose \(channel == .email ? "an email address" : "a phone number")").font(.headline)
+                            ForEach(addresses) { address in
+                                Button("\(address.label): \(address.value)") { prepare(address) }
+                                    .padding(.vertical, 8).accessibilityIdentifier("taskAction.address.\(address.id)")
+                            }
+                        }
+                        if let error { Text(error).foregroundStyle(.red).accessibilityIdentifier("taskAction.error") }
+                        if let receipt { Text(receipt).foregroundStyle(.secondary).accessibilityIdentifier("taskAction.receipt") }
+                        if action.status == .executing || action.status == .completed {
+                            Button("Mark task complete") {
+                                guard let task else { return }
+                                busy = true
+                                Task {
+                                    defer { busy = false }
+                                    do { try await model.changeTaskStatus(task, status: "COMPLETED"); closeAction() }
+                                    catch { self.error = error.localizedDescription }
+                                }
+                            }.disabled(busy).accessibilityIdentifier("taskAction.completeTask")
+                        }
+                        Divider()
+                        Button("Remind me in 15 minutes") { coordinator.snooze(actionID); closeAction() }
+                            .accessibilityIdentifier("taskAction.snooze").disabled(busy)
+                        Button("Dismiss") { coordinator.dismiss(actionID); closeAction() }
+                            .accessibilityIdentifier("taskAction.dismiss").disabled(busy)
+                        if action.contactIdentifier != nil {
+                            Button("Choose a different contact") {
+                                coordinator.update(actionID) { $0.contactIdentifier = nil }
+                                contact = nil; contacts = []; addresses = []
+                                if let channel { resolve(channel) }
+                            }.font(.subheadline).disabled(busy)
+                        }
+                        if let notice = coordinator.notice {
+                            Text(notice).font(.caption).foregroundStyle(.orange)
+                            Button("Retry reminders") { coordinator.retryNotifications() }
+                        }
+                    } else {
+                        ContentUnavailableView("Task unavailable", systemImage: "checkmark.circle", description: Text("This task may be completed, deleted, or rescheduled. Open your task list to check it."))
+                        Button("Close") { closeAction() }
+                    }
+                }.padding(20)
+            }
+            .navigationTitle("Nexdo Action").navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Close") { closeAction() } } }
+            .foregroundStyle(Color.nexdoInk).tint(Color.nexdoIndigo)
+            .confirmationDialog("Call \(contact?.name ?? action?.contactName ?? "this contact")?", isPresented: $confirmCall, titleVisibility: .visible) {
+                Button("Call") { placeCall() }
+                Button("Cancel", role: .cancel) {}
+            } message: { Text(selectedAddress?.value ?? "") }
+            .sheet(item: $composer) { draft in
+                if draft.channel == .message {
+                    ActionMessageComposer(recipient: draft.recipient,
+                        body: "Hi \(draft.name), " + (draft.context.map { "following up regarding \($0)." } ?? "just checking in."), finished: finishCompose)
+                        .ignoresSafeArea()
+                        .interactiveDismissDisabled()
+                } else {
+                    ActionEmailComposer(draft: emailService.draft(recipient: draft.recipient, name: draft.name, context: draft.context), finished: finishCompose)
+                        .ignoresSafeArea()
+                        .interactiveDismissDisabled()
+                }
+            }
+        }
+        .presentationDetents([.large]).presentationDragIndicator(.visible)
+        .onDisappear {
+            resolution?.cancel()
+            if isRoutedAction { coordinator.route = nil }
+        }
+        .task {
+            await model.refreshTasks()
+            guard usable else { return }
+            coordinator.update(actionID) { $0.transition(to: .awaitingApproval) }
+            if startSelectedAction, let preferred, !Task.isCancelled { resolve(preferred) }
+        }
+    }
+
+    private func title(_ channel: TaskActionChannel) -> String { switch channel { case .call: "Call"; case .message: "Message"; case .email: "Email" } }
+    private func icon(_ channel: TaskActionChannel) -> String { switch channel { case .call: "phone"; case .message: "message"; case .email: "envelope" } }
+    private func resolve(_ option: TaskActionChannel) {
+        guard let action, usable, !busy else { return }
+        channel = option; contacts = []; addresses = []; error = nil; receipt = nil; busy = true
+        coordinator.update(actionID) { $0.transition(to: .awaitingApproval) }
+        resolution?.cancel()
+        resolution = Task {
+            defer { busy = false }
+            do {
+                let matches = try await resolver.resolve(name: action.contactName, identifier: action.contactIdentifier)
+                guard !Task.isCancelled, usable, self.action?.id == action.id else { return }
+                if matches.count == 1 { choose(matches[0]) } else { contacts = matches }
+            } catch { self.error = error.localizedDescription }
+        }
+    }
+    private func choose(_ value: ActionContact) {
+        guard usable else { return }
+        contact = value; contacts = []
+        coordinator.remember(value)
+        coordinator.update(actionID) { $0.contactIdentifier = value.id }
+        addresses = channel == .email ? value.emails : value.phones
+        if addresses.isEmpty { error = (channel == .email ? TaskActionServiceError.noEmail : .noPhone).localizedDescription }
+        else if addresses.count == 1 { prepare(addresses[0]) }
+    }
+    private func prepare(_ address: ActionContact.Address) {
+        guard usable, let channel, let action, let contact else { return }
+        selectedAddress = address; addresses = []
+        if channel == .call { confirmCall = true; return }
+        guard channel == .message ? MFMessageComposeViewController.canSendText() : emailService.canCompose else {
+            error = TaskActionServiceError.unavailable.localizedDescription; return
+        }
+        // Approval is to open an editable composer, never to send automatically.
+        guard coordinator.approveExecution(actionID) else { return }
+        composer = Composer(channel: channel, recipient: address.value, name: contact.name, context: action.context)
+    }
+    private func placeCall() {
+        guard usable, let address = selectedAddress else { return }
+        // Do not turn an extension, pause, or vanity number into a different number.
+        guard address.value.allSatisfy({ "+0123456789 ()-.".contains($0) }) else {
+            error = TaskActionServiceError.invalidPhone.localizedDescription; return
+        }
+        let number = address.value.filter { "+0123456789".contains($0) }
+        guard !number.dropFirst().contains("+") else { error = TaskActionServiceError.invalidPhone.localizedDescription; return }
+        guard number.filter(\.isNumber).count >= 3, let url = URL(string: "tel:" + number) else {
+            error = TaskActionServiceError.invalidPhone.localizedDescription; return
+        }
+        guard coordinator.approveExecution(actionID) else { return }
+        UIApplication.shared.open(url) { accepted in
+            Task { @MainActor in
+                if accepted { receipt = "Opened Phone. Nexdo can’t verify whether the call connected. Mark the task complete when you’re done." }
+                else { coordinator.update(actionID) { $0.transition(to: .failed) }; error = "Phone couldn’t open this number." }
+            }
+        }
+    }
+    private func finishCompose(_ result: ActionComposeResult) {
+        composer = nil
+        switch result {
+        case .submitted:
+            coordinator.update(actionID) { $0.transition(to: .completed) }
+            receipt = "Submitted to the messaging app. Delivery isn’t verified. You can mark the task complete when you’re done."
+        case .cancelled, .saved:
+            coordinator.update(actionID) { $0.transition(to: .awaitingApproval) }
+            receipt = result == .saved ? "Draft saved. Nothing was sent." : "Cancelled. Nothing was sent."
+        case .failed:
+            coordinator.update(actionID) { $0.transition(to: .failed) }
+            error = "The message couldn’t be submitted. Please try again."
+        }
+    }
+
+    private func closeAction() {
+        if isRoutedAction { coordinator.route = nil }
+        dismiss()
+    }
+}

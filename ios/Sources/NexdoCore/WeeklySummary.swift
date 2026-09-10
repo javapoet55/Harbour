@@ -1,6 +1,11 @@
 import Foundation
 
 public struct WeeklySummary: Decodable, Sendable {
+    public struct TaskGroups: Decodable, Sendable {
+        public let planned: [NexdoTask]
+        public let completed: [NexdoTask]
+        public let overdue: [NexdoTask]
+    }
     public struct Metrics: Decodable, Sendable {
         public let completed: Int
         public let planned: Int
@@ -26,10 +31,52 @@ public struct WeeklySummary: Decodable, Sendable {
     public let headline: String
     public let summary: String
     public let metrics: Metrics
+    // Optional while the app and backend updates roll out independently.
+    public let taskGroups: TaskGroups?
     public let days: [Day]
     public let accomplishments: [Accomplishment]
     public let productivityInsight: String?
     public let limitations: [String]
+
+    public var taskRangeLabel: String {
+        let parser = DateFormatter()
+        parser.calendar = WeeklySummaryDates.calendar(timeZoneID: timeZone)
+        parser.timeZone = parser.calendar.timeZone
+        parser.locale = Locale(identifier: "en_US_POSIX")
+        parser.dateFormat = "yyyy-MM-dd"
+        guard let first = parser.date(from: start), let last = parser.date(from: end) else { return "\(start) – \(end)" }
+        parser.dateFormat = "EEE, MMM d"
+        return "\(parser.string(from: first)) – \(parser.string(from: last))"
+    }
+
+    /// Compatibility with servers that do not embed taskGroups yet. Use a fresh
+    /// task response and the same cohort/cutoff rules as buildWeeklySummary.
+    public func taskGroups(from tasks: [NexdoTask]) throws -> TaskGroups {
+        let calendar = WeeklySummaryDates.calendar(timeZoneID: timeZone)
+        let parser = DateFormatter()
+        parser.calendar = calendar
+        parser.timeZone = calendar.timeZone
+        parser.locale = Locale(identifier: "en_US_POSIX")
+        parser.dateFormat = "yyyy-MM-dd"
+        guard let first = parser.date(from: start), let last = parser.date(from: end),
+              let endExclusive = calendar.date(byAdding: .day, value: 1, to: last),
+              let generated = ServerDate.parse(generatedAt) else { throw APIError.invalidResponse }
+        let cutoff = min(endExclusive, generated)
+        let planned = tasks.filter {
+            guard let date = ($0.startAt ?? $0.dueAt).flatMap(ServerDate.parse) else { return false }
+            return date >= first && date < endExclusive
+        }.sorted { $0.id < $1.id }
+        let completed = planned.filter {
+            guard let date = $0.completedAt.flatMap(ServerDate.parse) else { return false }
+            return date >= first && date < cutoff
+        }
+        let overdue = planned.filter {
+            guard let due = $0.dueAt.flatMap(ServerDate.parse), due < cutoff else { return false }
+            return $0.completedAt.flatMap(ServerDate.parse).map { $0 > cutoff } ?? true
+        }
+        return TaskGroups(planned: planned, completed: completed, overdue: overdue)
+    }
+
 }
 
 public enum WeeklySummaryDates {

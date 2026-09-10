@@ -54,7 +54,12 @@ struct ProjectsView: View {
                         NavigationLink { ProjectDetailView(projectID: nil) } label: {
                             HStack(spacing: 16) {
                                 ProjectFolder(color: .secondary)
-                                VStack(alignment: .leading, spacing: 5) { Text("No project").font(.headline); Text("\(model.unassignedTaskCount) tasks").font(.subheadline).foregroundStyle(.secondary) }
+                                let unassigned = model.tasks.filter { $0.projectId == nil && $0.status != "CANCELLED" }
+                                VStack(alignment: .leading, spacing: 5) {
+                                    Text("No project").font(.headline)
+                                    Text("Open: \(unassigned.filter { !$0.isDone }.count)   Done: \(unassigned.filter(\.isDone).count)")
+                                        .font(.subheadline).foregroundStyle(.secondary)
+                                }
                                 Spacer(); Image(systemName: "chevron.right").foregroundStyle(.secondary)
                             }.padding(18).projectCardSurface()
                         }.buttonStyle(.plain).accessibilityHint("Opens unassigned tasks")
@@ -74,7 +79,8 @@ private struct ProjectCard: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack { ProjectFolder(color: ProjectStyle.color(project.color)); Spacer(); Image(systemName: "chevron.right").font(.caption).foregroundStyle(.secondary) }
             Text(project.name).font(.headline).lineLimit(3).frame(maxWidth: .infinity, minHeight: 44, alignment: .topLeading)
-            Text("\(project.completedTaskCount) of \(project.totalTaskCount) tasks").font(.subheadline).foregroundStyle(.secondary)
+            Text("Open: \(max(0, project.totalTaskCount - project.completedTaskCount))   Done: \(project.completedTaskCount)")
+                .font(.subheadline).foregroundStyle(.secondary)
             ProgressView(value: project.progress).tint(ProjectStyle.color(project.color))
                 .accessibilityLabel("Completion").accessibilityValue("\(project.completedTaskCount) of \(project.totalTaskCount) tasks completed")
         }.padding(16).frame(maxWidth: .infinity, alignment: .leading).projectCardSurface()
@@ -139,11 +145,15 @@ struct ProjectEditorView: View {
             }
             .navigationTitle(project == nil ? "Add Project" : "Edit Project").navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() }.disabled(saving) }
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { closeProjectEditor() }.disabled(saving) }
                 ToolbarItem(placement: .confirmationAction) { Button("Done", action: save).disabled(saving || model.projectMutationBusy || !ProjectQuery.validName(name)) }
             }
         }.tint(ProjectStyle.accent).interactiveDismissDisabled(saving)
             .task { if project == nil { nameFocused = true } }
+    }
+    private func closeProjectEditor() {
+        nameFocused = false
+        dismiss()
     }
     private func colorName(_ color: String) -> String {
         let names = ["#8875ff": "Purple", "#35bce6": "Cyan", "#ed4b9a": "Pink", "#67be66": "Green", "#367de8": "Blue", "#5b6abf": "Indigo"]
@@ -154,7 +164,7 @@ struct ProjectEditorView: View {
         saving = true; error = nil; nameFocused = false
         Task {
             defer { saving = false }
-            do { try await model.saveProject(id: project?.id, name: name, color: color); dismiss() }
+            do { try await model.saveProject(id: project?.id, name: name, color: color); closeProjectEditor() }
             catch { self.error = error.localizedDescription }
         }
     }
@@ -165,7 +175,9 @@ struct ProjectDetailView: View {
     @Environment(\.dismiss) private var dismiss
     let projectID: String?
     @State private var search = ""
-    @State private var status = "All"
+    // Project folders open to actionable work; completed tasks remain
+    // available through the status filter.
+    @State private var status = "Open"
     @State private var priority = "All"
     @State private var adding = false
     @State private var editing = false
@@ -184,13 +196,21 @@ struct ProjectDetailView: View {
             TodayBackdrop(subtle: true)
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    HStack { ProjectFolder(color: project.map { ProjectStyle.color($0.color) } ?? .secondary); Text(project?.name ?? "No project").font(.title2.bold()); Spacer() }
+                    HStack(spacing: 12) {
+                        ProjectFolder(color: project.map { ProjectStyle.color($0.color) } ?? .secondary)
+                        Text(project?.name ?? "No project").font(.title2.bold())
+                        Spacer()
+                        TodayHeaderButton(icon: "plus", label: "Add task to \(project?.name ?? "No project")") {
+                            adding = true
+                        }
+                        .disabled(deleting || missing)
+                    }
                     HStack {
                         ProjectSearchField(placeholder: "Search tasks", text: $search)
                         Menu {
                             Picker("Status", selection: $status) { ForEach(["All", "Open", "Completed"], id: \.self) { Text($0) } }
                             Picker("Priority", selection: $priority) { ForEach(["All", "LOW", "NORMAL", "HIGH", "CRITICAL"], id: \.self) { Text($0.capitalized).tag($0) } }
-                            Button("Reset filters") { status = "All"; priority = "All" }
+                            Button("Reset filters") { status = "Open"; priority = "All" }
                         } label: { Image(systemName: "slider.horizontal.3").frame(width: 48, height: 48) }.accessibilityLabel("Filter project tasks")
                     }
                     if let error { Text(error).foregroundStyle(.red) }
@@ -198,10 +218,30 @@ struct ProjectDetailView: View {
                     if model.tasksLoading && model.tasks.isEmpty { ProgressView("Loading tasks…") }
                     else if missing { ContentUnavailableView("Project unavailable", systemImage: "folder.badge.questionmark", description: Text("This project may have been deleted.")) }
                     else {
-                        Text("\(tasks.count) tasks").font(.subheadline).foregroundStyle(.secondary)
+                        if !tasks.isEmpty {
+                            Text("\(tasks.count) \(tasks.count == 1 ? "task" : "tasks")")
+                                .font(.subheadline).foregroundStyle(.secondary)
+                        }
                         if tasks.isEmpty {
-                            ContentUnavailableView(search.isEmpty && status == "All" && priority == "All" ? "No tasks yet" : "No matching tasks", systemImage: "checklist")
-                            Button("Add task") { adding = true }.buttonStyle(.borderedProminent).controlSize(.large).foregroundStyle(.white).frame(maxWidth: .infinity)
+                            VStack(spacing: 14) {
+                                Image(systemName: "checklist")
+                                    .font(.system(size: 38, weight: .regular))
+                                    .foregroundStyle(Color.nexdoSecondary)
+                                Text(search.isEmpty && status == "Open" && priority == "All" ? "You don’t have any open tasks." : "No matching tasks")
+                                    .font(.title3.weight(.regular))
+                                    .foregroundStyle(Color.nexdoSecondary)
+                                    .multilineTextAlignment(.center)
+                            }
+                            .frame(maxWidth: .infinity, minHeight: 260)
+                            Button { adding = true } label: {
+                                Text("Add task")
+                                    .font(.headline.weight(.semibold))
+                                    .foregroundStyle(.white)
+                                    .frame(maxWidth: .infinity, minHeight: 52)
+                                    .background(ProjectStyle.color(project?.color ?? "#8875ff"), in: Capsule())
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("Add task to \(project?.name ?? "project")")
                         }
                         LazyVStack(spacing: 12) {
                             ForEach(tasks) { task in
@@ -238,7 +278,8 @@ struct ProjectDetailView: View {
         .task { await model.refreshTasks(); await model.refreshProjects() }
     }
     private func subtitle(_ task: NexdoTask) -> String {
-        let date = (task.startAt ?? task.dueAt).map { " · \(ServerDate.day($0, timeZone: model.profile?.timeZone ?? TimeZone.current.identifier) ?? "")" } ?? ""
+        let zone = task.timeZone ?? model.profile?.timeZone ?? TimeZone.current.identifier
+        let date = (task.startAt ?? task.dueAt).map { " · \(ServerDate.day($0, timeZone: zone) ?? "")" } ?? ""
         return "\(task.durationMin) min\(date)"
     }
     private func remove() {
@@ -280,7 +321,10 @@ struct TaskListRow: View {
             Image(systemName: task.isDone ? "checkmark.circle.fill" : "circle").font(.title2).foregroundStyle(Color.nexdoSecondary).accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 5) {
                 Text(task.title).font(.body).foregroundStyle(Color.nexdoInk).strikethrough(task.isDone)
-                Text(subtitle).font(.caption).foregroundStyle(Color.nexdoSecondary)
+                if task.critical == true || task.priority == "CRITICAL" {
+                    Text("Critical").font(.caption).foregroundStyle(.red)
+                }
+                if !subtitle.isEmpty { Text(subtitle).font(.caption).foregroundStyle(Color.nexdoSecondary) }
             }
             Spacer(minLength: 8)
             Image(systemName: "chevron.right").font(.caption).foregroundStyle(Color.nexdoSecondary).accessibilityHidden(true)

@@ -28,12 +28,14 @@ struct WeeklySummaryView: View {
         }
         .navigationTitle("Weekly Summary")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar(.visible, for: .navigationBar)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 ShareLink(item: shareText).disabled(summary == nil).accessibilityLabel("Share weekly summary")
             }
         }
         .task {
+            guard summary == nil else { return }
             weekStart = currentWeek
             await load()
         }
@@ -47,20 +49,28 @@ struct WeeklySummaryView: View {
                 .overlay(alignment: .bottom) { Button("Retry") { Task { await load() } }.buttonStyle(.borderedProminent).padding(.bottom, 80) }
         } else if let summary {
             ScrollView {
-                LazyVStack(spacing: 16) {
+                // The fixed report sections do not need lazy measurement.
+                // Keep the Chart's height stable as it enters the viewport.
+                VStack(spacing: 16) {
                     weekSelector
                     summaryCard(summary)
-                    metricsGrid(summary.metrics)
+                    metricsGrid(summary)
                     chartCard(summary)
                     accomplishmentsCard(summary)
                     if let insight = summary.productivityInsight { insightCard(insight) }
-                    limitations(summary.limitations)
-                    planButton(summary)
                 }
                 .padding(.horizontal, 18).padding(.top, 12).padding(.bottom, 28)
             }
             .scrollIndicators(.hidden)
             .refreshable { await load() }
+            // Reserve space for the action above the tab shell's existing
+            // safe-area inset, rather than letting it scroll behind the tabs.
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                planButton(summary)
+                    .padding(.horizontal, 18)
+                    .padding(.vertical, 12)
+                    .background(.regularMaterial)
+            }
         }
     }
 
@@ -88,11 +98,20 @@ struct WeeklySummaryView: View {
         }.weeklyCard()
     }
 
-    private func metricsGrid(_ metrics: WeeklySummary.Metrics) -> some View {
-        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-            MetricCard(icon: "checkmark.circle.fill", color: .green, value: "\(metrics.completed) of \(metrics.planned)", label: "Tasks completed")
+    private func metricsGrid(_ value: WeeklySummary) -> some View {
+        let metrics = value.metrics
+        return LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
+            NavigationLink {
+                WeeklySummaryTasksView(summary: value, initialFilter: .completed)
+            } label: {
+                MetricCard(icon: "checkmark.circle.fill", color: .green, value: "\(metrics.completed) of \(metrics.planned)", label: "Tasks completed", actionable: true)
+            }.buttonStyle(.plain).accessibilityHint("Opens completed tasks for \(rangeLabel)")
             CompletionMetricCard(rate: metrics.completionRate)
-            MetricCard(icon: "exclamationmark.circle.fill", color: .red, value: metrics.overdue.map(String.init) ?? "Unavailable", label: "Overdue tasks")
+            NavigationLink {
+                WeeklySummaryTasksView(summary: value, initialFilter: .overdue)
+            } label: {
+                MetricCard(icon: "exclamationmark.circle.fill", color: .red, value: metrics.overdue.map(String.init) ?? "Unavailable", label: "Overdue tasks", actionable: true)
+            }.buttonStyle(.plain).accessibilityHint("Opens overdue tasks for \(rangeLabel)")
             MetricCard(icon: "clock", color: .nexdoPurple, value: focusLabel(metrics.focusMinutes), label: "Recorded focus time")
         }
     }
@@ -111,26 +130,23 @@ struct WeeklySummaryView: View {
                 .chartForegroundStyleScale(["Planned": Color.nexdoBlue.opacity(0.42), "Completed": Color.nexdoPurple])
                 .chartXAxis { AxisMarks(values: value.days.map(\.date)) { mark in AxisValueLabel { if let raw = mark.as(String.self) { Text(weekday(raw)) } } } }
                 .chartLegend(position: .bottom, alignment: .center)
-                // `chartXSelection` installs a drag gesture that competes with the
-                // surrounding vertical ScrollView. Use a discrete tap instead so
-                // swipes that begin on the chart continue scrolling the report.
-                .chartOverlay { proxy in
-                    GeometryReader { geometry in
-                        Color.clear
-                            .contentShape(Rectangle())
-                            .gesture(
-                                SpatialTapGesture().onEnded { tap in
-                                    guard let plotFrame = proxy.plotFrame else { return }
-                                    let plotOrigin = geometry[plotFrame].origin
-                                    let xPosition = tap.location.x - plotOrigin.x
-                                    guard let day: String = proxy.value(atX: xPosition) else { return }
-                                    selectedDay = day
-                                }
-                            )
+                .frame(height: 220)
+                // No transparent gesture layer over the chart: vertical swipes
+                // belong exclusively to the report's ScrollView.
+                .allowsHitTesting(false)
+                .accessibilityLabel("Planned versus completed tasks by day")
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 44))], spacing: 4) {
+                    ForEach(value.days) { day in
+                        Button { selectedDay = day.date } label: {
+                            Text(weekday(day.date)).font(.subheadline.bold())
+                                .frame(maxWidth: .infinity, minHeight: 44)
+                                .background(selectedDay == day.date ? Color.nexdoIndigo.opacity(0.15) : .clear, in: RoundedRectangle(cornerRadius: 10))
+                        }.buttonStyle(.plain)
+                            .accessibilityLabel(longDay(day.date))
+                            .accessibilityValue("\(day.planned) planned, \(day.completed) completed")
+                            .accessibilityAddTraits(selectedDay == day.date ? .isSelected : [])
                     }
                 }
-                .frame(height: 220)
-                .accessibilityLabel("Planned versus completed tasks by day")
                 if let selectedDay, let day = value.days.first(where: { $0.date == selectedDay }) {
                     Text("\(longDay(day.date)): \(day.planned) planned, \(day.completed) completed").font(.caption).foregroundStyle(Color.nexdoSecondary)
                 }
@@ -143,7 +159,7 @@ struct WeeklySummaryView: View {
             Text("Top accomplishments").font(.title3.bold()).foregroundStyle(Color.nexdoInk)
             if value.accomplishments.isEmpty { Text("No completed tasks in this week’s planned cohort.").foregroundStyle(Color.nexdoSecondary) }
             ForEach(value.accomplishments) { accomplishment in
-                if let task = model.tasks.first(where: { $0.id == accomplishment.id }) {
+                if let task = value.taskGroups?.completed.first(where: { $0.id == accomplishment.id }) ?? model.tasks.first(where: { $0.id == accomplishment.id }) {
                     NavigationLink { TaskDetailsView(task: task) } label: { accomplishmentRow(accomplishment) }.buttonStyle(.plain)
                 } else { accomplishmentRow(accomplishment) }
             }
@@ -162,15 +178,15 @@ struct WeeklySummaryView: View {
         Label(insight, systemImage: "sparkles").font(.subheadline.bold()).foregroundStyle(Color.nexdoIndigo).weeklyCard()
     }
 
-    private func limitations(_ values: [String]) -> some View {
-        DisclosureGroup("How these metrics are calculated") {
-            VStack(alignment: .leading, spacing: 8) { ForEach(values, id: \.self) { Text("• \($0)").font(.footnote).foregroundStyle(Color.nexdoSecondary) } }.padding(.top, 8)
-        }.font(.subheadline.weight(.semibold)).weeklyCard()
-    }
-
     private func planButton(_ value: WeeklySummary) -> some View {
         Button { onPlanNextWeek(planPrompt(value)) } label: {
-            Text("Plan next week with Nexdo →").font(.headline).foregroundStyle(.white).frame(maxWidth: .infinity, minHeight: 54).background(NexdoTheme.gradient, in: RoundedRectangle(cornerRadius: 18))
+            Text("Plan next week with Nexdo →")
+                .font(.headline).foregroundStyle(.white)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal, 16).padding(.vertical, 14)
+                .frame(maxWidth: .infinity, minHeight: 54)
+                .background(NexdoTheme.gradient, in: RoundedRectangle(cornerRadius: 18))
         }.buttonStyle(.plain).accessibilityHint("Opens Ask Nexdo with this summary. No tasks are changed without approval.")
     }
 
@@ -214,7 +230,100 @@ struct WeeklySummaryView: View {
 
 private struct MetricCard: View {
     let icon: String; let color: Color; let value: String; let label: String
-    var body: some View { VStack(alignment: .leading, spacing: 8) { Image(systemName: icon).font(.title2).foregroundStyle(color); Text(value).font(.title2.bold()).foregroundStyle(Color.nexdoInk).minimumScaleFactor(0.72); Text(label).font(.caption).foregroundStyle(Color.nexdoSecondary) }.frame(maxWidth: .infinity, minHeight: 112, alignment: .leading).weeklyCard() }
+    var actionable = false
+    var body: some View { VStack(alignment: .leading, spacing: 8) { HStack { Image(systemName: icon).font(.title2).foregroundStyle(color); Spacer(); if actionable { Image(systemName: "chevron.right").font(.caption).foregroundStyle(Color.nexdoSecondary).accessibilityHidden(true) } }; Text(value).font(.title2.bold()).foregroundStyle(Color.nexdoInk).minimumScaleFactor(0.72); Text(label).font(.caption).foregroundStyle(Color.nexdoSecondary) }.frame(maxWidth: .infinity, minHeight: 112, alignment: .leading).weeklyCard() }
+}
+
+private enum WeeklyTaskFilter: String, CaseIterable {
+    case completed = "Completed", planned = "Planned", overdue = "Overdue"
+}
+
+private struct WeeklySummaryTasksView: View {
+    @EnvironmentObject private var model: AppModel
+    @State private var loadedGroups: WeeklySummary.TaskGroups?
+    @State private var loading = false
+    @State private var loadError: String?
+    @State private var selectedTask: NexdoTask?
+    let summary: WeeklySummary
+    @State private var filter: WeeklyTaskFilter
+
+    init(summary: WeeklySummary, initialFilter: WeeklyTaskFilter) {
+        self.summary = summary
+        _filter = State(initialValue: initialFilter)
+    }
+
+    private var tasks: [NexdoTask]? {
+        guard let groups = loadedGroups ?? summary.taskGroups else { return nil }
+        switch filter {
+        case .completed: return groups.completed
+        case .planned: return groups.planned
+        case .overdue: return groups.overdue
+        }
+    }
+
+    var body: some View {
+        List {
+            Section {
+                Text(summary.taskRangeLabel).font(.headline)
+                Picker("Tasks in this week", selection: $filter) {
+                    ForEach(WeeklyTaskFilter.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                }.pickerStyle(.menu)
+                if filter == .overdue {
+                    Text("Overdue within this week’s planned tasks, as of the report. A task may have been completed since then.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+            }
+            if let tasks {
+                Section("\(tasks.count) \(filter.rawValue.lowercased()) tasks") {
+                    if tasks.isEmpty {
+                        Text("No \(filter.rawValue.lowercased()) tasks for this period.").foregroundStyle(.secondary)
+                    }
+                    ForEach(tasks) { task in
+                        // List adds its own disclosure arrow to NavigationLink.
+                        // The card already contains one, so push via selection.
+                        Button { selectedTask = task } label: {
+                            TaskListRow(task: task, subtitle: "\(task.durationMin) min · \(task.status.capitalized)")
+                        }
+                        .buttonStyle(.plain)
+                        .listRowInsets(EdgeInsets(top: 6, leading: 0, bottom: 6, trailing: 0))
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
+                        .accessibilityHint("Opens task details")
+                    }
+                }
+            } else {
+                if loading || loadError == nil {
+                    ProgressView("Loading tasks…")
+                } else {
+                    Section {
+                        Text(loadError ?? "Couldn’t load tasks.").foregroundStyle(.secondary)
+                        Button("Retry") { Task { await loadTasks() } }
+                    }
+                }
+            }
+        }
+        .task { await loadTasks() }
+        .refreshable { await loadTasks() }
+        .navigationTitle("\(filter.rawValue) tasks")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar(.visible, for: .navigationBar)
+        .navigationDestination(isPresented: Binding(
+            get: { selectedTask != nil },
+            set: { if !$0 { selectedTask = nil } }
+        )) {
+            if let selectedTask { TaskDetailsView(task: selectedTask) }
+        }
+    }
+
+    private func loadTasks() async {
+        guard !loading else { return }
+        loading = true
+        loadError = nil
+        defer { loading = false }
+        do { loadedGroups = try await model.weeklySummaryTasks(for: summary) }
+        catch { loadError = "Couldn’t load this week’s tasks. Please try again." }
+    }
+
 }
 
 private struct CompletionMetricCard: View {

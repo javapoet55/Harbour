@@ -58,7 +58,7 @@ struct WeatherForecastView: View {
             .navigationTitle("Weather").navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button { dismiss() } label: { Image(systemName: "xmark").frame(width: 44, height: 44) }
+                    Button { closeForecast() } label: { Image(systemName: "xmark").frame(width: 44, height: 44) }
                         .accessibilityLabel("Close weather forecast")
                 }
             }
@@ -69,6 +69,10 @@ struct WeatherForecastView: View {
             }
             .refreshable { await load() }
         }
+    }
+
+    private func closeForecast() {
+        dismiss()
     }
 
     private func temperatures(_ day: WeatherResponse.Day) -> some View {

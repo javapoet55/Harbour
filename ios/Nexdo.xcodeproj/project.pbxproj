@@ -173,6 +173,7 @@
 				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = iphoneos;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) DEBUG";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 6.0;
 			};
@@ -236,6 +237,7 @@
 				INFOPLIST_KEY_CFBundleDisplayName = Nexdo;
 				INFOPLIST_KEY_CFBundleURLTypes = "{\n    CFBundleURLSchemes =     (\n        nexdo\n    );\n}";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
+				INFOPLIST_KEY_NSContactsUsageDescription = "Nexdo uses Contacts to let you choose who to call, message, or email for your tasks. Contact details stay on this device.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Nexdo records your voice to transcribe questions and create tasks with OpenAI.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -268,6 +270,7 @@
 				INFOPLIST_KEY_CFBundleDisplayName = Nexdo;
 				INFOPLIST_KEY_CFBundleURLTypes = "{\n    CFBundleURLSchemes =     (\n        nexdo\n    );\n}";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
+				INFOPLIST_KEY_NSContactsUsageDescription = "Nexdo uses Contacts to let you choose who to call, message, or email for your tasks. Contact details stay on this device.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Nexdo records your voice to transcribe questions and create tasks with OpenAI.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;

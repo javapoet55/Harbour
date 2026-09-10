@@ -79,12 +79,17 @@ struct AccountView: View {
                 }.padding(20)
             }
             .background(ProfileBackground()).navigationTitle("More").navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Close", systemImage: "xmark") { dismiss() }.labelStyle(.iconOnly) } }
+            .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Close", systemImage: "xmark") { closeAccount() }.labelStyle(.iconOnly) } }
             .confirmationDialog("Sign out of Nexdo?", isPresented: $confirmsSignOut) {
                 Button("Sign out", role: .destructive) { Task { await model.logout(); if model.profile == nil { dismiss() } } }
             }
         }.tint(.nexdoIndigo)
     }
+
+    private func closeAccount() {
+        dismiss()
+    }
+
     private func menuRow(_ title: String, _ icon: String, web: Bool = false) -> some View {
         HStack(spacing: 14) {
             Image(systemName: icon).frame(width: 24).foregroundStyle(Color.nexdoIndigo)

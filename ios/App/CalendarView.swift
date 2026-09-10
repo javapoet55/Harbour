@@ -11,8 +11,6 @@ struct CalendarView: View {
     @State private var data: Agenda?
     @State private var loading = false
     @State private var failure: String?
-    @State private var adding = false
-    @State private var account = false
     @State private var ask = false
     @State private var conflicts = false
     @State private var expanded = false
@@ -69,65 +67,64 @@ struct CalendarView: View {
 
     var body: some View {
         NavigationStack {
-            ZStack {
-                TodayBackdrop(subtle: true)
-                VStack(spacing: 0) {
-                    TodayTopBar(name: model.profile?.name ?? "", temperature: model.weather.map { Int($0.current.temperature.rounded()) }, add: { adding = true }, account: { account = true })
-                        .padding(.horizontal, 24).padding(.vertical, 12).background(.ultraThinMaterial)
-                    ScrollView {
-                        VStack(alignment: .leading, spacing: 24) {
-                            calendarHeader
-                            if searching { searchField }
-                            segments
-                            if mode == .schedule { if !hasSearch { intelligence } }
-                            else { dateNavigation; dateGrid }
-                            if let failure {
-                                VStack(alignment: .leading, spacing: 8) {
-                                    Text(failure).font(.subheadline)
-                                    Button("Retry") { Task { await load() } }
-                                }.foregroundStyle(Color.nexdoSecondary)
-                            }
-                            if loading { ProgressView("Loading calendar…").frame(maxWidth: .infinity) }
-                            if currentData != nil {
-                                if mode == .schedule {
-                                    upcoming
-                                    summary
-                                    if hasSearch { searchResults }
-                                    else { ForEach(visibleDays, id: \.self) { day in daySection(day, relative: true) } }
-                                    DisclosureGroup(isExpanded: $expanded) {
-                                        if backlog.isEmpty { Text("No unscheduled or overdue tasks.").font(.subheadline).padding(.vertical) }
-                                        ForEach(backlog) { task in
-                                            NavigationLink { TaskDetailsView(task: task) } label: {
-                                                HStack { Text(task.title); Spacer(); if overdue(task) { badge("Overdue", color: .orange) } }
-                                                    .font(.subheadline).padding(.vertical, 10)
-                                            }
+            VStack(spacing: 0) {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 24) {
+                        calendarHeader
+                        if searching { searchField }
+                        segments
+                        if mode == .schedule { if !hasSearch { intelligence } }
+                        else { dateNavigation; dateGrid }
+                        if let failure {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text(failure).font(.subheadline)
+                                Button("Retry") { Task { await load() } }
+                            }.foregroundStyle(Color.nexdoSecondary)
+                        }
+                        if loading { ProgressView("Loading calendar…").frame(maxWidth: .infinity) }
+                        if currentData != nil {
+                            if mode == .schedule {
+                                upcoming
+                                summary
+                                if hasSearch { searchResults }
+                                else { ForEach(visibleDays, id: \.self) { day in daySection(day, relative: true) } }
+                                DisclosureGroup(isExpanded: $expanded) {
+                                    if backlog.isEmpty { Text("No unscheduled or overdue tasks.").font(.subheadline).padding(.vertical) }
+                                    ForEach(backlog) { task in
+                                        NavigationLink { TaskDetailsView(task: task) } label: {
+                                            HStack { Text(task.title); Spacer(); if overdue(task) { badge("Overdue", color: .orange) } }
+                                                .font(.subheadline).padding(.vertical, 10)
                                         }
-                                    } label: { Text("Unscheduled & overdue  \(backlog.count)").font(.subheadline.weight(.semibold)) }
-                                        .padding(16).background(.background.opacity(0.7), in: RoundedRectangle(cornerRadius: 16))
-                                        .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.nexdoBlue.opacity(0.18)))
-                                } else {
-                                    if hasSearch { searchResults }
-                                    else {
-                                    if mode == .week {
-                                        summaryCard("Your \(label(selected, "EEEE"))", detail: "\(itemCount(count(selected))) · \(tasks(selected).filter { scheduled($0, selected) }.reduce(0) { $0 + $1.durationMin }) min planned")
                                     }
-                                    daySection(selected, relative: false)
-                                    }
+                                } label: { Text("Unscheduled & overdue  \(backlog.count)").font(.subheadline.weight(.semibold)) }
+                                    .padding(16).background(.background.opacity(0.7), in: RoundedRectangle(cornerRadius: 16))
+                                    .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.nexdoBlue.opacity(0.18)))
+                            } else {
+                                if hasSearch { searchResults }
+                                else {
+                                if mode == .week {
+                                    summaryCard("Your \(label(selected, "EEEE"))", detail: "\(itemCount(count(selected))) · \(tasks(selected).filter { scheduled($0, selected) }.reduce(0) { $0 + $1.durationMin }) min planned")
+                                }
+                                daySection(selected, relative: false)
                                 }
                             }
                         }
-                        .padding(.horizontal, 24).padding(.top, 14).padding(.bottom, 24)
                     }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .clipped()
-                    .scrollDismissesKeyboard(.interactively)
-                    .refreshable {
-                        async let analysis: Void = model.refreshScheduleIntelligence()
-                        await model.refresh(); await load()
-                        await analysis
-                    }
+                    .padding(.horizontal, 24).padding(.top, 14).padding(.bottom, 24)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .clipped()
+                .scrollDismissesKeyboard(.interactively)
+                .refreshable {
+                    async let analysis: Void = model.refreshScheduleIntelligence()
+                    await model.refresh(); await load()
+                    await analysis
                 }
             }
+            // Keep the scroll viewport inside the tab shell's safe area. Only
+            // the decorative background extends underneath system/tab bars.
+            .safeAreaPadding(.bottom, 16)
+            .background { TodayBackdrop(subtle: true) }
             .foregroundStyle(Color.nexdoInk)
             .toolbar(.hidden, for: .navigationBar)
             .onAppear {
@@ -147,8 +144,6 @@ struct CalendarView: View {
                 await model.refreshScheduleIntelligence()
             }
             .onReceive(model.$agenda.dropFirst()) { _ in Task { await load() } }
-            .sheet(isPresented: $adding) { NavigationStack { TaskEditor(task: nil) } }
-            .sheet(isPresented: $account) { AccountView() }
             .sheet(isPresented: $ask) {
                 AskNexdoView(initialPrompt: "Help fix my schedule around \(dates.key(selected)). Analyze tasks, due dates, calendar commitments, available time, priority, and overdue work. Propose an improved schedule for my approval.")
                     .presentationDetents([.large]).presentationDragIndicator(.visible)

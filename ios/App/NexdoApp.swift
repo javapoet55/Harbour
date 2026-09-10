@@ -2,6 +2,7 @@ import SwiftUI
 
 @main
 struct NexdoApp: App {
+    @UIApplicationDelegateAdaptor(TaskActionAppDelegate.self) private var actionDelegate
     var body: some Scene { WindowGroup { RootView() } }
 }
 
@@ -383,6 +384,13 @@ final class AppModel: ObservableObject {
             do {
                 let response: TaskResponse = try await api.request("/api/tasks/\(task.id)", method: "PATCH", body: schedule)
                 replaceTask(response.task)
+                // Scheduling is persisted separately from the task metadata.
+                // The PATCH response may be a pre-relation snapshot, so fetch
+                // the canonical task before returning to deadline lists.
+                if let canonical: TasksResponse = try? await api.request("/api/tasks", timeout: 15),
+                   let updated = canonical.tasks.first(where: { $0.id == task.id }) {
+                    replaceTask(updated)
+                }
             } catch { throw TaskEditError.schedule }
         }
     }
@@ -496,6 +504,11 @@ final class AppModel: ObservableObject {
     }
     func weeklySummary(start: String) async throws -> WeeklySummary {
         try await api.request("/api/weekly-summary?start=\(start)", timeout: 30)
+    }
+    func weeklySummaryTasks(for summary: WeeklySummary) async throws -> WeeklySummary.TaskGroups {
+        if let groups = summary.taskGroups { return groups }
+        let response: TasksResponse = try await api.request("/api/tasks", timeout: 15)
+        return try summary.taskGroups(from: response.tasks)
     }
     func withdrawConsent() { voiceConsent = false; aiConsent = false; turn = nil; lastAssistantPrompt = nil; contextID = nil }
     func reset() async {

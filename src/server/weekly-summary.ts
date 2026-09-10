@@ -49,7 +49,13 @@ export async function buildWeeklySummary(userId: string, timeZone: string, start
   const [tasks, sessions] = await Promise.all([
     prisma.task.findMany({
       where: weeklySummaryTaskWhere(userId, start, endExclusive),
-      select: { id: true, title: true, priority: true, startAt: true, dueAt: true, completedAt: true },
+      select: {
+        id: true, title: true, priority: true, status: true, durationMin: true,
+        notes: true, startAt: true, dueAt: true, completedAt: true, projectId: true,
+        energyLevel: true, splittable: true, critical: true, minFocusMin: true,
+        timeZone: true, subtasks: true, recurrence: true,
+      },
+      orderBy: [{ startAt: 'asc' }, { dueAt: 'asc' }, { id: 'asc' }],
     }),
     prisma.taskWorkSession.findMany({
       where: { userId, startedAt: { lt: effectiveEnd }, OR: [{ endedAt: null }, { endedAt: { gt: start } }] },
@@ -70,13 +76,14 @@ export async function buildWeeklySummary(userId: string, timeZone: string, start
   const completedTasks = tasks.filter((task) => task.completedAt && task.completedAt >= start && task.completedAt < effectiveEnd);
   const completed = completedTasks.length;
   const planned = tasks.length;
-  const overdue = tasks.filter((task) => task.dueAt && task.dueAt < effectiveEnd && (!task.completedAt || task.completedAt > effectiveEnd)).length;
+  const overdueTasks = tasks.filter((task) => task.dueAt && task.dueAt < effectiveEnd && (!task.completedAt || task.completedAt > effectiveEnd));
+  const overdue = overdueTasks.length;
   const focusMinutes = sessions.reduce((total, session) => {
     const from = Math.max(session.startedAt.getTime(), start.getTime());
     const to = Math.min((session.endedAt ?? effectiveEnd).getTime(), effectiveEnd.getTime());
     return total + Math.max(0, Math.round((to - from) / 60_000));
   }, 0);
-  const accomplishments = completedTasks.sort((a, b) => (priorityRank[b.priority] ?? 0) - (priorityRank[a.priority] ?? 0) || +a.completedAt! - +b.completedAt!).slice(0, 3);
+  const accomplishments = [...completedTasks].sort((a, b) => (priorityRank[b.priority] ?? 0) - (priorityRank[a.priority] ?? 0) || +a.completedAt! - +b.completedAt! || a.id.localeCompare(b.id)).slice(0, 3);
   const percentage = completionRate(completed, planned);
   const firstName = (await prisma.user.findFirst({ where: { id: userId }, select: { name: true } }))?.name.split(/\s+/)[0] || 'there';
   const headline = planned === 0 ? `A clear week, ${firstName}` : completed === planned ? `Everything planned is complete, ${firstName}` : completed === 0 ? `A week in progress, ${firstName}` : `You completed ${completed} planned task${completed === 1 ? '' : 's'}, ${firstName}`;
@@ -85,6 +92,9 @@ export async function buildWeeklySummary(userId: string, timeZone: string, start
   return {
     timeZone, start: startDay, end: days[6], generatedAt: now.toISOString(), headline, summary,
     metrics: { completed, planned, completionRate: percentage, overdue, focusMinutes },
+    // Return the very same snapshot used by the counts; clients must not filter
+    // a separate, possibly stale task cache to reconstruct historical results.
+    taskGroups: { planned: tasks, completed: completedTasks, overdue: overdueTasks },
     days: days.map((day) => ({ date: day, planned: plannedByDay[day], completed: completedByDay[day] })),
     accomplishments: accomplishments.map(({ id, title, priority }) => ({ id, title, priority })),
     // Session records do not yet preserve enough comparable hourly buckets to make a reliable "most productive" claim.
