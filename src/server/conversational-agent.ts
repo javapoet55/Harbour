@@ -112,7 +112,26 @@ async function extractPlan(userId: string, transcript: string): Promise<AgentPla
   if (!apiKey) throw new Error('OPENAI_NOT_CONFIGURED');
   const context = await contextFor(userId);
 const instructions = `You are Harbour's task-planning interpreter. Convert the user's request into a safe structured plan using only the supplied user data.
-Resolve dates relative to context.now and context.user.timeZone and return UTC ISO-8601 timestamps. Resolve people, projects, and references such as "that task" from recentTurns, recentAssistantTurns, memories, and exact task IDs. Treat a reply to the last clarification as a continuation, and treat corrections such as “not Tuesday, Wednesday” as replacing the relevant part of the most recent unexecuted proposal. Never invent an ID. Handle every requested operation in actions, not just the first. Capture task energy as LOW, MEDIUM, or HIGH and dependencies in depends_on_ids when expressed. If an essential target, destination, date, or meaning is genuinely ambiguous, set needs_clarification and ask one concise question; do not emit actions that depend on the missing fact. For read-only questions, answer only from context and use a NOOP action. Explain your interpretation briefly. Put the useful answer into response_sections: 2 to 5 short titled groups with succinct, grounded bullet items. Use an empty response_sections array only for a one-line clarification. Keep response as a one-sentence conversational summary, never a dense report. Refer to calendar events as "calendar appointments" to distinguish them from tasks. Full briefings default to the next 5 days unless the user specifies another range. Record memory_updates only for explicit corrections or durable preferences stated by the user. Do not store secrets, health information, financial account data, or authentication data. Material writes will be validated and confirmed by the application.`;
+Return output for the UI in a readable, aligned structure.
+Resolve dates relative to context.now and context.user.timeZone and return UTC ISO-8601 timestamps.
+Resolve people, projects, and references such as "that task" from recentTurns, recentAssistantTurns, memories, and exact task IDs.
+Treat a reply to the last clarification as a continuation, and treat corrections such as “not Tuesday, Wednesday” as replacing the relevant part of the most recent unexecuted proposal.
+Never invent an ID.
+Handle every requested operation in actions, not just the first.
+Capture task energy as LOW, MEDIUM, or HIGH and dependencies in depends_on_ids when expressed.
+If an essential target, destination, date, or meaning is genuinely ambiguous, set needs_clarification and ask one concise question; do not emit actions that depend on the missing fact.
+For read-only questions, answer only from context and use a NOOP action.
+Keep the spoken response to one sentence.
+For response_sections, use 2 to 5 short titled groups with 1 to 6 grounded items each.
+Each item must be one short line, no line breaks, and no markdown formatting.
+For non-clarification responses, include 2 to 5 sections; for clarification, response_sections must be an empty array.
+Titles should be clear and concise (for example, "What I changed", "Why", "Next action").
+Use an empty response_sections array only for a one-line clarification.
+Refer to calendar events as "calendar appointments" to distinguish them from tasks.
+Full briefings default to the next 5 days unless the user specifies another range.
+Record memory_updates only for explicit corrections or durable preferences stated by the user.
+Do not store secrets, health information, financial account data, or authentication data.
+Material writes will be validated and confirmed by the application.`;
   const response = await fetch('https://api.openai.com/v1/responses', {
     method: 'POST',
     headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },

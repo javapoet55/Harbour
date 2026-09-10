@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { formatDay } from '@/lib/time';
 import type { AgendaPayload } from '@/lib/types';
+import { splitSectionItem } from '@/lib/assistant-sections';
 import { MobileDay } from './mobile-day';
 import { TodaySnapshot, useTodaySnapshot } from './today-snapshot';
 import { useRouter } from 'next/navigation';
@@ -195,7 +196,7 @@ export function TodayBoard() {
               ...data.events.filter((e) => dayOf(e.startAt) === day).map((e) => e.title),
               ...data.tasks.filter((t) => !['COMPLETED', 'CANCELLED'].includes(t.status) && (dayOf(t.dueAt) === day || dayOf(t.startAt) === day)).map((t) => t.title),
             ];
-            return <div key={day}><p className="font-medium">{nextDayLabel(day)}</p>{items.length ? <ul className="ml-5 mt-1 list-disc space-y-1">{items.map((item, index) => <li key={`${day}-${item}-${index}`}>{item}</li>)}</ul> : <p className="mt-1 text-[var(--muted)]">Clear</p>}</div>;
+            return <div key={day}><p className="font-medium">{nextDayLabel(day)}</p>{items.length ? <ul className="ml-5 mt-1 list-disc space-y-1">{items.map((item, index) => <li key={`${day}-${item}-${index}`}>{compactLines(item).map((line, lineIndex) => <p key={`${day}-${item}-${lineIndex}`}>{line}</p>)}</li>)}</ul> : <p className="mt-1 text-[var(--muted)]">Clear</p>}</div>;
           })}</div>
         </Card>
         <div className="lg:col-span-2"><Card title="Completed">
@@ -354,7 +355,11 @@ function List({ items, empty }: { items: string[]; empty: string }) {
   if (!items.length) return <p className="text-sm text-[var(--muted)]">{empty}</p>;
   return (
     <ul className="space-y-2 text-sm">
-      {items.map((item) => <li key={item}>{item}</li>)}
+      {items.map((item, index) => <li key={`${item}-${index}`}>{compactLines(item).map((line, lineIndex) => <p key={`${item}-${lineIndex}`}>{line}</p>)}</li>)}
     </ul>
   );
+}
+
+function compactLines(value: string): string[] {
+  return splitSectionItem(value);
 }

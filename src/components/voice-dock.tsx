@@ -1,11 +1,12 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Mic, X, CalendarDays, ChevronRight, Play, Pause, Sparkles, Target, AlarmClock, CalendarSearch, Sunrise, ShieldAlert } from 'lucide-react';
+import { Mic, X, CalendarDays, ChevronRight, Play, Pause, Sparkles, Target, AlarmClock, CalendarSearch, Sunrise } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import type { ExecutiveRecommendation } from '@/lib/executive-contract';
+import { normalizeSectionTitle, splitSectionItem } from '@/lib/assistant-sections';
 import { useFocusSession, formatFocus } from './focus-session';
 
 type VoiceState = 'idle' | 'listening' | 'processing' | 'speaking' | 'confirm' | 'error';
@@ -20,23 +21,26 @@ type Turn = {
 };
 
 function AnswerSections({ visual }: { visual: Turn['visual'] }) {
-  return <><p className="voice-response-summary">{visual.summary}</p><div className="voice-sections">{visual.sections?.map((section) => <section key={section.title} className="voice-section"><h3>{section.title}</h3><ul>{section.items.map((item, index) => <li key={`${section.title}-${index}`}>{item}</li>)}</ul></section>)}</div></>;
+  return (
+    <>
+      <p className="voice-response-summary">{visual.summary}</p>
+      <div className="voice-sections">
+        {visual.sections?.map((section) => (
+          <section key={section.title} className="voice-section">
+            <h3>{normalizeSectionTitle(section.title)}</h3>
+            <ul>
+              {section.items.flatMap((item) => splitSectionItem(typeof item === 'string' ? item : String(item))).slice(0, 12).map((item, index) => (
+                <li key={`${section.title}-${index}`}>{item}</li>
+              ))}
+            </ul>
+          </section>
+        ))}
+      </div>
+    </>
+  );
 }
 
 const PROMPT_SHORTCUTS = [
-  { label: 'What should I do next?', detail: 'One best action for the time you have right now', prompt: 'What should I do next?', Icon: Target },
-  {
-    label: 'What’s my day looking like?',
-    detail: 'See today’s calendar appointments, tasks, and overdue work',
-    prompt: 'What’s my day looking like?',
-    Icon: CalendarDays,
-  },
-  {
-    label: 'Do I have any conflicts?',
-    detail: 'Check overlaps, tight transitions, and workload risks',
-    prompt: 'Do I have any conflicts?',
-    Icon: ShieldAlert,
-  },
   {
     label: 'Give me my full briefing',
     detail: 'Priorities, deadlines, conflicts, and your next move',
@@ -49,13 +53,10 @@ const PROMPT_SHORTCUTS = [
     prompt: 'What should I focus on today?',
     Icon: Target,
   },
-  { label: 'Fix my afternoon', detail: 'Review a calmer plan before approving any changes', prompt: 'Fix my afternoon.', Icon: CalendarSearch },
-  { label: 'I have 45 minutes', detail: 'Find useful work that fits this opening', prompt: 'I have 45 minutes free. What should I do?', Icon: Target },
-  { label: 'Brief me on my way home', detail: 'A short spoken update on what still matters', prompt: "I'm driving home. What do I need to know?", Icon: Sunrise },
   {
     label: 'Show deadlines and risks',
-    detail: 'See what is due in the next seven days',
-    prompt: 'What deadlines are coming in the next 7 days?',
+    detail: 'See what is due in the next 5 days',
+    prompt: 'What deadlines are coming in the next 5 days?',
     Icon: AlarmClock,
   },
   {

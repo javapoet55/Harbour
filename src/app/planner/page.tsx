@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { Authed } from '@/components/authed';
 import type { PlanPayload, ReplanPayload } from '@/lib/types';
+import { splitSectionItem } from '@/lib/assistant-sections';
 
 export default function PlannerPage() {
   const [plan, setPlan] = useState<PlanPayload | null>(null);
@@ -36,6 +37,7 @@ export default function PlannerPage() {
     setMessage(`Moved ${result.moved} task${result.moved === 1 ? '' : 's'}.${result.externalSyncFailures ? ` ${result.externalSyncFailures} external calendar update${result.externalSyncFailures === 1 ? '' : 's'} need retrying.` : ''}`);
     await loadReplan();
   }
+  const compactLines = (value: string) => splitSectionItem(value);
 
   return (
     <Authed>
@@ -49,12 +51,12 @@ export default function PlannerPage() {
           </div>
           {replan.moves.length > 0 && <div className="mt-4 space-y-3">{replan.moves.map((move) => (
             <article key={move.taskId} className="rounded-xl border border-[var(--line)] p-3">
-              <p className="font-medium">{move.title}</p>
-              <p className="mt-1 text-sm">{move.fromLabel} → <span className="font-medium">{move.toLabel}</span></p>
-              <p className="mt-1 text-xs text-[var(--muted)]">Reason: {move.reasonLabel}</p>
+              {compactLines(move.title).map((line, index) => <p key={`${move.taskId}-title-${index}`} className="font-medium">{line}</p>)}
+              {compactLines(`${move.fromLabel} → ${move.toLabel}`).map((line, index) => <p key={`${move.taskId}-timing-${index}`} className="mt-1 text-sm">{line}</p>)}
+              {compactLines(`Reason: ${move.reasonLabel}`).map((line, index) => <p key={`${move.taskId}-reason-${index}`} className="mt-1 text-xs text-[var(--muted)]">{line}</p>)}
             </article>
           ))}</div>}
-          {replan.risks.length > 0 && <div className="mt-4 rounded-xl bg-[#faeeda] p-3"><p className="text-sm font-semibold">Capacity warnings</p><ul className="mt-1 text-sm">{replan.risks.map((risk) => <li key={risk.taskId}>{risk.title}: {risk.reason === 'no_capacity' ? 'no open working-hours block' : 'may finish after its deadline'}</li>)}</ul></div>}
+          {replan.risks.length > 0 && <div className="mt-4 rounded-xl bg-[#faeeda] p-3"><p className="text-sm font-semibold">Capacity warnings</p><ul className="mt-1 space-y-1 text-sm">{replan.risks.map((risk) => <li key={risk.taskId}>{compactLines(`${risk.title}: ${risk.reason === 'no_capacity' ? 'no open working-hours block' : 'may finish after its deadline'}`).map((line, index) => <p key={`${risk.taskId}-line-${index}`}>{line}</p>)}</li>)}</ul></div>}
           {replan.actionId && <button type="button" className="harbor-btn harbor-btn-brand mt-4" onClick={() => void applyReplan()}>Approve {replan.moves.length} changes</button>}
           {message && <p className="mt-3 text-sm text-[var(--ok)]">{message}</p>}
         </section>
@@ -65,11 +67,11 @@ export default function PlannerPage() {
           <div className="mt-4 grid gap-4 md:grid-cols-2">
             <div>
               <h2 className="text-sm font-bold uppercase text-[var(--faint)]">Do these</h2>
-              <ul className="mt-2 space-y-1 text-sm">{plan.visual.tasks.map((t) => <li key={t}>{t}</li>)}</ul>
+              <ul className="mt-2 space-y-1 text-sm">{plan.visual.tasks.map((t) => <li key={t}>{compactLines(t).map((line, index) => <p key={`${t}-line-${index}`}>{line}</p>)}</li>)}</ul>
             </div>
             <div>
               <h2 className="text-sm font-bold uppercase text-[var(--faint)]">Consider moving</h2>
-              <ul className="mt-2 space-y-1 text-sm">{plan.visual.overdue.map((t) => <li key={t}>{t}</li>)}</ul>
+              <ul className="mt-2 space-y-1 text-sm">{plan.visual.overdue.map((t) => <li key={t}>{compactLines(t).map((line, index) => <p key={`${t}-line-${index}`}>{line}</p>)}</li>)}</ul>
             </div>
           </div>
           <p className="mt-4 text-sm text-[var(--muted)]">{plan.visual.next}</p>

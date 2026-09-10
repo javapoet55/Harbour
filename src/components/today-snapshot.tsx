@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { AlertCircle, ArrowUpRight, CalendarDays, CheckCircle2, CheckSquare, ChevronDown, Clock3, RefreshCw, Sparkles } from 'lucide-react';
 import type { TodaySnapshotData } from '@/lib/schedule-intelligence';
 import type { ExecutiveRecommendation } from '@/lib/executive-contract';
+import { splitSectionItem } from '@/lib/assistant-sections';
 import { useFocusSession } from './focus-session';
 import './today-snapshot.css';
 
@@ -85,6 +86,7 @@ export function TodaySnapshot({ data, error, next, nextError, dismissNext, onRet
   const focus = useFocusSession();
   const [showAll, setShowAll] = useState(false);
   const [showTimeline, setShowTimeline] = useState(false);
+  const compactLines = (value: string) => splitSectionItem(value);
   if (error) return <section className="day-snapshot snapshot-unavailable" aria-label="Your day snapshot"><p role="status">{error}</p><button type="button" onClick={onRetry}><RefreshCw size={16} />Try again</button></section>;
   if (!data) return <section className="day-snapshot snapshot-loading" aria-label="Your day snapshot" aria-busy="true"><Sparkles size={20} /><p role="status">Bringing your day together…</p></section>;
   const time = (iso: string) => new Intl.DateTimeFormat('en-US', { timeZone: data.timeZone, hour: 'numeric', minute: '2-digit' }).format(new Date(iso));
@@ -122,9 +124,27 @@ export function TodaySnapshot({ data, error, next, nextError, dismissNext, onRet
 
       <div className="snapshot-guidance">
         {nextError && <p role="status">{nextError}</p>}
-        {best ? <article className="snapshot-recommendation" aria-label="What should I do next?"><span className="snapshot-eyebrow"><Sparkles size={16} aria-hidden="true" />What should I do next?</span><h3>{best.title}</h3><p>{best.focusMinutes} min recommended · {next!.recommendation!.window.availableMinutes} min available now</p><p>{best.reasons.join(' · ')}</p><div className="flex flex-wrap gap-2"><button type="button" className="harbor-btn harbor-btn-brand" disabled={focus.loading} onClick={() => void focus.start(best.taskId, best.title, best.focusMinutes, true)}>Start focus</button><button type="button" className="harbor-btn" onClick={() => ask('Why?', next!.contextActionId)}>Why this?</button><button type="button" className="harbor-btn" onClick={() => void dismissNext()}>Dismiss</button></div>{focus.error && <p role="alert">{focus.error}</p>}</article> : <div className="snapshot-recommendation"><button type="button" className="snapshot-link" onClick={() => ask('What should I do next?')}>What should I do next?<Sparkles size={16} aria-hidden="true" /></button>{next && !next.enabled && <p><Link href="/settings">Enable quiet next-action suggestions in Settings</Link></p>}</div>}
-        {issues.length > 0 && <div className="snapshot-issues" aria-label="Things needing attention">{issues.map((item) => <article key={item.id} className="snapshot-issue"><span className="snapshot-issue-label"><AlertCircle size={14} aria-hidden="true" />{item.label}</span><h3>{item.title}</h3><p>{item.explanation}</p>{review(item.kind, item.taskId)}</article>)}{data.attention.length > 2 && <button type="button" className="snapshot-show-more" onClick={() => setShowAll((value) => !value)} aria-expanded={showAll}>{showAll ? 'Show fewer' : `View all ${data.attention.length} attention items`}<ChevronDown size={15} aria-hidden="true" /></button>}</div>}
-        {!best && <article className="snapshot-recommendation"><span className="snapshot-eyebrow"><Sparkles size={16} aria-hidden="true" />Plan ahead</span><h3>{recommendation.title}</h3><p>{recommendation.explanation}</p>{recommendation.additionalAdvice && <p>{recommendation.additionalAdvice}</p>}{review(recommendation.kind, recommendation.taskId)}</article>}
+        {best ? (
+          <article className="snapshot-recommendation" aria-label="What should I do next?">
+            <span className="snapshot-eyebrow"><Sparkles size={16} aria-hidden="true" />What should I do next?</span>
+            <h3>{best.title}</h3>
+            <p>{best.focusMinutes} min recommended · {next!.recommendation!.window.availableMinutes} min available now</p>
+            {compactLines(best.reasons.join(' · ')).map((line, index) => <p key={`snapshot-best-reason-${index}`}>{line}</p>)}
+            <div className="flex flex-wrap gap-2">
+              <button type="button" className="harbor-btn harbor-btn-brand" disabled={focus.loading} onClick={() => void focus.start(best.taskId, best.title, best.focusMinutes, true)}>Start focus</button>
+              <button type="button" className="harbor-btn" onClick={() => ask('Why?', next!.contextActionId)}>Why this?</button>
+              <button type="button" className="harbor-btn" onClick={() => void dismissNext()}>Dismiss</button>
+            </div>
+            {focus.error && <p role="alert">{focus.error}</p>}
+          </article>
+        ) : (
+          <div className="snapshot-recommendation">
+            <button type="button" className="snapshot-link" onClick={() => ask('What should I do next?')}>What should I do next?<Sparkles size={16} aria-hidden="true" /></button>
+            {next && !next.enabled && <p><Link href="/settings">Enable quiet next-action suggestions in Settings</Link></p>}
+          </div>
+        )}
+        {issues.length > 0 && <div className="snapshot-issues" aria-label="Things needing attention">{issues.map((item) => <article key={item.id} className="snapshot-issue"><span className="snapshot-issue-label"><AlertCircle size={14} aria-hidden="true" />{item.label}</span><h3>{item.title}</h3><div>{compactLines(item.explanation).map((line, index) => <p key={`${item.id}-explanation-${index}`}>{line}</p>)}</div>{review(item.kind, item.taskId)}</article>)}{data.attention.length > 2 && <button type="button" className="snapshot-show-more" onClick={() => setShowAll((value) => !value)} aria-expanded={showAll}>{showAll ? 'Show fewer' : `View all ${data.attention.length} attention items`}<ChevronDown size={15} aria-hidden="true" /></button>}</div>}
+        {!best && <article className="snapshot-recommendation"><span className="snapshot-eyebrow"><Sparkles size={16} aria-hidden="true" />Plan ahead</span><h3>{recommendation.title}</h3>{compactLines(recommendation.explanation).map((line, index) => <p key={`snapshot-recommendation-${index}`}>{line}</p>)}{recommendation.additionalAdvice && compactLines(recommendation.additionalAdvice).map((line, index) => <p key={`snapshot-additional-${index}`}>{line}</p>)}{review(recommendation.kind, recommendation.taskId)}</article>}
       </div>
     </div>
 
