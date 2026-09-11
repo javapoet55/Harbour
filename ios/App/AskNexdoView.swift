@@ -88,6 +88,7 @@ struct NexdoAISuggestionCard: View {
 
 struct AskNexdoView: View {
     @EnvironmentObject private var model: AppModel
+    @Environment(\.dismiss) private var dismiss
     @Environment(\.dynamicTypeSize) private var typeSize
     @State private var prompt = ""
     @State private var submitting = false
@@ -188,6 +189,7 @@ struct AskNexdoView: View {
                     failedQuery = nil
                     pendingQuery = nil
                     model.turn = nil
+                    dismiss()
                 } label: {
                     Image(systemName: "xmark")
                         .font(.title2.weight(.semibold))
@@ -199,7 +201,7 @@ struct AskNexdoView: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Close Ask Nexdo")
-                .accessibilityHint("Returns to Ask Nexdo suggestions")
+                .accessibilityHint("Closes Ask Nexdo")
             }.padding(.horizontal, 20).padding(.top, 22)
 
             ScrollView {
