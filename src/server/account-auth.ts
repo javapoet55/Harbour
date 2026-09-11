@@ -36,6 +36,16 @@ export async function registerAccount(input: { name: string; email: string; pass
   }
 }
 
+export async function verifyEmail(emailValue: string, code: string) {
+  const email = normalizeEmail(emailValue);
+  if (!/^\d{6}$/.test(code)) throw new Error('INVALID_VERIFICATION_CODE');
+  const user = await prisma.user.findFirst({ where: { email, deletedAt: null } });
+  if (!user) throw new Error('INVALID_VERIFICATION_CODE');
+  const token = await prisma.emailVerificationToken.findFirst({ where: { userId: user.id, usedAt: null, expiresAt: { gt: new Date() } }, orderBy: { createdAt: 'desc' } });
+  if (!token || !await bcrypt.compare(code, token.codeHash)) throw new Error('INVALID_VERIFICATION_CODE');
+  await prisma.$transaction([prisma.emailVerificationToken.update({ where: { id: token.id }, data: { usedAt: new Date() } }), prisma.user.update({ where: { id: user.id }, data: { emailVerifiedAt: new Date() } })]);
+}
+
 export async function createPasswordReset(emailValue: string) {
   const email = normalizeEmail(emailValue);
   const user = await prisma.user.findFirst({ where: { email, deletedAt: null } });

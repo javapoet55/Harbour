@@ -18,6 +18,7 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
   deletedAt    DateTime?
+  emailVerifiedAt DateTime?
 
   preference         UserPreference?
   lists              TaskList[]
@@ -36,6 +37,19 @@ model User {
   workSessions       TaskWorkSession[]
   authIdentities     AuthIdentity[]
   passwordResetTokens PasswordResetToken[]
+  emailVerificationTokens EmailVerificationToken[]
+}
+
+model EmailVerificationToken {
+  id String @id @default(cuid())
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  codeHash String
+  expiresAt DateTime
+  usedAt DateTime?
+  createdAt DateTime @default(now())
+  @@index([userId, createdAt])
+  @@index([expiresAt])
 }
 
 model AuthIdentity {

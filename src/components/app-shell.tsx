@@ -12,6 +12,7 @@ import { VoiceDock } from './voice-dock';
 import { cn } from '@/lib/utils';
 import { FocusSessionProvider, FocusSessionBanner } from './focus-session';
 import { OfflineBanner } from './offline-banner';
+import { InstallPrompt } from './install-prompt';
 
 const DESKTOP = [
   { href: '/', label: 'My Day', icon: Sun },
@@ -54,7 +55,7 @@ export function AppShell({
   }
 
   return (
-    <FocusSessionProvider userId={userId}><OfflineBanner /><div className="harbor-shell">
+    <FocusSessionProvider userId={userId}><OfflineBanner /><InstallPrompt /><div className="harbor-shell">
       <aside className="harbor-side border-r border-[var(--line)] bg-[var(--bg-elev)] p-5">
         <Link href="/" aria-label="Nexdo home"><NexdoLogo priority /></Link>
         <p className="mt-2 text-lg font-semibold">{userName}</p>

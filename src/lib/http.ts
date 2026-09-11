@@ -10,6 +10,7 @@ export function jsonError(err: unknown) {
   if (err instanceof Error && err.message === 'PASSWORD_POLICY') return NextResponse.json({ error: 'Use a password with at least 12 characters (72 bytes maximum).' }, { status: 400 });
   if (err instanceof Error && err.message === 'ACCOUNT_EXISTS') return NextResponse.json({ error: 'An account with this email already exists. Sign in or reset your password.' }, { status: 409 });
   if (err instanceof Error && err.message === 'INVALID_RESET_CODE') return NextResponse.json({ error: 'That verification code is invalid, expired, or already used.' }, { status: 400 });
+  if (err instanceof Error && err.message === 'INVALID_VERIFICATION_CODE') return NextResponse.json({ error: 'That email verification code is invalid or expired.' }, { status: 400 });
   if (err instanceof Error && err.message === 'EMAIL_UNAVAILABLE') return NextResponse.json({ error: 'Password reset email is temporarily unavailable. Please try again later.' }, { status: 503 });
   if (err instanceof Error && err.message === 'APPLE_AUTH_CONFIGURATION_REQUIRED') return NextResponse.json({ error: 'Sign in with Apple is not configured on the server yet.' }, { status: 503 });
   if (err instanceof Error && ['INVALID_APPLE_CREDENTIAL', 'APPLE_EMAIL_REQUIRED'].includes(err.message)) return NextResponse.json({ error: 'Apple could not verify this sign-in. Please try again and allow email access.' }, { status: 401 });

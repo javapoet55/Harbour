@@ -34,7 +34,8 @@ export default function SignupPage() {
         setError(typeof body.error === 'string' ? body.error : 'We could not create your account. Please try again.');
         return;
       }
-      router.push('/onboarding');
+      const body = await response.json().catch(() => ({}));
+      router.push(`/verify-email?email=${encodeURIComponent(email)}${body.developmentCode ? `&code=${body.developmentCode}` : ''}`);
       router.refresh();
     } finally {
       setIsSubmitting(false);
