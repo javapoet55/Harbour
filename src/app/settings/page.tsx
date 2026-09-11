@@ -3,14 +3,15 @@
 import { useEffect, useState } from 'react';
 import { Authed } from '@/components/authed';
 import type { PreferenceForm } from '@/lib/types';
+import { readCachedProfile, writeCachedProfile } from '@/lib/profile-cache';
 
 type Connection = { id: string; provider: string; accountEmail: string; calendarName: string; visible: boolean; writeEnabled: boolean; status: string; lastSyncedAt: string | null };
 
 export default function SettingsPage() {
   const [pref, setPref] = useState<PreferenceForm | null>(null);
-  const [name, setName] = useState('');
+  const [name, setName] = useState(() => readCachedProfile().name ?? '');
   const [nextAction, setNextAction] = useState({ enabled: false, switchingThreshold: 10 });
-  const [timeZone, setTimeZone] = useState('');
+  const [timeZone, setTimeZone] = useState(() => readCachedProfile().timeZone ?? '');
   const [saved, setSaved] = useState(() => {
     if (typeof window === 'undefined') return '';
     const query = new URLSearchParams(window.location.search);
@@ -29,7 +30,7 @@ export default function SettingsPage() {
 
   useEffect(() => {
     let cancelled = false;
-    fetch('/api/me')
+    fetch('/api/me', { cache: 'no-store' })
       .then((r) => r.json())
       .then((data) => {
         if (cancelled) return;
@@ -53,6 +54,8 @@ export default function SettingsPage() {
       body: JSON.stringify({ name, timeZone, preference: pref, nextAction }),
     });
     if (!response.ok) { setSaved('Could not save settings. Please check your values and retry.'); return; }
+    writeCachedProfile({ name, timeZone });
+    window.dispatchEvent(new CustomEvent('harbor:profile-updated', { detail: { name, timeZone } }));
     window.dispatchEvent(new Event('harbor:tasks-updated'));
     setSaved('Saved. Relative dates now use this time zone.');
   }

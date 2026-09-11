@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { AlertCircle, ArrowRight, CalendarDays, CheckSquare, ChevronRight, ListFilter, X } from 'lucide-react';
 import type { AgendaPayload, AgendaTask } from '@/lib/types';
+import { firstName, readCachedProfile, writeCachedProfile } from '@/lib/profile-cache';
 
 type Props = {
   data: AgendaPayload; tasks: AgendaTask[]; completed: AgendaTask[];
@@ -17,7 +18,7 @@ export function MobileDay({ data, tasks, completed, weather, snapshot, criticalF
   const [days, setDays] = useState(1);
   const router = useRouter();
   const [now, setNow] = useState(() => Date.now());
-  const [name, setName] = useState('');
+  const [name, setName] = useState(() => firstName(readCachedProfile().name));
   const [showAdd, setShowAdd] = useState(false);
   const [newTitle, setNewTitle] = useState('');
   const [saving, setSaving] = useState(false);
@@ -39,10 +40,41 @@ export function MobileDay({ data, tasks, completed, weather, snapshot, criticalF
   useEffect(() => {
     let cancelled = false;
     const clock = window.setInterval(() => setNow(Date.now()), 60_000);
-    void fetch('/api/me').then((r) => r.json()).then((value) => { if (!cancelled) setName(value.user?.name?.split(' ')[0] ?? ''); }).catch(() => {});
+    const cached = readCachedProfile();
+    const refreshName = () => {
+      void fetch('/api/me', { cache: 'no-store' }).then((r) => r.json()).then((value) => { if (!cancelled) setName(value.user?.name?.split(' ')[0] ?? ''); }).catch(() => {});
+    };
+    const onProfileUpdated = (event: Event) => {
+      const detail = (event as CustomEvent<{ name?: string; timeZone?: string }>).detail;
+      if (detail?.name) {
+        setName(firstName(detail.name));
+        writeCachedProfile({ ...cached, name: detail.name });
+        return;
+      }
+      const latest = readCachedProfile();
+      if (latest.name) {
+        setName(firstName(latest.name));
+        return;
+      }
+      refreshName();
+    };
+    const onStorage = (event: StorageEvent) => {
+      if (event.key !== 'harbor:profile-cache:v1') return;
+      const next = event.newValue ? readCachedProfile() : {};
+      if (next.name) setName(firstName(next.name));
+    };
+    refreshName();
+    window.addEventListener('harbor:profile-updated', onProfileUpdated);
+    window.addEventListener('storage', onStorage);
     const open = () => setShowAdd(true);
     window.addEventListener('harbor:quick-add', open);
-    return () => { cancelled = true; window.clearInterval(clock); window.removeEventListener('harbor:quick-add', open); };
+    return () => {
+      cancelled = true;
+      window.clearInterval(clock);
+      window.removeEventListener('harbor:profile-updated', onProfileUpdated);
+      window.removeEventListener('storage', onStorage);
+      window.removeEventListener('harbor:quick-add', open);
+    };
   }, []);
   useEffect(() => {
     if (showAdd) dialogRef.current?.showModal();
