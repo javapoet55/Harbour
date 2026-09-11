@@ -41,9 +41,11 @@ export default function LoginPage() {
           Password
           <input className="harbor-input mt-1" type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" />
         </label>
+        <div className="text-right"><Link className="text-sm font-medium text-[var(--brand)] hover:underline" href="/reset-password">Forgot password?</Link></div>
         {error && <p className="text-sm text-[var(--danger)]">{error}</p>}
         <button className="harbor-btn harbor-btn-brand w-full" type="submit">Sign in</button>
       </form>
+      <p className="mt-4 text-center text-sm text-[var(--muted)]">New to Nexdo? <Link className="font-semibold text-[var(--brand)] hover:underline" href="/signup">Create an account</Link></p>
     </main>
   );
 }

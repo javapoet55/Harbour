@@ -435,27 +435,83 @@ private struct SignUpView: View {
 
     var body: some View {
         NavigationStack {
-            Form {
-                Section {
-                    TextField("Full name", text: $name).textContentType(.name)
-                    TextField("Email address", text: $email)
-                        .textContentType(.username).keyboardType(.emailAddress).textInputAutocapitalization(.never).autocorrectionDisabled()
-                    SecureField("Password", text: $password).textContentType(.newPassword)
-                    SecureField("Confirm password", text: $confirmation).textContentType(.newPassword)
-                } header: { Text("Your account") } footer: {
-                    Text("Use at least 12 characters. Your password is sent securely to Nexdo and stored only as a one-way hash.")
-                }
-                if let localError { Section { Text(localError).foregroundStyle(.red) } }
-                Section {
-                    Button(model.busy ? "Creating Account…" : "Create Account") { create() }
-                        .disabled(model.busy || name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !email.contains("@") || password.count < 12)
+            ZStack {
+                Color(uiColor: .systemBackground).ignoresSafeArea()
+                SignInBackdrop()
+
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text("Create your account")
+                            .font(.system(size: 34, weight: .bold, design: .rounded))
+                            .foregroundStyle(Color.nexdoInk)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        Text("Make your day easier with an AI-powered to-do app that turns a busy mind into a clear plan.")
+                            .font(.body)
+                            .foregroundStyle(Color.nexdoSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .padding(.top, 8)
+
+                        VStack(spacing: 0) {
+                            HStack(spacing: 14) {
+                                SignInFieldIcon(systemName: "person")
+                                TextField("Full name", text: $name).textContentType(.name).accessibilityLabel("Full name")
+                            }.padding(.horizontal, 18).frame(minHeight: 68)
+                            Divider().padding(.leading, 78)
+                            HStack(spacing: 14) {
+                                SignInFieldIcon(systemName: "envelope")
+                                TextField("Email address", text: $email)
+                                    .textContentType(.username).keyboardType(.emailAddress).textInputAutocapitalization(.never).autocorrectionDisabled().accessibilityLabel("Email address")
+                            }.padding(.horizontal, 18).frame(minHeight: 68)
+                            Divider().padding(.leading, 78)
+                            HStack(spacing: 14) {
+                                SignInFieldIcon(systemName: "lock")
+                                SecureField("Password", text: $password).textContentType(.newPassword).accessibilityLabel("Password")
+                            }.padding(.horizontal, 18).frame(minHeight: 68)
+                            Divider().padding(.leading, 78)
+                            HStack(spacing: 14) {
+                                SignInFieldIcon(systemName: "checkmark.shield")
+                                SecureField("Confirm password", text: $confirmation).textContentType(.newPassword).accessibilityLabel("Confirm password")
+                            }.padding(.horizontal, 18).frame(minHeight: 68)
+                        }
+                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 26, style: .continuous))
+                        .overlay(RoundedRectangle(cornerRadius: 26, style: .continuous).stroke(Color.white.opacity(0.8)))
+                        .shadow(color: Color.purple.opacity(0.09), radius: 25, y: 12)
+                        .padding(.top, 28)
+
+                        Text("Use at least 12 characters. Your password is sent securely to Nexdo and stored only as a one-way hash.")
+                            .font(.footnote)
+                            .foregroundStyle(Color.nexdoSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .padding(.top, 12)
+                        if let localError {
+                            Text(localError).font(.footnote).foregroundStyle(.red).padding(.top, 8)
+                        }
+                        Button { create() } label: {
+                            Text(model.busy ? "Creating Account…" : "Create Account")
+                                .font(.title3.bold()).foregroundStyle(.white)
+                                .frame(maxWidth: .infinity, minHeight: 60)
+                                .background(LinearGradient(colors: [.nexdoMagenta, .nexdoIndigo, .nexdoBlue], startPoint: .leading, endPoint: .trailing), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(!canCreate)
+                        .opacity(canCreate ? 1 : 0.55)
+                        .padding(.top, 20)
+                        Text("Nexdo captures tasks in your own words, finds the right next step, and helps you protect time for what matters.")
+                            .font(.footnote).foregroundStyle(Color.nexdoSecondary).multilineTextAlignment(.leading).padding(.top, 18)
+                    }
+                    .padding(.horizontal, 28).padding(.vertical, 28).frame(maxWidth: 560)
+                    .frame(maxWidth: .infinity)
                 }
             }
             .navigationTitle("Create your account")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { closeSignUp() } } }
         }
+        .onChange(of: model.profile?.id) { _, id in if id != nil { dismiss() } }
         .presentationDetents([.large])
+    }
+    private var canCreate: Bool {
+        !model.busy && !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && email.contains("@") && password.count >= 12 && confirmation.count >= 12
     }
     private func closeSignUp() {
         dismiss()

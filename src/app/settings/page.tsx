@@ -163,6 +163,7 @@ export default function SettingsPage() {
             ))}
           </div>
           <p className="mt-3 text-xs text-[var(--muted)]">Export and account deletion are available from support in production. This demo account can be reset with <code>yarn db:reset</code>.</p>
+          <a className="harbor-btn mt-3 inline-flex" href="/api/export" download="nexdo-export.json">Export my Nexdo data</a>
         </section>
       </div>
       <button type="button" className="harbor-btn harbor-btn-brand mt-4" onClick={() => void save()}>Save settings</button>

@@ -6,11 +6,12 @@ import { NexdoLogo } from './nexdo-logo';
 import { useRef } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import {
-  BarChart3, Bell, CalendarDays, CircleCheck, Inbox, MoreHorizontal, Sparkles, Sun, Timer, Plus, X,
+  BarChart3, Bell, CalendarDays, CircleCheck, CreditCard, Download, Inbox, MoreHorizontal, Sparkles, Sun, Timer, Plus, X,
 } from 'lucide-react';
 import { VoiceDock } from './voice-dock';
 import { cn } from '@/lib/utils';
 import { FocusSessionProvider, FocusSessionBanner } from './focus-session';
+import { OfflineBanner } from './offline-banner';
 
 const DESKTOP = [
   { href: '/', label: 'My Day', icon: Sun },
@@ -21,6 +22,8 @@ const DESKTOP = [
   { href: '/planner', label: 'AI Planner', icon: Sparkles },
   { href: '/insights', label: 'Insights', icon: BarChart3 },
   { href: '/notifications', label: 'Notifications', icon: Bell },
+  { href: '/billing', label: 'Plans and billing', icon: CreditCard },
+  { href: '/import-export', label: 'Import and export', icon: Download },
   { href: '/settings', label: 'Settings', icon: MoreHorizontal },
 ];
 
@@ -51,7 +54,7 @@ export function AppShell({
   }
 
   return (
-    <FocusSessionProvider userId={userId}><div className="harbor-shell">
+    <FocusSessionProvider userId={userId}><OfflineBanner /><div className="harbor-shell">
       <aside className="harbor-side border-r border-[var(--line)] bg-[var(--bg-elev)] p-5">
         <Link href="/" aria-label="Nexdo home"><NexdoLogo priority /></Link>
         <p className="mt-2 text-lg font-semibold">{userName}</p>
