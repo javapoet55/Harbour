@@ -61,7 +61,7 @@ Defaults are centralized in `VoiceTimeoutConfiguration`: 45 seconds before an in
 
 - Existing authenticated `POST /api/realtime/task-session`: `{ "consent": true }` → `{ "value": "temporary credential", "expiresAt": 123, "model": "…" }`. Client credential lifetime is 60 seconds for connection establishment; it is not the conversation inactivity timeout.
 - New authenticated `POST /api/realtime/tool`: `{ "consent": true, "sessionId": "UUID", "callId": "…", "name": "create_task", "arguments": {…} }` → `{ "success": true, "task": {…} }` or a grounded error/uncertainty result. Local/session tools do not call this endpoint.
-- `OPENAI_API_KEY` remains server-only. `OPENAI_TASK_REALTIME_MODEL` defaults to `gpt-realtime-mini`; `OPENAI_REALTIME_MODEL` provides the higher-capability router entry, default `gpt-realtime-2.1`. The existing Ask AI feature was not migrated by this change.
+- `OPENAI_API_KEY` remains server-only. Both conversational task router entries use `gpt-realtime-2.1`, pinned centrally in `AIModelConfiguration`. Legacy `OPENAI_TASK_REALTIME_MODEL` and `OPENAI_REALTIME_MODEL` environment overrides are ignored so existing deployments cannot silently select Mini. The existing Ask AI feature was not migrated by this change.
 - Both endpoints return `private, no-store`. No database migration is required; task idempotency already exists.
 
 ## Security, privacy and telemetry
@@ -81,7 +81,6 @@ The native dependency could not be downloaded under this task's network policy. 
 - https://developers.openai.com/api/docs/guides/voice-webrtc
 - https://developers.openai.com/api/docs/guides/realtime-conversations
 - https://developers.openai.com/api/docs/guides/realtime-vad
-- https://developers.openai.com/api/docs/models/gpt-realtime-mini
 - https://developers.openai.com/api/docs/models/gpt-realtime-2.1
 - https://github.com/stasel/WebRTC
 

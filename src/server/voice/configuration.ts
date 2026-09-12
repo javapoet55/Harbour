@@ -1,8 +1,11 @@
 export type AIWorkload = 'quickVoiceTask' | 'realtimeConversation';
+// One model for every conversational task workload. Legacy environment
+// overrides must not silently route a deployed session back to Mini.
+const conversationalTaskModel = 'gpt-realtime-2.1';
 export const AIModelConfiguration = {
-  quickVoiceTask: process.env.OPENAI_TASK_REALTIME_MODEL || 'gpt-realtime-mini',
-  realtimeConversation: process.env.OPENAI_REALTIME_MODEL || 'gpt-realtime-2.1',
-};
+  quickVoiceTask: conversationalTaskModel,
+  realtimeConversation: conversationalTaskModel,
+} as const;
 export const VoiceModelRouter = (workload: AIWorkload) => AIModelConfiguration[workload];
 const str = (description: string) => ({ type: 'string', description, maxLength: 200 });
 const time = { type: 'string', description: 'ISO8601 timestamp with explicit UTC offset, resolved in the user timezone.' };

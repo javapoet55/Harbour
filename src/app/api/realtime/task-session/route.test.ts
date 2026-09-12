@@ -24,9 +24,10 @@ it('issues an expiring task-scoped session using the account timezone', async ()
   upstream.mockResolvedValue(Response.json({ value: 'ephemeral', expires_at: 123 }));
   const response = await POST(request());
   expect(response.headers.get('Cache-Control')).toBe('private, no-store');
-  expect(await response.json()).toEqual({ value: 'ephemeral', expiresAt: 123, model: 'gpt-realtime-mini' });
+  expect(await response.json()).toEqual({ value: 'ephemeral', expiresAt: 123, model: 'gpt-realtime-2.1' });
   const payload = JSON.parse(upstream.mock.calls[0][1].body);
   expect(payload.expires_after.seconds).toBe(60);
+  expect(payload.session.model).toBe('gpt-realtime-2.1');
   expect(payload.session.instructions).toContain('America/Los_Angeles');
   expect(payload.session.tools.map((tool: { name: string }) => tool.name)).toEqual(expect.arrayContaining(['create_task', 'update_task', 'delete_task', 'complete_task', 'find_tasks', 'get_schedule', 'find_free_time', 'prepare_call', 'prepare_email', 'end_session']));
   expect(payload.session.output_modalities).toEqual(['audio']);
@@ -36,4 +37,13 @@ it('does not leak upstream errors or secrets', async () => {
   upstream.mockResolvedValue(new Response('server-key private diagnostic', { status: 500 }));
   const response = await POST(request());
   expect(response.status).toBe(502); expect(await response.text()).not.toContain('server-key');
+});
+
+it('keeps conversational task sessions on Realtime 2.1 despite legacy model overrides', async () => {
+  vi.stubEnv('OPENAI_TASK_REALTIME_MODEL', 'gpt-realtime-mini');
+  vi.stubEnv('OPENAI_REALTIME_MODEL', 'gpt-realtime');
+  vi.resetModules();
+  const { voiceSessionConfiguration, VoiceModelRouter } = await import('@/server/voice/configuration');
+  expect(voiceSessionConfiguration('America/Los_Angeles').model).toBe('gpt-realtime-2.1');
+  expect(VoiceModelRouter('realtimeConversation')).toBe('gpt-realtime-2.1');
 });
