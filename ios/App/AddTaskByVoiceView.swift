@@ -90,7 +90,7 @@ struct AddTaskByVoiceView: View {
         .onChange(of: voice.phase) { _, phase in
             if phase == .listening, !voice.muted, let url = Bundle.main.url(forResource: "ListeningReady", withExtension: "wav") {
                 readyBell = try? AVAudioPlayer(contentsOf: url)
-                readyBell?.volume = 0.65; readyBell?.play()
+                readyBell?.volume = 1.0; readyBell?.play()
             } else { readyBell?.stop() }
         }
         .onDisappear { readyBell?.stop(); voice.close(); executor.clear(); endBackgroundTask() }

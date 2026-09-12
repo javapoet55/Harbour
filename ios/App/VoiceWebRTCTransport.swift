@@ -108,7 +108,12 @@ extension VoiceWebRTCTransport: RTCDataChannelDelegate {
 extension VoiceWebRTCTransport: RTCPeerConnectionDelegate {
     nonisolated func peerConnection(_ peerConnection: RTCPeerConnection, didChange stateChanged: RTCSignalingState) {}
     nonisolated func peerConnection(_ peerConnection: RTCPeerConnection, didAdd stream: RTCMediaStream) {
-        Task { @MainActor [weak self] in self?.remoteAudio = stream.audioTracks.first; self?.remoteAudio?.isEnabled = !(self?.outputMuted ?? true) }
+        Task { @MainActor [weak self] in
+            self?.remoteAudio = stream.audioTracks.first
+            // WebRTC supports gain 0...10; 3 is a +200% increase from unity.
+            self?.remoteAudio?.source.volume = 3.0
+            self?.remoteAudio?.isEnabled = !(self?.outputMuted ?? true)
+        }
     }
     nonisolated func peerConnection(_ peerConnection: RTCPeerConnection, didRemove stream: RTCMediaStream) {}
     nonisolated func peerConnectionShouldNegotiate(_ peerConnection: RTCPeerConnection) {}
