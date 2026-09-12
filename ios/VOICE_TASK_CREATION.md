@@ -94,3 +94,7 @@ The native dependency could not be downloaded under this task's network policy. 
 - Xcode project file parses successfully; the patch passes `git apply --check` against the original Harbour checkout.
 - The broader Swift suite has one existing failure: `overdueListUsesDeadlinesAndExcludesFinishedWork`. It fails identically in the unchanged baseline; this unrelated behavior was not modified.
 - No live OpenAI session, real microphone, external calendar write, email or phone call was performed by tests.
+
+## Follow-up build validation
+
+During the task-category icon update on September 12, the pinned WebRTC package was successfully resolved. Two audio-session calls were updated to use typed AVAudioSession category/mode values. The complete native iOS simulator build then passed for arm64 and x86_64. This supersedes the earlier dependency-download and simulator-build limitation above; live physical-device voice testing is still outstanding.

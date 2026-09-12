@@ -27,8 +27,8 @@ final class VoiceWebRTCTransport: NSObject, VoiceRealtimeTransport {
                 do {
                     let audio = RTCAudioSession.sharedInstance()
                     audio.lockForConfiguration(); defer { audio.unlockForConfiguration() }
-                    try audio.setCategory(AVAudioSession.Category.playAndRecord.rawValue, with: [.defaultToSpeaker, .allowBluetooth])
-                    try audio.setMode(AVAudioSession.Mode.voiceChat.rawValue)
+                    try audio.setCategory(.playAndRecord, with: [.defaultToSpeaker, .allowBluetooth])
+                    try audio.setMode(.voiceChat)
                     try audio.setActive(true)
                     continuation.resume()
                 } catch { continuation.resume(throwing: error) }
