@@ -367,6 +367,7 @@ final class AppModel: ObservableObject {
         var updated = incoming
         if let old = tasks.first(where: { $0.id == incoming.id }) {
             // Mutation responses omit relations; keep them until canonical retrieval.
+            if updated.category == nil { updated.category = old.category }
             if updated.subtasks == nil { updated.subtasks = old.subtasks }
             if updated.recurrence == nil { updated.recurrence = old.recurrence }
         }

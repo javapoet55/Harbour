@@ -1507,15 +1507,17 @@ struct TasksView: View {
                 .accessibilityLabel("\(task.isDone ? "Restore" : "Complete") \(task.title)")
             Button { editing = task } label: {
                 HStack(spacing: 8) {
+                    let category = TaskCategoryAppearance.resolve(title: task.title, categoryName: task.category?.name)
                     VStack(alignment: .leading, spacing: 5) {
                         Text(task.title).font(.body).foregroundStyle(Color.nexdoInk).strikethrough(task.isDone)
                         Label(taskSubtitle(task), systemImage: "clock").font(.caption).foregroundStyle(Color.nexdoSecondary)
+                        if let project = model.projects.first(where: { $0.id == task.projectId }) {
+                            Label(project.name, systemImage: "folder.fill").font(.caption).foregroundStyle(Color.nexdoSecondary)
+                        }
+                        if typeSize.isAccessibilitySize { TaskCategoryBadge(appearance: category) }
                     }.frame(maxWidth: .infinity, alignment: .leading)
-                    if let project = model.projects.first(where: { $0.id == task.projectId }) {
-                        Label(project.name, systemImage: "folder.fill")
-                            .font(.caption).lineLimit(1).padding(.horizontal, 10).padding(.vertical, 9)
-                            .foregroundStyle(Color.nexdoIndigo).background(Color.nexdoIndigo.opacity(0.07), in: Capsule())
-                            .frame(maxWidth: 100)
+                    if !typeSize.isAccessibilitySize {
+                        TaskCategoryBadge(appearance: category).frame(maxWidth: 120)
                     }
                     Image(systemName: "chevron.right").font(.subheadline).foregroundStyle(Color.nexdoSecondary)
                 }.frame(minHeight: 44).contentShape(Rectangle())
