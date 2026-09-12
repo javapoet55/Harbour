@@ -1,11 +1,13 @@
 import { PrismaClient } from '../src/generated/prisma';
 import bcrypt from 'bcryptjs';
 import { addDays, tzToday, ymd, zonedDateTime } from '../src/lib/time';
+import { assertLocalSqlite } from './local-sqlite';
 
 const prisma = new PrismaClient();
 const TZ = 'America/Los_Angeles';
 
 async function main() {
+  assertLocalSqlite();
   if (process.env.NODE_ENV === 'production') throw new Error('Demo seeding is disabled in production.');
   const email = (process.env.HARBOR_DEMO_EMAIL || 'alex@harbor.app').toLowerCase();
   const password = process.env.HARBOR_DEMO_PASSWORD || 'harbor-demo';

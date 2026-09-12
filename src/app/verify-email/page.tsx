@@ -1,6 +1,64 @@
 'use client';
-import { FormEvent, useState } from 'react';
+
+import { FormEvent, Suspense, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { NexdoLogo } from '@/components/nexdo-logo';
-export default function VerifyEmailPage() { const router = useRouter(); const params = useSearchParams(); const [email, setEmail] = useState(params.get('email') || ''); const [code, setCode] = useState(''); const [error, setError] = useState(''); const [busy, setBusy] = useState(false); async function submit(e: FormEvent) { e.preventDefault(); setBusy(true); setError(''); try { const r = await fetch('/api/auth/verify-email', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, code }) }); if (!r.ok) { const d = await r.json().catch(() => ({})); setError(d.error || 'Verification failed.'); return; } router.push('/login?verified=1'); } finally { setBusy(false); } } return <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center px-5"><Link href="/welcome" className="nexdo-login-brand"><NexdoLogo priority /></Link><h1 className="mt-2 text-3xl font-semibold">Verify your email</h1><p className="mt-2 text-[var(--muted)]">Enter the six-digit code sent to your inbox.</p><form onSubmit={submit} className="harbor-card mt-6 space-y-3 p-5"><label className="block text-sm font-medium">Email address<input className="harbor-input mt-1" type="email" required value={email} onChange={e => setEmail(e.target.value)} /></label><label className="block text-sm font-medium">Verification code<input className="harbor-input mt-1" inputMode="numeric" pattern="[0-9]{6}" required value={code} onChange={e => setCode(e.target.value)} /></label>{error && <p className="text-sm text-[var(--danger)]" role="alert">{error}</p>}<button className="harbor-btn harbor-btn-brand w-full" disabled={busy}>{busy ? 'Verifying…' : 'Verify email'}</button></form></main>; }
+
+function VerifyEmailForm() {
+  const router = useRouter();
+  const params = useSearchParams();
+  const [email, setEmail] = useState(params.get('email') || '');
+  const [code, setCode] = useState('');
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    setBusy(true);
+    setError('');
+    try {
+      const response = await fetch('/api/auth/verify-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, code }),
+      });
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        setError(body.error || 'Verification failed.');
+        return;
+      }
+      router.push('/login?verified=1');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center px-5">
+      <Link href="/welcome" className="nexdo-login-brand"><NexdoLogo priority /></Link>
+      <h1 className="mt-2 text-3xl font-semibold">Verify your email</h1>
+      <p className="mt-2 text-[var(--muted)]">Enter the six-digit code sent to your inbox.</p>
+      <form onSubmit={submit} className="harbor-card mt-6 space-y-3 p-5">
+        <label className="block text-sm font-medium">
+          Email address
+          <input className="harbor-input mt-1" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
+        </label>
+        <label className="block text-sm font-medium">
+          Verification code
+          <input className="harbor-input mt-1" inputMode="numeric" pattern="[0-9]{6}" required value={code} onChange={(e) => setCode(e.target.value)} />
+        </label>
+        {error && <p className="text-sm text-[var(--danger)]" role="alert">{error}</p>}
+        <button className="harbor-btn harbor-btn-brand w-full" disabled={busy}>{busy ? 'Verifying…' : 'Verify email'}</button>
+      </form>
+    </main>
+  );
+}
+
+export default function VerifyEmailPage() {
+  return (
+    <Suspense fallback={<main className="mx-auto flex min-h-screen max-w-md flex-col justify-center px-5"><p>Loading…</p></main>}>
+      <VerifyEmailForm />
+    </Suspense>
+  );
+}

@@ -45,5 +45,8 @@ yarn-error.log*
 # vercel
 .vercel
 
+# Railway CLI project link
+.railway
+
 # typescript
 *.tsbuildinfo
