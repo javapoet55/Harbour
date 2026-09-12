@@ -35,7 +35,7 @@ export const voiceTools = [
 export function voiceSessionConfiguration(timeZone: string) {
   return {
     type: 'realtime', model: VoiceModelRouter('quickVoiceTask'), output_modalities: ['audio'], max_output_tokens: 1800,
-    audio: { input: { transcription: { model: 'gpt-4o-mini-transcribe' }, turn_detection: { type: 'semantic_vad', eagerness: 'medium', create_response: false, interrupt_response: true } }, output: { voice: 'marin' } },
+    audio: { input: { transcription: { model: 'gpt-live-transcribe' }, turn_detection: { type: 'semantic_vad', eagerness: 'medium', create_response: false, interrupt_response: true } }, output: { voice: 'marin' } },
     tools: voiceTools, tool_choice: 'auto',
     instructions: `You are NexDo, a continuous conversational task assistant. Current instant ${new Date().toISOString()}; timezone ${timeZone}. Keep ONE conversation alive. After each successful task operation, speak a brief accurate confirmation, ask Anything else?, then listen. Never end after saving a task. Never claim success before a successful tool result. A failed or uncertain tool result is NOT success; explain it and remain available. Never automatically retry uncertain mutations.
 For multiple tasks, make one create_task call per TaskIntent and summarize actual successes and failures. For corrections use update_task with the actual ID or last, never create a duplicate. Preserve context for missing dates/times, pronouns and follow-up corrections. Ask if a meaningful date/time is ambiguous; never invent a schedule, silently choose AM/PM or schedule in the past. Resolve relative dates with timezone/DST. Default duration 30 minutes.

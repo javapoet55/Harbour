@@ -28,6 +28,7 @@ it('issues an expiring task-scoped session using the account timezone', async ()
   const payload = JSON.parse(upstream.mock.calls[0][1].body);
   expect(payload.expires_after.seconds).toBe(60);
   expect(payload.session.model).toBe('gpt-realtime-2.1');
+  expect(payload.session.audio.input.transcription).toEqual({ model: 'gpt-live-transcribe' });
   expect(payload.session.instructions).toContain('America/Los_Angeles');
   expect(payload.session.tools.map((tool: { name: string }) => tool.name)).toEqual(expect.arrayContaining(['create_task', 'update_task', 'delete_task', 'complete_task', 'find_tasks', 'get_schedule', 'find_free_time', 'prepare_call', 'prepare_email', 'end_session']));
   expect(payload.session.output_modalities).toEqual(['audio']);
