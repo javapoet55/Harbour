@@ -18,7 +18,7 @@ struct RootView: View {
                 CalendarDesignPreview()
             } else if ProcessInfo.processInfo.arguments.contains("-today-design-preview") {
                 TodayDesignPreview()
-            } else if ProcessInfo.processInfo.arguments.contains("-task-design-preview") {
+            } else if ProcessInfo.processInfo.arguments.contains("-task-design-preview") || ProcessInfo.processInfo.arguments.contains("-voice-task-design-preview") {
                 TaskDesignPreview()
             } else if model.profile != nil {
                 authenticatedTabs
@@ -193,7 +193,9 @@ private struct TaskDesignPreview: View {
 
     var body: some View {
         Group {
-            if ProcessInfo.processInfo.arguments.contains("-task-editor-preview") {
+            if ProcessInfo.processInfo.arguments.contains("-voice-task-design-preview") {
+                AddTaskByVoiceView()
+            } else if ProcessInfo.processInfo.arguments.contains("-task-editor-preview") {
                 NavigationStack { TaskEditor(task: nil) }
             } else {
                 NexdoTabShell(selection: $selectedTab)
@@ -204,11 +206,18 @@ private struct TaskDesignPreview: View {
                 guard !loaded else { return }
                 loaded = true
                 model.profile = Profile(id: "preview", name: "Sri", email: "sri@example.com", timeZone: "America/Los_Angeles")
+                var calendar = Calendar(identifier: .gregorian)
+                calendar.timeZone = TimeZone(identifier: "America/Los_Angeles")!
+                let today = calendar.startOfDay(for: Date())
+                func scheduled(_ day: Int, _ hour: Int) -> String {
+                    let date = calendar.date(byAdding: .day, value: day, to: today)!
+                    return ISO8601DateFormatter().string(from: calendar.date(bySettingHour: hour, minute: 0, second: 0, of: date)!)
+                }
                 model.tasks = [
-                    NexdoTask(id: "proposal", title: "Finish the launch proposal", status: "PLANNED", priority: "CRITICAL", durationMin: 45, notes: "Share the final draft with the launch team.", startAt: "2026-09-06T17:45:00Z", dueAt: "2026-09-06T23:59:00Z"),
-                    NexdoTask(id: "notes", title: "Review product launch notes", status: "PLANNED", priority: "HIGH", durationMin: 30, notes: "Confirm open questions before the afternoon review.", startAt: nil, dueAt: "2026-09-07T19:00:00Z"),
+                    NexdoTask(id: "proposal", title: "Finish the launch proposal", status: "PLANNED", priority: "CRITICAL", durationMin: 45, notes: "Share the final draft with the launch team.", startAt: scheduled(0, 11), dueAt: scheduled(0, 23)),
+                    NexdoTask(id: "notes", title: "Review product launch notes", status: "PLANNED", priority: "HIGH", durationMin: 30, notes: "Confirm open questions before the afternoon review.", startAt: nil, dueAt: scheduled(0, 15)),
                     NexdoTask(id: "followup", title: "Send client follow-up", status: "PLANNED", priority: "MEDIUM", durationMin: 15, notes: "Include the revised timeline.", startAt: nil, dueAt: nil),
-                    NexdoTask(id: "briefing", title: "Prepare tomorrow’s executive briefing", status: "PLANNED", priority: "LOW", durationMin: 60, notes: "Summarize progress, risks, and decisions.", startAt: "2026-09-07T16:00:00Z", dueAt: nil),
+                    NexdoTask(id: "briefing", title: "Prepare tomorrow’s executive briefing", status: "PLANNED", priority: "LOW", durationMin: 60, notes: "Summarize progress, risks, and decisions.", startAt: scheduled(1, 14), dueAt: nil),
                     NexdoTask(id: "done", title: "Confirm design review", status: "COMPLETED", priority: "MEDIUM", durationMin: 15, notes: nil, startAt: nil, dueAt: nil)
                 ]
             }
@@ -1269,103 +1278,73 @@ private struct TaskRow: View {
 struct TasksView: View {
     @EnvironmentObject var model: AppModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.dynamicTypeSize) private var typeSize
     @State private var showingProjects = false
     @State private var adding = false
     @State private var account = false
     @State private var filters = false
-    @State private var selectionInfo = false
+    @State private var voice = false
+    @State private var searching = false
+    @FocusState private var searchFocused: Bool
     @State private var editing: NexdoTask?
-    private var visibleTasks: [NexdoTask] {
-        model.taskQuery.results(model.tasks, timeZone: model.profile?.timeZone ?? model.agenda?.timeZone ?? TimeZone.current.identifier)
+
+    private var zone: String { model.profile?.timeZone ?? model.agenda?.timeZone ?? TimeZone.current.identifier }
+    private var calendar: Calendar {
+        var value = Calendar(identifier: .gregorian)
+        value.timeZone = TimeZone(identifier: zone) ?? .current
+        value.firstWeekday = 2
+        return value
     }
+    private var visibleTasks: [NexdoTask] { model.taskQuery.results(model.tasks, timeZone: zone) }
+    private var groups: [(date: Date, tasks: [NexdoTask])] {
+        let grouped = Dictionary(grouping: visibleTasks) { task in
+            (task.startAt ?? task.dueAt).flatMap(ServerDate.parse).map { calendar.startOfDay(for: $0) } ?? .distantFuture
+        }
+        return grouped.keys.sorted { model.taskQuery.earliestFirst ? $0 < $1 : $0 > $1 }
+            .map { (date: $0, tasks: grouped[$0] ?? []) }
+    }
+    private let accent = LinearGradient(colors: [.nexdoIndigo, .nexdoBlue], startPoint: .leading, endPoint: .trailing)
 
     var body: some View {
         NavigationStack {
             ZStack {
                 TodayBackdrop(subtle: true)
-                VStack(alignment: .leading, spacing: 16) {
-                    TodayTopBar(name: model.profile?.name ?? "", temperature: model.weather.map { Int($0.current.temperature.rounded()) }, showsWeather: false, add: nil, account: { account = true })
+                VStack(alignment: .leading, spacing: 20) {
+                    TodayTopBar(name: model.profile?.name ?? "", temperature: nil, showsWeather: false, add: nil, account: { account = true })
                         .padding(.top, 8)
-                    HStack {
-                        Text("Tasks").font(.largeTitle.bold()).foregroundStyle(Color.nexdoInk).accessibilityHeading(.h1)
-                        Spacer()
-                        if !showingProjects {
-                            Button { filters = true } label: {
-                                Image(systemName: "slider.horizontal.3").font(.title3)
-                                    .frame(width: 48, height: 50)
-                                    .background(Color.nexdoIndigo.opacity(0.08), in: RoundedRectangle(cornerRadius: 16))
-                                    .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.nexdoIndigo.opacity(0.16)))
-                            }.accessibilityLabel("Task filters")
-                        }
-                    }
+                    header
                     Picker("Tasks or Projects", selection: $showingProjects) {
                         Text("Tasks").tag(false)
                         Text("Projects").tag(true)
-                    }.pickerStyle(.segmented).frame(height: 53)
-                    if showingProjects { ProjectsView() } else {
+                    }
+                    .pickerStyle(.segmented)
+                    .onChange(of: showingProjects) { _, _ in searchFocused = false }
 
-                    HStack(spacing: 10) {
-                        HStack(spacing: 10) {
-                            Image(systemName: "magnifyingglass").foregroundStyle(Color.nexdoSecondary).accessibilityHidden(true)
-                            TextField("Search your tasks", text: $model.taskQuery.search)
-                                .accessibilityLabel("Search tasks")
-                                .submitLabel(.search)
-                                .autocorrectionDisabled()
-                            if !model.taskQuery.search.isEmpty {
-                                Button { model.taskQuery.search = "" } label: { Image(systemName: "xmark.circle.fill") }
-                                    .accessibilityLabel("Clear search").frame(minWidth: 44, minHeight: 44)
+                    if showingProjects {
+                        ProjectsView()
+                    } else {
+                        ScrollView {
+                            VStack(alignment: .leading, spacing: 20) {
+                                if searching || !model.taskQuery.search.isEmpty { searchField }
+                                creationActions
+                                ViewThatFits(in: .horizontal) {
+                                    datePills
+                                    ScrollView(.horizontal) { datePills }.scrollIndicators(.hidden)
+                                }
+                                taskSections
                             }
+                            .padding(.bottom, 24)
                         }
-                        .padding(.horizontal, 14).frame(minHeight: 50)
-                        .background(.background.opacity(0.9), in: RoundedRectangle(cornerRadius: 16))
-                        .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.nexdoIndigo.opacity(0.16)))
-                        TodayHeaderButton(icon: "plus", label: "Add a task") { adding = true }
+                        .scrollIndicators(.hidden)
+                        .scrollDismissesKeyboard(.interactively)
+                        .refreshable { await model.refreshTasks() }
                     }
-                    ViewThatFits(in: .horizontal) {
-                        datePills
-                        ScrollView(.horizontal) { datePills }.scrollIndicators(.hidden)
-                    }
-                    HStack {
-                        Text("\(visibleTasks.count) \(visibleTasks.count == 1 ? "task" : "tasks")").foregroundStyle(Color.nexdoSecondary)
-                        Spacer()
-                        Button("Select tasks") { selectionInfo = true }.fontWeight(.semibold).frame(minHeight: 44)
-                    }.font(.caption)
-                    ScrollView {
-                        LazyVStack(spacing: 12) {
-                            if model.tasksLoading && model.tasks.isEmpty {
-                                ForEach(0..<3) { _ in
-                                    HStack { Circle().frame(width: 24, height: 24); VStack(alignment: .leading) { Capsule().frame(width: 140, height: 12); Capsule().frame(width: 100, height: 8) }; Spacer() }
-                                        .foregroundStyle(Color.nexdoSecondary.opacity(0.12)).padding(20)
-                                        .background(.background.opacity(0.7), in: RoundedRectangle(cornerRadius: 17))
-                                }.accessibilityHidden(true)
-                                Text("Loading tasks…").font(.caption).foregroundStyle(Color.nexdoSecondary)
-                            } else {
-                                if model.tasksLoadFailed {
-                                    VStack(spacing: 8) {
-                                        Text("Couldn’t load your tasks.")
-                                        Button("Retry") { Task { await model.refreshTasks() } }.frame(minHeight: 44)
-                                    }.frame(maxWidth: .infinity).padding()
-                                }
-                                if visibleTasks.isEmpty && !model.tasksLoadFailed && !model.tasksLoading {
-                                    VStack(spacing: 12) {
-                                        Image(systemName: "checklist").font(.largeTitle).foregroundStyle(Color.nexdoIndigo)
-                                        Text(model.taskQuery.search.isEmpty ? model.taskQuery.date.emptyTitle : "No matching tasks").font(.headline)
-                                        Text("Try another filter or add a task.").font(.subheadline).foregroundStyle(Color.nexdoSecondary)
-                                        Button("Add a task") { adding = true }.frame(minHeight: 44)
-                                    }.multilineTextAlignment(.center).frame(maxWidth: .infinity).padding(.vertical, 36)
-                                }
-                                ForEach(visibleTasks) { task in taskCard(task) }
-                            }
-                        }.padding(.bottom, 16)
-                    }
-                    .scrollDismissesKeyboard(.interactively)
-                    .refreshable { await model.refreshTasks() }
-                    .scrollIndicators(.hidden)
-                    }
-                }.padding(.horizontal, 20)
+                }
+                .padding(.horizontal, 20)
             }
             .toolbar(.hidden, for: .navigationBar)
             .sheet(isPresented: $adding) { NavigationStack { TaskEditor(task: nil) } }
+            .fullScreenCover(isPresented: $voice) { AddTaskByVoiceView() }
             .sheet(isPresented: $account) { AccountView() }
             .sheet(item: $editing) { task in
                 NavigationStack { TaskEditor(task: task) }
@@ -1384,53 +1363,194 @@ struct TasksView: View {
                         }
                         Toggle("Earliest due first", isOn: $model.taskQuery.earliestFirst)
                         Button("Reset filters") { model.taskQuery.status = "Open"; model.taskQuery.priority = "All"; model.taskQuery.earliestFirst = true }
-                    }.navigationTitle("Task filters")
-                        .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { filters = false } } }
+                    }
+                    .navigationTitle("Task filters")
+                    .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { closeFilters() } } }
                 }.presentationDetents([.medium, .large])
             }
-            .alert("Select tasks", isPresented: $selectionInfo) {
-                Button("OK", role: .cancel) {}
-            } message: { Text("Bulk actions aren’t available yet. Open a task to edit or complete it.") }
         }
     }
 
+    private var header: some View {
+        HStack(alignment: .center, spacing: 10) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Tasks").font(.system(.largeTitle, design: .default, weight: .bold))
+                    .foregroundStyle(Color.nexdoInk).accessibilityHeading(.h1)
+                Text("Turn intent into action.").font(.subheadline).foregroundStyle(Color.nexdoSecondary)
+            }
+            Spacer(minLength: 0)
+            if !showingProjects {
+                headerButton("slider.horizontal.3", label: "Task filters") { filters = true }
+                headerButton("magnifyingglass", label: "Search tasks") {
+                    searching.toggle()
+                    searchFocused = searching
+                }
+            }
+        }
+    }
+
+    private func headerButton(_ icon: String, label: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: icon).font(.title3)
+                .frame(width: 44, height: 44)
+                .background(Color.nexdoIndigo.opacity(0.06), in: RoundedRectangle(cornerRadius: 15))
+                .overlay(RoundedRectangle(cornerRadius: 15).stroke(Color.nexdoIndigo.opacity(0.14)))
+        }.buttonStyle(.plain).foregroundStyle(Color.nexdoIndigo).accessibilityLabel(label)
+    }
+
+    private var searchField: some View {
+        HStack {
+            Image(systemName: "magnifyingglass").foregroundStyle(Color.nexdoSecondary)
+            TextField("Search your tasks", text: $model.taskQuery.search)
+                .focused($searchFocused).submitLabel(.search).autocorrectionDisabled()
+                .accessibilityLabel("Search tasks")
+            Button { model.taskQuery.search = ""; searching = false; searchFocused = false } label: {
+                Image(systemName: "xmark.circle.fill").frame(width: 44, height: 44)
+            }.accessibilityLabel("Close search")
+        }.padding(.leading, 14).background(.background.opacity(0.85), in: RoundedRectangle(cornerRadius: 16))
+    }
+
+    private var creationActions: some View {
+        let layout = typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(spacing: 12)) : AnyLayout(HStackLayout(spacing: 12))
+        return layout {
+            creationCard(title: "Add by Voice", subtitle: "Tap and speak", icon: "mic.fill", isVoice: true) { voice = true }
+            creationCard(title: "Add Manually", subtitle: "Type a task", icon: "plus", isVoice: false) { adding = true }
+        }
+    }
+
+    private func creationCard(title: String, subtitle: String, icon: String, isVoice: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 10) {
+                Image(systemName: icon).font(.system(size: 24, weight: .medium))
+                    .foregroundStyle(isVoice ? Color.white : Color.nexdoIndigo)
+                    .frame(width: 42, height: 42)
+                    .background(isVoice ? AnyShapeStyle(accent) : AnyShapeStyle(Color.nexdoMagenta.opacity(0.08)), in: Circle())
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(title).font(.system(.footnote, design: .default, weight: .semibold)).foregroundStyle(Color.nexdoInk)
+                        .lineLimit(typeSize.isAccessibilitySize ? nil : 1).minimumScaleFactor(0.85)
+                    Text(subtitle).font(.caption).foregroundStyle(Color.nexdoSecondary)
+                        .lineLimit(typeSize.isAccessibilitySize ? nil : 1).minimumScaleFactor(0.85)
+                }
+                .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
+            }
+            .padding(12).frame(maxWidth: .infinity, minHeight: 72, alignment: .leading)
+            .background(isVoice ? Color.nexdoIndigo.opacity(0.05) : Color(uiColor: .systemBackground).opacity(0.7), in: RoundedRectangle(cornerRadius: 20))
+            .overlay(RoundedRectangle(cornerRadius: 20).stroke(Color.nexdoIndigo.opacity(0.16)))
+        }.buttonStyle(.plain).accessibilityLabel(title).accessibilityHint(subtitle)
+    }
+
     private var datePills: some View {
-        HStack(spacing: 8) {
-            ForEach(TaskDateFilter.allCases) { filter in
+        HStack(spacing: 7) {
+            ForEach([TaskDateFilter.today, .tomorrow, .week, .all]) { filter in
+                let selected = model.taskQuery.date == filter
                 Button {
                     withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.18)) { model.taskQuery.date = filter }
                 } label: {
-                    Text(filter.rawValue).font(.subheadline)
-                        .foregroundStyle(model.taskQuery.date == filter ? Color.nexdoIndigo : Color.nexdoSecondary)
-                        .padding(.horizontal, 15).frame(minHeight: 44)
-                        .background(model.taskQuery.date == filter ? Color.nexdoIndigo.opacity(0.10) : Color(uiColor: .systemBackground).opacity(0.85), in: Capsule())
-                        .overlay(Capsule().stroke(Color.nexdoIndigo.opacity(0.16)))
-                }.buttonStyle(.plain).accessibilityLabel("\(filter.rawValue) filter")
-                    .accessibilityAddTraits(model.taskQuery.date == filter ? .isSelected : [])
+                    HStack(spacing: 5) {
+                        Text(filter.rawValue)
+                        if filter != .all {
+                            Text("\(count(for: filter))").font(.caption)
+                                .padding(.horizontal, 5).padding(.vertical, 2)
+                                .background(selected ? Color.white.opacity(0.25) : Color.nexdoIndigo.opacity(0.08), in: Capsule())
+                        }
+                    }
+                    .font(.system(.footnote, design: .default)).foregroundStyle(selected ? Color.white : Color.nexdoSecondary)
+                    .padding(.horizontal, 8).frame(minHeight: 44)
+                    .background(selected ? AnyShapeStyle(accent) : AnyShapeStyle(Color(uiColor: .systemBackground).opacity(0.8)), in: Capsule())
+                    .overlay(Capsule().stroke(selected ? Color.clear : Color.nexdoIndigo.opacity(0.16)))
+                }.buttonStyle(.plain).accessibilityLabel("\(filter.rawValue), \(count(for: filter)) tasks")
+                    .accessibilityAddTraits(selected ? .isSelected : [])
             }
+        }
+    }
+
+    @ViewBuilder private var taskSections: some View {
+        if model.tasksLoading && model.tasks.isEmpty {
+            ProgressView("Loading tasks…").frame(maxWidth: .infinity).padding(30)
+        } else {
+            if model.tasksLoadFailed {
+                VStack(spacing: 8) {
+                    Text("Couldn’t load your tasks.")
+                    Button("Retry") { Task { await model.refreshTasks() } }.frame(minHeight: 44)
+                }.frame(maxWidth: .infinity).padding()
+            }
+            if visibleTasks.isEmpty && !model.tasksLoadFailed && !model.tasksLoading {
+                ContentUnavailableView {
+                    Label(model.taskQuery.search.isEmpty ? model.taskQuery.date.emptyTitle : "No matching tasks", systemImage: "checklist")
+                } description: { Text("Try another filter or add a task.") } actions: {
+                    Button("Add Manually") { adding = true }.buttonStyle(.bordered)
+                }
+            }
+            LazyVStack(spacing: 24) {
+                ForEach(groups, id: \.date) { group in
+                    VStack(spacing: 8) {
+                        HStack {
+                            Text(sectionTitle(group.date)).font(.title3.bold()).foregroundStyle(Color.nexdoInk).accessibilityHeading(.h2)
+                            Spacer()
+                            Text("\(group.tasks.count) \(group.tasks.count == 1 ? "task" : "tasks")").font(.subheadline).foregroundStyle(Color.nexdoSecondary)
+                        }.padding(.bottom, 2)
+                        ForEach(group.tasks) { task in taskCard(task) }
+                    }
+                }
+            }.padding(.top, 8)
         }
     }
 
     private func taskCard(_ task: NexdoTask) -> some View {
-        Button { editing = task } label: {
-            TaskListRow(task: task, subtitle: taskSubtitle(task))
-        }.buttonStyle(.plain).accessibilityElement(children: .combine).accessibilityHint("Opens task details")
+        HStack(spacing: 8) {
+            Button { Task { await model.complete(task) } } label: {
+                Image(systemName: task.isDone ? "checkmark.circle.fill" : "circle")
+                    .font(.system(size: 25, weight: .regular)).foregroundStyle(task.isDone ? Color.nexdoIndigo : Color.nexdoSecondary)
+                    .frame(width: 44, height: 44)
+            }.buttonStyle(.plain).disabled(model.busy)
+                .accessibilityLabel("\(task.isDone ? "Restore" : "Complete") \(task.title)")
+            Button { editing = task } label: {
+                HStack(spacing: 8) {
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text(task.title).font(.body).foregroundStyle(Color.nexdoInk).strikethrough(task.isDone)
+                        Label(taskSubtitle(task), systemImage: "clock").font(.caption).foregroundStyle(Color.nexdoSecondary)
+                    }.frame(maxWidth: .infinity, alignment: .leading)
+                    if let project = model.projects.first(where: { $0.id == task.projectId }) {
+                        Label(project.name, systemImage: "folder.fill")
+                            .font(.caption).lineLimit(1).padding(.horizontal, 10).padding(.vertical, 9)
+                            .foregroundStyle(Color.nexdoIndigo).background(Color.nexdoIndigo.opacity(0.07), in: Capsule())
+                            .frame(maxWidth: 100)
+                    }
+                    Image(systemName: "chevron.right").font(.subheadline).foregroundStyle(Color.nexdoSecondary)
+                }.frame(minHeight: 44).contentShape(Rectangle())
+            }.buttonStyle(.plain).accessibilityHint("Opens task editor")
+        }.padding(.horizontal, 10).padding(.vertical, 10)
+            .frame(maxWidth: .infinity, minHeight: 66)
+            .background(.background.opacity(0.8), in: RoundedRectangle(cornerRadius: 18))
+            .overlay(RoundedRectangle(cornerRadius: 18).stroke(Color.nexdoSecondary.opacity(0.16)))
     }
 
+    private func count(for filter: TaskDateFilter) -> Int {
+        var query = model.taskQuery
+        query.date = filter
+        return query.results(model.tasks, timeZone: zone).count
+    }
+    private func sectionTitle(_ date: Date) -> String {
+        if date == .distantFuture { return "Unscheduled" }
+        if calendar.isDate(date, inSameDayAs: Date()) { return "Today" }
+        if let tomorrow = calendar.date(byAdding: .day, value: 1, to: Date()), calendar.isDate(date, inSameDayAs: tomorrow) { return "Tomorrow" }
+        let formatter = DateFormatter()
+        formatter.timeZone = calendar.timeZone
+        formatter.dateFormat = "EEEE, MMM d"
+        return formatter.string(from: date)
+    }
     private func taskSubtitle(_ task: NexdoTask) -> String {
         var parts: [String] = []
-        let zone = task.timeZone ?? model.profile?.timeZone ?? TimeZone.current.identifier
-        if let value = task.startAt ?? task.dueAt, let date = ServerDate.parse(value) {
-            let formatter = DateFormatter()
-            formatter.timeZone = TimeZone(identifier: zone) ?? .current
-            formatter.dateStyle = model.taskQuery.date == .today || model.taskQuery.date == .tomorrow ? .none : .short
-            formatter.timeStyle = .short
-            let prefix = task.startAt == nil ? "Due " : ""
-            parts.append("\(prefix)\(formatter.string(from: date))")
+        if let value = task.startAt ?? task.dueAt {
+            parts.append(ServerDate.time(value, timeZone: task.timeZone ?? zone))
+        } else { parts.append("Unscheduled") }
+        if task.durationMin > 0 {
+            parts.append(task.durationMin % 60 == 0 ? "\(task.durationMin / 60) hr" : "\(task.durationMin) min")
         }
-        if task.durationMin > 0 { parts.append("\(task.durationMin) min") }
         return parts.joined(separator: " · ")
     }
+    private func closeFilters() { filters = false }
 }
 
 struct TaskEditor: View {

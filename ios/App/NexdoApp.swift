@@ -312,6 +312,24 @@ final class AppModel: ObservableObject {
         refreshSupplementaryData()
         await refreshTasks()
     }
+    func voiceTaskSession() async throws -> VoiceTaskSession {
+        guard aiConsent && voiceConsent else { throw APIError.response(403) }
+        return try await api.request("/api/realtime/task-session", method: "POST", body: JSONEncoder().encode(["consent": true]), timeout: 25)
+    }
+
+    func executeVoiceTool(name: String, arguments: Data, sessionID: UUID, callID: String) async throws -> Data {
+        guard aiConsent && voiceConsent, let userID = profile?.id else { throw APIError.signedOut }
+        let args = try JSONSerialization.jsonObject(with: arguments)
+        let body = try JSONSerialization.data(withJSONObject: ["consent": true, "sessionId": sessionID.uuidString, "callId": callID, "name": name, "arguments": args])
+        let response: VoiceToolResponse = try await api.request("/api/realtime/tool", method: "POST", body: body, timeout: 30)
+        // Only reconcile this account. A dismissed voice screen does not discard a saved task.
+        if profile?.id == userID, response.success, let task = response.task {
+            replaceTask(task)
+            if name == "delete_task" { tasks.removeAll { $0.id == task.id } }
+        }
+        return try JSONEncoder().encode(response)
+    }
+
     func saveTask(id: String?, title: String, notes: String, duration: Int, scheduledAt: Date? = nil, projectId: String? = nil) async -> Bool {
         var saved = false
         await perform(errorMessage: "Couldn’t update your task. Refresh to check its current state before retrying.") {
