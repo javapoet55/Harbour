@@ -92,6 +92,8 @@ public struct VoiceTelemetry: Sendable {
     private var closingReason: VoiceTerminationReason?
     private var results: [String: Data] = [:]
     private var queuedIDs = Set<String>()
+    private var committedItems = Set<String>()
+    private var interruptedResponses = Set<String>()
     private var queue: [[String: Any]] = []
     private var worker: Task<Void, Never>?
     private var starter: Task<Void, Never>?
@@ -213,13 +215,18 @@ public struct VoiceTelemetry: Sendable {
             telemetry.connectionLatency = now().timeIntervalSince(started); activity = now(); setPhase(.listening)
         case "input_audio_buffer.speech_started":
             guard !muted, closingReason == nil, backgrounded == nil else { return }
-            if audioPlaying || activeResponse != nil { telemetry.interruptions += 1; transport.silencePlayback() }
+            if audioPlaying || activeResponse != nil {
+                telemetry.interruptions += 1; transport.silencePlayback()
+                if let activeResponse { interruptedResponses.insert(activeResponse); emit(["type": "response.cancel"]) }
+                emit(["type": "output_audio_buffer.clear"])
+            }
             audioPlaying = false; audioFinished = true; userSpeaking = true; warned = false; activity = now()
             transcript = ""; reply = ""; setPhase(.userSpeaking)
         case "input_audio_buffer.speech_stopped":
             userSpeaking = false; if closingReason == nil { setPhase(.processing) }
         case "input_audio_buffer.committed":
             guard closingReason == nil, !muted else { return }
+            if let itemID = event["item_id"] as? String, !committedItems.insert(itemID).inserted { return }
             telemetry.userTurns += 1; activity = now(); needsResponse = true; settle()
         case "conversation.item.input_audio_transcription.delta":
             if !muted { transcript += event["delta"] as? String ?? "" }
@@ -244,7 +251,7 @@ public struct VoiceTelemetry: Sendable {
         case "response.done":
             guard let response = event["response"] as? [String: Any], let id = response["id"] as? String, id == activeResponse else { return }
             activeResponse = nil; responsePending = false
-            responseCompleted = response["status"] as? String == "completed"
+            responseCompleted = response["status"] as? String == "completed" && !interruptedResponses.contains(id)
             let output = response["output"] as? [[String: Any]] ?? []
             let hasAudio = output.contains { item in
                 (item["content"] as? [[String: Any]] ?? []).contains { $0["type"] as? String == "audio" || $0["type"] as? String == "output_audio" }
@@ -258,7 +265,7 @@ public struct VoiceTelemetry: Sendable {
             settle()
         case "error":
             let code = (event["error"] as? [String: Any])?["code"] as? String
-            if code == "response_cancel_not_active" { return }
+            if code == "response_cancel_not_active" || code == "conversation_already_has_active_response" { return }
             fail()
         default: break
         }

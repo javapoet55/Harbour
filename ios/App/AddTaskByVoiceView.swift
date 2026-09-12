@@ -10,6 +10,8 @@ struct AddTaskByVoiceView: View {
     @State private var executor: VoiceToolExecutor
     @State private var consent = false
     @State private var starting = false
+    @State private var readyBell: AVAudioPlayer?
+    private let clock = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
     @State private var startupError: String?
     @State private var backgroundTask: UIBackgroundTaskIdentifier = .invalid
     private let gradient = LinearGradient(colors: [.nexdoMagenta, .nexdoIndigo, .nexdoBlue], startPoint: .topLeading, endPoint: .bottomTrailing)
@@ -71,7 +73,7 @@ struct AddTaskByVoiceView: View {
                     Button { voice.toggleMute() } label: { Label(voice.muted ? "Unmute" : "Mute", systemImage: voice.muted ? "mic.slash.fill" : "mic.fill") }
                         .disabled(starting || [.idle, .connecting, .closing, .disconnected, .connectionLost].contains(voice.phase))
                     Spacer()
-                    Button("Done") { voice.finish(); if voice.phase == .idle { dismiss() } }
+                    Button { voice.finish(); if voice.phase == .idle { dismiss() } } label: { Text("Done").foregroundStyle(.white) }
                         .buttonStyle(.borderedProminent).disabled(voice.phase == .closing)
                 }.padding(24)
             }.foregroundStyle(Color.nexdoInk)
@@ -83,12 +85,15 @@ struct AddTaskByVoiceView: View {
         .task {
             voice.onClose = { dismiss() }
             if model.aiConsent && model.voiceConsent { await start() } else { consent = true }
-            while !Task.isCancelled {
-                do { try await Task.sleep(for: .seconds(1)) } catch { return }
-                voice.tick()
-            }
         }
-        .onDisappear { voice.close(); executor.clear(); endBackgroundTask() }
+        .onReceive(clock) { _ in voice.tick() }
+        .onChange(of: voice.phase) { _, phase in
+            if phase == .listening, !voice.muted, let url = Bundle.main.url(forResource: "ListeningReady", withExtension: "wav") {
+                readyBell = try? AVAudioPlayer(contentsOf: url)
+                readyBell?.volume = 0.65; readyBell?.play()
+            } else { readyBell?.stop() }
+        }
+        .onDisappear { readyBell?.stop(); voice.close(); executor.clear(); endBackgroundTask() }
         .onChange(of: scenePhase) { _, phase in
             if phase == .background {
                 voice.background(true)

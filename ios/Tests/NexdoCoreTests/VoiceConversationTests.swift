@@ -142,3 +142,40 @@ import Testing
     h.send(["type": "output_audio_buffer.stopped", "response_id": "old"])
     #expect(h.session.phase == .assistantSpeaking)
 }
+
+@Test @MainActor func requestedHandsFreeSequenceSavesEditsAndClosesOneSession() async {
+    let h = VoiceHarness(); await h.ready()
+    for (index, title) in ["Call Damien", "Go grocery shopping", "Submit expense report"].enumerated() {
+        h.send(["type": "input_audio_buffer.speech_started"])
+        h.send(["type": "input_audio_buffer.speech_stopped"])
+        h.send(["type": "input_audio_buffer.committed", "item_id": "speech-\(index)"])
+        await h.respond([h.tool("create_task", ["title": title])])
+        h.audioResponse()
+        #expect(h.session.phase == .listening)
+        #expect(!h.transport.muted && !h.transport.closed)
+    }
+    h.send(["type": "input_audio_buffer.speech_started"])
+    h.send(["type": "input_audio_buffer.speech_stopped"])
+    h.send(["type": "input_audio_buffer.committed", "item_id": "correction"])
+    await h.respond([h.tool("update_task", ["taskId": "last", "scheduledAt": "2027-01-01T14:30:00Z"])])
+    h.audioResponse()
+    #expect(h.tools.calls.last?.1["taskId"] as? String == "task-3")
+    #expect(h.session.sessionCreatedTasks.count == 3)
+    await h.respond([h.tool("end_session", ["reason": "explicitFinish"])])
+    #expect(!h.transport.closed)
+    h.audioResponse()
+    #expect(h.transport.closed)
+    #expect(h.transport.connects == 1)
+}
+
+@Test @MainActor func interruptedCompletedResponseCannotSaveStaleTask() async {
+    let h = VoiceHarness(); await h.ready()
+    h.send(["type": "response.created", "response": ["id": "interrupted"]])
+    h.send(["type": "output_audio_buffer.started", "response_id": "interrupted"])
+    h.send(["type": "input_audio_buffer.speech_started"])
+    h.send(["type": "response.done", "response": ["id": "interrupted", "status": "completed", "output": [h.tool("create_task", ["title": "Stale task"])]]])
+    for _ in 0..<30 { await Task.yield() }
+    #expect(h.tools.calls.isEmpty)
+    #expect(h.transport.sends.contains { $0["type"] as? String == "response.cancel" })
+    #expect(h.session.phase == .userSpeaking)
+}
