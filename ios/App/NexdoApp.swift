@@ -317,6 +317,11 @@ final class AppModel: ObservableObject {
         return try await api.request("/api/realtime/task-session", method: "POST", body: JSONEncoder().encode(["consent": true]), timeout: 25)
     }
 
+    func voiceTranscriptionSession() async throws -> VoiceTaskSession {
+        guard aiConsent && voiceConsent else { throw APIError.response(403) }
+        return try await api.request("/api/realtime/transcription-session", method: "POST", body: JSONEncoder().encode(["consent": true]), timeout: 25)
+    }
+
     func executeVoiceTool(name: String, arguments: Data, sessionID: UUID, callID: String) async throws -> Data {
         guard aiConsent && voiceConsent, let userID = profile?.id else { throw APIError.signedOut }
         let args = try JSONSerialization.jsonObject(with: arguments)
