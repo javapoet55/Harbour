@@ -9,7 +9,13 @@ import Testing
     func send(_ data: Data) throws { sends.append(try JSONSerialization.jsonObject(with: data) as! [String: Any]) }
     func setMuted(_ value: Bool) { muted = value }
     func silencePlayback() { silenced += 1 }
+    var deferRelease = false
+    var released: (@MainActor () -> Void)?
     func close() { closed = true }
+    func closeAfterReleasingAudio(_ completion: @escaping @MainActor () -> Void) {
+        close()
+        if deferRelease { released = completion } else { completion() }
+    }
 }
 @MainActor private final class MockVoiceTools: VoiceToolExecuting {
     var calls: [(String, [String: Any])] = []; var fails = false
@@ -178,4 +184,62 @@ import Testing
     #expect(h.tools.calls.isEmpty)
     #expect(h.transport.sends.contains { $0["type"] as? String == "response.cancel" })
     #expect(h.session.phase == .userSpeaking)
+}
+
+@Test func completionIntentDependsOnActiveQuestion() {
+    for word in ["No", "Nope", "No."] {
+        #expect(ConversationIntent.completion(reason: "explicitFinish", question: "anythingElse", utterance: word) == .endSession)
+        for question in ["schedule", "recurrence", "contact", "none"] {
+            #expect(ConversationIntent.completion(reason: "explicitFinish", question: question, utterance: word) == .answerQuestion)
+        }
+    }
+    for word in ["That's it", "That's all", "I'm done", "Nothing else", "We're good", "Done", "Finish"] {
+        #expect(ConversationIntent.completion(reason: "explicitFinish", question: "anythingElse", utterance: word) == .endSession)
+    }
+    #expect(ConversationIntent.completion(reason: "explicitFinish", question: "schedule", utterance: "That's it") == .answerQuestion)
+    #expect(ConversationIntent.completion(reason: nil, question: "none", utterance: "Finish the report tomorrow") == .continueConversation)
+}
+
+@Test @MainActor func activeQuestionSnapshotPreventsReclassifyingNoAsGoodbye() async {
+    let h = VoiceHarness(); await h.ready()
+    await h.respond([h.tool("set_conversation_context", ["question": "recurrence", "pendingIntent": "Call Damien"])])
+    h.audioResponse()
+    h.send(["type": "input_audio_buffer.speech_started"])
+    h.send(["type": "input_audio_buffer.speech_stopped"])
+    h.send(["type": "conversation.item.input_audio_transcription.completed", "transcript": "No"])
+    await h.respond([h.tool("set_conversation_context", ["question": "anythingElse", "pendingIntent": ""]), h.tool("end_session", ["reason": "explicitFinish"])])
+    #expect(!h.transport.closed)
+    #expect(h.session.telemetry.terminationReason == nil)
+}
+
+@Test @MainActor func semanticGoodbyeFinishesAudioBeforeCleanupAndDismissal() async {
+    let h = VoiceHarness(); await h.ready()
+    await h.respond([h.tool("create_task", ["title": "Saved task"])])
+    h.audioResponse()
+    await h.respond([h.tool("set_conversation_context", ["question": "anythingElse", "pendingIntent": ""])])
+    h.audioResponse()
+    var dismissed = false
+    h.session.onClose = { dismissed = true }
+    h.send(["type": "input_audio_buffer.speech_started"])
+    h.send(["type": "input_audio_buffer.speech_stopped"])
+    h.send(["type": "conversation.item.input_audio_transcription.completed", "transcript": "Nope"])
+    await h.respond([h.tool("end_session", ["reason": "declinedMore"])])
+    #expect(!h.transport.closed && !h.transport.muted && !dismissed)
+    h.audioResponse()
+    #expect(h.transport.closed && h.transport.muted && dismissed)
+    #expect(h.session.context.createdTaskIDs.isEmpty)
+    #expect(h.session.context.pendingClarification == "none")
+    #expect(h.session.telemetry.tasksCreated == 1)
+    #expect(h.tools.calls.count == 1)
+}
+
+@Test @MainActor func dismissalWaitsForAudioSessionRelease() async {
+    let h = VoiceHarness(); await h.ready()
+    h.transport.deferRelease = true
+    var dismissed = false
+    h.session.onClose = { dismissed = true }
+    h.session.close()
+    #expect(h.transport.closed && !dismissed)
+    h.transport.released?()
+    #expect(dismissed && h.session.phase == .disconnected)
 }

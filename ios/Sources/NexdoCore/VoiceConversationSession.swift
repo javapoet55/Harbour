@@ -9,6 +9,23 @@ public struct VoiceTaskSession: Decodable, Sendable {
 public enum VoicePhase: String, Sendable {
     case idle, connecting, listening, userSpeaking, processing, toolExecution, assistantSpeaking, closing, disconnected, connectionLost
 }
+/// The model resolves conversational meaning; this guard prevents ambiguous
+/// short answers from bypassing the question that was active when speech began.
+public enum ConversationIntent: Equatable, Sendable {
+    case endSession, answerQuestion, continueConversation
+
+    public static func completion(reason: String?, question: String, utterance: String) -> Self {
+        let text = utterance.lowercased().replacingOccurrences(of: "’", with: "'")
+            .trimmingCharacters(in: .whitespacesAndNewlines.union(.punctuationCharacters))
+        if ["no", "nope"].contains(text) || reason == "declinedMore" {
+            return question == "anythingElse" ? .endSession : .answerQuestion
+        }
+        if ["done", "finish", "that's it"].contains(text), !["none", "anythingElse"].contains(question) {
+            return .answerQuestion
+        }
+        return reason == "explicitFinish" ? .endSession : .continueConversation
+    }
+}
 public enum VoiceTerminationReason: String, Sendable {
     case userVoiceCommand, userTappedDone, userClosed, inactivityTimeout, networkFailure, appBackgrounded, audioInterruption
 }
@@ -52,6 +69,10 @@ public struct VoiceTelemetry: Sendable {
     func setMuted(_ muted: Bool)
     func silencePlayback()
     func close()
+    func closeAfterReleasingAudio(_ completion: @escaping @MainActor () -> Void)
+}
+public extension VoiceRealtimeTransport {
+    func closeAfterReleasingAudio(_ completion: @escaping @MainActor () -> Void) { close(); completion() }
 }
 @MainActor public protocol VoiceToolExecuting: AnyObject {
     func execute(name: String, arguments: Data, sessionID: UUID, callID: String) async throws -> Data
@@ -92,11 +113,14 @@ public struct VoiceTelemetry: Sendable {
     private var closingReason: VoiceTerminationReason?
     private var results: [String: Data] = [:]
     private var queuedIDs = Set<String>()
+    private var questionAtSpeechStart: String?
+    private var latestUserUtterance = ""
     private var committedItems = Set<String>()
     private var interruptedResponses = Set<String>()
     private var queue: [[String: Any]] = []
     private var worker: Task<Void, Never>?
     private var starter: Task<Void, Never>?
+    private var didDisconnect = false
 
     public init(transport: any VoiceRealtimeTransport, executor: any VoiceToolExecuting, timeouts: VoiceTimeoutConfiguration = .init(), now: @escaping () -> Date = Date.init) {
         self.transport = transport; self.executor = executor; self.timeouts = timeouts; self.now = now
@@ -158,18 +182,24 @@ public struct VoiceTelemetry: Sendable {
         if worker == nil && activeResponse == nil && !responsePending { farewell() }
     }
     public func close(reason: VoiceTerminationReason = .userClosed) {
-        guard phase != .disconnected && phase != .connectionLost else { return }
-        generation = UUID(); transport.setMuted(true); transport.close(); starter?.cancel(); starter = nil
+        guard !didDisconnect else { return }
+        didDisconnect = true
+        generation = UUID(); transport.setMuted(true); starter?.cancel(); starter = nil
         // Do not cancel a dispatched mutation: its result still reconciles the app.
         queue.removeAll(); needsResponse = false; activeResponse = nil; responsePending = false
         telemetry.duration = now().timeIntervalSince(started); telemetry.terminationReason = reason
         onTelemetry?(telemetry)
-        context = .init(); results.removeAll(); queuedIDs.removeAll(); transcript = ""; reply = ""
-        sessionCreatedTasks.removeAll()
-        setPhase(reason == .networkFailure ? .connectionLost : .disconnected)
-        if reason != .networkFailure { onClose?() }
+        transport.closeAfterReleasingAudio { [weak self] in
+            guard let self else { return }
+            self.context = .init(); self.results.removeAll(); self.queuedIDs.removeAll(); self.committedItems.removeAll(); self.interruptedResponses.removeAll()
+            self.questionAtSpeechStart = nil; self.latestUserUtterance = ""; self.transcript = ""; self.reply = ""
+            self.sessionCreatedTasks.removeAll()
+            self.setPhase(reason == .networkFailure ? .connectionLost : .disconnected)
+            if reason != .networkFailure { self.onClose?() }
+        }
     }
     public func tick() {
+        guard !didDisconnect else { return }
         guard ![.idle, .disconnected, .connectionLost].contains(phase) else { return }
         let time = now()
         if let backgrounded, time.timeIntervalSince(backgrounded) >= timeouts.backgroundGrace { close(reason: .appBackgrounded); return }
@@ -197,7 +227,6 @@ public struct VoiceTelemetry: Sendable {
         emit(["type": "response.create", "response": response])
     }
     private func farewell() {
-        transport.setMuted(true)
         requestResponse(instructions: closingReason == .inactivityTimeout ? "Say only: I'll close voice mode for now." : "Say only: You're all set.")
     }
     private func settle() {
@@ -209,6 +238,7 @@ public struct VoiceTelemetry: Sendable {
         else { activity = now(); setPhase(.listening) }
     }
     public func receive(_ data: Data) {
+        guard !didDisconnect else { return }
         guard ![.disconnected, .connectionLost].contains(phase), let event = try? JSONSerialization.jsonObject(with: data) as? [String: Any], let type = event["type"] as? String else { return }
         switch type {
         case "session.created":
@@ -221,6 +251,7 @@ public struct VoiceTelemetry: Sendable {
                 emit(["type": "output_audio_buffer.clear"])
             }
             audioPlaying = false; audioFinished = true; userSpeaking = true; warned = false; activity = now()
+            questionAtSpeechStart = context.pendingClarification; latestUserUtterance = ""
             transcript = ""; reply = ""; setPhase(.userSpeaking)
         case "input_audio_buffer.speech_stopped":
             userSpeaking = false; if closingReason == nil { setPhase(.processing) }
@@ -231,7 +262,7 @@ public struct VoiceTelemetry: Sendable {
         case "conversation.item.input_audio_transcription.delta":
             if !muted { transcript += event["delta"] as? String ?? "" }
         case "conversation.item.input_audio_transcription.completed":
-            if !muted { transcript = event["transcript"] as? String ?? "" }
+            if !muted { transcript = event["transcript"] as? String ?? ""; latestUserUtterance = transcript }
         case "response.created":
             responsePending = false; activeResponse = (event["response"] as? [String: Any])?["id"] as? String
             playbackResponse = activeResponse
@@ -297,8 +328,9 @@ public struct VoiceTelemetry: Sendable {
                         result = Data("{\"success\":true}".utf8)
                     } else if name == "end_session" {
                         let reason = args["reason"] as? String
-                        if reason == "explicitFinish" || (reason == "declinedMore" && context.pendingClarification == "anythingElse") {
-                            closingReason = .userVoiceCommand; transport.setMuted(true)
+                        let intent = ConversationIntent.completion(reason: reason, question: questionAtSpeechStart ?? context.pendingClarification, utterance: latestUserUtterance)
+                        if intent == .endSession {
+                            closingReason = .userVoiceCommand
                             result = Data("{\"success\":true}".utf8)
                         } else { result = Data("{\"success\":false,\"error\":\"No answers the pending clarification. Continue the conversation.\"}".utf8) }
                     } else {

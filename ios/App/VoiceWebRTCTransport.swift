@@ -86,6 +86,13 @@ final class VoiceWebRTCTransport: NSObject, VoiceRealtimeTransport {
             try? audio.setActive(false)
         }
     }
+    func closeAfterReleasingAudio(_ completion: @escaping @MainActor () -> Void) {
+        close()
+        // close() enqueues AVAudioSession deactivation on this same serial queue.
+        audioQueue.async {
+            DispatchQueue.main.async { completion() }
+        }
+    }
     private func deliver(_ data: Data) {
         if let event = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
             if event["type"] as? String == "response.created" { responseID = (event["response"] as? [String: Any])?["id"] as? String }
