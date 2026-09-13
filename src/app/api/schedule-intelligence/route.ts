@@ -11,9 +11,9 @@ export async function GET(req: Request) {
     const user = await requireUser();
     const params = new URL(req.url).searchParams;
     const scope = params.get('scope');
-    const bufferMinutes = Number(params.get('bufferMinutes') ?? 15);
-    if ((scope && scope !== 'today') || !Number.isInteger(bufferMinutes) || bufferMinutes < 0 || bufferMinutes > 60) {
-      return NextResponse.json({ error: 'Choose a buffer between 0 and 60 minutes.' }, { status: 400 });
+    const bufferMinutes = params.has('bufferMinutes') ? Number(params.get('bufferMinutes')) : undefined;
+    if ((scope && scope !== 'today') || (bufferMinutes !== undefined && (!Number.isInteger(bufferMinutes) || bufferMinutes < 0 || bufferMinutes > 120))) {
+      return NextResponse.json({ error: 'Choose a buffer between 0 and 120 minutes.' }, { status: 400 });
     }
     return NextResponse.json(await getScheduleIntelligence(user.id, new Date(), { scope: scope === 'today' ? 'today' : undefined, bufferMinutes }), { headers: { 'Cache-Control': 'private, no-store' } });
   } catch (error) { return jsonError(error); }

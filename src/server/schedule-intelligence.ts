@@ -1,3 +1,4 @@
+import { normalizedBuffer } from '@/lib/availability';
 import { addDays, endOfLocalDay, formatTime, startOfLocalDay, tzToday, ymd } from '@/lib/time';
 import { analyzeSchedule, withoutTaskMirrors } from '@/lib/schedule-intelligence';
 import { listEventsInRange } from './agenda';
@@ -10,7 +11,7 @@ import { NEXT_ACTION_POLICY } from '@/lib/next-action-config';
 const OPEN = ['INBOX', 'PLANNED', 'IN_PROGRESS', 'WAITING'];
 
 /** Shared request-scoped read model; never expose a User row/password hash to the model. */
-export async function loadScheduleContext(userId: string, now = new Date(), days = 7, db: Prisma.TransactionClient = prisma) {
+export async function loadScheduleContext(userId: string, now = new Date(), days = 7, db: Prisma.TransactionClient = prisma, freshnessNow = now) {
   const user = await db.user.findUniqueOrThrow({ where: { id: userId }, select: { id: true, name: true, timeZone: true, preference: true } });
   const today = tzToday(user.timeZone, now);
   const from = startOfLocalDay(ymd(today), user.timeZone);
@@ -43,7 +44,7 @@ export async function loadScheduleContext(userId: string, now = new Date(), days
   try { const parsed = activeFocusSchema.safeParse(JSON.parse(focusState?.value ?? 'null')); if (parsed.success && parsed.data.startedAt <= +now && parsed.data.endsAt > +now && parsed.data.endsAt - parsed.data.startedAt <= 480 * 60000 && rows.some((task) => task.id === parsed.data.taskId && task.status === 'IN_PROGRESS' && !task.deletedAt)) activeFocus = parsed.data; } catch { /* Expired/invalid operational state is not evidence of focus. */ }
   const threshold = Number(memory.get('preference:switching_threshold') ?? NEXT_ACTION_POLICY.switchingThreshold);
   const requestedBuffer = Number(memory.get('preference:buffer_minutes') ?? 15);
-  const bufferMinutes = Number.isFinite(requestedBuffer) ? Math.max(0, Math.min(120, requestedBuffer)) : 15;
+  const bufferMinutes = normalizedBuffer(requestedBuffer);
   const preferredProject = memory.get('preference:focus_project_id') ?? memory.get('goal:project_id');
   const tasks = rows.map((task) => ({ ...task,
     calendarDurationMin: task.durationMin,
@@ -56,7 +57,7 @@ export async function loadScheduleContext(userId: string, now = new Date(), days
     preferenceScore: preferredProject && task.projectId === preferredProject ? 100 : 50,
     contextScore: memory.get('preference:energy') === task.energyLevel ? 100 : task.status === 'IN_PROGRESS' ? 85 : 50,
   }));
-  const staleCalendars = connections.filter((connection) => connection.status !== 'connected' || !connection.lastSyncedAt || +now - +connection.lastSyncedAt > 15 * 60000).length;
+  const staleCalendars = connections.filter((connection) => connection.status !== 'connected' || !connection.lastSyncedAt || +freshnessNow - +connection.lastSyncedAt > 15 * 60000).length;
   const calendarFreshUntil = connections.length ? Math.min(...connections.map((connection) => connection.lastSyncedAt ? +connection.lastSyncedAt + 15 * 60000 : +now)) : null;
   return { user, now, from, to, tasks, events: withoutTaskMirrors(imported, tasks), activeFocus, calendarFreshUntil,
     nextActionEnabled: memory.get('preference:next_action_enabled') === 'true',
@@ -86,6 +87,7 @@ export async function getScheduleIntelligence(userId: string, now = new Date(), 
     user.preference?.personalizationEnabled ? buildPersonalizedInsights(userId, now) : Promise.resolve(null),
   ]);
   const preferenceById = new Map(insights?.enabled ? insights.completion.predictions.map((item) => [item.taskId, item.probability]) : []);
+  const bufferMemory = await prisma.userMemory.findUnique({ where: { userId_key: { userId, key: 'preference:buffer_minutes' } } });
   const result = analyzeSchedule({
     events,
     tasks: tasks.map((task) => ({ ...task, status: task.deletedAt ? 'CANCELLED' : task.status, dependencyBlocked: task.dependencies.some((edge) => edge.dependsOn.status !== 'COMPLETED' && !edge.dependsOn.deletedAt), blocksCount: task.dependents.length, preferenceScore: preferenceById.get(task.id) })),
@@ -93,7 +95,7 @@ export async function getScheduleIntelligence(userId: string, now = new Date(), 
     workStart: user.preference?.workStart ?? '09:00',
     workEnd: user.preference?.workEnd ?? '17:00',
     workingDays: user.preference?.workingDays ?? '1,2,3,4,5',
-    bufferMinutes: options.bufferMinutes,
+    bufferMinutes: normalizedBuffer(options.bufferMinutes ?? bufferMemory?.value),
     now,
   });
   return { ...result, timeZone: user.timeZone, generatedAt: now.toISOString() };

@@ -10,3 +10,10 @@ export const NEXT_ACTION_POLICY = {
   minimumProactiveWindow: 15,
 } as const;
 export type NextActionWeights = { [K in keyof typeof NEXT_ACTION_POLICY.weights]: number };
+
+/** Completing or cancelling the previous choice must not delay the next useful suggestion. */
+export function suppressNextAction(state: { taskId?: string; score?: number; shownAt?: number; dismissed?: boolean }, best: { taskId: string; score: number }, previousStillActionable: boolean, now: number) {
+  const elapsed = now - (state.shownAt ?? 0);
+  return (state.dismissed && previousStillActionable && elapsed < NEXT_ACTION_POLICY.cooldownMinutes * 60000)
+    || (state.taskId === best.taskId && best.score < (state.score ?? 0) + 20 && elapsed < NEXT_ACTION_POLICY.repeatSuppressionMinutes * 60000);
+}

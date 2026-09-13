@@ -42,9 +42,17 @@ struct RootView: View {
         }
         .environmentObject(model)
         .tint(.nexdoIndigo)
-        .onChange(of: model.profile?.id) { _, id in taskActions.activate(userID: id) }
+        .onChange(of: model.profile?.id) { _, id in taskActions.activate(userID: id); model.refreshNextAction() }
         .onReceive(model.$tasks) { tasks in
-            if let id = model.profile?.id { taskActions.synchronize(tasks: tasks, userID: id) }
+            if let id = model.profile?.id { taskActions.synchronize(tasks: tasks, userID: id); if phase == .active { model.refreshNextAction() } }
+        }
+        .onReceive(model.$focusSession.dropFirst()) { _ in if phase == .active { model.refreshNextAction() } }
+        .onReceive(model.$agenda.dropFirst()) { _ in if phase == .active { model.refreshNextAction() } }
+        .task {
+            while !Task.isCancelled {
+                do { try await Task.sleep(for: .seconds(60)) } catch { return }
+                if phase == .active { model.refreshNextAction() }
+            }
         }
         .sheet(item: $taskActions.route) { route in
             TaskActionView(actionID: route.id, preferred: route.preferred).environmentObject(model)
@@ -54,7 +62,8 @@ struct RootView: View {
             Button("OK") { model.error = nil }
         } message: { Text(model.error ?? "") }
         .onChange(of: phase) { _, value in
-            if value == .active && model.profile != nil { Task { await model.refresh() } }
+            if value == .active && model.profile != nil { model.refreshNextAction(); Task { await model.refresh() } }
+            else if value != .active { model.invalidateNextAction() }
         }
     }
 
@@ -882,6 +891,26 @@ private struct TodayView: View {
                             TodayActionsView(queue: queue, now: context.date, onTask: { id in editing = model.tasks.first { $0.id == id } })
                         }
 
+                        if range == .today, let recommendation = model.persistentNext?.recommendation,
+                           let best = recommendation.nextAction?.bestAction {
+                            VStack(alignment: .leading, spacing: 10) {
+                                HStack {
+                                    Text("What should I do now?").font(.headline)
+                                    Spacer()
+                                    Button { model.dismissPersistentNext() } label: { Image(systemName: "xmark").frame(width: 44, height: 44) }.accessibilityLabel("Dismiss suggestion")
+                                }
+                                Text(best.title).font(.title3.bold())
+                                Text("~\(best.focusMinutes) min · \(recommendation.nextAction?.availableWindowMinutes ?? 0) minutes available").font(.subheadline).foregroundStyle(Color.nexdoSecondary)
+                                Button("Start Focus Session") {
+                                    Task {
+                                        do { try await model.startRecommendedFocus(best); model.refreshNextAction() }
+                                        catch { model.error = error.localizedDescription; model.refreshNextAction() }
+                                    }
+                                }.buttonStyle(.borderedProminent).disabled(!recommendation.canStart || model.busy)
+                                Button("Other options") { showingDoNow = true }
+                            }.padding(18).background(Color.nexdoIndigo.opacity(0.06), in: RoundedRectangle(cornerRadius: 20))
+                        }
+
                         TodayIntelligenceCard(
                             range: range,
                             appointments: counts.appointments,
@@ -1662,6 +1691,9 @@ struct TaskEditor: View {
     @State private var projectID: String?
     @State private var projectInitialized = false
     @State private var title = ""
+    @State private var checkingAvailability = false
+    @State private var scheduleWarning: String?
+    @State private var showScheduleWarning = false
     @State private var notes = ""
     @State private var duration = 30
     @State private var notesExpanded = false
@@ -1768,11 +1800,15 @@ struct TaskEditor: View {
                 .frame(maxWidth: .infinity, minHeight: 52)
                 .background(canSave ? AnyShapeStyle(TaskCreationStyle.selectedGradient) : AnyShapeStyle(TaskCreationStyle.input), in: RoundedRectangle(cornerRadius: 17))
             }
-            .buttonStyle(.plain).disabled(!canSave)
+            .buttonStyle(.plain).disabled(!canSave || checkingAvailability)
             .padding(.horizontal, 20).padding(.vertical, 12).background(.regularMaterial)
         }
         .foregroundStyle(Color.primary)
         .tint(TaskCreationStyle.accent)
+        .alert("Schedule check", isPresented: $showScheduleWarning) {
+            Button("Choose another time", role: .cancel) {}
+            Button("Create anyway") { save(approved: true) }
+        } message: { Text(scheduleWarning ?? "") }
         .onAppear { if !projectInitialized { projectID = initialProjectID; projectInitialized = true } }
         .navigationTitle("New Task")
         .navigationBarTitleDisplayMode(.inline)
@@ -1781,7 +1817,8 @@ struct TaskEditor: View {
             ToolbarItemGroup(placement: .keyboard) { Spacer(); Button("Done") { focusedField = nil } }
         }
         .onDisappear { focusedField = nil }
-        .interactiveDismissDisabled(model.busy)
+        .interactiveDismissDisabled(model.busy || checkingAvailability)
+        .disabled(checkingAvailability)
         .sheet(isPresented: $showingDatePicker) {
             NavigationStack {
                 DatePicker("Task date", selection: $customDate, displayedComponents: .date)
@@ -1835,10 +1872,19 @@ struct TaskEditor: View {
         return dateChoice.resolve(customDate: customDate, timeZone: accountTimeZone)
     }
 
-    private func save() {
-        guard canSave else { return }
+    private func save() { save(approved: false) }
+    private func save(approved: Bool) {
+        guard canSave, !checkingAvailability else { return }
         focusedField = nil
+        checkingAvailability = true
         Task {
+            defer { checkingAvailability = false }
+            if !approved {
+                do {
+                    let warnings = try await model.schedulingWarnings(start: resolvedCreationDate, end: resolvedCreationDate.addingTimeInterval(Double(duration * 60)), kind: "task")
+                    if !warnings.isEmpty { scheduleWarning = warnings.joined(separator: "\n\n"); showScheduleWarning = true; return }
+                } catch { scheduleWarning = "Availability could not be verified. Create this task anyway?"; showScheduleWarning = true; return }
+            }
             if await model.saveTask(id: task?.id, title: title.trimmingCharacters(in: .whitespacesAndNewlines), notes: notes, duration: duration, scheduledAt: resolvedCreationDate, projectId: projectID) {
                 dismiss()
             }

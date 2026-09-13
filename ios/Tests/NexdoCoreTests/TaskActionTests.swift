@@ -110,3 +110,12 @@ private func reconcile(_ previous: [TaskAction], _ tasks: [NexdoTask]) -> [TaskA
     action.transition(to: .cancelled)
     #expect(TaskActionNotificationPlan.desired([action], now: actionNow).isEmpty)
 }
+
+@Test func vagueTaskClarificationRequiresAnExplicitContactAction() {
+    for title in ["Dentist", "Insurance", "Damien"] { #expect(TaskActionClarification.isCandidate(title)) }
+    #expect(!TaskActionClarification.isCandidate("Call Damien"))
+    #expect(TaskActionClarification.title(verb: "Call", contact: "Dentist") == "Call Dentist")
+    #expect(TaskActionClarification.title(verb: "Email", contact: "  Damien  ") == "Email Damien")
+    #expect(TaskActionClarification.title(verb: "Book", contact: "Dentist") == nil)
+    #expect(TaskActionClarification.title(verb: "Call", contact: " ") == nil)
+}

@@ -1,3 +1,5 @@
+import { checkCreationAvailability } from '@/server/availability';
+import { availability } from '@/lib/availability';
 import { z } from 'zod';
 import { createHash } from 'node:crypto';
 import { prisma } from '@/server/db';
@@ -13,9 +15,9 @@ const id = z.string().min(1).max(200);
 const schemas = {
   get_recommendations: z.object({ minutes: z.number().int().min(1).max(480).optional() }).strict(),
   list_categories: z.object({}).strict(),
-  create_calendar_event: z.object({ title: fields.title, notes: fields.notes.optional(), startAt: timestamp, endAt: timestamp, location: z.string().max(200).optional() }).strict(),
+  create_calendar_event: z.object({ allowScheduleConflict: z.boolean().optional(), title: fields.title, notes: fields.notes.optional(), startAt: timestamp, endAt: timestamp, location: z.string().max(200).optional() }).strict(),
   create_reminder: z.object({ title: fields.title, notes: fields.notes.optional(), categoryName: fields.categoryName.optional(), scheduledAt: timestamp }).strict(),
-  create_task: z.object({ title: fields.title, notes: fields.notes.optional(), scheduledAt: timestamp, durationMin: fields.durationMin, categoryName: fields.categoryName.optional() }).strict(),
+  create_task: z.object({ allowScheduleConflict: z.boolean().optional(), title: fields.title, notes: fields.notes.optional(), scheduledAt: timestamp, durationMin: fields.durationMin, categoryName: fields.categoryName.optional() }).strict(),
   update_task: z.object({ taskId: id, title: fields.title.optional(), notes: fields.notes.optional(), categoryName: fields.categoryName.optional(), scheduledAt: timestamp.optional(), durationMin: fields.durationMin.optional(), recurrence: z.null().optional() }).strict(),
   delete_task: z.object({ taskId: id }).strict(), complete_task: z.object({ taskId: id }).strict(),
   find_tasks: z.object({ query: z.string().trim().min(2).max(100) }).strict(),
@@ -30,8 +32,14 @@ export function validateVoiceTool(name: string, args: unknown) {
 }
 export async function executeVoiceTool(userId: string, sessionId: string, callId: string, name: string, input: unknown) {
   validateVoiceTool(name, input);
-  const args = input as Record<string, string | number | null>;
+  const args = input as Record<string, string | number | boolean | null>;
   if (typeof args.scheduledAt === 'string' && +new Date(args.scheduledAt) <= Date.now()) throw new Error('Schedule must be in the future');
+  if (['create_task', 'create_calendar_event'].includes(name) && args.allowScheduleConflict !== true) {
+    const start = new Date(String(name === 'create_task' ? args.scheduledAt : args.startAt));
+    const end = name === 'create_task' ? new Date(+start + Number(args.durationMin) * 60000) : new Date(String(args.endAt));
+    const warnings = await checkCreationAvailability(userId, start, end, name === 'create_task' ? 'task' : 'event');
+    if (warnings.length) return { success: false, requiresConfirmation: true, warnings, message: 'Explain these scheduling warnings and ask whether to create anyway. Nothing has been saved. Only after explicit agreement retry with allowScheduleConflict true.' };
+  }
   if (name === 'list_categories') {
     return { success: true, categories: await prisma.category.findMany({ where: { userId }, select: { name: true, kind: true }, take: 100 }) };
   }
@@ -57,7 +65,15 @@ export async function executeVoiceTool(userId: string, sessionId: string, callId
     const tasks = await prisma.task.findMany({ where: { userId, deletedAt: null, title: { contains: String(args.query) } }, select: selection, take: 21, orderBy: { updatedAt: 'desc' } });
     return { success: true, tasks: tasks.slice(0, 20), truncated: tasks.length > 20 };
   }
-  if (name === 'get_schedule' || name === 'find_free_time') {
+  if (name === 'find_free_time') {
+    const from = new Date(String(args.from)), to = new Date(String(args.to));
+    if (+to <= +from || +to - +from > 7 * 86400000) throw new Error('Use a window of at most seven days');
+    const { loadScheduleContext } = await import('@/server/schedule-intelligence');
+    const context = await loadScheduleContext(userId, new Date(+from - 86400000), 10, undefined, new Date());
+    const slots = availability(context, from, to).slots.filter(slot => slot.end - slot.start >= Number(args.durationMin) * 60000);
+    return { success: true, slots: slots.slice(0, 20).map(slot => ({ from: new Date(slot.start).toISOString(), to: new Date(slot.end).toISOString() })), warnings: context.contextWarnings, basedOn: 'Saved working hours, task durations, appointments and configured buffers', truncated: slots.length > 20 };
+  }
+  if (name === 'get_schedule') {
     const from = new Date(String(args.from)), to = new Date(String(args.to));
     if (+to <= +from || +to - +from > 7 * 86400000) throw new Error('Use a window of at most seven days');
     // Include tasks that began before the requested window but may still overlap it.
@@ -67,15 +83,7 @@ export async function executeVoiceTool(userId: string, sessionId: string, callId
     ]);
     if (tasks.length > 200 || events.length > 200) return { success: false, error: 'Window too busy; request a smaller range.' };
     const overlapping = tasks.filter(t => t.startAt && +t.startAt + t.durationMin * 60000 > +from);
-    const busy = [...overlapping.map(t => ({ start: +t.startAt!, end: +t.startAt! + t.durationMin * 60000 })), ...events.map(e => ({ start: +e.startAt, end: +e.endAt }))].sort((a, b) => a.start - b.start);
-    if (name === 'get_schedule') return { success: true, tasks: overlapping, events: events.map(e => ({ title: e.title, startAt: e.startAt, endAt: e.endAt })) };
-    const slots: { from: string; to: string }[] = []; let cursor = +from;
-    for (const period of [...busy, { start: +to, end: +to }]) {
-      const end = Math.min(period.start, +to);
-      if (end - cursor >= Number(args.durationMin) * 60000) slots.push({ from: new Date(cursor).toISOString(), to: new Date(end).toISOString() });
-      cursor = Math.max(cursor, period.end);
-    }
-    return { success: true, slots: slots.slice(0, 20), basedOn: 'NexDo tasks and currently synced visible calendars', truncated: slots.length > 20 };
+    return { success: true, tasks: overlapping, events: events.map(e => ({ title: e.title, startAt: e.startAt, endAt: e.endAt })) };
   }
   let task;
   if (name === 'create_task' || name === 'create_reminder') {

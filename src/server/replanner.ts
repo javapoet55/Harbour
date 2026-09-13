@@ -1,3 +1,4 @@
+import { normalizedBuffer } from '@/lib/availability';
 import { prisma } from './db';
 import { listEventsInRange } from './agenda';
 import { buildReplan, type ReplanMove, type ReplanRisk } from '@/lib/replanning';
@@ -80,13 +81,14 @@ export async function generateReplanProposal(userId: string, now = new Date()) {
     listEventsInRange(userId, start, end),
   ]);
   const predictedDurations = await personalizedTaskDurations(userId, tasks);
+  const bufferMemory = await prisma.userMemory.findUnique({ where: { userId_key: { userId, key: 'preference:buffer_minutes' } } });
   const plan = buildReplan({
     tasks: tasks.map((task) => ({ ...task, durationMin: predictedDurations.get(task.id) ?? task.durationMin, dependsOnIds: task.dependencies.filter((dependency) => dependency.dependsOn.status !== 'COMPLETED').map((dependency) => dependency.dependsOnId) })),
     events: events.filter((event) => !event.externalId || !tasks.some((task) => task.externalEventId === event.externalId)),
     timeZone: user.timeZone,
     workingDays: preference?.workingDays ?? '1,2,3,4,5',
     workStart: preference?.workStart ?? '09:00', workEnd: preference?.workEnd ?? '17:00',
-    horizonDays, now,
+    horizonDays, now, bufferMinutes: normalizedBuffer(bufferMemory?.value),
   });
   const payload: ReplanPayload = { version: 1, kind: INTENT, generatedAt: plan.generatedAt, moves: plan.moves, risks: plan.risks };
   let actionId: string | null = null;

@@ -10,7 +10,7 @@ export async function POST(req: Request) {
     const body = input.safeParse(await req.json().catch(() => null));
     if (!body.success) return Response.json({ error: 'Invalid event details.' }, { status: 400 });
     const { requestId, repeat, ...event } = body.data;
-    try { validateVoiceTool('create_calendar_event', event); }
+    try { validateVoiceTool('create_calendar_event', { ...event, allowScheduleConflict: true }); }
     catch { return Response.json({ error: 'Invalid event details.' }, { status: 400 }); }
     if (+new Date(event.startAt) <= Date.now() || +new Date(event.endAt) <= +new Date(event.startAt) || +new Date(event.endAt) - +new Date(event.startAt) > 7 * 86400000) return Response.json({ error: 'Choose a future start and an end within seven days.' }, { status: 400 });
     if (repeat) {
@@ -27,7 +27,7 @@ export async function POST(req: Request) {
       }, { timeout: 20000 });
       return Response.json({ success: true, occurrenceCount: occurrences.length }, { headers: { 'Cache-Control': 'private, no-store' } });
     }
-    return Response.json(await executeVoiceTool(user.id, requestId, 'manual-calendar-event', 'create_calendar_event', event), { headers: { 'Cache-Control': 'private, no-store' } });
+    return Response.json(await executeVoiceTool(user.id, requestId, 'manual-calendar-event', 'create_calendar_event', { ...event, allowScheduleConflict: true }), { headers: { 'Cache-Control': 'private, no-store' } });
   } catch (error) {
     return Response.json({ error: error instanceof Error && error.message === 'UNAUTHENTICATED' ? 'Sign in required.' : 'Could not confirm the event. Check your calendar before trying again.' }, { status: error instanceof Error && error.message === 'UNAUTHENTICATED' ? 401 : 500 });
   }

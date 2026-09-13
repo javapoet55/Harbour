@@ -1,6 +1,7 @@
 import { beforeEach, expect, it, vi } from 'vitest';
 import { executeVoiceTool, validateVoiceTool } from './tools';
-const mocks = vi.hoisted(() => ({ createTask: vi.fn(), updateTask: vi.fn(), scheduleTask: vi.fn(), completeTask: vi.fn(), deleteTask: vi.fn(), reminders: vi.fn(), tasks: vi.fn(), owned: vi.fn(), events: vi.fn(), eventSave: vi.fn(), categories: vi.fn(), categoryCreate: vi.fn(), taskUpdate: vi.fn(), reminderSave: vi.fn(), user: vi.fn(), context: vi.fn(), recommend: vi.fn() }));
+const mocks = vi.hoisted(() => ({ createTask: vi.fn(), updateTask: vi.fn(), scheduleTask: vi.fn(), completeTask: vi.fn(), deleteTask: vi.fn(), reminders: vi.fn(), tasks: vi.fn(), owned: vi.fn(), events: vi.fn(), eventSave: vi.fn(), categories: vi.fn(), categoryCreate: vi.fn(), taskUpdate: vi.fn(), reminderSave: vi.fn(), user: vi.fn(), context: vi.fn(), recommend: vi.fn(), availability: vi.fn() }));
+vi.mock('@/server/availability', () => ({ checkCreationAvailability: mocks.availability }));
 vi.mock('@/server/tasks', () => mocks);
 vi.mock('@/server/schedule-intelligence', () => ({ loadScheduleContext: mocks.context }));
 vi.mock('@/lib/executive-recommendations', () => ({ buildExecutiveRecommendation: mocks.recommend }));
@@ -11,7 +12,7 @@ vi.mock('@/server/agenda', () => ({ listEventsInRange: mocks.events }));
 vi.mock('@/server/db', () => ({ prisma: { task: { findMany: mocks.tasks, findFirst: mocks.owned, update: mocks.taskUpdate }, category: { findMany: mocks.categories, create: mocks.categoryCreate }, user: { findUniqueOrThrow: mocks.user }, calendarEvent: { upsert: mocks.eventSave }, reminder: { deleteMany: vi.fn(), upsert: mocks.reminderSave }, recurrenceRule: { deleteMany: vi.fn() } } }));
 const task = { id: 'task1', title: 'Call Damien', status: 'PLANNED', priority: 'NORMAL', durationMin: 30, startAt: new Date('2099-01-01T10:00:00Z'), dueAt: null, critical: false };
 const args = { title: 'Call Damien', scheduledAt: '2099-01-01T10:00:00Z', durationMin: 30 };
-beforeEach(() => { vi.clearAllMocks(); mocks.createTask.mockResolvedValue(task); mocks.reminders.mockResolvedValue(undefined); mocks.owned.mockResolvedValue(task); mocks.scheduleTask.mockResolvedValue(task); mocks.events.mockResolvedValue([]); mocks.tasks.mockResolvedValue([]); });
+beforeEach(() => { vi.clearAllMocks(); mocks.availability.mockResolvedValue([]); mocks.context.mockResolvedValue({ timeZone: "UTC", workingDays: "0,1,2,3,4,5,6", workStart: "00:00", workEnd: "23:59", bufferMinutes: 15, tasks: [], events: [] }); mocks.createTask.mockResolvedValue(task); mocks.reminders.mockResolvedValue(undefined); mocks.owned.mockResolvedValue(task); mocks.scheduleTask.mockResolvedValue(task); mocks.events.mockResolvedValue([]); mocks.tasks.mockResolvedValue([]); });
 it('passes a stable per-user session and call idempotency key to the existing task engine', async () => {
   await executeVoiceTool('u', 's', 'c', 'create_task', args);
   await executeVoiceTool('u', 's', 'c', 'create_task', args);
@@ -44,9 +45,9 @@ it('rejects overbroad calendar windows', async () => {
   expect(mocks.events).not.toHaveBeenCalled();
 });
 it('subtracts overlapping appointments from available time', async () => {
-  mocks.events.mockResolvedValue([{ title: 'Dentist', startAt: new Date('2099-01-01T10:00:00Z'), endAt: new Date('2099-01-01T11:00:00Z') }]);
+  mocks.context.mockResolvedValue({ timeZone: 'UTC', workingDays: '0,1,2,3,4,5,6', workStart: '09:00', workEnd: '17:00', bufferMinutes: 15, tasks: [], events: [{ id: 'dentist', title: 'Dentist', startAt: new Date('2099-01-01T10:00:00Z'), endAt: new Date('2099-01-01T11:00:00Z') }] });
   const result = await executeVoiceTool('u', 's', 'c', 'find_free_time', { from: '2099-01-01T09:00:00Z', to: '2099-01-01T12:00:00Z', durationMin: 45 });
-  expect(result).toMatchObject({ success: true, slots: [{ from: '2099-01-01T09:00:00.000Z', to: '2099-01-01T10:00:00.000Z' }, { from: '2099-01-01T11:00:00.000Z', to: '2099-01-01T12:00:00.000Z' }] });
+  expect(result).toMatchObject({ success: true, slots: [{ from: '2099-01-01T09:00:00.000Z', to: '2099-01-01T09:45:00.000Z' }, { from: '2099-01-01T11:15:00.000Z', to: '2099-01-01T12:00:00.000Z' }] });
 });
 
 it('creates a calendar event in the owned timezone with a stable key and no invitations', async () => {
@@ -77,4 +78,11 @@ it('grounds a recommendation in this user’s current schedule context', async (
   expect(mocks.context).toHaveBeenCalledWith('u');
   expect(mocks.recommend).toHaveBeenCalledWith({ marker: 'owned-context' }, 'FREE_WINDOW', { minutes: 38 });
   expect(result).toMatchObject({ success: true, nextAction: { availableWindowMinutes: 38 } });
+});
+
+it('requires confirmation before creating a task in a conflicting slot', async () => {
+  mocks.availability.mockResolvedValue(['Overlaps an appointment buffer.']);
+  expect(await executeVoiceTool('u', 's', 'c', 'create_task', args)).toMatchObject({ success: false, requiresConfirmation: true });
+  expect(mocks.createTask).not.toHaveBeenCalled();
+  expect(await executeVoiceTool('u', 's', 'c', 'create_task', { ...args, allowScheduleConflict: true })).toMatchObject({ success: true });
 });

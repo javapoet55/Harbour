@@ -77,6 +77,10 @@ struct TaskDetailsView: View {
         .toolbar {
             ToolbarItemGroup(placement: .keyboard) { Spacer(); Button("Done") { focus = nil } }
         }
+        .onChange(of: currentTask.title) { _, title in
+            if draft.title == original.title { draft.title = title }
+            original.title = title
+        }
         .onDisappear { focus = nil }
         .alert("Task details", isPresented: Binding(get: { message != nil }, set: { if !$0 { message = nil } })) {
             Button("OK", role: .cancel) {}

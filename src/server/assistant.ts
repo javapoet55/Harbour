@@ -1,3 +1,4 @@
+import { checkCreationAvailability } from './availability';
 import { addDays, formatDay, formatTime, tzToday, weekdayName, ymd } from '@/lib/time';
 import { inc, observeMs } from '@/lib/metrics';
 import { log } from '@/lib/logger';
@@ -75,7 +76,13 @@ export async function runAssistantTurn(userId: string, transcript: string, confi
     },
   });
 
-  if (needsConfirmation(intent, level) && ['CREATE_TASK', 'SCHEDULE_TASK', 'CREATE_RECURRING_TASK', 'DELETE_TASK', 'COMPLETE_TASK', 'RESCHEDULE_TASK'].includes(intent.intent)) {
+  let scheduleWarnings: string[] = [];
+  if (['CREATE_TASK', 'SCHEDULE_TASK', 'CREATE_RECURRING_TASK'].includes(intent.intent) && ['today', 'tomorrow'].includes(intent.whenText ?? '')) {
+    const day = tzToday(timeZone, new Date());
+    const start = localWhen(ymd(intent.whenText === 'tomorrow' ? addDays(day, 1) : day), intent.timeText, timeZone);
+    if (start) scheduleWarnings = await checkCreationAvailability(userId, start, new Date(+start + (intent.durationMin || 30) * 60000), 'task');
+  }
+  if ((scheduleWarnings.length > 0 || needsConfirmation(intent, level)) && ['CREATE_TASK', 'SCHEDULE_TASK', 'CREATE_RECURRING_TASK', 'DELETE_TASK', 'COMPLETE_TASK', 'RESCHEDULE_TASK'].includes(intent.intent)) {
     const action = await prisma.assistantAction.create({
       data: {
         userId,
@@ -85,7 +92,7 @@ export async function runAssistantTurn(userId: string, transcript: string, confi
         confirmation: 'REQUIRED',
       },
     });
-    const preview = previewAction(intent, timeZone);
+    const preview = previewAction(intent, timeZone) + (scheduleWarnings.length ? ` Schedule warning: ${scheduleWarnings.join(' ')} Keep this time?` : '');
     return {
       transcript,
       intent,

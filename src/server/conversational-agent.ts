@@ -1,3 +1,4 @@
+import { checkCreationAvailability } from './availability';
 import { createHash } from 'node:crypto';
 import { prisma } from './db';
 import { runAssistantTurn, type AssistantTurn } from './assistant';
@@ -304,6 +305,18 @@ export async function runConversationalAgent(userId: string, transcript: string,
   if (plan.needs_clarification || !material) {
     await prisma.assistantAction.create({ data: { userId, sessionId: session.id, intent: plan.needs_clarification ? 'AGENT_CLARIFICATION' : 'AGENT_READ', payloadJson: JSON.stringify(plan), confirmation: 'NONE', executed: true, resultJson: JSON.stringify({ response: plan.response }) } });
     return { ...turn(plan, null), transcript };
+  }
+  const warnings: string[] = [];
+  for (const action of plan.actions) {
+    if (action.type === 'CREATE_TASK' && action.start_at) {
+      const start = new Date(action.start_at);
+      warnings.push(...await checkCreationAvailability(userId, start, new Date(+start + (action.duration_min || 30) * 60000), 'task'));
+    }
+  }
+  if (warnings.length) {
+    const unique = [...new Set(warnings)];
+    plan.response_sections.push({ title: 'Schedule review', items: unique });
+    plan.interpretation += ` Schedule warning: ${unique.join(' ')} Confirm only if you want to keep this time.`;
   }
   const versions = referenced.length ? await prisma.task.findMany({ where: { userId, id: { in: referenced } }, select: { id: true, updatedAt: true } }) : [];
   const stored: StoredAgentPlan = { agentVersion: 1, plan, taskVersions: Object.fromEntries(versions.map((task) => [task.id, task.updatedAt.toISOString()])) };

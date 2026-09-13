@@ -1,3 +1,4 @@
+import { normalizedBuffer } from '@/lib/availability';
 import { listEventsInRange, listTasksInRange } from './agenda';
 import { endOfLocalDay, startOfLocalDay, tzToday, addDays, ymd } from '@/lib/time';
 import { prisma } from './db';
@@ -23,9 +24,9 @@ export async function buildDailyPlan(userId: string, timeZone: string, ymdValue:
   const workEnd = user.preference?.workEnd ?? '17:00';
   const memory = await prisma.userMemory.findUnique({ where: { userId_key: { userId, key: 'preference:buffer_minutes' } } });
   const configuredBuffer = Number(memory?.value ?? 15);
-  const buffer = Number.isFinite(configuredBuffer) ? Math.max(0, Math.min(120, configuredBuffer)) : 15;
+  const buffer = normalizedBuffer(configuredBuffer);
   const now = new Date();
-  const windows = workWindows(timeZone, user.preference?.workingDays ?? '1,2,3,4,5', workStart, workEnd, 1, start);
+  const windows = workWindows(timeZone, user.preference?.workingDays ?? '1,2,3,4,5', workStart, workEnd, 1, start, 0);
   const available = minutesIn(windows.flatMap((window) => freeSlots(Math.max(+now, window.start), window.end, calendarBusy(withoutTaskMirrors(events, tasks), buffer))));
   const openTasks = tasks.filter((t) => t.status !== 'COMPLETED' && t.status !== 'CANCELLED');
   const needed = openTasks.reduce((sum, task) => sum + minutesFor(task), 0);

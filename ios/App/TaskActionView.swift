@@ -5,6 +5,7 @@ struct TaskActionCard: View {
     @ObservedObject private var coordinator = TaskActionCoordinator.shared
     let task: NexdoTask
     @State private var showing = false
+    @EnvironmentObject private var model: AppModel
     var body: some View {
         if let action = coordinator.action(for: task.id), !task.isDone, task.status != "CANCELLED" {
             Button { showing = true } label: {
@@ -32,6 +33,47 @@ struct TaskActionCard: View {
             .sheet(isPresented: $showing) {
                 TaskActionView(actionID: action.id, preferred: action.preferredAction)
             }
+        } else if !task.isDone && task.status != "CANCELLED" && TaskActionClarification.isCandidate(task.title) {
+            ClarifyTaskActionCard(task: task)
+        }
+    }
+}
+
+private struct ClarifyTaskActionCard: View {
+    @EnvironmentObject private var model: AppModel
+    @ObservedObject private var coordinator = TaskActionCoordinator.shared
+    let task: NexdoTask
+    @State private var contact = ""
+    @State private var saving = false
+    @State private var failure: String?
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("What would you like to do about “\(task.title)”?").font(.headline)
+            TextField("Person or business to contact", text: $contact).textFieldStyle(.roundedBorder)
+            ViewThatFits(in: .horizontal) {
+                HStack { choices }
+                VStack(alignment: .leading) { choices }
+            }
+            Text("Choose an action to clarify this task. You’ll review the contact before calling or sending.").font(.caption).foregroundStyle(.secondary)
+            if saving { ProgressView("Updating your next step…") }
+            if let failure { Text(failure).font(.caption).foregroundStyle(.red) }
+        }.padding(16).background(Color.nexdoIndigo.opacity(0.06), in: RoundedRectangle(cornerRadius: 18))
+        .onAppear { contact = task.title }
+    }
+    @ViewBuilder private var choices: some View {
+        ForEach(["Call", "Message", "Email"], id: \.self) { verb in
+            Button(verb) {
+                guard let title = TaskActionClarification.title(verb: verb, contact: contact) else { failure = "Enter a short person or business name to continue."; return }
+                saving = true; failure = nil
+                Task {
+                    let saved = await model.saveTask(id: task.id, title: title, notes: task.notes ?? "", duration: task.durationMin)
+                    saving = false
+                    if saved, let owner = model.profile?.id {
+                        coordinator.synchronize(tasks: model.tasks, userID: owner)
+                        if let action = coordinator.action(for: task.id) { coordinator.open(action) }
+                    } else { failure = "Couldn’t update this task. Please try again." }
+                }
+            }.buttonStyle(.bordered).disabled(saving || contact.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         }
     }
 }

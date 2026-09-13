@@ -28,3 +28,10 @@ struct DoNowRecommendation: Decodable, Sendable {
     let recommendedActions: [Action]
     var canStart: Bool { recommendedActions.contains { $0.type == "START_FOCUS" } }
 }
+
+struct ProactiveNextResponse: Decodable, Sendable {
+    let enabled: Bool
+    let refreshAt: String?
+    let recommendation: DoNowRecommendation?
+    let contextActionId: String?
+}

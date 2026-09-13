@@ -8,7 +8,7 @@ import type { AssistantTurn } from './assistant';
 import { inc, observeMs } from '@/lib/metrics';
 import { log } from '@/lib/logger';
 import { addDays, endOfLocalDay, formatTime, startOfLocalDay, tzToday, ymd, zonedDateTime } from '@/lib/time';
-import { NEXT_ACTION_POLICY } from '@/lib/next-action-config';
+import { NEXT_ACTION_POLICY, suppressNextAction } from '@/lib/next-action-config';
 import { workWindows } from '@/lib/replanning';
 
 /** Conservative title resolution. Ambiguous/missing candidates require clarification, never invented IDs. */
@@ -175,8 +175,8 @@ export async function proactiveNextAction(userId: string, now = new Date()) {
       const previous = await tx.userMemory.findUnique({ where: { userId_key: { userId, key } } });
       let state: { taskId?: string; score?: number; shownAt?: number; contextActionId?: string; dismissed?: boolean } = {};
       try { state = JSON.parse(previous?.value ?? '{}'); } catch { /* Old operational state is replaceable. */ }
-      const elapsed = +now - (state.shownAt ?? 0);
-      if (elapsed < NEXT_ACTION_POLICY.cooldownMinutes * 60000 || (state.taskId === best.taskId && best.score < (state.score ?? 0) + 20 && elapsed < NEXT_ACTION_POLICY.repeatSuppressionMinutes * 60000)) {
+      const previousStillActionable = context.tasks.some(task => task.id === state.taskId && ['INBOX', 'PLANNED', 'IN_PROGRESS'].includes(task.status) && !task.dependencyBlocked);
+      if (suppressNextAction(state, best, previousStillActionable, +now)) {
         // Keep an already visible, still-valid card fresh; this is not a new notification.
         return state.taskId === best.taskId && state.contextActionId && !state.dismissed ? { ...result, recommendation, contextActionId: state.contextActionId } : result;
       }

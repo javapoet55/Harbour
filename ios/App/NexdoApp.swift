@@ -12,6 +12,40 @@ struct NexdoApp: App {
 @MainActor
 final class AppModel: ObservableObject {
     @Published var profile: Profile?
+    @Published private(set) var persistentNext: ProactiveNextResponse?
+    private var nextRefresh: Task<Void, Never>?
+    private var nextGeneration = UUID()
+
+    func invalidateNextAction() {
+        nextRefresh?.cancel(); nextRefresh = nil; nextGeneration = UUID(); persistentNext = nil
+    }
+    func refreshNextAction() {
+        invalidateNextAction()
+        guard let owner = profile?.id else { return }
+        let generation = nextGeneration
+        nextRefresh = Task { [weak self] in
+            do {
+                try await Task.sleep(for: .milliseconds(350))
+                guard let self else { return }
+                let result: ProactiveNextResponse = try await self.api.request("/api/schedule-intelligence", method: "POST", body: JSONEncoder().encode(["operation": "next-action"]), timeout: 20)
+                guard !Task.isCancelled, self.profile?.id == owner, self.nextGeneration == generation else { return }
+                self.persistentNext = result
+            } catch { /* Never keep a stale recommendation after a failed refresh. */ }
+        }
+    }
+    func dismissPersistentNext() {
+        guard let id = persistentNext?.contextActionId else { return }
+        let owner = profile?.id
+        invalidateNextAction()
+        Task {
+            do {
+                let _: EmptyResponse = try await api.request("/api/schedule-intelligence", method: "POST", body: JSONEncoder().encode(["operation": "dismiss-next-action", "contextActionId": id]))
+                if profile?.id == owner { invalidateNextAction() }
+            } catch { /* Card remains hidden locally. */ }
+        }
+    }
+    private struct EmptyResponse: Decodable, Sendable {}
+
     @Published var tasks: [NexdoTask] = []
     @Published var projects: [NexdoProject] = []
     @Published var projectsLoading = false
@@ -315,6 +349,20 @@ final class AppModel: ObservableObject {
         refreshSupplementaryData()
         await refreshTasks()
     }
+    func schedulingWarnings(start: Date, end: Date, kind: String, repeatFrequency: String = "none", repeatUntil: Date = Date(), weekdays: [Int] = []) async throws -> [String] {
+        struct Result: Decodable, Sendable { let warnings: [String] }
+        let owner = profile?.id
+        let format = ISO8601DateFormatter()
+        var payload: [String: Any] = ["startAt": format.string(from: start), "endAt": format.string(from: end), "kind": kind]
+        if repeatFrequency != "none" {
+            let date = DateFormatter(); date.calendar = Calendar(identifier: .gregorian); date.locale = Locale(identifier: "en_US_POSIX"); date.timeZone = TimeZone(identifier: profile?.timeZone ?? "") ?? .current; date.dateFormat = "yyyy-MM-dd"
+            payload["repeat"] = ["frequency": repeatFrequency, "until": date.string(from: repeatUntil), "weekdays": weekdays]
+        }
+        let result: Result = try await api.request("/api/availability", method: "POST", body: JSONSerialization.data(withJSONObject: payload), timeout: 25)
+        guard profile?.id == owner else { throw APIError.signedOut }
+        return result.warnings
+    }
+
     func createCalendarEvent(title: String, notes: String, location: String, start: Date, end: Date, requestID: UUID, repeatFrequency: String = "none", repeatUntil: Date = Date(), weekdays: [Int] = []) async throws {
         let owner = profile?.id
         let format = ISO8601DateFormatter()

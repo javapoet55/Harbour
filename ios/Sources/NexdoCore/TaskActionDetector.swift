@@ -63,3 +63,17 @@ public struct DeterministicTaskActionDetector: TaskActionDetector {
         return result
     }
 }
+
+public enum TaskActionClarification {
+    public static func isCandidate(_ title: String) -> Bool {
+        let words = title.split(whereSeparator: { $0.isWhitespace })
+        return !words.isEmpty && words.count <= 4 && title.count <= 100 && DeterministicTaskActionDetector().detect(title: title) == nil
+    }
+    public static func title(verb: String, contact: String) -> String? {
+        let name = contact.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard ["Call", "Message", "Email"].contains(verb), !name.isEmpty, name.count <= 100 else { return nil }
+        let result = "\(verb) \(name)"
+        guard DeterministicTaskActionDetector().detect(title: result) != nil else { return nil }
+        return result
+    }
+}
