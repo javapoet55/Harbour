@@ -3,7 +3,10 @@ import SwiftUI
 @main
 struct NexdoApp: App {
     @UIApplicationDelegateAdaptor(TaskActionAppDelegate.self) private var actionDelegate
-    var body: some Scene { WindowGroup { RootView() } }
+    @AppStorage(AppAppearance.storageKey) private var appearance: AppAppearance = .system
+    var body: some Scene {
+        WindowGroup { RootView().preferredColorScheme(appearance.colorScheme) }
+    }
 }
 
 @MainActor

@@ -115,6 +115,7 @@ private extension View {
 }
 
 struct ProfileSettingsView: View {
+    @AppStorage(AppAppearance.storageKey) private var appearance: AppAppearance = .system
     @EnvironmentObject private var model: AppModel
     @Environment(\.openURL) private var openURL
     @State private var name = ""
@@ -134,6 +135,15 @@ struct ProfileSettingsView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
+                card("Appearance") {
+                    Picker("Appearance", selection: $appearance) {
+                        ForEach(AppAppearance.allCases) { choice in
+                            Text(choice.title).tag(choice)
+                        }
+                    }.pickerStyle(.segmented)
+                    Text("Day uses a light view. Night uses a dark view. System follows your iPhone. Changes apply immediately and are saved on this device.")
+                        .font(.caption).foregroundStyle(Color.nexdoSecondary)
+                }
                 card("Profile picture") {
                     HStack(spacing: 18) {
                         ProfileAvatar(name: name)
