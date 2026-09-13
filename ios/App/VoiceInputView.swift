@@ -5,7 +5,7 @@ struct VoiceInputView: View {
     @EnvironmentObject private var model: AppModel
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
-    @StateObject private var capture = VoiceCapture()
+    @StateObject private var capture = LiveVoiceTranscription()
     @StateObject private var playback = VoicePlayback()
     @State private var operation: Task<Void, Never>?
     @State private var phase: Phase = .idle
@@ -38,7 +38,7 @@ struct VoiceInputView: View {
                     Text(status).font(.title2.bold()).multilineTextAlignment(.center).accessibilityAddTraits(.isHeader)
                     if !consented {
                         Text(greeting).multilineTextAlignment(.center)
-                        Text("Nexdo sends your recording and relevant task, calendar, preference, and conversation information to OpenAI to answer you. Replies use an AI-generated voice. You can withdraw permission in Account.").font(.subheadline).foregroundStyle(Color.nexdoSecondary)
+                        Text("Nexdo streams your voice and relevant task, calendar, preference, and conversation information to OpenAI to answer you. Replies use an AI-generated voice. You can withdraw permission in Account.").font(.subheadline).foregroundStyle(Color.nexdoSecondary)
                         Button("Allow sharing and begin") {
                             model.aiConsent = true; model.voiceConsent = true; begin()
                         }.buttonStyle(.borderedProminent)
@@ -48,7 +48,7 @@ struct VoiceInputView: View {
                             if !playback.isPlaying { ProgressView("Preparing your greeting…") }
                         }
                         if phase == .listening {
-                            ProgressView(value: capture.level).tint(.nexdoIndigo).accessibilityLabel("Microphone input level")
+                            if !capture.partial.isEmpty { Text(capture.partial).frame(maxWidth: .infinity, alignment: .leading) }
                             Text("Speak naturally. Pause when you’re done, or tap Send now.").font(.subheadline).multilineTextAlignment(.center)
                             Text("\(Int(capture.elapsed)) seconds · Up to 2 minutes").font(.caption).foregroundStyle(Color.nexdoSecondary)
                             if capture.isRecording { Button("Send now", systemImage: "arrow.up.circle.fill") { capture.stop() }.buttonStyle(.borderedProminent) }
@@ -78,12 +78,14 @@ struct VoiceInputView: View {
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Close") { closeVoiceInput() } } }
             .interactiveDismissDisabled(phase != .idle).tint(.nexdoIndigo)
             .task { if !began && consented { began = true; begin() } }
-            .onReceive(capture.$audio) { if let audio = $0 { respond(audio) } }
+            .onReceive(capture.$result) { if let text = $0 { respond(text) } }
             .onReceive(capture.$error) { if $0 != nil && phase == .listening { phase = .idle } }
             .onReceive(NotificationCenter.default.publisher(for: AVAudioSession.interruptionNotification)) { notification in
                 if let raw = notification.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt, raw == AVAudioSession.InterruptionType.began.rawValue { stop(); error = "Voice was interrupted. Tap Start listening to continue." }
             }
             .onChange(of: scenePhase) { _, phase in if phase == .background { stop() } }
+            .onChange(of: model.voiceConsent) { _, allowed in if !allowed { stop() } }
+            .onChange(of: model.profile?.id) { _, _ in stop() }
             .onChange(of: model.aiConsent) { _, allowed in if !allowed { stop() } }
             .onDisappear { active = false; stop() }
         }
@@ -103,8 +105,15 @@ struct VoiceInputView: View {
         guard active, consented else { return }
         stop(); error = nil; phase = .listening
         operation = Task {
-            await capture.start(autoStopAfterSpeech: true)
-            if !Task.isCancelled && !capture.isRecording { phase = .idle }
+            do {
+                let credential = try await model.voiceTranscriptionSession()
+                guard active, consented, !Task.isCancelled else { return }
+                await capture.start(credential: credential)
+            } catch {
+                guard !Task.isCancelled else { return }
+                self.error = "Couldn’t connect to live transcription. Please try again."; phase = .idle
+            }
+            if !Task.isCancelled && phase == .listening && capture.error != nil { phase = .idle }
         }
     }
     private func speak(_ text: String, isGreeting: Bool) {
@@ -127,12 +136,11 @@ struct VoiceInputView: View {
             }
         }
     }
-    private func respond(_ audio: Data) {
+    private func respond(_ text: String) {
         guard active, consented, phase == .listening else { return }
         phase = .thinking; error = nil
         operation = Task {
             do {
-                let text = try await model.transcribeVoice(audio)
                 guard active, consented, !Task.isCancelled else { return }
                 transcript = text; answer = ""
                 let success = await model.ask(text)
@@ -143,9 +151,6 @@ struct VoiceInputView: View {
                 }
                 answer = spoken
                 speak(spoken, isGreeting: false)
-            } catch {
-                guard active, !Task.isCancelled else { return }
-                self.error = error.localizedDescription; phase = .idle
             }
         }
     }

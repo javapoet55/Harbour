@@ -24,6 +24,9 @@ public struct PasswordResetResponse: Decodable, Sendable {
     public let message: String
     public let delivered: Bool
 }
+public struct TaskCategoryMetadata: Decodable, Sendable {
+    public let name: String
+}
 public struct NexdoTask: Decodable, Identifiable, Sendable {
     public let id: String
     public let title: String
@@ -33,6 +36,7 @@ public struct NexdoTask: Decodable, Identifiable, Sendable {
     public let notes: String?
     public let startAt: String?
     public let dueAt: String?
+    public var category: TaskCategoryMetadata? = nil
     public var completedAt: String? = nil
     public var projectId: String? = nil
     public var energyLevel: String? = nil

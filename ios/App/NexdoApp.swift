@@ -334,6 +334,11 @@ final class AppModel: ObservableObject {
         return try await api.request("/api/realtime/task-session", method: "POST", body: JSONSerialization.data(withJSONObject: ["consent": true, "scope": calendarOnly ? "calendar" : "general"]), timeout: 25)
     }
 
+    func voiceTranscriptionSession() async throws -> VoiceTaskSession {
+        guard aiConsent && voiceConsent else { throw APIError.response(403) }
+        return try await api.request("/api/realtime/transcription-session", method: "POST", body: JSONEncoder().encode(["consent": true]), timeout: 25)
+    }
+
     func executeVoiceTool(name: String, arguments: Data, sessionID: UUID, callID: String, calendarOnly: Bool = false) async throws -> Data {
         guard aiConsent && voiceConsent, let userID = profile?.id else { throw APIError.signedOut }
         let args = try JSONSerialization.jsonObject(with: arguments)
@@ -385,6 +390,7 @@ final class AppModel: ObservableObject {
         var updated = incoming
         if let old = tasks.first(where: { $0.id == incoming.id }) {
             // Mutation responses omit relations; keep them until canonical retrieval.
+            if updated.category == nil { updated.category = old.category }
             if updated.subtasks == nil { updated.subtasks = old.subtasks }
             if updated.recurrence == nil { updated.recurrence = old.recurrence }
         }

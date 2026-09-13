@@ -5,7 +5,13 @@ export default function setup() {
   if (!process.env.HARBOR_DATABASE_URL?.includes('nexdo-tests-')) {
     throw new Error('Refusing to migrate a non-test database.');
   }
-  execFileSync(process.execPath, [path.resolve('node_modules/prisma/build/index.js'), 'migrate', 'deploy'], {
+  const prismaCli = path.resolve('node_modules/prisma/build/index.js');
+  const schema = path.resolve('prisma/schema.sqlite.prisma');
+  execFileSync(process.execPath, [prismaCli, 'generate', '--schema', schema], {
+    env: process.env,
+    stdio: 'pipe',
+  });
+  execFileSync(process.execPath, [prismaCli, 'migrate', 'deploy', '--schema', schema], {
     env: process.env,
     stdio: 'pipe',
   });
