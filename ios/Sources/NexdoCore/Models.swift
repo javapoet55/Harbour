@@ -149,7 +149,7 @@ public struct ScheduleIntelligenceResponse: Decodable, Sendable {
             public let deadlineOnly: Bool
             public let past: Bool
         }
-        public struct AttentionItem: Decodable, Identifiable, Sendable {
+        public struct AttentionItem: Decodable, Identifiable, Sendable, Hashable {
             public let id: String
             public let label: String
             public let title: String
@@ -157,6 +157,9 @@ public struct ScheduleIntelligenceResponse: Decodable, Sendable {
             public let recommendedAction: String
             public let kind: String
             public let taskId: String?
+            public let taskIds: [String]?
+            public let requiredMinutes: Int?
+            public let deadlineAt: String?
         }
         public struct Recommendation: Decodable, Sendable {
             public let title: String

@@ -115,7 +115,10 @@ private extension View {
 }
 
 struct ProfileSettingsView: View {
+    @AppStorage(AppAppearance.storageKey) private var appearance: AppAppearance = .system
+    @AppStorage(AppVoice.volumeStorageKey) private var appVoiceVolume = AppVoice.defaultVolume
     @EnvironmentObject private var model: AppModel
+    @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
     @State private var name = ""
     @State private var zone = ""
@@ -134,6 +137,33 @@ struct ProfileSettingsView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
+                card("Appearance") {
+                    Picker("Appearance", selection: $appearance) {
+                        ForEach(AppAppearance.allCases) { choice in
+                            Text(choice.title).tag(choice)
+                        }
+                    }.pickerStyle(.segmented)
+                    Text("Day uses a light view. Night uses a dark view. System follows your iPhone. Changes apply immediately and are saved on this device.")
+                        .font(.caption).foregroundStyle(Color.nexdoSecondary)
+                }
+                card("App Voice") {
+                    HStack {
+                        Label("AI speaking volume", systemImage: "speaker.wave.2")
+                        Spacer()
+                        Text("\(Int((appVoiceVolume * 100).rounded()))%")
+                            .foregroundStyle(Color.nexdoSecondary).monospacedDigit()
+                    }
+                    Slider(value: $appVoiceVolume, in: 0...1, step: 0.05) {
+                        Text("AI speaking volume")
+                    } minimumValueLabel: {
+                        Image(systemName: "speaker.fill")
+                    } maximumValueLabel: {
+                        Image(systemName: "speaker.wave.3.fill")
+                    }
+                    .accessibilityValue("\(Int((appVoiceVolume * 100).rounded())) percent")
+                    Text("Adjusts Nexdo’s spoken responses immediately. This setting is saved on this device.")
+                        .font(.caption).foregroundStyle(Color.nexdoSecondary)
+                }
                 card("Profile picture") {
                     HStack(spacing: 18) {
                         ProfileAvatar(name: name)
@@ -208,9 +238,18 @@ struct ProfileSettingsView: View {
             }.padding(20).disabled(saving)
         }
         .background(ProfileBackground()).navigationTitle("Settings").navigationBarTitleDisplayMode(.large)
+        .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                Button { saveAndDismiss() } label: {
+                    Image(systemName: "chevron.backward")
+                }
+                .accessibilityLabel("Save settings and go back")
+                .disabled(loading || saving)
+            }
+        }
         .task { if loading { await load() } }
         .interactiveDismissDisabled(saving)
-        .navigationBarBackButtonHidden(saving)
+        .navigationBarBackButtonHidden(true)
         .alert("Could not update profile", isPresented: Binding(get: { failure != nil }, set: { if !$0 { failure = nil } })) {
             Button("OK", role: .cancel) { failure = nil }
         } message: { Text(failure ?? "") }
@@ -225,6 +264,7 @@ struct ProfileSettingsView: View {
                 photoMessage = "Profile picture saved."
             }
         }
+        .onChange(of: appVoiceVolume) { _, _ in AppVoice.notifyVolumeChanged() }
         .confirmationDialog("Permanently delete this account?", isPresented: $confirmsDeletion, titleVisibility: .visible) {
             Button("Delete account", role: .destructive) { Task { await model.deleteAccount() } }
         } message: { Text("This removes your Nexdo data permanently and cannot be undone.") }
@@ -266,22 +306,42 @@ struct ProfileSettingsView: View {
         Task { defer { saving = false }; do { try await operation() } catch { failure = error.localizedDescription } }
     }
     private func save() {
-        guard let preferences else { return }
+        guard let input = settingsInput() else { return }
+        run {
+            try await model.saveProfileSettings(input)
+            message = "Settings saved."
+        }
+    }
+
+    private func saveAndDismiss() {
+        guard let input = settingsInput(), !saving else { return }
+        saving = true
+        failure = nil
+        Task {
+            defer { saving = false }
+            do {
+                try await model.saveProfileSettings(input)
+                dismiss()
+            } catch {
+                failure = error.localizedDescription
+            }
+        }
+    }
+
+    private func settingsInput() -> ProfileSettingsInput? {
+        guard let preferences else { return nil }
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty, trimmed.count <= 80 else { failure = "Enter a display name of 1–80 characters."; return }
-        guard preferences.workStart < preferences.workEnd else { failure = "Working hours must end after they start."; return }
+        guard !trimmed.isEmpty, trimmed.count <= 80 else { failure = "Enter a display name of 1–80 characters."; return nil }
+        guard preferences.workStart < preferences.workEnd else { failure = "Working hours must end after they start."; return nil }
         let phone = normalizePhone(preferences.phoneNumber)
         guard phone != nil || preferences.phoneNumber?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty != false else {
             failure = "Enter a valid phone number, including country code (for example, +15551234567)."
-            return
+            return nil
         }
         var normalizedPreferences = preferences
         normalizedPreferences.phoneNumber = phone
         self.preferences = normalizedPreferences
-        run {
-            try await model.saveProfileSettings(ProfileSettingsInput(name: trimmed, timeZone: zone, preference: normalizedPreferences, nextAction: next))
-            message = "Settings saved."
-        }
+        return ProfileSettingsInput(name: trimmed, timeZone: zone, preference: normalizedPreferences, nextAction: next)
     }
 
     /// Accept friendly punctuation and US 10-digit numbers, while sending the

@@ -7,6 +7,17 @@ final class VoicePlayback: NSObject, ObservableObject, AVAudioPlayerDelegate {
     @Published private(set) var error: String?
     private var player: AVAudioPlayer?
     private var completion: ((Bool) -> Void)?
+    private var voiceVolumeObserver: NSObjectProtocol?
+
+    override init() {
+        super.init()
+        voiceVolumeObserver = NotificationCenter.default.addObserver(forName: AppVoice.volumeDidChange, object: nil, queue: .main) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.player?.volume = Float(AppVoice.volume)
+            }
+        }
+    }
+
     func play(_ data: Data, onComplete: ((Bool) -> Void)? = nil) {
         stop()
         completion = onComplete
@@ -16,6 +27,7 @@ final class VoicePlayback: NSObject, ObservableObject, AVAudioPlayerDelegate {
             try session.setActive(true)
             let next = try AVAudioPlayer(data: data)
             next.delegate = self
+            next.volume = Float(AppVoice.volume)
             guard next.prepareToPlay(), next.play() else { throw APIError.invalidResponse }
             player = next; isPlaying = true; error = nil
         }

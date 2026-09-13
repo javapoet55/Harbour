@@ -51,7 +51,8 @@ describe('Today snapshot', () => {
     ] });
     expect(result.today).toMatchObject({ commitments: 8, appointments: 4, tasks: 4 });
     expect(result.today.attention).toHaveLength(3);
-    expect(result.today.attention.find((item) => item.label === 'At risk')?.explanation).toContain('90 minutes by 2:00 PM, but only 30 minutes');
+    expect(result.today.attention.find((item) => item.label === 'Schedule check')?.explanation).toContain('90 minutes by 2:00 PM, but only 30 minutes');
+    expect(result.today.attention.find((item) => item.label === 'Schedule check')).toMatchObject({ taskIds: ['Presentation'], requiredMinutes: 90, deadlineAt: at('14:00').toISOString() });
     expect(result.today.recommendation.explanation).toContain('If Organize notes can move');
     expect(result.today.recommendation.explanation).toContain('12:30 PM–2:00 PM');
     expect(result.today.recommendation.additionalAdvice).toContain('calendar');
@@ -87,7 +88,7 @@ describe('Today snapshot', () => {
     expect(result.availableMinutes).toBe(0);
     expect(result.today.commitments).toBe(2);
     expect(result.today.recommendation.startAt).toBeUndefined();
-    expect(result.today.attention.some((item) => item.label === 'At risk')).toBe(true);
+    expect(result.today.attention.some((item) => item.label === 'Schedule check')).toBe(true);
   });
 
   it('uses the transition buffer both for warnings and for finding a free focus slot', () => {
@@ -104,7 +105,7 @@ describe('Today snapshot', () => {
 
   it('does not allocate a task on top of another task or beyond its deadline', () => {
     const result = analyzeSchedule({ ...morning, now: at('12:30'), events: [], tasks: [task('Presentation', { dueAt: at('14:00') }), task('Reserved', { priority: 'CRITICAL', startAt: at('12:30'), dueAt: null })] });
-    expect(result.today.attention.some((item) => item.label === 'At risk')).toBe(true);
+    expect(result.today.attention.some((item) => item.label === 'Schedule check')).toBe(true);
     expect(result.today.recommendation.startAt).toBeUndefined();
   });
 

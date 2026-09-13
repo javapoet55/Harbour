@@ -3,7 +3,10 @@ import SwiftUI
 @main
 struct NexdoApp: App {
     @UIApplicationDelegateAdaptor(TaskActionAppDelegate.self) private var actionDelegate
-    var body: some Scene { WindowGroup { RootView() } }
+    @AppStorage(AppAppearance.storageKey) private var appearance: AppAppearance = .system
+    var body: some Scene {
+        WindowGroup { RootView().preferredColorScheme(appearance.colorScheme) }
+    }
 }
 
 @MainActor
@@ -312,6 +315,39 @@ final class AppModel: ObservableObject {
         refreshSupplementaryData()
         await refreshTasks()
     }
+    func createCalendarEvent(title: String, notes: String, location: String, start: Date, end: Date, requestID: UUID, repeatFrequency: String = "none", repeatUntil: Date = Date(), weekdays: [Int] = []) async throws {
+        let owner = profile?.id
+        let format = ISO8601DateFormatter()
+        var payload: [String: Any] = ["requestId": requestID.uuidString, "title": title, "notes": notes, "location": location, "startAt": format.string(from: start), "endAt": format.string(from: end)]
+        if repeatFrequency != "none" {
+            let dateFormat = DateFormatter(); dateFormat.calendar = Calendar(identifier: .gregorian); dateFormat.locale = Locale(identifier: "en_US_POSIX"); dateFormat.timeZone = TimeZone(identifier: profile?.timeZone ?? "") ?? .current; dateFormat.dateFormat = "yyyy-MM-dd"
+            payload["repeat"] = ["frequency": repeatFrequency, "until": dateFormat.string(from: repeatUntil), "weekdays": weekdays]
+        }
+        let body = try JSONSerialization.data(withJSONObject: payload)
+        let result: VoiceToolResponse = try await api.request("/api/calendar/events", method: "POST", body: body)
+        guard result.success else { throw APIError.invalidResponse }
+        if profile?.id == owner { await refresh() }
+    }
+
+    func voiceTaskSession(calendarOnly: Bool = false) async throws -> VoiceTaskSession {
+        guard aiConsent && voiceConsent else { throw APIError.response(403) }
+        return try await api.request("/api/realtime/task-session", method: "POST", body: JSONSerialization.data(withJSONObject: ["consent": true, "scope": calendarOnly ? "calendar" : "general"]), timeout: 25)
+    }
+
+    func executeVoiceTool(name: String, arguments: Data, sessionID: UUID, callID: String, calendarOnly: Bool = false) async throws -> Data {
+        guard aiConsent && voiceConsent, let userID = profile?.id else { throw APIError.signedOut }
+        let args = try JSONSerialization.jsonObject(with: arguments)
+        let body = try JSONSerialization.data(withJSONObject: ["consent": true, "scope": calendarOnly ? "calendar" : "general", "sessionId": sessionID.uuidString, "callId": callID, "name": name, "arguments": args])
+        let response: VoiceToolResponse = try await api.request("/api/realtime/tool", method: "POST", body: body, timeout: 30)
+        // Only reconcile this account. A dismissed voice screen does not discard a saved task.
+        if profile?.id == userID, response.success, let task = response.task {
+            replaceTask(task)
+            if name == "delete_task" { tasks.removeAll { $0.id == task.id } }
+        }
+        if profile?.id == userID, response.success, name == "create_calendar_event" { await refresh() }
+        return try JSONEncoder().encode(response)
+    }
+
     func saveTask(id: String?, title: String, notes: String, duration: Int, scheduledAt: Date? = nil, projectId: String? = nil) async -> Bool {
         var saved = false
         await perform(errorMessage: "Couldn’t update your task. Refresh to check its current state before retrying.") {
@@ -372,12 +408,11 @@ final class AppModel: ObservableObject {
         if body != Data("{}".utf8) {
             let response: TaskResponse = try await api.request("/api/tasks/\(task.id)", method: "PATCH", body: body)
             replaceTask(response.task)
-            // The PATCH returns the task before updating its relations. Reconcile just
-            // this task from the existing retrieval endpoint, without replacing query state.
-            if draft.steps != original.steps || draft.recurrence != original.recurrence {
-                let response: TasksResponse = try await api.request("/api/tasks")
-                if let canonical = response.tasks.first(where: { $0.id == task.id }),
-                   let index = tasks.firstIndex(where: { $0.id == task.id }) { tasks[index] = canonical }
+            // Refresh the edited task from the canonical list. Some API deployments
+            // return a pre-update snapshot for PATCH, including priority changes.
+            if let response: TasksResponse = try? await api.request("/api/tasks", timeout: 15),
+               let canonical = response.tasks.first(where: { $0.id == task.id }) {
+                replaceTask(canonical)
             }
         }
         if let schedule = try draft.scheduleBody(comparedTo: original) {
@@ -408,19 +443,34 @@ final class AppModel: ObservableObject {
         }
     }
 
-    func startFocus(_ task: NexdoTask) async throws {
+    func recommendDoNow(minutes: Int? = nil) async throws -> DoNowRecommendation {
+        guard aiConsent else { throw APIError.response(403) }
+        let prompt = minutes.map { "I have \($0) minutes free. What should I do?" } ?? "What should I do next?"
+        let response: DoNowResponse = try await api.request("/api/assistant", method: "POST", body: JSONEncoder().encode(AssistantRequest(transcript: prompt)))
+        guard let recommendation = response.executive, recommendation.nextAction != nil else { throw APIError.invalidResponse }
+        return recommendation
+    }
+
+    func startRecommendedFocus(_ choice: DoNowRecommendation.Choice) async throws {
+        guard let task = tasks.first(where: { $0.id == choice.taskId }) else {
+            throw APIError.server(409, "Your tasks changed. Refresh Tasks and try again.")
+        }
+        try await startFocus(task, minutes: choice.focusMinutes, fromRecommendation: true)
+    }
+
+    func startFocus(_ task: NexdoTask, minutes requestedMinutes: Int = 25, fromRecommendation: Bool = false) async throws {
         guard !busy else { throw TaskEditError.busy }
-        if focusSession != nil { try await finishFocus() }
+        if focusSession != nil && !fromRecommendation { try await finishFocus() }
         busy = true
         defer { busy = false }
         let started = Date()
-        let body = try JSONSerialization.data(withJSONObject: ["status": "IN_PROGRESS", "focusMinutes": 25])
+        let body = try JSONSerialization.data(withJSONObject: ["status": "IN_PROGRESS", "focusMinutes": requestedMinutes, "fromRecommendation": fromRecommendation])
         let response: TaskResponse = try await api.request("/api/tasks/\(task.id)", method: "PATCH", body: body)
         replaceTask(response.task)
         // Older API deployments return the updated task without a focus receipt.
         // The Pomodoro remains useful locally and must not fail after a successful status update.
         let receipt = response.focus
-        let minutes = receipt?.minutes ?? 25
+        let minutes = receipt?.minutes ?? requestedMinutes
         let end = started.addingTimeInterval(Double(minutes * 60))
         focusSession = NativeFocusSession(taskID: task.id, title: task.title,
             endsAt: end, workSessionID: receipt?.workSessionId,

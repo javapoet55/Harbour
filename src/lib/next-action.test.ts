@@ -121,3 +121,24 @@ describe('next-action deterministic acceptance matrix', () => {
     expect(rec.nextAction?.confidence).toBe(.5); expect(rec.recommendedActions).toEqual([]);
   });
 });
+
+describe('signature do-now experience', () => {
+  it('at 2:37 PM uses the 38-minute opening and recommends the due-soon presentation with two quick alternatives', () => {
+    const rec = next(ctx({ now: at('14:37'), events: [meeting('15:30', '16:00')], tasks: [
+      task('presentation', { title: 'Finish presentation', durationMin: 30, dueAt: at('17:00'), priority: 'HIGH' }),
+      task('insurance', { title: 'Call insurance', durationMin: 10, priority: 'LOW' }),
+      task('damien', { title: 'Reply to Damien', durationMin: 5, priority: 'LOW' }),
+      ...Array.from({ length: 24 }, (_, i) => task(`long-${i}`, { durationMin: 120, splittable: false })),
+    ] }));
+    expect(rec.nextAction?.availableWindowMinutes).toBe(38);
+    expect(rec.nextAction?.bestAction).toMatchObject({ taskId: 'presentation', focusMinutes: 30, partial: false });
+    expect(rec.nextAction?.alternatives.map(t => t.taskId).sort()).toEqual(['damien', 'insurance']);
+    expect(rec.recommendedActions[0]).toMatchObject({ type: 'START_FOCUS', durationMin: 30 });
+  });
+  it('does not offer a focus start while the user is already in a calendar appointment', () => {
+    const rec = next(ctx({ now: at('14:37'), events: [meeting('14:30', '15:00')], tasks: [task('presentation')] }));
+    expect(rec.nextAction?.availableWindowMinutes).toBe(0);
+    expect(rec.nextAction?.bestAction).toBeNull();
+    expect(rec.recommendedActions).toEqual([]);
+  });
+});

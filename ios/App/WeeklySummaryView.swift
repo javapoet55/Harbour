@@ -256,7 +256,7 @@ private struct WeeklySummaryTasksView: View {
         guard let groups = loadedGroups ?? summary.taskGroups else { return nil }
         switch filter {
         case .completed: return groups.completed
-        case .planned: return groups.planned
+        case .planned: return groups.planned.filter { $0.status == "PLANNED" }
         case .overdue: return groups.overdue
         }
     }
@@ -282,7 +282,7 @@ private struct WeeklySummaryTasksView: View {
                         // List adds its own disclosure arrow to NavigationLink.
                         // The card already contains one, so push via selection.
                         Button { selectedTask = task } label: {
-                            TaskListRow(task: task, subtitle: "\(task.durationMin) min · \(task.status.capitalized)")
+                            TaskListRow(task: task, subtitle: taskSubtitle(task))
                         }
                         .buttonStyle(.plain)
                         .listRowInsets(EdgeInsets(top: 6, leading: 0, bottom: 6, trailing: 0))
@@ -322,6 +322,13 @@ private struct WeeklySummaryTasksView: View {
         defer { loading = false }
         do { loadedGroups = try await model.weeklySummaryTasks(for: summary) }
         catch { loadError = "Couldn’t load this week’s tasks. Please try again." }
+    }
+
+    private func taskSubtitle(_ task: NexdoTask) -> String {
+        let dueDate = task.dueAt.flatMap(ServerDate.parse)
+            .map { $0.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day()) }
+            ?? "No due date"
+        return "\(task.durationMin) min · \(dueDate)"
     }
 
 }

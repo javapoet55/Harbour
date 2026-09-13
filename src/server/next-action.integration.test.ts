@@ -57,6 +57,20 @@ describe('authenticated next-action API → SQLite → shared engine → respons
     expect(await prisma.task.findMany({ where: { userId } })).toEqual(before);
     expect(fetch).not.toHaveBeenCalled();
   });
+  it('signature: a 38-minute opening starts a 30-minute session for the presentation', async () => {
+    vi.setSystemTime(at('14:37'));
+    const presentation = await create('Finish presentation', { priority: 'HIGH', dueAt: at('17:00'), durationMin: 30 });
+    await create('Call insurance', { priority: 'LOW', durationMin: 10 });
+    await create('Reply to Damien', { priority: 'LOW', durationMin: 5 });
+    await event('15:30', '16:00');
+    const result = await ask('What should I do next?');
+    expect(result.status).toBe(200);
+    expect(result.body.executive?.nextAction).toMatchObject({ availableWindowMinutes: 38, bestAction: { taskId: presentation.id, focusMinutes: 30 } });
+    const started = await patch(presentation.id, { status: 'IN_PROGRESS', focusMinutes: 30, fromRecommendation: true });
+    expect(started.status).toBe(200);
+    expect((await started.json()).focus.minutes).toBe(30);
+    expect((await loadScheduleContext(userId)).activeFocus).toMatchObject({ taskId: presentation.id, endsAt: +at('15:07') });
+  });
   it('B: 45 minutes caps at the next real meeting and excludes an unsplittable long task', async () => {
     await event('13:45', '14:00');
     const short = await create('Short task');

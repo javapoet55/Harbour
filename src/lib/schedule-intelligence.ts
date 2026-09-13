@@ -20,7 +20,7 @@ export type TodaySnapshotData = {
   commitments: number; appointments: number; tasks: number; overdue: number; availableMinutes: number;
   workingToday: boolean; workStart: string; workEnd: string; bufferMinutes: number;
   timeline: Array<{ id: string; sourceId: string; kind: 'event' | 'task'; title: string; startAt: string; endAt: string | null; allDay: boolean; deadlineOnly: boolean; past: boolean }>;
-  attention: Array<{ id: string; label: string; title: string; explanation: string; recommendedAction: string; kind: 'event' | 'task'; taskId?: string }>;
+  attention: Array<{ id: string; label: string; title: string; explanation: string; recommendedAction: string; kind: 'event' | 'task'; taskId?: string; taskIds?: string[]; requiredMinutes?: number; deadlineAt?: string }>;
   recommendation: { title: string; explanation: string; additionalAdvice?: string; kind: 'event' | 'task' | 'settings'; taskId?: string; startAt?: string; endAt?: string };
   topPriority: PriorityScore | null;
 };
@@ -170,7 +170,7 @@ export function analyzeSchedule(input: {
     const needed = demand.reduce((sum, task) => sum + duration(task), 0);
     const deficit = needed - capacity;
     if (deficit > Math.max(0, previousDeficit)) {
-      conflicts.push({ id: `workload:${deadline}`, type: 'WORKLOAD', severity: deficit >= 60 ? 'CRITICAL' : 'HIGH', title: demand.length === 1 ? `${demand[0].title} is at risk` : `${demand.length} deadlines are competing for time`, explanation: `${demand.length === 1 ? demand[0].title : 'These tasks'} ${demand.length === 1 ? 'needs' : 'need'} ${needed} minutes by ${time(deadline)}, but only ${capacity} minutes are available before then${workingToday ? '' : ' in your working hours (today is a non-working day)'}.`, affectedItems: demand.map((task) => ({ id: task.id, title: task.title, kind: 'task' })), recommendedAction: `Free at least ${deficit} more minutes before ${time(deadline)}, or agree on a later deadline.`, confidence: .95 });
+      conflicts.push({ id: `workload:${deadline}`, type: 'WORKLOAD', severity: deficit >= 60 ? 'CRITICAL' : 'HIGH', title: demand.length === 1 ? `Find time for your ${demand[0].title.toLowerCase()}` : `Let’s make room for these ${demand.length} tasks`, explanation: `${demand.length === 1 ? demand[0].title : 'These tasks'} ${demand.length === 1 ? 'needs' : 'need'} ${needed} minutes by ${time(deadline)}, but only ${capacity} minutes are available before then${workingToday ? '' : ' in your working hours (today is a non-working day)'}.`, affectedItems: demand.map((task) => ({ id: task.id, title: task.title, kind: 'task' })), recommendedAction: `Free at least ${deficit} more minutes before ${time(deadline)}, or agree on a later deadline.`, confidence: .95 });
       const flexible = otherBlocks.filter((block) => block.end > dayStart && block.start < Math.min(deadline, workEnd) && priorityImportance(block.task) < Math.max(...demand.map(priorityImportance)) && (!block.task.dueAt || +block.task.dueAt > deadline));
       const withoutFlexible = minutesIn(slotsUntil(deadline, [...eventBusy, ...otherBlocks.filter((block) => !flexible.includes(block))]));
       if (withoutFlexible > capacity) conflicts.push({ id: `priority:${deadline}`, type: 'PRIORITY', severity: 'HIGH', title: 'Flexible work could make room', explanation: `Moving ${flexible.map((block) => block.task.title).join(', ')} would release ${withoutFlexible - capacity} minutes before ${time(deadline)}.`, affectedItems: flexible.map((block) => ({ id: block.task.id, title: block.task.title, kind: 'task' })), recommendedAction: 'Review these lower-priority tasks and move the ones that can wait.', confidence: .9 });
@@ -181,7 +181,9 @@ export function analyzeSchedule(input: {
   const todayIds = new Set([...todayEvents.map((event) => event.id), ...todayTasks.map((task) => task.id)]);
   const attention: TodaySnapshotData['attention'] = conflicts.filter((conflict) => conflict.affectedItems.some((item) => todayIds.has(item.id))).map((conflict) => {
     const task = conflict.affectedItems.find((item) => item.kind === 'task');
-    return { id: conflict.id, label: conflict.type === 'WORKLOAD' ? 'At risk' : conflict.type === 'PRIORITY' ? 'Make room' : 'Conflict', title: conflict.title, explanation: conflict.explanation, recommendedAction: conflict.recommendedAction, kind: task ? 'task' : 'event', taskId: task?.id };
+    const taskItems = conflict.affectedItems.filter((item) => item.kind === 'task');
+    const workloadDeadline = conflict.type === 'WORKLOAD' ? Number(conflict.id.split(':')[1]) : undefined;
+    return { id: conflict.id, label: conflict.type === 'WORKLOAD' ? 'Schedule check' : conflict.type === 'PRIORITY' ? 'Make room' : 'Conflict', title: conflict.title, explanation: conflict.explanation, recommendedAction: conflict.recommendedAction, kind: task ? 'task' : 'event', taskId: task?.id, taskIds: taskItems.map((item) => item.id), requiredMinutes: conflict.type === 'WORKLOAD' ? taskItems.reduce((total, item) => total + (tasks.find((task) => task.id === item.id)?.durationMin ?? 0), 0) : undefined, deadlineAt: workloadDeadline ? new Date(workloadDeadline).toISOString() : undefined };
   });
   if (overdue.length) attention.push({ id: 'overdue', label: 'Overdue', title: `${overdue.length} unfinished ${overdue.length === 1 ? 'deadline' : 'deadlines'}`, explanation: overdue.slice(0, 3).map((task) => task.title).join(' · ') + (overdue.length > 3 ? ` · and ${overdue.length - 3} more` : ''), recommendedAction: 'Review overdue work and choose what to finish or reschedule.', kind: 'task', taskId: overdue[0].id });
   for (const task of todayTasks.filter((task) => task.dependencyBlocked || task.status === 'WAITING')) {

@@ -1,0 +1,15 @@
+import { beforeEach, expect, it, vi } from 'vitest';
+import { POST } from './route';
+const mocks = vi.hoisted(() => ({ requireUser: vi.fn(), executeVoiceTool: vi.fn(), validateVoiceTool: vi.fn() }));
+vi.mock('@/server/auth', () => mocks);
+vi.mock('@/server/voice/tools', () => mocks);
+const request = (consent = true) => new Request('https://nexdo.test/api/realtime/tool', { method: 'POST', body: JSON.stringify({ consent, sessionId: '11111111-1111-4111-8111-111111111111', callId: 'c', name: 'create_task', arguments: {} }) });
+beforeEach(() => { vi.clearAllMocks(); mocks.requireUser.mockResolvedValue({ id: 'user' }); mocks.executeVoiceTool.mockResolvedValue({ success: true }); });
+it('requires authentication', async () => { mocks.requireUser.mockRejectedValue(new Error('UNAUTHENTICATED')); expect((await POST(request())).status).toBe(401); expect(mocks.executeVoiceTool).not.toHaveBeenCalled(); });
+it('requires current voice consent', async () => { expect((await POST(request(false))).status).toBe(400); expect(mocks.executeVoiceTool).not.toHaveBeenCalled(); });
+it('never reports a failed service as success or leaks diagnostics', async () => { mocks.executeVoiceTool.mockRejectedValue(new Error('private database data')); const response = await POST(request()); expect(response.status).toBe(500); expect(await response.json()).toMatchObject({ success: false, uncertain: true }); });
+it('rejects task mutations from the calendar voice flow', async () => {
+  const response = await POST(new Request('https://nexdo.test/api/realtime/tool', { method: 'POST', body: JSON.stringify({ consent: true, scope: 'calendar', sessionId: '11111111-1111-4111-8111-111111111111', callId: 'c', name: 'create_task', arguments: {} }) }));
+  expect(response.status).toBe(400);
+  expect(mocks.executeVoiceTool).not.toHaveBeenCalled();
+});

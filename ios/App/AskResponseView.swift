@@ -6,19 +6,38 @@ struct AskResponseView: View {
     var readingSection: Int? = nil
     var preparingSpeech = false
     var readLoud: ((Int, String) -> Void)? = nil
+    @State private var expandedSections: Set<Int> = []
 
     var body: some View {
         if let turn = model.turn {
             VStack(alignment: .leading, spacing: 12) {
+                AskResponseSummary(text: turn.visual.summary)
                 ForEach(Array(turn.displaySections.enumerated()), id: \.offset) { sectionIndex, section in
-                    AskResponseCard(title: section.title, reading: readingSection == sectionIndex, preparing: preparingSpeech && readingSection == sectionIndex, readAction: readLoud.map { action in { action(sectionIndex, section.items.joined(separator: "\n\n")) } }) {
-                        ForEach(Array(section.items.enumerated()), id: \.offset) { index, item in
+                    let expanded = expandedSections.contains(sectionIndex)
+                    let previewCount = sectionIndex == 0 ? min(2, section.items.count) : 0
+                    let visibleItems = expanded ? section.items : Array(section.items.prefix(previewCount))
+                    AskResponseCard(title: section.title, itemCount: section.items.count, expanded: expanded, toggleAction: { toggle(sectionIndex) }, reading: readingSection == sectionIndex, preparing: preparingSpeech && readingSection == sectionIndex, readAction: readLoud.map { action in { action(sectionIndex, section.items.joined(separator: "\n\n")) } }) {
+                        if visibleItems.isEmpty {
+                            Text("Tap to view the details.")
+                                .font(.subheadline).foregroundStyle(AskStyle.secondary)
+                                .padding(.vertical, 4)
+                        }
+                        ForEach(Array(visibleItems.enumerated()), id: \.offset) { index, item in
                             if index > 0 { Divider().overlay(AskStyle.blue.opacity(0.06)) }
-                            HStack(alignment: .top, spacing: 8) {
-                                Text("•").foregroundStyle(AskStyle.blue).accessibilityHidden(true)
+                            HStack(alignment: .top, spacing: 10) {
+                                Image(systemName: "circle.fill").font(.system(size: 5)).foregroundStyle(AskStyle.blue).padding(.top, 7).accessibilityHidden(true)
                                 Text(item).frame(maxWidth: .infinity, alignment: .leading)
                                     .fixedSize(horizontal: false, vertical: true).textSelection(.enabled)
                             }.padding(.vertical, 5)
+                        }
+                        if section.items.count > previewCount && !expanded {
+                            Button("Show \(section.items.count - previewCount) more") { toggle(sectionIndex) }
+                                .font(.subheadline.weight(.semibold)).foregroundStyle(AskStyle.blue)
+                                .frame(minHeight: 36)
+                        } else if expanded && section.items.count > previewCount {
+                            Button("Show less") { toggle(sectionIndex) }
+                                .font(.subheadline.weight(.semibold)).foregroundStyle(AskStyle.blue)
+                                .frame(minHeight: 36)
                         }
                     }
                 }
@@ -43,10 +62,32 @@ struct AskResponseView: View {
             }
         }
     }
+
+    private func toggle(_ section: Int) {
+        if expandedSections.contains(section) { expandedSections.remove(section) }
+        else { expandedSections.insert(section) }
+    }
+}
+
+private struct AskResponseSummary: View {
+    let text: String
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: "sparkles").foregroundStyle(AskStyle.blue).padding(.top, 2)
+            Text(text).font(.subheadline.weight(.medium)).foregroundStyle(AskStyle.ink)
+                .lineLimit(3).fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(14)
+        .background(AskStyle.blue.opacity(0.09), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+    }
 }
 
 private struct AskResponseCard<Content: View>: View {
     let title: String
+    var itemCount = 0
+    var expanded = false
+    var toggleAction: (() -> Void)? = nil
     var reading = false
     var preparing = false
     var readAction: (() -> Void)? = nil
@@ -55,8 +96,15 @@ private struct AskResponseCard<Content: View>: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
-                Text(title.uppercased()).font(.caption.weight(.bold))
+                Button(action: { toggleAction?() }) {
+                    HStack(spacing: 7) {
+                        Text(title.uppercased()).font(.caption.weight(.bold))
+                        if itemCount > 0 { Text("\(itemCount)").font(.caption2.weight(.bold)).padding(.horizontal, 6).padding(.vertical, 2).background(AskStyle.blue.opacity(0.12), in: Capsule()) }
+                        Image(systemName: expanded ? "chevron.up" : "chevron.down").font(.caption2.weight(.bold))
+                    }
                     .accessibilityAddTraits(.isHeader)
+                }
+                .buttonStyle(.plain)
                 Spacer(minLength: 8)
                 if let readAction {
                     Button(action: readAction) {

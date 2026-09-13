@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		10F35F4F304E3F3500D2D029 /* Media.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 10F35F4E304E3F3500D2D029 /* Media.xcassets */; };
+		B00000000000000000000001 /* WebRTC in Frameworks */ = {isa = PBXBuildFile; productRef = B00000000000000000000002 /* WebRTC */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -25,6 +26,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B00000000000000000000001 /* WebRTC in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -70,6 +72,7 @@
 			);
 			name = Nexdo;
 			packageProductDependencies = (
+				B00000000000000000000002 /* WebRTC */,
 			);
 			productName = Nexdo;
 			productReference = A00000000000000000000012 /* Nexdo: AI Daily Planner.app */;
@@ -103,6 +106,9 @@
 				Base,
 			);
 			mainGroup = A00000000000000000000004;
+			packageReferences = (
+				B00000000000000000000003 /* XCRemoteSwiftPackageReference "WebRTC" */,
+			);
 			productRefGroup = A00000000000000000000005 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
@@ -237,11 +243,15 @@
 				INFOPLIST_KEY_CFBundleDisplayName = Nexdo;
 				INFOPLIST_KEY_CFBundleURLTypes = "{\n    CFBundleURLSchemes =     (\n        nexdo\n    );\n}";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
-				INFOPLIST_KEY_NSContactsUsageDescription = "Nexdo uses Contacts to let you choose who to call, message, or email for your tasks. Contact details stay on this device.";
+				INFOPLIST_KEY_NSContactsUsageDescription = "Nexdo uses Contacts to let you choose who to call, message, or email for your tasks. Phone numbers and email addresses stay on this device; matching contact names may be shared during voice clarification.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Nexdo records your voice to transcribe questions and create tasks with OpenAI.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
 				MARKETING_VERSION = 0.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.pinslots.nexdo;
 				PRODUCT_NAME = "Nexdo: AI Daily Planner";
@@ -270,11 +280,15 @@
 				INFOPLIST_KEY_CFBundleDisplayName = Nexdo;
 				INFOPLIST_KEY_CFBundleURLTypes = "{\n    CFBundleURLSchemes =     (\n        nexdo\n    );\n}";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
-				INFOPLIST_KEY_NSContactsUsageDescription = "Nexdo uses Contacts to let you choose who to call, message, or email for your tasks. Contact details stay on this device.";
+				INFOPLIST_KEY_NSContactsUsageDescription = "Nexdo uses Contacts to let you choose who to call, message, or email for your tasks. Phone numbers and email addresses stay on this device; matching contact names may be shared during voice clarification.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Nexdo records your voice to transcribe questions and create tasks with OpenAI.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
 				MARKETING_VERSION = 0.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.pinslots.nexdo;
 				PRODUCT_NAME = "Nexdo: AI Daily Planner";
@@ -307,6 +321,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		B00000000000000000000003 /* XCRemoteSwiftPackageReference "WebRTC" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/stasel/WebRTC.git";
+			requirement = {
+				kind = exactVersion;
+				version = 153.0.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		B00000000000000000000002 /* WebRTC */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = B00000000000000000000003 /* XCRemoteSwiftPackageReference "WebRTC" */;
+			productName = WebRTC;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = A00000000000000000000001 /* Project object */;
 }

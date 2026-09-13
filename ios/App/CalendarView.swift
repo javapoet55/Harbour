@@ -12,6 +12,9 @@ struct CalendarView: View {
     @State private var loading = false
     @State private var failure: String?
     @State private var ask = false
+    @State private var addingVoice = false
+    @State private var addingManually = false
+    @Environment(\.dynamicTypeSize) private var typeSize
     @State private var conflicts = false
     @State private var expanded = false
     @State private var showTasks = true
@@ -148,6 +151,8 @@ struct CalendarView: View {
                 AskNexdoView(initialPrompt: "Help fix my schedule around \(dates.key(selected)). Analyze tasks, due dates, calendar commitments, available time, priority, and overdue work. Propose an improved schedule for my approval.")
                     .presentationDetents([.large]).presentationDragIndicator(.visible)
             }
+            .fullScreenCover(isPresented: $addingVoice, onDismiss: { Task { await load() } }) { AddTaskByVoiceView(calendarOnly: true) }
+            .sheet(isPresented: $addingManually, onDismiss: { Task { await load() } }) { NavigationStack { CalendarEventEditor() } }
             .sheet(isPresented: $conflicts) { conflictSheet }
             .sheet(item: $eventDetail) { event in
                 NavigationStack {
@@ -168,7 +173,10 @@ struct CalendarView: View {
 
     private var calendarHeader: some View {
         HStack {
-            Text("Calendar").font(.largeTitle.bold())
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Calendar").font(.largeTitle.bold())
+                Text("Plan your time. Make it happen.").font(.subheadline).foregroundStyle(Color.nexdoSecondary)
+            }
             Spacer()
             Button {
                 searching = true
@@ -249,12 +257,35 @@ struct CalendarView: View {
                 Text("Review your schedule").font(.headline)
                 Text("Load today’s conflicts and available time.").font(.caption).foregroundStyle(Color.nexdoSecondary)
             }
-            intelligenceStatus
-            Button { ask = true } label: { Text("Fix my schedule").font(.caption.bold()).padding(14).foregroundStyle(.white).background(Color(red: 0.18, green: 0.36, blue: 0.59), in: RoundedRectangle(cornerRadius: 12)) }.buttonStyle(.plain)
+            intelligenceStatus(allowCreation: true)
+            calendarCreationCards
         }.padding(14).background(Color.nexdoBlue.opacity(0.045), in: RoundedRectangle(cornerRadius: 16))
             .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.nexdoBlue.opacity(0.2)))
     }
-    @ViewBuilder private var intelligenceStatus: some View {
+    private var calendarCreationCards: some View {
+        let layout = typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(spacing: 10)) : AnyLayout(HStackLayout(spacing: 10))
+        return layout {
+            calendarCreationCard("Add by Voice", subtitle: "Tap and speak", voice: true) { addingVoice = true }
+            calendarCreationCard("Add Manually", subtitle: "Type an event", voice: false) { addingManually = true }
+        }
+    }
+    private func calendarCreationCard(_ title: String, subtitle: String, voice: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 8) {
+                Image(systemName: voice ? "mic.fill" : "plus").font(.title2)
+                    .foregroundStyle(voice ? Color.white : Color.nexdoIndigo)
+                    .frame(width: 38, height: 38)
+                    .background(voice ? AnyShapeStyle(LinearGradient(colors: [.nexdoIndigo, .nexdoBlue], startPoint: .leading, endPoint: .trailing)) : AnyShapeStyle(Color.nexdoMagenta.opacity(0.07)), in: Circle())
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(title).font(.caption.weight(.semibold)).lineLimit(1).minimumScaleFactor(0.8)
+                    Text(subtitle).font(.caption2).foregroundStyle(Color.nexdoSecondary).lineLimit(1)
+                }
+            }.frame(maxWidth: .infinity, minHeight: 64).padding(8)
+                .background(voice ? Color.nexdoIndigo.opacity(0.05) : Color(uiColor: .systemBackground), in: RoundedRectangle(cornerRadius: 18))
+                .overlay(RoundedRectangle(cornerRadius: 18).stroke(Color.nexdoIndigo.opacity(0.18)))
+        }.buttonStyle(.plain)
+    }
+    @ViewBuilder private func intelligenceStatus(allowCreation: Bool = false) -> some View {
         if model.intelligenceLoading {
             ProgressView("Reviewing your schedule…").font(.subheadline)
         } else if let message = model.intelligenceError {
@@ -265,7 +296,10 @@ struct CalendarView: View {
             Button("Retry schedule intelligence") { Task { await model.refreshScheduleIntelligence() } }
                 .font(.subheadline.weight(.semibold)).frame(minHeight: 44)
         } else if model.scheduleIntelligence?.today.day != dates.key(Date()) {
-            Button("Review schedule") { Task { await model.refreshScheduleIntelligence() } }
+            Button(allowCreation ? "Create Appointments" : "Review schedule") {
+                if allowCreation { addingManually = true }
+                else { Task { await model.refreshScheduleIntelligence() } }
+            }
                 .font(.subheadline.weight(.semibold)).frame(minHeight: 44)
         }
     }
@@ -429,7 +463,7 @@ struct CalendarView: View {
                         }
                     }
                 }
-                Section { intelligenceStatus }
+                Section { intelligenceStatus() }
             }.navigationTitle("Schedule review").navigationBarTitleDisplayMode(.inline).toolbar { Button("Done") { conflicts = false } }
         }
     }
@@ -454,5 +488,110 @@ struct CalendarView: View {
             guard !Task.isCancelled, token == loadToken, requestID == requested else { return }
             loading = false; failure = "Couldn’t refresh this date range.\(currentData == nil ? "" : " Showing previously loaded data.")"
         }
+    }
+}
+
+struct CalendarEventEditor: View {
+    @EnvironmentObject private var model: AppModel
+    @Environment(\.dismiss) private var dismiss
+    @State private var title = ""
+    @State private var notes = ""
+    @State private var location = ""
+    @State private var start = Date().addingTimeInterval(3600)
+    @State private var end = Date().addingTimeInterval(5400)
+    @State private var saving = false
+    @State private var failure: String?
+    @State private var requestID = UUID()
+    @State private var repeatFrequency = "none"
+    @State private var repeatUntil = Date().addingTimeInterval(90 * 86400)
+    @State private var weekdays: Set<Int> = []
+    private var canSave: Bool { !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && title.count <= 200 && notes.count <= 4000 && location.count <= 200 && end > start && end.timeIntervalSince(start) <= 7 * 86400 && (repeatFrequency != "weekdays" || !weekdays.isEmpty) && !saving }
+    var body: some View {
+        ZStack {
+            NexdoTaskBackdrop()
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
+                    TaskEditorLabel(title: "APPOINTMENT / EVENT", icon: "calendar")
+                    TextField("What’s on your calendar?", text: $title, axis: .vertical)
+                        .font(.title3.weight(.semibold)).padding(15)
+                        .background(TaskCreationStyle.input, in: RoundedRectangle(cornerRadius: 15))
+                    Text("Create a calendar event or appointment.").font(.caption).foregroundStyle(Color.nexdoSecondary)
+                    Divider()
+                    TaskEditorLabel(title: "SCHEDULE", icon: "clock")
+                    DatePicker("Starts", selection: $start)
+                    DatePicker("Ends", selection: $end, in: start...)
+                    Text(model.profile?.timeZone ?? TimeZone.current.identifier).font(.caption).foregroundStyle(Color.nexdoSecondary)
+                    Divider()
+                    TaskEditorLabel(title: "REPEAT", icon: "repeat")
+                    Picker("Repeat", selection: $repeatFrequency) {
+                        Text("Does not repeat").tag("none")
+                        Text("Daily").tag("daily")
+                        Text("Weekly").tag("weekly")
+                        Text("Monthly").tag("monthly")
+                        Text("Particular days of the week").tag("weekdays")
+                    }.pickerStyle(.menu)
+                    if repeatFrequency == "weekdays" {
+                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 64))], spacing: 8) {
+                            ForEach([1, 2, 3, 4, 5, 6, 0], id: \.self) { day in
+                                Button { if weekdays.contains(day) { weekdays.remove(day) } else { weekdays.insert(day) } } label: {
+                                    Text(["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][day])
+                                        .font(.subheadline.weight(.semibold)).frame(maxWidth: .infinity, minHeight: 44)
+                                        .foregroundStyle(weekdays.contains(day) ? Color.white : TaskCreationStyle.accent)
+                                        .background(weekdays.contains(day) ? TaskCreationStyle.accent : TaskCreationStyle.input, in: RoundedRectangle(cornerRadius: 12))
+                                }.buttonStyle(.plain).accessibilityAddTraits(weekdays.contains(day) ? .isSelected : [])
+                            }
+                        }
+                    }
+                    if repeatFrequency != "none" {
+                        DatePicker("Repeat until", selection: $repeatUntil, in: start...start.addingTimeInterval(365 * 86400), displayedComponents: .date)
+                        Text(repeatFrequency == "monthly" ? "Repeats on the same date each month. Months without that date are skipped." : "Repeats at the same local time through this date.")
+                            .font(.caption).foregroundStyle(Color.nexdoSecondary)
+                    }
+                    Divider()
+                    TaskEditorLabel(title: "LOCATION", icon: "mappin.and.ellipse")
+                    TextField("Add a location (optional)", text: $location).padding(15)
+                        .background(TaskCreationStyle.input, in: RoundedRectangle(cornerRadius: 15))
+                    Divider()
+                    TaskEditorLabel(title: "NOTES", icon: "text.alignleft")
+                    TextField("Add details (optional)", text: $notes, axis: .vertical).lineLimit(3...6).padding(15)
+                        .background(TaskCreationStyle.input, in: RoundedRectangle(cornerRadius: 15))
+                    if let failure { Text(failure).font(.subheadline).foregroundStyle(.red) }
+                }.padding(20)
+                    .background(TaskCreationStyle.card, in: RoundedRectangle(cornerRadius: 26))
+                    .overlay(RoundedRectangle(cornerRadius: 26).stroke(TaskCreationStyle.border))
+                    .padding(20)
+                    .disabled(saving)
+            }.scrollDismissesKeyboard(.interactively)
+        }
+        .environment(\.timeZone, TimeZone(identifier: model.profile?.timeZone ?? "") ?? .current)
+        .navigationTitle("New Appointment / Event").navigationBarTitleDisplayMode(.inline)
+        .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Close") { dismiss() }.disabled(saving) } }
+        .safeAreaInset(edge: .bottom) {
+            Button {
+                guard canSave else { return }
+                guard start > Date() else { failure = "Choose a future start time."; return }
+                saving = true; failure = nil
+                Task {
+                    do {
+                        try await model.createCalendarEvent(title: title.trimmingCharacters(in: .whitespacesAndNewlines), notes: notes, location: location, start: start, end: end, requestID: requestID, repeatFrequency: repeatFrequency, repeatUntil: repeatUntil, weekdays: weekdays.sorted())
+                        dismiss()
+                    } catch { failure = "Couldn’t confirm the event. Check your calendar before retrying." }
+                    saving = false
+                }
+            } label: {
+                HStack { if saving { ProgressView().tint(.white) }; Text(saving ? "Creating…" : "Create Event"); Image(systemName: "arrow.right") }
+                    .font(.headline).foregroundStyle(canSave ? Color.white : Color.secondary)
+                    .frame(maxWidth: .infinity, minHeight: 52)
+                    .background(canSave ? AnyShapeStyle(TaskCreationStyle.selectedGradient) : AnyShapeStyle(TaskCreationStyle.input), in: RoundedRectangle(cornerRadius: 17))
+            }.buttonStyle(.plain).disabled(!canSave)
+                .padding(.horizontal, 20).padding(.vertical, 12).background(.regularMaterial)
+        }
+        .tint(TaskCreationStyle.accent).interactiveDismissDisabled(saving)
+        .onAppear {
+            #if DEBUG
+            if ProcessInfo.processInfo.arguments.contains("-calendar-repeat-preview") { repeatFrequency = "weekdays"; weekdays = [1, 3, 5] }
+            #endif
+        }
+        .onChange(of: start) { old, new in end = new.addingTimeInterval(max(300, end.timeIntervalSince(old))); repeatUntil = max(new, min(repeatUntil, new.addingTimeInterval(365 * 86400))) }
     }
 }
