@@ -865,6 +865,7 @@ private struct TodayView: View {
                             availableMinutes: range == .today ? model.scheduleIntelligence?.today.availableMinutes : nil,
                             attentionCount: range == .today ? (model.scheduleIntelligence?.today.attention.count ?? model.agenda?.overdue.count ?? 0) : (model.agenda?.overdue.count ?? 0),
                             schedule: remainingSchedule(queue),
+                            searchSchedule: schedule,
                             recommendation: range == .today ? model.scheduleIntelligence?.today.recommendation : nil,
                             actionRecommendation: queue.recommendation,
                             showsSummary: !queue.hasImmediateActions,
@@ -1057,6 +1058,7 @@ private struct TodayIntelligenceCard: View {
     let availableMinutes: Int?
     let attentionCount: Int
     let schedule: [TodayScheduleItem]
+    let searchSchedule: [TodayScheduleItem]
     let recommendation: ScheduleIntelligenceResponse.Today.Recommendation?
     var actionRecommendation: String? = nil
     var showsSummary = true
@@ -1064,6 +1066,20 @@ private struct TodayIntelligenceCard: View {
     let onAttention: () -> Void
     let onAsk: () -> Void
     let onCalendar: () -> Void
+
+    @State private var showingSearch = false
+    @State private var searchText = ""
+    @FocusState private var searchFocused: Bool
+    private var searching: Bool { showingSearch && !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+    private var visibleSchedule: [TodayScheduleItem] {
+        guard searching else { return Array(schedule.prefix(7)) }
+        let keywords = searchText.split(whereSeparator: { $0.isWhitespace }).map(String.init)
+        // searchSchedule already contains only the selected Today/3/5-day range.
+        return searchSchedule.filter { item in
+            guard let task = item.task else { return false }
+            return keywords.allSatisfy { task.title.localizedStandardContains($0) || (task.notes?.localizedStandardContains($0) ?? false) }
+        }
+    }
 
     private var commitmentCount: Int { appointments + taskCount }
     private var freeLabel: String? {
@@ -1110,21 +1126,49 @@ private struct TodayIntelligenceCard: View {
                 HStack {
                     Text(showsSummary ? "On your schedule" : "Later Today").font(.headline).foregroundStyle(Color.nexdoInk)
                     Spacer()
+                    Button {
+                        showingSearch.toggle()
+                        searchFocused = showingSearch
+                        if !showingSearch { searchText = "" }
+                    } label: {
+                        Image(systemName: "magnifyingglass")
+                            .font(.body.weight(.semibold)).foregroundStyle(Color.nexdoInk)
+                            .frame(width: 36, height: 36)
+                            .background(Color.primary.opacity(0.08), in: Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(showingSearch ? "Close task search" : "Search tasks")
+                    .accessibilityHint("Search tasks in the selected date range")
                     Button(action: onCalendar) { Label("View day", systemImage: "chevron.down").labelStyle(.titleAndIcon).font(.caption) }
                         .accessibilityLabel("Open Calendar")
                 }
                 .padding(.bottom, 10)
 
-                if schedule.isEmpty {
+                if showingSearch {
+                    HStack {
+                        TextField("Search tasks by keywords", text: $searchText)
+                            .focused($searchFocused).submitLabel(.search)
+                            .autocorrectionDisabled()
+                            .onSubmit { searchFocused = false }
+                        if !searchText.isEmpty {
+                            Button { searchText = "" } label: { Image(systemName: "xmark.circle.fill") }
+                                .accessibilityLabel("Clear task search")
+                        }
+                    }
+                    .padding(10).background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 10))
+                    .padding(.bottom, 12)
+                }
+
+                if visibleSchedule.isEmpty {
                     VStack(spacing: 9) {
                         Image(systemName: "calendar.badge.checkmark").font(.title2).foregroundStyle(Color.nexdoIndigo)
-                        Text("Your schedule is clear").font(.headline).foregroundStyle(Color.nexdoInk)
-                        Text("Add a task or enjoy the open space.").font(.subheadline).foregroundStyle(Color.nexdoSecondary)
+                        Text(searching ? "No matching tasks" : "Your schedule is clear").font(.headline).foregroundStyle(Color.nexdoInk)
+                        Text(searching ? "Try different keywords or select a wider date range." : "Add a task or enjoy the open space.").font(.subheadline).foregroundStyle(Color.nexdoSecondary)
                     }
                     .frame(maxWidth: .infinity).padding(.vertical, 28)
                     .accessibilityElement(children: .combine)
                 } else {
-                    ForEach(Array(schedule.prefix(7).enumerated()), id: \.element.id) { index, item in
+                    ForEach(Array(visibleSchedule.enumerated()), id: \.element.id) { index, item in
                         if index > 0 { Divider().opacity(0.55) }
                         if let task = item.task {
                             Button { onOpenTask(task) } label: { TodayScheduleRow(item: item) }.buttonStyle(.plain)
@@ -1132,7 +1176,7 @@ private struct TodayIntelligenceCard: View {
                             Button(action: onCalendar) { TodayScheduleRow(item: item) }.buttonStyle(.plain)
                         }
                     }
-                    if schedule.count > 7 {
+                    if !searching && schedule.count > 7 {
                         Button("View \(schedule.count - 7) more") { onCalendar() }
                             .font(.subheadline.weight(.semibold)).padding(.top, 12)
                     }
