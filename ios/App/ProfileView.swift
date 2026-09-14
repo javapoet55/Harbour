@@ -8,14 +8,17 @@ private final class CalendarOAuthCoordinator: NSObject, ObservableObject, ASWebA
     private var session: ASWebAuthenticationSession?
     func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor { UIApplication.shared.connectedScenes.compactMap { ($0 as? UIWindowScene)?.keyWindow }.first ?? ASPresentationAnchor() }
     func connectGoogle(model: AppModel, completion: @escaping (String) -> Void) {
-        guard let url = URL(string: "https://harbour-production-f8a0.up.railway.app/api/calendar/oauth/google/start?native=1") else { completion("Invalid calendar connection URL."); return }
+        guard let url = URL(string: "https://harbour-production-f8a0.up.railway.app/api/calendar/oauth/google/start?native=1") else { completion("Google Calendar connection failed: invalid calendar connection URL."); return }
         session = ASWebAuthenticationSession(url: url, callbackURLScheme: "nexdo") { callback, error in
             Task { @MainActor in
                 defer { self.session = nil }
-                if let error { completion(error.localizedDescription); return }
+                if let error { completion(Self.describe(error)); return }
                 guard let callback else { completion("Google Calendar authorization was cancelled."); return }
                 let query = URLComponents(url: callback, resolvingAgainstBaseURL: false)?.queryItems ?? []
-                if let detail = query.first(where: { $0.name == "detail" })?.value { completion("Google Calendar connection failed: \(detail)"); return }
+                if query.first(where: { $0.name == "calendar" })?.value == "error" || query.contains(where: { $0.name == "detail" }) {
+                    let detail = query.first(where: { $0.name == "detail" })?.value ?? "authorization failed"
+                    completion("Google Calendar connection failed: \(detail)"); return
+                }
                 do { try await model.reloadProfile(); completion("Google Calendar connected and synchronized.") }
                 catch { completion("Google Calendar connected, but Nexdo could not refresh it yet.") }
             }
@@ -23,6 +26,13 @@ private final class CalendarOAuthCoordinator: NSObject, ObservableObject, ASWebA
         session?.presentationContextProvider = self
         session?.prefersEphemeralWebBrowserSession = false
         session?.start()
+    }
+
+    private static func describe(_ error: Error) -> String {
+        if let sessionError = error as? ASWebAuthenticationSessionError, sessionError.code == .canceledLogin {
+            return "Google Calendar connection failed: sign-in was cancelled or blocked. If Google showed “OAuth client was disabled”, enable that Web client in Google Cloud Console → APIs & Services → Credentials, and keep the redirect URI https://harbour-production-f8a0.up.railway.app/api/calendar/oauth/google/callback."
+        }
+        return "Google Calendar connection failed: \(error.localizedDescription)"
     }
 }
 
@@ -218,8 +228,8 @@ struct ProfileSettingsView: View {
                         Button("Connect Google Calendar", systemImage: "calendar.badge.plus") {
                             run { try await withCheckedThrowingContinuation { continuation in
                                 calendarOAuth.connectGoogle(model: model) { result in
-                                    if result.contains("failed") || result.contains("cancelled") { continuation.resume(throwing: OAuthError.message(result)) }
-                                    else { message = result; continuation.resume(returning: ()) }
+                                    if result.contains("connected") { message = result; continuation.resume(returning: ()) }
+                                    else { continuation.resume(throwing: OAuthError.message(result)) }
                                 }
                             }}
                         }
