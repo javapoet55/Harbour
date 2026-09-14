@@ -12,6 +12,24 @@ vi.mock('@/server/agenda', () => ({ listEventsInRange: mocks.events }));
 vi.mock('@/server/db', () => ({ prisma: { task: { findMany: mocks.tasks, findFirst: mocks.owned, update: mocks.taskUpdate }, category: { findMany: mocks.categories, create: mocks.categoryCreate }, user: { findUniqueOrThrow: mocks.user }, calendarEvent: { upsert: mocks.eventSave }, reminder: { deleteMany: vi.fn(), upsert: mocks.reminderSave }, recurrenceRule: { deleteMany: vi.fn() } } }));
 const task = { id: 'task1', title: 'Call Damien', status: 'PLANNED', priority: 'NORMAL', durationMin: 30, startAt: new Date('2099-01-01T10:00:00Z'), dueAt: null, critical: false };
 const args = { title: 'Call Damien', scheduledAt: '2099-01-01T10:00:00Z', durationMin: 30 };
+it('reads a fresh clock in the account timezone without changing tasks', async () => {
+  mocks.user.mockResolvedValue({ timeZone: 'America/Los_Angeles' });
+  vi.useFakeTimers();
+  try {
+    vi.setSystemTime(new Date('2026-09-14T12:32:00Z'));
+    const result = await executeVoiceTool('u', 's', 'clock', 'get_current_time', {});
+    expect(result).toMatchObject({ success: true, localDateTime: '2026-09-14T05:32:00-07:00' });
+    expect(mocks.createTask).not.toHaveBeenCalled();
+  } finally { vi.useRealTimers(); }
+});
+it('passes the requested 6 AM Pacific instant unchanged to task creation', async () => {
+  vi.useFakeTimers();
+  try {
+    vi.setSystemTime(new Date('2026-09-14T12:32:00Z'));
+    await executeVoiceTool('u', 's', 'morning', 'create_task', { title: 'Prepare for roof repair', scheduledAt: '2026-09-14T06:00:00-07:00', durationMin: 30, allowScheduleConflict: true });
+    expect(mocks.createTask).toHaveBeenCalledWith(expect.objectContaining({ startAt: new Date('2026-09-14T13:00:00Z') }));
+  } finally { vi.useRealTimers(); }
+});
 beforeEach(() => { vi.clearAllMocks(); mocks.availability.mockResolvedValue([]); mocks.context.mockResolvedValue({ timeZone: "UTC", workingDays: "0,1,2,3,4,5,6", workStart: "00:00", workEnd: "23:59", bufferMinutes: 15, tasks: [], events: [] }); mocks.createTask.mockResolvedValue(task); mocks.reminders.mockResolvedValue(undefined); mocks.owned.mockResolvedValue(task); mocks.scheduleTask.mockResolvedValue(task); mocks.events.mockResolvedValue([]); mocks.tasks.mockResolvedValue([]); });
 it('passes a stable per-user session and call idempotency key to the existing task engine', async () => {
   await executeVoiceTool('u', 's', 'c', 'create_task', args);

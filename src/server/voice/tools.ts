@@ -1,3 +1,4 @@
+import { voiceClock } from './time-context';
 import { ScheduleWarning } from '@/lib/schedule-warning';
 import { checkCreationAvailability } from '@/server/availability';
 import { availability } from '@/lib/availability';
@@ -14,6 +15,7 @@ const timestamp = z.string().datetime({ offset: true });
 const fields = { title: z.string().trim().min(1).max(200), notes: z.string().max(4000), scheduledAt: timestamp, durationMin: z.number().int().min(1).max(1440), categoryName: z.string().trim().min(1).max(80) };
 const id = z.string().min(1).max(200);
 const schemas = {
+  get_current_time: z.object({}).strict(),
   get_recommendations: z.object({ minutes: z.number().int().min(1).max(480).optional() }).strict(),
   list_categories: z.object({}).strict(),
   create_calendar_event: z.object({ allowScheduleConflict: z.boolean().optional(), title: fields.title, notes: fields.notes.optional(), startAt: timestamp, endAt: timestamp, location: z.string().max(200).optional() }).strict(),
@@ -33,6 +35,10 @@ export function validateVoiceTool(name: string, args: unknown) {
 }
 export async function executeVoiceTool(userId: string, sessionId: string, callId: string, name: string, input: unknown) {
   validateVoiceTool(name, input);
+  if (name === 'get_current_time') {
+    const user = await prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { timeZone: true } });
+    return { success: true, ...voiceClock(user.timeZone) };
+  }
   const args = input as Record<string, string | number | boolean | null>;
   if (typeof args.scheduledAt === 'string' && +new Date(args.scheduledAt) <= Date.now()) throw new Error('Schedule must be in the future');
   if (['create_task', 'create_calendar_event'].includes(name) && args.allowScheduleConflict !== true) {

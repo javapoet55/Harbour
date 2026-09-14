@@ -23,14 +23,20 @@ struct DoNowView: View {
                         HStack {
                             TextField("Minutes available (optional)", text: $customMinutes).keyboardType(.numberPad)
                             Button("Update") {
-                                guard let value = Int(customMinutes), (1...480).contains(value) else {
+                                let input = customMinutes.trimmingCharacters(in: .whitespacesAndNewlines)
+                                if input.isEmpty {
+                                    requestedUntil = nil
+                                    Task { await refresh() }
+                                    return
+                                }
+                                guard let value = Int(input), (1...480).contains(value) else {
                                     error = "Enter between 1 and 480 minutes."; return
                                 }
                                 requestedUntil = Date().addingTimeInterval(Double(value * 60))
                                 Task { await refresh() }
                             }.disabled(loading || starting)
                         }
-                        Text("Leave this blank to use your current calendar opening. Saved appointments and buffers still apply.")
+                        Text("Leave this blank to use your current opening within saved working hours. Enter minutes to work outside those hours. Appointments and buffers still apply.")
                             .font(.caption).foregroundStyle(.secondary)
                         if requestedMinutes != nil {
                             Button("Use my calendar opening") { customMinutes = ""; requestedUntil = nil; Task { await refresh() } }.disabled(loading || starting)
@@ -41,8 +47,14 @@ struct DoNowView: View {
                             Button("Refresh recommendation") { Task { await refresh() } }.disabled(loading || starting)
                         }
                         if let recommendation, let next = recommendation.nextAction {
-                            Text("You have \(next.availableWindowMinutes) minutes free")
+                            Text(next.outsideWorkingHours == true ? "Outside your working hours" : "You have \(DurationDisplay.durationLabel(next.availableWindowMinutes)) free now")
                                 .font(.title2.bold()).foregroundStyle(Color.nexdoInk)
+                            if let remaining = next.remainingWorkingMinutesToday {
+                                Text("Unreserved working time remaining today: \(DurationDisplay.durationLabel(remaining))")
+                                    .font(.subheadline).foregroundStyle(.secondary)
+                                Text("This can include several gaps. Unscheduled tasks have not reserved time in your calendar.")
+                                    .font(.caption).foregroundStyle(.secondary)
+                            }
                             if let best = next.bestAction {
                                 VStack(alignment: .leading, spacing: 12) {
                                     Text(next.continuingFocus ? "Keep your focus" : "Best thing to do now").font(.subheadline.weight(.semibold)).foregroundStyle(Color.nexdoIndigo)
@@ -71,7 +83,9 @@ struct DoNowView: View {
                                 }
                             } else {
                                 Text(recommendation.summary).foregroundStyle(.secondary)
-                                Text("No task fits safely right now. You can enter a different amount of available time above.").font(.subheadline)
+                                if next.outsideWorkingHours != true {
+                                    Text("No task fits this current opening. You can enter a different amount of available time above.").font(.subheadline)
+                                }
                             }
                         }
                     }

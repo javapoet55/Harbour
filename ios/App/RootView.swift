@@ -913,7 +913,7 @@ private struct TodayView: View {
                                     Button { model.dismissPersistentNext() } label: { Image(systemName: "xmark").frame(width: 44, height: 44) }.accessibilityLabel("Dismiss suggestion")
                                 }
                                 Text(best.title).font(.title3.bold())
-                                Text("~\(best.focusMinutes) min · \(recommendation.nextAction?.availableWindowMinutes ?? 0) minutes available").font(.subheadline).foregroundStyle(Color.nexdoSecondary)
+                                Text("~\(best.focusMinutes) min · \(DurationDisplay.durationLabel(recommendation.nextAction?.availableWindowMinutes ?? 0)) available").font(.subheadline).foregroundStyle(Color.nexdoSecondary)
                                 Button("Start Focus Session") {
                                     Task {
                                         do { try await model.startRecommendedFocus(best); model.refreshNextAction() }

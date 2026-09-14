@@ -54,6 +54,6 @@ it('calendar sessions expose only event creation and schedule tools', async () =
   const response = await POST(new Request('https://nexdo.test/api/realtime/task-session', { method: 'POST', body: JSON.stringify({ consent: true, scope: 'calendar' }) }));
   expect(response.status).toBe(200);
   const session = JSON.parse(upstream.mock.calls[0][1].body).session;
-  expect(session.tools.map((tool: { name: string }) => tool.name)).toEqual(['create_calendar_event', 'get_schedule', 'find_free_time', 'set_conversation_context', 'end_session']);
+  expect(session.tools.map((tool: { name: string }) => tool.name)).toEqual(['get_current_time', 'create_calendar_event', 'get_schedule', 'find_free_time', 'set_conversation_context', 'end_session']);
   expect(session.instructions).toContain('never tasks or reminders');
 });

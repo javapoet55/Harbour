@@ -1,5 +1,6 @@
 'use client';
 
+import { durationLabel } from '@/lib/duration';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { AlertCircle, ArrowUpRight, CalendarDays, CheckCircle2, CheckSquare, ChevronDown, Clock3, RefreshCw, Sparkles } from 'lucide-react';
@@ -90,7 +91,7 @@ export function TodaySnapshot({ data, error, next, nextError, dismissNext, onRet
   if (error) return <section className="day-snapshot snapshot-unavailable" aria-label="Your day snapshot"><p role="status">{error}</p><button type="button" onClick={onRetry}><RefreshCw size={16} />Try again</button></section>;
   if (!data) return <section className="day-snapshot snapshot-loading" aria-label="Your day snapshot" aria-busy="true"><Sparkles size={20} /><p role="status">Bringing your day together…</p></section>;
   const time = (iso: string) => new Intl.DateTimeFormat('en-US', { timeZone: data.timeZone, hour: 'numeric', minute: '2-digit' }).format(new Date(iso));
-  const hours = data.availableMinutes >= 60 ? `${Math.floor(data.availableMinutes / 60)}h${data.availableMinutes % 60 ? ` ${data.availableMinutes % 60}m` : ''}` : `${data.availableMinutes}m`;
+  const hours = durationLabel(data.availableMinutes);
   const remaining = data.timeline.filter((item) => !item.past);
   const items = showTimeline ? data.timeline : remaining.slice(0, 3);
   const issues = showAll ? data.attention : data.attention.slice(0, 2);
@@ -128,7 +129,7 @@ export function TodaySnapshot({ data, error, next, nextError, dismissNext, onRet
           <article className="snapshot-recommendation" aria-label="What should I do next?">
             <span className="snapshot-eyebrow"><Sparkles size={16} aria-hidden="true" />What should I do next?</span>
             <h3>{best.title}</h3>
-            <p>{best.focusMinutes} min recommended · {next!.recommendation!.window.availableMinutes} min available now</p>
+            <p>{best.focusMinutes} min recommended · {durationLabel(next!.recommendation!.window.availableMinutes)} available now</p>
             {compactLines(best.reasons.join(' · ')).map((line, index) => <p key={`snapshot-best-reason-${index}`}>{line}</p>)}
             <div className="flex flex-wrap gap-2">
               <button type="button" className="harbor-btn harbor-btn-brand" disabled={focus.loading} onClick={() => void focus.start(best.taskId, best.title, best.focusMinutes, true)}>Start focus</button>

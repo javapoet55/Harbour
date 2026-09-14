@@ -1,3 +1,4 @@
+import { durationLabel } from '@/lib/duration';
 import { nextTaskStart } from '@/lib/task-next-occurrence';
 import { checkCreationAvailability } from './availability';
 import { addDays, formatDay, formatTime, tzToday, weekdayName, ymd } from '@/lib/time';
@@ -168,8 +169,8 @@ async function executeIntent(userId: string, timeZone: string, intent: ParsedInt
   if (intent.intent === 'SCHEDULE_INTELLIGENCE') {
     const intelligence = await getScheduleIntelligence(userId);
     const attention = intelligence.conflicts.length;
-    const spoken = attention ? `${attention} schedule issue${attention === 1 ? '' : 's'} need attention. ${intelligence.conflicts[0].explanation}` : `Your schedule is clear. You have ${intelligence.commitmentsToday} calendar commitments today and ${Math.round(intelligence.availableMinutes / 60 * 10) / 10} usable hours remaining.`;
-    return { spoken, visual: { summary: spoken, appointments: [], tasks: intelligence.priorities.slice(0, 3).map((task, index) => `${index + 1}. ${task.title} — ${task.reasons.join(', ')}`), overdue: [], next: attention ? intelligence.conflicts[0].recommendedAction : 'Keep your highest-priority task protected.', rangeLabel: 'Schedule intelligence', sections: [{ title: 'Today', items: [`${intelligence.commitmentsToday} calendar commitments`, `${Math.round(intelligence.availableMinutes / 60 * 10) / 10} usable hours remaining`] }, { title: attention ? 'Needs attention' : 'All clear', items: attention ? intelligence.conflicts.map((conflict) => `${conflict.title}: ${conflict.explanation}`) : ['No hard, buffer, workload, or priority conflicts found.'] }, { title: 'Top priority', items: intelligence.priorities.slice(0, 3).map((task) => `${task.title} — ${task.reasons.join(', ')}`) }] } };
+    const spoken = attention ? `${attention} schedule issue${attention === 1 ? '' : 's'} need attention. ${intelligence.conflicts[0].explanation}` : `Your schedule is clear. You have ${intelligence.commitmentsToday} calendar commitments today and ${durationLabel(intelligence.availableMinutes)} of usable time remaining.`;
+    return { spoken, visual: { summary: spoken, appointments: [], tasks: intelligence.priorities.slice(0, 3).map((task, index) => `${index + 1}. ${task.title} — ${task.reasons.join(', ')}`), overdue: [], next: attention ? intelligence.conflicts[0].recommendedAction : 'Keep your highest-priority task protected.', rangeLabel: 'Schedule intelligence', sections: [{ title: 'Today', items: [`${intelligence.commitmentsToday} calendar commitments`, `${durationLabel(intelligence.availableMinutes)} of usable time remaining`] }, { title: attention ? 'Needs attention' : 'All clear', items: attention ? intelligence.conflicts.map((conflict) => `${conflict.title}: ${conflict.explanation}`) : ['No hard, buffer, workload, or priority conflicts found.'] }, { title: 'Top priority', items: intelligence.priorities.slice(0, 3).map((task) => `${task.title} — ${task.reasons.join(', ')}`) }] } };
   }
   if (intent.intent === 'LIST_THIS_WEEK') {
     const weekday = today.getUTCDay();

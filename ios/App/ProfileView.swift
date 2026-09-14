@@ -76,7 +76,6 @@ struct AccountView: View {
                     NavigationLink { ProfileSettingsView() } label: { menuRow("Edit profile and settings", "person.crop.circle") }
                     VStack(spacing: 0) {
                         webRow("Inbox", "tray", "/inbox")
-                        NavigationLink { TasksView() } label: { menuRow("Tasks", "checkmark.circle") }
                         webRow("Waiting For", "stopwatch", "/waiting")
                         webRow("AI Planner", "sparkles", "/planner")
                         webRow("Insights", "chart.bar", "/insights")
@@ -88,7 +87,7 @@ struct AccountView: View {
                         .disabled(model.busy)
                 }.padding(20)
             }
-            .background(ProfileBackground()).navigationTitle("More").navigationBarTitleDisplayMode(.inline)
+            .background(ProfileBackground()).navigationTitle("My Page").navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Close", systemImage: "xmark") { closeAccount() }.labelStyle(.iconOnly) } }
             .confirmationDialog("Sign out of Nexdo?", isPresented: $confirmsSignOut) {
                 Button("Sign out", role: .destructive) { Task { await model.logout(); if model.profile == nil { dismiss() } } }
@@ -192,7 +191,7 @@ struct ProfileSettingsView: View {
                     card("Profile and time") {
                         field("Display name", text: $name)
                         VStack(alignment: .leading, spacing: 8) {
-                            Picker("Time zone", selection: $zone) { ForEach(TimeZone.knownTimeZoneIdentifiers, id: \.self) { Text($0.replacingOccurrences(of: "_", with: " ")).tag($0) } }.pickerStyle(.navigationLink)
+                            LabeledContent("Time zone (Automatic)", value: TimeZone.autoupdatingCurrent.identifier.replacingOccurrences(of: "_", with: " "))
                         }
                         hours("Working hours", start: pref(\.workStart), end: pref(\.workEnd))
                         hours("Quiet hours", start: pref(\.quietStart), end: pref(\.quietEnd))
@@ -216,10 +215,8 @@ struct ProfileSettingsView: View {
                         Text("Suggestions respect your working hours, quiet hours, and active focus.").font(.caption).foregroundStyle(Color.nexdoSecondary)
                         Toggle("Push notifications", isOn: pref(\.pushEnabled))
                         Toggle("Email notifications", isOn: pref(\.emailEnabled))
-                        Toggle("SMS notifications", isOn: pref(\.smsEnabled))
                         Toggle("Morning summary", isOn: pref(\.morningSummary))
                         Toggle("Evening summary", isOn: pref(\.eveningSummary))
-                        field("SMS phone number", text: Binding(get: { preferences?.phoneNumber ?? "" }, set: { preferences?.phoneNumber = $0 }), placeholder: "+15551234567").keyboardType(.phonePad)
                         Text("Manage delivery permissions and send tests in Notification Center.").font(.caption).foregroundStyle(Color.nexdoSecondary)
                         Button("Open Notification Center") { website("/notifications") }
                     }
@@ -351,7 +348,7 @@ struct ProfileSettingsView: View {
         var normalizedPreferences = preferences
         normalizedPreferences.phoneNumber = phone
         self.preferences = normalizedPreferences
-        return ProfileSettingsInput(name: trimmed, timeZone: zone, preference: normalizedPreferences, nextAction: next)
+        return ProfileSettingsInput(name: trimmed, timeZone: TimeZone.autoupdatingCurrent.identifier, preference: normalizedPreferences, nextAction: next)
     }
 
     /// Accept friendly punctuation and US 10-digit numbers, while sending the

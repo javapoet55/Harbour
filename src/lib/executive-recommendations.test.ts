@@ -9,6 +9,26 @@ const task = (id: string, values: Partial<ExecutiveTask> = {}): ExecutiveTask =>
 const event = (id: string, start: string, end: string, day = '2026-09-07') => ({ id, title: id, startAt: at(start, day), endAt: at(end, day) });
 const context = (values: Partial<ExecutiveContext> = {}): ExecutiveContext => ({ now: at('13:00'), tasks: [], events: [], timeZone: 'America/Los_Angeles', workStart: '09:00', workEnd: '17:00', workingDays: '1,2,3,4,5', bufferMinutes: 15, ...values });
 
+describe('current opening versus remaining day capacity', () => {
+  const morning = () => context({ now: at('05:53'), tasks: [task('one', { startAt: at('09:00') }), task('two', { startAt: at('10:00') }), task('three', { startAt: at('11:00') })] });
+  it('does not equate an early-morning zero opening with a full day', () => {
+    const r = buildExecutiveRecommendation(morning(), 'NEXT_ACTION').recommendation;
+    expect(r.nextAction).toMatchObject({ availableWindowMinutes: 0, outsideWorkingHours: true, remainingWorkingMinutesToday: 390 });
+    expect(r.summary).toContain('This does not mean your day is full');
+  });
+  it('allows explicitly declared early-morning time and still observes appointments', () => {
+    const ctx = { ...morning(), tasks: [task('quick')] };
+    expect(buildExecutiveRecommendation(ctx, 'FREE_WINDOW', { minutes: 38 }).recommendation.nextAction).toMatchObject({ availableWindowMinutes: 38, outsideWorkingHours: false });
+    const blocked = { ...ctx, events: [event('early meeting', '06:15', '07:00')] };
+    expect(buildExecutiveRecommendation(blocked, 'FREE_WINDOW', { minutes: 38 }).recommendation.nextAction?.availableWindowMinutes).toBe(7);
+  });
+  it('does not count tomorrow as remaining today after hours or on a non-working day', () => {
+    for (const ctx of [context({ now: at('18:00') }), context({ now: at('05:53'), workingDays: '2' })]) {
+      expect(buildExecutiveRecommendation(ctx, 'NEXT_ACTION').recommendation.nextAction?.remainingWorkingMinutesToday).toBe(0);
+    }
+  });
+});
+
 describe('executive intent routing', () => {
   it.each(['What should I focus on today?', 'What should I do today?', 'What are my priorities?', "What's most important?"])('routes focus variation %s', (text) => expect(parseIntent(text).intent).toBe('FOCUS_TODAY'));
   it.each(['Fix my afternoon.', 'Optimize my afternoon.', 'Reorganize the rest of my day.', 'My afternoon is too busy.', 'Can you make everything fit?'])('routes optimization %s', (text) => expect(parseIntent(text).intent).toBe('FIX_SCHEDULE'));

@@ -180,7 +180,7 @@ struct WeeklySummaryView: View {
 
     private func planButton(_ value: WeeklySummary) -> some View {
         Button { onPlanNextWeek(planPrompt(value)) } label: {
-            Text("Plan next week with Nexdo →")
+            Text("Plan next week with Nexdo AI →")
                 .font(.headline).foregroundStyle(.white)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)

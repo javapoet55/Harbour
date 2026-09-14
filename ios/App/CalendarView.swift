@@ -250,7 +250,7 @@ struct CalendarView: View {
             }.foregroundStyle(Color.blue)
             if let info = model.scheduleIntelligence?.today, info.day == dates.key(Date()) {
                 Label(info.recommendation.title, systemImage: "exclamationmark.triangle").font(.headline)
-                Text("\(info.appointments) calendar commitments today · \(String(format: "%.1f", Double(info.availableMinutes) / 60)) usable hours remain")
+                Text("\(info.appointments) calendar commitments today · \(DurationDisplay.durationLabel(info.availableMinutes)) of usable time remain")
                     .font(.caption).foregroundStyle(Color.nexdoSecondary)
                 Text(info.recommendation.explanation).font(.caption).foregroundStyle(Color.nexdoSecondary)
             } else if !model.intelligenceLoading && model.intelligenceError == nil {

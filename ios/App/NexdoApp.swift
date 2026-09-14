@@ -198,6 +198,16 @@ final class AppModel: ObservableObject {
         guard profileRevision == revision, profile?.id == userID, !photoSaveInProgress else { return }
         profile = response.user
     }
+    // Follow the device's location-based system zone, including daylight saving time.
+    func synchronizeDeviceTimeZone() async throws {
+        guard let owner = profile?.id else { return }
+        let deviceZone = TimeZone.autoupdatingCurrent.identifier
+        guard profile?.timeZone != deviceZone else { return }
+        let _: Ignore = try await api.request("/api/settings", method: "PATCH", body: JSONEncoder().encode(["timeZone": deviceZone]), timeout: 15)
+        guard profile?.id == owner else { throw APIError.signedOut }
+        try await reloadProfile()
+        guard profile?.id == owner, profile?.timeZone == deviceZone else { throw APIError.invalidResponse }
+    }
     func saveProfileSettings(_ input: ProfileSettingsInput) async throws {
         let _: Ignore = try await api.request("/api/settings", method: "PATCH", body: JSONEncoder().encode(input), timeout: 15)
         try await reloadProfile()
@@ -264,6 +274,7 @@ final class AppModel: ObservableObject {
     private func finishAuthentication() async throws {
         let response: ProfileResponse = try await api.request("/api/me")
         profile = response.user
+        try await synchronizeDeviceTimeZone()
         lastSignedInFirstName = ProfileName.firstName(from: response.user.name)
         if let lastSignedInFirstName {
             UserDefaults.standard.set(lastSignedInFirstName, forKey: "nexdo.lastSignedInFirstName")
@@ -400,6 +411,8 @@ final class AppModel: ObservableObject {
     }
     func refresh() async {
         guard !busy else { return }
+        do { try await synchronizeDeviceTimeZone() }
+        catch { self.error = "Couldn’t synchronize your device time zone. Please reconnect and try again."; return }
         refreshSupplementaryData()
         await refreshTasks()
     }
@@ -433,6 +446,7 @@ final class AppModel: ObservableObject {
 
     func voiceTaskSession(calendarOnly: Bool = false) async throws -> VoiceTaskSession {
         guard aiConsent && voiceConsent else { throw APIError.response(403) }
+        try await synchronizeDeviceTimeZone()
         return try await api.request("/api/realtime/task-session", method: "POST", body: JSONSerialization.data(withJSONObject: ["consent": true, "scope": calendarOnly ? "calendar" : "general"]), timeout: 25)
     }
 

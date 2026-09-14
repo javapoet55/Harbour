@@ -11,7 +11,7 @@ final class VoiceToolExecutor: VoiceToolExecuting {
     func clear() { candidates.removeAll() }
     func execute(name: String, arguments: Data, sessionID: UUID, callID: String) async throws -> Data {
         guard let model, ownerID != nil, model.profile?.id == ownerID, model.aiConsent, model.voiceConsent else { throw APIError.signedOut }
-        if calendarOnly && !["create_calendar_event", "get_schedule", "find_free_time"].contains(name) {
+        if calendarOnly && !["get_current_time", "create_calendar_event", "get_schedule", "find_free_time"].contains(name) {
             return Data("{\"success\":false,\"error\":\"This screen creates appointments and events only.\"}".utf8)
         }
         if name == "prepare_call" || name == "prepare_email" {

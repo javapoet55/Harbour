@@ -1,3 +1,4 @@
+import { durationLabel } from './duration';
 import { analyzeSchedule, calendarBusy, freeSlots, minutesIn, scoreTasks, type IntelligenceTask } from './schedule-intelligence';
 import { buildReplan, workWindows, retainSafeMoves, type ReplanTask } from './replanning';
 import { addDays, endOfLocalDay, formatTime, startOfLocalDay, tzToday, ymd, zonedDateTime } from './time';
@@ -17,6 +18,7 @@ export type ExecutiveContext = {
 export type ExecutiveOptions = { minutes?: number; protectedTaskIds?: string[]; period?: 'afternoon' | 'remaining' | 'tomorrow_morning'; excludedTaskIds?: string[]; candidateTaskIds?: string[]; weights?: NextActionWeights; proactive?: boolean };
 const OPEN = new Set(['INBOX', 'PLANNED', 'IN_PROGRESS']);
 const minute = 60_000;
+
 
 /** Orchestration of the existing scoring, interval and replanning engines; no LLM arithmetic. */
 export function buildExecutiveRecommendation(context: ExecutiveContext, intent: ExecutiveIntent, options: ExecutiveOptions = {}) {
@@ -129,7 +131,7 @@ export function buildExecutiveRecommendation(context: ExecutiveContext, intent: 
         + (task.projectId && taskById.get(activeFocus.taskId)?.projectId && task.projectId !== taskById.get(activeFocus.taskId)?.projectId ? NEXT_ACTION_POLICY.projectSwitchPenalty : 0) : 0;
     return { ...priority, score: windowIntent ? Math.max(0, baseScore - switchingCost) : priority.score, baseScore, switchingCost, windowFit: Math.round(fit * 100), dependencyImpact: priority.factors.dependencyImpact, durationMin: task.durationMin, focusMinutes,
       partial, slackMinutes, dueAt: task.dueAt?.toISOString() ?? null,
-      reasons: [...priority.reasons, ...(windowIntent && focusMinutes ? [partial ? `${focusMinutes} minutes of useful partial progress; ${task.durationMin - focusMinutes} minutes remain` : `fits this ${available}-minute opening`] : []), ...(slackMinutes !== null && slackMinutes < 0 ? [`${Math.abs(slackMinutes)} minutes short before the deadline`] : []), ...(switchingCost ? [`${switchingCost}-point switching penalty protects your current focus`] : activeFocus?.taskId === task.id ? ['continue your active focus without a context switch'] : [])],
+      reasons: [...priority.reasons, ...(windowIntent && focusMinutes ? [partial ? `${durationLabel(focusMinutes)} of useful partial progress; ${durationLabel(task.durationMin - focusMinutes)} remain` : `fits this opening of ${durationLabel(available)}`] : []), ...(slackMinutes !== null && slackMinutes < 0 ? [`${durationLabel(Math.abs(slackMinutes))} short before the deadline`] : []), ...(switchingCost ? [`${switchingCost}-point switching penalty protects your current focus`] : activeFocus?.taskId === task.id ? ['continue your active focus without a context switch'] : [])],
     };
   }).filter((priority) => (!windowIntent || priority.focusMinutes > 0) && !options.excludedTaskIds?.includes(priority.taskId) && (!options.candidateTaskIds || options.candidateTaskIds.includes(priority.taskId)))
     .sort((a, b) => b.score - a.score || a.title.localeCompare(b.title));
@@ -149,12 +151,12 @@ export function buildExecutiveRecommendation(context: ExecutiveContext, intent: 
   if (intent === 'FIX_SCHEDULE') {
     recommendation.assumptions.push('New blocks start at least five minutes from now so you can review the plan. Refresh if a proposed start time passes.');
     recommendation.risks.push(...blocked.map((task) => ({ title: task.title, explanation: `${task.title} needs ${task.durationMin} minutes but is waiting or dependency-blocked. Resolve this before scheduling it.` })));
-    recommendation.summary = `Your ${options.period === 'tomorrow_morning' ? 'tomorrow morning' : options.period === 'remaining' ? 'remaining day' : 'afternoon'} has ${available} available minutes for ${required} minutes of flexible work.${required > available ? ` That is a ${required - available}-minute deficit.` : ''} No changes have been applied.`;
+    recommendation.summary = `Your ${options.period === 'tomorrow_morning' ? 'tomorrow morning' : options.period === 'remaining' ? 'remaining day' : 'afternoon'} has ${durationLabel(available)} available for ${durationLabel(required)} of flexible work.${required > available ? ` That is a ${durationLabel(required - available)} deficit.` : ''} No changes have been applied.`;
     recommendation.proposedScheduleChanges = plan.moves.map((move) => ({ taskId: move.taskId, title: move.title, before: move.fromStartAt, after: move.toStartAt, durationMin: move.durationMin, reason: move.reason.replaceAll('_', ' ') }));
     recommendation.requiresApproval = plan.moves.length > 0;
     recommendation.risks.push(...plan.risks.map((risk) => ({ title: risk.title, explanation: `${risk.title} cannot fit safely in this window before its deadline. Leave it unchanged and review a later slot or deadline with its owner.` })));
     recommendation.recommendedActions = plan.moves.length ? [{ type: 'REVIEW_PLAN', label: 'Review proposed changes' }] : [];
-    recommendation.sections = [{ title: 'Capacity', items: [`${required} minutes required · ${available} minutes available`, `${recommendation.window.deficitMinutes} minutes of unmet workload`] },
+    recommendation.sections = [{ title: 'Capacity', items: [`${durationLabel(required)} required · ${durationLabel(available)} available`, `${durationLabel(recommendation.window.deficitMinutes)} of unmet workload`] },
       { title: 'Protected commitments', items: fixed.length ? fixed.map((event) => `${event.title} — ${event.allDay ? 'all day' : time(event.startAt)} unchanged`) : ['No fixed calendar appointments in this period.'] },
       { title: 'Cannot fit', items: recommendation.risks.length ? recommendation.risks.map((risk) => risk.explanation) : ['The proposed flexible work fits.'] }];
   } else if (intent === 'DRIVING_BRIEFING') {
@@ -176,18 +178,20 @@ export function buildExecutiveRecommendation(context: ExecutiveContext, intent: 
     recommendation.sections = [{ title: 'On your way home', items: facts }, { title: 'Completed important work', items: done.length ? done.slice(0, 3).map((task) => task.title) : ['No important completions recorded today.'] }];
   } else {
     recommendation.summary = windowIntent
-      ? `You have ${available} usable minutes${options.minutes && available < options.minutes ? ` out of the ${options.minutes} requested, after saved commitments and buffers` : ''}. ${priorities[0] ? `Start with ${priorities[0].title}.` : 'No actionable task fits safely in this opening.'}`
+      ? `You have ${durationLabel(available)} available${options.minutes && available < options.minutes ? ` out of the ${durationLabel(options.minutes)} requested, after saved commitments and buffers` : ''}. ${priorities[0] ? `Start with ${priorities[0].title}.` : 'No actionable task fits safely in this opening.'}`
       : `You have ${actionable.length} actionable open tasks. ${priorities.length ? `${priorities.length} deserve your attention first.` : 'Nothing needs a focus recommendation right now.'}`;
     recommendation.sections = [{ title: windowIntent ? 'Best next action & alternatives' : 'Your focus priorities', items: priorities.length ? priorities.map((item, index) => `${index + 1}. ${item.title} — ${item.reasons.join('; ')}`) : [windowIntent && !available ? 'There is no uninterrupted working time available right now. Review your commitments or tell me another time window.' : 'No matching actionable work fits. Check blocked tasks or choose another window.'] },
       { title: 'Schedule & risks', items: [...conflicts.slice(0, 2).map((item) => item.explanation), ...risks.slice(0, 2).map((item) => item.explanation)].slice(0, 3) }].filter((section) => section.items.length);
     if (windowIntent && priorities[0]?.focusMinutes && !context.contextWarnings?.length) recommendation.recommendedActions = [{ type: 'START_FOCUS', taskId: priorities[0].taskId, durationMin: priorities[0].focusMinutes, label: `Start ${priorities[0].focusMinutes}-minute focus session` }];
   }
   if (windowIntent) {
-    recommendation.nextAction = { bestAction: priorities[0] ?? null, alternatives: priorities.slice(1), availableWindowMinutes: available,
+    const outsideWorkingHours = !working.some(window => window.start <= +now && window.end > +now);
+    const remainingWorkingMinutesToday = minutesIn(working.flatMap(window => freeSlots(Math.max(+now, window.start), Math.min(todayEnd, window.end), [...busy, ...scheduled])).filter(slot => slot.end > slot.start));
+    recommendation.nextAction = { outsideWorkingHours: intent !== 'FREE_WINDOW' && outsideWorkingHours, remainingWorkingMinutesToday, bestAction: priorities[0] ?? null, alternatives: priorities.slice(1), availableWindowMinutes: available,
       suggestedFocusDuration: priorities[0]?.focusMinutes ?? 0, proactive: options.proactive ?? false,
       continuingFocus: Boolean(activeFocus && priorities[0]?.taskId === activeFocus.taskId), confidence: recommendation.confidence };
     recommendation.assumptions.push('Task durations are saved or consented personalized estimates, not verified remaining work. Unknown location, device and meeting-preparation links are not inferred.', `Switching policy uses a ${context.switchingThreshold ?? NEXT_ACTION_POLICY.switchingThreshold}-point improvement threshold plus setup and active-focus investment; it never switches tasks automatically.`);
-    if (intent !== 'FREE_WINDOW' && !available && !working.some((window) => window.start <= +now && window.end > +now)) recommendation.summary = 'You are outside your saved working hours. Tell me how much time you have if you want a recommendation now.';
+    if (intent !== 'FREE_WINDOW' && !available && !working.some((window) => window.start <= +now && window.end > +now)) recommendation.summary = `You are outside your saved working hours (${context.workStart}–${context.workEnd}, ${timeZone}). This does not mean your day is full: ${durationLabel(remainingWorkingMinutesToday)} of unreserved working time remaining today. Enter the time you have available to get a recommendation now; appointments and buffers still apply.`;
   }
   recommendation.reasoning = priorities.map((item) => `${item.title}: ${item.reasons.join('; ')}`);
   if (context.contextWarnings?.length) {

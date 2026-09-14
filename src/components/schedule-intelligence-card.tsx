@@ -1,5 +1,6 @@
 'use client';
 
+import { durationLabel } from '@/lib/duration';
 import { useEffect, useState } from 'react';
 import { AlertTriangle, ChevronDown, ChevronUp, Sparkles } from 'lucide-react';
 import { splitSectionItem } from '@/lib/assistant-sections';
@@ -32,7 +33,7 @@ export function ScheduleIntelligenceCard({ onChanged }: { onChanged: () => void 
   const compactParagraphs = (value: string) => compactLines(value).map((line, index) => <p key={`${value}-${index}`}>{line}</p>);
   return <section className="schedule-intelligence" aria-label="Schedule Intelligence">
     <header><span><Sparkles size={19} /><strong>Schedule Intelligence</strong></span><button type="button" aria-expanded={expanded} onClick={() => setExpanded((value) => !value)}>{expanded ? 'Hide details' : 'Review conflicts'}{expanded ? <ChevronUp size={17} /> : <ChevronDown size={17} />}</button></header>
-    <div className="schedule-intelligence-summary"><AlertTriangle size={21} /><div><strong>{attention ? `${attention} thing${attention === 1 ? '' : 's'} need your attention` : 'Your schedule is in good shape'}</strong><p>{data ? `${data.commitmentsToday} calendar commitments today · ${Math.round(data.availableMinutes / 60 * 10) / 10} usable hours remain${data.priorities[0] ? ` · Top priority: ${data.priorities[0].title}` : ''}` : message}</p></div></div>
+    <div className="schedule-intelligence-summary"><AlertTriangle size={21} /><div><strong>{attention ? `${attention} thing${attention === 1 ? '' : 's'} need your attention` : 'Your schedule is in good shape'}</strong><p>{data ? `${data.commitmentsToday} calendar commitments today · ${durationLabel(data.availableMinutes)} of usable time remain${data.priorities[0] ? ` · Top priority: ${data.priorities[0].title}` : ''}` : message}</p></div></div>
     {expanded && <div className="schedule-intelligence-details">
       {data?.conflicts.length ? data.conflicts.map((conflict) => (
         <article key={conflict.id} className={`schedule-conflict severity-${conflict.severity.toLowerCase()}`}>

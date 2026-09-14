@@ -17,6 +17,8 @@ struct DoNowRecommendation: Decodable, Sendable {
     struct Next: Decodable, Sendable {
         let bestAction: Choice?
         let alternatives: [Choice]
+        let outsideWorkingHours: Bool?
+        let remainingWorkingMinutesToday: Int?
         let availableWindowMinutes: Int
         let continuingFocus: Bool
     }
@@ -47,4 +49,16 @@ struct ProtectedTimeProposal: Decodable, Sendable {
     let durationMin: Int
     let postponeCount: Int
     let expectedUpdatedAt: String
+}
+
+/// Shared display for remaining and available time, stored in whole minutes.
+enum DurationDisplay {
+    static func durationLabel(_ totalMinutes: Int) -> String {
+        let hours = totalMinutes / 60
+        let minutes = totalMinutes % 60
+        var parts: [String] = []
+        if hours > 0 { parts.append("\(hours) hour\(hours == 1 ? "" : "s")") }
+        if minutes > 0 || hours == 0 { parts.append("\(minutes) minute\(minutes == 1 ? "" : "s")") }
+        return parts.joined(separator: " ")
+    }
 }
