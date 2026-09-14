@@ -2,6 +2,7 @@ import './ai-features.css';
 import type { Metadata } from 'next';
 import { HarbourLanding } from '@/components/harbour-landing';
 import './welcome.css';
+import './welcome-dark.css';
 
 export const metadata: Metadata = {
   title: 'Nexdo — A little less juggling. A little more living.',

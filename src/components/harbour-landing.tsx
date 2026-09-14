@@ -30,7 +30,7 @@ export function HarbourLanding() {
     setNotice('Showing a matching sample story—not a live AI response. Nothing is saved or sent to AI.');
   }
 
-  return <div className="harbour-site">
+  return <div className="harbour-site hs-dark">
     <a className="hs-skip" href="#main">Skip to content</a>
     <MarketingHeader />
     <main id="main">
