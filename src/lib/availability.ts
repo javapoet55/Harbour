@@ -9,6 +9,7 @@ export type AvailabilityContext = {
   tasks: Array<{ id: string; startAt: Date | null; durationMin: number; status: string }>;
   events: Array<{ id: string; title: string; startAt: Date; endAt: Date; allDay?: boolean }>;
   contextWarnings?: string[];
+  activeFocus?: { taskId: string; startedAt: number; endsAt: number } | null;
 };
 export function availability(context: AvailabilityContext, from: Date, to: Date, excludeTaskId?: string) {
   const days = Math.min(368, Math.ceil((+to - +from) / 86400000) + 1);
@@ -17,6 +18,7 @@ export function availability(context: AvailabilityContext, from: Date, to: Date,
   const busy = [...calendarBusy(context.events, normalizedBuffer(context.bufferMinutes)), ...context.tasks
     .filter(task => task.id !== excludeTaskId && !['COMPLETED', 'CANCELLED'].includes(task.status) && task.startAt)
     .map(task => ({ start: +task.startAt!, end: +task.startAt! + task.durationMin * 60000 }))];
+  if (context.activeFocus && context.activeFocus.taskId !== excludeTaskId && context.activeFocus.endsAt > +from) busy.push({ start: context.activeFocus.startedAt, end: context.activeFocus.endsAt });
   return { windows, busy, slots: windows.flatMap(window => freeSlots(window.start, window.end, busy)) };
 }
 export function creationWarnings(context: AvailabilityContext, start: Date, end: Date, kind: 'task' | 'event', excludeTaskId?: string) {

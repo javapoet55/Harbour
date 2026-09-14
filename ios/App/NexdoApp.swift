@@ -12,12 +12,14 @@ struct NexdoApp: App {
 @MainActor
 final class AppModel: ObservableObject {
     @Published var profile: Profile?
+    @Published private(set) var protectedTime: ProtectedTimeProposal?
+    @Published private(set) var protectingTime = false
     @Published private(set) var persistentNext: ProactiveNextResponse?
     private var nextRefresh: Task<Void, Never>?
     private var nextGeneration = UUID()
 
     func invalidateNextAction() {
-        nextRefresh?.cancel(); nextRefresh = nil; nextGeneration = UUID(); persistentNext = nil
+        nextRefresh?.cancel(); nextRefresh = nil; nextGeneration = UUID(); persistentNext = nil; protectedTime = nil
     }
     func refreshNextAction() {
         invalidateNextAction()
@@ -30,8 +32,32 @@ final class AppModel: ObservableObject {
                 let result: ProactiveNextResponse = try await self.api.request("/api/schedule-intelligence", method: "POST", body: JSONEncoder().encode(["operation": "next-action"]), timeout: 20)
                 guard !Task.isCancelled, self.profile?.id == owner, self.nextGeneration == generation else { return }
                 self.persistentNext = result
+                if let protected: ProtectedTimeResponse = try? await self.api.request("/api/protected-time", timeout: 20),
+                   !Task.isCancelled, self.profile?.id == owner, self.nextGeneration == generation { self.protectedTime = protected.proposal }
             } catch { /* Never keep a stale recommendation after a failed refresh. */ }
         }
+    }
+    func protectedTimeLabel(_ proposal: ProtectedTimeProposal) -> String {
+        guard let date = ServerDate.parse(proposal.startAt) else { return proposal.startAt }
+        let formatter = DateFormatter(); formatter.dateStyle = .medium; formatter.timeStyle = .short
+        formatter.timeZone = TimeZone(identifier: profile?.timeZone ?? TimeZone.current.identifier)
+        return formatter.string(from: date)
+    }
+    func respondToProtectedTime(_ proposal: ProtectedTimeProposal, accept: Bool) async {
+        guard !protectingTime else { return }
+        protectingTime = true
+        defer { protectingTime = false }
+        struct Receipt: Decodable, Sendable { let warnings: [String] }
+        do {
+            let receipt: Receipt = try await api.request("/api/protected-time", method: "POST", body: JSONEncoder().encode([
+                "action": accept ? "accept" : "dismiss", "taskId": proposal.taskId,
+                "startAt": proposal.startAt, "expectedUpdatedAt": proposal.expectedUpdatedAt
+            ]))
+            protectedTime = nil
+            if accept { await refresh() }
+            if !receipt.warnings.isEmpty { error = receipt.warnings.joined(separator: "\n") }
+        } catch { self.error = error.localizedDescription }
+        refreshNextAction()
     }
     func dismissPersistentNext() {
         guard let id = persistentNext?.contextActionId else { return }
@@ -44,6 +70,33 @@ final class AppModel: ObservableObject {
             } catch { /* Card remains hidden locally. */ }
         }
     }
+    /// Every interactive schedule write uses the same explicit warning/retry flow.
+    private func scheduleRequest<T: Decodable & Sendable>(_ path: String, method: String, body: Data?) async throws -> T {
+        let owner = profile?.id
+        do { return try await api.request(path, method: method, body: body) }
+        catch APIError.scheduleWarning(let warnings) {
+            guard let owner, profile?.id == owner else { throw APIError.signedOut }
+            let approved = await confirmScheduleWarnings(warnings)
+            guard approved else { throw CancellationError() }
+            guard profile?.id == owner else { throw APIError.signedOut }
+            var payload = (try body.map { try JSONSerialization.jsonObject(with: $0) } as? [String: Any]) ?? [:]
+            payload["allowScheduleConflict"] = true
+            return try await api.request(path, method: method, body: JSONSerialization.data(withJSONObject: payload))
+        }
+    }
+    private func confirmScheduleWarnings(_ warnings: [String]) async -> Bool {
+        guard let scene = UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }).first(where: { $0.activationState == .foregroundActive }),
+              var presenter = scene.windows.first(where: { $0.isKeyWindow })?.rootViewController else { return false }
+        while let presented = presenter.presentedViewController { presenter = presented }
+        guard !(presenter is UIAlertController) else { return false }
+        return await withCheckedContinuation { continuation in
+            let alert = UIAlertController(title: "Review this time", message: warnings.joined(separator: "\n\n"), preferredStyle: .alert)
+            alert.addAction(UIAlertAction(title: "Keep previous schedule", style: .cancel) { _ in continuation.resume(returning: false) })
+            alert.addAction(UIAlertAction(title: "Save anyway", style: .default) { _ in continuation.resume(returning: true) })
+            presenter.present(alert, animated: true)
+        }
+    }
+
     private struct EmptyResponse: Decodable, Sendable {}
 
     @Published var tasks: [NexdoTask] = []
@@ -95,6 +148,7 @@ final class AppModel: ObservableObject {
         busy = true
         defer { busy = false }
         do { try await action() }
+        catch is CancellationError { return }
         catch APIError.signedOut { await reset(); error = "Please sign in again. Your session ended or the credentials were incorrect." }
         catch { self.error = errorMessage ?? (tasksLoadFailed ? "Couldn’t load your tasks. Please refresh to try again." : error.localizedDescription) }
     }
@@ -372,7 +426,7 @@ final class AppModel: ObservableObject {
             payload["repeat"] = ["frequency": repeatFrequency, "until": dateFormat.string(from: repeatUntil), "weekdays": weekdays]
         }
         let body = try JSONSerialization.data(withJSONObject: payload)
-        let result: VoiceToolResponse = try await api.request("/api/calendar/events", method: "POST", body: body)
+        let result: VoiceToolResponse = try await scheduleRequest("/api/calendar/events", method: "POST", body: body)
         guard result.success else { throw APIError.invalidResponse }
         if profile?.id == owner { await refresh() }
     }
@@ -405,7 +459,7 @@ final class AppModel: ObservableObject {
         var saved = false
         await perform(errorMessage: "Couldn’t update your task. Refresh to check its current state before retrying.") {
             let input = TaskSaveInput(title: title, notes: notes, durationMin: duration, isNew: id == nil, scheduledAt: scheduledAt, projectId: projectId)
-            let response: TaskResponse = try await api.request(id.map { "/api/tasks/\($0.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed)!)" } ?? "/api/tasks", method: id == nil ? "POST" : "PATCH", body: JSONEncoder().encode(input))
+            let response: TaskResponse = try await scheduleRequest(id.map { "/api/tasks/\($0.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed)!)" } ?? "/api/tasks", method: id == nil ? "POST" : "PATCH", body: JSONEncoder().encode(input))
             replaceTask(response.task)
             tasksLoadFailed = false
             if id == nil { taskQuery.revealCreatedTask(scheduledAt: scheduledAt, timeZone: profile?.timeZone ?? TimeZone.current.identifier) }
@@ -413,9 +467,20 @@ final class AppModel: ObservableObject {
         }
         return saved
     }
+    func saveClarifiedStep(_ task: NexdoTask, title: String) async -> Bool {
+        var saved = false
+        await perform {
+            let body = try JSONSerialization.data(withJSONObject: ["title": title, "subtasks": [title]])
+            let response: TaskResponse = try await scheduleRequest("/api/tasks/\(task.id)", method: "PATCH", body: body)
+            replaceTask(response.task)
+            try await loadTasks()
+            saved = true
+        }
+        return saved
+    }
     func complete(_ task: NexdoTask) async {
         await perform(errorMessage: "Couldn’t update your task. Refresh to check its current state before retrying.") {
-            let response: TaskResponse = try await api.request("/api/tasks/\(task.id)", method: "PATCH", body: JSONEncoder().encode(["status": task.isDone ? "PLANNED" : "COMPLETED"]))
+            let response: TaskResponse = try await scheduleRequest("/api/tasks/\(task.id)", method: "PATCH", body: JSONEncoder().encode(["status": task.isDone ? "PLANNED" : "COMPLETED"]))
             replaceTask(response.task)
             invalidateScheduleIntelligence()
             Task { await refreshScheduleIntelligence() }
@@ -460,7 +525,7 @@ final class AppModel: ObservableObject {
         defer { busy = false }
         let body = try draft.detailsBody(comparedTo: original)
         if body != Data("{}".utf8) {
-            let response: TaskResponse = try await api.request("/api/tasks/\(task.id)", method: "PATCH", body: body)
+            let response: TaskResponse = try await scheduleRequest("/api/tasks/\(task.id)", method: "PATCH", body: body)
             replaceTask(response.task)
             // Refresh the edited task from the canonical list. Some API deployments
             // return a pre-update snapshot for PATCH, including priority changes.
@@ -471,7 +536,7 @@ final class AppModel: ObservableObject {
         }
         if let schedule = try draft.scheduleBody(comparedTo: original) {
             do {
-                let response: TaskResponse = try await api.request("/api/tasks/\(task.id)", method: "PATCH", body: schedule)
+                let response: TaskResponse = try await scheduleRequest("/api/tasks/\(task.id)", method: "PATCH", body: schedule)
                 replaceTask(response.task)
                 // Scheduling is persisted separately from the task metadata.
                 // The PATCH response may be a pre-relation snapshot, so fetch
@@ -480,7 +545,8 @@ final class AppModel: ObservableObject {
                    let updated = canonical.tasks.first(where: { $0.id == task.id }) {
                     replaceTask(updated)
                 }
-            } catch { throw TaskEditError.schedule }
+            } catch is CancellationError { throw CancellationError() }
+            catch { throw TaskEditError.schedule }
         }
     }
 
@@ -489,7 +555,7 @@ final class AppModel: ObservableObject {
         if focusSession?.taskID == task.id && status == "COMPLETED" { try await finishFocus() }
         busy = true
         defer { busy = false }
-        let response: TaskResponse = try await api.request("/api/tasks/\(task.id)", method: "PATCH", body: JSONEncoder().encode(["status": status]))
+        let response: TaskResponse = try await scheduleRequest("/api/tasks/\(task.id)", method: "PATCH", body: JSONEncoder().encode(["status": status]))
         replaceTask(response.task)
         // Completion can create the next occurrence; use the existing task retrieval.
         if task.recurrence != nil && status == "COMPLETED" {
@@ -519,7 +585,7 @@ final class AppModel: ObservableObject {
         defer { busy = false }
         let started = Date()
         let body = try JSONSerialization.data(withJSONObject: ["status": "IN_PROGRESS", "focusMinutes": requestedMinutes, "fromRecommendation": fromRecommendation])
-        let response: TaskResponse = try await api.request("/api/tasks/\(task.id)", method: "PATCH", body: body)
+        let response: TaskResponse = try await scheduleRequest("/api/tasks/\(task.id)", method: "PATCH", body: body)
         replaceTask(response.task)
         // Older API deployments return the updated task without a focus receipt.
         // The Pomodoro remains useful locally and must not fail after a successful status update.
@@ -557,7 +623,7 @@ final class AppModel: ObservableObject {
         var body: [String: Any] = ["focusAction": "finish", "focusToken": session.token,
             "endedAt": ISO8601DateFormatter().string(from: min(Date(), session.endsAt))]
         if let id = session.workSessionID { body["workSessionId"] = id }
-        let _: Ignore = try await api.request("/api/tasks/\(session.taskID)", method: "PATCH", body: JSONSerialization.data(withJSONObject: body))
+        let _: Ignore = try await scheduleRequest("/api/tasks/\(session.taskID)", method: "PATCH", body: JSONSerialization.data(withJSONObject: body))
         focusSession = nil
     }
 

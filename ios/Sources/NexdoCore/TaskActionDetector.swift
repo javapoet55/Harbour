@@ -67,7 +67,15 @@ public struct DeterministicTaskActionDetector: TaskActionDetector {
 public enum TaskActionClarification {
     public static func isCandidate(_ title: String) -> Bool {
         let words = title.split(whereSeparator: { $0.isWhitespace })
-        return !words.isEmpty && words.count <= 4 && title.count <= 100 && DeterministicTaskActionDetector().detect(title: title) == nil
+        let workVerbs = ["finish", "write", "draft", "review", "read", "prepare", "submit", "send", "pay", "buy", "book", "schedule", "research", "complete", "practice", "study", "walk", "clean", "exercise", "build", "fix", "plan", "outline", "create", "go"]
+        return !words.isEmpty && words.count <= 4 && title.count <= 100
+            && !workVerbs.contains(words.first?.lowercased() ?? "")
+            && DeterministicTaskActionDetector().detect(title: title) == nil
+    }
+    public static func nextStepTitle(_ text: String) -> String? {
+        let value = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard value.count <= 200, value.split(whereSeparator: { $0.isWhitespace }).count >= 2 else { return nil }
+        return value
     }
     public static func title(verb: String, contact: String) -> String? {
         let name = contact.trimmingCharacters(in: .whitespacesAndNewlines)

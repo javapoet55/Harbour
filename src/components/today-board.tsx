@@ -1,4 +1,5 @@
 'use client';
+import { scheduleFetch } from '@/lib/schedule-fetch';
 
 import { useEffect, useMemo, useState } from 'react';
 import { formatDay } from '@/lib/time';
@@ -24,7 +25,7 @@ export function TodayBoard() {
   const [criticalFirst, setCriticalFirst] = useState(true);
 
   async function load() {
-    const res = await fetch('/api/agenda?days=5');
+    const res = await scheduleFetch('/api/agenda?days=5');
     if (!res.ok) {
       setError('Could not load your day.');
       return;
@@ -44,7 +45,7 @@ export function TodayBoard() {
       request?.abort();
       const controller = new AbortController();
       request = controller;
-      fetch('/api/agenda?days=5', { signal: controller.signal, cache: 'no-store' })
+      scheduleFetch('/api/agenda?days=5', { signal: controller.signal, cache: 'no-store' })
         .then((res) => (res.ok ? res.json() : Promise.reject(new Error('load'))))
         .then((payload: AgendaPayload) => { if (!controller.signal.aborted) { setData(payload); setError(''); } })
         .catch(() => { if (!controller.signal.aborted) setError('Could not load your day.'); });
@@ -95,7 +96,7 @@ export function TodayBoard() {
     setError('');
     try {
       const parts = Object.fromEntries(new Intl.DateTimeFormat('en-US', { timeZone: data.timeZone, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(new Date()).map((part) => [part.type, part.value]));
-      const res = await fetch('/api/tasks', {
+      const res = await scheduleFetch('/api/tasks', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ title: submittedTitle, date: todayKey, time: `${parts.hour}:${parts.minute}`, status: 'PLANNED' }),
@@ -112,14 +113,14 @@ export function TodayBoard() {
   }
 
   async function complete(id: string) {
-    const response = await fetch(`/api/tasks/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'COMPLETED' }) });
+    const response = await scheduleFetch(`/api/tasks/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'COMPLETED' }) });
     if (!response.ok) { setError('Could not complete that task.'); return; }
     if (focusTaskId === id) focus.stop();
     await load();
   }
 
   async function restore(id: string) {
-    const response = await fetch(`/api/tasks/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'PLANNED' }) });
+    const response = await scheduleFetch(`/api/tasks/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'PLANNED' }) });
     if (!response.ok) { setError('Could not restore that task.'); return; }
     await load();
   }
@@ -248,10 +249,10 @@ export function TaskDetailSheet({ task, timeZone, focusControl, onClose, onSaved
     setSaving(true);
     setError('');
     try {
-      const details = await fetch(`/api/tasks/${task.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: title.trim(), notes, priority, durationMin: duration, energyLevel: energy, splittable, minFocusMin, critical, subtasks, recurrence: recurrence === 'NONE' ? null : { frequency: recurrence, interval: 1 } }) });
+      const details = await scheduleFetch(`/api/tasks/${task.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: title.trim(), notes, priority, durationMin: duration, energyLevel: energy, splittable, minFocusMin, critical, subtasks, recurrence: recurrence === 'NONE' ? null : { frequency: recurrence, interval: 1 } }) });
       if (!details.ok) throw new Error('Could not save the task details.');
       if (date) {
-        const schedule = await fetch(`/api/tasks/${task.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ date, time, durationMin: duration }) });
+        const schedule = await scheduleFetch(`/api/tasks/${task.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ date, time, durationMin: duration }) });
         if (!schedule.ok) throw new Error('Details were saved, but the schedule could not be updated.');
       }
       await onSaved();
@@ -325,7 +326,7 @@ function Weather() {
     void (async () => {
       try {
         // Static location for the current prototype: ZIP 94582 (San Ramon, CA).
-        const response = await fetch('/api/weather?lat=37.7547&lon=-121.8997', { signal: controller.signal });
+        const response = await scheduleFetch('/api/weather?lat=37.7547&lon=-121.8997', { signal: controller.signal });
         if (!response.ok) throw new Error('weather');
         setWeather(await response.json());
       } catch (error) {

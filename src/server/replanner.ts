@@ -1,3 +1,6 @@
+import { creationWarnings } from '@/lib/availability';
+import { loadScheduleContext } from './schedule-intelligence';
+import { protectedTaskIds } from '@/lib/protected-time';
 import { normalizedBuffer } from '@/lib/availability';
 import { prisma } from './db';
 import { listEventsInRange } from './agenda';
@@ -31,7 +34,7 @@ export async function scheduleContextVersion(userId: string, db: Prisma.Transact
     db.calendarEvent.findMany({ where: { userId }, select: { id: true, title: true, startAt: true, endAt: true, allDay: true, deletedAt: true, connectionId: true }, orderBy: { id: 'asc' } }),
     db.calendarConnection.findMany({ where: { userId }, select: { id: true, status: true, visible: true, writeEnabled: true, calendarId: true }, orderBy: { id: 'asc' } }),
     db.user.findUnique({ where: { id: userId }, select: { timeZone: true, preference: { select: { updatedAt: true } } } }),
-    db.userMemory.findMany({ where: { userId, kind: 'preference' }, select: { id: true, updatedAt: true }, orderBy: { id: 'asc' } }),
+    db.userMemory.findMany({ where: { userId, kind: { in: ['preference', 'protected_time'] } }, select: { id: true, updatedAt: true }, orderBy: { id: 'asc' } }),
     db.taskDependency.findMany({ where: { task: { userId } }, select: { id: true, taskId: true, dependsOnId: true }, orderBy: { id: 'asc' } }),
   ]);
   return createHash('sha256').update(JSON.stringify({ tasks, events, connections, preference, memories, dependencies })).digest('hex');
@@ -82,8 +85,11 @@ export async function generateReplanProposal(userId: string, now = new Date()) {
   ]);
   const predictedDurations = await personalizedTaskDurations(userId, tasks);
   const bufferMemory = await prisma.userMemory.findUnique({ where: { userId_key: { userId, key: 'preference:buffer_minutes' } } });
+  const protectedRecords = await prisma.userMemory.findMany({ where: { userId, kind: 'protected_time' } });
+  const protectedIds = protectedTaskIds(protectedRecords, tasks, now);
   const plan = buildReplan({
-    tasks: tasks.map((task) => ({ ...task, durationMin: predictedDurations.get(task.id) ?? task.durationMin, dependsOnIds: task.dependencies.filter((dependency) => dependency.dependsOn.status !== 'COMPLETED').map((dependency) => dependency.dependsOnId) })),
+    protectedTaskIds: protectedIds,
+    tasks: tasks.map((task) => ({ ...task, durationMin: protectedIds.includes(task.id) ? task.durationMin : predictedDurations.get(task.id) ?? task.durationMin, dependsOnIds: task.dependencies.filter((dependency) => dependency.dependsOn.status !== 'COMPLETED').map((dependency) => dependency.dependsOnId) })),
     events: events.filter((event) => !event.externalId || !tasks.some((task) => task.externalEventId === event.externalId)),
     timeZone: user.timeZone,
     workingDays: preference?.workingDays ?? '1,2,3,4,5',
@@ -131,6 +137,21 @@ export async function applyReplanProposal(userId: string, actionId: string, now 
   }
   await prisma.$transaction(async (tx) => {
     if (payload.executive && (Math.abs(+now - +new Date(payload.generatedAt)) > 15 * 60_000 || !payload.contextVersion || await scheduleContextVersion(userId, tx) !== payload.contextVersion || payload.moves.some((move) => +new Date(move.toStartAt) < +now))) throw new Error('STALE_REPLAN');
+    const protectedRecords = await tx.userMemory.findMany({ where: { userId, kind: 'protected_time' } });
+    const protectedTasks = await tx.task.findMany({ where: { userId, deletedAt: null } });
+    const protectedIds = protectedTaskIds(protectedRecords, protectedTasks, now);
+    if (payload.moves.some(move => protectedIds.includes(move.taskId))) throw new Error('STALE_REPLAN');
+    const horizon = Math.ceil((Math.max(+now, ...payload.moves.map(move => +new Date(move.toStartAt) + move.durationMin * 60000)) - +now) / 86400000) + 2;
+    const schedule = await loadScheduleContext(userId, now, horizon, tx);
+    const moving = new Set(payload.moves.map(move => move.taskId));
+    schedule.tasks = schedule.tasks.map(task => moving.has(task.id) ? { ...task, startAt: null } : task);
+    for (const move of payload.moves) {
+      const start = new Date(move.toStartAt);
+      if (+start < +now || creationWarnings(schedule, start, new Date(+start + move.durationMin * 60000), 'task', move.taskId).length) throw new Error('STALE_REPLAN');
+      const task = schedule.tasks.find(task => task.id === move.taskId);
+      if (!task) throw new Error('STALE_REPLAN');
+      task.startAt = start; task.durationMin = move.durationMin;
+    }
     const claimed = await tx.assistantAction.updateMany({ where: { id: action.id, userId, executed: false }, data: { executed: true, confirmation: 'CONFIRMED' } });
     if (claimed.count !== 1) throw new Error('STALE_REPLAN');
     for (const move of payload.moves) {

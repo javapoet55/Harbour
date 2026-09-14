@@ -119,3 +119,11 @@ private func reconcile(_ previous: [TaskAction], _ tasks: [NexdoTask]) -> [TaskA
     #expect(TaskActionClarification.title(verb: "Book", contact: "Dentist") == nil)
     #expect(TaskActionClarification.title(verb: "Call", contact: " ") == nil)
 }
+
+@Test func nonContactClarificationDoesNotAssumeACall() {
+    for title in ["Finish presentation", "Review homework", "Write proposal", "Go to Target"] { #expect(!TaskActionClarification.isCandidate(title)) }
+    #expect(TaskActionClarification.isCandidate("Presentation"))
+    #expect(TaskActionClarification.nextStepTitle(" Draft three slides ") == "Draft three slides")
+    #expect(TaskActionClarification.nextStepTitle(" ") == nil)
+    #expect(TaskActionClarification.nextStepTitle("Presentation") == nil)
+}

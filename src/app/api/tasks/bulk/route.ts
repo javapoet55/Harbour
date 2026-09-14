@@ -1,3 +1,6 @@
+import { requireNonoverlappingBatch } from '@/lib/schedule-warning';
+import { nextTaskStart } from '@/lib/task-next-occurrence';
+import { requireAvailableSchedule } from '@/server/availability';
 import { NextResponse } from 'next/server';
 import { requireUser } from '@/server/auth';
 import { prisma } from '@/server/db';
@@ -14,7 +17,17 @@ export async function PATCH(req: Request) {
     const owned = await prisma.task.count({ where: { userId: user.id, id: { in: ids }, deletedAt: null } });
     if (owned !== ids.length) return NextResponse.json({ error: 'One or more selected tasks are unavailable.' }, { status: 404 });
 
-    if (body.status === 'COMPLETED') await Promise.all(ids.map((id) => completeTask(user.id, id)));
+    if (['PLANNED', 'INBOX', 'IN_PROGRESS', 'WAITING'].includes(body.status)) {
+      const tasks = await prisma.task.findMany({ where: { userId: user.id, id: { in: ids }, deletedAt: null } });
+      requireNonoverlappingBatch(tasks.filter(task => task.status !== body.status).map(task => ({ start: task.startAt, durationMin: task.durationMin })), body.allowScheduleConflict);
+      for (const task of tasks) if (task.status !== body.status) await requireAvailableSchedule(user.id, task.startAt, task.durationMin, body.allowScheduleConflict, task.id);
+    }
+    if (body.status === 'COMPLETED' && body.allowScheduleConflict !== true) {
+      const tasks = await prisma.task.findMany({ where: { userId: user.id, id: { in: ids }, deletedAt: null }, include: { recurrence: true } });
+      requireNonoverlappingBatch(tasks.map(task => ({ start: nextTaskStart(task), durationMin: task.durationMin })), false);
+      for (const task of tasks) await requireAvailableSchedule(user.id, nextTaskStart(task), task.durationMin, false, task.id);
+    }
+    if (body.status === 'COMPLETED') await Promise.all(ids.map((id) => completeTask(user.id, id, body.allowScheduleConflict === true)));
     else if (body.status === 'CANCELLED') await Promise.all(ids.map((id) => deleteTask(user.id, id)));
     else {
       const data: { status?: string; priority?: string; energyLevel?: string; projectId?: string | null } = {};

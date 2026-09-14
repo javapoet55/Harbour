@@ -6,6 +6,7 @@ import { NEXT_ACTION_POLICY, type NextActionWeights } from './next-action-config
 
 export type ExecutiveTask = IntelligenceTask & ReplanTask & { completedAt?: Date | null; splittable?: boolean; minFocusMin?: number; projectId?: string | null };
 export type ExecutiveContext = {
+  protectedTaskIds?: string[];
   tasks: ExecutiveTask[];
   events: Array<{ id: string; title: string; startAt: Date; endAt: Date; allDay?: boolean; externalId?: string | null }>;
   now: Date; timeZone: string; workStart: string; workEnd: string; workingDays: string; bufferMinutes: number;
@@ -46,7 +47,7 @@ export function buildExecutiveRecommendation(context: ExecutiveContext, intent: 
     for (const task of demand.filter((task) => +task.dueAt! === deadline)) capacity.set(task.id, free - required + task.durationMin);
   }
   const ranked = scoreTasks(actionable, now, capacity);
-  const protectedIds = new Set(options.protectedTaskIds ?? []);
+  const protectedIds = new Set([...(context.protectedTaskIds ?? []), ...(options.protectedTaskIds ?? [])]);
   for (const task of actionable) if (task.status === 'IN_PROGRESS' && task.startAt && +task.startAt <= +now && +task.startAt + task.durationMin * minute > +now) protectedIds.add(task.id);
 
   let start = Math.max(+now, +zonedDateTime(dayKey, intent === 'FIX_SCHEDULE' && options.period !== 'remaining' ? '12:00' : context.workStart, timeZone));

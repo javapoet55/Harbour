@@ -1,3 +1,4 @@
+import { nextTaskStart } from '@/lib/task-next-occurrence';
 import { checkCreationAvailability } from './availability';
 import { addDays, formatDay, formatTime, tzToday, weekdayName, ymd } from '@/lib/time';
 import { inc, observeMs } from '@/lib/metrics';
@@ -37,6 +38,26 @@ function itemLine(title: string, when: Date | null, timeZone: string) {
   return when ? `${title} at ${formatTime(when, timeZone)}` : title;
 }
 
+async function intentScheduleWarnings(userId: string, timeZone: string, intent: ParsedIntent) {
+  let scheduleWarnings: string[] = [];
+  if (['CREATE_TASK', 'SCHEDULE_TASK', 'CREATE_RECURRING_TASK'].includes(intent.intent) && ['today', 'tomorrow'].includes(intent.whenText ?? '')) {
+    const day = tzToday(timeZone, new Date());
+    const start = localWhen(ymd(intent.whenText === 'tomorrow' ? addDays(day, 1) : day), intent.timeText, timeZone);
+    if (start) scheduleWarnings = await checkCreationAvailability(userId, start, new Date(+start + (intent.durationMin || 30) * 60000), 'task');
+  }
+  if (intent.intent === 'RESCHEDULE_TASK' && intent.title) {
+    const match = await prisma.task.findFirst({ where: { userId, deletedAt: null, title: { contains: intent.title } } });
+    const start = resolveWhen(intent.whenText, timeZone, tzToday(timeZone, new Date()));
+    if (match && start) scheduleWarnings = await checkCreationAvailability(userId, start, new Date(+start + match.durationMin * 60000), 'task', match.id);
+  }
+  if (intent.intent === 'COMPLETE_TASK' && intent.title) {
+    const task = await prisma.task.findFirst({ where: { userId, deletedAt: null, title: { contains: intent.title } }, include: { recurrence: true } });
+    const start = task && nextTaskStart(task);
+    if (start && task) scheduleWarnings = await checkCreationAvailability(userId, start, new Date(+start + task.durationMin * 60000), 'task', task.id);
+  }
+  return scheduleWarnings;
+}
+
 export async function runAssistantTurn(userId: string, transcript: string, confirmActionId?: string): Promise<AssistantTurn> {
   if (['FOCUS_TODAY', 'FIX_SCHEDULE', 'DRIVING_BRIEFING', 'FREE_WINDOW', 'NEXT_ACTION', 'COMPARE_TASKS'].includes(parseIntent(transcript).intent)) {
     const executive = await handleExecutiveTurn(userId, transcript, { confirmActionId });
@@ -57,8 +78,10 @@ export async function runAssistantTurn(userId: string, transcript: string, confi
       where: { id: confirmActionId, userId, executed: false },
     });
     if (pending) {
-      const payload = JSON.parse(pending.payloadJson) as ParsedIntent;
-      const result = await executeIntent(userId, timeZone, payload, true);
+      const payload = JSON.parse(pending.payloadJson) as ParsedIntent & { scheduleWarnings?: string[] };
+      const freshWarnings = await intentScheduleWarnings(userId, timeZone, payload);
+      if (freshWarnings.some(warning => !payload.scheduleWarnings?.includes(warning))) throw new Error('STALE_AGENT_PLAN');
+      const result = await executeIntent(userId, timeZone, payload, true, true);
       await prisma.assistantAction.update({
         where: { id: pending.id },
         data: { executed: true, confirmation: 'CONFIRMED', resultJson: JSON.stringify(result.visual) },
@@ -76,19 +99,14 @@ export async function runAssistantTurn(userId: string, transcript: string, confi
     },
   });
 
-  let scheduleWarnings: string[] = [];
-  if (['CREATE_TASK', 'SCHEDULE_TASK', 'CREATE_RECURRING_TASK'].includes(intent.intent) && ['today', 'tomorrow'].includes(intent.whenText ?? '')) {
-    const day = tzToday(timeZone, new Date());
-    const start = localWhen(ymd(intent.whenText === 'tomorrow' ? addDays(day, 1) : day), intent.timeText, timeZone);
-    if (start) scheduleWarnings = await checkCreationAvailability(userId, start, new Date(+start + (intent.durationMin || 30) * 60000), 'task');
-  }
+  const scheduleWarnings = await intentScheduleWarnings(userId, timeZone, intent);
   if ((scheduleWarnings.length > 0 || needsConfirmation(intent, level)) && ['CREATE_TASK', 'SCHEDULE_TASK', 'CREATE_RECURRING_TASK', 'DELETE_TASK', 'COMPLETE_TASK', 'RESCHEDULE_TASK'].includes(intent.intent)) {
     const action = await prisma.assistantAction.create({
       data: {
         userId,
         sessionId: session.id,
         intent: intent.intent,
-        payloadJson: JSON.stringify(intent),
+        payloadJson: JSON.stringify({ ...intent, scheduleWarnings }),
         confirmation: 'REQUIRED',
       },
     });
@@ -143,7 +161,7 @@ function previewAction(intent: ParsedIntent, timeZone: string) {
   return `I understood ${intent.intent.replaceAll('_', ' ').toLowerCase()}. Should I continue?`;
 }
 
-async function executeIntent(userId: string, timeZone: string, intent: ParsedIntent, executeWrites: boolean) {
+async function executeIntent(userId: string, timeZone: string, intent: ParsedIntent, executeWrites: boolean, scheduleApproved = false) {
   const today = tzToday(timeZone);
 
   if (intent.intent === 'BRIEF_ME') return buildCompleteBriefing(userId, intent.days ?? 5);
@@ -220,7 +238,7 @@ async function executeIntent(userId: string, timeZone: string, intent: ParsedInt
     const match = await prisma.task.findFirst({
       where: { userId, deletedAt: null, title: { contains: intent.title } },
     });
-    if (match) await completeTask(userId, match.id);
+    if (match) await completeTask(userId, match.id, scheduleApproved);
     const spoken = match ? `Marked ${match.title} complete.` : `I could not find a task named ${intent.title}.`;
     return { spoken, visual: { summary: spoken, appointments: [], tasks: [], overdue: [], next: '', rangeLabel: 'Update' } };
   }

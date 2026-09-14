@@ -1,4 +1,5 @@
 'use client';
+import { scheduleFetch } from '@/lib/schedule-fetch';
 
 import { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { Pause, Play, X } from 'lucide-react';
@@ -8,7 +9,7 @@ type FocusController = { session: FocusSessionState | null; seconds: number; sta
 const Context = createContext<FocusController | null>(null);
 async function finishSegment(session: FocusSessionState) {
   if (!session.workSessionId && !session.focusToken) return;
-  const response = await fetch(`/api/tasks/${session.taskId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ focusAction: 'finish', workSessionId: session.workSessionId, focusToken: session.focusToken, endedAt: new Date(Math.min(Date.now(), session.endsAt ?? Date.now())).toISOString() }) });
+  const response = await scheduleFetch(`/api/tasks/${session.taskId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ focusAction: 'finish', workSessionId: session.workSessionId, focusToken: session.focusToken, endedAt: new Date(Math.min(Date.now(), session.endsAt ?? Date.now())).toISOString() }) });
   if (!response.ok) throw new Error('Could not save your focus time. Please retry.');
 }
 export function useFocusSession() {
@@ -69,7 +70,7 @@ export function FocusSessionProvider({ userId, children }: { userId: string; chi
         await finishSegment(session);
         setSession({ ...session, remainingSeconds, endsAt: null, workSessionId: null, focusToken: undefined }); setSeconds(remainingSeconds);
       } else if (session.remainingSeconds > 0) {
-        const response = await fetch(`/api/tasks/${session.taskId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'IN_PROGRESS', focusMinutes: Math.ceil(session.remainingSeconds / 60) }) });
+        const response = await scheduleFetch(`/api/tasks/${session.taskId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'IN_PROGRESS', focusMinutes: Math.ceil(session.remainingSeconds / 60) }) });
         const payload = await response.json();
         if (!response.ok) throw new Error(payload.error || 'Could not resume focus.');
         setSession({ ...session, endsAt: Date.now() + session.remainingSeconds * 1000, workSessionId: payload.focus.workSessionId, focusToken: payload.focus.focusToken });
@@ -87,7 +88,7 @@ export function FocusSessionProvider({ userId, children }: { userId: string; chi
         const remainingSeconds = focusSecondsRemaining(session);
         setSession({ ...session, remainingSeconds, endsAt: null, workSessionId: null, focusToken: undefined }); setSeconds(remainingSeconds);
       }
-      const response = await fetch(`/api/tasks/${taskId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'IN_PROGRESS', focusMinutes: minutes, fromRecommendation }) });
+      const response = await scheduleFetch(`/api/tasks/${taskId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'IN_PROGRESS', focusMinutes: minutes, fromRecommendation }) });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error || 'Could not start focus.');
       const remainingSeconds = payload.focus.minutes * 60;

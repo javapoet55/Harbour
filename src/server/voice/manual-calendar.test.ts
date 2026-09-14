@@ -19,3 +19,14 @@ it('requires an authenticated account', async () => {
   expect((await POST(request())).status).toBe(401);
   expect(mocks.executeVoiceTool).not.toHaveBeenCalled();
 });
+it('returns a schedule rejection and never silently supplies consent', async () => {
+  mocks.executeVoiceTool.mockResolvedValue({ success: false, requiresConfirmation: true, warnings: ['Overlaps a meeting'] });
+  const response = await POST(request());
+  expect(response.status).toBe(409);
+  expect(await response.json()).toMatchObject({ code: 'SCHEDULE_WARNING', warnings: ['Overlaps a meeting'] });
+  expect(mocks.executeVoiceTool.mock.calls[0][4].allowScheduleConflict).toBeUndefined();
+});
+it('forwards explicit schedule consent for a retried manual event', async () => {
+  await POST(new Request('https://nexdo.test/api/calendar/events', { method: 'POST', body: JSON.stringify({ ...event, allowScheduleConflict: true }) }));
+  expect(mocks.executeVoiceTool.mock.calls[0][4].allowScheduleConflict).toBe(true);
+});

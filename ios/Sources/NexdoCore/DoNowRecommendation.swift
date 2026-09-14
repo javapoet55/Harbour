@@ -35,3 +35,16 @@ struct ProactiveNextResponse: Decodable, Sendable {
     let recommendation: DoNowRecommendation?
     let contextActionId: String?
 }
+
+struct ProtectedTimeResponse: Decodable, Sendable {
+    let proposal: ProtectedTimeProposal?
+}
+struct ProtectedTimeProposal: Decodable, Sendable {
+    let taskId: String
+    let title: String
+    let startAt: String
+    let endAt: String
+    let durationMin: Int
+    let postponeCount: Int
+    let expectedUpdatedAt: String
+}

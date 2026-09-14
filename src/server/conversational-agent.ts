@@ -1,4 +1,6 @@
-import { checkCreationAvailability } from './availability';
+import { scheduleContextVersion } from './replanner';
+import { creationWarnings, type AvailabilityContext } from '@/lib/availability';
+import { loadScheduleContext } from './schedule-intelligence';
 import { createHash } from 'node:crypto';
 import { prisma } from './db';
 import { runAssistantTurn, type AssistantTurn } from './assistant';
@@ -61,7 +63,7 @@ type AgentPlan = {
   actions: AgentAction[];
   memory_updates: MemoryUpdate[];
 };
-type StoredAgentPlan = { agentVersion: 1; plan: AgentPlan; taskVersions: Record<string, string> };
+type StoredAgentPlan = { scheduleVersion?: string; agentVersion: 1; plan: AgentPlan; taskVersions: Record<string, string> };
 
 function normalizePlan(plan: AgentPlan): AgentPlan {
   return { ...plan, response_sections: plan.response_sections ?? [], actions: plan.actions.map((action) => ({ ...action, depends_on_ids: action.depends_on_ids ?? [], energy_level: action.energy_level ?? null })) };
@@ -205,6 +207,30 @@ async function saveMemories(userId: string, updates: MemoryUpdate[], taskIds: st
   });
 }
 
+async function planScheduleWarnings(userId: string, plan: AgentPlan) {
+  const starts = plan.actions.flatMap(action => action.start_at ? [+new Date(action.start_at)] : []);
+  const from = new Date(Math.min(Date.now(), ...starts) - 86400000);
+  const days = Math.ceil((Math.max(Date.now(), ...starts) - +from) / 86400000) + 3;
+  const context = await loadScheduleContext(userId, from, days, undefined, new Date());
+  const schedule: AvailabilityContext = { ...context, tasks: context.tasks.map(task => ({ ...task })) };
+  const warnings: string[] = [];
+  for (const [index, action] of plan.actions.entries()) {
+    if (!['CREATE_TASK', 'UPDATE_TASK', 'RESCHEDULE_TASK'].includes(action.type)) continue;
+    for (const id of action.type === 'CREATE_TASK' ? [`new:${index}`] : action.task_ids) {
+      const existing = schedule.tasks.find(task => task.id === id);
+      if (action.type !== 'CREATE_TASK' && !action.start_at && !action.duration_min) continue;
+      const start = action.start_at ? new Date(action.start_at) : existing?.startAt;
+      if (!start) continue;
+      const duration = action.duration_min || existing?.durationMin || 30;
+      warnings.push(...creationWarnings(schedule, start, new Date(+start + duration * 60000), 'task', id));
+      // Later actions in this proposal also see the slots already proposed above.
+      if (existing) { existing.startAt = start; existing.durationMin = duration; }
+      else schedule.tasks.push({ id, startAt: start, durationMin: duration, status: 'PLANNED' });
+    }
+  }
+  return [...new Set(warnings)];
+}
+
 function describeAction(action: AgentAction) {
   if (action.type === 'CREATE_TASK') return `Create “${action.title}”${action.start_at ? ` for ${new Date(action.start_at).toLocaleString()}` : ''}`;
   if (action.type === 'NOOP') return action.rationale;
@@ -213,12 +239,13 @@ function describeAction(action: AgentAction) {
   return `${verb} ${count} task${count === 1 ? '' : 's'}${action.start_at ? ` to ${new Date(action.start_at).toLocaleString()}` : ''}`;
 }
 
-async function executePlan(userId: string, plan: AgentPlan, actionId: string, taskVersions: Record<string, string>) {
+async function executePlan(userId: string, plan: AgentPlan, actionId: string, taskVersions: Record<string, string>, scheduleVersion: string) {
   const affected = new Set<string>();
   const preference = await prisma.userPreference.findUnique({ where: { userId } });
   await prisma.$transaction(async (tx) => {
     const claimed = await tx.assistantAction.updateMany({ where: { id: actionId, userId, intent: 'AGENT_PLAN', executed: false }, data: { executed: true, confirmation: 'CONFIRMED' } });
     if (claimed.count !== 1 || await validatePlan(userId, plan, tx)) throw new Error('STALE_AGENT_PLAN');
+    if (await scheduleContextVersion(userId, tx) !== scheduleVersion) throw new Error('STALE_AGENT_PLAN');
     const ids = Object.keys(taskVersions);
     const current = await tx.task.findMany({ where: { userId, id: { in: ids }, deletedAt: null }, select: { id: true, updatedAt: true } });
     if (current.length !== ids.length || current.some((task) => task.updatedAt.toISOString() !== taskVersions[task.id])) throw new Error('STALE_AGENT_PLAN');
@@ -282,14 +309,17 @@ export async function runConversationalAgent(userId: string, transcript: string,
     const pending = await prisma.assistantAction.findFirst({ where: { id: confirmActionId, userId, intent: 'AGENT_PLAN', executed: false } });
     if (!pending) throw new Error('NOT_FOUND');
     const stored = JSON.parse(pending.payloadJson) as StoredAgentPlan;
-    if (stored.agentVersion !== 1) throw new Error('STALE_AGENT_PLAN');
+    if (stored.agentVersion !== 1 || !stored.scheduleVersion || await scheduleContextVersion(userId) !== stored.scheduleVersion) throw new Error('STALE_AGENT_PLAN');
     const plan = normalizePlan(stored.plan);
     const clarification = await validatePlan(userId, plan);
     if (clarification) throw new Error('STALE_AGENT_PLAN');
     const versionIds = Object.keys(stored.taskVersions);
     const current = versionIds.length ? await prisma.task.findMany({ where: { userId, id: { in: versionIds }, deletedAt: null }, select: { id: true, updatedAt: true } }) : [];
     if (current.length !== versionIds.length || current.some((task) => task.updatedAt.toISOString() !== stored.taskVersions[task.id])) throw new Error('STALE_AGENT_PLAN');
-    const taskIds = await executePlan(userId, plan, pending.id, stored.taskVersions);
+    const currentWarnings = await planScheduleWarnings(userId, plan);
+    const approvedWarnings = plan.response_sections.filter(section => section.title === 'Schedule review').flatMap(section => section.items);
+    if (currentWarnings.some(warning => !approvedWarnings.includes(warning))) throw new Error('STALE_AGENT_PLAN');
+    const taskIds = await executePlan(userId, plan, pending.id, stored.taskVersions, stored.scheduleVersion);
     await prisma.assistantAction.update({ where: { id: pending.id }, data: { executed: true, confirmation: 'CONFIRMED', resultJson: JSON.stringify({ taskIds }) } });
     await saveMemories(userId, plan.memory_updates, taskIds);
     return { ...turn({ ...plan, response: `Done. ${plan.interpretation}` }, null), transcript };
@@ -306,20 +336,16 @@ export async function runConversationalAgent(userId: string, transcript: string,
     await prisma.assistantAction.create({ data: { userId, sessionId: session.id, intent: plan.needs_clarification ? 'AGENT_CLARIFICATION' : 'AGENT_READ', payloadJson: JSON.stringify(plan), confirmation: 'NONE', executed: true, resultJson: JSON.stringify({ response: plan.response }) } });
     return { ...turn(plan, null), transcript };
   }
-  const warnings: string[] = [];
-  for (const action of plan.actions) {
-    if (action.type === 'CREATE_TASK' && action.start_at) {
-      const start = new Date(action.start_at);
-      warnings.push(...await checkCreationAvailability(userId, start, new Date(+start + (action.duration_min || 30) * 60000), 'task'));
-    }
-  }
+  const scheduleVersion = await scheduleContextVersion(userId);
+  const warnings = await planScheduleWarnings(userId, plan);
+  if (await scheduleContextVersion(userId) !== scheduleVersion) throw new Error('STALE_AGENT_PLAN');
   if (warnings.length) {
     const unique = [...new Set(warnings)];
     plan.response_sections.push({ title: 'Schedule review', items: unique });
     plan.interpretation += ` Schedule warning: ${unique.join(' ')} Confirm only if you want to keep this time.`;
   }
   const versions = referenced.length ? await prisma.task.findMany({ where: { userId, id: { in: referenced } }, select: { id: true, updatedAt: true } }) : [];
-  const stored: StoredAgentPlan = { agentVersion: 1, plan, taskVersions: Object.fromEntries(versions.map((task) => [task.id, task.updatedAt.toISOString()])) };
+  const stored: StoredAgentPlan = { scheduleVersion, agentVersion: 1, plan, taskVersions: Object.fromEntries(versions.map((task) => [task.id, task.updatedAt.toISOString()])) };
   await prisma.assistantAction.updateMany({ where: { userId, intent: 'AGENT_PLAN', executed: false }, data: { executed: true, confirmation: 'SUPERSEDED', resultJson: JSON.stringify({ reason: 'Replaced by a newer conversational proposal' }) } });
   const action = await prisma.assistantAction.create({ data: { userId, sessionId: session.id, intent: 'AGENT_PLAN', payloadJson: JSON.stringify(stored), confirmation: 'REQUIRED' } });
   return { ...turn(plan, { prompt: plan.interpretation, actionId: action.id }), transcript };

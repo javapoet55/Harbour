@@ -1,3 +1,4 @@
+import { requireAvailableSchedule } from '@/server/availability';
 import { parseProjectId } from '@/server/projects';
 import { NextResponse } from 'next/server';
 import type { Prisma } from '@/generated/prisma';
@@ -23,6 +24,15 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
     if (body.projectId !== undefined && (body.status !== undefined || body.startAt || body.date || body.focusAction)) {
       return NextResponse.json({ error: 'Save the project assignment separately from status or schedule changes.' }, { status: 400 });
     }
+    // Validate schedule edits before applying metadata, duration or status changes.
+    if (body.startAt || body.date || body.durationMin !== undefined || ['PLANNED', 'INBOX', 'WAITING'].includes(body.status)) {
+      const existing = await prisma.task.findFirst({ where: { id, userId: user.id, deletedAt: null } });
+      if (!existing) throw new Error('NOT_FOUND');
+      const start = body.date ? zonedDateTime(String(body.date), String(body.time || '09:00'), user.timeZone) : body.startAt ? new Date(body.startAt) : existing.startAt;
+      if (body.startAt || body.date || body.durationMin !== existing.durationMin && body.durationMin !== undefined || ['PLANNED', 'INBOX', 'WAITING'].includes(body.status) && existing.status !== body.status) {
+        await requireAvailableSchedule(user.id, start, body.durationMin ?? existing.durationMin, body.allowScheduleConflict, id);
+      }
+    }
     if (body.focusAction === 'finish') {
       const end = new Date(body.endedAt);
       if ((!body.workSessionId && !body.focusToken) || (body.workSessionId && (typeof body.workSessionId !== 'string' || body.workSessionId.length > 100)) || (body.focusToken && (typeof body.focusToken !== 'string' || body.focusToken.length > 100)) || !Number.isFinite(end.getTime())) return NextResponse.json({ error: 'Invalid focus segment.' }, { status: 400 });
@@ -38,7 +48,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
       return NextResponse.json({ ok: true });
     }
     if (body.status === 'COMPLETED') {
-      const task = await completeTask(user.id, id);
+      const task = await completeTask(user.id, id, body.allowScheduleConflict === true);
       await pushTaskToExternal(user.id, id);
       await generateReplanProposal(user.id);
       return NextResponse.json({ task });
@@ -93,7 +103,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
       const startAt = body.date
         ? zonedDateTime(String(body.date), String(body.time || '09:00'), user.timeZone)
         : new Date(body.startAt);
-      const task = await scheduleTask(user.id, id, startAt, body.durationMin);
+      const task = await scheduleTask(user.id, id, startAt, body.durationMin ?? (await prisma.task.findFirstOrThrow({ where: { id, userId: user.id } })).durationMin);
       await scheduleDefaultReminders(user.id, id, startAt, Boolean(task.critical));
       await pushTaskToExternal(user.id, id);
       await generateReplanProposal(user.id);

@@ -1,4 +1,5 @@
 'use client';
+import { scheduleFetch } from '@/lib/schedule-fetch';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Check, ChevronRight, Search, SlidersHorizontal, X } from 'lucide-react';
@@ -55,7 +56,7 @@ export function TaskBrowser({ view = 'all' }: { view?: 'all' | 'open' | 'inbox' 
     if (priority !== 'ALL') params.set('priority', priority);
     if (due !== 'ALL') params.set('due', due);
     if (timeline !== 'ALL') params.set('timeline', timeline);
-    const res = await fetch(`/api/tasks?${params}`, { signal, cache: 'no-store' });
+    const res = await scheduleFetch(`/api/tasks?${params}`, { signal, cache: 'no-store' });
     if (!res.ok) {
       setError('Could not load tasks.');
       setLoading(false);
@@ -105,7 +106,7 @@ export function TaskBrowser({ view = 'all' }: { view?: 'all' | 'open' | 'inbox' 
   async function act(id: string, body: Record<string, unknown>) {
     setBusy(true);
     try {
-      const res = await fetch(`/api/tasks/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      const res = await scheduleFetch(`/api/tasks/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       if (!res.ok) throw new Error('Could not save your task. Please try again.');
       await load();
       return true;
@@ -120,7 +121,7 @@ export function TaskBrowser({ view = 'all' }: { view?: 'all' | 'open' | 'inbox' 
     if (!ids.length) return;
     setBusy(true);
     try {
-      const res = await fetch('/api/tasks/bulk', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids, [field]: value }) });
+      const res = await scheduleFetch('/api/tasks/bulk', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids, [field]: value }) });
       if (!res.ok) { const data = await res.json(); throw new Error(data.error || 'Bulk update failed.'); }
       setSelected([]); setBulk(''); await load();
     } catch (err) { setError(err instanceof Error ? err.message : 'Could not update your tasks.'); }
@@ -140,7 +141,7 @@ export function TaskBrowser({ view = 'all' }: { view?: 'all' | 'open' | 'inbox' 
       <button type="button" className="task-row-details" aria-label={`Open details for ${task.title}`} disabled={busy || !timeZone} onClick={() => setEditing(task)}><span className="task-card-copy"><span className="task-row-title">{task.title}</span><span className="task-card-meta">{task.priority === 'CRITICAL' && <span className="task-priority priority-critical">Critical</span>}<span>{timeZone ? taskDueLabel(task, timeZone) : 'Loading date…'} · {task.durationMin} min</span></span></span><ChevronRight size={18} aria-hidden="true" /></button>
     </article>)}</div>}
     {showCreate && <TaskCreateDialog onClose={() => setShowCreate(false)} onCreated={(title) => { setShowCreate(false); reset(); setQuery(''); setTimeline('ALL'); setBulk(''); setSelecting(false); setCreatedMessage(`Added “${title}”. Showing all tasks.`); setRevision((value) => value + 1); }} />}
-    {editing && timeZone && <TaskDetailSheet key={editing.id} task={editing} timeZone={timeZone} focusControl={<TaskWorkControls task={editing} onStart={async () => { const started = await act(editing.id, { status: 'IN_PROGRESS' }); if (started) setEditing({ ...editing, status: 'IN_PROGRESS' }); return started; }} />} onClose={() => setEditing(null)} onSaved={async () => { setEditing(null); await load(); }} onComplete={async () => { const response = await fetch(`/api/tasks/${editing.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'COMPLETED' }) }); if (!response.ok) throw new Error('Could not complete your task. Please try again.'); setEditing(null); await load(); }} />}
+    {editing && timeZone && <TaskDetailSheet key={editing.id} task={editing} timeZone={timeZone} focusControl={<TaskWorkControls task={editing} onStart={async () => { const started = await act(editing.id, { status: 'IN_PROGRESS' }); if (started) setEditing({ ...editing, status: 'IN_PROGRESS' }); return started; }} />} onClose={() => setEditing(null)} onSaved={async () => { setEditing(null); await load(); }} onComplete={async () => { const response = await scheduleFetch(`/api/tasks/${editing.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'COMPLETED' }) }); if (!response.ok) throw new Error('Could not complete your task. Please try again.'); setEditing(null); await load(); }} />}
     <dialog ref={dialog} className="task-filter-dialog"><form method="dialog"><header><div><p>MAKE IT YOURS</p><h2>Filter tasks</h2></div><button aria-label="Close filters"><X size={22} /></button></header><p className="task-filter-hint">Find just what you need to work on.</p><label>Status<select value={status} onChange={(event) => setStatus(event.target.value)}><option value="ALL">Any status</option>{['INBOX', 'PLANNED', 'IN_PROGRESS', 'WAITING', 'COMPLETED'].map((value) => <option key={value} value={value}>{label(value)}</option>)}</select></label><label>Priority<select value={priority} onChange={(event) => setPriority(event.target.value)}><option value="ALL">Any priority</option>{['CRITICAL', 'HIGH', 'NORMAL', 'LOW'].map((value) => <option key={value} value={value}>{label(value)}</option>)}</select></label><label>When<select value={due} onChange={(event) => setDue(event.target.value)}><option value="ALL">Any time</option><option value="OVERDUE">Overdue</option><option value="NEXT_24_HOURS">Due in 24 hours</option><option value="UNSCHEDULED">Unscheduled</option></select></label><footer><button type="button" onClick={reset}>Reset</button><button className="task-show-results">Show tasks</button></footer></form></dialog>
   </div>;
 }

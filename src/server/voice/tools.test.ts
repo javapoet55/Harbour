@@ -86,3 +86,19 @@ it('requires confirmation before creating a task in a conflicting slot', async (
   expect(mocks.createTask).not.toHaveBeenCalled();
   expect(await executeVoiceTool('u', 's', 'c', 'create_task', { ...args, allowScheduleConflict: true })).toMatchObject({ success: true });
 });
+it('checks a voice duration or schedule edit before changing any fields', async () => {
+  mocks.availability.mockResolvedValue(['Overlaps a meeting']);
+  expect(await executeVoiceTool('u', 's', 'c', 'update_task', { taskId: task.id, title: 'New title', durationMin: 60 })).toMatchObject({ requiresConfirmation: true });
+  expect(mocks.updateTask).not.toHaveBeenCalled();
+  expect(mocks.scheduleTask).not.toHaveBeenCalled();
+  expect(mocks.availability).toHaveBeenCalledWith('u', task.startAt, new Date(+task.startAt + 3600000), 'task', task.id);
+});
+it('lets voice ask about a conflicting recurring occurrence before completion', async () => {
+  const { ScheduleWarning } = await import('@/lib/schedule-warning');
+  mocks.completeTask.mockRejectedValueOnce(new ScheduleWarning(['Next occurrence overlaps']));
+  expect(await executeVoiceTool('u', 's', 'c', 'complete_task', { taskId: task.id })).toMatchObject({ requiresConfirmation: true, success: false });
+  expect(mocks.completeTask).toHaveBeenCalledWith('u', task.id, false);
+  const { voiceTools } = await import('./configuration');
+  expect(voiceTools.find(tool => tool.name === 'complete_task')?.parameters.properties).toHaveProperty('allowScheduleConflict');
+  expect(voiceTools.find(tool => tool.name === 'update_task')?.parameters.properties).toHaveProperty('allowScheduleConflict');
+});

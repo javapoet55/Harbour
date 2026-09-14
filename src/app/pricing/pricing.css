@@ -28,8 +28,8 @@
 .pricing-card-1 .pricing-cta { border-color:transparent; }
 .pricing-card ul { display:grid; gap:10px; margin-top:28px; }
 .pricing-card li { display:flex; gap:11px; color:var(--hs-muted); font-size:14px; line-height:1.45; }
-.pricing-card li svg { color:#5730f7; flex-shrink:0; }
-.pricing-card-2 li svg { color:#f59b0b; }
+.pricing-card li > svg { color:#5730f7; flex-shrink:0; }
+.pricing-card-2 li > svg { color:#f59b0b; }
 .pricing-assurances { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:20px; margin:30px 0 38px; }
 .pricing-assurances > div { display:flex; align-items:center; gap:13px; }
 .pricing-benefit-icon { display:grid; place-items:center; width:56px; height:56px; flex-shrink:0; background:linear-gradient(130deg,#dce7ff,#f1e7ff); color:#5032f5; border-radius:50%; }
@@ -100,9 +100,19 @@
 .pricing-intro .hs-eyebrow { color:#7040bd; }
 .pricing-card-1 { background:linear-gradient(145deg,#fff 15%,#f3edff 72%,#edf9ff); border-color:#9d82f7; }
 .pricing-card-2 { border-color:#eaa3d9; background:linear-gradient(145deg,#fff 30%,#fff4fb); }
-.pricing-card-2 li svg { color:#b51da4; }
+.pricing-card-2 li > svg { color:#b51da4; }
 .pricing-benefit-icon { background:var(--nexdo-surface); color:var(--brand); }
 .pricing-savings { background:var(--nexdo-surface); color:#5930ba; }
 .pricing-final { background:var(--nexdo-surface); border:1px solid #e9defc; }
 
 .pricing-savings.pricing-savings-annual { background:#dcfce7; color:#166534; }
+
+.pricing-feature-name { display:flex; align-items:center; gap:8px; }
+.pricing-feature-info { display:inline-flex; flex:0 0 28px; align-items:center; justify-content:center; width:28px; height:28px; padding:0; border:0; border-radius:50%; background:transparent; color:#b0b5c0; cursor:help; }
+.pricing-feature-info:hover { background:#f5f5f8; }
+.pricing-feature-info:focus-visible { outline:2px solid #8065db; outline-offset:2px; }
+.pricing-feature-tooltip { position:fixed; z-index:10000; display:block; box-sizing:border-box; padding:12px 14px; border:1px solid #e5e5ed; border-radius:12px; background:#fff; color:#50566c; box-shadow:0 8px 28px #20243d1f; font-family:Arial,sans-serif; font-size:13px; font-weight:400; line-height:1.6; text-align:left; pointer-events:auto; }
+.pricing-feature-tooltip > span { display:block; }
+
+.pricing-card-feature-text { flex:1; min-width:0; }
+.pricing-card li > .pricing-feature-info { margin-top:-4px; }

@@ -500,8 +500,6 @@ struct CalendarEventEditor: View {
     @State private var start = Date().addingTimeInterval(3600)
     @State private var end = Date().addingTimeInterval(5400)
     @State private var saving = false
-    @State private var showScheduleWarning = false
-    @State private var scheduleWarning = ""
     @State private var failure: String?
     @State private var requestID = UUID()
     @State private var repeatFrequency = "none"
@@ -569,7 +567,7 @@ struct CalendarEventEditor: View {
         .navigationTitle("New Appointment / Event").navigationBarTitleDisplayMode(.inline)
         .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Close") { dismiss() }.disabled(saving) } }
         .safeAreaInset(edge: .bottom) {
-            Button { saveEvent(approved: false)            } label: {
+            Button { saveEvent()            } label: {
                 HStack { if saving { ProgressView().tint(.white) }; Text(saving ? "Creating…" : "Create Event"); Image(systemName: "arrow.right") }
                     .font(.headline).foregroundStyle(canSave ? Color.white : Color.secondary)
                     .frame(maxWidth: .infinity, minHeight: 52)
@@ -577,10 +575,6 @@ struct CalendarEventEditor: View {
             }.buttonStyle(.plain).disabled(!canSave)
                 .padding(.horizontal, 20).padding(.vertical, 12).background(.regularMaterial)
         }
-        .alert("Schedule check", isPresented: $showScheduleWarning) {
-            Button("Choose another time", role: .cancel) {}
-            Button("Create anyway") { saveEvent(approved: true) }
-        } message: { Text(scheduleWarning) }
         .tint(TaskCreationStyle.accent).interactiveDismissDisabled(saving)
         .onAppear {
             #if DEBUG
@@ -589,22 +583,18 @@ struct CalendarEventEditor: View {
         }
         .onChange(of: start) { old, new in end = new.addingTimeInterval(max(300, end.timeIntervalSince(old))); repeatUntil = max(new, min(repeatUntil, new.addingTimeInterval(365 * 86400))) }
     }
-    private func saveEvent(approved: Bool) {
+    private func saveEvent() {
         guard canSave else { return }
         guard start > Date() else { failure = "Choose a future start time."; return }
         saving = true; failure = nil
         Task {
             defer { saving = false }
-            if !approved {
-                do {
-                    let warnings = try await model.schedulingWarnings(start: start, end: end, kind: "event", repeatFrequency: repeatFrequency, repeatUntil: repeatUntil, weekdays: weekdays.sorted())
-                    if !warnings.isEmpty { scheduleWarning = warnings.joined(separator: "\n\n"); showScheduleWarning = true; return }
-                } catch { scheduleWarning = "Availability could not be verified. Create this event anyway?"; showScheduleWarning = true; return }
-            }
+
             do {
                 try await model.createCalendarEvent(title: title.trimmingCharacters(in: .whitespacesAndNewlines), notes: notes, location: location, start: start, end: end, requestID: requestID, repeatFrequency: repeatFrequency, repeatUntil: repeatUntil, weekdays: weekdays.sorted())
                 dismiss()
-            } catch { failure = "Couldn’t confirm the event. Check your calendar before retrying." }
+            } catch is CancellationError { /* Keep the form open with the user’s entries. */ }
+            catch { failure = error.localizedDescription }
         }
     }
 

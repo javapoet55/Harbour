@@ -891,6 +891,19 @@ private struct TodayView: View {
                             TodayActionsView(queue: queue, now: context.date, onTask: { id in editing = model.tasks.first { $0.id == id } })
                         }
 
+                        if range == .today, let proposal = model.protectedTime {
+                            VStack(alignment: .leading, spacing: 10) {
+                                Label("Make room for important work", systemImage: "lock.shield").font(.headline)
+                                Text("You’ve postponed \(proposal.title) \(proposal.postponeCount) times.").font(.subheadline)
+                                Text("Reserve \(proposal.durationMin) minutes at \(model.protectedTimeLabel(proposal))?")
+                                Text("Nexdo will keep this block in place during replanning. You can still move it yourself.").font(.caption).foregroundStyle(.secondary)
+                                HStack {
+                                    Button("Reserve time") { Task { await model.respondToProtectedTime(proposal, accept: true) } }.buttonStyle(.borderedProminent)
+                                    Button("Not now") { Task { await model.respondToProtectedTime(proposal, accept: false) } }
+                                }.disabled(model.protectingTime)
+                            }.padding(18).background(Color.nexdoIndigo.opacity(0.06), in: RoundedRectangle(cornerRadius: 20))
+                        }
+
                         if range == .today, let recommendation = model.persistentNext?.recommendation,
                            let best = recommendation.nextAction?.bestAction {
                             VStack(alignment: .leading, spacing: 10) {
@@ -1692,8 +1705,6 @@ struct TaskEditor: View {
     @State private var projectInitialized = false
     @State private var title = ""
     @State private var checkingAvailability = false
-    @State private var scheduleWarning: String?
-    @State private var showScheduleWarning = false
     @State private var notes = ""
     @State private var duration = 30
     @State private var notesExpanded = false
@@ -1805,10 +1816,6 @@ struct TaskEditor: View {
         }
         .foregroundStyle(Color.primary)
         .tint(TaskCreationStyle.accent)
-        .alert("Schedule check", isPresented: $showScheduleWarning) {
-            Button("Choose another time", role: .cancel) {}
-            Button("Create anyway") { save(approved: true) }
-        } message: { Text(scheduleWarning ?? "") }
         .onAppear { if !projectInitialized { projectID = initialProjectID; projectInitialized = true } }
         .navigationTitle("New Task")
         .navigationBarTitleDisplayMode(.inline)
@@ -1872,19 +1879,13 @@ struct TaskEditor: View {
         return dateChoice.resolve(customDate: customDate, timeZone: accountTimeZone)
     }
 
-    private func save() { save(approved: false) }
-    private func save(approved: Bool) {
+    private func save() {
         guard canSave, !checkingAvailability else { return }
         focusedField = nil
         checkingAvailability = true
         Task {
             defer { checkingAvailability = false }
-            if !approved {
-                do {
-                    let warnings = try await model.schedulingWarnings(start: resolvedCreationDate, end: resolvedCreationDate.addingTimeInterval(Double(duration * 60)), kind: "task")
-                    if !warnings.isEmpty { scheduleWarning = warnings.joined(separator: "\n\n"); showScheduleWarning = true; return }
-                } catch { scheduleWarning = "Availability could not be verified. Create this task anyway?"; showScheduleWarning = true; return }
-            }
+
             if await model.saveTask(id: task?.id, title: title.trimmingCharacters(in: .whitespacesAndNewlines), notes: notes, duration: duration, scheduledAt: resolvedCreationDate, projectId: projectID) {
                 dismiss()
             }

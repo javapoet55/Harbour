@@ -33,7 +33,7 @@ struct TaskActionCard: View {
             .sheet(isPresented: $showing) {
                 TaskActionView(actionID: action.id, preferred: action.preferredAction)
             }
-        } else if !task.isDone && task.status != "CANCELLED" && TaskActionClarification.isCandidate(task.title) {
+        } else if !task.isDone && task.status != "CANCELLED" && (task.subtasks ?? []).isEmpty && TaskActionClarification.isCandidate(task.title) {
             ClarifyTaskActionCard(task: task)
         }
     }
@@ -44,17 +44,37 @@ private struct ClarifyTaskActionCard: View {
     @ObservedObject private var coordinator = TaskActionCoordinator.shared
     let task: NexdoTask
     @State private var contact = ""
+    @State private var nextStep = ""
+    @State private var contactMode = false
     @State private var saving = false
     @State private var failure: String?
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("What would you like to do about “\(task.title)”?").font(.headline)
-            TextField("Person or business to contact", text: $contact).textFieldStyle(.roundedBorder)
-            ViewThatFits(in: .horizontal) {
-                HStack { choices }
-                VStack(alignment: .leading) { choices }
+            Picker("Next step type", selection: $contactMode) {
+                Text("Work on it").tag(false)
+                Text("Contact someone").tag(true)
+            }.pickerStyle(.segmented)
+            if contactMode {
+                TextField("Person or business to contact", text: $contact).textFieldStyle(.roundedBorder)
+                ViewThatFits(in: .horizontal) {
+                    HStack { choices }
+                    VStack(alignment: .leading) { choices }
+                }
+                Text("You’ll review the contact before calling or sending.").font(.caption).foregroundStyle(.secondary)
+            } else {
+                TextField("First step, e.g. Draft three presentation slides", text: $nextStep, axis: .vertical).textFieldStyle(.roundedBorder)
+                Button("Save next step") {
+                    guard let title = TaskActionClarification.nextStepTitle(nextStep) else { return }
+                    saving = true; failure = nil
+                    Task {
+                        let saved = await model.saveClarifiedStep(task, title: title)
+                        saving = false
+                        if !saved { failure = "Couldn’t save your next step. Please try again." }
+                    }
+                }.buttonStyle(.borderedProminent).disabled(saving || TaskActionClarification.nextStepTitle(nextStep) == nil)
+                Text("Describe one small action. Save it, then use Start Focus Session below when you’re ready.").font(.caption).foregroundStyle(.secondary)
             }
-            Text("Choose an action to clarify this task. You’ll review the contact before calling or sending.").font(.caption).foregroundStyle(.secondary)
             if saving { ProgressView("Updating your next step…") }
             if let failure { Text(failure).font(.caption).foregroundStyle(.red) }
         }.padding(16).background(Color.nexdoIndigo.opacity(0.06), in: RoundedRectangle(cornerRadius: 18))

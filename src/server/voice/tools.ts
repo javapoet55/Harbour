@@ -1,3 +1,4 @@
+import { ScheduleWarning } from '@/lib/schedule-warning';
 import { checkCreationAvailability } from '@/server/availability';
 import { availability } from '@/lib/availability';
 import { z } from 'zod';
@@ -18,8 +19,8 @@ const schemas = {
   create_calendar_event: z.object({ allowScheduleConflict: z.boolean().optional(), title: fields.title, notes: fields.notes.optional(), startAt: timestamp, endAt: timestamp, location: z.string().max(200).optional() }).strict(),
   create_reminder: z.object({ title: fields.title, notes: fields.notes.optional(), categoryName: fields.categoryName.optional(), scheduledAt: timestamp }).strict(),
   create_task: z.object({ allowScheduleConflict: z.boolean().optional(), title: fields.title, notes: fields.notes.optional(), scheduledAt: timestamp, durationMin: fields.durationMin, categoryName: fields.categoryName.optional() }).strict(),
-  update_task: z.object({ taskId: id, title: fields.title.optional(), notes: fields.notes.optional(), categoryName: fields.categoryName.optional(), scheduledAt: timestamp.optional(), durationMin: fields.durationMin.optional(), recurrence: z.null().optional() }).strict(),
-  delete_task: z.object({ taskId: id }).strict(), complete_task: z.object({ taskId: id }).strict(),
+  update_task: z.object({ allowScheduleConflict: z.boolean().optional(), taskId: id, title: fields.title.optional(), notes: fields.notes.optional(), categoryName: fields.categoryName.optional(), scheduledAt: timestamp.optional(), durationMin: fields.durationMin.optional(), recurrence: z.null().optional() }).strict(),
+  delete_task: z.object({ taskId: id }).strict(), complete_task: z.object({ allowScheduleConflict: z.boolean().optional(), taskId: id }).strict(),
   find_tasks: z.object({ query: z.string().trim().min(2).max(100) }).strict(),
   get_schedule: z.object({ from: timestamp, to: timestamp }).strict(),
   find_free_time: z.object({ from: timestamp, to: timestamp, durationMin: fields.durationMin }).strict(),
@@ -92,7 +93,17 @@ export async function executeVoiceTool(userId: string, sessionId: string, callId
   } else {
     const owned = await prisma.task.findFirst({ where: { id: String(args.taskId), userId, deletedAt: null } });
     if (!owned) return { success: false, error: 'Task not found. Ask the user which task.' };
-    if (name === 'complete_task') task = owned.status === 'COMPLETED' ? owned : await completeTask(userId, owned.id);
+    if (name === 'update_task' && (args.scheduledAt || args.durationMin !== undefined) && args.allowScheduleConflict !== true) {
+      const start = args.scheduledAt ? new Date(String(args.scheduledAt)) : owned.startAt;
+      if (start) {
+        const warnings = await checkCreationAvailability(userId, start, new Date(+start + Number(args.durationMin ?? owned.durationMin) * 60000), 'task', owned.id);
+        if (warnings.length) return { success: false, requiresConfirmation: true, warnings, message: 'No changes saved. Explain the warnings and ask before retrying with allowScheduleConflict true.' };
+      }
+    }
+    if (name === 'complete_task') {
+      try { task = owned.status === 'COMPLETED' ? owned : await completeTask(userId, owned.id, args.allowScheduleConflict === true); }
+      catch (error) { if (error instanceof ScheduleWarning) return { success: false, requiresConfirmation: true, warnings: error.warnings, message: 'The next repeating occurrence has a conflict. Nothing changed. Ask before retrying with allowScheduleConflict true.' }; throw error; }
+    }
     else if (name === 'delete_task') task = await deleteTask(userId, owned.id);
     else {
       if (Object.keys(args).length === 1) return { success: false, error: 'No changes supplied.' };

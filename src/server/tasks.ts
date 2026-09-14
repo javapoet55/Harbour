@@ -1,3 +1,5 @@
+import { requireAvailableSchedule } from './availability';
+import { nextTaskStart } from '@/lib/task-next-occurrence';
 import type { Prisma } from '@/generated/prisma';
 import { prisma } from './db';
 import { validateProjectAssignment } from './projects';
@@ -67,11 +69,13 @@ export async function updateTask(userId: string, id: string, data: Prisma.TaskUp
   });
 }
 
-export async function completeTask(userId: string, id: string) {
+export async function completeTask(userId: string, id: string, allowScheduleConflict = false) {
   const now = new Date();
   return prisma.$transaction(async (tx) => {
     const task = await tx.task.findFirst({ where: { id, userId, deletedAt: null }, include: { user: { include: { preference: true } }, workSessions: true, recurrence: true, dependencies: true } });
     if (!task) throw new Error('NOT_FOUND');
+    const recurringStart = nextTaskStart(task);
+    if (recurringStart) await requireAvailableSchedule(userId, recurringStart, task.durationMin, allowScheduleConflict, task.id);
     let actualDurationMin = task.actualDurationMin;
     if (task.user.preference?.personalizationEnabled) {
       const active = task.workSessions.filter((session) => !session.endedAt);

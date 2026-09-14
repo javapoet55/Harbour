@@ -1,3 +1,4 @@
+import { requireAvailableSchedule } from '@/server/availability';
 import { parseProjectId } from '@/server/projects';
 import { jsonError } from '@/lib/http';
 import { NextResponse } from 'next/server';
@@ -45,6 +46,7 @@ export async function POST(req: Request) {
       : body.date
         ? zonedDateTime(body.date, body.time || '09:00', user.timeZone)
         : null;
+    await requireAvailableSchedule(user.id, startAt, body.durationMin ?? 30, body.allowScheduleConflict);
     const task = await createTask({
       userId: user.id,
       projectId: body.projectId === undefined ? undefined : parseProjectId(body.projectId),

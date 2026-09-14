@@ -1,4 +1,5 @@
 'use client';
+import { scheduleFetch } from '@/lib/schedule-fetch';
 
 import { useEffect, useRef, useState } from 'react';
 import { X } from 'lucide-react';
@@ -27,7 +28,7 @@ export function TaskCreateDialog({ onClose, onCreated }: { onClose: () => void; 
 
   useEffect(() => {
     const controller = new AbortController();
-    fetch('/api/me', { signal: controller.signal }).then(async (response) => {
+    scheduleFetch('/api/me', { signal: controller.signal }).then(async (response) => {
       if (!response.ok) throw new Error('Could not load your time zone.');
       const payload = await response.json();
       const zone = payload.user?.timeZone;
@@ -48,7 +49,7 @@ export function TaskCreateDialog({ onClose, onCreated }: { onClose: () => void; 
     setSaving(true);
     setError('');
     try {
-      const response = await fetch('/api/tasks', {
+      const response = await scheduleFetch('/api/tasks', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ title: title.trim(), date, time, durationMin: 30, status: 'PLANNED' }),

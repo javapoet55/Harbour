@@ -1,3 +1,4 @@
+import './ai-features.css';
 import type { Metadata } from 'next';
 import { HarbourLanding } from '@/components/harbour-landing';
 import './welcome.css';

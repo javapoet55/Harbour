@@ -81,6 +81,10 @@ struct TaskDetailsView: View {
             if draft.title == original.title { draft.title = title }
             original.title = title
         }
+        .onChange(of: currentTask.subtasks) { _, steps in
+            if draft.steps == original.steps { draft.steps = steps ?? [] }
+            original.steps = steps ?? []
+        }
         .onDisappear { focus = nil }
         .alert("Task details", isPresented: Binding(get: { message != nil }, set: { if !$0 { message = nil } })) {
             Button("OK", role: .cancel) {}
@@ -249,6 +253,7 @@ struct TaskDetailsView: View {
         Task { @MainActor in
             defer { working = false }
             do { try await action() }
+            catch is CancellationError { /* Keep edits available after declining a schedule warning. */ }
             catch { message = (error as? TaskEditError)?.errorDescription ?? "Couldn’t update your task. Your edits are still here. Please try again." }
         }
     }

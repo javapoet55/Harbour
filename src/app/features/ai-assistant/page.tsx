@@ -1,3 +1,4 @@
+import '../../welcome/ai-features.css';
 import type { Metadata } from 'next';
 import { AiAssistantPage } from '@/components/ai-assistant-page';
 import '../../welcome/welcome.css';

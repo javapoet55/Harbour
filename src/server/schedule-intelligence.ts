@@ -1,3 +1,4 @@
+import { protectedTaskIds } from '@/lib/protected-time';
 import { normalizedBuffer } from '@/lib/availability';
 import { addDays, endOfLocalDay, formatTime, startOfLocalDay, tzToday, ymd } from '@/lib/time';
 import { analyzeSchedule, withoutTaskMirrors } from '@/lib/schedule-intelligence';
@@ -16,7 +17,7 @@ export async function loadScheduleContext(userId: string, now = new Date(), days
   const today = tzToday(user.timeZone, now);
   const from = startOfLocalDay(ymd(today), user.timeZone);
   const to = endOfLocalDay(ymd(addDays(today, days - 1)), user.timeZone);
-  const [rows, imported, memories, connections, focusState] = await Promise.all([
+  const [rows, imported, memories, connections, focusState, protectedRecords] = await Promise.all([
     db.task.findMany({ where: { userId, OR: [
       { deletedAt: null, status: { in: OPEN } },
       { deletedAt: null, completedAt: { gte: from, lte: now } },
@@ -29,6 +30,7 @@ export async function loadScheduleContext(userId: string, now = new Date(), days
     db.userMemory.findMany({ where: { userId, kind: 'preference' }, select: { key: true, value: true }, take: 50, orderBy: { updatedAt: 'desc' } }),
     db.calendarConnection.findMany({ where: { userId, visible: true, provider: { in: ['google', 'microsoft'] } }, select: { lastSyncedAt: true, status: true } }),
     db.userMemory.findUnique({ where: { userId_key: { userId, key: 'runtime:focus' } }, select: { value: true } }),
+    db.userMemory.findMany({ where: { userId, kind: 'protected_time' }, select: { key: true, value: true } }),
   ]);
   const durations = await personalizedTaskDurations(userId, rows, db);
   const linkedIds = rows.flatMap((task) => task.calendarEventId ? [task.calendarEventId] : []);
@@ -46,11 +48,12 @@ export async function loadScheduleContext(userId: string, now = new Date(), days
   const requestedBuffer = Number(memory.get('preference:buffer_minutes') ?? 15);
   const bufferMinutes = normalizedBuffer(requestedBuffer);
   const preferredProject = memory.get('preference:focus_project_id') ?? memory.get('goal:project_id');
+  const protectedIds = protectedTaskIds(protectedRecords, rows, now);
   const tasks = rows.map((task) => ({ ...task,
     calendarDurationMin: task.durationMin,
     status: task.deletedAt ? 'CANCELLED' : task.status,
     startAt: drifted.has(task.id) ? null : task.startAt,
-    durationMin: durations.get(task.id) ?? task.durationMin,
+    durationMin: protectedIds.includes(task.id) ? task.durationMin : durations.get(task.id) ?? task.durationMin,
     dependencyBlocked: drifted.has(task.id) || task.dependencies.some((edge) => edge.dependsOn.status !== 'COMPLETED' && !edge.dependsOn.deletedAt),
     dependsOnIds: task.dependencies.filter((edge) => edge.dependsOn.status !== 'COMPLETED' && !edge.dependsOn.deletedAt).map((edge) => edge.dependsOnId),
     blocksCount: task.dependents.length,
@@ -59,7 +62,7 @@ export async function loadScheduleContext(userId: string, now = new Date(), days
   }));
   const staleCalendars = connections.filter((connection) => connection.status !== 'connected' || !connection.lastSyncedAt || +freshnessNow - +connection.lastSyncedAt > 15 * 60000).length;
   const calendarFreshUntil = connections.length ? Math.min(...connections.map((connection) => connection.lastSyncedAt ? +connection.lastSyncedAt + 15 * 60000 : +now)) : null;
-  return { user, now, from, to, tasks, events: withoutTaskMirrors(imported, tasks), activeFocus, calendarFreshUntil,
+  return { user, now, from, to, tasks, protectedTaskIds: protectedIds, events: withoutTaskMirrors(imported, tasks), activeFocus, calendarFreshUntil,
     nextActionEnabled: memory.get('preference:next_action_enabled') === 'true',
     switchingThreshold: Number.isFinite(threshold) ? Math.max(0, Math.min(50, threshold)) : NEXT_ACTION_POLICY.switchingThreshold,
     contextWarnings: [...(staleCalendars ? [`${staleCalendars} connected calendar(s) have stale or unavailable sync data. Synchronize before relying on this schedule.`] : []), ...(drifted.size ? [`${drifted.size} task calendar link(s) changed outside Nexdo. Their current calendar blocks are protected; review the linked tasks before scheduling them.`] : [])],

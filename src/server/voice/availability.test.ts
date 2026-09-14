@@ -30,3 +30,14 @@ it('refreshes the next choice immediately after completion while preserving dism
   expect(suppressNextAction({ ...state, dismissed: true }, next, true, 1001000)).toBe(true);
   expect(suppressNextAction(state, { taskId: 'finished', score: 80 }, true, 1001000)).toBe(true);
 });
+it('keeps an active focus session busy even when its task has no scheduled start', () => {
+  const focus = { ...context, activeFocus: { taskId: 'focus', startedAt: +at('12:00'), endsAt: +at('12:30') } };
+  expect(creationWarnings(focus, at('12:00'), at('12:15'), 'task').join()).toContain('overlaps');
+});
+it('requires approval for overlaps created within a bulk operation', async () => {
+  const { requireNonoverlappingBatch } = await import('@/lib/schedule-warning');
+  const slots = [{ start: at('12:00'), durationMin: 30 }, { start: at('12:15'), durationMin: 30 }];
+  expect(() => requireNonoverlappingBatch(slots, false)).toThrow('batch');
+  expect(() => requireNonoverlappingBatch(slots, true)).not.toThrow();
+  expect(() => requireNonoverlappingBatch([{ start: at('12:00'), durationMin: 15 }, { start: at('12:15'), durationMin: 30 }], false)).not.toThrow();
+});
