@@ -53,3 +53,11 @@ yarn-error.log*
 
 # typescript
 *.tsbuildinfo
+
+# React Native app (mobile/.gitignore covers these too)
+/mobile/node_modules
+/mobile/.expo
+/mobile/dist
+/mobile/web-build
+/mobile/ios
+/mobile/android

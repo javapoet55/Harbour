@@ -263,7 +263,7 @@ App Store review adds a few days per submission.
 - [ ] Phase 0: voice proof of concept
 - [ ] Expo project in `mobile/` with EAS development build
 - [ ] API client and cookie session verified on a device
-- [ ] Theme and shared components
+- [x] Theme and shared components
 - [ ] Auth screens and Sign in with Apple
 - [ ] Tasks and projects
 - [ ] Today
@@ -277,3 +277,45 @@ App Store review adds a few days per submission.
 - [ ] TestFlight build, internal testing
 - [ ] Parity review against the 32 screens in section 2
 - [ ] Retire the Swift app from TestFlight and archive `ios/`
+
+---
+
+## 10. Phase 1 status
+
+Last updated: 2026-09-15. Branch: `react-native-migration`.
+
+Phase 1 runs in **Expo Go** (Expo SDK 57, React Native 0.86, Expo Router, TypeScript). It has no native modules that need a development build, so the "EAS development build" checklist item stays open until Phase 0 or 2. Run and test instructions: [`mobile/README.md`](../mobile/README.md).
+
+### What exists
+| Area | Files |
+| --- | --- |
+| App config | `mobile/app.config.ts`: name Nexdo, slug `nexdo`, bundle ID `com.pinslots.nexdo`, scheme `nexdo`, `extra.apiUrl` from `EXPO_PUBLIC_API_URL` (default: the Railway URL) |
+| Routes | `app/_layout.tsx` session gate (`GET /api/me`, with `Stack.Protected`), `app/index.tsx`, `(auth)/sign-in`, `(tabs)/today`, `tasks`, `ask`, `calendar` (all placeholders), `dev/session-check` |
+| Theme | `src/theme/`: brand colours from `RootView.swift` with source lines, spacing, typography, radii, `useTheme` (follows the system setting) |
+| API | `src/api/client.ts` (port of `APIClient.swift`), `src/api/types.ts` (port of `Models.swift`, with differences from the web types noted inline), `src/api/index.ts` endpoints |
+| Server data | `src/query/`: `QueryClient` (no retry on 4xx; a `SIGNED_OUT` error signs the app out), query-key factory, `useMe`, stub `useTasks` (the Tasks tab shows the count) |
+| App state | `src/store/session.ts` (Zustand) |
+| Components | `Screen`, `Text`, `Button`, `Card`, `TextField`, `LoadingView`, `ErrorView` |
+| Root repo | `mobile/` is excluded from the root `tsconfig.json`, ESLint and Vitest, and its build outputs are added to `.gitignore` |
+
+### Verified by automated checks
+- `npx tsc --noEmit`, `npm run lint`: clean.
+- `npm test`: 38 Jest tests.
+  - API client: HTTPS-only base URLs and paths, `credentials: 'include'` and `redirect: 'manual'`.
+  - Error mapping: `EMAIL_NOT_VERIFIED` (with email), `SCHEDULE_WARNING` (with warnings), 401, and fallback messages matching Swift.
+  - Redirects to `/login` treated as signed out: 3xx, opaque, and followed.
+  - Network and invalid-body errors, and the retry policy.
+  - `Button` and `TextField` render tests.
+- `npx expo export --platform ios`: the app bundles.
+- Root project: `npm run typecheck` passes, and `npm test` gives the same results with and without the `mobile/` config changes.
+
+### Needs confirmation on a device
+- **Cookie session (risk gate):** sign in, force-quit, reopen, and `/api/me` still returns the profile. Procedure: `mobile/README.md`. Unverified.
+- Whether React Native's iOS networking obeys `redirect: 'manual'`. The client also detects a followed redirect to `/login`, but only a device shows which path runs.
+- Placeholder screens, tab bar, safe areas and dark mode on a real iPhone.
+
+### Phase 1 decisions to review
+Marked `TODO(phase1-decision)` in code:
+- Dark `nexdoInk` and `nexdoSecondary` use the standard dark values of iOS `.label` and `.secondaryLabel`. The Swift code uses the dynamic system colours, not fixed values.
+- The primary `Button` is solid indigo. The Swift gradient needs `expo-linear-gradient`, which can come with the auth screens.
+- `ios.supportsTablet` keeps the template value `true`.

@@ -1,4 +1,4 @@
-import { defineConfig } from 'vitest/config';
+import { configDefaults, defineConfig } from 'vitest/config';
 import path from 'node:path';
 import { mkdtempSync, closeSync, openSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -12,6 +12,8 @@ process.env.HARBOR_DATABASE_URL = `file:${databaseFile}`;
 export default defineConfig({
   test: {
     environment: 'node',
+    // mobile/ has its own Jest tests.
+    exclude: [...configDefaults.exclude, 'mobile/**'],
     setupFiles: ['./vitest.setup.ts'],
     globalSetup: ['./vitest.global-setup.ts'],
     env: { HARBOR_DATABASE_URL: process.env.HARBOR_DATABASE_URL },

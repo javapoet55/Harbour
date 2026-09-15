@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "build/**",
     "next-env.d.ts",
     "src/generated/**",
+    // React Native app: its own ESLint config and dependencies.
+    "mobile/**",
   ]),
 ]);
 
