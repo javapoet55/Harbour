@@ -2,10 +2,12 @@ import Foundation
 
 public enum APIError: LocalizedError, Sendable {
     case scheduleWarning([String])
+    case emailNotVerified(String)
     case insecureURL, signedOut, response(Int), server(Int, String), invalidResponse
     public var errorDescription: String? {
         switch self {
         case .scheduleWarning(let warnings): warnings.joined(separator: "\n\n")
+        case .emailNotVerified(let message): message
         case .insecureURL: "A secure server address is required."
         case .signedOut: "Your session has expired. Please sign in again."
         case .response(let status): status == 409 ? "Your schedule changed or could not be refreshed. Ask for a fresh plan before making changes." : "The request could not be completed (\(status)). Refresh to check the current state before retrying."
@@ -63,6 +65,7 @@ public actor APIClient {
         guard (200..<300).contains(response.statusCode) else {
             if let payload = try? JSONDecoder().decode(ServerError.self, from: data), !payload.error.isEmpty {
                 if payload.code == "SCHEDULE_WARNING", let warnings = payload.warnings { throw APIError.scheduleWarning(warnings) }
+                if payload.code == "EMAIL_NOT_VERIFIED" { throw APIError.emailNotVerified(payload.error) }
                 throw APIError.server(response.statusCode, payload.error)
             }
             throw APIError.response(response.statusCode)

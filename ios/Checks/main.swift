@@ -20,3 +20,6 @@ try check(rejected, "HTTP rejected")
 let request = AssistantRequest(transcript: "no", contextActionId: "context", rejectActionId: "proposal")
 let body = try JSONSerialization.jsonObject(with: JSONEncoder().encode(request)) as! [String: String]
 try check(body["contextActionId"] == "context" && body["rejectActionId"] == "proposal" && body["confirmActionId"] == nil, "Context retained and rejection separated from approval")
+try check(VerificationCode.sanitized(" 12a3-45 678") == "123456" && VerificationCode.isComplete("123456") && !VerificationCode.isComplete("12345"), "Verification code keeps exactly six digits")
+let registration = try JSONDecoder().decode(RegistrationResponse.self, from: Data(#"{"id":"u","name":"N","email":"n@example.com","emailVerificationRequired":true,"emailSent":false}"#.utf8))
+try check(registration.emailVerificationRequired == true && registration.emailSent == false, "Registration response reports pending verification")

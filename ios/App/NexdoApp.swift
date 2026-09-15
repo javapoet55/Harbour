@@ -152,19 +152,42 @@ final class AppModel: ObservableObject {
         catch APIError.signedOut { await reset(); error = "Please sign in again. Your session ended or the credentials were incorrect." }
         catch { self.error = errorMessage ?? (tasksLoadFailed ? "Couldn’t load your tasks. Please refresh to try again." : error.localizedDescription) }
     }
-    func login(email: String, password: String) async {
+    /// Returns the account to verify when the server requires the emailed code before signing in.
+    func login(email: String, password: String) async -> PendingEmailVerification? {
+        let address = email.trimmingCharacters(in: .whitespacesAndNewlines)
+        var pending: PendingEmailVerification?
         await perform {
-            let _: Ignore = try await api.request("/api/auth/login", method: "POST", body: JSONEncoder().encode(["email": email.trimmingCharacters(in: .whitespacesAndNewlines), "password": password]), treatUnauthorizedAsSignedOut: false)
+            do {
+                let _: Ignore = try await api.request("/api/auth/login", method: "POST", body: JSONEncoder().encode(["email": address, "password": password]), treatUnauthorizedAsSignedOut: false)
+            } catch APIError.emailNotVerified {
+                pending = PendingEmailVerification(email: address, reason: .signInRequiresVerification)
+                return
+            }
             try await finishAuthentication()
         }
+        return pending
     }
-    func register(name: String, email: String, password: String) async {
+    func register(name: String, email: String, password: String) async -> PendingEmailVerification? {
+        var pending: PendingEmailVerification?
         await perform {
             struct Input: Encodable { let name: String; let email: String; let password: String }
             let input = Input(name: name, email: email, password: password)
-            let _: Ignore = try await api.request("/api/auth/register", method: "POST", body: JSONEncoder().encode(input), treatUnauthorizedAsSignedOut: false)
-            try await finishAuthentication()
+            let response: RegistrationResponse = try await api.request("/api/auth/register", method: "POST", body: JSONEncoder().encode(input), treatUnauthorizedAsSignedOut: false)
+            // Servers without email verification start the session at registration.
+            guard response.emailVerificationRequired == true else { try await finishAuthentication(); return }
+            pending = PendingEmailVerification(email: response.email, reason: response.emailSent == false ? .codeNotSent : .codeSent)
         }
+        return pending
+    }
+    /// A correct code starts the session, so the profile loads straight after.
+    func verifyEmail(email: String, code: String) async throws {
+        struct Input: Encodable { let email: String; let code: String }
+        let _: Ignore = try await api.request("/api/auth/verify-email", method: "POST", body: JSONEncoder().encode(Input(email: email, code: code)), treatUnauthorizedAsSignedOut: false)
+        try await finishAuthentication()
+    }
+    func resendVerificationCode(email: String) async throws -> String {
+        let response: CodeDeliveryResponse = try await api.request("/api/auth/verify-email/resend", method: "POST", body: JSONEncoder().encode(["email": email]), treatUnauthorizedAsSignedOut: false)
+        return response.message
     }
     func requestPasswordReset(email: String) async -> Bool {
         var sent = false

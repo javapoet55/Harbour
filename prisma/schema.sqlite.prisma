@@ -47,6 +47,7 @@ model EmailVerificationToken {
   codeHash String
   expiresAt DateTime
   usedAt DateTime?
+  attempts Int @default(0)
   createdAt DateTime @default(now())
   @@index([userId, createdAt])
   @@index([expiresAt])

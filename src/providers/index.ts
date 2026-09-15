@@ -4,6 +4,8 @@ import { prisma } from '@/server/db';
 
 const configured = (value?: string) => Boolean(value && value.trim());
 
+export const emailDeliveryMocked = () => !configured(process.env.SENDGRID_API_KEY);
+
 export const emailProvider: EmailProvider = {
   name: configured(process.env.SENDGRID_API_KEY) ? 'sendgrid' : 'mock-email',
   async send(message) {
@@ -17,7 +19,7 @@ export const emailProvider: EmailProvider = {
       const response = await fetch('https://api.sendgrid.com/v3/mail/send', {
         method: 'POST',
         headers: { Authorization: `Bearer ${process.env.SENDGRID_API_KEY}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ personalizations: [{ to: [{ email: message.to }] }], from: { email: from, name: process.env.SENDGRID_FROM_NAME || 'Harbour' }, subject: message.subject, content: [{ type: 'text/plain', value: message.text }] }),
+        body: JSON.stringify({ personalizations: [{ to: [{ email: message.to }] }], from: { email: from, name: process.env.SENDGRID_FROM_NAME || 'Harbour' }, subject: message.subject, content: [{ type: 'text/plain', value: message.text }, ...(message.html ? [{ type: 'text/html', value: message.html }] : [])] }),
       });
       if (!response.ok) return { id: '', status: 'FAILED', reason: `SendGrid ${response.status}` };
       return { id: response.headers.get('x-message-id') || `sendgrid-${Date.now()}`, status: 'SENT' };

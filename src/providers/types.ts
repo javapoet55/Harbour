@@ -1,4 +1,4 @@
-export type EmailMessage = { to: string; subject: string; text: string };
+export type EmailMessage = { to: string; subject: string; text: string; html?: string };
 export type SmsMessage = { to: string; text: string };
 export type PushMessage = { userId: string; title: string; body: string; url?: string };
 export type CalendarWrite = {

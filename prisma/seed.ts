@@ -45,6 +45,7 @@ async function main() {
       email,
       name: 'Rohit Kumar',
       passwordHash: await bcrypt.hash(password, 10),
+      emailVerifiedAt: new Date(),
       timeZone: TZ,
       preference: {
         create: {

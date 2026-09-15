@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { NexdoLogo } from '@/components/nexdo-logo';
+import { PasswordInput } from '@/components/password-input';
 import { useRouter } from 'next/navigation';
 
 export default function LoginPage() {
@@ -20,6 +21,11 @@ export default function LoginPage() {
       body: JSON.stringify({ email, password }),
     });
     if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      if (body.code === 'EMAIL_NOT_VERIFIED') {
+        router.push(`/verify-email?email=${encodeURIComponent(body.email || email)}&reason=unverified`);
+        return;
+      }
       setError('Those credentials were not accepted.');
       return;
     }
@@ -39,7 +45,7 @@ export default function LoginPage() {
         </label>
         <label className="block text-sm font-medium">
           Password
-          <input className="harbor-input mt-1" type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" />
+          <PasswordInput value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" />
         </label>
         <div className="text-right"><Link className="text-sm font-medium text-[var(--brand)] hover:underline" href="/reset-password">Forgot password?</Link></div>
         {error && <p className="text-sm text-[var(--danger)]">{error}</p>}
