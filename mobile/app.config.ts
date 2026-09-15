@@ -18,6 +18,10 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     supportsTablet: true,
   },
   android: {
+    // TODO(phase0-decision): EAS and prebuild need an Android package name; this mirrors the iOS bundle ID.
+    package: 'com.pinslots.nexdo',
+    // The WebRTC config plugin adds these for video calling; voice does not use them.
+    blockedPermissions: ['android.permission.CAMERA', 'android.permission.SYSTEM_ALERT_WINDOW'],
     adaptiveIcon: {
       backgroundColor: '#E6F4FE',
       foregroundImage: './assets/android-icon-foreground.png',
@@ -29,7 +33,20 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   web: {
     favicon: './assets/favicon.png',
   },
-  plugins: ['expo-router'],
+  plugins: [
+    'expo-router',
+    'expo-dev-client',
+    [
+      // Phase 0 voice PoC. Needs a development build; Expo Go cannot load react-native-webrtc.
+      // TODO(phase0-decision): the plugin's compatibility table stops at SDK 56 (plugin 15.0.0); 15.0.2 declares expo >=56.
+      '@config-plugins/react-native-webrtc',
+      {
+        microphonePermission: 'Nexdo uses the microphone for voice conversations with your assistant.',
+        // TODO(phase0-decision): the plugin always sets a camera usage string; voice never opens the camera.
+        cameraPermission: 'Nexdo does not use the camera for voice conversations.',
+      },
+    ],
+  ],
   extra: {
     apiUrl: process.env.EXPO_PUBLIC_API_URL?.trim() || DEFAULT_API_URL,
   },

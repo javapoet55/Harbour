@@ -260,9 +260,9 @@ App Store review adds a few days per submission.
 ## 9. Migration checklist
 
 - [ ] Confirm setup decisions (section 1), including Android scope
-- [ ] Phase 0: voice proof of concept
+- [ ] Phase 0: voice proof of concept (built: `mobile/app/dev/voice-check.tsx`, protocol in `mobile/docs/voice-protocol.md`; awaiting the on-device test)
 - [ ] Expo project in `mobile/` with EAS development build
-- [ ] API client and cookie session verified on a device
+- [x] API client and cookie session verified on a device: *verified on Android (Expo Go, 2026-09-15); iOS pending*
 - [x] Theme and shared components
 - [ ] Auth screens and Sign in with Apple
 - [ ] Tasks and projects

@@ -34,6 +34,8 @@ export default function Today() {
         </Text>
       </Card>
       <Button title="Open session check" variant="secondary" onPress={() => router.push('/dev/session-check')} />
+      {/* Signed-in people land here, not on the sign-in placeholder. */}
+      <Button title="Open voice check" variant="secondary" onPress={() => router.push('/dev/voice-check')} />
       <Button title="Sign out" variant="ghost" loading={signingOut} onPress={signOut} />
     </Screen>
   );

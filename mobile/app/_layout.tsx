@@ -56,6 +56,7 @@ function RootNavigator() {
         </Stack.Protected>
         {/* Reachable signed in or out: it exists to test signing in and out. */}
         <Stack.Screen name="dev/session-check" options={{ headerShown: true, title: 'Session check' }} />
+        <Stack.Screen name="dev/voice-check" options={{ headerShown: true, title: 'Voice check' }} />
       </Stack>
     </>
   );

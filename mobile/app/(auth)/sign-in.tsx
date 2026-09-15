@@ -11,6 +11,7 @@ export default function SignIn() {
         <Text variant="title">Sign in</Text>
         <Text tone="secondary">The sign-in screen arrives in Phase 2. Use the session check to sign in for now.</Text>
         <Button title="Open session check" onPress={() => router.push('/dev/session-check')} />
+        <Button title="Open voice check" variant="secondary" onPress={() => router.push('/dev/voice-check')} />
       </Card>
     </Screen>
   );
