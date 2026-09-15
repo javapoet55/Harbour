@@ -39,6 +39,8 @@ yarn-error.log*
 /prisma/*.db
 /prisma/*.db-journal
 /prisma/dev.db
+/prisma/sqlite/*.db
+/prisma/sqlite/*.db-journal
 
 # generated Prisma client (created by `prisma generate`)
 /src/generated/prisma

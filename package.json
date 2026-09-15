@@ -12,8 +12,9 @@
     "test": "vitest run",
     "db:generate": "prisma generate --schema=prisma/schema.prisma",
     "db:push": "prisma db push --schema=prisma/schema.prisma",
-    "db:seed": "tsx prisma/assert-local-sqlite.ts && prisma generate --schema=prisma/schema.sqlite.prisma && tsx prisma/seed.ts",
-    "db:reset": "tsx prisma/assert-local-sqlite.ts && prisma db push --force-reset --schema=prisma/schema.sqlite.prisma && tsx prisma/seed.ts",
+    "db:migrate:deploy": "node prisma/deploy-migrations.mjs",
+    "db:seed": "tsx prisma/assert-local-sqlite.ts && prisma generate --schema=prisma/sqlite/schema.prisma && tsx prisma/seed.ts",
+    "db:reset": "tsx prisma/assert-local-sqlite.ts && prisma db push --force-reset --schema=prisma/sqlite/schema.prisma && tsx prisma/seed.ts",
     "postinstall": "prisma generate --schema=prisma/schema.prisma"
   },
   "dependencies": {
@@ -25,6 +26,7 @@
     "jose": "^6.2.10",
     "lucide-react": "^0.544.0",
     "next": "16.3.4",
+    "prisma": "^6.19.3",
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "tailwind-merge": "^3.3.1",
@@ -40,7 +42,6 @@
     "@types/web-push": "^3.6.4",
     "eslint": "^9",
     "eslint-config-next": "16.3.4",
-    "prisma": "^6.19.3",
     "tailwindcss": "^4",
     "tsx": "^4.23.13",
     "typescript": "^5",

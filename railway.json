@@ -5,6 +5,7 @@
     "buildCommand": "npm run build"
   },
   "deploy": {
+    "preDeployCommand": ["npm run db:migrate:deploy"],
     "startCommand": "npm run start:railway",
     "healthcheckPath": "/login",
     "healthcheckTimeout": 120,

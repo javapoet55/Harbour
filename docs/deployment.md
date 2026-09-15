@@ -1,6 +1,8 @@
 # Deployment
 
-1. Set `HARBOR_DATABASE_URL` to Postgres and run `npx prisma migrate deploy`.
+1. Set `HARBOR_DATABASE_URL` to Postgres. Railway runs `npm run db:migrate:deploy` before each deploy (`preDeployCommand` in `railway.json`); on other hosts run the same command before `npm start`. It applies `prisma/migrations`. The first time it meets a database created with `prisma db push` (tables but no migration history), it records the `20260914000000_init` baseline as already applied instead of recreating tables.
+   - Create schema changes with `npx prisma migrate dev --name <change>` against a local Postgres database, and commit the generated migration. A failed migration stops the deploy before the new code starts.
+   - `prisma/sqlite/` holds the separate SQLite schema and migrations used only by tests and the demo seed.
 2. Set `HARBOR_SESSION_SECRET` to a long random value.
 3. Optionally set SendGrid, Twilio, VAPID, OpenAI, and calendar OAuth client IDs.
    - Set `HARBOR_CREDENTIAL_ENCRYPTION_KEY` to 32 random bytes encoded as 64 hex characters.
@@ -15,14 +17,9 @@
 
 Harbor can deploy as its own Next.js service. Do not point it at the FSM `home_services` database.
 
-Password sign-in, on web and iOS, requires a verified email for accounts created after 2026-09-15 06:04:02 UTC. Sign in with Apple and a completed password reset also mark the email verified. Before deploying that server change:
+Password sign-in, on web and iOS, requires a verified email for accounts created after 2026-09-15 07:09:15 UTC, when that requirement first deployed. Sign in with Apple and a completed password reset also mark the email verified.
 
-- Apply `9_email_verification_attempts`. The Postgres equivalent is below. The `UPDATE` marks only accounts created before the cutoff as verified, so it is safe to run more than once.
-
-  ```sql
-  ALTER TABLE "EmailVerificationToken" ADD COLUMN IF NOT EXISTS "attempts" INTEGER NOT NULL DEFAULT 0;
-  UPDATE "User" SET "emailVerifiedAt" = "createdAt" WHERE "emailVerifiedAt" IS NULL AND "createdAt" < '2026-09-15 06:04:02';
-  ```
+- Migration `20260915071000_email_verification_attempts` adds the code attempt counter and marks accounts created before the cutoff as verified. It runs automatically with the other migrations before each deploy.
 
 - Sign-up no longer starts a session, on web or iOS. The person verifies the emailed code, which signs them in. Password sign-in to an unverified account returns 403 with `code: "EMAIL_NOT_VERIFIED"`, and both clients open their verification screen.
 - iOS builds from before the verification screen cannot finish sign-up against this server. Ship the updated iOS build together with this server change.
