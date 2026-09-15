@@ -207,7 +207,7 @@ private struct TodayDesignPreview: View {
 }
 
 private struct TaskDesignPreview: View {
-    @StateObject private var model = AppModel()
+    @StateObject private var model = ProjectsPreviewProtocol.model()
     @State private var loaded = false
     @State private var selectedTab: NexdoTab = .tasks
 
@@ -240,6 +240,14 @@ private struct TaskDesignPreview: View {
                     NexdoTask(id: "briefing", title: "Prepare tomorrow’s executive briefing", status: "PLANNED", priority: "LOW", durationMin: 60, notes: "Summarize progress, risks, and decisions.", startAt: scheduled(1, 14), dueAt: nil),
                     NexdoTask(id: "done", title: "Confirm design review", status: "COMPLETED", priority: "MEDIUM", durationMin: 15, notes: nil, startAt: nil, dueAt: nil)
                 ]
+                if ProcessInfo.processInfo.arguments.contains("-task-scroll-preview") {
+                    model.tasks = (-13...6).flatMap { day in
+                        (0..<5).map { index in
+                            NexdoTask(id: "scroll-\(day)-\(index)", title: "Day \(day) task \(index): Review the upcoming appointment and prepare the required documents", status: index == 4 ? "COMPLETED" : "PLANNED", priority: "NORMAL", durationMin: 30, notes: nil, startAt: scheduled(day, 9 + index), dueAt: nil)
+                        }
+                    }
+                    model.taskQuery.status = "All"
+                }
             }
     }
 }
@@ -1436,17 +1444,10 @@ struct TasksView: View {
         value.firstWeekday = 2
         return value
     }
-    private var visibleTasks: [NexdoTask] { model.taskQuery.results(model.tasks, timeZone: zone) }
-    private var groups: [(date: Date, tasks: [NexdoTask])] {
-        let grouped = Dictionary(grouping: visibleTasks) { task in
-            (task.startAt ?? task.dueAt).flatMap(ServerDate.parse).map { calendar.startOfDay(for: $0) } ?? .distantFuture
-        }
-        return grouped.keys.sorted { model.taskQuery.earliestFirst ? $0 < $1 : $0 > $1 }
-            .map { (date: $0, tasks: grouped[$0] ?? []) }
-    }
     private let accent = LinearGradient(colors: [.nexdoIndigo, .nexdoBlue], startPoint: .leading, endPoint: .trailing)
 
     var body: some View {
+        let snapshot = model.taskQuery.snapshot(model.tasks, timeZone: zone)
         NavigationStack {
             ZStack {
                 TodayBackdrop(subtle: true)
@@ -1464,18 +1465,37 @@ struct TasksView: View {
                     if showingProjects {
                         ProjectsView()
                     } else {
-                        ScrollView {
-                            VStack(alignment: .leading, spacing: 20) {
+                        List {
+                            Group {
                                 if searching || !model.taskQuery.search.isEmpty { searchField }
                                 creationActions
                                 ViewThatFits(in: .horizontal) {
-                                    datePills
-                                    ScrollView(.horizontal) { datePills }.scrollIndicators(.hidden)
+                                    datePills(snapshot)
+                                    ScrollView(.horizontal) { datePills(snapshot) }.scrollIndicators(.hidden)
                                 }
-                                taskSections
+                                if model.taskQuery.date == .all {
+                                    VStack(alignment: .leading, spacing: 6) {
+                                        HStack {
+                                            Text("History range").font(.subheadline.bold())
+                                            Spacer()
+                                            Picker("History range", selection: $model.taskQuery.historyRange) {
+                                                ForEach(TaskHistoryRange.allCases) { Text($0.rawValue).tag($0) }
+                                            }.pickerStyle(.menu).labelsHidden().tint(.nexdoIndigo)
+                                        }
+                                        Text(model.taskQuery.historyRange == .thisMonth ? "Tasks scheduled within this calendar month." : model.taskQuery.historyRange == .lastMonth ? "Previous calendar month, plus upcoming open tasks." : "History through today, plus upcoming open tasks.")
+                                            .font(.caption).foregroundStyle(Color.nexdoSecondary)
+                                    }
+                                }
+                                taskSections(snapshot)
                             }
-                            .padding(.bottom, 24)
+                            .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 8, trailing: 0))
+                            .listRowSeparator(.hidden)
+                            .listRowBackground(Color.clear)
                         }
+                        .listStyle(.plain)
+                        .scrollContentBackground(.hidden)
+                        .environment(\.defaultMinListRowHeight, 0)
+                        .buttonStyle(.plain)
                         .scrollIndicators(.hidden)
                         .scrollDismissesKeyboard(.interactively)
                         .refreshable { await model.refreshTasks() }
@@ -1502,7 +1522,7 @@ struct TasksView: View {
                             Text("All").tag("All")
                             ForEach(Array(Set(model.tasks.map(\.priority))).sorted(), id: \.self) { Text($0.capitalized).tag($0) }
                         }
-                        Toggle("Earliest due first", isOn: $model.taskQuery.earliestFirst)
+                        if model.taskQuery.date != .all { Toggle("Earliest due first", isOn: $model.taskQuery.earliestFirst) }
                         Button("Reset filters") { model.taskQuery.status = "Open"; model.taskQuery.priority = "All"; model.taskQuery.earliestFirst = true }
                     }
                     .navigationTitle("Task filters")
@@ -1581,17 +1601,19 @@ struct TasksView: View {
         }.buttonStyle(.plain).accessibilityLabel(title).accessibilityHint(subtitle)
     }
 
-    private var datePills: some View {
+    private func datePills(_ snapshot: TaskListSnapshot) -> some View {
         HStack(spacing: 7) {
             ForEach([TaskDateFilter.today, .tomorrow, .week, .all]) { filter in
                 let selected = model.taskQuery.date == filter
                 Button {
-                    withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.18)) { model.taskQuery.date = filter }
+                    searchFocused = false
+                    if filter == .all && model.taskQuery.date != .all { model.taskQuery.historyRange = .thisMonth; model.taskQuery.status = "Open" }
+                    model.taskQuery.date = filter
                 } label: {
                     HStack(spacing: 5) {
                         Text(filter.rawValue)
                         if filter != .all {
-                            Text("\(count(for: filter))").font(.caption)
+                            Text("\(snapshot.counts[filter, default: 0])").font(.caption)
                                 .padding(.horizontal, 5).padding(.vertical, 2)
                                 .background(selected ? Color.white.opacity(0.25) : Color.nexdoIndigo.opacity(0.08), in: Capsule())
                         }
@@ -1600,13 +1622,13 @@ struct TasksView: View {
                     .padding(.horizontal, 8).frame(minHeight: 44)
                     .background(selected ? AnyShapeStyle(accent) : AnyShapeStyle(Color(uiColor: .systemBackground).opacity(0.8)), in: Capsule())
                     .overlay(Capsule().stroke(selected ? Color.clear : Color.nexdoIndigo.opacity(0.16)))
-                }.buttonStyle(.plain).accessibilityLabel("\(filter.rawValue), \(count(for: filter)) tasks")
+                }.buttonStyle(.plain).accessibilityLabel("\(filter.rawValue), \(snapshot.counts[filter, default: 0]) tasks")
                     .accessibilityAddTraits(selected ? .isSelected : [])
             }
         }
     }
 
-    @ViewBuilder private var taskSections: some View {
+    @ViewBuilder private func taskSections(_ snapshot: TaskListSnapshot) -> some View {
         if model.tasksLoading && model.tasks.isEmpty {
             ProgressView("Loading tasks…").frame(maxWidth: .infinity).padding(30)
         } else {
@@ -1616,25 +1638,23 @@ struct TasksView: View {
                     Button("Retry") { Task { await model.refreshTasks() } }.frame(minHeight: 44)
                 }.frame(maxWidth: .infinity).padding()
             }
-            if visibleTasks.isEmpty && !model.tasksLoadFailed && !model.tasksLoading {
+            if snapshot.tasks.isEmpty && !model.tasksLoadFailed && !model.tasksLoading {
                 ContentUnavailableView {
                     Label(model.taskQuery.search.isEmpty ? model.taskQuery.date.emptyTitle : "No matching tasks", systemImage: "checklist")
                 } description: { Text("Try another filter or add a task.") } actions: {
                     Button("Add Manually") { adding = true }.buttonStyle(.bordered)
                 }
             }
-            LazyVStack(spacing: 24) {
-                ForEach(groups, id: \.date) { group in
-                    VStack(spacing: 8) {
+            ForEach(snapshot.sections) { group in
+                    Group {
                         HStack {
-                            Text(sectionTitle(group.date)).font(.title3.bold()).foregroundStyle(Color.nexdoInk).accessibilityHeading(.h2)
+                            Text(group.isDone && model.taskQuery.status == "All" ? "Completed · \(sectionTitle(group.date))" : sectionTitle(group.date)).font(.title3.bold()).foregroundStyle(Color.nexdoInk).accessibilityHeading(.h2)
                             Spacer()
                             Text("\(group.tasks.count) \(group.tasks.count == 1 ? "task" : "tasks")").font(.subheadline).foregroundStyle(Color.nexdoSecondary)
                         }.padding(.bottom, 2)
                         ForEach(group.tasks) { task in taskCard(task) }
                     }
-                }
-            }.padding(.top, 8)
+            }
         }
     }
 
@@ -1669,14 +1689,10 @@ struct TasksView: View {
             .overlay(RoundedRectangle(cornerRadius: 18).stroke(Color.nexdoSecondary.opacity(0.16)))
     }
 
-    private func count(for filter: TaskDateFilter) -> Int {
-        var query = model.taskQuery
-        query.date = filter
-        return query.results(model.tasks, timeZone: zone).count
-    }
     private func sectionTitle(_ date: Date) -> String {
         if date == .distantFuture { return "Unscheduled" }
         if calendar.isDate(date, inSameDayAs: Date()) { return "Today" }
+        if let yesterday = calendar.date(byAdding: .day, value: -1, to: Date()), calendar.isDate(date, inSameDayAs: yesterday) { return "Yesterday" }
         if let tomorrow = calendar.date(byAdding: .day, value: 1, to: Date()), calendar.isDate(date, inSameDayAs: tomorrow) { return "Tomorrow" }
         let formatter = DateFormatter()
         formatter.timeZone = calendar.timeZone
@@ -1733,7 +1749,7 @@ struct TaskEditor: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
                     TaskEditorLabel(title: "TASK NAME", icon: "checklist")
-                    TextField("Task name", text: $title, prompt: Text("What needs to get done?").foregroundStyle(Color(uiColor: .secondaryLabel)), axis: .vertical)
+                    TextField("Task name", text: $title, prompt: Text(focusedField == .title ? "" : "What needs to get done?").foregroundStyle(Color(uiColor: .secondaryLabel)), axis: .vertical)
                         .font(.title3.weight(.semibold)).lineLimit(1...3)
                         .focused($focusedField, equals: .title)
                         .accessibilityLabel("Task name")

@@ -20,6 +20,7 @@ struct CalendarView: View {
     @State private var showTasks = true
     @State private var showEvents = true
     @State private var criticalOnly = false
+    @State private var completedOnly = false
     @State private var eventDetail: CalendarEvent?
     @State private var searching = false
     @State private var searchText = ""
@@ -44,7 +45,7 @@ struct CalendarView: View {
     }
     private var openTasks: [NexdoTask] { model.tasks.filter { !$0.isDone && $0.status != "CANCELLED" } }
     private func overdue(_ task: NexdoTask) -> Bool {
-        guard let due = task.dueAt.flatMap({ ServerDate.day($0, timeZone: zone) }) else { return false }
+        guard !task.isDone, let due = task.dueAt.flatMap({ ServerDate.day($0, timeZone: zone) }) else { return false }
         return due < dates.key(Date())
     }
     private func matches(_ task: NexdoTask) -> Bool {
@@ -52,12 +53,12 @@ struct CalendarView: View {
             && CalendarSearch.matches(task.title, query: searchText)
     }
     private func tasks(_ day: Date) -> [NexdoTask] {
-        (currentData?.tasks ?? []).filter { matches($0) && dates.taskOccurs($0, on: day) }
+        (currentData?.tasks ?? []).filter { matches($0) && dates.taskOccurs($0, on: day, completedOnly: completedOnly) }
     }
     private func events(_ day: Date) -> [CalendarEvent] {
         guard showEvents, !criticalOnly else { return [] }
         return (currentData?.events ?? []).filter {
-            CalendarSearch.matches($0.title, query: searchText) && ServerDate.occurs($0, on: dates.key(day), timeZone: zone)
+            CalendarSearch.matches($0.title, query: searchText) && CalendarEventFilter.matches($0, day: dates.key(day), timeZone: zone, completedOnly: completedOnly)
         }
     }
     private var backlog: [NexdoTask] { openTasks.filter { matches($0) && ($0.startAt == nil || overdue($0)) } }
@@ -76,7 +77,7 @@ struct CalendarView: View {
                         calendarHeader
                         if searching { searchField }
                         segments
-                        if mode == .schedule { if !hasSearch { intelligence } }
+                        if mode == .schedule { if !hasSearch && !completedOnly { intelligence } }
                         else { dateNavigation; dateGrid }
                         if let failure {
                             VStack(alignment: .leading, spacing: 8) {
@@ -88,9 +89,14 @@ struct CalendarView: View {
                         if currentData != nil {
                             if mode == .schedule {
                                 upcoming
+                                if completedOnly {
+                                    DatePicker("Starting date", selection: $selected, displayedComponents: .date)
+                                    Text("Events appear after their end time. Choose a date to view past appointments.").font(.caption).foregroundStyle(Color.nexdoSecondary)
+                                }
                                 summary
                                 if hasSearch { searchResults }
                                 else { ForEach(visibleDays, id: \.self) { day in daySection(day, relative: true) } }
+                                if !completedOnly {
                                 DisclosureGroup(isExpanded: $expanded) {
                                     if backlog.isEmpty { Text("No unscheduled or overdue tasks.").font(.subheadline).padding(.vertical) }
                                     ForEach(backlog) { task in
@@ -102,6 +108,7 @@ struct CalendarView: View {
                                 } label: { Text("Unscheduled & overdue  \(backlog.count)").font(.subheadline.weight(.semibold)) }
                                     .padding(16).background(.background.opacity(0.7), in: RoundedRectangle(cornerRadius: 16))
                                     .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.nexdoBlue.opacity(0.18)))
+                                }
                             } else {
                                 if hasSearch { searchResults }
                                 else {
@@ -305,7 +312,7 @@ struct CalendarView: View {
     }
     private var upcoming: some View {
         HStack {
-            Text("Upcoming").font(.title2.bold()); Spacer()
+            Text(completedOnly ? "Completed" : "Upcoming").font(.title2.bold()); Spacer()
             Menu { ForEach(Range.allCases, id: \.self) { value in Button(value.rawValue) { range = value } } } label: {
                 HStack { Text(range.rawValue); Image(systemName: "chevron.down").font(.caption2) }.font(.subheadline).padding(12)
             }.background(.background.opacity(0.8), in: RoundedRectangle(cornerRadius: 12))
@@ -316,18 +323,20 @@ struct CalendarView: View {
         Menu {
             Toggle("Tasks", isOn: $showTasks)
             Toggle("Calendar events", isOn: $showEvents)
+            Toggle("Completed", isOn: $completedOnly)
+                .onChange(of: completedOnly) { _, enabled in if enabled { criticalOnly = false } }
             Toggle("Critical only", isOn: $criticalOnly)
-            Button("Reset filters") { showTasks = true; showEvents = true; criticalOnly = false }
+            Button("Reset filters") { showTasks = true; showEvents = true; criticalOnly = false; completedOnly = false }
         } label: {
             Image(systemName: "slider.horizontal.3").frame(width: 44, height: 44)
                 .background(.background.opacity(0.8), in: RoundedRectangle(cornerRadius: 14))
                 .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.nexdoIndigo.opacity(0.18)))
-        }.accessibilityLabel("Calendar filters\((!showTasks || !showEvents || criticalOnly) ? ", active" : "")")
+        }.accessibilityLabel("Calendar filters\((!showTasks || !showEvents || criticalOnly || completedOnly) ? ", active" : "")")
     }
     private var summary: some View {
         let total = visibleDays.reduce(0) { $0 + count($1) }
         let deadlines = Set(visibleDays.flatMap { day in tasks(day).filter { $0.dueAt.flatMap { ServerDate.day($0, timeZone: zone) } == dates.key(day) }.map(\.id) }).count
-        return summaryCard("\(itemCount(total)) · \(deadlines) \(deadlines == 1 ? "deadline" : "deadlines")", detail: "\(openTasks.filter { overdue($0) }.count) overdue tasks overall · \(visibleDays.contains { dates.calendar.isDate($0, inSameDayAs: Date()) } ? "Includes today" : label(visibleDays[0], "MMM d"))")
+        return summaryCard("\(itemCount(total)) · \(deadlines) \(deadlines == 1 ? "deadline" : "deadlines")", detail: completedOnly ? "Completed tasks and past events in the selected dates" : "\(openTasks.filter { overdue($0) }.count) overdue tasks overall · \(visibleDays.contains { dates.calendar.isDate($0, inSameDayAs: Date()) } ? "Includes today" : label(visibleDays[0], "MMM d"))")
     }
     private func summaryCard(_ title: String, detail: String) -> some View {
         HStack(spacing: 14) {
@@ -382,7 +391,7 @@ struct CalendarView: View {
             }.padding(.bottom, 16)
             Divider().overlay(Color.nexdoIndigo.opacity(0.08))
             if count(day) == 0 {
-                Text(!showTasks || !showEvents || criticalOnly ? "No items match your filters." : "Nothing scheduled. Room to breathe.")
+                Text(!showTasks || !showEvents || criticalOnly || completedOnly ? "No items match your filters." : "Nothing scheduled. Room to breathe.")
                     .font(.subheadline).foregroundStyle(Color.nexdoSecondary).padding(.vertical, 26).frame(maxWidth: .infinity, alignment: .leading)
             }
             ForEach(rows(day)) { row in
@@ -437,7 +446,7 @@ struct CalendarView: View {
             VStack(alignment: .leading, spacing: 7) {
                 Text(row.title).font(.body).fixedSize(horizontal: false, vertical: true)
                 Text(row.detail).font(.caption).foregroundStyle(Color.nexdoSecondary)
-                HStack { if late { badge("Overdue", color: .orange) }; if critical { badge("Critical", color: .red) }; if row.deadline { badge("Deadline", color: .nexdoIndigo) } }
+                HStack { if completedOnly { badge(row.event != nil ? "Past event" : "Completed", color: .green) }; if late { badge("Overdue", color: .orange) }; if critical { badge("Critical", color: .red) }; if row.deadline { badge("Deadline", color: .nexdoIndigo) } }
                 Divider().padding(.top, 10)
             }.padding(.top, 18).padding(.bottom, 4)
             Spacer(minLength: 0)

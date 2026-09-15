@@ -36,8 +36,18 @@ public struct CalendarDates {
         let count = ((offset + calendar.range(of: .day, in: .month, for: first)!.count + 6) / 7) * 7
         return (0..<count).map { addingDays($0, to: start) }
     }
-    public func taskOccurs(_ task: NexdoTask, on date: Date) -> Bool {
-        guard !task.isDone, task.status != "CANCELLED" else { return false }
+    public func taskOccurs(_ task: NexdoTask, on date: Date, completedOnly: Bool = false) -> Bool {
+        guard task.isDone == completedOnly, task.status != "CANCELLED" else { return false }
         return [task.startAt, task.dueAt].compactMap { $0 }.contains { ServerDate.day($0, timeZone: calendar.timeZone.identifier) == key(date) }
+    }
+}
+
+/// Events have no completion flag: their exclusive end time determines completion.
+public enum CalendarEventFilter {
+    public static func matches(_ event: CalendarEvent, day: String, timeZone: String, completedOnly: Bool, now: Date = Date()) -> Bool {
+        guard ServerDate.occurs(event, on: day, timeZone: timeZone) else { return false }
+        guard completedOnly else { return true }
+        guard let end = ServerDate.parse(event.endAt) else { return false }
+        return end <= now
     }
 }
