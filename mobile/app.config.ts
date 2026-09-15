@@ -7,6 +7,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   ...config,
   name: 'Nexdo',
   slug: 'nexdo',
+  owner: 'visakans',
   version: '1.0.0',
   orientation: 'portrait',
   icon: './assets/icon.png',
@@ -49,5 +50,8 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   ],
   extra: {
     apiUrl: process.env.EXPO_PUBLIC_API_URL?.trim() || DEFAULT_API_URL,
+    eas: {
+      projectId: 'e7d3247e-ad15-4193-9a5c-d87b4fd2465b',
+    },
   },
 });
