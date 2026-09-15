@@ -1,0 +1,279 @@
+# iOS (SwiftUI) to React Native (Expo) migration plan
+
+Last updated: 2026-09-15
+
+## Goal
+
+Replace the native SwiftUI iPhone app in `ios/` with a React Native app built on Expo, while:
+
+- **Keeping the Swift app** working until the React Native app reaches parity.
+- **Keeping the backend unchanged.** The React Native app uses the same Railway API (`https://harbour-production-f8a0.up.railway.app`) and the same session cookie auth.
+- **Leaving Android optional.** Expo can build it, but it needs extra work (section 8).
+
+This document lists everything the Swift app does, maps each piece to React Native, and proposes a phased plan with estimates.
+
+---
+
+## 1. Proposed setup
+
+These are suggestions to confirm before starting:
+
+| Decision | Suggestion | Why |
+| --- | --- | --- |
+| Location | New `mobile/` folder at the repo root, next to `ios/` | Keeps the Swift app untouched |
+| Framework | Expo (latest SDK) with a development build (EAS) | Voice needs native WebRTC, which Expo Go cannot run |
+| Navigation | Expo Router (file-based) | Tabs, stacks, and modal sheets map directly to the SwiftUI structure |
+| Server data | TanStack Query | Caching, refresh, and stale-response handling that `AppModel` does by hand today |
+| App state | React context or Zustand | Session, profile, focus session, consent |
+| Forms and validation | React Hook Form + Zod | The web app already uses Zod |
+| Tests | Jest + React Native Testing Library | Replaces the Swift checks |
+| Builds | EAS Build and EAS Submit | No local Xcode needed for builds |
+| Bundle ID | `com.pinslots.nexdo` | Same as the Swift app, so it replaces it on TestFlight |
+
+This Mac has no full Xcode, so there is no iOS simulator. Test most screens on a physical iPhone, with Expo Go first and a development build once native modules (voice, Apple sign-in) are added.
+
+---
+
+## 2. Screen inventory
+
+The Swift app has **32 unique screens and sheets**. Some Swift views open from several places and are counted once.
+
+Suggested Expo Router file paths are shown for each screen.
+
+### Auth (signed out): 4
+| # | Screen | Swift view | Presentation | Suggested route |
+| --- | --- | --- | --- | --- |
+| 1 | Sign in (email/password, eye toggle, Sign in with Apple) | `SignInView` | Root | `app/(auth)/sign-in.tsx` |
+| 2 | Create account | `SignUpView` | Sheet | `app/(auth)/sign-up.tsx` |
+| 3 | Verify email (6-digit code, resend countdown) | `EmailVerificationView` | Push from sign-up, sheet from sign-in | `app/(auth)/verify-email.tsx` |
+| 4 | Reset password (request code, then code + new password) | `PasswordResetView` | Sheet | `app/(auth)/reset-password.tsx` |
+
+### App shell: 1
+| # | Screen | Swift view | Suggested route |
+| --- | --- | --- | --- |
+| 5 | Tab bar: Today, Tasks, Ask AI, Calendar (Ask AI opens a sheet) | `NexdoTabShell` | `app/(tabs)/_layout.tsx` |
+
+The focus session strip (`FocusSessionStrip`) sits above the tab bar and is a shared component, not a screen.
+
+### Today tab: 9
+| # | Screen | Swift view | Presentation |
+| --- | --- | --- | --- |
+| 6 | Today dashboard (top bar, intelligence card, schedule, action queue) | `TodayView` | Tab |
+| 7 | Do Now (suggested next task) | `DoNowView` | Sheet |
+| 8 | Action queue: all actions, with snooze menu | `ActionQueueSheet`, `SnoozeMenu` | Sheet |
+| 9 | Needs attention details | `attentionDetails` in `TodayView` | Push |
+| 10 | Schedule check details | `scheduleCheckDetails` in `TodayView` | Push |
+| 11 | Overdue tasks | `OverdueTasksView` | Push |
+| 12 | Weekly summary | `WeeklySummaryView` | Push |
+| 13 | Weekly summary task list | `WeeklySummaryTasksView` | Push |
+| 14 | Weather forecast | `WeatherForecastView` | Sheet |
+
+### Tasks tab and projects: 8
+| # | Screen | Swift view | Presentation |
+| --- | --- | --- | --- |
+| 15 | Task list (search, metrics, rows) | `TasksView` | Tab |
+| 16 | Task filters | Sheet in `TasksView` | Sheet |
+| 17 | Add / edit task, with date picker | `TaskEditor` | Sheet (also opened from Today, Overdue, Projects) |
+| 18 | Task details | `TaskDetailsView` | Push (also from Calendar, Weekly summary) |
+| 19 | Voice capture: add task, ask AI, or add calendar event | `AddTaskByVoiceView` (3 modes) | Full screen |
+| 20 | Projects | `ProjectsView` | Section in Tasks |
+| 21 | Project detail | `ProjectDetailView` | Push |
+| 22 | Create / edit project | `ProjectEditorView` | Sheet |
+
+### Ask AI: 2
+| # | Screen | Swift view | Presentation |
+| --- | --- | --- | --- |
+| 23 | Ask Nexdo: suggestions, answers, read aloud; also full-screen text chat | `AskNexdoView` (2 modes), `AskResponseView` | Sheet / full screen |
+| 24 | AI data-sharing consent | Sheet in `AskNexdoView` | Sheet |
+
+Voice conversation reuses screen 19 in ask mode.
+
+### Calendar tab: 4
+| # | Screen | Swift view | Presentation |
+| --- | --- | --- | --- |
+| 25 | Calendar (tasks and synced events) | `CalendarView` | Tab |
+| 26 | Event details | Sheet in `CalendarView` | Sheet |
+| 27 | Add calendar event | `CalendarEventEditor` | Sheet |
+| 28 | Schedule conflicts | Sheet in `CalendarView` | Sheet |
+
+Calendar also opens Ask (screen 23), voice in calendar mode (screen 19), and task details (screen 18).
+
+### Account: 2
+| # | Screen | Swift view | Presentation |
+| --- | --- | --- | --- |
+| 29 | Account (profile, menu, sign out) | `AccountView` | Sheet from the avatar |
+| 30 | Profile and settings (photo, preferences, Connect Google Calendar, Synchronize now, web links, delete account) | `ProfileSettingsView` | Push |
+
+### Reminders: 2
+| # | Screen | Swift view | Presentation |
+| --- | --- | --- | --- |
+| 31 | Task action (action card, clarify card), opened from a reminder notification | `TaskActionView`, `TaskActionCard`, `ClarifyTaskActionCard` | Sheet |
+| 32 | Message / email composer | `TaskActionComposers` | Sheet |
+
+### Not migrating
+- `VoiceInputView`: defined, but nothing opens it.
+- Debug-only previews: `TodayDesignPreview`, `CalendarDesignPreview`, `ProjectsDesignPreview`, `TaskDesignPreview`, `WeeklySummaryPreview`, and the `-email-verification-preview` launch argument.
+
+---
+
+## 3. Shared components
+
+| Group | Swift views |
+| --- | --- |
+| Tasks | `TaskRow`, `TaskListRow`, `TaskBadge`, `TaskCategoryBadge`, `TaskMetric`, `TasksHero`, `TaskEditorLabel`, `DetailInput` |
+| Today and calendar | `EventRow`, `TodayScheduleRow`, `TodayTopBar`, `TodayHeaderButton`, `TodayIntelligenceCard`, `NextActionRow`, `ActionNeededCard`, `FocusSessionStrip` |
+| Projects | `ProjectCard`, `ProjectFolder`, `ProjectSearchField`, `ProjectAssignmentField` |
+| Weekly summary | `MetricCard`, `CompletionMetricCard` |
+| Profile | `ProfileAvatar` |
+| Auth | `RevealablePasswordField`, `SignInFieldIcon`, `NexdoLogoMark` |
+| Backgrounds and effects | `SignInBackdrop`, `TodayBackdrop`, `NexdoTaskBackdrop`, `ProfileBackground`, `WeeklySummaryBackdrop`, `ActionGlass`, `FocusButtonBorder`, `NexdoAISuggestionCard` |
+
+Brand colors (from `RootView.swift`): `nexdoBlue`, `nexdoIndigo`, `nexdoPurple`, `nexdoMagenta`, plus light/dark `nexdoInk`, `nexdoSecondary`, `nexdoScheduleBlue`. Put these in one theme file.
+
+---
+
+## 4. Logic to port (not screens)
+
+### `ios/Sources/NexdoCore/` (shared Swift logic)
+
+Port each file to a TypeScript module. Several have web equivalents in `src/lib/` that may be reusable.
+
+| Swift file | What it does | Possible web counterpart |
+| --- | --- | --- |
+| `APIClient.swift` | HTTPS-only requests, cookie session, no redirects, server error mapping (`SCHEDULE_WARNING`, `EMAIL_NOT_VERIFIED`) | `src/lib/schedule-fetch.ts` |
+| `Models.swift` | Profile, task, agenda, calendar event, assistant response types | `src/lib/types.ts` |
+| `EmailVerification.swift` | Registration response, pending verification, 6-digit code cleanup | — |
+| `TaskQuery.swift` | Task search, status and date filters | Task browser logic |
+| `TaskDraft.swift`, `TaskSaveInput.swift`, `VoiceTaskDraft.swift` | Task drafts and save payloads | — |
+| `CalendarDates.swift` | Server date parsing, account time zone days, daylight saving, multi-day events | `src/lib/time.ts`, `src/lib/calendar-view.ts` |
+| `DoNowRecommendation.swift` | Do Now pick | `src/lib/focus-ranking.ts` |
+| `TodayActionQueue.swift`, `TaskAction.swift`, `TaskActionDetector.swift` | Action queue, task actions (call, message, email), detection | — |
+| `OverdueTasks.swift` | Overdue filtering | — |
+| `Projects.swift` | Project models and validation | — |
+| `WeeklySummary.swift` | Weekly summary grouping | — |
+| `FocusClock.swift` | Focus timer | `src/lib/focus-session.ts` |
+| `ProfileSettings.swift` | Settings payloads | — |
+| `AssistantPresentation.swift` | Answer sections | `src/lib/assistant-sections.ts` |
+| `SpeechText.swift` | Splits long answers for read-aloud | — |
+| `VoiceConversationSession.swift`, `VoiceToolResponse.swift`, `VoiceUpload.swift`, `RealtimePCMConverter.swift` | Voice conversation state machine, tool results, uploads, audio conversion | `src/server/voice/` (server side) |
+| `WeatherClient.swift` | Weather request | `/api/weather` |
+| `TaskCategoryAppearance.swift` | Category icons and colors | — |
+
+### `AppModel` (`ios/App/NexdoApp.swift`)
+
+App-wide state and actions. Recreate as TanStack Query hooks plus a small store:
+
+- Sign in, sign up, verify email, resend code, reset password, Sign in with Apple, sign out, delete account.
+- Load profile, sync device time zone to the account, save settings, upload profile photo with confirmation.
+- Load and refresh tasks with duplicate-request protection and stale-response protection. A slow old response must not overwrite a newer save.
+- Create, edit, complete, and delete tasks. Projects CRUD with count reconciliation.
+- Schedule-conflict confirmation: on `SCHEDULE_WARNING`, ask the person, then retry with `allowScheduleConflict: true`.
+- Agenda, schedule intelligence, next action with periodic refresh, protected time proposals.
+- Assistant turns with context IDs and approve/reject, AI consent state.
+- Focus session, weekly summary, weather, calendar sync.
+
+---
+
+## 5. Native features to Expo
+
+| Feature | Swift today | Expo / React Native |
+| --- | --- | --- |
+| Session cookie | `URLSession` ephemeral cookie storage | `fetch` with native cookie handling. **Verify early** that the `harbor_session` cookie persists and is sent. If not, add a token header option on the server. |
+| Sign in with Apple | `AuthenticationServices` | `expo-apple-authentication` |
+| Google Calendar connect | `ASWebAuthenticationSession`, `nexdo://` callback, `?native=1` | `expo-web-browser` `openAuthSessionAsync`, `nexdo` URL scheme in app config |
+| Live voice conversation | `VoiceWebRTCTransport`, `RealtimeTaskAudio` | `react-native-webrtc` in a development build. **Highest risk.** |
+| Live transcription, recording, playback | `LiveVoiceTranscription`, `VoiceCapture`, `VoicePlayback` | `expo-audio` (or `expo-av`); may need a native module for streaming PCM |
+| Voice animation | `VoiceAnimationView` | `react-native-reanimated` |
+| Reminder notifications with actions | `TaskActionNotifications`, `TaskActionCoordinator`, app delegate | `expo-notifications` with notification categories and response handling |
+| Contacts | `TaskActionContacts` | `expo-contacts` |
+| Message and email composers | `TaskActionComposers` | `expo-sms`, `expo-mail-composer` |
+| Profile photo | `PhotosUI`, `ProfilePhotoEncoder` | `expo-image-picker`, `expo-image-manipulator` |
+| Appearance (system, light, dark) | `AppAppearance` with `@AppStorage` | `Appearance` API + `expo-secure-store` or AsyncStorage |
+| Last signed-in first name | `UserDefaults` | AsyncStorage |
+| Pull to refresh, sheets, date pickers | SwiftUI | `RefreshControl`, Expo Router modals or `@gorhom/bottom-sheet`, `@react-native-community/datetimepicker` |
+
+### App configuration (`app.json` / `app.config.ts`)
+- iOS bundle identifier `com.pinslots.nexdo`, Apple team.
+- Sign in with Apple entitlement.
+- URL scheme `nexdo`.
+- Permission texts: microphone, contacts, notifications, photo library.
+- Privacy manifest (port `PrivacyInfo.xcprivacy`).
+- App icon and splash (see `output/app-icon`).
+- API base URL as config, not hardcoded.
+
+---
+
+## 6. Phased plan and estimates
+
+Assumes one developer working full-time with AI assistance, testing on a real iPhone.
+
+| Phase | Scope | Working days |
+| --- | --- | --- |
+| 0. Voice proof of concept | Minimal Expo development build with `react-native-webrtc` connecting to `/api/realtime/task-session` | 2–3 (do first, to confirm phase 9) |
+| 1. Setup | Expo app, Expo Router, theme, API client, cookie session check, TanStack Query, shared components | 2–3 |
+| 2. Auth | Screens 1–4, Sign in with Apple | 2–3 |
+| 3. Tasks and projects | Screens 15–18, 20–22, task logic | 5–7 |
+| 4. Today | Screens 6–14, action queue, Do Now, intelligence, weekly summary | 5–7 |
+| 5. Calendar | Screens 25–28, Google Calendar connect | 3–5 |
+| 6. Ask AI (text) | Screens 23–24 | 2–3 |
+| 7. Account and settings | Screens 29–30, photo upload | 2–3 |
+| 8. Reminders | Notifications with actions, screens 31–32, contacts, composers | 3–5 |
+| 9. Voice | Screen 19 (all three modes), live conversation, transcription, playback | 7–15 |
+| 10. Finish | Tests, design polish, device QA, EAS build, TestFlight | 5–7 |
+| **Total** | | **about 38–61 days (8–12 weeks)** |
+
+Options:
+
+| Scope | Estimate |
+| --- | --- |
+| Everything except voice (keep voice in Swift or add later) | 5–8 weeks |
+| Minimum usable app: auth, Today, Tasks, Calendar, text Ask AI, settings | 3–5 weeks |
+| Adding Android | +1–2 weeks |
+
+App Store review adds a few days per submission.
+
+---
+
+## 7. Risks
+
+| Risk | Impact | Mitigation |
+| --- | --- | --- |
+| WebRTC voice in React Native | Voice could take much longer than estimated | Phase 0 proof of concept before committing |
+| Cookie session handling | Sign-in could fail to persist | Test in phase 1. Fallback: bearer token support on the server |
+| No Xcode on this Mac | No simulator | Physical iPhone with Expo Go and development builds, EAS cloud builds |
+| Design parity | SwiftUI blur, material, and gradient effects differ in React Native | `expo-blur`, `expo-linear-gradient`; agree on acceptable differences |
+| Two apps at once | Features added to Swift during migration must also be built in React Native | Freeze new Swift features, or track them in this doc |
+| Android | Sign in with Apple, notifications, and audio differ | Decide early. Add Google sign-in if Android is in scope |
+| Google OAuth in Testing mode | Only listed test users can connect, connections expire after 7 days | Complete Google verification before public launch |
+
+---
+
+## 8. Android (if in scope)
+
+- Sign in with Apple on Android needs the web flow, or add Google sign-in (server work).
+- Notification channels and action buttons differ from iOS.
+- Audio recording and WebRTC behave differently. Test separately.
+- Google Play listing, signing, and review.
+
+---
+
+## 9. Migration checklist
+
+- [ ] Confirm setup decisions (section 1), including Android scope
+- [ ] Phase 0: voice proof of concept
+- [ ] Expo project in `mobile/` with EAS development build
+- [ ] API client and cookie session verified on a device
+- [ ] Theme and shared components
+- [ ] Auth screens and Sign in with Apple
+- [ ] Tasks and projects
+- [ ] Today
+- [ ] Calendar and Google Calendar connect
+- [ ] Ask AI (text) and consent
+- [ ] Account and settings
+- [ ] Reminder notifications and task actions
+- [ ] Voice (all modes)
+- [ ] Jest tests for ported logic (task query, calendar dates, action queue, verification, API errors)
+- [ ] Privacy manifest, permission texts, icons
+- [ ] TestFlight build, internal testing
+- [ ] Parity review against the 32 screens in section 2
+- [ ] Retire the Swift app from TestFlight and archive `ios/`
