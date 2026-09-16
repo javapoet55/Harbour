@@ -597,3 +597,88 @@ synced calendar event today.
 45. Confirm these are ABSENT rather than broken: the action queue, the protected-time card, the
     persistent next-action card, the "Needs your attention" list, the weekly summary screen, the
     overdue screen and the weather forecast sheet.
+
+## Phase 4B on-device test plan
+
+The remaining Today screens. Run these after the Phase 4A plan, on a signed-in phone with the Swift
+app beside you. You need at least one overdue task, one synced calendar event, and a week with some
+completed work so the weekly summary has something to show.
+
+### 1. Overdue
+
+1. From Today, tap the attention chip, then the overdue row; or reach it from the attention screen.
+   The title reads "Unfinished deadlines".
+2. Tasks are listed OLDEST FIRST, each with a red "Due <medium date> at <time>" line.
+3. The header reads "N UNFINISHED DEADLINES", singular for one.
+4. A task whose deadline passes while you watch appears within a minute, without a manual refresh.
+5. With nothing overdue: "No unfinished deadlines" / "You have no overdue tasks."
+6. Tap a row: the task detail opens. Reschedule it, come back, and confirm it has left the list.
+
+### 2. Weather forecast
+
+7. Tap the weather chip on Today. The sheet is titled "Weather".
+8. The heading reads "San Ramon" and "5-day forecast · °F". San Ramon is CORRECT: the coordinates are
+   hardcoded in Swift and the app never asks for your location.
+9. The current reading shows a condition glyph and a large temperature.
+10. Five day rows follow, each with a weekday, a condition name, a glyph, and H/L temperatures.
+11. The first row reads "Today" — note this is today in the FORECAST's zone (America/Los_Angeles),
+    which may be yesterday's date where you are. That matches Swift.
+12. A day with rain shows "N% chance of precipitation".
+13. Turn airplane mode on and reopen: "Couldn't load the forecast. Please try again." with a Retry.
+14. "Weather by Open-Meteo" opens the provider's site.
+
+### 3. Weekly summary
+
+15. Tap the Weekly Summary card on Today.
+16. The week selector reads "Sep 14–Sep 20, 2026". "Next week" is DISABLED on the current week.
+17. Tap "Previous week": the range moves back a week and the report reloads. "Next week" enables.
+18. The summary card shows the headline and the paragraph.
+19. Four metric cards: "N of N Tasks completed", a completion rate, "Overdue tasks", and
+    "Recorded focus time" (minutes under an hour, otherwise one decimal such as "2.5h").
+20. A metric the server could not compute reads "Unavailable", not a blank or a zero.
+21. The chart shows two bars per day, planned and completed. NOTE: this is hand-built, not Swift
+    Charts, so it has no axis chrome or legend — compare the DATA, not the styling.
+22. Tap a weekday letter: a line appears reading "Wed, Sep 16: 5 planned, 3 completed".
+23. With no activity all week: "No task activity" and the explanation.
+24. "Top accomplishments" lists completed tasks; tapping one opens the task detail.
+25. Tap "Share": the system share sheet opens with the headline and summary.
+26. Tap "Plan next week with Nexdo AI →". NOTE: it routes to Ask, which is Phase 6 — expect a
+    not-found screen for now, and check the Metro log rather than the screen.
+
+### 4. Weekly summary task list
+
+27. From the weekly summary, tap "Tasks completed". The list opens on the Completed filter.
+28. The header shows the week as "Mon, Sep 14 – Sun, Sep 20".
+29. Tap the filter row and switch to Planned, then Overdue. The list and the count change.
+30. On Overdue only, a caveat appears explaining the list is as of the report.
+31. An empty group reads "No <filter> tasks for this period."
+32. Tap a task: its detail opens.
+33. Go back to the summary and tap "Overdue tasks": the list opens on the Overdue filter directly.
+
+### 5. Needs your attention, and the schedule check
+
+34. With schedule intelligence available, Today shows a "Needs your attention" card listing each item,
+    with the OVERDUE item first.
+35. Tap the attention chip in the summary instead: the same items open as their own screen.
+36. Tap the overdue item: the overdue list opens.
+37. Tap a non-overdue item: the schedule check opens, showing the explanation, the recommended action,
+    and a section titled "Tasks needing N minutes by <time>".
+38. Each affected task is listed with "N minutes · due <time>"; tapping one opens its detail.
+39. If those tasks have since been rescheduled: "The affected tasks are no longer available."
+40. With intelligence unavailable, the attention screen offers the overdue list instead. Swift does the
+    same fall-through.
+41. On Today, confirm the attention COUNT comes from intelligence: it may differ from the number of
+    overdue tasks.
+
+### 6. The Today schedule with intelligence
+
+42. With intelligence loaded, the Today schedule list comes from the SERVER timeline, not the agenda.
+    Rows may differ from the 3-day and 5-day views, which always use the agenda. That is Swift.
+43. If the server returns a snapshot dated other than today, the app ignores it and falls back to the
+    agenda. Hard to force by hand; if the schedule ever looks a day stale, this is the guard to check.
+
+### 7. Still not built
+
+44. Confirm these are ABSENT rather than broken: the action queue ("Next up", the "Nexdo Action" card,
+    the snooze menu and the "View all" sheet), the protected-time card, and the persistent
+    next-action card. All three need the reminders work in Phase 8 or the next-action service.

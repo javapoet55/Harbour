@@ -393,8 +393,11 @@ App Store review adds a few days per submission.
 - [x] Today dashboard, Do Now and the focus runtime (Phase 4A, 2026-09-16): screens 6 and 7 of
   section 2, built from `TodayView.body` (`RootView.swift:1017-1198`) and `DoNowView.body`
   (`DoNowView.swift:15-107`). Covered by tests; **not yet tested on a device**.
-- [ ] Today screens 8-14: action queue, needs-attention, schedule check, overdue, weekly summary,
-  weekly summary tasks, weather forecast. **Phase 4B.**
+- [x] Today screens 9-14 (Phase 4B, 2026-09-16): needs-attention, schedule check, overdue, weekly
+  summary, weekly summary tasks, weather forecast. Covered by tests; **not yet tested on a device**.
+- [ ] Today screen 8, the action queue: **blocked on Phase 8.** Its logic (`TodayActionQueue`) is
+  ported and tested, but every action comes from `TaskActionCoordinator`, which needs local
+  notifications and Contacts. See section 14.
 - [ ] Tasks and projects
 - [ ] Today
 - [ ] Calendar and Google Calendar connect
@@ -789,3 +792,83 @@ Nothing in Phase 4A has run on a phone. Procedure: `mobile/README.md`, "Phase 4A
   recommended session.
 - The weather chip, including the offline dash, and that the reading is San Ramon rather than local.
 - Every screen against the iPhone in light and dark.
+
+---
+
+## 14. Phase 4B status (the remaining Today screens)
+
+### Built, with the `body` range each screen was read from
+
+| Screen | Swift source | `body` range | Child view files followed |
+| --- | --- | --- | --- |
+| `app/today/overdue.tsx` | `OverdueTasksView` | `OverdueTasksView.swift:15-69` | none; rows are inline |
+| `app/today/weather.tsx` | `WeatherForecastView` | `WeatherForecastView.swift:11-72` | none; `temperatures`/`dateLabel` are private funcs, glyphs from `Models.swift:81-140` |
+| `app/today/weekly-summary.tsx` | `WeeklySummaryView` | `:24-42` plus `content` at `:44-73` | `MetricCard` (`:231`), `CompletionMetricCard` (`:336`), `WeeklySummaryBackdrop` (`:341`), all private structs in the same file |
+| `app/today/weekly-tasks.tsx` | `WeeklySummaryTasksView` | `WeeklySummaryView.swift:264-315` | `TaskListRow` (`ProjectsView.swift:316`), already ported in Phase 3 |
+| `app/today/attention.tsx` | `attentionDetails` | `RootView.swift:1202-1231` | `attentionCard` (`RootView.swift:1261`) |
+| `app/today/schedule-check.tsx` | `scheduleCheckDetails` | `RootView.swift:1233-1259` | none |
+| Today sections 9-10 | `TodayView.body` | `RootView.swift:1130-1166` | `attentionCard` |
+
+Logic ported with tests: `WeeklySummaryDates` and the label helpers (`src/lib/weeklySummary.ts`),
+`OverdueTasks` (`src/lib/overdueTasks.ts`), the `WeatherResponse` day helpers (`src/lib/weather.ts`),
+and `TodayActionQueue` (`src/lib/todayActionQueue.ts`).
+
+### Screen 8, the action queue: NOT built, and why
+
+`TodayActionsView` (`ios/App/TodayActionsView.swift:16-46`) renders NOTHING when the queue is empty —
+both of its branches are conditional on `queue.primaryAction` or `queue.nextActions`. Every action in
+that queue comes from `TaskActionCoordinator` (`ios/App/TaskActionCoordinator.swift:20`), which:
+
+- persists actions to a JSON file in Application Support,
+- schedules reminders through `UNUserNotificationCenter`,
+- resolves people through the `Contacts` framework,
+- and drives `TaskActionView`, the composers, and `SnoozeMenu.snooze`.
+
+In React Native that is `expo-notifications` and `expo-contacts`, both native, both forcing a new
+development build, and both listed under **Phase 8** in section 6. Building the queue's UI now would
+add a screen that can never display anything and cannot be tested against real data.
+
+So: the QUEUE LOGIC is ported and fully tested (`src/lib/todayActionQueue.ts`, 15 cases covering the
+window, the ordering, deferral past midnight and the one-action-per-task rule), ready for Phase 8 to
+supply actions. The UI — `ActionNeededCard`, `NextActionRow`, `ActionQueueSheet`, `SnoozeMenu` — is
+not. **Phase 4 therefore covers 8 of the 9 Today screens.**
+
+### Also still deferred, and why
+
+- The protected-time proposal (`RootView.swift:1094-1108`) needs `model.protectedTime` and
+  `/api/protected-time`, which no phase has claimed yet.
+- The persistent next-action card (`:1110-1128`) needs `model.persistentNext` and the next-action
+  service behind `/api/schedule-intelligence`'s dismiss operation.
+- The `queue.hasImmediateActions` branch of the Weekly Summary row (`:1070-1075`) is a function of the
+  action queue, so it follows Phase 8.
+- "Plan next week with Nexdo AI" routes to `/ask`, which is Phase 6; the route does not exist yet.
+
+### Visual gaps added in 4B
+
+- **Swift Charts has no React Native equivalent.** The planned-vs-completed chart is a hand-built
+  grouped bar chart with the same data and the same two colours, but without the axis marks, the
+  legend or the 220pt chart chrome. No charting dependency was added.
+- `CompletionMetricCard`'s trimmed circle is a horizontal bar.
+- `ShareLink` becomes React Native's `Share` API, and sits as a button rather than a toolbar item.
+- The weekly summary's `.regularMaterial` cards are flat surface fills.
+- `Picker(.menu)` on the weekly task filter is an inline list, as elsewhere.
+- The attention list uses the same inline-list substitution for its rows rather than a `List`.
+
+### Open TODOs after 4B
+
+- `TODO(phase4b-decision)` in `src/query/useToday.ts`: port `WeeklySummary.taskGroups(from:)` only if
+  a deployment is found that does not embed `taskGroups`.
+- `TODO(phase7)` in `app/(tabs)/today.tsx`, `src/components/TodayShell.tsx`, `src/query/useToday.ts`.
+- `TODO(phase8)` in `src/components/ClarifyTaskActionCard.tsx` and, by implication, the whole action
+  queue described above.
+- `TODO(phase9)` in `src/voice/taskCaptureStub.ts`.
+
+### Needs confirmation on a device
+
+Nothing in Phase 4B has run on a phone. Procedure: `mobile/README.md`, "Phase 4B on-device test plan".
+
+- The overdue list's one-minute recomputation.
+- The weekly summary against real data, including week navigation and a week with no activity.
+- That the forecast's "Today" row is today in AMERICA/LOS_ANGELES, not locally.
+- The attention list and schedule check against a real schedule-intelligence snapshot, which is hard
+  to provoke deliberately.
