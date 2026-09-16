@@ -242,6 +242,31 @@ export function useSaveClarifiedStep({ onConflict }: ConflictHandler) {
   });
 }
 
+/**
+ * `AppModel.changeTaskStatus` (NexdoApp.swift:588-600) for the detail screen's "Start task" button.
+ * This is a plain status change, NOT a focus session: Swift wires that button to `changeTaskStatus`,
+ * not to `startFocus` (TaskDetailsView.swift:123-125).
+ */
+export function useStartTask({ onConflict }: ConflictHandler) {
+  const queryClient = useQueryClient();
+  return useMutation<NexdoTask, Error, NexdoTask>({
+    mutationFn: async (task) => {
+      const token = claim(task.id);
+      const response = await scheduleRequest(
+        (body) => endpoints.updateTask(task.id, body),
+        { status: 'IN_PROGRESS' },
+        onConflict,
+      );
+      if (!isNewest(task.id, token)) throw new StaleWriteDiscarded();
+      return response.task;
+    },
+    onSuccess: (task) => {
+      replaceTask(queryClient, task);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.agenda.all() });
+    },
+  });
+}
+
 /** Deletion is a CANCELLED status; the server soft-deletes and the filter drops it. */
 export function useDeleteTask() {
   const queryClient = useQueryClient();

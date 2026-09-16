@@ -275,18 +275,22 @@ describe('Task detail actions', () => {
     expect(screen.getByTestId('detail-start-focus').props.accessibilityState.disabled).toBe(true);
   });
 
-  it('records the intent in the stub store and sends nothing to the server', async () => {
+  it('starts a real 25-minute session, and Start task changes the status', async () => {
+    // Phase 4 replaced the Phase 3 stub: both buttons now reach the server.
+    mockUpdateTask.mockResolvedValue({
+      task: task({ id: 't1', status: 'IN_PROGRESS' }),
+      focus: { minutes: 25, workSessionId: 'w1', focusToken: 'tok-1' },
+    });
     await renderDetail();
 
     await fireEvent.press(screen.getByTestId('detail-start-focus'));
-    await fireEvent.press(screen.getByTestId('detail-start-task'));
+    await waitFor(() =>
+      expect(mockUpdateTask).toHaveBeenCalledWith('t1', { status: 'IN_PROGRESS', focusMinutes: 25, fromRecommendation: false }),
+    );
+    await waitFor(() => expect(useFocus.getState().session).toMatchObject({ taskId: 't1', serverBacked: true }));
 
-    expect(useFocus.getState().intents).toEqual([
-      expect.objectContaining({ taskId: 't1', kind: 'focus-session', minutes: 25 }),
-      expect.objectContaining({ taskId: 't1', kind: 'start-task' }),
-    ]);
-    // TODO(phase4) replaces the stub; until then nothing may reach the network.
-    expect(mockUpdateTask).not.toHaveBeenCalled();
-    expect(useFocus.getState().session).toBeNull();
+    mockUpdateTask.mockClear();
+    await fireEvent.press(screen.getByTestId('detail-start-task'));
+    await waitFor(() => expect(mockUpdateTask).toHaveBeenCalledWith('t1', { status: 'IN_PROGRESS' }));
   });
 });

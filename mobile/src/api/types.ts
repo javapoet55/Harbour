@@ -300,3 +300,38 @@ export type TaskCreateInput = {
   durationMin: number;
   startAt: string;
 };
+
+// MARK: Today
+
+/** `DoNowRecommendation.Choice` (ios/Sources/NexdoCore/DoNowRecommendation.swift:7-15). */
+export type DoNowChoice = {
+  taskId: string;
+  title: string;
+  durationMin: number;
+  focusMinutes: number;
+  partial: boolean;
+  dueAt?: string | null;
+  reasons: string[];
+};
+
+/** `DoNowRecommendation.Next` (DoNowRecommendation.swift:16-23). */
+export type DoNowNext = {
+  bestAction?: DoNowChoice | null;
+  alternatives: DoNowChoice[];
+  outsideWorkingHours?: boolean | null;
+  remainingWorkingMinutesToday?: number | null;
+  availableWindowMinutes: number;
+  continuingFocus: boolean;
+};
+
+/** `DoNowRecommendation` (DoNowRecommendation.swift:6-31). */
+export type DoNowRecommendation = {
+  generatedAt: string;
+  timeZone: string;
+  summary: string;
+  nextAction?: DoNowNext | null;
+  recommendedActions: { type: string }[];
+};
+
+/** `DoNowResponse` (DoNowRecommendation.swift:3-5): the assistant turn, of which only `executive` matters. */
+export type DoNowResponse = { executive?: DoNowRecommendation | null };

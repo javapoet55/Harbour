@@ -21,11 +21,13 @@ import { dayKey, isDone, startOfDay } from '../../src/lib/taskQuery';
 import {
   useCompleteTask,
   useSaveClarifiedStep,
+  useStartTask,
   useTask,
   useUpdateTask,
   type ScheduleConflict,
 } from '../../src/query/useTasks';
 import { canStartFocusSession, canStartTask, FOCUS_SESSION_MINUTES, useFocus } from '../../src/store/focus';
+import { FocusSessionStrip } from '../../src/components/FocusSessionStrip';
 import { useSession } from '../../src/store/session';
 import { brand, useTheme } from '../../src/theme';
 
@@ -54,7 +56,10 @@ export default function TaskDetail() {
   const [picking, setPicking] = useState<'date' | 'time' | null>(null);
   const [clarifyFailure, setClarifyFailure] = useState<string | null>(null);
 
-  const focus = useFocus();
+  const focusSession = useFocus((state) => state.session);
+  const startFocus = useFocus((state) => state.startFocus);
+  const focusBusy = useFocus((state) => state.busy);
+  const startTask = useStartTask({ onConflict: setConflict });
   const update = useUpdateTask({ onConflict: setConflict });
   const complete = useCompleteTask({ onConflict: setConflict });
   const clarify = useSaveClarifiedStep({ onConflict: setConflict });
@@ -82,7 +87,7 @@ export default function TaskDetail() {
 
   const zone = profile?.timeZone ?? task.timeZone ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
   // `blocked` (TaskDetailsView.swift:25)
-  const blocked = update.isPending || complete.isPending || clarify.isPending;
+  const blocked = update.isPending || complete.isPending || clarify.isPending || startTask.isPending || focusBusy;
   // `dirty` (TaskDetailsView.swift:26)
   const dirty = !draftsEqual(current, original) || newStep.trim().length > 0;
   const valid = isDraftValid(current);
@@ -175,18 +180,25 @@ export default function TaskDetail() {
 
         {/* `actions` (TaskDetailsView.swift:114-127) */}
         <View style={styles.actions}>
-          {/* TODO(phase4): when a focus session is live, Swift replaces this button with
-              `FocusSessionStrip()` (TaskDetailsView.swift:116-117). */}
-          <DetailOutlineButton
-            title={`Start a ${FOCUS_SESSION_MINUTES}-minute focus session`}
-            disabled={blocked || !canStartFocusSession(task.status, isDone(task))}
-            onPress={() => focus.startFocus(task.id)}
-            testID="detail-start-focus"
-          />
+          {/* While a session for THIS task is live, the strip takes the focus button's place. */}
+          {focusSession?.taskId === task.id ? (
+            <FocusSessionStrip />
+          ) : (
+            <DetailOutlineButton
+              title={`Start a ${FOCUS_SESSION_MINUTES}-minute focus session`}
+              disabled={blocked || !canStartFocusSession(task.status, isDone(task))}
+              onPress={() => {
+                void startFocus(task).catch((cause: unknown) => {
+                  Alert.alert('Focus session', cause instanceof Error ? cause.message : 'Please try again.');
+                });
+              }}
+              testID="detail-start-focus"
+            />
+          )}
           <DetailOutlineButton
             title={task.status === 'IN_PROGRESS' ? 'Task in progress' : 'Start task'}
             disabled={blocked || !canStartTask(task.status, isDone(task))}
-            onPress={() => focus.startTask(task.id)}
+            onPress={() => startTask.mutate(task)}
             testID="detail-start-task"
           />
         </View>

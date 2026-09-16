@@ -17,6 +17,7 @@ export const queryKeys = {
     all: () => ['agenda'] as const,
     range: (from: string, to: string) => ['agenda', from, to] as const,
   },
+  weather: () => ['weather'] as const,
   projects: {
     all: () => ['projects'] as const,
     detail: (id: string) => ['projects', id] as const,

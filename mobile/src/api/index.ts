@@ -5,6 +5,8 @@ import type {
   ProjectInput,
   ProjectResponse,
   ProjectsResponse,
+  Agenda,
+  DoNowResponse,
   TaskCreateInput,
   TaskResponse,
   CodeDeliveryResponse,
@@ -111,6 +113,26 @@ export const endpoints = {
 
   deleteProject: (id: string, client: ApiClient = getApi()) =>
     client.del<{ ok: boolean }>(`/api/projects/${encodeURIComponent(id)}`),
+
+  // MARK: Today
+
+  /**
+   * `AppModel.refreshAgenda` uses `/api/agenda?days=5` (NexdoApp.swift:369); the calendar asks for a
+   * range with `calendarAgenda(from:days:)` (`:431`).
+   */
+  agenda: (days = 5, from?: string, client: ApiClient = getApi()) =>
+    client.get<Agenda>(`/api/agenda?days=${days}${from ? `&from=${encodeURIComponent(from)}` : ''}`),
+
+  /**
+   * `AppModel.recommendDoNow` (NexdoApp.swift:603-609).
+   *
+   * There is NO do-now endpoint: Swift asks the ASSISTANT a question in prose and reads the
+   * `executive` field off the turn. The ranking is entirely server-side.
+   */
+  doNow: (minutes: number | null, client: ApiClient = getApi()) =>
+    client.post<DoNowResponse>('/api/assistant', {
+      transcript: minutes === null ? 'What should I do next?' : `I have ${minutes} minutes free. What should I do?`,
+    }),
 
   logout: (client: ApiClient = getApi()) => client.post<{ ok: boolean }>('/api/auth/logout', undefined, { signedOutOn401: false }),
   me: (client: ApiClient = getApi()) => client.get<ProfileResponse>('/api/me'),
