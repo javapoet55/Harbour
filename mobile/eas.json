@@ -13,6 +13,33 @@
       "ios": {
         "simulator": false
       }
+    },
+    "preview": {
+      "distribution": "internal",
+      "channel": "preview",
+      "android": {
+        "buildType": "apk"
+      },
+      "ios": {
+        "simulator": false
+      },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://harbour-production-f8a0.up.railway.app"
+      }
+    },
+    "production": {
+      "distribution": "store",
+      "channel": "production",
+      "autoIncrement": true,
+      "android": {
+        "buildType": "app-bundle"
+      },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://harbour-production-f8a0.up.railway.app"
+      }
     }
+  },
+  "submit": {
+    "production": {}
   }
 }
