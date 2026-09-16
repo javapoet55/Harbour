@@ -1,10 +1,11 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import Constants from 'expo-constants';
 import { router } from 'expo-router';
 import { useState } from 'react';
 import { Controller, useForm, useWatch } from 'react-hook-form';
 import { Alert, Pressable, StyleSheet, TextInput, View } from 'react-native';
+
+import { DevMenu } from '../../src/components/DevMenu';
 
 import {
   AppleSignInButton,
@@ -197,46 +198,8 @@ export default function SignIn() {
         </Text>
       </View>
 
-      <DevEntryPoints />
+      <DevMenu />
     </AuthScreen>
-  );
-}
-
-/**
- * Development-only way back to the Phase 0 and Phase 1 check screens.
- *
- * TODO(phase2-decision): the brief asked for the dev links behind a long-press on the app version text.
- * The Swift sign-in screen has no version label at all, so showing one always would break parity. It
- * renders only under `__DEV__`, which keeps a release build identical to Swift.
- */
-function DevEntryPoints() {
-  const theme = useTheme();
-  const [open, setOpen] = useState(false);
-  if (!__DEV__) return null;
-  const version = Constants.expoConfig?.version ?? '1.0.0';
-
-  return (
-    <View style={styles.devRow}>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={`Version ${version}`}
-        accessibilityHint="Long press to open the developer checks"
-        delayLongPress={600}
-        onLongPress={() => setOpen((current) => !current)}
-      >
-        <Text style={[styles.footnote, { color: theme.colors.secondary }]}>{version}</Text>
-      </Pressable>
-      {open ? (
-        <View style={styles.devLinks}>
-          <Pressable accessibilityRole="button" onPress={() => router.push('/dev/session-check')}>
-            <Text style={[styles.footnote, { color: theme.colors.tint }]}>Open session check</Text>
-          </Pressable>
-          <Pressable accessibilityRole="button" onPress={() => router.push('/dev/voice-check')}>
-            <Text style={[styles.footnote, { color: theme.colors.tint }]}>Open voice check</Text>
-          </Pressable>
-        </View>
-      ) : null}
-    </View>
   );
 }
 

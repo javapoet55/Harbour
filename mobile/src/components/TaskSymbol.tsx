@@ -33,6 +33,20 @@ export const taskIcons = {
   square: 'square-outline',
   xmark: 'close',
   sparkles: 'sparkles',
+  'exclamationmark.circle': 'alert-circle-outline',
+  'exclamationmark.triangle.fill': 'warning',
+  'chart.bar.xaxis': 'stats-chart',
+  'lock.shield': 'lock-closed-outline',
+  'calendar.badge.checkmark': 'calendar-number-outline',
+  'thermometer.medium': 'thermometer-outline',
+  'sun.max.fill': 'sunny',
+  'cloud.sun.fill': 'partly-sunny',
+  'cloud.fill': 'cloud',
+  'cloud.fog.fill': 'cloudy',
+  'cloud.drizzle.fill': 'rainy-outline',
+  'cloud.rain.fill': 'rainy',
+  'cloud.snow.fill': 'snow',
+  'cloud.bolt.rain.fill': 'thunderstorm',
 } satisfies Record<string, IoniconName>;
 
 export type TaskSymbolName = keyof typeof taskIcons;

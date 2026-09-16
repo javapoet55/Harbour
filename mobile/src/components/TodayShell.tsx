@@ -1,7 +1,9 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import { Pressable, StyleSheet, View } from 'react-native';
 
+import { conditionSymbol } from '../lib/weather';
 import { brand, useTheme } from '../theme';
+import { TaskSymbol } from './TaskSymbol';
 import { NexdoLogoMark } from './NexdoLogoMark';
 import { Text } from './Text';
 
@@ -62,13 +64,72 @@ export function ProfileAvatar({ name, size = 44 }: { name: string; size?: number
 }
 
 /**
- * `TodayTopBar` (RootView.swift:1283-1341) as the Tasks tab configures it: no weather, no add button
- * (`TodayTopBar(name:temperature:showsWeather:false, add:nil, account:)`, RootView.swift:1645).
- *
- * TODO(phase3-decision): the weather button and the `add` button are not built, because Tasks passes
- * neither. Phase 4 adds them for Today.
+ * `TodayHeaderButton` (RootView.swift:1343-1356): a 44pt gradient circle.
  */
-export function TasksTopBar({ name, onAccount }: { name: string; onAccount: () => void }) {
+export function TodayHeaderButton({ icon, label, onPress, testID }: { icon: 'plus'; label: string; onPress: () => void; testID?: string }) {
+  return (
+    <Pressable accessibilityRole="button" accessibilityLabel={label} onPress={onPress} testID={testID}>
+      <LinearGradient colors={[...NEXDO_GRADIENT]} start={{ x: 0, y: 0.5 }} end={{ x: 1, y: 0.5 }} style={styles.headerButton}>
+        <TaskSymbol name={icon} size={20} color="#FFFFFF" />
+      </LinearGradient>
+    </Pressable>
+  );
+}
+
+/**
+ * The weather chip (RootView.swift:1310-1325): a 44pt gradient circle carrying the condition glyph
+ * over the temperature in Fahrenheit, or an en dash when the forecast has not loaded.
+ *
+ * The accessibility label names San Ramon because `WeatherClient` hardcodes those coordinates; it is
+ * not derived from the account.
+ */
+export function WeatherChip({
+  temperature,
+  weatherCode,
+  onPress,
+  testID,
+}: {
+  temperature: number | null;
+  weatherCode: number | null | undefined;
+  onPress: () => void;
+  testID?: string;
+}) {
+  return (
+    <Pressable
+      accessible
+      accessibilityRole="button"
+      accessibilityLabel={
+        temperature === null ? 'Weather temporarily unavailable' : `San Ramon weather, ${temperature} degrees Fahrenheit`
+      }
+      accessibilityHint="Opens the five-day forecast"
+      onPress={onPress}
+      testID={testID}
+    >
+      <LinearGradient colors={[...NEXDO_GRADIENT]} start={{ x: 0, y: 0.5 }} end={{ x: 1, y: 0.5 }} style={styles.headerButton}>
+        <TaskSymbol name={conditionSymbol(weatherCode)} size={12} color="#FFFFFF" />
+        <Text style={styles.temperature}>{temperature === null ? '\u2013\u00b0' : `${temperature}\u00b0`}</Text>
+      </LinearGradient>
+    </Pressable>
+  );
+}
+
+/**
+ * `TodayTopBar` (RootView.swift:1283-1341). The Tasks tab passes `showsWeather: false` and no `add`
+ * (RootView.swift:1645); Today passes both (`:1027-1032`), so they are optional here.
+ */
+export function TasksTopBar({
+  name,
+  onAccount,
+  weather,
+  onAdd,
+}: {
+  name: string;
+  onAccount: () => void;
+  /** Omitted by the Tasks tab, which sets `showsWeather: false`. */
+  weather?: { temperature: number | null; weatherCode: number | null | undefined; onPress: () => void };
+  /** Omitted by the Tasks tab, which passes `add: nil`. */
+  onAdd?: () => void;
+}) {
   const theme = useTheme();
   return (
     <View style={styles.topBar}>
@@ -85,6 +146,17 @@ export function TasksTopBar({ name, onAccount }: { name: string; onAccount: () =
           </Text>
         </View>
       </View>
+
+      {weather ? (
+        <WeatherChip
+          temperature={weather.temperature}
+          weatherCode={weather.weatherCode}
+          onPress={weather.onPress}
+          testID="weather-chip"
+        />
+      ) : null}
+
+      {onAdd ? <TodayHeaderButton icon="plus" label="Add a task" onPress={onAdd} testID="today-add" /> : null}
 
       <Pressable accessibilityRole="button" accessibilityLabel={`Open account for ${name}`} onPress={onAccount} testID="open-account">
         <ProfileAvatar name={name} size={44} />
@@ -108,4 +180,6 @@ const styles = StyleSheet.create({
   brandRow: { flexDirection: 'row', alignItems: 'center', gap: 3 },
   brandName: { fontSize: 24, lineHeight: 28, fontWeight: '700' },
   brandTag: { fontSize: 8, lineHeight: 10, fontWeight: '700', letterSpacing: 0.35 },
+  headerButton: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', gap: 1 },
+  temperature: { fontSize: 13, lineHeight: 15, fontWeight: '700', color: '#FFFFFF' },
 });
