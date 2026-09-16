@@ -24,8 +24,16 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   android: {
     // TODO(phase0-decision): EAS and prebuild need an Android package name; this mirrors the iOS bundle ID.
     package: 'com.pinslots.nexdo',
-    // The WebRTC config plugin adds these for video calling; voice does not use them.
-    blockedPermissions: ['android.permission.CAMERA', 'android.permission.SYSTEM_ALERT_WINDOW'],
+    // Permissions the Swift app has no equivalent for, removed from the merged manifest.
+    // - CAMERA and SYSTEM_ALERT_WINDOW: added by the WebRTC plugin for video calling; voice uses neither.
+    // - WRITE_CONTACTS: added by expo-contacts, which also offers contact creation. Nexdo only READS
+    //   contacts — `AppleTaskActionContacts` (ios/App/TaskActionContacts.swift:18-46) opens the store
+    //   read-only and never writes — so the write permission is dropped.
+    blockedPermissions: [
+      'android.permission.CAMERA',
+      'android.permission.SYSTEM_ALERT_WINDOW',
+      'android.permission.WRITE_CONTACTS',
+    ],
     adaptiveIcon: {
       backgroundColor: '#E6F4FE',
       foregroundImage: './assets/android-icon-foreground.png',
@@ -45,6 +53,28 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     // (`openAuthSessionAsync`), the analogue of Swift's `ASWebAuthenticationSession`
     // (ios/App/ProfileView.swift:12). It declares no permissions of its own.
     'expo-web-browser',
+    [
+      // Phase 8 reminders. Local notifications only — the Swift app registers no device token and the
+      // server has no APNs or FCM path (see "Backend gaps" in docs/IOS_TO_REACT_NATIVE.md).
+      //
+      // The small icon and colour are ANDROID-ONLY and have no Swift counterpart: Android requires a
+      // monochrome small icon, and without one the launcher icon is used and renders as a grey square.
+      'expo-notifications',
+      {
+        icon: './assets/android-icon-monochrome.png',
+        color: '#3D29F0',
+      },
+    ],
+    [
+      // Phase 8 contacts. `AppleTaskActionContacts` (ios/App/TaskActionContacts.swift:19-26) asks the
+      // first time a channel is chosen, and the Swift target's usage string is reused verbatim from
+      // ios/Nexdo.xcodeproj/project.pbxproj:246.
+      'expo-contacts',
+      {
+        contactsPermission:
+          'Nexdo uses Contacts to let you choose who to call, message, or email for your tasks. Phone numbers and email addresses stay on this device; matching contact names may be shared during voice clarification.',
+      },
+    ],
     [
       // Phase 7 profile photo. Swift uses `PhotosPicker` (ios/App/ProfileView.swift:181), which is
       // PHPickerViewController: it runs out of process and needs NO usage description, which is why

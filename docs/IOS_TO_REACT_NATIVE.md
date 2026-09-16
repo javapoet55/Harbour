@@ -1231,3 +1231,184 @@ intent filter is already generated from `scheme: 'nexdo'`, and image-picker adds
 - Deleting a throwaway account.
 - The hand-built slider's feel, and the hour/minute columns on a small screen.
 - Appearance surviving a relaunch, and the whole app following Day/Night.
+
+## 18. Phase 8 status (Reminders, action queue, native actions)
+
+### Built, with the `body` range each screen was read from
+
+| # | Screen | Swift view | `body` | React Native |
+| --- | --- | --- | --- | --- |
+| 31 | Task action | `TaskActionView` (`ios/App/TaskActionView.swift:101`) | **`:133-236`** | `app/action/[id].tsx` |
+| 32 | Message / email composer | `ActionMessageComposer` / `ActionEmailComposer` (`TaskActionComposers.swift:22`, `:42`) | n/a — `UIViewControllerRepresentable` wrappers | the SYSTEM composers, via `src/actions/composers.ts` |
+| 8 | Action queue (Today section 6) | `TodayActionsView` (`TodayActionsView.swift:9`) | **`:16-46`** | `src/components/TodayActions.tsx` |
+| — | Action queue sheet | `ActionQueueSheet` (`TodayActionsView.swift:188`) | **`:193-220`** | `app/action/queue.tsx` |
+| — | Task action card | `TaskActionCard` (`TaskActionView.swift:4`) | **`:9-40`** | `src/components/TaskActionCard.tsx` |
+
+Child views followed out of those `body`s, in render order:
+
+- `ActionNeededCard` — `TodayActionsView.swift:56`, body `:69-128`.
+- `SnoozeMenu` — `TodayActionsView.swift:130`, body `:134-159`.
+- `NextActionRow` — `TodayActionsView.swift:165`, body `:168-186`.
+- `ActionGlass` — `TodayActionsView.swift:48-54`; `actionIcon` / `actionTimeLabel` — `:224-232`.
+- `ClarifyTaskActionCard` — `TaskActionView.swift:42`, body `:51-80` — already built in Phase 3; its
+  "Contact someone" follow-through (`:90-93`) is wired now.
+
+Supporting ports, each with tests:
+
+- `src/lib/taskActionDetector.ts` — `DeterministicTaskActionDetector` and its private `parseTime`
+  (`ios/Sources/NexdoCore/TaskActionDetector.swift:4-77`).
+- `src/lib/taskAction.ts` — `transition`, `TaskActionReconciler`, `TaskActionNotificationPlan`
+  (`ios/Sources/NexdoCore/TaskAction.swift:21-115`).
+- `src/actions/coordinator.ts` — `TaskActionCoordinator` (`TaskActionCoordinator.swift:21-158`).
+- `src/actions/notifications.ts` — `LocalTaskActionScheduler` and `TaskActionAppDelegate`
+  (`TaskActionNotifications.swift`).
+- `src/actions/persistence.ts`, `contacts.ts`, `composers.ts`, `errors.ts`.
+
+### Backend gaps
+
+**The server has no APNs or FCM path, and the Swift app registers no device token.** `ios/` contains
+no `registerForRemoteNotifications`, no `didRegisterForRemoteNotificationsWithDeviceToken` and no
+token upload; every reminder is a local `UNCalendarNotificationTrigger` the app schedules itself
+(`TaskActionNotifications.swift:35-37`). The server's only push route is
+`src/app/api/push-subscriptions/route.ts`, which is **Web Push over VAPID** — it stores a browser
+`PushSubscription` (`endpoint`, `keys.p256dh`, `keys.auth`) and is used by the web app, not by a
+mobile device token.
+
+So this phase registers nothing, by design and by parity: there is no endpoint to register with, and
+Swift does not register either. Everything else — the category, the four action buttons, the
+foreground rule, tap and button routing, and the scheduled reminders — is real and works offline on
+both platforms. If the backend later adds FCM, the only new work is a token upload; the response
+handling in `src/actions/useActionNotifications.ts` already routes any payload carrying
+`{ actionID, owner }`, which is the shape Swift's local notifications use.
+
+A second, smaller gap: `src/server/reminders.ts` contains no `web-push`, `apn` or `fcm` call at all,
+so nothing on the server currently sends to any device.
+
+### Where the brief and Swift disagree
+
+- **"How the device token is registered with the server (`POST /api/push/register` or similar — find
+  it)."** There is no such route and no such call. See Backend gaps.
+- **"`parseTime` in `NexdoCore`."** It is `private` to `DeterministicTaskActionDetector`
+  (`TaskActionDetector.swift:35`), not a public `NexdoCore` helper. Ported and exported here because
+  the creation form's behaviour depends on it and Swift's tests pin it.
+- **"Detected time overrides the chosen date."** Only until a date pill is tapped.
+  `resolvedCreationDate` (`RootView.swift:2086-2089`) prefers the detected time **while
+  `!dateExplicitlyChosen`**; `dateExplicitlyChosen` is set by any pill (`:2061`). The caption at
+  `:1983-1986` always shows the resolved date, whichever won.
+- **"The reminder screens' action buttons call the same endpoints (complete, snooze with Swift's
+  offset)."** None of the four buttons calls the server. CALL / MESSAGE / EMAIL open the action
+  screen with a channel preselected; REMIND_LATER snoozes locally by 15 minutes AND opens the screen
+  ("Snooze from a notification still opens the authenticated action screen",
+  `TaskActionCoordinator.swift:88`). The only server call anywhere in this flow is "Mark task
+  complete", which is the ordinary task PATCH.
+- **"Persistence with the same file shape (use `expo-file-system` if Swift writes a file; state
+  which)."** Swift does write a file: `Application Support/TaskActions/<sha256(userID)>.json`. This
+  uses `expo-file-system` at `Paths.document/TaskActions/<sha256>.json` with the same JSON array.
+- **"`TodayActionsView.swift` (body :16-46)"** — correct, confirmed.
+- **"Contact resolution via `expo-contacts` (same permission moment, same fields)."** The moment is
+  the first time a channel is chosen on the action screen, not at launch. Swift also accepts iOS 18's
+  `.limited` authorization; `expo-contacts` reports limited access as granted, which behaves the same.
+
+### The one-action-per-task rule
+
+Enforced twice, as in Swift: `reconcileActions` maps over TASKS, so a second action for one task
+cannot be produced; and `buildActionQueue` (Phase 4B) keeps only the first action per task in its
+sorted order. Both are tested.
+
+### Rebuild needed: YES
+
+| Package | Version | Why |
+| --- | --- | --- |
+| `expo-notifications` | ~57.0.19 | `UNUserNotificationCenter`: the `CONTACT_TASK` category, its four buttons, scheduling and responses. |
+| `expo-contacts` | ~57.0.5 | `CNContactStore` (`TaskActionContacts.swift:18-46`). |
+| `expo-sms` | ~57.0.2 | `MFMessageComposeViewController` (`TaskActionComposers.swift:22-41`). |
+| `expo-mail-composer` | ~57.0.2 | `MFMailComposeViewController` (`TaskActionComposers.swift:42-66`). |
+| `expo-file-system` | ~57.0.7 | The coordinator's per-account JSON file (`TaskActionCoordinator.swift:33-41`). |
+
+### The Android permission list
+
+`npx expo prebuild --platform android --no-install`, after blocking what Swift has no equivalent for:
+
+| Permission | Source | Kept? |
+| --- | --- | --- |
+| `INTERNET`, `ACCESS_NETWORK_STATE` | Expo | yes |
+| `READ_CONTACTS` | expo-contacts | yes — the contact lookup |
+| `WRITE_CONTACTS` | expo-contacts | **blocked** — Nexdo only reads contacts |
+| `READ_EXTERNAL_STORAGE`, `WRITE_EXTERNAL_STORAGE` (`maxSdkVersion="32"`) | expo-image-picker | yes — legacy only; no `READ_MEDIA_IMAGES`, because the system photo picker needs none |
+| `RECORD_AUDIO`, `MODIFY_AUDIO_SETTINGS`, `BLUETOOTH`, `WAKE_LOCK` | react-native-webrtc (Phase 0) | yes |
+| `CAMERA`, `SYSTEM_ALERT_WINDOW` | react-native-webrtc | **blocked** — voice uses neither |
+| `VIBRATE` | Expo / notifications | yes |
+| `POST_NOTIFICATIONS`, `RECEIVE_BOOT_COMPLETED` | expo-notifications' own manifest, merged at build | yes — Android 13+ requires the first; the second restores scheduled reminders after a reboot, which iOS does on its own |
+
+No SMS permission is added: `expo-sms` hands off to an intent, so the person always sees the
+composer. The `nexdo` scheme intent filter is present, from Phase 1.
+
+### Build profiles
+
+`eas.json` now has three. `development` is unchanged.
+
+- **`preview`** — internal distribution, an Android **APK**, `channel: "preview"`, the production API
+  URL in `env`, and NO dev client, so a tester installs the APK and runs it with no Metro server.
+- **`production`** — store distribution, an Android **app-bundle** (AAB), `autoIncrement: true`.
+
+**Versioning is REMOTE** (`cli.appVersionSource: "remote"`, already set in Phase 1). EAS owns
+`android.versionCode`; `autoIncrement` on the production profile bumps it per build, and
+`app.config.ts` deliberately declares no `versionCode` so the two cannot disagree. `version` stays
+manual at `1.0.0` in `app.config.ts`.
+
+### Visual gaps
+
+- **`ActionQueueSheet`'s `List` sections.** Swift uses a grouped `List` with real section headers;
+  this is a scroll view with header labels and a card per section.
+- **`SnoozeMenu`'s "Choose time…"** (`TodayActionsView.swift:141-157`) opens a `DatePicker` sheet with
+  a `[.medium]` detent. The five fixed offsets are built; the custom picker is not, for the reason
+  recorded on `MonthCalendar` — see Open TODOs.
+- **A swipe-away does not cancel on Android.** `UNNotificationDismissActionIdentifier` and
+  `.customDismissAction` (`TaskActionNotifications.swift:56`, `TaskActionCoordinator.swift:83`) have
+  no Android equivalent; Android raises no response for a dismissed notification. The branch is
+  built and tested, and will fire on iOS.
+- **`.ultraThinMaterial`** on the action cards is a flat surface plus an indigo hairline, as
+  everywhere else in this port.
+- **SF Symbols**: `phone`/`message`/`envelope` → `call-outline`/`chatbubble-ellipses-outline`/
+  `mail-outline`; `person.crop.circle.fill` → `person-circle`; `bell.fill` → `notifications`.
+- **iOS file protection.** `.completeFileProtectionUntilFirstUserAuthentication` and
+  `isExcludedFromBackup` (`TaskActionCoordinator.swift:132-136`) have no `expo-file-system`
+  equivalent. On Android the app's files directory is already private to the app.
+- **Dynamic Type.** `typeSize.isAccessibilitySize` re-lays `ActionNeededCard`'s channel row into a
+  vertical stack (`TodayActionsView.swift:107`); not ported, as in the other phases.
+
+### TODOs closed in Phase 8
+
+- `TODO(phase8)` in `src/components/ClarifyTaskActionCard.tsx` — the coordinator branch renders ahead
+  of the clarify card, and "Contact someone" now opens the created action.
+- `TODO(phase4b)` in `app/(tabs)/today.tsx` (the Weekly Summary card) — the `hasImmediateActions`
+  branch and its Daily Briefing button are built.
+- `TODO(phase4b)` in `app/(tabs)/today.tsx` (sections 6-8) — section 6, `TodayActionsView`, is built.
+  Sections 7 and 8 are re-marked `TODO(phase9)`; see below.
+- The Phase 4B note in `src/lib/todayActionQueue.ts` that nothing supplies `actions` — the coordinator
+  does now.
+
+### TODOs still open after Phase 8
+
+- `TODO(phase9)` in `app/(tabs)/today.tsx`: sections 7 and 8 of the dashboard — the protected-time
+  proposal card and the persistent next-action card. Both depend on `model.protectedTime` and
+  `model.persistentNext`, which are the next-action service, not the coordinator, so they were never
+  Phase 8 work.
+- `TODO(phase9)` in `src/voice/speechStub.ts` and `src/voice/taskCaptureStub.ts`, and the third
+  device time-zone sync call site in `voiceTaskSession()`.
+- `TODO(server-connect-token)` in `src/query/useCalendar.ts` — a server change.
+- `TODO(phase7)` in `src/query/useToday.ts` — the hardcoded weather coordinates are Swift's own.
+- `TODO(phase3-decision)` in `src/components/MonthCalendar.tsx` — the hand-built pickers, which
+  `SnoozeMenu`'s "Choose time…" would also need.
+- `TODO(phase0-decision)` / `TODO(phase1-decision)` in `app.config.ts`.
+
+### Needs confirmation on a device
+
+- The notification permission prompt appearing at the first scheduled reminder, not at launch.
+- A reminder actually firing, and each of the four buttons routing correctly from the lock screen,
+  from the shade with the app backgrounded, and with the app open.
+- A cold-start tap: the app launching straight into the action screen for the right task.
+- The Contacts prompt, a real multi-match name, and a contact with several numbers.
+- The SMS and mail composers opening with the drafted body, and the three outcomes.
+- `tel:` opening the dialler with the number intact.
+- The `preview` APK installing and running with no Metro server.

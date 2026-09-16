@@ -1,8 +1,10 @@
 import { router } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 
+import { useCoordinator } from '../../src/actions/coordinator';
 import { TaskSymbol, Text } from '../../src/components';
+import { TodayActionsView } from '../../src/components/TodayActions';
 import { FocusSessionStrip } from '../../src/components/FocusSessionStrip';
 import { AttentionCard } from '../../src/components/AttentionCard';
 import { TodayIntelligenceCard } from '../../src/components/TodayIntelligenceCard';
@@ -16,6 +18,7 @@ import {
   TODAY_RANGES,
   type TodayRange,
 } from '../../src/lib/todaySchedule';
+import { buildActionQueue } from '../../src/lib/todayActionQueue';
 import { useTasks } from '../../src/query/useTasks';
 import { useAgenda, useScheduleIntelligence, useWeather } from '../../src/query/useToday';
 import { useSession } from '../../src/store/session';
@@ -56,6 +59,15 @@ export default function Today() {
   const weather = useWeather();
   const intelligence = useScheduleIntelligence();
 
+  // `TodayActionQueue(actions:tasks:now:timeZone:)` (RootView.swift:1137). Swift rebuilds it inside a
+  // `TimelineView(.periodic(by: 60))`, so the relative labels tick over once a minute.
+  const actions = useCoordinator((state) => state.actions);
+  const [queueNow, setQueueNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setQueueNow(Date.now()), 60_000);
+    return () => clearInterval(timer);
+  }, []);
+
   const loadedAgenda = agenda.data;
   const loadedTasks = tasks.data;
   const timeZone =
@@ -67,6 +79,10 @@ export default function Today() {
     [loadedAgenda, loadedTasks, intelligence.data, range],
   );
   const counts = scheduleCounts(schedule);
+  const queue = useMemo(
+    () => buildActionQueue({ actions, tasks: loadedTasks?.tasks ?? [], now: queueNow, timeZone }),
+    [actions, loadedTasks, queueNow, timeZone],
+  );
   // `range == .today ? (intelligence?.attention.count ?? agenda?.overdue.count ?? 0) : agenda?.overdue.count`
   const attention = intelligence.data?.today.attention ?? [];
   const attentionCount =
@@ -136,35 +152,67 @@ export default function Today() {
         </View>
 
         {/*
-          The Weekly Summary card (RootView.swift:1070-1089). Swift shows a compact Daily Briefing row
-          instead when the action queue has immediate actions; the queue is Run B, so this is the
-          `else` branch, which is what an account with no due contact actions sees.
-          TODO(phase4b): add the `queue.hasImmediateActions` branch.
+          The Weekly Summary card (RootView.swift:1070-1089), and the compact **Daily Briefing** row
+          Swift shows INSTEAD when the action queue has immediate actions (`:1063-1070`).
         */}
-        <Pressable
-          accessibilityRole="button"
-          accessibilityHint="Opens your weekly progress report"
-          onPress={() => router.push('/today/weekly-summary')}
-          testID="today-weekly-summary"
-          style={[styles.summaryCard, { backgroundColor: theme.colors.surface, borderColor: withAlpha(brand.nexdoIndigo, 0.12) }]}
-        >
-          <View style={[styles.summaryIcon, { backgroundColor: brand.nexdoIndigo }]}>
-            <TaskSymbol name="chart.bar.xaxis" size={20} color="#FFFFFF" />
+        {queue.hasImmediateActions ? (
+          <View style={[styles.briefingRow, { backgroundColor: theme.colors.surface, borderColor: withAlpha(brand.nexdoIndigo, 0.12) }]}>
+            <Pressable
+              accessibilityLabel="Daily Briefing"
+              accessibilityRole="button"
+              onPress={() => router.push({ pathname: '/ask', params: { prompt: DAILY_BRIEFING_PROMPT } })}
+              style={styles.briefingButton}
+              testID="today-daily-briefing"
+            >
+              <TaskSymbol name="chart.bar.xaxis" size={17} color={theme.colors.tint} />
+              <Text style={[styles.summaryTitle, { color: theme.colors.tint }]}>Daily Briefing</Text>
+            </Pressable>
+            <View style={styles.grow} />
+            <Pressable
+              accessibilityLabel="Weekly Summary"
+              accessibilityRole="button"
+              onPress={() => router.push('/today/weekly-summary')}
+              testID="today-weekly-summary-compact"
+            >
+              <Text style={[styles.caption, { color: theme.colors.tint }]}>Weekly Summary</Text>
+            </Pressable>
           </View>
-          <View style={styles.grow}>
-            <Text style={[styles.summaryTitle, { color: theme.colors.ink }]}>Weekly Summary</Text>
-            <Text style={[styles.caption, { color: theme.colors.secondary }]}>
-              Review progress, focus time, and accomplishments
-            </Text>
-          </View>
-          <TaskSymbol name="chevron.right" size={15} color={theme.colors.secondary} />
-        </Pressable>
+        ) : (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityHint="Opens your weekly progress report"
+            onPress={() => router.push('/today/weekly-summary')}
+            testID="today-weekly-summary"
+            style={[styles.summaryCard, { backgroundColor: theme.colors.surface, borderColor: withAlpha(brand.nexdoIndigo, 0.12) }]}
+          >
+            <View style={[styles.summaryIcon, { backgroundColor: brand.nexdoIndigo }]}>
+              <TaskSymbol name="chart.bar.xaxis" size={20} color="#FFFFFF" />
+            </View>
+            <View style={styles.grow}>
+              <Text style={[styles.summaryTitle, { color: theme.colors.ink }]}>Weekly Summary</Text>
+              <Text style={[styles.caption, { color: theme.colors.secondary }]}>
+                Review progress, focus time, and accomplishments
+              </Text>
+            </View>
+            <TaskSymbol name="chevron.right" size={15} color={theme.colors.secondary} />
+          </Pressable>
+        )}
 
         {/* `FocusSessionStrip` renders itself only while a session is live. */}
         <FocusSessionStrip />
 
-        {/* TODO(phase4b): sections 6-8 of `body` — TodayActionsView, the protected-time proposal and
-            the persistent next-action card — all sit here, before the intelligence card. */}
+        {/* Section 6: `TodayActionsView` (RootView.swift:1136-1143). Renders nothing when the queue is
+            empty, which is what an account with no contact-shaped tasks sees.
+            TODO(phase9): sections 7 and 8 — `model.protectedTime`'s proposal card and
+            `model.persistentNext` — both need the next-action service, not the coordinator. */}
+        <TodayActionsView
+          now={queueNow}
+          onOpen={(action, channel) => useCoordinator.getState().open(action.id, channel ?? action.preferredAction ?? null)}
+          onTask={(taskId) => router.push(`/task/${taskId}`)}
+          onViewAll={() => router.push('/action/queue')}
+          queue={queue}
+          timeZone={timeZone}
+        />
 
         <TodayIntelligenceCard
           range={range}
@@ -221,6 +269,10 @@ function withAlpha(color: string, alpha: number): string {
   return `rgba(${(int >> 16) & 255}, ${(int >> 8) & 255}, ${int & 255}, ${alpha})`;
 }
 
+/** `onPlanWeek(…)` on the Daily Briefing button (RootView.swift:1065). */
+const DAILY_BRIEFING_PROMPT =
+  "Give me today's daily briefing, prioritizing my due contact actions and upcoming calendar commitments.";
+
 const styles = StyleSheet.create({
   fill: { flex: 1 },
   // `.padding(.horizontal, 20).padding(.top, 12).padding(.bottom, 32)` with `LazyVStack(spacing: 16)`.
@@ -231,6 +283,9 @@ const styles = StyleSheet.create({
   rangeRow: { flexDirection: 'row', borderRadius: 14, borderWidth: StyleSheet.hairlineWidth, overflow: 'hidden' },
   rangeOption: { flex: 1, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
   rangeLabel: { fontSize: 15, lineHeight: 20, fontWeight: '500' },
+  // The compact Daily Briefing row (RootView.swift:1063-1070): `.padding(16)`, corner radius 20.
+  briefingRow: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16, borderRadius: 20, borderWidth: StyleSheet.hairlineWidth },
+  briefingButton: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 32 },
   summaryCard: { flexDirection: 'row', alignItems: 'center', gap: 14, padding: 16, borderRadius: 20, borderWidth: StyleSheet.hairlineWidth },
   summaryIcon: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
   summaryTitle: { fontSize: 17, lineHeight: 22, fontWeight: '600' },

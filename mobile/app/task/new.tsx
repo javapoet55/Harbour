@@ -6,6 +6,7 @@ import { ActivityIndicator, Alert, Modal, Pressable, ScrollView, StyleSheet, Tex
 import { NexdoTaskBackdrop, TaskSymbol, Text } from '../../src/components';
 import { MonthCalendar } from '../../src/components/MonthCalendar';
 import { ProjectAssignmentField } from '../../src/components/ProjectAssignmentField';
+import { detectTaskAction } from '../../src/lib/taskActionDetector';
 import { creationDateFor, TASK_CREATION_DATES, type TaskCreationDate } from '../../src/lib/taskCreation';
 import { useCreateTask, type ScheduleConflict } from '../../src/query/useTasks';
 import { useSession } from '../../src/store/session';
@@ -37,7 +38,23 @@ export default function NewTask() {
   // `@State private var customDate = Date()` and `showingDatePicker` (RootView.swift:1919-1921).
   const [customDate, setCustomDate] = useState(() => Date.now());
   const [showingDatePicker, setShowingDatePicker] = useState(false);
+  // `@State private var dateExplicitlyChosen = false` (RootView.swift:1921).
+  const [dateExplicitlyChosen, setDateExplicitlyChosen] = useState(false);
+  // `DeterministicTaskActionDetector().detect(title:)` runs on every keystroke in `body` (`:1983`).
+  const [detectorNow] = useState(() => Date.now());
   const [conflict, setConflict] = useState<ScheduleConflict | null>(null);
+
+  /**
+   * `resolvedCreationDate` (RootView.swift:2086-2089).
+   *
+   * A time detected in the TITLE wins — but only until a date pill is tapped. After that the pills
+   * decide, even if the title still says "at 4 PM".
+   */
+  const detected = detectTaskAction(title, detectorNow, zone);
+  const resolvedCreationDate =
+    !dateExplicitlyChosen && detected?.scheduledAt != null
+      ? detected.scheduledAt
+      : creationDateFor(dateChoice, zone, customDate);
 
   const create = useCreateTask({ onConflict: setConflict });
   const busy = create.isPending;
@@ -60,7 +77,7 @@ export default function NewTask() {
         title: title.trim(),
         notes,
         durationMin: duration,
-        startAt: new Date(creationDateFor(dateChoice, zone, customDate)).toISOString(),
+        startAt: new Date(resolvedCreationDate).toISOString(),
         projectId: projectID,
       },
       {
@@ -142,12 +159,22 @@ export default function NewTask() {
                 selected={dateChoice === choice}
                 onPress={() => {
                   setDateChoice(choice);
+                  // `dateExplicitlyChosen = true` (RootView.swift:2061): from here on, a time in the
+                  // title no longer overrides the pills.
+                  setDateExplicitlyChosen(true);
                   if (choice === 'Select Date') setShowingDatePicker(true);
                 }}
                 testID={`date-${choice}`}
               />
             ))}
           </View>
+
+          {/* `if let detected = DeterministicTaskActionDetector().detect(title:)` (RootView.swift:1983-1986). */}
+          {detected ? (
+            <Text style={[styles.caption, { color: theme.colors.secondary }]} testID="new-task-action-hint">
+              {`Nexdo Action: contact ${detected.contactName}. Schedule: ${creationDateLabel(resolvedCreationDate, zone)}.`}
+            </Text>
+          ) : null}
 
           <View style={[styles.divider, { backgroundColor: theme.colors.separator }]} />
           <EditorLabel title="TIME ESTIMATE" icon="clock" />
@@ -242,6 +269,18 @@ export default function NewTask() {
   );
 }
 
+/** `.formatted(date: .abbreviated, time: .shortened)` on the resolved creation date (RootView.swift:1984). */
+function creationDateLabel(at: number, timeZone: string): string {
+  return new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(new Date(at));
+}
+
 /** `customDateLabel` (RootView.swift:2071-2076): `MMM d, yyyy` in the account zone. */
 function customDateLabel(at: number, timeZone: string): string {
   return new Intl.DateTimeFormat('en-US', { timeZone, month: 'short', day: 'numeric', year: 'numeric' }).format(new Date(at));
@@ -288,6 +327,7 @@ const SELECTED_GRADIENT = ['#91198A', '#5930BF', '#144DAD'] as const;
 
 const styles = StyleSheet.create({
   fill: { flex: 1 },
+  caption: { fontSize: 12, lineHeight: 16 },
   scroll: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 20 },
   card: { gap: 20, padding: 20, borderRadius: 26, borderWidth: StyleSheet.hairlineWidth },
   editorLabel: { flexDirection: 'row', alignItems: 'center', gap: 5 },

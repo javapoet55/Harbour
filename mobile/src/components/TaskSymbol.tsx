@@ -85,6 +85,17 @@ export const taskIcons = {
   'calendar.badge.plus': 'calendar-outline',
   'arrow.triangle.2.circlepath': 'sync-outline',
   'chevron.backward': 'chevron-back',
+  // Reminders and task actions (Phase 8). The channel buttons on `TaskActionView`
+  // (ios/App/TaskActionView.swift:241), `ActionNeededCard` and `NextActionRow`
+  // (TodayActionsView.swift:56-186).
+  phone: 'call-outline',
+  message: 'chatbubble-ellipses-outline',
+  envelope: 'mail-outline',
+  'phone.fill': 'call',
+  'message.fill': 'chatbubble-ellipses',
+  'envelope.fill': 'mail',
+  'bell.fill': 'notifications',
+  'person.crop.circle.fill': 'person-circle',
 } satisfies Record<string, IoniconName>;
 
 export type TaskSymbolName = keyof typeof taskIcons;

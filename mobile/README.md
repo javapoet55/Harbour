@@ -1081,3 +1081,166 @@ This is the rule the iPhone uses: **the account follows the device, never the ot
 - Spoken replies and the App Voice volume actually doing something: Phase 9.
 - Reminders and notification delivery: Phase 8. "Open Notification Center" goes to the web app, as it
   does on the iPhone.
+
+## Phase 8 on-device test plan
+
+Reminders, the action queue and the native actions. **A NEW DEVELOPMENT BUILD IS REQUIRED** — five
+native modules landed (`expo-notifications`, `expo-contacts`, `expo-sms`, `expo-mail-composer`,
+`expo-file-system`). The Phase 7 build will crash on the Today tab.
+
+Everything here is a **local** notification. Nothing is pushed from the server, on either platform —
+the Swift app works the same way, so a reminder still fires with the phone offline.
+
+### 1. Creating a task that becomes an action
+
+1. Tasks → **+**. Type **Call Damien at 4 PM**.
+2. Under the DATE pills a grey line appears: **"Nexdo Action: contact Damien. Schedule: …"**, and the
+   schedule is **4 PM today** (or tomorrow if 4 PM has passed), not the "Today" pill's time.
+3. Now tap the **Tomorrow** pill. The line stays, but the schedule changes to the pill's date. That is
+   correct: once you choose a date, the title's time stops overriding it.
+4. Reset by reopening the form. Type **Buy groceries** — no line at all. Type **Call** on its own — no
+   line. Both are correct; the parser is deliberately conservative.
+5. Save with the title **Call Damien at 4 PM** and no pill tapped.
+
+### 2. The permission prompt
+
+1. The notification permission prompt appears **when the first reminder is scheduled**, not at launch
+   and not on the Today tab. Saving the task above is what triggers it.
+2. Allow it.
+3. If you refuse: the task still exists, but an orange line appears on the task's action card reading
+   "Notifications are off. Enable notifications for Nexdo in Settings…", with **Retry reminders**.
+
+### 3. A reminder firing
+
+Set a task a few minutes out so you do not have to wait: **Call Damien at <four minutes from now>**
+using the 12-hour form, e.g. "Call Damien at 3:07 PM".
+
+1. Lock the phone and wait.
+2. The notification reads **"Time to contact Damien"** / "Choose Call, Message, Email, or remind me
+   later." Expand it: four buttons — **Call**, **Message**, **Email**, **Remind me later**.
+3. **Tap the body.** The app opens straight onto the **Nexdo Action** screen for that task, with no
+   channel ticked.
+4. Force-quit the app, fire another reminder (snooze one by 5 minutes), and tap the body from a **cold
+   start**. It must still land on the right action — not on Today.
+5. With the app OPEN on any tab, let a reminder fire. It still appears as a banner, with sound.
+
+### 4. The four buttons
+
+Snooze a reminder by 5 minutes between each of these so you get a fresh notification.
+
+1. **Call** → the action screen opens with **Call** ticked and the contact lookup already running.
+2. **Message** → same, with Message ticked.
+3. **Email** → same, with Email ticked.
+4. **Remind me later** → the action screen opens AND the reminder is pushed 15 minutes out. Check the
+   task's action card afterwards: it reads "Reminder: …" with the new time. This double behaviour is
+   Swift's, not a bug.
+5. On iOS only, swipe a reminder away without tapping: the action is cancelled and the card reads
+   "Reminder dismissed. Tap to take action." **Android does not report a swipe-away**, so nothing
+   happens there. Expected.
+
+### 5. The action screen
+
+1. Title **Nexdo Action**, heading **"Time to contact Damien"**, then "How would you like to get in
+   touch?" and three rows: Call, Message, Email.
+2. At the bottom: **Remind me in 15 minutes** and **Dismiss**.
+3. **Nothing else** — no "Mark task complete" until you have actually used a channel, and no "Choose a
+   different contact" until a contact has been picked. Report it if you see either early.
+4. Tap **Call**. The **Contacts** permission prompt appears — the first time only, and only here.
+5. With a name that matches one contact who has one number, you go straight to a confirmation:
+   **"Call Damien Hall?"** with the number. Cancel it.
+6. With a name matching several people, **"Choose the correct contact"** lists them.
+7. With a contact who has several numbers, **"Choose a phone number"** lists them with their labels.
+8. A contact with no number at all: "This contact has no phone number. Add a number in Contacts or
+   choose another person."
+9. Once a contact is chosen, **Choose a different contact** appears at the bottom. Tap it and the
+   lookup starts again.
+
+### 6. Calling, messaging and emailing
+
+1. **Call** → confirm → the **dialler opens with the number filled in**. Nexdo never dials. Come back:
+   the screen says "Opened Phone. Nexdo can't verify whether the call connected…" and **Mark task
+   complete** has appeared.
+2. **Message** → the system SMS composer opens, addressed to the contact, pre-filled with
+   "Hi <name>, just checking in." (or "…following up regarding <context>." if the task said "about
+   …"). **Send nothing**: cancel. The screen reads "Cancelled. Nothing was sent."
+3. **Email** → the mail composer opens with subject "Following up" (or "Follow-up: <context>") and the
+   drafted body. Save it as a draft: "Draft saved. Nothing was sent."
+4. Send one real message to yourself: "Submitted to the messaging app. Delivery isn't verified…"
+5. On a phone with no SIM or no mail account: "This action isn't available on this device. Check
+   Messages or Mail setup and try again."
+
+**At no point should anything send without you tapping send in the system composer.**
+
+### 7. The Today action queue
+
+1. Make one contact task due now and another 10 minutes out.
+2. Today shows an **Action Needed** card at the top of section 6: a pink bell, the time, "in N min" or
+   "Due now" or "N min overdue", "Time to contact <name>", a contact row, a **Task context** row, then
+   three big buttons — **Call**, **iMessage**, **Email** (iMessage, not Message — that is Swift's
+   label) — and **Remind me later** / **Dismiss**.
+3. With two or more overdue, an orange line reads "N actions need your attention".
+4. Under it, **Next up** with a count and **View all**, listing at most three rows.
+5. Tap **Task context** → the task detail opens.
+6. Tap **Call** → the action screen opens with Call ticked and the lookup already running.
+7. **Remind me later** → 5 / 10 / 15 / 30 minutes / 1 hour. Pick 30: the card's time updates.
+8. **Dismiss** → the card disappears.
+9. **View all** → the **Nexdo Actions** sheet, with **Due now** and **Upcoming** sections and a
+   **Done** button. An account with none reads "No actions today".
+
+### 8. The Daily Briefing branch
+
+1. While an action is **due now**, the Weekly Summary card on Today is REPLACED by a compact row:
+   **Daily Briefing** on the left, **Weekly Summary** on the right.
+2. Tap **Daily Briefing** → Ask AI opens with the prompt already filled in: "Give me today's daily
+   briefing, prioritizing my due contact actions and upcoming calendar commitments." It is not sent.
+3. Dismiss the action. The full Weekly Summary card comes back.
+
+### 9. The task detail card
+
+1. Open the task behind an action. At the top, a **Nexdo Action** card: "Contact Damien",
+   "Call • Message • Email", and one status line —
+   - "Reminder: <date and time>" while it is scheduled,
+   - "Reminder dismissed. Tap to take action." after a dismissal,
+   - "Review the outcome or mark your task complete." after using a channel,
+   - "Set a schedule to receive an action reminder." if the task has no date.
+2. Tap it → the action screen.
+3. The "What would you like to do about…" clarify card must **not** be there at the same time. The two
+   are mutually exclusive.
+
+### 10. "Contact someone" from the clarify card
+
+1. Create a task called just **Roof** (vague, two words, no verb). Open it.
+2. The clarify card appears. Choose **Contact someone**, type **Damien**, tap **Call**.
+3. The task is retitled "Call Damien" AND the action screen opens immediately for the new action.
+
+### 11. Persistence and sign-out
+
+1. With actions on screen, force-quit and reopen: the same actions, the same reminders.
+2. Start a Call, then kill the app from the recents list while the dialler is up. Reopen: the action is
+   back at "awaiting approval", not marked done. Nexdo never assumes an interrupted call went through.
+3. Sign out and back in: the actions rebuild from your tasks.
+4. Sign in as a different account: no actions from the first one. They are stored per account.
+
+### 12. The preview build
+
+This is the build to hand to a teammate.
+
+```
+eas build --profile preview --platform android
+```
+
+1. EAS produces an **APK** with internal distribution. Open the build page and send the QR code or the
+   direct link.
+2. The tester installs the APK and opens it. **There is no dev server**: no Metro, no QR to scan, no
+   `npx expo start` on anyone's machine, and no development menu. It points at the production API.
+3. Confirm on the tester's phone: sign in, create a contact task, receive its reminder.
+4. `eas build --profile production --platform android` produces an **AAB** for Play, with the version
+   code incremented by EAS (versioning is remote — nothing to edit in `app.config.ts`).
+
+### 13. What is NOT here
+
+- Nothing is pushed from the server. The backend has no APNs or FCM path and the iPhone app registers
+  no token either, so every reminder is scheduled on the device. See "Backend gaps" in the plan doc.
+- The custom "Choose time…" snooze picker: the five fixed offsets are built.
+- Sections 7 and 8 of the Today dashboard (protected time, persistent next action): Phase 9.
+- Voice: Phase 9.

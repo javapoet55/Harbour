@@ -3,7 +3,9 @@ import { useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { NexdoLogoMark, TaskSymbol, Text } from '../../src/components';
+import { useCoordinator } from '../../src/actions/coordinator';
 import { ClarifyTaskActionCard } from '../../src/components/ClarifyTaskActionCard';
+import { TaskActionCard } from '../../src/components/TaskActionCard';
 import { MonthCalendar } from '../../src/components/MonthCalendar';
 import { ProjectAssignmentField } from '../../src/components/ProjectAssignmentField';
 import {
@@ -48,6 +50,7 @@ export default function TaskDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const profile = useSession((state) => state.profile);
   const task = useTask(id);
+  const contactAction = useCoordinator((state) => state.actions.find((item) => item.taskId === id));
 
   const original = useMemo(() => (task ? draftFrom(task) : null), [task]);
   const [draft, setDraft] = useState<TaskDraft | null>(null);
@@ -86,6 +89,9 @@ export default function TaskDetail() {
   const set = (next: Partial<TaskDraft>) => setDraft({ ...current, ...next });
 
   const zone = profile?.timeZone ?? task.timeZone ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
+  // `if let action = coordinator.action(for: task.id) … else if … ClarifyTaskActionCard`
+  // (TaskActionView.swift:10, `:36`): the two branches are mutually exclusive.
+  const hasContactAction = contactAction !== undefined;
   // `blocked` (TaskDetailsView.swift:25)
   const blocked = update.isPending || complete.isPending || clarify.isPending || startTask.isPending || focusBusy;
   // `dirty` (TaskDetailsView.swift:26)
@@ -156,7 +162,10 @@ export default function TaskDetail() {
       </View>
 
       <ScrollView keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive" contentContainerStyle={styles.scroll}>
-        {/* `TaskActionCard(task:)` (TaskDetailsView.swift:34) */}
+        {/* `TaskActionCard(task:)` (TaskDetailsView.swift:34). Its FIRST branch — a scheduled contact
+            action — wins; the clarify card below is the fall-through (TaskActionView.swift:10, `:36`). */}
+        <TaskActionCard task={task} onOpen={(id) => useCoordinator.getState().open(id)} />
+        {hasContactAction ? null : (
         <ClarifyTaskActionCard
           task={task}
           saving={clarify.isPending}
@@ -173,10 +182,29 @@ export default function TaskDetail() {
             // Swift calls `model.saveTask(id:title:notes:duration:)`; the same PATCH, title only.
             update.mutate(
               { id: task.id, details: { title }, schedule: null },
-              { onError: () => setClarifyFailure('Couldn’t update this task. Please try again.') },
+              {
+                onError: () => setClarifyFailure('Couldn’t update this task. Please try again.'),
+                /**
+                 * The "Contact someone" follow-through (TaskActionView.swift:90-93): once the title
+                 * is saved, the coordinator reconciles it into an action and OPENS that action.
+                 * This was the Phase 3 `TODO(phase8)`.
+                 */
+                onSuccess: (saved) => {
+                  const owner = profile?.id;
+                  if (!owner || !saved) return;
+                  void useCoordinator
+                    .getState()
+                    .synchronize([saved], owner, zone)
+                    .then(() => {
+                      const created = useCoordinator.getState().actionForTask(saved.id);
+                      if (created) useCoordinator.getState().open(created.id);
+                    });
+                },
+              },
             );
           }}
         />
+        )}
 
         {/* `actions` (TaskDetailsView.swift:114-127) */}
         <View style={styles.actions}>
