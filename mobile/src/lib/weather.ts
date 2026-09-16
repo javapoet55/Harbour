@@ -30,3 +30,58 @@ export function conditionLabel(code: number | null | undefined): string {
   if (value >= 95 && value <= 99) return 'Thunderstorms';
   return 'Conditions unavailable';
 }
+
+/** `WeatherResponse.Day` (ios/Sources/NexdoCore/Models.swift:113-140). */
+export type WeatherDay = {
+  /** The `yyyy-MM-dd` string, which is also the row identity. */
+  id: string;
+  code: number | null;
+  high: number | null;
+  low: number | null;
+  rain: number | null;
+};
+
+/**
+ * `WeatherResponse.Daily.days` (Models.swift:120-130): the first FIVE entries, each index read
+ * defensively because open-meteo can return shorter arrays than `time`.
+ */
+export function weatherDays(daily: {
+  time: string[];
+  weather_code: (number | null)[];
+  temperature_2m_max: (number | null)[];
+  temperature_2m_min: (number | null)[];
+  precipitation_probability_max: (number | null)[];
+} | null | undefined): WeatherDay[] {
+  if (!daily) return [];
+  return daily.time.slice(0, 5).map((day, index) => ({
+    id: day,
+    code: daily.weather_code[index] ?? null,
+    high: daily.temperature_2m_max[index] ?? null,
+    low: daily.temperature_2m_min[index] ?? null,
+    rain: daily.precipitation_probability_max[index] ?? null,
+  }));
+}
+
+/** `temperature(_:)` (ios/App/WeatherForecastView.swift:84): rounded, or an em dash. */
+export function temperatureLabel(value: number | null): string {
+  return value === null ? '\u2014' : `${Math.round(value)}\u00b0`;
+}
+
+/**
+ * `dateLabel(_:zone:)` (WeatherForecastView.swift:85-95): "Today" for the current day in the
+ * forecast's own zone, otherwise `EEE, MMM d`.
+ */
+export function forecastDayLabel(day: string, zone: string | null | undefined, now: number = Date.now()): string {
+  const timeZone = zone ?? 'America/Los_Angeles';
+  try {
+    const today = new Intl.DateTimeFormat('en-CA', { timeZone }).format(new Date(now));
+    if (today === day) return 'Today';
+    const [year, month, date] = day.split('-').map(Number);
+    if (!year || !month || !date) return day;
+    return new Intl.DateTimeFormat('en-US', { timeZone: 'UTC', weekday: 'short', month: 'short', day: 'numeric' }).format(
+      new Date(Date.UTC(year, month - 1, date)),
+    );
+  } catch {
+    return day;
+  }
+}

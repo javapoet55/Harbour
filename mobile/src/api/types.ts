@@ -335,3 +335,26 @@ export type DoNowRecommendation = {
 
 /** `DoNowResponse` (DoNowRecommendation.swift:3-5): the assistant turn, of which only `executive` matters. */
 export type DoNowResponse = { executive?: DoNowRecommendation | null };
+
+/** `WeeklySummary` (ios/Sources/NexdoCore/WeeklySummary.swift:3-40). */
+export type WeeklySummary = {
+  timeZone: string;
+  start: string;
+  end: string;
+  generatedAt: string;
+  headline: string;
+  summary: string;
+  metrics: {
+    completed: number;
+    planned: number;
+    completionRate?: number | null;
+    overdue?: number | null;
+    focusMinutes?: number | null;
+  };
+  /** "Optional while the app and backend updates roll out independently." */
+  taskGroups?: { planned: NexdoTask[]; completed: NexdoTask[]; overdue: NexdoTask[] } | null;
+  days: { date: string; planned: number; completed: number }[];
+  accomplishments: { id: string; title: string; priority: string }[];
+  productivityInsight?: string | null;
+  limitations: string[];
+};

@@ -16,12 +16,14 @@ jest.mock('expo-router', () => ({
 const mockTasks = jest.fn();
 const mockAgenda = jest.fn();
 const mockUpdateTask = jest.fn();
+const mockIntelligence = jest.fn();
 jest.mock('../api', () => ({
   ...jest.requireActual('../api'),
   endpoints: {
     tasks: (...args: unknown[]) => mockTasks(...args),
     agenda: (...args: unknown[]) => mockAgenda(...args),
     updateTask: (...args: unknown[]) => mockUpdateTask(...args),
+    scheduleIntelligence: (...args: unknown[]) => mockIntelligence(...args),
   },
 }));
 
@@ -86,6 +88,8 @@ beforeEach(() => {
   mockTasks.mockResolvedValue({ tasks: AGENDA.tasks, timeZone: ZONE });
   mockAgenda.mockResolvedValue(AGENDA);
   mockFetch.mockResolvedValue({ ok: true, json: async () => FORECAST });
+  // No intelligence by default: the dashboard then builds its schedule from the agenda.
+  mockIntelligence.mockRejectedValue(new Error('unavailable'));
   jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
 });
 
@@ -287,18 +291,153 @@ describe('Today renders no invented section', () => {
     }
   });
 
-  it('does not render the Run B sections yet, and does not fake them', async () => {
+  it('does not render the sections that are still deferred, and does not fake them', async () => {
     await renderToday();
 
-    // The action queue, protected time and the persistent next-action card are Run B.
+    // Still deferred: the action queue, the protected-time proposal and the persistent next-action
+    // card, all of which need TaskActionCoordinator (Phase 8) or the next-action service.
     expect(screen.queryByText('Make room for important work')).toBeNull();
-    expect(screen.queryByText('Needs your attention')).toBeNull();
     expect(screen.queryByText('Daily Briefing')).toBeNull();
+    expect(screen.queryByText('What should I do now?')).toBeTruthy(); // the card entry, not the queue
   });
 
   it('keeps sign-out off the dashboard itself', async () => {
     await renderToday();
     // It moved into the __DEV__ menu, which is collapsed until the version text is long-pressed.
     expect(screen.queryByTestId('sign-out')).toBeNull();
+  });
+});
+
+/** Section 10 of `body`: the "Needs your attention" list (RootView.swift:1145-1166). */
+describe('Today attention list', () => {
+  const INTELLIGENCE = {
+    today: {
+      day: '2026-09-16',
+      timeZone: ZONE,
+      commitments: 2,
+      appointments: 1,
+      tasks: 1,
+      overdue: 1,
+      availableMinutes: 90,
+      timeline: [],
+      attention: [
+        {
+          id: 'gap',
+          label: 'Schedule check',
+          title: 'Not enough time before Friday',
+          explanation: 'Two tasks need 90 minutes before their deadline.',
+          recommendedAction: 'Move one task earlier.',
+          kind: 'GAP',
+          taskId: null,
+          taskIds: ['t1'],
+          requiredMinutes: 90,
+          deadlineAt: '2026-09-18T03:30:00.000Z',
+        },
+        {
+          id: 'overdue',
+          label: 'Overdue',
+          title: '1 overdue task',
+          explanation: 'Renew passport is past its deadline.',
+          recommendedAction: 'Reschedule or complete it.',
+          kind: 'OVERDUE',
+          taskId: null,
+          taskIds: [],
+          requiredMinutes: null,
+          deadlineAt: null,
+        },
+      ],
+      recommendation: { title: '', explanation: '', additionalAdvice: null, kind: '', taskId: null },
+    },
+  };
+
+  it('renders the list with the overdue item FIRST', async () => {
+    mockIntelligence.mockResolvedValue(INTELLIGENCE);
+    await renderToday();
+
+    await waitFor(() => expect(screen.getByText('Needs your attention')).toBeTruthy());
+    expect(screen.getByTestId('today-attention-overdue')).toBeTruthy();
+    expect(screen.getByTestId('today-attention-gap')).toBeTruthy();
+    expect(screen.getByText('1 overdue task')).toBeTruthy();
+  });
+
+  it('counts attention items from intelligence rather than the overdue list', async () => {
+    mockIntelligence.mockResolvedValue(INTELLIGENCE);
+    await renderToday();
+
+    // Two attention items, even though the agenda carries one overdue task.
+    await waitFor(() => expect(screen.getByText('2 things need attention')).toBeTruthy());
+  });
+
+  it('routes the overdue item to the overdue screen and others to the schedule check', async () => {
+    mockIntelligence.mockResolvedValue(INTELLIGENCE);
+    await renderToday();
+    await waitFor(() => expect(screen.getByTestId('today-attention-overdue')).toBeTruthy());
+
+    await fireEvent.press(screen.getByTestId('today-attention-overdue'));
+    expect(mockPush).toHaveBeenCalledWith('/today/overdue');
+
+    await fireEvent.press(screen.getByTestId('today-attention-gap'));
+    expect(mockPush).toHaveBeenCalledWith({ pathname: '/today/schedule-check', params: { id: 'gap' } });
+  });
+
+  it('uses the server timeline as the Today schedule once intelligence loads', async () => {
+    mockIntelligence.mockResolvedValue({
+      ...INTELLIGENCE,
+      today: {
+        ...INTELLIGENCE.today,
+        attention: [],
+        timeline: [
+          {
+            id: 'tl1',
+            sourceId: 't1',
+            kind: 'task',
+            title: 'From the timeline',
+            startAt: atLocal('2026-09-16', '11:00'),
+            endAt: null,
+            allDay: false,
+            deadlineOnly: false,
+            past: false,
+          },
+        ],
+      },
+    });
+    await renderToday();
+
+    await waitFor(() => expect(screen.getByText('From the timeline')).toBeTruthy());
+    // The agenda build is replaced wholesale, so its rows are gone.
+    expect(screen.queryByText('Standup')).toBeNull();
+  });
+
+  it('rejects a stale snapshot whose day is not today', async () => {
+    mockIntelligence.mockResolvedValue({ ...INTELLIGENCE, today: { ...INTELLIGENCE.today, day: '2026-09-15' } });
+    await renderToday();
+
+    // It falls back to the agenda build and the agenda overdue count.
+    await waitFor(() => expect(screen.getByText('1 thing needs attention')).toBeTruthy());
+    expect(screen.getByText('Standup')).toBeTruthy();
+  });
+});
+
+describe('Today navigation to the Run B screens', () => {
+  it('opens the weather forecast from the chip', async () => {
+    await renderToday();
+    await waitFor(() => expect(screen.getByLabelText(/San Ramon weather/)).toBeTruthy());
+
+    await fireEvent.press(screen.getByTestId('weather-chip'));
+    expect(mockPush).toHaveBeenCalledWith('/today/weather');
+  });
+
+  it('opens the weekly summary from its card', async () => {
+    await renderToday();
+    await fireEvent.press(screen.getByTestId('today-weekly-summary'));
+    expect(mockPush).toHaveBeenCalledWith('/today/weekly-summary');
+  });
+
+  it('opens the attention screen from the summary chip', async () => {
+    await renderToday();
+    await waitFor(() => expect(screen.getByTestId('today-attention-chip')).toBeTruthy());
+
+    await fireEvent.press(screen.getByTestId('today-attention-chip'));
+    expect(mockPush).toHaveBeenCalledWith('/today/attention');
   });
 });

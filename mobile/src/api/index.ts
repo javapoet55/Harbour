@@ -7,6 +7,8 @@ import type {
   ProjectsResponse,
   Agenda,
   DoNowResponse,
+  ScheduleIntelligenceResponse,
+  WeeklySummary,
   TaskCreateInput,
   TaskResponse,
   CodeDeliveryResponse,
@@ -133,6 +135,14 @@ export const endpoints = {
     client.post<DoNowResponse>('/api/assistant', {
       transcript: minutes === null ? 'What should I do next?' : `I have ${minutes} minutes free. What should I do?`,
     }),
+
+  /** `AppModel.refreshScheduleIntelligence` (NexdoApp.swift:377-401). */
+  scheduleIntelligence: (client: ApiClient = getApi()) =>
+    client.get<ScheduleIntelligenceResponse>('/api/schedule-intelligence?scope=today'),
+
+  /** `AppModel.weeklySummary(start:)` (NexdoApp.swift:712-714). */
+  weeklySummary: (start: string, client: ApiClient = getApi()) =>
+    client.get<WeeklySummary>(`/api/weekly-summary?start=${encodeURIComponent(start)}`),
 
   logout: (client: ApiClient = getApi()) => client.post<{ ok: boolean }>('/api/auth/logout', undefined, { signedOutOn401: false }),
   me: (client: ApiClient = getApi()) => client.get<ProfileResponse>('/api/me'),

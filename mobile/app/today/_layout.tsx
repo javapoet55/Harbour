@@ -38,6 +38,14 @@ export default function TodayLayout() {
         name="do-now"
         options={{ presentation: 'modal', title: 'What should I do now?', headerRight: doneButton() }}
       />
+      {/* `.sheet(isPresented:)` on the weather chip (RootView.swift:1338). */}
+      <Stack.Screen name="weather" options={{ presentation: 'modal', title: 'Weather', headerRight: doneButton() }} />
+      {/* The four `navigationDestination`s (RootView.swift:1191-1196) all PUSH. */}
+      <Stack.Screen name="attention" options={{ title: 'Needs your attention' }} />
+      <Stack.Screen name="schedule-check" options={{ title: 'Schedule check' }} />
+      <Stack.Screen name="overdue" options={{ title: 'Unfinished deadlines' }} />
+      <Stack.Screen name="weekly-summary" options={{ title: 'Weekly Summary' }} />
+      <Stack.Screen name="weekly-tasks" options={{ title: 'Tasks' }} />
     </Stack>
   );
 }

@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
-import { endpoints, type Agenda, type DoNowRecommendation, type WeatherResponse } from '../api';
+import { endpoints, type Agenda, type DoNowRecommendation, type WeatherResponse, type WeeklySummary } from '../api';
 import { queryKeys } from './keys';
 import { currentRevision, isCurrent } from './taskRevision';
 
@@ -101,4 +101,54 @@ export function useDoNow() {
 /** `recommendation.canStart` (DoNowRecommendation.swift:30). */
 export function canStartRecommendation(recommendation: DoNowRecommendation): boolean {
   return recommendation.recommendedActions.some((action) => action.type === 'START_FOCUS');
+}
+
+/**
+ * `AppModel.weeklySummary(start:)` (NexdoApp.swift:712-714). The week start is a `yyyy-MM-dd` day in
+ * the account zone; the server defaults to the current week when it is omitted.
+ */
+export function useWeeklySummary(start: string) {
+  return useQuery({
+    queryKey: queryKeys.weeklySummary(start),
+    queryFn: () => endpoints.weeklySummary(start),
+  });
+}
+
+/**
+ * `AppModel.weeklySummaryTasks(for:)` (NexdoApp.swift:715-719).
+ *
+ * The summary usually embeds `taskGroups`. When a deployment does not, Swift refetches `/api/tasks`
+ * and re-derives the groups with the same cohort rules. That derivation is NOT ported: it duplicates
+ * the server's cohort logic, and every current deployment embeds the groups.
+ * TODO(phase4b-decision): port `WeeklySummary.taskGroups(from:)` if a deployment is found without it.
+ */
+export function weeklyTaskGroups(summary: WeeklySummary | undefined) {
+  return summary?.taskGroups ?? null;
+}
+
+/**
+ * `AppModel.refreshScheduleIntelligence` (NexdoApp.swift:377-401).
+ *
+ * Swift additionally REJECTS a snapshot whose `today.day` is not the current day in its own zone
+ * (`:394`), because a stale snapshot would date the whole dashboard. The same check is here.
+ */
+export function useScheduleIntelligence() {
+  const queryClient = useQueryClient();
+  return useQuery({
+    queryKey: queryKeys.scheduleIntelligence(),
+    queryFn: async () => {
+      const captured = currentRevision();
+      const response = await endpoints.scheduleIntelligence();
+      const today = new Intl.DateTimeFormat('en-CA', { timeZone: response.today.timeZone }).format(new Date());
+      if (response.today.day !== today) {
+        throw new Error('The server returned an unexpected response. Please try again later.');
+      }
+      if (!isCurrent(captured)) {
+        const existing = queryClient.getQueryData(queryKeys.scheduleIntelligence());
+        if (existing) return existing as typeof response;
+      }
+      return response;
+    },
+    retry: false,
+  });
 }

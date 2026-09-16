@@ -1,10 +1,11 @@
 import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
+import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 
 import { TaskSymbol, Text } from '../../src/components';
 import { DevMenu } from '../../src/components/DevMenu';
 import { FocusSessionStrip } from '../../src/components/FocusSessionStrip';
+import { AttentionCard } from '../../src/components/AttentionCard';
 import { TodayIntelligenceCard } from '../../src/components/TodayIntelligenceCard';
 import { TasksTopBar, TodayBackdrop } from '../../src/components/TodayShell';
 import {
@@ -17,7 +18,7 @@ import {
   type TodayRange,
 } from '../../src/lib/todaySchedule';
 import { useTasks } from '../../src/query/useTasks';
-import { useAgenda, useWeather } from '../../src/query/useToday';
+import { useAgenda, useScheduleIntelligence, useWeather } from '../../src/query/useToday';
 import { useSession } from '../../src/store/session';
 import { brand, useTheme } from '../../src/theme';
 
@@ -54,6 +55,7 @@ export default function Today() {
   const tasks = useTasks();
   const agenda = useAgenda(5);
   const weather = useWeather();
+  const intelligence = useScheduleIntelligence();
 
   const loadedAgenda = agenda.data;
   const loadedTasks = tasks.data;
@@ -62,16 +64,20 @@ export default function Today() {
 
   // `schedule` (RootView.swift:942) — the intelligence timeline is Run B, so this is the agenda build.
   const schedule = useMemo(
-    () => buildSchedule({ agenda: loadedAgenda, tasks: loadedTasks?.tasks ?? [], intelligence: null, range }),
-    [loadedAgenda, loadedTasks, range],
+    () => buildSchedule({ agenda: loadedAgenda, tasks: loadedTasks?.tasks ?? [], intelligence: intelligence.data, range }),
+    [loadedAgenda, loadedTasks, intelligence.data, range],
   );
   const counts = scheduleCounts(schedule);
-  const attentionCount = loadedAgenda?.overdue.length ?? 0;
+  // `range == .today ? (intelligence?.attention.count ?? agenda?.overdue.count ?? 0) : agenda?.overdue.count`
+  const attention = intelligence.data?.today.attention ?? [];
+  const attentionCount =
+    range === 1 ? (intelligence.data ? attention.length : (loadedAgenda?.overdue.length ?? 0)) : (loadedAgenda?.overdue.length ?? 0);
 
   const refresh = () => {
     void tasks.refetch();
     void agenda.refetch();
     void weather.refetch();
+    void intelligence.refetch();
   };
 
   return (
@@ -89,8 +95,7 @@ export default function Today() {
             // `model.weather.map { Int($0.current.temperature.rounded()) }` (RootView.swift:1029)
             temperature: weather.data ? Math.round(weather.data.current.temperature_2m) : null,
             weatherCode: weather.data?.current.weather_code,
-            // TODO(phase4b): Swift opens `WeatherForecastView` as a sheet (RootView.swift:1338).
-            onPress: () => undefined,
+            onPress: () => router.push('/today/weather'),
           }}
           onAdd={() => router.push('/task/new')}
           // TODO(phase7): Swift opens `AccountView()` here (RootView.swift:1031).
@@ -139,8 +144,7 @@ export default function Today() {
         <Pressable
           accessibilityRole="button"
           accessibilityHint="Opens your weekly progress report"
-          // TODO(phase4b): `WeeklySummaryView` is Run B.
-          onPress={() => Alert.alert('Weekly Summary', 'The weekly summary arrives in Phase 4B.')}
+          onPress={() => router.push('/today/weekly-summary')}
           testID="today-weekly-summary"
           style={[styles.summaryCard, { backgroundColor: theme.colors.surface, borderColor: withAlpha(brand.nexdoIndigo, 0.12) }]}
         >
@@ -170,13 +174,35 @@ export default function Today() {
           schedule={schedule}
           searchSchedule={schedule}
           onOpenTask={(task) => router.push(`/task/${task.id}`)}
-          // TODO(phase4b): `attentionDetails` (RootView.swift:1202).
-          onAttention={() => undefined}
+          onAttention={() => router.push('/today/attention')}
           onAsk={() => router.push('/today/do-now')}
           onCalendar={() => router.push('/calendar')}
         />
 
-        {/* TODO(phase4b): section 10 of `body` — the "Needs your attention" list (RootView.swift:1145). */}
+        {/* Section 10 of `body`: the "Needs your attention" list (RootView.swift:1145-1166). Today only. */}
+        {range === 1 && attention.length > 0 ? (
+          <View style={[styles.attentionCard, { backgroundColor: theme.colors.surface, borderColor: withAlpha(theme.colors.separator, 0.3) }]}>
+            <View style={styles.attentionHeader}>
+              <TaskSymbol name="exclamationmark.triangle.fill" size={17} color={theme.colors.danger} />
+              <Text style={[styles.attentionTitle, { color: theme.colors.danger }]}>Needs your attention</Text>
+            </View>
+            {[...attention]
+              .sort((left, right) => (left.id === 'overdue' ? -1 : right.id === 'overdue' ? 1 : 0))
+              .map((item) => (
+                <AttentionCard
+                  key={item.id}
+                  item={item}
+                  opensTasks={item.id === 'overdue' || (item.taskIds?.length ?? 0) > 0}
+                  onPress={
+                    item.id === 'overdue'
+                      ? () => router.push('/today/overdue')
+                      : () => router.push({ pathname: '/today/schedule-check', params: { id: item.id } })
+                  }
+                  testID={`today-attention-${item.id}`}
+                />
+              ))}
+          </View>
+        ) : null}
 
         {/* Not part of `body`: development-only, and renders nothing in a release build. */}
         <DevMenu showsSignOut />
@@ -213,4 +239,8 @@ const styles = StyleSheet.create({
   summaryTitle: { fontSize: 17, lineHeight: 22, fontWeight: '600' },
   caption: { fontSize: 12, lineHeight: 16 },
   grow: { flex: 1 },
+  // `.padding(18)`, corner radius 24 (RootView.swift:1163-1165).
+  attentionCard: { gap: 12, padding: 18, borderRadius: 24, borderWidth: StyleSheet.hairlineWidth },
+  attentionHeader: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  attentionTitle: { fontSize: 17, lineHeight: 22, fontWeight: '600' },
 });
