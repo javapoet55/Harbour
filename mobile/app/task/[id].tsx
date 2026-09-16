@@ -1,27 +1,45 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Switch, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
-import { NexdoTaskBackdrop, TaskSymbol, Text, withTaskAlpha } from '../../src/components';
+import { NexdoLogoMark, TaskSymbol, Text } from '../../src/components';
+import { ClarifyTaskActionCard } from '../../src/components/ClarifyTaskActionCard';
+import { MonthCalendar } from '../../src/components/MonthCalendar';
+import { ProjectAssignmentField } from '../../src/components/ProjectAssignmentField';
+import {
+  DetailCheckbox,
+  DetailField,
+  DetailMenu,
+  DetailOutlineButton,
+  DetailTextInput,
+  detailInputStyle,
+  SectionLabel,
+  withAlpha,
+} from '../../src/components/TaskDetailParts';
 import { detailsBody, draftFrom, draftsEqual, isDraftValid, scheduleBody, type TaskDraft } from '../../src/lib/taskDraft';
-import { taskSubtitle } from '../../src/lib/taskLabels';
-import { isDone } from '../../src/lib/taskQuery';
-import { useCompleteTask, useDeleteTask, useTask, useUpdateTask, type ScheduleConflict } from '../../src/query/useTasks';
+import { dayKey, isDone, startOfDay } from '../../src/lib/taskQuery';
+import {
+  useCompleteTask,
+  useSaveClarifiedStep,
+  useTask,
+  useUpdateTask,
+  type ScheduleConflict,
+} from '../../src/query/useTasks';
 import { canStartFocusSession, canStartTask, FOCUS_SESSION_MINUTES, useFocus } from '../../src/store/focus';
 import { useSession } from '../../src/store/session';
-import { useTheme } from '../../src/theme';
+import { brand, useTheme } from '../../src/theme';
 
 /**
- * Port of `TaskDetailsView` (ios/App/TaskDetailsView.swift).
+ * Port of `TaskDetailsView` (ios/App/TaskDetailsView.swift), rebuilt element by element from the view
+ * body at `:28-90`.
  *
- * In Swift this is not a route of its own: `TaskEditor(task:)` renders `TaskDetailsView` when the task
- * is non-nil (RootView.swift:1929-1931) and `TasksView` presents it as a sheet. Expo Router needs a
- * path, so it is `/task/[id]` presented as a modal — same presentation, addressable differently.
+ * In Swift this is not a route: `TaskEditor(task:)` renders it when the task is non-nil
+ * (RootView.swift:1929) and `TasksView` presents that as a sheet. Expo Router needs a path, so it is
+ * `/task/[id]` as a modal.
  *
- * The `actions` section (TaskDetailsView.swift:114-127) renders its two buttons with Swift's copy,
- * placement and enabled rules, but is wired to `src/store/focus.ts`, a STUB that records the intent
- * and no-ops. TODO(phase4): swap that store for the real focus runtime; the buttons then post to the
- * server and `FocusSessionStrip` replaces the first button while a session is live.
+ * Order, matching `body` exactly: header, `TaskActionCard`, `actions`, TASK, `metadata`
+ * (PRIORITY + ESTIMATE side by side), PROJECT, `schedule`, REPEAT, the "Important reminders"
+ * checkbox, STEPS, NOTES, then the `footer` bar.
  */
 export default function TaskDetail() {
   const theme = useTheme();
@@ -33,12 +51,15 @@ export default function TaskDetail() {
   const [draft, setDraft] = useState<TaskDraft | null>(null);
   const [newStep, setNewStep] = useState('');
   const [conflict, setConflict] = useState<ScheduleConflict | null>(null);
+  const [picking, setPicking] = useState<'date' | 'time' | null>(null);
+  const [clarifyFailure, setClarifyFailure] = useState<string | null>(null);
 
   const focus = useFocus();
   const update = useUpdateTask({ onConflict: setConflict });
   const complete = useCompleteTask({ onConflict: setConflict });
-  const remove = useDeleteTask();
+  const clarify = useSaveClarifiedStep({ onConflict: setConflict });
 
+  // `confirmScheduleWarnings` (NexdoApp.swift:87-98).
   if (conflict) {
     const pending = conflict;
     setConflict(null);
@@ -50,379 +71,451 @@ export default function TaskDetail() {
 
   if (!task || !original) {
     return (
-      <View style={[styles.fill, styles.centre, { backgroundColor: theme.colors.groupedBackground }]}>
+      <View style={[styles.fill, styles.centre, { backgroundColor: theme.colors.background }]}>
         <Text style={[theme.typography.body, { color: theme.colors.secondary }]}>This task is no longer in your list.</Text>
       </View>
     );
   }
 
-  // The buffer is seeded from the cached task and then owned by the screen, so a background refetch
-  // does not overwrite what is being typed.
   const current = draft ?? original;
   const set = (next: Partial<TaskDraft>) => setDraft({ ...current, ...next });
 
   const zone = profile?.timeZone ?? task.timeZone ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
-  const busy = update.isPending || complete.isPending || remove.isPending;
+  // `blocked` (TaskDetailsView.swift:25)
+  const blocked = update.isPending || complete.isPending || clarify.isPending;
+  // `dirty` (TaskDetailsView.swift:26)
   const dirty = !draftsEqual(current, original) || newStep.trim().length > 0;
-  const canSave = dirty && isDraftValid(current) && !busy;
+  const valid = isDraftValid(current);
 
-  const save = () => {
-    if (!canSave) return;
-    // An unsent step in the field is part of the edit, as `dirty` implies.
-    const steps = newStep.trim().length > 0
-      ? [...current.steps, { id: `new-${current.steps.length}`, title: newStep.trim(), sortOrder: current.steps.length }]
-      : current.steps;
-    const pending: TaskDraft = { ...current, steps };
+  /** `addStep` (TaskDetailsView.swift:236-241). */
+  const addStep = (from: TaskDraft = current): TaskDraft => {
+    const value = newStep.trim();
+    if (value.length === 0 || from.steps.length >= 50) return from;
+    return {
+      ...from,
+      steps: [...from.steps, { id: `new-${from.steps.length}-${value}`, title: value, completedAt: null, sortOrder: from.steps.length }],
+    };
+  };
 
+  /** `persist()` (TaskDetailsView.swift:243-248): flush the pending step, then send both bodies. */
+  const persist = (after?: () => void) => {
+    const pending = addStep();
     update.mutate(
       { id: task.id, details: detailsBody(pending, original), schedule: scheduleBody(pending, original) },
       {
         onSuccess: () => {
           setNewStep('');
           setDraft(null);
-          router.back();
+          if (after) after();
+          else router.back();
         },
         onError: (error) => {
           if (error.name === 'ScheduleConflictCancelled' || error.name === 'StaleWriteDiscarded') return;
-          Alert.alert('Couldn’t update your task. Refresh to check its current state before retrying.', error.message);
+          // `run(_:)`'s catch (TaskDetailsView.swift:256).
+          Alert.alert('Task details', 'Couldn’t update your task. Your edits are still here. Please try again.');
         },
       },
     );
   };
 
-  const confirmDelete = () => {
-    Alert.alert('Delete this task?', 'This cannot be undone.', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: () => remove.mutate(task.id, { onSuccess: () => router.back() }),
-      },
-    ]);
+  /** `footer`'s Mark complete (TaskDetailsView.swift:205-214): save the buffer first, then flip. */
+  const markComplete = () => {
+    const flip = () => complete.mutate(task, { onSuccess: () => router.back() });
+    if (dirty) persist(flip);
+    else flip();
   };
 
+  const scheduleAt = current.schedule;
+
   return (
-    <View style={styles.fill}>
-      <NexdoTaskBackdrop />
-      <ScrollView keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive" contentContainerStyle={styles.scroll}>
-        <Card>
-          <TextInput
-            accessibilityLabel="Task title"
-            value={current.title}
-            onChangeText={(title) => set({ title })}
-            style={[styles.titleInput, { color: theme.colors.ink, backgroundColor: theme.colors.groupedBackground, borderColor: theme.colors.separator }]}
-            testID="detail-title"
-          />
-          <Text style={[styles.caption, { color: theme.colors.secondary }]}>{taskSubtitle(task, zone)}</Text>
-
-          <ToggleRow
-            label="Critical"
-            value={current.critical}
-            onChange={(critical) => set({ critical })}
-            testID="detail-critical"
-          />
-
-          <TextInput
-            accessibilityLabel="Task notes"
-            placeholder="Context, links, or anything you need to remember..."
-            placeholderTextColor={theme.colors.secondary}
-            value={current.notes}
-            onChangeText={(notes) => set({ notes })}
-            multiline
-            style={[styles.notesInput, { color: theme.colors.ink, backgroundColor: theme.colors.groupedBackground, borderColor: theme.colors.separator }]}
-            testID="detail-notes"
-          />
-        </Card>
-
-        {/* `actions` (TaskDetailsView.swift:114-127), above the metadata, as in Swift. */}
-        <Card>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={`Start a ${FOCUS_SESSION_MINUTES}-minute focus session`}
-            accessibilityState={{ disabled: !canStartFocusSession(task.status, isDone(task)) }}
-            disabled={!canStartFocusSession(task.status, isDone(task))}
-            onPress={() => focus.startFocus(task.id)}
-            testID="detail-start-focus"
-            style={[
-              styles.outlineButton,
-              { backgroundColor: theme.colors.background, borderColor: withTaskAlpha(theme.colors.tint, 0.16) },
-            ]}
-          >
-            <Text
-              style={[
-                styles.outlineLabel,
-                { color: canStartFocusSession(task.status, isDone(task)) ? theme.colors.ink : theme.colors.secondary },
-              ]}
-            >
-              {`Start a ${FOCUS_SESSION_MINUTES}-minute focus session`}
-            </Text>
-          </Pressable>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={task.status === 'IN_PROGRESS' ? 'Task in progress' : 'Start task'}
-            accessibilityState={{ disabled: !canStartTask(task.status, isDone(task)) }}
-            disabled={!canStartTask(task.status, isDone(task))}
-            onPress={() => focus.startTask(task.id)}
-            testID="detail-start-task"
-            style={[
-              styles.outlineButton,
-              { backgroundColor: theme.colors.background, borderColor: withTaskAlpha(theme.colors.tint, 0.16) },
-            ]}
-          >
-            <Text
-              style={[
-                styles.outlineLabel,
-                { color: canStartTask(task.status, isDone(task)) ? theme.colors.ink : theme.colors.secondary },
-              ]}
-            >
-              {task.status === 'IN_PROGRESS' ? 'Task in progress' : 'Start task'}
-            </Text>
-          </Pressable>
-        </Card>
-
-        <Card title="PRIORITY">
-          <OptionRow
-            options={['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']}
-            value={current.priority}
-            onChange={(priority) => set({ priority })}
-            prefix="priority"
-          />
-        </Card>
-
-        <Card title="ENERGY">
-          <OptionRow options={['LOW', 'MEDIUM', 'HIGH']} value={current.energy} onChange={(energy) => set({ energy })} prefix="energy" />
-        </Card>
-
-        <Card title="TIME ESTIMATE">
-          <View style={styles.row}>
-            <Text style={[theme.typography.body, styles.grow, { color: theme.colors.ink }]}>{current.duration} min</Text>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Less"
-              onPress={() => set({ duration: Math.max(1, current.duration - 5) })}
-              style={styles.stepperButton}
-              testID="detail-duration-less"
-            >
-              <Text style={[styles.stepperGlyph, { color: theme.colors.tint }]}>−</Text>
-            </Pressable>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="More"
-              onPress={() => set({ duration: Math.min(1440, current.duration + 5) })}
-              style={styles.stepperButton}
-              testID="detail-duration-more"
-            >
-              <Text style={[styles.stepperGlyph, { color: theme.colors.tint }]}>+</Text>
-            </Pressable>
-          </View>
-        </Card>
-
-        <Card title="REPEATS">
-          <OptionRow
-            options={['NONE', 'DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY']}
-            value={current.recurrence}
-            onChange={(recurrence) => set({ recurrence })}
-            prefix="recurrence"
-          />
-        </Card>
-
-        {/* `steps` (TaskDetailsView.swift:178-200) */}
-        <Card title="STEPS">
-          {current.steps.map((step, index) => (
-            <View key={step.id} style={styles.row}>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={`${step.completedAt ? 'Reopen' : 'Complete'} ${step.title}`}
-                onPress={() => {
-                  const steps = [...current.steps];
-                  steps[index] = { ...step, completedAt: step.completedAt ? null : new Date().toISOString() };
-                  set({ steps });
-                }}
-                style={styles.stepToggle}
-                testID={`step-toggle-${step.id}`}
-              >
-                <TaskSymbol
-                  name={step.completedAt ? 'checkmark.circle.fill' : 'circle'}
-                  size={22}
-                  color={step.completedAt ? theme.colors.tint : theme.colors.secondary}
-                />
-              </Pressable>
-              <TextInput
-                accessibilityLabel={`Step ${index + 1}`}
-                value={step.title}
-                onChangeText={(title) => {
-                  const steps = [...current.steps];
-                  steps[index] = { ...step, title };
-                  set({ steps });
-                }}
-                style={[theme.typography.body, styles.grow, { color: theme.colors.ink }]}
-                testID={`step-title-${step.id}`}
-              />
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={`Remove ${step.title}`}
-                onPress={() => set({ steps: current.steps.filter((item) => item.id !== step.id) })}
-                style={styles.stepToggle}
-                testID={`step-remove-${step.id}`}
-              >
-                <TaskSymbol name="xmark.circle.fill" size={20} color={theme.colors.secondary} />
-              </Pressable>
-            </View>
-          ))}
-          <View style={styles.row}>
-            <TextInput
-              accessibilityLabel="Add a step"
-              placeholder="Add a step"
-              placeholderTextColor={theme.colors.secondary}
-              value={newStep}
-              onChangeText={setNewStep}
-              style={[theme.typography.body, styles.grow, { color: theme.colors.ink }]}
-              testID="new-step"
-            />
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Add"
-              disabled={newStep.trim().length === 0}
-              onPress={() => {
-                set({ steps: [...current.steps, { id: `new-${Date.now()}`, title: newStep.trim(), sortOrder: current.steps.length }] });
-                setNewStep('');
-              }}
-              style={styles.addStep}
-              testID="add-step"
-            >
-              <Text style={[theme.typography.body, { color: newStep.trim().length === 0 ? theme.colors.secondary : theme.colors.tint }]}>Add</Text>
-            </Pressable>
-          </View>
-        </Card>
-
-        {/* `footer` (TaskDetailsView.swift:204-220) */}
-        <Card>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={isDone(task) ? 'Mark incomplete' : 'Mark complete'}
-            accessibilityState={{ disabled: busy }}
-            disabled={busy}
-            onPress={() => complete.mutate(task)}
-            style={styles.footerButton}
-            testID="detail-complete"
-          >
-            <Text style={[theme.typography.body, { color: theme.colors.tint }]}>{isDone(task) ? 'Mark incomplete' : 'Mark complete'}</Text>
-          </Pressable>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Delete task"
-            accessibilityState={{ disabled: busy }}
-            disabled={busy}
-            onPress={confirmDelete}
-            style={styles.footerButton}
-            testID="detail-delete"
-          >
-            <Text style={[theme.typography.body, { color: theme.colors.danger }]}>Delete task</Text>
-          </Pressable>
-        </Card>
-      </ScrollView>
-
-      <View style={[styles.saveBar, { backgroundColor: theme.colors.surface, borderTopColor: theme.colors.separator }]}>
+    <View style={[styles.fill, { backgroundColor: theme.colors.background }]}>
+      {/* `header` (TaskDetailsView.swift:94-112) */}
+      <View style={[styles.header, { borderBottomColor: withAlpha(brand.nexdoIndigo, 0.1) }]}>
+        <View style={styles.headerText}>
+          <Text style={[styles.eyebrow, { color: theme.colors.tint }]}>TASK DETAILS</Text>
+          <Text accessibilityRole="header" numberOfLines={2} style={[styles.headerTitle, { color: theme.colors.ink }]}>
+            {current.title.trim().length === 0 ? task.title : current.title}
+          </Text>
+        </View>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={update.isPending ? 'Saving…' : 'Save changes'}
-          accessibilityState={{ disabled: !canSave }}
-          disabled={!canSave}
-          onPress={save}
-          style={[styles.saveButton, { backgroundColor: canSave ? theme.colors.tint : theme.colors.groupedBackground }]}
-          testID="detail-save"
+          accessibilityLabel="Close task details"
+          accessibilityState={{ disabled: blocked }}
+          disabled={blocked}
+          onPress={() => router.back()}
+          testID="detail-close"
+          style={[styles.close, { backgroundColor: withAlpha(brand.nexdoIndigo, 0.09) }]}
         >
-          <Text style={[styles.saveLabel, { color: canSave ? '#FFFFFF' : theme.colors.secondary }]}>
-            {update.isPending ? 'Saving…' : 'Save changes'}
-          </Text>
+          <TaskSymbol name="xmark" size={17} color={theme.colors.tint} />
         </Pressable>
       </View>
+
+      <ScrollView keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive" contentContainerStyle={styles.scroll}>
+        {/* `TaskActionCard(task:)` (TaskDetailsView.swift:34) */}
+        <ClarifyTaskActionCard
+          task={task}
+          saving={clarify.isPending}
+          failure={clarifyFailure}
+          onSaveNextStep={(title) => {
+            setClarifyFailure(null);
+            clarify.mutate(
+              { id: task.id, title },
+              { onError: () => setClarifyFailure('Couldn’t save your next step. Please try again.') },
+            );
+          }}
+          onSaveContactAction={(title) => {
+            setClarifyFailure(null);
+            // Swift calls `model.saveTask(id:title:notes:duration:)`; the same PATCH, title only.
+            update.mutate(
+              { id: task.id, details: { title }, schedule: null },
+              { onError: () => setClarifyFailure('Couldn’t update this task. Please try again.') },
+            );
+          }}
+        />
+
+        {/* `actions` (TaskDetailsView.swift:114-127) */}
+        <View style={styles.actions}>
+          {/* TODO(phase4): when a focus session is live, Swift replaces this button with
+              `FocusSessionStrip()` (TaskDetailsView.swift:116-117). */}
+          <DetailOutlineButton
+            title={`Start a ${FOCUS_SESSION_MINUTES}-minute focus session`}
+            disabled={blocked || !canStartFocusSession(task.status, isDone(task))}
+            onPress={() => focus.startFocus(task.id)}
+            testID="detail-start-focus"
+          />
+          <DetailOutlineButton
+            title={task.status === 'IN_PROGRESS' ? 'Task in progress' : 'Start task'}
+            disabled={blocked || !canStartTask(task.status, isDone(task))}
+            onPress={() => focus.startTask(task.id)}
+            testID="detail-start-task"
+          />
+        </View>
+
+        <DetailField title="TASK">
+          <DetailTextInput
+            value={current.title}
+            onChangeText={(title) => set({ title })}
+            accessibilityLabel="Task title"
+            testID="detail-title"
+          />
+        </DetailField>
+
+        {/* `metadata` (TaskDetailsView.swift:129-148): PRIORITY and ESTIMATE side by side. */}
+        <View style={styles.metadata}>
+          <DetailField title="PRIORITY">
+            <DetailMenu
+              label="Priority"
+              accessibilityLabel="Priority"
+              value={current.priority}
+              options={['LOW', 'NORMAL', 'HIGH', 'CRITICAL']}
+              display={capitalised}
+              onSelect={(priority) => set({ priority })}
+              testID="detail-priority"
+            />
+          </DetailField>
+          <DetailField title="ESTIMATE">
+            <DetailMenu
+              label="Estimate"
+              accessibilityLabel="Estimate"
+              value={String(current.duration)}
+              options={['15', '30', '45', '60', '90', '120'].sort(byNumber)}
+              display={(minutes) => `${minutes} min`}
+              onSelect={(minutes) => set({ duration: Number(minutes) })}
+              testID="detail-estimate"
+            >
+              {/* `ControlGroup { Less / More }` (TaskDetailsView.swift:139-142) */}
+              <View style={[styles.controlGroup, { borderTopColor: theme.colors.separator }]}>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Less"
+                  onPress={() => set({ duration: Math.max(1, current.duration - 5) })}
+                  testID="detail-estimate-less"
+                  style={styles.controlButton}
+                >
+                  <Text style={[theme.typography.body, { color: theme.colors.tint }]}>− Less</Text>
+                </Pressable>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="More"
+                  onPress={() => set({ duration: Math.min(1440, current.duration + 5) })}
+                  testID="detail-estimate-more"
+                  style={styles.controlButton}
+                >
+                  <Text style={[theme.typography.body, { color: theme.colors.tint }]}>+ More</Text>
+                </Pressable>
+              </View>
+            </DetailMenu>
+          </DetailField>
+        </View>
+
+        <DetailField title="PROJECT">
+          <ProjectAssignmentField projectID={current.projectId} onChange={(projectId) => set({ projectId })} />
+        </DetailField>
+
+        {/* `schedule` (TaskDetailsView.swift:150-171) */}
+        <View style={[styles.scheduleCard, { backgroundColor: theme.colors.background, borderColor: withAlpha(brand.nexdoIndigo, 0.16) }]}>
+          <SectionLabel title="SCHEDULE" />
+          {scheduleAt !== null ? (
+            <View style={styles.scheduleRow}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Schedule date"
+                accessibilityValue={{ text: dateLabel(scheduleAt, zone) }}
+                onPress={() => setPicking('date')}
+                testID="detail-schedule-date"
+                style={[detailInputStyle(theme), styles.chip]}
+              >
+                <Text style={[theme.typography.body, { color: theme.colors.ink }]}>{dateLabel(scheduleAt, zone)}</Text>
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Start time"
+                accessibilityValue={{ text: timeLabel(scheduleAt, zone) }}
+                onPress={() => setPicking('time')}
+                testID="detail-schedule-time"
+                style={[detailInputStyle(theme), styles.chip]}
+              >
+                <Text style={[theme.typography.body, { color: theme.colors.ink }]}>{timeLabel(scheduleAt, zone)}</Text>
+              </Pressable>
+            </View>
+          ) : (
+            <DetailOutlineButton
+              title="Set date and start time"
+              onPress={() => set({ schedule: Date.now() })}
+              testID="detail-set-schedule"
+            />
+          )}
+        </View>
+
+        <DetailField title="REPEAT">
+          <DetailMenu
+            label="Repeat"
+            accessibilityLabel="Repeat"
+            value={current.recurrence}
+            options={['NONE', 'DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY']}
+            display={(option) => (option === 'NONE' ? 'Does not repeat' : capitalised(option))}
+            onSelect={(recurrence) => set({ recurrence })}
+            testID="detail-repeat"
+          />
+        </DetailField>
+
+        {/* The critical toggle (TaskDetailsView.swift:48-54) */}
+        <DetailCheckbox
+          title="Important reminders"
+          subtitle="Use escalation channels"
+          value={current.critical}
+          onChange={(critical) => set({ critical })}
+          testID="detail-critical"
+        />
+
+        {/* `steps` (TaskDetailsView.swift:178-200) */}
+        <DetailField title="STEPS">
+          <View style={styles.steps}>
+            {current.steps.map((step) => (
+              <View key={step.id} style={[detailInputStyle(theme), styles.stepRow]}>
+                <TaskSymbol
+                  name={step.completedAt === null || step.completedAt === undefined ? 'circle' : 'checkmark.circle.fill'}
+                  size={20}
+                  color={theme.colors.secondary}
+                />
+                <Text style={[theme.typography.body, styles.grow, { color: theme.colors.ink }]}>{step.title}</Text>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`Remove step ${step.title}`}
+                  onPress={() => set({ steps: current.steps.filter((item) => item.id !== step.id) })}
+                  testID={`detail-step-remove-${step.id}`}
+                  style={styles.stepRemove}
+                >
+                  <TaskSymbol name="xmark" size={15} color={theme.colors.secondary} />
+                </Pressable>
+              </View>
+            ))}
+            <View style={styles.addStepRow}>
+              <View style={styles.grow}>
+                <DetailTextInput
+                  value={newStep}
+                  onChangeText={setNewStep}
+                  placeholder="Add a step"
+                  accessibilityLabel="Add task step"
+                  testID="detail-new-step"
+                />
+              </View>
+              <DetailOutlineButton
+                title="Add"
+                disabled={newStep.trim().length === 0 || current.steps.length >= 50}
+                onPress={() => {
+                  setDraft(addStep());
+                  setNewStep('');
+                }}
+                testID="detail-add-step"
+              />
+            </View>
+            {current.steps.length >= 50 ? (
+              <Text style={[styles.caption, { color: theme.colors.secondary }]}>Up to 50 steps per task.</Text>
+            ) : null}
+          </View>
+        </DetailField>
+
+        <DetailField title="NOTES">
+          <DetailTextInput
+            value={current.notes}
+            onChangeText={(notes) => set({ notes })}
+            placeholder="Context, links, or anything you need to remember..."
+            accessibilityLabel="Task notes"
+            multiline
+            testID="detail-notes"
+          />
+        </DetailField>
+      </ScrollView>
+
+      {/* `footer` (TaskDetailsView.swift:203-227): Mark complete and Save changes, side by side. */}
+      <View style={[styles.footer, { backgroundColor: theme.colors.surface, borderTopColor: withAlpha(brand.nexdoIndigo, 0.1) }]}>
+        <View style={styles.footerButton}>
+          <DetailOutlineButton
+            title={isDone(task) ? 'Mark incomplete' : 'Mark complete'}
+            accessibilityLabel={isDone(task) ? 'Mark task incomplete' : 'Mark task complete'}
+            greenBackground
+            disabled={blocked || !valid}
+            onPress={markComplete}
+            testID="detail-complete"
+          />
+        </View>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Save task changes"
+          accessibilityState={{ disabled: blocked || !valid || !dirty }}
+          disabled={blocked || !valid || !dirty}
+          onPress={() => persist()}
+          testID="detail-save"
+          style={[styles.footerButton, !(valid && dirty) && styles.dimmed]}
+        >
+          <View style={[styles.saveCapsule, { backgroundColor: theme.colors.tint }]}>
+            {update.isPending ? <ActivityIndicator color="#FFFFFF" /> : null}
+            <Text style={[styles.saveLabel, { color: '#FFFFFF' }]}>{update.isPending ? 'Saving…' : 'Save changes'}</Text>
+          </View>
+        </Pressable>
+      </View>
+
+      {/* The two `.datePickerStyle(.compact)` pickers (TaskDetailsView.swift:156-163). */}
+      <Modal visible={picking !== null} animationType="slide" transparent onRequestClose={() => setPicking(null)}>
+        <View style={styles.sheetBackdrop}>
+          <View style={[styles.sheet, { backgroundColor: theme.colors.surface }]}>
+            <View style={styles.sheetBar}>
+              <Text accessibilityRole="header" style={[styles.sheetTitle, { color: theme.colors.ink }]}>
+                {picking === 'time' ? 'Start time' : 'Schedule date'}
+              </Text>
+              <Pressable accessibilityRole="button" accessibilityLabel="Done" onPress={() => setPicking(null)} style={styles.sheetDone} testID="detail-schedule-done">
+                <Text style={[theme.typography.body, { color: theme.colors.tint }]}>Done</Text>
+              </Pressable>
+            </View>
+            {/* Both chips only exist once `schedule` is set, so there is never a null to fall back from. */}
+            {picking === 'date' && scheduleAt !== null ? (
+              <MonthCalendar selected={scheduleAt} onSelect={(next) => set({ schedule: next })} timeZone={zone} />
+            ) : null}
+            {picking === 'time' && scheduleAt !== null ? (
+              <TimeGrid selected={scheduleAt} onSelect={(next) => set({ schedule: next })} timeZone={zone} />
+            ) : null}
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
 
-function Card({ title, children }: { title?: string; children: React.ReactNode }) {
+/**
+ * The hour-and-minute half of the schedule. SwiftUI's compact `DatePicker` opens a wheel; this is a
+ * list of half-hour slots, for the same reason `MonthCalendar` is hand-built — see its note.
+ */
+function TimeGrid({ selected, onSelect, timeZone }: { selected: number; onSelect: (next: number) => void; timeZone: string }) {
   const theme = useTheme();
-  return (
-    <View style={styles.cardWrapper}>
-      {title ? <Text style={[styles.cardTitle, { color: theme.colors.tint }]}>{title}</Text> : null}
-      <View style={[styles.card, { backgroundColor: theme.colors.surface, borderColor: theme.colors.separator }]}>{children}</View>
-    </View>
-  );
-}
+  const midnight = startOfDay(selected, timeZone);
+  const currentSlot = Math.floor((selected - midnight) / 1_800_000);
 
-function ToggleRow({ label, value, onChange, testID }: { label: string; value: boolean; onChange: (next: boolean) => void; testID?: string }) {
-  const theme = useTheme();
   return (
-    <View style={styles.row}>
-      <Text style={[theme.typography.body, styles.grow, { color: theme.colors.ink }]}>{label}</Text>
-      <Switch value={value} onValueChange={onChange} accessibilityLabel={label} testID={testID} />
-    </View>
-  );
-}
-
-function OptionRow({
-  options,
-  value,
-  onChange,
-  prefix,
-}: {
-  options: string[];
-  value: string;
-  onChange: (next: string) => void;
-  prefix: string;
-}) {
-  const theme = useTheme();
-  return (
-    <View style={styles.options}>
-      {options.map((option) => {
-        const selected = option === value;
+    <ScrollView style={styles.timeGrid}>
+      {Array.from({ length: 48 }, (_, slot) => {
+        const at = midnight + slot * 1_800_000;
+        const label = timeLabel(at, timeZone);
+        const isSelected = slot === currentSlot;
         return (
           <Pressable
-            key={option}
+            key={slot}
             accessibilityRole="button"
-            accessibilityLabel={option.charAt(0) + option.slice(1).toLowerCase()}
-            accessibilityState={{ selected }}
-            onPress={() => onChange(option)}
-            testID={`${prefix}-${option}`}
-            style={[
-              styles.option,
-              { borderColor: theme.colors.separator, backgroundColor: selected ? theme.colors.tint : theme.colors.groupedBackground },
-            ]}
+            accessibilityLabel={label}
+            accessibilityState={{ selected: isSelected }}
+            onPress={() => onSelect(at)}
+            testID={`time-slot-${slot}`}
+            style={styles.timeRow}
           >
-            <Text style={[styles.optionLabel, { color: selected ? '#FFFFFF' : theme.colors.ink }]}>
-              {option.charAt(0) + option.slice(1).toLowerCase()}
-            </Text>
+            <Text style={[theme.typography.body, { color: isSelected ? theme.colors.tint : theme.colors.ink }]}>{label}</Text>
           </Pressable>
         );
       })}
-    </View>
+    </ScrollView>
   );
 }
+
+/** `.capitalized` on an all-caps enum value: "NORMAL" reads as "Normal". */
+function capitalised(value: string): string {
+  return value.charAt(0) + value.slice(1).toLowerCase();
+}
+
+function byNumber(left: string, right: string): number {
+  return Number(left) - Number(right);
+}
+
+function dateLabel(at: number, timeZone: string): string {
+  try {
+    return new Intl.DateTimeFormat('en-US', { timeZone, month: 'short', day: 'numeric', year: 'numeric' }).format(new Date(at));
+  } catch {
+    return dayKey(at, timeZone);
+  }
+}
+
+function timeLabel(at: number, timeZone: string): string {
+  return new Intl.DateTimeFormat('en-US', { timeZone, hour: 'numeric', minute: '2-digit' }).format(new Date(at));
+}
+
+export { NexdoLogoMark };
 
 const styles = StyleSheet.create({
   fill: { flex: 1 },
   centre: { alignItems: 'center', justifyContent: 'center', padding: 24 },
-  scroll: { padding: 20, gap: 18, paddingBottom: 24 },
-  cardWrapper: { gap: 6 },
-  cardTitle: { fontSize: 12, lineHeight: 16, fontWeight: '600', letterSpacing: 0.8, marginLeft: 4 },
-  card: { gap: 12, padding: 16, borderRadius: 20, borderWidth: StyleSheet.hairlineWidth },
-  titleInput: { fontSize: 20, lineHeight: 25, fontWeight: '600', padding: 12, borderRadius: 12, borderWidth: StyleSheet.hairlineWidth },
-  notesInput: { fontSize: 17, lineHeight: 22, minHeight: 88, padding: 12, borderRadius: 12, borderWidth: StyleSheet.hairlineWidth, textAlignVertical: 'top' },
-  caption: { fontSize: 12, lineHeight: 16 },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 44 },
+  // `.padding(.horizontal, 20).padding(.vertical, 18)` with a bottom divider.
+  header: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 20, paddingVertical: 18, borderBottomWidth: StyleSheet.hairlineWidth },
+  headerText: { flex: 1, gap: 5 },
+  // `.font(.caption.weight(.bold)).tracking(1.7)`
+  eyebrow: { fontSize: 12, lineHeight: 16, fontWeight: '700', letterSpacing: 1.7 },
+  // `.font(.title3.weight(.semibold))`
+  headerTitle: { fontSize: 20, lineHeight: 25, fontWeight: '600' },
+  close: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
+  // `.padding(20)` with `VStack(spacing: 24)`.
+  scroll: { padding: 20, gap: 24 },
+  actions: { gap: 8 },
+  metadata: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
+  controlGroup: { flexDirection: 'row', borderTopWidth: StyleSheet.hairlineWidth },
+  controlButton: { flex: 1, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
+  // `.padding(12)`, corner radius 17.
+  scheduleCard: { gap: 8, padding: 12, borderRadius: 17, borderWidth: StyleSheet.hairlineWidth },
+  scheduleRow: { flexDirection: 'row', gap: 12 },
+  chip: { flex: 1, justifyContent: 'center' },
+  steps: { gap: 8 },
+  stepRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  stepRemove: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  addStepRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   grow: { flex: 1 },
-  stepperButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
-  stepperGlyph: { fontSize: 24, lineHeight: 28, fontWeight: '600' },
-  stepToggle: { width: 36, height: 44, alignItems: 'center', justifyContent: 'center' },
-  addStep: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 8 },
-  options: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  option: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 14, borderRadius: 12, borderWidth: StyleSheet.hairlineWidth },
-  optionLabel: { fontSize: 15, lineHeight: 20, fontWeight: '600' },
-  outlineButton: { minHeight: 44, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 14, borderRadius: 13, borderWidth: StyleSheet.hairlineWidth },
-  outlineLabel: { fontSize: 15, lineHeight: 20, fontWeight: '600' },
-  footerButton: { minHeight: 44, justifyContent: 'center' },
-  saveBar: { paddingHorizontal: 20, paddingVertical: 12, borderTopWidth: StyleSheet.hairlineWidth },
-  saveButton: { minHeight: 52, alignItems: 'center', justifyContent: 'center', borderRadius: 17 },
-  saveLabel: { fontSize: 17, lineHeight: 22, fontWeight: '600' },
+  caption: { fontSize: 12, lineHeight: 16 },
+  // `.padding(.horizontal, 16).padding(.vertical, 12)` over `.regularMaterial`, divider on top.
+  footer: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 12, borderTopWidth: StyleSheet.hairlineWidth },
+  footerButton: { flex: 1 },
+  dimmed: { opacity: 0.55 },
+  saveCapsule: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 46, paddingHorizontal: 12, borderRadius: 999 },
+  saveLabel: { fontSize: 15, lineHeight: 20, fontWeight: '600' },
+  sheetBackdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0, 0, 0, 0.35)' },
+  sheet: { padding: 20, gap: 14, borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: '80%' },
+  sheetBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  sheetTitle: { fontSize: 17, lineHeight: 22, fontWeight: '600' },
+  sheetDone: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 4 },
+  timeGrid: { maxHeight: 320 },
+  timeRow: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 8 },
 });

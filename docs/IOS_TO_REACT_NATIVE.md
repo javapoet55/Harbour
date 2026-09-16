@@ -509,6 +509,29 @@ Nothing in Phase 2 has run on a phone. Procedures: `mobile/README.md`, "Auth flo
 
 ## 12. Phase 3 status (tasks and projects)
 
+### Correction: the task detail screen was rebuilt (2026-09-16)
+
+The first port of `mobile/app/task/[id].tsx` did not resemble `TaskDetailsView` at all. It showed an
+ENERGY section, a plain Critical switch, priority and repeat as pill groups and notes at the top, and
+it omitted the action card, PROJECT, SCHEDULE and the reminders checkbox.
+
+**Root cause: it was built from the MODEL, not the VIEW.** `TaskDraft`
+(`ios/Sources/NexdoCore/TaskDraft.swift`) carries `energy` and `splittable`, so an ENERGY control was
+invented for them; the view never exposes either. The rest of the screen was assembled from a grep of
+`TaskDetailsView.swift`'s `private var` names rather than from its `body`, so the composition (which
+sections exist, in what order, and which come from other files) was guessed. `TaskDraft` is the edit
+buffer; it is not the field list.
+
+The screen has now been rebuilt element by element from the view body (`TaskDetailsView.swift:28-90`).
+The order is: header, `TaskActionCard`, `actions`, TASK, `metadata` (PRIORITY and ESTIMATE side by
+side), PROJECT, `schedule`, REPEAT, the "Important reminders / Use escalation channels" checkbox,
+STEPS, NOTES, then the footer bar with "Mark complete" and "Save changes".
+
+**Lesson for later phases: read the `body`.** A SwiftUI view's composition cannot be inferred from its
+state, its helpers' names, or the model it edits. Two of this screen's sections come from other files
+entirely (`TaskActionCard` from `TaskActionView.swift`, `ProjectAssignmentField` from
+`ProjectsView.swift`), which a grep of the screen's own file will never reveal.
+
 ### Where the Swift app does not match the brief
 
 The Phase 3 brief was written from the screen inventory, not from the Swift source, and the two differ
@@ -570,16 +593,31 @@ Two more findings worth recording:
 | `mobile/app/project/new.tsx`, `mobile/app/project/[id]/edit.tsx` | `ProjectEditorView`, presented as a sheet |
 | `src/lib/projectQuery.ts` | `ProjectQuery` (`Projects.swift:20-41`) and `ProjectStyle.color` |
 | `src/store/focus.ts` | `AppModel.startFocus` / `changeTaskStatus` — STUB, Phase 4 replaces it |
+| `src/components/TaskDetailParts.tsx` | `field`, `sectionLabel`, `menu`, `menuLabel`, `DetailInput`, `DetailOutlineButton`, `DetailCheckboxStyle` (`TaskDetailsView.swift:266-295, 297-321, 343-353`) |
+| `src/components/ClarifyTaskActionCard.tsx` | `TaskActionCard` and `ClarifyTaskActionCard` (`TaskActionView.swift:4-100`) |
+| `src/lib/taskClarification.ts` | `TaskActionClarification` and the detection half of `DeterministicTaskActionDetector` (`TaskActionDetector.swift:4-33, 67-87`) |
 
 ### NOT built in Phase 3
 
 - **Voice transcription.** The capture screen runs on a `__DEV__`-only stub
   (`src/voice/taskCaptureStub.ts`) that yields a fixed transcript. Phase 9 replaces it.
-- **The focus runtime.** The two `actions` buttons on the task detail render with Swift's copy,
-  placement and enabled rules, but are wired to `src/store/focus.ts`, a stub that records the intent
-  and no-ops. Phase 4 replaces it with the real POST, `focusToken`, countdown and `FocusSessionStrip`.
-- **`FocusSessionStrip`** itself (`ios/App/FocusSessionStrip.swift:25`), which Swift swaps in for the
-  focus button while a session is live (TaskDetailsView.swift:116-117). Phase 4.
+- **The focus runtime.** The two `actions` buttons render with Swift's copy, placement and enabled
+  rules but are wired to `src/store/focus.ts`, a stub that records the intent and no-ops. Phase 4
+  replaces it with the real POST, `focusToken`, countdown and `FocusSessionStrip`.
+- **`FocusSessionStrip`** (`ios/App/FocusSessionStrip.swift:25`), which Swift swaps in for the focus
+  button while a session is live (`TaskDetailsView.swift:116-117`). Phase 4.
+- **`TaskActionCoordinator`** (`ios/App/TaskActionCoordinator.swift`). `TaskActionCard` has two
+  branches: a "Nexdo Action: contact X" card when the coordinator holds a scheduled reminder action,
+  and the clarify card otherwise (`TaskActionView.swift:10-38`). The coordinator is reminders work, so
+  only the SECOND branch is ported and the first never shows. Phase 8.
+- **The "Contact someone" follow-through.** The card builds and saves the "Call <name>" title, but
+  Swift then calls `coordinator.synchronize` and opens the action sheet
+  (`TaskActionView.swift:92-95`). Phase 8.
+- **`DeterministicTaskActionDetector.parseTime`** (`TaskActionDetector.swift:35-65`). Only the
+  detection half is ported, which is all `isCandidate` needs. Phase 8 needs the rest, and the task
+  CREATION form uses it too: Swift shows a "Nexdo Action: contact X. Schedule: ..." line under the
+  date buttons and lets a detected time override the chosen date (`RootView.swift:1981-1984`,
+  `:2082-2085`). That line is NOT in the React Native creation form. See the re-check below.
 
 ### Visual gaps
 
@@ -607,6 +645,16 @@ Two more findings worth recording:
 - **New.** `ProjectCard`'s progress bar is a plain two-view track, not a `ProgressView`.
 - **New.** The projects grid approximates `LazyVGrid`'s adaptive columns with flex-wrap and a
   `minWidth`, rather than Swift's explicit `geometry.size.width < 340` switch.
+- **New in the detail rebuild.** `FocusButtonBorder` (`TaskDetailsView.swift:323-341`), the animated
+  angular-gradient border on the focus button, is not reproduced; the button takes the plain outline.
+- **New.** The schedule row's two compact `DatePicker`s are chips that open a month grid and a
+  half-hour time list, rather than iOS wheel pickers.
+- **New.** The estimate menu's `ControlGroup { Less / More }` is two full-width rows under the options
+  instead of a segmented control.
+- **New.** `DetailCheckbox` uses an Ionicons checkbox glyph rather than SF Symbols'
+  `checkmark.square.fill` / `square`.
+- **New.** The `ScrollViewReader` that scrolls a focused field to centre
+  (`TaskDetailsView.swift:66-68`) is not reproduced.
 
 ### Open TODO(phase3-decision) markers
 
@@ -625,6 +673,23 @@ Two more findings worth recording:
   Phase 7 account screen exists, rather than a route to a path that would render the not-found screen.
 - `TODO(phase9)` in `src/voice/taskCaptureStub.ts`: the real transcription session.
 
+### Creation form re-check (2026-09-16)
+
+Re-verified `mobile/app/task/new.tsx` against `TaskEditor.creationForm` (`RootView.swift:1932-2050`):
+
+- **The NOTES row must NOT navigate.** It is a `DisclosureGroup` (`RootView.swift:1954-1975`) that
+  expands in place; there is no notes screen. The React Native row already expanded in place, but its
+  collapsed chevron pointed right, which reads as a push. It now rotates: right when collapsed, down
+  when expanded, matching the disclosure control.
+- **The custom estimate stepper matches**: `Stepper(value:in:step:)` over 5...480 in steps of 5,
+  labelled "Custom estimate" and "N min". The React Native control clamps to the same bounds with the
+  same step and the same two labels. It draws as two separate buttons rather than one segmented
+  stepper, a minor difference already covered by the gaps list.
+- **One real gap found**: Swift shows "Nexdo Action: contact X. Schedule: ..." under the date buttons
+  when the title parses as a contact action, and lets that detected time override the chosen date
+  unless a date was picked explicitly. Neither is ported, because both need `parseTime`. Listed under
+  "NOT built" above.
+
 ### Needs confirmation on a device
 
 Nothing in Phase 3 has run on a phone. Procedure: `mobile/README.md`, "Phase 3 on-device test plan".
@@ -635,3 +700,4 @@ Nothing in Phase 3 has run on a phone. Procedure: `mobile/README.md`, "Phase 3 o
 - Pull-to-refresh, keyboard avoidance, and the modal presentations.
 - Projects: create, edit, delete, the colour grid, the "No project" folder and per-project filters.
 - The date picker's month grid, including stepping across a month boundary.
+- The rebuilt task detail, section by section, against the iPhone: this is the screen that was wrong.

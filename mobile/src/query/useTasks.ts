@@ -221,6 +221,27 @@ export function useUpdateTask({ onConflict }: ConflictHandler) {
   });
 }
 
+/**
+ * `AppModel.saveClarifiedStep` (NexdoApp.swift:507-517): the "Save next step" button on the clarify
+ * card. It sends the step as BOTH the title and the sole subtask, then refetches, because the server
+ * replaces every step row when `subtasks` is present.
+ */
+export function useSaveClarifiedStep({ onConflict }: ConflictHandler) {
+  const queryClient = useQueryClient();
+  return useMutation<NexdoTask, Error, { id: string; title: string }>({
+    mutationFn: async ({ id, title }) => {
+      const token = claim(id);
+      const response = await scheduleRequest((body) => endpoints.updateTask(id, body), { title, subtasks: [title] }, onConflict);
+      if (!isNewest(id, token)) throw new StaleWriteDiscarded();
+      return response.task;
+    },
+    onSuccess: (task) => {
+      replaceTask(queryClient, task);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.tasks.all() });
+    },
+  });
+}
+
 /** Deletion is a CANCELLED status; the server soft-deletes and the filter drops it. */
 export function useDeleteTask() {
   const queryClient = useQueryClient();

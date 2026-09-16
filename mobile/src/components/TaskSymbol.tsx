@@ -28,6 +28,11 @@ export const taskIcons = {
   'text.alignleft': 'text-outline',
   'arrow.right': 'arrow-forward',
   'circle.dotted': 'ellipse-outline',
+  'chevron.down': 'chevron-down',
+  'checkmark.square.fill': 'checkbox',
+  square: 'square-outline',
+  xmark: 'close',
+  sparkles: 'sparkles',
 } satisfies Record<string, IoniconName>;
 
 export type TaskSymbolName = keyof typeof taskIcons;

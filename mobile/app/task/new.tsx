@@ -110,7 +110,9 @@ export default function NewTask() {
                 </Text>
               ) : null}
             </View>
-            <TaskSymbol name="chevron.right" size={15} color={theme.colors.secondary} />
+            {/* A `DisclosureGroup` chevron, which rotates in place. Notes expand HERE; they do not
+                navigate to a notes screen, so the collapsed glyph must not imply a push. */}
+            <TaskSymbol name={notesExpanded ? 'chevron.down' : 'chevron.right'} size={15} color={theme.colors.secondary} />
           </Pressable>
           {notesExpanded ? (
             <TextInput

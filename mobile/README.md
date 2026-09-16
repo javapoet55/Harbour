@@ -447,19 +447,48 @@ this week and last month, plus at least one completed task and one recurring tas
     `.datePickerStyle(.graphical)` and decide whether the difference is worth a native dependency and
     a rebuild; the trade-off is recorded in section 12 of `docs/IOS_TO_REACT_NATIVE.md`.
 
-### 12. Task detail actions (Phase 4 stub)
+### 12. The task detail screen
 
-69. Open a task. Above PRIORITY, two buttons read "Start a 25-minute focus session" and "Start task".
-70. Check they are positioned and styled as in Swift, directly under the title/notes card.
-71. On a COMPLETED task both are greyed out. On a task already IN_PROGRESS, "Start task" reads
-    "Task in progress" and is greyed out while the focus button stays available.
-72. Tap either button. NOTHING SHOULD HAPPEN and no request should appear in the Metro log: these are
-    wired to a Phase 4 stub that only records the intent. Behaviour lands in Phase 4.
+This screen was rebuilt after the first port came out wrong. Compare it against the iPhone section by
+section, top to bottom; the order below IS the Swift order.
+
+69. Open a task. The header shows "TASK DETAILS" above the task title, with a round X on the right.
+70. For a task with a SHORT, VAGUE title and no steps yet (try "Kitchen"), a tinted card reads
+    "What would you like to do about "Kitchen"?" with a Work on it / Contact someone control.
+    For "Pay the rent", or for any task that already has steps, the card should NOT appear.
+71. On "Work on it": the field reads "First step, e.g. Draft three presentation slides". "Save next
+    step" stays grey until you type at least TWO words.
+72. Type a step and save. In the Metro log the body is `{"title":…,"subtasks":[…]}` — the same text as
+    both the title and the only step. The card then disappears, because the task now has a step.
+73. On "Contact someone": the field pre-fills with the task title, and Call / Message / Email save a
+    title like "Call Damien". NOTE: Swift then opens the action sheet; that is Phase 8 and does not
+    happen here.
+74. Below the card: "Start a 25-minute focus session" and "Start task". These are the Phase 4 stub —
+    nothing should happen and no request should appear in the log.
+75. TASK: the title field.
+76. PRIORITY and ESTIMATE sit SIDE BY SIDE. Priority reads "Normal" for a NORMAL task. Estimate reads
+    "30 min" and its menu offers 15/30/45/60/90/120 plus Less and More in fives.
+77. PROJECT: the same assignment control as the creation form.
+78. SCHEDULE: a card with a date chip and a time chip side by side. For an UNSCHEDULED task it instead
+    shows "Set date and start time"; tap it and the chips appear.
+79. REPEAT: reads "Does not repeat" when there is no rule.
+80. The checkbox reads "Important reminders" with "Use escalation channels" beneath it. It is a
+    CHECKBOX, not a switch.
+81. STEPS: existing steps each with an X to remove, then an "Add a step" field with an Add button.
+82. NOTES last, as a multi-line field.
+83. The bottom bar has "Mark complete" (green) and "Save changes" (tinted) SIDE BY SIDE. "Save changes"
+    stays dim until something is dirty.
+84. Edit the title, then tap "Mark complete". TWO requests should appear in the log: the title change
+    first, then `{"status":"COMPLETED"}` — Swift saves the buffer before flipping.
+85. Type into "Add a step" without pressing Add, then tap "Save changes". The unsent step should still
+    be included in the `subtasks` array.
+86. Confirm NONE of these appear, because the Swift view has none of them: an ENERGY section, a
+    "Critical" switch, a "TIME ESTIMATE" heading, or a "REPEATS" heading.
 
 ### 13. Visual parity
 
-73. With the Swift app beside you, compare the list, the creation sheet and the detail sheet in light
+87. With the Swift app beside you, compare the list, the creation sheet and the detail sheet in light
     and dark mode. The known differences are listed under "Visual gaps" in section 12 of
     `docs/IOS_TO_REACT_NATIVE.md`; anything NOT on that list is a defect worth reporting.
-74. Check the category badges in particular: they carry no artwork here, only a coloured dot.
-75. Check the four menus in the projects screens: they open as inline lists, not floating popovers.
+88. Check the category badges in particular: they carry no artwork here, only a coloured dot.
+89. Check the four menus in the projects screens: they open as inline lists, not floating popovers.
