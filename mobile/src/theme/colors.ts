@@ -10,6 +10,12 @@ export const brand = {
 
 export type Palette = {
   ink: string;
+  /** iOS `.label` — what an unstyled SwiftUI `Text` uses. Not the same as `ink` (`nexdoInk`). */
+  label: string;
+  /** iOS `.placeholderText` — what an unstyled `TextField` placeholder uses. */
+  placeholder: string;
+  /** iOS `.secondaryLabel` — used by `Form` section headers and footers. Not `nexdoSecondary`. */
+  secondaryLabel: string;
   secondary: string;
   scheduleBlue: string;
   tint: string;
@@ -17,6 +23,13 @@ export type Palette = {
   background: string;
   groupedBackground: string;
   surface: string;
+  /**
+   * iOS raises the dark-mode system backgrounds one level inside a presented sheet, so a sheet is
+   * #1C1C1E where the root screen is black. In light mode nothing changes.
+   */
+  backgroundElevated: string;
+  groupedBackgroundElevated: string;
+  surfaceElevated: string;
   separator: string;
   danger: string;
   /** `.ultraThinMaterial` stand-in for the auth cards. expo-blur tints over this. */
@@ -27,6 +40,8 @@ export type Palette = {
   glassShadow: string;
   /** `Color.nexdoSecondary.opacity(0.25)`: the rules either side of "OR" on sign-in. */
   ruleFaint: string;
+  /** The row separator inside an inset-grouped `Form`, which is lighter than `.separator`. */
+  listSeparator: string;
 };
 
 export type ColorScheme = 'light' | 'dark';
@@ -34,6 +49,9 @@ export type ColorScheme = 'light' | 'dark';
 export const palettes: Record<ColorScheme, Palette> = {
   light: {
     ink: '#080F2E', // RootView.swift:885 light: UIColor(red: 0.03, green: 0.06, blue: 0.18)
+    label: '#000000', // iOS .label
+    placeholder: 'rgba(60, 60, 67, 0.3)', // iOS .placeholderText
+    secondaryLabel: 'rgba(60, 60, 67, 0.6)', // iOS .secondaryLabel
     secondary: '#575C80', // RootView.swift:886 light: UIColor(red: 0.34, green: 0.36, blue: 0.50)
     scheduleBlue: '#26578F', // RootView.swift:887 light: UIColor(red: 0.15, green: 0.34, blue: 0.56)
     tint: brand.nexdoIndigo, // RootView.swift:46 `.tint(.nexdoIndigo)`
@@ -43,16 +61,23 @@ export const palettes: Record<ColorScheme, Palette> = {
     background: '#FFFFFF',
     groupedBackground: '#F2F2F7',
     surface: '#FFFFFF',
+    backgroundElevated: '#FFFFFF',
+    groupedBackgroundElevated: '#F2F2F7',
+    surfaceElevated: '#FFFFFF',
     separator: 'rgba(60, 60, 67, 0.29)',
     danger: '#FF3B30',
-    glassFill: 'rgba(247, 247, 250, 0.72)', // RootView.swift:354 `.ultraThinMaterial` over systemBackground
+    glassFill: 'rgba(236, 236, 240, 0.72)', // RootView.swift:354 `.ultraThinMaterial`, tuned against the Swift render
     glassStroke: 'rgba(255, 255, 255, 0.8)', // RootView.swift:355 Color.white.opacity(0.8)
     glassShadow: 'rgba(128, 0, 128, 0.09)', // RootView.swift:356 Color.purple.opacity(0.09)
     ruleFaint: 'rgba(87, 92, 128, 0.25)', // RootView.swift:385 nexdoSecondary.opacity(0.25)
+    listSeparator: '#E8E8E8', // measured in the Swift Form on iOS 26
   },
   dark: {
     // TODO(phase1-decision): the Swift dark variant is the dynamic system `.label`; this is its standard dark value.
     ink: '#FFFFFF', // RootView.swift:885 dark: .label
+    label: '#FFFFFF', // iOS .label
+    placeholder: 'rgba(235, 235, 245, 0.3)', // iOS .placeholderText
+    secondaryLabel: 'rgba(235, 235, 245, 0.6)', // iOS .secondaryLabel
     // TODO(phase1-decision): the Swift dark variant is the dynamic system `.secondaryLabel`; this is its standard dark value.
     secondary: 'rgba(235, 235, 245, 0.6)', // RootView.swift:886 dark: .secondaryLabel
     scheduleBlue: '#7ABAFF', // RootView.swift:887 dark: UIColor(red: 0.48, green: 0.73, blue: 1)
@@ -61,11 +86,15 @@ export const palettes: Record<ColorScheme, Palette> = {
     background: '#000000',
     groupedBackground: '#000000',
     surface: '#1C1C1E',
+    backgroundElevated: '#1C1C1E',
+    groupedBackgroundElevated: '#1C1C1E',
+    surfaceElevated: '#2C2C2E',
     separator: 'rgba(84, 84, 88, 0.6)',
     danger: '#FF453A',
     glassFill: 'rgba(40, 40, 44, 0.72)', // `.ultraThinMaterial` over the dark systemBackground
     glassStroke: 'rgba(255, 255, 255, 0.14)', // white.opacity(0.8) reads as a blown-out edge on black
     glassShadow: 'rgba(128, 0, 128, 0.09)',
     ruleFaint: 'rgba(235, 235, 245, 0.15)', // secondaryLabel at 0.25 of its own 0.6 alpha
+    listSeparator: '#38383A',
   },
 };

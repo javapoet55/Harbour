@@ -15,7 +15,7 @@ import {
 import { isApiError } from '../../src/api';
 import { useSignUp } from '../../src/query/useAuth';
 import { signUpSchema, type SignUpValues } from '../../src/schemas/auth';
-import { useTheme } from '../../src/theme';
+import { systemText, textStyles, useTheme } from '../../src/theme';
 
 /**
  * Port of `SignUpView` (ios/App/RootView.swift:472-571).
@@ -27,7 +27,8 @@ import { useTheme } from '../../src/theme';
  * reuses the element Swift already has rather than adding a new one, but it is not literal parity.
  */
 export default function SignUp() {
-  const theme = useTheme();
+  // `presentation: 'modal'`, so the dark background elevates (see useTheme).
+  const theme = useTheme({ elevated: true });
   const signUp = useSignUp();
 
   const {
@@ -70,7 +71,7 @@ export default function SignUp() {
   });
 
   return (
-    <AuthScreen contentStyle={styles.column}>
+    <AuthScreen contentStyle={styles.column} elevated>
       {/* .font(.system(size: 34, weight: .bold, design: .rounded)) */}
       <Text style={[styles.title, { color: theme.colors.ink }]}>Create your account</Text>
       <Text style={[styles.body, styles.intro, { color: theme.colors.secondary }]}>
@@ -86,7 +87,7 @@ export default function SignUp() {
               <TextInput
                 accessibilityLabel="Full name"
                 placeholder="Full name"
-                placeholderTextColor={theme.colors.secondary}
+                placeholderTextColor={theme.colors.placeholder}
                 value={field.value}
                 onChangeText={field.onChange}
                 onBlur={field.onBlur}
@@ -109,7 +110,7 @@ export default function SignUp() {
               <TextInput
                 accessibilityLabel="Email address"
                 placeholder="Email address"
-                placeholderTextColor={theme.colors.secondary}
+                placeholderTextColor={theme.colors.placeholder}
                 value={field.value}
                 onChangeText={field.onChange}
                 onBlur={field.onBlur}
@@ -197,12 +198,12 @@ export default function SignUp() {
 const styles = StyleSheet.create({
   // .padding(.horizontal, 28).padding(.vertical, 28), leading-aligned.
   column: { paddingHorizontal: 28, paddingTop: 28, alignItems: 'stretch' },
-  title: { fontSize: 34, lineHeight: 41, fontWeight: '700' },
-  body: { fontSize: 17, lineHeight: 22 },
+  title: { ...systemText(34), fontWeight: '700' },
+  body: textStyles.body,
   intro: { marginTop: 8 },
   input: { flex: 1, paddingVertical: 0 },
   card: { marginTop: 28 },
-  footnote: { fontSize: 13, lineHeight: 18 },
+  footnote: textStyles.footnote,
   policy: { marginTop: 12 },
   error: { marginTop: 8 },
   createButton: { marginTop: 20 },

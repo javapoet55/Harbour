@@ -27,7 +27,7 @@ export function RevealablePasswordField({ title, textContentType = 'newPassword'
         ref={ref}
         accessibilityLabel={title}
         placeholder={title}
-        placeholderTextColor={theme.colors.secondary}
+        placeholderTextColor={theme.colors.placeholder}
         secureTextEntry={!visible}
         textContentType={textContentType}
         // Revealing a password must not autocapitalise or autocorrect it (RootView.swift:648–650).

@@ -11,8 +11,17 @@ import { SignInBackdrop } from './SignInBackdrop';
  *
  * The inner column is `.frame(maxWidth: 560).frame(maxWidth: .infinity)`: capped, then centred.
  */
-export function AuthScreen({ children, contentStyle }: { children: ReactNode; contentStyle?: StyleProp<ViewStyle> }) {
-  const theme = useTheme();
+export function AuthScreen({
+  children,
+  contentStyle,
+  elevated = false,
+}: {
+  children: ReactNode;
+  contentStyle?: StyleProp<ViewStyle>;
+  /** True when the screen is presented as a sheet; iOS elevates its dark background. */
+  elevated?: boolean;
+}) {
+  const theme = useTheme({ elevated });
   return (
     <View style={[styles.fill, { backgroundColor: theme.colors.background }]}>
       <SignInBackdrop />
@@ -21,6 +30,10 @@ export function AuthScreen({ children, contentStyle }: { children: ReactNode; co
         <ScrollView
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
+          // SwiftUI's ScrollView insets its content by the safe area while still drawing under it.
+          // "always" is the UIScrollView behaviour that does the same, and it measures the screen's
+          // own safe area, so it is correct both here and under a navigation header.
+          contentInsetAdjustmentBehavior="always"
           contentContainerStyle={styles.scroll}
         >
           <View style={[styles.column, contentStyle]}>{children}</View>

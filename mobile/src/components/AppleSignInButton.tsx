@@ -86,5 +86,7 @@ export function AppleSignInButton({ onCredential, onError, disabled = false, sty
 
 const styles = StyleSheet.create({
   // .frame(maxWidth: .infinity, minHeight: 58) with a 18pt corner radius.
-  button: { width: '100%', height: 58 },
+  // `alignSelf: 'stretch'`, not `width: '100%'`: with a horizontal margin from the caller, a
+  // percentage width resolves against the parent and the margin then pushes the button off-screen.
+  button: { alignSelf: 'stretch', height: 58 },
 });

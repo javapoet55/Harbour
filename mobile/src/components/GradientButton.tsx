@@ -1,8 +1,18 @@
 import { Pressable, StyleSheet, type StyleProp, type ViewStyle } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 
-import { brand } from '../theme';
+import { brand, linearGradientStops, textStyles } from '../theme';
 import { Text } from './Text';
+
+const GRADIENT = [brand.nexdoMagenta, brand.nexdoIndigo, brand.nexdoBlue] as const;
+
+/**
+ * Swift writes `.opacity(0.55)`, but SwiftUI also dims a disabled control on its own, and the two
+ * multiply. Measured off the Swift app against both a white and a black background, the button ends
+ * up at about 0.25 — and at that value a plain gamma blend matches, so no linear compositing is
+ * needed here. Taking the 0.55 in the source at face value gives a button roughly twice too strong.
+ */
+const DISABLED_OPACITY = 0.25;
 
 export type GradientButtonProps = {
   title: string;
@@ -27,6 +37,8 @@ export type GradientButtonProps = {
  * The Swift title carries the busy state ("Signing In…"), so the caller passes the finished string.
  */
 export function GradientButton({ title, onPress, disabled = false, minHeight, style, testID }: GradientButtonProps) {
+  const colors = linearGradientStops(GRADIENT);
+
   return (
     <Pressable
       accessibilityRole="button"
@@ -35,10 +47,10 @@ export function GradientButton({ title, onPress, disabled = false, minHeight, st
       disabled={disabled}
       onPress={onPress}
       testID={testID}
-      style={[{ opacity: disabled ? 0.55 : 1 }, style]}
+      style={[disabled ? { opacity: DISABLED_OPACITY } : null, style]}
     >
       <LinearGradient
-        colors={[brand.nexdoMagenta, brand.nexdoIndigo, brand.nexdoBlue]}
+        colors={colors}
         start={{ x: 0, y: 0.5 }}
         end={{ x: 1, y: 0.5 }}
         style={[styles.fill, { minHeight, borderRadius: 20 }]}
@@ -52,5 +64,5 @@ export function GradientButton({ title, onPress, disabled = false, minHeight, st
 
 const styles = StyleSheet.create({
   fill: { alignItems: 'center', justifyContent: 'center', width: '100%' },
-  label: { fontSize: 20, lineHeight: 25, fontWeight: '700', color: '#FFFFFF' },
+  label: { ...textStyles.title3, fontWeight: '700', color: '#FFFFFF' },
 });

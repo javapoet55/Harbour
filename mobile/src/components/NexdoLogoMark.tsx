@@ -1,7 +1,7 @@
 import { View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 
-import { brand } from '../theme';
+import { brand, linearGradientStops } from '../theme';
 
 /**
  * Port of `NexdoLogoMark` (ios/App/RootView.swift:857–882): three rotated, gradient-filled capsules
@@ -23,11 +23,11 @@ export function NexdoLogoMark({ width, height }: { width: number; height: number
   return (
     <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={{ width, height, alignItems: 'center', justifyContent: 'center' }}>
       {/* RootView.swift:864–868 */}
-      <LinearGradient colors={[brand.nexdoIndigo, brand.nexdoBlue]} start={{ x: 1, y: 0 }} end={{ x: 0, y: 1 }} style={capsule(20, -width * 0.25, 0)} />
+      <LinearGradient colors={linearGradientStops([brand.nexdoIndigo, brand.nexdoBlue])} start={{ x: 1, y: 0 }} end={{ x: 0, y: 1 }} style={capsule(20, -width * 0.25, 0)} />
       {/* RootView.swift:869–874 */}
-      <LinearGradient colors={[brand.nexdoIndigo, brand.nexdoPurple]} start={{ x: 0.5, y: 0 }} end={{ x: 0.5, y: 1 }} style={capsule(-27, width * 0.01, width * 0.05)} />
+      <LinearGradient colors={linearGradientStops([brand.nexdoIndigo, brand.nexdoPurple])} start={{ x: 0.5, y: 0 }} end={{ x: 0.5, y: 1 }} style={capsule(-27, width * 0.01, width * 0.05)} />
       {/* RootView.swift:875–879 */}
-      <LinearGradient colors={[brand.nexdoMagenta, brand.nexdoPurple]} start={{ x: 0.5, y: 0 }} end={{ x: 0.5, y: 1 }} style={capsule(17, width * 0.26, 0)} />
+      <LinearGradient colors={linearGradientStops([brand.nexdoMagenta, brand.nexdoPurple])} start={{ x: 0.5, y: 0 }} end={{ x: 0.5, y: 1 }} style={capsule(17, width * 0.26, 0)} />
     </View>
   );
 }
