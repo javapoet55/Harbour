@@ -3,7 +3,6 @@ import { useMemo, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 
 import { TaskSymbol, Text } from '../../src/components';
-import { DevMenu } from '../../src/components/DevMenu';
 import { FocusSessionStrip } from '../../src/components/FocusSessionStrip';
 import { AttentionCard } from '../../src/components/AttentionCard';
 import { TodayIntelligenceCard } from '../../src/components/TodayIntelligenceCard';
@@ -98,8 +97,9 @@ export default function Today() {
             onPress: () => router.push('/today/weather'),
           }}
           onAdd={() => router.push('/task/new')}
-          // TODO(phase7): Swift opens `AccountView()` here (RootView.swift:1031).
-          onAccount={() => undefined}
+          // `.sheet(isPresented: $showingAccount) { AccountView() }` (RootView.swift:1181).
+          onAccount={() => router.push('/account')}
+          photo={profile?.photo}
         />
 
         {/* The greeting block (RootView.swift:1034-1045) */}
@@ -203,9 +203,6 @@ export default function Today() {
               ))}
           </View>
         ) : null}
-
-        {/* Not part of `body`: development-only, and renders nothing in a release build. */}
-        <DevMenu showsSignOut />
       </ScrollView>
     </View>
   );

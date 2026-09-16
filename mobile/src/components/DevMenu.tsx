@@ -3,7 +3,6 @@ import { router } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
-import { useSignOut } from '../query/useAuth';
 import { useTheme } from '../theme';
 import { Text } from './Text';
 
@@ -11,17 +10,17 @@ import { Text } from './Text';
  * Development-only entry points, behind a long-press on the version text. Renders NOTHING in a
  * release build, so the screens that host it stay identical to Swift.
  *
- * Phase 4 moved sign-out here, off the Today dashboard, because `TodayView` has no sign-out control —
- * Swift signs out from `AccountView` (ios/App/ProfileView.swift:60), which is Phase 7.
+ * SIGN-OUT IS NO LONGER HERE. Phase 4 parked it in this menu because `TodayView` has no sign-out
+ * control and `AccountView` did not exist yet. Phase 7 built `AccountView`
+ * (ios/App/ProfileView.swift:84-86, and its confirmation dialog at `:96-98`), so sign-out is at
+ * app/account/index.tsx, where Swift puts it, and the Today mount of this menu is gone with it.
  *
- * It is mounted on BOTH sign-in and Today. Sign-in alone would put sign-out behind the session gate,
- * where a signed-in person can never reach it, which would make the README's sign-out check
- * impossible to run until Phase 7 lands.
+ * It is now mounted on the sign-in screen only, which is where the session-check and voice-check
+ * development screens are useful anyway.
  */
-export function DevMenu({ showsSignOut = false }: { showsSignOut?: boolean }) {
+export function DevMenu() {
   const theme = useTheme();
   const [open, setOpen] = useState(false);
-  const signOut = useSignOut();
 
   if (!__DEV__) return null;
   const version = Constants.expoConfig?.version ?? '1.0.0';
@@ -46,20 +45,6 @@ export function DevMenu({ showsSignOut = false }: { showsSignOut?: boolean }) {
           <Pressable accessibilityRole="button" onPress={() => router.push('/dev/voice-check')}>
             <Text style={[styles.footnote, { color: theme.colors.tint }]}>Open voice check</Text>
           </Pressable>
-          {showsSignOut ? (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Sign out"
-              accessibilityState={{ disabled: signOut.isPending }}
-              disabled={signOut.isPending}
-              onPress={() => signOut.mutate()}
-              testID="sign-out"
-            >
-              <Text style={[styles.footnote, { color: theme.colors.danger }]}>
-                {signOut.isPending ? 'Signing out…' : 'Sign out'}
-              </Text>
-            </Pressable>
-          ) : null}
         </View>
       ) : null}
     </View>

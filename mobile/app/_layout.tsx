@@ -2,13 +2,15 @@ import { focusManager, QueryClientProvider, useQueryClient } from '@tanstack/rea
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
-import { AppState } from 'react-native';
+import { Alert, AppState } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { onSignedOut } from '../src/api';
 import { createQueryClient } from '../src/query/client';
 import { queryKeys } from '../src/query/keys';
 import { useMe } from '../src/query/useMe';
+import { synchronizeDeviceTimeZone, TIME_ZONE_SYNC_ERROR } from '../src/query/useProfile';
+import { useAppearance } from '../src/store/appearance';
 import { useLastSignedIn } from '../src/store/lastSignedIn';
 import { useSession } from '../src/store/session';
 import { useTheme } from '../src/theme';
@@ -16,15 +18,27 @@ import { useTheme } from '../src/theme';
 export default function RootLayout() {
   const [queryClient] = useState(createQueryClient);
 
-  // Refetch stale queries when the app returns to the foreground.
+  // Refetch stale queries when the app returns to the foreground, and re-assert the device time zone.
+  //
+  // `RootView` does both on `scenePhase == .active` (ios/App/RootView.swift:66-69): `model.refresh()`
+  // (NexdoApp.swift:435-441) synchronizes the zone FIRST and abandons the refresh if that fails,
+  // reporting it through the app-wide alert (`RootView.swift:63-65`).
   useEffect(() => {
-    const subscription = AppState.addEventListener('change', (state) => focusManager.setFocused(state === 'active'));
+    const subscription = AppState.addEventListener('change', (state) => {
+      focusManager.setFocused(state === 'active');
+      if (state !== 'active' || useSession.getState().status !== 'signedIn') return;
+      synchronizeDeviceTimeZone(queryClient).catch(() => {
+        Alert.alert('Unable to complete request', TIME_ZONE_SYNC_ERROR);
+      });
+    });
     return () => subscription.remove();
-  }, []);
+  }, [queryClient]);
 
-  // Device-backed state the first render needs: the sign-in greeting and Phase 6's consent flags.
+  // Device-backed state the first render needs: the sign-in greeting, and the Appearance and App
+  // Voice choices, which are `@AppStorage` in Swift (ios/App/ProfileView.swift:127-128).
   useEffect(() => {
     void useLastSignedIn.getState().hydrate();
+    void useAppearance.getState().hydrate();
   }, []);
 
   return (

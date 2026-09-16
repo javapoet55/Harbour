@@ -70,10 +70,8 @@ export default function Tasks() {
     <View style={styles.fill}>
       <TodayBackdrop subtle />
       <View style={styles.content}>
-        {/* TODO(phase7): Swift opens `AccountView()` as a sheet here (RootView.swift:1700). The
-            account screen is Phase 7, so this is a deliberate no-op rather than a route to a path
-            that does not exist and would render the not-found screen. */}
-        <TasksTopBar name={profile?.name ?? ''} onAccount={() => undefined} />
+        {/* `.sheet(isPresented: $account) { AccountView() }` (RootView.swift:1702). */}
+        <TasksTopBar name={profile?.name ?? ''} photo={profile?.photo} onAccount={() => router.push('/account')} />
 
         {/* `header` (RootView.swift:1729-1747) */}
         <View style={styles.header}>

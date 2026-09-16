@@ -4,21 +4,38 @@ import { endpoints, isApiError, type Profile } from '../api';
 import { useLastSignedIn } from '../store/lastSignedIn';
 import { useSession } from '../store/session';
 import { queryKeys } from './keys';
+import { synchronizeDeviceTimeZone } from './useProfile';
 
 /**
  * Port of `AppModel.finishAuthentication()` (ios/App/NexdoApp.swift:297–308): once the server has
- * started a session, load the profile, publish it, and remember the first name for the greeting.
+ * started a session, load the profile, publish it, synchronize the device time zone, remember the
+ * first name for the greeting, and load the account's data.
  *
- * TODO(phase2-decision): Swift also calls `synchronizeDeviceTimeZone()` and `load()` here. The time
- * zone PATCHes /api/settings (Phase 7) and `load()` fetches tasks and agenda (Phases 3 and 4), so
- * neither is wired up yet. Add both to this function when those phases land.
+ * Swift's order is exactly this: `/api/me` → `synchronizeDeviceTimeZone()` → remember the name →
+ * `load()`. The time-zone step is second because everything loaded after it is dated in the account
+ * zone, so syncing later would show one screen of stale dates.
+ *
+ * `load()` itself is `refreshSupplementaryData()` plus `loadTasks()` (`:309-313`). React Query
+ * refetches those on mount, so the equivalent here is to invalidate them rather than fetch inline;
+ * the screens that need them are not mounted yet at this point.
  */
 export async function finishAuthentication(queryClient: QueryClient): Promise<Profile> {
   const { user } = await endpoints.me();
   queryClient.setQueryData(queryKeys.me(), user);
   useSession.getState().setProfile(user);
-  await useLastSignedIn.getState().remember(user.name);
-  return user;
+
+  // `try await synchronizeDeviceTimeZone()` (NexdoApp.swift:300). It throws in Swift too, which
+  // aborts `finishAuthentication` and leaves the sign-in screen showing the error.
+  await synchronizeDeviceTimeZone(queryClient);
+
+  const current = queryClient.getQueryData<Profile | null>(queryKeys.me()) ?? user;
+  await useLastSignedIn.getState().remember(current.name);
+
+  // `try await load()` (`:307`).
+  void queryClient.invalidateQueries({ queryKey: queryKeys.tasks.all() });
+  void queryClient.invalidateQueries({ queryKey: queryKeys.agenda.all() });
+  void queryClient.invalidateQueries({ queryKey: queryKeys.scheduleIntelligence() });
+  return current;
 }
 
 /** `EMAIL_NOT_VERIFIED` from sign-in: the account exists but must confirm its emailed code first. */

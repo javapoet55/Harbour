@@ -3,8 +3,9 @@ import { Pressable, StyleSheet, View } from 'react-native';
 
 import { conditionSymbol } from '../lib/weather';
 import { brand, useTheme } from '../theme';
-import { TaskSymbol } from './TaskSymbol';
 import { NexdoLogoMark } from './NexdoLogoMark';
+import { AccountAvatar } from './ProfileParts';
+import { TaskSymbol } from './TaskSymbol';
 import { Text } from './Text';
 
 /**
@@ -44,23 +45,15 @@ export function TodayBackdrop({ subtle = false }: { subtle?: boolean }) {
   );
 }
 
-/** `ProfileAvatar` (ios/App/ProfileView.swift:39-58) at its 44pt top-bar size. */
-export function ProfileAvatar({ name, size = 44 }: { name: string; size?: number }) {
-  // `ProfileName.firstName(from:)?.prefix(1).uppercased() ?? "U"` (Models.swift:4-11).
-  const initial = name.trim().split(/\s+/)[0]?.charAt(0).toUpperCase() || 'U';
-  return (
-    <LinearGradient
-      colors={[...NEXDO_GRADIENT]}
-      start={{ x: 0, y: 0.5 }}
-      end={{ x: 1, y: 0.5 }}
-      style={[styles.avatar, { width: size, height: size, borderRadius: size / 2 }]}
-      accessibilityLabel="Profile picture"
-    >
-      {/* TODO(phase3-decision): Swift draws `model.profile?.photo` when present; the profile photo
-          is Phase 7, so this always shows the initial. */}
-      <Text style={{ fontSize: size * 0.4, fontWeight: '700', color: '#FFFFFF' }}>{initial}</Text>
-    </LinearGradient>
-  );
+/**
+ * `ProfileAvatar` (ios/App/ProfileView.swift:39-58) at its 44pt top-bar size.
+ *
+ * Swift draws `model.profile?.photo` when there is one (`:43-46, :51`) and the first initial
+ * otherwise. Phase 7 added the photo; the shared implementation is `AccountAvatar` in
+ * `src/components/ProfileParts.tsx`, and this keeps the top bar's own sizing default.
+ */
+export function ProfileAvatar({ name, photo, size = 44 }: { name: string; photo?: string | null; size?: number }) {
+  return <AccountAvatar name={name} photo={photo} size={size} />;
 }
 
 /**
@@ -122,6 +115,7 @@ export function TasksTopBar({
   onAccount,
   weather,
   onAdd,
+  photo,
 }: {
   name: string;
   onAccount: () => void;
@@ -129,6 +123,8 @@ export function TasksTopBar({
   weather?: { temperature: number | null; weatherCode: number | null | undefined; onPress: () => void };
   /** Omitted by the Tasks tab, which passes `add: nil`. */
   onAdd?: () => void;
+  /** `model.profile?.photo` — the stored `data:image/jpeg;base64,…` URL, when there is one. */
+  photo?: string | null;
 }) {
   const theme = useTheme();
   return (
@@ -159,7 +155,7 @@ export function TasksTopBar({
       {onAdd ? <TodayHeaderButton icon="plus" label="Add a task" onPress={onAdd} testID="today-add" /> : null}
 
       <Pressable accessibilityRole="button" accessibilityLabel={`Open account for ${name}`} onPress={onAccount} testID="open-account">
-        <ProfileAvatar name={name} size={44} />
+        <ProfileAvatar name={name} photo={photo} size={44} />
       </Pressable>
     </View>
   );

@@ -28,6 +28,20 @@ export { ProjectEditorForm } from './ProjectEditorForm';
 export { ProjectCard, ProjectFolder, ProjectSearchField, TaskListRow, useProjectAccent, useProjectCardSurface } from './ProjectParts';
 export { ProjectsList } from './ProjectsList';
 export { ProfileAvatar, TasksTopBar, TodayBackdrop, NEXDO_GRADIENT } from './TodayShell';
+export { AccountAvatar, AccountMenuRow, ProfileBackground, ProfileCard } from './ProfileParts';
+export {
+  ClockField,
+  SettingsCaption,
+  SettingsCard,
+  SettingsDivider,
+  SettingsField,
+  SettingsHours,
+  SettingsLabeledValue,
+  SettingsPicker,
+  SettingsSegments,
+  SettingsSlider,
+  SettingsToggle,
+} from './SettingsControls';
 export { AddTaskByVoiceView, type AddTaskByVoiceViewProps } from './AddTaskByVoiceView';
 export { AskNexdoView, type AskNexdoViewProps } from './AskNexdoView';
 export { AskEntryCard, AskEntryCards, AskExampleRow, AskSuggestionCard } from './AskParts';

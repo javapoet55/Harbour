@@ -1,9 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { randomUUID } from 'expo-crypto';
+import * as WebBrowser from 'expo-web-browser';
 
 import { endpoints, type Agenda, type CalendarEventInput } from '../api';
+import { getApiUrl } from '../config';
 import { queryKeys } from './keys';
 import { bumpRevision, currentRevision, isCurrent } from './taskRevision';
+import { reloadProfile } from './useProfile';
 import { scheduleRequest, type ScheduleConflict } from './useTasks';
 
 /**
@@ -73,17 +76,10 @@ export function useCreateCalendarEvent({ onConflict }: { onConflict: (conflict: 
 }
 
 /**
- * TODO(phase7): the Calendar TAB has no connect or sync controls. "Connect Google Calendar" and
- * "Synchronize now" live in `ProfileSettingsView`'s "Calendars and privacy" card
- * (ios/App/ProfileView.swift:223-234), which is screen 30 — Phase 7. `CalendarOAuth.connectGoogle`
- * (ProfileView.swift:10-30) drives an `ASWebAuthenticationSession` against
- * `/api/calendar/oauth/google/start` with the callback scheme `nexdo`, and `syncProfileCalendars`
- * POSTs `/api/calendar/sync` (NexdoApp.swift:291-294).
- *
- * When Phase 7 builds them:
- * - `expo-web-browser`'s `openAuthSessionAsync(startUrl, 'nexdo://')` mirrors the Swift session. That
- *   package contains NATIVE code, so adding it forces a new development build.
- * - The start URL is built in `googleConnectStartUrl` below so the server-side fix is one line.
+ * The Calendar TAB still has no connect or sync controls, and that is correct: "Connect Google
+ * Calendar" and "Synchronize now" live in `ProfileSettingsView`'s "Calendars and privacy" card
+ * (ios/App/ProfileView.swift:223-234). Phase 7 built them there, and `useConnectGoogleCalendar`
+ * below is the `ASWebAuthenticationSession` half.
  */
 
 /**
@@ -134,4 +130,45 @@ export function parseGoogleCallback(callbackUrl: string | null | undefined): Goo
     return { ok: false, message: `Google Calendar connection failed: ${detail}` };
   }
   return { ok: true, message: 'Google Calendar connected and synchronized.' };
+}
+
+/**
+ * `CalendarOAuthCoordinator.connectGoogle(model:completion:)` (ios/App/ProfileView.swift:9-29).
+ *
+ * `expo-web-browser`'s `openAuthSessionAsync` is `ASWebAuthenticationSession`: it opens the start URL
+ * in a system browser tab that shares cookies with Safari/Chrome and hands back the first redirect to
+ * the app's scheme. Swift sets `prefersEphemeralWebBrowserSession = false`, which is this default —
+ * an existing Google sign-in in the system browser is reused.
+ *
+ * On success Swift reloads the profile and reports "connected and synchronized"; a reload that fails
+ * still counts as connected, with a softer message (`:22-23`).
+ */
+export function useConnectGoogleCalendar() {
+  const queryClient = useQueryClient();
+  return useMutation<GoogleConnectResult, Error, void>({
+    mutationFn: async () => {
+      const result = await WebBrowser.openAuthSessionAsync(
+        googleConnectStartUrl(getApiUrl()),
+        `${CONNECT_CALLBACK_SCHEME}://`,
+      );
+
+      // `guard let callback else { completion("… was cancelled.") }` — dismiss and cancel both land
+      // here, as they do in Swift's `.canceledLogin` branch.
+      if (result.type !== 'success') {
+        return { ok: false, message: 'Google Calendar authorization was cancelled.' };
+      }
+
+      const parsed = parseGoogleCallback(result.url);
+      if (!parsed.ok) return parsed;
+
+      try {
+        await reloadProfile(queryClient);
+        void queryClient.invalidateQueries({ queryKey: queryKeys.calendar.all() });
+        void queryClient.invalidateQueries({ queryKey: queryKeys.agenda.all() });
+        return parsed;
+      } catch {
+        return { ok: true, message: 'Google Calendar connected, but Nexdo could not refresh it yet.' };
+      }
+    },
+  });
 }

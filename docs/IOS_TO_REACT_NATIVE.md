@@ -1068,3 +1068,166 @@ transcription session underneath is unchanged and still the Phase 9 stub.
 - That approving a proposal visibly updates the Tasks and Calendar tabs.
 - The bottom composer with the keyboard up, on a short screen.
 - Read Loud in a release build, which should show the failure line rather than silence.
+
+## 17. Phase 7 status (Account and settings)
+
+### Built, with the `body` range each screen was read from
+
+| Screen | Swift view | `body` | React Native |
+| --- | --- | --- | --- |
+| My Page (Account) | `AccountView` (`ios/App/ProfileView.swift:60`) | **`:65-99`** | `app/account/index.tsx` |
+| Settings | `ProfileSettingsView` (`ios/App/ProfileView.swift:126`) | **`:146-270`** | `app/account/settings.tsx` |
+
+Child views followed out of those two `body`s, in the order they render:
+
+- `ProfileAvatar` — `ProfileView.swift:39`, body `:48-57` → `AccountAvatar` in
+  `src/components/ProfileParts.tsx` (and re-exported at its 44pt size by `TodayShell.tsx`).
+- `ProfileBackground` — `ProfileView.swift:116-118` → same file.
+- `menuRow(_:_:web:)` / `webRow(_:_:_:)` — `ProfileView.swift:104-114` → `AccountMenuRow`.
+- `profileCard()` — `ProfileView.swift:119-123` → `ProfileCard` and `SettingsCard`.
+- `card(_:content:)`, `field(_:text:placeholder:)`, `hours(_:start:end:)`, `clock(_:)` —
+  `ProfileView.swift:274-295` → `src/components/SettingsControls.tsx`.
+- `CalendarOAuthCoordinator` — `ProfileView.swift:6-36` → `useConnectGoogleCalendar` in
+  `src/query/useCalendar.ts`, over the Phase 5 `googleConnectStartUrl` / `parseGoogleCallback`.
+- `ProfilePhotoEncoder` — `ios/App/ProfilePhotoEncoder.swift:4-29` → `src/lib/profilePhoto.ts`
+  (the policy) and `src/photo/encodePhoto.ts` (the resize and re-encode).
+- `AppAppearance` / `AppVoice` — `ios/App/AppAppearance.swift:3-37` → `src/store/appearance.ts`.
+- `ProfileSettingsInput` / `settingsInput()` / `normalizePhone(_:)` — `ProfileSettings.swift:22-27`,
+  `ProfileView.swift:339-366` → `src/lib/profileSettings.ts`.
+
+### Is appearance user-selectable in Swift? YES
+
+`ProfileSettingsView` has an `@AppStorage(AppAppearance.storageKey)` segmented picker with **System,
+Day, Night** (`ProfileView.swift:127`, `:148-157`), and `NexdoApp` applies it at the root with
+`RootView().preferredColorScheme(appearance.colorScheme)` (`ios/App/NexdoApp.swift:6-8`). It is stored
+on the device under `UserDefaults` key **`nexdo.appearance`** and never sent to the server.
+
+**This corrects a Phase 2 finding.** `nexdo.lastSignedInFirstName` is not the only `UserDefaults` key
+the Swift app writes. There are three: that one, `nexdo.appearance`, and `nexdo.appVoiceVolume`
+(`AppAppearance.swift:4`, default 1.0, the App Voice slider). All three are AsyncStorage here, under
+the same key names. `useTheme` now resolves the choice, since React Native has no root
+`preferredColorScheme` equivalent.
+
+### The time-zone rule, as implemented
+
+`synchronizeDeviceTimeZone()` (`NexdoApp.swift:225-233`), ported in `src/query/useProfile.ts`:
+
+1. no signed-in profile → do nothing;
+2. `profile.timeZone === Intl.DateTimeFormat().resolvedOptions().timeZone` → **no request at all**;
+3. otherwise `PATCH /api/settings` with `{ timeZone }` **alone**, re-read `/api/me`, and verify the
+   reloaded zone really is the device zone — a server that accepted the PATCH without persisting it
+   is an error, not a success.
+
+The account follows the device, never the reverse. Swift calls it from three places and two are now
+wired: `finishAuthentication()` (`:300`) in `src/query/useAuth.ts` — which closes the Phase 2
+`TODO(phase2-decision)` — and `refresh()` (`:437`) on returning to the foreground, in
+`app/_layout.tsx`, where a failure raises Swift's own alert ("Unable to complete request" /
+"Couldn't synchronize your device time zone. Please reconnect and try again."). The third,
+`voiceTaskSession()` (`:472`), belongs to Phase 9. Saving the settings form also re-asserts it,
+because `settingsInput()` always sends the device zone (`ProfileView.swift:355`).
+
+### Where the brief and Swift disagree
+
+- **"PATCH profile, preference, photo upload" as separate routes.** There is only one:
+  `PATCH /api/settings`. There is no `/api/profile` and no `/api/account/*` except the DELETE.
+- **"Photo: match the content type and field names — multipart? base64?"** Neither multipart nor an
+  upload route. `saveProfilePhoto` (`NexdoApp.swift:255`) sends `{"photo": "data:image/jpeg;base64,…"}`
+  on the same settings PATCH, and `null` removes it. The server enforces the JPEG data-URL prefix,
+  256,000 decoded bytes and real SOI/EOI markers (`src/app/api/settings/route.ts:36`).
+- **"Edit name/email → PATCH, optimistic where Swift is."** Only the NAME is editable; there is no
+  email field in `body`. And nothing on this screen is optimistic or debounced except the photo:
+  every other control edits `@State` and only **Save settings** or the back chevron writes. The
+  photo is the one optimistic write, with a rollback and a server confirmation.
+- **"Default duration and reminder minutes", "phone number for SMS if present", "suggestNextAction
+  and its mode picker".** The mode picker exists — "Protect my current focus" with Flexible 5 /
+  Balanced 10 / Strong 25 (`:212-214`). The others do not: no control in `body` touches
+  `defaultDurationMin` or `defaultReminderMinutes`, and `ProfilePreferences`
+  (`ProfileSettings.swift:3-17`) does not even decode them. There is no SMS toggle and no phone
+  field, although `smsEnabled` and `phoneNumber` ARE decoded — and `settingsInput()` still normalises
+  the stored phone number on every save (`:343-350`), so a legacy value the server would now reject
+  blocks the save. That is ported, with tests.
+- **"Delete account with its confirmation flow", "app version/legal links if present".** Delete is in
+  the "Calendars and privacy" card, not on My Page. There is no version string and no legal link
+  anywhere in either `body`.
+- **"Photo crop? working-hours picker sheet?"** Neither exists. `PhotosPicker` returns the image
+  as-is and the encoder downsamples it; working hours are two compact `DatePicker`s inline.
+- **"Sign-out button currently in the dev menu."** Moved to My Page (`:84-86`), and the Today mount of
+  `DevMenu` is gone. The menu stays on sign-in, `__DEV__` only, without a sign-out entry.
+- **Google connect.** Unchanged from Phase 5's finding: still broken against production for any
+  in-app browser, the Swift app included, and the `TODO(server-connect-token)` is still the one line
+  to change.
+
+### Rebuild needed: YES
+
+Three new native modules:
+
+| Package | Version | Why |
+| --- | --- | --- |
+| `expo-image-picker` | ~57.0.18 | `PhotosPicker(matching: .images)` (`ProfileView.swift:181`). |
+| `expo-image-manipulator` | ~57.0.18 | The resize half of `ProfilePhotoEncoder` — ImageIO thumbnails plus `jpegData(compressionQuality:)`. |
+| `expo-web-browser` | ~57.0.3 | `ASWebAuthenticationSession` for the Google OAuth session (`ProfileView.swift:12`). |
+
+Permission strings are deliberately **off** for `expo-image-picker` (`photosPermission: false`,
+`cameraPermission: false`). The Swift target declares `NSContactsUsageDescription` and
+`NSMicrophoneUsageDescription` and **no photo-library or camera string**
+(`ios/Nexdo.xcodeproj/project.pbxproj:243-250`), because PHPicker runs out of process; Swift offers no
+camera option at all. `expo prebuild --platform android` was run and discarded: the `nexdo` scheme
+intent filter is already generated from `scheme: 'nexdo'`, and image-picker adds only the legacy
+`READ_EXTERNAL_STORAGE` / `WRITE_EXTERNAL_STORAGE` pair capped at `maxSdkVersion="32"` — no
+`READ_MEDIA_IMAGES`, because the system photo picker needs none.
+
+### Visual gaps
+
+- **The `.menu` and default `Picker` styles.** "AI confirmation" and "Protect my current focus" are a
+  label-plus-value row that opens a list, not an iOS pull-down menu.
+- **`DatePicker(displayedComponents: .hourAndMinute)`** is a field that opens two scrollable columns,
+  not the compact SwiftUI wheel. Hand-built for the reason `MonthCalendar` records: the community
+  date-time picker forces an Android dialog, which is further from the compact control than this is.
+  Every minute Swift allows is still reachable.
+- **`Slider`.** React Native's core has no slider, and the setting it drives is inert until Phase 9,
+  so it is hand-built from responder events rather than a fourth native module. It has the same 0.05
+  step, the same percentage read-out and the same accessibility value.
+- **SF Symbols.** `arrow.up.right` → `open-outline` (Ionicons has no diagonal arrow),
+  `calendar.badge.plus` → `calendar-outline` (no plus badge), `speaker.wave.2` → `volume-medium-outline`.
+- **Sheet presentation.** My Page is a plain modal; Swift's `.sheet` carries the iOS grabber and
+  rounded corners. Same gap as every other sheet in this port.
+- **`ProfileAvatar`'s gradient** is `NEXDO_GRADIENT` (the Phase 4 port of `NexdoTheme.gradient`), and
+  the photo fills the circle the way `scaledToFill` does.
+- **The app-wide "Updating…" overlay** (`RootView.swift:62`) still has no equivalent, so a long save
+  shows only the in-place "Saving…" on the button.
+
+### TODOs closed in Phase 7
+
+- `TODO(phase7)` in `app/(tabs)/tasks.tsx` — the account button now opens `/account`.
+- `TODO(phase7)` in `app/(tabs)/today.tsx` — the avatar now opens `/account`.
+- `TODO(phase3-decision)` in `src/components/TodayShell.tsx` — the top-bar avatar draws the photo.
+- `TODO(phase2-decision)` in `src/query/useAuth.ts` — `finishAuthentication` now synchronizes the
+  device time zone and invalidates what Swift's `load()` fetches.
+- `TODO(phase7)` in `src/query/useCalendar.ts` — connect and sync are built, in Settings, where Swift
+  keeps them.
+- The Phase 4 note in `src/components/DevMenu.tsx` — sign-out is on My Page.
+- `TODO(phase1-decision)` in `src/theme/useTheme.ts` — the manual appearance override exists.
+
+### TODOs still open after Phase 7
+
+- `TODO(server-connect-token)` in `src/query/useCalendar.ts` — a server change, deliberately untouched.
+- `TODO(phase7)` in `src/query/useToday.ts` — the hardcoded weather coordinates are Swift's own
+  (`WeatherClient.swift:14-32`), not an account setting, and no control in either `body` exposes
+  them. It stays open only as a marker for if the account ever gains a location preference.
+- `TODO(phase4b)` in `app/(tabs)/today.tsx` — the `queue.hasImmediateActions` branch of the Weekly
+  Summary card, still outstanding from Phase 4B.
+- `TODO(phase9)` in `src/voice/speechStub.ts` and `src/voice/taskCaptureStub.ts`, plus the third
+  time-zone sync call site in `voiceTaskSession()`.
+- `TODO(phase0-decision)` / `TODO(phase1-decision)` in `app.config.ts` (tablet support, the Android
+  package name, the WebRTC plugin's SDK table).
+
+### Needs confirmation on a device
+
+- The photo round trip end to end: the encoder's output size on a real 12MP photo, and that no
+  permission prompt appears.
+- That the device time-zone PATCH fires on a real foreground transition, and does NOT fire when the
+  zones already match.
+- The Google connect failure mode against production, and the success path once the server lands.
+- Deleting a throwaway account.
+- The hand-built slider's feel, and the hour/minute columns on a small screen.
+- Appearance surviving a relaunch, and the whole app following Day/Night.

@@ -934,3 +934,150 @@ free hours." It will not happen on every account.
 - The microphone button in the suggestions-page composer does the same.
 - **Read Loud** does not speak. Phase 9.
 - Withdrawing AI permission lives in Account. Phase 7.
+
+## Phase 7 on-device test plan
+
+Account and settings. **A NEW DEVELOPMENT BUILD IS REQUIRED** — three native modules landed in this
+phase (`expo-image-picker`, `expo-image-manipulator`, `expo-web-browser`). The previous build will
+crash the moment you open Settings.
+
+Use a throwaway account for step 11.
+
+### 1. Getting there
+
+1. On **Today**, tap the avatar in the top right. A sheet slides up titled **My Page**.
+2. Dismiss it. On **Tasks**, tap the avatar in the top right: the same sheet.
+3. The sheet covers the tab behind it; the tab bar does not change.
+
+### 2. My Page, top to bottom
+
+1. A 76pt gradient circle with your first initial, your full name in bold, your email under it in
+   small grey text.
+2. **Edit profile and settings** with a person icon and a chevron.
+3. A card of six rows, in this order: **Inbox**, **Waiting For**, **AI Planner**, **Insights**,
+   **Notifications** — each with an outward arrow — then **Settings** with a chevron.
+4. **Sign out** in red at the bottom.
+5. Tap **Inbox**. The system browser opens `harbour-production-f8a0.up.railway.app/inbox`. Come back.
+6. There is no Delete account and no Appearance here. Both live one screen deeper. That is correct.
+
+### 3. Settings, top to bottom
+
+Tap **Edit profile and settings**. Check the cards appear in exactly this order:
+
+1. **Appearance** — a three-way System / Day / Night control, then the grey caption ending "saved on
+   this device."
+2. **App Voice** — "AI speaking volume" with a percentage on the right, a slider between a small and a
+   large speaker icon, then its caption.
+3. **Profile picture** — your avatar, **Change photo**, the caption, and **Remove photo** only if you
+   already have one.
+4. **Profile and time** — Display name, "Time zone (Automatic)" with the device zone, Working hours
+   (Start/End), Quiet hours (Start/End).
+5. **Voice and confirmation** — AI confirmation, Enable spoken replies, a divider, Personalized
+   predictions and its caption.
+6. **Notifications and focus** — Suggest my next action, Protect my current focus, a caption, then
+   Push / Email / Morning summary / Evening summary, a caption, **Open Notification Center**.
+7. **Calendars and privacy** — the Google line, **Connect Google Calendar**, **Synchronize now**, a
+   divider, the OpenAI sharing state, and **Delete account** in red.
+8. **Save settings** — a gradient capsule.
+
+**Nothing else.** There is no email field, no default duration, no reminder minutes, no SMS toggle, no
+phone number field and no version or legal links. Swift has none of those on this screen; report it if
+you see one.
+
+### 4. Appearance applies immediately
+
+1. Tap **Night**. The whole app turns dark at once, without saving.
+2. Go back, visit Today, Tasks and Calendar: all dark.
+3. Force-quit and reopen. Still dark — it is stored on the device, like the iPhone's `@AppStorage`.
+4. Set it back to **System** and confirm the app follows the phone's own light/dark setting.
+
+### 5. App Voice volume
+
+1. Drag the slider. The percentage changes in 5% steps.
+2. Force-quit and reopen: the value survives.
+3. **Nothing is spoken.** Spoken replies are Phase 9; this only stores the setting, as the caption says.
+
+### 6. Nothing saves until you press Save
+
+1. Turn **Push notifications** off, change the display name, change Working hours.
+2. **Watch the Metro terminal: no PATCH goes out.** Swift batches the whole form the same way.
+3. Press **Save settings**. One `PATCH /api/settings` appears carrying `name`, `timeZone`,
+   `preference` and `nextAction` together, then a `GET /api/me`.
+4. A green "Settings saved." line appears under the button.
+5. Leave and come back: the values stuck.
+
+### 7. Validation
+
+1. Clear the display name and press **Save settings** → an alert "Could not update profile" with
+   "Enter a display name of 1–80 characters.", and no request.
+2. Set Working hours to start 17:00 and end 09:00, press Save → "Working hours must end after they
+   start.", and no request.
+3. Quiet hours crossing midnight (21:00 → 07:00) is allowed. It must save.
+4. Fix the name, then press the **back chevron** at the top left. It SAVES and then leaves. With an
+   invalid name it shows the error and stays put.
+
+### 8. The profile photo
+
+1. **Change photo** → the system photo picker. **No permission prompt should appear** — the picker
+   runs out of process, which is why the iPhone app has no photo-library usage string either.
+2. Pick a large photo. "Saving profile photo…" appears, then "Profile picture saved."
+3. The avatar updates here, and on **Today** and **Tasks** top bars.
+4. In the Metro terminal the PATCH body is `{"photo":"data:image/jpeg;base64,…"}` — one JSON string,
+   not a file upload — and it is under 256 KB however big the original was.
+5. **Remove photo** → "Profile picture removed." and the initial comes back everywhere.
+6. Try a photo the encoder cannot shrink (a very large panorama). It should report "Could not process
+   this photo. Please choose another image." rather than failing silently.
+
+### 9. Time zone sync
+
+This is the rule the iPhone uses: **the account follows the device, never the other way round.**
+
+1. On the web app, set your account time zone to something different from the phone's.
+2. Force-quit the mobile app and sign in again. On sign-in it sends
+   `PATCH /api/settings {"timeZone":"<the phone's zone>"}`, then re-reads `/api/me`.
+3. Reload the web settings page: the account zone is now the phone's.
+4. Do it again, but instead of signing in, just background the app and bring it back. The same PATCH
+   fires on returning to the foreground.
+5. With the two already equal, background and foreground the app: **no PATCH at all.** Check the
+   Metro terminal.
+6. Saving the settings form also re-asserts the device zone — that is Swift's behaviour, not an extra.
+
+### 10. Google Calendar and Synchronize now
+
+1. **Connect Google Calendar** opens a system browser tab.
+2. **EXPECT THIS TO FAIL TODAY.** The server route needs the account session cookie, which no in-app
+   browser sends — the iPhone app fails in exactly the same way. You will see a blank page, then on
+   dismissal "Google Calendar authorization was cancelled." That is the current, known state.
+3. What passing will look like after the server fix: Google's consent screen, then a return to the app
+   and "Google Calendar connected and synchronized." The URL is built in one place,
+   `googleConnectStartUrl` in `src/query/useCalendar.ts`, still marked `TODO(server-connect-token)`.
+4. **Synchronize now** works today. With no calendars connected it says "No calendars connected yet.";
+   with one connected, "Calendars synchronized."; if the server reports an error on any connection,
+   "Some calendars could not synchronize. Check their connections in calendar settings."
+
+### 11. OpenAI sharing, and deleting the account
+
+1. Ask something in Ask AI first so sharing is on for the session. Back in Settings the line reads
+   "OpenAI sharing is allowed for this session." with **Withdraw AI permission** under it.
+2. Tap it: the line becomes "OpenAI sharing is off.", the button disappears, and any Ask answer on
+   screen is discarded. No request goes out — consent is per launch and local.
+3. **With a throwaway account**: tap **Delete account** → a confirmation titled "Permanently delete
+   this account?" with "This removes your Nexdo data permanently and cannot be undone."
+4. Cancel first and confirm nothing happened. Then delete: `DELETE /api/account` goes out and the app
+   returns to the sign-in screen with everything cleared.
+5. Try signing in with that account: it is gone.
+
+### 12. Sign out
+
+1. Sign-out has MOVED. It is on **My Page**, where the iPhone app puts it — not in the developer menu
+   on Today any more, and the developer menu is gone from Today entirely.
+2. Tap **Sign out** → "Sign out of Nexdo?" with a red **Sign out**. Confirm: you land on sign-in, the
+   greeting still remembers your first name.
+3. The developer menu (long-press the version number) is still on the sign-in screen in a development
+   build, without a sign-out entry.
+
+### 13. What is NOT here
+
+- Spoken replies and the App Voice volume actually doing something: Phase 9.
+- Reminders and notification delivery: Phase 8. "Open Notification Center" goes to the web app, as it
+  does on the iPhone.

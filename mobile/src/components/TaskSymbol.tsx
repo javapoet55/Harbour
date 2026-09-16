@@ -70,6 +70,21 @@ export const taskIcons = {
   'arrow.up.left': 'arrow-up-outline',
   'circle.fill': 'ellipse',
   'sun.max': 'sunny-outline',
+  // Account and settings (Phase 7). `AccountView`'s menu rows (ios/App/ProfileView.swift:76-82,
+  // :104-111) and `ProfileSettingsView`'s cards (`:146-270`).
+  'person.crop.circle': 'person-circle-outline',
+  tray: 'file-tray-outline',
+  stopwatch: 'stopwatch-outline',
+  'chart.bar': 'bar-chart-outline',
+  bell: 'notifications-outline',
+  'arrow.up.right': 'open-outline',
+  photo: 'image-outline',
+  'speaker.wave.2': 'volume-medium-outline',
+  'speaker.fill': 'volume-low',
+  'speaker.wave.3.fill': 'volume-high',
+  'calendar.badge.plus': 'calendar-outline',
+  'arrow.triangle.2.circlepath': 'sync-outline',
+  'chevron.backward': 'chevron-back',
 } satisfies Record<string, IoniconName>;
 
 export type TaskSymbolName = keyof typeof taskIcons;

@@ -48,6 +48,26 @@ export type Profile = {
 
 export type ProfileResponse = { user: Profile };
 
+/** `ProfileSettingsInput` (ios/Sources/NexdoCore/ProfileSettings.swift:22-27). PATCH /api/settings. */
+export type ProfileSettingsInput = {
+  name: string;
+  timeZone: string;
+  preference: ProfilePreferences;
+  nextAction: NextActionPreference;
+};
+
+/**
+ * PATCH /api/settings success body (src/app/api/settings/route.ts:78).
+ *
+ * `profile` is present ONLY when the request carried a `photo` key — the route returns the persisted
+ * row "so clients do not depend on a second, potentially stale profile read". `ProfilePhotoReceipt`
+ * (ios/App/NexdoApp.swift:273-276) decodes exactly that.
+ */
+export type SettingsResponse = { ok: boolean; profile?: { id: string; photo: string | null } | null };
+
+/** POST /api/calendar/sync (src/app/api/calendar/sync/route.ts:24). Swift decodes only `error`. */
+export type CalendarSyncResponse = { results: { error?: string | null }[] };
+
 /** POST /api/auth/login success body (src/app/api/auth/login/route.ts). Swift discards it and reloads /api/me. */
 export type LoginResponse = { id: string; name: string; email: string };
 

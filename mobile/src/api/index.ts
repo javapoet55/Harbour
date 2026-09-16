@@ -3,6 +3,9 @@ import { createApiClient, type ApiClient } from './client';
 import type {
   AppleAuthResponse,
   AssistantRequest,
+  CalendarSyncResponse,
+  ProfileSettingsInput,
+  SettingsResponse,
   AssistantTurn,
   ProjectInput,
   ProjectResponse,
@@ -181,6 +184,33 @@ export const endpoints = {
   /** `AppModel.weeklySummary(start:)` (NexdoApp.swift:712-714). */
   weeklySummary: (start: string, client: ApiClient = getApi()) =>
     client.get<WeeklySummary>(`/api/weekly-summary?start=${encodeURIComponent(start)}`),
+
+  // MARK: Account
+
+  /**
+   * `AppModel.saveProfileSettings(_:)` (NexdoApp.swift:234-240) and
+   * `synchronizeDeviceTimeZone()` (`:225-233`), which PATCH the SAME route with different subsets.
+   *
+   * There is no /api/profile and no per-field endpoint: every setting on the screen goes to
+   * PATCH /api/settings, whose schema (src/app/api/settings/route.ts:34-42) makes every key optional.
+   */
+  updateSettings: (input: Partial<ProfileSettingsInput>, client: ApiClient = getApi()) =>
+    client.patch<SettingsResponse>('/api/settings', input, { timeoutMs: 15_000 }),
+
+  /**
+   * `AppModel.saveProfilePhoto(_:)` (NexdoApp.swift:241-272).
+   *
+   * NOT multipart and not a separate upload route: the photo is a `data:image/jpeg;base64,…` STRING
+   * on the same PATCH, and `null` removes it. The 30s timeout is Swift's.
+   */
+  updatePhoto: (photo: string | null, client: ApiClient = getApi()) =>
+    client.patch<SettingsResponse>('/api/settings', { photo }, { timeoutMs: 30_000 }),
+
+  /** `AppModel.syncProfileCalendars()` (NexdoApp.swift:286-295). */
+  syncCalendars: (client: ApiClient = getApi()) => client.post<CalendarSyncResponse>('/api/calendar/sync'),
+
+  /** `AppModel.deleteAccount()` (NexdoApp.swift:739-744). */
+  deleteAccount: (client: ApiClient = getApi()) => client.del<{ ok: boolean }>('/api/account'),
 
   logout: (client: ApiClient = getApi()) => client.post<{ ok: boolean }>('/api/auth/logout', undefined, { signedOutOn401: false }),
   me: (client: ApiClient = getApi()) => client.get<ProfileResponse>('/api/me'),

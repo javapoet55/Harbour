@@ -41,6 +41,23 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     'expo-router',
     'expo-dev-client',
     'expo-apple-authentication',
+    // Phase 7. `expo-web-browser` drives the Google Calendar OAuth session
+    // (`openAuthSessionAsync`), the analogue of Swift's `ASWebAuthenticationSession`
+    // (ios/App/ProfileView.swift:12). It declares no permissions of its own.
+    'expo-web-browser',
+    [
+      // Phase 7 profile photo. Swift uses `PhotosPicker` (ios/App/ProfileView.swift:181), which is
+      // PHPickerViewController: it runs out of process and needs NO usage description, which is why
+      // ios/Nexdo.xcodeproj/project.pbxproj declares NSContactsUsageDescription and
+      // NSMicrophoneUsageDescription but NO NSPhotoLibraryUsageDescription and no camera string.
+      //
+      // Both permissions are therefore switched OFF, so the generated Info.plist and
+      // AndroidManifest.xml stay as close to the Swift app as the plugin allows.
+      // `launchImageLibraryAsync` uses the system photo picker, which needs neither.
+      // Swift offers NO camera option, so `cameraPermission` is off as well.
+      'expo-image-picker',
+      { photosPermission: false, cameraPermission: false },
+    ],
     [
       // Phase 0 voice PoC. Needs a development build; Expo Go cannot load react-native-webrtc.
       // TODO(phase0-decision): the plugin's compatibility table stops at SDK 56 (plugin 15.0.0); 15.0.2 declares expo >=56.
