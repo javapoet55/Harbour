@@ -12,7 +12,7 @@ import {
 } from '../../src/components';
 import { useResendVerification, useVerifyEmail } from '../../src/query/useAuth';
 import { isCodeComplete, sanitizeCode } from '../../src/schemas/auth';
-import { systemText, textStyles, useTheme } from '../../src/theme';
+import { inputText, systemText, textStyles, useTheme } from '../../src/theme';
 import type { PendingVerification } from '../../src/query/useAuth';
 
 /** `EmailVerificationView.resendCooldown` (ios/App/RootView.swift:686). Client-side: the server has none. */
@@ -179,7 +179,7 @@ const styles = StyleSheet.create({
   intro: { marginTop: 8 },
   card: { marginTop: 28 },
   // .font(.title2.monospacedDigit().weight(.semibold))
-  codeInput: { flex: 1, ...textStyles.title2, fontWeight: '600', fontVariant: ['tabular-nums'], paddingVertical: 0 },
+  codeInput: { flex: 1, ...inputText(textStyles.title2), fontWeight: '600', fontVariant: ['tabular-nums'], paddingVertical: 0 },
   footnote: textStyles.footnote,
   message: { marginTop: 12 },
   error: { marginTop: 8 },

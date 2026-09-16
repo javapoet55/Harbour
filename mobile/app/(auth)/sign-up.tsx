@@ -15,7 +15,7 @@ import {
 import { isApiError } from '../../src/api';
 import { useSignUp } from '../../src/query/useAuth';
 import { signUpSchema, type SignUpValues } from '../../src/schemas/auth';
-import { systemText, textStyles, useTheme } from '../../src/theme';
+import { inputText, systemText, textStyles, useTheme } from '../../src/theme';
 
 /**
  * Port of `SignUpView` (ios/App/RootView.swift:472-571).
@@ -94,7 +94,7 @@ export default function SignUp() {
                 textContentType="name"
                 autoComplete="name"
                 returnKeyType="next"
-                style={[theme.typography.body, styles.input, { color: theme.colors.ink }]}
+                style={[inputText(theme.typography.body), styles.input, { color: theme.colors.ink }]}
               />
             )}
           />
@@ -120,7 +120,7 @@ export default function SignUp() {
                 autoCapitalize="none"
                 autoCorrect={false}
                 returnKeyType="next"
-                style={[theme.typography.body, styles.input, { color: theme.colors.ink }]}
+                style={[inputText(theme.typography.body), styles.input, { color: theme.colors.ink }]}
               />
             )}
           />

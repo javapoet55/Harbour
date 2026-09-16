@@ -29,12 +29,12 @@ percentage is" below.
 
 | Screen | State | Before | After |
 | --- | --- | ---: | ---: |
-| sign-in | empty, light | 53.13% | **4.03%** |
+| sign-in | empty, light | 53.13% | **3.97%** |
 | sign-in | keyboard open, email focused | — | 10.52% |
 | sign-in | both fields filled | — | 14.14% |
 | sign-in | server error alert | — | 3.91% |
 | sign-in | submitting ("Signing In…") | — | 8.95% |
-| sign-in | empty, dark | 54.08% | **4.77%** |
+| sign-in | empty, dark | 54.08% | **4.68%** |
 | sign-up | empty, light | 37.28% | **6.78%** |
 | sign-up | keyboard open, name focused | — | 4.93% |
 | sign-up | validation error | — | *not captured, see below* |
@@ -101,6 +101,18 @@ Sorted by how much of the residual it accounts for.
 8. **`sign-in-loading`** carries a system "Updating…" keychain HUD in the iOS capture that iOS
    raises whenever a `.password` field is submitted. It is timing-dependent, so it is not in the
    React Native capture of the same moment.
+
+## A capture trap worth knowing
+
+The sign-in greeting reads the device-stored `nexdo.lastSignedInFirstName`, so once anything has
+written it the React Native capture says "Welcome back, A" where the Swift reference says "Welcome
+back". That is app state, not styling, and it silently adds about 0.7 points to the sign-in figures.
+Clear it before capturing:
+
+```bash
+CONT=$(xcrun simctl get_app_container booted com.pinslots.nexdo data)
+rm -rf "$CONT/Library/Application Support/com.pinslots.nexdo/RCTAsyncLocalStorage_V1"
+```
 
 ## Functional notes
 

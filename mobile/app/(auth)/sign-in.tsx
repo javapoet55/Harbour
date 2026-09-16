@@ -22,7 +22,7 @@ import {
 import { useAppleSignIn, useSignIn } from '../../src/query/useAuth';
 import { signInSchema, type SignInValues } from '../../src/schemas/auth';
 import { useLastSignedIn } from '../../src/store/lastSignedIn';
-import { brand, systemText, textStyles, useTheme } from '../../src/theme';
+import { brand, inputText, systemText, textStyles, useTheme } from '../../src/theme';
 
 /**
  * Port of `SignInView` (ios/App/RootView.swift:258-470).
@@ -124,7 +124,7 @@ export default function SignIn() {
                 returnKeyType="next"
                 submitBehavior="submit"
                 onSubmitEditing={() => passwordField?.focus()}
-                style={[theme.typography.body, styles.input, { color: theme.colors.ink }]}
+                style={[inputText(theme.typography.body), styles.input, { color: theme.colors.ink }]}
               />
             )}
           />

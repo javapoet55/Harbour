@@ -1,6 +1,6 @@
 import { StyleSheet, TextInput, View, type TextInputProps } from 'react-native';
 
-import { useTheme } from '../theme';
+import { inputText, useTheme } from '../theme';
 import { Text } from './Text';
 
 export type TextFieldProps = TextInputProps & {
@@ -19,7 +19,7 @@ export function TextField({ label, error, style, ...rest }: TextFieldProps) {
         accessibilityLabel={label}
         placeholderTextColor={theme.colors.secondary}
         style={[
-          theme.typography.body,
+          inputText(theme.typography.body),
           styles.input,
           {
             color: theme.colors.ink,

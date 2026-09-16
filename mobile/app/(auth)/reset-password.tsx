@@ -6,7 +6,7 @@ import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleShee
 import { RevealablePasswordField, Text } from '../../src/components';
 import { useConfirmPasswordReset, useRequestPasswordReset } from '../../src/query/useAuth';
 import { sanitizeCode } from '../../src/schemas/auth';
-import { textStyles, useTheme } from '../../src/theme';
+import { inputText, textStyles, useTheme } from '../../src/theme';
 
 /**
  * Port of `PasswordResetView` (ios/App/RootView.swift:574-640).
@@ -79,7 +79,7 @@ export default function ResetPassword() {
                 autoCapitalize="none"
                 autoCorrect={false}
                 returnKeyType="next"
-                style={[theme.typography.body, styles.input, { color: theme.colors.ink }]}
+                style={[inputText(theme.typography.body), styles.input, { color: theme.colors.ink }]}
               />
             </FormRow>
           </FormSection>
@@ -96,7 +96,7 @@ export default function ResetPassword() {
                   keyboardType="number-pad"
                   textContentType="oneTimeCode"
                   autoComplete="one-time-code"
-                  style={[theme.typography.body, styles.input, { color: theme.colors.ink }]}
+                  style={[inputText(theme.typography.body), styles.input, { color: theme.colors.ink }]}
                   testID="reset-code"
                 />
               </FormRow>

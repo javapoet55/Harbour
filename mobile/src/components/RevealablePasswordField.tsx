@@ -2,7 +2,7 @@ import { useState, type Ref } from 'react';
 import { Pressable, StyleSheet, TextInput, View, type TextInputProps } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 
-import { useTheme } from '../theme';
+import { inputText, useTheme } from '../theme';
 
 export type RevealablePasswordFieldProps = Omit<TextInputProps, 'secureTextEntry'> & {
   /** Doubles as the placeholder and the accessibility label, as in Swift. */
@@ -33,7 +33,7 @@ export function RevealablePasswordField({ title, textContentType = 'newPassword'
         // Revealing a password must not autocapitalise or autocorrect it (RootView.swift:648–650).
         autoCapitalize="none"
         autoCorrect={false}
-        style={[theme.typography.body, styles.input, { color: theme.colors.ink }, style]}
+        style={[inputText(theme.typography.body), styles.input, { color: theme.colors.ink }, style]}
         {...rest}
       />
       <Pressable
