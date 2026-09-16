@@ -54,6 +54,22 @@ export const taskIcons = {
   repeat: 'repeat',
   'mappin.and.ellipse': 'location-outline',
   'chevron.left': 'chevron-back',
+  // Ask AI (Phase 6). `NexdoAIIntent.icon` (AskNexdoView.swift:25-32), the Ask header and composer,
+  // `AskResponseCard` (AskResponseView.swift:86-131) and the tab bar (RootView.swift:81).
+  target: 'locate-outline',
+  alarm: 'alarm-outline',
+  sunrise: 'sunny-outline',
+  'calendar.badge.clock': 'calendar-number-outline',
+  'questionmark.circle': 'help-circle-outline',
+  'chevron.up': 'chevron-up',
+  'speaker.wave.2.fill': 'volume-high',
+  'stop.fill': 'stop',
+  'stop.circle': 'stop-circle-outline',
+  mic: 'mic-outline',
+  'text.bubble': 'chatbubble-outline',
+  'arrow.up.left': 'arrow-up-outline',
+  'circle.fill': 'ellipse',
+  'sun.max': 'sunny-outline',
 } satisfies Record<string, IoniconName>;
 
 export type TaskSymbolName = keyof typeof taskIcons;

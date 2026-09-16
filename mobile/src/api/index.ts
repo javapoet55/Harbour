@@ -2,6 +2,8 @@ import { getApiUrl } from '../config';
 import { createApiClient, type ApiClient } from './client';
 import type {
   AppleAuthResponse,
+  AssistantRequest,
+  AssistantTurn,
   ProjectInput,
   ProjectResponse,
   ProjectsResponse,
@@ -137,6 +139,31 @@ export const endpoints = {
     client.post<DoNowResponse>('/api/assistant', {
       transcript: minutes === null ? 'What should I do next?' : `I have ${minutes} minutes free. What should I do?`,
     }),
+
+  // MARK: Ask AI
+
+  /**
+   * `AppModel.ask(_:accept:)` (NexdoApp.swift:693-711) — `POST /api/assistant`.
+   *
+   * A SINGLE JSON response, not a stream: `src/app/api/assistant/route.ts:22` returns
+   * `NextResponse.json(...)`. There is no SSE and no apply/approve route — approving a proposal is
+   * the same endpoint with `confirmActionId` set, and rejecting it is the same endpoint with
+   * `rejectActionId`. The 50s ceiling matches Swift's own assistant timeout budget.
+   *
+   * Optional fields are omitted rather than sent as null, because `assistantRequestSchema`
+   * (src/lib/executive-contract.ts:35-41) declares them `.optional()`, not nullable.
+   */
+  assistant: (request: AssistantRequest, client: ApiClient = getApi()) =>
+    client.post<AssistantTurn>(
+      '/api/assistant',
+      {
+        transcript: request.transcript,
+        ...(request.contextActionId ? { contextActionId: request.contextActionId } : {}),
+        ...(request.confirmActionId ? { confirmActionId: request.confirmActionId } : {}),
+        ...(request.rejectActionId ? { rejectActionId: request.rejectActionId } : {}),
+      },
+      { timeoutMs: 50_000 },
+    ),
 
   // MARK: Calendar
 

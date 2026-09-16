@@ -28,3 +28,7 @@ export { ProjectEditorForm } from './ProjectEditorForm';
 export { ProjectCard, ProjectFolder, ProjectSearchField, TaskListRow, useProjectAccent, useProjectCardSurface } from './ProjectParts';
 export { ProjectsList } from './ProjectsList';
 export { ProfileAvatar, TasksTopBar, TodayBackdrop, NEXDO_GRADIENT } from './TodayShell';
+export { AddTaskByVoiceView, type AddTaskByVoiceViewProps } from './AddTaskByVoiceView';
+export { AskNexdoView, type AskNexdoViewProps } from './AskNexdoView';
+export { AskEntryCard, AskEntryCards, AskExampleRow, AskSuggestionCard } from './AskParts';
+export { AskResponse, AskResponseCard, AskResponseSummary, type AskResponseCardProps, type AskResponseProps } from './AskResponse';

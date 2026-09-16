@@ -1,13 +1,13 @@
-import { Card, Screen, Text } from '../../src/components';
+import { Redirect } from 'expo-router';
 
-// Placeholder. Ask AI (text) is Phase 6, and becomes a sheet then.
-export default function Ask() {
-  return (
-    <Screen edges={['top', 'left', 'right']}>
-      <Text variant="display">Ask AI</Text>
-      <Card>
-        <Text tone="secondary">Placeholder screen (Phase 6).</Text>
-      </Card>
-    </Screen>
-  );
+/**
+ * UNREACHABLE by design, and deliberately so in Swift too: `NexdoTabShell` keeps a `case .askAI`
+ * branch in its content switch (ios/App/RootView.swift:102) that nothing can select, because the
+ * tab-bar button opens the Ask sheet instead of changing `selection` (`:120`).
+ *
+ * The route still has to exist for `Tabs.Screen name="ask"` to render its tab-bar item. If it is ever
+ * reached — a deep link, say — it forwards to the sheet rather than showing an empty tab.
+ */
+export default function AskTab() {
+  return <Redirect href="/ask" />;
 }

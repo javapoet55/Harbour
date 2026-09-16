@@ -600,8 +600,10 @@ export default function Calendar() {
         <View style={styles.intelligenceHeader}>
           <TaskSymbol name="sparkles" size={15} color="#007AFF" />
           <Text style={[styles.subheadline, styles.semibold, styles.grow, { color: '#007AFF' }]}>Schedule Intelligence</Text>
-          {/* TODO(phase6): Swift opens `conflictSheet` (CalendarView.swift:459-478), which also links
-              into Ask. The sheet is built below; Ask itself is Phase 6. */}
+          {/* Swift opens `conflictSheet` (CalendarView.swift:463-477). It does NOT link into Ask:
+              `CalendarView`'s `ask` state (`:14`) and the `AskNexdoView(initialPrompt:)` sheet it
+              would present (`:157-160`) are dead code — nothing in the file ever sets `ask = true`.
+              Verified in Phase 6. */}
           <Pressable accessibilityRole="button" accessibilityLabel="Review conflicts" onPress={() => router.push('/today/attention')} style={styles.cancel} testID="calendar-conflicts">
             <Text style={[styles.caption, styles.semibold, { color: '#007AFF' }]}>Review conflicts</Text>
           </Pressable>

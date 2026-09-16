@@ -1,5 +1,7 @@
 import { create } from 'zustand';
 
+import { useAssistantStore } from './assistant';
+
 /**
  * Voice and AI consent — in memory only, reset on every launch.
  *
@@ -22,7 +24,7 @@ export type ConsentState = {
 
 type ConsentStore = ConsentState & {
   setConsent: (next: Partial<ConsentState>) => void;
-  /** `AppModel.withdrawConsent()`: clears both flags. */
+  /** `AppModel.withdrawConsent()`: clears both flags AND the assistant's conversation state. */
   withdraw: () => void;
 };
 
@@ -31,5 +33,13 @@ const EMPTY: ConsentState = { ai: false, voice: false };
 export const useConsent = create<ConsentStore>()((set) => ({
   ...EMPTY,
   setConsent: (next) => set((state) => ({ ai: next.ai ?? state.ai, voice: next.voice ?? state.voice })),
-  withdraw: () => set({ ...EMPTY }),
+  /**
+   * `withdrawConsent()` (NexdoApp.swift:720) also does `turn = nil; lastAssistantPrompt = nil;
+   * contextID = nil`, so withdrawing permission removes the answer already on screen rather than
+   * leaving it there with the sharing switched off.
+   */
+  withdraw: () => {
+    useAssistantStore.getState().reset();
+    set({ ...EMPTY });
+  },
 }));

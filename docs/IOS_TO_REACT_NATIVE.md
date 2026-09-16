@@ -951,3 +951,120 @@ Nothing in Phase 5 has run on a phone. Procedure: `mobile/README.md`, "Phase 5 o
 - The schedule-warning flow on an event, which needs a real overlapping commitment.
 - A multi-day and an all-day event, which need real synced calendar data.
 - The completed filter, which needs finished tasks and past events.
+
+## 16. Phase 6 status (Ask AI, text)
+
+### Built, with the `body` range each screen was read from
+
+| Screen | Swift view | `body` | React Native |
+| --- | --- | --- | --- |
+| Ask Nexdo (suggestions) | `AskNexdoView` (`ios/App/AskNexdoView.swift:89`) | `:182-277` | `app/ask/index.tsx` → `src/components/AskNexdoView.tsx` |
+| Free form Text | the same view with `textPage: true` (`:271`) | `:182-277` | `app/ask/text.tsx` → the same component |
+| Ask by Voice | `AddTaskByVoiceView(askMode: true)` (`:270`) | `AddTaskByVoiceView.swift:30-` | `app/ask/voice.tsx` → `src/components/AddTaskByVoiceView.tsx` (shell) |
+
+Child views followed out of `body`, in the order `body` renders them:
+
+- `NexdoAISuggestionCard` — `AskNexdoView.swift:58`, body `:61-86` → `AskSuggestionCard` in
+  `src/components/AskParts.tsx`.
+- `AskResponseView` — `ios/App/AskResponseView.swift:4`, body `:11-69` → `AskResponse` in
+  `src/components/AskResponse.tsx`.
+  - `AskResponseSummary` — `AskResponseView.swift:72`, body `:75-84`.
+  - `AskResponseCard` — `AskResponseView.swift:86`, body `:97-130`.
+- `entryCards` / `entryCard` — `AskNexdoView.swift:277-310` → `AskEntryCards` / `AskEntryCard`.
+- `composer` / `field` / `controls` — `AskNexdoView.swift:312-357`.
+- `consentView` — `AskNexdoView.swift:348-364`.
+- `NexdoAIIntent` — `AskNexdoView.swift:4-43` → `src/lib/askIntents.ts`.
+- `AskStyle` — `AskNexdoView.swift:45-56` → `askBlue` and `secondaryBackground` in `src/theme/colors.ts`.
+
+Supporting logic, each with tests:
+
+- `src/lib/assistantPolicy.ts` — the client-side guard (`AskNexdoView.swift:120-180`).
+- `src/lib/assistantPresentation.ts` — `displaySections` (`ios/Sources/NexdoCore/AssistantPresentation.swift:6-24`).
+- `src/lib/speechText.ts` — `SpeechText.chunks` (`ios/Sources/NexdoCore/SpeechText.swift:6-29`).
+- `src/store/assistant.ts` — `AppModel.turn` / `lastAssistantPrompt` / `contextID` (`NexdoApp.swift:119-127`).
+- `src/query/useAssistant.ts` — `AppModel.ask(_:accept:)` (`NexdoApp.swift:693-711`).
+- `src/api/index.ts` `endpoints.assistant` — `POST /api/assistant`.
+
+### The server contract
+
+`src/app/api/assistant/route.ts:8-33` returns **one JSON body**. There is no SSE, no streaming and no
+separate apply/approve route, so no chunk parser exists on the mobile side. `assistantRequestSchema`
+(`src/lib/executive-contract.ts:35-41`) takes `transcript` plus three optional ids and refuses
+`confirmActionId` and `rejectActionId` together. `createdTaskId` is in the Swift decoder but the
+server never emits it; it is kept in the type and honoured in the reload branch.
+
+### Where the brief and Swift disagree
+
+- **"Ask AI is a sheet; Phase 1 made it a tab."** Both are true at once. `NexdoTab.askAI`
+  (`RootView.swift:77-82`) **does** have a tab-bar item, but the button runs
+  `if tab == .askAI { showingAsk = true }` (`:120`) and never changes `selection`. The item is now
+  kept, and its press is intercepted (`tabPress` → `router.push('/ask')`), which is exactly what
+  Swift does. `app/(tabs)/ask.tsx` survives as an unreachable route, mirroring Swift's own
+  unreachable `case .askAI:` at `:102`.
+- **"A message list and bubbles."** There is none. Swift holds a single `model.turn`; "Show
+  suggestions" (`:246`) and the ✕ (`:193`) discard it. No transcript is kept, so none was built.
+- **"Reject = no server call."** Wrong. "Keep my current plan" calls `model.ask("no", accept: false)`
+  (`AskResponseView.swift:62`), which POSTs `rejectActionId`. The proposal is server-side state.
+  Following Swift; the test asserts the request and that no task data is invalidated.
+- **"A `confirmationLevel` matrix."** No such field exists anywhere — not in `AssistantTurn`
+  (`Models.swift:190-211`), not in the route, not in `executive-contract.ts`. The only confirmation
+  is `confirmation: { actionId, prompt }`, which is a single yes/no card.
+- **Calendar's Ask prompt.** `CalendarView.swift:157-160` presents `AskNexdoView(initialPrompt:)`
+  from an `ask` state (`:14`) that **nothing ever sets to true**. It is dead code. "Review conflicts"
+  (`:256`) opens `conflictSheet`, which is what the mobile button already does. The Phase 5
+  `TODO(phase6)` there has been replaced with this finding.
+- **Consent persistence.** Unchanged from Phase 3: in memory only, per launch. `AppModel.aiConsent`
+  (`NexdoApp.swift:125`) has no storage.
+
+### Read Loud and voice: shells, marked
+
+`AskResponseCard` always renders a **Read Loud** control, so it is rendered here. Its transport —
+`POST /api/speech` returning `audio/mpeg`, played through `VoicePlayback` (`AskNexdoView.swift:420-445`)
+— needs a native audio module and is Phase 9. `src/voice/speechStub.ts` walks the same preparing →
+speaking states and, like `taskCaptureStub`, **throws outside `__DEV__`**, so a release build shows
+Swift's own failure line instead of pretending to speak.
+
+`AddTaskByVoiceView` has been extracted from `app/task/voice-capture.tsx` into
+`src/components/AddTaskByVoiceView.tsx` and given the `askMode` flag, because Swift has one view with
+one flag that changes four pieces of copy (`AddTaskByVoiceView.swift:36, 41, 42, 69-71`). The
+transcription session underneath is unchanged and still the Phase 9 stub.
+
+### Visual gaps
+
+- **Sheet detents.** `.presentationDetents([.fraction(0.84)])` on the Ask sheet
+  (`RootView.swift:112`) and `[.medium, .large]` on the consent sheet (`AskNexdoView.swift:267`) have
+  no Expo Router equivalent on Android. Both are full-height modals. Same gap as the Phase 3 filters
+  sheet.
+- **SF Symbols.** `target` → `locate-outline`, `alarm` → `alarm-outline`, `sunrise` →
+  `sunny-outline` (Ionicons has no sunrise), `calendar.badge.clock` → `calendar-number-outline` (no
+  clock badge), `arrow.up.left` → `arrow-up-outline` (Ionicons has no diagonal arrows).
+- **`blocked`.** Swift's `blocked` is `submitting || model.busy`, where `model.busy` is the app-wide
+  "Updating…" flag. There is no single global mutation flag in React Query here, so `blocked` is the
+  Ask request alone. A task save running in another screen will not grey out the Ask controls.
+- **Dynamic Type.** `typeSize.isAccessibilitySize` re-lays the composer and the entry cards into a
+  vertical stack (`AskNexdoView.swift:324-328`, `:278`). Not ported; the row layout is used at every
+  size, as in the other phases.
+- **`.interactiveDismissDisabled(composerFocused || submitting)`** (`:265`) has no React Navigation
+  equivalent; the sheet can be swiped away mid-request.
+- **Grapheme clusters.** `speechChunks` splits on code points, not extended grapheme clusters; see
+  the note in `src/lib/speechText.ts`.
+
+### Open TODOs after Phase 6
+
+- `TODO(phase4b)` in `app/(tabs)/today.tsx`: the `queue.hasImmediateActions` branch of the Weekly
+  Summary card (`RootView.swift:1063-1070`) is still missing. Its **Daily Briefing** button is a
+  fourth Ask entry point — `onPlanWeek("Give me today's daily briefing, prioritizing my due contact
+  actions and upcoming calendar commitments.")` — so that entry point does not exist on Android yet.
+  Left where Phase 4B left it rather than widened into this phase.
+- `TODO(phase7)`: withdrawing AI permission (`ProfileView.swift:235-236`). `useConsent.withdraw()` is
+  built and tested; nothing calls it yet.
+- `TODO(phase9)`: `src/voice/speechStub.ts`, `src/voice/taskCaptureStub.ts`, and ask-mode voice
+  answering with an assistant turn rather than creating a task.
+
+### Needs confirmation on a device
+
+- The Ask sheet over a live tab, and that the tab behind it does not change.
+- A real proposal card, which needs an account the planner will actually propose changes for.
+- That approving a proposal visibly updates the Tasks and Calendar tabs.
+- The bottom composer with the keyboard up, on a short screen.
+- Read Loud in a release build, which should show the failure line rather than silence.

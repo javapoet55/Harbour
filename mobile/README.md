@@ -796,3 +796,141 @@ least one synced calendar event.
     connected and synchronized." The URL is built in ONE place,
     `googleConnectStartUrl` in `src/query/useCalendar.ts`, marked `TODO(server-connect-token)` — adding
     the token there is the only mobile change needed.
+
+## Phase 6 on-device test plan
+
+Ask AI in text mode. Sign in first. Ask AI needs a working assistant on the server; every step below
+is against the real `/api/assistant`, because there is no fixture mode.
+
+Consent is per launch, in memory. **Force-quit and reopen the app between the consent steps**, or the
+first "Allow" makes every later run skip the sheet.
+
+### 1. The tab bar item is not a tab
+
+1. With Today showing, tap **Ask AI** in the tab bar.
+2. The Ask sheet opens over Today. **Today stays behind it** — Ask never replaces the screen.
+3. Dismiss the sheet. You are back on Today, not on a fourth tab.
+4. All four tab items now carry an icon: a sun, a check circle, sparkles and a calendar.
+
+### 2. The suggestions page
+
+1. Open Ask AI. The title is **Ask Nexdo** with a large round ✕ on the right.
+2. Under it: "Let's make room for what matters."
+3. Five cards, in this exact order, each with an icon, a title and a grey subtitle:
+   - Give me my full day briefing — Priorities, deadlines, conflicts, and your next move
+   - Pick my Top 3 focus tasks — Ranked by urgency, effort, and completion risk
+   - Show deadlines and risks — See what is due in the next 5 days
+   - Find time in my schedule — Surface open time around calendar commitments
+   - Help me plan tomorrow — Check whether tomorrow has enough capacity
+4. Pinned to the bottom, two cards side by side on a faint magenta-to-indigo wash: **Ask by Voice**
+   ("Tap and speak", gradient circle) and **Free form Text** ("Type your prompt").
+5. There is **no text field on this page**. That is correct.
+
+### 3. The consent gate
+
+1. Force-quit and reopen the app. Open Ask AI.
+2. Tap any suggestion card. **No spinner appears and no request goes out.** A sheet slides up titled
+   **Before using Ask AI**.
+3. It reads: "Nexdo sends your question and relevant task and calendar information—including titles,
+   notes, times, preferences, and conversation context—to OpenAI to generate answers. Do not include
+   information you do not want shared. AI can make mistakes; review proposed changes before approving
+   them."
+4. Below: a link **OpenAI data privacy information**, then the grey line about withdrawing permission
+   in Account, then **Allow sharing with OpenAI** and **Not now**.
+5. Tap **Not now**. The sheet closes and nothing was sent — the suggestion cards are still there.
+6. Tap the same card again, then **Allow sharing with OpenAI**. The sheet closes and **the card's
+   question is sent straight away**, without you tapping it a third time.
+7. Force-quit and reopen. Tap a card again: the sheet is back. Consent does not survive a relaunch,
+   which is what the Swift app does.
+
+### 4. An answer
+
+1. With sharing allowed, tap **Give me my full day briefing**.
+2. "Asking Nexdo…" with a spinner appears under the cards while the request runs.
+3. When it lands, the cards are replaced by:
+   - a small grey line with a "?" icon showing the question you asked;
+   - a blue-tinted summary bar with a sparkles icon (at most three lines);
+   - one card per section, header in BOLD CAPS with a count pill and a chevron.
+4. **Only the first section shows anything** — its first two items, each with a small blue bullet.
+   Under them, **Show N more**.
+5. Every later section is collapsed and reads "Tap to view the details."
+6. Tap a section header, or **Show N more**: it expands, the chevron flips up, and the button becomes
+   **Show less**.
+7. At the bottom: **Show suggestions**. Tap it — the answer disappears and the five cards return.
+
+### 5. Read Loud — a Phase 9 shell
+
+1. Ask something, then tap **Read Loud** on a section header.
+2. In a **development build** the button flips to **Stop** and the states cycle. **No audio plays.**
+   The speech transport is Phase 9.
+3. In a **release build** the row instead shows "Your answer is ready to read. Read Loud is not
+   available in this build yet. Phase 9 adds spoken replies." with a **Retry voice reply** button.
+4. Either is expected. Report it only if the button is missing, or if it claims to be speaking in a
+   release build.
+
+### 6. Free form Text
+
+1. From the suggestions page, tap **Free form Text**.
+2. A full-screen page titled **Free form Text**, with:
+   - "Let's make room for what matters."
+   - **What would you like help with?**
+   - "Type a question or tell Nexdo what to plan, create, or change."
+   - a tall multi-line field, placeholder "Type your prompt…"
+   - an **Ask Nexdo** button on the right — and **no microphone button** on this page
+   - **Try a prompt**, then three rows: "What should I focus on today?", "Find 30 minutes free
+     tomorrow for a walk.", "Remind me to call Damien tomorrow at 11 AM."
+3. Tap one of the three. It **fills the field and nothing is sent**.
+4. Tap **Ask Nexdo**. The answer replaces the page content, the field empties, and a **composer
+   appears pinned to the bottom** — a short field plus **Ask Nexdo** — for the follow-up.
+5. Type a follow-up and send it. The previous answer is replaced; there is no chat history. That is
+   correct: the Swift app keeps one turn.
+6. Paste more than 4,000 characters into the bottom composer: "Keep your question under 4,000
+   characters." appears and **Ask Nexdo** greys out.
+
+### 7. The policy guard
+
+1. On the Free form Text page, type **Who is Ada Lovelace?** and send.
+2. **No spinner, no network request.** The answer area immediately shows "I can't help with that
+   request. Ask me about your tasks, deadlines, or schedule instead." in both the summary bar and an
+   AI RESPONSE card.
+3. Type **What is on my calendar tomorrow?** — the same opener, but it mentions the calendar — and
+   send. This one **does** go to the server.
+4. Type something political or violent and send. The other refusal appears: "I can't help with
+   political, violent, sexual, or general-knowledge questions. I can help with your tasks, calendar,
+   and scheduling questions instead."
+5. Do this before allowing consent as well: the refusal appears **without** the consent sheet.
+
+### 8. A proposal, approved and declined
+
+Needs a prompt the server answers with a plan, for example "Reschedule my afternoon so I have two
+free hours." It will not happen on every account.
+
+1. When the answer carries a proposal, a final card appears: **REVIEW PROPOSED CHANGES**.
+2. It shows the server's prompt text, then one block per change: the task title in semibold,
+   "From: …" (or "From: Unscheduled"), "To: … · N min", then the reason in grey.
+3. **Approve changes** (filled blue) and **Keep my current plan** below it.
+4. Tap **Approve changes**. Both buttons grey out while it runs, a new answer replaces the old one,
+   and **the Tasks and Calendar tabs reflect the new times** when you go back to them.
+5. Repeat and tap **Keep my current plan** instead. This **also calls the server** — that is what the
+   Swift app does — and a new answer comes back, but Tasks and Calendar are unchanged.
+
+### 9. Failure and retry
+
+1. Turn off Wi-Fi and mobile data. Ask something.
+2. "Nexdo couldn't complete that request. Please try again." appears with a **Retry** button.
+3. Turn the network back on and tap **Retry**: the same question is sent again.
+
+### 10. Entry points from other screens
+
+1. Today → **Weekly Summary** → **Plan next week with Nexdo AI →**. Ask opens **with the prompt
+   already in the field, not sent**.
+2. Calendar → **Review conflicts** opens the schedule review, **not** Ask. That matches Swift: the
+   Ask sheet in `CalendarView` is unreachable code.
+
+### 11. What is NOT here yet
+
+- **Ask by Voice** opens the voice shell with ask-mode copy ("Ask Nexdo anything"), but the session
+  underneath is still the development stub and it creates a task rather than answering. Phase 9.
+- The microphone button in the suggestions-page composer does the same.
+- **Read Loud** does not speak. Phase 9.
+- Withdrawing AI permission lives in Account. Phase 7.

@@ -12,6 +12,10 @@ export type Palette = {
   ink: string;
   secondary: string;
   scheduleBlue: string;
+  /** `AskStyle.blue` (ios/App/AskNexdoView.swift:45-50). Close to `scheduleBlue`, but not equal. */
+  askBlue: string;
+  /** `.secondarySystemBackground`: `AskStyle.cardBackground` (AskNexdoView.swift:54). */
+  secondaryBackground: string;
   tint: string;
   onTint: string;
   background: string;
@@ -36,6 +40,8 @@ export const palettes: Record<ColorScheme, Palette> = {
     ink: '#080F2E', // RootView.swift:885 light: UIColor(red: 0.03, green: 0.06, blue: 0.18)
     secondary: '#575C80', // RootView.swift:886 light: UIColor(red: 0.34, green: 0.36, blue: 0.50)
     scheduleBlue: '#26578F', // RootView.swift:887 light: UIColor(red: 0.15, green: 0.34, blue: 0.56)
+    askBlue: '#2E598F', // AskNexdoView.swift:47 light: UIColor(red: 0.18, green: 0.35, blue: 0.56)
+    secondaryBackground: '#F2F2F7',
     tint: brand.nexdoIndigo, // RootView.swift:46 `.tint(.nexdoIndigo)`
     onTint: '#FFFFFF',
     // iOS system colours used alongside the brand colours in RootView.swift
@@ -56,6 +62,8 @@ export const palettes: Record<ColorScheme, Palette> = {
     // TODO(phase1-decision): the Swift dark variant is the dynamic system `.secondaryLabel`; this is its standard dark value.
     secondary: 'rgba(235, 235, 245, 0.6)', // RootView.swift:886 dark: .secondaryLabel
     scheduleBlue: '#7ABAFF', // RootView.swift:887 dark: UIColor(red: 0.48, green: 0.73, blue: 1)
+    askBlue: '#6BB8FF', // AskNexdoView.swift:46 dark: UIColor(red: 0.42, green: 0.72, blue: 1.00)
+    secondaryBackground: '#1C1C1E',
     tint: brand.nexdoIndigo,
     onTint: '#FFFFFF',
     background: '#000000',
