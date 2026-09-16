@@ -19,6 +19,14 @@ export type Palette = {
   surface: string;
   separator: string;
   danger: string;
+  /** `.ultraThinMaterial` stand-in for the auth cards. expo-blur tints over this. */
+  glassFill: string;
+  /** `RoundedRectangle(...).stroke(Color.white.opacity(0.8))` on the auth cards. */
+  glassStroke: string;
+  /** `.shadow(color: Color.purple.opacity(0.09), radius: 25, y: 12)` on the auth cards. */
+  glassShadow: string;
+  /** `Color.nexdoSecondary.opacity(0.25)`: the rules either side of "OR" on sign-in. */
+  ruleFaint: string;
 };
 
 export type ColorScheme = 'light' | 'dark';
@@ -37,6 +45,10 @@ export const palettes: Record<ColorScheme, Palette> = {
     surface: '#FFFFFF',
     separator: 'rgba(60, 60, 67, 0.29)',
     danger: '#FF3B30',
+    glassFill: 'rgba(247, 247, 250, 0.72)', // RootView.swift:354 `.ultraThinMaterial` over systemBackground
+    glassStroke: 'rgba(255, 255, 255, 0.8)', // RootView.swift:355 Color.white.opacity(0.8)
+    glassShadow: 'rgba(128, 0, 128, 0.09)', // RootView.swift:356 Color.purple.opacity(0.09)
+    ruleFaint: 'rgba(87, 92, 128, 0.25)', // RootView.swift:385 nexdoSecondary.opacity(0.25)
   },
   dark: {
     // TODO(phase1-decision): the Swift dark variant is the dynamic system `.label`; this is its standard dark value.
@@ -51,5 +63,9 @@ export const palettes: Record<ColorScheme, Palette> = {
     surface: '#1C1C1E',
     separator: 'rgba(84, 84, 88, 0.6)',
     danger: '#FF453A',
+    glassFill: 'rgba(40, 40, 44, 0.72)', // `.ultraThinMaterial` over the dark systemBackground
+    glassStroke: 'rgba(255, 255, 255, 0.14)', // white.opacity(0.8) reads as a blown-out edge on black
+    glassShadow: 'rgba(128, 0, 128, 0.09)',
+    ruleFaint: 'rgba(235, 235, 245, 0.15)', // secondaryLabel at 0.25 of its own 0.6 alpha
   },
 };

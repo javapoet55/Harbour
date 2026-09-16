@@ -15,6 +15,9 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   userInterfaceStyle: 'automatic',
   ios: {
     bundleIdentifier: 'com.pinslots.nexdo',
+    // Sign in with Apple entitlement, matching ios/App/Nexdo.entitlements on the Swift app.
+    // This is a native capability: it needs a new EAS build and cannot work in Expo Go.
+    usesAppleSignIn: true,
     // TODO(phase1-decision): template default kept; the Swift app is iPhone-first. Revisit before the first EAS build.
     supportsTablet: true,
   },
@@ -37,6 +40,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   plugins: [
     'expo-router',
     'expo-dev-client',
+    'expo-apple-authentication',
     [
       // Phase 0 voice PoC. Needs a development build; Expo Go cannot load react-native-webrtc.
       // TODO(phase0-decision): the plugin's compatibility table stops at SDK 56 (plugin 15.0.0); 15.0.2 declares expo >=56.

@@ -1,0 +1,221 @@
+import { router, useLocalSearchParams } from 'expo-router';
+import type { ReactNode } from 'react';
+import { useState } from 'react';
+import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+
+import { RevealablePasswordField, Text } from '../../src/components';
+import { useConfirmPasswordReset, useRequestPasswordReset } from '../../src/query/useAuth';
+import { sanitizeCode } from '../../src/schemas/auth';
+import { useTheme } from '../../src/theme';
+
+/**
+ * Port of `PasswordResetView` (ios/App/RootView.swift:574-640).
+ *
+ * Confirmed as ONE screen with two stages: the verification section and the update button appear in
+ * place once `codeSent` is true, without navigating.
+ *
+ * Unlike the other three auth screens this is a SwiftUI `Form`, not a glass card over `SignInBackdrop`
+ * — so it is a plain inset-grouped list on the grouped background, and it deliberately looks different.
+ */
+export default function ResetPassword() {
+  const theme = useTheme();
+  const params = useLocalSearchParams<{ email?: string }>();
+
+  // `init(initialEmail:)` — the address typed on sign-in carries over.
+  const [email, setEmail] = useState(params.email ?? '');
+  const [code, setCode] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmation, setConfirmation] = useState('');
+  const [codeSent, setCodeSent] = useState(false);
+  const [localError, setLocalError] = useState<string | undefined>();
+
+  const request = useRequestPasswordReset();
+  const confirm = useConfirmPasswordReset();
+  const busy = request.isPending || confirm.isPending;
+
+  const close = () => router.back();
+
+  const requestCode = () => {
+    setLocalError(undefined);
+    request.mutate(
+      { email },
+      { onSuccess: () => setCodeSent(true), onError: (error) => setLocalError(error.message) },
+    );
+  };
+
+  const updatePassword = () => {
+    // RootView.swift:636 — the mismatch is checked before the request is made.
+    if (password !== confirmation) {
+      setLocalError('The passwords do not match.');
+      return;
+    }
+    setLocalError(undefined);
+    confirm.mutate(
+      { email, code, password },
+      {
+        onSuccess: () =>
+          Alert.alert('Password updated', 'You can now sign in with your new password.', [{ text: 'Sign In', onPress: close }]),
+        onError: (error) => setLocalError(error.message),
+      },
+    );
+  };
+
+  return (
+    <View style={[styles.fill, { backgroundColor: theme.colors.groupedBackground }]}>
+      <KeyboardAvoidingView style={styles.fill} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.form}>
+          <FormSection footer="We’ll email a six-digit code if an account exists. Codes expire after 15 minutes.">
+            <FormRow>
+              <TextInput
+                accessibilityLabel="Email address"
+                placeholder="Email address"
+                placeholderTextColor={theme.colors.secondary}
+                value={email}
+                onChangeText={setEmail}
+                keyboardType="email-address"
+                textContentType="username"
+                autoComplete="email"
+                autoCapitalize="none"
+                autoCorrect={false}
+                returnKeyType="next"
+                style={[theme.typography.body, styles.input, { color: theme.colors.ink }]}
+              />
+            </FormRow>
+          </FormSection>
+
+          {codeSent ? (
+            <FormSection header="Verification">
+              <FormRow>
+                <TextInput
+                  accessibilityLabel="6-digit code"
+                  placeholder="6-digit code"
+                  placeholderTextColor={theme.colors.secondary}
+                  value={code}
+                  onChangeText={(value) => setCode(sanitizeCode(value))}
+                  keyboardType="number-pad"
+                  textContentType="oneTimeCode"
+                  autoComplete="one-time-code"
+                  style={[theme.typography.body, styles.input, { color: theme.colors.ink }]}
+                  testID="reset-code"
+                />
+              </FormRow>
+              <FormRow>
+                <RevealablePasswordField
+                  title="New password"
+                  autoComplete="new-password"
+                  value={password}
+                  onChangeText={setPassword}
+                />
+              </FormRow>
+              <FormRow last>
+                <RevealablePasswordField
+                  title="Confirm new password"
+                  autoComplete="new-password"
+                  value={confirmation}
+                  onChangeText={setConfirmation}
+                />
+              </FormRow>
+            </FormSection>
+          ) : null}
+
+          {localError ? (
+            <FormSection>
+              <FormRow last>
+                <Text accessibilityLiveRegion="polite" style={[theme.typography.body, { color: theme.colors.danger }]}>
+                  {localError}
+                </Text>
+              </FormRow>
+            </FormSection>
+          ) : null}
+
+          <FormSection>
+            {codeSent ? (
+              <>
+                <FormButton
+                  title={confirm.isPending ? 'Updating…' : 'Update Password'}
+                  onPress={updatePassword}
+                  // RootView.swift:620: six digits and at least twelve characters.
+                  disabled={busy || code.length !== 6 || password.length < 12}
+                  testID="reset-update"
+                />
+                <FormButton title="Send a new code" onPress={requestCode} disabled={busy} last />
+              </>
+            ) : (
+              <FormButton
+                title={request.isPending ? 'Sending…' : 'Send Verification Code'}
+                onPress={requestCode}
+                disabled={busy || !email.includes('@')}
+                last
+                testID="reset-request"
+              />
+            )}
+          </FormSection>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </View>
+  );
+}
+
+/** One inset-grouped `Section`, with the optional header and footer SwiftUI draws around it. */
+function FormSection({ children, header, footer }: { children: ReactNode; header?: string; footer?: string }) {
+  const theme = useTheme();
+  return (
+    <View style={styles.section}>
+      {header ? <Text style={[styles.header, { color: theme.colors.secondary }]}>{header.toUpperCase()}</Text> : null}
+      <View style={[styles.sectionBody, { backgroundColor: theme.colors.surface }]}>{children}</View>
+      {footer ? <Text style={[styles.footer, { color: theme.colors.secondary }]}>{footer}</Text> : null}
+    </View>
+  );
+}
+
+/** A 44pt form row with the inset separator iOS draws between rows. */
+function FormRow({ children, last = false }: { children: ReactNode; last?: boolean }) {
+  const theme = useTheme();
+  return (
+    <View style={[styles.row, !last && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.colors.separator }]}>
+      {children}
+    </View>
+  );
+}
+
+/** A `Button` inside a Form: tinted, leading-aligned text; grey when disabled. */
+function FormButton({
+  title,
+  onPress,
+  disabled,
+  last = false,
+  testID,
+}: {
+  title: string;
+  onPress: () => void;
+  disabled: boolean;
+  last?: boolean;
+  testID?: string;
+}) {
+  const theme = useTheme();
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={title}
+      accessibilityState={{ disabled }}
+      disabled={disabled}
+      onPress={onPress}
+      testID={testID}
+      style={[styles.row, !last && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.colors.separator }]}
+    >
+      <Text style={[theme.typography.body, { color: disabled ? theme.colors.secondary : theme.colors.tint }]}>{title}</Text>
+    </Pressable>
+  );
+}
+
+const styles = StyleSheet.create({
+  fill: { flex: 1 },
+  form: { paddingVertical: 18 },
+  input: { flex: 1, paddingVertical: 0 },
+  section: { marginBottom: 22 },
+  // Inset-grouped metrics: 20pt outer inset, 10pt corners, 16pt row inset.
+  sectionBody: { marginHorizontal: 20, borderRadius: 10, overflow: 'hidden' },
+  row: { minHeight: 44, paddingHorizontal: 16, paddingVertical: 11, flexDirection: 'row', alignItems: 'center' },
+  header: { fontSize: 13, lineHeight: 18, marginHorizontal: 36, marginBottom: 7 },
+  footer: { fontSize: 13, lineHeight: 18, marginHorizontal: 36, marginTop: 7 },
+});

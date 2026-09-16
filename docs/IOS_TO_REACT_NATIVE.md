@@ -1,6 +1,6 @@
 # iOS (SwiftUI) to React Native (Expo) migration plan
 
-Last updated: 2026-09-15
+Last updated: 2026-09-16
 
 ## Goal
 
@@ -222,6 +222,20 @@ Assumes one developer working full-time with AI assistance, testing on a real iP
 | 10. Finish | Tests, design polish, device QA, EAS build, TestFlight | 5–7 |
 | **Total** | | **about 38–61 days (8–12 weeks)** |
 
+### Phase 0 result
+
+**Passed on Android, 2026-09-16.** A development build on a physical Android phone connected to
+`/api/realtime/task-session`, streamed microphone audio, and played a spoken reply. Connect, speak, hear a
+reply all work, so Phase 9 is not blocked by React Native WebRTC.
+
+Not measured during the proof of concept, and carried into Phase 9 rather than treated as blockers:
+
+- Latency figures were not recorded (neither start → data channel open, nor end of speech → first audio back).
+- Speaker volume relative to the Swift app was not measured.
+- End-to-end task creation from speech was not confirmed.
+
+iOS is untested for voice. The proof of concept ran only on Android.
+
 Options:
 
 | Scope | Estimate |
@@ -260,11 +274,14 @@ App Store review adds a few days per submission.
 ## 9. Migration checklist
 
 - [ ] Confirm setup decisions (section 1), including Android scope
-- [ ] Phase 0: voice proof of concept (built: `mobile/app/dev/voice-check.tsx`, protocol in `mobile/docs/voice-protocol.md`; awaiting the on-device test)
-- [ ] Expo project in `mobile/` with EAS development build
+- [x] Phase 0: voice proof of concept (built: `mobile/app/dev/voice-check.tsx`, protocol in `mobile/docs/voice-protocol.md`): *passed on Android 2026-09-16; iOS untested*
+- [x] Expo project in `mobile/` with EAS development build: *Android development build made and run; iOS build not made*
 - [x] API client and cookie session verified on a device: *verified on Android (Expo Go, 2026-09-15); iOS pending*
 - [x] Theme and shared components
-- [ ] Auth screens and Sign in with Apple
+- [x] Auth screens: sign-in, sign-up, verify-email, reset-password, the session gate and sign-out
+  (Phase 2, 2026-09-16). Built and covered by tests; **not yet tested on a device**.
+- [ ] Sign in with Apple: built (`expo-apple-authentication`, `ios.usesAppleSignIn`), untested — it
+  needs an iOS development build and the capability on the Apple Developer App ID.
 - [ ] Tasks and projects
 - [ ] Today
 - [ ] Calendar and Google Calendar connect
@@ -319,3 +336,62 @@ Marked `TODO(phase1-decision)` in code:
 - Dark `nexdoInk` and `nexdoSecondary` use the standard dark values of iOS `.label` and `.secondaryLabel`. The Swift code uses the dynamic system colours, not fixed values.
 - The primary `Button` is solid indigo. The Swift gradient needs `expo-linear-gradient`, which can come with the auth screens.
 - `ios.supportsTablet` keeps the template value `true`.
+
+---
+
+## 11. Phase 2 status
+
+Last updated: 2026-09-16. Branch: `react-native-migration`.
+
+Phase 2 builds the four auth screens (section 2, screens 1–4), Sign in with Apple, the session gate and
+sign-out. Screens are reproduced from `SignInView`, `SignUpView`, `EmailVerificationView` and
+`PasswordResetView` — all four live in `ios/App/RootView.swift`, not in separate files. The
+modifier-by-modifier translation rules are in
+[`mobile/docs/swift-to-rn-style-map.md`](../mobile/docs/swift-to-rn-style-map.md), calibrated against
+the live sign-in screenshot in `mobile/docs/reference/`.
+
+### What exists
+| Area | Files |
+| --- | --- |
+| Screens | `app/(auth)/sign-in.tsx`, `sign-up.tsx`, `verify-email.tsx`, `reset-password.tsx`, `_layout.tsx` |
+| Auth components | `SignInBackdrop`, `GlassCard`, `GradientButton`, `GradientText`, `NexdoLogoMark`, `SignInFieldIcon`, `AuthFieldRow`, `RevealablePasswordField`, `AuthScreen`, `AppleSignInButton`, `SplashView` |
+| Validation | `src/schemas/auth.ts`, derived from `src/server/account-auth.ts` and the Swift enable gates |
+| Server calls | `src/api/index.ts` auth endpoints, `src/query/useAuth.ts` mutations |
+| Stores | `src/store/consent.ts` (Phase 6), `src/store/lastSignedIn.ts` (the sign-in greeting) |
+| Gate | `app/_layout.tsx`: launch `GET /api/me`, splash while undecided, app-wide 401 sign-out via `onSignedOut` |
+| New packages | `expo-linear-gradient`, `expo-blur`, `expo-apple-authentication`, `expo-crypto`, `expo-font`, `@expo/vector-icons`, `@react-native-masked-view/masked-view`, `@react-native-async-storage/async-storage` |
+
+### Verified by automated checks
+- `npx tsc --noEmit`, `npm run lint`: clean.
+- `npm test`: 129 Jest tests (91 added in Phase 2), covering the Zod rules, the sign-in screen
+  (render, submit, server error, `EMAIL_NOT_VERIFIED` routing), the verify screen (paste handling,
+  resend countdown, the too-many-attempts state) and the session gate (200, 401, app-wide 401).
+- `npx expo-doctor`: back to the Phase 0 state — only the known New Architecture warnings for
+  `react-native-webrtc` and `react-native-incall-manager`.
+
+### Where the server does not match the brief
+Found while reading `src/app/api/auth/*` and `src/server/account-auth.ts`, and worth deciding on
+separately from the mobile app:
+
+- **There is no login lockout.** No attempt counter, no 429, no `Retry-After` anywhere in the login
+  path. A wrong password always returns the same 401, however many times it is sent.
+- **The code attempt limit is five, not ten** (`MAX_CODE_ATTEMPTS`), and exhausting it returns the same
+  400 and the same message as an ordinary wrong code, so a client cannot show a distinct lockout state.
+- **The 60-second resend cooldown is client-side only.** It is `EmailVerificationView.resendCooldown` in
+  Swift and is reproduced as such. The server's own limit is three sends per 15 minutes, and exceeding
+  it returns success without sending.
+- **Sign in with Apple posts an authorization code and a raw nonce**, not an identity token —
+  `authenticateApple` in `src/app/api/auth/apple/route.ts`. The React Native client sends the same shape.
+- **Consent is not stored on the device in Swift.** `AppModel.voiceConsent` and `aiConsent` are plain
+  `@Published` properties with no storage key, so consent resets on every launch. Phase 2 was asked for a
+  device-backed store and built one; Phase 6 decides which behaviour is correct.
+
+### Needs confirmation on a device
+Nothing in Phase 2 has run on a phone. Procedures: `mobile/README.md`, "Auth flows to test on a device".
+
+- All four screens against the Swift app, side by side, in light and dark.
+- Sign in with Apple: untested and untestable here. It needs an iOS development build carrying the
+  entitlement, and the capability enabled on the `com.pinslots.nexdo` App ID.
+- Password-manager behaviour for the `textContentType` / `autoComplete` pairs.
+- The visual gaps listed in the style map, above all the missing SF Rounded face on the two large titles.
+

@@ -3,7 +3,10 @@
 The React Native replacement for the SwiftUI app in `../ios`. It uses the same Railway API and the same `harbor_session` cookie. The migration plan is in [`../docs/IOS_TO_REACT_NATIVE.md`](../docs/IOS_TO_REACT_NATIVE.md).
 
 **Status:**
-- Phase 1 (setup) is done. Screens are placeholders, except the session check at `app/dev/session-check.tsx`.
+- Phase 1 (setup) is done. Screens are placeholders, except the auth screens and the session check.
+- Phase 2 (auth) is done: sign-in, sign-up, verify-email and reset-password are built to match the Swift
+  screens ([`docs/swift-to-rn-style-map.md`](docs/swift-to-rn-style-map.md)), with the session gate and
+  Sign in with Apple. Apple sign-in is **untested** — it needs an iOS device and a new build.
 - Phase 0 (voice proof of concept) is at `app/dev/voice-check.tsx`. It needs a **development build** (see "Voice proof of concept"). Everything else still runs in Expo Go.
 
 ## Requirements
@@ -32,7 +35,10 @@ npx expo start
 2. On the iPhone, open the **Camera** app and scan the QR code, then tap the banner to open it in Expo Go.
 3. If the phone cannot reach the Mac (a different network, or a client or guest Wi‑Fi), stop the server and run `npx expo start --tunnel`. The first run may ask to install `@expo/ngrok`; accept.
 
-The app opens on the sign-in placeholder, or on Today if a session already exists.
+The app opens on **Sign in**, or on Today if a session already exists.
+
+Everything in Phase 2 runs in Expo Go **except Sign in with Apple**, which needs the entitlement and
+so only appears in a build made from `app.config.ts` (see "Development builds" below).
 
 ## API address
 
@@ -63,7 +69,10 @@ EXPO_PUBLIC_API_URL=https://my-staging.up.railway.app npx expo start
 app/                     Expo Router routes
   _layout.tsx            QueryClientProvider, theme, session gate (GET /api/me)
   index.tsx              Loading or error, then redirect to /today or /sign-in
-  (auth)/sign-in.tsx     placeholder (Phase 2)
+  (auth)/sign-in.tsx     sign in, Sign in with Apple, links to sign-up and reset
+  (auth)/sign-up.tsx     create account
+  (auth)/verify-email.tsx  six-digit code, resend with a 60s cooldown
+  (auth)/reset-password.tsx  request a code, then code + new password (one screen, two stages)
   (tabs)/                Today, Tasks, Ask AI, Calendar placeholders
   dev/session-check.tsx  cookie session test (below)
 src/
@@ -72,9 +81,110 @@ src/
   api/index.ts           app-wide client and endpoints
   query/                 QueryClient, query keys, useMe, useTasks
   store/session.ts       Zustand session store
+  store/consent.ts       voice and AI consent, for Phase 6
+  store/lastSignedIn.ts  the greeting name on sign-in (UserDefaults key from the Swift app)
+  schemas/auth.ts        Zod rules, derived from src/server/account-auth.ts and the Swift gates
+  query/useAuth.ts       sign in, sign up, verify, resend, reset, Apple, sign out
   theme/                 colours from ios/App/RootView.swift, spacing, type, radii, useTheme
-  components/            Screen, Text, Button, Card, TextField, LoadingView, ErrorView
+  components/            shared UI, including the auth pieces ported from RootView.swift:
+                         SignInBackdrop, GlassCard, GradientButton, GradientText, NexdoLogoMark,
+                         SignInFieldIcon, RevealablePasswordField, AuthScreen, AppleSignInButton
+  __tests__/             tests for screens under app/ (they must NOT live in app/, where Expo
+                         Router's require.context would turn them into routes and bundle them)
 ```
+
+## Auth flows to test on a device
+
+Phase 2 is built but only automated checks have run. Work through these on a phone, in order. You need
+a real inbox you can read, because every code is emailed.
+
+Signed out, the app opens on **Sign in**. In a development build the version number at the very bottom
+of that screen is a long-press target that reveals the session and voice check links; it appears only
+in development builds.
+
+### 1. Fresh sign-up through verification
+
+1. Tap **Create account**. The sheet says "Create your account".
+2. **Create Account** stays dimmed until there is a name, an "@" in the email, and both password fields
+   have at least 12 characters. Confirm that.
+3. Enter a name, a new email address, and the same 12+ character password twice. Tap **Create Account**.
+4. Change one character of the confirmation and submit: "The passwords do not match." appears under the
+   card and nothing is sent. Put it back.
+5. On success the **Verify your email** screen appears, saying a code was sent to that address, expiring
+   in 24 hours. The keyboard opens on the code field.
+6. Type five digits: **Verify Email** stays dimmed. Type the sixth: it enables.
+7. Paste the code from the email instead. Non-digits are stripped and it stops at six characters.
+8. Tap **Verify Email**. The app goes to **Today** and shows your name.
+
+### 2. Sign in
+
+1. Sign out (below), then sign in with that account.
+2. The greeting now reads **"Welcome back, <first name>"** — it is stored on the device, so it also shows
+   before you sign in.
+3. The eye button in the password row reveals and hides the password.
+4. The email field's Return key moves to the password field; the password field's **Go** submits.
+5. A password manager should offer the saved credentials for both fields.
+
+### 3. Wrong password
+
+1. Sign in with a deliberately wrong password.
+2. An alert titled **Unable to complete request** shows "Invalid email or password." Tap OK.
+3. The password field is cleared; the email is kept.
+4. Repeat five or more times.
+   **Expected: it keeps saying the same thing.** The server has no login lockout — there is no attempt
+   counter, no 429, and no cooldown anywhere in `src/app/api/auth/login/route.ts` or `src/server/auth.ts`.
+   If you expected a lockout after five attempts, that is a server change, not a mobile one.
+
+### 4. Unverified account signing in
+
+1. Create an account but do not verify it. Sign out, then sign in with it.
+2. The app routes to **Verify your email** with the address filled in and the message "Verify your email
+   to sign in...". No code is sent automatically — matching the Swift app. Use **Send a new code**.
+
+### 5. Resend cooldown and too many attempts
+
+1. On the verify screen, tap **Send a new code**.
+2. The button becomes **"Send a new code in 60s"**, disabled, and counts down once a second to zero,
+   then returns to **Send a new code**. Tapping during the countdown does nothing.
+3. Enter a wrong six-digit code and tap **Verify Email** five times.
+   On the fifth, the server stops accepting that code and answers "That verification code is invalid,
+   expired, or already used. Send a new code and try again." That message *is* the lockout state; the
+   API does not distinguish it from an ordinary wrong code. The limit is **five**, not ten.
+4. Tap **Send a new code** and verify with the fresh code. It works.
+
+### 6. Reset password
+
+1. From sign-in, tap **Forgot password?**. The address you typed carries over.
+2. Tap **Send Verification Code**. The Verification section appears in place, on the same screen.
+3. **Update Password** stays disabled until the code is six digits and the new password is 12+ characters.
+4. Enter mismatched passwords and submit: "The passwords do not match."
+5. Enter the emailed code and a matching new password. On success an alert says **Password updated**;
+   tap **Sign In** to return.
+6. Sign in with the new password. Note that resetting also verifies the email address.
+7. Codes here expire after **15 minutes**, not 24 hours. Leave one for 16 minutes to see it rejected.
+
+### 7. Sign out
+
+1. On **Today**, tap **Sign out** (temporary — Phase 7 moves it to Account).
+2. The app returns to **Sign in** and the greeting still shows your first name.
+3. Open the session check and tap **Who am I**: *failed*, `401 SIGNED_OUT`.
+
+### 8. Force-quit while signed in
+
+1. Sign in, then force-quit the app from the app switcher.
+2. Reopen it. It must show the splash briefly and go **straight to Today**, never flashing sign-in.
+3. Repeat while signed out: it must land on **Sign in**, not on Today.
+
+### 9. Sign in with Apple (iPhone only)
+
+Untested. On Android the button does not render at all, which is correct for this phase. On iOS it
+needs a build carrying the Sign in with Apple entitlement (see below).
+
+1. The black **Continue with Apple** button appears under the OR rule.
+2. Tapping it opens the system sheet. Completing it signs in and lands on Today.
+3. Cancelling it shows no error, matching the Swift app.
+4. Apple returns a name only on the **first** authorization for this app. To test that path again,
+   remove the app from Settings > Apple ID > Sign in with Apple.
 
 ## Cookie session test (Phase 1 gate)
 
@@ -106,6 +216,22 @@ Note: Expo Go keeps cookies in its own app container. A standalone or developmen
 Phase 0 checks whether a live voice conversation works from React Native against the existing backend. This is the go/no-go gate for Phase 9. The protocol, and how it maps from Swift, is in [`docs/voice-protocol.md`](docs/voice-protocol.md).
 
 The proof of concept uses native code (`react-native-webrtc`, `react-native-incall-manager`), so **it does not run in Expo Go**. You need a development build: your own app with the Expo dev client inside.
+
+### Sign in with Apple needs a new build
+
+`expo-apple-authentication` and `ios.usesAppleSignIn` were added in Phase 2. They change the native
+project, so the existing Android development build does **not** contain them, and neither does Expo Go.
+
+- **Android:** nothing to do. Apple sign-in never renders there, and every other Phase 2 change is
+  JavaScript, so the existing development build picks them up from Metro:
+  `npx expo start --dev-client`.
+- **iOS:** a build is required before Apple sign-in can be tested at all, and the bundle ID
+  `com.pinslots.nexdo` needs the Sign in with Apple capability on its Apple Developer App ID:
+
+  ```bash
+  cd mobile
+  npx eas-cli@latest build --profile development --platform ios
+  ```
 
 ### Build the Android development build (EAS, once)
 

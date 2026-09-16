@@ -53,6 +53,30 @@ export type LoginResponse = { id: string; name: string; email: string };
 
 export type PasswordResetResponse = { message: string; delivered: boolean };
 
+/**
+ * POST /api/auth/register success body (src/app/api/auth/register/route.ts).
+ * Port of `RegistrationResponse` (ios/Sources/NexdoCore/EmailVerification.swift:3–7), which decodes
+ * only the three fields the verify screen needs. `developmentCode` is present only when the server
+ * runs outside production with email delivery mocked.
+ */
+export type RegistrationResponse = {
+  id: string;
+  name: string;
+  email: string;
+  emailVerificationRequired?: boolean;
+  emailSent?: boolean;
+  developmentCode?: string;
+};
+
+/**
+ * POST /api/auth/verify-email/resend success body (src/app/api/auth/verify-email/resend/route.ts).
+ * Port of `CodeDeliveryResponse` (ios/Sources/NexdoCore/EmailVerification.swift:9–12).
+ */
+export type CodeDeliveryResponse = { message: string; delivered: boolean };
+
+/** POST /api/auth/apple success body (src/app/api/auth/apple/route.ts). */
+export type AppleAuthResponse = { id: string; name: string; email: string };
+
 // MARK: Tasks
 
 export type TaskCategoryMetadata = { name: string };

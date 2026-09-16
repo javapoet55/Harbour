@@ -1,12 +1,16 @@
-import { focusManager, QueryClientProvider } from '@tanstack/react-query';
+import { focusManager, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
 import { AppState } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { onSignedOut } from '../src/api';
 import { createQueryClient } from '../src/query/client';
+import { queryKeys } from '../src/query/keys';
 import { useMe } from '../src/query/useMe';
+import { useConsent } from '../src/store/consent';
+import { useLastSignedIn } from '../src/store/lastSignedIn';
 import { useSession } from '../src/store/session';
 import { useTheme } from '../src/theme';
 
@@ -19,6 +23,12 @@ export default function RootLayout() {
     return () => subscription.remove();
   }, []);
 
+  // Device-backed state the first render needs: the sign-in greeting and Phase 6's consent flags.
+  useEffect(() => {
+    void useLastSignedIn.getState().hydrate();
+    void useConsent.getState().hydrate();
+  }, []);
+
   return (
     <SafeAreaProvider>
       <QueryClientProvider client={queryClient}>
@@ -29,11 +39,13 @@ export default function RootLayout() {
 }
 
 /**
- * Session gate. `GET /api/me` decides: a profile unlocks (tabs), `null` unlocks (auth). While it is unknown
- * neither group is available, so every route falls back to app/index.tsx, which shows loading or the error.
+ * Session gate. The launch `GET /api/me` decides: a profile unlocks (tabs), `null` unlocks (auth).
+ * While it is undecided neither group is available, so every route falls back to app/index.tsx, which
+ * shows the splash rather than a flash of the sign-in screen.
  */
 function RootNavigator() {
   const theme = useTheme();
+  const queryClient = useQueryClient();
   const { data: profile } = useMe();
   const setProfile = useSession((state) => state.setProfile);
   const clear = useSession((state) => state.clear);
@@ -42,6 +54,19 @@ function RootNavigator() {
     if (profile) setProfile(profile);
     else if (profile === null) clear();
   }, [profile, setProfile, clear]);
+
+  /**
+   * A 401 from ANY request, on any screen, ends the session here. There is no navigation call: the
+   * guards below flip to the auth group on their own, so this cannot start a redirect loop. It is also
+   * idempotent — a burst of parallel 401s writes the same already-signed-out state.
+   */
+  useEffect(() => {
+    onSignedOut(() => {
+      if (useSession.getState().status === 'signedOut') return;
+      useSession.getState().clear();
+      queryClient.setQueryData(queryKeys.me(), null);
+    });
+  }, [queryClient]);
 
   return (
     <>

@@ -1,6 +1,6 @@
 import { Redirect } from 'expo-router';
 
-import { ErrorView, LoadingView } from '../src/components';
+import { ErrorView, SplashView } from '../src/components';
 import { useMe } from '../src/query/useMe';
 
 export default function Index() {
@@ -10,5 +10,6 @@ export default function Index() {
   if (me.isError) {
     return <ErrorView title="Nexdo can’t reach the server" error={me.error} onRetry={() => me.refetch()} retrying={me.isFetching} />;
   }
-  return <LoadingView />;
+  // Undecided: the brand splash, never a flash of the sign-in screen.
+  return <SplashView />;
 }

@@ -1,18 +1,265 @@
+import { zodResolver } from '@hookform/resolvers/zod';
+import Ionicons from '@expo/vector-icons/Ionicons';
+import Constants from 'expo-constants';
 import { router } from 'expo-router';
+import { useState } from 'react';
+import { Controller, useForm, useWatch } from 'react-hook-form';
+import { Alert, Pressable, StyleSheet, TextInput, View } from 'react-native';
 
-import { Button, Card, Screen, Text } from '../../src/components';
+import {
+  AppleSignInButton,
+  AuthFieldDivider,
+  AuthFieldRow,
+  AuthScreen,
+  GlassCard,
+  GradientButton,
+  GradientText,
+  NexdoLogoMark,
+  RevealablePasswordField,
+  Text,
+  type AppleCredential,
+} from '../../src/components';
+import { useAppleSignIn, useSignIn } from '../../src/query/useAuth';
+import { signInSchema, type SignInValues } from '../../src/schemas/auth';
+import { useLastSignedIn } from '../../src/store/lastSignedIn';
+import { brand, useTheme } from '../../src/theme';
 
-// Placeholder. The real sign-in screen is Phase 2.
+/**
+ * Port of `SignInView` (ios/App/RootView.swift:258-470).
+ *
+ * Errors follow Swift: `AppModel.error` is presented by the root `.alert("Unable to complete request")`
+ * (RootView.swift:62-64), so sign-in has no inline error row of its own.
+ */
 export default function SignIn() {
+  const theme = useTheme();
+  const signIn = useSignIn();
+  const apple = useAppleSignIn();
+  const greetingName = useLastSignedIn((state) => state.value);
+  const [passwordField, setPasswordField] = useState<TextInput | null>(null);
+
+  const { control, handleSubmit, setValue } = useForm<SignInValues>({
+    resolver: zodResolver(signInSchema),
+    defaultValues: { email: '', password: '' },
+    mode: 'onSubmit',
+  });
+
+  const email = useWatch({ control, name: 'email' });
+  const password = useWatch({ control, name: 'password' });
+  const busy = signIn.isPending || apple.isPending;
+  // RootView.swift:431-433 `canSignIn`: an "@" and a non-empty password, nothing stricter.
+  const canSignIn = !busy && email.includes('@') && password.length > 0;
+
+  // TODO(phase2-decision): there is no lockout to show. The brief expected "5 failed logins / 15 min",
+  // but src/app/api/auth/login/route.ts and src/server/auth.ts have no attempt counter, no 429 and no
+  // Retry-After — a wrong password always returns the same 401. So no countdown and no timed disable
+  // are rendered. If a lockout is wanted, it has to be added on the server first.
+  const showError = (message: string) => Alert.alert('Unable to complete request', message, [{ text: 'OK' }]);
+
+  const submit = handleSubmit(
+    (values) => {
+      // RootView.swift:437-439: the submitted password is cleared from state immediately.
+      setValue('password', '');
+      signIn.mutate(
+        { email: values.email, password: values.password },
+        {
+          onSuccess: (pending) => {
+            if (!pending) return;
+            // The server requires the emailed code first. Swift does NOT resend here; the verify
+            // screen offers "Send a new code" instead (RootView.swift:696-697).
+            router.push({ pathname: '/verify-email', params: { email: pending.email, reason: pending.reason } });
+          },
+          onError: (error) => showError(error.message),
+        },
+      );
+    },
+    // Swift has no inline errors here, so a schema failure surfaces in the same alert.
+    (errors) => showError(errors.email?.message ?? errors.password?.message ?? 'Enter your email address and password.'),
+  );
+
+  const signInWithApple = (credential: AppleCredential) =>
+    apple.mutate(credential, { onError: (error) => showError(error.message) });
+
   return (
-    <Screen>
-      <Text variant="display">Nexdo</Text>
-      <Card style={{ gap: 12 }}>
-        <Text variant="title">Sign in</Text>
-        <Text tone="secondary">The sign-in screen arrives in Phase 2. Use the session check to sign in for now.</Text>
-        <Button title="Open session check" onPress={() => router.push('/dev/session-check')} />
-        <Button title="Open voice check" variant="secondary" onPress={() => router.push('/dev/voice-check')} />
-      </Card>
-    </Screen>
+    <AuthScreen>
+      {/* Spacer(minLength: 42) */}
+      <View style={styles.topSpacer} />
+
+      <View style={styles.center}>
+        <NexdoLogoMark width={116} height={84} />
+      </View>
+
+      {/* .font(.system(size: 42, weight: .bold, design: .rounded)) with a blue-indigo-magenta fill. */}
+      <GradientText
+        colors={[brand.nexdoBlue, brand.nexdoIndigo, brand.nexdoMagenta]}
+        numberOfLines={2}
+        shadow={{ color: 'rgba(61, 41, 240, 0.20)', radius: 12, offsetY: 4 }}
+        style={styles.title}
+      >
+        {greetingName ? `Welcome back, ${greetingName}` : 'Welcome back'}
+      </GradientText>
+
+      <Text style={[styles.subtitle, { color: theme.colors.secondary }]}>Your day is clearer with Nexdo.</Text>
+
+      <GlassCard radius={28} style={styles.card}>
+        <AuthFieldRow icon="envelope" paddingHorizontal={20} minHeight={72}>
+          <Controller
+            control={control}
+            name="email"
+            render={({ field }) => (
+              <TextInput
+                accessibilityLabel="Email address"
+                placeholder="Email address"
+                placeholderTextColor={theme.colors.secondary}
+                value={field.value}
+                onChangeText={field.onChange}
+                onBlur={field.onBlur}
+                keyboardType="email-address"
+                textContentType="username"
+                autoComplete="email"
+                autoCapitalize="none"
+                autoCorrect={false}
+                returnKeyType="next"
+                submitBehavior="submit"
+                onSubmitEditing={() => passwordField?.focus()}
+                style={[theme.typography.body, styles.input, { color: theme.colors.ink }]}
+              />
+            )}
+          />
+        </AuthFieldRow>
+
+        <AuthFieldDivider />
+
+        <AuthFieldRow icon="lock" paddingHorizontal={20} minHeight={72}>
+          <Controller
+            control={control}
+            name="password"
+            render={({ field }) => (
+              <RevealablePasswordField
+                ref={setPasswordField}
+                title="Password"
+                // Sign-in uses .password, not .newPassword, so managers offer the saved credential.
+                textContentType="password"
+                autoComplete="current-password"
+                value={field.value}
+                onChangeText={field.onChange}
+                onBlur={field.onBlur}
+                returnKeyType="go"
+                onSubmitEditing={() => submit()}
+              />
+            )}
+          />
+        </AuthFieldRow>
+
+        <AuthFieldDivider />
+
+        {/* .font(.subheadline.weight(.medium)), trailing aligned, minHeight 54, .padding(.horizontal, 22) */}
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Forgot password?"
+          onPress={() => router.push({ pathname: '/reset-password', params: { email } })}
+          style={styles.forgotRow}
+        >
+          <Text style={[styles.forgot, { color: theme.colors.tint }]}>Forgot password?</Text>
+        </Pressable>
+      </GlassCard>
+
+      <GradientButton
+        title={busy ? 'Signing In…' : 'Sign In'}
+        onPress={() => submit()}
+        disabled={!canSignIn}
+        minHeight={62}
+        style={styles.signInButton}
+        testID="sign-in-submit"
+      />
+
+      {/* HStack(spacing: 12) { Rectangle; Text("OR"); Rectangle } */}
+      <View style={styles.orRow}>
+        <View style={[styles.rule, { backgroundColor: theme.colors.ruleFaint }]} />
+        <Text style={[styles.or, { color: theme.colors.secondary }]}>OR</Text>
+        <View style={[styles.rule, { backgroundColor: theme.colors.ruleFaint }]} />
+      </View>
+
+      <AppleSignInButton onCredential={signInWithApple} onError={showError} disabled={busy} style={styles.apple} />
+
+      {/* HStack(spacing: 5) { Text("New to Nexdo?"); Button("Create account") } */}
+      <View style={styles.createRow}>
+        <Text style={[styles.subheadline, { color: theme.colors.ink }]}>New to Nexdo?</Text>
+        <Pressable accessibilityRole="button" accessibilityLabel="Create account" onPress={() => router.push('/sign-up')}>
+          <Text style={[styles.subheadline, { color: theme.colors.tint }]}>Create account</Text>
+        </Pressable>
+      </View>
+
+      {/* Label("...", systemImage: "checkmark.shield"): icon and text on one wrapping line. */}
+      <View style={styles.assuranceRow}>
+        <Ionicons name="shield-checkmark-outline" size={13} color={theme.colors.secondary} style={styles.assuranceIcon} />
+        <Text style={[styles.footnote, styles.assuranceText, { color: theme.colors.secondary }]}>
+          Your password stays on this device only for this sign-in.
+        </Text>
+      </View>
+
+      <DevEntryPoints />
+    </AuthScreen>
   );
 }
+
+/**
+ * Development-only way back to the Phase 0 and Phase 1 check screens.
+ *
+ * TODO(phase2-decision): the brief asked for the dev links behind a long-press on the app version text.
+ * The Swift sign-in screen has no version label at all, so showing one always would break parity. It
+ * renders only under `__DEV__`, which keeps a release build identical to Swift.
+ */
+function DevEntryPoints() {
+  const theme = useTheme();
+  const [open, setOpen] = useState(false);
+  if (!__DEV__) return null;
+  const version = Constants.expoConfig?.version ?? '1.0.0';
+
+  return (
+    <View style={styles.devRow}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`Version ${version}`}
+        accessibilityHint="Long press to open the developer checks"
+        delayLongPress={600}
+        onLongPress={() => setOpen((current) => !current)}
+      >
+        <Text style={[styles.footnote, { color: theme.colors.secondary }]}>{version}</Text>
+      </Pressable>
+      {open ? (
+        <View style={styles.devLinks}>
+          <Pressable accessibilityRole="button" onPress={() => router.push('/dev/session-check')}>
+            <Text style={[styles.footnote, { color: theme.colors.tint }]}>Open session check</Text>
+          </Pressable>
+          <Pressable accessibilityRole="button" onPress={() => router.push('/dev/voice-check')}>
+            <Text style={[styles.footnote, { color: theme.colors.tint }]}>Open voice check</Text>
+          </Pressable>
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  topSpacer: { height: 42 },
+  center: { alignItems: 'center' },
+  input: { flex: 1, paddingVertical: 0 },
+  title: { fontSize: 42, lineHeight: 50, fontWeight: '700', textAlign: 'center', marginTop: 22 },
+  subtitle: { fontSize: 20, lineHeight: 25, textAlign: 'center', marginTop: 8 },
+  card: { marginHorizontal: 28, marginTop: 42 },
+  forgotRow: { minHeight: 54, paddingHorizontal: 22, justifyContent: 'center', alignItems: 'flex-end' },
+  forgot: { fontSize: 15, lineHeight: 20, fontWeight: '500' },
+  signInButton: { marginHorizontal: 28, marginTop: 22 },
+  orRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginHorizontal: 36, marginVertical: 22 },
+  rule: { flex: 1, height: 1 },
+  or: { fontSize: 15, lineHeight: 20, fontWeight: '600' },
+  apple: { marginHorizontal: 28 },
+  createRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 5, marginTop: 24 },
+  subheadline: { fontSize: 15, lineHeight: 20 },
+  assuranceRow: { flexDirection: 'row', justifyContent: 'center', marginTop: 18, marginBottom: 34, paddingHorizontal: 32, gap: 6 },
+  assuranceIcon: { marginTop: 2 },
+  assuranceText: { flexShrink: 1, textAlign: 'left' },
+  footnote: { fontSize: 13, lineHeight: 18, textAlign: 'center' },
+  devRow: { alignItems: 'center', paddingBottom: 24, gap: 12 },
+  devLinks: { alignItems: 'center', gap: 10 },
+});

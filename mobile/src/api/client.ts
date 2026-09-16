@@ -68,6 +68,12 @@ export type ApiClientOptions = {
   baseUrl: string;
   fetch?: typeof fetch;
   onExchange?: (exchange: Exchange) => void;
+  /**
+   * Called whenever any request finds the session gone, before the SIGNED_OUT error is thrown.
+   * The app uses it to clear the session store from one place, so a 401 on any screen signs out.
+   * Requests that opt out with `signedOutOn401: false` (sign-in, sign-up) never reach it.
+   */
+  onSignedOut?: () => void;
 };
 
 export type ApiClient = ReturnType<typeof createApiClient>;
@@ -130,6 +136,7 @@ export function createApiClient(options: ApiClientOptions) {
     });
 
     if (signedOutOn401 && (response.status === 401 || isLoginRedirect(response, baseUrl))) {
+      options.onSignedOut?.();
       throw new ApiError({ status: 401, code: 'SIGNED_OUT', message: messages.signedOut });
     }
 
