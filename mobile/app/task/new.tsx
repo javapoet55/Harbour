@@ -1,0 +1,272 @@
+import { LinearGradient } from 'expo-linear-gradient';
+import { router } from 'expo-router';
+import { useState } from 'react';
+import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+
+import { NexdoTaskBackdrop, TaskSymbol, Text } from '../../src/components';
+import { creationDateFor, TASK_CREATION_DATES, type TaskCreationDate } from '../../src/lib/taskCreation';
+import { useCreateTask, type ScheduleConflict } from '../../src/query/useTasks';
+import { useSession } from '../../src/store/session';
+import { useTheme } from '../../src/theme';
+
+/**
+ * Port of `TaskEditor`'s `creationForm` (ios/App/RootView.swift:1932-2050).
+ *
+ * FIELD SET, which is much smaller than the brief describes: Swift's creation form has exactly four
+ * inputs — task name, notes, project and date — plus a duration stepper. There is no priority, no
+ * energy, no tags, no recurrence, no dependencies and no reminder offset on this screen; several of
+ * those live on `TaskDetailsView` instead, and tags and dependencies do not exist in `NexdoTask` at
+ * all. See the Phase 3 status section of the migration plan.
+ */
+export default function NewTask() {
+  const theme = useTheme();
+  const profile = useSession((state) => state.profile);
+  const zone = profile?.timeZone ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+  const [title, setTitle] = useState('');
+  const [notes, setNotes] = useState('');
+  const [notesExpanded, setNotesExpanded] = useState(false);
+  const [duration, setDuration] = useState(30);
+  const [dateChoice, setDateChoice] = useState<TaskCreationDate>('Today');
+  const [conflict, setConflict] = useState<ScheduleConflict | null>(null);
+
+  const create = useCreateTask({ onConflict: setConflict });
+  const busy = create.isPending;
+  // `canSave` (RootView.swift:2078-2080)
+  const canSave = !busy && title.trim().length > 0;
+
+  if (conflict) {
+    const pending = conflict;
+    setConflict(null);
+    Alert.alert('Review this time', pending.warnings.join('\n\n'), [
+      { text: 'Keep previous schedule', style: 'cancel', onPress: pending.cancel },
+      { text: 'Save anyway', onPress: pending.confirm },
+    ]);
+  }
+
+  const save = () => {
+    if (!canSave) return;
+    create.mutate(
+      {
+        title: title.trim(),
+        notes,
+        durationMin: duration,
+        startAt: new Date(creationDateFor(dateChoice, zone)).toISOString(),
+        projectId: null,
+      },
+      {
+        onSuccess: () => router.back(),
+        onError: (error) => {
+          // `perform(errorMessage:)` (NexdoApp.swift:496).
+          if (error.name === 'ScheduleConflictCancelled') return;
+          Alert.alert('Couldn’t update your task. Refresh to check its current state before retrying.', error.message);
+        },
+      },
+    );
+  };
+
+  return (
+    <View style={styles.fill}>
+      <NexdoTaskBackdrop />
+      <ScrollView keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive" contentContainerStyle={styles.scroll}>
+        <View style={[styles.card, { backgroundColor: theme.colors.surface, borderColor: theme.colors.separator }]}>
+          <EditorLabel title="TASK NAME" icon="checklist" />
+          <TextInput
+            accessibilityLabel="Task name"
+            placeholder="What needs to get done?"
+            placeholderTextColor={theme.colors.secondary}
+            value={title}
+            onChangeText={setTitle}
+            multiline
+            style={[styles.input, styles.titleInput, { color: theme.colors.ink, backgroundColor: theme.colors.groupedBackground, borderColor: theme.colors.separator }]}
+            testID="task-title"
+          />
+
+          <View style={[styles.divider, { backgroundColor: theme.colors.separator }]} />
+
+          {/* `DisclosureGroup` (RootView.swift:1953-1976) */}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Notes"
+            accessibilityState={{ expanded: notesExpanded }}
+            onPress={() => setNotesExpanded((value) => !value)}
+            style={styles.disclosure}
+            testID="notes-disclosure"
+          >
+            <View style={styles.disclosureLabel}>
+              <EditorLabel title="NOTES" icon="text.alignleft" />
+              {!notesExpanded ? (
+                <Text numberOfLines={1} style={[styles.notesPreview, { color: theme.colors.secondary }]}>
+                  {notes.length === 0 ? 'Add a note (optional)' : notes}
+                </Text>
+              ) : null}
+            </View>
+            <TaskSymbol name="chevron.right" size={15} color={theme.colors.secondary} />
+          </Pressable>
+          {notesExpanded ? (
+            <TextInput
+              accessibilityLabel="Task notes"
+              placeholder="Add context, links, or a definition of done…"
+              placeholderTextColor={theme.colors.secondary}
+              value={notes}
+              onChangeText={setNotes}
+              multiline
+              style={[styles.input, styles.notesInput, { color: theme.colors.ink, backgroundColor: theme.colors.groupedBackground, borderColor: theme.colors.separator }]}
+              testID="task-notes"
+            />
+          ) : null}
+
+          <View style={[styles.divider, { backgroundColor: theme.colors.separator }]} />
+          <EditorLabel title="PROJECT" icon="folder" />
+          {/* TODO(phase3-decision): `ProjectAssignmentField` (RootView.swift:1978) is not ported yet;
+              the create call sends `projectId: null` until the projects screens land. */}
+          <Text style={[styles.notesPreview, { color: theme.colors.secondary }]}>No project</Text>
+
+          <View style={[styles.divider, { backgroundColor: theme.colors.separator }]} />
+          <EditorLabel title="DATE" icon="calendar" />
+          <View style={styles.choiceRow}>
+            {TASK_CREATION_DATES.map((choice) => (
+              <ChoiceButton
+                key={choice}
+                label={choice}
+                selected={dateChoice === choice}
+                onPress={() => setDateChoice(choice)}
+                testID={`date-${choice}`}
+              />
+            ))}
+          </View>
+
+          <View style={[styles.divider, { backgroundColor: theme.colors.separator }]} />
+          <EditorLabel title="TIME ESTIMATE" icon="clock" />
+          <View style={styles.choiceRow}>
+            {[15, 30, 45, 60].map((minutes) => (
+              <ChoiceButton
+                key={minutes}
+                label={`${minutes}m`}
+                selected={duration === minutes}
+                onPress={() => setDuration(minutes)}
+                testID={`duration-${minutes}`}
+              />
+            ))}
+          </View>
+
+          {/* `Stepper(value: $duration, in: 5...480, step: 5)` (RootView.swift:2000-2008) */}
+          <View style={[styles.stepper, { backgroundColor: theme.colors.groupedBackground }]}>
+            <View style={styles.stepperText}>
+              <Text style={[theme.typography.body, { color: theme.colors.secondary }]}>Custom estimate</Text>
+              <Text style={[theme.typography.body, styles.stepperValue, { color: theme.colors.ink }]}>{duration} min</Text>
+            </View>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Decrease estimate"
+              onPress={() => setDuration((value) => Math.max(5, value - 5))}
+              style={styles.stepperButton}
+              testID="duration-decrease"
+            >
+              <Text style={[styles.stepperGlyph, { color: theme.colors.tint }]}>−</Text>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Increase estimate"
+              onPress={() => setDuration((value) => Math.min(480, value + 5))}
+              style={styles.stepperButton}
+              testID="duration-increase"
+            >
+              <Text style={[styles.stepperGlyph, { color: theme.colors.tint }]}>+</Text>
+            </Pressable>
+          </View>
+        </View>
+      </ScrollView>
+
+      {/* `.safeAreaInset(edge: .bottom)` (RootView.swift:2013-2028) */}
+      <View style={[styles.footer, { backgroundColor: theme.colors.surface, borderTopColor: theme.colors.separator }]}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={busy ? 'Creating…' : 'Create Task'}
+          accessibilityState={{ disabled: !canSave }}
+          disabled={!canSave}
+          onPress={save}
+          testID="create-task"
+        >
+          {canSave ? (
+            <LinearGradient colors={SELECTED_GRADIENT} start={{ x: 0, y: 0.5 }} end={{ x: 1, y: 0.5 }} style={styles.saveButton}>
+              {busy ? <ActivityIndicator color="#FFFFFF" /> : null}
+              <Text style={[styles.saveLabel, { color: '#FFFFFF' }]}>{busy ? 'Creating…' : 'Create Task'}</Text>
+              {!busy ? <TaskSymbol name="arrow.right" size={17} color="#FFFFFF" /> : null}
+            </LinearGradient>
+          ) : (
+            <View style={[styles.saveButton, { backgroundColor: theme.colors.groupedBackground }]}>
+              <Text style={[styles.saveLabel, { color: theme.colors.secondary }]}>Create Task</Text>
+            </View>
+          )}
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
+/** `TaskEditorLabel` (RootView.swift:2207-2217). */
+function EditorLabel({ title, icon }: { title: string; icon: 'checklist' | 'text.alignleft' | 'folder' | 'calendar' | 'clock' }) {
+  const theme = useTheme();
+  return (
+    <View style={styles.editorLabel}>
+      <TaskSymbol name={icon} size={13} color={theme.colors.tint} />
+      <Text style={[styles.editorLabelText, { color: theme.colors.tint }]}>{title}</Text>
+    </View>
+  );
+}
+
+/** `TaskDurationButtonStyle` (RootView.swift:2218-2230), used by both the date and duration rows. */
+function ChoiceButton({ label, selected, onPress, testID }: { label: string; selected: boolean; onPress: () => void; testID?: string }) {
+  const theme = useTheme();
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ selected }}
+      onPress={onPress}
+      testID={testID}
+      style={styles.choiceWrapper}
+    >
+      {selected ? (
+        <LinearGradient colors={SELECTED_GRADIENT} start={{ x: 0, y: 0.5 }} end={{ x: 1, y: 0.5 }} style={styles.choice}>
+          <Text style={[styles.choiceLabel, { color: '#FFFFFF' }]}>{label}</Text>
+        </LinearGradient>
+      ) : (
+        <View style={[styles.choice, { backgroundColor: theme.colors.groupedBackground, borderWidth: StyleSheet.hairlineWidth, borderColor: theme.colors.separator }]}>
+          <Text style={[styles.choiceLabel, { color: theme.colors.ink }]}>{label}</Text>
+        </View>
+      )}
+    </Pressable>
+  );
+}
+
+/** `TaskCreationStyle.selectedGradient` (RootView.swift:2199-2203). */
+const SELECTED_GRADIENT = ['#91198A', '#5930BF', '#144DAD'] as const;
+
+const styles = StyleSheet.create({
+  fill: { flex: 1 },
+  scroll: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 20 },
+  card: { gap: 20, padding: 20, borderRadius: 26, borderWidth: StyleSheet.hairlineWidth },
+  editorLabel: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  editorLabelText: { fontSize: 12, lineHeight: 16, fontWeight: '600', letterSpacing: 0.8 },
+  input: { padding: 16, borderRadius: 15, borderWidth: StyleSheet.hairlineWidth },
+  titleInput: { fontSize: 20, lineHeight: 25, fontWeight: '600', minHeight: 56 },
+  notesInput: { fontSize: 17, lineHeight: 22, minHeight: 96, textAlignVertical: 'top' },
+  divider: { height: StyleSheet.hairlineWidth, opacity: 0.45 },
+  disclosure: { flexDirection: 'row', alignItems: 'center', minHeight: 44 },
+  disclosureLabel: { flex: 1, gap: 6 },
+  notesPreview: { fontSize: 15, lineHeight: 20 },
+  choiceRow: { flexDirection: 'row', gap: 9 },
+  choiceWrapper: { flex: 1 },
+  choice: { minHeight: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 13, paddingHorizontal: 6 },
+  choiceLabel: { fontSize: 15, lineHeight: 20, fontWeight: '600' },
+  stepper: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 15, borderRadius: 15 },
+  stepperText: { flex: 1, gap: 4 },
+  stepperValue: { fontWeight: '600' },
+  stepperButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  stepperGlyph: { fontSize: 24, lineHeight: 28, fontWeight: '600' },
+  footer: { paddingHorizontal: 20, paddingVertical: 12, borderTopWidth: StyleSheet.hairlineWidth },
+  saveButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, minHeight: 52, borderRadius: 17 },
+  saveLabel: { fontSize: 17, lineHeight: 22, fontWeight: '600' },
+});

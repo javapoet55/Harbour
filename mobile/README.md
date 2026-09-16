@@ -300,3 +300,110 @@ PoC limits, left for Phase 9:
 - no inactivity timeout
 - `end_session` does not close the call; use **Stop**
 - contacts (`prepare_call` / `prepare_email`) always report unavailable
+
+## Phase 3 on-device test plan
+
+Tasks and projects. Run these in order on a signed-in phone, with the Swift app open beside you for
+the visual checks. Nothing in Phase 3 has been run on a device yet.
+
+Watch the Metro terminal throughout: the `__DEV__` request log prints the exact method, URL and body
+of every request, with passwords and codes redacted.
+
+Before you start, you need an account with a handful of tasks spread across today, tomorrow, later
+this week and last month, plus at least one completed task and one recurring task.
+
+### 1. The list
+
+1. Open the Tasks tab. The header reads "Tasks" / "Turn intent into action.", with a filter button and
+   a search button on the right.
+2. The four date pills read Today, Tomorrow, This Week, All. Only the first three carry a count.
+3. Check each pill count against the list it opens: tap the pill and count the rows. A disagreement
+   here means the snapshot pass is wrong, not the display.
+4. Tasks are grouped under day headings with a "N tasks" count on the right, open work before
+   completed work.
+5. Pull down to refresh. The list should reload without flicker.
+6. Switch to All. The history range control appears; try This Month, Last Month and Last 2 weeks.
+   Under Last 2 weeks, open tasks scheduled beyond the range should still be listed, at the top.
+
+### 2. Search
+
+7. Tap the search button. Type part of a task title; the list narrows as you type.
+8. Type part of a task's NOTES instead. It should match too.
+9. Try a term with different case and accents from the original.
+10. Tap the clear button. The field closes and the full list returns.
+
+### 3. Filters
+
+11. Tap the filter button. The sheet has Status, Priority, "Earliest due first" and Reset filters.
+12. Set Status to Completed. Only completed tasks remain. Set it to All: completed sections gain a
+    "Completed · " prefix.
+13. Set a Priority. The options listed are only the priorities present in your tasks.
+14. Toggle "Earliest due first" off. Within a day, the order reverses.
+15. Switch the date pill to All; the "Earliest due first" toggle disappears, as in Swift.
+16. Tap Reset filters: status back to Open, priority to All, earliest-first on. The date and the
+    search term are deliberately NOT reset.
+
+### 4. Creating a task
+
+17. Tap "Add Manually". The sheet has TASK NAME, NOTES, PROJECT, DATE and TIME ESTIMATE, and nothing
+    else.
+18. "Create Task" stays grey until the title has non-space content.
+19. Expand NOTES; the collapsed row previews the first line.
+20. Pick a duration chip, then use the custom stepper: it moves in fives and stops at 5 and 480.
+21. Choose Tomorrow, then create. In the Metro log, confirm the body is exactly
+    `{"projectId":null,"title":...,"notes":...,"durationMin":...,"startAt":...}` and that `startAt` is
+    tomorrow at the CURRENT time, not midnight.
+22. After the save, the list should move to the day the task landed on, with the filters cleared.
+
+### 5. Completing, and recurrence
+
+23. Tap a task's circle. The circle should not flip until the server answers; it is disabled while the
+    write is in flight. This matches Swift, which is not optimistic here.
+24. Tap it again to restore it. Confirm the Metro log shows `{"status":"PLANNED"}`.
+25. Complete the RECURRING task. After the refetch, the next occurrence should appear in the list; the
+    server creates it, not the app.
+
+### 6. Editing a task
+
+26. Tap a task row. The detail sheet opens with the title, a Critical toggle, notes, priority, energy,
+    time estimate, repeats and steps.
+27. Change only the priority and save. In the Metro log, the PATCH body should contain ONLY
+    `{"priority":...}` — nothing else.
+28. Change only the duration on a SCHEDULED task and save. Two requests go out: the details body, then
+    a schedule body carrying `startAt` and `durationMin`, because the server revalidates the slot.
+29. Add a step, toggle one complete, rename one, delete one. Save. The `subtasks` key should be an
+    array of titles, and the server replaces every row.
+30. Set Repeats to Weekly, save, reopen: the value should have stuck.
+31. Open a task, change nothing, and confirm "Save changes" stays disabled.
+32. Delete a task from the detail footer and confirm it leaves the list.
+
+### 7. The schedule conflict flow
+
+33. Create or edit a task so it overlaps an existing one. The server answers 409 `SCHEDULE_WARNING`.
+34. An alert titled "Review this time" lists the conflicts, with "Keep previous schedule" and
+    "Save anyway".
+35. Tap "Keep previous schedule": nothing is saved, no second request in the log, and no error alert.
+36. Repeat and tap "Save anyway": the SAME body is resent with `"allowScheduleConflict":true`.
+
+### 8. Voice capture (stub)
+
+37. Tap "Add by Voice". First time, the consent alert appears with the OpenAI sharing wording.
+38. "Not now" closes the screen. Reopen and choose "Allow and start".
+39. The status line steps Listening… → Connecting… → Ready to add, then a fixed transcript appears.
+    THIS IS A STUB: it is a canned transcript on timers, not real transcription. Phase 9 replaces it.
+40. Tap "Add this task". The task is created through the same endpoint as the manual editor, and
+    "Added this session" lists it.
+41. Force-quit and reopen the app, then open voice capture again: the consent alert must appear again,
+    because consent is in memory only, exactly as in Swift.
+
+### 9. Projects
+
+42. Tap the Projects segment. It currently shows a placeholder; the projects screens are not built.
+    See section 12 of `docs/IOS_TO_REACT_NATIVE.md`.
+
+### 10. Visual parity
+
+43. With the Swift app beside you, compare the list, the creation sheet and the detail sheet in light
+    and dark mode. The known differences are listed under "Visual gaps" in section 12 of
+    `docs/IOS_TO_REACT_NATIVE.md`; anything NOT on that list is a defect worth reporting.
+44. Check the category badges in particular: they carry no artwork here, only a coloured dot.

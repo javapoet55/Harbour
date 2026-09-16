@@ -254,3 +254,49 @@ export type AssistantRequest = {
   confirmActionId?: string;
   rejectActionId?: string;
 };
+
+/** POST /api/tasks and PATCH /api/tasks/[id] success body (src/app/api/tasks/route.ts:71). */
+export type TaskResponse = {
+  task: NexdoTask;
+  /** Present only for a focus start (Phase 4); Swift decodes it as an optional receipt. */
+  focus?: { minutes: number; workSessionId: string | null; focusToken: string } | null;
+};
+
+// MARK: Projects
+
+/** Port of `NexdoProject` (ios/Sources/NexdoCore/Projects.swift:3-11). */
+export type NexdoProject = {
+  id: string;
+  name: string;
+  color: string;
+  createdAt: string;
+  updatedAt: string;
+  completedTaskCount: number;
+  totalTaskCount: number;
+};
+
+/** GET /api/projects success body (src/server/projects.ts `listProjects`). */
+export type ProjectsResponse = {
+  projects: NexdoProject[];
+  unassignedTaskCount: number;
+};
+
+/** POST /api/projects and PATCH /api/projects/[id] success body. */
+export type ProjectResponse = { project: NexdoProject };
+
+/** The create/update body: `ProjectInput` (Projects.swift:17). */
+export type ProjectInput = { name: string; color: string };
+
+/**
+ * The create body: `TaskSaveInput` (ios/Sources/NexdoCore/TaskSaveInput.swift:7-21).
+ *
+ * `startAt` is sent on create only — the server assigns both `startAt` and `dueAt` from it
+ * (src/app/api/tasks/route.ts:44-56) — and omitted on edit, so an edit never silently reschedules.
+ */
+export type TaskCreateInput = {
+  projectId?: string | null;
+  title: string;
+  notes: string;
+  durationMin: number;
+  startAt: string;
+};

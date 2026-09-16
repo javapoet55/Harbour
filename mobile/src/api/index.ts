@@ -2,6 +2,11 @@ import { getApiUrl } from '../config';
 import { createApiClient, type ApiClient } from './client';
 import type {
   AppleAuthResponse,
+  ProjectInput,
+  ProjectResponse,
+  ProjectsResponse,
+  TaskCreateInput,
+  TaskResponse,
   CodeDeliveryResponse,
   LoginResponse,
   PasswordResetResponse,
@@ -69,7 +74,44 @@ export const endpoints = {
     client: ApiClient = getApi(),
   ) => client.post<AppleAuthResponse>('/api/auth/apple', input, { signedOutOn401: false }),
 
+  // MARK: Tasks
+  //
+  // Swift fetches the WHOLE list once (`AppModel.loadTasks`, NexdoApp.swift:315) and filters it on the
+  // device through `TaskQuery`; it never passes the server's q/status/priority/energy/due parameters.
+  // `src/lib/taskQuery.ts` is that filter. Keeping it client-side is what makes the date-pill counts
+  // possible: every pill's count comes from one pass over the same array.
+  tasks: (client: ApiClient = getApi()) => client.get<TasksResponse>('/api/tasks'),
+
+  createTask: (input: TaskCreateInput, client: ApiClient = getApi()) => client.post<TaskResponse>('/api/tasks', input),
+
+  /**
+   * Every task write goes through PATCH. The server refuses a body that mixes `projectId` with a
+   * status or schedule change (src/app/api/tasks/[id]/route.ts:26-28), which is why `TaskDraft`
+   * splits its edits into a details body and a schedule body.
+   */
+  updateTask: (id: string, body: Record<string, unknown>, client: ApiClient = getApi()) =>
+    client.patch<TaskResponse>(`/api/tasks/${encodeURIComponent(id)}`, body),
+
+  /** `AppModel.complete` (NexdoApp.swift:518): a toggle, not a one-way action. */
+  setTaskStatus: (id: string, status: string, client: ApiClient = getApi()) =>
+    client.patch<TaskResponse>(`/api/tasks/${encodeURIComponent(id)}`, { status }),
+
+  /** Deletion is a CANCELLED status, which the server soft-deletes (tasks/[id]/route.ts:62-67). */
+  deleteTask: (id: string, client: ApiClient = getApi()) =>
+    client.patch<TaskResponse>(`/api/tasks/${encodeURIComponent(id)}`, { status: 'CANCELLED' }),
+
+  // MARK: Projects
+
+  projects: (client: ApiClient = getApi()) => client.get<ProjectsResponse>('/api/projects'),
+
+  createProject: (input: ProjectInput, client: ApiClient = getApi()) => client.post<ProjectResponse>('/api/projects', input),
+
+  updateProject: (id: string, input: ProjectInput, client: ApiClient = getApi()) =>
+    client.patch<ProjectResponse>(`/api/projects/${encodeURIComponent(id)}`, input),
+
+  deleteProject: (id: string, client: ApiClient = getApi()) =>
+    client.del<{ ok: boolean }>(`/api/projects/${encodeURIComponent(id)}`),
+
   logout: (client: ApiClient = getApi()) => client.post<{ ok: boolean }>('/api/auth/logout', undefined, { signedOutOn401: false }),
   me: (client: ApiClient = getApi()) => client.get<ProfileResponse>('/api/me'),
-  tasks: (client: ApiClient = getApi()) => client.get<TasksResponse>('/api/tasks'),
 };

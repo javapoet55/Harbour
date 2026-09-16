@@ -298,6 +298,10 @@ App Store review adds a few days per submission.
   (Phase 2, 2026-09-16). Built and covered by tests; **not yet tested on a device**.
 - [ ] Sign in with Apple: built (`expo-apple-authentication`, `ios.usesAppleSignIn`), untested — it
   needs an iOS development build and the capability on the Apple Developer App ID.
+- [x] Task list, filters, search, creation editor, task detail, voice-capture shell
+  (Phase 3, 2026-09-16). Built and covered by tests; **not yet tested on a device**.
+- [ ] Projects: list, detail, create/edit/delete: **not built**. The Tasks tab Projects segment
+  renders a placeholder. See section 12, "Phase 3 status".
 - [ ] Tasks and projects
 - [ ] Today
 - [ ] Calendar and Google Calendar connect
@@ -411,3 +415,106 @@ Nothing in Phase 2 has run on a phone. Procedures: `mobile/README.md`, "Auth flo
 - Password-manager behaviour for the `textContentType` / `autoComplete` pairs.
 - The visual gaps listed in the style map, above all the missing SF Rounded face on the two large titles.
 
+
+---
+
+## 12. Phase 3 status (tasks and projects)
+
+### Where the Swift app does not match the brief
+
+The Phase 3 brief was written from the screen inventory, not from the Swift source, and the two differ
+substantially. Per the parity rule, the build follows Swift. The differences, all verified against
+`ios/App/`:
+
+| The brief says | Swift actually does |
+| --- | --- |
+| Separate Projects screens | Tasks and Projects are ONE screen with a segmented picker; `ProjectsView()` renders inline (`RootView.swift:1650-1658`) |
+| A task-detail push route | Tapping a task opens `TaskEditor` as a SHEET, which renders `TaskDetailsView` for an existing task (`RootView.swift:1699`, `1929-1931`) |
+| Swipe actions and a long-press menu | Neither exists. A row has a completion circle and a tap target (`RootView.swift:1843-1876`) |
+| Optimistic completion | `AppModel.complete` awaits the server, then calls `replaceTask`; the button is disabled by `model.busy` meanwhile (`NexdoApp.swift:518-527`) |
+| Filters for status, priority, energy, project, tags, due range | Status, Priority, an "Earliest due first" toggle and Reset. Nothing else (`RootView.swift:1705-1726`) |
+| Editor fields including tags, dependencies, reminder offset, recurrence | The creation form has title, notes, project, date and duration. Nothing else (`RootView.swift:1932-2010`) |
+| Tags and dependencies on a task | `NexdoTask` has neither field (`Models.swift:33-48`). They are not in the mobile model either |
+| `TaskFiltering.swift`, `TaskSorting.swift`, `RecurrenceRule.swift`, `TaskValidation.swift`, `DateFormatting.swift` | None exist. The logic is in `TaskQuery.swift`, `TaskDraft.swift` and `TaskSaveInput.swift` |
+| `TaskListView.swift`, `TaskEditorView.swift`, `TaskFilterSheet.swift`, `TaskRow.swift`, `PriorityBadge.swift`, `EnergyBadge.swift`, `TagChip.swift`, `ScheduleConflictSheet.swift` | None exist as files. `TasksView`, `TaskEditor`, `TaskRow` and the filter sheet are all inside `RootView.swift` |
+
+Two more findings worth recording:
+
+- **Recurrence is server-side.** Completing a recurring task creates the next occurrence inside
+  `completeTask` (`src/server/tasks.ts:89-97`); the client only refetches. This is why completion is
+  not optimistic: an optimistic flip would show a list missing the new occurrence.
+- **The task list is fetched whole and filtered on the device.** Swift never sends the server's
+  `q`/`status`/`priority`/`energy`/`due` parameters (`NexdoApp.swift:315`). The date-pill counts depend
+  on this, because every pill's count comes from one pass over the same array.
+
+### Built in Phase 3
+
+| Screen / module | Swift source |
+| --- | --- |
+| `mobile/app/(tabs)/tasks.tsx` | `TasksView` (`RootView.swift:1620-1907`) |
+| `mobile/app/task/new.tsx` | `TaskEditor.creationForm` (`RootView.swift:1932-2050`) |
+| `mobile/app/task/[id].tsx` | `TaskDetailsView` (`ios/App/TaskDetailsView.swift`) |
+| `mobile/app/task/filters.tsx` | the filter sheet (`RootView.swift:1705-1726`) |
+| `mobile/app/task/voice-capture.tsx` | `AddTaskByVoiceView` (`ios/App/AddTaskByVoiceView.swift`), over a stub |
+| `mobile/app/task/_layout.tsx` | the `.sheet` / `.fullScreenCover` modifiers on `TasksView` |
+| `src/lib/taskQuery.ts` | `TaskQuery.swift` |
+| `src/lib/taskDraft.ts` | `TaskDraft.swift` |
+| `src/lib/taskCreation.ts` | `TaskCreationDate` (`TaskSaveInput.swift:24-39`) |
+| `src/lib/taskCategory.ts` | `TaskCategoryAppearance.swift` |
+| `src/lib/taskLabels.ts` | `ServerDate.time`, `TasksView.sectionTitle`, `TasksView.taskSubtitle` |
+| `src/query/useTasks.ts`, `src/query/taskRevision.ts` | the task methods on `AppModel` (`NexdoApp.swift:309-560`) |
+| `src/query/useProjects.ts` | `Projects.swift` and the project routes |
+| `src/store/taskQuery.ts` | `AppModel.taskQuery` |
+| `src/components/TaskCard.tsx` | `TasksView.taskCard` (`RootView.swift:1843-1876`) |
+| `src/components/TaskListParts.tsx` | `headerButton`, `datePills`, `creationCard`, the section header, `ContentUnavailableView` |
+| `src/components/TaskBadge.tsx` | `TaskBadge` (`RootView.swift:2123-2137`) |
+| `src/components/TaskCategoryBadge.tsx` | `TaskCategoryBadge.swift` |
+| `src/components/NexdoTaskBackdrop.tsx` | `NexdoTaskBackdrop` (`RootView.swift:2231-2242`) |
+| `src/components/TodayShell.tsx` | `TodayBackdrop`, `TodayTopBar`, `ProfileAvatar` |
+| `src/components/TaskSymbol.tsx` | the SF Symbol to Ionicons mapping for these screens |
+
+### NOT built in Phase 3
+
+- **Projects screens.** `ProjectsView.swift` (21.8 KB) and its editor are not ported; the Projects
+  segment renders a placeholder. The data layer (`useProjects`) and the project model are in place.
+- **The `actions` section of `TaskDetailsView`**, being "Start a 25-minute focus session" and
+  "Start task" (`TaskDetailsView.swift:114-127`). These drive the focus timer, which is Phase 4/8.
+- **`ProjectAssignmentField`** in the creation editor: the create call sends `projectId: null`.
+- **Voice transcription.** The capture screen runs on a `__DEV__`-only stub
+  (`src/voice/taskCaptureStub.ts`) that yields a fixed transcript. Phase 9 replaces it.
+- **The custom date picker** on the creation form (`RootView.swift:2040-2049`). The "Select Date"
+  button is present and selectable but does not open a calendar.
+
+### Visual gaps
+
+- `TaskCategoryBadge` draws no artwork. Swift hand-draws twelve bespoke vector illustrations
+  (`TaskCategoryBadge.swift:33+`); this renders the capsule, gradient and label with a coloured dot.
+- `.blur(radius:)` on the backdrop circles is not reproduced, because React Native cannot blur a
+  view's own content and `expo-blur` blurs what is behind a view. The circles are hard-edged.
+- `.ultraThinMaterial` on cards is a flat translucent fill, as in Phase 2.
+- SF Rounded (`design: .rounded`) has no bundled equivalent, so "Nexdo" in the top bar and the large
+  titles use the system face.
+- SF Symbols are substituted with Ionicons; the mapping is in `src/components/TaskSymbol.tsx`.
+- Sheet detents (`.presentationDetents([.medium, .large])` on the filter sheet) have no Expo Router
+  equivalent on Android, so the sheet is a full modal.
+- `TaskCard` does not switch to the accessibility-size layout that moves the category badge below the
+  text (`RootView.swift:1866-1871`).
+- The segmented control is a hand-built pair of pills, not a native `UISegmentedControl`.
+- The task editor has no keyboard toolbar, so SwiftUI's keyboard "Done" button is absent.
+
+### Open TODO(phase3-decision) markers
+
+- `src/components/TaskCategoryBadge.tsx`: whether to add `react-native-svg` for the category artwork.
+- `src/components/TodayShell.tsx`: the profile photo (Phase 7) and the weather / add buttons (Phase 4).
+- `mobile/app/(tabs)/tasks.tsx`: the inline `ProjectsView()`.
+- `mobile/app/task/new.tsx`: `ProjectAssignmentField`.
+- `mobile/app/(tabs)/tasks.tsx`: the account button is inert until the Phase 7 account screen exists.
+
+### Needs confirmation on a device
+
+Nothing in Phase 3 has run on a phone. Procedure: `mobile/README.md`, "Phase 3 on-device test plan".
+
+- Every screen against the Swift app, side by side, in light and dark.
+- The `SCHEDULE_WARNING` flow needs two overlapping tasks on the server to raise a real 409.
+- Recurrence: completing a recurring task should make the next occurrence appear after the refetch.
+- Pull-to-refresh, keyboard avoidance, and the modal presentations.
