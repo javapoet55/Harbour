@@ -102,6 +102,15 @@ export function createApiClient(options: ApiClientOptions) {
     const headers: Record<string, string> = { Accept: 'application/json' };
     if (body !== undefined) headers['Content-Type'] = 'application/json';
 
+    // Serialised once, so the string logged below is the exact one handed to fetch.
+    const serializedBody = body === undefined ? undefined : JSON.stringify(body);
+
+    if (__DEV__) {
+      // The bytes actually leaving the phone, in the Metro terminal. Development builds only:
+      // request bodies on the auth routes carry passwords and reset codes in the clear.
+      console.log(`[api] -> ${method} ${url}${serializedBody === undefined ? '' : ` ${serializedBody}`}`);
+    }
+
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     const started = Date.now();
@@ -111,7 +120,7 @@ export function createApiClient(options: ApiClientOptions) {
       response = await doFetch(url, {
         method,
         headers,
-        body: body === undefined ? undefined : JSON.stringify(body),
+        body: serializedBody,
         credentials: 'include',
         // API routes never redirect. React Native's iOS networking may still follow redirects, so the
         // response URL is checked below as well.
