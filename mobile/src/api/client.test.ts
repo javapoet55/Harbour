@@ -1,5 +1,5 @@
 import { shouldRetry } from '../query/client';
-import { ApiError, createApiClient, messages, normalizeBaseUrl, type Exchange } from './client';
+import { ApiError, createApiClient, messages, normalizeBaseUrl, redactSecrets, type Exchange } from './client';
 
 const ORIGIN = 'https://api.example.com';
 
@@ -200,5 +200,37 @@ describe('query retry policy', () => {
     expect(shouldRetry(0, network)).toBe(true);
     expect(shouldRetry(1, new ApiError({ status: 503, message: '' }))).toBe(true);
     expect(shouldRetry(2, network)).toBe(false);
+  });
+});
+
+describe('dev request log redaction', () => {
+  it('blanks every credential-bearing key', () => {
+    const body = JSON.stringify({
+      email: 'visakan+signintest@apzzo.com',
+      password: 'a-long-enough-password',
+      newPassword: 'another-one',
+      code: '123456',
+      token: 'SECRET-TOKEN-VALUE',
+      authorizationCode: 'SECRET-AUTH-CODE',
+      rawNonce: 'SECRET-NONCE',
+    });
+    const redacted = redactSecrets(body);
+
+    for (const secret of ['a-long-enough-password', 'another-one', '123456', 'SECRET-TOKEN-VALUE', 'SECRET-AUTH-CODE', 'SECRET-NONCE']) {
+      expect(redacted).not.toContain(secret);
+    }
+    // The address is diagnostic, not a secret: plus-addressing must stay visible and unencoded.
+    expect(redacted).toContain('visakan+signintest@apzzo.com');
+    expect(JSON.parse(redacted)).toMatchObject({ password: '***', code: '***', rawNonce: '***' });
+  });
+
+  it('survives a quote escaped inside a secret', () => {
+    const body = JSON.stringify({ password: 'pa"ss\word', email: 'a@b.com' });
+    expect(JSON.parse(redactSecrets(body))).toEqual({ password: '***', email: 'a@b.com' });
+  });
+
+  it('leaves a body with no secrets untouched', () => {
+    const body = JSON.stringify({ email: 'a@b.com', title: 'Ship the thing' });
+    expect(redactSecrets(body)).toBe(body);
   });
 });

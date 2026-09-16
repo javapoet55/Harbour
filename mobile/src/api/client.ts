@@ -105,10 +105,13 @@ export function createApiClient(options: ApiClientOptions) {
     // Serialised once, so the string logged below is the exact one handed to fetch.
     const serializedBody = body === undefined ? undefined : JSON.stringify(body);
 
-    if (__DEV__) {
-      // The bytes actually leaving the phone, in the Metro terminal. Development builds only:
-      // request bodies on the auth routes carry passwords and reset codes in the clear.
-      console.log(`[api] -> ${method} ${url}${serializedBody === undefined ? '' : ` ${serializedBody}`}`);
+    // Development builds only, and never under Jest, where it is noise rather than diagnostics.
+    if (__DEV__ && process.env.NODE_ENV !== 'test') {
+      // The bytes actually leaving the phone, in the Metro terminal. Redacted from the SAME string
+      // that fetch receives, so what is printed still reflects the real serialisation (a `+` that
+      // survived, a field name that did not) rather than a second, possibly divergent, stringify.
+      const logged = serializedBody === undefined ? '' : ` ${redactSecrets(serializedBody)}`;
+      console.log(`[api] -> ${method} ${url}${logged}`);
     }
 
     const controller = new AbortController();
@@ -208,6 +211,19 @@ function sameOriginPath(location: string, origin: string): string | null {
   else if (location.startsWith('/') && !location.startsWith('//')) path = location;
   else return null;
   return path.split(/[?#]/)[0];
+}
+
+/**
+ * Credential-bearing fields, blanked before a request body reaches the console. Covers every auth
+ * route: passwords (login, register, password-reset/confirm), the six-digit verify and reset codes,
+ * and the Sign in with Apple authorization code and raw nonce.
+ */
+/** The value of any secret-bearing key, including one containing escaped quotes. */
+const SECRET_VALUE = /"(password|newPassword|code|token|authorizationCode|rawNonce)":"(?:[^"\\]|\\.)*"/g;
+
+/** Replace the value of any secret-bearing key in a serialised JSON body with `"***"`. */
+export function redactSecrets(serialized: string): string {
+  return serialized.replace(SECRET_VALUE, '"$1":"***"');
 }
 
 function parseJson<T>(text: string): T | undefined {

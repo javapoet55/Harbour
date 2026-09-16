@@ -222,6 +222,22 @@ Assumes one developer working full-time with AI assistance, testing on a real iP
 | 10. Finish | Tests, design polish, device QA, EAS build, TestFlight | 5–7 |
 | **Total** | | **about 38–61 days (8–12 weeks)** |
 
+### Phase 2 result
+
+**Passed on Android, 2026-09-16.** Sign in, sign up, email verification and password reset all work
+against the deployed backend on a physical Android phone, with the cookie session surviving a relaunch.
+
+One open item, which is not an auth-screen defect:
+
+- **Password-reset email is silent for `+` addresses from mobile** (e.g. `visakan+signintest@apzzo.com`,
+  while `visakan@apzzo.com` works). The request bytes leaving the phone are confirmed correct by
+  `mobile/src/api/password-reset.test.ts`, which pins the path, method and body and asserts the `+`
+  travels unencoded; the navigation param round-trip preserves it too. A server-side rate limit is the
+  leading suspicion: `createPasswordReset` (`src/server/account-auth.ts`) allows three sends per 15
+  minutes per user and returns the same `{ delivered: true }` and the same generic message when it
+  refuses, so a throttled send is indistinguishable from a sent one. Re-test after a quiet 20-minute
+  gap, watching the `__DEV__` request log in the Metro terminal to confirm the address on the wire.
+
 ### Phase 0 result
 
 **Passed on Android, 2026-09-16.** A development build on a physical Android phone connected to

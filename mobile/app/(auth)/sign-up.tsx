@@ -12,7 +12,6 @@ import {
   RevealablePasswordField,
   Text,
 } from '../../src/components';
-import { isApiError } from '../../src/api';
 import { useSignUp } from '../../src/query/useAuth';
 import { signUpSchema, type SignUpValues } from '../../src/schemas/auth';
 import { useTheme } from '../../src/theme';
@@ -20,11 +19,10 @@ import { useTheme } from '../../src/theme';
 /**
  * Port of `SignUpView` (ios/App/RootView.swift:472-571).
  *
- * TODO(phase2-decision): Swift shows a single inline `localError` footnote under the card and sends
- * server failures to the root alert; it does no field mapping, because the server returns prose, not
- * field-keyed errors. The brief asked for field mapping, so the server message goes into that same
- * inline slot and, where the message is unambiguous, is also attached to the field it concerns. This
- * reuses the element Swift already has rather than adding a new one, but it is not literal parity.
+ * Server failures show as ONE message in the inline footnote slot, matching Swift: `SignUpView` keeps
+ * a single `localError` string (RootView.swift:479, 531-532) and does no field mapping, because the
+ * server returns prose rather than field-keyed errors. Phase 2 briefly mapped messages onto
+ * individual fields; that went beyond the Swift app and was reverted in Phase 3 housekeeping.
  */
 export default function SignUp() {
   const theme = useTheme();
@@ -58,13 +56,8 @@ export default function SignUp() {
           if (!pending) return;
           router.push({ pathname: '/verify-email', params: { email: pending.email, reason: pending.reason } });
         },
-        onError: (error) => {
-          const message = error.message;
-          // Messages from src/lib/http.ts, mapped to the field each one is about.
-          if (isApiError(error) && message.startsWith('An account with this email already exists')) setError('email', { message });
-          else if (isApiError(error) && message.startsWith('Use a password with at least')) setError('password', { message });
-          else setError('root', { message });
-        },
+        // Whatever the server said, in the one inline slot Swift has.
+        onError: (error) => setError('root', { message: error.message }),
       },
     );
   });

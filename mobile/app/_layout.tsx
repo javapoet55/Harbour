@@ -9,7 +9,6 @@ import { onSignedOut } from '../src/api';
 import { createQueryClient } from '../src/query/client';
 import { queryKeys } from '../src/query/keys';
 import { useMe } from '../src/query/useMe';
-import { useConsent } from '../src/store/consent';
 import { useLastSignedIn } from '../src/store/lastSignedIn';
 import { useSession } from '../src/store/session';
 import { useTheme } from '../src/theme';
@@ -26,7 +25,6 @@ export default function RootLayout() {
   // Device-backed state the first render needs: the sign-in greeting and Phase 6's consent flags.
   useEffect(() => {
     void useLastSignedIn.getState().hydrate();
-    void useConsent.getState().hydrate();
   }, []);
 
   return (
