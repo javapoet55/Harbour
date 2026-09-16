@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, RefreshControl, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 
 import { CreationCard, DatePill, HeaderButton, SectionHeader, TaskCard, TaskEmptyState, TaskSymbol, Text } from '../../src/components';
+import { ProjectsList } from '../../src/components/ProjectsList';
 import { TasksTopBar, TodayBackdrop } from '../../src/components/TodayShell';
 import { DATE_FILTER_EMPTY_TITLE, TASK_DATE_FILTERS, snapshot, type TaskDateFilter } from '../../src/lib/taskQuery';
 import { sectionTitle } from '../../src/lib/taskLabels';
@@ -69,9 +70,9 @@ export default function Tasks() {
     <View style={styles.fill}>
       <TodayBackdrop subtle />
       <View style={styles.content}>
-        {/* TODO(phase3-decision): Swift opens `AccountView()` as a sheet here (RootView.swift:1700).
-            The account screen is Phase 7, so the button is inert rather than routing to a path that
-            does not exist yet and would render the not-found screen. */}
+        {/* TODO(phase7): Swift opens `AccountView()` as a sheet here (RootView.swift:1700). The
+            account screen is Phase 7, so this is a deliberate no-op rather than a route to a path
+            that does not exist and would render the not-found screen. */}
         <TasksTopBar name={profile?.name ?? ''} onAccount={() => undefined} />
 
         {/* `header` (RootView.swift:1729-1747) */}
@@ -111,7 +112,17 @@ export default function Tasks() {
         </View>
 
         {showingProjects ? (
-          <ProjectsPlaceholder />
+          <ProjectsList
+            tasks={loaded?.tasks ?? []}
+            onOpenProject={(projectId) => router.push(`/project/${projectId}`)}
+            onOpenUnassigned={() => router.push('/project/unassigned')}
+            onNewProject={() => router.push('/project/new')}
+            onRefresh={() => {
+              void tasks.refetch();
+              void projects.refetch();
+            }}
+            refreshing={tasks.isRefetching || projects.isRefetching}
+          />
         ) : (
           <ScrollView
             keyboardShouldPersistTaps="handled"
@@ -232,19 +243,6 @@ export default function Tasks() {
           </ScrollView>
         )}
       </View>
-    </View>
-  );
-}
-
-/**
- * TODO(phase3-decision): `ProjectsView()` renders inline here in Swift (RootView.swift:1658). The
- * projects screens are not built in this commit; see the Phase 3 status section of the migration plan.
- */
-function ProjectsPlaceholder() {
-  const theme = useTheme();
-  return (
-    <View style={styles.loading}>
-      <Text style={[theme.typography.body, { color: theme.colors.secondary }]}>Projects arrive later in Phase 3.</Text>
     </View>
   );
 }

@@ -192,11 +192,20 @@ describe('Tasks screen', () => {
     await waitFor(() => expect(screen.getByText('Completed · Today')).toBeTruthy());
   });
 
-  it('switches to the Projects segment', async () => {
+  it('switches to the Projects segment and renders the projects list', async () => {
+    mockProjects.mockResolvedValue({
+      projects: [
+        { id: 'p1', name: 'Home move', color: '#8875ff', createdAt: '', updatedAt: '2026-09-10T00:00:00.000Z', completedTaskCount: 1, totalTaskCount: 4 },
+      ],
+      unassignedTaskCount: 2,
+    });
     await renderTasks();
 
     await fireEvent.press(screen.getByTestId('segment-Projects'));
 
-    await waitFor(() => expect(screen.getByText('Projects arrive later in Phase 3.')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('Home move')).toBeTruthy());
+    // The header button and the "No project" folder, both from ProjectsView.swift.
+    expect(screen.getByLabelText('New project')).toBeTruthy();
+    expect(screen.getByText('No project')).toBeTruthy();
   });
 });

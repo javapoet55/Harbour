@@ -472,18 +472,25 @@ Two more findings worth recording:
 | `src/components/NexdoTaskBackdrop.tsx` | `NexdoTaskBackdrop` (`RootView.swift:2231-2242`) |
 | `src/components/TodayShell.tsx` | `TodayBackdrop`, `TodayTopBar`, `ProfileAvatar` |
 | `src/components/TaskSymbol.tsx` | the SF Symbol to Ionicons mapping for these screens |
+| `src/components/ProjectsList.tsx` | `ProjectsView` (`ProjectsView.swift:12-75`) |
+| `src/components/ProjectParts.tsx` | `ProjectStyle`, `ProjectCard`, `ProjectFolder`, `ProjectSearchField`, `TaskListRow` (`ProjectsView.swift:3-111, 316-335`) |
+| `src/components/ProjectEditorForm.tsx` | `ProjectEditorView` (`ProjectsView.swift:112-171`) |
+| `src/components/ProjectAssignmentField.tsx` | `ProjectAssignmentField` (`ProjectsView.swift:295-315`) |
+| `src/components/MonthCalendar.tsx` | the graphical `DatePicker` sheet (`RootView.swift:2038-2049`) |
+| `mobile/app/project/[id]/index.tsx` | `ProjectDetailView` (`ProjectsView.swift:173-294`) |
+| `mobile/app/project/new.tsx`, `mobile/app/project/[id]/edit.tsx` | `ProjectEditorView`, presented as a sheet |
+| `src/lib/projectQuery.ts` | `ProjectQuery` (`Projects.swift:20-41`) and `ProjectStyle.color` |
+| `src/store/focus.ts` | `AppModel.startFocus` / `changeTaskStatus` — STUB, Phase 4 replaces it |
 
 ### NOT built in Phase 3
 
-- **Projects screens.** `ProjectsView.swift` (21.8 KB) and its editor are not ported; the Projects
-  segment renders a placeholder. The data layer (`useProjects`) and the project model are in place.
-- **The `actions` section of `TaskDetailsView`**, being "Start a 25-minute focus session" and
-  "Start task" (`TaskDetailsView.swift:114-127`). These drive the focus timer, which is Phase 4/8.
-- **`ProjectAssignmentField`** in the creation editor: the create call sends `projectId: null`.
 - **Voice transcription.** The capture screen runs on a `__DEV__`-only stub
   (`src/voice/taskCaptureStub.ts`) that yields a fixed transcript. Phase 9 replaces it.
-- **The custom date picker** on the creation form (`RootView.swift:2040-2049`). The "Select Date"
-  button is present and selectable but does not open a calendar.
+- **The focus runtime.** The two `actions` buttons on the task detail render with Swift's copy,
+  placement and enabled rules, but are wired to `src/store/focus.ts`, a stub that records the intent
+  and no-ops. Phase 4 replaces it with the real POST, `focusToken`, countdown and `FocusSessionStrip`.
+- **`FocusSessionStrip`** itself (`ios/App/FocusSessionStrip.swift:25`), which Swift swaps in for the
+  focus button while a session is live (TaskDetailsView.swift:116-117). Phase 4.
 
 ### Visual gaps
 
@@ -495,20 +502,39 @@ Two more findings worth recording:
 - SF Rounded (`design: .rounded`) has no bundled equivalent, so "Nexdo" in the top bar and the large
   titles use the system face.
 - SF Symbols are substituted with Ionicons; the mapping is in `src/components/TaskSymbol.tsx`.
-- Sheet detents (`.presentationDetents([.medium, .large])` on the filter sheet) have no Expo Router
-  equivalent on Android, so the sheet is a full modal.
+- Sheet detents (`.presentationDetents([.medium, .large])`) have no Expo Router equivalent on Android,
+  so those sheets are full modals.
 - `TaskCard` does not switch to the accessibility-size layout that moves the category badge below the
   text (`RootView.swift:1866-1871`).
 - The segmented control is a hand-built pair of pills, not a native `UISegmentedControl`.
 - The task editor has no keyboard toolbar, so SwiftUI's keyboard "Done" button is absent.
+- **New in the projects pass.** SwiftUI `Menu` has no React Native equivalent, so the four menus in the
+  projects screens — sort, project assignment, the project-detail filters and its `ellipsis.circle`
+  actions — open as inline lists under their button rather than as floating popovers.
+- **New.** The date picker is a hand-built month grid, not the system `DatePicker(.graphical)`; see the
+  decision note below.
+- **New.** `ProjectFolder` approximates SwiftUI's `color.gradient` (a colour shaded into itself) with an
+  explicit light-to-dark ramp.
+- **New.** `ProjectCard`'s progress bar is a plain two-view track, not a `ProgressView`.
+- **New.** The projects grid approximates `LazyVGrid`'s adaptive columns with flex-wrap and a
+  `minWidth`, rather than Swift's explicit `geometry.size.width < 340` switch.
 
 ### Open TODO(phase3-decision) markers
 
 - `src/components/TaskCategoryBadge.tsx`: whether to add `react-native-svg` for the category artwork.
+- `src/components/MonthCalendar.tsx`: whether to adopt `@react-native-community/datetimepicker`.
+  Swift DOES use the system picker (`DatePicker` + `.datePickerStyle(.graphical)`), so the native
+  dependency would be permitted — but it would force a new development build, AND its Android
+  presentation is a modal dialog rather than the inline month grid `.graphical` draws, so it would be
+  both costlier and less faithful than the hand-built grid. Revisit once there is an iOS build.
 - `src/components/TodayShell.tsx`: the profile photo (Phase 7) and the weather / add buttons (Phase 4).
-- `mobile/app/(tabs)/tasks.tsx`: the inline `ProjectsView()`.
-- `mobile/app/task/new.tsx`: `ProjectAssignmentField`.
-- `mobile/app/(tabs)/tasks.tsx`: the account button is inert until the Phase 7 account screen exists.
+
+### Other open TODOs
+
+- `TODO(phase4)` in `src/store/focus.ts` and `mobile/app/task/[id].tsx`: the real focus runtime.
+- `TODO(phase7)` in `mobile/app/(tabs)/tasks.tsx`: the account button is a deliberate no-op until the
+  Phase 7 account screen exists, rather than a route to a path that would render the not-found screen.
+- `TODO(phase9)` in `src/voice/taskCaptureStub.ts`: the real transcription session.
 
 ### Needs confirmation on a device
 
@@ -518,3 +544,5 @@ Nothing in Phase 3 has run on a phone. Procedure: `mobile/README.md`, "Phase 3 o
 - The `SCHEDULE_WARNING` flow needs two overlapping tasks on the server to raise a real 409.
 - Recurrence: completing a recurring task should make the next occurrence appear after the refetch.
 - Pull-to-refresh, keyboard avoidance, and the modal presentations.
+- Projects: create, edit, delete, the colour grid, the "No project" folder and per-project filters.
+- The date picker's month grid, including stepping across a month boundary.

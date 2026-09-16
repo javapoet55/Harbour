@@ -398,12 +398,68 @@ this week and last month, plus at least one completed task and one recurring tas
 
 ### 9. Projects
 
-42. Tap the Projects segment. It currently shows a placeholder; the projects screens are not built.
-    See section 12 of `docs/IOS_TO_REACT_NATIVE.md`.
+42. Tap the Projects segment. The header reads "Projects" with a "New project" button, a search field
+    and a sort button.
+43. Each project card shows a coloured folder, the name, "Open: N   Done: N" and a progress bar. Check
+    the counts against the project's real tasks.
+44. Below the cards, a "No project" folder shows the unassigned open and done counts.
+45. Type part of a project name into the search field; the grid narrows. Clear it.
+46. Tap the sort button and try each of Recently updated, Name, Most tasks, Highest completion. Confirm
+    the order changes and that ties keep a stable order.
+47. Tap "New project". The sheet has a name field and a six-colour grid.
+48. Leave the name blank: "Done" stays grey. Type 81 characters: the rule "Use 1–80 characters,
+    excluding surrounding spaces." appears and Done stays grey.
+49. Type a name, pick a colour, tap Done. In the Metro log the body is exactly `{"name":…,"color":…}`
+    with the name trimmed. The new project appears in the grid.
+50. Open a project. It pushes (it does not present as a sheet) and lists that project's OPEN tasks
+    only, with a "N tasks" count.
+51. Tap the filter button; switch Status to All. Completed tasks appear. Try a priority. Tap
+    "Reset filters": status returns to Open, priority to All.
+52. Search inside the project; only that project's tasks are matched.
+53. Tap the "+" button. The task editor opens with THIS project already selected in the PROJECT field.
+    Create a task and confirm it appears in the project.
+54. Open the "···" menu: Add task, Edit project, Delete project.
+55. Edit the project: the form is pre-filled with the current name and colour. Change both, save,
+    reopen: the change stuck.
+56. Delete the project. The confirmation reads "Its tasks will move to No project. No tasks will be
+    deleted." Confirm, then check that its tasks now appear under the "No project" folder and that
+    none were deleted.
+57. Open the "No project" folder and confirm it lists unassigned tasks and has no Edit/Delete actions.
 
-### 10. Visual parity
+### 10. Project assignment on the task editor
 
-43. With the Swift app beside you, compare the list, the creation sheet and the detail sheet in light
+58. Open "Add Manually". The PROJECT field reads "No project".
+59. Tap it: the list shows "No project" followed by every project, sorted by name.
+60. Pick a project; the field shows its name and its colour on the folder glyph.
+61. Create the task and confirm the Metro log body carries `"projectId":"<the id>"`, not null.
+62. Repeat, setting it back to "No project", and confirm the body carries `"projectId":null`.
+
+### 11. The date picker
+
+63. On the task editor, tap "Select Date". A sheet titled "Select Date" opens with a month grid.
+64. The grid starts on Monday and highlights today.
+65. Step back and forward a month with the ‹ › buttons. Step from a 31-day month into a 30-day one and
+    confirm the selection clamps to the last day rather than rolling over.
+66. Pick a day, tap Done. The date button now reads that date as "MMM d, yyyy".
+67. Create the task. In the Metro log, `startAt` is the chosen DAY at the CURRENT time of day — not
+    midnight, and not today.
+68. NOTE: this is a hand-built grid, not the iOS system picker. Compare it against Swift's
+    `.datePickerStyle(.graphical)` and decide whether the difference is worth a native dependency and
+    a rebuild; the trade-off is recorded in section 12 of `docs/IOS_TO_REACT_NATIVE.md`.
+
+### 12. Task detail actions (Phase 4 stub)
+
+69. Open a task. Above PRIORITY, two buttons read "Start a 25-minute focus session" and "Start task".
+70. Check they are positioned and styled as in Swift, directly under the title/notes card.
+71. On a COMPLETED task both are greyed out. On a task already IN_PROGRESS, "Start task" reads
+    "Task in progress" and is greyed out while the focus button stays available.
+72. Tap either button. NOTHING SHOULD HAPPEN and no request should appear in the Metro log: these are
+    wired to a Phase 4 stub that only records the intent. Behaviour lands in Phase 4.
+
+### 13. Visual parity
+
+73. With the Swift app beside you, compare the list, the creation sheet and the detail sheet in light
     and dark mode. The known differences are listed under "Visual gaps" in section 12 of
     `docs/IOS_TO_REACT_NATIVE.md`; anything NOT on that list is a defect worth reporting.
-44. Check the category badges in particular: they carry no artwork here, only a coloured dot.
+74. Check the category badges in particular: they carry no artwork here, only a coloured dot.
+75. Check the four menus in the projects screens: they open as inline lists, not floating popovers.

@@ -1,9 +1,11 @@
 import { LinearGradient } from 'expo-linear-gradient';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, Modal, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 
 import { NexdoTaskBackdrop, TaskSymbol, Text } from '../../src/components';
+import { MonthCalendar } from '../../src/components/MonthCalendar';
+import { ProjectAssignmentField } from '../../src/components/ProjectAssignmentField';
 import { creationDateFor, TASK_CREATION_DATES, type TaskCreationDate } from '../../src/lib/taskCreation';
 import { useCreateTask, type ScheduleConflict } from '../../src/query/useTasks';
 import { useSession } from '../../src/store/session';
@@ -28,6 +30,13 @@ export default function NewTask() {
   const [notesExpanded, setNotesExpanded] = useState(false);
   const [duration, setDuration] = useState(30);
   const [dateChoice, setDateChoice] = useState<TaskCreationDate>('Today');
+  // `TaskEditor.initialProjectID` (RootView.swift:1912, 1978): the project detail's "Add task"
+  // opens the editor with that project already chosen.
+  const { projectId: initialProjectID } = useLocalSearchParams<{ projectId?: string }>();
+  const [projectID, setProjectID] = useState<string | null>(initialProjectID ?? null);
+  // `@State private var customDate = Date()` and `showingDatePicker` (RootView.swift:1919-1921).
+  const [customDate, setCustomDate] = useState(() => Date.now());
+  const [showingDatePicker, setShowingDatePicker] = useState(false);
   const [conflict, setConflict] = useState<ScheduleConflict | null>(null);
 
   const create = useCreateTask({ onConflict: setConflict });
@@ -51,8 +60,8 @@ export default function NewTask() {
         title: title.trim(),
         notes,
         durationMin: duration,
-        startAt: new Date(creationDateFor(dateChoice, zone)).toISOString(),
-        projectId: null,
+        startAt: new Date(creationDateFor(dateChoice, zone, customDate)).toISOString(),
+        projectId: projectID,
       },
       {
         onSuccess: () => router.back(),
@@ -118,9 +127,7 @@ export default function NewTask() {
 
           <View style={[styles.divider, { backgroundColor: theme.colors.separator }]} />
           <EditorLabel title="PROJECT" icon="folder" />
-          {/* TODO(phase3-decision): `ProjectAssignmentField` (RootView.swift:1978) is not ported yet;
-              the create call sends `projectId: null` until the projects screens land. */}
-          <Text style={[styles.notesPreview, { color: theme.colors.secondary }]}>No project</Text>
+          <ProjectAssignmentField projectID={projectID} onChange={setProjectID} />
 
           <View style={[styles.divider, { backgroundColor: theme.colors.separator }]} />
           <EditorLabel title="DATE" icon="calendar" />
@@ -128,9 +135,13 @@ export default function NewTask() {
             {TASK_CREATION_DATES.map((choice) => (
               <ChoiceButton
                 key={choice}
-                label={choice}
+                // RootView.swift:2060 — once chosen, the custom button shows the date instead of its title.
+                label={choice === 'Select Date' && dateChoice === 'Select Date' ? customDateLabel(customDate, zone) : choice}
                 selected={dateChoice === choice}
-                onPress={() => setDateChoice(choice)}
+                onPress={() => {
+                  setDateChoice(choice);
+                  if (choice === 'Select Date') setShowingDatePicker(true);
+                }}
                 testID={`date-${choice}`}
               />
             ))}
@@ -178,6 +189,30 @@ export default function NewTask() {
         </View>
       </ScrollView>
 
+      {/* `.sheet(isPresented: $showingDatePicker)` (RootView.swift:2038-2049): a graphical date
+          picker titled "Select Date" with a Done confirmation button, over the account time zone. */}
+      <Modal visible={showingDatePicker} animationType="slide" transparent onRequestClose={() => setShowingDatePicker(false)}>
+        <View style={styles.sheetBackdrop}>
+          <View style={[styles.sheet, { backgroundColor: theme.colors.surface }]}>
+            <View style={styles.sheetBar}>
+              <Text accessibilityRole="header" style={[styles.sheetTitle, { color: theme.colors.ink }]}>
+                Select Date
+              </Text>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Done"
+                onPress={() => setShowingDatePicker(false)}
+                style={styles.sheetDone}
+                testID="date-picker-done"
+              >
+                <Text style={[theme.typography.body, { color: theme.colors.tint }]}>Done</Text>
+              </Pressable>
+            </View>
+            <MonthCalendar selected={customDate} onSelect={setCustomDate} timeZone={zone} />
+          </View>
+        </View>
+      </Modal>
+
       {/* `.safeAreaInset(edge: .bottom)` (RootView.swift:2013-2028) */}
       <View style={[styles.footer, { backgroundColor: theme.colors.surface, borderTopColor: theme.colors.separator }]}>
         <Pressable
@@ -203,6 +238,11 @@ export default function NewTask() {
       </View>
     </View>
   );
+}
+
+/** `customDateLabel` (RootView.swift:2071-2076): `MMM d, yyyy` in the account zone. */
+function customDateLabel(at: number, timeZone: string): string {
+  return new Intl.DateTimeFormat('en-US', { timeZone, month: 'short', day: 'numeric', year: 'numeric' }).format(new Date(at));
 }
 
 /** `TaskEditorLabel` (RootView.swift:2207-2217). */
@@ -266,6 +306,11 @@ const styles = StyleSheet.create({
   stepperValue: { fontWeight: '600' },
   stepperButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   stepperGlyph: { fontSize: 24, lineHeight: 28, fontWeight: '600' },
+  sheetBackdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0, 0, 0, 0.35)' },
+  sheet: { padding: 20, gap: 14, borderTopLeftRadius: 20, borderTopRightRadius: 20 },
+  sheetBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  sheetTitle: { fontSize: 17, lineHeight: 22, fontWeight: '600' },
+  sheetDone: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 4 },
   footer: { paddingHorizontal: 20, paddingVertical: 12, borderTopWidth: StyleSheet.hairlineWidth },
   saveButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, minHeight: 52, borderRadius: 17 },
   saveLabel: { fontSize: 17, lineHeight: 22, fontWeight: '600' },

@@ -7,14 +7,20 @@ import { resetRevisions } from '../query/taskRevision';
 import { useSession } from '../store/session';
 
 const mockBack = jest.fn();
+const mockParams = jest.fn(() => ({}) as Record<string, string>);
 jest.mock('expo-router', () => ({
   router: { push: jest.fn(), replace: jest.fn(), back: (...args: unknown[]) => mockBack(...args) },
+  useLocalSearchParams: () => mockParams(),
 }));
 
 const mockCreateTask = jest.fn();
+const mockProjects = jest.fn();
 jest.mock('../api', () => ({
   ...jest.requireActual('../api'),
-  endpoints: { createTask: (...args: unknown[]) => mockCreateTask(...args) },
+  endpoints: {
+    createTask: (...args: unknown[]) => mockCreateTask(...args),
+    projects: (...args: unknown[]) => mockProjects(...args),
+  },
 }));
 
 import NewTask from '../../app/task/new';
@@ -48,6 +54,14 @@ describe('Task creation editor', () => {
     resetRevisions();
     useSession.setState({ status: 'signedIn', profile: { id: 'u1', name: 'Sri Ram', email: 'a@b.com', timeZone: ZONE } });
     jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    mockParams.mockReturnValue({});
+    mockProjects.mockResolvedValue({
+      projects: [
+        { id: 'p1', name: 'Home move', color: '#8875ff', createdAt: '', updatedAt: '2026-09-10T00:00:00.000Z', completedTaskCount: 0, totalTaskCount: 3 },
+        { id: 'p2', name: 'Zurich trip', color: '#35bce6', createdAt: '', updatedAt: '2026-09-11T00:00:00.000Z', completedTaskCount: 1, totalTaskCount: 2 },
+      ],
+      unassignedTaskCount: 0,
+    });
   });
 
   afterEach(() => jest.useRealTimers());

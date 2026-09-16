@@ -2,11 +2,12 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Switch, TextInput, View } from 'react-native';
 
-import { NexdoTaskBackdrop, TaskSymbol, Text } from '../../src/components';
+import { NexdoTaskBackdrop, TaskSymbol, Text, withTaskAlpha } from '../../src/components';
 import { detailsBody, draftFrom, draftsEqual, isDraftValid, scheduleBody, type TaskDraft } from '../../src/lib/taskDraft';
 import { taskSubtitle } from '../../src/lib/taskLabels';
 import { isDone } from '../../src/lib/taskQuery';
 import { useCompleteTask, useDeleteTask, useTask, useUpdateTask, type ScheduleConflict } from '../../src/query/useTasks';
+import { canStartFocusSession, canStartTask, FOCUS_SESSION_MINUTES, useFocus } from '../../src/store/focus';
 import { useSession } from '../../src/store/session';
 import { useTheme } from '../../src/theme';
 
@@ -17,10 +18,10 @@ import { useTheme } from '../../src/theme';
  * is non-nil (RootView.swift:1929-1931) and `TasksView` presents it as a sheet. Expo Router needs a
  * path, so it is `/task/[id]` presented as a modal — same presentation, addressable differently.
  *
- * SCOPE, stated plainly: the metadata, schedule, steps and footer sections below are ported. The
- * `actions` section (RootView/TaskDetailsView.swift:114-127) is NOT — "Start a 25-minute focus
- * session" and "Start task" belong to the focus timer, which is Phase 4/8 work, and wiring them here
- * would pull in `finishFocus` and the focus runtime state. See the Phase 3 status section.
+ * The `actions` section (TaskDetailsView.swift:114-127) renders its two buttons with Swift's copy,
+ * placement and enabled rules, but is wired to `src/store/focus.ts`, a STUB that records the intent
+ * and no-ops. TODO(phase4): swap that store for the real focus runtime; the buttons then post to the
+ * server and `FocusSessionStrip` replaces the first button while a session is live.
  */
 export default function TaskDetail() {
   const theme = useTheme();
@@ -33,6 +34,7 @@ export default function TaskDetail() {
   const [newStep, setNewStep] = useState('');
   const [conflict, setConflict] = useState<ScheduleConflict | null>(null);
 
+  const focus = useFocus();
   const update = useUpdateTask({ onConflict: setConflict });
   const complete = useCompleteTask({ onConflict: setConflict });
   const remove = useDeleteTask();
@@ -130,6 +132,52 @@ export default function TaskDetail() {
             style={[styles.notesInput, { color: theme.colors.ink, backgroundColor: theme.colors.groupedBackground, borderColor: theme.colors.separator }]}
             testID="detail-notes"
           />
+        </Card>
+
+        {/* `actions` (TaskDetailsView.swift:114-127), above the metadata, as in Swift. */}
+        <Card>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Start a ${FOCUS_SESSION_MINUTES}-minute focus session`}
+            accessibilityState={{ disabled: !canStartFocusSession(task.status, isDone(task)) }}
+            disabled={!canStartFocusSession(task.status, isDone(task))}
+            onPress={() => focus.startFocus(task.id)}
+            testID="detail-start-focus"
+            style={[
+              styles.outlineButton,
+              { backgroundColor: theme.colors.background, borderColor: withTaskAlpha(theme.colors.tint, 0.16) },
+            ]}
+          >
+            <Text
+              style={[
+                styles.outlineLabel,
+                { color: canStartFocusSession(task.status, isDone(task)) ? theme.colors.ink : theme.colors.secondary },
+              ]}
+            >
+              {`Start a ${FOCUS_SESSION_MINUTES}-minute focus session`}
+            </Text>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={task.status === 'IN_PROGRESS' ? 'Task in progress' : 'Start task'}
+            accessibilityState={{ disabled: !canStartTask(task.status, isDone(task)) }}
+            disabled={!canStartTask(task.status, isDone(task))}
+            onPress={() => focus.startTask(task.id)}
+            testID="detail-start-task"
+            style={[
+              styles.outlineButton,
+              { backgroundColor: theme.colors.background, borderColor: withTaskAlpha(theme.colors.tint, 0.16) },
+            ]}
+          >
+            <Text
+              style={[
+                styles.outlineLabel,
+                { color: canStartTask(task.status, isDone(task)) ? theme.colors.ink : theme.colors.secondary },
+              ]}
+            >
+              {task.status === 'IN_PROGRESS' ? 'Task in progress' : 'Start task'}
+            </Text>
+          </Pressable>
         </Card>
 
         <Card title="PRIORITY">
@@ -371,6 +419,8 @@ const styles = StyleSheet.create({
   options: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   option: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 14, borderRadius: 12, borderWidth: StyleSheet.hairlineWidth },
   optionLabel: { fontSize: 15, lineHeight: 20, fontWeight: '600' },
+  outlineButton: { minHeight: 44, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 14, borderRadius: 13, borderWidth: StyleSheet.hairlineWidth },
+  outlineLabel: { fontSize: 15, lineHeight: 20, fontWeight: '600' },
   footerButton: { minHeight: 44, justifyContent: 'center' },
   saveBar: { paddingHorizontal: 20, paddingVertical: 12, borderTopWidth: StyleSheet.hairlineWidth },
   saveButton: { minHeight: 52, alignItems: 'center', justifyContent: 'center', borderRadius: 17 },
