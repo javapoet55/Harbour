@@ -358,3 +358,26 @@ export type WeeklySummary = {
   productivityInsight?: string | null;
   limitations: string[];
 };
+
+// MARK: Calendar
+
+/**
+ * The `POST /api/calendar/events` body (src/app/api/calendar/events/route.ts:9), as
+ * `AppModel.createCalendarEvent` builds it (ios/App/NexdoApp.swift:456-468).
+ *
+ * The route's zod schema is `.strict()`, so an unexpected key is a 400. `repeat` is omitted entirely
+ * when the frequency is "none".
+ */
+export type CalendarEventInput = {
+  requestId: string;
+  title: string;
+  notes: string;
+  location: string;
+  startAt: string;
+  endAt: string;
+  repeat?: { frequency: string; until: string; weekdays: number[] };
+  allowScheduleConflict?: boolean;
+};
+
+/** The success body: `VoiceToolResponse` in Swift, `{ success, occurrenceCount? }` on the wire. */
+export type CalendarEventResponse = { success: boolean; occurrenceCount?: number };

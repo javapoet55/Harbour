@@ -6,6 +6,8 @@ import type {
   ProjectResponse,
   ProjectsResponse,
   Agenda,
+  CalendarEventInput,
+  CalendarEventResponse,
   DoNowResponse,
   ScheduleIntelligenceResponse,
   WeeklySummary,
@@ -135,6 +137,15 @@ export const endpoints = {
     client.post<DoNowResponse>('/api/assistant', {
       transcript: minutes === null ? 'What should I do next?' : `I have ${minutes} minutes free. What should I do?`,
     }),
+
+  // MARK: Calendar
+
+  /**
+   * `AppModel.createCalendarEvent` (NexdoApp.swift:456-468). Goes through the schedule-warning retry,
+   * exactly like task writes.
+   */
+  createCalendarEvent: (input: CalendarEventInput, client: ApiClient = getApi()) =>
+    client.post<CalendarEventResponse>('/api/calendar/events', input),
 
   /** `AppModel.refreshScheduleIntelligence` (NexdoApp.swift:377-401). */
   scheduleIntelligence: (client: ApiClient = getApi()) =>

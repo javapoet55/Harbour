@@ -49,6 +49,11 @@ export const taskIcons = {
   'cloud.bolt.rain.fill': 'thunderstorm',
   'drop.fill': 'water',
   'checkmark.circle': 'checkmark-circle-outline',
+  'checkmark.square': 'checkbox-outline',
+  'doc.text': 'document-text-outline',
+  repeat: 'repeat',
+  'mappin.and.ellipse': 'location-outline',
+  'chevron.left': 'chevron-back',
 } satisfies Record<string, IoniconName>;
 
 export type TaskSymbolName = keyof typeof taskIcons;
