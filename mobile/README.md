@@ -492,3 +492,108 @@ section, top to bottom; the order below IS the Swift order.
     `docs/IOS_TO_REACT_NATIVE.md`; anything NOT on that list is a defect worth reporting.
 88. Check the category badges in particular: they carry no artwork here, only a coloured dot.
 89. Check the four menus in the projects screens: they open as inline lists, not floating popovers.
+
+## Phase 4A on-device test plan
+
+The Today dashboard, Do Now, and the focus runtime. Run these in order on a signed-in phone with the
+Swift app beside you. Watch the Metro terminal: the `__DEV__` request log prints every request.
+
+You need an account with a few tasks today, one two days out, at least one overdue task, and one
+synced calendar event today.
+
+### 1. The dashboard, top to bottom
+
+1. Open the Today tab. The order must be: top bar, greeting, range picker, Weekly Summary card, then
+   the intelligence card. Nothing else.
+2. The greeting reads "Good morning/afternoon/evening, <first name>" and switches at noon and 17:00 in
+   the ACCOUNT time zone, not the phone's. The line under it reads "Wed, Sep 16, 2026".
+3. The top bar shows the Nexdo mark, a weather chip, a "+" button and your avatar.
+4. Tap "+": the task editor opens.
+5. Pull down to refresh. Tasks, agenda and weather all reload.
+
+### 2. The range picker
+
+6. Today / 3 days / 5 days. Today is selected on open.
+7. Switch to 5 days. The schedule list grows, and the headline changes from "N commitments today" to
+   "N commitments ahead" and from "Your day, in focus" to "Your next 5 days".
+8. Check the counts against the list: "N Tasks · N Appointments" must equal what is listed.
+
+### 3. The schedule list
+
+9. Events and tasks appear together, ordered by time, with critical tasks FIRST regardless of time.
+10. Each row shows the time on the left, a calendar or check glyph, the title, and a detail line
+    reading "Planned task", "Task deadline", "Critical task" or "Calendar appointment".
+11. A task scheduled with only a due date reads "Due 5:00 PM".
+12. Tap a task row: the task detail opens. Tap an event row or "View day": the Calendar tab opens.
+13. With more than seven items, a "View N more" row appears at the bottom.
+14. With nothing scheduled, the list reads "Your schedule is clear" / "Add a task or enjoy the open
+    space."
+
+### 4. Search
+
+15. Tap the magnifying glass in the schedule header. Type part of a task title; the list narrows.
+16. Search matches TASKS ONLY — an event title must not match, even exactly.
+17. Multiple words must ALL match (title or notes).
+18. A term with no match reads "No matching tasks" / "Try different keywords or select a wider date
+    range."
+
+### 5. The attention chip
+
+19. With overdue tasks, the summary shows an orange "N things need attention" chip; with none, a green
+    "Nothing needs attention".
+20. NOTE: tapping the chip does nothing yet. The attention detail screen is Phase 4B.
+
+### 6. Weather
+
+21. The chip shows a condition glyph over a temperature in Fahrenheit.
+22. Turn airplane mode on and reopen the tab: the chip shows "–°" and NO error alert appears.
+23. NOTE: the coordinates are hardcoded to San Ramon, California, in Swift (`WeatherClient.swift:17`).
+    The reading is NOT for your location, and the app never asks for location permission. If the
+    temperature looks wrong for where you are, that is why, and it matches the iPhone.
+24. Tapping the chip does nothing yet; the forecast sheet is Phase 4B.
+
+### 7. Do Now
+
+25. Tap "What should I do now?" in the intelligence card. The sheet opens titled "What should I do
+    now?" with a "Done" button.
+26. First time, with AI consent withdrawn, it shows the consent paragraph and "Allow and find my next
+    task". Tap it.
+27. It reads "Finding your best next step…", then either a recommendation or a message.
+28. The headline reads "You have N minutes free now", or "Outside your working hours".
+29. The best action card shows the task, "~N min", a reason, and "Start Focus Session".
+30. Enter 45 in "Minutes available" and tap Update. The recommendation refreshes for that window, and
+    "Use my calendar opening" appears; tap it to go back.
+31. Enter 0 or 900 and tap Update: "Enter between 1 and 480 minutes."
+32. Leave the sheet open for a minute; it refreshes on its own.
+33. Tap "Start Focus Session". The sheet closes and the focus strip appears on Today.
+
+### 8. The focus runtime
+
+34. On a task detail, tap "Start a 25-minute focus session". In the Metro log the body is
+    `{"status":"IN_PROGRESS","focusMinutes":25,"fromRecommendation":false}`.
+35. The focus button is REPLACED by the strip, showing the task title and a counting-down 25:00.
+36. Go to Today: the SAME strip is there, with the same countdown.
+37. Background the app for a minute and return: the countdown has advanced by a minute. It is derived
+    from the clock, not from ticks.
+38. FORCE-QUIT the app and reopen: the session is GONE. That matches Swift, where `focusSession` is a
+    plain published property with no persistence. Do not report it as a bug.
+39. Tap "End focus". In the log: `{"focusAction":"finish","focusToken":…,"endedAt":…}` plus
+    `workSessionId` when the server sent one.
+40. Start a session and let it run out. At zero the title reads "Focus finished", the button reads
+    "Finish", and the session closes itself with the same finish request.
+41. Start a session on task A, then start one on task B: A is finished first, then B starts — two
+    requests, in that order.
+42. Complete a task that has a live session: the session ends as part of completing it.
+43. There is NO pause and NO cancel. The only control is End focus. That is Swift.
+
+### 9. Sign out
+
+44. Sign-out has moved off Today. Long-press the version number at the bottom of the Today screen (or
+    the sign-in screen) to open the `__DEV__` menu, then tap "Sign out". This is a development-only
+    affordance; Phase 7 puts the real control on the Account screen.
+
+### 10. What is NOT here yet (Phase 4B)
+
+45. Confirm these are ABSENT rather than broken: the action queue, the protected-time card, the
+    persistent next-action card, the "Needs your attention" list, the weekly summary screen, the
+    overdue screen and the weather forecast sheet.

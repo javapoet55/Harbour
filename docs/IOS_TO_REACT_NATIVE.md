@@ -389,8 +389,12 @@ App Store review adds a few days per submission.
   needs an iOS development build and the capability on the Apple Developer App ID.
 - [x] Task list, filters, search, creation editor, task detail, voice-capture shell
   (Phase 3, 2026-09-16). Built and covered by tests; **not yet tested on a device**.
-- [ ] Projects: list, detail, create/edit/delete: **not built**. The Tasks tab Projects segment
-  renders a placeholder. See section 12, "Phase 3 status".
+- [x] Projects: list, detail, create/edit/delete (Phase 3).
+- [x] Today dashboard, Do Now and the focus runtime (Phase 4A, 2026-09-16): screens 6 and 7 of
+  section 2, built from `TodayView.body` (`RootView.swift:1017-1198`) and `DoNowView.body`
+  (`DoNowView.swift:15-107`). Covered by tests; **not yet tested on a device**.
+- [ ] Today screens 8-14: action queue, needs-attention, schedule check, overdue, weekly summary,
+  weekly summary tasks, weather forecast. **Phase 4B.**
 - [ ] Tasks and projects
 - [ ] Today
 - [ ] Calendar and Google Calendar connect
@@ -701,3 +705,87 @@ Nothing in Phase 3 has run on a phone. Procedure: `mobile/README.md`, "Phase 3 o
 - Projects: create, edit, delete, the colour grid, the "No project" folder and per-project filters.
 - The date picker's month grid, including stepping across a month boundary.
 - The rebuilt task detail, section by section, against the iPhone: this is the screen that was wrong.
+
+---
+
+## 13. Phase 4A status (Today dashboard, Do Now, focus runtime)
+
+### Built, with the `body` range each screen was read from
+
+| Screen / module | Swift source | `body` range |
+| --- | --- | --- |
+| `mobile/app/(tabs)/today.tsx` | `TodayView` (`RootView.swift:911`) | `:1017-1198` |
+| `mobile/app/today/do-now.tsx` | `DoNowView` (`DoNowView.swift:3`) | `:15-107` |
+| `src/components/TodayIntelligenceCard.tsx` | `TodayIntelligenceCard`, `TodayScheduleRow` | `RootView.swift:1358-1506`, `:1507-1533` |
+| `src/components/FocusSessionStrip.tsx` | `FocusSessionStrip` | `FocusSessionStrip.swift:25-56` |
+| `src/components/TodayShell.tsx` | `TodayTopBar`, `TodayHeaderButton`, the weather chip | `RootView.swift:1283-1341`, `:1343-1356` |
+| `src/store/focus.ts` | `AppModel.startFocus` / `finishFocus`, `NativeFocusSession` | `NexdoApp.swift:611-665`, `FocusSessionStrip.swift:3-10` |
+| `src/lib/todaySchedule.ts` | `TodayView`'s private helpers | `RootView.swift:930-1015` |
+| `src/lib/focusClock.ts` | `FocusClock`, `DurationDisplay` | `FocusClock.swift`, `DoNowRecommendation.swift:52-61` |
+| `src/lib/weather.ts` | `conditionSymbol`, `condition` | `Models.swift:81-93`, `:128-140` |
+| `src/query/useToday.ts` | `refreshAgenda`, `refreshWeather`, `recommendDoNow` | `NexdoApp.swift:368-371`, `:419-422`, `:603-609` |
+
+Child view files followed while reading `TodayView.body`: `RootView.swift` itself (`TodayBackdrop`,
+`TodayTopBar`, `TodayIntelligenceCard`, `TodayScheduleRow`), `ios/App/DoNowView.swift`,
+`ios/App/FocusSessionStrip.swift`, `ios/App/TodayActionsView.swift` (read, deferred to 4B),
+`ios/Sources/NexdoCore/TodayActionQueue.swift` (read, deferred), `ios/Sources/NexdoCore/FocusClock.swift`,
+`ios/Sources/NexdoCore/DoNowRecommendation.swift`, `ios/Sources/NexdoCore/WeatherClient.swift`,
+`ios/Sources/NexdoCore/Models.swift`.
+
+### Where the brief and Swift disagree
+
+| The brief says | Swift actually does |
+| --- | --- |
+| Port the Do Now recommendation engine from `NexdoCore`, with energy / working-hours / quiet-hours inputs | There is no engine. `DoNowRecommendation.swift` declares only `Decodable` response types plus `DurationDisplay`; the ranking is server-side, reached by asking `/api/assistant` a question in prose (`NexdoApp.swift:603-609`) |
+| Focus `start/tick/pause/finish/cancel` | There is no pause and no cancel. `FocusSessionStrip`'s one button reads "End focus", or "Finish" at zero, and calls `finishFocus()` either way |
+| Check whether focus persists to UserDefaults | It does not. `focusSession` is a plain `@Published` property (`NexdoApp.swift:121`); the only `UserDefaults` key in the model is `nexdo.lastSignedInFirstName`. A session does not survive a relaunch |
+| Weather via `expo-location` if Swift asks for location | Swift never asks. `WeatherClient.forecast()` calls open-meteo directly with HARDCODED coordinates 37.7547, -121.8997 (San Ramon, California) over a cookie-free session, so no permission and no new dependency |
+| Focus completion "marks task done? logs a session? both?" | Neither marks the task done. Finishing only closes the work session; the task stays IN_PROGRESS. The reverse is true though: completing a task ENDS its session first (`NexdoApp.swift:592`) |
+
+### Deferred to Phase 4B, in `body` order
+
+Sections 6, 7, 8 and 10 of `TodayView.body`, each marked in place in `today.tsx`:
+
+- `TodayActionsView` (`RootView.swift:1092`) — needs `TaskActionCoordinator`, which is Phase 8, and
+  `TodayActionQueue` from `NexdoCore`.
+- The protected-time proposal (`:1094-1108`) — needs `model.protectedTime` and `/api/protected-time`.
+- The persistent next-action card (`:1110-1128`) — needs `model.persistentNext` and
+  `startRecommendedFocus` from the next-action service.
+- The "Needs your attention" list (`:1145-1166`) — needs `scheduleIntelligence.today.attention`.
+
+Also 4B: the `queue.hasImmediateActions` branch of the Weekly Summary row (`:1070-1075`), the weather
+forecast sheet, and the four navigation destinations (`attentionDetails`, `scheduleCheckDetails`,
+`OverdueTasksView`, `WeeklySummaryView`).
+
+### Visual gaps
+
+- `TimelineView(.periodic(by: 60))` wraps the whole dashboard in Swift, recomputing the action queue
+  every minute. With the queue deferred, nothing here needs a minute tick, so there is none.
+- The focus strip's `.regularMaterial` is a flat surface fill, as elsewhere.
+- SF Rounded is still unavailable, so the greeting and the commitment headline use the system face.
+- The range picker is a hand-built segmented row, not a `Picker`.
+- The weather chip's condition glyph is an Ionicons substitute for each SF Symbol; the mapping is in
+  `src/lib/weather.ts` and `src/components/TaskSymbol.tsx`.
+- `FocusButtonBorder`, the animated gradient border on the focus button, is still not reproduced.
+
+### Open TODOs
+
+- `TODO(phase4b)` in `app/(tabs)/today.tsx`: the four deferred sections, the weather forecast sheet,
+  the Weekly Summary destination and `attentionDetails`.
+- `TODO(phase7)` in `app/(tabs)/today.tsx` and `src/components/TodayShell.tsx`: the account sheet and
+  the profile photo.
+- `TODO(phase7)` in `src/query/useToday.ts`: the hardcoded weather coordinates, if the account ever
+  gains a location preference.
+- `TODO(phase8)` in `src/components/ClarifyTaskActionCard.tsx`: `TaskActionCoordinator`.
+- `TODO(phase9)` in `src/voice/taskCaptureStub.ts`: the real transcription session.
+
+### Needs confirmation on a device
+
+Nothing in Phase 4A has run on a phone. Procedure: `mobile/README.md`, "Phase 4A on-device test plan".
+
+- The focus timer across backgrounding, and its auto-finish at zero.
+- That a force-quit loses the session, which is correct rather than a defect.
+- Do Now against a real assistant turn: the 60-second refresh, the minutes override, and starting a
+  recommended session.
+- The weather chip, including the offline dash, and that the reading is San Ramon rather than local.
+- Every screen against the iPhone in light and dark.
