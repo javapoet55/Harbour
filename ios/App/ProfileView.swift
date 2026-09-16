@@ -7,8 +7,9 @@ import AuthenticationServices
 private final class CalendarOAuthCoordinator: NSObject, ObservableObject, ASWebAuthenticationPresentationContextProviding {
     private var session: ASWebAuthenticationSession?
     func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor { UIApplication.shared.connectedScenes.compactMap { ($0 as? UIWindowScene)?.keyWindow }.first ?? ASPresentationAnchor() }
-    func connectGoogle(model: AppModel, completion: @escaping (String) -> Void) {
-        guard let url = URL(string: "https://harbour-production-f8a0.up.railway.app/api/calendar/oauth/google/start?native=1") else { completion("Google Calendar connection failed: invalid calendar connection URL."); return }
+    // The URL already carries a short-lived connect token: the web session
+    // cookie is not available to ASWebAuthenticationSession.
+    func connectGoogle(url: URL, model: AppModel, completion: @escaping (String) -> Void) {
         session = ASWebAuthenticationSession(url: url, callbackURLScheme: "nexdo") { callback, error in
             Task { @MainActor in
                 defer { self.session = nil }
@@ -137,6 +138,8 @@ struct ProfileSettingsView: View {
     @State private var savingPhoto = false
     @State private var photoMessage: String?
     @State private var saving = false
+    // Kept apart from `saving` so the OAuth sheet never leaves Save stuck on "Saving…".
+    @State private var connecting = false
     @State private var loading = true
     @State private var message: String?
     @State private var failure: String?
@@ -222,14 +225,7 @@ struct ProfileSettingsView: View {
                     }
                     card("Calendars and privacy") {
                         Text("Connect Google Calendar securely. You may need to sign in with Google.").font(.subheadline).foregroundStyle(Color.nexdoSecondary)
-                        Button("Connect Google Calendar", systemImage: "calendar.badge.plus") {
-                            run { try await withCheckedThrowingContinuation { continuation in
-                                calendarOAuth.connectGoogle(model: model) { result in
-                                    if result.contains("connected") { message = result; continuation.resume(returning: ()) }
-                                    else { continuation.resume(throwing: OAuthError.message(result)) }
-                                }
-                            }}
-                        }
+                        Button(connecting ? "Connecting…" : "Connect Google Calendar", systemImage: "calendar.badge.plus") { connect() }
                         Button("Synchronize now", systemImage: "arrow.triangle.2.circlepath") { run { message = try await model.syncProfileCalendars() } }
                         Divider()
                         Text(model.aiConsent ? "OpenAI sharing is allowed for this session." : "OpenAI sharing is off.").font(.caption)
@@ -242,7 +238,7 @@ struct ProfileSettingsView: View {
                 } else { Button("Retry loading settings") { Task { await load() } } }
                 if let failure { Text(failure).foregroundStyle(.red).accessibilityAddTraits(.updatesFrequently) }
                 if let message { Label(message, systemImage: "checkmark.circle").foregroundStyle(Color.nexdoIndigo).accessibilityAddTraits(.updatesFrequently) }
-            }.padding(20).disabled(saving)
+            }.padding(20).disabled(saving || connecting)
         }
         .background(ProfileBackground()).navigationTitle("Settings").navigationBarTitleDisplayMode(.large)
         .toolbar {
@@ -251,11 +247,11 @@ struct ProfileSettingsView: View {
                     Image(systemName: "chevron.backward")
                 }
                 .accessibilityLabel("Save settings and go back")
-                .disabled(loading || saving)
+                .disabled(loading || saving || connecting)
             }
         }
         .task { if loading { await load() } }
-        .interactiveDismissDisabled(saving)
+        .interactiveDismissDisabled(saving || connecting)
         .navigationBarBackButtonHidden(true)
         .alert("Could not update profile", isPresented: Binding(get: { failure != nil }, set: { if !$0 { failure = nil } })) {
             Button("OK", role: .cancel) { failure = nil }
@@ -277,6 +273,22 @@ struct ProfileSettingsView: View {
         } message: { Text("This removes your Nexdo data permanently and cannot be undone.") }
     }
     private enum OAuthError: LocalizedError { case message(String); var errorDescription: String? { if case .message(let value) = self { return value }; return "Calendar connection failed." } }
+    private func connect() {
+        guard !saving, !connecting else { return }
+        connecting = true; failure = nil; message = nil
+        Task {
+            defer { connecting = false }
+            do {
+                let url = try await model.calendarConnectURL()
+                message = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<String, Error>) in
+                    calendarOAuth.connectGoogle(url: url, model: model) { result in
+                        if result.contains("connected") { continuation.resume(returning: result) }
+                        else { continuation.resume(throwing: OAuthError.message(result)) }
+                    }
+                }
+            } catch { failure = error.localizedDescription }
+        }
+    }
     private func card<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 16) { Text(title).font(.headline); content() }.frame(maxWidth: .infinity, alignment: .leading).padding(18).profileCard()
     }

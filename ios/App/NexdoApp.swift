@@ -283,6 +283,25 @@ final class AppModel: ObservableObject {
             }
         }
     }
+    // ASWebAuthenticationSession runs outside this app's ephemeral cookie jar,
+    // so the start route is authorized with a short-lived token fetched here
+    // over the authenticated API session instead.
+    func calendarConnectURL(provider: String = "google") async throws -> URL {
+        struct Issued: Decodable, Sendable { let token: String }
+        let issued: Issued = try await api.request("/api/calendar/oauth/\(provider)/connect-token", method: "POST")
+        guard !issued.token.isEmpty,
+              var components = URLComponents(url: await api.baseURL, resolvingAgainstBaseURL: false) else {
+            throw CalendarConnectError.unavailable
+        }
+        components.path = "/api/calendar/oauth/\(provider)/start"
+        components.queryItems = [URLQueryItem(name: "native", value: "1"), URLQueryItem(name: "connect_token", value: issued.token)]
+        guard let url = components.url else { throw CalendarConnectError.unavailable }
+        return url
+    }
+    enum CalendarConnectError: LocalizedError {
+        case unavailable
+        var errorDescription: String? { "Nexdo could not start the calendar connection. Please try again." }
+    }
     func syncProfileCalendars() async throws -> String {
         struct Sync: Decodable, Sendable {
             struct Result: Decodable, Sendable { let error: String? }
