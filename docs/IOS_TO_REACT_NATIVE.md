@@ -40,95 +40,161 @@ The Swift app has **32 unique screens and sheets**. Some Swift views open from s
 
 Suggested Expo Router file paths are shown for each screen.
 
+> **Read the Swift view column literally.** A view's name is NOT its file name. Most of the app lives
+> inside four large files — `RootView.swift` alone is 121 KB and holds the auth screens, the tab shell,
+> Today, Tasks and the task editor — so `SignInView` is not in `SignInView.swift`, and no such file
+> exists. Every location below was verified against `ios/App/` on 2026-09-16; line numbers are the
+> `struct` declaration. Phase 3 was planned from view names alone and lost time hunting for files that
+> were never there, so locations are now given for every row.
+
 ### Auth (signed out): 4
-| # | Screen | Swift view | Presentation | Suggested route |
-| --- | --- | --- | --- | --- |
-| 1 | Sign in (email/password, eye toggle, Sign in with Apple) | `SignInView` | Root | `app/(auth)/sign-in.tsx` |
-| 2 | Create account | `SignUpView` | Sheet | `app/(auth)/sign-up.tsx` |
-| 3 | Verify email (6-digit code, resend countdown) | `EmailVerificationView` | Push from sign-up, sheet from sign-in | `app/(auth)/verify-email.tsx` |
-| 4 | Reset password (request code, then code + new password) | `PasswordResetView` | Sheet | `app/(auth)/reset-password.tsx` |
+| # | Screen | Swift view | Location | Presentation | Suggested route |
+| --- | --- | --- | --- | --- | --- |
+| 1 | Sign in (email/password, eye toggle, Sign in with Apple) | `SignInView` | `RootView.swift:258` | Root | `app/(auth)/sign-in.tsx` |
+| 2 | Create account | `SignUpView` | `RootView.swift:472` | Sheet | `app/(auth)/sign-up.tsx` |
+| 3 | Verify email (6-digit code, resend countdown) | `EmailVerificationView` | `RootView.swift:674` | Push from sign-up, sheet from sign-in | `app/(auth)/verify-email.tsx` |
+| 4 | Reset password (request code, then code + new password) | `PasswordResetView` | `RootView.swift:574` | Sheet | `app/(auth)/reset-password.tsx` |
 
 ### App shell: 1
-| # | Screen | Swift view | Suggested route |
-| --- | --- | --- | --- |
-| 5 | Tab bar: Today, Tasks, Ask AI, Calendar (Ask AI opens a sheet) | `NexdoTabShell` | `app/(tabs)/_layout.tsx` |
+| # | Screen | Swift view | Location | Suggested route |
+| --- | --- | --- | --- | --- |
+| 5 | Tab bar: Today, Tasks, Ask AI, Calendar (Ask AI opens a sheet) | `NexdoTabShell` | `RootView.swift:84` | `app/(tabs)/_layout.tsx` |
 
-The focus session strip (`FocusSessionStrip`) sits above the tab bar and is a shared component, not a screen.
+The focus session strip (`FocusSessionStrip`, `ios/App/FocusSessionStrip.swift:25`) sits above the tab bar and is a shared component, not a screen.
 
 ### Today tab: 9
-| # | Screen | Swift view | Presentation |
-| --- | --- | --- | --- |
-| 6 | Today dashboard (top bar, intelligence card, schedule, action queue) | `TodayView` | Tab |
-| 7 | Do Now (suggested next task) | `DoNowView` | Sheet |
-| 8 | Action queue: all actions, with snooze menu | `ActionQueueSheet`, `SnoozeMenu` | Sheet |
-| 9 | Needs attention details | `attentionDetails` in `TodayView` | Push |
-| 10 | Schedule check details | `scheduleCheckDetails` in `TodayView` | Push |
-| 11 | Overdue tasks | `OverdueTasksView` | Push |
-| 12 | Weekly summary | `WeeklySummaryView` | Push |
-| 13 | Weekly summary task list | `WeeklySummaryTasksView` | Push |
-| 14 | Weather forecast | `WeatherForecastView` | Sheet |
+| # | Screen | Swift view | Location | Presentation |
+| --- | --- | --- | --- | --- |
+| 6 | Today dashboard (top bar, intelligence card, schedule, action queue) | `TodayView` | `RootView.swift:911` | Tab |
+| 7 | Do Now (suggested next task) | `DoNowView` | `DoNowView.swift:3` | Sheet |
+| 8 | Action queue: all actions, with snooze menu | `ActionQueueSheet`, `SnoozeMenu` | `TodayActionsView.swift:188`, `:130` | Sheet |
+| 9 | Needs attention details | `attentionDetails`, a private var on `TodayView` | `RootView.swift:1202` | Push |
+| 10 | Schedule check details | `scheduleCheckDetails`, a private func on `TodayView` | `RootView.swift:1191` (call site), `:1217` | Push |
+| 11 | Overdue tasks | `OverdueTasksView` | `OverdueTasksView.swift:3` | Push |
+| 12 | Weekly summary | `WeeklySummaryView` | `WeeklySummaryView.swift:4` | Push |
+| 13 | Weekly summary task list | `WeeklySummaryTasksView` | `WeeklySummaryView.swift:241` | Push |
+| 14 | Weather forecast | `WeatherForecastView` | `WeatherForecastView.swift:3` | Sheet |
 
 ### Tasks tab and projects: 8
-| # | Screen | Swift view | Presentation |
-| --- | --- | --- | --- |
-| 15 | Task list (search, metrics, rows) | `TasksView` | Tab |
-| 16 | Task filters | Sheet in `TasksView` | Sheet |
-| 17 | Add / edit task, with date picker | `TaskEditor` | Sheet (also opened from Today, Overdue, Projects) |
-| 18 | Task details | `TaskDetailsView` | Push (also from Calendar, Weekly summary) |
-| 19 | Voice capture: add task, ask AI, or add calendar event | `AddTaskByVoiceView` (3 modes) | Full screen |
-| 20 | Projects | `ProjectsView` | Section in Tasks |
-| 21 | Project detail | `ProjectDetailView` | Push |
-| 22 | Create / edit project | `ProjectEditorView` | Sheet |
+| # | Screen | Swift view | Location | Presentation |
+| --- | --- | --- | --- | --- |
+| 15 | Task list (search, date pills, rows) | `TasksView` | `RootView.swift:1620` | Tab |
+| 16 | Task filters | an inline `Form` in a `.sheet` on `TasksView` | `RootView.swift:1705-1726` | Sheet |
+| 17 | Add task, with date picker | `TaskEditor` (its `creationForm`) | `RootView.swift:1908`, form at `:1932` | Sheet (also opened from Today, Overdue, Projects) |
+| 18 | Task details (also the EDIT path) | `TaskDetailsView` | `TaskDetailsView.swift:3` | Sheet — `TaskEditor(task:)` renders it when the task is non-nil (`RootView.swift:1929`) |
+| 19 | Voice capture: add task, ask AI, or add calendar event | `AddTaskByVoiceView` (3 modes) | `AddTaskByVoiceView.swift:4` | Full screen |
+| 20 | Projects | `ProjectsView` | `ProjectsView.swift:12` | Section inside the Tasks tab, behind a segmented picker (`RootView.swift:1650-1658`) |
+| 21 | Project detail | `ProjectDetailView` | `ProjectsView.swift:173` | Push |
+| 22 | Create / edit project | `ProjectEditorView` | `ProjectsView.swift:112` | Sheet |
+
+Corrections made during Phase 3, kept here so later phases do not repeat the mistake:
+
+- Screens 15-17 and the filter sheet are all inside `RootView.swift`. There is no `TaskListView.swift`,
+  `TaskEditorView.swift` or `TaskFilterSheet.swift`.
+- Screen 18 is both the detail AND the edit screen; there is no separate task editor for an existing task.
+- Screen 20 is not a route. Tasks and Projects share one screen.
 
 ### Ask AI: 2
-| # | Screen | Swift view | Presentation |
-| --- | --- | --- | --- |
-| 23 | Ask Nexdo: suggestions, answers, read aloud; also full-screen text chat | `AskNexdoView` (2 modes), `AskResponseView` | Sheet / full screen |
-| 24 | AI data-sharing consent | Sheet in `AskNexdoView` | Sheet |
+| # | Screen | Swift view | Location | Presentation |
+| --- | --- | --- | --- | --- |
+| 23 | Ask Nexdo: suggestions, answers, read aloud; also full-screen text chat | `AskNexdoView` (2 modes), `AskResponseView` | `AskNexdoView.swift:89`, `AskResponseView.swift:4` | Sheet / full screen |
+| 24 | AI data-sharing consent | `consentView`, a private var on `AskNexdoView` | `AskNexdoView.swift:361` (presented at `:268`) | Sheet |
 
 Voice conversation reuses screen 19 in ask mode.
 
 ### Calendar tab: 4
-| # | Screen | Swift view | Presentation |
-| --- | --- | --- | --- |
-| 25 | Calendar (tasks and synced events) | `CalendarView` | Tab |
-| 26 | Event details | Sheet in `CalendarView` | Sheet |
-| 27 | Add calendar event | `CalendarEventEditor` | Sheet |
-| 28 | Schedule conflicts | Sheet in `CalendarView` | Sheet |
+| # | Screen | Swift view | Location | Presentation |
+| --- | --- | --- | --- | --- |
+| 25 | Calendar (tasks and synced events) | `CalendarView` | `CalendarView.swift:3` | Tab |
+| 26 | Event details | an inline `.sheet(item: $eventDetail)` on `CalendarView` | `CalendarView.swift:164` | Sheet |
+| 27 | Add calendar event | `CalendarEventEditor` | `CalendarView.swift:503` | Sheet |
+| 28 | Schedule conflicts | `conflictSheet`, a private var on `CalendarView` | `CalendarView.swift:459` (presented at `:163`) | Sheet |
+
+`CalendarEventEditor` is inside `CalendarView.swift`; there is no `CalendarEventEditor.swift`.
 
 Calendar also opens Ask (screen 23), voice in calendar mode (screen 19), and task details (screen 18).
 
 ### Account: 2
-| # | Screen | Swift view | Presentation |
-| --- | --- | --- | --- |
-| 29 | Account (profile, menu, sign out) | `AccountView` | Sheet from the avatar |
-| 30 | Profile and settings (photo, preferences, Connect Google Calendar, Synchronize now, web links, delete account) | `ProfileSettingsView` | Push |
+| # | Screen | Swift view | Location | Presentation |
+| --- | --- | --- | --- | --- |
+| 29 | Account (profile, menu, sign out) | `AccountView` | `ProfileView.swift:60` | Sheet from the avatar |
+| 30 | Profile and settings (photo, preferences, Connect Google Calendar, Synchronize now, web links, delete account) | `ProfileSettingsView` | `ProfileView.swift:126` | Push |
+
+Both live in `ProfileView.swift`. There is no `AccountView.swift` or `ProfileSettingsView.swift`.
 
 ### Reminders: 2
-| # | Screen | Swift view | Presentation |
-| --- | --- | --- | --- |
-| 31 | Task action (action card, clarify card), opened from a reminder notification | `TaskActionView`, `TaskActionCard`, `ClarifyTaskActionCard` | Sheet |
-| 32 | Message / email composer | `TaskActionComposers` | Sheet |
+| # | Screen | Swift view | Location | Presentation |
+| --- | --- | --- | --- | --- |
+| 31 | Task action (action card, clarify card), opened from a reminder notification | `TaskActionView`, `TaskActionCard`, `ClarifyTaskActionCard` | `TaskActionView.swift:101`, `:4`, `:42` | Sheet |
+| 32 | Message / email composer | `ActionMessageComposer`, `ActionEmailComposer` | `TaskActionComposers.swift:22`, `:42` | Sheet (`UIViewControllerRepresentable` wrappers around MFMessageComposeViewController / MFMailComposeViewController) |
+
+`TaskActionComposers` is a FILE, not a view: it holds the two composer wrappers above plus
+`ActionEmailDraft` (`:5`) and `NativeTaskActionEmailService` (`:15`). Supporting logic for screen 31 is
+split across `TaskActionCoordinator.swift`, `TaskActionContacts.swift` and `TaskActionNotifications.swift`.
 
 ### Not migrating
-- `VoiceInputView`: defined, but nothing opens it.
-- Debug-only previews: `TodayDesignPreview`, `CalendarDesignPreview`, `ProjectsDesignPreview`, `TaskDesignPreview`, `WeeklySummaryPreview`, and the `-email-verification-preview` launch argument.
+- `VoiceInputView` (`VoiceInputView.swift:5`): defined, but nothing opens it.
+- Debug-only previews: `TodayDesignPreview` (`RootView.swift:184`), `CalendarDesignPreview` (`:167`),
+  `ProjectsDesignPreview` (`:161`), `TaskDesignPreview` (`:211`), `WeeklySummaryPreview` (`:155`), and
+  the `-email-verification-preview` launch argument.
 
 ---
 
 ## 3. Shared components
 
-| Group | Swift views |
-| --- | --- |
-| Tasks | `TaskRow`, `TaskListRow`, `TaskBadge`, `TaskCategoryBadge`, `TaskMetric`, `TasksHero`, `TaskEditorLabel`, `DetailInput` |
-| Today and calendar | `EventRow`, `TodayScheduleRow`, `TodayTopBar`, `TodayHeaderButton`, `TodayIntelligenceCard`, `NextActionRow`, `ActionNeededCard`, `FocusSessionStrip` |
-| Projects | `ProjectCard`, `ProjectFolder`, `ProjectSearchField`, `ProjectAssignmentField` |
-| Weekly summary | `MetricCard`, `CompletionMetricCard` |
-| Profile | `ProfileAvatar` |
-| Auth | `RevealablePasswordField`, `SignInFieldIcon`, `NexdoLogoMark` |
-| Backgrounds and effects | `SignInBackdrop`, `TodayBackdrop`, `NexdoTaskBackdrop`, `ProfileBackground`, `WeeklySummaryBackdrop`, `ActionGlass`, `FocusButtonBorder`, `NexdoAISuggestionCard` |
+Every location verified against `ios/App/` on 2026-09-16. Note how many live in `RootView.swift`.
 
-Brand colors (from `RootView.swift`): `nexdoBlue`, `nexdoIndigo`, `nexdoPurple`, `nexdoMagenta`, plus light/dark `nexdoInk`, `nexdoSecondary`, `nexdoScheduleBlue`. Put these in one theme file.
+| Group | Swift view | Location |
+| --- | --- | --- |
+| Tasks | `TaskRow` | `RootView.swift:1548` |
+| Tasks | `TaskListRow` | `ProjectsView.swift:316` |
+| Tasks | `TaskBadge` | `RootView.swift:2123` |
+| Tasks | `TaskCategoryBadge` | `TaskCategoryBadge.swift:4` |
+| Tasks | `TaskMetric` | `RootView.swift:2175` |
+| Tasks | `TasksHero` | `RootView.swift:2138` |
+| Tasks | `TaskEditorLabel` | `RootView.swift:2207` |
+| Tasks | `DetailInput` | `TaskDetailsView.swift:288` |
+| Today and calendar | `EventRow` | `RootView.swift:2243` |
+| Today and calendar | `TodayScheduleRow` | `RootView.swift:1507` |
+| Today and calendar | `TodayTopBar` | `RootView.swift:1283` |
+| Today and calendar | `TodayHeaderButton` | `RootView.swift:1343` |
+| Today and calendar | `TodayIntelligenceCard` | `RootView.swift:1358` |
+| Today and calendar | `NextActionRow` | `TodayActionsView.swift:165` |
+| Today and calendar | `ActionNeededCard` | `TodayActionsView.swift:56` |
+| Today and calendar | `FocusSessionStrip` | `FocusSessionStrip.swift:25` |
+| Projects | `ProjectCard` | `ProjectsView.swift:76` |
+| Projects | `ProjectFolder` | `ProjectsView.swift:90` |
+| Projects | `ProjectSearchField` | `ProjectsView.swift:100` |
+| Projects | `ProjectAssignmentField` | `ProjectsView.swift:295` |
+| Weekly summary | `MetricCard` | `WeeklySummaryView.swift:231` |
+| Weekly summary | `CompletionMetricCard` | `WeeklySummaryView.swift:336` |
+| Profile | `ProfileAvatar` | `ProfileView.swift:39` |
+| Auth | `RevealablePasswordField` | `RootView.swift:642` |
+| Auth | `SignInFieldIcon` | `RootView.swift:821` |
+| Auth | `NexdoLogoMark` | `RootView.swift:857` |
+| Backgrounds and effects | `SignInBackdrop` | `RootView.swift:833` |
+| Backgrounds and effects | `TodayBackdrop` | `RootView.swift:1534` |
+| Backgrounds and effects | `NexdoTaskBackdrop` | `RootView.swift:2231` |
+| Backgrounds and effects | `ProfileBackground` | `ProfileView.swift:116` |
+| Backgrounds and effects | `WeeklySummaryBackdrop` | `WeeklySummaryView.swift:341` |
+| Backgrounds and effects | `ActionGlass` | `TodayActionsView.swift:48` |
+| Backgrounds and effects | `FocusButtonBorder` | `TaskDetailsView.swift:323` |
+| Backgrounds and effects | `NexdoAISuggestionCard` | `AskNexdoView.swift:58` |
+
+Style enums, which carry the colours and button styles rather than any view:
+
+| Enum / style | Location |
+| --- | --- |
+| `NexdoTheme` (the brand gradients) | `RootView.swift:2118` |
+| `TaskCreationStyle` (editor card, input, border, accent, selected gradient) | `RootView.swift:2191` |
+| `TaskDurationButtonStyle` | `RootView.swift:2218` |
+| `ProjectStyle` (project accent, surface, hex parsing) | `ProjectsView.swift:3` |
+| `DetailOutlineButton` | `TaskDetailsView.swift:297` |
+| `AppAppearance` | `AppAppearance.swift:3` |
+
+Brand colors are declared in `extension Color` at `RootView.swift:884-892`: `nexdoBlue`, `nexdoIndigo`,
+`nexdoPurple`, `nexdoMagenta`, plus light/dark `nexdoInk`, `nexdoSecondary`, `nexdoScheduleBlue`. They
+are already ported to `mobile/src/theme/colors.ts`.
 
 ---
 
@@ -159,9 +225,32 @@ Port each file to a TypeScript module. Several have web equivalents in `src/lib/
 | `WeatherClient.swift` | Weather request | `/api/weather` |
 | `TaskCategoryAppearance.swift` | Category icons and colors | — |
 
+Every file above was verified to exist in `ios/Sources/NexdoCore/` on 2026-09-16. Unlike sections 2
+and 3, this table names real files. Two it does not list, both present: `TaskCategoryAppearance.swift`
+is covered, but `Models.swift` also carries `ServerDate` (ISO-8601 parsing, account-zone days, and the
+multi-day event rule) and `ProfileName`, and `CalendarDates.swift` carries `CalendarSearch.matches`,
+the case- and diacritic-insensitive search used by projects and the calendar.
+
 ### `AppModel` (`ios/App/NexdoApp.swift`)
 
-App-wide state and actions. Recreate as TanStack Query hooks plus a small store:
+App-wide state and actions, in one 46 KB file. Recreate as TanStack Query hooks plus a small store.
+Locations verified during Phase 3:
+
+| Concern | Location |
+| --- | --- |
+| Auth: login, register, verify, resend, password reset, Apple | `NexdoApp.swift:156-216` |
+| `scheduleRequest` — the `SCHEDULE_WARNING` retry | `NexdoApp.swift:73-85` |
+| `confirmScheduleWarnings` — the alert it presents | `NexdoApp.swift:87-98` |
+| `load` / `loadTasks` with the `taskRevision` stale guard | `NexdoApp.swift:309-338` |
+| `refreshTasks` | `NexdoApp.swift:340-345` |
+| `saveTask` | `NexdoApp.swift:495-506` |
+| `complete` | `NexdoApp.swift:518-527` |
+| `replaceTask` — relation preservation and the revision bump | `NexdoApp.swift:537-558` |
+| `saveTaskDetails` — the details/schedule two-body split | `NexdoApp.swift:558-586` |
+| `changeTaskStatus` — including recurrence refetch | `NexdoApp.swift:588-600` |
+| `taskRevision` itself | `NexdoApp.swift:135` |
+
+
 
 - Sign in, sign up, verify email, resend code, reset password, Sign in with Apple, sign out, delete account.
 - Load profile, sync device time zone to the account, save settings, upload profile photo with confirmation.
