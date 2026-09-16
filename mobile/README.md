@@ -682,3 +682,117 @@ completed work so the weekly summary has something to show.
 44. Confirm these are ABSENT rather than broken: the action queue ("Next up", the "Nexdo Action" card,
     the snooze menu and the "View all" sheet), the protected-time card, and the persistent
     next-action card. All three need the reminders work in Phase 8 or the next-action service.
+
+## Phase 5 on-device test plan
+
+The Calendar tab. Run on a signed-in phone with the Swift app beside you. You need a few tasks spread
+over the next week, at least one with only a due date, one critical task, one overdue task, and at
+least one synced calendar event.
+
+### 1. The tab, top to bottom
+
+1. Open Calendar. The order is: "Calendar" / "Plan your time. Make it happen." with a search button,
+   then the Schedule / Week / Month segments, then the Schedule Intelligence card, then Upcoming.
+2. The tab bar now shows a calendar icon. The other three tabs are still labels only, by design.
+3. Pull down to refresh. Tasks, the agenda and schedule intelligence all reload.
+
+### 2. Schedule mode
+
+4. "Upcoming" shows a range button reading "Next 3 days" and a filter button.
+5. Tap the range button: Next 3 days / Next 7 days / This week. Choosing "This week" switches to the
+   MONDAY-first week, not the next seven days.
+6. The summary card reads "N items · N deadlines" and a second line with the overall overdue count.
+7. Each day has a heading. Today reads "Today · Wed, Sep 16" and tomorrow "Tomorrow · Thu, Sep 17".
+8. A day with nothing reads "Nothing scheduled. Room to breathe."
+9. At the bottom, "Unscheduled & overdue  N" expands to list tasks with no start date or a past
+   deadline, each overdue one carrying an amber badge. Empty reads "No unscheduled or overdue tasks."
+
+### 3. The merged day rows
+
+10. Tasks and events appear together, ordered by time, with a time gutter on the left and a connector
+    rail down the middle.
+11. A SCHEDULED task reads "30 min · Task"; a task that only has a due date reads "Due 5:00 PM" and
+    "Task deadline", with a "Deadline" badge.
+12. A repeating task adds "· Repeats".
+13. An event reads its duration and "Event"; an all-day event reads "All day" and "Calendar event".
+14. A multi-day event shown on a middle day starts at 12:00 AM and reads 1440 min. That is correct:
+    Swift clamps the event to the day being shown.
+15. Colours: indigo normally, amber for overdue, red for critical. Check an overdue task shows the
+    document glyph rather than the checkbox.
+16. Tap a task row: the Phase 3 task detail opens. Tap an event row: the event detail sheet opens.
+
+### 4. The event detail sheet
+
+17. It is titled "Event Details" and shows the event title, then "Starts:", "Ends:" and the account
+    time zone, with a Done button. An all-day event adds an "All day" line.
+18. NOTE: there is no edit or delete here. Swift has neither, so neither does this.
+
+### 5. Week and Month modes
+
+19. Week mode: a MON…SUN column header, seven day cells, and a range label "Sep 14 – Sep 20, 2026".
+20. Month mode: a SUN…SAT header, a full month grid padded to whole weeks, and a "September 2026"
+    label. Days outside the month are dimmed.
+21. Under each day cell, up to three dots: blue for planned, amber for overdue, red for critical. The
+    legend below says so.
+22. Tap a day: only that day's items are listed beneath the grid.
+23. The arrows move a week in Week mode and a month in Month mode. From 31 October, "next" lands on
+    30 November rather than rolling into December.
+24. "Today" returns to the current period.
+25. Week mode adds a card reading "Your Wednesday" with the item count and the planned minutes.
+
+### 6. Filters
+
+26. Tap the filter button: Tasks, Calendar events, Completed, Critical only, Reset filters.
+27. Turn off "Calendar events": events disappear, tasks remain.
+28. Turn on "Critical only": ALL events disappear too, leaving only critical tasks. That is Swift —
+    critical-only suppresses events entirely.
+29. Turn on "Completed": "Critical only" switches itself off, the heading changes from "Upcoming" to
+    "Completed", and the list shows completed tasks and events whose END time has passed.
+30. With filters on, an empty day reads "No items match your filters." rather than the clear-day copy.
+31. "Reset filters" restores all four.
+
+### 7. Search
+
+32. Tap the magnifying glass. The field reads "Search events and tasks" and below it a line naming the
+    date range being searched.
+33. Type a keyword: only matching days are listed. Search covers both tasks and events.
+34. A term with no match reads "No matching events or tasks in this date range. Try another keyword,
+    date range, or filter."
+35. "Cancel" clears the term and closes the field.
+
+### 8. Creating an event
+
+36. In Schedule mode, the Schedule Intelligence card has "Add by Voice" and "Add Manually".
+37. Tap "Add Manually". The sheet is titled "New Appointment / Event" with a Close button.
+38. Fields, in order: APPOINTMENT / EVENT, SCHEDULE (Starts, Ends, the time zone), REPEAT, LOCATION,
+    NOTES. There is NO all-day toggle, no attendees and no calendar picker — Swift has none.
+39. "Create Event" stays grey until there is a title.
+40. Starts defaults to an hour from now and Ends to ninety minutes. Move Starts: Ends moves with it,
+    keeping the same gap.
+41. Choose a repeat frequency. "Particular days of the week" reveals a Mon…Sun grid, and Create stays
+    grey until at least one day is chosen.
+42. With a repeat set, "Repeat until" appears with an explanatory line that differs for Monthly.
+43. Create the event. In the Metro log the body is exactly
+    `{"requestId":…,"title":…,"notes":…,"location":…,"startAt":…,"endAt":…}` plus `repeat` only when
+    a frequency is set. The route's schema is strict, so any extra key would be a 400.
+44. Set a start in the past and save: "Choose a future start time." appears before any request.
+45. Create an event overlapping an existing commitment. The server answers 409 and an alert titled
+    "Review this time" appears with "Keep previous schedule" and "Save anyway".
+46. "Save anyway" resends with `allowScheduleConflict: true` AND THE SAME `requestId`. Check the log:
+    a different requestId would create a duplicate repeat series.
+47. "Keep previous schedule" sends nothing more and leaves the form open with your entries.
+
+### 9. Connect Google Calendar — NOT in this phase
+
+48. Confirm the Calendar tab has NO "Connect Google Calendar" or "Synchronize now" button. In Swift
+    both live in Profile → Settings → "Calendars and privacy", which is Phase 7. Their absence here is
+    correct, not a gap.
+49. When Phase 7 builds the button, expect it to FAIL against the current server: the start route
+    needs the account session cookie, which an in-app browser does not send, so the server returns a
+    blank page instead of redirecting to Google. The Swift app has the same failure today.
+50. What "pass" looks like once the server fix lands: tapping Connect opens a Google sign-in page in an
+    in-app browser; after consent it returns to `nexdo://…`; a callback carrying `calendar=error` or
+    any `detail` parameter is a failure and its text is shown; a clean callback reads "Google Calendar
+    connected and synchronized." The URL is built in ONE place,
+    `googleConnectStartUrl` in `src/query/useCalendar.ts`, marked `TODO(server-connect-token)` — adding
+    the token there is the only mobile change needed.

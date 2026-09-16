@@ -398,6 +398,8 @@ App Store review adds a few days per submission.
 - [ ] Today screen 8, the action queue: **blocked on Phase 8.** Its logic (`TodayActionQueue`) is
   ported and tested, but every action comes from `TaskActionCoordinator`, which needs local
   notifications and Contacts. See section 14.
+- [x] Calendar screens 25-28 (Phase 5, 2026-09-16): the Calendar tab, the event detail sheet, the
+  event editor and the schedule-review sheet. Covered by tests; **not yet tested on a device**.
 - [ ] Tasks and projects
 - [ ] Today
 - [ ] Calendar and Google Calendar connect
@@ -872,3 +874,80 @@ Nothing in Phase 4B has run on a phone. Procedure: `mobile/README.md`, "Phase 4B
 - That the forecast's "Today" row is today in AMERICA/LOS_ANGELES, not locally.
 - The attention list and schedule check against a real schedule-intelligence snapshot, which is hard
   to provoke deliberately.
+
+---
+
+## 15. Phase 5 status (Calendar tab)
+
+### Built, with the `body` range each screen was read from
+
+| # | Screen | Swift source | `body` range | Child view files followed |
+| --- | --- | --- | --- | --- |
+| 25 | `app/(tabs)/calendar.tsx` | `CalendarView` | `CalendarView.swift:72-176` | `TodayBackdrop` (`RootView.swift:1534`), `TaskDetailsView` (Phase 3), `CalendarEventEditor` (`CalendarView.swift:503`), `AddTaskByVoiceView` (Phase 3 shell), `AskNexdoView` (Phase 6) |
+| 26 | The event detail sheet, inside `calendar.tsx` | an inline `.sheet(item: $eventDetail)` on `CalendarView` | `CalendarView.swift:168-180` | none |
+| 27 | `app/calendar/event/new.tsx` | `CalendarEventEditor` | `CalendarView.swift:518-588` | `NexdoTaskBackdrop` and `TaskEditorLabel` (`RootView.swift:2231`, `:2207`) |
+| 28 | The schedule-review sheet | `conflictSheet`, a private var on `CalendarView` | `CalendarView.swift:459-478` | `attentionCard`, reused from Phase 4B via `/today/attention` |
+
+Logic ported with tests (`src/lib/calendarDates.ts`, `src/lib/calendarRows.ts`): `CalendarDates`
+(`key`, `addingDays`, `week`, `month`, `taskOccurs`), `CalendarSearch`, `CalendarEventFilter`,
+`visibleDays`, `shift`, `overdue`, `scheduled`, and the `rows(_:)` merge.
+
+### Where the brief and Swift disagree
+
+| The brief says | Swift actually does |
+| --- | --- |
+| A month grid, a week strip and a day agenda | THREE modes: Schedule, Week and Month. Schedule shows a rolling range (Next 3 days / Next 7 days / This week); Week and Month show a date grid with one selected day beneath it (`CalendarView.swift:4-5, 32-41`) |
+| An event detail route | An inline `.sheet(item:)` on the tab, with four lines and a Done button (`:168-180`). The plan doc already said so |
+| An event editor with edit and delete | `CalendarEventEditor` is CREATE-ONLY. Both call sites construct it with no arguments (`CalendarView.swift:162`, `RootView.swift:14`); there is no update or delete path anywhere in the app |
+| Editor fields including all-day, attendees, calendar/account selection | Title, start, end, repeat (frequency, weekday grid, until), location, notes. None of the other three exist |
+| "Connect Google Calendar" and "Synchronize now" in the Calendar tab | Neither is in `CalendarView`. Both live in `ProfileSettingsView`'s "Calendars and privacy" card (`ProfileView.swift:223-234`), which is screen 30 — **Phase 7** |
+| Outlook | Not exposed anywhere in the Swift UI. Skipped, as the brief allows |
+
+Because connect and sync are Phase 7, **`expo-web-browser` was not added and no rebuild is needed.**
+The two pure helpers ARE built and tested here so Phase 7 only has to wire them:
+`googleConnectStartUrl` reproduces Swift's URL including `?native=1`, and `parseGoogleCallback`
+reproduces its success and failure rules.
+
+### The completed-calendar view
+
+Commit `ba66449` ("Fix task scrolling and filters and add completed calendar view") added the
+`completedOnly` filter and `CalendarEventFilter`. It is ported: the filter flips the heading from
+"Upcoming" to "Completed", switches `taskOccurs` to completed tasks, and shows only events whose END
+time has passed — "Events have no completion flag: their exclusive end time determines completion"
+(`CalendarDates.swift:43`). Turning it on also clears "Critical only", as Swift does.
+
+### Visual gaps
+
+- SwiftUI `Menu` still has no React Native equivalent, so the range menu, the filters menu and the
+  repeat picker open as inline lists rather than floating popovers.
+- The editor's three `DatePicker`s become a month grid plus a half-hour time strip in a sheet, for the
+  same reason `MonthCalendar` exists — no native date picker was added.
+- `.ultraThinMaterial` and `.regularMaterial` remain flat surface fills.
+- The Schedule/Week/Month segments are hand-built, not a `Picker`.
+- `TodayBackdrop`'s blurred circles are still hard-edged.
+- The timeline rail is a plain view rather than SwiftUI's `ZStack` overlay, so its connector does not
+  extend between rows the way Swift's does.
+- SF Symbols are Ionicons substitutes; the mapping is in `src/components/TaskSymbol.tsx`.
+
+### Open TODOs
+
+- `TODO(server-connect-token)` in `src/query/useCalendar.ts`: the one line to change when the server
+  accepts a short-lived connect token. The connect flow is broken against production today, for the
+  Swift app as much as this one.
+- `TODO(phase6)` in `app/(tabs)/calendar.tsx`: `conflictSheet` links into Ask, and the Ask prompt the
+  calendar builds (`CalendarView.swift:157-160`) belongs to Phase 6. "Review conflicts" currently
+  opens the Phase 4B attention screen, which shows the same schedule-intelligence items.
+- `TODO(phase6)` in `app/(tabs)/_layout.tsx`: the other three tab icons.
+- `TODO(phase7)` in `src/query/useCalendar.ts`: connect and sync, with the note that
+  `expo-web-browser` is native and will force a rebuild when it is added.
+- `TODO(phase9)` in `app/(tabs)/calendar.tsx`: `AddTaskByVoiceView(calendarOnly: true)`; the voice
+  shell has no calendar mode yet.
+
+### Needs confirmation on a device
+
+Nothing in Phase 5 has run on a phone. Procedure: `mobile/README.md`, "Phase 5 on-device test plan".
+
+- The three modes against the iPhone, including the Monday-first week and Sunday-first month.
+- The schedule-warning flow on an event, which needs a real overlapping commitment.
+- A multi-day and an all-day event, which need real synced calendar data.
+- The completed filter, which needs finished tasks and past events.
