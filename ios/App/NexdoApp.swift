@@ -12,6 +12,8 @@ struct NexdoApp: App {
 @MainActor
 final class AppModel: ObservableObject {
     @Published var profile: Profile?
+    @Published private(set) var calendarConnections: [CalendarConnection] = []
+    @Published private(set) var calendarConnectionsLoaded = false
     @Published private(set) var protectedTime: ProtectedTimeProposal?
     @Published private(set) var protectingTime = false
     @Published private(set) var persistentNext: ProactiveNextResponse?
@@ -302,12 +304,36 @@ final class AppModel: ObservableObject {
         case unavailable
         var errorDescription: String? { "Nexdo could not start the calendar connection. Please try again." }
     }
+    func loadCalendarConnections() async {
+        struct Response: Decodable, Sendable { let connections: [CalendarConnection] }
+        do {
+            let response: Response = try await api.request("/api/calendar/connections")
+            calendarConnections = response.connections
+        } catch {
+            calendarConnections = []
+        }
+        calendarConnectionsLoaded = true
+    }
+    func setCalendarWrites(id: String, enabled: Bool) async throws -> String {
+        struct Input: Encodable, Sendable { let id: String; let writeEnabled: Bool }
+        let _: Ignore = try await api.request("/api/calendar/connections", method: "PATCH", body: JSONEncoder().encode(Input(id: id, writeEnabled: enabled)))
+        await loadCalendarConnections()
+        return enabled ? "Nexdo can now add your scheduled tasks to this calendar." : "Nexdo will no longer add events to this calendar."
+    }
+    func disconnectCalendar(id: String) async throws -> String {
+        guard let encoded = id.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) else { throw CalendarConnectError.unavailable }
+        let _: Ignore = try await api.request("/api/calendar/connections?id=\(encoded)", method: "DELETE")
+        await loadCalendarConnections()
+        refreshSupplementaryData()
+        return "Calendar disconnected. Imported events were removed with the connection."
+    }
     func syncProfileCalendars() async throws -> String {
         struct Sync: Decodable, Sendable {
             struct Result: Decodable, Sendable { let error: String? }
             let results: [Result]
         }
         let result: Sync = try await api.request("/api/calendar/sync", method: "POST")
+        await loadCalendarConnections()
         if result.results.contains(where: { $0.error != nil }) { return "Some calendars could not synchronize. Check their connections in calendar settings." }
         refreshSupplementaryData()
         return result.results.isEmpty ? "No calendars connected yet." : "Calendars synchronized."
