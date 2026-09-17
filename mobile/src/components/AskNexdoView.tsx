@@ -44,7 +44,13 @@ export type AskNexdoViewProps = {
 };
 
 export function AskNexdoView({ textPage, initialPrompt = '' }: AskNexdoViewProps) {
-  const theme = useTheme();
+  // The suggestions page is a `.sheet` (RootView.swift:110), and iOS resolves `AskStyle.background`
+  // and `AskStyle.cardBackground` one level up inside one — #1C1C1E in dark mode, not black.
+  // "Free form Text" is a `.fullScreenCover` (AskNexdoView.swift:271), which does NOT elevate.
+  // `app/ask/_layout.tsx` sets the matching `contentStyle` on `index` only.
+  const theme = useTheme({ elevated: !textPage });
+  // `consentView` is always presented as a sheet (`:266`), whichever page opened it.
+  const sheetTheme = useTheme({ elevated: true });
   const consent = useConsent();
   const ask = useAsk();
 
@@ -181,11 +187,14 @@ export function AskNexdoView({ textPage, initialPrompt = '' }: AskNexdoViewProps
       multiline
       onChangeText={setPrompt}
       placeholder="Type your prompt…"
-      placeholderTextColor={theme.colors.secondary}
+      placeholderTextColor={theme.colors.placeholder}
       style={[
         styles.field,
-        // `.lineLimit(textPage && model.turn == nil ? 4...8 : 1...4)`
-        { minHeight: textPage && turn === null ? 96 : 44, color: theme.colors.ink, backgroundColor: theme.colors.secondaryBackground, borderColor: theme.colors.separator },
+        // `.lineLimit(textPage && model.turn == nil ? 4...8 : 1...4)` at a 21pt `.subheadline` line
+        // box plus the 12pt padding either side. The 1-line floor is Swift's own
+        // `.frame(minHeight: 44)` (AskNexdoView.swift:339), which is taller than one line.
+        textPage && turn === null ? { minHeight: 108, maxHeight: 192 } : { minHeight: 44, maxHeight: 108 },
+        { color: theme.colors.ink, backgroundColor: theme.colors.secondaryBackground, borderColor: theme.colors.separator },
       ]}
       testID="ask-field"
       value={prompt}
@@ -200,7 +209,9 @@ export function AskNexdoView({ textPage, initialPrompt = '' }: AskNexdoViewProps
         accessibilityState={{ disabled: !validPrompt || blocked }}
         disabled={!validPrompt || blocked}
         onPress={() => request(prompt)}
-        style={[styles.askButton, { backgroundColor: blue, opacity: validPrompt && !blocked ? 1 : 0.55 }]}
+        // Swift writes `.disabled(...)` AND `.opacity(0.55)` (`:365`); SwiftUI dims a disabled
+        // control on top of that, and the rendered result matches 0.25 (style map section 5).
+        style={[styles.askButton, { backgroundColor: blue, opacity: validPrompt && !blocked ? 1 : 0.25 }]}
         testID="ask-submit"
       >
         {submitting ? (
@@ -223,7 +234,8 @@ export function AskNexdoView({ textPage, initialPrompt = '' }: AskNexdoViewProps
           style={[styles.micButton, { backgroundColor: blue }]}
           testID="ask-mic"
         >
-          <TaskSymbol name={playing ? 'speaker.wave.2.fill' : 'mic'} size={20} color="#FFFFFF" />
+          {/* `Image(systemName:)` with no `.font` is `.body` (AskNexdoView.swift:370). */}
+          <TaskSymbol name={playing ? 'speaker.wave.2.fill' : 'mic'} size={17} color="#FFFFFF" />
         </Pressable>
       ) : null}
     </View>
@@ -237,9 +249,11 @@ export function AskNexdoView({ textPage, initialPrompt = '' }: AskNexdoViewProps
       {preparingSpeech ? (
         <View style={styles.speechRow}>
           <ActivityIndicator color={blue} size="small" />
-          <Text style={[styles.subheadline, styles.grow, { color: theme.colors.ink }]}>Preparing voice reply…</Text>
+          {/* Neither the ProgressView label nor the Button carries a `.font` (`:314`), so both
+              are `.body`. The same is true of every control in this block. */}
+          <Text style={[theme.typography.body, styles.grow, { color: theme.colors.label }]}>Preparing voice reply…</Text>
           <Pressable accessibilityRole="button" accessibilityLabel="Cancel" onPress={stopSpeech} testID="ask-speech-cancel">
-            <Text style={[styles.subheadline, { color: blue }]}>Cancel</Text>
+            <Text style={[theme.typography.body, { color: blue }]}>Cancel</Text>
           </Pressable>
         </View>
       ) : null}
@@ -247,13 +261,14 @@ export function AskNexdoView({ textPage, initialPrompt = '' }: AskNexdoViewProps
       {playing ? (
         <Pressable accessibilityRole="button" accessibilityLabel="Stop speaking" onPress={stopSpeech} style={styles.speechRow} testID="ask-speech-stop">
           <TaskSymbol name="stop.circle" size={17} color={blue} />
-          <Text style={[styles.subheadline, { color: blue }]}>Stop speaking</Text>
+          <Text style={[theme.typography.body, { color: blue }]}>Stop speaking</Text>
         </Pressable>
       ) : null}
 
       {voiceError !== null ? (
         <View style={styles.speechError}>
-          <Text style={[styles.caption, { color: theme.colors.ink }]} testID="ask-voice-error">
+          {/* `Text(message).font(.caption)` with no `.foregroundStyle` (`:319`) is `Color.primary`. */}
+          <Text style={[styles.caption, { color: theme.colors.label }]} testID="ask-voice-error">
             {voiceError}
           </Text>
           <Pressable
@@ -264,7 +279,9 @@ export function AskNexdoView({ textPage, initialPrompt = '' }: AskNexdoViewProps
             onPress={() => speakAnswer(lastSpeechText ?? undefined)}
             testID="ask-speech-retry"
           >
-            <Text style={[styles.subheadline, { color: blue, opacity: blocked || preparingSpeech ? 0.55 : 1 }]}>Retry voice reply</Text>
+            {/* `.disabled(...)` with no `.opacity` of its own: SwiftUI's own dim alone, which the
+                style map's 0.55 -> 0.25 measurement puts at about 0.45. */}
+            <Text style={[theme.typography.body, { color: blue, opacity: blocked || preparingSpeech ? 0.45 : 1 }]}>Retry voice reply</Text>
           </Pressable>
         </View>
       ) : null}
@@ -275,7 +292,7 @@ export function AskNexdoView({ textPage, initialPrompt = '' }: AskNexdoViewProps
       </View>
 
       {prompt.length > ASK_MAX_LENGTH ? (
-        <Text style={[styles.caption, { color: theme.colors.secondary }]} testID="ask-too-long">
+        <Text style={[styles.caption, { color: theme.colors.secondaryLabel }]} testID="ask-too-long">
           Keep your question under 4,000 characters.
         </Text>
       ) : null}
@@ -304,12 +321,14 @@ export function AskNexdoView({ textPage, initialPrompt = '' }: AskNexdoViewProps
       <ScrollView contentContainerStyle={styles.scroll} keyboardDismissMode="interactive" keyboardShouldPersistTaps="handled">
         {turn === null ? (
           <>
-            <Text style={[styles.subheadline, styles.tagline, { color: theme.colors.secondary }]}>Let’s make room for what matters.</Text>
+            {/* `AskStyle.secondary` is `Color(uiColor: .secondaryLabel)` (`:51`), not nexdoSecondary. */}
+            <Text style={[styles.subheadline, styles.tagline, { color: theme.colors.secondaryLabel }]}>Let’s make room for what matters.</Text>
 
             {textPage ? (
               <>
-                <Text style={[styles.title2, styles.bold, { color: theme.colors.ink }]}>What would you like help with?</Text>
-                <Text style={[styles.subheadline, { color: theme.colors.secondary }]}>
+                {/* No `.foregroundStyle` in Swift (`:217`), so `Color.primary` — `.label`, not nexdoInk. */}
+                <Text style={[styles.title2, styles.bold, { color: theme.colors.label }]}>What would you like help with?</Text>
+                <Text style={[styles.subheadline, { color: theme.colors.secondaryLabel }]}>
                   Type a question or tell Nexdo what to plan, create, or change.
                 </Text>
                 {field}
@@ -329,8 +348,8 @@ export function AskNexdoView({ textPage, initialPrompt = '' }: AskNexdoViewProps
           <>
             {lastAssistantPrompt !== null ? (
               <View accessibilityLabel={`Your question: ${lastAssistantPrompt}`} style={styles.questionRow}>
-                <TaskSymbol name="questionmark.circle" size={15} color={theme.colors.secondary} />
-                <Text numberOfLines={2} style={[styles.subheadline, styles.grow, { color: theme.colors.secondary }]} testID="ask-last-prompt">
+                <TaskSymbol name="questionmark.circle" size={15} color={theme.colors.secondaryLabel} />
+                <Text numberOfLines={2} style={[styles.subheadline, styles.grow, { color: theme.colors.secondaryLabel }]} testID="ask-last-prompt">
                   {lastAssistantPrompt}
                 </Text>
               </View>
@@ -364,9 +383,10 @@ export function AskNexdoView({ textPage, initialPrompt = '' }: AskNexdoViewProps
         )}
 
         {submitting ? (
+          // `ProgressView("Asking Nexdo…")` (`:250`) puts its label under the spinner.
           <View style={styles.progress}>
             <ActivityIndicator color={blue} size="small" />
-            <Text style={[theme.typography.body, { color: theme.colors.secondary }]} testID="ask-submitting">
+            <Text style={[theme.typography.body, styles.centred, { color: theme.colors.secondaryLabel }]} testID="ask-submitting">
               Asking Nexdo…
             </Text>
           </View>
@@ -374,7 +394,8 @@ export function AskNexdoView({ textPage, initialPrompt = '' }: AskNexdoViewProps
 
         {failedQuery !== null ? (
           <View style={styles.failure}>
-            <Text style={[styles.subheadline, { color: theme.colors.ink }]} testID="ask-failed">
+            {/* `.font(.subheadline)` on the VStack, no `.foregroundStyle` (`:252-256`). */}
+            <Text style={[styles.subheadline, { color: theme.colors.label }]} testID="ask-failed">
               Nexdo couldn’t complete that request. Please try again.
             </Text>
             <Pressable
@@ -385,7 +406,7 @@ export function AskNexdoView({ textPage, initialPrompt = '' }: AskNexdoViewProps
               onPress={() => request(failedQuery, lastRequestWasVoice)}
               testID="ask-retry"
             >
-              <Text style={[styles.subheadline, { color: blue }]}>Retry</Text>
+              <Text style={[styles.subheadline, { color: blue, opacity: blocked ? 0.45 : 1 }]}>Retry</Text>
             </Pressable>
           </View>
         ) : null}
@@ -416,10 +437,10 @@ export function AskNexdoView({ textPage, initialPrompt = '' }: AskNexdoViewProps
         presentationStyle="pageSheet"
         visible={showConsent}
       >
-        <SafeAreaView edges={['top', 'left', 'right', 'bottom']} style={[styles.fill, { backgroundColor: theme.colors.background }]}>
+        <SafeAreaView edges={['top', 'left', 'right', 'bottom']} style={[styles.fill, { backgroundColor: sheetTheme.colors.background }]}>
           <ScrollView contentContainerStyle={styles.consent}>
-            <Text style={[styles.title2, styles.bold, { color: theme.colors.ink }]}>Before using Ask AI</Text>
-            <Text style={[theme.typography.body, { color: theme.colors.ink }]}>
+            <Text style={[styles.title2, styles.bold, { color: sheetTheme.colors.label }]}>Before using Ask AI</Text>
+            <Text style={[theme.typography.body, { color: sheetTheme.colors.label }]}>
               Nexdo sends your question and relevant task and calendar information—including titles, notes, times,
               preferences, and conversation context—to OpenAI to generate answers. Do not include information you do not
               want shared. AI can make mistakes; review proposed changes before approving them.
@@ -432,7 +453,7 @@ export function AskNexdoView({ textPage, initialPrompt = '' }: AskNexdoViewProps
             >
               <Text style={[theme.typography.body, { color: blue }]}>OpenAI data privacy information</Text>
             </Pressable>
-            <Text style={[styles.footnote, { color: theme.colors.secondary }]}>
+            <Text style={[styles.footnote, { color: sheetTheme.colors.secondaryLabel }]}>
               Optional. You can withdraw permission in Account; withdrawal stops future requests, not previous
               processing.
             </Text>
@@ -449,7 +470,9 @@ export function AskNexdoView({ textPage, initialPrompt = '' }: AskNexdoViewProps
               style={[styles.approve, { backgroundColor: blue }]}
               testID="ask-consent-allow"
             >
-              <Text style={[styles.subheadline, styles.semibold, { color: '#FFFFFF' }]}>Allow sharing with OpenAI</Text>
+              {/* `.buttonStyle(.borderedProminent)` (`:360`) inside a `VStack(alignment: .leading)`:
+                  a capsule sized to its own label, not a full-width block. */}
+              <Text style={[theme.typography.body, { color: '#FFFFFF' }]}>Allow sharing with OpenAI</Text>
             </Pressable>
             <Pressable
               accessibilityRole="button"
@@ -461,7 +484,8 @@ export function AskNexdoView({ textPage, initialPrompt = '' }: AskNexdoViewProps
               style={styles.reject}
               testID="ask-consent-decline"
             >
-              <Text style={[styles.subheadline, { color: blue }]}>Not now</Text>
+              {/* `Button("Not now", role: .cancel)` (`:361`): plain text, leading-aligned. */}
+              <Text style={[theme.typography.body, { color: blue }]}>Not now</Text>
             </Pressable>
           </ScrollView>
         </SafeAreaView>
@@ -475,11 +499,14 @@ const styles = StyleSheet.create({
   grow: { flex: 1 },
   semibold: { fontWeight: '600' },
   bold: { fontWeight: '700' },
-  subheadline: { fontSize: 15, lineHeight: 20 },
+  // Named text styles carry their own leading; `fontSize * 1.2` is the `.system(size:)` rule
+  // only (style map section 2).
+  subheadline: { fontSize: 15, lineHeight: 21 },
   caption: { fontSize: 12, lineHeight: 16 },
-  footnote: { fontSize: 13, lineHeight: 18 },
+  footnote: { fontSize: 13, lineHeight: 20 },
   headline: { fontSize: 17, lineHeight: 22, fontWeight: '600' },
   title2: { fontSize: 22, lineHeight: 28 },
+  centred: { textAlign: 'center' },
 
   header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingTop: 22 },
   close: { width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
@@ -491,7 +518,8 @@ const styles = StyleSheet.create({
 
   questionRow: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingTop: 16, paddingBottom: 2 },
   showSuggestions: { paddingVertical: 12 },
-  progress: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 16 },
+  // A `ProgressView` with a label stacks the label under the spinner.
+  progress: { alignItems: 'center', gap: 8, paddingVertical: 16 },
   failure: { gap: 8, paddingVertical: 12 },
 
   composer: { paddingHorizontal: 20, paddingBottom: 12, gap: 14 },
@@ -502,7 +530,7 @@ const styles = StyleSheet.create({
 
   field: {
     fontSize: 15,
-    lineHeight: 20,
+    lineHeight: 21,
     paddingHorizontal: 12,
     paddingVertical: 12,
     borderRadius: 13,
@@ -513,7 +541,9 @@ const styles = StyleSheet.create({
   askButton: { minHeight: 44, paddingHorizontal: 16, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
   micButton: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
 
-  consent: { padding: 24, gap: 18 },
-  approve: { minHeight: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  reject: { minHeight: 44, alignItems: 'center', justifyContent: 'center' },
+  // `VStack(alignment: .leading, spacing: 18).padding(24)`, so both buttons are leading-aligned
+  // and sized to their own labels.
+  consent: { padding: 24, gap: 18, alignItems: 'flex-start' },
+  approve: { alignSelf: 'flex-start', minHeight: 44, paddingHorizontal: 20, borderRadius: 999, alignItems: 'center', justifyContent: 'center' },
+  reject: { alignSelf: 'flex-start', minHeight: 44, justifyContent: 'center' },
 });

@@ -27,17 +27,21 @@ export function AskSuggestionCard({ intent, disabled, onPress }: { intent: AskIn
       testID={`ask-intent-${intent.id}`}
       style={[
         styles.suggestion,
-        { backgroundColor: theme.colors.secondaryBackground, borderColor: withAlpha(blue, 0.28), opacity: disabled ? 0.55 : 1 },
+        // `.disabled(blocked)` with no `.opacity` of its own, so SwiftUI's own dim alone —
+        // about 0.45, from the style map's measured 0.55 -> 0.25 on an explicitly dimmed control.
+        { backgroundColor: theme.colors.secondaryBackground, borderColor: withAlpha(blue, 0.28), opacity: disabled ? 0.45 : 1 },
       ]}
     >
       <View style={[styles.suggestionIcon, { backgroundColor: withAlpha(blue, 0.16) }]}>
-        <TaskSymbol name={intent.icon} size={17} color={theme.colors.ink} />
+        {/* `.foregroundStyle(AskStyle.ink)` on the row (`:73`): `.label`, not nexdoInk. */}
+        <TaskSymbol name={intent.icon} size={17} color={theme.colors.label} />
       </View>
-      <View style={styles.grow}>
-        <Text style={[styles.subheadline, styles.semibold, { color: theme.colors.ink }]}>{intent.title}</Text>
-        <Text style={[styles.caption, { color: theme.colors.secondary }]}>{intent.detail}</Text>
+      <View style={styles.suggestionText}>
+        <Text style={[styles.subheadline, styles.semibold, { color: theme.colors.label }]}>{intent.title}</Text>
+        {/* `AskStyle.secondary` is `.secondaryLabel` (AskNexdoView.swift:51). */}
+        <Text style={[styles.caption, { color: theme.colors.secondaryLabel }]}>{intent.detail}</Text>
       </View>
-      <TaskSymbol name="chevron.right" size={12} color={theme.colors.secondary} />
+      <TaskSymbol name="chevron.right" size={12} color={theme.colors.secondaryLabel} />
     </Pressable>
   );
 }
@@ -100,7 +104,7 @@ export function AskEntryCard({
         {
           backgroundColor: voice ? withAlpha(brand.nexdoIndigo, 0.05) : theme.colors.background,
           borderColor: withAlpha(brand.nexdoIndigo, 0.14),
-          opacity: disabled ? 0.55 : 1,
+          opacity: disabled ? 0.45 : 1,
         },
       ]}
     >
@@ -118,11 +122,24 @@ export function AskEntryCard({
           <TaskSymbol name={icon} size={22} color={brand.nexdoIndigo} />
         </View>
       )}
-      <View style={styles.grow}>
-        <Text numberOfLines={1} style={[styles.footnote, styles.semibold, { color: theme.colors.ink }]}>
+      <View style={styles.entryText}>
+        {/* `.lineLimit(1).minimumScaleFactor(0.75)` on BOTH labels (AskNexdoView.swift:301-302).
+            Roboto sets ~9% narrower than SF Pro on a 4.5% narrower screen, so "Free form Text" is
+            exactly the label that runs out of room here. */}
+        <Text
+          numberOfLines={1}
+          adjustsFontSizeToFit
+          minimumFontScale={0.75}
+          style={[styles.footnote, styles.semibold, { color: theme.colors.ink }]}
+        >
           {title}
         </Text>
-        <Text numberOfLines={1} style={[styles.caption, { color: theme.colors.secondary }]}>
+        <Text
+          numberOfLines={1}
+          adjustsFontSizeToFit
+          minimumFontScale={0.75}
+          style={[styles.caption, { color: theme.colors.secondaryLabel }]}
+        >
           {detail}
         </Text>
       </View>
@@ -141,10 +158,12 @@ export function AskExampleRow({ example, disabled, onPress }: { example: string;
       disabled={disabled}
       onPress={onPress}
       testID={`ask-example-${example}`}
-      style={[styles.example, { backgroundColor: withAlpha(brand.nexdoIndigo, 0.06), opacity: disabled ? 0.55 : 1 }]}
+      style={[styles.example, { backgroundColor: withAlpha(brand.nexdoIndigo, 0.06), opacity: disabled ? 0.45 : 1 }]}
     >
-      <Text style={[styles.subheadline, styles.grow, { color: theme.colors.ink }]}>{example}</Text>
-      <TaskSymbol name="arrow.up.left" size={15} color={theme.colors.ink} />
+      {/* The row carries no `.font` and no `.foregroundStyle` (AskNexdoView.swift:221-225), so both
+          children are `.body` in `Color.primary`. */}
+      <Text style={[theme.typography.body, styles.grow, { color: theme.colors.label }]}>{example}</Text>
+      <TaskSymbol name="arrow.up.left" size={17} color={theme.colors.label} />
     </Pressable>
   );
 }
@@ -152,8 +171,9 @@ export function AskExampleRow({ example, disabled, onPress }: { example: string;
 const styles = StyleSheet.create({
   grow: { flex: 1 },
   semibold: { fontWeight: '600' },
-  subheadline: { fontSize: 15, lineHeight: 20 },
-  footnote: { fontSize: 13, lineHeight: 18 },
+  // Named text styles carry their own leading (style map section 2).
+  subheadline: { fontSize: 15, lineHeight: 21 },
+  footnote: { fontSize: 13, lineHeight: 20 },
   caption: { fontSize: 12, lineHeight: 16 },
 
   suggestion: {
@@ -166,6 +186,8 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
   },
   suggestionIcon: { width: 36, height: 36, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  // `VStack(alignment: .leading, spacing: 3)` (AskNexdoView.swift:69).
+  suggestionText: { flex: 1, gap: 3 },
 
   entryOuter: { paddingHorizontal: 16, paddingVertical: 14 },
   entryRow: { flexDirection: 'row', gap: 12, padding: 16 },
@@ -180,6 +202,9 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
   },
   entryIcon: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
+  // `VStack(alignment: .leading, spacing: 4)` (AskNexdoView.swift:300).
+  entryText: { flex: 1, gap: 4 },
 
-  example: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16, borderRadius: 16 },
+  // A bare `HStack` spaces its children by 8 (AskNexdoView.swift:222).
+  example: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 16, borderRadius: 16 },
 });

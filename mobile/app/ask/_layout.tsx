@@ -18,9 +18,13 @@ import { useTheme } from '../../src/theme';
  */
 export default function AskLayout() {
   const theme = useTheme();
+  // `index` is a `.sheet`, so iOS resolves its background one level up (style map section 3);
+  // `text` and `voice` are `.fullScreenCover`s, which do not elevate. `AskNexdoView` makes the
+  // same distinction with `useTheme({ elevated: !textPage })`, and the two must agree.
+  const sheet = useTheme({ elevated: true });
   return (
     <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: theme.colors.background } }}>
-      <Stack.Screen name="index" options={{ presentation: 'modal' }} />
+      <Stack.Screen name="index" options={{ presentation: 'modal', contentStyle: { backgroundColor: sheet.colors.background } }} />
       <Stack.Screen name="text" options={{ presentation: 'fullScreenModal' }} />
       <Stack.Screen name="voice" options={{ presentation: 'fullScreenModal' }} />
     </Stack>

@@ -65,7 +65,8 @@ export function AskResponse({ turn, readingSection, preparingSpeech, onReadLoud,
             testID={`ask-section-${index}`}
           >
             {visible.length === 0 ? (
-              <Text style={[styles.subheadline, styles.emptyHint, { color: theme.colors.secondary }]}>Tap to view the details.</Text>
+              // `AskStyle.secondary` is `.secondaryLabel` (AskNexdoView.swift:51), not nexdoSecondary.
+              <Text style={[styles.subheadline, styles.emptyHint, { color: theme.colors.secondaryLabel }]}>Tap to view the details.</Text>
             ) : null}
 
             {visible.map((item, itemIndex) => (
@@ -104,7 +105,7 @@ export function AskResponse({ turn, readingSection, preparingSpeech, onReadLoud,
               <Text style={[styles.subheadline, styles.semibold, { color: theme.colors.ink }]}>{change.title}</Text>
               <Text style={[styles.subheadline, { color: theme.colors.ink }]}>{`From: ${change.before ?? 'Unscheduled'}`}</Text>
               <Text style={[styles.subheadline, { color: theme.colors.ink }]}>{`To: ${change.after} · ${change.durationMin} min`}</Text>
-              <Text style={[styles.subheadline, { color: theme.colors.secondary }]}>{change.reason}</Text>
+              <Text style={[styles.subheadline, { color: theme.colors.secondaryLabel }]}>{change.reason}</Text>
             </View>
           ))}
 
@@ -116,9 +117,10 @@ export function AskResponse({ turn, readingSection, preparingSpeech, onReadLoud,
             disabled={busy}
             onPress={onApprove}
             testID="ask-approve"
-            style={[styles.approve, { backgroundColor: blue, opacity: busy ? 0.55 : 1 }]}
+            // `.disabled(model.busy)` with no `.opacity` of its own: SwiftUI's own dim, about 0.45.
+            style={[styles.approve, { backgroundColor: blue, opacity: busy ? 0.45 : 1 }]}
           >
-            <Text style={[styles.subheadline, styles.semibold, { color: '#FFFFFF' }]}>Approve changes</Text>
+            <Text style={[theme.typography.body, { color: '#FFFFFF' }]}>Approve changes</Text>
           </Pressable>
 
           <Pressable
@@ -128,9 +130,9 @@ export function AskResponse({ turn, readingSection, preparingSpeech, onReadLoud,
             disabled={busy}
             onPress={onReject}
             testID="ask-reject"
-            style={[styles.reject, { opacity: busy ? 0.55 : 1 }]}
+            style={[styles.reject, { opacity: busy ? 0.45 : 1 }]}
           >
-            <Text style={[styles.subheadline, { color: blue }]}>Keep my current plan</Text>
+            <Text style={[theme.typography.body, { color: blue }]}>Keep my current plan</Text>
           </Pressable>
         </AskResponseCard>
       ) : null}
@@ -146,7 +148,9 @@ export function AskResponseSummary({ text }: { text: string }) {
       <View style={styles.summaryIcon}>
         <TaskSymbol name="sparkles" size={15} color={theme.colors.askBlue} />
       </View>
-      <Text numberOfLines={3} style={[styles.subheadline, styles.medium, styles.grow, { color: theme.colors.ink }]}>
+      {/* `.foregroundStyle(AskStyle.ink)` (AskResponseView.swift:78) is `.label`, not nexdoInk.
+          The card BODY is different: Swift names `Color.nexdoInk` there explicitly (`:124`). */}
+      <Text numberOfLines={3} style={[styles.subheadline, styles.medium, styles.grow, { color: theme.colors.label }]}>
         {text}
       </Text>
     </View>
@@ -219,7 +223,8 @@ const styles = StyleSheet.create({
   semibold: { fontWeight: '600' },
   medium: { fontWeight: '500' },
   bold: { fontWeight: '700' },
-  subheadline: { fontSize: 15, lineHeight: 20 },
+  // `.subheadline` carries its own 21pt leading (style map section 2).
+  subheadline: { fontSize: 15, lineHeight: 21 },
   caption: { fontSize: 12, lineHeight: 16 },
   caption2: { fontSize: 11, lineHeight: 13 },
 
@@ -241,6 +246,8 @@ const styles = StyleSheet.create({
 
   prompt: { paddingBottom: 8 },
   change: { gap: 6, paddingVertical: 8 },
-  approve: { minHeight: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 12 },
-  reject: { minHeight: 44, alignItems: 'center', justifyContent: 'center' },
+  // `.buttonStyle(.borderedProminent).frame(minHeight: 44)` (AskResponseView.swift:58) inside a
+  // `VStack(alignment: .leading)`: a capsule sized to its own label, not a full-width block.
+  approve: { alignSelf: 'flex-start', minHeight: 44, paddingHorizontal: 20, alignItems: 'center', justifyContent: 'center', borderRadius: 999 },
+  reject: { alignSelf: 'flex-start', minHeight: 44, justifyContent: 'center' },
 });
