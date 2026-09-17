@@ -40,6 +40,8 @@ struct RootView: View {
                 TodayDesignPreview()
             } else if ProcessInfo.processInfo.arguments.contains("-task-design-preview") || ProcessInfo.processInfo.arguments.contains("-voice-task-design-preview") {
                 TaskDesignPreview()
+            } else if ProcessInfo.processInfo.arguments.contains("-email-verification-preview") {
+                NavigationStack { EmailVerificationView(pending: PendingEmailVerification(email: "preview@example.com", reason: .codeSent), showsCancel: true) }
             } else if model.profile != nil {
                 authenticatedTabs
             } else { SignInView() }
@@ -436,7 +438,13 @@ private struct SignInView: View {
         }
         .sheet(isPresented: $showsSignUp) { SignUpView() }
         .sheet(isPresented: $showsPasswordReset) { PasswordResetView(initialEmail: email) }
+        .sheet(item: $verification) { pending in
+            NavigationStack { EmailVerificationView(pending: pending, showsCancel: true) }
+                .presentationDetents([.large])
+        }
     }
+
+    @State private var verification: PendingEmailVerification?
 
     private var canSignIn: Bool {
         !model.busy && email.contains("@") && !password.isEmpty
@@ -447,7 +455,7 @@ private struct SignInView: View {
         focusedField = nil
         let submittedPassword = password
         password = ""
-        Task { await model.login(email: email, password: submittedPassword) }
+        Task { if let pending = await model.login(email: email, password: submittedPassword) { verification = pending } }
     }
 
     private static func sha256(_ value: String) -> String {
@@ -514,12 +522,12 @@ private struct SignUpView: View {
                             Divider().padding(.leading, 78)
                             HStack(spacing: 14) {
                                 SignInFieldIcon(systemName: "lock")
-                                SecureField("Password", text: $password).textContentType(.newPassword).accessibilityLabel("Password")
+                                RevealablePasswordField(title: "Password", text: $password)
                             }.padding(.horizontal, 18).frame(minHeight: 68)
                             Divider().padding(.leading, 78)
                             HStack(spacing: 14) {
                                 SignInFieldIcon(systemName: "checkmark.shield")
-                                SecureField("Confirm password", text: $confirmation).textContentType(.newPassword).accessibilityLabel("Confirm password")
+                                RevealablePasswordField(title: "Confirm password", text: $confirmation)
                             }.padding(.horizontal, 18).frame(minHeight: 68)
                         }
                         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 26, style: .continuous))
@@ -555,10 +563,12 @@ private struct SignUpView: View {
             .navigationTitle("Create your account")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { closeSignUp() } } }
+            .navigationDestination(item: $verification) { pending in EmailVerificationView(pending: pending) }
         }
         .onChange(of: model.profile?.id) { _, id in if id != nil { dismiss() } }
         .presentationDetents([.large])
     }
+    @State private var verification: PendingEmailVerification?
     private var canCreate: Bool {
         !model.busy && !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && email.contains("@") && password.count >= 12 && confirmation.count >= 12
     }
@@ -569,7 +579,7 @@ private struct SignUpView: View {
     private func create() {
         guard password == confirmation else { localError = "The passwords do not match."; return }
         localError = nil
-        Task { await model.register(name: name, email: email, password: password) }
+        Task { if let pending = await model.register(name: name, email: email, password: password) { verification = pending } }
     }
 }
 
@@ -592,12 +602,16 @@ private struct PasswordResetView: View {
                 Section {
                     TextField("Email address", text: $email)
                         .textContentType(.username).keyboardType(.emailAddress).textInputAutocapitalization(.never).autocorrectionDisabled()
-                } footer: { Text("We’ll email a six-digit verification code if an account exists.") }
+                } footer: { Text("We’ll email a six-digit code if an account exists. Codes expire after 15 minutes.") }
                 if codeSent {
                     Section("Verification") {
                         TextField("6-digit code", text: $code).keyboardType(.numberPad).textContentType(.oneTimeCode)
-                        SecureField("New password", text: $password).textContentType(.newPassword)
-                        SecureField("Confirm new password", text: $confirmation).textContentType(.newPassword)
+                            .onChange(of: code) { _, value in
+                                let digits = VerificationCode.sanitized(value)
+                                if digits != value { code = digits }
+                            }
+                        RevealablePasswordField(title: "New password", text: $password)
+                        RevealablePasswordField(title: "Confirm new password", text: $confirmation)
                     }
                 }
                 if let localError { Section { Text(localError).foregroundStyle(.red) } }
@@ -634,6 +648,185 @@ private struct PasswordResetView: View {
         guard password == confirmation else { localError = "The passwords do not match."; return }
         localError = nil
         Task { if await model.confirmPasswordReset(email: email, code: code, password: password) { complete = true } }
+    }
+}
+
+private struct RevealablePasswordField: View {
+    let title: String
+    @Binding var text: String
+    @State private var visible = false
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Group {
+                if visible {
+                    TextField(title, text: $text)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                } else {
+                    SecureField(title, text: $text)
+                }
+            }
+            .textContentType(.newPassword)
+            .accessibilityLabel(title)
+
+            Button { visible.toggle() } label: {
+                Image(systemName: visible ? "eye.slash" : "eye")
+                    .font(.title3)
+                    .foregroundStyle(Color.nexdoSecondary)
+                    .frame(width: 44, height: 44)
+            }
+            // Borderless keeps the toggle from activating the whole row inside a Form.
+            .buttonStyle(.borderless)
+            .accessibilityLabel(visible ? "Hide password" : "Show password")
+        }
+    }
+}
+
+private struct EmailVerificationView: View {
+    @EnvironmentObject private var model: AppModel
+    @Environment(\.dismiss) private var dismiss
+    let pending: PendingEmailVerification
+    let showsCancel: Bool
+    @State private var code = ""
+    @State private var working = false
+    @State private var message: String?
+    @State private var errorMessage: String?
+    @State private var resendAvailableAt: Date?
+    @FocusState private var codeFocused: Bool
+
+    private static let resendCooldown: TimeInterval = 60
+
+    init(pending: PendingEmailVerification, showsCancel: Bool = false) {
+        self.pending = pending
+        self.showsCancel = showsCancel
+        switch pending.reason {
+        case .codeSent:
+            _message = State(initialValue: "We sent a six-digit code to \(pending.email). It expires in 24 hours.")
+        case .codeNotSent:
+            _errorMessage = State(initialValue: "We couldn’t send your verification code. Send a new code to try again.")
+        case .signInRequiresVerification:
+            _message = State(initialValue: "Verify your email to sign in. Send a new code if you don’t have one from the last 24 hours.")
+        }
+    }
+
+    var body: some View {
+        ZStack {
+            Color(uiColor: .systemBackground).ignoresSafeArea()
+            SignInBackdrop()
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    SignInFieldIcon(systemName: "envelope.badge")
+                    Text("Verify your email")
+                        .font(.system(size: 34, weight: .bold, design: .rounded))
+                        .foregroundStyle(Color.nexdoInk)
+                        .padding(.top, 18)
+                    Text("Enter the six-digit code we emailed to \(pending.email).")
+                        .font(.body)
+                        .foregroundStyle(Color.nexdoSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.top, 8)
+
+                    HStack(spacing: 14) {
+                        SignInFieldIcon(systemName: "number")
+                        TextField("6-digit code", text: $code)
+                            .keyboardType(.numberPad)
+                            .textContentType(.oneTimeCode)
+                            .font(.title2.monospacedDigit().weight(.semibold))
+                            .focused($codeFocused)
+                            .onChange(of: code) { _, value in
+                                let digits = VerificationCode.sanitized(value)
+                                if digits != value { code = digits }
+                            }
+                            .accessibilityLabel("Verification code")
+                    }
+                    .padding(.horizontal, 18)
+                    .frame(minHeight: 72)
+                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 26, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 26, style: .continuous).stroke(Color.white.opacity(0.8)))
+                    .shadow(color: Color.purple.opacity(0.09), radius: 25, y: 12)
+                    .padding(.top, 28)
+
+                    if let message {
+                        Text(message)
+                            .font(.footnote)
+                            .foregroundStyle(Color.nexdoSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .padding(.top, 12)
+                    }
+                    if let errorMessage {
+                        Text(errorMessage)
+                            .font(.footnote)
+                            .foregroundStyle(.red)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .padding(.top, 8)
+                    }
+
+                    Button { verify() } label: {
+                        Text(working ? "Verifying…" : "Verify Email")
+                            .font(.title3.bold()).foregroundStyle(.white)
+                            .frame(maxWidth: .infinity, minHeight: 60)
+                            .background(LinearGradient(colors: [.nexdoMagenta, .nexdoIndigo, .nexdoBlue], startPoint: .leading, endPoint: .trailing), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(!canVerify)
+                    .opacity(canVerify ? 1 : 0.55)
+                    .padding(.top, 20)
+
+                    TimelineView(.periodic(from: .now, by: 1)) { context in
+                        let wait = secondsUntilResend(at: context.date)
+                        Button(wait > 0 ? "Send a new code in \(wait)s" : "Send a new code") { resend() }
+                            .font(.subheadline.weight(.semibold))
+                            .disabled(working || wait > 0)
+                            .frame(maxWidth: .infinity, minHeight: 44)
+                    }
+                    .padding(.top, 12)
+                }
+                .padding(.horizontal, 28).padding(.vertical, 28).frame(maxWidth: 560)
+                .frame(maxWidth: .infinity)
+            }
+            .scrollDismissesKeyboard(.interactively)
+        }
+        .navigationTitle("Verify email")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            if showsCancel {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+            }
+        }
+        .onAppear { codeFocused = true }
+    }
+
+    private var canVerify: Bool { !working && VerificationCode.isComplete(code) }
+
+    private func secondsUntilResend(at date: Date) -> Int {
+        guard let resendAvailableAt else { return 0 }
+        return max(0, Int(resendAvailableAt.timeIntervalSince(date).rounded(.up)))
+    }
+
+    private func verify() {
+        guard canVerify else { return }
+        working = true; errorMessage = nil; message = nil; codeFocused = false
+        Task {
+            defer { working = false }
+            do { try await model.verifyEmail(email: pending.email, code: code) }
+            catch { errorMessage = error.localizedDescription; codeFocused = true }
+        }
+    }
+
+    private func resend() {
+        guard !working else { return }
+        working = true; errorMessage = nil; message = nil
+        Task {
+            defer { working = false }
+            do {
+                message = try await model.resendVerificationCode(email: pending.email)
+                resendAvailableAt = Date().addingTimeInterval(Self.resendCooldown)
+                code = ""
+                codeFocused = true
+            } catch { errorMessage = error.localizedDescription }
+        }
     }
 }
 

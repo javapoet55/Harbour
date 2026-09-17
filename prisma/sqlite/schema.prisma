@@ -1,6 +1,6 @@
 generator client {
   provider = "prisma-client-js"
-  output   = "../src/generated/prisma"
+  output   = "../../src/generated/prisma"
 }
 
 datasource db {
@@ -49,6 +49,7 @@ model EmailVerificationToken {
   codeHash String
   expiresAt DateTime
   usedAt DateTime?
+  attempts Int @default(0)
   createdAt DateTime @default(now())
   @@index([userId, createdAt])
   @@index([expiresAt])

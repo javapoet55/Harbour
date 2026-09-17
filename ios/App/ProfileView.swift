@@ -7,8 +7,9 @@ import AuthenticationServices
 private final class CalendarOAuthCoordinator: NSObject, ObservableObject, ASWebAuthenticationPresentationContextProviding {
     private var session: ASWebAuthenticationSession?
     func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor { UIApplication.shared.connectedScenes.compactMap { ($0 as? UIWindowScene)?.keyWindow }.first ?? ASPresentationAnchor() }
-    func connectGoogle(model: AppModel, completion: @escaping (String) -> Void) {
-        guard let url = URL(string: "https://harbour-production-f8a0.up.railway.app/api/calendar/oauth/google/start?native=1") else { completion("Google Calendar connection failed: invalid calendar connection URL."); return }
+    // The URL already carries a short-lived connect token: the web session
+    // cookie is not available to ASWebAuthenticationSession.
+    func connectGoogle(url: URL, model: AppModel, completion: @escaping (String) -> Void) {
         session = ASWebAuthenticationSession(url: url, callbackURLScheme: "nexdo") { callback, error in
             Task { @MainActor in
                 defer { self.session = nil }
@@ -137,6 +138,9 @@ struct ProfileSettingsView: View {
     @State private var savingPhoto = false
     @State private var photoMessage: String?
     @State private var saving = false
+    // Kept apart from `saving` so the OAuth sheet never leaves Save stuck on "Saving…".
+    @State private var connecting = false
+    @State private var disconnecting: CalendarConnection?
     @State private var loading = true
     @State private var message: String?
     @State private var failure: String?
@@ -222,14 +226,8 @@ struct ProfileSettingsView: View {
                     }
                     card("Calendars and privacy") {
                         Text("Connect Google Calendar securely. You may need to sign in with Google.").font(.subheadline).foregroundStyle(Color.nexdoSecondary)
-                        Button("Connect Google Calendar", systemImage: "calendar.badge.plus") {
-                            run { try await withCheckedThrowingContinuation { continuation in
-                                calendarOAuth.connectGoogle(model: model) { result in
-                                    if result.contains("connected") { message = result; continuation.resume(returning: ()) }
-                                    else { continuation.resume(throwing: OAuthError.message(result)) }
-                                }
-                            }}
-                        }
+                        connectionList
+                        Button(connecting ? "Connecting…" : (model.calendarConnections.isEmpty ? "Connect Google Calendar" : "Connect another calendar"), systemImage: "calendar.badge.plus") { connect() }
                         Button("Synchronize now", systemImage: "arrow.triangle.2.circlepath") { run { message = try await model.syncProfileCalendars() } }
                         Divider()
                         Text(model.aiConsent ? "OpenAI sharing is allowed for this session." : "OpenAI sharing is off.").font(.caption)
@@ -242,7 +240,7 @@ struct ProfileSettingsView: View {
                 } else { Button("Retry loading settings") { Task { await load() } } }
                 if let failure { Text(failure).foregroundStyle(.red).accessibilityAddTraits(.updatesFrequently) }
                 if let message { Label(message, systemImage: "checkmark.circle").foregroundStyle(Color.nexdoIndigo).accessibilityAddTraits(.updatesFrequently) }
-            }.padding(20).disabled(saving)
+            }.padding(20).disabled(saving || connecting)
         }
         .background(ProfileBackground()).navigationTitle("Settings").navigationBarTitleDisplayMode(.large)
         .toolbar {
@@ -251,11 +249,11 @@ struct ProfileSettingsView: View {
                     Image(systemName: "chevron.backward")
                 }
                 .accessibilityLabel("Save settings and go back")
-                .disabled(loading || saving)
+                .disabled(loading || saving || connecting)
             }
         }
         .task { if loading { await load() } }
-        .interactiveDismissDisabled(saving)
+        .interactiveDismissDisabled(saving || connecting)
         .navigationBarBackButtonHidden(true)
         .alert("Could not update profile", isPresented: Binding(get: { failure != nil }, set: { if !$0 { failure = nil } })) {
             Button("OK", role: .cancel) { failure = nil }
@@ -272,11 +270,82 @@ struct ProfileSettingsView: View {
             }
         }
         .onChange(of: appVoiceVolume) { _, _ in AppVoice.notifyVolumeChanged() }
+        .confirmationDialog(
+            "Disconnect \(disconnecting?.displayName ?? "this calendar")?",
+            isPresented: Binding(get: { disconnecting != nil }, set: { if !$0 { disconnecting = nil } }),
+            titleVisibility: .visible
+        ) {
+            Button("Disconnect", role: .destructive) {
+                guard let connection = disconnecting else { return }
+                disconnecting = nil
+                run { message = try await model.disconnectCalendar(id: connection.id) }
+            }
+            Button("Keep it", role: .cancel) { disconnecting = nil }
+        } message: { Text("Events imported from this calendar are removed with the connection.") }
         .confirmationDialog("Permanently delete this account?", isPresented: $confirmsDeletion, titleVisibility: .visible) {
             Button("Delete account", role: .destructive) { Task { await model.deleteAccount() } }
         } message: { Text("This removes your Nexdo data permanently and cannot be undone.") }
     }
     private enum OAuthError: LocalizedError { case message(String); var errorDescription: String? { if case .message(let value) = self { return value }; return "Calendar connection failed." } }
+    @ViewBuilder private var connectionList: some View {
+        if !model.calendarConnections.isEmpty {
+            VStack(spacing: 10) {
+                ForEach(model.calendarConnections) { connection in
+                    VStack(alignment: .leading, spacing: 10) {
+                        HStack(alignment: .top, spacing: 12) {
+                            Image(systemName: connection.isHealthy ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+                                .foregroundStyle(connection.isHealthy ? Color.nexdoIndigo : .orange)
+                                .accessibilityHidden(true)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(connection.displayName).font(.subheadline).bold()
+                                Text(connection.detail).font(.caption).foregroundStyle(Color.nexdoSecondary)
+                                if let synced = connection.lastSyncedDescription {
+                                    Text(synced).font(.caption2).foregroundStyle(Color.nexdoSecondary)
+                                }
+                            }
+                            .accessibilityElement(children: .combine)
+                            Spacer(minLength: 8)
+                            Button("Disconnect", role: .destructive) { disconnecting = connection }
+                                .font(.caption).buttonStyle(.borderless)
+                        }
+                        Divider()
+                        // Writes default to off on the server, so without this toggle the
+                        // app only ever reads: scheduled tasks never reach the calendar.
+                        Toggle("Add my scheduled tasks here", isOn: Binding(
+                            get: { connection.writeEnabled },
+                            set: { enabled in run { message = try await model.setCalendarWrites(id: connection.id, enabled: enabled) } }
+                        )).font(.subheadline)
+                        if !connection.writeEnabled {
+                            Text("Read-only: events come into Nexdo, but tasks you schedule are not added to this calendar.")
+                                .font(.caption2).foregroundStyle(Color.nexdoSecondary)
+                        }
+                    }
+                    .padding(12)
+                    .background(Color.nexdoIndigo.opacity(0.035), in: RoundedRectangle(cornerRadius: 12))
+                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.nexdoIndigo.opacity(0.16)))
+                }
+            }
+        } else if model.calendarConnectionsLoaded {
+            Text("No calendars connected yet.").font(.caption).foregroundStyle(Color.nexdoSecondary)
+        }
+    }
+    private func connect() {
+        guard !saving, !connecting else { return }
+        connecting = true; failure = nil; message = nil
+        Task {
+            defer { connecting = false }
+            do {
+                let url = try await model.calendarConnectURL()
+                message = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<String, Error>) in
+                    calendarOAuth.connectGoogle(url: url, model: model) { result in
+                        if result.contains("connected") { continuation.resume(returning: result) }
+                        else { continuation.resume(throwing: OAuthError.message(result)) }
+                    }
+                }
+                await model.loadCalendarConnections()
+            } catch { failure = error.localizedDescription }
+        }
+    }
     private func card<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 16) { Text(title).font(.headline); content() }.frame(maxWidth: .infinity, alignment: .leading).padding(18).profileCard()
     }
@@ -304,6 +373,7 @@ struct ProfileSettingsView: View {
             return
         }
         #endif
+        await model.loadCalendarConnections()
         do { try await model.reloadProfile(); name = model.profile?.name ?? ""; zone = model.profile?.timeZone ?? ""; preferences = model.profile?.preference; next = model.profile?.nextAction ?? next
             if preferences == nil { failure = "Settings are unavailable. Please retry." }
         } catch { failure = error.localizedDescription }

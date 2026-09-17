@@ -66,11 +66,13 @@ export async function authenticateApple(input: { authorizationCode: string; rawN
   const existing = await prisma.user.findFirst({ where: { email, deletedAt: null } });
   if (existing) {
     await prisma.authIdentity.create({ data: { userId: existing.id, provider: 'apple', subject, refreshToken: encryptCredential(exchange.refreshToken) } });
-    return existing;
+    // Apple verified this address, so the matching account counts as verified.
+    if (existing.emailVerifiedAt) return existing;
+    return prisma.user.update({ where: { id: existing.id }, data: { emailVerifiedAt: new Date() } });
   }
   const passwordHash = await bcrypt.hash(randomBytes(32).toString('hex'), 12);
   return prisma.$transaction(async (tx) => {
-    const user = await tx.user.create({ data: { email, name, passwordHash, preference: { create: {} } } });
+    const user = await tx.user.create({ data: { email, name, passwordHash, emailVerifiedAt: new Date(), preference: { create: {} } } });
     await tx.authIdentity.create({ data: { userId: user.id, provider: 'apple', subject, refreshToken: encryptCredential(exchange.refreshToken) } });
     return user;
   });

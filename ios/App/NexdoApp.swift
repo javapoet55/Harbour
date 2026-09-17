@@ -12,6 +12,8 @@ struct NexdoApp: App {
 @MainActor
 final class AppModel: ObservableObject {
     @Published var profile: Profile?
+    @Published private(set) var calendarConnections: [CalendarConnection] = []
+    @Published private(set) var calendarConnectionsLoaded = false
     @Published private(set) var protectedTime: ProtectedTimeProposal?
     @Published private(set) var protectingTime = false
     @Published private(set) var persistentNext: ProactiveNextResponse?
@@ -153,19 +155,42 @@ final class AppModel: ObservableObject {
         catch APIError.signedOut { await reset(); error = "Please sign in again. Your session ended or the credentials were incorrect." }
         catch { self.error = errorMessage ?? (tasksLoadFailed ? "Couldn’t load your tasks. Please refresh to try again." : error.localizedDescription) }
     }
-    func login(email: String, password: String) async {
+    /// Returns the account to verify when the server requires the emailed code before signing in.
+    func login(email: String, password: String) async -> PendingEmailVerification? {
+        let address = email.trimmingCharacters(in: .whitespacesAndNewlines)
+        var pending: PendingEmailVerification?
         await perform {
-            let _: Ignore = try await api.request("/api/auth/login", method: "POST", body: JSONEncoder().encode(["email": email.trimmingCharacters(in: .whitespacesAndNewlines), "password": password]), treatUnauthorizedAsSignedOut: false)
+            do {
+                let _: Ignore = try await api.request("/api/auth/login", method: "POST", body: JSONEncoder().encode(["email": address, "password": password]), treatUnauthorizedAsSignedOut: false)
+            } catch APIError.emailNotVerified {
+                pending = PendingEmailVerification(email: address, reason: .signInRequiresVerification)
+                return
+            }
             try await finishAuthentication()
         }
+        return pending
     }
-    func register(name: String, email: String, password: String) async {
+    func register(name: String, email: String, password: String) async -> PendingEmailVerification? {
+        var pending: PendingEmailVerification?
         await perform {
             struct Input: Encodable { let name: String; let email: String; let password: String }
             let input = Input(name: name, email: email, password: password)
-            let _: Ignore = try await api.request("/api/auth/register", method: "POST", body: JSONEncoder().encode(input), treatUnauthorizedAsSignedOut: false)
-            try await finishAuthentication()
+            let response: RegistrationResponse = try await api.request("/api/auth/register", method: "POST", body: JSONEncoder().encode(input), treatUnauthorizedAsSignedOut: false)
+            // Servers without email verification start the session at registration.
+            guard response.emailVerificationRequired == true else { try await finishAuthentication(); return }
+            pending = PendingEmailVerification(email: response.email, reason: response.emailSent == false ? .codeNotSent : .codeSent)
         }
+        return pending
+    }
+    /// A correct code starts the session, so the profile loads straight after.
+    func verifyEmail(email: String, code: String) async throws {
+        struct Input: Encodable { let email: String; let code: String }
+        let _: Ignore = try await api.request("/api/auth/verify-email", method: "POST", body: JSONEncoder().encode(Input(email: email, code: code)), treatUnauthorizedAsSignedOut: false)
+        try await finishAuthentication()
+    }
+    func resendVerificationCode(email: String) async throws -> String {
+        let response: CodeDeliveryResponse = try await api.request("/api/auth/verify-email/resend", method: "POST", body: JSONEncoder().encode(["email": email]), treatUnauthorizedAsSignedOut: false)
+        return response.message
     }
     func requestPasswordReset(email: String) async -> Bool {
         var sent = false
@@ -261,12 +286,55 @@ final class AppModel: ObservableObject {
             }
         }
     }
+    // ASWebAuthenticationSession runs outside this app's ephemeral cookie jar,
+    // so the start route is authorized with a short-lived token fetched here
+    // over the authenticated API session instead.
+    func calendarConnectURL(provider: String = "google") async throws -> URL {
+        struct Issued: Decodable, Sendable { let token: String }
+        let issued: Issued = try await api.request("/api/calendar/oauth/\(provider)/connect-token", method: "POST")
+        guard !issued.token.isEmpty,
+              var components = URLComponents(url: await api.baseURL, resolvingAgainstBaseURL: false) else {
+            throw CalendarConnectError.unavailable
+        }
+        components.path = "/api/calendar/oauth/\(provider)/start"
+        components.queryItems = [URLQueryItem(name: "native", value: "1"), URLQueryItem(name: "connect_token", value: issued.token)]
+        guard let url = components.url else { throw CalendarConnectError.unavailable }
+        return url
+    }
+    enum CalendarConnectError: LocalizedError {
+        case unavailable
+        var errorDescription: String? { "Nexdo could not start the calendar connection. Please try again." }
+    }
+    func loadCalendarConnections() async {
+        struct Response: Decodable, Sendable { let connections: [CalendarConnection] }
+        do {
+            let response: Response = try await api.request("/api/calendar/connections")
+            calendarConnections = response.connections
+        } catch {
+            calendarConnections = []
+        }
+        calendarConnectionsLoaded = true
+    }
+    func setCalendarWrites(id: String, enabled: Bool) async throws -> String {
+        struct Input: Encodable, Sendable { let id: String; let writeEnabled: Bool }
+        let _: Ignore = try await api.request("/api/calendar/connections", method: "PATCH", body: JSONEncoder().encode(Input(id: id, writeEnabled: enabled)))
+        await loadCalendarConnections()
+        return enabled ? "Nexdo can now add your scheduled tasks to this calendar." : "Nexdo will no longer add events to this calendar."
+    }
+    func disconnectCalendar(id: String) async throws -> String {
+        guard let encoded = id.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) else { throw CalendarConnectError.unavailable }
+        let _: Ignore = try await api.request("/api/calendar/connections?id=\(encoded)", method: "DELETE")
+        await loadCalendarConnections()
+        refreshSupplementaryData()
+        return "Calendar disconnected. Imported events were removed with the connection."
+    }
     func syncProfileCalendars() async throws -> String {
         struct Sync: Decodable, Sendable {
             struct Result: Decodable, Sendable { let error: String? }
             let results: [Result]
         }
         let result: Sync = try await api.request("/api/calendar/sync", method: "POST")
+        await loadCalendarConnections()
         if result.results.contains(where: { $0.error != nil }) { return "Some calendars could not synchronize. Check their connections in calendar settings." }
         refreshSupplementaryData()
         return result.results.isEmpty ? "No calendars connected yet." : "Calendars synchronized."

@@ -16,7 +16,7 @@ The server URL is centralized in `App/NexdoApp.swift`. HTTPS is mandatory; there
 
 | Native surface | Existing authenticated server API | Scope |
 | --- | --- | --- |
-| Account access | `/api/auth/login`, `/api/auth/register`, `/api/auth/password-reset/*`, `/api/auth/apple`, `/api/me`, `/api/auth/logout` | Email/password registration and reset plus native Sign in with Apple; ephemeral cookie session |
+| Account access | `/api/auth/login`, `/api/auth/register`, `/api/auth/verify-email`, `/api/auth/verify-email/resend`, `/api/auth/password-reset/*`, `/api/auth/apple`, `/api/me`, `/api/auth/logout` | Email/password registration with a six-digit emailed verification code (24 hours) before the first session, password reset code (15 minutes), plus native Sign in with Apple; ephemeral cookie session |
 | Account deletion | `/api/account` | Permanent database deletion; stored Apple refresh authorization is revoked first |
 | Today / Calendar | `/api/agenda?days=3` | Server tasks/events/overdue; account timezone; multi-day event display |
 | Tasks | `/api/tasks`, `/api/tasks/[id]` | Search, open/done filter, create, edit title/notes/estimate, complete/restore |

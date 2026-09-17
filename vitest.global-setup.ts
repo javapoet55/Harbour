@@ -6,7 +6,7 @@ export default function setup() {
     throw new Error('Refusing to migrate a non-test database.');
   }
   const prismaCli = path.resolve('node_modules/prisma/build/index.js');
-  const schema = path.resolve('prisma/schema.sqlite.prisma');
+  const schema = path.resolve('prisma/sqlite/schema.prisma');
   execFileSync(process.execPath, [prismaCli, 'generate', '--schema', schema], {
     env: process.env,
     stdio: 'pipe',
