@@ -1,5 +1,5 @@
 import { focusManager, QueryClientProvider, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Stack } from 'expo-router';
+import { router, Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
 import { Alert, AppState } from 'react-native';
@@ -79,6 +79,28 @@ export function RootNavigator() {
     if (profile) setProfile(profile);
     else if (profile === null) clear();
   }, [profile, setProfile, clear]);
+
+  /**
+   * Nothing is left presented over the sign-in screen. Whatever ends the session — the Sign out
+   * button, a 401 from any request, Delete account — reaches the store, and the guards below then
+   * unmount the navigator that owns any presented modal. A modal outliving its navigator is the
+   * "GO_BACK was not handled by any navigator" warning, with the sheet still on screen; Swift has
+   * no equivalent state, because `RootView` swaps its body and the sheet goes with it.
+   *
+   * So the dismissal belongs to the TRANSITION, not to any one screen: the store notifies its
+   * subscribers synchronously inside `clear()`, while React has only scheduled the re-render, so
+   * this runs while the navigator is still mounted to receive it. `canDismiss()` makes it a no-op
+   * when nothing is presented — including when the screen already dismissed itself, as the Account
+   * sheet does so that it closes on the confirmation rather than on the logout response.
+   */
+  useEffect(
+    () =>
+      useSession.subscribe((state, previous) => {
+        if (state.status !== 'signedOut' || previous.status === 'signedOut') return;
+        if (router.canDismiss()) router.dismissAll();
+      }),
+    [],
+  );
 
   /**
    * A 401 from ANY request, on any screen, ends the session here. There is no navigation call: the

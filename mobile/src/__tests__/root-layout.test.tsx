@@ -1,25 +1,40 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, waitFor } from '@testing-library/react-native';
+import { act, render, screen, waitFor } from '@testing-library/react-native';
 
 import type { NexdoTask } from '../api';
 import { useCoordinator } from '../actions/coordinator';
+import { createApiClient } from '../api/client';
 import { queryKeys } from '../query/keys';
 import { useSession } from '../store/session';
 
+const mockCanDismiss = jest.fn(() => false);
+const mockDismissAll = jest.fn();
+// `Screen` renders a marker and `Protected` honours its guard, so which group is mounted — and when
+// it stops being mounted — is assertable from the tree.
 jest.mock('expo-router', () => {
   const { View } = require('react-native') as typeof import('react-native');
   function Stack({ children }: { children?: React.ReactNode }) {
     return <View>{children}</View>;
   }
-  function Screen() {
-    return null;
+  function Screen({ name }: { name: string }) {
+    return <View testID={`screen-${name}`} />;
   }
-  function Protected({ children }: { children?: React.ReactNode }) {
-    return <View>{children}</View>;
+  function Protected({ children, guard }: { children?: React.ReactNode; guard: boolean }) {
+    return guard ? <View>{children}</View> : null;
   }
   Stack.Screen = Screen;
   Stack.Protected = Protected;
-  return { Stack, router: { push: jest.fn(), replace: jest.fn(), back: jest.fn() }, useLocalSearchParams: () => ({}) };
+  return {
+    Stack,
+    router: {
+      push: jest.fn(),
+      replace: jest.fn(),
+      back: jest.fn(),
+      canDismiss: () => mockCanDismiss(),
+      dismissAll: () => mockDismissAll(),
+    },
+    useLocalSearchParams: () => ({}),
+  };
 });
 
 // The notification wiring has its own suite; here it would only add listeners.
@@ -27,8 +42,12 @@ jest.mock('../actions/useActionNotifications', () => ({ useActionNotifications: 
 
 const mockMe = jest.fn();
 const mockTasks = jest.fn();
+// `onSignedOut` is captured rather than stubbed: the tests below fire the handler the gate itself
+// installs, through a real client answering 401.
+const mockOnSignedOut = jest.fn();
 jest.mock('../api', () => ({
   ...jest.requireActual('../api'),
+  onSignedOut: (handler: () => void) => mockOnSignedOut(handler),
   endpoints: {
     me: (...args: unknown[]) => mockMe(...args),
     tasks: (...args: unknown[]) => mockTasks(...args),
@@ -124,5 +143,72 @@ describe('the root layout’s view of the task cache', () => {
 
     await waitFor(() => expect(useSession.getState().status).toBe('signedOut'));
     expect(useCoordinator.getState().actions).toEqual([]);
+  });
+});
+
+/**
+ * A sheet is presented from a tab — the Account sheet, say — and then the session ends. The guards
+ * unmount the navigator that owns it, so a dismissal that arrives afterwards has nothing left to
+ * handle it: "GO_BACK was not handled by any navigator", with the sheet still on screen over the
+ * sign-in view. The gate therefore dismisses on the TRANSITION, before React re-renders the guards,
+ * and it does so for every path into `signedOut` — not just the Sign out button.
+ */
+describe('a session that ends while a sheet is presented', () => {
+  /** A 401 from any request, answered by the handler `RootNavigator` installs through `onSignedOut`. */
+  function respondWith401() {
+    const handler = mockOnSignedOut.mock.calls.at(-1)?.[0] as () => void;
+    const client = createApiClient({
+      baseUrl: 'https://example.com',
+      onSignedOut: handler,
+      fetch: async () => new Response('', { status: 401 }),
+    });
+    return act(async () => {
+      await expect(client.get('/api/tasks')).rejects.toMatchObject({ code: 'SIGNED_OUT' });
+    });
+  }
+
+  it('dismisses the sheet before the guards swap to the auth group', async () => {
+    await show(makeClient());
+    await waitFor(() => expect(screen.getByTestId('screen-(tabs)')).toBeTruthy());
+
+    // The sheet is up over the tabs.
+    mockCanDismiss.mockReturnValue(true);
+    const tabsStillMounted: boolean[] = [];
+    mockDismissAll.mockImplementation(() => {
+      // The navigator that owns the sheet has to be there to receive this.
+      tabsStillMounted.push(screen.queryByTestId('screen-(tabs)') !== null);
+      mockCanDismiss.mockReturnValue(false);
+    });
+
+    await respondWith401();
+
+    expect(mockDismissAll).toHaveBeenCalledTimes(1);
+    expect(tabsStillMounted).toEqual([true]);
+    // ...and only then does the gate swap groups, with nothing left presented over it.
+    await waitFor(() => expect(screen.queryByTestId('screen-(tabs)')).toBeNull());
+    expect(screen.getByTestId('screen-(auth)')).toBeTruthy();
+  });
+
+  it('dismisses nothing when no sheet is presented', async () => {
+    await show(makeClient());
+    await waitFor(() => expect(screen.getByTestId('screen-(tabs)')).toBeTruthy());
+
+    mockCanDismiss.mockReturnValue(false);
+    await respondWith401();
+
+    expect(mockDismissAll).not.toHaveBeenCalled();
+    await waitFor(() => expect(screen.getByTestId('screen-(auth)')).toBeTruthy());
+  });
+
+  /** The same 401 burst `onSignedOut` is idempotent against must not dismiss the screen behind it. */
+  it('dismisses once for a burst of 401s, not once each', async () => {
+    await show(makeClient());
+    await waitFor(() => expect(screen.getByTestId('screen-(tabs)')).toBeTruthy());
+
+    mockCanDismiss.mockReturnValue(true);
+    await respondWith401();
+    await respondWith401();
+
+    expect(mockDismissAll).toHaveBeenCalledTimes(1);
   });
 });
