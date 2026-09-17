@@ -51,7 +51,8 @@ export default function TodayLayout() {
       <Stack.Screen name="schedule-check" options={{ title: 'Schedule check' }} />
       <Stack.Screen name="overdue" options={{ title: 'Unfinished deadlines' }} />
       <Stack.Screen name="weekly-summary" options={{ title: 'Weekly Summary' }} />
-      <Stack.Screen name="weekly-tasks" options={{ title: 'Tasks' }} />
+      {/* The title follows the filter, so `weekly-tasks` sets its own. */}
+      <Stack.Screen name="weekly-tasks" />
     </Stack>
   );
 }

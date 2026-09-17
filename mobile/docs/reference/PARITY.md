@@ -196,28 +196,53 @@ the bar survives, and a regression would be silent.
 Only screens with **both** captures can carry a percentage. Android captures exist for two screens
 so far; the rest of this table fills in as each group is done.
 
-| Screen | State | Before | After | Remaining gaps |
-| --- | --- | --- | --- | --- |
-| Project editor | default, light | 7.17% | **6.89%** | essentially a match |
-| Tasks | default, light | 13.54% | **12.01%** | empty-state glyph (SF Symbol gap); tab-bar y offset |
-| Project unassigned | default, light | — | 12.40% | measured before the tab bar was restored; needs a re-capture |
-| Tasks | search open, light | — | **12.68%** | as Tasks default |
-| Projects | default, light | 14.17% | **13.71%** | cumulative drift below the fold |
-| Project detail | default, light | 14.35% | **13.39%** | tab bar restored; cumulative drift below the fold |
-| Tasks | list (All), light | — | **16.04%** | drift; row badge glyph |
-| Task editor | default, light | 18.67% | **16.85%** | Swift presents a detent sheet, so it opens already scrolled; Android is a full page |
-| Tasks | list scrolled, light | — | **17.59%** | scroll offset cannot be matched exactly between devices |
-| Sign in | empty, dark | — | 19.09% | Apple button absent on Android by design — **not re-measured at font scale 1.0** |
-| Sign in | empty, light | — | 19.21% | as above — **not re-measured** |
-| Tasks | default, dark | 28.49% | **21.45%** | empty-state glyph; backdrop tint |
-| Sign up | empty, light | — | 23.09% | nav-bar pill (iOS 26) — **not re-measured** |
-| Today | default, light | — | 33.12% | longest screen — **not re-measured** |
-| Reset password | empty, light | — | 3.68% | essentially a match — **not re-measured** |
-| Task filters | default, light | 79.95% | **68.82%** | the content now matches; the figure is almost all detent — iOS draws the Tasks screen behind a half-height sheet where Android fills the page |
-| Sign in | keyboard, email focused | — | n/a | not measurable as a full-screen diff — see below |
+| Screen | Android vs Swift | Note |
+| --- | ---: | --- |
+| Action queue | **3.38%** | |
+| Needs your attention | **4.10%** | |
+| Schedule conflicts | **4.11%** | |
+| Overdue | **6.08%** | |
+| Schedule check | **6.77%** | |
+| Account, My Page | **6.79%** | |
+| Project editor | **6.89%** | |
+| Free form Text | **9.17%** | |
+| Do Now | **9.98%** | |
+| Calendar, month | **10.74%** | |
+| Add calendar event | **11.76%** | |
+| Weekly tasks | **11.80%** | |
+| Tasks | **12.01%** | |
+| Calendar, week | **12.21%** | |
+| Project, unassigned | 12.40% | measured before the tab bar was restored; needs a re-capture |
+| Tasks, search open | **12.68%** | |
+| Project detail | **13.39%** | from 14.46% |
+| Weather forecast | **13.55%** | |
+| Projects | **13.71%** | |
+| Calendar, Schedule | **13.83%** | |
+| Tasks, list | **16.04%** | |
+| Task editor | **16.85%** | Swift opens at a detent, already scrolled |
+| Ask, answered turn | **17.50%** | |
+| Tasks, list scrolled | **17.59%** | scroll offset cannot be matched exactly |
+| Task action | **18.26%** | the residue is a data difference: iOS had Contacts denied and shows the permission line, Android never asked |
+| Profile and settings | **18.47%** | |
+| Today | **20.41%** | from 27.79% |
+| Tasks, dark | **21.45%** | |
+| Weekly Summary | **23.17%** | |
+| Today, 3 days | **24.54%** | |
+| Today, 5 days | **24.62%** | |
+| Today, action needed | **25.58%** | from 53.13% |
+| Ask, suggestions | 36.21% | **detent** — content matches |
+| Event details | 59.79% | **presentation** — content matches; see SHARED-REQUESTS |
+| Task filters | 68.82% | **detent** — from 79.95% |
+| AI consent | 97.65% | **detent** — content matches |
+| Reset password | 3.68% | **not re-measured** at font scale 1.0 |
+| Sign in, dark | 19.09% | **not re-measured** |
+| Sign in | 19.21% | **not re-measured** |
+| Sign up | 23.09% | **not re-measured** |
+| Sign in, keyboard | n/a | not measurable as a full-screen diff — see below |
 
-Rows marked **not re-measured** were captured at the phone's old 0.9 font scale and are kept only so
-the trend is visible. They need a fresh Android capture before they mean anything.
+**41 screens now have a capture on both platforms.** The four auth rows were measured while the phone
+was still at font scale 0.9 and are kept only so the trend is visible; they need a fresh Android
+capture at 1.0 before they mean anything.
 
 All figures are content-aligned (see Tooling) and were re-measured together after the alignment
 change, so they are comparable with each other but not with anything quoted earlier in the session.
@@ -372,12 +397,64 @@ and carries none. The Android card now measures (241, 241, 243) against Swift's 
 Worth re-reading the rest of the accepted-gaps list the same way: a gap that was true when it was
 written may have been closed by a later phase.
 
+## The reminder screens, and the data it took to reach them
+
+Screens 8, 31 and 32 had never been captured on either platform, because they only exist when the
+account has a **contact-shaped task** — `DeterministicTaskActionDetector` matches a title like
+"Call Damien" (TaskActionDetector.swift:6-33) and schedules a local notification at the task's time.
+
+Three things had to be true first, and the first was a real fault in the test setup rather than the
+app: **notifications were disabled for the app on the phone** (`dumpsys notification` reported
+`importance=NONE`), so no reminder could ever have fired. After
+`pm grant … POST_NOTIFICATIONS`, the reminder fired on time.
+
+Neither app can set a task's *time* — Swift's picker is `displayedComponents: .date`
+(RootView.swift:2040) and Android's is date-only too, which is correct parity — so a task created for
+today is scheduled at the current time and its reminder fires immediately.
+
+| Screen | Android vs Swift | How it was reached |
+| --- | ---: | --- |
+| Action queue (8) | **3.38%** | "View all" on the Next up card, which needs a *second* action |
+| Task action (31) | **18.26%** | a channel button on the action card |
+| Today, action needed | **25.58%** | one contact-shaped task |
+
+Screen 32 — the message and email composers — is the system composer on both platforms and is
+already recorded as a §20 gap; it is not a screen this app draws.
+
+### Faults the reminder captures exposed
+
+| Fault | Swift | Android before |
+| --- | --- | --- |
+| The Action Needed card was flat white with an opaque fill | `ActionGlass`: `.ultraThinMaterial` + `nexdoIndigo` 22% stroke (TodayActionsView.swift:48-54) | `colors.surface` |
+| "Remind me later" and "Dismiss" were **outlined** | `.buttonStyle(.bordered)` is a **filled** tinted capsule, measured (206, 202, 241) over a (238, 238, 241) card — the tint at 18% | a hairline border |
+| The Daily Briefing row was an opaque card | `.ultraThinMaterial` (RootView.swift:1070) | `colors.surface` |
+| "Remind me in 15 minutes" and "Dismiss" were indigo | `.foregroundStyle(Color.nexdoInk)` on the whole view (TaskActionView.swift:209); the buttons carry no `.buttonStyle`, so the label is ink — iOS (0, 0, 22) | the tint, (61, 41, 240) |
+
+`.buttonStyle(.bordered)` is worth remembering: in SwiftUI it **fills**, and reading it as "bordered
+= outline" is a natural mistake that had been made twice.
+
+### A gradient stroke cannot be reproduced on a glass card
+
+Swift strokes the Action Needed card with `NexdoTheme.gradient` at 1.5pt
+(TodayActionsView.swift:130). The usual React Native workaround is a `LinearGradient` *behind* the
+card with 1.5 of padding, which is what `ActionCardRing` does — and it cannot be used here, because
+the card is glass and the blur samples the gradient straight through, turning the whole card blue.
+That was measured, not assumed: the diff went from 32% to 65% when it was tried. A gradient stroke
+needs a mask over the card, not a fill behind it. The solid `nexdoIndigo` border stays as the
+approximation, and this is now a recorded gap.
+
+### Weekly tasks had a hardcoded title
+
+`.navigationTitle("\(filter.rawValue) tasks")` (WeeklySummaryView.swift:307) — "Completed tasks",
+"Overdue tasks". The route declared a static `title: 'Tasks'`, so every filter showed the same word.
+Now set from the screen, which is where the filter lives.
+
 ### Still uncaptured in this group
 
-- **`weekly-tasks`** — captured on Android, no Swift reference yet; the driver stopped responding to
-  the Weekly Summary card before it could be shot.
-- **`schedule-check`** — neither platform. It opens from a schedule-gap attention item, and this
-  account's attention list holds only the Overdue row.
+Both now have captures on both platforms. `schedule-check` needed a schedule-gap attention item,
+which the account did not have; creating a contact task that overlapped the test calendar event
+produced a **CONFLICT** attention row — "Call Damien at 6:16 PM overlaps Parity reference event" —
+which is exactly that item. No overlapping events had to be created on the web app.
 
 ### Three of those figures measure presentation, not styling
 

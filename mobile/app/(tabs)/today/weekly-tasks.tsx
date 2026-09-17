@@ -1,4 +1,4 @@
-import { router, useLocalSearchParams } from 'expo-router';
+import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 
@@ -63,6 +63,10 @@ export default function WeeklyTasks() {
       contentContainerStyle={styles.scroll}
       refreshControl={<RefreshControl refreshing={query.isRefetching} onRefresh={() => void query.refetch()} />}
     >
+      {/* `.navigationTitle("\(filter.rawValue) tasks")` (WeeklySummaryView.swift:307): the title
+          follows the filter — "Completed tasks", "Overdue tasks" — and is not a static "Tasks". It
+          is set here rather than in `_layout.tsx` because it depends on this screen's own state. */}
+      <Stack.Screen options={{ title: `${filter} tasks` }} />
       <View style={[styles.section, { backgroundColor: theme.colors.surface }]}>
         <View style={styles.row}>
           <Text style={[styles.heading, { color: theme.colors.ink }]} testID="weekly-tasks-range">

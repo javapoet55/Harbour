@@ -8,10 +8,31 @@ import { useSession } from '../store/session';
 const mockPush = jest.fn();
 const mockReplace = jest.fn();
 const mockParams = jest.fn(() => ({}) as Record<string, string>);
-jest.mock('expo-router', () => ({
-  router: { push: (...args: unknown[]) => mockPush(...args), replace: (...args: unknown[]) => mockReplace(...args), back: jest.fn() },
-  useLocalSearchParams: () => mockParams(),
-}));
+jest.mock('expo-router', () => {
+  const { View } = require('react-native') as typeof import('react-native');
+  // `weekly-tasks` sets its own title through `<Stack.Screen options>`, because the title follows the
+  // filter (WeeklySummaryView.swift:307). Rendering the header items keeps them reachable here.
+  function Screen({
+    options,
+  }: {
+    options?: { headerLeft?: () => React.ReactNode; headerRight?: () => React.ReactNode };
+  }) {
+    return (
+      <View>
+        {options?.headerLeft?.()}
+        {options?.headerRight?.()}
+      </View>
+    );
+  }
+  function StackRoot({ children }: { children?: React.ReactNode }) {
+    return <View>{children}</View>;
+  }
+  return {
+    router: { push: (...args: unknown[]) => mockPush(...args), replace: (...args: unknown[]) => mockReplace(...args), back: jest.fn() },
+    useLocalSearchParams: () => mockParams(),
+    Stack: Object.assign(StackRoot, { Screen }),
+  };
+});
 
 const mockTasks = jest.fn();
 const mockWeekly = jest.fn();

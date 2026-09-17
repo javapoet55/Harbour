@@ -7,6 +7,7 @@ import type { StoredTaskAction, TaskActionChannel } from '../lib/taskAction';
 import { notificationDate } from '../lib/taskAction';
 import type { TodayActionQueue } from '../lib/todayActionQueue';
 import { brand, useTheme } from '../theme';
+import { GlassCard } from './GlassCard';
 import { withAlpha } from './SignInBackdrop';
 import { TaskSymbol, type TaskSymbolName } from './TaskSymbol';
 import { Text } from './Text';
@@ -37,10 +38,17 @@ function timeLabel(at: number, timeZone: string): string {
   return new Intl.DateTimeFormat('en-US', { timeZone, hour: 'numeric', minute: '2-digit' }).format(new Date(at));
 }
 
-/** `ActionGlass` (TodayActionsView.swift:48-54). */
-function glassStyle(surface: string) {
-  return { backgroundColor: surface, borderColor: withAlpha(brand.nexdoIndigo, 0.22) };
-}
+/**
+ * `ActionGlass` (TodayActionsView.swift:48-54):
+ *
+ *   .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 22))
+ *   .overlay(RoundedRectangle(cornerRadius: 22).stroke(Color.nexdoIndigo.opacity(0.22)))
+ *
+ * `GlassCard` reproduces `.ultraThinMaterial` with `expo-blur`. It was written for the auth cards and
+ * nothing outside auth had reached for it, so these cards filled with an opaque `surface` and read as
+ * flat white against the lavender backdrop. Swift's card measures (238, 238, 241).
+ */
+const ACTION_GLASS_STROKE = withAlpha(brand.nexdoIndigo, 0.22);
 
 export function TodayActionsView({
   queue,
@@ -76,7 +84,8 @@ export function TodayActionsView({
       ) : null}
 
       {next.length > 0 ? (
-        <View style={[styles.card, glassStyle(theme.colors.surface)]} testID="today-actions-next">
+        <GlassCard radius={22} shadow={false} stroke={ACTION_GLASS_STROKE}>
+        <View style={styles.card} testID="today-actions-next">
           <View style={styles.row}>
             <TaskSymbol color={theme.colors.ink} name="clock" size={17} />
             <Text style={[styles.headline, { color: theme.colors.ink }]}>Next up</Text>
@@ -95,6 +104,7 @@ export function TodayActionsView({
             </View>
           ))}
         </View>
+        </GlassCard>
       ) : null}
     </View>
   );
@@ -127,10 +137,14 @@ export function ActionNeededCard({
   const at = notificationDate(action) ?? now;
 
   return (
-    <View
-      style={[styles.card, styles.primaryCard, glassStyle(theme.colors.surface)]}
-      testID="today-actions-primary"
-    >
+    // VISUAL GAP: Swift strokes this card with `NexdoTheme.gradient` at 1.5pt
+    // (TodayActionsView.swift:130). React Native cannot stroke a border with a gradient, and the
+    // usual workaround — a `LinearGradient` behind the card, which is what `ActionCardRing` does —
+    // cannot be used here: the card is glass, and the blur samples the gradient straight through, so
+    // the whole card turns blue. A gradient stroke needs a mask over the card, not behind it. The
+    // solid `nexdoIndigo` border is the approximation; the glass fill is the part worth having.
+    <GlassCard radius={22} shadow={false} stroke={ACTION_GLASS_STROKE} style={styles.primaryRing}>
+    <View style={[styles.card, styles.primaryCard]} testID="today-actions-primary">
       <View style={styles.rowTop}>
         <TaskSymbol color="#FF2D55" name="bell.fill" size={17} />
         <Text style={[styles.headline, styles.grow, { color: '#FF2D55' }]}>Action Needed</Text>
@@ -212,7 +226,7 @@ export function ActionNeededCard({
           accessibilityLabel={`Dismiss ${action.contactName} action`}
           accessibilityRole="button"
           onPress={() => useCoordinator.getState().dismiss(action.id)}
-          style={[styles.bordered, { borderColor: theme.colors.tint }]}
+          style={[styles.bordered, { backgroundColor: withAlpha(brand.nexdoIndigo, 0.18) }]}
           testID="today-actions-dismiss"
         >
           <TaskSymbol color={theme.colors.tint} name="xmark" size={15} />
@@ -220,6 +234,7 @@ export function ActionNeededCard({
         </Pressable>
       </View>
     </View>
+    </GlassCard>
   );
 }
 
@@ -234,7 +249,7 @@ export function SnoozeMenu({ action }: { action: StoredTaskAction }) {
         accessibilityLabel={`Remind ${action.contactName} task later`}
         accessibilityRole="button"
         onPress={() => setOpen(true)}
-        style={[styles.bordered, { borderColor: theme.colors.tint }]}
+        style={[styles.bordered, { backgroundColor: withAlpha(brand.nexdoIndigo, 0.18) }]}
         testID="today-actions-snooze"
       >
         <TaskSymbol color={theme.colors.tint} name="clock" size={15} />
@@ -323,7 +338,8 @@ const styles = StyleSheet.create({
 
   // `.padding(16)` / `.padding(18)` with corner radius 22.
   card: { gap: 12, padding: 16, borderRadius: 22, borderWidth: StyleSheet.hairlineWidth },
-  primaryCard: { gap: 14, padding: 18, borderWidth: 1.5, borderColor: brand.nexdoIndigo },
+  primaryCard: { gap: 14, padding: 18 },
+  primaryRing: { borderWidth: 1.5, borderColor: brand.nexdoIndigo, borderRadius: 22 },
   ring: { borderRadius: 22, padding: 1.5 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   rowTop: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
@@ -334,7 +350,9 @@ const styles = StyleSheet.create({
   context: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, borderRadius: 14 },
   channelRow: { flexDirection: 'row', gap: 10 },
   channel: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 76, borderRadius: 16 },
-  bordered: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, minHeight: 44, borderRadius: 12, borderWidth: StyleSheet.hairlineWidth },
+  // `.buttonStyle(.bordered)` fills with the tint; it is not an outline. Measured off the Swift
+  // app: (206, 202, 241) over a (238, 238, 241) card, which is `nexdoIndigo` at 18%.
+  bordered: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, minHeight: 44, borderRadius: 12 },
 
   nextRow: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 54 },
   nextTime: { width: 78, gap: 3 },

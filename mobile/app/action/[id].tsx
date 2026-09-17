@@ -335,7 +335,10 @@ export default function TaskAction() {
               }}
               testID="action-snooze"
             >
-              <Text style={[theme.typography.body, { color: theme.colors.tint }]}>Remind me in 15 minutes</Text>
+              {/* `Button("Remind me in 15 minutes")` (TaskActionView.swift:186) carries no
+                  `.buttonStyle`, and the view sets `.foregroundStyle(Color.nexdoInk)` (`:209`), so the
+                  label is ink — not the tint. Measured: iOS (0, 0, 22), Android was (61, 41, 240). */}
+              <Text style={[theme.typography.body, { color: theme.colors.ink }]}>Remind me in 15 minutes</Text>
             </Pressable>
 
             <Pressable
@@ -349,7 +352,7 @@ export default function TaskAction() {
               }}
               testID="action-dismiss"
             >
-              <Text style={[theme.typography.body, { color: theme.colors.tint }]}>Dismiss</Text>
+              <Text style={[theme.typography.body, { color: theme.colors.ink }]}>Dismiss</Text>
             </Pressable>
 
             {action.contactIdentifier ? (

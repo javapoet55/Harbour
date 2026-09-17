@@ -178,7 +178,10 @@ export default function Today() {
           Swift shows INSTEAD when the action queue has immediate actions (`:1063-1070`).
         */}
         {queue.hasImmediateActions ? (
-          <View style={[styles.briefingRow, { backgroundColor: theme.colors.surface, borderColor: withAlpha(brand.nexdoIndigo, 0.12) }]}>
+          // `.padding(16).background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 20))`
+          // (RootView.swift:1070) — the compact row is glass too, not an opaque card.
+          <GlassCard radius={20} shadow={false} stroke={withAlpha(brand.nexdoIndigo, 0.12)}>
+          <View style={styles.briefingRow}>
             <Pressable
               accessibilityLabel="Daily Briefing"
               accessibilityRole="button"
@@ -199,6 +202,7 @@ export default function Today() {
               <Text style={[styles.caption, { color: theme.colors.tint }]}>Weekly Summary</Text>
             </Pressable>
           </View>
+          </GlassCard>
         ) : (
           <Pressable
             accessibilityRole="button"
@@ -367,7 +371,7 @@ const styles = StyleSheet.create({
   rangeOption: { flex: 1, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
   rangeLabel: { fontSize: 15, lineHeight: 20, fontWeight: '500' },
   // The compact Daily Briefing row (RootView.swift:1063-1070): `.padding(16)`, corner radius 20.
-  briefingRow: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16, borderRadius: 20, borderWidth: StyleSheet.hairlineWidth },
+  briefingRow: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16 },
   briefingButton: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 32 },
   summaryCard: { flexDirection: 'row', alignItems: 'center', gap: 14, padding: 16 },
   summaryIcon: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
