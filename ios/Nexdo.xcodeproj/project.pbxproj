@@ -5,25 +5,24 @@
 	};
 	objectVersion = 71;
 	objects = {
-        C10000000000000000000001 = {isa = PBXNativeTarget; buildConfigurationList = C10000000000000000000002; buildPhases = (C10000000000000000000005, C10000000000000000000006, C10000000000000000000007); buildRules = (); dependencies = (C10000000000000000000008); fileSystemSynchronizedGroups = (C10000000000000000000010); name = NexdoMomentUITests; productName = NexdoMomentUITests; productReference = C10000000000000000000011; productType = "com.apple.product-type.bundle.ui-testing"; };
-        C10000000000000000000002 = {isa = XCConfigurationList; buildConfigurations = (C10000000000000000000003, C10000000000000000000004); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
-        C10000000000000000000003 = {isa = XCBuildConfiguration; buildSettings = {GENERATE_INFOPLIST_FILE = YES; PRODUCT_BUNDLE_IDENTIFIER = com.pinslots.nexdo.MomentUITests; PRODUCT_NAME = "$(TARGET_NAME)"; TEST_TARGET_NAME = Nexdo; SDKROOT = iphoneos; IPHONEOS_DEPLOYMENT_TARGET = 17.0; SWIFT_VERSION = 6.0; TARGETED_DEVICE_FAMILY = 1; }; name = Debug; };
-        C10000000000000000000004 = {isa = XCBuildConfiguration; buildSettings = {GENERATE_INFOPLIST_FILE = YES; PRODUCT_BUNDLE_IDENTIFIER = com.pinslots.nexdo.MomentUITests; PRODUCT_NAME = "$(TARGET_NAME)"; TEST_TARGET_NAME = Nexdo; SDKROOT = iphoneos; IPHONEOS_DEPLOYMENT_TARGET = 17.0; SWIFT_VERSION = 6.0; TARGETED_DEVICE_FAMILY = 1; }; name = Release; };
-        C10000000000000000000005 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
-        C10000000000000000000006 = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
-        C10000000000000000000007 = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
-        C10000000000000000000008 = {isa = PBXTargetDependency; target = A00000000000000000000002; targetProxy = C10000000000000000000009; };
-        C10000000000000000000009 = {isa = PBXContainerItemProxy; containerPortal = A00000000000000000000001; proxyType = 1; remoteGlobalIDString = A00000000000000000000002; remoteInfo = Nexdo; };
-        C10000000000000000000010 = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = Tests/MomentUITests; sourceTree = "<group>"; };
-        C10000000000000000000011 = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = NexdoMomentUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-
 
 /* Begin PBXBuildFile section */
 		10F35F4F304E3F3500D2D029 /* Media.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 10F35F4E304E3F3500D2D029 /* Media.xcassets */; };
 		B00000000000000000000001 /* WebRTC in Frameworks */ = {isa = PBXBuildFile; productRef = B00000000000000000000002 /* WebRTC */; };
 /* End PBXBuildFile section */
 
+/* Begin PBXContainerItemProxy section */
+		C10000000000000000000009 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A00000000000000000000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A00000000000000000000002;
+			remoteInfo = Nexdo;
+		};
+/* End PBXContainerItemProxy section */
+
 /* Begin PBXFileReference section */
+		10943B34305B60B900606E29 /* NexdoMomentUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = NexdoMomentUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		10F35F4E304E3F3500D2D029 /* Media.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Media.xcassets; sourceTree = "<group>"; };
 		A00000000000000000000012 /* Nexdo: AI Daily Planner.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Nexdo: AI Daily Planner.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -31,6 +30,7 @@
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		A00000000000000000000010 /* App */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = App; sourceTree = "<group>"; };
 		A00000000000000000000011 /* Sources/NexdoCore */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = Sources/NexdoCore; sourceTree = "<group>"; };
+		C10000000000000000000010 /* Tests/MomentUITests */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = Tests/MomentUITests; sourceTree = "<group>"; };
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -42,13 +42,20 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		C10000000000000000000006 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
 		A00000000000000000000004 = {
 			isa = PBXGroup;
 			children = (
-                C10000000000000000000010,
+				C10000000000000000000010 /* Tests/MomentUITests */,
 				10F35F4E304E3F3500D2D029 /* Media.xcassets */,
 				A00000000000000000000010 /* App */,
 				A00000000000000000000011 /* Sources/NexdoCore */,
@@ -60,6 +67,7 @@
 			isa = PBXGroup;
 			children = (
 				A00000000000000000000012 /* Nexdo: AI Daily Planner.app */,
+				10943B34305B60B900606E29 /* NexdoMomentUITests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -90,6 +98,27 @@
 			productName = Nexdo;
 			productReference = A00000000000000000000012 /* Nexdo: AI Daily Planner.app */;
 			productType = "com.apple.product-type.application";
+		};
+		C10000000000000000000001 /* NexdoMomentUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = C10000000000000000000002 /* Build configuration list for PBXNativeTarget "NexdoMomentUITests" */;
+			buildPhases = (
+				C10000000000000000000005 /* Sources */,
+				C10000000000000000000006 /* Frameworks */,
+				C10000000000000000000007 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				C10000000000000000000008 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				C10000000000000000000010 /* Tests/MomentUITests */,
+			);
+			name = NexdoMomentUITests;
+			productName = NexdoMomentUITests;
+			productReference = 10943B34305B60B900606E29 /* NexdoMomentUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
 		};
 /* End PBXNativeTarget section */
 
@@ -126,7 +155,7 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-                C10000000000000000000001,
+				C10000000000000000000001 /* NexdoMomentUITests */,
 				A00000000000000000000002 /* Nexdo */,
 			);
 		};
@@ -141,6 +170,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		C10000000000000000000007 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -151,7 +187,22 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		C10000000000000000000005 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		C10000000000000000000008 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = A00000000000000000000002 /* Nexdo */;
+			targetProxy = C10000000000000000000009 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		A00000000000000000000013 /* Debug */ = {
@@ -315,6 +366,34 @@
 			};
 			name = Release;
 		};
+		C10000000000000000000003 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.pinslots.nexdo.MomentUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				TEST_TARGET_NAME = Nexdo;
+			};
+			name = Debug;
+		};
+		C10000000000000000000004 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.pinslots.nexdo.MomentUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				TEST_TARGET_NAME = Nexdo;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -332,6 +411,15 @@
 			buildConfigurations = (
 				A00000000000000000000015 /* Debug */,
 				A00000000000000000000016 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		C10000000000000000000002 /* Build configuration list for PBXNativeTarget "NexdoMomentUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				C10000000000000000000003 /* Debug */,
+				C10000000000000000000004 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

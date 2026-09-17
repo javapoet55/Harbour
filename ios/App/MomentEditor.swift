@@ -11,37 +11,169 @@ struct MomentEditor: View {
     @State private var date = Date()
     @State private var initialized = false
     @State private var dateConfirmed = true
+    @State private var choosingRecipient = false
+    @State private var festivalRecipients: [FestivalRecipient] = []
+    @State private var savedRecipientIDs: Set<String> = []
+
+    private enum Field: Hashable { case title, firstName, phone, email }
+    @FocusState private var focusedField: Field?
     var body: some View {
         Form {
             Section("Important moment") {
-                Picker("Type", selection: $input.type) { ForEach(["birthday","anniversary","festival","custom"], id: \.self) { Text($0.capitalized).tag($0) } }
-                TextField("Title", text: $input.title)
+                Picker("Type", selection: Binding(get: { input.type }, set: { type in
+                    let previousDefault = defaultTitle(for: input.type)
+                    input.type = type
+                    if let title = defaultTitle(for: type) {
+                        input.title = title
+                    } else if input.title == previousDefault {
+                        input.title = ""
+                    }
+                })) { ForEach(["birthday","anniversary","festival","custom"], id: \.self) { Text($0.capitalized).tag($0) } }.accessibilityIdentifier("moment-type")
+                TextField("Title", text: $input.title).focused($focusedField, equals: .title).submitLabel(.done)
                 DatePicker("Date", selection: $date, displayedComponents: .date).environment(\.timeZone, TimeZone(identifier: input.timeZoneID) ?? .current)
                 Picker("Time zone", selection: $input.timeZoneID) { ForEach(TimeZone.knownTimeZoneIdentifiers, id: \.self) { Text($0) } }
                 if !dateConfirmed { Toggle("I have confirmed the event date", isOn: $dateConfirmed) }
                 Toggle("Repeat yearly", isOn: $input.yearly)
                 Text("February 29 is observed on February 28 in non-leap years. Dates for festivals with moving calendars must be confirmed each year.").font(.caption)
-            }
-            Section("Recipient") {
-                TextField("First name", text: $input.firstName)
-                TextField("Phone (optional)", text: $input.phone).keyboardType(.phonePad)
-                TextField("Email (optional)", text: $input.email).keyboardType(.emailAddress).textInputAutocapitalization(.never).autocorrectionDisabled()
+            }.disabled(!savedRecipientIDs.isEmpty)
+            Section(input.type == "festival" ? "Recipients" : "Recipient") {
+                Button {
+                    focusedField = nil
+                    choosingRecipient = true
+                } label: {
+                    Label(input.type == "festival" ? "Choose multiple contacts" : "Choose from Contacts", systemImage: "person.crop.circle.badge.plus")
+                }
+                if input.type == "festival" && !festivalRecipients.isEmpty {
+                    Text("\(festivalRecipients.count) contacts selected").font(.subheadline)
+                    ForEach($festivalRecipients) { $recipient in
+                        VStack(alignment: .leading) {
+                            HStack {
+                                Text(recipient.displayName).font(.headline)
+                                Spacer()
+                                Button(role: .destructive) {
+                                    festivalRecipients.removeAll { $0.id == recipient.id }
+                                } label: { Image(systemName: "minus.circle") }
+                                .buttonStyle(.borderless)
+                                .accessibilityLabel("Remove \(recipient.displayName)")
+                            }
+                            TextField("First name", text: $recipient.firstName).focused($focusedField, equals: .firstName).submitLabel(.done)
+                            TextField("Phone (optional)", text: $recipient.phone).keyboardType(.phonePad).focused($focusedField, equals: .phone)
+                            TextField("Email (optional)", text: $recipient.email).keyboardType(.emailAddress).textInputAutocapitalization(.never).autocorrectionDisabled().focused($focusedField, equals: .email)
+                        }
+                    }
+                    Text("A separate festival moment is saved for each person. Review and approve each wish before sending.").font(.caption)
+                } else {
+                TextField("First name", text: $input.firstName).focused($focusedField, equals: .firstName).submitLabel(.done)
+                TextField("Phone (optional)", text: $input.phone).keyboardType(.phonePad).focused($focusedField, equals: .phone)
+                TextField("Email (optional)", text: $input.email).keyboardType(.emailAddress).textInputAutocapitalization(.never).autocorrectionDisabled().focused($focusedField, equals: .email).submitLabel(.done)
+                }
                 Text("Only the recipient and occasion you confirm here are saved to your Nexdo account. Your address book is never uploaded.").font(.caption)
+            }.disabled(!savedRecipientIDs.isEmpty)
+            if !savedRecipientIDs.isEmpty {
+                Text("\(savedRecipientIDs.count) recipients saved. Tap Save again to retry the remaining recipients.").font(.caption)
             }
             if let moment { Section { Toggle("Show reminders", isOn: Binding(get: { store.moments.first { $0.id == moment.id }?.enabled ?? moment.enabled }, set: { value in Task { await store.perform { try await store.visibility(moment, enabled: value) } } })) } }
             if let error = store.error { Text(error).foregroundStyle(.red) }
-            Button("Save Moment") {
+            Button(input.type == "festival" && !festivalRecipients.isEmpty ? "Save for \(festivalRecipients.count) contacts" : "Save Moment") {
                 input.occurrenceDate = MomentDates.day(date, zone: input.timeZoneID)
-                Task { await store.perform { try await store.save(input, id: moment?.id); dismiss() } }
+                Task {
+                    await store.perform {
+                        if input.type == "festival" && !festivalRecipients.isEmpty {
+                            for (index, recipient) in festivalRecipients.enumerated() where !savedRecipientIDs.contains(recipient.id) {
+                                var value = input
+                                value.firstName = recipient.firstName
+                                value.phone = recipient.phone
+                                value.email = recipient.email
+                                value.source = "manual"
+                                value.sourceKey = "festival:" + TaskActionCoordinator.ownerKey(input.sourceKey + ":" + recipient.id)
+                                try await store.save(value, id: index == 0 ? moment?.id : nil)
+                                savedRecipientIDs.insert(recipient.id)
+                            }
+                        } else {
+                            try await store.save(input, id: moment?.id)
+                        }
+                        dismiss()
+                    }
+                }
             }.disabled(store.busy || !dateConfirmed || input.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         }
+        .disabled(store.busy)
         .navigationTitle(moment == nil ? "Add Moment" : "Edit Moment").navigationBarTitleDisplayMode(.inline)
+        .onSubmit { focusedField = nil }
+        .scrollDismissesKeyboard(.interactively)
+        .toolbar {
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button("Done") { focusedField = nil }
+            }
+        }
+        .sheet(isPresented: $choosingRecipient) {
+            if input.type == "festival" {
+                FestivalContactsPicker { contacts in
+                    for contact in contacts where !festivalRecipients.contains(where: { $0.id == contact.id }) {
+                        festivalRecipients.append(contact)
+                    }
+                    choosingRecipient = false
+                }
+            } else {
+            MomentContactPicker { contact in
+                // Selecting a recipient must not change the occasion or its schedule.
+                input.firstName = contact.firstName
+                input.phone = contact.phone
+                input.email = contact.email
+                choosingRecipient = false
+            }
+            }
+        }
         .onAppear {
             guard !initialized else { return }; initialized = true
             if let m = moment {
                 input.type = m.type; input.title = m.title; input.firstName = m.firstName; input.phone = m.phone; input.email = m.email; input.yearly = m.yearly; input.timeZoneID = m.timeZoneID; input.source = m.source; input.sourceKey = m.sourceKey; input.occurrenceDate = m.occurrenceDate
             } else if let imported { input = imported; dateConfirmed = !imported.occurrenceDate.isEmpty }
+            if moment == nil && input.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                input.title = defaultTitle(for: input.type) ?? ""
+            }
             if !input.occurrenceDate.isEmpty { date = MomentDates.date(input.occurrenceDate, zone: input.timeZoneID) }
+        }
+    }
+    private func defaultTitle(for type: String) -> String? {
+        switch type {
+        case "birthday": "Happy Birthday"
+        case "anniversary": "Happy Anniversary"
+        default: nil
+        }
+    }
+}
+struct FestivalRecipient: Identifiable {
+    let id: String
+    let displayName: String
+    var firstName, phone, email: String
+}
+/// Implementing the plural delegate method enables Apple's multi-contact selection.
+struct FestivalContactsPicker: UIViewControllerRepresentable {
+    let selected: ([FestivalRecipient]) -> Void
+    func makeCoordinator() -> Coordinator { Coordinator(selected) }
+    func makeUIViewController(context: Context) -> CNContactPickerViewController {
+        let picker = CNContactPickerViewController()
+        picker.delegate = context.coordinator
+        picker.displayedPropertyKeys = [CNContactGivenNameKey, CNContactFamilyNameKey, CNContactPhoneNumbersKey, CNContactEmailAddressesKey]
+        return picker
+    }
+    func updateUIViewController(_ controller: CNContactPickerViewController, context: Context) {}
+    @MainActor final class Coordinator: NSObject, @preconcurrency CNContactPickerDelegate {
+        let selected: ([FestivalRecipient]) -> Void
+        init(_ selected: @escaping ([FestivalRecipient]) -> Void) { self.selected = selected }
+        func contactPicker(_ picker: CNContactPickerViewController, didSelect contacts: [CNContact]) {
+            selected(contacts.map { contact in
+                let name = CNContactFormatter.string(from: contact, style: .fullName) ?? "Contact"
+                return FestivalRecipient(
+                    id: TaskActionCoordinator.ownerKey(contact.identifier),
+                    displayName: name,
+                    firstName: contact.givenName.isEmpty ? name : contact.givenName,
+                    phone: contact.isKeyAvailable(CNContactPhoneNumbersKey) ? contact.phoneNumbers.first?.value.stringValue ?? "" : "",
+                    email: contact.isKeyAvailable(CNContactEmailAddressesKey) ? contact.emailAddresses.first.map { String($0.value) } ?? "" : ""
+                )
+            })
         }
     }
 }
@@ -66,13 +198,20 @@ struct MomentSettingsView: View {
                 Text("Authorize sending from your own Gmail account. Scheduled email also requires Nexdo’s backend worker.").font(.caption)
             }
             Section("Notifications") {
-                Button("Enable wish reminders") { Task { await store.perform { try await store.authorizeNotifications() } } }
+                Label(store.reminderStatusText, systemImage: store.reminderAuthorization == .denied ? "bell.slash" : "bell.badge")
+                if store.enablingReminders {
+                    ProgressView("Enabling reminders…")
+                } else if store.reminderAuthorization == .notDetermined {
+                    Button("Enable wish reminders") { Task { await store.enableWishReminders() } }
+                }
+                Text("Reminders are on by default once you allow iOS notifications. They apply to wishes you schedule; enabling them does not send messages.").font(.caption)
                 Button("Open iOS Settings") { if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) } }
                 Text("Reminders require notifications. Denied or limited Contacts and Calendar access can be changed in iOS Settings.").font(.caption)
             }
             Section("Privacy") { Button("Delete all Important Moments data", role: .destructive) { delete = true }; Text("Deletes moments, drafts, delivery history and the connected email credentials. An email already submitted cannot be recalled.").font(.caption) }
             if let error = store.error { Text(error).foregroundStyle(.red) }
         }.navigationTitle("Moments Settings").navigationBarTitleDisplayMode(.inline)
+        .task { await store.prepareDefaultReminders() }
         .alert("Select one contact", isPresented: $explainContacts) { Button("Choose contact") { contacts = true }; Button("Cancel", role: .cancel) {} } message: { Text("Nexdo will show the selected birthday, first name, phone and email for you to review. Only the details you save will be sent to your Nexdo account.") }
         .sheet(isPresented: $contacts) { MomentContactPicker { input in contacts = false; selectedContact = MomentImport(input: input) } }
         .sheet(item: $selectedContact) { item in NavigationStack { MomentEditor(imported: item.input).toolbar { Button("Close") { selectedContact = nil } } }.environmentObject(store) }

@@ -22,6 +22,38 @@ struct MomentOK: Decodable, Sendable {}
     @Published var loading = false
     @Published var busy = false
     @Published var lastSynced: Date?
+    @Published var reminderAuthorization: UNAuthorizationStatus = .notDetermined
+    @Published var reminderStatusLoaded = false
+    @Published var enablingReminders = false
+    var reminderStatusText: String {
+        guard reminderStatusLoaded else { return "Checking notification permission…" }
+        switch reminderAuthorization {
+        case .authorized: return "Wish reminders are enabled"
+        case .provisional: return "Wish reminders are enabled quietly"
+        case .ephemeral: return "Wish reminders are temporarily enabled"
+        case .denied: return "Wish reminders are off in iOS Settings"
+        case .notDetermined: return "Allow notifications to enable wish reminders"
+        @unknown default: return "Check notification permission in iOS Settings"
+        }
+    }
+    func updateReminderStatus() async {
+        reminderAuthorization = await UNUserNotificationCenter.current().notificationSettings().authorizationStatus
+        reminderStatusLoaded = true
+    }
+    /// Request once, contextually on the Moments screen; never override a denial.
+    func prepareDefaultReminders() async {
+        await updateReminderStatus()
+        if reminderAuthorization == .notDetermined { await enableWishReminders() }
+    }
+    func enableWishReminders() async {
+        guard !enablingReminders else { return }
+        enablingReminders = true
+        defer { enablingReminders = false }
+        do {
+            try await authorizeNotifications()
+            await replaceNotifications()
+        } catch { self.error = error.localizedDescription }
+    }
     @Published var route: ImportantMoment?
     private let notificationAuthorization: (@Sendable () async throws -> Void)?
     private let api: APIClient
@@ -41,6 +73,7 @@ struct MomentOK: Decodable, Sendable {}
     func refresh() async {
         guard owner != nil, !loading else { return }; let token = generation
         loading = true; defer { loading = false }
+        await updateReminderStatus()
         do {
             let result: MomentsSnapshot = try await api.request("/api/moments", timeout: 20)
             guard token == generation else { return }; snapshot = result; lastSynced = Date(); error = nil
@@ -77,10 +110,21 @@ struct MomentOK: Decodable, Sendable {}
     }
     func deleteData() async throws { let _: MomentOK = try await api.request("/api/moments", method: "DELETE"); snapshot = nil; await clearNotifications() }
     func authorizeNotifications() async throws {
-        if let notificationAuthorization { try await notificationAuthorization(); return }
-        let center = UNUserNotificationCenter.current(); let settings = await center.notificationSettings()
-        if settings.authorizationStatus == .notDetermined { guard try await center.requestAuthorization(options: [.alert,.sound]) else { throw TaskActionServiceError.notificationsDenied } }
-        else if settings.authorizationStatus == .denied { throw TaskActionServiceError.notificationsDenied }
+        if let notificationAuthorization {
+            try await notificationAuthorization()
+            reminderAuthorization = .authorized
+            reminderStatusLoaded = true
+            return
+        }
+        let center = UNUserNotificationCenter.current()
+        await updateReminderStatus()
+        if reminderAuthorization == .notDetermined {
+            _ = try await center.requestAuthorization(options: [.alert, .sound])
+            await updateReminderStatus()
+        }
+        guard [.authorized, .provisional, .ephemeral].contains(reminderAuthorization) else {
+            throw TaskActionServiceError.notificationsDenied
+        }
     }
     private func clearNotifications() async {
         let c = UNUserNotificationCenter.current()
@@ -97,6 +141,16 @@ struct MomentOK: Decodable, Sendable {}
         let available = max(0, 60 - (await center.pendingNotificationRequests()).count)
         var requests: [(String,Date,String)] = []
         let enabledDrafts = Set(moments.filter(\.enabled).flatMap { $0.drafts.map(\.id) })
+        var preparedGroups = Set<String>()
+        for moment in moments where moment.enabled && moment.type == "festival" {
+            if let settings = FestivalSettings.read(moment.festivalSettings), settings.prepareDays > 0, preparedGroups.insert(settings.groupID).inserted {
+                var calendar = Calendar(identifier: .gregorian); calendar.timeZone = TimeZone(identifier: moment.timeZoneID) ?? .current
+                if let occurrenceTime = FestivalValidation.instant(day: moment.nextOccurrence, hour: 8, minute: 0, zone: moment.timeZoneID),
+                   let when = calendar.date(byAdding: .day, value: -settings.prepareDays, to: occurrenceTime), when > Date() {
+                    requests.append((moment.id, when, "Review your festival wish."))
+                }
+            }
+        }
         for plan in plans where plan.editable && enabledDrafts.contains(plan.draftID) {
             if !plan.automaticDelivery && plan.date > Date() { requests.append((plan.id,plan.date,"Your wish is ready. Open Nexdo to review and confirm delivery.")) }
             if plan.reminderOffset == 60 && plan.date.addingTimeInterval(-3600) > Date() { requests.append((plan.id,plan.date.addingTimeInterval(-3600),"Your scheduled wish is due in one hour.")) }

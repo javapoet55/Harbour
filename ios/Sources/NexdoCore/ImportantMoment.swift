@@ -3,6 +3,7 @@ import Foundation
 public struct ImportantMoment: Codable, Identifiable, Sendable {
     public var id, type, title, firstName, phone, email, occurrenceDate, timeZoneID, source, sourceKey: String
     public var yearly, enabled: Bool
+    public var festivalSettings: String?
     public var snoozedUntil: String?
     public var nextOccurrence: String
     public var drafts: [WishDraft]
@@ -58,4 +59,57 @@ public struct MomentInput: Encodable, Sendable {
     public var yearly = true
     public var source = "manual", sourceKey = UUID().uuidString
     public init() {}
+}
+
+public enum MomentUpcomingGroup: String, CaseIterable, Sendable {
+    case thisWeek = "This Week", nextWeek = "Next Week", thisMonth = "This Month", nextMonth = "Next Month", later = "Later"
+}
+public extension ImportantMoment {
+    var upcomingDelivery: WishDeliveryPlan? {
+        drafts.flatMap { $0.plans ?? [] }.filter {
+            ["SCHEDULED", "AWAITING_CONFIRMATION"].contains($0.status) &&
+            MomentDates.day($0.date, zone: timeZoneID) == nextOccurrence
+        }.sorted { $0.date < $1.date }.first
+    }
+    func upcomingGroup(now: Date = Date()) -> MomentUpcomingGroup {
+        var calendar = Calendar.current
+        calendar.timeZone = TimeZone(identifier: timeZoneID) ?? .current
+        let occurrence = MomentDates.date(nextOccurrence, zone: timeZoneID)
+        if let week = calendar.dateInterval(of: .weekOfYear, for: now),
+           occurrence >= week.start && occurrence < week.end { return .thisWeek }
+        if let month = calendar.dateInterval(of: .month, for: now),
+           let next = calendar.dateInterval(of: .month, for: month.end),
+           occurrence >= next.start && occurrence < next.end { return .nextMonth }
+        if let nextWeek = calendar.date(byAdding: .weekOfYear, value: 1, to: now),
+           let week = calendar.dateInterval(of: .weekOfYear, for: nextWeek),
+           occurrence >= week.start && occurrence < week.end { return .nextWeek }
+        if let month = calendar.dateInterval(of: .month, for: now),
+           occurrence >= month.start && occurrence < month.end { return .thisMonth }
+        return .later
+    }
+}
+
+/// Display grouping only; approved drafts and deliveries remain recipient-specific.
+public struct MomentDisplayGroup: Identifiable, Sendable {
+    public let id: String
+    public let moments: [ImportantMoment]
+    public static func groups(_ moments: [ImportantMoment]) -> [Self] {
+        var order: [String] = []
+        var entries: [String: [ImportantMoment]] = [:]
+        for moment in moments {
+            let key: String
+            if moment.type == "festival", let settings = FestivalSettings.read(moment.festivalSettings) {
+                key = "festival-group:" + settings.groupID
+            } else if moment.type == "festival" {
+                let title = moment.title.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+                key = [title, moment.nextOccurrence, moment.timeZoneID, String(moment.yearly)]
+                    .map { "\($0.utf8.count):\($0)" }.joined()
+            } else {
+                key = "moment:" + moment.id
+            }
+            if entries[key] == nil { order.append(key) }
+            entries[key, default: []].append(moment)
+        }
+        return order.map { Self(id: $0, moments: entries[$0]!) }
+    }
 }

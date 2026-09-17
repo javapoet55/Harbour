@@ -7,6 +7,102 @@ import XCTest
         app = XCUIApplication(); app.launchArguments = ["-moments-design-preview"]; app.launch()
         XCTAssertTrue(app.navigationBars["Important Moments"].waitForExistence(timeout: 15))
     }
+    func openFestivalManager() {
+        app.terminate(); app.launchArguments.append("-festival-manage-preview"); app.launch()
+        let manage=app.buttons["Manage Moments"]
+        XCTAssertTrue(manage.waitForExistence(timeout:15));manage.tap()
+        XCTAssertTrue(app.navigationBars["Manage Moment"].waitForExistence(timeout:5))
+    }
+    func testFestivalTabsPreserveEditsAndWarnOnExit() {
+        openFestivalManager()
+        let name=app.textFields["festival-name"];name.tap();name.typeText(" Edited")
+        app.buttons["festival-tab-Contacts"].tap()
+        XCTAssertTrue(app.staticTexts["Recipients"].exists)
+        app.buttons["festival-tab-Wish Message"].tap()
+        XCTAssertTrue(app.textViews["Festival wish message"].exists)
+        app.buttons["festival-tab-Details"].tap()
+        XCTAssertTrue((name.value as? String)?.contains("Edited") == true)
+        app.navigationBars.buttons["Back"].tap()
+        XCTAssertTrue(app.buttons["Discard changes"].waitForExistence(timeout:3))
+        app.buttons["Keep editing"].tap()
+    }
+    func testFestivalImagePreviewAndSelection() {
+        openFestivalManager();app.buttons["festival-tab-Wish Message"].tap()
+        for _ in 0..<3 { if app.buttons["Generate AI Image"].isHittable {break};app.swipeUp() }
+        app.buttons["Generate AI Image"].tap()
+        XCTAssertTrue(app.staticTexts["Mock preview — no production AI requests"].exists)
+        app.buttons["Generate preview"].tap()
+        let use=app.buttons["Use This Image"].firstMatch
+        XCTAssertTrue(use.waitForExistence(timeout:5));use.tap()
+        XCTAssertTrue(app.navigationBars["Manage Moment"].exists)
+    }
+    func testFestivalDeleteRequiresConfirmation() {
+        openFestivalManager()
+        app.buttons["Moment options"].tap();app.buttons["festival-delete-menu"].tap()
+        XCTAssertTrue(app.buttons["Cancel"].waitForExistence(timeout:3))
+        app.buttons["Cancel"].tap()
+        XCTAssertTrue(app.navigationBars["Manage Moment"].exists)
+    }
+    func testFestivalApprovalAndSchedule() {
+        openFestivalManager();app.buttons["festival-tab-Wish Message"].tap()
+        let save=app.buttons.matching(identifier:"wish-primary").matching(NSPredicate(format:"label == %@", "Save Message")).firstMatch
+        for _ in 0..<5 {if save.isHittable{break};app.swipeUp()};save.tap()
+        XCTAssertTrue(app.staticTexts["Message approved and saved. Nothing has been sent."].waitForExistence(timeout:8))
+        for _ in 0..<5 {if app.buttons["festival-tab-Schedule"].isHittable{break};app.swipeDown()}
+        app.buttons["festival-tab-Schedule"].tap()
+        let schedule=app.buttons.matching(identifier:"wish-primary").matching(NSPredicate(format:"label == %@", "Schedule Wish")).firstMatch
+        for _ in 0..<5 {if schedule.isHittable{break};app.swipeUp()};schedule.tap()
+        XCTAssertTrue(app.navigationBars["Review schedule"].waitForExistence(timeout:5))
+        XCTAssertTrue(app.staticTexts["We’ll remind you to confirm in Messages"].exists)
+        app.buttons.matching(identifier:"wish-primary").matching(NSPredicate(format:"label == %@", "Confirm Schedule")).firstMatch.tap()
+        XCTAssertTrue(app.staticTexts["Wishes scheduled"].waitForExistence(timeout:8))
+    }
+    func testFestivalVisualTabs() {
+        openFestivalManager()
+        for tab in ["Details","Contacts","Wish Message","Schedule"] {
+            let button=app.buttons["festival-tab-"+tab];button.tap()
+            XCTAssertTrue(button.isSelected)
+            let shot=XCTAttachment(screenshot:app.screenshot());shot.name="Manage Festival - "+tab;shot.lifetime = .keepAlways;add(shot)
+        }
+    }
+    func openRoutedWish() {
+        app.terminate()
+        app.launchArguments.append("-moments-route-preview")
+        app.launch()
+        XCTAssertTrue(app.navigationBars["Wish details"].waitForExistence(timeout: 15))
+    }
+    func testRoutedWishDoneReturnsToList() {
+        openRoutedWish()
+        app.swipeUp()
+        app.buttons["Done"].tap()
+        XCTAssertTrue(app.buttons["Add Moment"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.navigationBars["Wish details"].exists)
+        app.buttons["Close"].tap()
+        XCTAssertTrue(app.navigationBars["Important Moments"].waitForExistence(timeout: 5))
+    }
+    func testRoutedWishBackReturnsToList() {
+        openRoutedWish()
+        app.navigationBars["Wish details"].buttons.firstMatch.tap()
+        XCTAssertTrue(app.buttons["Add Moment"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.navigationBars["Wish details"].exists)
+    }
+    func testFestivalOffersMultipleContactPicker() {
+        app.buttons["Add Moment"].tap()
+        XCTAssertTrue(app.navigationBars["Add Moment"].waitForExistence(timeout: 5))
+        app.buttons["moment-type"].tap()
+        app.buttons["Festival"].tap()
+        app.swipeUp()
+        let choose = app.buttons["Choose multiple contacts"]
+        XCTAssertTrue(choose.waitForExistence(timeout: 5))
+        choose.tap()
+        XCTAssertTrue(app.navigationBars["Contacts"].waitForExistence(timeout: 5))
+        app.cells["John Appleseed"].tap()
+        app.cells["Kate Bell"].tap()
+        app.navigationBars["Contacts"].buttons["Done"].tap()
+        XCTAssertTrue(app.staticTexts["2 contacts selected"].waitForExistence(timeout: 5))
+        app.buttons["Remove John Appleseed"].tap()
+        XCTAssertTrue(app.staticTexts["1 contacts selected"].exists)
+    }
     func openReview() {
         let review = app.buttons["Review wish"].firstMatch
         XCTAssertTrue(review.waitForExistence(timeout: 10)); review.tap()

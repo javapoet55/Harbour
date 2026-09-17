@@ -31,13 +31,162 @@ struct ImportantMomentsTodayCard: View {
         }
     }
 }
+struct MomentIconTile: View {
+    let type: String
+    var title = ""
+    private var color: Color {
+        switch type { case "birthday": .red; case "anniversary": .purple; case "festival": .orange; default: .nexdoIndigo }
+    }
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 16).fill(color.opacity(0.16).gradient)
+            if type == "anniversary" {
+                ZStack {
+                    Image(systemName: "heart").offset(x: -7, y: -4)
+                    Image(systemName: "heart").offset(x: 7, y: 5)
+                }.font(.system(size: 30, weight: .semibold))
+            } else if type == "festival" && title.localizedCaseInsensitiveContains("diwali") {
+                VStack(spacing: 1) {
+                    Image(systemName: "flame.fill").font(.system(size: 25))
+                    UnevenRoundedRectangle(bottomLeadingRadius: 22, bottomTrailingRadius: 22)
+                        .frame(width: 38, height: 17)
+                }
+            } else {
+                Image(systemName: type == "birthday" ? "gift.fill" : type == "festival" ? "sparkles" : type == "summary" ? "calendar" : "star.fill")
+                    .font(.system(size: 32, weight: .medium))
+            }
+        }
+        .foregroundStyle(color).frame(width: 64, height: 64)
+        .accessibilityHidden(true)
+    }
+}
+struct MomentStatusBadge: View {
+    let title: String
+    let color: Color
+    let icon: String
+    var body: some View {
+        Label(title, systemImage: icon).font(.caption.weight(.semibold))
+            .foregroundStyle(color).padding(.horizontal, 10).padding(.vertical, 6)
+            .background(color.opacity(0.14), in: Capsule())
+    }
+}
+private struct UpcomingMomentRow: View {
+    let moment: ImportantMoment
+    private var plan: WishDeliveryPlan? { moment.upcomingDelivery }
+    var body: some View {
+        MomentCard {
+            HStack(alignment: .top, spacing: 14) {
+                MomentIconTile(type: moment.type, title: moment.title)
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(moment.title).font(.title3.bold())
+                    Text("\(moment.type.capitalized) · \(MomentDates.relative(moment.nextOccurrence, zone: moment.timeZoneID))")
+                        .font(.subheadline).foregroundStyle(.secondary)
+                    if !moment.enabled {
+                        MomentStatusBadge(title: "Disabled", color: .secondary, icon: "pause.circle")
+                    } else if let plan {
+                        MomentStatusBadge(title: plan.automaticDelivery ? "Auto-send scheduled" : "Reminder scheduled",
+                                          color: plan.automaticDelivery ? .green : .blue,
+                                          icon: plan.automaticDelivery ? "checkmark.circle.fill" : "clock")
+                        Text("\(plan.channel.capitalized) · \(MomentDates.label(plan.date, zone: plan.timeZoneID))")
+                            .font(.caption).foregroundStyle(.secondary)
+                        NavigationLink { WishPlanView(plan: plan) } label: { Label("Manage", systemImage: "chevron.right") }
+                    } else {
+                        MomentStatusBadge(title: "Needs review", color: .orange, icon: "exclamationmark.circle.fill")
+                        Text(moment.latest == nil ? "Create a personal wish" : "Message draft ready").font(.caption).foregroundStyle(.secondary)
+                        NavigationLink { ReviewWishView(moment: moment) } label: {
+                            Text("Review").font(.subheadline.bold()).foregroundStyle(.white)
+                                .padding(.horizontal, 22).padding(.vertical, 10)
+                                .background(NexdoTheme.gradient, in: RoundedRectangle(cornerRadius: 12))
+                        }.accessibilityLabel(moment.latest == nil ? "Create wish" : "Review wish")
+                    }
+                    NavigationLink("Edit") { MomentEditor(moment: moment) }.font(.subheadline)
+                }.frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+    }
+}
+private struct FestivalGroupCard: View {
+    let group: MomentDisplayGroup
+    var body: some View {
+        if let moment = group.moments.first {
+            MomentCard {
+                HStack(alignment: .top, spacing: 14) {
+                    MomentIconTile(type: "festival", title: moment.title)
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(moment.title).font(.title3.bold())
+                        Text("Festival · \(MomentDates.relative(moment.nextOccurrence, zone: moment.timeZoneID))")
+                            .font(.subheadline).foregroundStyle(.secondary)
+                        Label("\(group.moments.count) selected contacts", systemImage: "person.2.fill")
+                            .font(.subheadline.weight(.medium)).foregroundStyle(Color.nexdoIndigo)
+                        let scheduled = group.moments.filter { $0.enabled && $0.upcomingDelivery != nil }.count
+                        let review = group.moments.filter { $0.enabled && $0.upcomingDelivery == nil }.count
+                        if review > 0 {
+                            MomentStatusBadge(title: "\(review) need review", color: .orange, icon: "exclamationmark.circle.fill")
+                        }
+                        if scheduled > 0 {
+                            MomentStatusBadge(title: "\(scheduled) scheduled", color: .blue, icon: "clock")
+                        }
+                        NavigationLink {
+                            FestivalRecipientsView(group: group)
+                        } label: {
+                            Label("Manage recipients", systemImage: "chevron.right")
+                                .font(.subheadline.bold())
+                        }
+                    }.frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+        }
+    }
+}
+private struct FestivalRecipientsView: View {
+    @EnvironmentObject private var store: ImportantMomentsStore
+    let group: MomentDisplayGroup
+    private var recipients: [ImportantMoment] {
+        let ids = Set(group.moments.map(\.id))
+        return store.moments.filter { ids.contains($0.id) }
+    }
+    var body: some View {
+        ZStack {
+            TodayBackdrop()
+            ScrollView {
+                VStack(spacing: 16) {
+                    Text("\(recipients.count) selected contacts").font(.headline)
+                    ForEach(recipients) { moment in
+                        MomentCard {
+                            Text(moment.firstName.isEmpty ? "Recipient" : moment.firstName).font(.title3.bold())
+                            if !moment.phone.isEmpty { Text(moment.phone).foregroundStyle(.secondary) }
+                            if !moment.email.isEmpty { Text(moment.email).foregroundStyle(.secondary) }
+                            if let plan = moment.upcomingDelivery {
+                                Text(plan.statusLabel).font(.subheadline)
+                            }
+                            HStack(spacing: 14) {
+                                if let plan = moment.upcomingDelivery {
+                                    NavigationLink("Manage Wish") { WishPlanView(plan: plan) }
+                                } else {
+                                    NavigationLink("Review Wish") { ReviewWishView(moment: moment) }
+                                }
+                                Rectangle().fill(Color.secondary.opacity(0.4))
+                                    .frame(width: 1, height: 20).accessibilityHidden(true)
+                                NavigationLink("Edit Recipient") { MomentEditor(moment: moment) }
+                            }
+                            .font(.subheadline)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
+                        }
+                    }
+                }.padding(18)
+            }
+        }.navigationTitle(group.moments.first?.title ?? "Festival")
+            .navigationBarTitleDisplayMode(.inline)
+    }
+}
 struct ImportantMomentsView: View {
     @EnvironmentObject private var store: ImportantMomentsStore
     @State private var tab = "Upcoming"
     @State private var search = ""
     @State private var filter = "All"
     @State private var deliveryFilter = "All"
-    private var displayed: [ImportantMoment] { store.moments.filter { (tab != "Upcoming" || $0.nextOccurrence >= MomentDates.day(Date(), zone: $0.timeZoneID)) && (filter == "All" || $0.type == filter.lowercased()) && (search.isEmpty || $0.title.localizedCaseInsensitiveContains(search)) }.sorted { $0.nextOccurrence < $1.nextOccurrence } }
+    private var displayed: [ImportantMoment] { store.moments.filter { (tab == "Sent" || !($0.festivalSettings?.contains("\"archived\":true") ?? false)) && (tab != "Upcoming" || $0.nextOccurrence >= MomentDates.day(Date(), zone: $0.timeZoneID)) && (filter == "All" || $0.type == filter.lowercased()) && (search.isEmpty || $0.title.localizedCaseInsensitiveContains(search)) }.sorted { $0.nextOccurrence < $1.nextOccurrence } }
     var body: some View {
         ZStack { TodayBackdrop(); ScrollView { VStack(spacing: 16) {
             MomentSegments(options: ["Upcoming", "Scheduled", "Sent"], selection: $tab)
@@ -46,12 +195,34 @@ struct ImportantMomentsView: View {
                 Picker("Type", selection: $filter) { ForEach(["All","Birthday","Anniversary","Festival","Custom"], id: \.self) { Text($0) } }.labelsHidden().accessibilityLabel("Filter moment type")
             }
             if tab == "Upcoming" {
-                Text("\(displayed.filter(\.enabled).count) upcoming moments").font(.title3.bold()).frame(maxWidth: .infinity, alignment: .leading)
-                ForEach(displayed) { moment in
-                    MomentCard {
-                        Label(moment.title, systemImage: moment.icon).font(.title3.bold())
-                        Text("\(MomentDates.relative(moment.nextOccurrence, zone: moment.timeZoneID)) · \(moment.nextOccurrence) · \(moment.source)\(moment.enabled ? "" : " · Disabled")").foregroundStyle(.secondary)
-                        HStack { NavigationLink(moment.latest == nil ? "Create wish" : "Review wish") { ReviewWishView(moment: moment) }; Spacer(); NavigationLink("Edit") { MomentEditor(moment: moment) } }
+                MomentCard {
+                    HStack(spacing: 16) {
+                        MomentIconTile(type: "summary")
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("\(MomentDisplayGroup.groups(displayed.filter(\.enabled)).count) upcoming moment\(MomentDisplayGroup.groups(displayed.filter(\.enabled)).count == 1 ? "" : "s")").font(.title3.bold())
+                            let scheduled = displayed.filter { $0.enabled && $0.upcomingDelivery != nil }.count
+                            let review = displayed.filter { $0.enabled && $0.upcomingDelivery == nil }.count
+                            Text("\(scheduled) wish\(scheduled == 1 ? "" : "es") scheduled · \(review) need\(review == 1 ? "s" : "") review")
+                                .font(.subheadline).foregroundStyle(.secondary)
+                            NavigationLink { FestivalManagementEntry() } label: {
+                                Label("Manage Moments", systemImage: "slider.horizontal.3").foregroundStyle(Color.nexdoIndigo).frame(minHeight: 44)
+                            }
+                        }
+                        Spacer(minLength: 0)
+                    }
+                }
+                ForEach(MomentUpcomingGroup.allCases, id: \.self) { group in
+                    let items = displayed.filter { $0.upcomingGroup() == group }
+                    if !items.isEmpty {
+                        Text(group.rawValue).font(.title.bold())
+                            .frame(maxWidth: .infinity, alignment: .leading).padding(.top, 8)
+                        ForEach(MomentDisplayGroup.groups(items)) { entry in
+                            if entry.moments.first?.type == "festival" {
+                                FestivalGroupCard(group: entry)
+                            } else if let moment = entry.moments.first {
+                                UpcomingMomentRow(moment: moment)
+                            }
+                        }
                     }
                 }
             } else {
@@ -61,7 +232,18 @@ struct ImportantMomentsView: View {
                     let history = ["SENT","COPIED","SHARED"].contains(p.status)
                     return matches && (tab == "Sent" ? history : !history && p.status != "CANCELLED") && (deliveryFilter == "All" || tab == "Sent" || deliveryFilter == "Automatic" && p.automaticDelivery || deliveryFilter == "Confirmation" && !p.automaticDelivery || deliveryFilter == "Action needed" && ["FAILED","UNCERTAIN"].contains(p.status))
                 }) { plan in NavigationLink { WishPlanView(plan: plan) } label: {
-                    MomentCard { Text(plan.subject).font(.headline); Text(plan.statusLabel).foregroundStyle(Color.nexdoIndigo); Text(plan.body).lineLimit(2); Text("\(plan.channel.capitalized) · \(plan.date.formatted())").font(.caption) }
+                    MomentCard {
+                        HStack(alignment: .top, spacing: 14) {
+                            let moment = displayed.first { $0.drafts.contains { $0.id == plan.draftID } }
+                            MomentIconTile(type: moment?.type ?? "custom", title: moment?.title ?? plan.subject)
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text(plan.subject).font(.headline)
+                                Text(plan.statusLabel).foregroundStyle(Color.nexdoIndigo)
+                                Text(plan.body).lineLimit(2)
+                                Text("\(plan.channel.capitalized) · \(MomentDates.label(plan.date, zone: plan.timeZoneID))").font(.caption)
+                            }.frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                    }
                 }.buttonStyle(.plain) }
             }
             if displayed.isEmpty { ContentUnavailableView("No moments yet", systemImage: "gift", description: Text("Add a moment manually, or select contacts and calendars in Settings.")) }
@@ -72,7 +254,7 @@ struct ImportantMomentsView: View {
         }.padding(18) } }
         .navigationTitle("Important Moments").navigationBarTitleDisplayMode(.inline)
         .toolbar { NavigationLink { MomentSettingsView() } label: { Image(systemName: "gearshape") }.accessibilityLabel("Important Moments settings") }
-        .task { await store.refresh() }.refreshable { await store.refresh() }
+        .task { await store.prepareDefaultReminders(); await store.refresh() }.refreshable { await store.refresh() }
     }
 }
 struct ReviewWishView: View {
@@ -88,7 +270,15 @@ struct ReviewWishView: View {
     @FocusState private var editing: Bool
     var body: some View {
         ZStack { TodayBackdrop(); ScrollView { VStack(spacing: 16) {
-            MomentCard { Label(moment.firstName.isEmpty ? moment.title : moment.firstName, systemImage: moment.icon).font(.title2.bold()); Text("\(moment.type.capitalized) · \(moment.nextOccurrence)").foregroundStyle(.secondary) }
+            MomentCard {
+                Label(moment.firstName.isEmpty ? moment.title : moment.firstName, systemImage: moment.icon).font(.title2.bold())
+                if moment.type == "festival" {
+                    Text("Festival: \(moment.title)").foregroundStyle(.secondary)
+                    Text(moment.nextOccurrence).foregroundStyle(.secondary)
+                } else {
+                    Text("\(moment.type.capitalized) · \(moment.nextOccurrence)").foregroundStyle(.secondary)
+                }
+            }
             MomentCard {
                 Label("Choose a tone", systemImage: "sparkles").font(.title2.bold()); Text("Adjust the vibe of your message.").foregroundStyle(.secondary)
                 MomentSegments(options: ["Warm", "Personal", "Short", "Fun"], selection: $tone)
@@ -324,14 +514,31 @@ struct MomentSheetHost: View {
     @EnvironmentObject private var store: ImportantMomentsStore
     var body: some View {
         Color.clear.frame(width: 0, height: 0).sheet(item: $store.route) { moment in
-            NavigationStack {
-                ImportantMomentsView()
-                    .navigationDestination(isPresented: .constant(true)) {
-                        if let plan = moment.drafts.flatMap({$0.plans ?? []}).first(where: { $0.editable }) { WishPlanView(plan: plan) }
-                        else { ReviewWishView(moment: moment) }
+            MomentRoutedView(moment: moment) { store.route = nil }
+                .environmentObject(store)
+        }
+    }
+}
+
+/// A writable destination binding allows both Back and dismiss() to pop the route.
+private struct MomentRoutedView: View {
+    @EnvironmentObject private var store: ImportantMomentsStore
+    let moment: ImportantMoment
+    let close: () -> Void
+    @State private var showingDetail = true
+    var body: some View {
+        NavigationStack {
+            ImportantMomentsView()
+                .navigationDestination(isPresented: $showingDetail) {
+                    if let plan = moment.drafts.flatMap({ $0.plans ?? [] }).first(where: { $0.editable }) {
+                        WishPlanView(plan: plan)
+                    } else if moment.type == "festival", let group = MomentDisplayGroup.groups(store.moments.filter { $0.type == "festival" }).first(where: { $0.moments.contains { $0.id == moment.id } }) {
+                        ManageFestivalView(group: group, store: store)
+                    } else {
+                        ReviewWishView(moment: moment)
                     }
-                    .toolbar { ToolbarItem(placement: .topBarLeading) { Button("Close") { store.route = nil } } }
-            }.environmentObject(store)
+                }
+                .toolbar { ToolbarItem(placement: .topBarLeading) { Button("Close", action: close) } }
         }
     }
 }

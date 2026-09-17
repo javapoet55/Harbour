@@ -1,3 +1,4 @@
+import { saveFestival, deleteFestival, festivalCatalog } from '@/server/moments/festival';
 import { NextResponse } from 'next/server';
 import { requireUser } from '@/server/auth';
 import { jsonError } from '@/lib/http';
@@ -10,9 +11,12 @@ function failure(e:unknown) { if(e instanceof SyntaxError) return NextResponse.j
 export async function GET() { try { return NextResponse.json(await listMoments((await requireUser()).id)); } catch(e) { return failure(e); } }
 export async function POST(req:Request) {
  try {
-  const user=await requireUser();const raw=await req.text();if(raw.length>12000) throw new MomentError('Request too large.',413);
+  const user=await requireUser();const raw=await req.text();if(raw.length>200000) throw new MomentError('Request too large.',413);
   const p=z.object({operation:z.string(),input:z.unknown().optional(),id:z.string().optional()}).parse(JSON.parse(raw));
   switch(p.operation) {
+   case 'festivalSave': return NextResponse.json(await saveFestival(user.id,p.input));
+   case 'festivalDelete': return NextResponse.json(await deleteFestival(user.id,p.input));
+   case 'festivalCatalog': return NextResponse.json({entries:festivalCatalog()});
    case 'save': return NextResponse.json({moment:await saveMoment(user.id,p.input,p.id)});
    case 'generate': return NextResponse.json(await generateDraft(user.id,p.input));
    case 'approve': return NextResponse.json({draft:await approveDraft(user.id,p.input)});
