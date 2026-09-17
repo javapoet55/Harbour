@@ -23,12 +23,15 @@ final class MomentsPreviewProtocol: URLProtocol, @unchecked Sendable {
             let operation = json["operation"] as? String ?? ""; let input = json["input"] as? [String: Any] ?? [:]
             switch operation {
             case "festivalCatalog": result = ["entries":[]]
-            case "festivalSave": Self.festivalSaved = input; result = ["ok":true]
+            case "festivalSave":
+                Self.festivalSaved = input
+                if input["cancelSchedules"] as? Bool == true {Self.savedPlans=Self.savedPlans.map{var plan=$0;plan["status"]="CANCELLED";return plan}}
+                result = ["ok":true]
             case "festivalDelete": Self.festivalDeleted = true; result = ["ok":true]
             case "generate": result = ["draft":draft(),"usedAI":false]
             case "approve": Self.draftBody = input["body"] as? String ?? Self.draftBody; result = ["draft":draft()]
             case "schedule":
-                var plan = input; plan["id"] = "plan"; plan["subject"] = "Damien’s Birthday"; plan["body"] = Self.draftBody; plan["status"] = (input["automaticDelivery"] as? Bool == true) ? "SCHEDULED" : "AWAITING_CONFIRMATION"
+                var plan = input; plan["id"] = "plan-" + (input["idempotencyKey"] as? String ?? "fixture"); plan["subject"] = "Damien’s Birthday"; plan["body"] = Self.draftBody; plan["status"] = (input["automaticDelivery"] as? Bool == true) ? "SCHEDULED" : "AWAITING_CONFIRMATION"
                 Self.savedPlans = [plan]; result = ["plan":plan]
             case "plan":
                 if !Self.savedPlans.isEmpty {
@@ -48,7 +51,18 @@ final class MomentsPreviewProtocol: URLProtocol, @unchecked Sendable {
                 if let settings=Self.festivalSaved?["settings"],let encoded=try? JSONSerialization.data(withJSONObject:settings) {moment["festivalSettings"]=String(data:encoded,encoding:.utf8)}
                 moment["enabled"]=Self.festivalSaved?["active"] ?? true
             }
-            result = ["moments":Self.festivalDeleted ? []:[moment],"emailAccount":["email":"you@example.com","status":"connected"],"emailConfigured":true,"automaticEmailEnabled":true]
+            var moments = [moment]
+            if ProcessInfo.processInfo.arguments.contains("-festival-two-recipients") {
+                var second=moment;second["id"]="moment2";second["firstName"]="Priya";second["phone"]="+15555550185";second["sourceKey"]="fixture2"
+                moments.append(second)
+            }
+            if ProcessInfo.processInfo.arguments.contains("-all-moment-categories") {
+                for type in ["anniversary","festival","custom"] {
+                    var item=moment;item["id"]=type;item["type"]=type;item["title"]=type.capitalized+" example";item["sourceKey"]=type
+                    moments.append(item)
+                }
+            }
+            result = ["moments":Self.festivalDeleted ? []:moments,"emailAccount":["email":"you@example.com","status":"connected"],"emailConfigured":true,"automaticEmailEnabled":true]
         }
         let data = try! JSONSerialization.data(withJSONObject: result)
         client?.urlProtocol(self, didReceive: HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: ["Content-Type":"application/json"])!, cacheStoragePolicy: .notAllowed)

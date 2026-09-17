@@ -203,7 +203,7 @@ struct ImportantMomentsView: View {
                             let review = displayed.filter { $0.enabled && $0.upcomingDelivery == nil }.count
                             Text("\(scheduled) wish\(scheduled == 1 ? "" : "es") scheduled · \(review) need\(review == 1 ? "s" : "") review")
                                 .font(.subheadline).foregroundStyle(.secondary)
-                            NavigationLink { FestivalManagementEntry() } label: {
+                            NavigationLink { MomentsManagementEntry() } label: {
                                 Label("Manage Moments", systemImage: "slider.horizontal.3").foregroundStyle(Color.nexdoIndigo).frame(minHeight: 44)
                             }
                         }

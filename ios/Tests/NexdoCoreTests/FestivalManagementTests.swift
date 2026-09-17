@@ -61,3 +61,9 @@ import Testing
     #expect(FestivalSettings.read(saved)?.cardSignature==settings.cardSignature)
     #expect(FestivalSettings.read(saved)?.cardGreeting==settings.cardGreeting)
 }
+
+@Test func festivalSendDateUsesScheduledDayAndTimeZone() {
+    let send=ISO8601DateFormatter().date(from:"2026-09-19T01:53:00Z")!
+    #expect(MomentDates.sendDayLabel(send,zone:"America/Los_Angeles")=="Fri, Sep 18, 2026")
+    #expect(MomentDates.sendDayLabel(send,zone:"Asia/Kolkata")=="Sat, Sep 19, 2026")
+}

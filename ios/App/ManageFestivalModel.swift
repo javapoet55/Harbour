@@ -13,6 +13,7 @@ import CryptoKit
     @Published var settings=FestivalSettings()
     @Published var sendDate=Date()
     @Published var notify=true
+    @Published var needsScheduleConfirmation=false
     @Published var busy=false
     @Published var generatingImage=false
     @Published var error:String?
@@ -35,7 +36,11 @@ import CryptoKit
     private let analytics=FestivalAnalytics()
     let contactsService=FestivalContactsService()
     var source:String { originals.first?.source ?? "manual" }
-    var hasSchedules:Bool { originals.contains {$0.drafts.contains {$0.plans?.contains { $0.editable || $0.status == "SENDING" } == true}} }
+    var hasSchedules:Bool {
+        let current=originals.map { original in store.moments.first(where:{$0.id==original.id}) ?? original }
+        return current.contains {$0.drafts.contains {$0.plans?.contains { $0.editable || $0.status == "SENDING" } == true}}
+            || savedPlans.contains {$0.editable || $0.status == "SENDING"}
+    }
     var selected:[ManagedFestivalRecipient] { recipients.filter(\.selected) }
     var emailReady:Bool { store.snapshot?.automaticEmailEnabled == true && store.snapshot?.emailAccount?.status == "connected" }
     var dirty:Bool { fingerprint != baseline }
@@ -52,7 +57,7 @@ import CryptoKit
         if saved.baseMessage.isEmpty {saved.baseMessage=first.latest?.body ?? FestivalValidation.fallback(name:first.title,tone:"Warm")}
         for r in recipients where saved.channels[r.key] == nil {saved.channels[r.key]=r.phone.isEmpty ? (r.email.isEmpty ? "share":"email") : "messages"}
         settings=saved;sendDate=FestivalValidation.instant(day:first.nextOccurrence,hour:8,minute:0,zone:first.timeZoneID) ?? date
-        if let plan=first.upcomingDelivery {sendDate=plan.date}
+        if let plan=group.moments.compactMap(\.upcomingDelivery).first {sendDate=plan.date;zone=plan.timeZoneID}
         savedImageID=saved.imageID;imageData=imageStorage.load(saved.imageID);notice=saved.catalogNotice;baseline=fingerprint;analytics.record(.opened)
     }
     func loadCatalog() async {
@@ -71,8 +76,14 @@ import CryptoKit
         if error != nil {active=old}else if !value{analytics.record(.disabled)}
     }
     func save(cancelSchedules:Bool=false) async {
-        guard !busy else{return};busy=true;error=nil;notice=nil;defer{busy=false}
-        do {try await persist(cancelSchedules:cancelSchedules);notice="Festival changes saved.";analytics.record(.saved)} catch {self.error=error.localizedDescription}
+        guard !busy else{return}
+        guard dirty else {error=nil;notice="No changes to save. Your existing schedule is unchanged.";return}
+        busy=true;error=nil;notice=nil;defer{busy=false}
+        do {try await persist(cancelSchedules:cancelSchedules);notice=cancelSchedules ? "Changes saved. Review and schedule your updated wish again.":"Festival changes saved.";analytics.record(.saved)} catch {
+            if case APIError.server(409,let message)=error, message.contains("Existing schedules") {
+                needsScheduleConfirmation=true
+            } else {self.error=error.localizedDescription}
+        }
     }
     private func persist(cancelSchedules:Bool) async throws {
         guard !title.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty,title.count<=80 else{throw FestivalError.message("Enter a festival name of 1–80 characters.")}
@@ -107,7 +118,7 @@ import CryptoKit
         guard !settings.baseMessage.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty,settings.baseMessage.count<=500,settings.overrides.values.allSatisfy({!$0.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty && $0.count<=500}) else {error="Each message must contain 1–500 characters.";return}
         settings.approvedAt=ISO8601DateFormatter().string(from:Date())
         await save(cancelSchedules:cancelSchedules)
-        if error != nil {settings.approvedAt=nil}else{analytics.record(.approved);notice="Message approved and saved. Nothing has been sent."}
+        if error != nil || needsScheduleConfirmation {settings.approvedAt=nil}else{analytics.record(.approved);notice="Message approved and saved. Nothing has been sent."}
     }
     var isDesignPreview:Bool { ProcessInfo.processInfo.arguments.contains("-moments-design-preview") }
     func generateImage() {
@@ -167,7 +178,9 @@ import CryptoKit
                 let response:WishPlanResponse=try await store.request("schedule",WishScheduleInput(draftID:draftIDs[r.key]!,channel:c,recipient:c=="email" ? r.email:FestivalValidation.phone(r.phone),scheduledAtUTC:ISO8601DateFormatter().string(from:sendDate),timeZoneID:zone,automaticDelivery:c=="email" && settings.automatic[r.key]==true,reminderOffset:notify ? 60:0,repeatYearly:false,idempotencyKey:keys[r.key]!))
                 savedPlans.append(response.plan)
             }
-            await store.refresh();notice="\(savedPlans.count) wishes scheduled. Messages requires confirmation.";scheduleCompleted=true;analytics.record(.scheduled)
+            await store.refresh()
+            originals=originals.map {original in store.moments.first(where:{$0.id==original.id}) ?? original}
+            notice="\(savedPlans.count) wishes scheduled. Messages requires confirmation.";scheduleCompleted=true;analytics.record(.scheduled)
         } catch {self.error="\(savedPlans.count) scheduled. \(error.localizedDescription) Retry continues remaining recipients.";await store.refresh()}
     }
 }

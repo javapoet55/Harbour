@@ -1,16 +1,44 @@
 import SwiftUI
 
-struct FestivalManagementEntry: View {
+struct MomentsManagementEntry: View {
     @EnvironmentObject private var store:ImportantMomentsStore
-    private var groups:[MomentDisplayGroup] {MomentDisplayGroup.groups(store.moments.filter{$0.type=="festival" && !($0.festivalSettings?.contains("\"archived\":true") ?? false)})}
+    private var groups:[MomentDisplayGroup] {
+        MomentDisplayGroup.groups(store.moments.filter {
+            !($0.festivalSettings?.contains("\"archived\":true") ?? false)
+        }.sorted { $0.nextOccurrence < $1.nextOccurrence })
+    }
     var body:some View {
-        Group {
-            if groups.count==1,let group=groups.first {ManageFestivalView(group:group,store:store)}
-            else {ZStack{TodayBackdrop();ScrollView{VStack(spacing:16){
-                if groups.isEmpty {ContentUnavailableView("No festivals yet",systemImage:"sparkles",description:Text("Add a festival in Important Moments to manage its wishes here."))}
-                ForEach(groups){group in NavigationLink{ManageFestivalView(group:group,store:store)}label:{MomentCard{HStack{MomentIconTile(type:"festival",title:group.moments[0].title);VStack(alignment:.leading){Text(group.moments[0].title).font(.headline);Text("\(group.moments.count) contacts").foregroundStyle(.secondary)};Spacer();Image(systemName:"chevron.right")}}}.buttonStyle(.plain)}
-            }.padding(18)}}.navigationTitle("Manage Moments").navigationBarTitleDisplayMode(.inline)}
-        }
+        ZStack {
+            TodayBackdrop()
+            ScrollView {
+                VStack(spacing:16) {
+                    if groups.isEmpty {
+                        ContentUnavailableView("No moments yet",systemImage:"gift",description:Text("Add a birthday, anniversary, festival, or custom moment to manage it here."))
+                    }
+                    ForEach(groups) { group in
+                        if let moment=group.moments.first {
+                            NavigationLink {
+                                if moment.type == "festival" {ManageFestivalView(group:group,store:store)}
+                                else {MomentEditor(moment:moment)}
+                            } label: {
+                                MomentCard {
+                                    HStack(spacing:14) {
+                                        MomentIconTile(type:moment.type,title:moment.title)
+                                        VStack(alignment:.leading,spacing:6) {
+                                            Text(moment.title).font(.headline)
+                                            Text(moment.type.capitalized).font(.subheadline).foregroundStyle(.secondary)
+                                            if !moment.enabled {Text("Inactive").font(.caption).foregroundStyle(.secondary)}
+                                        }
+                                        Spacer()
+                                        Image(systemName:"chevron.right")
+                                    }
+                                }
+                            }.buttonStyle(.plain).accessibilityIdentifier("manage-moment-\(moment.id)")
+                        }
+                    }
+                }.padding(18)
+            }
+        }.navigationTitle("Manage Moments").navigationBarTitleDisplayMode(.inline)
     }
 }
 struct ManageFestivalView: View {
@@ -19,7 +47,6 @@ struct ManageFestivalView: View {
     @State private var discard=false
 @State private var deleteConfirm=false
 @State private var disableConfirm=false
-@State private var saveConfirm=false
 @State private var scheduleConfirm=false
     @State private var contacts=false
 @State private var manual=false
@@ -43,7 +70,7 @@ struct ManageFestivalView: View {
             if let notice=model.notice {Text(notice).font(.subheadline).foregroundStyle(.secondary).accessibilityIdentifier("festival-notice")}
         }.padding(18)}}
         .navigationTitle("Manage Moment").navigationBarTitleDisplayMode(.inline).navigationBarBackButtonHidden()
-        .navigationDestination(isPresented:$model.scheduleCompleted){FestivalScheduleSuccess(title:model.title,plans:model.savedPlans)}
+        .navigationDestination(isPresented:$model.scheduleCompleted){FestivalScheduleSuccess(title:model.title,plans:model.savedPlans){model.tab = .schedule;model.scheduleCompleted=false}}
         .toolbar {
             ToolbarItem(placement:.topBarLeading){Button {if model.dirty{discard=true}else{dismiss()}}label:{Image(systemName:"chevron.left").frame(width:44,height:44)}.accessibilityLabel("Back")}
             ToolbarItem(placement:.topBarTrailing){Menu{Button("Festival settings"){model.tab = .details};Button("Delete Moment",role:.destructive){deleteConfirm=true}.accessibilityIdentifier("festival-delete-menu")}label:{Image(systemName:"ellipsis").frame(width:44,height:44)}.accessibilityLabel("Moment options")}
@@ -55,7 +82,7 @@ struct ManageFestivalView: View {
         .alert("Discard unsaved changes?",isPresented:$discard){Button("Discard changes",role:.destructive){model.discardImageEdits();dismiss()};Button("Keep editing",role:.cancel){}}
         .confirmationDialog("Disable this festival? Pending wishes will be cancelled. Contacts and messages are preserved.",isPresented:$disableConfirm,titleVisibility:.visible){Button("Disable and cancel wishes",role:.destructive){Task{await model.setActive(false,cancelSchedules:true)}}}
         .alert("Delete Moment?",isPresented:$deleteConfirm){Button("Delete Moment",role:.destructive){Task{if await model.delete(){dismiss()}}};Button("Cancel",role:.cancel){}}message:{Text("Contacts will be disconnected, scheduled wishes cancelled, and saved drafts deleted. Sent history remains.")}
-        .confirmationDialog("Saving changes cancels existing schedules. Review and schedule the updated wish again.",isPresented:$saveConfirm,titleVisibility:.visible){Button("Cancel schedules and save"){Task{if approveAfterCancel{await model.approve(cancelSchedules:true)}else{await model.save(cancelSchedules:true)}}}}
+        .alert("Save changes to scheduled wishes?",isPresented:$model.needsScheduleConfirmation){Button("Cancel schedules and save"){Task{if approveAfterCancel{await model.approve(cancelSchedules:true)}else{await model.save(cancelSchedules:true)}}};Button("Keep schedules",role:.cancel){}}message:{Text("Saving these changes cancels the existing schedules for this festival. After saving, review and schedule your updated wishes again.")}
         .confirmationDialog("Replace the edited message with a new draft?",isPresented:$regenerateConfirm,titleVisibility:.visible){Button("Regenerate"){Task{await model.generate(aiConsent:aiConsent)}}}
         .sheet(isPresented:$contacts){ManagedFestivalContactsPicker{values in contacts=false;contactChoices=values;if let first=values.first{choicePhone=first.phones.first ?? "";choiceEmail=first.emails.first ?? ""}}}
         .sheet(isPresented:Binding(get:{!contactChoices.isEmpty && !contacts},set:{if !$0{contactChoices=[]}})){contactSelection}
@@ -64,7 +91,26 @@ struct ManageFestivalView: View {
         .sheet(isPresented:$imageSheet){imageConfiguration}
         .sheet(isPresented:$scheduleConfirm){confirmation}
     }
-    private var identity:some View {MomentCard{HStack(spacing:16){MomentIconTile(type:"festival",title:model.title);VStack(alignment:.leading,spacing:8){Text(model.title).font(.title2.bold());Text("Festival · \(model.date.formatted(date:.abbreviated,time:.omitted))").foregroundStyle(.secondary)};Spacer(minLength:0);VStack{Toggle("Festival active",isOn:Binding(get:{model.active},set:{value in if !value && model.hasSchedules{disableConfirm=true}else{Task{await model.setActive(value)}}})).labelsHidden().accessibilityLabel("Festival active");Text(model.active ? "Active":"Inactive").font(.caption).foregroundStyle(.secondary)}}}}
+    private var identity:some View {
+        MomentCard {
+            HStack(spacing:16) {
+                MomentIconTile(type:"festival",title:model.title)
+                VStack(alignment:.leading,spacing:8) {
+                    Text(model.title).font(.title2.bold())
+                    Text("Festival").foregroundStyle(.secondary)
+                }
+                Spacer(minLength:0)
+                VStack {
+                    Toggle("Festival active",isOn:Binding(get:{model.active},set:{value in if !value && model.hasSchedules{disableConfirm=true}else{Task{await model.setActive(value)}}})).labelsHidden().accessibilityLabel("Festival active")
+                    Text(model.active ? "Active":"Inactive").font(.caption)
+                }
+            }
+            Label("Send date · \(MomentDates.sendDayLabel(model.sendDate,zone:model.zone))",systemImage:"calendar")
+                .font(.subheadline).foregroundStyle(.secondary)
+                .accessibilityIdentifier("festival-send-date")
+        }
+    }
+
     private var tabs:some View {HStack(spacing:3){ForEach(ManageFestivalModel.Tab.allCases,id:\.self){tab in Button{model.tab=tab;FestivalAnalytics().record(.tab)}label:{Text(tab.rawValue).font(.subheadline).lineLimit(1).minimumScaleFactor(0.7).frame(maxWidth:.infinity,minHeight:44).padding(.vertical,5).foregroundStyle(model.tab==tab ? Color.white:Color.nexdoIndigo).background(model.tab==tab ? Color.nexdoIndigo:Color.clear,in:RoundedRectangle(cornerRadius:18))}.buttonStyle(.plain).accessibilityAddTraits(model.tab==tab ? .isSelected:[]).accessibilityIdentifier("festival-tab-\(tab.rawValue)")}}.padding(5).background(.ultraThinMaterial,in:RoundedRectangle(cornerRadius:22))}
     private var details:some View {Group{
         Text("Moment Details").font(.largeTitle.bold())
@@ -89,7 +135,7 @@ struct ManageFestivalView: View {
         saveButtons
     }}
     private var saveButtons:some View {Group{MomentPrimary(title:"Save Changes"){save()};Button(role:.destructive){deleteConfirm=true}label:{Label("Delete Moment",systemImage:"trash").foregroundStyle(.red).frame(maxWidth:.infinity,minHeight:48).background(.red.opacity(0.08),in:RoundedRectangle(cornerRadius:18))}.buttonStyle(.plain)}}
-    private func save(approve:Bool=false){approveAfterCancel=approve;if model.hasSchedules{saveConfirm=true}else{Task{if approve{await model.approve()}else{await model.save()}}}}
+    private func save(approve:Bool=false){approveAfterCancel=approve;if model.dirty && model.hasSchedules || approve && model.hasSchedules{model.needsScheduleConfirmation=true}else{Task{if approve{await model.approve()}else{await model.save()}}}}
     private var message:some View {Group{
         Text("Wish Message").font(.largeTitle.bold());HStack{Label("For \(model.selected.count) selected contact\(model.selected.count == 1 ? "":"s")",systemImage:"person.2.fill").font(.subheadline);Spacer();Button("Personalize"){personalize=true}.frame(minHeight:44)}
         MomentSegments(options:["Warm","Personal","Short","Fun"],selection:$model.settings.tone)
@@ -108,7 +154,7 @@ struct ManageFestivalView: View {
         MomentPrimary(title:"Save Message"){save(approve:true)}
     }}
     private var schedule:some View {Group{
-        Text("Schedule").font(.largeTitle.bold());Label(model.date.formatted(date:.long,time:.omitted),systemImage:"calendar").foregroundStyle(.secondary)
+        Text("Schedule").font(.largeTitle.bold());Label(MomentDates.sendDayLabel(model.sendDate,zone:model.zone),systemImage:"calendar").foregroundStyle(.secondary)
         Text("Send time").font(.title2.bold());MomentCard{DatePicker("Date and time",selection:$model.sendDate,in:Date()...).environment(\.timeZone,TimeZone(identifier:model.zone) ?? .current);zonePicker}
         Text("Delivery").font(.title2.bold());MomentCard{ForEach(model.selected){r in VStack(alignment:.leading){HStack{Text(r.initials).padding(10).background(Color.nexdoIndigo.opacity(0.12),in:Circle());Text(r.name).font(.headline);Spacer()};Picker("Channel for \(r.name)",selection:Binding(get:{model.channel(r)},set:{model.settings.channels[r.key]=$0})){if !r.phone.isEmpty{Text("Messages").tag("messages")};if !r.email.isEmpty{Text("Email").tag("email")};Text("Copy / Share").tag("share")};if model.channel(r)=="email"{Toggle("Send automatically",isOn:Binding(get:{model.settings.automatic[r.key] ?? false},set:{model.settings.automatic[r.key]=$0})).disabled(!model.emailReady);Text(model.settings.automatic[r.key]==true ? "Auto-send":"Confirmation required").font(.caption)}else{Text(model.channel(r)=="messages" ? "Confirm at send time":"Manual share only").font(.caption)};Divider()}}}
         Text("\(automaticCount) automatic · \(model.selected.count-automaticCount) confirmation required").font(.subheadline)
@@ -136,16 +182,30 @@ private struct FestivalScheduleSuccess:View {
     @Environment(\.dismiss) private var dismiss
     let title:String
     let plans:[WishDeliveryPlan]
+    let manage:()->Void
+    private var deliverySummary:[String] {
+        Array(Set(plans.map { plan in
+            plan.automaticDelivery ? "Will send automatically by email" : "We’ll remind you to confirm in \(plan.channel == "messages" ? "Messages":"Nexdo")"
+        })).sorted()
+    }
+    private var sendTimes:[String] {
+        Array(Set(plans.map { MomentDates.label($0.date,zone:$0.timeZoneID) })).sorted()
+    }
     var body:some View {
         ZStack {TodayBackdrop();ScrollView{VStack(spacing:20){
             Image(systemName:"calendar.badge.checkmark").font(.system(size:68)).foregroundStyle(Color.nexdoIndigo)
             Text("Wishes scheduled").font(.largeTitle.bold())
             Text(title).font(.title2)
-            ForEach(plans){plan in MomentCard{
-                Label(plan.automaticDelivery ? "Will send automatically":"We’ll remind you to confirm in \(plan.channel == "messages" ? "Messages":"Nexdo")",systemImage:plan.automaticDelivery ? "envelope.fill":"bell.fill")
-                Text(MomentDates.label(plan.date,zone:plan.timeZoneID)).foregroundStyle(.secondary)
-                NavigationLink("Manage scheduled wish"){WishPlanView(plan:plan)}.frame(minHeight:44)
-            }}
+            MomentCard {
+                Text("For all \(plans.count) selected contact\(plans.count == 1 ? "":"s")").font(.headline)
+                    .accessibilityIdentifier("festival-confirmation-recipients")
+                ForEach(deliverySummary,id:\.self) { summary in
+                    Label(summary,systemImage:summary.hasPrefix("Will send") ? "envelope.fill":"bell.fill")
+                }
+                ForEach(sendTimes,id:\.self) { Text($0).foregroundStyle(.secondary) }
+                Button("Manage scheduled wish",action:manage).frame(minHeight:44)
+                    .accessibilityIdentifier("festival-manage-schedule")
+            }
             MomentPrimary(title:"Done"){dismiss()}
         }.padding(18)}}.navigationTitle("Schedule confirmed").navigationBarTitleDisplayMode(.inline)
     }

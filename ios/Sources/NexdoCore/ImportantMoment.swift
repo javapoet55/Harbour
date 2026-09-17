@@ -33,6 +33,15 @@ public struct WishDeliveryPlan: Codable, Identifiable, Sendable {
     } }
 }
 public enum MomentDates {
+    public static func sendDayLabel(_ date: Date, zone: String) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.timeZone = TimeZone(identifier: zone) ?? .current
+        formatter.dateFormat = "EEE, MMM d, yyyy"
+        return formatter.string(from: date)
+    }
+
     public static func relative(_ value: String, zone: String, now: Date = Date()) -> String {
         var c = Calendar(identifier: .gregorian); c.timeZone = TimeZone(identifier: zone) ?? .current
         let days = c.dateComponents([.day], from: c.startOfDay(for: now), to: date(value, zone: zone)).day ?? 0

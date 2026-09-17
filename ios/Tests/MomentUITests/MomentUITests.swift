@@ -11,7 +11,22 @@ import XCTest
         app.terminate(); app.launchArguments.append("-festival-manage-preview"); app.launch()
         let manage=app.buttons["Manage Moments"].firstMatch
         XCTAssertTrue(manage.waitForExistence(timeout:15));manage.tap()
+        app.buttons["manage-moment-moment"].tap()
         XCTAssertTrue(app.navigationBars["Manage Moment"].waitForExistence(timeout:5))
+    }
+    func testManageMomentsListsEveryCategory() {
+        app.terminate();app.launchArguments.append("-all-moment-categories");app.launch()
+        app.buttons["Manage Moments"].firstMatch.tap()
+        XCTAssertTrue(app.navigationBars["Manage Moments"].waitForExistence(timeout:5))
+        for id in ["moment","anniversary","festival","custom"] {
+            XCTAssertTrue(app.buttons["manage-moment-"+id].exists)
+        }
+        app.buttons["manage-moment-moment"].tap()
+        XCTAssertTrue(app.navigationBars["Edit Moment"].waitForExistence(timeout:5))
+        app.navigationBars.buttons.firstMatch.tap()
+        app.buttons["manage-moment-festival"].tap()
+        XCTAssertTrue(app.navigationBars["Manage Moment"].waitForExistence(timeout:5))
+        XCTAssertTrue(app.buttons["festival-tab-Schedule"].exists)
     }
     func testFestivalCardOpensItsFourTabManager() {
         app.terminate(); app.launchArguments.append("-festival-manage-preview"); app.launch()
@@ -74,6 +89,7 @@ import XCTest
         XCTAssertTrue(app.navigationBars["Manage Moment"].exists)
     }
     func testFestivalApprovalAndSchedule() {
+        app.launchArguments.append("-festival-two-recipients")
         openFestivalManager();app.buttons["festival-tab-Wish Message"].tap()
         let save=app.buttons.matching(identifier:"wish-primary").matching(NSPredicate(format:"label == %@", "Save Message")).firstMatch
         for _ in 0..<5 {if save.isHittable{break};app.swipeUp()};save.tap()
@@ -83,9 +99,23 @@ import XCTest
         let schedule=app.buttons.matching(identifier:"wish-primary").matching(NSPredicate(format:"label == %@", "Schedule Wish")).firstMatch
         for _ in 0..<5 {if schedule.isHittable{break};app.swipeUp()};schedule.tap()
         XCTAssertTrue(app.navigationBars["Review schedule"].waitForExistence(timeout:5))
-        XCTAssertTrue(app.staticTexts["We’ll remind you to confirm in Messages"].exists)
+        XCTAssertTrue(app.staticTexts["We’ll remind you to confirm in Messages"].firstMatch.exists)
         app.buttons.matching(identifier:"wish-primary").matching(NSPredicate(format:"label == %@", "Confirm Schedule")).firstMatch.tap()
         XCTAssertTrue(app.staticTexts["Wishes scheduled"].waitForExistence(timeout:8))
+        XCTAssertEqual(app.staticTexts.matching(identifier:"We’ll remind you to confirm in Messages").count,1)
+        XCTAssertTrue(app.staticTexts["For all 2 selected contacts"].exists)
+        XCTAssertEqual(app.buttons.matching(identifier:"festival-manage-schedule").count,1)
+        app.buttons["festival-manage-schedule"].tap()
+        XCTAssertTrue(app.navigationBars["Manage Moment"].waitForExistence(timeout:5))
+        XCTAssertTrue(app.buttons["festival-tab-Schedule"].isSelected)
+        app.buttons["festival-tab-Details"].tap()
+        app.switches["Repeat every year"].tap()
+        let saveDetails=app.buttons.matching(identifier:"wish-primary").matching(NSPredicate(format:"label == %@","Save Changes")).firstMatch
+        for _ in 0..<7 {if saveDetails.isHittable{break};app.swipeUp()}
+        saveDetails.tap()
+        XCTAssertTrue(app.alerts["Save changes to scheduled wishes?"].waitForExistence(timeout:5))
+        app.alerts.buttons["Cancel schedules and save"].tap()
+        XCTAssertTrue(app.staticTexts["Changes saved. Review and schedule your updated wish again."].waitForExistence(timeout:8))
     }
     func testFestivalVisualTabs() {
         openFestivalManager()
