@@ -8,6 +8,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useCoordinator } from '../src/actions/coordinator';
 import { useActionNotifications } from '../src/actions/useActionNotifications';
 import { onSignedOut, type TasksResponse } from '../src/api';
+import { RootErrorBoundary } from '../src/components/RootErrorBoundary';
 import { createQueryClient } from '../src/query/client';
 import { queryKeys } from '../src/query/keys';
 import { useMe } from '../src/query/useMe';
@@ -44,11 +45,13 @@ export default function RootLayout() {
   }, []);
 
   return (
-    <SafeAreaProvider>
-      <QueryClientProvider client={queryClient}>
-        <RootNavigator />
-      </QueryClientProvider>
-    </SafeAreaProvider>
+    <RootErrorBoundary>
+      <SafeAreaProvider>
+        <QueryClientProvider client={queryClient}>
+          <RootNavigator />
+        </QueryClientProvider>
+      </SafeAreaProvider>
+    </RootErrorBoundary>
   );
 }
 
@@ -116,8 +119,6 @@ function RootNavigator() {
         <Stack.Protected guard={profile === null}>
           <Stack.Screen name="(auth)" />
         </Stack.Protected>
-        {/* Reachable signed in or out: it exists to test signing in and out. */}
-        <Stack.Screen name="dev/session-check" options={{ headerShown: true, title: 'Session check' }} />
         {/* Reminder screens sit OUTSIDE the tab group: a notification opens them over any tab. */}
         <Stack.Protected guard={profile != null}>
           <Stack.Screen name="action" />

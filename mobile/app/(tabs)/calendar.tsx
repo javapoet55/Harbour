@@ -600,11 +600,13 @@ export default function Calendar() {
         <View style={styles.intelligenceHeader}>
           <TaskSymbol name="sparkles" size={15} color="#007AFF" />
           <Text style={[styles.subheadline, styles.semibold, styles.grow, { color: '#007AFF' }]}>Schedule Intelligence</Text>
-          {/* Swift opens `conflictSheet` (CalendarView.swift:463-477). It does NOT link into Ask:
-              `CalendarView`'s `ask` state (`:14`) and the `AskNexdoView(initialPrompt:)` sheet it
-              would present (`:157-160`) are dead code — nothing in the file ever sets `ask = true`.
-              Verified in Phase 6. */}
-          <Pressable accessibilityRole="button" accessibilityLabel="Review conflicts" onPress={() => router.push('/today/attention')} style={styles.cancel} testID="calendar-conflicts">
+          {/* `.sheet(isPresented: $conflicts) { conflictSheet }` (CalendarView.swift:163, `:463-477`).
+              It does NOT link into Ask: `CalendarView`'s `ask` state (`:14`) and the
+              `AskNexdoView(initialPrompt:)` sheet it would present (`:157-160`) are dead code —
+              nothing in the file ever sets `ask = true`. Verified in Phase 6.
+              Phase 5 pointed this at `/today/attention`, a port of a different view; Phase 10 built
+              the sheet itself. */}
+          <Pressable accessibilityRole="button" accessibilityLabel="Review conflicts" onPress={() => router.push('/calendar/conflicts')} style={styles.cancel} testID="calendar-conflicts">
             <Text style={[styles.caption, styles.semibold, { color: '#007AFF' }]}>Review conflicts</Text>
           </Pressable>
         </View>

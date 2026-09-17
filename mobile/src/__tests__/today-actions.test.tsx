@@ -3,6 +3,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react-nativ
 
 import type { Agenda, NexdoTask } from '../api';
 import { useCoordinator, scheduledWork } from '../actions/coordinator';
+import { addDays, startOfDay } from '../lib/taskQuery';
 import { queryKeys } from '../query/keys';
 import { useSession } from '../store/session';
 
@@ -53,7 +54,17 @@ const DUE_TASK = task({ id: 't1', startAt: new Date(Date.now() - 30_000).toISOSt
  * Ten minutes out: inside the queue's 15-minute window (`TodayActionQueue.windowMinutes`), so it is
  * a "Next up" row. Beyond the window it would be a `laterAction`, which only the queue sheet shows.
  */
-const LATER_TASK = task({ id: 't2', title: 'Call Ana at 4 PM', startAt: new Date(Date.now() + 600_000).toISOString() });
+const LATER_TASK = task({ id: 't2', title: 'Call Ana at 4 PM', startAt: soonToday(ZONE) });
+
+/**
+ * Ten minutes out, but never past local midnight: the queue covers only the rest of today, so a fixed
+ * offset makes the test fail for the last ten minutes of every day.
+ */
+function soonToday(zone: string): string {
+  const now = Date.now();
+  const endOfDay = addDays(startOfDay(now, zone), 1, zone);
+  return new Date(now + Math.min(600_000, (endOfDay - now) / 2)).toISOString();
+}
 
 const AGENDA: Agenda = { timeZone: ZONE, range: { days: [] }, tasks: [], events: [], overdue: [] };
 

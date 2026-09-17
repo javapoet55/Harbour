@@ -4,6 +4,7 @@ export { AuthScreen } from './AuthScreen';
 export { Button, type ButtonProps, type ButtonVariant } from './Button';
 export { Card } from './Card';
 export { ErrorView, type ErrorViewProps } from './ErrorView';
+export { RootErrorBoundary } from './RootErrorBoundary';
 export { GlassCard, type GlassCardProps } from './GlassCard';
 export { GradientButton, type GradientButtonProps } from './GradientButton';
 export { GradientText, type GradientTextProps } from './GradientText';

@@ -53,7 +53,13 @@ export type RequestOptions = {
   timeoutMs?: number;
 };
 
-/** One request/response pair, reported to `onExchange` for diagnostics (the session check screen). */
+/**
+ * One request/response pair, reported to `onExchange` for diagnostics.
+ *
+ * Phase 10 removed the development screen that consumed this, but the hook stays: it is the only
+ * place a caller can see the status, the Set-Cookie visibility and the timing of a request, and it
+ * costs nothing when nobody subscribes.
+ */
 export type Exchange = {
   method: HttpMethod;
   path: string;

@@ -11,7 +11,9 @@ function task(overrides: Partial<NexdoTask> & { id: string }): NexdoTask {
 }
 
 function client(tasks: NexdoTask[] = []): QueryClient {
-  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+  // `gcTime: 0` so the cache schedules no garbage-collection timer. Without it every cached query
+  // leaves a five-minute `setTimeout` behind and Jest force-exits the worker.
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 }, mutations: { retry: false, gcTime: 0 } } });
   queryClient.setQueryData<TasksResponse>(queryKeys.tasks.all(), { tasks, timeZone: 'Asia/Kolkata' });
   return queryClient;
 }

@@ -10,7 +10,6 @@ import {
   parseToolArguments,
   taskIdFromResult,
   toolRequest,
-  uuidV4,
 } from './protocol';
 
 function fakeFetch(status: number, body: string) {
@@ -146,14 +145,5 @@ describe('tool calls', () => {
       type: 'conversation.item.create',
       item: { type: 'function_call_output', call_id: 'call_a', output: '{"success":true}' },
     });
-  });
-});
-
-describe('uuidV4', () => {
-  it('produces RFC 4122 version 4 UUIDs', () => {
-    const pattern = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
-    for (let i = 0; i < 50; i++) expect(uuidV4()).toMatch(pattern);
-    expect(uuidV4(() => 0.999)).toMatch(pattern);
-    expect(uuidV4(() => 0)).toMatch(pattern);
   });
 });

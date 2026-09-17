@@ -21,8 +21,10 @@ export function createNativeDriver(): WebRtcDriver {
     createPeer: () => new webrtc.RTCPeerConnection({ iceServers: [] }) as unknown as PeerLike,
     getMicrophone: async () => (await webrtc.mediaDevices.getUserMedia({ audio: true, video: false })) as unknown as StreamLike,
     audioRoute: {
-      // TODO(phase0-decision): react-native-webrtc has no speaker API and Android voice-call audio defaults to the
-      // earpiece. react-native-incall-manager forces the loudspeaker (the Swift app uses .defaultToSpeaker).
+      // RESOLVED (Phase 0, kept in Phase 9): react-native-webrtc has no speaker API and Android
+      // voice-call audio defaults to the earpiece, so react-native-incall-manager forces the
+      // loudspeaker — which is what `.defaultToSpeaker` gives the Swift app
+      // (ios/App/VoiceWebRTCTransport.swift:39).
       start: () => {
         InCallManager.start({ media: 'audio' });
         InCallManager.setForceSpeakerphoneOn(true);

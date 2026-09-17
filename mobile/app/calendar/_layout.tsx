@@ -44,6 +44,8 @@ export default function CalendarLayout() {
       />
       {/* `.fullScreenCover` (CalendarView.swift:161). */}
       <Stack.Screen name="voice" options={{ presentation: 'fullScreenModal', headerShown: false }} />
+      {/* `.sheet(isPresented: $conflicts)` (CalendarView.swift:163); it draws its own header. */}
+      <Stack.Screen name="conflicts" options={{ presentation: 'modal', headerShown: false }} />
     </Stack>
   );
 }

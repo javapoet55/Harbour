@@ -5,7 +5,6 @@ import { useState } from 'react';
 import { Controller, useForm, useWatch } from 'react-hook-form';
 import { Alert, Pressable, StyleSheet, TextInput, View } from 'react-native';
 
-import { DevMenu } from '../../src/components/DevMenu';
 
 import {
   AppleSignInButton,
@@ -198,7 +197,6 @@ export default function SignIn() {
         </Text>
       </View>
 
-      <DevMenu />
     </AuthScreen>
   );
 }

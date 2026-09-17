@@ -18,8 +18,9 @@ export type ButtonProps = {
 export function Button({ title, onPress, variant = 'primary', loading = false, disabled = false, style, testID }: ButtonProps) {
   const theme = useTheme();
   const inactive = disabled || loading;
-  // TODO(phase1-decision): the Swift primary button is a magenta→indigo→blue gradient; solid indigo until
-  // expo-linear-gradient is added with the auth screens.
+  // RESOLVED (Phase 2): the Swift primary button's magenta→indigo→blue gradient lives in
+  // `GradientButton`, which every real screen uses. This one stays solid and now backs only
+  // `ErrorView`'s secondary "Try again".
   const container: ViewStyle =
     variant === 'primary'
       ? { backgroundColor: theme.colors.tint }

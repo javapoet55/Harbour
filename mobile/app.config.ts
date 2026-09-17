@@ -8,7 +8,22 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   name: 'Nexdo',
   slug: 'nexdo',
   owner: 'nexdoapp.com',
-  version: '1.0.0',
+  /**
+   * The Android review candidate.
+   *
+   * The Swift app's `MARKETING_VERSION` is 0.1.0 (ios/Nexdo.xcodeproj/project.pbxproj:255) and it
+   * STAYS the shipping iOS product, so reusing its number for this separate Android artefact would
+   * make two different builds claim the same version. `-rc.1` says what this build is: the first
+   * candidate for the team's parity review.
+   *
+   * IOS CAVEAT: `CFBundleShortVersionString` must be numeric, so this string cannot be submitted to
+   * App Store Connect as-is. Drop the pre-release suffix before the first TestFlight upload; see the
+   * iOS-pending list in docs/IOS_TO_REACT_NATIVE.md.
+   *
+   * `android.versionCode` is deliberately absent: `cli.appVersionSource` is "remote" in eas.json, so
+   * EAS owns the build number and the `production` profile increments it.
+   */
+  version: '1.0.0-rc.1',
   orientation: 'portrait',
   icon: './assets/icon.png',
   scheme: 'nexdo',
@@ -33,6 +48,12 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       'android.permission.CAMERA',
       'android.permission.SYSTEM_ALERT_WINDOW',
       'android.permission.WRITE_CONTACTS',
+      // - FOREGROUND_SERVICE / FOREGROUND_SERVICE_MEDIA_PLAYBACK: added by expo-audio for background
+      //   playback. Nexdo never plays audio in the background — `VoicePlayback`
+      //   (ios/App/VoicePlayback.swift) is an in-app player, and the voice session closes five
+      //   seconds after the app is backgrounded (VoiceConversationSession.swift:209).
+      'android.permission.FOREGROUND_SERVICE',
+      'android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK',
     ],
     adaptiveIcon: {
       backgroundColor: '#E6F4FE',

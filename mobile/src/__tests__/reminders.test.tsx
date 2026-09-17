@@ -5,6 +5,7 @@ import { Alert } from 'react-native';
 
 import type { NexdoTask } from '../api';
 import { useCoordinator, scheduledWork } from '../actions/coordinator';
+import { addDays, startOfDay } from '../lib/taskQuery';
 import { queryKeys } from '../query/keys';
 import { useSession } from '../store/session';
 
@@ -39,13 +40,26 @@ const ZONE = 'America/Los_Angeles';
 const OWNER = 'user-1';
 const OWNER_KEY = 'digest';
 
+/**
+ * A time that is always in the future AND always still "today" in the account zone.
+ *
+ * `buildActionQueue` only covers the rest of today, so a fixture at a fixed offset (say now + 1h)
+ * silently leaves the queue whenever the suite runs within that offset of local midnight. Halving
+ * the remaining day removes the dependency on the wall clock.
+ */
+function laterToday(zone: string): string {
+  const now = Date.now();
+  const endOfDay = addDays(startOfDay(now, zone), 1, zone);
+  return new Date(now + Math.min(3_600_000, (endOfDay - now) / 2)).toISOString();
+}
+
 function task(overrides: Partial<NexdoTask> & { id: string }): NexdoTask {
   return {
     title: 'Contact Damien at 10 AM',
     status: 'PLANNED',
     priority: 'NORMAL',
     durationMin: 30,
-    startAt: new Date(Date.now() + 3_600_000).toISOString(),
+    startAt: laterToday(ZONE),
     ...overrides,
   };
 }

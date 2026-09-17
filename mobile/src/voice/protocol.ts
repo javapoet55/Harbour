@@ -154,14 +154,3 @@ export const clientEvents = {
     item: { type: 'function_call_output', call_id: callId, output },
   }),
 };
-
-/** RFC 4122 version 4 UUID (the tool route validates `sessionId` as a UUID). */
-export function uuidV4(random: () => number = Math.random): string {
-  // TODO(phase0-decision): Math.random, not a CSPRNG. The session ID only scopes tool idempotency keys on the
-  // server; Phase 9 should use expo-crypto's randomUUID.
-  const hex = Array.from({ length: 32 }, () => Math.floor(random() * 16));
-  hex[12] = 4;
-  hex[16] = (hex[16] & 0x3) | 0x8;
-  const s = hex.map((n) => n.toString(16)).join('');
-  return `${s.slice(0, 8)}-${s.slice(8, 12)}-${s.slice(12, 16)}-${s.slice(16, 20)}-${s.slice(20)}`;
-}
