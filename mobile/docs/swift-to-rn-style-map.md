@@ -422,6 +422,25 @@ When the button's enabled state depends on screen state, set it from the screen 
 `<Stack.Screen options={{ headerRight: … }} />` rather than in `_layout.tsx`; the same applies to a
 title that depends on loaded data, such as the project name.
 
+### `.minimumScaleFactor` has no Android equivalent
+
+`Text(...).lineLimit(1).minimumScaleFactor(0.75)` shrinks the label until it fits. The obvious
+translation is `numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75}` — and it is right on
+iOS and **does nothing on Android**, where `adjustsFontSizeToFit` is not implemented. The label
+silently falls back to one clipped line.
+
+There is no drop-in replacement. Give the label the width it needs, set a smaller `fontSize` for
+Android, or measure with `onTextLayout` and scale by hand. Do not leave `adjustsFontSizeToFit` as
+the only defence, because it reads like a fix in the source and is not one on the target platform.
+
+### `.buttonStyle(.borderedProminent)` fills with the *inherited* tint
+
+Not with whatever colour the surrounding file happens to define. `Button("…").buttonStyle(.borderedProminent)`
+with no `.tint` takes the tint from the environment, which this app sets once at the root —
+`.tint(.nexdoIndigo)` (RootView.swift:46). A screen that defines its own accent for other purposes,
+as `AskStyle.blue` does for the mic circle, does not change it. Reading the nearest colour constant
+instead of the environment put the consent capsule at `#2E598F` where Swift draws `#3D29F0`.
+
 ### A `Form` section header is sentence case on iOS 26
 
 `Section("Project name")` renders as **"Project name"**, not "PROJECT NAME". Uppercasing is
