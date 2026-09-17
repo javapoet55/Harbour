@@ -54,6 +54,13 @@ export type Palette = {
    */
   segmentTrack: string;
   segmentSelected: string;
+  /**
+   * The tab bar. Swift's sits on a material a shade darker than the content — measured
+   * (245,245,245) light — and marks the selected tab with a rounded capsule of `nexdoIndigo` at
+   * 10%, measured (227,225,244). React Native defaulted the bar to plain white with no capsule.
+   */
+  tabBarBackground: string;
+  tabBarSelected: string;
 };
 
 export type ColorScheme = 'light' | 'dark';
@@ -87,6 +94,8 @@ export const palettes: Record<ColorScheme, Palette> = {
     listSeparator: '#E8E8E8', // measured in the Swift Form on iOS 26
     segmentTrack: 'rgba(118, 118, 128, 0.12)',
     segmentSelected: '#FFFFFF',
+    tabBarBackground: '#F5F5F5',
+    tabBarSelected: 'rgba(61, 41, 240, 0.10)',
   },
   dark: {
     // TODO(phase1-decision): the Swift dark variant is the dynamic system `.label`; this is its standard dark value.
@@ -119,5 +128,7 @@ export const palettes: Record<ColorScheme, Palette> = {
     listSeparator: '#38383A',
     segmentTrack: 'rgba(118, 118, 128, 0.18)',
     segmentSelected: 'rgba(235, 235, 245, 0.32)',
+    tabBarBackground: '#1C1C1E',
+    tabBarSelected: 'rgba(122, 106, 255, 0.22)',
   },
 };

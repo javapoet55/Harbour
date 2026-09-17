@@ -62,6 +62,25 @@ So the `fontSize` values were right and must not be scaled. But Roboto sets ~9% 
 Pro, and the screen is 4.5% narrower again — together that is the cause of the truncation and
 wrapping differences, not any font-size error. Fix the width a label is given, not the label.
 
+## Group 2 — app shell / tab bar
+
+| Element | iOS | Android before | Android after |
+| --- | --- | --- | --- |
+| Bar background | (245, 245, 245) | (255, 255, 255) | **(245, 245, 245)** |
+| Selected capsule | `nexdoIndigo` @10%, (227, 225, 244), 11dp corner | none | **present, rounded** |
+
+Two things had to be worked out on the device rather than assumed:
+
+- `tabBarActiveBackgroundColor` paints a view that `tabBarItemStyle` cannot round — a `borderRadius`
+  there produced a hard-edged rectangle, and `overflow: 'hidden'` did not reach it either. The
+  capsule has to be drawn *inside* a custom `tabBarButton`; that is `src/components/TabBarButton.tsx`.
+- Expo Router's `BottomTabItem` marks the focused tab with **`aria-selected`**, not
+  `accessibilityState.selected`. Reading the wrong one leaves the capsule permanently hidden with no
+  error.
+
+Remaining: the capsule sits a few dp higher than Swift's and is slightly shorter, because the bar's
+content height is driven by React Navigation rather than set outright.
+
 ## Screen results
 
 Only screens with **both** captures can carry a percentage. Android captures exist for two screens
@@ -76,6 +95,7 @@ so far; the rest of this table fills in as each group is done.
 | Sign in | empty, light | 19.23% | **19.13%** | Apple button absent on Android by design — most of what is left |
 | Sign in | empty, dark | 18.51% | **18.78%** | as above; card stroke now matches after the fix below |
 | Sign up | empty, light | 28.03% | **20.84%** | nav-bar pill (iOS 26); intro wraps to 2 lines not 3 (Roboto is narrower) |
+| Sign in | keyboard, email focused | — | n/a | not measurable as a full-screen diff — see below; content above the keyboard matches |
 | Reset password | empty, light | — | **3.38%** | essentially a match |
 
 All figures are content-aligned (see Tooling). The status-bar fix is not visible in them because the
@@ -99,13 +119,32 @@ references and remain valid.
 | Auth | sign-in, sign-up, verify-email, reset-password | default, keyboard, error, loading, filled, code-sent, dark — 20 files |
 | Today | today (default / 3-days / 5-days), weekly-summary, attention-details, overdue | 6 |
 | Tasks and projects | tasks, tasks-list, tasks-list-scrolled, tasks-search, task-filters, task-editor, task-detail*, projects, project-detail, project-editor, project-unassigned | 11 |
-| Calendar | calendar, calendar-week, calendar-conflicts, calendar-event-editor | 4 |
+| Calendar | calendar (Schedule), calendar-week, calendar-month, calendar-conflicts, calendar-event-editor | 5 |
 | Ask | ask, ai-consent | 2 |
 | Voice | voice-capture, voice-ask | 2 |
-| Account | account | 1 |
+| Account | account, account-settings | 2 |
+
+### Hand-off to the other machine
+
+Calendar, Ask, Account and Reminders are being done elsewhere from these references. Default states
+for Calendar (5), Ask (2) and Account (2) are captured and committed. **Reminders/actions (screens
+31 and 32) are not**: both open from a reminder notification, which needs a scheduled local
+notification to fire — see "Not captured".
 
 \* `task-detail` was captured but landed on the wrong screen and has been removed; it still needs a
 clean capture.
+
+### Keyboard states cannot be compared as a full-screen diff
+
+The iOS Simulator on this machine will not show the software keyboard: it treats the Mac's keyboard
+as a connected hardware one and suppresses it. `defaults write com.apple.iphonesimulator
+ConnectHardwareKeyboard -bool false` and restarting Simulator.app did not change it — in this Xcode
+the setting is per-device and not reachable from the command line.
+
+So a keyboard-state capture has a keyboard on Android and none on iOS, and the full-screen figure
+(37.96% on sign-in) measures that, not the app. What can be compared is the content *above* the
+keyboard, which is what the state is for — checking nothing is hidden or displaced. On sign-in that
+region matches: the card, the fields and the "Forgot password?" row all sit where Swift puts them.
 
 ### Not captured, and why
 

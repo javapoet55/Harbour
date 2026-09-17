@@ -343,6 +343,16 @@ not merely misplaced. Six screens had the same hand-rolled footer; they now shar
 `StickyFooter`, which adds `useSafeAreaInsets().bottom` to its padding. This is a functional bug as
 much as a visual one, so check it on any new screen with a pinned action.
 
+### The tab bar's selected capsule
+
+Swift marks the selected tab with a rounded capsule of `nexdoIndigo` at 10%. Two traps:
+
+- **`tabBarActiveBackgroundColor` cannot be rounded.** It paints a view outside the one
+  `tabBarItemStyle` styles, so `borderRadius` there gives a hard-edged rectangle and
+  `overflow: 'hidden'` does not reach it. Draw the capsule inside a custom `tabBarButton`.
+- **Focus arrives as `aria-selected`,** not `accessibilityState.selected`, from Expo Router's
+  `BottomTabItem`. Reading the wrong one hides the capsule silently, with nothing in the logs.
+
 ### Navigation bar buttons
 
 iOS 26 draws a native bar button inside a glass capsule. A custom `headerLeft` in Expo Router is

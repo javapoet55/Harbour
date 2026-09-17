@@ -1,6 +1,7 @@
 import { router, Tabs } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { TaskSymbol } from '../../src/components';
+import { TabBarButton, TaskSymbol } from '../../src/components';
 import { useTheme } from '../../src/theme';
 
 /**
@@ -13,14 +14,25 @@ import { useTheme } from '../../src/theme';
  */
 export default function TabsLayout() {
   const theme = useTheme();
+  const insets = useSafeAreaInsets();
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: theme.colors.tint,
         tabBarInactiveTintColor: theme.colors.secondary,
-        tabBarStyle: { backgroundColor: theme.colors.background, borderTopColor: theme.colors.separator },
+        // The bar needs room for the capsule: with the default height the vertical inset below
+        // clipped the label. 58dp of content plus whatever the gesture bar takes.
+        tabBarStyle: {
+          backgroundColor: theme.colors.tabBarBackground,
+          borderTopColor: theme.colors.separator,
+          height: 58 + insets.bottom,
+          paddingBottom: insets.bottom,
+        },
         tabBarLabelStyle: { fontSize: 13, fontWeight: '600' },
+        // Swift draws a rounded capsule behind the selected tab. TabBarButton draws it inside the
+        // button, because `tabBarActiveBackgroundColor` paints a view `tabBarItemStyle` cannot round.
+        tabBarButton: (props) => <TabBarButton {...props} />,
       }}
     >
       {/* `NexdoTab.icon` (RootView.swift:81): sun.max, checkmark.circle, sparkles, calendar. */}
