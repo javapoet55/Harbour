@@ -80,7 +80,8 @@ function SettingsScreen({
   loading: boolean;
   onRetry: () => void;
 }) {
-  const theme = useTheme();
+  // Pushed inside the account `.sheet`, so it takes the elevated palette too (style map section 3).
+  const theme = useTheme({ elevated: true });
   const consent = useConsent();
   const appearance = useAppearance();
 
@@ -209,9 +210,11 @@ function SettingsScreen({
           disabled={loading || saving}
           hitSlop={8}
           onPress={() => void saveAndDismiss()}
+          style={{ opacity: loading || saving ? 0.25 : 1 }}
           testID="settings-back"
         >
-          <TaskSymbol color={loading || saving ? theme.colors.secondary : theme.colors.tint} name="chevron.backward" size={22} />
+          {/* `Image(systemName: "chevron.backward")` with no `.font` is `.body` (ProfileView.swift:251). */}
+          <TaskSymbol color={theme.colors.tint} name="chevron.backward" size={17} />
         </Pressable>
       </View>
 
@@ -238,9 +241,11 @@ function SettingsScreen({
         {/* 2. App Voice (`:158-175`). */}
         <SettingsCard testID="settings-app-voice" title="App Voice">
           <View style={styles.row}>
-            <TaskSymbol color={theme.colors.ink} name="speaker.wave.2" size={17} />
-            <Text style={[theme.typography.body, styles.grow, { color: theme.colors.ink }]}>AI speaking volume</Text>
-            <Text style={[theme.typography.body, { color: theme.colors.secondary }]} testID="voice-volume-value">
+            {/* A `Label` with no `.foregroundStyle` is `Color.primary` — `.label`, not nexdoInk. */}
+            <TaskSymbol color={theme.colors.label} name="speaker.wave.2" size={17} />
+            <Text style={[theme.typography.body, styles.grow, { color: theme.colors.label }]}>AI speaking volume</Text>
+            {/* `.monospacedDigit()` (ProfileView.swift:163) so the percentage does not jitter. */}
+            <Text style={[theme.typography.body, styles.tabular, { color: theme.colors.secondary }]} testID="voice-volume-value">
               {`${Math.round(appearance.voiceVolume * 100)}%`}
             </Text>
           </View>
@@ -288,7 +293,8 @@ function SettingsScreen({
           </View>
           <SettingsCaption>Choose a photo from your library. Your picture is saved to your Nexdo account.</SettingsCaption>
           {savingPhoto ? (
-            <View style={styles.row}>
+            // `ProgressView("Saving profile photo…")` puts its label under the spinner.
+            <View style={styles.centred}>
               <ActivityIndicator color={theme.colors.tint} size="small" />
               <Text style={[theme.typography.body, { color: theme.colors.secondary }]}>Saving profile photo…</Text>
             </View>
@@ -451,7 +457,8 @@ function SettingsScreen({
                 <Text style={[theme.typography.body, { color: theme.colors.tint }]}>Synchronize now</Text>
               </Pressable>
               <SettingsDivider />
-              <Text style={[styles.caption, { color: theme.colors.ink }]} testID="settings-consent-state">
+              {/* `.font(.caption)` with no `.foregroundStyle` (ProfileView.swift:235). */}
+              <Text style={[styles.caption, { color: theme.colors.label }]} testID="settings-consent-state">
                 {consent.ai ? 'OpenAI sharing is allowed for this session.' : 'OpenAI sharing is off.'}
               </Text>
               {consent.ai ? (
@@ -489,9 +496,11 @@ function SettingsScreen({
                 start={{ x: 0, y: 0.5 }}
                 style={[styles.save, { opacity: saving ? 0.55 : 1 }]}
               >
-                {update.isPending ? <ActivityIndicator color="#FFFFFF" size="small" /> : null}
+                {/* Swift reads the shared `saving` flag (ProfileView.swift:240), which a photo
+                    upload, a sync and a calendar connection all set, not the save request alone. */}
+                {saving ? <ActivityIndicator color="#FFFFFF" size="small" /> : null}
                 <Text style={[theme.typography.body, styles.bold, { color: '#FFFFFF' }]}>
-                  {update.isPending ? 'Saving…' : 'Save settings'}
+                  {saving ? 'Saving…' : 'Save settings'}
                 </Text>
               </LinearGradient>
             </Pressable>
@@ -529,9 +538,11 @@ function SettingsScreen({
 const styles = StyleSheet.create({
   fill: { flex: 1 },
   grow: { flex: 1 },
-  subheadline: { fontSize: 15, lineHeight: 20 },
+  // `.subheadline` carries its own 21pt leading (style map section 2).
+  subheadline: { fontSize: 15, lineHeight: 21 },
   caption: { fontSize: 12, lineHeight: 16 },
   largeTitle: { fontSize: 34, lineHeight: 41, fontWeight: '700' },
+  tabular: { fontVariant: ['tabular-nums'] },
 
   navBar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 14 },
   // `VStack(alignment: .leading, spacing: 18).padding(20)`
@@ -547,5 +558,6 @@ const styles = StyleSheet.create({
   linkRow: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 32 },
   bold: { fontWeight: '700' },
   // `.frame(maxWidth: .infinity, minHeight: 50)` in a Capsule.
-  save: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, minHeight: 50, borderRadius: 25 },
+  // A bare `HStack` spaces by 8 (ProfileView.swift:240).
+  save: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 50, borderRadius: 25 },
 });

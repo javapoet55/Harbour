@@ -8,8 +8,7 @@ import { TaskSymbol } from '../../src/components/TaskSymbol';
 import { Text } from '../../src/components/Text';
 import { useSignOut } from '../../src/query/useAuth';
 import { useMe } from '../../src/query/useMe';
-import { brand, useTheme } from '../../src/theme';
-import { withAlpha } from '../../src/components/SignInBackdrop';
+import { useTheme } from '../../src/theme';
 
 /**
  * `AccountView` (ios/App/ProfileView.swift:60), **body `:65-99`**, read top to bottom.
@@ -25,7 +24,9 @@ import { withAlpha } from '../../src/components/SignInBackdrop';
 const WEB_ORIGIN = 'https://harbour-production-f8a0.up.railway.app';
 
 export default function Account() {
-  const theme = useTheme();
+  // `AccountView` is a `.sheet` from both entry points (RootView.swift:1181, :1702); iOS resolves
+  // the system backgrounds one level up inside a sheet (style map section 3).
+  const theme = useTheme({ elevated: true });
   const { data: profile } = useMe();
   const signOut = useSignOut();
   const [signingOut, setSigningOut] = useState(false);
@@ -64,18 +65,26 @@ export default function Account() {
 
       {/* `.navigationTitle("My Page").navigationBarTitleDisplayMode(.inline)` with a trailing Close. */}
       <View style={styles.navBar}>
-        <Text accessibilityRole="header" style={[styles.navTitle, styles.grow, { color: theme.colors.ink }]}>
+        {/* An `.inline` title is centred; React Navigation left-aligns on Android. */}
+        <View style={styles.navSide} />
+        <Text accessibilityRole="header" style={[styles.navTitle, styles.grow, styles.centred, { color: theme.colors.ink }]}>
           My Page
         </Text>
-        <Pressable
-          accessibilityLabel="Close"
-          accessibilityRole="button"
-          hitSlop={8}
-          onPress={dismiss}
-          testID="account-close"
-        >
-          <TaskSymbol color={theme.colors.tint} name="xmark" size={20} />
-        </Pressable>
+        {/* iOS 26 draws a bar button inside a glass capsule, which `account-default.png` shows
+            plainly as a white circle around the X. The style map lists the capsule as unclosed;
+            this is the nearest thing a plain Pressable can be. */}
+        <View style={styles.navSide}>
+          <Pressable
+            accessibilityLabel="Close"
+            accessibilityRole="button"
+            hitSlop={8}
+            onPress={dismiss}
+            style={[styles.closeCapsule, { backgroundColor: theme.colors.background }]}
+            testID="account-close"
+          >
+            <TaskSymbol color={theme.colors.tint} name="xmark" size={20} />
+          </Pressable>
+        </View>
       </View>
 
       <ScrollView contentContainerStyle={styles.scroll}>
@@ -122,15 +131,12 @@ export default function Account() {
           accessibilityState={{ disabled: signingOut }}
           disabled={signingOut}
           onPress={confirmSignOut}
-          style={[
-            styles.signOut,
-            { backgroundColor: theme.colors.surface, borderColor: withAlpha(brand.nexdoIndigo, 0.13), opacity: signingOut ? 0.55 : 1 },
-          ]}
+          // `.background(.background, in: RoundedRectangle(cornerRadius: 14))` (ProfileView.swift:85)
+          // draws a fill and no stroke, and the label never changes.
+          style={[styles.signOut, { backgroundColor: theme.colors.background, opacity: signingOut ? 0.55 : 1 }]}
           testID="account-sign-out"
         >
-          <Text style={[theme.typography.body, { color: theme.colors.danger }]}>
-            {signingOut ? 'Signing out…' : 'Sign out'}
-          </Text>
+          <Text style={[theme.typography.body, { color: theme.colors.danger }]}>Sign out</Text>
         </Pressable>
       </ScrollView>
     </SafeAreaView>
@@ -140,11 +146,15 @@ export default function Account() {
 const styles = StyleSheet.create({
   fill: { flex: 1 },
   grow: { flex: 1 },
-  title3: { fontSize: 20, lineHeight: 25, fontWeight: '700' },
+  // `.title3` is 20/28; 25 is `fontSize * 1.2`, which is the rule for `.system(size:)` only.
+  title3: { fontSize: 20, lineHeight: 28, fontWeight: '700' },
   caption: { fontSize: 12, lineHeight: 16 },
+  centred: { textAlign: 'center' },
 
-  navBar: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 20, paddingVertical: 14 },
+  navBar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 14 },
+  navSide: { width: 44, alignItems: 'flex-end' },
   navTitle: { fontSize: 17, lineHeight: 22, fontWeight: '600' },
+  closeCapsule: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
 
   // `VStack(alignment: .leading, spacing: 18).padding(20)`
   scroll: { padding: 20, gap: 18 },
@@ -154,5 +164,5 @@ const styles = StyleSheet.create({
   // `VStack(spacing: 0) … .padding(8)`
   menuCard: { padding: 8 },
   // `.frame(maxWidth: .infinity, minHeight: 46)` with corner radius 14.
-  signOut: { minHeight: 46, alignItems: 'center', justifyContent: 'center', borderRadius: 14, borderWidth: StyleSheet.hairlineWidth },
+  signOut: { minHeight: 46, alignItems: 'center', justifyContent: 'center', borderRadius: 14 },
 });

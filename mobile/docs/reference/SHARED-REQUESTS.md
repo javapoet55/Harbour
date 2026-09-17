@@ -74,3 +74,24 @@ may touch. So the review is here in full rather than in the code. Read against
 | `styles.subheadline` 20 → **21**. | Style map §2. |
 | The summary text takes `theme.colors.label`; "Tap to view the details." and a change's `reason` take `theme.colors.secondaryLabel`. | `AskStyle.ink` (`AskResponseView.swift:78`) and `AskStyle.secondary` (`:22`, `:55`). The card body is correctly `nexdoInk` — Swift names it explicitly there (`:124`). |
 | "Approve changes": a content-sized capsule in the tint, not a full-width 12pt-radius block. | `.buttonStyle(.borderedProminent)` (`:58`). |
+
+## `src/components/ProfileParts.tsx`
+
+Read against `ProfileView.swift:39-58`, `:104-123` and `account-default.png`.
+
+| What | Why |
+| --- | --- |
+| `AccountMenuRow`: the leading glyph `size` 20 → **17**, and the trailing chevron/arrow 13 → **12**. | `Image(systemName: icon)` carries no `.font`, so it is `.body` (`:105`); the trailing one is `.font(.caption)` (`:108`). |
+| `AccountAvatar` and `ProfileCard` should take the **elevated** palette when rendered inside the account sheet, or accept the colours from the caller. | `AccountView` is a `.sheet` (RootView.swift:1181, `:1702`). `app/account/index.tsx` and `settings.tsx` now pass `useTheme({ elevated: true })` for their own colours; these two still resolve their own non-elevated palette, so in dark mode the card is `#1C1C1E` where the screen around it is also `#1C1C1E`, and the card stops reading as a card. |
+
+## `src/components/SettingsControls.tsx`
+
+Read against `ProfileView.swift:146-270`, `:274-295`.
+
+| What | Why |
+| --- | --- |
+| `styles.subheadline` 20 → **21**. | Style map §2. |
+| The card title, `SettingsField`'s label, `SettingsToggle`'s label and `SettingsLabeledValue`'s label take `theme.colors.label`; `SettingsLabeledValue`'s value takes `theme.colors.secondaryLabel`. | None carries a `.foregroundStyle` in Swift, so all are `Color.primary` / `LabeledContent`'s own secondary (style map §3). The screen currently paints them `nexdoInk` / `nexdoSecondary`, which is visible in light mode. |
+| **`SettingsSegments`: use `colors.segmentTrack` and `colors.segmentSelected`, with the selected label in `colors.label`** — not a `tint`-filled segment with white text. | `.pickerStyle(.segmented)` (`:154`) is a system segmented control: a translucent track with a raised light capsule and label-coloured text. This is the same fault PARITY global fix 5 already closed for the Tasks screen's picker; the Appearance picker never got it, so Day/Night/System renders as an indigo block. |
+| `SettingsPicker`: the current value takes `theme.colors.tint`, and the indicator is the up/down chevron pair. | `.pickerStyle(.menu)` (`:202`) draws the selection in the accent colour with `chevron.up.chevron.down`. |
+| `SettingsSlider`: the two speaker glyphs `size` 15 → **17** and colour `theme.colors.label`; the thumb is white with a shadow, not `tint`. | `Image(systemName: "speaker.fill")` has no `.font` and no `.foregroundStyle` (`:168-172`), and a system `Slider` thumb is white in both appearance modes. |
