@@ -127,3 +127,11 @@ Tests use isolated SQLite and URLProtocol fixtures; no real messages, email or A
 Initial `swift test` using the system toolchain lacked the `Testing` module; rerunning via the configured Xcode toolchain executed the suite successfully apart from the unrelated expectation above.
 
 No production deployment, real message/email send, commit or push was performed for this request.
+
+## Greeting cards
+
+The Wish Message tab now opens a full greeting-card editor. It composes AI artwork with native, editable greeting text and an optional signature (80 characters). Text is typeset on device for readability; the signature and greeting are not sent to the artwork provider. The card can be shared through the iOS share sheet as a rendered image. Use This Card applies the selected artwork; Save Message persists greeting/signature metadata in the existing festivalSettings JSON. Artwork remains in protected local storage; it does not sync across devices. Scheduled delivery remains text-only and is labeled accordingly.
+
+Authenticated `POST /api/moments`, operation `greetingArtwork`, accepts `momentID`, `festival`, `style`, `aspect`, `prompt`, and `aiConsent:true`. It verifies ownership, limits concurrent/per-hour generation per user per instance, calls OpenAI Images, and returns JPEG base64. Configure server-side `OPENAI_API_KEY`; optional `OPENAI_IMAGE_MODEL` defaults to `gpt-image-1.5`. Provider errors are shown rather than replaced by mock artwork. Production generation requires deployment of this backend version and provider image-model access. No new database migration is required. Preview launch arguments use fixture art only for simulator tests. Provider billing quotas remain the cross-instance spending limit.
+
+API implementation reference: https://developers.openai.com/api/docs/guides/image-generation

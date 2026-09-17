@@ -73,3 +73,103 @@ struct ManagedFestivalContactsPicker: UIViewControllerRepresentable {
     }
 }
 enum FestivalError:LocalizedError {case message(String);var errorDescription:String? {if case let .message(value)=self{return value};return nil}}
+
+/// Native typesetting keeps the greeting and signature editable and legible.
+struct FestivalGreetingCard: View {
+    let artwork:UIImage
+    let title,message,signature:String
+    var body:some View {
+        VStack(spacing:0) {
+            Image(uiImage:artwork).resizable().scaledToFit().frame(maxWidth:.infinity).frame(height:230).background(Color(red:0.15,green:0.08,blue:0.35))
+            VStack(spacing:16) {
+                Text(title).font(.system(size:30,weight:.semibold,design:.serif)).foregroundStyle(Color(red:0.25,green:0.12,blue:0.37))
+                Rectangle().fill(Color.orange.opacity(0.5)).frame(width:48,height:2)
+                Text(message).font(.system(size:17,design:.serif)).lineSpacing(5).foregroundStyle(Color(red:0.25,green:0.22,blue:0.29)).fixedSize(horizontal:false,vertical:true)
+                if !signature.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty {
+                    Text(signature).font(.system(size:23,weight:.medium,design:.serif)).italic().foregroundStyle(Color(red:0.48,green:0.25,blue:0.13)).fixedSize(horizontal:false,vertical:true).padding(.top,6)
+                }
+            }.multilineTextAlignment(.center).padding(26).frame(maxWidth:.infinity)
+                .background(Color(red:1,green:0.97,blue:0.91))
+        }.clipShape(RoundedRectangle(cornerRadius:20))
+            .overlay(RoundedRectangle(cornerRadius:20).stroke(Color.orange.opacity(0.25)))
+            .accessibilityIdentifier("greeting-card-preview")
+    }
+}
+struct FestivalGreetingCardEditor:View {
+    @ObservedObject var model:ManageFestivalModel
+    @Environment(\.dismiss) private var dismiss
+    @State private var selected:FestivalImageVariation?
+    @State private var shared:CardShareItem?
+    @FocusState private var editing:Bool
+    private var artwork:UIImage? { (selected?.data ?? model.imageData).flatMap(UIImage.init(data:)) }
+    private var greeting:Binding<String> {Binding(get:{model.settings.cardGreeting ?? model.settings.baseMessage},set:{model.settings.cardGreeting=String($0.prefix(500))})}
+    private var signature:Binding<String> {Binding(get:{model.settings.cardSignature ?? ""},set:{model.settings.cardSignature=String($0.prefix(80))})}
+    var body:some View {
+        NavigationStack {
+            ZStack {TodayBackdrop();ScrollView {
+                VStack(alignment:.leading,spacing:22) {
+                    Text("A little more personal.").font(.title.bold())
+                    Text("Create artwork for your occasion, then finish your card with a greeting and signature.").foregroundStyle(.secondary)
+                    if let artwork {
+                        FestivalGreetingCard(artwork:artwork,title:model.title,message:greeting.wrappedValue,signature:signature.wrappedValue)
+                    } else {
+                        VStack(spacing:16){Image(systemName:"envelope.open.fill").font(.system(size:54)).foregroundStyle(Color.nexdoIndigo);Text(model.title).font(.title2.bold());Text("Your greeting card will appear here").foregroundStyle(.secondary)}.frame(maxWidth:.infinity,minHeight:240).background(.ultraThinMaterial,in:RoundedRectangle(cornerRadius:22))
+                    }
+                    MomentCard {
+                        Label("Make it yours",systemImage:"pencil.and.outline").font(.headline)
+                        Text("Greeting").font(.subheadline.bold())
+                        TextField("Your greeting",text:greeting,axis:.vertical).lineLimit(3...8).focused($editing).accessibilityIdentifier("card-greeting")
+                        Divider()
+                        Text("Your signature").font(.subheadline.bold())
+                        TextField("With love, Sri & family",text:signature,axis:.vertical).lineLimit(1...3).focused($editing).accessibilityIdentifier("card-signature")
+                        Text("Appears at the bottom of your card. \(signature.wrappedValue.count)/80").font(.caption).foregroundStyle(.secondary)
+                    }
+                    MomentCard {
+                        Label("Artwork",systemImage:"sparkles").font(.headline)
+                        Picker("Style",selection:$model.settings.imageStyle){ForEach(["Traditional","Modern","Minimal","Colorful","Elegant"],id:\.self){Text($0)}}
+                        Picker("Artwork format",selection:$model.settings.imageAspect){ForEach(["Portrait","Square","Landscape"],id:\.self){Text($0)}}
+                        TextField("Describe the artwork (optional)",text:$model.settings.imagePrompt,axis:.vertical).focused($editing).onChange(of:model.settings.imagePrompt){_,value in model.settings.imagePrompt=String(value.prefix(1000))}
+                        Text("Generate sends the occasion, style and scene description to OpenAI. Your greeting, signature and contacts stay out of that request.").font(.caption).foregroundStyle(.secondary)
+                        if model.isDesignPreview {Text("Design preview · sample artwork").font(.caption).foregroundStyle(.orange)}
+                        if model.generatingImage {ProgressView("Creating your artwork…");Button("Cancel generation"){model.cancelImage()}}
+                        else {Button(artwork == nil ? "Generate AI Greeting Card":"Regenerate Artwork",systemImage:"sparkles"){editing=false;model.generateImage()}.buttonStyle(.borderedProminent)}
+                    }
+                    if !model.images.isEmpty {
+                        Text("Choose artwork").font(.headline)
+                        ScrollView(.horizontal){HStack{ForEach(model.images){variation in
+                            if let image=UIImage(data:variation.data) {
+                                Button{selected=variation}label:{Image(uiImage:image).resizable().scaledToFill().frame(width:90,height:110).clipped().clipShape(RoundedRectangle(cornerRadius:12)).overlay(RoundedRectangle(cornerRadius:12).stroke(selected?.id==variation.id ? Color.nexdoIndigo:Color.clear,lineWidth:3))}.accessibilityLabel("Choose artwork \(model.images.firstIndex(where:{$0.id==variation.id})!+1)")
+                            }
+                        }}}
+                    }
+                    if let error=model.error {Text(error).foregroundStyle(.red)}
+                    if artwork != nil {
+                        MomentPrimary(title:"Use This Card") {
+                            if let selected {model.chooseImage(selected)}
+                            if model.error == nil {dismiss()}
+                        }
+                        Button("Share Card",systemImage:"square.and.arrow.up") {share()}.frame(maxWidth:.infinity,minHeight:44).buttonStyle(.bordered)
+                        Text("Use This Card applies it to this moment. Tap Save Message on the next screen to save your changes.").font(.caption).foregroundStyle(.secondary)
+                    }
+                }.padding(18)
+            }.scrollDismissesKeyboard(.interactively)}
+            .navigationTitle("Greeting Card").navigationBarTitleDisplayMode(.inline)
+            .toolbar{ToolbarItem(placement:.topBarTrailing){Button("Done"){model.cancelImage();dismiss()}};ToolbarItemGroup(placement:.keyboard){Spacer();Button("Done"){editing=false}}}
+            .onChange(of:model.images.map(\.id)){_,_ in selected=model.images.first}
+            .onDisappear{model.cancelImage()}
+            .sheet(item:$shared){CardActivitySheet(image:$0.image)}
+        }
+    }
+    @MainActor private func share() {
+        guard let artwork else{return}
+        let renderer=ImageRenderer(content:FestivalGreetingCard(artwork:artwork,title:model.title,message:greeting.wrappedValue,signature:signature.wrappedValue).frame(width:380).environment(\.colorScheme,.light))
+        renderer.scale=3
+        if let image=renderer.uiImage {shared=CardShareItem(image:image)}else{model.error="The card could not be prepared for sharing."}
+    }
+}
+private struct CardShareItem:Identifiable {let id=UUID();let image:UIImage}
+private struct CardActivitySheet:UIViewControllerRepresentable {
+    let image:UIImage
+    func makeUIViewController(context:Context)->UIActivityViewController {UIActivityViewController(activityItems:[image],applicationActivities:nil)}
+    func updateUIViewController(_ controller:UIActivityViewController,context:Context){}
+}

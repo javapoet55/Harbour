@@ -106,6 +106,7 @@ private struct UpcomingMomentRow: View {
     }
 }
 private struct FestivalGroupCard: View {
+    @EnvironmentObject private var store: ImportantMomentsStore
     let group: MomentDisplayGroup
     var body: some View {
         if let moment = group.moments.first {
@@ -116,8 +117,6 @@ private struct FestivalGroupCard: View {
                         Text(moment.title).font(.title3.bold())
                         Text("Festival · \(MomentDates.relative(moment.nextOccurrence, zone: moment.timeZoneID))")
                             .font(.subheadline).foregroundStyle(.secondary)
-                        Label("\(group.moments.count) selected contacts", systemImage: "person.2.fill")
-                            .font(.subheadline.weight(.medium)).foregroundStyle(Color.nexdoIndigo)
                         let scheduled = group.moments.filter { $0.enabled && $0.upcomingDelivery != nil }.count
                         let review = group.moments.filter { $0.enabled && $0.upcomingDelivery == nil }.count
                         if review > 0 {
@@ -127,11 +126,11 @@ private struct FestivalGroupCard: View {
                             MomentStatusBadge(title: "\(scheduled) scheduled", color: .blue, icon: "clock")
                         }
                         NavigationLink {
-                            FestivalRecipientsView(group: group)
+                            ManageFestivalView(group: group, store: store)
                         } label: {
-                            Label("Manage recipients", systemImage: "chevron.right")
+                            Label("Manage Moments", systemImage: "chevron.right")
                                 .font(.subheadline.bold())
-                        }
+                        }.accessibilityIdentifier("festival-manage-\(moment.id)")
                     }.frame(maxWidth: .infinity, alignment: .leading)
                 }
             }

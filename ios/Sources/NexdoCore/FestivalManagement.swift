@@ -7,7 +7,9 @@ public struct FestivalSettings: Codable, Equatable, Sendable {
     public var baseMessage = "", tone = "Warm", personalContext = ""
     public var manuallyEdited = false
     public var approvedAt: String?
-    public var includeImage = false, imageID = "", imageStyle = "Traditional", imageAspect = "Square", imagePrompt = ""
+    public var includeImage = false, imageID = "", imageStyle = "Traditional", imageAspect = "Portrait", imagePrompt = ""
+    public var cardSignature: String?
+    public var cardGreeting: String?
     public var overrides: [String:String] = [:], channels: [String:String] = [:], contactIDs: [String:String] = [:]
     public var automatic: [String:Bool] = [:], selected: [String:Bool] = [:]
     public var catalogNotice:String?

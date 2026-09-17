@@ -24,7 +24,7 @@ import CryptoKit
     @Published var imageData:Data?
     private(set) var originals:[ImportantMoment]
     let store:ImportantMomentsStore
-    private let imageService:any FestivalImageGenerationService
+    private let imageService:(any FestivalImageGenerationService)?
     private let imageStorage:any FestivalImageStorageService
     private var imageTask:Task<Void,Never>?
     private var baseline=""
@@ -41,7 +41,7 @@ import CryptoKit
     var dirty:Bool { fingerprint != baseline }
     private func encoded<T:Encodable>(_ value:T) -> String {let encoder=JSONEncoder();encoder.outputFormatting = [.sortedKeys];return String(data:(try? encoder.encode(value)) ?? Data(),encoding:.utf8) ?? ""}
     private var fingerprint:String { let state=[title,MomentDates.day(date,zone:zone),zone,String(yearly),String(active),encoded(recipients),encoded(settings)];return state.joined(separator:"|") }
-    init(group:MomentDisplayGroup,store:ImportantMomentsStore,imageService:any FestivalImageGenerationService=MockFestivalImageService(),imageStorage:any FestivalImageStorageService=ProtectedFestivalImageStorage()) {
+    init(group:MomentDisplayGroup,store:ImportantMomentsStore,imageService:(any FestivalImageGenerationService)?=nil,imageStorage:any FestivalImageStorageService=ProtectedFestivalImageStorage()) {
         self.store=store;self.originals=group.moments;self.imageService=imageService;self.imageStorage=imageStorage
         let first=group.moments[0];title=first.title;zone=first.timeZoneID;date=MomentDates.date(first.nextOccurrence,zone:first.timeZoneID);yearly=first.yearly;active=group.moments.contains(where: \.enabled)
         var saved=FestivalSettings.read(first.festivalSettings) ?? FestivalSettings()
@@ -109,12 +109,29 @@ import CryptoKit
         await save(cancelSchedules:cancelSchedules)
         if error != nil {settings.approvedAt=nil}else{analytics.record(.approved);notice="Message approved and saved. Nothing has been sent."}
     }
+    var isDesignPreview:Bool { ProcessInfo.processInfo.arguments.contains("-moments-design-preview") }
     func generateImage() {
-        guard !generatingImage else{return};generatingImage=true;error=nil;analytics.record(.imageStarted)
+        guard !generatingImage, let first=originals.first else{return}
+        generatingImage=true;error=nil;analytics.record(.imageStarted)
         let request=FestivalImageRequest(festival:title,style:settings.imageStyle,aspect:settings.imageAspect,prompt:settings.imagePrompt)
-        imageTask=Task { do {let values=try await imageService.generate(request);try Task.checkCancellation();images=values;analytics.record(.imageCompleted)} catch is CancellationError {} catch {self.error="Image generation failed. Try again.";analytics.record(.imageFailed)};generatingImage=false }
+        imageTask=Task {
+            defer {generatingImage=false}
+            do {
+                let values:[FestivalImageVariation]
+                if let service=imageService { values=try await service.generate(request) }
+                else if isDesignPreview { values=try await MockFestivalImageService().generate(request) }
+                else {
+                    struct Input:Encodable {let momentID,festival,style,aspect,prompt:String;let aiConsent=true}
+                    struct Response:Decodable,Sendable {let data,mime:String}
+                    let result:Response=try await store.request("greetingArtwork",Input(momentID:first.id,festival:request.festival,style:request.style,aspect:request.aspect,prompt:request.prompt))
+                    guard let data=Data(base64Encoded:result.data),data.count<=5_000_000,UIImage(data:data) != nil else {throw FestivalError.message("The artwork could not be opened. Please try again.")}
+                    values=[FestivalImageVariation(id:UUID().uuidString,data:data,isMock:false)]
+                }
+                try Task.checkCancellation();images=values;analytics.record(.imageCompleted)
+            } catch is CancellationError {} catch {if !Task.isCancelled {self.error=error.localizedDescription;analytics.record(.imageFailed)}}
+        }
     }
-    func cancelImage() {imageTask?.cancel();Task{await imageService.cancel()};generatingImage=false}
+    func cancelImage() {imageTask?.cancel();Task{await imageService?.cancel()}}
     func chooseImage(_ image:FestivalImageVariation) {do{settings.imageID=try imageStorage.store(image);stagedImages.insert(settings.imageID);imageData=image.data;images=[];invalidateApproval();analytics.record(.imageSelected)}catch{self.error="Could not save image preview."}}
     func discardImageEdits(){for id in stagedImages{imageStorage.delete(id)};stagedImages=[]}
     func removeImage(){settings.imageID="";imageData=nil;settings.includeImage=false;invalidateApproval()}

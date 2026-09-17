@@ -1,3 +1,4 @@
+import { generateGreetingArtwork } from '@/server/moments/greeting-card';
 import { saveFestival, deleteFestival, festivalCatalog } from '@/server/moments/festival';
 import { NextResponse } from 'next/server';
 import { requireUser } from '@/server/auth';
@@ -14,6 +15,7 @@ export async function POST(req:Request) {
   const user=await requireUser();const raw=await req.text();if(raw.length>200000) throw new MomentError('Request too large.',413);
   const p=z.object({operation:z.string(),input:z.unknown().optional(),id:z.string().optional()}).parse(JSON.parse(raw));
   switch(p.operation) {
+   case 'greetingArtwork': return NextResponse.json(await generateGreetingArtwork(user.id,p.input,req.signal));
    case 'festivalSave': return NextResponse.json(await saveFestival(user.id,p.input));
    case 'festivalDelete': return NextResponse.json(await deleteFestival(user.id,p.input));
    case 'festivalCatalog': return NextResponse.json({entries:festivalCatalog()});

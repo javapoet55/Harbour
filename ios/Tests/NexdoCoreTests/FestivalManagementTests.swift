@@ -51,3 +51,13 @@ import Testing
     #expect(!FestivalImageCompatibility.valid(data:Data([1]),mime:"image/webp",providerSupportsImages:true))
     #expect(FestivalImageCompatibility.valid(data:Data([1]),mime:"image/png",providerSupportsImages:true))
 }
+
+@Test func greetingCardSettingsPreserveLegacyAndPersonalization() throws {
+    var settings=FestivalSettings();settings.baseMessage="Happy Diwali"
+    let legacy=String(data:try JSONEncoder().encode(settings),encoding:.utf8)!
+    #expect(FestivalSettings.read(legacy)?.cardSignature == nil)
+    settings.cardSignature="With love, Sri & family";settings.cardGreeting="Wishing you light and joy."
+    let saved=String(data:try JSONEncoder().encode(settings),encoding:.utf8)!
+    #expect(FestivalSettings.read(saved)?.cardSignature==settings.cardSignature)
+    #expect(FestivalSettings.read(saved)?.cardGreeting==settings.cardGreeting)
+}

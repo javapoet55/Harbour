@@ -90,7 +90,7 @@ struct MomentOK: Decodable, Sendable {}
     func request<T: Encodable, R: Decodable & Sendable>(_ operation: String, _ input: T, id: String? = nil) async throws -> R {
         guard owner != nil else { throw APIError.signedOut }
         let token = generation
-        let result: R = try await api.request("/api/moments", method: "POST", body: JSONEncoder().encode(MomentEnvelope(operation: operation, input: input, id: id)), timeout: 50)
+        let result: R = try await api.request("/api/moments", method: "POST", body: JSONEncoder().encode(MomentEnvelope(operation: operation, input: input, id: id)), timeout: operation == "greetingArtwork" ? 150 : 50)
         guard token == generation else { throw APIError.signedOut }
         return result
     }

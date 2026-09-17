@@ -9,9 +9,26 @@ import XCTest
     }
     func openFestivalManager() {
         app.terminate(); app.launchArguments.append("-festival-manage-preview"); app.launch()
-        let manage=app.buttons["Manage Moments"]
+        let manage=app.buttons["Manage Moments"].firstMatch
         XCTAssertTrue(manage.waitForExistence(timeout:15));manage.tap()
         XCTAssertTrue(app.navigationBars["Manage Moment"].waitForExistence(timeout:5))
+    }
+    func testFestivalCardOpensItsFourTabManager() {
+        app.terminate(); app.launchArguments.append("-festival-manage-preview"); app.launch()
+        let manage = app.buttons["festival-manage-moment"]
+        XCTAssertTrue(manage.waitForExistence(timeout: 15))
+        for _ in 0..<5 { if manage.isHittable { break }; app.swipeUp() }
+        XCTAssertEqual(manage.label, "Manage Moments")
+        XCTAssertFalse(app.staticTexts["1 selected contacts"].exists)
+        XCTAssertFalse(app.buttons["Manage recipients"].exists)
+        manage.tap()
+        XCTAssertTrue(app.navigationBars["Manage Moment"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.textFields["festival-name"].value as? String, "Happy Diwali")
+        for tab in ["Details", "Contacts", "Wish Message", "Schedule"] {
+            XCTAssertTrue(app.buttons["festival-tab-" + tab].exists)
+        }
+        app.buttons["festival-tab-Contacts"].tap()
+        XCTAssertTrue(app.staticTexts["Damien"].exists)
     }
     func testFestivalTabsPreserveEditsAndWarnOnExit() {
         openFestivalManager()
@@ -28,13 +45,26 @@ import XCTest
     }
     func testFestivalImagePreviewAndSelection() {
         openFestivalManager();app.buttons["festival-tab-Wish Message"].tap()
-        for _ in 0..<3 { if app.buttons["Generate AI Image"].isHittable {break};app.swipeUp() }
-        app.buttons["Generate AI Image"].tap()
-        XCTAssertTrue(app.staticTexts["Mock preview — no production AI requests"].exists)
-        app.buttons["Generate preview"].tap()
-        let use=app.buttons["Use This Image"].firstMatch
-        XCTAssertTrue(use.waitForExistence(timeout:5));use.tap()
-        XCTAssertTrue(app.navigationBars["Manage Moment"].exists)
+        let create=app.buttons["Create AI Greeting Card"]
+        for _ in 0..<6 { if create.isHittable {break};app.swipeUp() }
+        create.tap()
+        XCTAssertTrue(app.navigationBars["Greeting Card"].waitForExistence(timeout:5))
+        let signature=app.textFields["card-signature"]
+        for _ in 0..<5 {if signature.isHittable {break};app.swipeUp()}
+        signature.tap();signature.typeText("With love, Sri & family")
+        app.toolbars.buttons["Done"].tap()
+        let generate=app.buttons["Generate AI Greeting Card"]
+        for _ in 0..<5 {if generate.isHittable {break};app.swipeUp()}
+        generate.tap()
+        let use=app.buttons["Use This Card"]
+        XCTAssertTrue(use.waitForExistence(timeout:10))
+        for _ in 0..<6 {app.swipeDown()}
+        let preview=XCTAttachment(screenshot:app.screenshot());preview.name="Full greeting card preview";preview.lifetime = .keepAlways;add(preview)
+        for _ in 0..<8 {if use.isHittable {break};app.swipeUp()}
+        let shot=XCTAttachment(screenshot:app.screenshot());shot.name="Greeting card editor";shot.lifetime = .keepAlways;add(shot)
+        use.tap()
+        XCTAssertTrue(app.navigationBars["Manage Moment"].waitForExistence(timeout:5))
+        XCTAssertTrue(app.staticTexts["With love, Sri & family"].exists)
     }
     func testFestivalDeleteRequiresConfirmation() {
         openFestivalManager()
