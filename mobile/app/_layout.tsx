@@ -7,11 +7,12 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { useCoordinator } from '../src/actions/coordinator';
 import { useActionNotifications } from '../src/actions/useActionNotifications';
-import { onSignedOut, type TasksResponse } from '../src/api';
+import { onSignedOut } from '../src/api';
 import { RootErrorBoundary } from '../src/components/RootErrorBoundary';
 import { createQueryClient } from '../src/query/client';
 import { queryKeys } from '../src/query/keys';
 import { useMe } from '../src/query/useMe';
+import { tasksQueryOptions } from '../src/query/useTasks';
 import { synchronizeDeviceTimeZone, TIME_ZONE_SYNC_ERROR } from '../src/query/useProfile';
 import { useAppearance } from '../src/store/appearance';
 import { useLastSignedIn } from '../src/store/lastSignedIn';
@@ -66,7 +67,7 @@ export default function RootLayout() {
  * signed-in screen on display. The store is the single source of truth here and `clear()` sets it
  * synchronously, so the switch to the auth group happens in the same tick.
  */
-function RootNavigator() {
+export function RootNavigator() {
   const theme = useTheme();
   const queryClient = useQueryClient();
   const { data: profile } = useMe();
@@ -98,8 +99,13 @@ function RootNavigator() {
    * `RootView` drives the coordinator from two places: the signed-in profile id, and every change to
    * `model.tasks`. Both are reproduced here, so the action set and its notifications follow the task
    * list without any screen having to ask.
+   *
+   * This OBSERVES the cache and never fetches: `enabled: false` keeps the root layout from issuing a
+   * request of its own, so the coordinator sees the list only once a screen has loaded it. The real
+   * `queryFn` comes along anyway, because TanStack logs "No queryFn was passed as an option" for a
+   * query created without one even when it is disabled.
    */
-  const tasksForActions = useQuery({ queryKey: queryKeys.tasks.all(), enabled: false }).data as TasksResponse | undefined;
+  const tasksForActions = useQuery({ ...tasksQueryOptions(queryClient), enabled: false }).data;
   useEffect(() => {
     void useCoordinator.getState().activate(profile?.id ?? null);
   }, [profile?.id]);

@@ -67,10 +67,13 @@ export function isConflictCancelled(error: unknown): boolean {
  * The revision guard lives in `queryFn` rather than in a `select`, because the point is to stop a
  * stale response being WRITTEN to the cache at all: returning the cached value leaves the newer
  * mutation result in place.
+ *
+ * The options are separate from the hook so a caller that only wants to WATCH the cached list can
+ * reuse the same definition with `enabled: false`. A bare `useQuery({ queryKey })` cannot: TanStack
+ * logs "No queryFn was passed as an option" for any query created without one, `enabled` or not.
  */
-export function useTasks() {
-  const queryClient = useQueryClient();
-  return useQuery({
+export function tasksQueryOptions(queryClient: QueryClient) {
+  return {
     queryKey: queryKeys.tasks.all(),
     queryFn: async () => {
       const captured = currentRevision();
@@ -82,7 +85,12 @@ export function useTasks() {
       }
       return response;
     },
-  });
+  };
+}
+
+export function useTasks() {
+  const queryClient = useQueryClient();
+  return useQuery(tasksQueryOptions(queryClient));
 }
 
 /** One task out of the cached list, so opening the editor never issues a second request. */
