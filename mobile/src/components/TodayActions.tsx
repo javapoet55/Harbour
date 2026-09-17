@@ -137,14 +137,15 @@ export function ActionNeededCard({
   const at = notificationDate(action) ?? now;
 
   return (
-    // VISUAL GAP: Swift strokes this card with `NexdoTheme.gradient` at 1.5pt
-    // (TodayActionsView.swift:130). React Native cannot stroke a border with a gradient, and the
-    // usual workaround — a `LinearGradient` behind the card, which is what `ActionCardRing` does —
-    // cannot be used here: the card is glass, and the blur samples the gradient straight through, so
-    // the whole card turns blue. A gradient stroke needs a mask over the card, not behind it. The
-    // solid `nexdoIndigo` border is the approximation; the glass fill is the part worth having.
-    <GlassCard radius={22} shadow={false} stroke={ACTION_GLASS_STROKE} style={styles.primaryRing}>
-    <View style={[styles.card, styles.primaryCard]} testID="today-actions-primary">
+    // `.overlay(RoundedRectangle(cornerRadius: 22).stroke(NexdoTheme.gradient, lineWidth: 1.5))`
+    // (TodayActionsView.swift:130). React Native cannot stroke a border with a gradient, so the ring
+    // is a `LinearGradient` behind the card with 1.5 of padding — `ActionCardRing`.
+    //
+    // That rules out `GlassCard` for this one card: its blur samples whatever is behind it, which is
+    // now the ring, and the whole card takes the gradient. It fills with `glassSolid` instead — the
+    // Swift card measured (238, 238, 241), so the difference from real glass is not visible here.
+    <ActionCardRing>
+    <View style={[styles.card, styles.primaryCard, { backgroundColor: theme.colors.glassSolid, borderColor: ACTION_GLASS_STROKE }]} testID="today-actions-primary">
       <View style={styles.rowTop}>
         <TaskSymbol color="#FF2D55" name="bell.fill" size={17} />
         <Text style={[styles.headline, styles.grow, { color: '#FF2D55' }]}>Action Needed</Text>
@@ -234,7 +235,7 @@ export function ActionNeededCard({
         </Pressable>
       </View>
     </View>
-    </GlassCard>
+    </ActionCardRing>
   );
 }
 
@@ -338,8 +339,7 @@ const styles = StyleSheet.create({
 
   // `.padding(16)` / `.padding(18)` with corner radius 22.
   card: { gap: 12, padding: 16, borderRadius: 22, borderWidth: StyleSheet.hairlineWidth },
-  primaryCard: { gap: 14, padding: 18 },
-  primaryRing: { borderWidth: 1.5, borderColor: brand.nexdoIndigo, borderRadius: 22 },
+  primaryCard: { gap: 14, padding: 18, borderRadius: 20.5, borderWidth: StyleSheet.hairlineWidth },
   ring: { borderRadius: 22, padding: 1.5 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   rowTop: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },

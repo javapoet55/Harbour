@@ -38,6 +38,15 @@ export type Palette = {
   danger: string;
   /** `.ultraThinMaterial` stand-in for the auth cards. expo-blur tints over this. */
   glassFill: string;
+  /**
+   * An OPAQUE stand-in for `.ultraThinMaterial`, for a card that sits on a gradient ring.
+   *
+   * `GlassCard` blurs what is behind it, and a `LinearGradient` ring behind the card is exactly that
+   * — the blur samples it and the whole card takes the gradient's colour. A card that needs the ring
+   * fills with this instead. Light is the Swift card measured off the Today screen, (238, 238, 241);
+   * dark is `glassFill` composited over the black grouped background.
+   */
+  glassSolid: string;
   /** `RoundedRectangle(...).stroke(Color.white.opacity(0.8))` on the auth cards. */
   glassStroke: string;
   /** `.shadow(color: Color.purple.opacity(0.09), radius: 25, y: 12)` on the auth cards. */
@@ -88,6 +97,7 @@ export const palettes: Record<ColorScheme, Palette> = {
     separator: 'rgba(60, 60, 67, 0.29)',
     danger: '#FF3B30',
     glassFill: 'rgba(236, 236, 240, 0.72)', // RootView.swift:354 `.ultraThinMaterial`, tuned against the Swift render
+    glassSolid: '#EEEEF1', // measured off the Swift Action Needed card: (238, 238, 241)
     glassStroke: 'rgba(255, 255, 255, 0.8)', // RootView.swift:355 Color.white.opacity(0.8)
     glassShadow: 'rgba(128, 0, 128, 0.09)', // RootView.swift:356 Color.purple.opacity(0.09)
     ruleFaint: 'rgba(87, 92, 128, 0.25)', // RootView.swift:385 nexdoSecondary.opacity(0.25)
@@ -119,6 +129,7 @@ export const palettes: Record<ColorScheme, Palette> = {
     separator: 'rgba(84, 84, 88, 0.6)',
     danger: '#FF453A',
     glassFill: 'rgba(40, 40, 44, 0.72)', // `.ultraThinMaterial` over the dark systemBackground
+    glassSolid: '#1D1D20', // the same fill composited over the black grouped background
     // RootView.swift:355 `Color.white.opacity(0.8)`, the same as light. A previous pass guessed
     // this down to 0.14 on the assumption it would read as blown-out on black; measuring the Swift
     // app shows the stroke really is bright — (214,214,215) against a (28,28,30) card.

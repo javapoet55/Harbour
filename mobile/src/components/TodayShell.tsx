@@ -18,11 +18,64 @@ import { Text } from './Text';
 export const NEXDO_GRADIENT = [brand.nexdoMagenta, brand.nexdoIndigo, brand.nexdoBlue] as const;
 
 /**
- * `TodayBackdrop` (RootView.swift:1534-1546).
+ * `SoftBlob` — one of the backdrop's `.blur(radius: 18)` circles.
  *
- * VISUAL GAP: the two circles are `.blur(radius: 18)` in Swift and are drawn hard-edged here, for the
- * same reason as `NexdoTaskBackdrop` — React Native cannot blur a view's own content.
+ * React Native cannot blur a view's own content, and `expo-blur` only blurs what is *behind* a view,
+ * so neither reproduces a blurred circle. Drawing the circle hard-edged left a visible hard ring on
+ * every screen that uses the backdrop.
+ *
+ * A Gaussian blur of a flat disc is a radial ramp, so this stacks `RINGS` concentric circles from
+ * `diameter + spread` down to `diameter - spread`, each at a low alpha. Where they overlap the alpha
+ * accumulates, which gives a smooth falloff; the outermost ring contributes the faint edge. Solving
+ * `1 - (1 - a)^RINGS = peak` for `a` makes the centre land on the opacity Swift asks for.
  */
+const RINGS = 12;
+
+function SoftBlob({
+  color,
+  diameter,
+  spread,
+  peak,
+  x,
+  y,
+  opacity,
+}: {
+  color: string;
+  diameter: number;
+  /** How far the blur carries past the edge; Swift's `blur(radius: 18)` reads as about 2x that. */
+  spread: number;
+  peak: number;
+  x: number;
+  y: number;
+  opacity: number;
+}) {
+  const alpha = 1 - Math.pow(1 - peak, 1 / RINGS);
+  return (
+    <View pointerEvents="none" style={[StyleSheet.absoluteFill, { opacity }]}>
+      {Array.from({ length: RINGS }, (_, index) => {
+        const size = diameter + spread - (index * (2 * spread)) / (RINGS - 1);
+        return (
+          <View
+            key={index}
+            style={[
+              styles.blob,
+              {
+                width: size,
+                height: size,
+                borderRadius: size / 2,
+                backgroundColor: withAlpha(color, alpha),
+                marginLeft: x - size / 2,
+                marginTop: y - size / 2,
+              },
+            ]}
+          />
+        );
+      })}
+    </View>
+  );
+}
+
+/** `TodayBackdrop` (RootView.swift:1534-1546). */
 export function TodayBackdrop({ subtle = false }: { subtle?: boolean }) {
   const theme = useTheme();
   const blobOpacity = subtle ? 0.25 : 1;
@@ -40,8 +93,9 @@ export function TodayBackdrop({ subtle = false }: { subtle?: boolean }) {
         end={{ x: 0.5, y: 0.5 }}
         style={StyleSheet.absoluteFill}
       />
-      <View style={[styles.blob, { width: 280, height: 280, borderRadius: 140, backgroundColor: withAlpha(brand.nexdoBlue, 0.12), opacity: blobOpacity, marginLeft: -170 - 140, marginTop: -360 - 140 }]} />
-      <View style={[styles.blob, { width: 260, height: 260, borderRadius: 130, backgroundColor: withAlpha(brand.nexdoMagenta, 0.1), opacity: blobOpacity, marginLeft: 190 - 130, marginTop: -250 - 130 }]} />
+      {/* `Circle().fill(...).frame(width: 280).blur(radius: 18).offset(x: -170, y: -360)` */}
+      <SoftBlob color={brand.nexdoBlue} diameter={280} spread={36} peak={0.12} x={-170} y={-360} opacity={blobOpacity} />
+      <SoftBlob color={brand.nexdoMagenta} diameter={260} spread={36} peak={0.1} x={190} y={-250} opacity={blobOpacity} />
     </View>
   );
 }
@@ -164,6 +218,9 @@ export function TasksTopBar({
             {/* TODO(phase3-decision): `.design: .rounded` (SF Rounded) has no bundled equivalent —
                 the same gap the style map records for the auth titles. */}
             <Text style={[styles.brandName, { color: theme.colors.ink }]}>Nexdo</Text>
+            {/* `Image(systemName: "sparkles").font(.system(size: 17.28))` in indigo, 3pt after the
+                wordmark (RootView.swift:1298-1299). */}
+            <TaskSymbol name="sparkles" size={17} color={brand.nexdoIndigo} />
           </View>
           <Text numberOfLines={1} style={[styles.brandTag, { color: theme.colors.secondary }]}>
             GET MORE DONE WITH AI

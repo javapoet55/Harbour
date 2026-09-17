@@ -150,8 +150,11 @@ export default function Today() {
           </Text>
         </View>
 
-        {/* The range picker (RootView.swift:1047-1068) */}
-        <View style={[styles.rangeRow, { borderColor: withAlpha(brand.nexdoIndigo, 0.12), backgroundColor: theme.colors.surface }]}>
+        {/* The range picker (RootView.swift:1047-1068). The track is
+            `.background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14))` with an indigo
+            12% stroke (`:1059-1061`) — glass, not the opaque `surface` it used to fill with. */}
+        <GlassCard radius={14} shadow={false} stroke={withAlpha(brand.nexdoIndigo, 0.12)}>
+        <View style={styles.rangeRow}>
           {TODAY_RANGES.map((option) => {
             const selected = range === option;
             return (
@@ -163,7 +166,7 @@ export default function Today() {
                 onPress={() => setRange(option)}
                 testID={`today-range-${option}`}
                 // `Color(red: 0.18, green: 0.38, blue: 0.62)` when selected.
-                style={[styles.rangeOption, selected && { backgroundColor: '#2E6199' }]}
+                style={[styles.rangeOption, selected && { backgroundColor: '#2E619E' }]}
               >
                 <Text style={[styles.rangeLabel, { color: selected ? '#FFFFFF' : withAlpha(theme.colors.ink, 0.82) }]}>
                   {rangeTitle(option)}
@@ -172,6 +175,7 @@ export default function Today() {
             );
           })}
         </View>
+        </GlassCard>
 
         {/*
           The Weekly Summary card (RootView.swift:1070-1089), and the compact **Daily Briefing** row
@@ -367,7 +371,7 @@ const styles = StyleSheet.create({
   greeting: { gap: 3 },
   // `.font(.system(.title, design: .rounded, weight: .bold))`
   greetingLine: { fontSize: 28, lineHeight: 34, fontWeight: '700' },
-  rangeRow: { flexDirection: 'row', borderRadius: 14, borderWidth: StyleSheet.hairlineWidth, overflow: 'hidden' },
+  rangeRow: { flexDirection: 'row', borderRadius: 14, overflow: 'hidden' },
   rangeOption: { flex: 1, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
   rangeLabel: { fontSize: 15, lineHeight: 20, fontWeight: '500' },
   // The compact Daily Briefing row (RootView.swift:1063-1070): `.padding(16)`, corner radius 20.
