@@ -77,7 +77,7 @@ describe('the schedule review sheet', () => {
 
     await waitFor(() => expect(screen.getByTestId('conflict-overloaded')).toBeTruthy());
     expect(screen.getByText('Schedule review')).toBeTruthy();
-    expect(screen.getByText('TODAY’S SCHEDULE REVIEW')).toBeTruthy();
+    expect(screen.getByText('Today’s schedule review')).toBeTruthy();
     expect(screen.getByText('Overloaded day')).toBeTruthy();
     expect(screen.getByText('Three tasks overlap at 2 PM')).toBeTruthy();
     expect(screen.getByText('You have 45 minutes of usable time and 120 minutes of work.')).toBeTruthy();

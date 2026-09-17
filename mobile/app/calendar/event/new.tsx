@@ -12,7 +12,7 @@ import { startOfDay } from '../../../src/lib/taskQuery';
 import { useCreateCalendarEvent } from '../../../src/query/useCalendar';
 import { type ScheduleConflict } from '../../../src/query/useTasks';
 import { useSession } from '../../../src/store/session';
-import { useTheme } from '../../../src/theme';
+import { inputText, textStyles, useTheme } from '../../../src/theme';
 
 /**
  * Port of `CalendarEventEditor` (ios/App/CalendarView.swift), built from `body` at `:518-588`.
@@ -29,6 +29,12 @@ import { useTheme } from '../../../src/theme';
  */
 export default function NewCalendarEvent() {
   const theme = useTheme();
+  // `TaskCreationStyle` (RootView.swift:2190-2204). Its accent and input fill are NOT the app tint
+  // and the grouped background: the accent is its own pair of literals, and the input fill is
+  // `.tertiarySystemGroupedBackground`, which is #2C2C2E in dark mode where `groupedBackground` is
+  // black. Both were visibly wrong here, the accent most of all at night.
+  const accent = theme.scheme === 'dark' ? EDITOR_ACCENT_DARK : EDITOR_ACCENT_LIGHT;
+  const inputFill = theme.scheme === 'dark' ? EDITOR_INPUT_DARK : EDITOR_INPUT_LIGHT;
   const profile = useSession((state) => state.profile);
   const zone = profile?.timeZone ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
 
@@ -121,40 +127,42 @@ export default function NewCalendarEvent() {
       <NexdoTaskBackdrop />
       <ScrollView keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive" contentContainerStyle={styles.scroll}>
         <View style={[styles.card, { backgroundColor: theme.colors.surface, borderColor: theme.colors.separator }]}>
-          <EditorLabel title="APPOINTMENT / EVENT" icon="calendar" />
+          <EditorLabel title="APPOINTMENT / EVENT" icon="calendar" accent={accent} />
           <TextInput
             accessibilityLabel="Event title"
             placeholder="What’s on your calendar?"
-            placeholderTextColor={theme.colors.secondary}
+            placeholderTextColor={theme.colors.placeholder}
             value={title}
             onChangeText={setTitle}
             multiline
-            style={[styles.input, styles.titleInput, { color: theme.colors.ink, backgroundColor: theme.colors.groupedBackground, borderColor: theme.colors.separator }]}
+            style={[styles.input, styles.titleInput, { color: theme.colors.ink, backgroundColor: inputFill }]}
             testID="event-title"
           />
           <Text style={[styles.caption, { color: theme.colors.secondary }]}>Create a calendar event or appointment.</Text>
 
           <Divider />
-          <EditorLabel title="SCHEDULE" icon="clock" />
-          <FieldRow label="Starts" value={dateTimeLabel(start)} onPress={() => setPicking('start')} testID="event-start" />
-          <FieldRow label="Ends" value={dateTimeLabel(end)} onPress={() => setPicking('end')} testID="event-end" />
+          <EditorLabel title="SCHEDULE" icon="clock" accent={accent} />
+          <FieldRow label="Starts" value={dateTimeLabel(start)} fill={inputFill} onPress={() => setPicking('start')} testID="event-start" />
+          <FieldRow label="Ends" value={dateTimeLabel(end)} fill={inputFill} onPress={() => setPicking('end')} testID="event-end" />
           <Text style={[styles.caption, { color: theme.colors.secondary }]}>{zone}</Text>
 
           <Divider />
-          <EditorLabel title="REPEAT" icon="repeat" />
+          <EditorLabel title="REPEAT" icon="repeat" accent={accent} />
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Repeat"
             accessibilityValue={{ text: REPEAT_LABELS[repeatFrequency] }}
             onPress={() => setRepeatOpen((open) => !open)}
-            style={[styles.field, { backgroundColor: theme.colors.groupedBackground }]}
+            style={styles.menuPicker}
             testID="event-repeat"
           >
-            <Text style={[theme.typography.body, styles.grow, { color: theme.colors.ink }]}>{REPEAT_LABELS[repeatFrequency]}</Text>
-            <TaskSymbol name="chevron.down" size={13} color={theme.colors.secondary} />
+            {/* `.pickerStyle(.menu)` (CalendarView.swift:541): the current value in the accent
+                colour with an up/down chevron, on the card — not a filled field. */}
+            <Text style={[theme.typography.body, { color: accent }]}>{REPEAT_LABELS[repeatFrequency]}</Text>
+            <TaskSymbol name="chevron.down" size={13} color={accent} />
           </Pressable>
           {repeatOpen ? (
-            <View style={[styles.menu, { backgroundColor: theme.colors.groupedBackground }]}>
+            <View style={[styles.menu, { backgroundColor: inputFill }]}>
               {Object.entries(REPEAT_LABELS).map(([value, name]) => (
                 <Pressable
                   key={value}
@@ -169,7 +177,7 @@ export default function NewCalendarEvent() {
                   testID={`event-repeat-${value}`}
                 >
                   <Text style={[theme.typography.body, styles.grow, { color: theme.colors.ink }]}>{name}</Text>
-                  {repeatFrequency === value ? <Text style={[theme.typography.body, { color: theme.colors.tint }]}>✓</Text> : null}
+                  {repeatFrequency === value ? <Text style={[theme.typography.body, { color: accent }]}>✓</Text> : null}
                 </Pressable>
               ))}
             </View>
@@ -190,10 +198,10 @@ export default function NewCalendarEvent() {
                     testID={`event-weekday-${day}`}
                     style={[
                       styles.weekday,
-                      { backgroundColor: on ? theme.colors.tint : theme.colors.groupedBackground },
+                      { backgroundColor: on ? accent : inputFill },
                     ]}
                   >
-                    <Text style={[styles.weekdayLabel, { color: on ? '#FFFFFF' : theme.colors.tint }]}>{WEEKDAY_NAMES[day]}</Text>
+                    <Text style={[styles.weekdayLabel, { color: on ? '#FFFFFF' : accent }]}>{WEEKDAY_NAMES[day]}</Text>
                   </Pressable>
                 );
               })}
@@ -205,6 +213,7 @@ export default function NewCalendarEvent() {
               <FieldRow
                 label="Repeat until"
                 value={new Intl.DateTimeFormat('en-US', { timeZone: zone, month: 'short', day: 'numeric', year: 'numeric' }).format(new Date(repeatUntil))}
+                fill={inputFill}
                 onPress={() => setPicking('until')}
                 testID="event-repeat-until"
               />
@@ -217,27 +226,27 @@ export default function NewCalendarEvent() {
           ) : null}
 
           <Divider />
-          <EditorLabel title="LOCATION" icon="mappin.and.ellipse" />
+          <EditorLabel title="LOCATION" icon="mappin.and.ellipse" accent={accent} />
           <TextInput
             accessibilityLabel="Location"
             placeholder="Add a location (optional)"
-            placeholderTextColor={theme.colors.secondary}
+            placeholderTextColor={theme.colors.placeholder}
             value={location}
             onChangeText={setLocation}
-            style={[styles.input, { color: theme.colors.ink, backgroundColor: theme.colors.groupedBackground, borderColor: theme.colors.separator }]}
+            style={[styles.input, styles.bodyInput, { color: theme.colors.ink, backgroundColor: inputFill }]}
             testID="event-location"
           />
 
           <Divider />
-          <EditorLabel title="NOTES" icon="text.alignleft" />
+          <EditorLabel title="NOTES" icon="text.alignleft" accent={accent} />
           <TextInput
             accessibilityLabel="Notes"
             placeholder="Add details (optional)"
-            placeholderTextColor={theme.colors.secondary}
+            placeholderTextColor={theme.colors.placeholder}
             value={notes}
             onChangeText={setNotes}
             multiline
-            style={[styles.input, styles.notesInput, { color: theme.colors.ink, backgroundColor: theme.colors.groupedBackground, borderColor: theme.colors.separator }]}
+            style={[styles.input, styles.bodyInput, styles.notesInput, { color: theme.colors.ink, backgroundColor: inputFill }]}
             testID="event-notes"
           />
 
@@ -266,8 +275,11 @@ export default function NewCalendarEvent() {
               <TaskSymbol name="arrow.right" size={17} color="#FFFFFF" />
             </LinearGradient>
           ) : (
-            <View style={[styles.saveButton, { backgroundColor: theme.colors.groupedBackground }]}>
-              <Text style={[styles.saveLabel, { color: theme.colors.secondary }]}>Create Event</Text>
+            <View style={[styles.saveButton, { backgroundColor: inputFill }]}>
+              {/* `.foregroundStyle(canSave ? .white : Color.secondary)` on the whole HStack, which
+                  still holds the arrow when disabled (CalendarView.swift:579-582). */}
+              <Text style={[styles.saveLabel, { color: theme.colors.secondaryLabel }]}>Create Event</Text>
+              <TaskSymbol name="arrow.right" size={17} color={theme.colors.secondaryLabel} />
             </View>
           )}
         </Pressable>
@@ -343,12 +355,19 @@ function TimeRow({ selected, timeZone, onSelect }: { selected: number; timeZone:
 }
 
 /** `TaskEditorLabel` (RootView.swift:2207-2217). */
-function EditorLabel({ title, icon }: { title: string; icon: 'calendar' | 'clock' | 'repeat' | 'mappin.and.ellipse' | 'text.alignleft' }) {
-  const theme = useTheme();
+function EditorLabel({
+  title,
+  icon,
+  accent,
+}: {
+  title: string;
+  icon: 'calendar' | 'clock' | 'repeat' | 'mappin.and.ellipse' | 'text.alignleft';
+  accent: string;
+}) {
   return (
     <View style={styles.editorLabel}>
-      <TaskSymbol name={icon} size={13} color={theme.colors.tint} />
-      <Text style={[styles.editorLabelText, { color: theme.colors.tint }]}>{title}</Text>
+      <TaskSymbol name={icon} size={13} color={accent} />
+      <Text style={[styles.editorLabelText, { color: accent }]}>{title}</Text>
     </View>
   );
 }
@@ -358,7 +377,24 @@ function Divider() {
   return <View style={[styles.divider, { backgroundColor: theme.colors.separator }]} />;
 }
 
-function FieldRow({ label, value, onPress, testID }: { label: string; value: string; onPress: () => void; testID: string }) {
+/**
+ * A `DatePicker("Starts", selection:)` row (CalendarView.swift:530-531): the label sits on the card
+ * itself and only the value gets the tinted capsule. Filling the whole row, as this did, drew a grey
+ * band across the card that Swift does not have.
+ */
+function FieldRow({
+  label,
+  value,
+  fill,
+  onPress,
+  testID,
+}: {
+  label: string;
+  value: string;
+  fill: string;
+  onPress: () => void;
+  testID: string;
+}) {
   const theme = useTheme();
   return (
     <Pressable
@@ -366,11 +402,13 @@ function FieldRow({ label, value, onPress, testID }: { label: string; value: str
       accessibilityLabel={label}
       accessibilityValue={{ text: value }}
       onPress={onPress}
-      style={[styles.field, { backgroundColor: theme.colors.groupedBackground }]}
+      style={styles.field}
       testID={testID}
     >
       <Text style={[theme.typography.body, styles.grow, { color: theme.colors.ink }]}>{label}</Text>
-      <Text style={[theme.typography.body, { color: theme.colors.secondary }]}>{value}</Text>
+      <View style={[styles.fieldValue, { backgroundColor: fill }]}>
+        <Text style={[theme.typography.body, { color: theme.colors.ink }]}>{value}</Text>
+      </View>
     </Pressable>
   );
 }
@@ -390,28 +428,44 @@ const WEEKDAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 /** `TaskCreationStyle.selectedGradient` (RootView.swift:2199-2203). */
 const SELECTED_GRADIENT = ['#91198A', '#5930BF', '#144DAD'] as const;
 
+/** `TaskCreationStyle.accent` (RootView.swift:2194-2198), rounded from its sRGB components. */
+const EDITOR_ACCENT_LIGHT = '#3D29C7'; // UIColor(red: 0.24, green: 0.16, blue: 0.78)
+const EDITOR_ACCENT_DARK = '#B8ADFF'; // UIColor(red: 0.72, green: 0.68, blue: 1)
+
+/** `TaskCreationStyle.input` (RootView.swift:2192): `.tertiarySystemGroupedBackground`. */
+const EDITOR_INPUT_LIGHT = '#F2F2F7';
+const EDITOR_INPUT_DARK = '#2C2C2E';
+
 const styles = StyleSheet.create({
   fill: { flex: 1 },
   scroll: { padding: 20 },
   card: { gap: 20, padding: 20, borderRadius: 26, borderWidth: StyleSheet.hairlineWidth },
   editorLabel: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   editorLabelText: { fontSize: 12, lineHeight: 16, fontWeight: '600', letterSpacing: 0.8 },
-  input: { padding: 15, borderRadius: 15, borderWidth: StyleSheet.hairlineWidth },
-  titleInput: { fontSize: 20, lineHeight: 25, fontWeight: '600', minHeight: 56 },
-  notesInput: { fontSize: 17, lineHeight: 22, minHeight: 88, textAlignVertical: 'top' },
+  // `.padding(15).background(TaskCreationStyle.input, in: RoundedRectangle(cornerRadius: 15))` —
+  // the fill carries the field; Swift draws no stroke on it (CalendarView.swift:524-525).
+  input: { padding: 15, borderRadius: 15 },
+  // `.font(.title3.weight(.semibold))`; `inputText` drops the line box, which a TextInput clips.
+  titleInput: { ...inputText(textStyles.title3), fontWeight: '600', minHeight: 56 },
+  bodyInput: inputText(textStyles.body),
+  // `.lineLimit(3...6)` on a `.body` field: three 25pt lines plus the 15pt padding either side.
+  notesInput: { minHeight: 105, maxHeight: 180, textAlignVertical: 'top' },
   caption: { fontSize: 12, lineHeight: 16 },
-  subheadline: { fontSize: 15, lineHeight: 20 },
+  subheadline: { fontSize: 15, lineHeight: 21 },
   heading: { fontSize: 17, lineHeight: 22, fontWeight: '600' },
   divider: { height: StyleSheet.hairlineWidth },
-  field: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 48, paddingHorizontal: 15, borderRadius: 15 },
+  field: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 44 },
+  fieldValue: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 9 },
   grow: { flex: 1 },
   menu: { borderRadius: 15, overflow: 'hidden' },
   menuRow: { flexDirection: 'row', alignItems: 'center', minHeight: 44, paddingHorizontal: 15 },
+  menuPicker: { flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 44 },
   weekdays: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   weekday: { flexGrow: 1, flexBasis: 64, minHeight: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 12 },
-  weekdayLabel: { fontSize: 15, lineHeight: 20, fontWeight: '600' },
+  weekdayLabel: { fontSize: 15, lineHeight: 21, fontWeight: '600' },
   footer: { paddingHorizontal: 20, paddingVertical: 12, borderTopWidth: StyleSheet.hairlineWidth },
-  saveButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, minHeight: 52, borderRadius: 17 },
+  // A bare `HStack` spaces by 8 (CalendarView.swift:579).
+  saveButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 52, borderRadius: 17 },
   saveLabel: { fontSize: 17, lineHeight: 22, fontWeight: '600' },
   sheetBackdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0, 0, 0, 0.35)' },
   sheet: { padding: 20, gap: 14, borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: '85%' },

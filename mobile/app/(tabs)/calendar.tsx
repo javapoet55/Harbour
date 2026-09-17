@@ -1,6 +1,8 @@
+import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { ActivityIndicator, Modal, Pressable, RefreshControl, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import type { CalendarEvent } from '../../src/api';
 import { TaskSymbol, Text } from '../../src/components';
@@ -22,6 +24,7 @@ import {
   type CalendarRange,
 } from '../../src/lib/calendarDates';
 import { calendarRows } from '../../src/lib/calendarRows';
+import { durationLabel } from '../../src/lib/focusClock';
 import { serverTime } from '../../src/lib/taskLabels';
 import { isDone, parseServerDate } from '../../src/lib/taskQuery';
 import { useCalendarAgenda } from '../../src/query/useCalendar';
@@ -49,6 +52,12 @@ import { brand, useTheme } from '../../src/theme';
  */
 export default function Calendar() {
   const theme = useTheme();
+  // The event detail is a `.sheet` (CalendarView.swift:168); iOS resolves its backgrounds one level
+  // up inside a sheet, so the modal below takes the elevated palette (style map section 3).
+  const sheetTheme = useTheme({ elevated: true });
+  // `.toolbar(.hidden, for: .navigationBar)` (CalendarView.swift:138) leaves the SwiftUI scroll view
+  // inset by the safe area. React Native insets nothing, so the wordmark drew under the status bar.
+  const insets = useSafeAreaInsets();
   const profile = useSession((state) => state.profile);
 
   const [mode, setMode] = useState<CalendarMode>('Schedule');
@@ -170,9 +179,10 @@ export default function Calendar() {
         accessibilityLabel={`Calendar filters${filtersActive ? ', active' : ''}`}
         onPress={() => setFiltersOpen((open) => !open)}
         testID="calendar-filters"
-        style={[styles.filtersButton, { backgroundColor: theme.colors.surface, borderColor: withAlpha(brand.nexdoIndigo, 0.18) }]}
+        style={[styles.filtersButton, { backgroundColor: withAlpha(theme.colors.surface, 0.8), borderColor: withAlpha(brand.nexdoIndigo, 0.18) }]}
       >
-        <TaskSymbol name="slider.horizontal.3" size={20} color={theme.colors.tint} />
+        {/* No `.font` on the glyph, so `.body`; no `.foregroundStyle`, so nexdoInk (`:332`). */}
+        <TaskSymbol name="slider.horizontal.3" size={17} color={theme.colors.ink} />
       </Pressable>
     );
   }
@@ -183,7 +193,7 @@ export default function Calendar() {
       <ScrollView
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="interactive"
-        contentContainerStyle={styles.scroll}
+        contentContainerStyle={[styles.scroll, { paddingTop: styles.scroll.paddingTop + insets.top }]}
         refreshControl={<RefreshControl refreshing={agenda.isRefetching} onRefresh={refresh} />}
       >
         {/* `calendarHeader` (CalendarView.swift:178-196) */}
@@ -199,7 +209,8 @@ export default function Calendar() {
             testID="calendar-search-open"
             style={[styles.headerButton, { backgroundColor: withAlpha(brand.nexdoIndigo, 0.09) }]}
           >
-            <TaskSymbol name="magnifyingglass" size={20} color={theme.colors.tint} />
+            {/* `.font(.title3)` with no `.foregroundStyle`, so it inherits the view's nexdoInk (`:187`). */}
+            <TaskSymbol name="magnifyingglass" size={20} color={theme.colors.ink} />
           </Pressable>
         </View>
 
@@ -207,12 +218,13 @@ export default function Calendar() {
         {searching ? (
           <View style={styles.searchBlock}>
             <View style={styles.searchRow}>
-              <View style={[styles.searchField, { backgroundColor: theme.colors.surface, borderColor: withAlpha(brand.nexdoIndigo, 0.18) }]}>
+              {/* `.background(.background.opacity(0.9), ...)` (CalendarView.swift:217). */}
+              <View style={[styles.searchField, { backgroundColor: withAlpha(theme.colors.surface, 0.9), borderColor: withAlpha(brand.nexdoIndigo, 0.18) }]}>
                 <TaskSymbol name="magnifyingglass" size={17} color={theme.colors.secondary} />
                 <TextInput
                   accessibilityLabel="Search calendar by keyword"
                   placeholder="Search events and tasks"
-                  placeholderTextColor={theme.colors.secondary}
+                  placeholderTextColor={theme.colors.placeholder}
                   value={searchText}
                   onChangeText={setSearchText}
                   autoCorrect={false}
@@ -220,9 +232,10 @@ export default function Calendar() {
                   style={[theme.typography.body, styles.grow, { color: theme.colors.ink }]}
                   testID="calendar-search-input"
                 />
+                {/* `.frame(width: 44, height: 44)` on the glyph (CalendarView.swift:212). */}
                 {searchText.length > 0 ? (
-                  <Pressable accessibilityRole="button" accessibilityLabel="Clear calendar search" onPress={() => setSearchText('')}>
-                    <TaskSymbol name="xmark.circle.fill" size={18} color={theme.colors.secondary} />
+                  <Pressable accessibilityRole="button" accessibilityLabel="Clear calendar search" onPress={() => setSearchText('')} style={styles.clearButton}>
+                    <TaskSymbol name="xmark.circle.fill" size={17} color={theme.colors.secondary} />
                   </Pressable>
                 ) : null}
               </View>
@@ -283,7 +296,8 @@ export default function Calendar() {
 
             {/* `dateGrid` (CalendarView.swift:358-381) */}
             <View style={styles.grid}>
-              <View style={styles.gridRow}>
+              {/* One `LazyVGrid`: the weekday row and the date rows share `spacing: mode == .month ? 10 : 0`. */}
+              <View style={[styles.gridRow, { rowGap: mode === 'Month' ? 10 : 0 }]}>
                 {(mode === 'Week'
                   ? ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN']
                   : ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT']
@@ -292,8 +306,6 @@ export default function Calendar() {
                     {weekday}
                   </Text>
                 ))}
-              </View>
-              <View style={styles.gridRow}>
                 {days.map((day) => {
                   const key = calendarKey(day, zone);
                   const isSelected = key === calendarKey(selected, zone);
@@ -309,7 +321,7 @@ export default function Calendar() {
                       testID={`calendar-day-${key}`}
                       style={styles.gridCell}
                     >
-                      <View style={[styles.dayCircle, isSelected && { backgroundColor: '#2E5C97' }]}>
+                      <View style={[styles.dayCircle, isSelected && { backgroundColor: SELECTED_DAY }]}>
                         <Text
                           style={[
                             theme.typography.body,
@@ -346,8 +358,9 @@ export default function Calendar() {
             <Text style={[styles.subheadline, { color: theme.colors.secondary }]} testID="calendar-failure">
               {`Couldn’t refresh this date range.${data === null ? '' : ' Showing previously loaded data.'}`}
             </Text>
+            {/* `.foregroundStyle(Color.nexdoSecondary)` wraps the Button too (CalendarView.swift:85). */}
             <Pressable accessibilityRole="button" accessibilityLabel="Retry" onPress={() => void agenda.refetch()} style={styles.retry} testID="calendar-retry">
-              <Text style={[styles.subheadline, { color: theme.colors.tint }]}>Retry</Text>
+              <Text style={[theme.typography.body, { color: theme.colors.secondary }]}>Retry</Text>
             </Pressable>
           </View>
         ) : null}
@@ -355,7 +368,7 @@ export default function Calendar() {
         {agenda.isLoading ? (
           <View style={styles.loading}>
             <ActivityIndicator />
-            <Text style={[theme.typography.body, { color: theme.colors.secondary }]}>Loading calendar…</Text>
+            <Text style={[theme.typography.body, styles.centred, { color: theme.colors.secondary }]}>Loading calendar…</Text>
           </View>
         ) : null}
 
@@ -372,10 +385,11 @@ export default function Calendar() {
                   accessibilityValue={{ text: range }}
                   onPress={() => setRangeOpen((open) => !open)}
                   testID="calendar-range"
-                  style={[styles.rangeButton, { backgroundColor: theme.colors.surface }]}
+                  style={[styles.rangeButton, { backgroundColor: withAlpha(theme.colors.surface, 0.8) }]}
                 >
                   <Text style={[styles.subheadline, { color: theme.colors.ink }]}>{range}</Text>
-                  <TaskSymbol name="chevron.down" size={11} color={theme.colors.secondary} />
+                  {/* `.font(.caption2)`, inheriting the view's nexdoInk (CalendarView.swift:316). */}
+                  <TaskSymbol name="chevron.down" size={11} color={theme.colors.ink} />
                 </Pressable>
                 <FiltersButton />
               </View>
@@ -421,7 +435,8 @@ export default function Calendar() {
                     <Text style={[styles.subheadline, styles.semibold, styles.grow, { color: theme.colors.ink }]}>
                       {`Unscheduled & overdue  ${backlog.length}`}
                     </Text>
-                    <TaskSymbol name={expanded ? 'chevron.down' : 'chevron.right'} size={14} color={theme.colors.secondary} />
+                    {/* A `DisclosureGroup` draws its chevron in the accent colour, not secondary. */}
+                    <TaskSymbol name={expanded ? 'chevron.down' : 'chevron.right'} size={14} color={theme.colors.tint} />
                   </Pressable>
                   {expanded ? (
                     backlog.length === 0 ? (
@@ -511,34 +526,42 @@ export default function Calendar() {
       {/* `.sheet(item: $eventDetail)` (CalendarView.swift:168-180): an INLINE sheet, not a route. */}
       <Modal visible={eventDetail !== null} animationType="slide" transparent onRequestClose={() => setEventDetail(null)}>
         <View style={styles.sheetBackdrop}>
-          <View style={[styles.sheet, { backgroundColor: theme.colors.groupedBackground }]}>
+          <View style={[styles.sheet, { backgroundColor: sheetTheme.colors.groupedBackground }]}>
+            {/* `.navigationTitle("Event Details").navigationBarTitleDisplayMode(.inline)` with a
+                trailing Done button (`:177-178`): an inline title is centred on both platforms. */}
             <View style={styles.sheetBar}>
-              <Text accessibilityRole="header" style={[styles.heading, { color: theme.colors.ink }]}>
+              <View style={styles.sheetBarSide} />
+              <Text accessibilityRole="header" style={[styles.heading, styles.centred, styles.grow, { color: sheetTheme.colors.ink }]}>
                 Event Details
               </Text>
-              <Pressable accessibilityRole="button" accessibilityLabel="Done" onPress={() => setEventDetail(null)} style={styles.cancel} testID="event-detail-done">
-                <Text style={[theme.typography.body, { color: theme.colors.tint }]}>Done</Text>
+              <Pressable accessibilityRole="button" accessibilityLabel="Done" onPress={() => setEventDetail(null)} style={[styles.cancel, styles.sheetBarSide]} testID="event-detail-done">
+                <Text style={[theme.typography.body, styles.trailing, { color: sheetTheme.colors.tint }]}>Done</Text>
               </Pressable>
             </View>
             {eventDetail ? (
               <>
-                <View style={[styles.sheetSection, { backgroundColor: theme.colors.surface }]}>
-                  <Text style={[styles.heading, { color: theme.colors.ink }]} testID="event-detail-title">
+                {/* A `Form` on iOS 26: 16pt outer inset, 26pt corners, 16pt row inset, 56pt rows,
+                    a sentence-case `.body` header inset 32pt from the screen (style map section 7). */}
+                <View style={[styles.sheetSection, { backgroundColor: sheetTheme.colors.surface }]}>
+                  <Text style={[styles.heading, styles.formRow, { color: sheetTheme.colors.ink }]} testID="event-detail-title">
                     {eventDetail.title}
                   </Text>
                 </View>
-                <Text style={[styles.sectionHeader, { color: theme.colors.secondary }]}>CALENDAR COMMITMENT</Text>
-                <View style={[styles.sheetSection, { backgroundColor: theme.colors.surface }]}>
+                <Text style={[theme.typography.body, styles.sectionHeader, { color: sheetTheme.colors.secondaryLabel }]}>Calendar commitment</Text>
+                <View style={[styles.sheetSection, { backgroundColor: sheetTheme.colors.surface }]}>
                   {eventDetail.allDay === true ? (
-                    <Text style={[theme.typography.body, { color: theme.colors.ink }]}>All day</Text>
+                    <Text style={[theme.typography.body, styles.formRow, { color: sheetTheme.colors.ink }]}>All day</Text>
                   ) : null}
-                  <Text style={[theme.typography.body, { color: theme.colors.ink }]} testID="event-detail-starts">
+                  <View style={[styles.formSeparator, { backgroundColor: sheetTheme.colors.listSeparator }]} />
+                  <Text style={[theme.typography.body, styles.formRow, { color: sheetTheme.colors.ink }]} testID="event-detail-starts">
                     {`Starts: ${eventDateLabel(eventDetail.startAt, zone)}`}
                   </Text>
-                  <Text style={[theme.typography.body, { color: theme.colors.ink }]} testID="event-detail-ends">
+                  <View style={[styles.formSeparator, { backgroundColor: sheetTheme.colors.listSeparator }]} />
+                  <Text style={[theme.typography.body, styles.formRow, { color: sheetTheme.colors.ink }]} testID="event-detail-ends">
                     {`Ends: ${eventDateLabel(eventDetail.endAt, zone)}`}
                   </Text>
-                  <Text style={[theme.typography.body, { color: theme.colors.secondary }]}>{zone}</Text>
+                  <View style={[styles.formSeparator, { backgroundColor: sheetTheme.colors.listSeparator }]} />
+                  <Text style={[theme.typography.body, styles.formRow, { color: sheetTheme.colors.secondaryLabel }]}>{zone}</Text>
                 </View>
               </>
             ) : null}
@@ -599,7 +622,8 @@ export default function Calendar() {
       <View style={[styles.intelligence, { backgroundColor: withAlpha(brand.nexdoBlue, 0.045), borderColor: withAlpha(brand.nexdoBlue, 0.2) }]}>
         <View style={styles.intelligenceHeader}>
           <TaskSymbol name="sparkles" size={15} color="#007AFF" />
-          <Text style={[styles.subheadline, styles.semibold, styles.grow, { color: '#007AFF' }]}>Schedule Intelligence</Text>
+          {/* `.font(.subheadline.bold())` (CalendarView.swift:253) — bold, not semibold. */}
+          <Text style={[styles.subheadline, styles.bold, styles.grow, { color: '#007AFF' }]}>Schedule Intelligence</Text>
           {/* `.sheet(isPresented: $conflicts) { conflictSheet }` (CalendarView.swift:163, `:463-477`).
               It does NOT link into Ask: `CalendarView`'s `ask` state (`:14`) and the
               `AskNexdoView(initialPrompt:)` sheet it would present (`:157-160`) are dead code —
@@ -612,18 +636,26 @@ export default function Calendar() {
         </View>
         {current && today ? (
           <>
-            <Text style={[styles.heading, { color: theme.colors.ink }]}>{today.recommendation.title}</Text>
+            {/* `Label(info.recommendation.title, systemImage: "exclamationmark.triangle")` (`:259`). */}
+            <View style={styles.recommendation}>
+              <TaskSymbol name="exclamationmark.triangle.fill" size={17} color={theme.colors.ink} />
+              <Text style={[styles.heading, styles.grow, { color: theme.colors.ink }]}>{today.recommendation.title}</Text>
+            </View>
             <Text style={[styles.caption, { color: theme.colors.secondary }]}>
-              {`${today.appointments} calendar commitments today · ${today.availableMinutes} minutes of usable time remain`}
+              {/* `DurationDisplay.durationLabel(info.availableMinutes)` (`:260`) — "7 hours 43 minutes". */}
+              {`${today.appointments} calendar commitments today · ${durationLabel(today.availableMinutes)} of usable time remain`}
             </Text>
             <Text style={[styles.caption, { color: theme.colors.secondary }]}>{today.recommendation.explanation}</Text>
           </>
-        ) : (
+        ) : intelligence.isFetching || intelligence.isError ? null : (
           <>
+            {/* `else if !model.intelligenceLoading && model.intelligenceError == nil` (`:263`). */}
             <Text style={[styles.heading, { color: theme.colors.ink }]}>Review your schedule</Text>
             <Text style={[styles.caption, { color: theme.colors.secondary }]}>Load today’s conflicts and available time.</Text>
           </>
         )}
+        {/* `intelligenceStatus(allowCreation: true)` (CalendarView.swift:268, defined `:295-312`). */}
+        <IntelligenceStatus current={current} />
         <View style={styles.creationRow}>
           {/* `.fullScreenCover { AddTaskByVoiceView(calendarOnly: true) }` (CalendarView.swift:161). */}
           <CreationCard title="Add by Voice" subtitle="Tap and speak" voice onPress={() => router.push('/calendar/voice')} testID="calendar-add-voice" />
@@ -631,6 +663,55 @@ export default function Calendar() {
         </View>
       </View>
     );
+  }
+
+  /**
+   * `intelligenceStatus(allowCreation:)` (CalendarView.swift:295-312), with `allowCreation` true:
+   * the loading line, the error line with its retry, or the "Create Appointments" button when the
+   * review on hand is not today's. Renders nothing when today's review is current.
+   */
+  function IntelligenceStatus({ current }: { current: boolean }) {
+    if (intelligence.isFetching) {
+      return (
+        <View style={styles.loading} testID="calendar-intelligence-loading">
+          <ActivityIndicator />
+          <Text style={[styles.subheadline, styles.centred, { color: theme.colors.ink }]}>Reviewing your schedule…</Text>
+        </View>
+      );
+    }
+    if (intelligence.isError) {
+      return (
+        <View style={styles.statusBlock} testID="calendar-intelligence-error">
+          <Text style={[styles.subheadline, { color: theme.colors.secondary }]}>{(intelligence.error as Error).message}</Text>
+          {intelligence.data !== undefined ? (
+            <Text style={[styles.caption, { color: theme.colors.secondary }]}>Showing the last successful review.</Text>
+          ) : null}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Retry schedule intelligence"
+            onPress={() => void intelligence.refetch()}
+            style={styles.retry}
+            testID="calendar-intelligence-retry"
+          >
+            <Text style={[styles.subheadline, styles.semibold, { color: theme.colors.tint }]}>Retry schedule intelligence</Text>
+          </Pressable>
+        </View>
+      );
+    }
+    if (!current) {
+      return (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Create Appointments"
+          onPress={() => router.push('/calendar/event/new')}
+          style={styles.retry}
+          testID="calendar-create-appointments"
+        >
+          <Text style={[styles.subheadline, styles.semibold, { color: theme.colors.tint }]}>Create Appointments</Text>
+        </Pressable>
+      );
+    }
+    return null;
   }
 
   /** `calendarCreationCard(_:subtitle:voice:action:)` (CalendarView.swift:277-292). */
@@ -661,11 +742,31 @@ export default function Calendar() {
           },
         ]}
       >
-        <View style={[styles.creationIcon, { backgroundColor: voice ? brand.nexdoIndigo : withAlpha(brand.nexdoMagenta, 0.07) }]}>
-          <TaskSymbol name={voice ? 'mic.fill' : 'plus'} size={20} color={voice ? '#FFFFFF' : theme.colors.tint} />
-        </View>
-        <View style={styles.grow}>
-          <Text numberOfLines={1} style={[styles.caption, styles.semibold, { color: theme.colors.ink }]}>
+        {/* The voice circle is a leading-to-trailing indigo-to-blue gradient (CalendarView.swift:283). */}
+        {voice ? (
+          <LinearGradient
+            colors={[brand.nexdoIndigo, brand.nexdoBlue]}
+            start={{ x: 0, y: 0.5 }}
+            end={{ x: 1, y: 0.5 }}
+            style={styles.creationIcon}
+          >
+            <TaskSymbol name="mic.fill" size={22} color="#FFFFFF" />
+          </LinearGradient>
+        ) : (
+          <View style={[styles.creationIcon, { backgroundColor: withAlpha(brand.nexdoMagenta, 0.07) }]}>
+            {/* `.font(.title2)` (CalendarView.swift:280). */}
+            <TaskSymbol name="plus" size={22} color={theme.colors.tint} />
+          </View>
+        )}
+        <View style={styles.creationText}>
+          {/* `.lineLimit(1).minimumScaleFactor(0.8)` (CalendarView.swift:287): Roboto is ~9% narrower
+              than SF Pro on a 4.5% narrower screen, so "Add Manually" is the label that runs out. */}
+          <Text
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.8}
+            style={[styles.caption, styles.semibold, { color: theme.colors.ink }]}
+          >
             {title}
           </Text>
           <Text numberOfLines={1} style={[styles.caption2, { color: theme.colors.secondary }]}>
@@ -711,16 +812,24 @@ function eventDateLabel(value: string, timeZone: string): string {
   return `${date} ${serverTime(value, timeZone)}`;
 }
 
+/** `Color(red: 0.18, green: 0.36, blue: 0.59)` on the selected day (CalendarView.swift:366). */
+const SELECTED_DAY = '#2E5C96';
+
 const styles = StyleSheet.create({
   fill: { flex: 1 },
   // `.padding(.horizontal, 24).padding(.top, 14).padding(.bottom, 24)` with `VStack(spacing: 24)`.
   scroll: { paddingHorizontal: 24, paddingTop: 14, paddingBottom: 24, gap: 24 },
-  header: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  // A bare `HStack` spaces its children by 8 (CalendarView.swift:179).
+  header: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   title: { fontSize: 34, lineHeight: 41, fontWeight: '700' },
-  subheadline: { fontSize: 15, lineHeight: 20 },
+  // The line heights are the named text styles', not `fontSize * 1.2` (style map section 2).
+  subheadline: { fontSize: 15, lineHeight: 21 },
   semibold: { fontWeight: '600' },
+  bold: { fontWeight: '700' },
+  centred: { textAlign: 'center' },
+  trailing: { textAlign: 'right' },
   caption: { fontSize: 12, lineHeight: 16 },
-  caption2: { fontSize: 11, lineHeight: 14 },
+  caption2: { fontSize: 11, lineHeight: 13 },
   heading: { fontSize: 17, lineHeight: 22, fontWeight: '600' },
   sectionTitle: { fontSize: 22, lineHeight: 28, fontWeight: '700' },
   headerButton: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
@@ -729,13 +838,15 @@ const styles = StyleSheet.create({
   searchRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   searchField: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, paddingLeft: 12, minHeight: 48, borderRadius: 12, borderWidth: StyleSheet.hairlineWidth },
   cancel: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 4 },
-  dateNav: { flexDirection: 'row', alignItems: 'center' },
+  clearButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  dateNav: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   navButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   navLabel: { flex: 1, textAlign: 'center' },
   todayButton: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 8 },
   grid: { gap: 18 },
   gridRow: { flexDirection: 'row', flexWrap: 'wrap' },
-  gridHeader: { width: `${100 / 7}%`, textAlign: 'center', fontSize: 11, lineHeight: 28 },
+  // `.font(.caption2)` in a `.frame(height: 28)` (CalendarView.swift:361).
+  gridHeader: { width: `${100 / 7}%`, height: 28, textAlign: 'center', textAlignVertical: 'center', fontSize: 11, lineHeight: 13 },
   gridCell: { width: `${100 / 7}%`, minHeight: 48, alignItems: 'center', justifyContent: 'center', gap: 2 },
   dayCircle: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
   dots: { flexDirection: 'row', gap: 3, height: 5 },
@@ -743,9 +854,11 @@ const styles = StyleSheet.create({
   legend: { textAlign: 'center', paddingTop: 4 },
   failure: { gap: 8 },
   retry: { minHeight: 44, justifyContent: 'center' },
-  loading: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
-  upcoming: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  rangeButton: { flexDirection: 'row', alignItems: 'center', gap: 6, padding: 12, borderRadius: 12 },
+  // A `ProgressView` with a label stacks the label under the spinner.
+  loading: { alignItems: 'center', justifyContent: 'center', gap: 8 },
+  statusBlock: { gap: 6 },
+  upcoming: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  rangeButton: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 12, borderRadius: 12 },
   filtersButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 14, borderWidth: StyleSheet.hairlineWidth },
   menu: { borderRadius: 12, borderWidth: StyleSheet.hairlineWidth, overflow: 'hidden' },
   menuRow: { flexDirection: 'row', alignItems: 'center', minHeight: 44, paddingHorizontal: 16 },
@@ -757,18 +870,28 @@ const styles = StyleSheet.create({
   searchResults: { gap: 24 },
   backlog: { padding: 16, borderRadius: 16, borderWidth: StyleSheet.hairlineWidth },
   backlogHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 44 },
-  backlogEmpty: { paddingVertical: 12 },
+  // `.padding(.vertical)` with no value is 16 (CalendarView.swift:100).
+  backlogEmpty: { paddingVertical: 16 },
   backlogRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 10, minHeight: 44 },
   badge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 999 },
-  badgeText: { fontSize: 11, lineHeight: 14 },
+  badgeText: { fontSize: 11, lineHeight: 13 },
   intelligence: { gap: 12, padding: 14, borderRadius: 16, borderWidth: StyleSheet.hairlineWidth },
   intelligenceHeader: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  recommendation: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   creationRow: { flexDirection: 'row', gap: 10 },
   creationCard: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 64, padding: 8, borderRadius: 18, borderWidth: StyleSheet.hairlineWidth },
   creationIcon: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
+  // `VStack(alignment: .leading, spacing: 4)` (CalendarView.swift:286).
+  creationText: { flex: 1, gap: 4 },
   sheetBackdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0, 0, 0, 0.35)' },
-  sheet: { padding: 20, gap: 12, borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: '80%' },
-  sheetBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  sheetSection: { gap: 8, padding: 16, borderRadius: 10 },
-  sectionHeader: { fontSize: 13, lineHeight: 18, marginLeft: 4 },
+  // A `Form` section is inset 16 from the screen on iOS 26 (style map section 7).
+  sheet: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 20, gap: 8, borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: '80%' },
+  sheetBar: { flexDirection: 'row', alignItems: 'center', paddingVertical: 6 },
+  sheetBarSide: { width: 72 },
+  // 26pt corners, 16pt row inset; each row is 56 high with the separator between rows.
+  sheetSection: { borderRadius: 26, overflow: 'hidden' },
+  formRow: { minHeight: 56, paddingHorizontal: 16, textAlignVertical: 'center' },
+  formSeparator: { height: 1, marginLeft: 16 },
+  // 32 from the screen: 16 section inset plus 16 row inset. Sentence case, `.body`, `.secondaryLabel`.
+  sectionHeader: { marginLeft: 16, marginTop: 12 },
 });
