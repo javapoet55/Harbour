@@ -2,15 +2,15 @@ import { router } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 
-import type { DoNowChoice, DoNowRecommendation } from '../../src/api';
-import { Text } from '../../src/components';
-import { durationLabel } from '../../src/lib/focusClock';
-import { parseServerDate } from '../../src/lib/taskQuery';
-import { useTasks } from '../../src/query/useTasks';
-import { canStartRecommendation, useDoNow } from '../../src/query/useToday';
-import { useConsent } from '../../src/store/consent';
-import { useFocus } from '../../src/store/focus';
-import { brand, useTheme } from '../../src/theme';
+import type { DoNowChoice, DoNowRecommendation } from '../../../src/api';
+import { Text } from '../../../src/components';
+import { durationLabel } from '../../../src/lib/focusClock';
+import { parseServerDate } from '../../../src/lib/taskQuery';
+import { useTasks } from '../../../src/query/useTasks';
+import { canStartRecommendation, useDoNow } from '../../../src/query/useToday';
+import { useConsent } from '../../../src/store/consent';
+import { useFocus } from '../../../src/store/focus';
+import { brand, useTheme } from '../../../src/theme';
 
 /**
  * Port of `DoNowView` (ios/App/DoNowView.swift), built from `body` at `:15-107`.

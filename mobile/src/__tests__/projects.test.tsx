@@ -52,9 +52,9 @@ jest.mock('../api', () => ({
   },
 }));
 
-import NewProject from '../../app/project/new';
-import EditProject from '../../app/project/[id]/edit';
-import ProjectDetail from '../../app/project/[id]/index';
+import NewProject from '../../app/(tabs)/(tasks)/project/new';
+import EditProject from '../../app/(tabs)/(tasks)/project/[id]/edit';
+import ProjectDetail from '../../app/(tabs)/(tasks)/project/[id]/index';
 import { ProjectsList } from '../components/ProjectsList';
 
 const ZONE = 'Asia/Kolkata';

@@ -3,14 +3,14 @@ import { router } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 
-import { useCoordinator } from '../../src/actions/coordinator';
-import { TaskSymbol, Text } from '../../src/components';
-import { TodayActionsView } from '../../src/components/TodayActions';
-import { PersistentNextCard, ProtectedTimeCard } from '../../src/components/TodayNextAction';
-import { FocusSessionStrip } from '../../src/components/FocusSessionStrip';
-import { AttentionCard } from '../../src/components/AttentionCard';
-import { TodayIntelligenceCard } from '../../src/components/TodayIntelligenceCard';
-import { TasksTopBar, TodayBackdrop } from '../../src/components/TodayShell';
+import { useCoordinator } from '../../../src/actions/coordinator';
+import { TaskSymbol, Text } from '../../../src/components';
+import { TodayActionsView } from '../../../src/components/TodayActions';
+import { PersistentNextCard, ProtectedTimeCard } from '../../../src/components/TodayNextAction';
+import { FocusSessionStrip } from '../../../src/components/FocusSessionStrip';
+import { AttentionCard } from '../../../src/components/AttentionCard';
+import { TodayIntelligenceCard } from '../../../src/components/TodayIntelligenceCard';
+import { TasksTopBar, TodayBackdrop } from '../../../src/components/TodayShell';
 import {
   buildSchedule,
   dateLabel,
@@ -19,20 +19,20 @@ import {
   scheduleCounts,
   TODAY_RANGES,
   type TodayRange,
-} from '../../src/lib/todaySchedule';
-import { buildActionQueue } from '../../src/lib/todayActionQueue';
+} from '../../../src/lib/todaySchedule';
+import { buildActionQueue } from '../../../src/lib/todayActionQueue';
 import {
   invalidateNextAction,
   useDismissNextAction,
   useNextAction,
   useProtectedTime,
   useRespondToProtectedTime,
-} from '../../src/query/useNextAction';
-import { useTasks } from '../../src/query/useTasks';
-import { canStartRecommendation, useAgenda, useScheduleIntelligence, useWeather } from '../../src/query/useToday';
-import { useFocus } from '../../src/store/focus';
-import { useSession } from '../../src/store/session';
-import { brand, useTheme } from '../../src/theme';
+} from '../../../src/query/useNextAction';
+import { useTasks } from '../../../src/query/useTasks';
+import { canStartRecommendation, useAgenda, useScheduleIntelligence, useWeather } from '../../../src/query/useToday';
+import { useFocus } from '../../../src/store/focus';
+import { useSession } from '../../../src/store/session';
+import { brand, useTheme } from '../../../src/theme';
 
 /**
  * Port of `TodayView` (ios/App/RootView.swift), built from `body` at `:1017-1198`.

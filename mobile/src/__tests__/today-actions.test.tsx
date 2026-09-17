@@ -39,7 +39,7 @@ jest.mock('../api', () => ({
   },
 }));
 
-import Today from '../../app/(tabs)/today';
+import Today from '../../app/(tabs)/today/index';
 
 const ZONE = 'America/Los_Angeles';
 const OWNER = 'user-1';

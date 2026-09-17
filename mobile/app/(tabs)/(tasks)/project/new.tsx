@@ -2,11 +2,11 @@ import { router, Stack } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
-import { Text } from '../../src/components';
-import { ProjectEditorForm } from '../../src/components/ProjectEditorForm';
-import { isValidProjectName, PROJECT_PALETTE } from '../../src/lib/projectQuery';
-import { useCreateProject } from '../../src/query/useProjects';
-import { useTheme } from '../../src/theme';
+import { Text } from '../../../../src/components';
+import { ProjectEditorForm } from '../../../../src/components/ProjectEditorForm';
+import { isValidProjectName, PROJECT_PALETTE } from '../../../../src/lib/projectQuery';
+import { useCreateProject } from '../../../../src/query/useProjects';
+import { useTheme } from '../../../../src/theme';
 
 /** `ProjectEditorView(project: nil)` (ios/App/ProjectsView.swift:112-171), presented as a sheet. */
 export default function NewProject() {

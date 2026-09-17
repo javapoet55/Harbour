@@ -43,7 +43,7 @@ jest.mock('../voice/useVoiceSession', () => ({
   START_FAILED: 'Couldn’t start voice. Close this screen and try again.',
 }));
 
-import Today from '../../app/(tabs)/today';
+import Today from '../../app/(tabs)/today/index';
 import { AddTaskByVoiceView } from '../components/AddTaskByVoiceView';
 
 const ZONE = 'America/Los_Angeles';

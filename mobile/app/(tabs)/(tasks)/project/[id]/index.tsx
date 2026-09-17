@@ -2,15 +2,15 @@ import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 
-import { TaskSymbol, Text } from '../../../src/components';
-import { ProjectFolder, ProjectSearchField, TaskListRow, useProjectAccent } from '../../../src/components/ProjectParts';
-import { TodayBackdrop, TodayHeaderButton } from '../../../src/components/TodayShell';
-import { projectColor, searchMatches } from '../../../src/lib/projectQuery';
-import { dayKey, isDone, parseServerDate } from '../../../src/lib/taskQuery';
-import { useDeleteProject, useProject, useProjects } from '../../../src/query/useProjects';
-import { useTasks } from '../../../src/query/useTasks';
-import { useSession } from '../../../src/store/session';
-import { useTheme } from '../../../src/theme';
+import { TaskSymbol, Text } from '../../../../../src/components';
+import { ProjectFolder, ProjectSearchField, TaskListRow, useProjectAccent } from '../../../../../src/components/ProjectParts';
+import { TodayBackdrop, TodayHeaderButton } from '../../../../../src/components/TodayShell';
+import { projectColor, searchMatches } from '../../../../../src/lib/projectQuery';
+import { dayKey, isDone, parseServerDate } from '../../../../../src/lib/taskQuery';
+import { useDeleteProject, useProject, useProjects } from '../../../../../src/query/useProjects';
+import { useTasks } from '../../../../../src/query/useTasks';
+import { useSession } from '../../../../../src/store/session';
+import { useTheme } from '../../../../../src/theme';
 
 /**
  * Port of `ProjectDetailView` (ios/App/ProjectsView.swift:173-294).

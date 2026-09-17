@@ -28,12 +28,12 @@ jest.mock('../api', () => ({
 const mockFetch = jest.fn();
 global.fetch = mockFetch as unknown as typeof fetch;
 
-import Attention from '../../app/today/attention';
-import Overdue from '../../app/today/overdue';
-import ScheduleCheck from '../../app/today/schedule-check';
-import Weather from '../../app/today/weather';
-import WeeklySummaryScreen from '../../app/today/weekly-summary';
-import WeeklyTasks from '../../app/today/weekly-tasks';
+import Attention from '../../app/(tabs)/today/attention';
+import Overdue from '../../app/(tabs)/today/overdue';
+import ScheduleCheck from '../../app/(tabs)/today/schedule-check';
+import Weather from '../../app/(tabs)/today/weather';
+import WeeklySummaryScreen from '../../app/(tabs)/today/weekly-summary';
+import WeeklyTasks from '../../app/(tabs)/today/weekly-tasks';
 
 const ZONE = 'Asia/Kolkata';
 /** 2026-09-16 09:00 in Asia/Kolkata (a Wednesday). */

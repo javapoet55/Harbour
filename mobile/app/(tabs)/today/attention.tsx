@@ -1,11 +1,11 @@
 import { router } from 'expo-router';
 import { RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 
-import { TaskSymbol, Text } from '../../src/components';
-import { AttentionCard } from '../../src/components/AttentionCard';
-import { useScheduleIntelligence } from '../../src/query/useToday';
-import { useTasks } from '../../src/query/useTasks';
-import { useTheme } from '../../src/theme';
+import { TaskSymbol, Text } from '../../../src/components';
+import { AttentionCard } from '../../../src/components/AttentionCard';
+import { useScheduleIntelligence } from '../../../src/query/useToday';
+import { useTasks } from '../../../src/query/useTasks';
+import { useTheme } from '../../../src/theme';
 
 /**
  * Port of `attentionDetails` (ios/App/RootView.swift:1202-1231), a private `@ViewBuilder` var on

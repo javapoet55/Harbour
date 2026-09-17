@@ -24,7 +24,7 @@ jest.mock('../api', () => ({
   },
 }));
 
-import Tasks from '../../app/(tabs)/tasks';
+import Tasks from '../../app/(tabs)/(tasks)/tasks';
 
 const ZONE = 'Asia/Kolkata';
 /** 2026-09-16 09:00 in Asia/Kolkata. */

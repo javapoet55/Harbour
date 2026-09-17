@@ -1,10 +1,18 @@
 import { router, Stack } from 'expo-router';
 import { Pressable } from 'react-native';
 
-import { Text } from '../../src/components';
-import { stackHeaderOptions, useTheme} from '../../src/theme';
+import { Text } from '../../../src/components';
+import { stackHeaderOptions, useTheme} from '../../../src/theme';
 
 /**
+ * The Today tab's navigation stack.
+ *
+ * It lives **inside** `(tabs)` so that a pushed screen keeps the tab bar, which is what SwiftUI does:
+ * `.navigationDestination` pushes within the selected tab's `NavigationStack`
+ * (RootView.swift:1187-1196), and `WeeklySummaryView`'s `NavigationLink`s (`:104`, `:110`) push
+ * again from there. Route groups are stripped from the URL and `today` is a real segment, so every
+ * path is unchanged by the move.
+ *
  * `TodayView` presents Do Now as a `.sheet` with `[.large]` detents and a drag indicator
  * (RootView.swift:1180), titled "What should I do now?" with a "Done" confirmation action
  * (DoNowView.swift:95-96).
@@ -30,6 +38,8 @@ export default function TodayLayout() {
         ...stackHeaderOptions(theme, theme.colors.background),
       }}
     >
+      {/* The tab's own root draws `TodayTopBar`, so it takes no navigation header. */}
+      <Stack.Screen name="index" options={{ headerShown: false }} />
       <Stack.Screen
         name="do-now"
         options={{ presentation: 'modal', title: 'What should I do now?', headerRight: doneButton() }}

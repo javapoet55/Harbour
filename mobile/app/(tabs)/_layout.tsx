@@ -35,13 +35,15 @@ export default function TabsLayout() {
         tabBarButton: (props) => <TabBarButton {...props} />,
       }}
     >
-      {/* `NexdoTab.icon` (RootView.swift:81): sun.max, checkmark.circle, sparkles, calendar. */}
+      {/* `NexdoTab.icon` (RootView.swift:81): sun.max, checkmark.circle, sparkles, calendar.
+          `today` and `(tasks)` name a *stack*, not a screen: each tab owns a `NavigationStack` the
+          way Swift does, so a pushed project or Today detail keeps the bar. See their `_layout`s. */}
       <Tabs.Screen
         name="today"
         options={{ title: 'Today', tabBarIcon: ({ color }) => <TaskSymbol name="sun.max" size={22} color={String(color)} /> }}
       />
       <Tabs.Screen
-        name="tasks"
+        name="(tasks)"
         options={{
           title: 'Tasks',
           tabBarIcon: ({ color }) => <TaskSymbol name="checkmark.circle" size={22} color={String(color)} />,

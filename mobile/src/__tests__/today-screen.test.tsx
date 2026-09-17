@@ -31,7 +31,7 @@ jest.mock('../api', () => ({
 const mockFetch = jest.fn();
 global.fetch = mockFetch as unknown as typeof fetch;
 
-import Today from '../../app/(tabs)/today';
+import Today from '../../app/(tabs)/today/index';
 
 const ZONE = 'Asia/Kolkata';
 /** 2026-09-16 09:00 in Asia/Kolkata (a Wednesday). */

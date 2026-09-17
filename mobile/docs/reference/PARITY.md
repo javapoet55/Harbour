@@ -152,34 +152,46 @@ renders those **as written**. The task editor's "TASK NAME", "NOTES", "PROJECT",
 uppercase strings in the Swift source (RootView.swift:1964-1990). Those stay uppercase. The rule is
 not "iOS does not uppercase"; it is "read which one Swift wrote".
 
-## The tab bar disappears on every pushed screen
-
-**Not fixed — it needs a decision, because it is a routing change, not a style change.**
+## The tab bar on pushed screens — fixed
 
 SwiftUI pushes a detail screen *inside* the selected tab's `NavigationStack`, so the tab bar stays.
-In this app every detail route is a sibling of `(tabs)` in the Expo Router tree, so pushing one
-unmounts the tab navigator and the bar vanishes. On `project-detail` that is a whole 90 dp band of
-the screen present on one platform and absent on the other, and no amount of styling closes it.
+Every detail route here used to be a sibling of `(tabs)`, so pushing one unmounted the tab navigator
+and the bar vanished — on `project-detail` a whole 90 dp band present on one platform and absent on
+the other.
 
-Swift uses a real push — tab bar visible — for exactly these:
+Each tab now owns a stack, the way Swift does. Verified on the device: all four tab items are in the
+view tree on each of these, and hardware back returns where Swift returns.
 
-| Route | Swift |
-| --- | --- |
-| `project/[id]` | `NavigationLink` (ProjectsView.swift:50, 54) |
-| `today/attention` | `.navigationDestination` (RootView.swift:1187) |
-| `today/schedule-check` | `.navigationDestination` (`:1190`) |
-| `today/overdue` | `.navigationDestination` (`:1193`) |
-| `today/weekly-summary` | `.navigationDestination` (`:1196`) |
+| Route | Swift | Was | Now |
+| --- | --- | --- | --- |
+| `/project/[id]` | `NavigationLink` (ProjectsView.swift:50, 54) | no bar | **bar, back → Projects segment** |
+| `/today/attention` | `.navigationDestination` (RootView.swift:1187) | no bar | **bar, back → Today** |
+| `/today/schedule-check` | `.navigationDestination` (`:1190`) | no bar | **bar** |
+| `/today/overdue` | `.navigationDestination` (`:1193`) | no bar | **bar** |
+| `/today/weekly-summary` | `.navigationDestination` (`:1196`) | no bar | **bar** |
+| `/today/weekly-tasks` | `NavigationLink` (WeeklySummaryView.swift:104, 110) | no bar | **bar** — a push from a push, found while checking the other five |
 
-Everything else reached from a tab — the task editor, Do Now, Account, the weather forecast, Ask —
-is a `.sheet` or a `.fullScreenCover`, and a sheet covers the tab bar on iOS too. Those are already
-right.
+**No route path changed.** Route groups in parentheses are stripped from the URL, so the tasks tab is
+a group, `(tabs)/(tasks)/`, and `project/[id]/index.tsx` inside it still serves `/project/[id]`.
+Using a plain `tasks` directory instead would have rewritten every project path to
+`/tasks/project/…`. Today did not need a group: `today` is a real segment either way, so
+`(tabs)/today/index.tsx` serves `/today` and its siblings serve `/today/*` as before. Nothing in
+`router.push` had to change.
 
-The fix is to move those five routes under `app/(tabs)/`, giving each tab its own stack. That
-changes every `router.push('/project/…')` path, the Android hardware-back behaviour and deep links,
-so it is not something to slip into a styling commit.
+Also checked, because "it doesn't touch these" was the premise of the move:
 
-## Screen results
+- **Reminder notification routing** (Phase 8) opens `/action/[id]`, which is a `.sheet` in Swift
+  (RootView.swift:59-62) and did not move. Deep-linked `nexdo://action/abc123?preferred=CALL` and got
+  the Nexdo Action sheet with its Close button.
+- **Deep links** `nexdo://project/unassigned`, `nexdo://today/schedule-check?id=gap`,
+  `nexdo://today/weekly-summary`, `nexdo://action/queue` and `nexdo://calendar/conflicts` all resolve
+  to the same screens as before. The last two show no tab bar, which is right: both are `.sheet`s in
+  Swift (TodayActionsView.swift:213, CalendarView.swift:163).
+
+`src/__tests__/tab-routes.test.ts` pins the file placement, since placement is what decides whether
+the bar survives, and a regression would be silent.
+
+## Screen results## Screen results
 
 Only screens with **both** captures can carry a percentage. Android captures exist for two screens
 so far; the rest of this table fills in as each group is done.
@@ -188,10 +200,10 @@ so far; the rest of this table fills in as each group is done.
 | --- | --- | --- | --- | --- |
 | Project editor | default, light | 7.17% | **6.89%** | essentially a match |
 | Tasks | default, light | 13.54% | **12.01%** | empty-state glyph (SF Symbol gap); tab-bar y offset |
-| Project unassigned | default, light | — | **12.40%** | no tab bar on Android (see above); text sits ~3 dp lower in each card |
+| Project unassigned | default, light | — | 12.40% | measured before the tab bar was restored; needs a re-capture |
 | Tasks | search open, light | — | **12.68%** | as Tasks default |
 | Projects | default, light | 14.17% | **13.71%** | cumulative drift below the fold |
-| Project detail | default, light | 14.35% | **14.46%** | **no tab bar on Android** — the whole 90 dp band counts as a mismatch |
+| Project detail | default, light | 14.35% | **13.39%** | tab bar restored; cumulative drift below the fold |
 | Tasks | list (All), light | — | **16.04%** | drift; row badge glyph |
 | Task editor | default, light | 18.67% | **16.85%** | Swift presents a detent sheet, so it opens already scrolled; Android is a full page |
 | Tasks | list scrolled, light | — | **17.59%** | scroll offset cannot be matched exactly between devices |

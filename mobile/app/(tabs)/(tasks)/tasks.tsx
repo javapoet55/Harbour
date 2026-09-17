@@ -2,9 +2,9 @@ import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, RefreshControl, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 
-import { CreationCard, DatePill, HeaderButton, SectionHeader, TaskCard, TaskEmptyState, TaskSymbol, Text } from '../../src/components';
-import { ProjectsList } from '../../src/components/ProjectsList';
-import { TasksTopBar, TodayBackdrop } from '../../src/components/TodayShell';
+import { CreationCard, DatePill, HeaderButton, SectionHeader, TaskCard, TaskEmptyState, TaskSymbol, Text } from '../../../src/components';
+import { ProjectsList } from '../../../src/components/ProjectsList';
+import { TasksTopBar, TodayBackdrop } from '../../../src/components/TodayShell';
 import {
   DATE_FILTER_EMPTY_TITLE,
   TASK_DATE_FILTERS,
@@ -12,13 +12,13 @@ import {
   snapshot,
   type TaskDateFilter,
   type TaskHistoryRange,
-} from '../../src/lib/taskQuery';
-import { sectionTitle } from '../../src/lib/taskLabels';
-import { useProjects } from '../../src/query/useProjects';
-import { useCompleteTask, useTasks, type ScheduleConflict } from '../../src/query/useTasks';
-import { useSession } from '../../src/store/session';
-import { useTaskQuery } from '../../src/store/taskQuery';
-import { useTheme } from '../../src/theme';
+} from '../../../src/lib/taskQuery';
+import { sectionTitle } from '../../../src/lib/taskLabels';
+import { useProjects } from '../../../src/query/useProjects';
+import { useCompleteTask, useTasks, type ScheduleConflict } from '../../../src/query/useTasks';
+import { useSession } from '../../../src/store/session';
+import { useTaskQuery } from '../../../src/store/taskQuery';
+import { useTheme } from '../../../src/theme';
 
 /** The caption under the history-range picker (RootView.swift:1678). */
 const HISTORY_RANGE_CAPTION: Record<TaskHistoryRange, string> = {
