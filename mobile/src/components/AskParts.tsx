@@ -1,11 +1,12 @@
 import { LinearGradient } from 'expo-linear-gradient';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { useState } from 'react';
+import { Platform, Pressable, StyleSheet, View, type LayoutChangeEvent } from 'react-native';
 
 import type { AskIntent } from '../lib/askIntents';
 import { brand, useTheme } from '../theme';
 import { withAlpha } from './SignInBackdrop';
 import { TaskSymbol } from './TaskSymbol';
-import { Text } from './Text';
+import { Text, type TextProps } from './Text';
 
 /**
  * The pieces of `AskNexdoView` (ios/App/AskNexdoView.swift) that are their own views or funcs:
@@ -124,26 +125,74 @@ export function AskEntryCard({
       )}
       <View style={styles.entryText}>
         {/* `.lineLimit(1).minimumScaleFactor(0.75)` on BOTH labels (AskNexdoView.swift:301-302).
-            Roboto sets ~9% narrower than SF Pro on a 4.5% narrower screen, so "Free form Text" is
-            exactly the label that runs out of room here. */}
-        <Text
-          numberOfLines={1}
-          adjustsFontSizeToFit
-          minimumFontScale={0.75}
-          style={[styles.footnote, styles.semibold, { color: theme.colors.ink }]}
-        >
-          {title}
-        </Text>
-        <Text
-          numberOfLines={1}
-          adjustsFontSizeToFit
-          minimumFontScale={0.75}
-          style={[styles.caption, { color: theme.colors.secondaryLabel }]}
-        >
-          {detail}
-        </Text>
+            The test phone's screen is 18 dp narrower than the iPhone's, which is enough on its own
+            to run "Free form Text" and "Type your prompt" out of room. (Not the typeface: at font
+            scale 1.0 Roboto is within 1% of SF Pro — style map §2.) */}
+        <FittedText style={[styles.footnote, styles.semibold, { color: theme.colors.ink }]}>{title}</FittedText>
+        <FittedText style={[styles.caption, { color: theme.colors.secondaryLabel }]}>{detail}</FittedText>
       </View>
     </Pressable>
+  );
+}
+
+/**
+ * One line that shrinks to fit, on both platforms: SwiftUI's `.lineLimit(1).minimumScaleFactor(_:)`.
+ *
+ * `adjustsFontSizeToFit` is iOS-only in React Native — see docs/swift-to-rn-style-map.md,
+ * "`.minimumScaleFactor` has no Android equivalent". On Android it is silently ignored and the
+ * label keeps its size, so the run is clipped with no ellipsis: "Type your prompt" painted as
+ * "Type your" while `uiautomator` still reported the whole string.
+ *
+ * iOS keeps the real thing. Android measures instead: a copy of the label is laid out at full size
+ * inside an over-wide absolute layer, where it is a shrink-to-fit child and so reports its *own*
+ * content width through `onLayout` — the ink width, not the container width that `onTextLayout`
+ * hands back (style map §4). The row reports the width available, and the font is scaled by the
+ * ratio, clamped at `minimumFontScale` exactly as SwiftUI clamps at its scale factor.
+ *
+ * `lineHeight` is left alone so the shrunk label keeps its box and the card does not change height.
+ */
+export function FittedText({
+  minimumFontScale = 0.75,
+  style,
+  children,
+}: {
+  minimumFontScale?: number;
+  style: TextProps['style'];
+  children: string;
+}) {
+  const [available, setAvailable] = useState(0);
+  const [natural, setNatural] = useState(0);
+  const measures = Platform.OS === 'android';
+
+  const width = (set: (value: number) => void) => (event: LayoutChangeEvent) => set(event.nativeEvent.layout.width);
+  const base = StyleSheet.flatten(style);
+  const fontSize = typeof base?.fontSize === 'number' ? base.fontSize : undefined;
+  const scale = measures && available > 0 && natural > available ? Math.max(minimumFontScale, available / natural) : 1;
+
+  return (
+    <View onLayout={measures ? width(setAvailable) : undefined}>
+      <Text
+        numberOfLines={1}
+        // Right on iOS, and a no-op on Android, where `scale` is what actually fits the label.
+        adjustsFontSizeToFit
+        minimumFontScale={minimumFontScale}
+        style={[style, scale < 1 && fontSize !== undefined && { fontSize: fontSize * scale }]}
+      >
+        {children}
+      </Text>
+      {measures ? (
+        <View
+          accessibilityElementsHidden
+          importantForAccessibility="no-hide-descendants"
+          pointerEvents="none"
+          style={styles.measureLayer}
+        >
+          <Text onLayout={width(setNatural)} style={[style, styles.measured]}>
+            {children}
+          </Text>
+        </View>
+      ) : null}
+    </View>
   );
 }
 
@@ -207,4 +256,9 @@ const styles = StyleSheet.create({
 
   // A bare `HStack` spaces its children by 8 (AskNexdoView.swift:222).
   example: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 16, borderRadius: 16 },
+
+  // Absolute, so it neither sizes its parent nor paints over the label it is measuring; wide
+  // enough that the copy inside it is never the one deciding where the line breaks.
+  measureLayer: { position: 'absolute', left: 0, top: 0, width: 4000, opacity: 0 },
+  measured: { alignSelf: 'flex-start' },
 });
