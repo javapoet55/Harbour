@@ -2,7 +2,7 @@ import { router, Stack } from 'expo-router';
 import { Pressable } from 'react-native';
 
 import { Text } from '../../src/components';
-import { useTheme } from '../../src/theme';
+import { textStyles, useTheme } from '../../src/theme';
 
 /**
  * Presentation matches the Swift app (ios/App/RootView.swift):
@@ -17,10 +17,12 @@ import { useTheme } from '../../src/theme';
  */
 export default function AuthLayout() {
   const theme = useTheme();
+  // Sign-up and reset-password are sheets, where iOS elevates the dark system backgrounds.
+  const sheet = useTheme({ elevated: true });
 
   const cancelButton = () => (
     <Pressable accessibilityRole="button" accessibilityLabel="Cancel" onPress={() => router.back()} hitSlop={8}>
-      <Text style={{ fontSize: 17, lineHeight: 22, color: theme.colors.tint }}>Cancel</Text>
+      <Text style={{ ...textStyles.body, color: theme.colors.tint }}>Cancel</Text>
     </Pressable>
   );
 
@@ -33,12 +35,21 @@ export default function AuthLayout() {
         headerTitleStyle: { color: theme.colors.ink, fontSize: 17, fontWeight: '600' },
         headerStyle: { backgroundColor: theme.colors.background },
         headerShadowVisible: false,
+        // Android left-aligns the title by default and it collides with the Cancel button.
+        headerTitleAlign: 'center',
       }}
     >
       <Stack.Screen name="sign-in" />
       <Stack.Screen
         name="sign-up"
-        options={{ presentation: 'modal', headerShown: true, title: 'Create your account', headerLeft: cancelButton }}
+        options={{
+          presentation: 'modal',
+          headerShown: true,
+          title: 'Create your account',
+          headerLeft: cancelButton,
+          contentStyle: { backgroundColor: sheet.colors.background },
+          headerStyle: { backgroundColor: sheet.colors.background },
+        }}
       />
       <Stack.Screen name="verify-email" options={{ headerShown: true, title: 'Verify email', headerLeft: cancelButton }} />
       <Stack.Screen
@@ -49,8 +60,8 @@ export default function AuthLayout() {
           title: 'Reset password',
           headerLeft: cancelButton,
           // The reset screen is a Form, so it sits on the grouped background, not systemBackground.
-          contentStyle: { backgroundColor: theme.colors.groupedBackground },
-          headerStyle: { backgroundColor: theme.colors.groupedBackground },
+          contentStyle: { backgroundColor: sheet.colors.groupedBackground },
+          headerStyle: { backgroundColor: sheet.colors.groupedBackground },
         }}
       />
     </Stack>

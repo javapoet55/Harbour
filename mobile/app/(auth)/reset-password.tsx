@@ -6,7 +6,7 @@ import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleShee
 import { RevealablePasswordField, Text } from '../../src/components';
 import { useConfirmPasswordReset, useRequestPasswordReset } from '../../src/query/useAuth';
 import { sanitizeCode } from '../../src/schemas/auth';
-import { useTheme } from '../../src/theme';
+import { inputText, textStyles, useTheme } from '../../src/theme';
 
 /**
  * Port of `PasswordResetView` (ios/App/RootView.swift:574-640).
@@ -18,7 +18,8 @@ import { useTheme } from '../../src/theme';
  * — so it is a plain inset-grouped list on the grouped background, and it deliberately looks different.
  */
 export default function ResetPassword() {
-  const theme = useTheme();
+  // `presentation: 'modal'`, so the dark backgrounds elevate (see useTheme).
+  const theme = useTheme({ elevated: true });
   const params = useLocalSearchParams<{ email?: string }>();
 
   // `init(initialEmail:)` — the address typed on sign-in carries over.
@@ -67,9 +68,12 @@ export default function ResetPassword() {
           <FormSection footer="We’ll email a six-digit code if an account exists. Codes expire after 15 minutes.">
             <FormRow>
               <TextInput
+                // Android draws its own underline drawable behind a TextInput; it showed
+                // as a pale hard-edged box inside the glass card.
+                underlineColorAndroid="transparent"
                 accessibilityLabel="Email address"
                 placeholder="Email address"
-                placeholderTextColor={theme.colors.secondary}
+                placeholderTextColor={theme.colors.placeholder}
                 value={email}
                 onChangeText={setEmail}
                 keyboardType="email-address"
@@ -78,7 +82,7 @@ export default function ResetPassword() {
                 autoCapitalize="none"
                 autoCorrect={false}
                 returnKeyType="next"
-                style={[theme.typography.body, styles.input, { color: theme.colors.ink }]}
+                style={[inputText(theme.typography.body), styles.input, { color: theme.colors.ink }]}
               />
             </FormRow>
           </FormSection>
@@ -87,15 +91,18 @@ export default function ResetPassword() {
             <FormSection header="Verification">
               <FormRow>
                 <TextInput
+                  // Android draws its own underline drawable behind a TextInput; it showed
+                  // as a pale hard-edged box inside the glass card.
+                  underlineColorAndroid="transparent"
                   accessibilityLabel="6-digit code"
                   placeholder="6-digit code"
-                  placeholderTextColor={theme.colors.secondary}
+                  placeholderTextColor={theme.colors.placeholder}
                   value={code}
                   onChangeText={(value) => setCode(sanitizeCode(value))}
                   keyboardType="number-pad"
                   textContentType="oneTimeCode"
                   autoComplete="one-time-code"
-                  style={[theme.typography.body, styles.input, { color: theme.colors.ink }]}
+                  style={[inputText(theme.typography.body), styles.input, { color: theme.colors.ink }]}
                   testID="reset-code"
                 />
               </FormRow>
@@ -156,23 +163,29 @@ export default function ResetPassword() {
   );
 }
 
-/** One inset-grouped `Section`, with the optional header and footer SwiftUI draws around it. */
+/**
+ * One inset-grouped `Section`, with the optional header and footer SwiftUI draws around it.
+ *
+ * Measured off the Swift app on iOS 26, where the inset-grouped list changed: the section is inset
+ * 16pt (not 20), its corners are 26pt (not 10), rows are 56pt tall (not 44), and the header is
+ * sentence case at `.body` — **not** the uppercase `.footnote` of earlier iOS.
+ */
 function FormSection({ children, header, footer }: { children: ReactNode; header?: string; footer?: string }) {
-  const theme = useTheme();
+  const theme = useTheme({ elevated: true });
   return (
     <View style={styles.section}>
-      {header ? <Text style={[styles.header, { color: theme.colors.secondary }]}>{header.toUpperCase()}</Text> : null}
+      {header ? <Text style={[styles.header, { color: theme.colors.secondaryLabel }]}>{header}</Text> : null}
       <View style={[styles.sectionBody, { backgroundColor: theme.colors.surface }]}>{children}</View>
-      {footer ? <Text style={[styles.footer, { color: theme.colors.secondary }]}>{footer}</Text> : null}
+      {footer ? <Text style={[styles.footer, { color: theme.colors.secondaryLabel }]}>{footer}</Text> : null}
     </View>
   );
 }
 
-/** A 44pt form row with the inset separator iOS draws between rows. */
+/** A 56pt form row with the inset 1pt separator iOS draws between rows. */
 function FormRow({ children, last = false }: { children: ReactNode; last?: boolean }) {
-  const theme = useTheme();
+  const theme = useTheme({ elevated: true });
   return (
-    <View style={[styles.row, !last && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.colors.separator }]}>
+    <View style={[styles.row, !last && { borderBottomWidth: 1, borderBottomColor: theme.colors.listSeparator }]}>
       {children}
     </View>
   );
@@ -201,7 +214,7 @@ function FormButton({
       disabled={disabled}
       onPress={onPress}
       testID={testID}
-      style={[styles.row, !last && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.colors.separator }]}
+      style={[styles.row, !last && { borderBottomWidth: 1, borderBottomColor: theme.colors.listSeparator }]}
     >
       <Text style={[theme.typography.body, { color: disabled ? theme.colors.secondary : theme.colors.tint }]}>{title}</Text>
     </Pressable>
@@ -210,12 +223,17 @@ function FormButton({
 
 const styles = StyleSheet.create({
   fill: { flex: 1 },
-  form: { paddingVertical: 18 },
+  // Measured: the Swift Form's first section sits 35pt below the navigation bar.
+  form: { paddingTop: 35, paddingBottom: 18 },
   input: { flex: 1, paddingVertical: 0 },
-  section: { marginBottom: 22 },
-  // Inset-grouped metrics: 20pt outer inset, 10pt corners, 16pt row inset.
-  sectionBody: { marginHorizontal: 20, borderRadius: 10, overflow: 'hidden' },
-  row: { minHeight: 44, paddingHorizontal: 16, paddingVertical: 11, flexDirection: 'row', alignItems: 'center' },
-  header: { fontSize: 13, lineHeight: 18, marginHorizontal: 36, marginBottom: 7 },
-  footer: { fontSize: 13, lineHeight: 18, marginHorizontal: 36, marginTop: 7 },
+  section: { marginBottom: 0 },
+  // iOS 26 inset-grouped metrics, measured off the Swift app: 16pt outer inset, 26pt corners,
+  // 16pt row inset, 56pt rows.
+  sectionBody: { marginHorizontal: 16, borderRadius: 26, overflow: 'hidden' },
+  // 15pt of vertical padding makes a plain row 56pt and a row holding the 44pt eye button 74pt,
+  // which is what the Swift Form measures.
+  row: { minHeight: 56, paddingHorizontal: 16, paddingVertical: 15, flexDirection: 'row', alignItems: 'center' },
+  // Header and footer sit 16pt inside the section, so 32pt from the screen edge.
+  header: { ...textStyles.body, marginHorizontal: 32, marginTop: 16, marginBottom: 8 },
+  footer: { ...textStyles.subheadline, marginHorizontal: 32, marginTop: 10, marginBottom: 12 },
 });

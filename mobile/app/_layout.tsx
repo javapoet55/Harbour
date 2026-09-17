@@ -56,14 +56,21 @@ export default function RootLayout() {
 }
 
 /**
- * Session gate. The launch `GET /api/me` decides: a profile unlocks (tabs), `null` unlocks (auth).
- * While it is undecided neither group is available, so every route falls back to app/index.tsx, which
- * shows the splash rather than a flash of the sign-in screen.
+ * Session gate. The launch `GET /api/me` decides: a profile unlocks (tabs), no profile unlocks
+ * (auth). While it is undecided neither group is available, so every route falls back to
+ * app/index.tsx, which shows the splash rather than a flash of the sign-in screen.
+ *
+ * The guards read the session **store**, not the `me` query. Signing out calls
+ * `queryClient.clear()`, which destroys that query, so the query's `data` goes to `undefined`
+ * rather than `null` — and with `undefined` neither guard matched and the gate simply left the
+ * signed-in screen on display. The store is the single source of truth here and `clear()` sets it
+ * synchronously, so the switch to the auth group happens in the same tick.
  */
 function RootNavigator() {
   const theme = useTheme();
   const queryClient = useQueryClient();
   const { data: profile } = useMe();
+  const status = useSession((state) => state.status);
   const setProfile = useSession((state) => state.setProfile);
   const clear = useSession((state) => state.clear);
 
@@ -113,10 +120,10 @@ function RootNavigator() {
       <StatusBar style={theme.scheme === 'dark' ? 'light' : 'dark'} />
       <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: theme.colors.groupedBackground } }}>
         <Stack.Screen name="index" />
-        <Stack.Protected guard={profile != null}>
+        <Stack.Protected guard={status === 'signedIn'}>
           <Stack.Screen name="(tabs)" />
         </Stack.Protected>
-        <Stack.Protected guard={profile === null}>
+        <Stack.Protected guard={status === 'signedOut'}>
           <Stack.Screen name="(auth)" />
         </Stack.Protected>
         {/* Reminder screens sit OUTSIDE the tab group: a notification opens them over any tab. */}

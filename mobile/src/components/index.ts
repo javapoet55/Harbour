@@ -15,6 +15,7 @@ export { Screen, type ScreenProps } from './Screen';
 export { SplashView } from './SplashView';
 export { SignInBackdrop, withAlpha } from './SignInBackdrop';
 export { SignInFieldIcon, fieldIcons, type FieldIconName } from './SignInFieldIcon';
+export { SymbolLabel } from './SymbolLabel';
 export { Text, type TextProps, type TextTone } from './Text';
 export { TextField, type TextFieldProps } from './TextField';
 export { NexdoTaskBackdrop } from './NexdoTaskBackdrop';

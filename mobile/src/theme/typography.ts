@@ -1,11 +1,57 @@
 import { Platform, type TextStyle } from 'react-native';
 
-// Sizes follow the iOS Dynamic Type defaults (large title, title 2, body, footnote).
+/**
+ * The SwiftUI text styles the auth screens use, with the line heights iOS actually lays them out
+ * with. React Native needs `lineHeight` stated; leaving it out, or deriving it as `fontSize * 1.2`,
+ * makes every block shorter than the Swift one and the error compounds down the screen.
+ *
+ * `fontSize` is confirmed correct: the same string rendered by both apps on an iPhone 17 Pro
+ * (iOS 26.5, default Dynamic Type) produces glyphs of identical pixel width and height. Only the
+ * line box differed, so these `lineHeight` values are measured from the Swift app's own layout
+ * frames rather than computed. See mobile/docs/swift-to-rn-style-map.md section 2.
+ */
+export const textStyles = {
+  /** `.largeTitle` */
+  largeTitle: { fontSize: 34, lineHeight: 41 },
+  /** `.title2` */
+  title2: { fontSize: 22, lineHeight: 28 },
+  /** `.title3` */
+  title3: { fontSize: 20, lineHeight: 28 },
+  /** `.body` */
+  body: { fontSize: 17, lineHeight: 25 },
+  /** `.subheadline` */
+  subheadline: { fontSize: 15, lineHeight: 21 },
+  /** `.footnote` */
+  footnote: { fontSize: 13, lineHeight: 20 },
+} as const satisfies Record<string, TextStyle>;
+
+/**
+ * A text style made safe for a `TextInput`, on both platforms.
+ *
+ * - **`lineHeight` is dropped.** React Native turns it into a fixed line box on an iOS `TextInput`
+ *   and clips whatever does not fit, cutting the descenders off g, j, p, q and y. A `Text` is fine;
+ *   only an input misbehaves. Single-line fields take their height from the row's `minHeight`.
+ * - **The background is forced transparent.** Android gives a `TextInput` its own background
+ *   drawable, which showed through the glass card as a pale hard-edged box running from the icon to
+ *   the card's right edge. (`underlineColorAndroid="transparent"` removes the underline but not
+ *   this.) iOS has no such background, so the override is harmless there.
+ */
+export function inputText(style: TextStyle): TextStyle {
+  const { lineHeight: _lineHeight, ...rest } = style;
+  return { ...rest, backgroundColor: 'transparent' };
+}
+
+/** `.system(size: n)` takes the font's own line height, which is close to `n * 1.2`. */
+export function systemText(size: number): TextStyle {
+  return { fontSize: size, lineHeight: Math.round(size * 1.2) };
+}
+
+// Kept for the Phase 1 screens that already use these names.
 export const typography = {
   display: { fontSize: 34, lineHeight: 41, fontWeight: '700' },
   title: { fontSize: 22, lineHeight: 28, fontWeight: '700' },
-  body: { fontSize: 17, lineHeight: 22, fontWeight: '400' },
-  caption: { fontSize: 13, lineHeight: 18, fontWeight: '400' },
+  body: { ...textStyles.body, fontWeight: '400' },
+  caption: { ...textStyles.footnote, fontWeight: '400' },
   mono: {
     fontSize: 12,
     lineHeight: 17,

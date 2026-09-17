@@ -30,7 +30,9 @@ These are suggestions to confirm before starting:
 | Builds | EAS Build and EAS Submit | No local Xcode needed for builds |
 | Bundle ID | `com.pinslots.nexdo` | Same as the Swift app, so it replaces it on TestFlight |
 
-This Mac has no full Xcode, so there is no iOS simulator. Test most screens on a physical iPhone, with Expo Go first and a development build once native modules (voice, Apple sign-in) are added.
+~~This Mac has no full Xcode, so there is no iOS simulator.~~ **Out of date since 2026-09-16:** the
+machine used for the `rn-ui-parity` pass has Xcode 26.6 and runs both apps in the iOS Simulator.
+Setup, build commands and timings: [`mobile/docs/mac-setup.md`](../mobile/docs/mac-setup.md).
 
 ---
 
@@ -362,7 +364,7 @@ App Store review adds a few days per submission.
 | --- | --- | --- |
 | WebRTC voice in React Native | Voice could take much longer than estimated | Phase 0 proof of concept before committing |
 | Cookie session handling | Sign-in could fail to persist | Test in phase 1. Fallback: bearer token support on the server |
-| No Xcode on this Mac | No simulator | Physical iPhone with Expo Go and development builds, EAS cloud builds |
+| ~~No Xcode on this Mac~~ | Resolved 2026-09-16 | Xcode 26.6 is installed; both apps run in the iOS Simulator |
 | Design parity | SwiftUI blur, material, and gradient effects differ in React Native | `expo-blur`, `expo-linear-gradient`; agree on acceptable differences |
 | Two apps at once | Features added to Swift during migration must also be built in React Native | Freeze new Swift features, or track them in this doc |
 | Android | Sign in with Apple, notifications, and audio differ | Decide early. Add Google sign-in if Android is in scope |
@@ -383,13 +385,23 @@ App Store review adds a few days per submission.
 
 - [ ] Confirm setup decisions (section 1), including Android scope
 - [x] Phase 0: voice proof of concept (built: `mobile/app/dev/voice-check.tsx`, protocol in `mobile/docs/voice-protocol.md`): *passed on Android 2026-09-16; iOS untested*
-- [x] Expo project in `mobile/` with EAS development build: *Android development build made and run; iOS build not made*
-- [x] API client and cookie session verified on a device: *verified on Android (Expo Go, 2026-09-15); iOS pending*
+- [x] Expo project in `mobile/` with EAS development build: *Android development build made and run.
+  iOS development build now made **locally** with `npx expo run:ios` — no EAS and no Apple account
+  needed for the simulator; about 16 minutes the first time. See
+  [`mobile/docs/mac-setup.md`](../mobile/docs/mac-setup.md).*
+- [x] API client and cookie session verified on a device: *verified on Android (Expo Go, 2026-09-15).
+  On iOS (simulator, 2026-09-16) the launch `GET /api/me` reaches the production API and the app
+  lands on sign-in signed out, across a force-quit. The signed-in half of the check is still open:
+  it needs a verified account's credentials, which were not available.*
 - [x] Theme and shared components
 - [x] Auth screens: sign-in, sign-up, verify-email, reset-password, the session gate and sign-out
-  (Phase 2, 2026-09-16). Built and covered by tests; **not yet tested on a device**.
-- [ ] Sign in with Apple: built (`expo-apple-authentication`, `ios.usesAppleSignIn`), untested — it
-  needs an iOS development build and the capability on the Apple Developer App ID.
+  (Phase 2, 2026-09-16). Built and covered by tests; **run and checked against the Swift app in the
+  iOS simulator** (iPhone 17 Pro, iOS 26.5) in the `rn-ui-parity` pass, 2026-09-16 — see
+  [`mobile/docs/reference/PARITY.md`](../mobile/docs/reference/PARITY.md). Android was checked on a
+  physical device in the same pass.
+- [x] Sign in with Apple **renders**: the black "Continue with Apple" button appears on sign-in in a
+  local development build (iOS simulator, 2026-09-16). Completing the flow is still untested — it
+  needs a real Apple ID and the capability on the `com.pinslots.nexdo` App ID.
 - [x] Task list, filters, search, creation editor, task detail, voice-capture shell
   (Phase 3, 2026-09-16). Built and covered by tests; **not yet tested on a device**.
 - [x] Projects: list, detail, create/edit/delete (Phase 3).
