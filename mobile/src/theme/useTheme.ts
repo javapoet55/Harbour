@@ -4,7 +4,7 @@ import { useAppearance } from '../store/appearance';
 import { palettes, type ColorScheme, type Palette } from './colors';
 import { radii } from './radii';
 import { spacing } from './spacing';
-import { typography } from './typography';
+import { textStyles, typography } from './typography';
 
 export type Theme = {
   scheme: ColorScheme;
@@ -12,6 +12,7 @@ export type Theme = {
   spacing: typeof spacing;
   radii: typeof radii;
   typography: typeof typography;
+  textStyles: typeof textStyles;
 };
 
 /**
@@ -21,10 +22,22 @@ export type Theme = {
  * (ios/App/NexdoApp.swift:8) — where `AppAppearance.colorScheme` is `nil` for System, `.light` for
  * Day and `.dark` for Night (AppAppearance.swift:30-36). React Native has no equivalent root
  * override, so the resolution happens here, in the one hook every screen already calls.
+ *
+ * Pass `{ elevated: true }` from a screen presented as a sheet: iOS resolves the system background
+ * colours one level up inside a sheet, so a dark sheet is #1C1C1E where the root screen is black.
  */
-export function useTheme(): Theme {
+export function useTheme(options?: { elevated?: boolean }): Theme {
   const appearance = useAppearance((state) => state.appearance);
   const system: ColorScheme = useColorScheme() === 'dark' ? 'dark' : 'light';
   const scheme: ColorScheme = appearance === 'day' ? 'light' : appearance === 'night' ? 'dark' : system;
-  return { scheme, colors: palettes[scheme], spacing, radii, typography };
+  const palette = palettes[scheme];
+  const colors: Palette = options?.elevated
+    ? {
+        ...palette,
+        background: palette.backgroundElevated,
+        groupedBackground: palette.groupedBackgroundElevated,
+        surface: palette.surfaceElevated,
+      }
+    : palette;
+  return { scheme, colors, spacing, radii, typography, textStyles };
 }

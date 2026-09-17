@@ -1,9 +1,8 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import Ionicons from '@expo/vector-icons/Ionicons';
 import { router } from 'expo-router';
 import { useState } from 'react';
 import { Controller, useForm, useWatch } from 'react-hook-form';
-import { Alert, Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { Alert, Keyboard, Pressable, StyleSheet, TextInput, View } from 'react-native';
 
 
 import {
@@ -16,13 +15,14 @@ import {
   GradientText,
   NexdoLogoMark,
   RevealablePasswordField,
+  SymbolLabel,
   Text,
   type AppleCredential,
 } from '../../src/components';
 import { useAppleSignIn, useSignIn } from '../../src/query/useAuth';
 import { signInSchema, type SignInValues } from '../../src/schemas/auth';
 import { useLastSignedIn } from '../../src/store/lastSignedIn';
-import { brand, useTheme } from '../../src/theme';
+import { brand, inputText, systemText, textStyles, useTheme } from '../../src/theme';
 
 /**
  * Port of `SignInView` (ios/App/RootView.swift:258-470).
@@ -57,6 +57,9 @@ export default function SignIn() {
 
   const submit = handleSubmit(
     (values) => {
+      // RootView.swift:436 `focusedField = nil`: submitting drops focus, so the keyboard goes away
+      // and the button's "Signing In…" state is actually visible.
+      Keyboard.dismiss();
       // RootView.swift:437-439: the submitted password is cleared from state immediately.
       setValue('password', '');
       signIn.mutate(
@@ -80,7 +83,7 @@ export default function SignIn() {
     apple.mutate(credential, { onError: (error) => showError(error.message) });
 
   return (
-    <AuthScreen>
+    <AuthScreen topInset>
       {/* Spacer(minLength: 42) */}
       <View style={styles.topSpacer} />
 
@@ -107,9 +110,12 @@ export default function SignIn() {
             name="email"
             render={({ field }) => (
               <TextInput
+                // Android draws its own underline drawable behind a TextInput; it showed
+                // as a pale hard-edged box inside the glass card.
+                underlineColorAndroid="transparent"
                 accessibilityLabel="Email address"
                 placeholder="Email address"
-                placeholderTextColor={theme.colors.secondary}
+                placeholderTextColor={theme.colors.placeholder}
                 value={field.value}
                 onChangeText={field.onChange}
                 onBlur={field.onBlur}
@@ -121,7 +127,7 @@ export default function SignIn() {
                 returnKeyType="next"
                 submitBehavior="submit"
                 onSubmitEditing={() => passwordField?.focus()}
-                style={[theme.typography.body, styles.input, { color: theme.colors.ink }]}
+                style={[inputText(theme.typography.body), styles.input, { color: theme.colors.ink }]}
               />
             )}
           />
@@ -183,19 +189,26 @@ export default function SignIn() {
 
       {/* HStack(spacing: 5) { Text("New to Nexdo?"); Button("Create account") } */}
       <View style={styles.createRow}>
-        <Text style={[styles.subheadline, { color: theme.colors.ink }]}>New to Nexdo?</Text>
+        {/* Unstyled in Swift, so it takes `Color.primary` (.label), not `nexdoInk`. */}
+        <Text style={[styles.subheadline, { color: theme.colors.label }]}>New to Nexdo?</Text>
         <Pressable accessibilityRole="button" accessibilityLabel="Create account" onPress={() => router.push('/sign-up')}>
           <Text style={[styles.subheadline, { color: theme.colors.tint }]}>Create account</Text>
         </Pressable>
       </View>
 
-      {/* Label("...", systemImage: "checkmark.shield"): icon and text on one wrapping line. */}
-      <View style={styles.assuranceRow}>
-        <Ionicons name="shield-checkmark-outline" size={13} color={theme.colors.secondary} style={styles.assuranceIcon} />
-        <Text style={[styles.footnote, styles.assuranceText, { color: theme.colors.secondary }]}>
-          Your password stays on this device only for this sign-in.
-        </Text>
-      </View>
+      {/* Label("...", systemImage: "checkmark.shield") */}
+      <SymbolLabel
+        icon="shield-checkmark-outline"
+        iconSize={13}
+        // Measured against Swift: the SF Symbol's advance plus Label spacing comes to 21pt, so the
+        // Ionicons box (13) needs 8 to give the title the same width and wrap on the same word.
+        spacing={8}
+        color={theme.colors.secondary}
+        textStyle={styles.footnoteLeading}
+        style={styles.assuranceWrap}
+      >
+        Your password stays on this device only for this sign-in.
+      </SymbolLabel>
 
     </AuthScreen>
   );
@@ -205,22 +218,21 @@ const styles = StyleSheet.create({
   topSpacer: { height: 42 },
   center: { alignItems: 'center' },
   input: { flex: 1, paddingVertical: 0 },
-  title: { fontSize: 42, lineHeight: 50, fontWeight: '700', textAlign: 'center', marginTop: 22 },
-  subtitle: { fontSize: 20, lineHeight: 25, textAlign: 'center', marginTop: 8 },
+  title: { ...systemText(42), fontWeight: '700', textAlign: 'center', marginTop: 22 },
+  subtitle: { ...textStyles.title3, textAlign: 'center', marginTop: 8 },
   card: { marginHorizontal: 28, marginTop: 42 },
   forgotRow: { minHeight: 54, paddingHorizontal: 22, justifyContent: 'center', alignItems: 'flex-end' },
-  forgot: { fontSize: 15, lineHeight: 20, fontWeight: '500' },
+  forgot: { ...textStyles.subheadline, fontWeight: '500' },
   signInButton: { marginHorizontal: 28, marginTop: 22 },
   orRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginHorizontal: 36, marginVertical: 22 },
   rule: { flex: 1, height: 1 },
-  or: { fontSize: 15, lineHeight: 20, fontWeight: '600' },
+  or: { ...textStyles.subheadline, fontWeight: '600' },
   apple: { marginHorizontal: 28 },
   createRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 5, marginTop: 24 },
-  subheadline: { fontSize: 15, lineHeight: 20 },
-  assuranceRow: { flexDirection: 'row', justifyContent: 'center', marginTop: 18, marginBottom: 34, paddingHorizontal: 32, gap: 6 },
-  assuranceIcon: { marginTop: 2 },
-  assuranceText: { flexShrink: 1, textAlign: 'left' },
-  footnote: { fontSize: 13, lineHeight: 18, textAlign: 'center' },
+  subheadline: textStyles.subheadline,
+  assuranceWrap: { marginTop: 18, marginBottom: 34, paddingHorizontal: 32 },
+  footnoteLeading: textStyles.footnote,
+  footnote: { ...textStyles.footnote, textAlign: 'center' },
   devRow: { alignItems: 'center', paddingBottom: 24, gap: 12 },
   devLinks: { alignItems: 'center', gap: 10 },
 });

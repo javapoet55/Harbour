@@ -2,7 +2,7 @@ import { useState, type Ref } from 'react';
 import { Pressable, StyleSheet, TextInput, View, type TextInputProps } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 
-import { useTheme } from '../theme';
+import { inputText, useTheme } from '../theme';
 
 export type RevealablePasswordFieldProps = Omit<TextInputProps, 'secureTextEntry'> & {
   /** Doubles as the placeholder and the accessibility label, as in Swift. */
@@ -24,16 +24,19 @@ export function RevealablePasswordField({ title, textContentType = 'newPassword'
   return (
     <View style={styles.row}>
       <TextInput
+        // Android draws its own underline drawable behind a TextInput; it showed
+        // as a pale hard-edged box inside the glass card.
+        underlineColorAndroid="transparent"
         ref={ref}
         accessibilityLabel={title}
         placeholder={title}
-        placeholderTextColor={theme.colors.secondary}
+        placeholderTextColor={theme.colors.placeholder}
         secureTextEntry={!visible}
         textContentType={textContentType}
         // Revealing a password must not autocapitalise or autocorrect it (RootView.swift:648–650).
         autoCapitalize="none"
         autoCorrect={false}
-        style={[theme.typography.body, styles.input, { color: theme.colors.ink }, style]}
+        style={[inputText(theme.typography.body), styles.input, { color: theme.colors.ink }, style]}
         {...rest}
       />
       <Pressable

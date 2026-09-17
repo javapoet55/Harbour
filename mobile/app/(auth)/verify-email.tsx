@@ -1,6 +1,6 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { Keyboard, Pressable, StyleSheet, TextInput, View } from 'react-native';
 
 import {
   AuthFieldRow,
@@ -12,7 +12,7 @@ import {
 } from '../../src/components';
 import { useResendVerification, useVerifyEmail } from '../../src/query/useAuth';
 import { isCodeComplete, sanitizeCode } from '../../src/schemas/auth';
-import { useTheme } from '../../src/theme';
+import { inputText, systemText, textStyles, useTheme } from '../../src/theme';
 import type { PendingVerification } from '../../src/query/useAuth';
 
 /** `EmailVerificationView.resendCooldown` (ios/App/RootView.swift:686). Client-side: the server has none. */
@@ -65,6 +65,8 @@ export default function VerifyEmail() {
 
   const submit = () => {
     if (!canVerify) return;
+    // RootView.swift:797 `codeFocused = false` while verifying.
+    Keyboard.dismiss();
     setErrorMessage(undefined);
     setMessage(undefined);
     verify.mutate(
@@ -109,9 +111,12 @@ export default function VerifyEmail() {
       <GlassCard radius={26} style={styles.card}>
         <AuthFieldRow icon="number" paddingHorizontal={18} minHeight={72}>
           <TextInput
+            // Android draws its own underline drawable behind a TextInput; it showed
+            // as a pale hard-edged box inside the glass card.
+            underlineColorAndroid="transparent"
             accessibilityLabel="Verification code"
             placeholder="6-digit code"
-            placeholderTextColor={theme.colors.secondary}
+            placeholderTextColor={theme.colors.placeholder}
             value={code}
             // RootView.swift:726-729: non-digits are stripped and the value is capped at six.
             onChangeText={(value) => setCode(sanitizeCode(value))}
@@ -172,18 +177,18 @@ export default function VerifyEmail() {
 
 const styles = StyleSheet.create({
   column: { paddingHorizontal: 28, paddingTop: 28, alignItems: 'stretch' },
-  title: { fontSize: 34, lineHeight: 41, fontWeight: '700', marginTop: 18 },
-  body: { fontSize: 17, lineHeight: 22 },
+  title: { ...systemText(34), fontWeight: '700', marginTop: 18 },
+  body: textStyles.body,
   intro: { marginTop: 8 },
   card: { marginTop: 28 },
   // .font(.title2.monospacedDigit().weight(.semibold))
-  codeInput: { flex: 1, fontSize: 22, lineHeight: 28, fontWeight: '600', fontVariant: ['tabular-nums'], paddingVertical: 0 },
-  footnote: { fontSize: 13, lineHeight: 18 },
+  codeInput: { flex: 1, ...inputText(textStyles.title2), fontWeight: '600', fontVariant: ['tabular-nums'], paddingVertical: 0 },
+  footnote: textStyles.footnote,
   message: { marginTop: 12 },
   error: { marginTop: 8 },
   verifyButton: { marginTop: 20 },
   // .frame(maxWidth: .infinity, minHeight: 44).padding(.top, 12)
   resend: { minHeight: 44, marginTop: 12, alignItems: 'center', justifyContent: 'center' },
-  resendLabel: { fontSize: 15, lineHeight: 20, fontWeight: '600' },
+  resendLabel: { ...textStyles.subheadline, fontWeight: '600' },
   bottomInset: { height: 28 },
 });
