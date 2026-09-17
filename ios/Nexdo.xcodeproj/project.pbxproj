@@ -5,6 +5,18 @@
 	};
 	objectVersion = 71;
 	objects = {
+        C10000000000000000000001 = {isa = PBXNativeTarget; buildConfigurationList = C10000000000000000000002; buildPhases = (C10000000000000000000005, C10000000000000000000006, C10000000000000000000007); buildRules = (); dependencies = (C10000000000000000000008); fileSystemSynchronizedGroups = (C10000000000000000000010); name = NexdoMomentUITests; productName = NexdoMomentUITests; productReference = C10000000000000000000011; productType = "com.apple.product-type.bundle.ui-testing"; };
+        C10000000000000000000002 = {isa = XCConfigurationList; buildConfigurations = (C10000000000000000000003, C10000000000000000000004); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+        C10000000000000000000003 = {isa = XCBuildConfiguration; buildSettings = {GENERATE_INFOPLIST_FILE = YES; PRODUCT_BUNDLE_IDENTIFIER = com.pinslots.nexdo.MomentUITests; PRODUCT_NAME = "$(TARGET_NAME)"; TEST_TARGET_NAME = Nexdo; SDKROOT = iphoneos; IPHONEOS_DEPLOYMENT_TARGET = 17.0; SWIFT_VERSION = 6.0; TARGETED_DEVICE_FAMILY = 1; }; name = Debug; };
+        C10000000000000000000004 = {isa = XCBuildConfiguration; buildSettings = {GENERATE_INFOPLIST_FILE = YES; PRODUCT_BUNDLE_IDENTIFIER = com.pinslots.nexdo.MomentUITests; PRODUCT_NAME = "$(TARGET_NAME)"; TEST_TARGET_NAME = Nexdo; SDKROOT = iphoneos; IPHONEOS_DEPLOYMENT_TARGET = 17.0; SWIFT_VERSION = 6.0; TARGETED_DEVICE_FAMILY = 1; }; name = Release; };
+        C10000000000000000000005 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+        C10000000000000000000006 = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+        C10000000000000000000007 = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+        C10000000000000000000008 = {isa = PBXTargetDependency; target = A00000000000000000000002; targetProxy = C10000000000000000000009; };
+        C10000000000000000000009 = {isa = PBXContainerItemProxy; containerPortal = A00000000000000000000001; proxyType = 1; remoteGlobalIDString = A00000000000000000000002; remoteInfo = Nexdo; };
+        C10000000000000000000010 = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = Tests/MomentUITests; sourceTree = "<group>"; };
+        C10000000000000000000011 = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = NexdoMomentUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+
 
 /* Begin PBXBuildFile section */
 		10F35F4F304E3F3500D2D029 /* Media.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 10F35F4E304E3F3500D2D029 /* Media.xcassets */; };
@@ -36,6 +48,7 @@
 		A00000000000000000000004 = {
 			isa = PBXGroup;
 			children = (
+                C10000000000000000000010,
 				10F35F4E304E3F3500D2D029 /* Media.xcassets */,
 				A00000000000000000000010 /* App */,
 				A00000000000000000000011 /* Sources/NexdoCore */,
@@ -113,6 +126,7 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
+                C10000000000000000000001,
 				A00000000000000000000002 /* Nexdo */,
 			);
 		};
@@ -243,7 +257,8 @@
 				INFOPLIST_KEY_CFBundleDisplayName = Nexdo;
 				INFOPLIST_KEY_CFBundleURLTypes = "{\n    CFBundleURLSchemes =     (\n        nexdo\n    );\n}";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
-				INFOPLIST_KEY_NSContactsUsageDescription = "Nexdo uses Contacts to let you choose who to call, message, or email for your tasks. Phone numbers and email addresses stay on this device; matching contact names may be shared during voice clarification.";
+				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "Nexdo reads your selected calendars to suggest birthday and anniversary moments for your review.";
+				INFOPLIST_KEY_NSContactsUsageDescription = "Nexdo uses Contacts to let you choose who to call, message, or email for your tasks. For Important Moments, only recipient details you review and save are synced to your Nexdo account.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Nexdo records your voice to transcribe questions and create tasks with OpenAI.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -280,7 +295,8 @@
 				INFOPLIST_KEY_CFBundleDisplayName = Nexdo;
 				INFOPLIST_KEY_CFBundleURLTypes = "{\n    CFBundleURLSchemes =     (\n        nexdo\n    );\n}";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
-				INFOPLIST_KEY_NSContactsUsageDescription = "Nexdo uses Contacts to let you choose who to call, message, or email for your tasks. Phone numbers and email addresses stay on this device; matching contact names may be shared during voice clarification.";
+				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "Nexdo reads your selected calendars to suggest birthday and anniversary moments for your review.";
+				INFOPLIST_KEY_NSContactsUsageDescription = "Nexdo uses Contacts to let you choose who to call, message, or email for your tasks. For Important Moments, only recipient details you review and save are synced to your Nexdo account.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Nexdo records your voice to transcribe questions and create tasks with OpenAI.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;

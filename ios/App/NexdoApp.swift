@@ -129,6 +129,7 @@ final class AppModel: ObservableObject {
     private var photoSaveInProgress = false
     private var focusCompletion: Task<Void, Never>?
     // Ephemeral cookie session: credentials are never written to preferences, files, or logs.
+    var momentAPI: APIClient { api }
     private let api: APIClient
     private let weatherClient = WeatherClient()
     private var taskLoadID: UUID?

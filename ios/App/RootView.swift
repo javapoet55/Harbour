@@ -3,14 +3,23 @@ import AuthenticationServices
 import CryptoKit
 
 struct RootView: View {
-    @StateObject private var model = AppModel()
+    @StateObject private var model: AppModel
+    @StateObject private var moments: ImportantMomentsStore
+    init() {
+        let model = AppModel()
+        _model = StateObject(wrappedValue: model)
+        _moments = StateObject(wrappedValue: ImportantMomentsStore(api: model.momentAPI))
+    }
+    @ObservedObject private var momentRoutes = MomentNotificationRoute.shared
     @ObservedObject private var taskActions = TaskActionCoordinator.shared
     @Environment(\.scenePhase) private var phase
     @State private var selectedTab: NexdoTab = .today
     var body: some View {
         Group {
             #if DEBUG
-            if ProcessInfo.processInfo.arguments.contains("-calendar-manual-preview") {
+            if ProcessInfo.processInfo.arguments.contains("-moments-design-preview") {
+                MomentsDesignPreview()
+            } else if ProcessInfo.processInfo.arguments.contains("-calendar-manual-preview") {
                 NavigationStack { CalendarEventEditor() }
             } else if ProcessInfo.processInfo.arguments.contains("-calendar-voice-preview") {
                 AddTaskByVoiceView(calendarOnly: true)
@@ -41,8 +50,9 @@ struct RootView: View {
             #endif
         }
         .environmentObject(model)
+        .environmentObject(moments)
         .tint(.nexdoIndigo)
-        .onChange(of: model.profile?.id) { _, id in taskActions.activate(userID: id); model.refreshNextAction() }
+        .onChange(of: model.profile?.id) { _, id in taskActions.activate(userID: id); model.refreshNextAction(); Task { await moments.activate(id) } }
         .onReceive(model.$tasks) { tasks in
             if let id = model.profile?.id { taskActions.synchronize(tasks: tasks, userID: id); if phase == .active { model.refreshNextAction() } }
         }
@@ -51,9 +61,11 @@ struct RootView: View {
         .task {
             while !Task.isCancelled {
                 do { try await Task.sleep(for: .seconds(60)) } catch { return }
-                if phase == .active { model.refreshNextAction() }
+                if phase == .active { model.refreshNextAction(); await moments.refresh() }
             }
         }
+        .onChange(of: momentRoutes.pending) { _, _ in Task { await moments.refresh(); moments.resolveRoute() } }
+        .background { MomentSheetHost().environmentObject(moments) }
         .sheet(item: $taskActions.route) { route in
             TaskActionView(actionID: route.id, preferred: route.preferred).environmentObject(model)
         }
@@ -62,7 +74,7 @@ struct RootView: View {
             Button("OK") { model.error = nil }
         } message: { Text(model.error ?? "") }
         .onChange(of: phase) { _, value in
-            if value == .active && model.profile != nil { model.refreshNextAction(); Task { await model.refresh() } }
+            if value == .active && model.profile != nil { model.refreshNextAction(); Task { await model.refresh(); await moments.refresh() } }
             else if value != .active { model.invalidateNextAction() }
         }
     }
@@ -716,6 +728,7 @@ private struct TodayScheduleItem: Identifiable {
 }
 
 private struct TodayView: View {
+    @EnvironmentObject private var moments: ImportantMomentsStore
     @EnvironmentObject private var model: AppModel
     @ObservedObject private var actionCoordinator = TaskActionCoordinator.shared
     let onAsk: () -> Void
@@ -895,6 +908,8 @@ private struct TodayView: View {
                         .accessibilityHint("Opens your weekly progress report")
                         }
 
+                        ImportantMomentsTodayCard()
+
                         if range == .today {
                             TodayActionsView(queue: queue, now: context.date, onTask: { id in editing = model.tasks.first { $0.id == id } })
                         }
@@ -936,6 +951,7 @@ private struct TodayView: View {
                             range: range,
                             appointments: counts.appointments,
                             taskCount: counts.tasks,
+                            momentCount: range == .today ? moments.today.count : 0,
                             availableMinutes: range == .today ? model.scheduleIntelligence?.today.availableMinutes : nil,
                             attentionCount: range == .today ? (model.scheduleIntelligence?.today.attention.count ?? model.agenda?.overdue.count ?? 0) : (model.agenda?.overdue.count ?? 0),
                             schedule: remainingSchedule(queue),
@@ -1166,6 +1182,7 @@ private struct TodayIntelligenceCard: View {
     let range: TodayRange
     let appointments: Int
     let taskCount: Int
+    var momentCount: Int = 0
     let availableMinutes: Int?
     let attentionCount: Int
     let schedule: [TodayScheduleItem]
@@ -1192,7 +1209,7 @@ private struct TodayIntelligenceCard: View {
         }
     }
 
-    private var commitmentCount: Int { appointments + taskCount }
+    private var commitmentCount: Int { appointments + taskCount + momentCount }
     var body: some View {
         VStack(spacing: 0) {
             if showsSummary {
@@ -1202,7 +1219,7 @@ private struct TodayIntelligenceCard: View {
                 Text("\(commitmentCount) commitment\(commitmentCount == 1 ? "" : "s") \(range == .today ? "today" : "ahead")")
                     .font(.system(.title, design: .rounded, weight: .bold)).foregroundStyle(Color.nexdoInk)
                     .accessibilityHeading(.h2)
-                Text("\(taskCount) Task\(taskCount == 1 ? "" : "s") · \(appointments) Appointment\(appointments == 1 ? "" : "s")")
+                Text("\(taskCount) Task\(taskCount == 1 ? "" : "s") · \(appointments) Appointment\(appointments == 1 ? "" : "s") · \(momentCount) Important Moment\(momentCount == 1 ? "" : "s")")
                     .font(.subheadline).foregroundStyle(Color.nexdoSecondary)
                 HStack(spacing: 10) {
                     if attentionCount > 0 {
