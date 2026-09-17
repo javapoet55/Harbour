@@ -23,7 +23,9 @@ import { useTheme } from '../../src/theme';
  * labels tick over once a minute; the interval below is that timeline.
  */
 export default function ActionQueue() {
-  const theme = useTheme();
+  // `.sheet(isPresented: $showingAll) { ActionQueueSheet() }` (TodayActionsView.swift:44): iOS
+  // resolves the system backgrounds one level up inside a sheet (style map section 3).
+  const theme = useTheme({ elevated: true });
   const tasks = useTasks();
   const { data: profile } = useMe();
   const actions = useCoordinator((state) => state.actions);
@@ -51,20 +53,24 @@ export default function ActionQueue() {
 
   return (
     <SafeAreaView edges={['top', 'left', 'right', 'bottom']} style={[styles.fill, { backgroundColor: theme.colors.groupedBackground }]}>
+      {/* `.navigationTitle("Nexdo Actions").navigationBarTitleDisplayMode(.inline)` with a
+          `.confirmationAction` Done (`:214`): an inline title is centred on both platforms. */}
       <View style={styles.navBar}>
-        <Text accessibilityRole="header" style={[styles.navTitle, styles.grow, { color: theme.colors.ink }]}>
+        <View style={styles.navSide} />
+        <Text accessibilityRole="header" style={[styles.navTitle, styles.grow, styles.centred, { color: theme.colors.ink }]}>
           Nexdo Actions
         </Text>
-        <Pressable accessibilityLabel="Done" accessibilityRole="button" hitSlop={8} onPress={() => router.back()} testID="queue-done">
-          <Text style={[theme.typography.body, { color: theme.colors.tint }]}>Done</Text>
+        <Pressable accessibilityLabel="Done" accessibilityRole="button" hitSlop={8} onPress={() => router.back()} style={styles.navSide} testID="queue-done">
+          <Text style={[theme.typography.body, styles.trailing, { color: theme.colors.tint }]}>Done</Text>
         </Pressable>
       </View>
 
       {all.length === 0 ? (
         /* `ContentUnavailableView("No actions today", systemImage: "checkmark.circle")` (`:213`). */
         <View style={styles.empty} testID="queue-empty">
-          <TaskSymbol color={theme.colors.secondary} name="checkmark.circle" size={44} />
-          <Text style={[styles.title2, { color: theme.colors.ink }]}>No actions today</Text>
+          {/* A `ContentUnavailableView` draws a ~52pt secondary glyph over a `.label` title. */}
+          <TaskSymbol color={theme.colors.secondaryLabel} name="checkmark.circle" size={52} />
+          <Text style={[styles.title2, { color: theme.colors.label }]}>No actions today</Text>
         </View>
       ) : (
         <ScrollView contentContainerStyle={styles.scroll}>
@@ -72,8 +78,12 @@ export default function ActionQueue() {
             const rows = all.filter((action) => ((notificationDate(action) ?? Number.POSITIVE_INFINITY) <= now) === section.due);
             return (
               <View key={section.title} style={styles.section}>
-                <Text style={[styles.sectionTitle, { color: theme.colors.secondary }]}>{section.title.toUpperCase()}</Text>
-                <View style={[styles.card, { backgroundColor: theme.colors.surface, borderColor: theme.colors.separator }]}>
+                {/* `Section("Due now")` / `Section("Upcoming")` (`:198`). A `List` header on
+                    iOS 26 is sentence case in `.body` at `.secondaryLabel`, inset 32 from the
+                    screen; uppercasing it is the tell of a pre-iOS-26 port (style map section 7). */}
+                <Text style={[theme.typography.body, styles.sectionTitle, { color: theme.colors.secondaryLabel }]}>{section.title}</Text>
+                {/* A `List` section has a fill and no stroke. */}
+                <View style={[styles.card, { backgroundColor: theme.colors.surface }]}>
                   {rows.map((action, index) => (
                     <Pressable
                       accessibilityRole="button"
@@ -84,7 +94,8 @@ export default function ActionQueue() {
                       style={styles.row}
                       testID={`queue-action-${action.id}`}
                     >
-                      {index > 0 ? <View style={[styles.divider, { backgroundColor: theme.colors.separator }]} /> : null}
+                      {/* A `List` row separator is `listSeparator` at 1pt, not a hairline `.separator`. */}
+                      {index > 0 ? <View style={[styles.divider, { backgroundColor: theme.colors.listSeparator }]} /> : null}
                       <NextActionRow action={action} now={now} timeZone={timeZone} />
                       {/* `action.preferredAction?.rawValue.capitalized ?? "Call • Message • Email"` (`:209`). */}
                       <Text style={[styles.caption, { color: theme.colors.secondary }]}>
@@ -109,15 +120,19 @@ const styles = StyleSheet.create({
   grow: { flex: 1 },
   title2: { fontSize: 22, lineHeight: 28, fontWeight: '700' },
   caption: { fontSize: 12, lineHeight: 16 },
+  centred: { textAlign: 'center' },
+  trailing: { textAlign: 'right' },
 
-  navBar: { flexDirection: 'row', alignItems: 'center', gap: 16, paddingHorizontal: 20, paddingVertical: 14 },
+  navBar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 14 },
+  navSide: { width: 56 },
   navTitle: { fontSize: 17, lineHeight: 22, fontWeight: '600' },
 
+  // A `List` on iOS 26: sections inset 16, 26pt corners, 16pt row inset, header inset 32 overall.
   scroll: { padding: 16, gap: 20 },
   section: { gap: 8 },
-  sectionTitle: { fontSize: 13, lineHeight: 18, fontWeight: '600', paddingHorizontal: 4 },
-  card: { borderRadius: 14, borderWidth: StyleSheet.hairlineWidth, paddingHorizontal: 14 },
-  row: { gap: 4, paddingVertical: 10 },
-  divider: { height: StyleSheet.hairlineWidth, marginBottom: 10 },
+  sectionTitle: { marginLeft: 16 },
+  card: { borderRadius: 26, paddingHorizontal: 16 },
+  row: { gap: 4, paddingVertical: 10, minHeight: 56 },
+  divider: { height: 1, marginBottom: 10 },
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
 });

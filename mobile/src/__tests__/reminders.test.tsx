@@ -273,8 +273,8 @@ describe('the action queue', () => {
 
     await waitFor(() => expect(screen.getByTestId(`queue-action-${id}`)).toBeTruthy());
     expect(screen.getByText('Nexdo Actions')).toBeTruthy();
-    expect(screen.getByText('UPCOMING')).toBeTruthy();
-    expect(screen.getByText('DUE NOW')).toBeTruthy();
+    expect(screen.getByText('Upcoming')).toBeTruthy();
+    expect(screen.getByText('Due now')).toBeTruthy();
     // "Contact Damien" has no preferred channel, so Swift prints all three.
     expect(screen.getByText('Call • Message • Email')).toBeTruthy();
   });

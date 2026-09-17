@@ -95,3 +95,14 @@ Read against `ProfileView.swift:146-270`, `:274-295`.
 | **`SettingsSegments`: use `colors.segmentTrack` and `colors.segmentSelected`, with the selected label in `colors.label`** — not a `tint`-filled segment with white text. | `.pickerStyle(.segmented)` (`:154`) is a system segmented control: a translucent track with a raised light capsule and label-coloured text. This is the same fault PARITY global fix 5 already closed for the Tasks screen's picker; the Appearance picker never got it, so Day/Night/System renders as an indigo block. |
 | `SettingsPicker`: the current value takes `theme.colors.tint`, and the indicator is the up/down chevron pair. | `.pickerStyle(.menu)` (`:202`) draws the selection in the accent colour with `chevron.up.chevron.down`. |
 | `SettingsSlider`: the two speaker glyphs `size` 15 → **17** and colour `theme.colors.label`; the thumb is white with a shadow, not `tint`. | `Image(systemName: "speaker.fill")` has no `.font` and no `.foregroundStyle` (`:168-172`), and a system `Slider` thumb is white in both appearance modes. |
+
+## `src/components/TodayActions.tsx`
+
+Only `NextActionRow` (`TodayActionsView.swift:165-186`) was reviewed here — the action queue renders
+it. `ActionNeededCard` belongs to the Today screen, which the Mac session owns.
+
+| What | Why |
+| --- | --- |
+| `styles.subheadline` 20 → **21**. | Style map §2. `NextActionRow`'s title is `.subheadline.weight(.semibold)` (`:175`). |
+| The relative label and the context line take `theme.colors.secondaryLabel`. | Both are `.foregroundStyle(.secondary)` (`:172`, `:176`), which is `.secondaryLabel`, not `nexdoSecondary`. |
+| The trailing `chevron.right` is `.font(.caption)` — 12, and both trailing glyphs inherit `nexdoInk` from `ActionGlass` rather than taking a colour of their own. | `:181-182` carry no `.foregroundStyle`; the enclosing `ActionGlass` sets `Color.nexdoInk` (`:49`). |

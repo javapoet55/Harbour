@@ -38,7 +38,9 @@ import { brand, useTheme } from '../../src/theme';
 const CHANNELS: TaskActionChannel[] = ['call', 'message', 'email'];
 
 export default function TaskAction() {
-  const theme = useTheme();
+  // A `.sheet` at `.presentationDetents([.large])` (TaskActionView.swift:222), so the backgrounds
+  // resolve one level up (style map section 3).
+  const theme = useTheme({ elevated: true });
   const params = useLocalSearchParams<{ id?: string; preferred?: string; start?: string }>();
   const actionID = typeof params.id === 'string' ? params.id : '';
   const preferred = isChannel(params.preferred) ? params.preferred : null;
@@ -232,6 +234,7 @@ export default function TaskAction() {
                 style={[styles.channel, { backgroundColor: withAlpha(brand.nexdoIndigo, 0.08) }]}
                 testID={`action-${option}`}
               >
+                {/* A `Label` spaces its glyph from its title by 6, not by the row's own 8. */}
                 <TaskSymbol color={theme.colors.ink} name={channelIcon(option)} size={17} />
                 <Text style={[theme.typography.body, styles.grow, { color: theme.colors.ink }]}>{channelTitle(option)}</Text>
                 {(channel ?? preferred) === option ? <TaskSymbol color={theme.colors.ink} name="checkmark" size={17} /> : null}
@@ -239,7 +242,8 @@ export default function TaskAction() {
             ))}
 
             {busy ? (
-              <View style={styles.row}>
+              // `ProgressView("Finding contact…")` puts its label under the spinner.
+              <View style={styles.progress}>
                 <ActivityIndicator color={theme.colors.tint} size="small" />
                 <Text style={[theme.typography.body, { color: theme.colors.secondary }]}>Finding contact…</Text>
               </View>
@@ -257,7 +261,8 @@ export default function TaskAction() {
                     testID={`action-contact-${candidate.id}`}
                   >
                     <Text style={[theme.typography.body, { color: theme.colors.ink }]}>{candidate.name}</Text>
-                    <Text style={[styles.caption, { color: theme.colors.secondary }]}>
+                    {/* `.foregroundStyle(.secondary)` is `.secondaryLabel`, not nexdoSecondary (`:159`). */}
+                    <Text style={[styles.caption, { color: theme.colors.secondaryLabel }]}>
                       {candidate.phones[0]?.value ?? candidate.emails[0]?.value ?? 'No contact details'}
                     </Text>
                   </Pressable>
@@ -289,8 +294,9 @@ export default function TaskAction() {
                 {error}
               </Text>
             ) : null}
+            {/* `.foregroundStyle(.secondary)` (TaskActionView.swift:173). */}
             {receipt !== null ? (
-              <Text style={[theme.typography.body, { color: theme.colors.secondary }]} testID="action-receipt">
+              <Text style={[theme.typography.body, { color: theme.colors.secondaryLabel }]} testID="action-receipt">
                 {receipt}
               </Text>
             ) : null}
@@ -384,9 +390,11 @@ export default function TaskAction() {
         ) : (
           /* `ContentUnavailableView("Task unavailable", …)` (TaskActionView.swift:202-203). */
           <View style={styles.unavailable} testID="action-unavailable">
-            <TaskSymbol color={theme.colors.secondary} name="checkmark.circle" size={44} />
-            <Text style={[styles.title2, { color: theme.colors.ink }]}>Task unavailable</Text>
-            <Text style={[theme.typography.body, styles.centred, { color: theme.colors.secondary }]}>
+            {/* A `ContentUnavailableView` is a ~52pt secondary glyph, a `.label` title and a
+                `.secondaryLabel` description. */}
+            <TaskSymbol color={theme.colors.secondaryLabel} name="checkmark.circle" size={52} />
+            <Text style={[styles.title2, { color: theme.colors.label }]}>Task unavailable</Text>
+            <Text style={[theme.typography.body, styles.centred, { color: theme.colors.secondaryLabel }]}>
               This task may be completed, deleted, or rescheduled. Open your task list to check it.
             </Text>
             <Pressable accessibilityLabel="Close" accessibilityRole="button" onPress={closeAction} testID="action-close-unavailable">
@@ -419,7 +427,8 @@ const styles = StyleSheet.create({
   centred: { textAlign: 'center' },
   title2: { fontSize: 22, lineHeight: 28, fontWeight: '700' },
   headline: { fontSize: 17, lineHeight: 22, fontWeight: '600' },
-  subheadline: { fontSize: 15, lineHeight: 20 },
+  // `.subheadline` carries its own 21pt leading (style map section 2).
+  subheadline: { fontSize: 15, lineHeight: 21 },
   caption: { fontSize: 12, lineHeight: 16 },
 
   navBar: { flexDirection: 'row', alignItems: 'center', gap: 16, paddingHorizontal: 20, paddingVertical: 14 },
@@ -428,8 +437,10 @@ const styles = StyleSheet.create({
   // `VStack(alignment: .leading, spacing: 18).padding(20)`
   scroll: { padding: 20, gap: 18 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  // `.padding(14).frame(maxWidth: .infinity)` with corner radius 14.
-  channel: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, borderRadius: 14, minHeight: 48 },
+  // A `ProgressView` with a label stacks the label under the spinner.
+  progress: { alignItems: 'center', gap: 8 },
+  // `.padding(14).frame(maxWidth: .infinity)` with corner radius 14; a `Label` spaces by 6.
+  channel: { flexDirection: 'row', alignItems: 'center', gap: 6, padding: 14, borderRadius: 14, minHeight: 48 },
   candidate: { gap: 4, paddingVertical: 8 },
   divider: { height: StyleSheet.hairlineWidth },
   unavailable: { alignItems: 'center', gap: 12, paddingVertical: 32 },
