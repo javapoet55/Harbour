@@ -1,9 +1,9 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { ActivityIndicator, Alert, Modal, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, KeyboardAvoidingView, Modal, Pressable, StyleSheet, TextInput, View } from 'react-native';
 
-import { NexdoTaskBackdrop, StickyFooter, TaskSymbol, Text } from '../../src/components';
+import { KeyboardAwareScrollView, NexdoTaskBackdrop, StickyFooter, TaskSymbol, Text } from '../../src/components';
 import { MonthCalendar } from '../../src/components/MonthCalendar';
 import { ProjectAssignmentField } from '../../src/components/ProjectAssignmentField';
 import { detectTaskAction } from '../../src/lib/taskActionDetector';
@@ -92,9 +92,14 @@ export default function NewTask() {
   };
 
   return (
-    <View style={styles.fill}>
+    // The keyboard OVERLAYS the window on this build rather than resizing it — measured on the
+    // device: with the keyboard up, the notes field and the pinned footer both stayed at their
+    // full-height positions while the keyboard covered everything below its top edge. So `padding`
+    // is needed on Android too, not just iOS; without it the footer and any field below the fold sit
+    // behind the keyboard with no way to reach them.
+    <KeyboardAvoidingView behavior="padding" style={styles.fill}>
       <NexdoTaskBackdrop />
-      <ScrollView keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive" contentContainerStyle={styles.scroll}>
+      <KeyboardAwareScrollView keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive" contentContainerStyle={styles.scroll}>
         <View style={[styles.card, { backgroundColor: theme.colors.surface, borderColor: theme.colors.separator }]}>
           <EditorLabel title="TASK NAME" icon="checklist" />
           <TextInput
@@ -216,7 +221,7 @@ export default function NewTask() {
             </Pressable>
           </View>
         </View>
-      </ScrollView>
+      </KeyboardAwareScrollView>
 
       {/* `.sheet(isPresented: $showingDatePicker)` (RootView.swift:2038-2049): a graphical date
           picker titled "Select Date" with a Done confirmation button, over the account time zone. */}
@@ -268,7 +273,7 @@ export default function NewTask() {
           )}
         </Pressable>
       </StickyFooter>
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 

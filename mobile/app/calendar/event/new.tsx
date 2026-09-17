@@ -2,9 +2,9 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { randomUUID } from 'expo-crypto';
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { ActivityIndicator, Alert, Modal, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, KeyboardAvoidingView, Modal, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 
-import { NexdoTaskBackdrop, StickyFooter, TaskSymbol, Text } from '../../../src/components';
+import { KeyboardAwareScrollView, NexdoTaskBackdrop, StickyFooter, TaskSymbol, Text } from '../../../src/components';
 import { MonthCalendar } from '../../../src/components/MonthCalendar';
 import { calendarKey } from '../../../src/lib/calendarDates';
 import { serverTime } from '../../../src/lib/taskLabels';
@@ -123,9 +123,14 @@ export default function NewCalendarEvent() {
     `${new Intl.DateTimeFormat('en-US', { timeZone: zone, weekday: 'short', month: 'short', day: 'numeric' }).format(new Date(at))} ${serverTime(new Date(at).toISOString(), zone)}`;
 
   return (
-    <View style={styles.fill}>
+    // The keyboard OVERLAYS the window on this build rather than resizing it — measured on the
+    // device: with the keyboard up, the notes field and the pinned footer both stayed at their
+    // full-height positions while the keyboard covered everything below its top edge. So `padding`
+    // is needed on Android too, not just iOS; without it the footer and any field below the fold sit
+    // behind the keyboard with no way to reach them.
+    <KeyboardAvoidingView behavior="padding" style={styles.fill}>
       <NexdoTaskBackdrop />
-      <ScrollView keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive" contentContainerStyle={styles.scroll}>
+      <KeyboardAwareScrollView keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive" contentContainerStyle={styles.scroll}>
         <View style={[styles.card, { backgroundColor: theme.colors.surface, borderColor: theme.colors.separator }]}>
           <EditorLabel title="APPOINTMENT / EVENT" icon="calendar" accent={accent} />
           <TextInput
@@ -256,7 +261,7 @@ export default function NewCalendarEvent() {
             </Text>
           ) : null}
         </View>
-      </ScrollView>
+      </KeyboardAwareScrollView>
 
       {/* `.safeAreaInset(edge: .bottom)` (CalendarView.swift:578-586) */}
       <StickyFooter background={theme.colors.surface}>
@@ -320,7 +325,7 @@ export default function NewCalendarEvent() {
           </View>
         </View>
       </Modal>
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 

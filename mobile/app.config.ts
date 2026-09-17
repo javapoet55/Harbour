@@ -56,7 +56,9 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       'android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK',
     ],
     adaptiveIcon: {
-      backgroundColor: '#E6F4FE',
+      // The mark is drawn on white, exactly as the Swift app's AppIcon is
+      // (ios/Media.xcassets/AppIcon.appiconset/AppIcon.png), so the launcher icon matches iOS.
+      backgroundColor: '#FFFFFF',
       foregroundImage: './assets/android-icon-foreground.png',
       backgroundImage: './assets/android-icon-background.png',
       monochromeImage: './assets/android-icon-monochrome.png',
@@ -67,6 +69,25 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     favicon: './assets/favicon.png',
   },
   plugins: [
+    [
+      // Without this plugin there is no splash screen at all: the app opens on a blank white
+      // window and the first frame the user sees is whatever React renders. Expo SDK 57 has no
+      // top-level `splash` key — the plugin is the only way to configure one
+      // (https://docs.expo.dev/versions/v57.0.0/sdk/splash-screen/).
+      //
+      // The image is transparent, so a single file works against both backgrounds below.
+      'expo-splash-screen',
+      {
+        image: './assets/splash-icon.png',
+        imageWidth: 200,
+        resizeMode: 'contain',
+        backgroundColor: '#FFFFFF',
+        dark: {
+          image: './assets/splash-icon.png',
+          backgroundColor: '#000000',
+        },
+      },
+    ],
     [
       // WORKAROUND, remove when Expo ships a fixed expo-contacts.
       //

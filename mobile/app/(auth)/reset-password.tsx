@@ -1,7 +1,7 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import type { ReactNode } from 'react';
 import { useState } from 'react';
-import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { Alert, KeyboardAvoidingView, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 
 import { RevealablePasswordField, Text } from '../../src/components';
 import { useConfirmPasswordReset, useRequestPasswordReset } from '../../src/query/useAuth';
@@ -63,7 +63,7 @@ export default function ResetPassword() {
 
   return (
     <View style={[styles.fill, { backgroundColor: theme.colors.groupedBackground }]}>
-      <KeyboardAvoidingView style={styles.fill} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <KeyboardAvoidingView style={styles.fill} behavior="padding">
         <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.form}>
           <FormSection footer="We’ll email a six-digit code if an account exists. Codes expire after 15 minutes.">
             <FormRow>

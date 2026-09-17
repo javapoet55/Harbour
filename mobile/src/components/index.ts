@@ -50,3 +50,4 @@ export { AskEntryCard, AskEntryCards, AskExampleRow, AskSuggestionCard } from '.
 export { AskResponse, AskResponseCard, AskResponseSummary, type AskResponseCardProps, type AskResponseProps } from './AskResponse';
 export { StickyFooter } from './StickyFooter';
 export { TabBarButton } from './TabBarButton';
+export { KeyboardAwareScrollView } from './KeyboardAwareScrollView';

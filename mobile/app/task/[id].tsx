@@ -1,10 +1,10 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Alert, KeyboardAvoidingView, Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { NexdoLogoMark, TaskSymbol, Text } from '../../src/components';
+import { KeyboardAwareScrollView, NexdoLogoMark, TaskSymbol, Text } from '../../src/components';
 import { useCoordinator } from '../../src/actions/coordinator';
 import { ClarifyTaskActionCard } from '../../src/components/ClarifyTaskActionCard';
 import { TaskActionCard } from '../../src/components/TaskActionCard';
@@ -145,7 +145,12 @@ export default function TaskDetail() {
   const scheduleAt = current.schedule;
 
   return (
-    <View style={[styles.fill, { backgroundColor: theme.colors.background }]}>
+    // The keyboard OVERLAYS the window on this build rather than resizing it — measured on the
+    // device: with the keyboard up, the notes field and the pinned footer both stayed at their
+    // full-height positions while the keyboard covered everything below its top edge. So `padding`
+    // is needed on Android too, not just iOS; without it the footer and any field below the fold sit
+    // behind the keyboard with no way to reach them.
+    <KeyboardAvoidingView behavior="padding" style={[styles.fill, { backgroundColor: theme.colors.background }]}>
       {/* `header` (TaskDetailsView.swift:94-112) */}
       <View style={[styles.header, { borderBottomColor: withAlpha(brand.nexdoIndigo, 0.1) }]}>
         <View style={styles.headerText}>
@@ -167,7 +172,7 @@ export default function TaskDetail() {
         </Pressable>
       </View>
 
-      <ScrollView keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive" contentContainerStyle={styles.scroll}>
+      <KeyboardAwareScrollView keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive" contentContainerStyle={styles.scroll}>
         {/* `TaskActionCard(task:)` (TaskDetailsView.swift:34). Its FIRST branch — a scheduled contact
             action — wins; the clarify card below is the fall-through (TaskActionView.swift:10, `:36`). */}
         <TaskActionCard task={task} onOpen={(id) => useCoordinator.getState().open(id)} />
@@ -412,7 +417,7 @@ export default function TaskDetail() {
             testID="detail-notes"
           />
         </DetailField>
-      </ScrollView>
+      </KeyboardAwareScrollView>
 
       {/* `footer` (TaskDetailsView.swift:203-227): Mark complete and Save changes, side by side. */}
       <View style={[styles.footer, { backgroundColor: theme.colors.surface, borderTopColor: withAlpha(brand.nexdoIndigo, 0.1), paddingBottom: 12 + insets.bottom }]}>
@@ -466,7 +471,7 @@ export default function TaskDetail() {
           </View>
         </View>
       </Modal>
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 
