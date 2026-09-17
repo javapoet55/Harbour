@@ -32,6 +32,9 @@ export default function Account() {
 
   const openWeb = (path: string) => void Linking.openURL(WEB_ORIGIN + path);
 
+  /** `dismiss()` (ProfileView.swift:71, `:99`): close the sheet, back to whichever tab presented it. */
+  const dismiss = () => router.back();
+
   /** `.confirmationDialog("Sign out of Nexdo?", …)` (ProfileView.swift:96-98). */
   const confirmSignOut = () => {
     Alert.alert('Sign out of Nexdo?', undefined, [
@@ -41,8 +44,14 @@ export default function Account() {
         style: 'destructive',
         onPress: () => {
           setSigningOut(true);
-          // `await model.logout(); if model.profile == nil { dismiss() }` — the session gate in
-          // app/_layout.tsx swaps to the auth group on its own, so there is no navigation here.
+          // `await model.logout(); if model.profile == nil { dismiss() }` (ProfileView.swift:99) —
+          // same two steps, ORDER REVERSED. SwiftUI's sheet outlives the logout, so Swift can
+          // dismiss afterwards; here the session gate in app/_layout.tsx unmounts the navigator
+          // that owns this modal the moment the store flips to `signedOut`, and a dismissal with no
+          // navigator left to receive it is the "GO_BACK was not handled by any navigator" warning
+          // — with the sheet still on screen over the sign-in view. Closing FIRST leaves the gate a
+          // plain screen swap to make, and the sign-in screen is what remains behind the sheet.
+          dismiss();
           signOut.mutate(undefined, { onSettled: () => setSigningOut(false) });
         },
       },
@@ -62,7 +71,7 @@ export default function Account() {
           accessibilityLabel="Close"
           accessibilityRole="button"
           hitSlop={8}
-          onPress={() => router.back()}
+          onPress={dismiss}
           testID="account-close"
         >
           <TaskSymbol color={theme.colors.tint} name="xmark" size={20} />

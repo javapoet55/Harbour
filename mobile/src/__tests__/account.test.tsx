@@ -181,6 +181,35 @@ describe('the Account sheet', () => {
     await waitFor(() => expect(useSession.getState().status).toBe('signedOut'));
   });
 
+  /**
+   * The regression: the session gate (app/_layout.tsx) unmounts the navigator that owns this modal
+   * as soon as the store reaches `signedOut`, so the sheet has to be dismissed BEFORE the session
+   * clears. Dismissing after it leaves the sheet on screen and logs "GO_BACK was not handled by any
+   * navigator". Swift dismisses after `logout()` (ProfileView.swift:99) because its sheet outlives
+   * the presenter; the visible result — the sheet gone, sign-in behind it — is the same.
+   */
+  it('dismisses the sheet before the session clears', async () => {
+    const order: string[] = [];
+    mockBack.mockImplementation(() => order.push('dismiss'));
+    mockLogout.mockImplementation(async () => {
+      order.push('logout');
+      return { ok: true };
+    });
+    await show(<Account />);
+
+    fireEvent.press(screen.getByTestId('account-sign-out'));
+    const buttons = (Alert.alert as jest.Mock).mock.calls.at(-1)?.[2] as { text: string; onPress?: () => void }[];
+    buttons[1].onPress?.();
+
+    // Dismissed in the press itself, while the session — and so the navigator — is still there.
+    expect(order).toEqual(['dismiss']);
+    expect(useSession.getState().status).toBe('signedIn');
+
+    await waitFor(() => expect(useSession.getState().status).toBe('signedOut'));
+    expect(order).toEqual(['dismiss', 'logout']);
+    expect(mockBack).toHaveBeenCalledTimes(1);
+  });
+
   it('closes back to the tab behind it', async () => {
     await show(<Account />);
     fireEvent.press(screen.getByTestId('account-close'));
