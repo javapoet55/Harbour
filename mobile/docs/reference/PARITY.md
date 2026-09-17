@@ -245,6 +245,39 @@ references and remain valid.
 | Voice | voice-capture, voice-ask | 2 |
 | Account | account, account-settings | 2 |
 
+### Reference integrity: four of the Swift captures were wrong
+
+A reference that is silently wrong is worse than a missing one, and this set had four. They were
+found by hashing every file and looking for duplicates, which is the check that should have been run
+from the start — the mismatch percentage does not find them, because two sparse screens can be a
+genuine 2% apart.
+
+| File | What was wrong |
+| --- | --- |
+| `tasks-search-default.png` | byte-identical to `tasks-list-default.png` — the search field was never opened |
+| `today-3days.png` / `today-5days.png` | byte-identical — the range segment did not switch |
+| `attention-details-default.png` / `overdue-default.png` | byte-identical — the second screen was never pushed |
+| `ai-consent-default.png` | captured the **voice** consent alert on `AddTaskByVoiceView`, not `consentView` |
+| `calendar-week-default.png` | a duplicate of the Schedule capture — the segment did not switch |
+| `calendar-conflicts-default.png` | landed on Ask by Voice |
+| `task-detail` | landed on the wrong screen; deleted earlier |
+
+All have been re-shot through the XCUITest driver, and **every capture is now taken only after the
+view tree is asserted to be the intended screen** — `Selected` on the segment, the navigation bar's
+`identifier`, or a string only that screen shows. `md5` across the set now reports no duplicates.
+
+New references captured in the same pass: `ask-text-default`, `ask-answered-default`,
+`calendar-event-details-default`, `calendar-event-editor-filled`, `account-settings-default`, and
+dark-mode defaults for `calendar`, `ask`, `account` and `account-settings`.
+
+**A test event was created to reach Event Details, and it could not be removed.** Screen 26 only
+exists when the account has a calendar event, and this account had none — "0 calendar commitments
+today". The event is **"Parity reference event", Thu 17 Sep 2026, 6:36–7:06 PM**. Neither app can
+delete a calendar event: `CalendarView.swift` has no delete action or swipe action, and the React
+Native API layer has no delete endpoint for events. It has to be removed from the source calendar by
+hand. Captures taken after this point include it — `calendar-dark.png` was shot before, so the two
+differ by one row.
+
 ### Hand-off to the other machine
 
 Calendar, Ask, Account and Reminders are being done elsewhere from these references. Default states
