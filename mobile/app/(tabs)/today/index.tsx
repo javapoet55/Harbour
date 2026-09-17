@@ -165,8 +165,12 @@ export default function Today() {
                 accessibilityState={{ selected }}
                 onPress={() => setRange(option)}
                 testID={`today-range-${option}`}
-                // `Color(red: 0.18, green: 0.38, blue: 0.62)` when selected.
-                style={[styles.rangeOption, selected && { backgroundColor: '#2E619E' }]}
+                // `Color(red: 0.18, green: 0.38, blue: 0.62)` when selected — #2E619E. Measured off
+                // the Swift render, the selected cell is a rounded rect on ALL FOUR corners at the
+                // track's own 14pt radius, filling its cell exactly; it is not a square segment
+                // clipped by the container. Android will not clip a child to a parent's rounded
+                // corners reliably, so the radius goes on the cell.
+                style={[styles.rangeOption, selected && styles.rangeSelected]}
               >
                 <Text style={[styles.rangeLabel, { color: selected ? '#FFFFFF' : withAlpha(theme.colors.ink, 0.82) }]}>
                   {rangeTitle(option)}
@@ -373,6 +377,7 @@ const styles = StyleSheet.create({
   greetingLine: { fontSize: 28, lineHeight: 34, fontWeight: '700' },
   rangeRow: { flexDirection: 'row', borderRadius: 14, overflow: 'hidden' },
   rangeOption: { flex: 1, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
+  rangeSelected: { backgroundColor: '#2E619E', borderRadius: 14 },
   rangeLabel: { fontSize: 15, lineHeight: 20, fontWeight: '500' },
   // The compact Daily Briefing row (RootView.swift:1063-1070): `.padding(16)`, corner radius 20.
   briefingRow: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16 },
