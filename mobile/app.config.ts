@@ -67,6 +67,21 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     favicon: './assets/favicon.png',
   },
   plugins: [
+    [
+      // WORKAROUND, remove when Expo ships a fixed expo-contacts.
+      //
+      // The precompiled ExpoContacts.xcframework published for SDK 57 (expo-contacts 57.0.5) is
+      // linked against `@rpath/Testing.framework/Testing` — Swift's test-only framework, which is
+      // not present at runtime — so the app dies at launch with
+      // "Library not loaded: @rpath/Testing.framework/Testing". Confirmed with `otool -L`; the bad
+      // binary even carries the publisher's own build path in its rpaths.
+      //
+      // The podspec builds from source perfectly well, so turn the precompiled modules off. The
+      // generated Podfile otherwise defaults them on (`ENV['EXPO_USE_PRECOMPILED_MODULES'] ||= '1'`).
+      // Cost: a slower first `pod install`, since every Expo module compiles from source.
+      'expo-build-properties',
+      { ios: { usePrecompiledModules: false } },
+    ],
     'expo-router',
     'expo-dev-client',
     'expo-apple-authentication',
