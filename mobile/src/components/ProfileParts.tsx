@@ -83,11 +83,14 @@ export function AccountMenuRow({
       style={styles.menuRow}
       testID={testID}
     >
+      {/* `Image(systemName: icon)` (ProfileView.swift:105) carries no `.font`, so it is `.body` — 17,
+          not 20. */}
       <View style={styles.menuIcon}>
-        <TaskSymbol color={brand.nexdoIndigo} name={icon} size={20} />
+        <TaskSymbol color={brand.nexdoIndigo} name={icon} size={17} />
       </View>
       <Text style={[theme.typography.body, styles.grow, { color: theme.colors.ink }]}>{title}</Text>
-      <TaskSymbol color={theme.colors.secondary} name={web ? 'arrow.up.right' : 'chevron.right'} size={13} />
+      {/* The trailing one is `.font(.caption)` (`:108`) — 12. */}
+      <TaskSymbol color={theme.colors.secondary} name={web ? 'arrow.up.right' : 'chevron.right'} size={12} />
     </Pressable>
   );
 }

@@ -638,7 +638,7 @@ export default function Calendar() {
           <>
             {/* `Label(info.recommendation.title, systemImage: "exclamationmark.triangle")` (`:259`). */}
             <View style={styles.recommendation}>
-              <TaskSymbol name="exclamationmark.triangle.fill" size={17} color={theme.colors.ink} />
+              <TaskSymbol name="exclamationmark.triangle" size={17} color={theme.colors.ink} />
               <Text style={[styles.heading, styles.grow, { color: theme.colors.ink }]}>{today.recommendation.title}</Text>
             </View>
             <Text style={[styles.caption, { color: theme.colors.secondary }]}>

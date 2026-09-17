@@ -36,7 +36,7 @@ import { useMe } from '../../src/query/useMe';
 import { useDeleteAccount, useSyncNow, useUpdateProfile, useUploadPhoto } from '../../src/query/useProfile';
 import { useAppearance } from '../../src/store/appearance';
 import { useConsent } from '../../src/store/consent';
-import { brand, useTheme } from '../../src/theme';
+import { brand, ElevatedSurface, useTheme } from '../../src/theme';
 
 /**
  * `ProfileSettingsView` (ios/App/ProfileView.swift:126), **body `:146-270`**, read top to bottom.
@@ -62,7 +62,23 @@ import { brand, useTheme } from '../../src/theme';
  * chevron PATCH, both through `settingsInput()`. Appearance and App Voice volume are the exceptions —
  * they are `@AppStorage` (`:127-128`), device-local, and apply the moment they change.
  */
+/**
+ * `ProfileSettingsView` is pushed inside the account `.sheet`, so it is elevated too, so everything below resolves the *elevated* system backgrounds.
+ *
+ * The provider has to sit above the body rather than inside it: `useTheme({ elevated: true })`
+ * only colours the screen's own styles, and a shared component further down — `ProfileCard`,
+ * `AccountAvatar`, the settings controls — has no way to know it is in a sheet. In dark mode
+ * that painted the card `#1C1C1E` on a `#1C1C1E` sheet, so it stopped reading as a card.
+ */
 export default function Settings() {
+  return (
+    <ElevatedSurface>
+      <SettingsBody />
+    </ElevatedSurface>
+  );
+}
+
+function SettingsBody() {
   const me = useMe();
   // `load()` (ProfileView.swift:297-309) seeds `name`, `preferences` and `next` from the profile
   // BEFORE the editable screen appears. Remounting on the profile's id does the same without a

@@ -8,7 +8,7 @@ import { TaskSymbol } from '../../src/components/TaskSymbol';
 import { Text } from '../../src/components/Text';
 import { useSignOut } from '../../src/query/useAuth';
 import { useMe } from '../../src/query/useMe';
-import { useTheme } from '../../src/theme';
+import { ElevatedSurface, useTheme } from '../../src/theme';
 
 /**
  * `AccountView` (ios/App/ProfileView.swift:60), **body `:65-99`**, read top to bottom.
@@ -23,7 +23,23 @@ import { useTheme } from '../../src/theme';
  */
 const WEB_ORIGIN = 'https://harbour-production-f8a0.up.railway.app';
 
+/**
+ * `AccountView` is a `.sheet` from both entry points (RootView.swift:1181, `:1702`), so everything below resolves the *elevated* system backgrounds.
+ *
+ * The provider has to sit above the body rather than inside it: `useTheme({ elevated: true })`
+ * only colours the screen's own styles, and a shared component further down — `ProfileCard`,
+ * `AccountAvatar`, the settings controls — has no way to know it is in a sheet. In dark mode
+ * that painted the card `#1C1C1E` on a `#1C1C1E` sheet, so it stopped reading as a card.
+ */
 export default function Account() {
+  return (
+    <ElevatedSurface>
+      <AccountSheet />
+    </ElevatedSurface>
+  );
+}
+
+function AccountSheet() {
   // `AccountView` is a `.sheet` from both entry points (RootView.swift:1181, :1702); iOS resolves
   // the system backgrounds one level up inside a sheet (style map section 3).
   const theme = useTheme({ elevated: true });

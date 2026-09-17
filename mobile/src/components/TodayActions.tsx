@@ -175,7 +175,7 @@ export function ActionNeededCard({
           <Text style={[styles.caption, { color: theme.colors.secondary }]}>Task context</Text>
           <Text style={[styles.subheadline, { color: theme.colors.ink }]}>{action.context ?? action.sourceTitle}</Text>
         </View>
-        <TaskSymbol color={theme.colors.secondary} name="chevron.right" size={13} />
+        <TaskSymbol color={theme.colors.ink} name="chevron.right" size={12} />
       </Pressable>
 
       <View style={styles.channelRow}>
@@ -278,7 +278,7 @@ export function NextActionRow({ action, now, timeZone }: { action: StoredTaskAct
     >
       <View style={styles.nextTime}>
         <Text style={[styles.caption, styles.bold, { color: theme.colors.scheduleBlue }]}>{timeLabel(at, timeZone)}</Text>
-        <Text style={[styles.caption2, { color: theme.colors.secondary }]}>{actionTimeLabel(action, now)}</Text>
+        <Text style={[styles.caption2, { color: theme.colors.secondaryLabel }]}>{actionTimeLabel(action, now)}</Text>
       </View>
       <View style={[styles.rail, { backgroundColor: brand.nexdoIndigo }]} />
       <View style={styles.grow}>
@@ -286,7 +286,7 @@ export function NextActionRow({ action, now, timeZone }: { action: StoredTaskAct
           {action.sourceTitle}
         </Text>
         {action.context ? (
-          <Text numberOfLines={2} style={[styles.caption, { color: theme.colors.secondary }]}>
+          <Text numberOfLines={2} style={[styles.caption, { color: theme.colors.secondaryLabel }]}>
             {action.context}
           </Text>
         ) : null}
@@ -317,7 +317,7 @@ const styles = StyleSheet.create({
   semibold: { fontWeight: '600' },
   title2: { fontSize: 22, lineHeight: 28, fontWeight: '700' },
   headline: { fontSize: 17, lineHeight: 22, fontWeight: '600' },
-  subheadline: { fontSize: 15, lineHeight: 20 },
+  subheadline: { fontSize: 15, lineHeight: 21 },
   caption: { fontSize: 12, lineHeight: 16 },
   caption2: { fontSize: 11, lineHeight: 13 },
 

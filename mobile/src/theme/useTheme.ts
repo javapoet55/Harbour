@@ -1,6 +1,7 @@
 import { useColorScheme } from 'react-native';
 
 import { useAppearance } from '../store/appearance';
+import { useElevated } from './elevation';
 import { palettes, type ColorScheme, type Palette } from './colors';
 import { radii } from './radii';
 import { spacing } from './spacing';
@@ -25,13 +26,17 @@ export type Theme = {
  *
  * Pass `{ elevated: true }` from a screen presented as a sheet: iOS resolves the system background
  * colours one level up inside a sheet, so a dark sheet is #1C1C1E where the root screen is black.
+ * Better still, wrap the screen in `<ElevatedSurface>`, which does the same for every descendant —
+ * a shared component cannot know it is inside a sheet, and several were resolving the base palette
+ * while the screen around them used the elevated one.
  */
 export function useTheme(options?: { elevated?: boolean }): Theme {
   const appearance = useAppearance((state) => state.appearance);
   const system: ColorScheme = useColorScheme() === 'dark' ? 'dark' : 'light';
   const scheme: ColorScheme = appearance === 'day' ? 'light' : appearance === 'night' ? 'dark' : system;
   const palette = palettes[scheme];
-  const colors: Palette = options?.elevated
+  const inherited = useElevated();
+  const colors: Palette = (options?.elevated ?? inherited)
     ? {
         ...palette,
         background: palette.backgroundElevated,

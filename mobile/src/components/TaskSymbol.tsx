@@ -37,6 +37,7 @@ export const taskIcons = {
   'ellipsis.circle': 'ellipsis-horizontal-circle-outline',
   'exclamationmark.circle': 'alert-circle-outline',
   'exclamationmark.triangle.fill': 'warning',
+  'exclamationmark.triangle': 'warning-outline',
   'chart.bar.xaxis': 'stats-chart',
   'lock.shield': 'lock-closed-outline',
   'calendar.badge.checkmark': 'calendar-number-outline',

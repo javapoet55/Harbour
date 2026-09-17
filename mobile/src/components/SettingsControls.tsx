@@ -23,7 +23,8 @@ export function SettingsCard({ title, children, testID }: { title: string; child
       style={[styles.card, { backgroundColor: theme.colors.surface, borderColor: withAlpha(brand.nexdoIndigo, 0.13) }]}
       testID={testID}
     >
-      <Text style={[styles.headline, { color: theme.colors.ink }]}>{title}</Text>
+      {/* `Text(title).font(.headline)` (ProfileView.swift:281) carries no `.foregroundStyle`. */}
+      <Text style={[styles.headline, { color: theme.colors.label }]}>{title}</Text>
       {children}
     </View>
   );
@@ -54,7 +55,7 @@ export function SettingsField({
   const theme = useTheme();
   return (
     <View style={styles.fieldGroup}>
-      <Text style={[styles.subheadline, { color: theme.colors.ink }]}>{title}</Text>
+      <Text style={[styles.subheadline, { color: theme.colors.label }]}>{title}</Text>
       {/* `.textInputAutocapitalization(.words)` for "Display name", `.autocorrectionDisabled()`. */}
       <TextInput
         accessibilityLabel={title}
@@ -81,9 +82,9 @@ export function SettingsLabeledValue({ label, value, testID }: { label: string; 
   const theme = useTheme();
   return (
     <View style={styles.row} testID={testID}>
-      <Text style={[theme.typography.body, { color: theme.colors.ink }]}>{label}</Text>
+      <Text style={[theme.typography.body, { color: theme.colors.label }]}>{label}</Text>
       <View style={styles.grow} />
-      <Text style={[theme.typography.body, { color: theme.colors.secondary }]}>{value}</Text>
+      <Text style={[theme.typography.body, { color: theme.colors.secondaryLabel }]}>{value}</Text>
     </View>
   );
 }
@@ -103,7 +104,7 @@ export function SettingsToggle({
   const theme = useTheme();
   return (
     <View style={styles.row}>
-      <Text style={[theme.typography.body, styles.grow, { color: theme.colors.ink }]}>{label}</Text>
+      <Text style={[theme.typography.body, styles.grow, { color: theme.colors.label }]}>{label}</Text>
       <Switch
         accessibilityLabel={label}
         onValueChange={onValueChange}
@@ -132,7 +133,11 @@ export function SettingsSegments<T extends string>({
 }) {
   const theme = useTheme();
   return (
-    <View accessibilityLabel={label} style={[styles.segments, { backgroundColor: withAlpha(brand.nexdoIndigo, 0.07) }]}>
+    // `.pickerStyle(.segmented)` (ProfileView.swift:154): a translucent track carrying a raised,
+    // light capsule with a label-coloured title — not a tint-filled segment with white text. This is
+    // the fault PARITY global fix 5 closed for the Tasks picker; Appearance never got it, so
+    // Day/Night/System rendered as an indigo block.
+    <View accessibilityLabel={label} style={[styles.segments, { backgroundColor: theme.colors.segmentTrack }]}>
       {options.map((option) => {
         const selected = option.value === value;
         return (
@@ -142,10 +147,10 @@ export function SettingsSegments<T extends string>({
             accessibilityState={{ selected }}
             key={option.value}
             onPress={() => onChange(option.value)}
-            style={[styles.segment, selected ? { backgroundColor: theme.colors.tint } : null]}
+            style={[styles.segment, selected ? { backgroundColor: theme.colors.segmentSelected } : null]}
             testID={`${testIDPrefix}-${option.value}`}
           >
-            <Text style={[styles.subheadline, { color: selected ? '#FFFFFF' : theme.colors.tint }]}>{option.title}</Text>
+            <Text style={[styles.subheadline, { color: theme.colors.label }]}>{option.title}</Text>
           </Pressable>
         );
       })}
@@ -185,8 +190,8 @@ export function SettingsPicker<T extends string | number>({
         testID={testID}
       >
         <Text style={[theme.typography.body, styles.grow, { color: theme.colors.ink }]}>{label}</Text>
-        <Text style={[theme.typography.body, { color: theme.colors.secondary }]}>{current?.title ?? ''}</Text>
-        <TaskSymbol color={theme.colors.secondary} name="chevron.down" size={13} />
+        <Text style={[theme.typography.body, { color: theme.colors.tint }]}>{current?.title ?? ''}</Text>
+        <TaskSymbol color={theme.colors.tint} name="chevron.up.chevron.down" size={13} />
       </Pressable>
 
       <Modal animationType="fade" onRequestClose={() => setOpen(false)} transparent visible={open}>
@@ -379,7 +384,7 @@ export function SettingsSlider({
 
   return (
     <View style={styles.sliderRow}>
-      <TaskSymbol color={theme.colors.secondary} name="speaker.fill" size={15} />
+      <TaskSymbol color={theme.colors.label} name="speaker.fill" size={17} />
       <View
         accessibilityLabel={label}
         accessibilityRole="adjustable"
@@ -402,9 +407,9 @@ export function SettingsSlider({
         <View style={[styles.sliderTrack, { backgroundColor: theme.colors.separator }]}>
           <View style={[styles.sliderFill, { width: `${percent}%`, backgroundColor: theme.colors.tint }]} />
         </View>
-        <View style={[styles.sliderThumb, { left: `${percent}%`, backgroundColor: theme.colors.tint }]} />
+        <View style={[styles.sliderThumb, { left: `${percent}%` }]} />
       </View>
-      <TaskSymbol color={theme.colors.secondary} name="speaker.wave.3.fill" size={15} />
+      <TaskSymbol color={theme.colors.label} name="speaker.wave.3.fill" size={17} />
     </View>
   );
 }
@@ -418,7 +423,7 @@ export function SettingsDivider() {
 const styles = StyleSheet.create({
   grow: { flex: 1 },
   headline: { fontSize: 17, lineHeight: 22, fontWeight: '600' },
-  subheadline: { fontSize: 15, lineHeight: 20 },
+  subheadline: { fontSize: 15, lineHeight: 21 },
   caption: { fontSize: 12, lineHeight: 16 },
 
   // `.padding(18)` with corner radius 20 and the indigo hairline from `profileCard()`.
@@ -446,7 +451,20 @@ const styles = StyleSheet.create({
   sliderTrackArea: { flex: 1, height: 36, justifyContent: 'center' },
   sliderTrack: { height: 4, borderRadius: 2, overflow: 'hidden' },
   sliderFill: { height: 4, borderRadius: 2 },
-  sliderThumb: { position: 'absolute', width: 22, height: 22, borderRadius: 11, marginLeft: -11 },
+  // A system `Slider`'s thumb is white in both appearance modes, with a soft shadow.
+  sliderThumb: {
+    position: 'absolute',
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    marginLeft: -11,
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#000000',
+    shadowOpacity: 0.18,
+    shadowRadius: 3,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 3,
+  },
 
   divider: { height: StyleSheet.hairlineWidth },
 });

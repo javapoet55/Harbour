@@ -118,7 +118,10 @@ export function CalendarTimelineRow({
       testID={`calendar-row-${row.id}`}
       style={styles.timelineRow}
     >
-      <Text style={[styles.time, { color: theme.colors.secondary }]}>{row.time}</Text>
+      {/* `Text(row.time).font(.caption)` (CalendarView.swift:440) carries no `.foregroundStyle`, so
+          it inherits the view's `.foregroundStyle(Color.nexdoInk)` (`:138`) like every other label
+          in the row — it is not the one greyed part of it. */}
+      <Text style={[styles.time, { color: theme.colors.ink }]}>{row.time}</Text>
       <View style={styles.rail}>
         <View style={[styles.railLine, { backgroundColor: withAlpha(brand.nexdoIndigo, 0.18) }]} />
         <View style={[styles.railDot, { backgroundColor: colour }]} />
@@ -152,16 +155,16 @@ export function withAlpha(color: string, alpha: number): string {
 
 const styles = StyleSheet.create({
   badge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 999 },
-  badgeText: { fontSize: 11, lineHeight: 14 },
+  badgeText: { fontSize: 11, lineHeight: 13 },
   // `.padding(20)`, corner radius 16.
   summaryCard: { flexDirection: 'row', alignItems: 'center', gap: 14, padding: 20, borderRadius: 16 },
   summaryTitle: { fontSize: 17, lineHeight: 22, fontWeight: '600', marginBottom: 8 },
-  subheadline: { fontSize: 15, lineHeight: 20 },
+  subheadline: { fontSize: 15, lineHeight: 21 },
   grow: { flex: 1 },
   segments: { flexDirection: 'row', borderRadius: 12 },
   segmentWrapper: { flex: 1 },
   segment: { minHeight: 48, alignItems: 'center', justifyContent: 'center', borderRadius: 11 },
-  segmentLabel: { fontSize: 15, lineHeight: 20 },
+  segmentLabel: { fontSize: 15, lineHeight: 21 },
   timelineRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
   time: { width: 64, fontSize: 12, lineHeight: 16, paddingTop: 18 },
   rail: { width: 8, alignSelf: 'stretch', alignItems: 'center', justifyContent: 'center' },
