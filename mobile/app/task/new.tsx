@@ -261,6 +261,9 @@ export default function NewTask() {
           ) : (
             <View style={[styles.saveButton, { backgroundColor: theme.colors.groupedBackground }]}>
               <Text style={[styles.saveLabel, { color: theme.colors.secondary }]}>Create Task</Text>
+              {/* `if !model.busy { Image(systemName: "arrow.right") }` (RootView.swift:2017) — the
+                  arrow tracks the *busy* state, not whether the button is enabled. */}
+              <TaskSymbol name="arrow.right" size={17} color={theme.colors.secondary} />
             </View>
           )}
         </Pressable>

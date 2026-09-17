@@ -47,7 +47,9 @@ export function ProjectAssignmentField({
       >
         <TaskSymbol name="folder.fill" size={17} color={selected ? projectColor(selected.color) : theme.colors.secondary} />
         <Text style={[theme.typography.body, styles.grow, { color: theme.colors.ink }]}>{label}</Text>
-        <TaskSymbol name="chevron.right" size={13} color={theme.colors.secondary} />
+        {/* `Image(systemName: "chevron.down").font(.caption)` (ProjectsView.swift:307) — a menu
+            affordance, not a disclosure arrow. */}
+        <TaskSymbol name="chevron.down" size={13} color={theme.colors.secondary} />
       </Pressable>
 
       {open ? (

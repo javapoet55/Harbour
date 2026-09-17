@@ -63,6 +63,9 @@ export function GradientButton({ title, onPress, disabled = false, minHeight, st
 }
 
 const styles = StyleSheet.create({
-  fill: { alignItems: 'center', justifyContent: 'center', width: '100%' },
-  label: { ...textStyles.title3, fontWeight: '700', color: '#FFFFFF' },
+  fill: { justifyContent: 'center', width: '100%', paddingHorizontal: 16 },
+  // `.frame(maxWidth: .infinity)` is on the *label* in Swift. Centring it with the parent's
+  // `alignItems` instead sizes it to its own measured width, which Android then wraps and clips —
+  // see docs/swift-to-rn-style-map.md §4.
+  label: { ...textStyles.title3, fontWeight: '700', color: '#FFFFFF', alignSelf: 'stretch', textAlign: 'center' },
 });

@@ -32,7 +32,8 @@ export default function ProjectLayout() {
         ...stackHeaderOptions(theme, theme.colors.background),
       }}
     >
-      <Stack.Screen name="[id]/index" options={{ title: 'Project' }} />
+      {/* The title and the trailing menu are the project's, so `[id]/index` sets its own options. */}
+      <Stack.Screen name="[id]/index" />
       <Stack.Screen name="[id]/edit" options={{ presentation: 'modal', title: 'Edit Project', headerLeft: closeButton('Cancel') }} />
       <Stack.Screen name="new" options={{ presentation: 'modal', title: 'Add Project', headerLeft: closeButton('Cancel') }} />
     </Stack>

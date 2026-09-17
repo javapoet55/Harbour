@@ -58,6 +58,7 @@ export function Button({ title, onPress, variant = 'primary', loading = false, d
 
 const styles = StyleSheet.create({
   base: { minHeight: 48, alignItems: 'center', justifyContent: 'center' },
-  label: { fontWeight: '600' },
+  // Stretched rather than centred by `base`: see docs/swift-to-rn-style-map.md §4.
+  label: { fontWeight: '600', alignSelf: 'stretch', textAlign: 'center' },
   dimmed: { opacity: 0.6 },
 });

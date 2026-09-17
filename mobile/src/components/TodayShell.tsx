@@ -60,9 +60,30 @@ export function ProfileAvatar({ name, photo, size = 44 }: { name: string; photo?
 /**
  * `TodayHeaderButton` (RootView.swift:1343-1356): a 44pt gradient circle.
  */
-export function TodayHeaderButton({ icon, label, onPress, testID }: { icon: 'plus'; label: string; onPress: () => void; testID?: string }) {
+export function TodayHeaderButton({
+  icon,
+  label,
+  onPress,
+  testID,
+  disabled = false,
+}: {
+  icon: 'plus';
+  label: string;
+  onPress: () => void;
+  testID?: string;
+  /** `.disabled(_:)` on the button (ProjectsView.swift:204); SwiftUI dims a disabled button. */
+  disabled?: boolean;
+}) {
   return (
-    <Pressable accessibilityRole="button" accessibilityLabel={label} onPress={onPress} testID={testID}>
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ disabled }}
+      disabled={disabled}
+      onPress={onPress}
+      testID={testID}
+      style={disabled ? { opacity: 0.3 } : undefined}
+    >
       <LinearGradient colors={[...NEXDO_GRADIENT]} start={{ x: 0, y: 0.5 }} end={{ x: 1, y: 0.5 }} style={styles.headerButton}>
         <TaskSymbol name={icon} size={20} color="#FFFFFF" />
       </LinearGradient>
