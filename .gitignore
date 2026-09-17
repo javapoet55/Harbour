@@ -53,3 +53,9 @@ yarn-error.log*
 
 # typescript
 *.tsbuildinfo
+
+# mobile build artefacts (mobile/ itself is tracked on react-native-migration)
+mobile/node_modules/
+mobile/.expo/
+mobile/android/
+mobile/dist/
