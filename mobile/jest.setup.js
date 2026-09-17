@@ -72,8 +72,11 @@ jest.mock('expo-file-system', () => {
     textSync() {
       return store.get(this.path) ?? '';
     }
+    create() {
+      if (!store.has(this.path)) store.set(this.path, '');
+    }
     write(contents) {
-      store.set(this.path, contents);
+      store.set(this.path, typeof contents === 'string' ? contents : '<binary>');
     }
     delete() {
       store.delete(this.path);
@@ -90,6 +93,23 @@ jest.mock('expo-file-system', () => {
   }
   return { File, Directory, Paths: { document: 'document' }, __store: store };
 });
+
+// Phase 9 Read Loud: expo-audio's real module needs the native runtime to subclass its player.
+jest.mock('expo-audio', () => ({
+  createAudioPlayer: jest.fn(() => ({
+    volume: 1,
+    play: jest.fn(),
+    remove: jest.fn(),
+    addListener: jest.fn(() => ({ remove: jest.fn() })),
+  })),
+  setAudioModeAsync: jest.fn(async () => undefined),
+}));
+
+// react-native-webrtc and its in-call companion are native-only; the voice tests inject fakes.
+jest.mock('react-native-webrtc', () => ({ RTCPeerConnection: jest.fn(), mediaDevices: { getUserMedia: jest.fn() } }));
+jest.mock('react-native-incall-manager', () => ({
+  default: { start: jest.fn(), stop: jest.fn(), setForceSpeakerphoneOn: jest.fn() },
+}));
 
 jest.mock('expo-contacts', () => ({
   Fields: { ID: 'id', Name: 'name', PhoneNumbers: 'phoneNumbers', Emails: 'emails' },

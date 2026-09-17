@@ -187,7 +187,7 @@ export default function TaskDetail() {
                 /**
                  * The "Contact someone" follow-through (TaskActionView.swift:90-93): once the title
                  * is saved, the coordinator reconciles it into an action and OPENS that action.
-                 * This was the Phase 3 `TODO(phase8)`.
+                 * This closed the Phase 3 follow-through marker.
                  */
                 onSuccess: (saved) => {
                   const owner = profile?.id;

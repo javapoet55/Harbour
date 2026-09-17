@@ -623,9 +623,8 @@ export default function Calendar() {
           </>
         )}
         <View style={styles.creationRow}>
-          {/* TODO(phase9): Swift opens `AddTaskByVoiceView(calendarOnly: true)`; the voice shell's
-              calendar mode is Phase 9, so this routes to the existing shell. */}
-          <CreationCard title="Add by Voice" subtitle="Tap and speak" voice onPress={() => router.push('/task/voice-capture')} testID="calendar-add-voice" />
+          {/* `.fullScreenCover { AddTaskByVoiceView(calendarOnly: true) }` (CalendarView.swift:161). */}
+          <CreationCard title="Add by Voice" subtitle="Tap and speak" voice onPress={() => router.push('/calendar/voice')} testID="calendar-add-voice" />
           <CreationCard title="Add Manually" subtitle="Type an event" voice={false} onPress={() => router.push('/calendar/event/new')} testID="calendar-add-manual" />
         </View>
       </View>

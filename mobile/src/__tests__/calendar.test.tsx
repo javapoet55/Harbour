@@ -166,7 +166,7 @@ describe('Calendar tab', () => {
     expect(mockPush).toHaveBeenCalledWith('/calendar/event/new');
 
     await fireEvent.press(screen.getByTestId('calendar-add-voice'));
-    expect(mockPush).toHaveBeenCalledWith('/task/voice-capture');
+    expect(mockPush).toHaveBeenCalledWith('/calendar/voice');
   });
 });
 

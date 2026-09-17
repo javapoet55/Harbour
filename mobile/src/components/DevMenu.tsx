@@ -15,8 +15,11 @@ import { Text } from './Text';
  * (ios/App/ProfileView.swift:84-86, and its confirmation dialog at `:96-98`), so sign-out is at
  * app/account/index.tsx, where Swift puts it, and the Today mount of this menu is gone with it.
  *
- * It is now mounted on the sign-in screen only, which is where the session-check and voice-check
- * development screens are useful anyway.
+ * It is now mounted on the sign-in screen only, which is where the session-check screen is useful.
+ *
+ * The voice-check screen is GONE. Phase 0 used it to prove the WebRTC path; Phase 9 built the real
+ * Add by Voice screen on the same transport, which exercises everything the check did and shows the
+ * live phase, transcript and reply besides.
  */
 export function DevMenu() {
   const theme = useTheme();
@@ -41,9 +44,6 @@ export function DevMenu() {
         <View style={styles.links}>
           <Pressable accessibilityRole="button" onPress={() => router.push('/dev/session-check')}>
             <Text style={[styles.footnote, { color: theme.colors.tint }]}>Open session check</Text>
-          </Pressable>
-          <Pressable accessibilityRole="button" onPress={() => router.push('/dev/voice-check')}>
-            <Text style={[styles.footnote, { color: theme.colors.tint }]}>Open voice check</Text>
           </Pressable>
         </View>
       ) : null}

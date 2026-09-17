@@ -19,6 +19,9 @@ export const queryKeys = {
   },
   weather: () => ['weather'] as const,
   scheduleIntelligence: () => ['schedule-intelligence'] as const,
+  /** `persistentNext` and `protectedTime` (ios/App/NexdoApp.swift:15-17). */
+  nextAction: () => ['next-action'] as const,
+  protectedTime: () => ['protected-time'] as const,
   weeklySummary: (start: string) => ['weekly-summary', start] as const,
   projects: {
     all: () => ['projects'] as const,

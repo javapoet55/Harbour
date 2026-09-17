@@ -96,6 +96,8 @@ export const taskIcons = {
   'envelope.fill': 'mail',
   'bell.fill': 'notifications',
   'person.crop.circle.fill': 'person-circle',
+  // Voice (Phase 9): the orb and the mute button (ios/App/AddTaskByVoiceView.swift:77, :153).
+  'mic.slash.fill': 'mic-off',
 } satisfies Record<string, IoniconName>;
 
 export type TaskSymbolName = keyof typeof taskIcons;

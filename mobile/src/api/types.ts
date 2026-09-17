@@ -353,6 +353,31 @@ export type DoNowRecommendation = {
   recommendedActions: { type: string }[];
 };
 
+/** `ProactiveNextResponse` (DoNowRecommendation.swift:34-39). POST /api/schedule-intelligence. */
+export type ProactiveNextResponse = {
+  enabled: boolean;
+  refreshAt?: string | null;
+  recommendation?: DoNowRecommendation | null;
+  contextActionId?: string | null;
+};
+
+/** `ProtectedTimeProposal` (DoNowRecommendation.swift:44-52). */
+export type ProtectedTimeProposal = {
+  taskId: string;
+  title: string;
+  startAt: string;
+  endAt: string;
+  durationMin: number;
+  postponeCount: number;
+  expectedUpdatedAt: string;
+};
+
+/** `ProtectedTimeResponse` (DoNowRecommendation.swift:41-43). GET /api/protected-time. */
+export type ProtectedTimeResponse = { proposal?: ProtectedTimeProposal | null };
+
+/** The POST /api/protected-time receipt (ios/App/NexdoApp.swift:50). */
+export type ProtectedTimeReceipt = { warnings: string[] };
+
 /** `DoNowResponse` (DoNowRecommendation.swift:3-5): the assistant turn, of which only `executive` matters. */
 export type DoNowResponse = { executive?: DoNowRecommendation | null };
 

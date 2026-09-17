@@ -54,6 +54,14 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     // (ios/App/ProfileView.swift:12). It declares no permissions of its own.
     'expo-web-browser',
     [
+      // Phase 9 Read Loud. `VoicePlayback` (ios/App/VoicePlayback.swift:21-42) plays the MP3 that
+      // /api/speech returns through `AVAudioPlayer`; React Native's core has no audio player, so this
+      // is the module that provides one. The microphone string is NOT enabled here — the WebRTC
+      // plugin already declares it, with the Swift target's own wording.
+      'expo-audio',
+      { microphonePermission: false },
+    ],
+    [
       // Phase 8 reminders. Local notifications only — the Swift app registers no device token and the
       // server has no APNs or FCM path (see "Backend gaps" in docs/IOS_TO_REACT_NATIVE.md).
       //

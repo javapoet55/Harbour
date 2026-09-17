@@ -1244,3 +1244,138 @@ eas build --profile preview --platform android
 - The custom "Choose time…" snooze picker: the five fixed offsets are built.
 - Sections 7 and 8 of the Today dashboard (protected time, persistent next action): Phase 9.
 - Voice: Phase 9.
+
+## Phase 9 on-device test plan
+
+Live voice, and the last two Today sections. **A NEW DEVELOPMENT BUILD IS REQUIRED** — `expo-audio`
+(and its peer `expo-asset`) landed for Read Loud.
+
+Voice needs a **physical phone**. An emulator has no usable microphone and the WebRTC audio path will
+not come up. Use headphones for the barge-in and mute steps so you can hear the reply stop.
+
+### 1. Getting in, and the consent gate
+
+1. Force-quit and reopen the app, so consent is unset.
+2. Tasks → the microphone button. A full-screen page titled **Add by Voice**.
+3. An alert appears at once: **"Use voice to manage tasks?"** with the OpenAI sharing paragraph, then
+   **Not now** and **Allow and start**.
+4. Tap **Not now** — the page closes and nothing connected.
+5. Go back in and tap **Allow and start**. The microphone permission prompt appears the first time.
+6. The status line runs **Connecting…** → **Listening…**.
+7. Open it again in the same launch: no consent alert. Force-quit, reopen: the alert is back. Consent
+   is per launch, like the iPhone app.
+
+### 2. Capturing a task by voice, end to end
+
+1. With the status on **Listening…**, say **"Call Damien tomorrow at eleven AM."**
+2. The status moves **Listening to you…** → **Understanding…**, your words appear in the transcript
+   card, then **Updating your tasks…** while the tool runs, then **Speaking…** as it confirms.
+3. Under the orb, **Added this session** appears with **Call Damien** and its date and time.
+4. Say **"Actually make that noon."** The same task updates; no second row appears.
+5. Tap **Done**. You hear **"You're all set."** and the page closes on its own.
+6. Open the Tasks tab: the task is there, at noon tomorrow.
+
+**There is no "review" screen and no "Add this task" button.** The model saves as you speak. That is
+what the iPhone app does; report it if you see a confirm step.
+
+### 3. Barge-in
+
+1. Start a session and ask something that gets a long answer: **"What should I focus on this week?"**
+2. While it is **Speaking…**, start talking over it.
+3. **Its audio must stop immediately**, and the status must switch to **Listening to you…**.
+4. It should answer your new question, not finish the old one.
+
+### 4. Mute
+
+1. While **Listening…**, tap **Mute**.
+2. The status reads **Muted**, the orb's icon becomes a struck-through microphone, and the button
+   reads **Unmute**.
+3. Talk. Nothing happens: no transcript, no reply.
+4. Tap **Unmute** and talk again. It hears you.
+5. Mute is disabled while connecting and after the session ends. Check both.
+
+### 5. The inactivity timeout
+
+1. Start a session and say nothing.
+2. After about **45 seconds** it asks **"Are you still there?"**
+3. Say nothing for about **20 seconds** more. It says **"I'll close voice mode for now."** and the
+   page closes.
+4. Repeat, but answer the "are you still there?" prompt. The session continues and the clock restarts.
+
+### 6. Error recovery
+
+1. Start a session, then turn off Wi-Fi and mobile data.
+2. Within a few seconds the page shows **"The voice connection ended. Saved tasks are preserved. Close
+   and try again."** and the status reads **Connection lost**.
+3. **The page does NOT close itself** on a network failure — that is deliberate, so you can read the
+   message. Close it yourself.
+4. Anything saved before the drop is still in Tasks.
+5. Turn the network back on and start a new session: it connects normally.
+
+### 7. Ask by Voice
+
+1. Ask AI → **Ask by Voice**.
+2. The page reads **Ask by Voice** / **Ask Nexdo anything**, with its own three examples.
+3. Ask **"What should I focus on today?"** It answers out loud.
+4. **No text answer appears in the Ask screen afterwards.** The spoken reply is the answer; the iPhone
+   app behaves the same way.
+
+### 8. Calendar voice mode
+
+1. Calendar → **Add by Voice**.
+2. The page reads **Speak your appointment** with the appointment examples.
+3. Say **"Dentist appointment tomorrow at eleven AM for thirty minutes."** The event is created; check
+   the Calendar tab.
+4. Now say **"Add a task to buy milk."** It must refuse: this screen creates appointments only.
+
+### 9. Read Loud and the volume slider
+
+1. Ask AI → **Free form Text**, ask something, then tap **Read Loud** on a section.
+2. It speaks. **This is the server's voice** (`/api/speech`), not the phone's built-in speech.
+3. While it is speaking, open Account → Settings → **App Voice** and drag the slider. The volume
+   changes **mid-sentence**.
+4. Set it to 0 and play again: silence. Set it back.
+5. **Known gap**: the slider does NOT change the volume of a live voice CONVERSATION on Android — only
+   Read Loud. The iPhone applies a ×3 gain to the realtime track; react-native-webrtc has no
+   equivalent. Use the phone's own volume keys during a conversation.
+
+### 10. Interruptions
+
+1. Start a voice session and put the app in the background.
+2. Within about five seconds the session ends. Come back: the page is closed or closing.
+3. Start a session and receive a phone call. **Known gap**: the iPhone ends the session on an audio
+   interruption; Android does not report one, so the session stays up and the audio may be mixed.
+   Tap Done.
+
+### 11. Today, section 7: protected time
+
+Needs an account with a task postponed several times, so the server actually proposes a block.
+
+1. On **Today**, below the action queue, a card reads **Make room for important work**.
+2. It says **"You've postponed <task> N times."**, then **"Reserve N minutes at <date and time>?"**,
+   then the grey line about replanning.
+3. Tap **Not now**. The card disappears and nothing is scheduled.
+4. Get it to propose again and tap **Reserve time**. The block appears in Tasks and Calendar at that
+   time, and the card goes.
+5. If the server returns warnings, they appear in an **Unable to complete request** alert.
+
+### 12. Today, section 8: the persistent next action
+
+Needs "Suggest my next action" ON in Settings, and an account the server has a recommendation for.
+
+1. Below the protected-time card, a card reads **What should I do now?** with the task title and
+   **~N min · <window> available**.
+2. Tap **Other options** → the Do Now screen opens.
+3. Go back and tap **Start Focus Session**. The focus strip appears with that task and its own
+   duration, and the card refreshes.
+4. Tap the **✕**. The card goes and does not come back on this account until the server offers a new
+   one.
+5. With the setting OFF, neither card appears.
+
+### 13. What is NOT here
+
+- The orb does not animate — the rings and bars are drawn at rest. See the plan doc.
+- No "ready" chime when the session starts listening; the iPhone's `ListeningReady.wav` is not in this
+  repository.
+- Dictation into a text field (`/api/realtime/transcription-session`) is a separate iPhone screen that
+  this migration has not been asked to build.

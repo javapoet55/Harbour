@@ -13,9 +13,9 @@ import { Text } from './Text';
  * falls through to (`:42-100`). This sits at the TOP of the task detail (TaskDetailsView.swift:34).
  *
  * `TaskActionCard` has two branches. The first draws a "Nexdo Action: contact X" card when
- * `TaskActionCoordinator` holds a scheduled reminder action for the task — that coordinator is the
- * reminders work in Phase 8 and does not exist yet, so the first branch is never taken here.
- * TODO(phase8): port `TaskActionCoordinator` and render that branch ahead of this one.
+ * `TaskActionCoordinator` holds a scheduled reminder action for the task; Phase 8 built it as
+ * `src/components/TaskActionCard.tsx`, and the task detail renders it AHEAD of this card, so the two
+ * are mutually exclusive exactly as they are in Swift.
  *
  * The second branch, ported in full below, shows when the task is open, has NO steps yet, and its
  * title is vague enough that `TaskActionClarification.isCandidate` returns true.

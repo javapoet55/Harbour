@@ -118,7 +118,6 @@ function RootNavigator() {
         </Stack.Protected>
         {/* Reachable signed in or out: it exists to test signing in and out. */}
         <Stack.Screen name="dev/session-check" options={{ headerShown: true, title: 'Session check' }} />
-        <Stack.Screen name="dev/voice-check" options={{ headerShown: true, title: 'Voice check' }} />
         {/* Reminder screens sit OUTSIDE the tab group: a notification opens them over any tab. */}
         <Stack.Protected guard={profile != null}>
           <Stack.Screen name="action" />

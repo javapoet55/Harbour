@@ -11,7 +11,7 @@ import { useAsk } from '../query/useAssistant';
 import { useAssistantStore } from '../store/assistant';
 import { useConsent } from '../store/consent';
 import { brand, useTheme } from '../theme';
-import { startSpeechStub, type SpeechStub } from '../voice/speechStub';
+import { playSpeech, type SpeechPlayback } from '../voice/speech';
 import { AskEntryCards, AskExampleRow, AskSuggestionCard } from './AskParts';
 import { AskResponse } from './AskResponse';
 import { withAlpha } from './SignInBackdrop';
@@ -61,7 +61,7 @@ export function AskNexdoView({ textPage, initialPrompt = '' }: AskNexdoViewProps
   const [readingSection, setReadingSection] = useState<number | null>(null);
   const [lastSpeechText, setLastSpeechText] = useState<string | null>(null);
   const [lastRequestWasVoice, setLastRequestWasVoice] = useState(false);
-  const speech = useRef<SpeechStub | null>(null);
+  const speech = useRef<SpeechPlayback | null>(null);
 
   const submitting = ask.isPending;
   // `blocked` (AskNexdoView.swift:148). Swift also ORs in `model.busy`, the app-wide "Updating…"
@@ -95,17 +95,18 @@ export function AskNexdoView({ textPage, initialPrompt = '' }: AskNexdoViewProps
     setVoiceError(null);
     setLastSpeechText(body);
     setReadingSection(section);
-    try {
-      speech.current = startSpeechStub(speechChunks(body), {
-        onPreparing: setPreparingSpeech,
-        onPlaying: setPlaying,
-        onFinished: () => setReadingSection(null),
-      });
-    } catch (cause) {
-      setPreparingSpeech(false);
-      setReadingSection(null);
-      setVoiceError(`Your answer is ready to read. ${cause instanceof Error ? cause.message : String(cause)}`);
-    }
+    // `speakChunks(_:index:)` (AskNexdoView.swift:428-445): one /api/speech request per chunk, played
+    // in order, and a failure becomes "Your answer is ready to read. " + the message (`:443`).
+    speech.current = playSpeech(speechChunks(body), {
+      onPreparing: setPreparingSpeech,
+      onPlaying: setPlaying,
+      onFinished: () => setReadingSection(null),
+      onError: (message) => {
+        setPreparingSpeech(false);
+        setReadingSection(null);
+        setVoiceError(`Your answer is ready to read. ${message}`);
+      },
+    });
   };
 
   /** `request(_:speakResponse:)` (AskNexdoView.swift:377-409). */

@@ -1,10 +1,12 @@
+import { useQueryClient } from '@tanstack/react-query';
 import { router } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
-import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
+import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 
 import { useCoordinator } from '../../src/actions/coordinator';
 import { TaskSymbol, Text } from '../../src/components';
 import { TodayActionsView } from '../../src/components/TodayActions';
+import { PersistentNextCard, ProtectedTimeCard } from '../../src/components/TodayNextAction';
 import { FocusSessionStrip } from '../../src/components/FocusSessionStrip';
 import { AttentionCard } from '../../src/components/AttentionCard';
 import { TodayIntelligenceCard } from '../../src/components/TodayIntelligenceCard';
@@ -19,8 +21,16 @@ import {
   type TodayRange,
 } from '../../src/lib/todaySchedule';
 import { buildActionQueue } from '../../src/lib/todayActionQueue';
+import {
+  invalidateNextAction,
+  useDismissNextAction,
+  useNextAction,
+  useProtectedTime,
+  useRespondToProtectedTime,
+} from '../../src/query/useNextAction';
 import { useTasks } from '../../src/query/useTasks';
-import { useAgenda, useScheduleIntelligence, useWeather } from '../../src/query/useToday';
+import { canStartRecommendation, useAgenda, useScheduleIntelligence, useWeather } from '../../src/query/useToday';
+import { useFocus } from '../../src/store/focus';
 import { useSession } from '../../src/store/session';
 import { brand, useTheme } from '../../src/theme';
 
@@ -79,6 +89,17 @@ export default function Today() {
     [loadedAgenda, loadedTasks, intelligence.data, range],
   );
   const counts = scheduleCounts(schedule);
+
+  // Sections 7 and 8 (RootView.swift:1095-1126), both `range == .today` only.
+  const queryClient = useQueryClient();
+  const startFocus = useFocus((state) => state.startFocus);
+  const focusBusy = useFocus((state) => state.busy);
+  const nextAction = useNextAction(range === 1 && profile !== null);
+  const protectedTime = useProtectedTime(range === 1 && profile !== null);
+  const respond = useRespondToProtectedTime();
+  const dismissNext = useDismissNextAction();
+  const recommendation = nextAction.data?.recommendation ?? null;
+  const bestAction = recommendation?.nextAction?.bestAction ?? null;
   const queue = useMemo(
     () => buildActionQueue({ actions, tasks: loadedTasks?.tasks ?? [], now: queueNow, timeZone }),
     [actions, loadedTasks, queueNow, timeZone],
@@ -202,9 +223,7 @@ export default function Today() {
         <FocusSessionStrip />
 
         {/* Section 6: `TodayActionsView` (RootView.swift:1136-1143). Renders nothing when the queue is
-            empty, which is what an account with no contact-shaped tasks sees.
-            TODO(phase9): sections 7 and 8 — `model.protectedTime`'s proposal card and
-            `model.persistentNext` — both need the next-action service, not the coordinator. */}
+            empty, which is what an account with no contact-shaped tasks sees. */}
         <TodayActionsView
           now={queueNow}
           onOpen={(action, channel) => useCoordinator.getState().open(action.id, channel ?? action.preferredAction ?? null)}
@@ -213,6 +232,55 @@ export default function Today() {
           queue={queue}
           timeZone={timeZone}
         />
+
+        {/* Section 7: the protected-time proposal (RootView.swift:1095-1106). Today only. */}
+        {range === 1 && protectedTime.data ? (
+          <ProtectedTimeCard
+            busy={respond.isPending}
+            onRespond={(accept) => {
+              const proposal = protectedTime.data;
+              if (!proposal) return;
+              respond.mutate(
+                { proposal, accept },
+                {
+                  // `if !receipt.warnings.isEmpty { error = … }` and the catch (NexdoApp.swift:57-59).
+                  onSuccess: (warning) => {
+                    if (warning !== null) Alert.alert('Unable to complete request', warning);
+                  },
+                  onError: (cause) => Alert.alert('Unable to complete request', cause.message),
+                },
+              );
+            }}
+            proposal={protectedTime.data}
+            timeZone={timeZone}
+          />
+        ) : null}
+
+        {/* Section 8: the persistent next-action card (RootView.swift:1108-1126). Today only. */}
+        {range === 1 && bestAction && recommendation ? (
+          <PersistentNextCard
+            availableWindowMinutes={recommendation.nextAction?.availableWindowMinutes ?? 0}
+            best={bestAction}
+            busy={focusBusy}
+            canStart={canStartRecommendation(recommendation)}
+            onDismiss={() => {
+              const id = nextAction.data?.contextActionId;
+              if (id) dismissNext.mutate({ contextActionId: id });
+            }}
+            onOtherOptions={() => router.push('/today/do-now')}
+            onStart={() => {
+              // `startRecommendedFocus(_:)` (NexdoApp.swift:611-616).
+              const task = loadedTasks?.tasks.find((item) => item.id === bestAction.taskId);
+              if (!task) {
+                Alert.alert('Unable to complete request', 'Your tasks changed. Refresh Tasks and try again.');
+                return;
+              }
+              void startFocus(task, bestAction.focusMinutes, true)
+                .catch((cause: unknown) => Alert.alert('Unable to complete request', cause instanceof Error ? cause.message : 'Please try again.'))
+                .finally(() => invalidateNextAction(queryClient));
+            }}
+          />
+        ) : null}
 
         <TodayIntelligenceCard
           range={range}

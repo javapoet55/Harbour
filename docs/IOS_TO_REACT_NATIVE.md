@@ -1412,3 +1412,153 @@ manual at `1.0.0` in `app.config.ts`.
 - The SMS and mail composers opening with the drafted body, and the three outcomes.
 - `tel:` opening the dialler with the number intact.
 - The `preview` APK installing and running with no Metro server.
+
+## 19. Phase 9 status (Voice, and the last two Today sections)
+
+### Built, with the line ranges each feature was read from
+
+| Feature | Swift | Range | React Native |
+| --- | --- | --- | --- |
+| The conversation | `VoiceConversationSession` (`ios/Sources/NexdoCore/VoiceConversationSession.swift:81`) | **`:81-364`** | `src/voice/conversation.ts` |
+| The transport | `VoiceWebRTCTransport` (`ios/App/VoiceWebRTCTransport.swift:5`) | **`:5-146`** | `src/voice/transport.ts` (+ `nativeDriver.ts`) |
+| The tools | `VoiceToolExecutor` (`ios/App/VoiceToolExecutor.swift:4`) and `AppModel.executeVoiceTool` (`NexdoApp.swift:481-493`) | **`:4-32`** | `src/voice/toolExecutor.ts` |
+| The screen (3 modes) | `AddTaskByVoiceView` (`ios/App/AddTaskByVoiceView.swift:4`) | body **`:27-124`**, `orb` **`:138-160`** | `src/components/AddTaskByVoiceView.tsx` |
+| Read Loud | `VoicePlayback` (`ios/App/VoicePlayback.swift:4`) + `speakChunks` (`AskNexdoView.swift:428-445`) | **`:4-54`** | `src/voice/speech.ts` |
+| Protected time (section 7) | `TodayView.body` (`ios/App/RootView.swift:914`) | **`:1095-1106`** | `ProtectedTimeCard` in `src/components/TodayNextAction.tsx` |
+| Persistent next action (section 8) | `TodayView.body` | **`:1108-1126`** | `PersistentNextCard`, same file |
+
+Child files followed: `ios/Sources/NexdoCore/VoiceTaskDraft.swift`, `VoiceToolResponse.swift`,
+`SpeechText.swift`, `ios/App/TaskActionContacts.swift` (the contact tools), `RealtimeTaskAudio.swift`
+and `RealtimePCMConverter.swift` (read and NOT ported — see below), plus
+`ios/Sources/NexdoCore/DoNowRecommendation.swift:34-63` for sections 7 and 8, and
+`AppModel.refreshNextAction` / `respondToProtectedTime` / `dismissPersistentNext`
+(`NexdoApp.swift:21-71`).
+
+### Rebuild needed: YES — one new module
+
+| Package | Version | Why |
+| --- | --- | --- |
+| `expo-audio` | ~57.0.5 | Read Loud. `VoicePlayback` plays the MP3 `/api/speech` returns through `AVAudioPlayer`, and React Native's core has no audio player. |
+| `expo-asset` | ~57.0.5 | A required peer of `expo-audio`, flagged by `expo-doctor` and installed with it. |
+
+`react-native-webrtc` and `react-native-incall-manager` were already in from Phase 0. Nothing else was
+added: the whole conversation runs over the existing peer connection.
+
+### How Read Loud is implemented
+
+**Not `AVSpeechSynthesizer`, and not the realtime model.** `AppModel.speechAudio(for:)`
+(`NexdoApp.swift:682-691`) POSTs the text to `/api/speech`, which answers `audio/mpeg`, and
+`VoicePlayback.play(_:)` hands that MP3 to `AVAudioPlayer`. `src/voice/speech.ts` does the same: one
+request per `SpeechText.chunks` chunk, written to the cache directory, played by `expo-audio` in
+order, with `playsInSilentMode` standing in for Swift's `.playback` / `.spokenAudio` category.
+
+### The volume and gain approach, and its gap
+
+There are TWO volumes in Swift, and they are not the same:
+
+- **Read Loud** sets `player.volume = Float(AppVoice.volume)` (`VoicePlayback.swift:31`) — the plain
+  0…1 slider value, no gain. **Ported exactly**, including Swift's observer that re-applies the
+  volume to a PLAYING chunk when the slider moves (`:15-19`).
+- **The realtime reply** sets `remoteAudio.source.volume = AppVoice.volume * 3`
+  (`VoiceWebRTCTransport.swift:143`) — "Realtime's track supports gain above unity. 3.0 preserves
+  Nexdo's existing +200% voice gain at the slider's 100% position."
+
+**GAP: the ×3 realtime gain cannot be applied on Android.** react-native-webrtc exposes no per-track
+gain on `MediaStreamTrack`, and react-native-incall-manager has no volume API, so the model's reply
+plays at the device volume. The multiplier and the call site are both in place
+(`WebRtcTransport.applyVolume`, `VOICE_OUTPUT_GAIN`, and `audioRoute.setVolume`, which the native
+driver implements as a no-op with the reason recorded) so a single driver change turns it on if
+react-native-webrtc ever adds a track gain. The slider itself is stored, applied to Read Loud, and
+re-applied live.
+
+The setting is `nexdo.appVoiceVolume` in AsyncStorage, unchanged from Phase 7 — the same place the
+appearance choice lives, and the same key the Swift app's `UserDefaults` uses.
+
+### Where the brief and Swift disagree
+
+- **"Voice task capture … replace `taskCaptureStub.ts` with the transcription/task session Swift uses;
+  review/confirm step posts the parsed task exactly as Swift does."** THERE IS NO REVIEW/CONFIRM STEP.
+  `AddTaskByVoiceView` runs one live conversation in all three modes; the model creates and edits
+  tasks through TOOL CALLS while you talk, and the screen lists them under "Added this session"
+  (`:52-66`). The Phase 3 stub's transcript → "Add this task" flow was the stub's own invention and is
+  gone, with a guard test against it coming back.
+- **"How the transcription session differs from the task session."** `AddTaskByVoiceView` never uses
+  `/api/realtime/transcription-session`. That endpoint belongs to `VoiceInputView` /
+  `LiveVoiceTranscription` — dictation into a text field — which is a screen this migration has not
+  been asked to build. Only `/api/realtime/task-session` is used here.
+- **"Ask by Voice … the answer should come back as an assistant turn."** It does not. `askMode`
+  changes four pieces of copy (`:36`, `:41`, `:42`, `:69-71`) and nothing else; the model answers out
+  loud, and `model.turn` is untouched.
+- **"If it's `AVSpeechSynthesizer`, use `expo-speech`."** It is neither — see above.
+- **"Error handling (Swift closes on realtime error events — the PoC logged and continued; match
+  Swift)."** Confirmed and matched: a realtime `error` event calls `fail()`, which sets the message
+  and closes with `networkFailure`, EXCEPT for `response_cancel_not_active` and
+  `conversation_already_has_active_response` (`VoiceConversationSession.swift:295-300`).
+- **Sections 7 and 8 were "the next-action service".** They are `POST /api/schedule-intelligence` with
+  `{"operation":"next-action"}` and `GET /api/protected-time`, in that order, with the second wrapped
+  in `try?` so its failure hides only its own card (`NexdoApp.swift:30-37`).
+
+### Read but deliberately not ported
+
+`RealtimeTaskAudio.swift` and `RealtimePCMConverter.swift` build an `AVAudioEngine` tap that streams
+PCM frames — the transport for `LiveVoiceTranscription`, not for `AddTaskByVoiceView`, which uses
+WebRTC. `LiveVoiceTranscription`, `VoiceInputView`, `VoiceCapture` and `VoiceAnimationView` belong to
+the dictation feature and to screens outside this migration's screen list.
+
+### The dev voice-check screen: DELETED
+
+`app/dev/voice-check.tsx` and the Phase 0 `src/voice/session.ts` are gone, and so is the dev-menu
+entry. The real Add by Voice screen drives the same task-session → WebRTC → `oai-events` → tool path
+and shows the live phase, transcript, reply and created tasks, which is strictly more than the check
+reported. `src/voice/protocol.ts` survives — the SDP exchange and the session validation are still
+the transport's.
+
+### Visual and behavioural gaps
+
+- **The orb does not animate.** Swift drives three breathing rings and 25 capsules from a 24fps
+  `TimelineView` (`AddTaskByVoiceView.swift:139-159`). The same composition is drawn at rest; a
+  per-frame JavaScript loop costs more than it conveys. It is `accessibilityHidden` either way.
+- **No ready chime.** `.onChange(of: voice.phase)` plays `ListeningReady.wav` when the session reaches
+  `listening` (`:104-109`). That audio file is not in this repository, so there is nothing to play.
+- **The ×3 realtime gain** — see above.
+- **No background task.** Swift calls `beginBackgroundTask` so a session can finish while the app is
+  backgrounded (`:112-115`); React Native has no equivalent, so the five-second `backgroundGrace`
+  simply closes the session, which is the same outcome the grace period was protecting.
+- **Audio interruptions and route changes.** Swift closes the session on an `AVAudioSession`
+  interruption or an unplugged headset (`:119-121`). `interruptAudio()` is built and tested, but
+  React Native raises no equivalent notification, so nothing calls it yet.
+- **`.ultraThinMaterial`** on the transcript card is a flat surface, as everywhere else.
+- **Dynamic Type** re-layout is not ported, as in every earlier phase.
+
+### TODOs closed in Phase 9
+
+- `TODO(phase9)` in `app/(tabs)/today.tsx` — sections 7 and 8 are built.
+- `TODO(phase9)` in `app/(tabs)/calendar.tsx` — "Add by Voice" opens the real calendar-only session.
+- `TODO(phase9)` in `app/ask/voice.tsx` — the shell is the real session.
+- `src/voice/speechStub.ts`, `taskCaptureStub.ts`, `taskCaptureTypes.ts` — deleted.
+- The third `synchronizeDeviceTimeZone()` call site (`NexdoApp.swift:472`), left open in Phase 7 — the
+  voice session syncs the zone before asking for a credential.
+- `TODO(phase0-decision)` in `src/voice/nativeDriver.ts` about the speaker route — resolved and
+  documented; the volume gap replaces it.
+
+### TODOs still open
+
+- `TODO(server-connect-token)` in `src/query/useCalendar.ts` — a server change.
+- `TODO(phase7)` in `src/query/useToday.ts` — the weather coordinates are Swift's own constant.
+- `TODO(phase3-decision)` in `src/components/MonthCalendar.tsx` — the hand-built pickers.
+- `TODO(phase0-decision)` / `TODO(phase1-decision)` in `app.config.ts` — tablet support, the Android
+  package name, the WebRTC plugin's compatibility table.
+- The two `TODO(phase1-decision)` colour notes in `src/theme/colors.ts`.
+
+### Needs confirmation on a device
+
+- A full conversation: connect, speak, hear the reply, watch a task appear under "Added this session".
+- **Barge-in**: talk over the assistant and confirm its audio stops at once.
+- **Mute**: the status reads Muted, the model stops hearing you, unmuting resumes.
+- **The inactivity timeout**: say nothing for 45 seconds and hear "Are you still there?", then nothing
+  for 20 more and hear "I'll close voice mode for now."
+- **Error recovery**: turn off the network mid-session and confirm the message and the closed state.
+- **Done**: hear "You're all set." before the screen dismisses.
+- **Calendar mode**: an event is created and a task request is refused.
+- Read Loud actually playing, and following the slider mid-sentence.
+- Sections 7 and 8, which need an account the server actually makes proposals for.

@@ -1,7 +1,7 @@
-// PHASE 0 PROOF OF CONCEPT. The only file that touches react-native-webrtc and react-native-incall-manager.
+// The only file that touches react-native-webrtc and react-native-incall-manager.
 import { NativeModules } from 'react-native';
 
-import type { PeerLike, StreamLike, WebRtcDriver } from './session';
+import type { PeerLike, StreamLike, WebRtcDriver } from './transport';
 
 /** False in Expo Go, which does not contain react-native-webrtc's native code. */
 export function isWebRtcAvailable(): boolean {
@@ -31,6 +31,16 @@ export function createNativeDriver(): WebRtcDriver {
         InCallManager.setForceSpeakerphoneOn(false);
         InCallManager.stop();
       },
+      /**
+       * VISUAL GAP, carried from Phase 0. `VoiceWebRTCTransport.applyVoiceVolume()`
+       * (ios/App/VoiceWebRTCTransport.swift:141-144) sets `remoteAudio.source.volume` — a per-TRACK
+       * gain that WebRTC allows above unity, which is how Swift reaches +200% at the slider's 100%.
+       * react-native-webrtc exposes no equivalent on `MediaStreamTrack`, and incall-manager has no
+       * volume API either, so the ×3 gain cannot be applied on Android: the reply plays at the
+       * device volume. The slider is still stored and still drives Read Loud, where the volume IS
+       * applied. Revisit if react-native-webrtc adds a track gain.
+       */
+      setVolume: () => undefined,
     },
   };
 }

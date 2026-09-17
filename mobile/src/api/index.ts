@@ -4,7 +4,10 @@ import type {
   AppleAuthResponse,
   AssistantRequest,
   CalendarSyncResponse,
+  ProactiveNextResponse,
   ProfileSettingsInput,
+  ProtectedTimeReceipt,
+  ProtectedTimeResponse,
   SettingsResponse,
   AssistantTurn,
   ProjectInput,
@@ -184,6 +187,35 @@ export const endpoints = {
   /** `AppModel.weeklySummary(start:)` (NexdoApp.swift:712-714). */
   weeklySummary: (start: string, client: ApiClient = getApi()) =>
     client.get<WeeklySummary>(`/api/weekly-summary?start=${encodeURIComponent(start)}`),
+
+  // MARK: Next action and protected time
+
+  /**
+   * `AppModel.refreshNextAction()` (ios/App/NexdoApp.swift:24-38): the persistent next-action card.
+   * It is the SAME route as schedule intelligence, with an `operation` in the body.
+   */
+  nextAction: (client: ApiClient = getApi()) =>
+    client.post<ProactiveNextResponse>('/api/schedule-intelligence', { operation: 'next-action' }, { timeoutMs: 20_000 }),
+
+  /** `dismissPersistentNext()` (NexdoApp.swift:62-71). */
+  dismissNextAction: (contextActionId: string, client: ApiClient = getApi()) =>
+    client.post<{ ok?: boolean }>('/api/schedule-intelligence', { operation: 'dismiss-next-action', contextActionId }),
+
+  /** `refreshNextAction()`'s second request (NexdoApp.swift:35-36), which is allowed to fail quietly. */
+  protectedTime: (client: ApiClient = getApi()) =>
+    client.get<ProtectedTimeResponse>('/api/protected-time', { timeoutMs: 20_000 }),
+
+  /** `respondToProtectedTime(_:accept:)` (NexdoApp.swift:46-61). */
+  respondToProtectedTime: (
+    input: { accept: boolean; taskId: string; startAt: string; expectedUpdatedAt: string },
+    client: ApiClient = getApi(),
+  ) =>
+    client.post<ProtectedTimeReceipt>('/api/protected-time', {
+      action: input.accept ? 'accept' : 'dismiss',
+      taskId: input.taskId,
+      startAt: input.startAt,
+      expectedUpdatedAt: input.expectedUpdatedAt,
+    }),
 
   // MARK: Account
 

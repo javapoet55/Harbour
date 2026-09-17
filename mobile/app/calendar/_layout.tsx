@@ -42,6 +42,8 @@ export default function CalendarLayout() {
         name="event/new"
         options={{ presentation: 'modal', title: 'New Appointment / Event', headerLeft: closeButton() }}
       />
+      {/* `.fullScreenCover` (CalendarView.swift:161). */}
+      <Stack.Screen name="voice" options={{ presentation: 'fullScreenModal', headerShown: false }} />
     </Stack>
   );
 }
