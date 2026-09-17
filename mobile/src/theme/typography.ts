@@ -26,16 +26,19 @@ export const textStyles = {
 } as const satisfies Record<string, TextStyle>;
 
 /**
- * The same text style, with `lineHeight` removed, for use on a `TextInput`.
+ * A text style made safe for a `TextInput`, on both platforms.
  *
- * React Native turns `lineHeight` on an iOS `TextInput` into a fixed line box and clips whatever
- * does not fit, which cuts the descenders off g, j, p, q and y. A `Text` is fine — only an input
- * misbehaves. Single-line fields take their height from the row's `minHeight` anyway, so dropping
- * the line height costs nothing.
+ * - **`lineHeight` is dropped.** React Native turns it into a fixed line box on an iOS `TextInput`
+ *   and clips whatever does not fit, cutting the descenders off g, j, p, q and y. A `Text` is fine;
+ *   only an input misbehaves. Single-line fields take their height from the row's `minHeight`.
+ * - **The background is forced transparent.** Android gives a `TextInput` its own background
+ *   drawable, which showed through the glass card as a pale hard-edged box running from the icon to
+ *   the card's right edge. (`underlineColorAndroid="transparent"` removes the underline but not
+ *   this.) iOS has no such background, so the override is harmless there.
  */
 export function inputText(style: TextStyle): TextStyle {
   const { lineHeight: _lineHeight, ...rest } = style;
-  return rest;
+  return { ...rest, backgroundColor: 'transparent' };
 }
 
 /** `.system(size: n)` takes the font's own line height, which is close to `n * 1.2`. */

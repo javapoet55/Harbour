@@ -35,6 +35,8 @@ export default function AuthLayout() {
         headerTitleStyle: { color: theme.colors.ink, fontSize: 17, fontWeight: '600' },
         headerStyle: { backgroundColor: theme.colors.background },
         headerShadowVisible: false,
+        // Android left-aligns the title by default and it collides with the Cancel button.
+        headerTitleAlign: 'center',
       }}
     >
       <Stack.Screen name="sign-in" />

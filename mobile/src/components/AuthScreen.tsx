@@ -1,6 +1,8 @@
 import type { ReactNode } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
 import { useTheme } from '../theme';
 import { SignInBackdrop } from './SignInBackdrop';
 
@@ -15,13 +17,22 @@ export function AuthScreen({
   children,
   contentStyle,
   elevated = false,
+  topInset = false,
 }: {
   children: ReactNode;
   contentStyle?: StyleProp<ViewStyle>;
   /** True when the screen is presented as a sheet; iOS elevates its dark background. */
   elevated?: boolean;
+  /**
+   * True when the screen has no navigation header, so it has to clear the status bar itself.
+   * Only Android needs this: `contentInsetAdjustmentBehavior` below covers iOS, and a header
+   * already clears the status bar on both platforms.
+   */
+  topInset?: boolean;
 }) {
   const theme = useTheme({ elevated });
+  const insets = useSafeAreaInsets();
+  const androidTopInset = Platform.OS === 'android' && topInset ? insets.top : 0;
   return (
     <View style={[styles.fill, { backgroundColor: theme.colors.background }]}>
       <SignInBackdrop />
@@ -34,7 +45,7 @@ export function AuthScreen({
           // "always" is the UIScrollView behaviour that does the same, and it measures the screen's
           // own safe area, so it is correct both here and under a navigation header.
           contentInsetAdjustmentBehavior="always"
-          contentContainerStyle={styles.scroll}
+          contentContainerStyle={[styles.scroll, { paddingTop: androidTopInset }]}
         >
           <View style={[styles.column, contentStyle]}>{children}</View>
         </ScrollView>

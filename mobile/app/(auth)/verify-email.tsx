@@ -111,6 +111,9 @@ export default function VerifyEmail() {
       <GlassCard radius={26} style={styles.card}>
         <AuthFieldRow icon="number" paddingHorizontal={18} minHeight={72}>
           <TextInput
+            // Android draws its own underline drawable behind a TextInput; it showed
+            // as a pale hard-edged box inside the glass card.
+            underlineColorAndroid="transparent"
             accessibilityLabel="Verification code"
             placeholder="6-digit code"
             placeholderTextColor={theme.colors.placeholder}

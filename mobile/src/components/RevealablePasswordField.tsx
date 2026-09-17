@@ -24,6 +24,9 @@ export function RevealablePasswordField({ title, textContentType = 'newPassword'
   return (
     <View style={styles.row}>
       <TextInput
+        // Android draws its own underline drawable behind a TextInput; it showed
+        // as a pale hard-edged box inside the glass card.
+        underlineColorAndroid="transparent"
         ref={ref}
         accessibilityLabel={title}
         placeholder={title}

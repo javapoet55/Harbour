@@ -38,3 +38,18 @@ jest.mock('expo-crypto', () => ({
   digestStringAsync: jest.fn(async () => 'digest'),
   CryptoDigestAlgorithm: { SHA256: 'SHA-256' },
 }));
+
+// AuthScreen reads useSafeAreaInsets() to clear the status bar on Android. The tests render screens
+// without a SafeAreaProvider, which otherwise throws. Report a plain iPhone-ish inset.
+jest.mock('react-native-safe-area-context', () => {
+  const insets = { top: 47, right: 0, bottom: 34, left: 0 };
+  const frame = { x: 0, y: 0, width: 402, height: 874 };
+  return {
+    SafeAreaProvider: ({ children }) => children,
+    SafeAreaView: ({ children }) => children,
+    SafeAreaInsetsContext: { Consumer: ({ children }) => children(insets), Provider: ({ children }) => children },
+    useSafeAreaInsets: () => insets,
+    useSafeAreaFrame: () => frame,
+    initialWindowMetrics: { insets, frame },
+  };
+});

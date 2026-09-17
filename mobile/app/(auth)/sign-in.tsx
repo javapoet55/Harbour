@@ -83,7 +83,7 @@ export default function SignIn() {
     apple.mutate(credential, { onError: (error) => showError(error.message) });
 
   return (
-    <AuthScreen>
+    <AuthScreen topInset>
       {/* Spacer(minLength: 42) */}
       <View style={styles.topSpacer} />
 
@@ -110,6 +110,9 @@ export default function SignIn() {
             name="email"
             render={({ field }) => (
               <TextInput
+                // Android draws its own underline drawable behind a TextInput; it showed
+                // as a pale hard-edged box inside the glass card.
+                underlineColorAndroid="transparent"
                 accessibilityLabel="Email address"
                 placeholder="Email address"
                 placeholderTextColor={theme.colors.placeholder}

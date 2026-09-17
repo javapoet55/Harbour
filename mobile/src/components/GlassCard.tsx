@@ -23,7 +23,11 @@ export function GlassCard({ children, radius, style }: GlassCardProps) {
   const theme = useTheme();
   const shadow =
     Platform.OS === 'android'
-      ? { elevation: 8 }
+      ? // Android draws an elevation shadow behind the view, and this card's fill is only 72%
+        // opaque, so a strong shadow bleeds through its own edges as a dark inset band. The Swift
+        // shadow is `Color.purple.opacity(0.09)` — barely there — so keep the elevation low and
+        // tint it to match rather than leaving the default black.
+        { elevation: 2, shadowColor: theme.colors.glassShadow }
       : { shadowColor: theme.colors.glassShadow, shadowOpacity: 1, shadowRadius: 25 / 2, shadowOffset: { width: 0, height: 12 } };
 
   return (

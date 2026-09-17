@@ -68,6 +68,9 @@ export default function ResetPassword() {
           <FormSection footer="We’ll email a six-digit code if an account exists. Codes expire after 15 minutes.">
             <FormRow>
               <TextInput
+                // Android draws its own underline drawable behind a TextInput; it showed
+                // as a pale hard-edged box inside the glass card.
+                underlineColorAndroid="transparent"
                 accessibilityLabel="Email address"
                 placeholder="Email address"
                 placeholderTextColor={theme.colors.placeholder}
@@ -88,6 +91,9 @@ export default function ResetPassword() {
             <FormSection header="Verification">
               <FormRow>
                 <TextInput
+                  // Android draws its own underline drawable behind a TextInput; it showed
+                  // as a pale hard-edged box inside the glass card.
+                  underlineColorAndroid="transparent"
                   accessibilityLabel="6-digit code"
                   placeholder="6-digit code"
                   placeholderTextColor={theme.colors.placeholder}

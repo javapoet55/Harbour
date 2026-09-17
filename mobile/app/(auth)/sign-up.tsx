@@ -85,6 +85,9 @@ export default function SignUp() {
             name="name"
             render={({ field }) => (
               <TextInput
+                // Android draws its own underline drawable behind a TextInput; it showed
+                // as a pale hard-edged box inside the glass card.
+                underlineColorAndroid="transparent"
                 accessibilityLabel="Full name"
                 placeholder="Full name"
                 placeholderTextColor={theme.colors.placeholder}
@@ -108,6 +111,9 @@ export default function SignUp() {
             name="email"
             render={({ field }) => (
               <TextInput
+                // Android draws its own underline drawable behind a TextInput; it showed
+                // as a pale hard-edged box inside the glass card.
+                underlineColorAndroid="transparent"
                 accessibilityLabel="Email address"
                 placeholder="Email address"
                 placeholderTextColor={theme.colors.placeholder}
