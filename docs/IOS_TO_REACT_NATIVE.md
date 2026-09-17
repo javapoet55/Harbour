@@ -1,6 +1,6 @@
 # iOS (SwiftUI) to React Native (Expo) migration plan
 
-Last updated: 2026-09-16
+Last updated: 2026-09-17
 
 ## Goal
 
@@ -133,7 +133,10 @@ Both live in `ProfileView.swift`. There is no `AccountView.swift` or `ProfileSet
 split across `TaskActionCoordinator.swift`, `TaskActionContacts.swift` and `TaskActionNotifications.swift`.
 
 ### Not migrating
-- `VoiceInputView` (`VoiceInputView.swift:5`): defined, but nothing opens it.
+- `VoiceInputView` (`VoiceInputView.swift:4`) and `VoiceCapture` (`VoiceCapture.swift:6`): defined,
+  but nothing opens them. Re-verified in Phase 10 with a call-site search over all of `ios/`; the
+  evidence is in section 20. `/api/realtime/transcription-session` and `RealtimeTaskAudio.swift` serve
+  only `VoiceInputView`, so they are unreachable too.
 - Debug-only previews: `TodayDesignPreview` (`RootView.swift:184`), `CalendarDesignPreview` (`:167`),
   `ProjectsDesignPreview` (`:161`), `TaskDesignPreview` (`:211`), `WeeklySummaryPreview` (`:155`), and
   the `-email-verification-preview` launch argument.
@@ -1562,3 +1565,280 @@ the transport's.
 - **Calendar mode**: an event is created and a task request is refused.
 - Read Loud actually playing, and following the slider mid-sentence.
 - Sections 7 and 8, which need an account the server actually makes proposals for.
+
+## 20. Final status (Phase 10)
+
+**The Swift app in `ios/` remains the iOS product.** Nothing under `ios/` has been changed, retired
+or archived by this migration, and nothing should be until the team has signed off on the Android
+review candidate. This section is the state of that candidate.
+
+Android review candidate: **1.0.0-rc.1**.
+
+### Screen parity: 32 of 32
+
+Every screen in section 2 is built, with the `body` range it was read from recorded in the phase
+section named below.
+
+| # | Screen | Built as | `body` | Phase |
+| --- | --- | --- | --- | --- |
+| 1 | Sign in | `app/(auth)/sign-in.tsx` | `RootView.swift:258` | 2 (§11) |
+| 2 | Create account | `app/(auth)/sign-up.tsx` | `RootView.swift:472` | 2 |
+| 3 | Verify email | `app/(auth)/verify-email.tsx` | `RootView.swift:674` | 2 |
+| 4 | Reset password | `app/(auth)/reset-password.tsx` | `RootView.swift:574` | 2 |
+| 5 | Tab shell | `app/(tabs)/_layout.tsx` | `RootView.swift:84-190` | 1, corrected in 6 |
+| 6 | Today dashboard | `app/(tabs)/today.tsx` | `RootView.swift:924-1199` | 4A, 4B, 8, 9 |
+| 7 | Do Now | `app/today/do-now.tsx` | `DoNowView.swift:8-96` | 4A (§13) |
+| 8 | Action queue | `app/action/queue.tsx`, `src/components/TodayActions.tsx` | `TodayActionsView.swift:193-220`, `:16-46` | 8 (§18) |
+| 9 | Needs attention | `app/today/attention.tsx` | `RootView.swift:1202-1231` | 4B (§14) |
+| 10 | Schedule check | `app/today/schedule-check.tsx` | `RootView.swift:1217-1259` | 4B |
+| 11 | Overdue tasks | `app/today/overdue.tsx` | `OverdueTasksView.swift:8-70` | 4B |
+| 12 | Weekly summary | `app/today/weekly-summary.tsx` | `WeeklySummaryView.swift:12-238` | 4B |
+| 13 | Weekly summary tasks | `app/today/weekly-tasks.tsx` | `WeeklySummaryView.swift:245-300` | 4B |
+| 14 | Weather forecast | `app/today/weather.tsx` | `WeatherForecastView.swift:8-60` | 4B |
+| 15 | Task list | `app/(tabs)/tasks.tsx` | `RootView.swift:1629-1726` | 3 (§12) |
+| 16 | Task filters | `app/task/filters.tsx` | `RootView.swift:1705-1726` | 3 |
+| 17 | Add task | `app/task/new.tsx` | `RootView.swift:1932-2010` | 3, 8 |
+| 18 | Task details | `app/task/[id].tsx` | `TaskDetailsView.swift:28-90` | 3 (rebuilt), 8 |
+| 19 | Voice, 3 modes | `app/task/voice-capture.tsx`, `app/ask/voice.tsx`, `app/calendar/voice.tsx` | `AddTaskByVoiceView.swift:27-124` | 9 (§19) |
+| 20 | Projects | `src/components/ProjectsList.tsx`, inside the Tasks tab | `ProjectsView.swift:20-108` | 3 |
+| 21 | Project detail | `app/project/[id]/index.tsx` | `ProjectsView.swift:180-240` | 3 |
+| 22 | Create / edit project | `app/project/new.tsx`, `app/project/[id]/edit.tsx` | `ProjectsView.swift:119-170` | 3 |
+| 23 | Ask Nexdo | `app/ask/index.tsx`, `app/ask/text.tsx` | `AskNexdoView.swift:182-277` | 6 (§16) |
+| 24 | AI consent | inside `src/components/AskNexdoView.tsx` | `AskNexdoView.swift:348-364` | 6 |
+| 25 | Calendar | `app/(tabs)/calendar.tsx` | `CalendarView.swift:20-165` | 5 (§15) |
+| 26 | Event details | inside `app/(tabs)/calendar.tsx` | `CalendarView.swift:164-180` | 5 |
+| 27 | Add calendar event | `app/calendar/event/new.tsx` | `CalendarView.swift:510-600` | 5 |
+| 28 | Schedule conflicts | `app/calendar/conflicts.tsx` | `CalendarView.swift:464-477` | **10** |
+| 29 | Account | `app/account/index.tsx` | `ProfileView.swift:65-99` | 7 (§17) |
+| 30 | Profile and settings | `app/account/settings.tsx` | `ProfileView.swift:146-270` | 7 |
+| 31 | Task action | `app/action/[id].tsx` | `TaskActionView.swift:133-236` | 8 |
+| 32 | Message / email composer | the system composers, via `src/actions/composers.ts` | wrappers, no `body` | 8 |
+
+**Screen 28 was the one gap, and Phase 10 closed it.** Phase 5 pointed the Calendar's "Review
+conflicts" button at `/today/attention` — a port of a *different* Swift view (`attentionDetails`,
+`RootView.swift:1202`). The two list the same attention items, but `conflictSheet` has its own title
+("Schedule review"), its own empty state ("No issues reported by schedule intelligence.") and the
+`intelligenceStatus()` block (`CalendarView.swift:295-312`). It is now built, tested, and the button
+points at it.
+
+### The dictation screen: confirmed dead code
+
+Phase 9 noticed `VoiceInputView` / `LiveVoiceTranscription` and asked whether they were a 33rd screen.
+**They are not reachable from the Swift app's UI.** Evidence, from `grep -rn` over `ios/`:
+
+- `VoiceInputView` appears exactly once outside its own file's declaration: never. Its only
+  references are its own `struct` (`VoiceInputView.swift:4`), its internal use of
+  `LiveVoiceTranscription`, and `ios/Tests/AppModelChecks/VoiceInputChecks.swift`.
+- `LiveVoiceTranscription` is referenced only by `VoiceInputView` and
+  `ios/Tests/LiveTranscriptionChecks/Checks.swift`.
+- `voiceTranscriptionSession()` (`NexdoApp.swift:476`) has exactly one caller:
+  `VoiceInputView.swift:109`.
+- `VoiceCapture` (`VoiceCapture.swift:6`) is likewise declared and never instantiated.
+
+So `/api/realtime/transcription-session`, `RealtimeTaskAudio.swift` and `RealtimePCMConverter.swift`
+serve a screen nothing opens. Nothing was built. This matches the "Not migrating" note already in
+section 2, whose line reference is corrected here: `VoiceInputView.swift:4`, not `:5`.
+
+The screen count stays **32**.
+
+### Every TODO in `mobile/`, classified
+
+11 remain. None is unclassified, and none blocks the review.
+
+| Where | Marker | Class | Note |
+| --- | --- | --- | --- |
+| `app/(auth)/sign-in.tsx` | `phase2-decision` | **Backend gap** | The brief expected a "5 failed logins / 15 min" lockout; the server has none to show. |
+| `app/(auth)/verify-email.tsx` | `phase2-decision` | **Backend gap** | The server returns no distinct "too many attempts" code. |
+| `src/query/useCalendar.ts` | `server-connect-token` | **Backend gap** | Google OAuth needs the session cookie an in-app browser cannot send. The iPhone app fails identically. One line changes when the server lands the fix. |
+| `app/(auth)/_layout.tsx` | `phase2-decision` | Deferred, visual | Sign-in presents reset-password as a sheet; here both are routes in one stack. |
+| `src/components/MonthCalendar.tsx` | `phase3-decision` | Deferred, deliberate | Hand-built date grid rather than `@react-native-community/datetimepicker`, whose Android presentation is a dialog and therefore further from `.graphical`. |
+| `src/components/TaskCategoryBadge.tsx` | `phase3-decision` | Deferred, needs a dependency | The badge artwork needs `react-native-svg`; not worth a native module for one badge. |
+| `src/components/TodayShell.tsx` | `phase3-decision` | Deferred, platform | SF Rounded is an Apple font. |
+| `src/theme/colors.ts` ×2 | `phase1-decision` | Deferred, platform | iOS dynamic `.label` / `.secondaryLabel`; the standard dark values are used. |
+| `src/query/useToday.ts` | `phase4b-decision` | Deferred, conditional | Port `WeeklySummary.taskGroups(from:)` only if a deployment is found that omits `taskGroups`. |
+| `src/query/useToday.ts` | `phase7` | Deferred, no work exists | The weather coordinates are hardcoded in Swift's own `WeatherClient`, not an account setting. The marker stays as a pointer if a location preference is ever added. |
+| `src/voice/protocol.ts` | `phase0-decision` | Deferred, harmless | `Math.random` for a session id that only scopes tool idempotency on the device. |
+
+Closed in Phase 10: the `phase1-decision` on `Button.tsx` (the gradient lives in `GradientButton`, which
+every real screen uses) and the `phase0-decision` on `nativeDriver.ts` (the speaker route is
+implemented through incall-manager). Both are now plain resolution notes. `uuidV4` in
+`src/voice/protocol.ts` was deleted outright: `expo-crypto.randomUUID` replaced it everywhere.
+
+### Dev-only code is out of the production bundle
+
+`app/dev/session-check.tsx` and `src/components/DevMenu.tsx` are **deleted**. The session check proved
+cookie auth in Phase 1 and the app now does that on every launch; the voice check went in Phase 9 for
+the same reason. Deleting them is what actually removes their strings from the bundle — `__DEV__`
+guards hide behaviour, but expo-router still registers any file under `app/`, so the route existed in
+a preview build.
+
+`NODE_ENV=production npx expo export --platform android`, then grepping the Hermes bundle:
+
+| Needle | Hits |
+| --- | --- |
+| `session-check` | 0 |
+| `voice-check` | 0 |
+| `Open session check` | 0 |
+| `developer checks` | 0 |
+| `[api] ->` | 0 |
+| `PHASE 9 REPLACES` | 0 |
+
+The `__DEV__` request log (`src/api/client.ts`) is dead-code-eliminated, and every Phase 3-8 stub is
+gone from the source. A literal grep for `DevMenu` returns one hit, which is a fragment of Hermes's
+packed string table sitting between icon names (`…mortgaget DevMenumProcessor…`), not a symbol from
+this app: the component's own strings return 0, and `expo-dev-menu` does not appear either.
+
+### Error and offline behaviour
+
+**What Swift does when the API is unreachable**: nothing bespoke. `APIError`
+(`ios/Sources/NexdoCore/APIClient.swift:7-17`) has no network case at all — a `URLError` propagates
+and is shown through `error.localizedDescription`, so the person sees iOS's own sentence. There is no
+offline screen, no banner, no queue-and-retry. The only app-wide presentation is the alert at
+`RootView.swift:63-65`: **"Unable to complete request"**, the message, one **OK**.
+
+Matched here as follows.
+
+- **Per-request**: `ApiError` with code `NETWORK` and the message "Nexdo could not reach the server.
+  Check your connection and try again." Each screen shows it inline, as Swift's screens do.
+  **Known difference**: this is Nexdo's own sentence where the iPhone shows iOS's. It says the same
+  thing; it is listed in the README's table.
+- **Root**: `src/components/RootErrorBoundary.tsx`, mounted in `app/_layout.tsx`. A render error
+  anywhere shows Swift's title, the message and **OK**, which re-renders rather than leaving a blank
+  screen. SwiftUI has no equivalent because it cannot recover from a crash at all; this is strictly
+  a safety net, and it invents no reporting, no stack trace and no "restart the app".
+- **Empty states** were built per screen in their own phases, each from the Swift view's own empty
+  branch. No new ones were added here.
+
+### Test suite
+
+1,024 tests in 58 suites, all passing. Coverage: **85.94% lines**, 83.66% statements, 79.24%
+branches, 75.74% functions.
+
+Thirteen files are under 60% line coverage:
+
+| File | Lines | Why |
+| --- | --- | --- |
+| `src/config.ts` | 0% | Three lines reading `Constants.expoConfig`; every suite mocks it. |
+| `src/components/Card.tsx` | 0% | A styled `View` with no logic. |
+| `src/voice/nativeDriver.ts` | 0% | The only file that imports `react-native-webrtc` and `react-native-incall-manager`. Untestable off-device by design; that is why `WebRtcTransport` takes the driver as a parameter. |
+| `src/voice/useVoiceSession.ts` | 1.5% | The React lifecycle around the session. The session itself is at 98%; the hook is mocked in the screen tests and is exercised on a device. |
+| `src/api/index.ts` | 23.7% | A list of one-line endpoint builders. The ones with shaping logic (assistant, settings, photo, tool) have wire-shape tests; the rest are a URL and a verb. |
+| `src/actions/useActionNotifications.ts` | 25% | The `expo-notifications` listener wiring. `handleNotificationResponse` — the part with logic — is tested directly. |
+| `src/components/Screen.tsx` | 25% | A `SafeAreaView` wrapper. |
+| `src/components/LoadingView.tsx` | 33% | An `ActivityIndicator`. |
+| `src/store/appearance.ts` | 37.5% | `hydrate` reads AsyncStorage at launch; the setters are covered through the settings screen. |
+| `src/components/AppleSignInButton.tsx` | 39% | Renders nothing on Android (`isAvailableAsync` is false), which is the branch these tests take. |
+| `src/query/client.ts` | 40% | The production `QueryClient` defaults; every test builds its own. |
+| `src/store/taskQuery.ts` | 50% | Filter state; the filtering logic it feeds is in `src/lib/taskQuery.ts` at 97%. |
+| `src/components/SettingsControls.tsx` | 56.7% | The uncovered part is the hand-built slider's responder maths, which needs real touch coordinates. |
+
+**The "worker failed to exit" warning: diagnosed, partly fixed, still present.**
+`--detectOpenHandles` reported 20 open handles, **all** of them `Query.scheduleGc` timers — every
+`QueryClient` built in a test without `gcTime: 0` schedules a five-minute `setTimeout` per cached
+query. Two test files did that (`src/query/useTasks.test.ts`, `src/voice/toolExecutor.test.ts`); both
+now pass `gcTime: 0`, and `--detectOpenHandles` reports **zero** handles with the suite green. The
+warning still appears in the default parallel run. Bisecting by folder, only `src/__tests__` triggers
+it, and **every file in that folder passes individually with no warning** — so the residual is an
+interaction between screen suites sharing a worker that Jest's handle tracker cannot attribute. Left
+in place; it does not affect results.
+
+A second, unrelated fragility was found and fixed while diagnosing: the reminder and Today-action
+fixtures scheduled an action at a fixed offset (now + 1h, now + 10min), which falls outside
+`buildActionQueue`'s "rest of today" window whenever the suite runs within that offset of local
+midnight. Both now take half the remaining day, so the wall clock cannot change the outcome.
+
+### Static checks
+
+- `npx tsc --noEmit` — clean.
+- `npm run lint` — clean.
+- `npx expo prebuild --platform android --no-install` — succeeds; `android/` deleted afterwards and
+  the npm scripts it rewrote reverted.
+- `npx expo-doctor` — 20 of 21. The one failure is **react-native-incall-manager** and
+  **react-native-webrtc** being "untested on the New Architecture". Both are **known to work on a
+  physical Android phone**: the Phase 0 proof of concept ran a live WebRTC voice session against the
+  production task-session endpoint on this project's New-Architecture build, and Phase 9 kept the same
+  transport for every voice mode. The warning reflects the React Native Directory's metadata, not a
+  measured failure here.
+
+### The final Android permission list
+
+| Permission | Source | Kept |
+| --- | --- | --- |
+| `INTERNET`, `ACCESS_NETWORK_STATE` | Expo | yes |
+| `VIBRATE`, `WAKE_LOCK` | Expo, notifications | yes |
+| `RECORD_AUDIO`, `MODIFY_AUDIO_SETTINGS`, `BLUETOOTH` | react-native-webrtc | yes — live voice |
+| `READ_CONTACTS` | expo-contacts | yes — the contact lookup |
+| `READ_EXTERNAL_STORAGE`, `WRITE_EXTERNAL_STORAGE` (`maxSdkVersion="32"`) | expo-image-picker | yes — legacy only; no `READ_MEDIA_IMAGES` |
+| `POST_NOTIFICATIONS`, `RECEIVE_BOOT_COMPLETED` | expo-notifications, merged from its own manifest | yes — Android 13+, and restoring reminders after a reboot |
+| `CAMERA` | react-native-webrtc | **blocked** |
+| `SYSTEM_ALERT_WINDOW` | react-native-webrtc | **blocked** |
+| `WRITE_CONTACTS` | expo-contacts | **blocked** — Nexdo only reads |
+| `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_MEDIA_PLAYBACK` | expo-audio | **blocked, new in Phase 10** — Nexdo never plays audio in the background; the voice session closes five seconds after backgrounding |
+
+The `nexdo` scheme intent filter is present, from the app's own `scheme`.
+
+### Versioning
+
+`version: '1.0.0-rc.1'` in `app.config.ts`. The Swift app's `MARKETING_VERSION` is **0.1.0**
+(`ios/Nexdo.xcodeproj/project.pbxproj:255`) and it keeps that number, because it stays the shipping
+iOS product; reusing it here would make two different artefacts claim one version. `-rc.1` says what
+this build is.
+
+`android.versionCode` is deliberately absent from `app.config.ts`: `cli.appVersionSource` is
+`"remote"`, so EAS owns the build number and the `production` profile increments it.
+
+### Deferred, and why
+
+- **Everything in the README's "Known differences" table** — platform limits and deliberate choices,
+  each with its reason recorded in the phase section that made it.
+- **The `.graphical` date picker, the SVG category badge, SF Rounded, dynamic system colours** —
+  visual fidelity that costs a native dependency or a font licence.
+- **Dynamic Type re-layout** — Swift re-stacks several cards at accessibility sizes; not ported in any
+  phase.
+- **The app-wide "Updating…" pill** (`RootView.swift:62`) — there is no single global busy flag in a
+  React Query app; each screen reports its own.
+
+### Backend gaps
+
+These need server work and cannot be closed from `mobile/`.
+
+1. **Google Calendar OAuth.** `/api/calendar/oauth/google/start` requires the account session cookie,
+   which no in-app browser sends. **The Swift app is broken in the same way.** The fix is most likely
+   a short-lived connect token as a query parameter; the URL is built in one place,
+   `googleConnectStartUrl` in `src/query/useCalendar.ts`, marked `TODO(server-connect-token)`.
+2. **No mobile push.** The server's only push route is `/api/push-subscriptions`, which is Web Push
+   over VAPID for browsers — neither APNs nor FCM. The Swift app registers no device token either, so
+   all reminders on both platforms are local notifications. Everything on the client side of a push —
+   the category, the four action buttons, the payload routing — is already built and would need only a
+   token upload.
+3. **No sign-in lockout state** and **no "too many attempts" code** for email verification, so
+   neither app can show one.
+
+### iOS: pending until the team signs off
+
+The Swift app ships on iOS today and nothing here changes that. If and when the React Native app is
+taken to iOS, these are the open items, none of which has been attempted:
+
+- **The session cookie.** iOS's `WKWebsiteDataStore` and `URLSession` cookie behaviour differs from
+  Android's; the cookie-session gate has only been exercised on Android.
+- **Sign in with Apple.** `expo-apple-authentication` is installed and `usesAppleSignIn` is set, but
+  the button renders nothing on Android, so the whole flow — including the server's
+  `/api/auth/apple` round trip — is untested from this app.
+- **The marketing version.** `CFBundleShortVersionString` must be numeric, so `1.0.0-rc.1` cannot be
+  submitted to App Store Connect. Drop the pre-release suffix before the first TestFlight upload.
+- **TestFlight and the bundle identifier.** `com.pinslots.nexdo` is deliberately the same as the Swift
+  app's, so an iOS build would **replace** it on TestFlight. That is a decision to make, not a
+  default to fall into.
+- **Push.** Even with an APNs path on the server, iOS would need the entitlement and a token upload.
+- **The realtime voice gain.** The ×3 track gain the Swift app applies has no Android equivalent; on
+  iOS the same problem may not exist, which would make the two platforms differ.
+
+### Build commands
+
+```
+eas build --profile development --platform android
+eas build --profile preview --platform android
+```
+
+`preview` is the one testers install: internal distribution, an APK, no dev client, the production
+API URL. `production` (an AAB, with `autoIncrement`) is defined but nothing needs it yet.
