@@ -29,10 +29,17 @@ wide so the two are directly comparable and each file stays well under 500 KB.
   Prints the share of compared pixels whose largest RGB channel differs by more than 16/255, and
   writes a heat map to `diff/`.
 
-  **Why the crop matters.** iOS reserves 62 pt for the status bar and Android 31.5 dp. Overlaying
-  from the screen top puts every content row about 30 px out, and the heat map lights up the whole
-  screen twice over — 35-40% on any populated screen, whatever the styling is like. Content-aligned
-  figures are the ones in this file; they are not comparable with the earlier pass's numbers.
+  **Why the alignment matters.** iOS reserves 62 pt for the status bar and Android 31.5 dp, and the
+  two apps then start drawing at slightly different distances below that. Overlaying from the screen
+  top puts every row about 30 px out and lights up the whole screen twice — 35-40% on any populated
+  screen whatever the styling is like. Cropping by the declared inset alone still left 6-11 dp, so
+  the script now finds the first real content row on each side and aligns there.
+
+  **What the number still cannot separate.** The phone is 853 dp tall and the simulator 874 pt, so
+  anything anchored to the bottom — the tab bar above all — sits at a different absolute position and
+  counts as a mismatch on every screen. Cumulative spacing drift adds to it: small per-element
+  differences accumulate downward, so the lower half of a long screen diverges even where each
+  element is individually right. Read the heat map, not just the percentage; a figure is a floor.
 
 ## Global fixes
 
@@ -88,18 +95,18 @@ so far; the rest of this table fills in as each group is done.
 
 | Screen | State | Before | After | Remaining gaps |
 | --- | --- | ---: | ---: | --- |
-| Today | default, light | — | **32.16%** | global fixes 2, 3, 6 outstanding |
-| Tasks | default, light | — | **14.98%** | empty-state glyph (SF Symbol gap), tab-bar selection pill |
-| Tasks | default, dark | — | **31.45%** | as above, plus backdrop tint |
-| Task editor | default, light | 18.67% | **17.17%** | Swift presents a detent sheet, Android a full page (flow gap, not styling) |
-| Sign in | empty, light | 19.23% | **19.13%** | Apple button absent on Android by design — most of what is left |
-| Sign in | empty, dark | 18.51% | **18.78%** | as above; card stroke now matches after the fix below |
-| Sign up | empty, light | 28.03% | **20.84%** | nav-bar pill (iOS 26); intro wraps to 2 lines not 3 (Roboto is narrower) |
+| Reset password | empty, light | — | **3.68%** | essentially a match |
+| Tasks | default, light | — | **13.54%** | empty-state glyph (SF Symbol gap); cumulative drift below the fold |
+| Task editor | default, light | 18.67% | **17.02%** | Swift presents a detent sheet, Android a full page |
+| Sign in | empty, dark | — | **19.09%** | Apple button absent on Android by design |
+| Sign in | empty, light | — | **19.21%** | as above |
+| Sign up | empty, light | — | **23.09%** | nav-bar pill (iOS 26); intro wraps 2 lines not 3 (Roboto) |
+| Tasks | default, dark | — | **28.49%** | as above, plus backdrop tint |
+| Today | default, light | — | **33.12%** | longest screen, so most affected by drift and by the height difference |
 | Sign in | keyboard, email focused | — | n/a | not measurable as a full-screen diff — see below; content above the keyboard matches |
-| Reset password | empty, light | — | **3.38%** | essentially a match |
 
-All figures are content-aligned (see Tooling). The status-bar fix is not visible in them because the
-crop now removes that offset by design — its effect is that content no longer sits under the clock.
+All figures are content-aligned (see Tooling) and were re-measured together after the alignment
+change, so they are comparable with each other but not with anything quoted earlier in the session.
 
 ### Segmented picker, measured before and after
 
