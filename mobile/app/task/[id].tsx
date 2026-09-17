@@ -1,3 +1,4 @@
+import { LinearGradient } from 'expo-linear-gradient';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
@@ -46,6 +47,9 @@ import { brand, useTheme } from '../../src/theme';
  * (PRIORITY + ESTIMATE side by side), PROJECT, `schedule`, REPEAT, the "Important reminders"
  * checkbox, STEPS, NOTES, then the `footer` bar.
  */
+/** `NexdoTheme.saveGradient`: blue → indigo → magenta (RootView.swift:2119). */
+const SAVE_GRADIENT = [brand.nexdoBlue, brand.nexdoIndigo, brand.nexdoMagenta] as const;
+
 export default function TaskDetail() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
@@ -431,10 +435,12 @@ export default function TaskDetail() {
           testID="detail-save"
           style={[styles.footerButton, !(valid && dirty) && styles.dimmed]}
         >
-          <View style={[styles.saveCapsule, { backgroundColor: theme.colors.tint }]}>
+          {/* `.background(NexdoTheme.saveGradient, in: Capsule())` (TaskDetailsView.swift:225) —
+              blue → indigo → magenta, not a flat tint. */}
+          <LinearGradient colors={SAVE_GRADIENT} start={{ x: 0, y: 0.5 }} end={{ x: 1, y: 0.5 }} style={styles.saveCapsule}>
             {update.isPending ? <ActivityIndicator color="#FFFFFF" /> : null}
             <Text style={[styles.saveLabel, { color: '#FFFFFF' }]}>{update.isPending ? 'Saving…' : 'Save changes'}</Text>
-          </View>
+          </LinearGradient>
         </Pressable>
       </View>
 

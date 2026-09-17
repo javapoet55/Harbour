@@ -262,7 +262,12 @@ const styles = StyleSheet.create({
   menu: { borderRadius: 13, borderWidth: StyleSheet.hairlineWidth, overflow: 'hidden' },
   menuRow: { flexDirection: 'row', alignItems: 'center', minHeight: 44, paddingHorizontal: 14 },
   grow: { flex: 1 },
-  outlineWrapper: { width: '100%' },
+  // `.frame(maxWidth: .infinity)` (TaskDetailsView.swift:304). NOT `width: '100%'`: a percentage
+  // width resolves against the parent and does not take part in flex negotiation, so in the "Add a
+  // step" ROW the button demanded the whole row and collapsed the `flex: 1` input beside it to a
+  // sliver. `alignSelf: 'stretch'` is what the modifier actually means — full width in a column, and
+  // intrinsic width in a row, which is how Swift lays both out. See style map section 4.
+  outlineWrapper: { alignSelf: 'stretch' },
   dimmed: { opacity: 0.45 },
   outlineButton: { minHeight: 44, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 14, borderRadius: 13 },
   outlineLabel: { fontSize: 15, lineHeight: 20, fontWeight: '600' },
