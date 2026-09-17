@@ -41,20 +41,22 @@ Any future sheet gets this right by wrapping itself; add new requests below.
 # Requests the other way: Mac → Windows
 
 Found while capturing the Android side of Ask. Both are in files the Windows session owns
-(`AskNexdoView.tsx`, `AskParts.tsx`), so they are listed rather than applied.
+(`AskNexdoView.tsx`, `AskParts.tsx`), so they were listed rather than applied — and both have since
+been applied on the Windows side, in `mobile: parity ask (win) — indigo consent, android label fit`.
+They are kept here with what was done, so the measurement behind each one is not lost.
 
 ## `src/components/AskNexdoView.tsx`
 
 | What | Why |
 | --- | --- |
-| The consent sheet's "Allow sharing with OpenAI" capsule should be `theme.colors.tint`, not `theme.colors.askBlue`. Check "Approve changes" on the response card, which was given the same treatment. | `Button("Allow sharing with OpenAI") { … }.buttonStyle(.borderedProminent)` (AskNexdoView.swift:369-373) carries **no `.tint`**, so it fills with the inherited tint — `.tint(.nexdoIndigo)` applied at the root (RootView.swift:46). `AskStyle.blue` is only ever applied where Swift names it, such as the mic circle (`:356`). Measured off the two captures: iOS renders **(61, 41, 240)** = `#3D29F0` = `nexdoIndigo`; Android renders **(46, 89, 143)** = `#2E598F` = `askBlue`. |
+| **Applied.** The consent sheet's "Allow sharing with OpenAI" capsule should be `theme.colors.tint`, not `theme.colors.askBlue`. Check "Approve changes" on the response card, which was given the same treatment. | `Button("Allow sharing with OpenAI") { … }.buttonStyle(.borderedProminent)` (AskNexdoView.swift:369-373) carries **no `.tint`**, so it fills with the inherited tint — `.tint(.nexdoIndigo)` applied at the root (RootView.swift:46). `AskStyle.blue` is only ever applied where Swift names it, such as the mic circle (`:356`). Measured off the two captures: iOS renders **(61, 41, 240)** = `#3D29F0` = `nexdoIndigo`; Android renders **(46, 89, 143)** = `#2E598F` = `askBlue`. |
 
 ## `src/components/AskParts.tsx`
 
 | What | Why |
 | --- | --- |
-| `AskEntryCard` sets `adjustsFontSizeToFit` + `minimumFontScale={0.75}` for `.minimumScaleFactor(0.75)`, but **`adjustsFontSizeToFit` is iOS-only in React Native** — it does nothing on Android. "Type your prompt" is clipped to "Type your" on the device: the label's box is 83.7 dp and the string needs about 90 dp. It needs a real fix — a smaller `fontSize` for the detail line, more width for the text column, or measuring and scaling by hand. | `AskNexdoView.swift:301-302`. Confirmed on the device from `uiautomator`: the node's text is the full "Type your prompt" while only "Type your" is painted. |
-| While editing that file: the comment above those labels says "Roboto sets ~9% narrower than SF Pro on a 4.5% narrower screen". **That is wrong** and the style map entry it came from has been corrected — it was the test phone's `font_scale` of 0.9, not the typeface. At font scale 1.0 Roboto is within 1% of SF Pro. The screen really is 18 dp narrower, which is enough on its own here. | Style map §2. |
+| **Applied** by measuring and scaling by hand: `FittedText` in `AskParts.tsx` keeps `adjustsFontSizeToFit` for iOS and, on Android, lays a copy of the label out in an over-wide absolute layer to read its ink width off `onLayout`, then scales `fontSize` by available/ink, clamped at `minimumFontScale`. `onTextLayout` is not used, for the reason in style map §4. — `AskEntryCard` sets `adjustsFontSizeToFit` + `minimumFontScale={0.75}` for `.minimumScaleFactor(0.75)`, but **`adjustsFontSizeToFit` is iOS-only in React Native** — it does nothing on Android. "Type your prompt" is clipped to "Type your" on the device: the label's box is 83.7 dp and the string needs about 90 dp. It needs a real fix — a smaller `fontSize` for the detail line, more width for the text column, or measuring and scaling by hand. | `AskNexdoView.swift:301-302`. Confirmed on the device from `uiautomator`: the node's text is the full "Type your prompt" while only "Type your" is painted. |
+| **Applied** — the comment now cites the 18 dp narrower screen alone. While editing that file: the comment above those labels says "Roboto sets ~9% narrower than SF Pro on a 4.5% narrower screen". **That is wrong** and the style map entry it came from has been corrected — it was the test phone's `font_scale` of 0.9, not the typeface. At font scale 1.0 Roboto is within 1% of SF Pro. The screen really is 18 dp narrower, which is enough on its own here. | Style map §2. |
 
 ## `app/(tabs)/calendar.tsx`
 

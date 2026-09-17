@@ -467,11 +467,15 @@ export function AskNexdoView({ textPage, initialPrompt = '' }: AskNexdoViewProps
                 setPendingQuery(null);
                 if (query !== null) requestAfterConsent(query);
               }}
-              style={[styles.approve, { backgroundColor: blue }]}
+              style={[styles.approve, { backgroundColor: theme.colors.tint }]}
               testID="ask-consent-allow"
             >
               {/* `.buttonStyle(.borderedProminent)` (`:360`) inside a `VStack(alignment: .leading)`:
-                  a capsule sized to its own label, not a full-width block. */}
+                  a capsule sized to its own label, not a full-width block. It fills with the
+                  *inherited* tint — `.tint(.nexdoIndigo)` at the root (RootView.swift:46) — not with
+                  `AskStyle.blue`, which this screen defines for the mic circle and the plain buttons
+                  alone. Measured (46,89,143) against Swift's (61,41,240) before this. The response
+                  card's "Approve changes" stays blue: that view sets `.tint(AskStyle.blue)` itself. */}
               <Text style={[theme.typography.body, { color: '#FFFFFF' }]}>Allow sharing with OpenAI</Text>
             </Pressable>
             <Pressable
