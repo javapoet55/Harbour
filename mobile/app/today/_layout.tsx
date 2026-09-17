@@ -2,7 +2,7 @@ import { router, Stack } from 'expo-router';
 import { Pressable } from 'react-native';
 
 import { Text } from '../../src/components';
-import { useTheme } from '../../src/theme';
+import { stackHeaderOptions, useTheme} from '../../src/theme';
 
 /**
  * `TodayView` presents Do Now as a `.sheet` with `[.large]` detents and a drag indicator
@@ -27,11 +27,7 @@ export default function TodayLayout() {
     <Stack
       screenOptions={{
         headerShown: true,
-        headerTintColor: theme.colors.tint,
-        headerTitleStyle: { color: theme.colors.ink, fontSize: 17, fontWeight: '600' },
-        headerStyle: { backgroundColor: theme.colors.background },
-        contentStyle: { backgroundColor: theme.colors.background },
-        headerShadowVisible: false,
+        ...stackHeaderOptions(theme, theme.colors.background),
       }}
     >
       <Stack.Screen

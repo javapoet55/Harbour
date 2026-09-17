@@ -46,6 +46,14 @@ export type Palette = {
   ruleFaint: string;
   /** The row separator inside an inset-grouped `Form`, which is lighter than `.separator`. */
   listSeparator: string;
+  /**
+   * `Picker(...).pickerStyle(.segmented)`. Both are translucent system fills in Swift, so the
+   * backdrop tints through them; mapping them to opaque greys turns the dark control into a black
+   * box. Measured off the Swift app on the Tasks screen: the track renders (238,231,237) light and
+   * (36,29,37) dark, the selected segment (255,255,255) and (98,91,102).
+   */
+  segmentTrack: string;
+  segmentSelected: string;
 };
 
 export type ColorScheme = 'light' | 'dark';
@@ -77,6 +85,8 @@ export const palettes: Record<ColorScheme, Palette> = {
     glassShadow: 'rgba(128, 0, 128, 0.09)', // RootView.swift:356 Color.purple.opacity(0.09)
     ruleFaint: 'rgba(87, 92, 128, 0.25)', // RootView.swift:385 nexdoSecondary.opacity(0.25)
     listSeparator: '#E8E8E8', // measured in the Swift Form on iOS 26
+    segmentTrack: 'rgba(118, 118, 128, 0.12)',
+    segmentSelected: '#FFFFFF',
   },
   dark: {
     // TODO(phase1-decision): the Swift dark variant is the dynamic system `.label`; this is its standard dark value.
@@ -100,9 +110,14 @@ export const palettes: Record<ColorScheme, Palette> = {
     separator: 'rgba(84, 84, 88, 0.6)',
     danger: '#FF453A',
     glassFill: 'rgba(40, 40, 44, 0.72)', // `.ultraThinMaterial` over the dark systemBackground
-    glassStroke: 'rgba(255, 255, 255, 0.14)', // white.opacity(0.8) reads as a blown-out edge on black
+    // RootView.swift:355 `Color.white.opacity(0.8)`, the same as light. A previous pass guessed
+    // this down to 0.14 on the assumption it would read as blown-out on black; measuring the Swift
+    // app shows the stroke really is bright — (214,214,215) against a (28,28,30) card.
+    glassStroke: 'rgba(255, 255, 255, 0.8)',
     glassShadow: 'rgba(128, 0, 128, 0.09)',
     ruleFaint: 'rgba(235, 235, 245, 0.15)', // secondaryLabel at 0.25 of its own 0.6 alpha
     listSeparator: '#38383A',
+    segmentTrack: 'rgba(118, 118, 128, 0.18)',
+    segmentSelected: 'rgba(235, 235, 245, 0.32)',
   },
 };

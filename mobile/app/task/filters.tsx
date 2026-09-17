@@ -1,7 +1,7 @@
 import { router } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
-import { Text } from '../../src/components';
+import { StickyFooter, Text } from '../../src/components';
 import { useTasks } from '../../src/query/useTasks';
 import { useTaskQuery } from '../../src/store/taskQuery';
 import { useTheme } from '../../src/theme';
@@ -76,11 +76,11 @@ export default function TaskFilters() {
         </Section>
       </ScrollView>
 
-      <View style={[styles.footer, { borderTopColor: theme.colors.separator }]}>
+      <StickyFooter>
         <Pressable accessibilityRole="button" accessibilityLabel="Done" onPress={() => router.back()} style={styles.row} testID="filters-done">
           <Text style={[theme.typography.body, { color: theme.colors.tint }]}>Done</Text>
         </Pressable>
-      </View>
+      </StickyFooter>
     </View>
   );
 }

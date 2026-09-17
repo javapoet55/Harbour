@@ -4,7 +4,7 @@ import { router } from 'expo-router';
 import { useState } from 'react';
 import { ActivityIndicator, Alert, Modal, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 
-import { NexdoTaskBackdrop, TaskSymbol, Text } from '../../../src/components';
+import { NexdoTaskBackdrop, StickyFooter, TaskSymbol, Text } from '../../../src/components';
 import { MonthCalendar } from '../../../src/components/MonthCalendar';
 import { calendarKey } from '../../../src/lib/calendarDates';
 import { serverTime } from '../../../src/lib/taskLabels';
@@ -250,7 +250,7 @@ export default function NewCalendarEvent() {
       </ScrollView>
 
       {/* `.safeAreaInset(edge: .bottom)` (CalendarView.swift:578-586) */}
-      <View style={[styles.footer, { backgroundColor: theme.colors.surface, borderTopColor: theme.colors.separator }]}>
+      <StickyFooter background={theme.colors.surface}>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={saving ? 'Creating…' : 'Create Event'}
@@ -271,7 +271,7 @@ export default function NewCalendarEvent() {
             </View>
           )}
         </Pressable>
-      </View>
+      </StickyFooter>
 
       {/* The three `DatePicker`s, as sheets. See Visual gaps: Swift uses inline system pickers. */}
       <Modal visible={picking !== null} animationType="slide" transparent onRequestClose={() => setPicking(null)}>

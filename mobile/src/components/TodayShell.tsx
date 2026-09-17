@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 
 import { conditionSymbol } from '../lib/weather';
 import { brand, useTheme } from '../theme';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NexdoLogoMark } from './NexdoLogoMark';
 import { AccountAvatar } from './ProfileParts';
 import { TaskSymbol } from './TaskSymbol';
@@ -127,8 +128,14 @@ export function TasksTopBar({
   photo?: string | null;
 }) {
   const theme = useTheme();
+  // SwiftUI insets a ScrollView's content by the safe area; React Native does not, and on Android
+  // `contentInsetAdjustmentBehavior` is iOS-only, so the bar drew under the status bar and the
+  // wordmark collided with the clock. Today and Tasks both render this bar, so insetting it here
+  // fixes both. A screen that puts the bar inside a ScrollView still scrolls under the status bar,
+  // which is what SwiftUI does too.
+  const insets = useSafeAreaInsets();
   return (
-    <View style={styles.topBar}>
+    <View style={[styles.topBar, { paddingTop: insets.top }]}>
       <View accessible accessibilityLabel="Nexdo" style={styles.brandGroup}>
         <NexdoLogoMark width={40} height={30} />
         <View style={styles.brandText}>

@@ -29,9 +29,13 @@ export type AppleSignInButtonProps = {
  * iOS version without Sign in with Apple simply do not show it. The Android web fallback is a later
  * phase (docs/IOS_TO_REACT_NATIVE.md section 8).
  */
-export function AppleSignInButton({ onCredential, onError, disabled = false, style }: AppleSignInButtonProps) {
+/**
+ * Whether Sign in with Apple can render at all. Exported because the caller has to know too: the
+ * sign-in screen draws an "OR" rule above this button, and on Android — where the button never
+ * renders — that rule was left dividing the form from nothing.
+ */
+export function useAppleSignInAvailable(): boolean {
   const [available, setAvailable] = useState(false);
-
   useEffect(() => {
     let active = true;
     AppleAuthentication.isAvailableAsync()
@@ -43,6 +47,11 @@ export function AppleSignInButton({ onCredential, onError, disabled = false, sty
       active = false;
     };
   }, []);
+  return available;
+}
+
+export function AppleSignInButton({ onCredential, onError, disabled = false, style }: AppleSignInButtonProps) {
+  const available = useAppleSignInAvailable();
 
   if (!available) return null;
 

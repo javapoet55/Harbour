@@ -2,7 +2,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 
-import { Text } from '../../../src/components';
+import { StickyFooter, Text } from '../../../src/components';
 import { ProjectEditorForm } from '../../../src/components/ProjectEditorForm';
 import { isValidProjectName } from '../../../src/lib/projectQuery';
 import type { NexdoProject } from '../../../src/api/types';
@@ -71,7 +71,7 @@ function EditProjectForm({ project }: { project: NexdoProject }) {
         error={error}
         onRetry={save}
       />
-      <View style={[styles.footer, { borderTopColor: theme.colors.separator }]}>
+      <StickyFooter>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Done"
@@ -83,7 +83,7 @@ function EditProjectForm({ project }: { project: NexdoProject }) {
         >
           <Text style={[theme.typography.body, { color: canSave ? theme.colors.tint : theme.colors.secondary }]}>Done</Text>
         </Pressable>
-      </View>
+      </StickyFooter>
     </View>
   );
 }

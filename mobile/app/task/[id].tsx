@@ -1,6 +1,7 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { NexdoLogoMark, TaskSymbol, Text } from '../../src/components';
 import { useCoordinator } from '../../src/actions/coordinator';
@@ -47,6 +48,7 @@ import { brand, useTheme } from '../../src/theme';
  */
 export default function TaskDetail() {
   const theme = useTheme();
+  const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
   const profile = useSession((state) => state.profile);
   const task = useTask(id);
@@ -409,7 +411,7 @@ export default function TaskDetail() {
       </ScrollView>
 
       {/* `footer` (TaskDetailsView.swift:203-227): Mark complete and Save changes, side by side. */}
-      <View style={[styles.footer, { backgroundColor: theme.colors.surface, borderTopColor: withAlpha(brand.nexdoIndigo, 0.1) }]}>
+      <View style={[styles.footer, { backgroundColor: theme.colors.surface, borderTopColor: withAlpha(brand.nexdoIndigo, 0.1), paddingBottom: 12 + insets.bottom }]}>
         <View style={styles.footerButton}>
           <DetailOutlineButton
             title={isDone(task) ? 'Mark incomplete' : 'Mark complete'}
@@ -546,6 +548,8 @@ const styles = StyleSheet.create({
   grow: { flex: 1 },
   caption: { fontSize: 12, lineHeight: 16 },
   // `.padding(.horizontal, 16).padding(.vertical, 12)` over `.regularMaterial`, divider on top.
+  // paddingBottom is added at render from the safe-area inset: on gesture-nav Android this bar
+  // otherwise sits under the navigation controls. See StickyFooter for the shared version.
   footer: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 12, borderTopWidth: StyleSheet.hairlineWidth },
   footerButton: { flex: 1 },
   dimmed: { opacity: 0.55 },

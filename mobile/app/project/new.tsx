@@ -2,7 +2,7 @@ import { router } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
-import { Text } from '../../src/components';
+import { StickyFooter, Text } from '../../src/components';
 import { ProjectEditorForm } from '../../src/components/ProjectEditorForm';
 import { isValidProjectName, PROJECT_PALETTE } from '../../src/lib/projectQuery';
 import { useCreateProject } from '../../src/query/useProjects';
@@ -38,7 +38,7 @@ export default function NewProject() {
         error={error}
         onRetry={save}
       />
-      <View style={[styles.footer, { borderTopColor: theme.colors.separator }]}>
+      <StickyFooter>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Done"
@@ -50,7 +50,7 @@ export default function NewProject() {
         >
           <Text style={[theme.typography.body, { color: canSave ? theme.colors.tint : theme.colors.secondary }]}>Done</Text>
         </Pressable>
-      </View>
+      </StickyFooter>
     </View>
   );
 }

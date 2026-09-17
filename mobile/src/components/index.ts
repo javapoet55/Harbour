@@ -1,5 +1,5 @@
 export { AuthFieldDivider, AuthFieldRow } from './AuthFieldRow';
-export { AppleSignInButton, type AppleCredential, type AppleSignInButtonProps } from './AppleSignInButton';
+export { useAppleSignInAvailable, AppleSignInButton, type AppleCredential, type AppleSignInButtonProps } from './AppleSignInButton';
 export { AuthScreen } from './AuthScreen';
 export { Button, type ButtonProps, type ButtonVariant } from './Button';
 export { Card } from './Card';
@@ -48,3 +48,4 @@ export { AddTaskByVoiceView, type AddTaskByVoiceViewProps } from './AddTaskByVoi
 export { AskNexdoView, type AskNexdoViewProps } from './AskNexdoView';
 export { AskEntryCard, AskEntryCards, AskExampleRow, AskSuggestionCard } from './AskParts';
 export { AskResponse, AskResponseCard, AskResponseSummary, type AskResponseCardProps, type AskResponseProps } from './AskResponse';
+export { StickyFooter } from './StickyFooter';

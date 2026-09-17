@@ -2,7 +2,7 @@ import { router, Stack } from 'expo-router';
 import { Pressable } from 'react-native';
 
 import { Text } from '../../src/components';
-import { useTheme } from '../../src/theme';
+import { stackHeaderOptions, useTheme} from '../../src/theme';
 
 /**
  * `CalendarView` presents the editor as a `.sheet` wrapping a `NavigationStack`
@@ -31,11 +31,7 @@ export default function CalendarLayout() {
     <Stack
       screenOptions={{
         headerShown: true,
-        headerTintColor: theme.colors.tint,
-        headerTitleStyle: { color: theme.colors.ink, fontSize: 17, fontWeight: '600' },
-        headerStyle: { backgroundColor: theme.colors.groupedBackground },
-        contentStyle: { backgroundColor: theme.colors.groupedBackground },
-        headerShadowVisible: false,
+        ...stackHeaderOptions(theme, theme.colors.groupedBackground),
       }}
     >
       <Stack.Screen

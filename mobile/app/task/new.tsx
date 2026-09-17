@@ -3,7 +3,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { ActivityIndicator, Alert, Modal, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 
-import { NexdoTaskBackdrop, TaskSymbol, Text } from '../../src/components';
+import { NexdoTaskBackdrop, StickyFooter, TaskSymbol, Text } from '../../src/components';
 import { MonthCalendar } from '../../src/components/MonthCalendar';
 import { ProjectAssignmentField } from '../../src/components/ProjectAssignmentField';
 import { detectTaskAction } from '../../src/lib/taskActionDetector';
@@ -243,7 +243,7 @@ export default function NewTask() {
       </Modal>
 
       {/* `.safeAreaInset(edge: .bottom)` (RootView.swift:2013-2028) */}
-      <View style={[styles.footer, { backgroundColor: theme.colors.surface, borderTopColor: theme.colors.separator }]}>
+      <StickyFooter background={theme.colors.surface}>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={busy ? 'Creating…' : 'Create Task'}
@@ -264,7 +264,7 @@ export default function NewTask() {
             </View>
           )}
         </Pressable>
-      </View>
+      </StickyFooter>
     </View>
   );
 }

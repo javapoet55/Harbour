@@ -1,127 +1,146 @@
-# Auth screen parity: React Native against SwiftUI
+# Parity: React Native on Android against the SwiftUI app
 
-Result of the `rn-ui-parity` pass. Every screenshot in [`ios/`](ios), [`rn/`](rn) and [`diff/`](diff)
-was taken on the **same simulator — iPhone 17 Pro, iOS 26.5**, 402 x 874 points, captured at
-1206 x 2622 px and stored here at half that size. Setup is in
-[`../mac-setup.md`](../mac-setup.md); the translation rules the fixes came from are in
-[`../swift-to-rn-style-map.md`](../swift-to-rn-style-map.md).
+The SwiftUI app in `../../../ios` is the **reference**. The thing being corrected is the React
+Native app **as it renders on Android**. Anything comparing React Native on an iOS simulator is not
+parity work; the earlier pass that did so is kept, unused, in
+[`rn-ios-superseded/`](rn-ios-superseded).
 
-## How the percentage is measured
+## Devices
 
-`imgdiff.py` (kept with the run scripts, not in the repo) compares the two captures pixel by pixel
-and reports **the share of compared pixels whose largest RGB channel differs by more than 16/255**.
-The threshold ignores antialiasing while still catching any real difference in spacing, size,
-colour or text wrapping. Both captures use a pinned status bar, so the clock and battery never
-differ.
+| | Reference | Target |
+| --- | --- | --- |
+| Device | iPhone 17 Pro (simulator) | Samsung **SM-A055F** (physical, USB) |
+| OS | iOS 26.5 | Android 15 |
+| Physical | 1206 x 2622 px @3x | **720 x 1600 px** @1.875 (300 dpi) |
+| Logical | 402 x 874 pt | **384 x 853 dp** |
+| Top inset | 62 pt | **31.5 dp** |
 
-Two regions are excluded from every measurement, because they exist only in a development build and
-have no counterpart in the Swift app:
+Both apps are signed into the same account, so the data on screen matches.
 
-- the `expo-dev-client` floating **Tools** button, top right;
-- the `__DEV__`-only version label at the bottom of sign-in (`DevEntryPoints`).
+**Android is 18 dp narrower, and its status bar is half the height.** Captures are stored at 720 px
+wide so the two are directly comparable and each file stays well under 500 KB.
 
-Nothing else is excluded. **A percentage is a floor, not a grade** — see "What the remaining
-percentage is" below.
+## Tooling
 
-## Results
+- `mobile/scripts/capture.sh <screen>-<state>` — shoots both platforms at once
+  (`PLATFORM=ios|android` for one side only) and shrinks to 720 px.
+- `mobile/scripts/diff.py <screen>-<state>` — scales both to a common width, **crops each side by
+  its own top inset** so the first content row lines up, and compares only the overlapping height.
+  Prints the share of compared pixels whose largest RGB channel differs by more than 16/255, and
+  writes a heat map to `diff/`.
 
-"Before" is the same screen on the same simulator with the Phase 2 code, measured the same way.
+  **Why the crop matters.** iOS reserves 62 pt for the status bar and Android 31.5 dp. Overlaying
+  from the screen top puts every content row about 30 px out, and the heat map lights up the whole
+  screen twice over — 35-40% on any populated screen, whatever the styling is like. Content-aligned
+  figures are the ones in this file; they are not comparable with the earlier pass's numbers.
 
-| Screen | State | Before | After |
-| --- | --- | ---: | ---: |
-| sign-in | empty, light | 53.13% | **3.97%** |
-| sign-in | keyboard open, email focused | — | 10.52% |
-| sign-in | both fields filled | — | 14.14% |
-| sign-in | server error alert | — | 3.91% |
-| sign-in | submitting ("Signing In…") | — | 8.95% |
-| sign-in | empty, dark | 54.08% | **4.68%** |
-| sign-up | empty, light | 37.28% | **6.78%** |
-| sign-up | keyboard open, name focused | — | 4.93% |
-| sign-up | validation error | — | *not captured, see below* |
-| sign-up | submitting | — | *not captured, see below* |
-| sign-up | empty, dark | 77.69% | **13.02%** |
-| verify-email | empty, light | 34.61% | **10.73%** |
-| verify-email | keyboard open, code focused | 24.33% | 7.17% |
-| verify-email | server error | — | *not captured, see below* |
-| verify-email | submitting | — | *not captured, see below* |
-| verify-email | empty, dark | 38.51% | **11.21%** |
-| reset-password | empty, light | 5.26% | **1.91%** |
-| reset-password | keyboard open, email focused | — | 1.94% |
-| reset-password | code-sent stage | — | 3.45% |
-| reset-password | validation error | — | 4.45% |
-| reset-password | submitting ("Sending…") | — | 2.08% |
-| reset-password | empty, dark | 86.85% | **1.98%** |
+## Global fixes
 
-A "before" figure is given for the states that could be reached without typing. The fixes were made
-and measured in sequence, so for the typing-dependent states only the final figure is recorded.
+| # | Fix | Where | Status |
+| --- | --- | --- | --- |
+| 1 | **Top safe-area inset.** Every tab screen drew under the status bar; the wordmark collided with the clock. `contentInsetAdjustmentBehavior` is iOS-only, so Android got nothing. | `src/components/TodayShell.tsx` (`TasksTopBar`) — shared by Today and Tasks, so one change covers both | **done, verified on device** |
+| 2 | **Bottom inset.** Every pinned footer rendered *under* the Android gesture-navigation bar — on the task editor the "Create Task" button sat behind the back/home/recents controls and could not be tapped. Six screens had the same hand-rolled footer. | new `src/components/StickyFooter.tsx`, adopted by task/new, task/filters, task/[id], project/new, project/[id]/edit, calendar/event/new | **done, verified on device** |
+| 3 | **Header pattern.** React Navigation left-aligns a header title on Android, so a screen with a custom `headerLeft` rendered "CloseNew Task". SwiftUI's `.inline` title is always centred. | new `src/theme/navigation.ts` (`stackHeaderOptions`), adopted by the task, project, calendar and today stacks | **done, verified on device** |
+| 4 | **Font mapping re-verified on Android** — see below | `docs/swift-to-rn-style-map.md` §1b, §2 | **done** |
+| 5 | **Colour tokens in both appearance modes.** Dark mode is broadly correct. One real fault found and fixed: the segmented picker used opaque `groupedBackground`/`surface`, which renders a black box in dark mode where Swift has translucent system fills. | `src/theme/colors.ts` (`segmentTrack`, `segmentSelected`) + `app/(tabs)/tasks.tsx` | **partly done, verified on device** |
+| 6 | Text truncation and wrapping ("Add Manually", "Select Date") | — | root cause identified; no truncation reproduced yet on this device at these widths |
+| 8 | **Card stroke invisible in dark mode.** Swift draws `Color.white.opacity(0.8)` on every glass card. A previous pass guessed that down to 0.14 assuming it would read as blown-out on black; measuring the Swift app shows the stroke really is bright — (214,214,215) against a (28,28,30) card, where Android rendered (60,60,62). Now (210,210,210). Affects every glass card, not just sign-in. | `src/theme/colors.ts` (`glassStroke` dark) | **done, verified on device** |
+| 7 | **Orphaned "OR" rule on sign-in.** Apple sign-in correctly never renders on Android, but the rule above it did — dividing the form from empty space. | `src/components/AppleSignInButton.tsx` (new `useAppleSignInAvailable`) + `app/(auth)/sign-in.tsx` | **done, verified on device** |
 
-The iOS reference exists for every state, including the four with no React Native counterpart:
-`ios/sign-up-error.png`, `ios/sign-up-loading.png`, `ios/verify-email-error.png`,
-`ios/verify-email-loading.png`.
+### Font mapping, re-verified
 
-### States not captured on the React Native side
+The previous pass calibrated against an iOS simulator. Re-measured on a real Android render, in
+logical units:
 
-Both gaps come from driving the simulator, not from the app:
+| String | iOS (SF Pro) | Android (Roboto) | |
+| --- | ---: | ---: | --- |
+| "Tasks" `.largeTitle` bold — height | 24.6 pt | 24.0 dp | sizes map **1:1**, keep them |
+| "Tasks" — width | 87.7 pt | 80.0 dp | **9% narrower** |
+| "Turn intent into action." `.subheadline` — width | 151.9 pt | 136.5 dp | **10% narrower** |
 
-- **sign-up validation error and submitting.** Filling four fields needs the text typed in short
-  chunks (see the input race under "Functional notes"), and the XCUITest driver used for this pass
-  slowed to a crawl querying React Native's very deep accessibility tree — single taps began taking
-  over a minute. The iOS references for both states are captured and the procedure is written down,
-  so they are a short follow-up rather than an open question.
-- **verify-email server error and submitting.** Same reason. Reaching the screen at all needs a
-  `nexdo://verify-email?...` deep link, because the only in-app routes to it are registering a new
-  account or signing in with an unverified one, and no test account was available.
+So the `fontSize` values were right and must not be scaled. But Roboto sets ~9% narrower than SF
+Pro, and the screen is 4.5% narrower again — together that is the cause of the truncation and
+wrapping differences, not any font-size error. Fix the width a label is given, not the label.
 
-## What the remaining percentage is
+## Screen results
 
-Sorted by how much of the residual it accounts for.
+Only screens with **both** captures can carry a percentage. Android captures exist for two screens
+so far; the rest of this table fills in as each group is done.
 
-1. **The system keyboard** dominates every keyboard-open state (sign-in keyboard 10.52%, filled
-   14.14%). Above the keyboard the two apps line up; the red in
-   `diff/sign-in-keyboard.png` is almost entirely the QuickType suggestion strip, which predicts
-   different words between runs, and a transient "Paste / AutoFill" callout. This is simulator
-   state, not app UI.
-2. **SF Rounded.** Both large titles (`design: .rounded`) are a known gap and cannot be closed
-   without bundling a font. On sign-in the 42pt "Welcome back" alone is most of the remaining 4%.
-3. **The backdrop circle inside a sheet** (sign-up, verify-email). SwiftUI's `GeometryReader` sits
-   under the navigation bar because of `.ignoresSafeArea()`; the React Native view is laid out below
-   the header, so the third circle lands about 10pt low. See the style map, section 5.
-4. **iOS 26 navigation-bar buttons.** Swift's `Cancel` is a native bar button, which iOS 26 draws in
-   a glass capsule. A custom `headerLeft` in Expo Router renders plain text and gets no capsule.
-   This is the double "Cancel" in `diff/sign-up-empty.png` and `diff/reset-password-empty.png`.
-5. **Translucency in a wide-gamut space.** After matching the effective opacity (style map,
-   section 5) the disabled buttons agree within about 3/255 at the gradient ends, but SwiftUI
-   composites and interpolates in the display's linear wide-gamut space, and neither
-   `expo-linear-gradient` nor React Native's `opacity` can be pushed all the way there. Worst
-   remaining error is roughly 20/255 in one channel in the middle of a gradient.
-6. **Continuous corners and SF Symbols**, both on the accepted list: every rounded rectangle differs
-   by a pixel or two at the corner, and the Ionicons glyphs are a slightly different shape.
-7. **The sign-in assurance line** sits 14pt left of where Swift centres it. Flexbox cannot size a
-   wrapped `Text` to its longest line; see `SymbolLabel` for why measuring does not help.
-8. **`sign-in-loading`** carries a system "Updating…" keychain HUD in the iOS capture that iOS
-   raises whenever a `.password` field is submitted. It is timing-dependent, so it is not in the
-   React Native capture of the same moment.
+| Screen | State | Before | After | Remaining gaps |
+| --- | --- | ---: | ---: | --- |
+| Today | default, light | — | **32.16%** | global fixes 2, 3, 6 outstanding |
+| Tasks | default, light | — | **14.98%** | empty-state glyph (SF Symbol gap), tab-bar selection pill |
+| Tasks | default, dark | — | **31.45%** | as above, plus backdrop tint |
+| Task editor | default, light | 18.67% | **17.17%** | Swift presents a detent sheet, Android a full page (flow gap, not styling) |
+| Sign in | empty, light | 19.23% | **19.13%** | Apple button absent on Android by design — most of what is left |
+| Sign in | empty, dark | 18.51% | **18.78%** | as above; card stroke now matches after the fix below |
+| Sign up | empty, light | 28.03% | **20.84%** | nav-bar pill (iOS 26); intro wraps to 2 lines not 3 (Roboto is narrower) |
+| Reset password | empty, light | — | **3.38%** | essentially a match |
 
-## A capture trap worth knowing
+All figures are content-aligned (see Tooling). The status-bar fix is not visible in them because the
+crop now removes that offset by design — its effect is that content no longer sits under the clock.
 
-The sign-in greeting reads the device-stored `nexdo.lastSignedInFirstName`, so once anything has
-written it the React Native capture says "Welcome back, A" where the Swift reference says "Welcome
-back". That is app state, not styling, and it silently adds about 0.7 points to the sign-in figures.
-Clear it before capturing:
+### Segmented picker, measured before and after
 
-```bash
-CONT=$(xcrun simctl get_app_container booted com.pinslots.nexdo data)
-rm -rf "$CONT/Library/Application Support/com.pinslots.nexdo/RCTAsyncLocalStorage_V1"
-```
+| | iOS | Android before | Android after |
+| --- | --- | --- | --- |
+| Track, dark | (36, 29, 37) | (0, 0, 0) | **(34, 22, 34)** |
+| Selected, dark | (98, 91, 102) | (28, 28, 30) | **(100, 92, 103)** |
+| Track, light | (238, 231, 237) | (242, 242, 247) | unchanged, already close |
 
-## Functional notes
+## Swift reference inventory
 
-Found while capturing; **none of these were changed** (see the report for detail):
+47 captures in [`ios/`](ios). Auth (20) are re-used from the earlier pass — they are Swift
+references and remain valid.
 
-- **Fast typing into the controlled `TextInput`s scrambles the value.** Typing
-  `parity@example.com` at machine speed into reset-password produced `pae.comrity@exampl`. Typing in
-  chunks is reliable. Worth checking on a device with a fast human typist or a password manager.
-- **`verify-email`'s code field sets `returnKeyType="go"`**, so iOS floats a **Go** key over the
-  number pad. The Swift field sets no `submitLabel` and has no such key.
-- **Password reset from sign-in reached the server fine**, but the same request with a mangled email
-  returns "Enter a valid name and email address." rather than anything reset-specific.
+| Group | Screens captured | States |
+| --- | --- | --- |
+| Auth | sign-in, sign-up, verify-email, reset-password | default, keyboard, error, loading, filled, code-sent, dark — 20 files |
+| Today | today (default / 3-days / 5-days), weekly-summary, attention-details, overdue | 6 |
+| Tasks and projects | tasks, tasks-list, tasks-list-scrolled, tasks-search, task-filters, task-editor, task-detail*, projects, project-detail, project-editor, project-unassigned | 11 |
+| Calendar | calendar, calendar-week, calendar-conflicts, calendar-event-editor | 4 |
+| Ask | ask, ai-consent | 2 |
+| Voice | voice-capture, voice-ask | 2 |
+| Account | account | 1 |
+
+\* `task-detail` was captured but landed on the wrong screen and has been removed; it still needs a
+clean capture.
+
+### Not captured, and why
+
+- **Do Now** (screen 7) — cannot be reached with this account's data. The card only opens when there
+  is a recommendation, and the account has 0 tasks scheduled today. Needs a seeded task.
+- **Action queue, task action, composers** (screens 8, 31, 32) — reached from a reminder
+  notification; not attempted yet.
+- **Calendar month view, event details** — the segmented control did not switch; needs a retry.
+- **Profile and settings** (screen 30) — push from Account; not attempted yet.
+- Loading, empty, error and dark states for the non-auth screens.
+
+## Flows
+
+Not started. Each §20 row needs its presentation checked (tab vs push vs sheet vs full-screen), the
+close affordance, what dismisses it and where it returns to.
+
+## Flows
+
+| Flow | Result |
+| --- | --- |
+| Account sheet — open from the Today avatar | matches: modal sheet on both |
+| Account — sign out confirmation | **gap, accepted**: Swift shows a `confirmationDialog` popover, Android a Material alert. Both are the native idiom for the platform. |
+| Sign out — return to sign-in | **broken, see below** |
+| Task editor — presentation | **gap**: Swift is a `.sheet` at a detent, Android is a full-height page. Expo Router has no detent API; the plan doc already records this as accepted. |
+| Task editor — close affordance | fixed: "Close" now sits left of a centred title (was "CloseNew Task") |
+
+## Functional bugs noticed, not fixed
+
+- **`[["tasks"]]: No queryFn was passed as an option`** — a warning toast on both platforms,
+  including on the signed-out screen where no tasks query should be running. Pre-existing on
+  `react-native-migration`; not introduced by the parity work.
+- **Sign out did not leave the Today screen** (fixed separately in `2709b84`): the gate read the
+  `me` query, which `queryClient.clear()` destroys, so neither route guard matched.
+- **Signing out from the Account sheet leaves the sheet on screen.** The profile clears, but the
+  sheet stays up and its close button then logs *"The action 'GO_BACK' was not handled by any
+  navigator"* — the route guard has already unmounted the navigator that owned the modal. The sheet
+  has to be dismissed before the guard flips. Not fixed here: the sign-out call lives in
+  `src/query/useAuth.ts`, which this pass does not touch.

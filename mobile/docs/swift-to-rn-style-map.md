@@ -5,7 +5,13 @@ the Phase 2 auth screens against the live sign-in screenshot in
 [`reference/login_and_auth_page.png`](reference/login_and_auth_page.png), and meant to be reused by
 every later phase so the screens stay consistent with one another.
 
-Last updated: 2026-09-16 (auth parity pass, branch `rn-ui-parity`).
+Last updated: 2026-09-17 (Android parity pass, branch `rn-ui-parity`).
+
+> **Read this first.** The pass before this one calibrated against React Native running on an **iOS
+> simulator**. That was the wrong target: the app ships on **Android**, and the reference is the
+> SwiftUI app. Entries below are being re-verified against a real Android render; anything still
+> marked *(iOS-calibrated)* has not been re-checked yet. Superseded iOS-simulator captures are kept
+> in `reference/rn-ios-superseded/` and must not be used.
 
 **Phase 2 built this file from a single screenshot. It has now been corrected against both apps
 running side by side in one iOS Simulator** (iPhone 17 Pro, iOS 26.5), measured with screenshot
@@ -31,6 +37,25 @@ confirms the identity mapping:
 | Card `cornerRadius: 28` | 56 px | ~56 px |
 
 So a Swift modifier value is copied into the RN style verbatim. Do not rescale.
+
+---
+
+## 1b. The two devices are not the same size
+
+Measured, not assumed:
+
+| | iOS reference | Android target |
+| --- | --- | --- |
+| Device | iPhone 17 Pro, iOS 26.5 | Samsung SM-A055F, Android 15 |
+| Physical | 1206 x 2622 px | 720 x 1600 px |
+| Scale | 3x | 1.875x (300 dpi) |
+| **Logical** | **402 x 874 pt** | **384 x 853 dp** |
+| Top inset | 62 pt | 31.5 dp |
+
+**Android is 18 dp narrower and its status bar is half the height.** A point value copied from Swift
+is still one dp — the unit mapping is 1:1 — but the *space it has to live in* is 4.5% smaller. Fixed
+widths, and paddings tuned so content just fits on a 402 pt screen, overflow here. When a label
+truncates or wraps on Android and not on iOS, fix the width it was given, not the label.
 
 ---
 
@@ -60,6 +85,20 @@ The error compounds. Every block was 1 to 3pt short, and by the bottom of the si
 whole column had drifted 5pt up — on top of the 62pt safe-area error in section 7. Measure a line
 height by putting the same string in both apps and comparing the frame heights the accessibility
 tree reports; do not derive it.
+
+**Verified on Android: the sizes are right, the typeface is narrower.** Rendering the same strings
+on both devices and converting to logical units:
+
+| String | iOS (SF Pro) | Android (Roboto) | |
+| --- | ---: | ---: | --- |
+| "Tasks", `.largeTitle` bold — height | 24.6 pt | 24.0 dp | sizes map 1:1 |
+| "Tasks" — width | 87.7 pt | 80.0 dp | 9% narrower |
+| "Turn intent into action.", `.subheadline` — width | 151.9 pt | 136.5 dp | 10% narrower |
+
+So keep the `fontSize` column as it is; do **not** scale it for Android. But expect every run of text
+to be about 9% narrower than the Swift screenshot, which changes where lines break. Combined with the
+18 dp narrower screen (section 1b), that is the cause of most wrapping differences — and the reason a
+block that wraps identically on both cannot be assumed from an iOS capture.
 
 Weights: `.regular` → `'400'`, `.medium` → `'500'`, `.semibold` → `'600'`, `.bold` → `'700'`.
 `.title3.bold()` therefore becomes `{ fontSize: 20, lineHeight: 28, fontWeight: '700' }`.
@@ -149,7 +188,7 @@ line sits 14pt left of where Swift centres it.
 | SwiftUI | React Native |
 | --- | --- |
 | `.background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: r))` | `GlassCard`: a translucent `colors.glassFill` behind an `expo-blur` `BlurView` |
-| `.overlay(RoundedRectangle(...).stroke(Color.white.opacity(0.8)))` | absolutely-positioned `View` with `borderWidth: StyleSheet.hairlineWidth` |
+| `.overlay(RoundedRectangle(...).stroke(Color.white.opacity(0.8)))` | absolutely-positioned `View` with `borderWidth: StyleSheet.hairlineWidth`. **Use the literal 0.8 in dark mode too** — measured (214,214,215) on a (28,28,30) card. Guessing it down "because white on black looks blown out" loses the edge entirely. |
 | `LinearGradient(colors:, startPoint: .leading, endPoint: .trailing)` | `expo-linear-gradient` with `start={{x:0,y:0.5}} end={{x:1,y:0.5}}` |
 | `startPoint: .topLeading, endPoint: .bottomTrailing` | `start={{x:0,y:0}} end={{x:1,y:1}}` |
 | `startPoint: .top, endPoint: .bottom` | `start={{x:0.5,y:0}} end={{x:0.5,y:1}}` |
@@ -253,6 +292,8 @@ Ionicons has no weight axis, so `.font(.title3.weight(.medium))` on a symbol onl
 | `.navigationDestination(item:)` | `router.push(...)` onto the same stack |
 | `NavigationStack { }` + `.navigationTitle(_).navigationBarTitleDisplayMode(.inline)` | `headerShown: true, title: ...` |
 | `.toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") } }` | `headerLeft` rendering a Cancel `Pressable` |
+| `.navigationBarTitleDisplayMode(.inline)` | `headerTitleAlign: 'center'` — **required on Android**, see below |
+| a bar pinned to the bottom of a sheet | `StickyFooter`, which adds `useSafeAreaInsets().bottom` — see below |
 | `.scrollDismissesKeyboard(.interactively)` | `keyboardDismissMode="on-drag"` (the closest available) |
 | keyboard avoidance (automatic in SwiftUI) | explicit `KeyboardAvoidingView`, `behavior="padding"` on iOS |
 | a `ScrollView` inside `ZStack { ….ignoresSafeArea() }` | `contentInsetAdjustmentBehavior="always"` — see below |
@@ -286,6 +327,21 @@ screen under a header would be inset twice.
 | First section below the bar | — | **35pt** |
 
 Uppercasing the header is the tell that a port was written against an older iOS.
+
+### Two Android-only faults every stack and sheet had
+
+**A header title is left-aligned on Android.** React Navigation follows the Material convention, so a
+screen with a custom `headerLeft` renders the button and the title jammed together — the task editor
+read "CloseNew Task". SwiftUI's `.inline` title is always centred, so
+`headerTitleAlign: 'center'` is what matches on both. Spread `stackHeaderOptions(theme, background)`
+from `src/theme/navigation.ts` rather than repeating the header block; four stacks were missing it.
+
+**A pinned footer sits under the gesture-navigation bar.** SwiftUI keeps a bottom bar inside the safe
+area; React Native does not, and on a gesture-nav Android phone the button renders *behind* the
+back/home/recents controls and cannot be tapped — "Create Task" on the task editor was unreachable,
+not merely misplaced. Six screens had the same hand-rolled footer; they now share
+`StickyFooter`, which adds `useSafeAreaInsets().bottom` to its padding. This is a functional bug as
+much as a visual one, so check it on any new screen with a pinned action.
 
 ### Navigation bar buttons
 

@@ -7,6 +7,7 @@ import { Alert, Keyboard, Pressable, StyleSheet, TextInput, View } from 'react-n
 
 import {
   AppleSignInButton,
+  useAppleSignInAvailable,
   AuthFieldDivider,
   AuthFieldRow,
   AuthScreen,
@@ -36,6 +37,7 @@ export default function SignIn() {
   const apple = useAppleSignIn();
   const greetingName = useLastSignedIn((state) => state.value);
   const [passwordField, setPasswordField] = useState<TextInput | null>(null);
+  const appleAvailable = useAppleSignInAvailable();
 
   const { control, handleSubmit, setValue } = useForm<SignInValues>({
     resolver: zodResolver(signInSchema),
@@ -178,12 +180,17 @@ export default function SignIn() {
         testID="sign-in-submit"
       />
 
-      {/* HStack(spacing: 12) { Rectangle; Text("OR"); Rectangle } */}
+      {/* HStack(spacing: 12) { Rectangle; Text("OR"); Rectangle } — the rule only makes sense when
+          there is something below it to divide from. Apple sign-in never renders on Android, which
+          left an "OR" separating the form from empty space. */}
+      {appleAvailable ? (
       <View style={styles.orRow}>
         <View style={[styles.rule, { backgroundColor: theme.colors.ruleFaint }]} />
         <Text style={[styles.or, { color: theme.colors.secondary }]}>OR</Text>
         <View style={[styles.rule, { backgroundColor: theme.colors.ruleFaint }]} />
       </View>
+
+      ) : null}
 
       <AppleSignInButton onCredential={signInWithApple} onError={showError} disabled={busy} style={styles.apple} />
 

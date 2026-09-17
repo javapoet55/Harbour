@@ -90,7 +90,7 @@ export default function Tasks() {
         </View>
 
         {/* `Picker(...).pickerStyle(.segmented)` (RootView.swift:1650-1655) */}
-        <View style={[styles.segmented, { backgroundColor: theme.colors.groupedBackground }]}>
+        <View style={[styles.segmented, { backgroundColor: theme.colors.segmentTrack }]}>
           {(['Tasks', 'Projects'] as const).map((label) => {
             const selected = (label === 'Projects') === showingProjects;
             return (
@@ -101,7 +101,7 @@ export default function Tasks() {
                 accessibilityState={{ selected }}
                 onPress={() => setShowingProjects(label === 'Projects')}
                 testID={`segment-${label}`}
-                style={[styles.segment, selected && { backgroundColor: theme.colors.surface }]}
+                style={[styles.segment, selected && { backgroundColor: theme.colors.segmentSelected }]}
               >
                 <Text style={[styles.segmentLabel, { color: theme.colors.ink }]}>{label}</Text>
               </Pressable>
