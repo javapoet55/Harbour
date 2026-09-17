@@ -20,6 +20,27 @@ Both apps are signed into the same account, so the data on screen matches.
 **Android is 18 dp narrower, and its status bar is half the height.** Captures are stored at 720 px
 wide so the two are directly comparable and each file stays well under 500 KB.
 
+### Two things must be set on the phone before any capture
+
+Both were wrong for the whole first pass, and both silently corrupt every figure.
+
+1. **`font_scale` must be 1.0.** The phone was set to **0.9**, and React Native's `Text` honours the
+   OS font scale by default, so every Android capture rendered text at 90% of the size the iOS
+   Simulator used. This is what the style map's old "Roboto sets 9% narrower than SF Pro" entry was
+   actually measuring. Re-measured at 1.0, "Tasks" `.largeTitle` is **87.66 pt wide on iOS and
+   88.53 dp on Android** — a 1% difference, not 9%. See the style map §2.
+
+   ```sh
+   adb shell settings put system font_scale 1.0
+   ```
+
+2. **The dev client's floating "Tools button" must be off.** It draws a grey gear over the content,
+   it is baked into every screenshot, and nothing on iOS corresponds to it. Turn it off in the Expo
+   dev menu (`adb shell input keyevent 82` → scroll → **Tools button**).
+
+Every figure quoted below was measured after both were fixed. Figures recorded earlier in this file
+are not comparable and have been re-measured.
+
 ## Tooling
 
 - `mobile/scripts/capture.sh <screen>-<state>` — shoots both platforms at once
@@ -50,7 +71,7 @@ wide so the two are directly comparable and each file stays well under 500 KB.
 | 3 | **Header pattern.** React Navigation left-aligns a header title on Android, so a screen with a custom `headerLeft` rendered "CloseNew Task". SwiftUI's `.inline` title is always centred. | new `src/theme/navigation.ts` (`stackHeaderOptions`), adopted by the task, project, calendar and today stacks | **done, verified on device** |
 | 4 | **Font mapping re-verified on Android** — see below | `docs/swift-to-rn-style-map.md` §1b, §2 | **done** |
 | 5 | **Colour tokens in both appearance modes.** Dark mode is broadly correct. One real fault found and fixed: the segmented picker used opaque `groupedBackground`/`surface`, which renders a black box in dark mode where Swift has translucent system fills. | `src/theme/colors.ts` (`segmentTrack`, `segmentSelected`) + `app/(tabs)/tasks.tsx` | **partly done, verified on device** |
-| 6 | Text truncation and wrapping ("Add Manually", "Select Date") | — | root cause identified; no truncation reproduced yet on this device at these widths |
+| 6 | **Text losing its last word with no ellipsis.** "Add task" rendered as "Add", "This Week" as "This", on a button and a chip that both had room to spare. Android measures and draws text in two passes and Yoga rounds the measured width onto the pixel grid in between; at this phone's density of **1.875** that rounding lands a fraction short, the draw pass breaks the line at the last space, and the second line falls outside a view sized for one line. `uiautomator dump` still reports the full string, so it reads as a copy bug. | `src/components/Text.tsx` — one device pixel of padding each side, cancelled by an equal negative margin, so the box is wider than the glyph run and the layout is unchanged. Fixes every label at once. Plus `alignSelf: 'stretch'` on full-width control labels (`GradientButton`, `Button`, the project capsule). | **done, verified on device** |
 | 8 | **Card stroke invisible in dark mode.** Swift draws `Color.white.opacity(0.8)` on every glass card. A previous pass guessed that down to 0.14 assuming it would read as blown-out on black; measuring the Swift app shows the stroke really is bright — (214,214,215) against a (28,28,30) card, where Android rendered (60,60,62). Now (210,210,210). Affects every glass card, not just sign-in. | `src/theme/colors.ts` (`glassStroke` dark) | **done, verified on device** |
 | 7 | **Orphaned "OR" rule on sign-in.** Apple sign-in correctly never renders on Android, but the rule above it did — dividing the form from empty space. | `src/components/AppleSignInButton.tsx` (new `useAppleSignInAvailable`) + `app/(auth)/sign-in.tsx` | **done, verified on device** |
 
@@ -73,8 +94,11 @@ wrapping differences, not any font-size error. Fix the width a label is given, n
 
 | Element | iOS | Android before | Android after |
 | --- | --- | --- | --- |
-| Bar background | (245, 245, 245) | (255, 255, 255) | **(245, 245, 245)** |
-| Selected capsule | `nexdoIndigo` @10%, (227, 225, 244), 11dp corner | none | **present, rounded** |
+| Bar background, light | (245, 245, 245) | (255, 255, 255) | **(245, 245, 245)** |
+| Bar background, dark | (31, 31, 31) | (28, 28, 30) | **(31, 31, 31)** |
+| Selected capsule, light | `nexdoIndigo` @10%, (227, 225, 244), 11dp corner | none | **present, rounded** |
+| Selected capsule, dark | (34, 32, 52) | (49, 45, 79) | **(34, 32, 52)** |
+| Capsule width | ~85 dp inside a 93 dp item | 35 dp — shrink-wrapped | **~85 dp** |
 
 Two things had to be worked out on the device rather than assumed:
 
@@ -85,8 +109,75 @@ Two things had to be worked out on the device rather than assumed:
   `accessibilityState.selected`. Reading the wrong one leaves the capsule permanently hidden with no
   error.
 
+Two more faults found on the second pass, both of which affected **every** tab screen:
+
+- **The capsule shrink-wrapped its icon and label** — 35 dp wide against Swift's 85 dp. `TabBarButton`
+  spreads React Navigation's own button style *after* its own, and that style carries
+  `alignItems: 'center'`, which overrides the default `stretch` and sizes the capsule to its content.
+  `alignSelf: 'stretch'` on the capsule restores it.
+- **The dark capsule was guessed, not measured.** It was `rgba(122, 106, 255, 0.22)`. Measuring the
+  Swift app gives (34, 32, 52) over a (31, 31, 31) bar, which solves exactly to `nexdoIndigo` at
+  **10%** — the *same* value as light mode. A dark appearance does not imply a lighter, stronger
+  tint; it is the same colour over a different background.
+
 Remaining: the capsule sits a few dp higher than Swift's and is slightly shorter, because the bar's
 content height is driven by React Navigation rather than set outright.
+
+## Group 3 — tasks and projects
+
+Every fault below was found by comparing against the Swift source or a Swift capture, not by
+inspection of the React Native code alone.
+
+| Screen | What was wrong | Swift says | Fixed in |
+| --- | --- | --- | --- |
+| Project detail | Nav title was the literal string **"Project"** | `.navigationTitle(project?.name ?? "No project")` (ProjectsView.swift:258) | `app/project/[id]/index.tsx`, set from the screen because it depends on the loaded project |
+| Project detail | The `···` menu sat in the content row | `ToolbarItem(placement: .topBarTrailing)` (`:260`) — a nav-bar item | same |
+| Project detail | The `+` was a flat accent circle | `TodayHeaderButton` (`:203`) — the 44pt **gradient** circle | same; `TodayHeaderButton` gained a `disabled` prop for `.disabled(deleting \|\| missing)` (`:204`) |
+| Project detail | "Add task" rendered as **"Add"** | `.frame(maxWidth: .infinity)` is on the *label* (`:238`) | global fix 6 |
+| Project editor | "Done" was a pinned footer button | `ToolbarItem(placement: .confirmationAction)` (`:149`) | `app/project/new.tsx`, `app/project/[id]/edit.tsx` |
+| Project editor | Section headers were uppercased — "PROJECT NAME" | `Section("Project name")`; **iOS 26 no longer uppercases** a `Form` header | `src/components/ProjectEditorForm.tsx` |
+| Task filters | Invented "STATUS"/"PRIORITY" sections listing every option — **79.95%** | a `Form` with no section headers and three rows: two collapsed `Picker`s and a `Button` (RootView.swift:1710-1719) | `app/task/filters.tsx`, rebuilt |
+| Task filters | "Done" was a footer button; a "Cancel" existed | only `.confirmationAction` "Done" (`:1722`); no Cancel | same |
+| Task filters | Inline title | `.navigationTitle` is **not** `.inline` here, so iOS draws a large title | same; drawn as content, since `headerLargeTitle` is iOS-only |
+| Task filters | "Earliest due first" was a checkmark row | `Toggle` (`:1718`) — a switch, tinted `.nexdoIndigo` by the root `.tint` (`:46`) | same |
+| Tasks list | The **History range** picker and its caption were missing entirely | `if model.taskQuery.date == .all { … }` (`:1669-1681`) | `app/(tabs)/tasks.tsx`; `historyRange` already existed in the store, only the control was absent |
+| Task editor | The `→` disappeared when the button was disabled | `if !model.busy { Image("arrow.right") }` (`:2017`) — it tracks *busy*, not *enabled* | `app/task/new.tsx` |
+| Task editor | Project row used a `›` disclosure chevron | `Image(systemName: "chevron.down")` (ProjectsView.swift:307) — a menu affordance | `src/components/ProjectAssignmentField.tsx` |
+
+### Uppercase section headers: only some of them were wrong
+
+`ProjectEditorForm` and the filters sheet mirror a real SwiftUI `Form` `Section("…")`, and iOS 26
+renders those **as written**. The task editor's "TASK NAME", "NOTES", "PROJECT", "DATE" and
+"TIME ESTIMATE" are *not* `Form` sections — they are `TaskEditorLabel(title: "NOTES", …)`, literal
+uppercase strings in the Swift source (RootView.swift:1964-1990). Those stay uppercase. The rule is
+not "iOS does not uppercase"; it is "read which one Swift wrote".
+
+## The tab bar disappears on every pushed screen
+
+**Not fixed — it needs a decision, because it is a routing change, not a style change.**
+
+SwiftUI pushes a detail screen *inside* the selected tab's `NavigationStack`, so the tab bar stays.
+In this app every detail route is a sibling of `(tabs)` in the Expo Router tree, so pushing one
+unmounts the tab navigator and the bar vanishes. On `project-detail` that is a whole 90 dp band of
+the screen present on one platform and absent on the other, and no amount of styling closes it.
+
+Swift uses a real push — tab bar visible — for exactly these:
+
+| Route | Swift |
+| --- | --- |
+| `project/[id]` | `NavigationLink` (ProjectsView.swift:50, 54) |
+| `today/attention` | `.navigationDestination` (RootView.swift:1187) |
+| `today/schedule-check` | `.navigationDestination` (`:1190`) |
+| `today/overdue` | `.navigationDestination` (`:1193`) |
+| `today/weekly-summary` | `.navigationDestination` (`:1196`) |
+
+Everything else reached from a tab — the task editor, Do Now, Account, the weather forecast, Ask —
+is a `.sheet` or a `.fullScreenCover`, and a sheet covers the tab bar on iOS too. Those are already
+right.
+
+The fix is to move those five routes under `app/(tabs)/`, giving each tab its own stack. That
+changes every `router.push('/project/…')` path, the Android hardware-back behaviour and deep links,
+so it is not something to slip into a styling commit.
 
 ## Screen results
 
@@ -94,16 +185,27 @@ Only screens with **both** captures can carry a percentage. Android captures exi
 so far; the rest of this table fills in as each group is done.
 
 | Screen | State | Before | After | Remaining gaps |
-| --- | --- | ---: | ---: | --- |
-| Reset password | empty, light | — | **3.68%** | essentially a match |
-| Tasks | default, light | — | **13.54%** | empty-state glyph (SF Symbol gap); cumulative drift below the fold |
-| Task editor | default, light | 18.67% | **17.02%** | Swift presents a detent sheet, Android a full page |
-| Sign in | empty, dark | — | **19.09%** | Apple button absent on Android by design |
-| Sign in | empty, light | — | **19.21%** | as above |
-| Sign up | empty, light | — | **23.09%** | nav-bar pill (iOS 26); intro wraps 2 lines not 3 (Roboto) |
-| Tasks | default, dark | — | **28.49%** | as above, plus backdrop tint |
-| Today | default, light | — | **33.12%** | longest screen, so most affected by drift and by the height difference |
-| Sign in | keyboard, email focused | — | n/a | not measurable as a full-screen diff — see below; content above the keyboard matches |
+| --- | --- | --- | --- | --- |
+| Project editor | default, light | 7.17% | **6.89%** | essentially a match |
+| Tasks | default, light | 13.54% | **12.01%** | empty-state glyph (SF Symbol gap); tab-bar y offset |
+| Project unassigned | default, light | — | **12.40%** | no tab bar on Android (see above); text sits ~3 dp lower in each card |
+| Tasks | search open, light | — | **12.68%** | as Tasks default |
+| Projects | default, light | 14.17% | **13.71%** | cumulative drift below the fold |
+| Project detail | default, light | 14.35% | **14.46%** | **no tab bar on Android** — the whole 90 dp band counts as a mismatch |
+| Tasks | list (All), light | — | **16.04%** | drift; row badge glyph |
+| Task editor | default, light | 18.67% | **16.85%** | Swift presents a detent sheet, so it opens already scrolled; Android is a full page |
+| Tasks | list scrolled, light | — | **17.59%** | scroll offset cannot be matched exactly between devices |
+| Sign in | empty, dark | — | 19.09% | Apple button absent on Android by design — **not re-measured at font scale 1.0** |
+| Sign in | empty, light | — | 19.21% | as above — **not re-measured** |
+| Tasks | default, dark | 28.49% | **21.45%** | empty-state glyph; backdrop tint |
+| Sign up | empty, light | — | 23.09% | nav-bar pill (iOS 26) — **not re-measured** |
+| Today | default, light | — | 33.12% | longest screen — **not re-measured** |
+| Reset password | empty, light | — | 3.68% | essentially a match — **not re-measured** |
+| Task filters | default, light | 79.95% | **68.82%** | the content now matches; the figure is almost all detent — iOS draws the Tasks screen behind a half-height sheet where Android fills the page |
+| Sign in | keyboard, email focused | — | n/a | not measurable as a full-screen diff — see below |
+
+Rows marked **not re-measured** were captured at the phone's old 0.9 font scale and are kept only so
+the trend is visible. They need a fresh Android capture before they mean anything.
 
 All figures are content-aligned (see Tooling) and were re-measured together after the alignment
 change, so they are comparable with each other but not with anything quoted earlier in the session.
@@ -140,6 +242,12 @@ notification to fire — see "Not captured".
 
 \* `task-detail` was captured but landed on the wrong screen and has been removed; it still needs a
 clean capture.
+
+**`tasks-search-default.png` was a second bogus reference** — byte-identical to
+`tasks-list-default.png`, so the search state had never actually been captured. It has been replaced
+with a real one driven through the XCUITest remote. Worth checking the rest the same way: two of the
+first eleven Swift references in this group were wrong, and a wrong reference is worse than a
+missing one because nothing flags it.
 
 ### Keyboard states cannot be compared as a full-screen diff
 

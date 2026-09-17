@@ -1,8 +1,8 @@
-import { router } from 'expo-router';
+import { router, Stack } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
-import { StickyFooter, Text } from '../../src/components';
+import { Text } from '../../src/components';
 import { ProjectEditorForm } from '../../src/components/ProjectEditorForm';
 import { isValidProjectName, PROJECT_PALETTE } from '../../src/lib/projectQuery';
 import { useCreateProject } from '../../src/query/useProjects';
@@ -29,6 +29,27 @@ export default function NewProject() {
 
   return (
     <View style={[styles.fill, { backgroundColor: theme.colors.groupedBackground }]}>
+      {/* `ToolbarItem(placement: .confirmationAction) { Button("Done", action: save) }`
+          (ProjectsView.swift:149) — a nav-bar button, not a footer. */}
+      <Stack.Screen
+        options={{
+          headerRight: () => (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Done"
+              accessibilityState={{ disabled: !canSave }}
+              disabled={!canSave}
+              onPress={save}
+              hitSlop={8}
+              testID="project-done"
+            >
+              <Text style={[theme.typography.body, { color: canSave ? theme.colors.tint : theme.colors.secondary, fontWeight: '600' }]}>
+                Done
+              </Text>
+            </Pressable>
+          ),
+        }}
+      />
       <ProjectEditorForm
         name={name}
         color={color}
@@ -38,25 +59,10 @@ export default function NewProject() {
         error={error}
         onRetry={save}
       />
-      <StickyFooter>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Done"
-          accessibilityState={{ disabled: !canSave }}
-          disabled={!canSave}
-          onPress={save}
-          style={styles.done}
-          testID="project-done"
-        >
-          <Text style={[theme.typography.body, { color: canSave ? theme.colors.tint : theme.colors.secondary }]}>Done</Text>
-        </Pressable>
-      </StickyFooter>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   fill: { flex: 1 },
-  footer: { borderTopWidth: StyleSheet.hairlineWidth, paddingHorizontal: 20 },
-  done: { minHeight: 44, justifyContent: 'center', alignItems: 'flex-end' },
 });

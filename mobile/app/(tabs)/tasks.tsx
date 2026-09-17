@@ -5,13 +5,27 @@ import { ActivityIndicator, Alert, Pressable, RefreshControl, ScrollView, StyleS
 import { CreationCard, DatePill, HeaderButton, SectionHeader, TaskCard, TaskEmptyState, TaskSymbol, Text } from '../../src/components';
 import { ProjectsList } from '../../src/components/ProjectsList';
 import { TasksTopBar, TodayBackdrop } from '../../src/components/TodayShell';
-import { DATE_FILTER_EMPTY_TITLE, TASK_DATE_FILTERS, snapshot, type TaskDateFilter } from '../../src/lib/taskQuery';
+import {
+  DATE_FILTER_EMPTY_TITLE,
+  TASK_DATE_FILTERS,
+  TASK_HISTORY_RANGES,
+  snapshot,
+  type TaskDateFilter,
+  type TaskHistoryRange,
+} from '../../src/lib/taskQuery';
 import { sectionTitle } from '../../src/lib/taskLabels';
 import { useProjects } from '../../src/query/useProjects';
 import { useCompleteTask, useTasks, type ScheduleConflict } from '../../src/query/useTasks';
 import { useSession } from '../../src/store/session';
 import { useTaskQuery } from '../../src/store/taskQuery';
 import { useTheme } from '../../src/theme';
+
+/** The caption under the history-range picker (RootView.swift:1678). */
+const HISTORY_RANGE_CAPTION: Record<TaskHistoryRange, string> = {
+  'This Month': 'Tasks scheduled within this calendar month.',
+  'Last Month': 'Previous calendar month, plus upcoming open tasks.',
+  'Last 2 weeks': 'History through today, plus upcoming open tasks.',
+};
 
 /**
  * Port of `TasksView` (ios/App/RootView.swift:1620-1907).
@@ -34,6 +48,7 @@ export default function Tasks() {
   const [showingProjects, setShowingProjects] = useState(false);
   const [searching, setSearching] = useState(false);
   const [conflict, setConflict] = useState<ScheduleConflict | null>(null);
+  const [rangeOpen, setRangeOpen] = useState(false);
 
   const tasks = useTasks();
   const projects = useProjects();
@@ -189,6 +204,53 @@ export default function Tasks() {
               ))}
             </ScrollView>
 
+            {/* `if model.taskQuery.date == .all { … }` (RootView.swift:1669-1681): the history-range
+                picker and its explanatory caption, shown only on the All pill. */}
+            {query.date === 'All' ? (
+              <View style={styles.historyRange}>
+                <View style={styles.historyRangeRow}>
+                  <Text style={[styles.historyRangeTitle, { color: theme.colors.ink }]}>History range</Text>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={`History range, ${query.historyRange}`}
+                    accessibilityState={{ expanded: rangeOpen }}
+                    onPress={() => setRangeOpen((open) => !open)}
+                    hitSlop={8}
+                    style={styles.historyRangeValue}
+                    testID="history-range"
+                  >
+                    <Text style={[theme.typography.body, { color: theme.colors.tint }]}>{query.historyRange}</Text>
+                    <TaskSymbol name="chevron.up.chevron.down" size={13} color={theme.colors.tint} />
+                  </Pressable>
+                </View>
+                {rangeOpen ? (
+                  <View style={[styles.rangeMenu, { backgroundColor: theme.colors.surface, borderColor: theme.colors.separator }]}>
+                    {TASK_HISTORY_RANGES.map((range, index, all) => (
+                      <Pressable
+                        key={range}
+                        accessibilityRole="button"
+                        accessibilityLabel={range}
+                        accessibilityState={{ selected: query.historyRange === range }}
+                        onPress={() => {
+                          setQuery({ historyRange: range });
+                          setRangeOpen(false);
+                        }}
+                        style={[
+                          styles.rangeOption,
+                          index < all.length - 1 && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.colors.separator },
+                        ]}
+                        testID={`history-range-${range}`}
+                      >
+                        <Text style={[theme.typography.body, styles.grow, { color: theme.colors.ink }]}>{range}</Text>
+                        {query.historyRange === range ? <TaskSymbol name="checkmark" size={16} color={theme.colors.tint} /> : null}
+                      </Pressable>
+                    ))}
+                  </View>
+                ) : null}
+                <Text style={[styles.historyRangeCaption, { color: theme.colors.secondary }]}>{HISTORY_RANGE_CAPTION[query.historyRange]}</Text>
+              </View>
+            ) : null}
+
             {/* `taskSections` (RootView.swift:1808-1842) */}
             {tasks.isLoading && (loaded?.tasks.length ?? 0) === 0 ? (
               <View style={styles.loading}>
@@ -263,7 +325,16 @@ const styles = StyleSheet.create({
   searchInput: { flex: 1, paddingVertical: 0 },
   searchClose: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   creationRow: { flexDirection: 'row', gap: 12 },
+  grow: { flex: 1 },
   pills: { gap: 7 },
+  // `VStack(alignment: .leading, spacing: 6)` (RootView.swift:1670).
+  historyRange: { gap: 6 },
+  historyRangeRow: { flexDirection: 'row', alignItems: 'center' },
+  historyRangeTitle: { flex: 1, fontSize: 15, lineHeight: 21, fontWeight: '700' },
+  historyRangeValue: { flexDirection: 'row', alignItems: 'center', gap: 4, minHeight: 44 },
+  historyRangeCaption: { fontSize: 12, lineHeight: 16 },
+  rangeMenu: { borderRadius: 14, borderWidth: StyleSheet.hairlineWidth, overflow: 'hidden' },
+  rangeOption: { flexDirection: 'row', alignItems: 'center', minHeight: 44, paddingHorizontal: 16 },
   loading: { alignItems: 'center', justifyContent: 'center', gap: 8, padding: 30 },
   loadFailed: { alignItems: 'center', gap: 8, padding: 16 },
   retry: { minHeight: 44, justifyContent: 'center' },

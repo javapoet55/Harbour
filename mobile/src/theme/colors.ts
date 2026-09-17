@@ -128,7 +128,9 @@ export const palettes: Record<ColorScheme, Palette> = {
     listSeparator: '#38383A',
     segmentTrack: 'rgba(118, 118, 128, 0.18)',
     segmentSelected: 'rgba(235, 235, 245, 0.32)',
-    tabBarBackground: '#1C1C1E',
-    tabBarSelected: 'rgba(122, 106, 255, 0.22)',
+    tabBarBackground: '#1F1F1F',
+    // Measured off the Swift app in dark mode: the capsule is (34, 32, 52) over a (31, 31, 31) bar,
+    // which is `nexdoIndigo` at 10% — the *same* value as light mode, not a lighter indigo at 22%.
+    tabBarSelected: 'rgba(61, 41, 240, 0.10)',
   },
 };

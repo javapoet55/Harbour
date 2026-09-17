@@ -86,19 +86,37 @@ whole column had drifted 5pt up — on top of the 62pt safe-area error in sectio
 height by putting the same string in both apps and comparing the frame heights the accessibility
 tree reports; do not derive it.
 
-**Verified on Android: the sizes are right, the typeface is narrower.** Rendering the same strings
-on both devices and converting to logical units:
+**Verified on Android: the sizes are right, and Roboto is *not* narrower.** Rendering the same
+strings on both devices and converting to logical units:
 
 | String | iOS (SF Pro) | Android (Roboto) | |
 | --- | ---: | ---: | --- |
-| "Tasks", `.largeTitle` bold — height | 24.6 pt | 24.0 dp | sizes map 1:1 |
-| "Tasks" — width | 87.7 pt | 80.0 dp | 9% narrower |
-| "Turn intent into action.", `.subheadline` — width | 151.9 pt | 136.5 dp | 10% narrower |
+| "Tasks", `.largeTitle` bold — cap height | 24.57 pt | 26.13 dp | **6% taller** |
+| "Tasks" — width | 87.66 pt | 88.53 dp | **1% wider — effectively the same** |
 
-So keep the `fontSize` column as it is; do **not** scale it for Android. But expect every run of text
-to be about 9% narrower than the Swift screenshot, which changes where lines break. Combined with the
-18 dp narrower screen (section 1b), that is the cause of most wrapping differences — and the reason a
-block that wraps identically on both cannot be assumed from an iOS capture.
+**Corrected, and the earlier entry was wrong for a reason worth remembering.** This table previously
+read "80.0 dp, 9% narrower" and "136.5 dp, 10% narrower", and concluded that every run of text sets
+about 9% narrower on Android. That is false. The test phone had **`settings system font_scale` set
+to 0.9**, and React Native's `Text` honours the OS font scale by default (`allowFontScaling`), so
+every Android measurement was of text rendered at 90% of the size the Swift reference used. The
+"9% narrower" was the 0.9 font scale and nothing else — 80.0 / 0.9 = 88.9, which is the real width.
+
+Two consequences:
+
+- **Set the phone to `font_scale 1.0` before capturing anything**, because the iOS Simulator is at
+  the default Dynamic Type size. Otherwise the reference and the target are not comparable and every
+  figure is measuring the phone's accessibility setting:
+
+  ```sh
+  adb shell settings put system font_scale 1.0
+  ```
+
+- **Do not compensate for a narrower typeface, because there isn't one.** Where a label wraps or
+  truncates on Android but not on iOS, the cause is the 18 dp narrower screen (section 1b) or the
+  layout giving the label too little width (section 4) — not the font.
+
+Roboto's cap height is ~6% taller than SF Pro's at the same `fontSize`. That shifts vertical rhythm
+slightly; it does not change line breaking.
 
 Weights: `.regular` → `'400'`, `.medium` → `'500'`, `.semibold` → `'600'`, `.bold` → `'700'`.
 `.title3.bold()` therefore becomes `{ fontSize: 20, lineHeight: 28, fontWeight: '700' }`.
@@ -167,6 +185,44 @@ not padding on the stack. Translating it as stack padding shifts every sibling.
 A percentage width resolves against the parent, and the margin is then added on top, so the child
 overflows. The Apple button came out 402pt wide inside a 346pt column. Use
 `alignSelf: 'stretch'`, which is what the SwiftUI modifier actually means.
+
+**A centred button label must stretch, not be centred by its parent.** SwiftUI's
+
+```swift
+Button { … } label: {
+    Text("Add task").frame(maxWidth: .infinity, minHeight: 52)
+}
+```
+
+gives the *label* the button's full width. The obvious React Native translation — `alignItems:
+'center'` on the `Pressable`, with the `Text` left to size itself — is wrong, and it fails in a way
+that is easy to misread:
+
+```tsx
+// wrong
+capsule: { minHeight: 52, alignItems: 'center', justifyContent: 'center' },
+label:   { fontSize: 17, lineHeight: 22, fontWeight: '600' },
+```
+
+`alignItems: 'center'` sizes the `Text` to its own measured width and nothing more. On Android the
+measure and draw passes can disagree by a fraction of a pixel, so a label that measured as one line
+is laid out as one line, then *drawn* as two — and the second line falls outside the view's height
+and is clipped. "Add task" rendered as **"Add"**, centred, with no ellipsis and no clue anything was
+missing. `adb shell uiautomator dump` still reported `text="Add task"`, which is what gives it away:
+the string is right, the box is a hair too narrow. It is not a copy bug and not a font bug — the
+phone's font scale and the typeface are both irrelevant here.
+
+```tsx
+// right
+capsule: { minHeight: 52, justifyContent: 'center', paddingHorizontal: 20 },
+label:   { alignSelf: 'stretch', textAlign: 'center', fontSize: 17, lineHeight: 22, fontWeight: '600' },
+```
+
+`alignSelf: 'stretch'` + `textAlign: 'center'` is the literal translation of `.frame(maxWidth:
+.infinity)` on the label, and it removes the rounding sensitivity entirely because the text box is
+now far wider than the glyph run. Apply it to every single-line label inside a full-width control.
+`numberOfLines={1}` is **not** the fix: it converts the clipped second line into a truncation
+("Add ta…") instead of preventing it.
 
 **Flexbox cannot size a wrapped `Text` to its longest line.** SwiftUI does: a centred `Label` whose
 title wraps is a tight block in the middle of its parent. A shrinking flex child is measured at its
@@ -343,6 +399,50 @@ not merely misplaced. Six screens had the same hand-rolled footer; they now shar
 `StickyFooter`, which adds `useSafeAreaInsets().bottom` to its padding. This is a functional bug as
 much as a visual one, so check it on any new screen with a pinned action.
 
+### A toolbar item is a header button, not a footer button
+
+`ToolbarItem(placement:)` says where a button goes, and the placement has to be read — a sheet's
+"Done" is not automatically at the bottom just because a previous screen put one there.
+
+| SwiftUI placement | React Native |
+| --- | --- |
+| `.cancellationAction` | `headerLeft` |
+| `.confirmationAction` | `headerRight` |
+| `.topBarTrailing` | `headerRight` |
+| no toolbar item — the button is in the view body | a `StickyFooter` at the bottom |
+
+The project editors and the task-filters sheet all had their "Done" in a `StickyFooter`, but Swift
+declares `ToolbarItem(placement: .confirmationAction)` for each (ProjectsView.swift:149,
+RootView.swift:1722), so all three belong in the header. The task editor and the calendar event
+editor genuinely do have a body button — Swift gives them only a `.cancellationAction` "Close"
+(RootView.swift:2032, CalendarView.swift:577) and draws "Create Task" in the view — so `StickyFooter`
+is right there. Check the placement per screen.
+
+When the button's enabled state depends on screen state, set it from the screen with an inline
+`<Stack.Screen options={{ headerRight: … }} />` rather than in `_layout.tsx`; the same applies to a
+title that depends on loaded data, such as the project name.
+
+### A `Form` section header is sentence case on iOS 26
+
+`Section("Project name")` renders as **"Project name"**, not "PROJECT NAME". Uppercasing is
+pre-iOS-15 behaviour and it was being applied by hand.
+
+But do not generalise it into "iOS does not uppercase headers". The task editor's "NOTES",
+"PROJECT", "DATE" and "TIME ESTIMATE" are *not* `Form` sections — they are literal uppercase strings
+passed to a custom `TaskEditorLabel` (RootView.swift:1964-1990) — and they stay uppercase. Read
+which construct Swift used.
+
+### `Picker` in a `Form` is a row, not a list
+
+`Picker("Status", selection:)` inside a `Form` renders as a single row carrying the label, the
+current value and an up/down chevron; the options appear only on tap. Expanding it into a list of
+every option under an invented section header changes the resting shape of the screen completely —
+on the filters sheet that alone was most of an 80% difference. React Native has no native picker
+(a recorded gap), so expand the row *in place*, but keep it collapsed by default.
+
+`Toggle` is a `Switch`, not a checkmark row, and it takes the root `.tint(.nexdoIndigo)`
+(RootView.swift:46) rather than Android's default teal — set `trackColor.true` to the theme tint.
+
 ### The tab bar's selected capsule
 
 Swift marks the selected tab with a rounded capsule of `nexdoIndigo` at 10%. Two traps:
@@ -352,6 +452,17 @@ Swift marks the selected tab with a rounded capsule of `nexdoIndigo` at 10%. Two
   `overflow: 'hidden'` does not reach it. Draw the capsule inside a custom `tabBarButton`.
 - **Focus arrives as `aria-selected`,** not `accessibilityState.selected`, from Expo Router's
   `BottomTabItem`. Reading the wrong one hides the capsule silently, with nothing in the logs.
+- **React Navigation's button style is spread after yours** in a custom `tabBarButton`, and it
+  carries `alignItems: 'center'`. That overrides the default `stretch`, so the capsule shrink-wraps
+  its icon and label — 35 dp against Swift's 85 dp. Put `alignSelf: 'stretch'` on the capsule.
+- **The dark capsule is the same colour as the light one.** It was guessed at
+  `rgba(122, 106, 255, 0.22)` on the assumption that a dark bar needs a lighter, stronger tint.
+  Measured, Swift's is (34, 32, 52) over a (31, 31, 31) bar, which solves exactly to `nexdoIndigo`
+  at 10% — identical to light mode. The bar itself is (31, 31, 31), not `#1C1C1E`.
+
+The general point, and it has now cost three separate mistakes in this file: **a dark-mode value is
+not derivable from its light-mode value by reasoning about contrast.** Measure it off the Swift app.
+See also `glassStroke` in §3.
 
 ### Navigation bar buttons
 

@@ -29,6 +29,10 @@ const styles = StyleSheet.create({
   button: { flex: 1 },
   pill: {
     flex: 1,
+    // React Navigation's own button style carries `alignItems: 'center'`, and it is spread after
+    // `styles.button`, so without this the capsule shrink-wraps its icon and label instead of
+    // spanning the item the way Swift's does — 35dp wide against Swift's 85dp.
+    alignSelf: 'stretch',
     marginHorizontal: 4,
     marginVertical: 4,
     borderRadius: 11,

@@ -1,10 +1,10 @@
-import { router, useLocalSearchParams } from 'expo-router';
+import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 
 import { TaskSymbol, Text } from '../../../src/components';
 import { ProjectFolder, ProjectSearchField, TaskListRow, useProjectAccent } from '../../../src/components/ProjectParts';
-import { TodayBackdrop } from '../../../src/components/TodayShell';
+import { TodayBackdrop, TodayHeaderButton } from '../../../src/components/TodayShell';
 import { projectColor, searchMatches } from '../../../src/lib/projectQuery';
 import { dayKey, isDone, parseServerDate } from '../../../src/lib/taskQuery';
 import { useDeleteProject, useProject, useProjects } from '../../../src/query/useProjects';
@@ -91,6 +91,28 @@ export default function ProjectDetail() {
 
   return (
     <View style={styles.fill}>
+      {/* `.navigationTitle(project?.name ?? "No project")` and the `.topBarTrailing` menu
+          (ProjectsView.swift:258-268). Both are set here rather than in `_layout.tsx` because they
+          depend on the loaded project. */}
+      <Stack.Screen
+        options={{
+          title,
+          headerRight: () => (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Project actions"
+              accessibilityState={{ disabled: remove.isPending || missing }}
+              disabled={remove.isPending || missing}
+              onPress={() => setMenuOpen((open) => !open)}
+              testID="project-actions"
+              hitSlop={8}
+              style={[styles.menuButton, (remove.isPending || missing) && { opacity: 0.3 }]}
+            >
+              <TaskSymbol name="ellipsis.circle" size={22} color={accent} />
+            </Pressable>
+          ),
+        }}
+      />
       <TodayBackdrop subtle />
       <ScrollView
         keyboardShouldPersistTaps="handled"
@@ -103,28 +125,13 @@ export default function ProjectDetail() {
           <Text accessibilityRole="header" style={[styles.title, { color: theme.colors.ink }]} testID="project-title">
             {title}
           </Text>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={`Add task to ${title}`}
-            accessibilityState={{ disabled: remove.isPending || missing }}
+          <TodayHeaderButton
+            icon="plus"
+            label={`Add task to ${title}`}
             disabled={remove.isPending || missing}
             onPress={() => router.push({ pathname: '/task/new', params: projectID ? { projectId: projectID } : {} })}
             testID="project-add-task"
-            style={[styles.addButton, { backgroundColor: accent }]}
-          >
-            <TaskSymbol name="plus" size={20} color="#FFFFFF" />
-          </Pressable>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Project actions"
-            accessibilityState={{ disabled: remove.isPending || missing }}
-            disabled={remove.isPending || missing}
-            onPress={() => setMenuOpen((open) => !open)}
-            testID="project-actions"
-            style={styles.menuButton}
-          >
-            <Text style={[styles.menuGlyph, { color: accent }]}>···</Text>
-          </Pressable>
+          />
         </View>
 
         {/* The toolbar `Menu` (ProjectsView.swift:260-268), as an inline list. */}
@@ -317,9 +324,7 @@ const styles = StyleSheet.create({
   scroll: { padding: 20, gap: 16 },
   headerRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   title: { flex: 1, fontSize: 22, lineHeight: 28, fontWeight: '700' },
-  addButton: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
   menuButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
-  menuGlyph: { fontSize: 22, lineHeight: 26, fontWeight: '700' },
   menu: { borderRadius: 14, borderWidth: StyleSheet.hairlineWidth, overflow: 'hidden' },
   menuRow: { flexDirection: 'row', alignItems: 'center', minHeight: 44, paddingHorizontal: 16 },
   grow: { flex: 1 },
@@ -334,7 +339,10 @@ const styles = StyleSheet.create({
   emptyBlock: { alignItems: 'center', justifyContent: 'center', gap: 14, minHeight: 260 },
   emptyBody: { fontSize: 20, lineHeight: 25 },
   subheadline: { fontSize: 15, lineHeight: 20 },
-  addTaskCapsule: { minHeight: 52, alignItems: 'center', justifyContent: 'center', borderRadius: 26 },
-  addTaskLabel: { fontSize: 17, lineHeight: 22, fontWeight: '600' },
+  addTaskCapsule: { minHeight: 52, justifyContent: 'center', paddingHorizontal: 20, borderRadius: 26 },
+  // `alignSelf: 'stretch'` + `textAlign` rather than the parent's `alignItems: 'center'`: see
+  // docs/swift-to-rn-style-map.md §7. Centring via the parent sizes the label to its own measured
+  // width, and Android then wraps the last word onto a second, clipped line.
+  addTaskLabel: { alignSelf: 'stretch', textAlign: 'center', fontSize: 17, lineHeight: 22, fontWeight: '600' },
   list: { gap: 12 },
 });

@@ -9,10 +9,32 @@ import { useSession } from '../store/session';
 const mockPush = jest.fn();
 const mockBack = jest.fn();
 const mockParams = jest.fn(() => ({}) as Record<string, string>);
-jest.mock('expo-router', () => ({
-  router: { push: (...args: unknown[]) => mockPush(...args), replace: jest.fn(), back: (...args: unknown[]) => mockBack(...args) },
-  useLocalSearchParams: () => mockParams(),
-}));
+jest.mock('expo-router', () => {
+  const { View } = require('react-native') as typeof import('react-native');
+  // The screens set their title and their toolbar buttons through `<Stack.Screen options>`, the way
+  // Swift declares them on the view. Rendering the header items here keeps them reachable from the
+  // tests instead of silently dropping them.
+  function Screen({
+    options,
+  }: {
+    options?: { headerLeft?: () => React.ReactNode; headerRight?: () => React.ReactNode };
+  }) {
+    return (
+      <View>
+        {options?.headerLeft?.()}
+        {options?.headerRight?.()}
+      </View>
+    );
+  }
+  function StackRoot({ children }: { children?: React.ReactNode }) {
+    return <View>{children}</View>;
+  }
+  return {
+    router: { push: (...args: unknown[]) => mockPush(...args), replace: jest.fn(), back: (...args: unknown[]) => mockBack(...args) },
+    useLocalSearchParams: () => mockParams(),
+    Stack: Object.assign(StackRoot, { Screen }),
+  };
+});
 
 const mockTasks = jest.fn();
 const mockProjects = jest.fn();

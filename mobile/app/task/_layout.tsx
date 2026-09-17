@@ -36,7 +36,8 @@ export default function TaskLayout() {
     >
       <Stack.Screen name="new" options={{ presentation: 'modal', title: 'New Task', headerLeft: closeButton('Close') }} />
       <Stack.Screen name="[id]" options={{ presentation: 'modal', title: 'Task', headerLeft: closeButton('Close') }} />
-      <Stack.Screen name="filters" options={{ presentation: 'modal', title: 'Task filters', headerLeft: closeButton('Cancel') }} />
+      {/* Swift has only a confirmation "Done" here and a large title, both set by the screen. */}
+      <Stack.Screen name="filters" options={{ presentation: 'modal' }} />
       <Stack.Screen name="voice-capture" options={{ presentation: 'fullScreenModal', title: 'Add by Voice', headerLeft: closeButton('Cancel') }} />
     </Stack>
   );

@@ -116,7 +116,9 @@ function Section({ title, children }: { title?: string; children: React.ReactNod
   const theme = useTheme();
   return (
     <View style={styles.section}>
-      {title ? <Text style={[styles.sectionHeader, { color: theme.colors.secondary }]}>{title.toUpperCase()}</Text> : null}
+      {/* iOS 26 no longer uppercases a `Form` section header — `Section("Project name")` renders as
+          written. Uppercasing it is the pre-iOS-15 behaviour. */}
+      {title ? <Text style={[styles.sectionHeader, { color: theme.colors.secondaryLabel }]}>{title}</Text> : null}
       <View style={[styles.sectionBody, { backgroundColor: theme.colors.surface }]}>{children}</View>
     </View>
   );
