@@ -1,16 +1,17 @@
 import { useQueryClient } from '@tanstack/react-query';
+import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 
 import { useCoordinator } from '../../../src/actions/coordinator';
-import { TaskSymbol, Text } from '../../../src/components';
+import { GlassCard, TaskSymbol, Text } from '../../../src/components';
 import { TodayActionsView } from '../../../src/components/TodayActions';
 import { PersistentNextCard, ProtectedTimeCard } from '../../../src/components/TodayNextAction';
 import { FocusSessionStrip } from '../../../src/components/FocusSessionStrip';
 import { AttentionCard } from '../../../src/components/AttentionCard';
 import { TodayIntelligenceCard } from '../../../src/components/TodayIntelligenceCard';
-import { TasksTopBar, TodayBackdrop } from '../../../src/components/TodayShell';
+import { NEXDO_GRADIENT, TasksTopBar, TodayBackdrop } from '../../../src/components/TodayShell';
 import {
   buildSchedule,
   dateLabel,
@@ -204,18 +205,32 @@ export default function Today() {
             accessibilityHint="Opens your weekly progress report"
             onPress={() => router.push('/today/weekly-summary')}
             testID="today-weekly-summary"
-            style={[styles.summaryCard, { backgroundColor: theme.colors.surface, borderColor: withAlpha(brand.nexdoIndigo, 0.12) }]}
           >
-            <View style={[styles.summaryIcon, { backgroundColor: brand.nexdoIndigo }]}>
-              <TaskSymbol name="chart.bar.xaxis" size={20} color="#FFFFFF" />
-            </View>
-            <View style={styles.grow}>
-              <Text style={[styles.summaryTitle, { color: theme.colors.ink }]}>Weekly Summary</Text>
-              <Text style={[styles.caption, { color: theme.colors.secondary }]}>
-                Review progress, focus time, and accomplishments
-              </Text>
-            </View>
-            <TaskSymbol name="chevron.right" size={15} color={theme.colors.secondary} />
+            {/* `.background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 20))` with an
+                indigo 12% stroke and no shadow (RootView.swift:1084-1085). An opaque `surface` fill
+                reads as flat white against the lavender backdrop; measured, Swift's card sits at
+                (238, 237, 240) with the backdrop showing through. */}
+            <GlassCard radius={20} shadow={false} stroke={withAlpha(brand.nexdoIndigo, 0.12)}>
+              <View style={styles.summaryCard}>
+                {/* `.background(NexdoTheme.gradient, in: RoundedRectangle(cornerRadius: 14))`
+                    (RootView.swift:1076) — the brand gradient, not a flat indigo fill. */}
+                <LinearGradient
+                  colors={[...NEXDO_GRADIENT]}
+                  start={{ x: 0, y: 0.5 }}
+                  end={{ x: 1, y: 0.5 }}
+                  style={styles.summaryIcon}
+                >
+                  <TaskSymbol name="chart.bar.xaxis" size={20} color="#FFFFFF" />
+                </LinearGradient>
+                <View style={styles.grow}>
+                  <Text style={[styles.summaryTitle, { color: theme.colors.ink }]}>Weekly Summary</Text>
+                  <Text style={[styles.caption, { color: theme.colors.secondary }]}>
+                    Review progress, focus time, and accomplishments
+                  </Text>
+                </View>
+                <TaskSymbol name="chevron.right" size={15} color={theme.colors.secondary} />
+              </View>
+            </GlassCard>
           </Pressable>
         )}
 
@@ -354,7 +369,7 @@ const styles = StyleSheet.create({
   // The compact Daily Briefing row (RootView.swift:1063-1070): `.padding(16)`, corner radius 20.
   briefingRow: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16, borderRadius: 20, borderWidth: StyleSheet.hairlineWidth },
   briefingButton: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 32 },
-  summaryCard: { flexDirection: 'row', alignItems: 'center', gap: 14, padding: 16, borderRadius: 20, borderWidth: StyleSheet.hairlineWidth },
+  summaryCard: { flexDirection: 'row', alignItems: 'center', gap: 14, padding: 16 },
   summaryIcon: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
   summaryTitle: { fontSize: 17, lineHeight: 22, fontWeight: '600' },
   caption: { fontSize: 12, lineHeight: 16 },

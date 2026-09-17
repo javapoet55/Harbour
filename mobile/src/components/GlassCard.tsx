@@ -8,6 +8,14 @@ export type GlassCardProps = {
   children: ReactNode;
   /** `RoundedRectangle(cornerRadius:)`: 28 on sign-in, 26 on sign-up and verify-email. */
   radius: number;
+  /**
+   * The `.overlay(...stroke(...))` colour, when the caller's is not the auth one. The Weekly
+   * Summary card strokes `Color.nexdoIndigo.opacity(0.12)` (RootView.swift:1085) where the auth
+   * cards stroke `Color.white.opacity(0.8)`.
+   */
+  stroke?: string;
+  /** Swift only shadows the auth cards; a `.ultraThinMaterial` card elsewhere carries none. */
+  shadow?: boolean;
   style?: StyleProp<ViewStyle>;
 };
 
@@ -19,9 +27,11 @@ export type GlassCardProps = {
  *   .overlay(RoundedRectangle(cornerRadius: r, style: .continuous).stroke(Color.white.opacity(0.8)))
  *   .shadow(color: Color.purple.opacity(0.09), radius: 25, y: 12)
  */
-export function GlassCard({ children, radius, style }: GlassCardProps) {
+export function GlassCard({ children, radius, stroke, shadow: withShadow = true, style }: GlassCardProps) {
   const theme = useTheme();
-  const shadow =
+  const shadow = !withShadow
+    ? null
+    :
     Platform.OS === 'android'
       ? // Android draws an elevation shadow behind the view, and this card's fill is only 72%
         // opaque, so a strong shadow bleeds through its own edges as a dark inset band. The Swift
@@ -37,7 +47,7 @@ export function GlassCard({ children, radius, style }: GlassCardProps) {
       </View>
       <View
         pointerEvents="none"
-        style={[StyleSheet.absoluteFill, { borderRadius: radius, borderWidth: StyleSheet.hairlineWidth, borderColor: theme.colors.glassStroke }]}
+        style={[StyleSheet.absoluteFill, { borderRadius: radius, borderWidth: StyleSheet.hairlineWidth, borderColor: stroke ?? theme.colors.glassStroke }]}
       />
       <View style={{ borderRadius: radius, overflow: 'hidden' }}>{children}</View>
     </View>

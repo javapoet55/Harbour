@@ -340,6 +340,45 @@ could not make are listed in [`SHARED-REQUESTS.md`](SHARED-REQUESTS.md).
 | Action queue (8) | default + empty | pending device | `TodayActionsView.swift:188-220` — **no capture** | The sheet takes the elevated palette. The inline title is centred with Done trailing. Section headers are **"Due now" / "Upcoming"** in sentence case at `.body`/`.secondaryLabel` inset 32 — they were `DUE NOW` / `UPCOMING` at 13pt. 26pt corners, no section stroke, 1pt `listSeparator` rows, 56pt row boxes. The empty state is a 52pt `.secondaryLabel` glyph over a `.label` title, as `ContentUnavailableView` draws it | `TodayActions.tsx`: `NextActionRow` line height and two `.secondary` colours | Never captured on either platform — it is reached from a reminder notification. Hand-built inset-grouped list rather than a `List` |
 | Task action (31) | default + unavailable | pending device | `TaskActionView.swift:133-236` — **no capture** | The sheet takes the elevated palette. `.subheadline` 20→21. The channel rows space their `Label` glyph by 6, not 12. "Finding contact…" stacks under its spinner. The contact detail line and the receipt take `.secondaryLabel`, not `nexdoSecondary`. The unavailable state matches `ContentUnavailableView`: a 52pt `.secondaryLabel` glyph, a `.label` title and a `.secondaryLabel` description | — | No capture. The two composers are the system ones on both platforms (§20 screen 32). Swift's `confirmationDialog` before placing a call is a Material alert here |
 
+## Group 4 — Today
+
+| Screen | Android vs Swift | Note |
+| --- | ---: | --- |
+| Needs your attention | **4.10%** | a match; the tab bar is now present on both |
+| Overdue | **6.08%** | a match |
+| Do Now | **9.98%** | first capture on either platform |
+| Weather forecast | **13.55%** | first capture on either platform |
+| Today, default | **20.41%** | was 27.79% before the Weekly Summary card was fixed |
+| Weekly Summary | **23.17%** | cumulative drift down a long screen |
+| Today, 3 days | **24.54%** | |
+| Today, 5 days | **24.62%** | |
+
+### The Weekly Summary card was solid white where Swift draws glass
+
+Three faults in one card, all from RootView.swift:1072-1088:
+
+| | Swift | Android before |
+| --- | --- | --- |
+| Fill | `.ultraThinMaterial` — measured (238, 237, 241) with the lavender backdrop showing through | `colors.surface`, flat **(255, 255, 255)** |
+| Stroke | `.stroke(Color.nexdoIndigo.opacity(0.12))` | present, but invisible against the opaque fill |
+| Icon | `.background(NexdoTheme.gradient, …)` — magenta → indigo → blue | a flat `nexdoIndigo` square |
+
+`.ultraThinMaterial` is on the accepted-gaps list, but **it is not actually a gap in this codebase**:
+`GlassCard` has reproduced it with `expo-blur` since the auth screens, and nothing else had reached
+for it. It now takes an optional `stroke` and `shadow` so a card that is not an auth card can use it —
+the auth cards stroke `Color.white.opacity(0.8)` and carry a shadow, this one strokes indigo at 12%
+and carries none. The Android card now measures (241, 241, 243) against Swift's (238, 237, 241).
+
+Worth re-reading the rest of the accepted-gaps list the same way: a gap that was true when it was
+written may have been closed by a later phase.
+
+### Still uncaptured in this group
+
+- **`weekly-tasks`** — captured on Android, no Swift reference yet; the driver stopped responding to
+  the Weekly Summary card before it could be shot.
+- **`schedule-check`** — neither platform. It opens from a schedule-gap attention item, and this
+  account's attention list holds only the Overdue row.
+
 ### Three of those figures measure presentation, not styling
 
 `ask-default` (36.21%), `ai-consent` (97.65%) and `event-details` (59.79%) are all cases where the
