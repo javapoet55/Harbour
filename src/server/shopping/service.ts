@@ -1,16 +1,17 @@
-import {randomUUID,randomBytes} from 'node:crypto';
+import {randomUUID,randomBytes,createHash} from 'node:crypto';
 import {prisma} from '@/server/db';
 import {z} from 'zod';
 import {listInput,nextShoppingDate,parseShopping} from './domain';
 import {MomentError} from '@/server/moments/domain';
 const include={items:{orderBy:{sortOrder:'asc' as const}}};
 export async function shoppingLists(userId:string){return prisma.shoppingList.findMany({where:{userId},include,orderBy:[{date:'desc'},{createdAt:'desc'}],take:200});}
-export async function shoppingAction(userId:string,raw:unknown){
+export async function shoppingAction(userId:string,raw:unknown,idempotencyKey?:string){
  const p=z.object({operation:z.enum(['create','save','delete','complete','share','revoke','parse']),id:z.string().optional(),revision:z.number().int().nonnegative().optional(),input:z.unknown().optional()}).parse(raw);
  if(p.operation==='parse'){const {text}=z.object({text:z.string().min(1).max(12000)}).parse(p.input);return {items:parseShopping(text).map(i=>({...i,id:randomUUID()}))};}
  if(p.operation==='create'){
   const input=listInput.parse(p.input);const {items,...data}=input;
-  return {list:await prisma.shoppingList.create({data:{...data,userId,items:{create:items.map((i,sortOrder)=>({...i,id:randomUUID(),sortOrder}))}},include})};
+  const id=idempotencyKey ? createHash('sha256').update(userId+':'+idempotencyKey).digest('hex') : randomUUID();
+  return {list:await prisma.shoppingList.upsert({where:{id},update:{},create:{id,...data,userId,items:{create:items.map((i,sortOrder)=>({...i,id:randomUUID(),sortOrder}))}},include})};
  }
  if(!p.id)throw new MomentError('List not found.',404);
  return prisma.$transaction(async tx=>{

@@ -1,3 +1,4 @@
+import { moduleConversation } from './module-conversation';
 import { scheduleContextVersion } from './replanner';
 import { creationWarnings, type AvailabilityContext } from '@/lib/availability';
 import { loadScheduleContext } from './schedule-intelligence';
@@ -300,6 +301,8 @@ function turn(plan: AgentPlan, confirmation?: { prompt: string; actionId: string
 }
 
 export async function runConversationalAgent(userId: string, transcript: string, confirmActionId?: string, rejectActionId?: string, contextActionId?: string): Promise<AssistantTurn> {
+  const moduleTurn = await moduleConversation(userId, transcript, confirmActionId, rejectActionId, contextActionId);
+  if (moduleTurn) return moduleTurn;
   const executive = await handleExecutiveTurn(userId, transcript, { confirmActionId, rejectActionId, contextActionId }, explainExecutiveRecommendation);
   if (executive) return executive;
   const deterministic = parseIntent(transcript);

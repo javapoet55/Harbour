@@ -1,3 +1,4 @@
+import { moduleSchemas, isModuleTool, executeModuleTool } from '../assistant-modules';
 import { voiceClock } from './time-context';
 import { ScheduleWarning } from '@/lib/schedule-warning';
 import { checkCreationAvailability } from '@/server/availability';
@@ -15,6 +16,7 @@ const timestamp = z.string().datetime({ offset: true });
 const fields = { title: z.string().trim().min(1).max(200), notes: z.string().max(4000), scheduledAt: timestamp, durationMin: z.number().int().min(1).max(1440), categoryName: z.string().trim().min(1).max(80) };
 const id = z.string().min(1).max(200);
 const schemas = {
+  ...moduleSchemas,
   get_current_time: z.object({}).strict(),
   get_recommendations: z.object({ minutes: z.number().int().min(1).max(480).optional() }).strict(),
   list_categories: z.object({}).strict(),
@@ -35,6 +37,7 @@ export function validateVoiceTool(name: string, args: unknown) {
 }
 export async function executeVoiceTool(userId: string, sessionId: string, callId: string, name: string, input: unknown) {
   validateVoiceTool(name, input);
+  if (isModuleTool(name)) return executeModuleTool(userId, `${sessionId}:${callId}`, name, input);
   if (name === 'get_current_time') {
     const user = await prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { timeZone: true } });
     return { success: true, ...voiceClock(user.timeZone) };
