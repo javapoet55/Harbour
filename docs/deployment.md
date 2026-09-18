@@ -1,6 +1,6 @@
 # Deployment
 
-1. Set `HARBOR_DATABASE_URL` to Postgres. Railway runs `npm run db:migrate:deploy` before each deploy (`preDeployCommand` in `railway.json`); on other hosts run the same command before `npm start`. It applies `prisma/migrations`. The first time it meets a database created with `prisma db push` (tables but no migration history), it records the `20260914000000_init` baseline as already applied instead of recreating tables.
+1. Set `HARBOR_DATABASE_URL` to Postgres. Railway runs `npm run db:migrate:deploy` before each deploy (`preDeployCommand` in `railway.json`); on other hosts run the same command before `npm start`. It applies `prisma/migrations`. The first time it meets a database created with `prisma db push` (tables but no migration history), it first requires an exact schema match, then records the existing migrations as applied instead of recreating tables. If the schemas differ, deployment stops for review.
    - Create schema changes with `npx prisma migrate dev --name <change>` against a local Postgres database, and commit the generated migration. A failed migration stops the deploy before the new code starts.
    - `prisma/sqlite/` holds the separate SQLite schema and migrations used only by tests and the demo seed.
 2. Set `HARBOR_SESSION_SECRET` to a long random value.
