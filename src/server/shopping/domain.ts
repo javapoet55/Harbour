@@ -23,13 +23,13 @@ export function categoryFor(name:string):typeof categories[number] {
 /** Deterministic, private parsing. Every result is editable before saving. */
 export function parseShopping(text:string) {
  const numbers:Record<string,string>={a:'1',an:'1',one:'1',two:'2',three:'3',four:'4',five:'5',six:'6',seven:'7',eight:'8',nine:'9',ten:'10',eleven:'11',twelve:'12',half:'0.5'};
- return text.replace(/\b(one|two|three|four|five|six|seven|eight|nine|ten) and a half\b/gi,(_,n)=>String(Number(numbers[n.toLowerCase()])+0.5)).replace(/mac and cheese/gi,'mac & cheese').replace(/\b(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|half|a|an)\b/gi,m=>numbers[m.toLowerCase()])
+ return text.replace(/\bhalf (?:a|an)\b/gi,'half').replace(/\b(one|two|three|four|five|six|seven|eight|nine|ten) and a half\b/gi,(_,n)=>String(Number(numbers[n.toLowerCase()])+0.5)).replace(/mac and cheese/gi,'mac & cheese').replace(/\b(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|half|a|an)\b/gi,m=>numbers[m.toLowerCase()])
  .split(/[,;\n]+|\s+and\s+/i).map(part=>{
   let name=part.trim().replace(/^(?:please\s+)?(?:add|buy|we need|i need|also|then)\s+/i,'').replace(/[.!]+$/,'').trim();
   let quantity='1',size='';
   const leading=name.match(/^(\d+(?:\.\d+)?(?:\/\d+)?)\s+/);
   if(leading){quantity=leading[1];name=name.slice(leading[0].length)}
-  const pack=name.match(/^(bottles?|bags?|boxes|box|packs?|cans?|cartons?|dozen|gallons?|liters?|litres?|pounds?|lbs?|kg|grams?|ounces?|oz)\s+(?:of\s+)?/i);
+  const pack=name.match(/^(bottles?|bags?|boxes|box|packs?|cans?|cartons?|dozen|gallons?|gal|liters?|litres?|ml|pounds?|lbs?|kg|grams?|g|ounces?|oz)\s+(?:of\s+)?/i);
   if(pack){size=pack[1];name=name.slice(pack[0].length)}
   const amount=name.match(/\s+(\d+(?:\.\d+)?\s*(?:oz|ounces?|gallons?|gal|liters?|litres?|ml|kg|g|lbs?|pounds?))\b/i);
   if(amount){size=[size,amount[1]].filter(Boolean).join(' · ');name=name.replace(amount[0],'')}

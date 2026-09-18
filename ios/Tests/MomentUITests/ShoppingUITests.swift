@@ -34,6 +34,18 @@ import XCTest
         XCTAssertFalse(app.buttons["Check Bananas"].exists)
         XCTAssertTrue(app.buttons["Add groceries by voice"].exists)
     }
+    func testCopyFromDetailOpensNewUncheckedList() {
+        openList()
+        app.buttons["Check Bananas"].tap()
+        XCTAssertTrue(app.buttons["Uncheck Bananas"].waitForExistence(timeout: 5))
+        app.buttons["List options"].tap()
+        app.buttons["Copy list"].tap()
+        XCTAssertTrue(app.navigationBars["New List"].waitForExistence(timeout: 5))
+        app.buttons["Create List"].tap()
+        XCTAssertTrue(app.navigationBars["Shopping List"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["Check Bananas"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["Uncheck Bananas"].exists)
+    }
     func testCreateFromLastList(){
         app.buttons["Create shopping list"].tap()
         XCTAssertTrue(app.navigationBars["New List"].waitForExistence(timeout:5))

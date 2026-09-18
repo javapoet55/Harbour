@@ -270,7 +270,7 @@ struct ShoppingDetail:View {
             .sheet(item:$item){value in ShoppingItemEditor(store:store,initial:value){updated in var next=list;if let index=next.items.firstIndex(where:{$0.id==updated.id}){next.items[index]=updated}else{next.items.append(updated)};save(next)}}
             .sheet(isPresented:$voice){ShoppingVoiceView(store:store){items in var next=list;next.items.append(contentsOf:items);save(next)}}
             .sheet(isPresented:$pendingReview){ShoppingBatchReview(items:pending){values in var next=list;next.items.append(contentsOf:values);save(next)}}
-            .sheet(isPresented:$copy){NewShoppingList(store:store,source:list)}
+            .sheet(isPresented:$copy){NewShoppingList(store:store,source:list){list=$0}}
             .sheet(isPresented:$settings){ShoppingSettings(initial:list){save($0)}}
             .sheet(isPresented:$sharing){ShoppingShare(store:store,list:list){list=$0}}
             .confirmationDialog("Delete this list?",isPresented:$deleting,titleVisibility:.visible){Button("Delete list",role:.destructive){Task{_ = await store.action("delete",list:list,input:[String:String]());if store.error==nil{dismiss()}}}}

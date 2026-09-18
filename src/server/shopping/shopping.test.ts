@@ -64,3 +64,9 @@ describe('shopping lists',()=>{
  });
 
 });
+
+it('parses common metric sizes and spoken half measures without corrupting item names',()=>{
+ expect(parseShopping('500 g rice, 250 ml milk, half a gallon of milk').map(i=>[i.name,i.quantity,i.size])).toEqual([
+  ['rice','500','g'],['milk','250','ml'],['milk','0.5','gallon']
+ ]);
+});

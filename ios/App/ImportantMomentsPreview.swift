@@ -48,6 +48,7 @@ final class MomentsPreviewProtocol: URLProtocol, @unchecked Sendable {
             }
         } else {
             var moment: [String: Any] = ["id":"moment","type":"birthday","title":"Damien’s Birthday","firstName":"Damien","phone":"+15555550184","email":"damien@example.com","occurrenceDate":day,"timeZoneID":"America/Los_Angeles","source":"manual","sourceKey":"fixture","yearly":true,"enabled":true,"nextOccurrence":day,"drafts":[draft()]]
+            if ProcessInfo.processInfo.arguments.contains("-legacy-moment-preview") { moment["type"] = "custom"; moment["title"] = "Damien’s Celebration" }
             if ProcessInfo.processInfo.arguments.contains("-festival-manage-preview") {
                 moment["type"]="festival";moment["title"]=Self.festivalSaved?["title"] ?? "Happy Diwali";moment["yearly"]=false
                 let future=MomentDates.day(Date().addingTimeInterval(30*86400),zone:"America/Los_Angeles")

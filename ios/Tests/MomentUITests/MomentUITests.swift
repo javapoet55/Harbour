@@ -358,6 +358,8 @@ import XCTest
         XCTAssertTrue(app.staticTexts["1 contacts selected"].exists)
     }
     func openReview() {
+        // Custom moments retain this delivery flow; birthdays use the four-tab manager.
+        app.terminate(); app.launchArguments.append("-legacy-moment-preview"); app.launch()
         let review = app.buttons["Review wish"].firstMatch
         XCTAssertTrue(review.waitForExistence(timeout: 10)); review.tap()
         XCTAssertTrue(app.navigationBars["Review Wish"].waitForExistence(timeout: 5))
