@@ -36,7 +36,11 @@ import AVFoundation
                 try? await Task.sleep(for:.seconds(300))
                 guard !Task.isCancelled else{return};self?.error="Five-minute session ended. Your transcript is ready to review.";self?.close()
             }
-        }catch{self.error="Couldn’t connect. Your transcript is kept; try again or type.";close()}
+        }catch{
+            guard run==generation else{return}
+            self.error=error.localizedDescription+" Your transcript is kept; retry or type your items."
+            close()
+        }
     }
     private func receive(_ data:Data) {
         guard let event=try? JSONSerialization.jsonObject(with:data) as? [String:Any],let type=event["type"] as? String else{return}
@@ -90,7 +94,7 @@ struct ShoppingVoiceView:View {
                     Button{Task{if voice.listening{await voice.finish()}else{await voice.start(store:store)}}}label:{
                         Image(systemName:voice.listening ? "pause.fill":"mic.fill").font(.system(size:48)).foregroundStyle(.white).frame(width:140,height:140).background(NexdoTheme.gradient,in:Circle()).shadow(color:.nexdoIndigo.opacity(0.2),radius:24)
                     }.disabled(!consent || voice.connecting || voice.finishing).accessibilityLabel(voice.listening ? "Pause listening":"Start listening")
-                    Text(voice.finishing ? "Finishing transcription…":voice.connecting ? "Connecting…":voice.listening ? "Listening — keep going":"Ready when you are").font(.headline)
+                    Text(!consent ? "Enable live transcription below to start":voice.finishing ? "Finishing transcription…":voice.connecting ? "Connecting…":voice.listening ? "Listening — keep going":"Ready when you are").font(.headline)
                     Toggle("Allow live voice transcription",isOn:$consent).onChange(of:consent){_,value in if !value{voice.close()}}
                     Text("Audio is sent for transcription while listening. Items are saved only after you review and add them.").font(.caption).foregroundStyle(.secondary)
                     TextEditor(text:$voice.text).frame(minHeight:120).padding(10).background(.ultraThinMaterial,in:RoundedRectangle(cornerRadius:16)).accessibilityLabel("Shopping transcript")

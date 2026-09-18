@@ -23,3 +23,7 @@ Additive migrations create ShoppingList and ShoppingItem tables in PostgreSQL an
 - Production backend compiled with `next build --webpack`; sandbox blocked Turbopack's local worker port.
 
 Release validation (2026-09-17): full backend suite 437 passed / 10 failed; unchanged main reproduces the same 10 failures. Native suite 120 passed / 1 overdue-task failure; verified against unchanged main. Shopping tests pass (5 backend, 4 Swift unit tests, 3 simulator UI flows). Live microphone/provider audio remains a device smoke-test item.
+
+## Continuous voice connection fix
+
+Production rejected the original `gpt-live-transcribe` + `server_vad` session with HTTP 400: turn detection is not supported for that model. The transcription-session endpoint now uses `gpt-4o-transcribe`, retaining automatic pause detection and the existing multi-turn transcript events. A production credential-only probe confirmed HTTP 200 with this configuration; no user audio was sent. iOS preserves useful backend/network error messages and explains that the voice consent switch must be enabled. This server fix also benefits existing app builds.

@@ -11,8 +11,9 @@ export async function POST(req: Request) {
     if (consent?.consent !== true) return Response.json({ error: 'Allow voice sharing before starting.' }, { status: 400, headers });
     const key = process.env.OPENAI_API_KEY;
     if (!key) return Response.json({ error: 'Live transcription is not configured yet. You can still type your question.' }, { status: 503, headers });
-    const session = { type: 'transcription', audio: { input: { transcription: { model: 'gpt-live-transcribe' }, turn_detection: { type: 'server_vad', silence_duration_ms: 1800, prefix_padding_ms: 300 } } } };
-    const model = 'gpt-live-transcribe';
+    // Continuous dictation needs server VAD; gpt-live-transcribe rejects it.
+    const session = { type: 'transcription', audio: { input: { transcription: { model: 'gpt-4o-transcribe' }, turn_detection: { type: 'server_vad', silence_duration_ms: 1800, prefix_padding_ms: 300 } } } };
+    const model = 'gpt-4o-transcribe';
     const response = await fetch('https://api.openai.com/v1/realtime/client_secrets', {
       method: 'POST',
       headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
