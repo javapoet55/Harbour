@@ -75,44 +75,132 @@ private struct NewRecurringTask:View {
         }.navigationTitle("Recurring Task").toolbar{Button("Cancel"){dismiss()}}}
     }
 }
-struct ShoppingHome:View {
-    @ObservedObject var store:ShoppingStore
-    @State private var create=false
-    var body:some View {
-        ZStack{TodayBackdrop();ScrollView{VStack(alignment:.leading,spacing:18){
-            Button{create=true}label:{MomentCard{Label("Create New List",systemImage:"plus.circle.fill").font(.headline);Text("Start fresh or use your last list.").foregroundStyle(.secondary)}}.buttonStyle(.plain)
-            Text("Recent Lists").font(.title2.bold())
-            if store.lists.isEmpty && store.error == nil {ContentUnavailableView("Your next trip starts here",systemImage:"cart",description:Text("Create a list, then type or dictate what you need."))}
-            ForEach(store.lists){list in NavigationLink{ShoppingDetail(store:store,initial:list)}label:{
-                MomentCard{shoppingSummary(list);if list.completedAt != nil {Label("Trip completed",systemImage:"checkmark.circle.fill").font(.caption).foregroundStyle(.green)}}
-            }.buttonStyle(.plain)}
-            if let error=store.error{Text(error).foregroundStyle(.red);Button("Try again"){Task{await store.refresh()}}}
-        }.padding(18)}}.navigationTitle("My Lists")
-            .toolbar{Button{create=true}label:{Image(systemName:"plus.circle.fill")}.accessibilityLabel("Create shopping list")}
-            .sheet(isPresented:$create){NewShoppingList(store:store)}
-            .refreshable{await store.refresh()}.task{await store.refresh()}
+struct ShoppingHome: View {
+    @ObservedObject var store: ShoppingStore
+    @State private var create = false
+    @State private var created: GroceryList?
+    var body: some View {
+        ZStack {
+            TodayBackdrop()
+            ScrollView {
+                VStack(alignment: .leading, spacing: 24) {
+                    Button { create = true } label: {
+                        MomentCard {
+                            HStack(spacing: 14) {
+                                listTile("doc.badge.plus", color: .nexdoIndigo)
+                                VStack(alignment: .leading, spacing: 5) {
+                                    Text("Create New List").font(.headline).foregroundStyle(Color.nexdoInk)
+                                    Text("Start from scratch or use last week’s list.").font(.subheadline).foregroundStyle(Color.nexdoSecondary)
+                                }
+                                Spacer(minLength: 0)
+                                Image(systemName: "chevron.right").foregroundStyle(Color.nexdoSecondary)
+                            }
+                        }
+                    }.buttonStyle(.plain).accessibilityIdentifier("shopping-create-list")
+                    Text("Recent Lists").font(.title2.bold()).foregroundStyle(Color.nexdoInk)
+                    if store.lists.isEmpty && store.error == nil {
+                        ContentUnavailableView("Your next trip starts here", systemImage: "cart", description: Text("Create a list, then type or dictate what you need."))
+                    } else if !store.lists.isEmpty {
+                        MomentCard {
+                            ForEach(Array(store.lists.enumerated()), id: \.element.id) { index, list in
+                                if index > 0 { Divider() }
+                                NavigationLink { ShoppingDetail(store: store, initial: list) } label: {
+                                    HStack(spacing: 12) {
+                                        listTile(list.completedAt == nil ? "cart.fill" : "doc.on.doc", color: list.completedAt == nil ? .green : .nexdoIndigo)
+                                        VStack(alignment: .leading, spacing: 4) {
+                                            Text(list.title).font(.headline).foregroundStyle(Color.nexdoInk)
+                                            Text("\(list.items.count) items" + (list.completedAt == nil ? "" : " · Completed")).font(.caption).foregroundStyle(Color.nexdoSecondary)
+                                        }
+                                        Spacer(minLength: 4)
+                                        Text(MomentDates.date(list.date, zone: list.timeZone), format: .dateTime.month(.abbreviated).day()).font(.caption).foregroundStyle(Color.nexdoSecondary)
+                                        Image(systemName: "chevron.right").font(.caption).foregroundStyle(Color.nexdoSecondary)
+                                    }.padding(.vertical, 4).contentShape(Rectangle())
+                                }.buttonStyle(.plain)
+                            }
+                        }
+                    }
+                    if let error = store.error {
+                        Text(error).foregroundStyle(.red)
+                        Button("Try again") { Task { await store.refresh() } }
+                    }
+                }.padding(18)
+            }
+        }.navigationTitle("My Lists").tint(.nexdoIndigo)
+            .toolbar { Button { create = true } label: { Image(systemName: "plus.circle.fill").font(.title2) }.accessibilityLabel("Create shopping list") }
+            .sheet(isPresented: $create) {
+                NewShoppingList(store: store) { created = $0 }
+            }
+            .navigationDestination(isPresented: Binding(get: { created != nil && !create }, set: { if !$0 { created = nil } })) {
+                if let created { ShoppingDetail(store: store, initial: created) }
+            }
+            .refreshable { await store.refresh() }.task { await store.refresh() }
     }
 }
-private struct NewShoppingList:View {
-    @ObservedObject var store:ShoppingStore
-    var source:GroceryList?=nil
+private func listTile(_ symbol: String, color: Color) -> some View {
+    Image(systemName: symbol).font(.title2).foregroundStyle(color)
+        .frame(width: 48, height: 48).background(color.opacity(0.12), in: RoundedRectangle(cornerRadius: 14))
+}
+private struct NewShoppingList: View {
+    @ObservedObject var store: ShoppingStore
+    var source: GroceryList? = nil
+    var onCreated: ((GroceryList) -> Void)? = nil
     @Environment(\.dismiss) private var dismiss
-    @State private var title="Weekly Shopping List"
-    @State private var date=Date()
-    @State private var weekly=true
-    @State private var useLast=false
-    private var previous:GroceryList? {source ?? store.lists.first}
-    var body:some View {
-        NavigationStack{ZStack{TodayBackdrop();ScrollView{VStack(spacing:18){
-            Button{useLast=false}label:{MomentCard{Label("Start from Scratch",systemImage:useLast ? "doc":"checkmark.circle.fill");Text("Make a fresh list for your next trip.").font(.subheadline)}}.buttonStyle(.plain)
-            Button{useLast=true}label:{MomentCard{Label("Use Last List",systemImage:useLast ? "checkmark.circle.fill":"arrow.counterclockwise");Text(previous.map{"Copy \($0.items.count) items from “\($0.title)”"} ?? "Create your first list to reuse it next time.").font(.subheadline)}}.buttonStyle(.plain).disabled(previous==nil)
-            MomentCard{TextField("List name",text:$title);DatePicker("Shopping date",selection:$date,displayedComponents:.date);Toggle("Repeat every week",isOn:$weekly);Text("Complete a trip to create next week’s list. Items carry over unchecked.").font(.caption).foregroundStyle(.secondary)}
-            if let error=store.error {Text(error).foregroundStyle(.red)}
-            MomentPrimary(title:store.busy ? "Creating…":"Create List"){Task{
-                let value=GroceryList(id:UUID().uuidString,title:title,date:MomentDates.day(date,zone:TimeZone.current.identifier),timeZone:TimeZone.current.identifier,weekly:weekly,revision:0,items:useLast ? (previous?.items.map{var i=$0;i.checked=false;return i} ?? []):[])
-                if await store.action("create",input:ShoppingInput(value)) != nil{dismiss()}
-            }}.disabled(store.busy || title.trimmingCharacters(in:.whitespaces).isEmpty)
-        }.padding(18)}}.navigationTitle("New List").navigationBarTitleDisplayMode(.inline).toolbar{Button("Cancel"){dismiss()}}.onAppear{if let source{title=source.title;useLast=true}}}
+    @State private var title = "Weekly Shopping List"
+    @State private var date = Date()
+    @State private var weekly = true
+    @State private var useLast = false
+    private var previous: GroceryList? { source ?? store.lists.first(where: { $0.completedAt != nil }) ?? store.lists.first }
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                TodayBackdrop()
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 18) {
+                        choice("Start from Scratch", subtitle: "Create a brand new list.", symbol: "doc.badge.plus", selected: !useLast) { useLast = false }
+                        choice("Use Last Week’s List", subtitle: previous.map { "Copy \($0.items.count) items from “\($0.title)” and edit." } ?? "Create your first list to reuse it next time.", symbol: "arrow.counterclockwise", selected: useLast) { useLast = true }
+                            .disabled(previous == nil).opacity(previous == nil ? 0.5 : 1)
+                            .accessibilityIdentifier("shopping-use-last")
+                        Text("List Name").font(.headline).padding(.top, 10)
+                        MomentCard {
+                            TextField("List name", text: $title).font(.headline).accessibilityIdentifier("shopping-list-name")
+                            Divider()
+                            DatePicker("Shopping date", selection: $date, displayedComponents: .date)
+                            Divider()
+                            Toggle("Repeat every week", isOn: $weekly)
+                            Text("Complete a trip to create next week’s list with unchecked items.").font(.caption).foregroundStyle(Color.nexdoSecondary)
+                        }
+                        if let error = store.error { Text(error).foregroundStyle(.red) }
+                    }.padding(18)
+                }
+            }.navigationTitle("New List").navigationBarTitleDisplayMode(.inline).tint(.nexdoIndigo)
+                .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }
+                .safeAreaInset(edge: .bottom) {
+                    MomentPrimary(title: store.busy ? "Creating…" : "Create List") {
+                        Task {
+                            let value = GroceryList(id: UUID().uuidString, title: title.trimmingCharacters(in: .whitespacesAndNewlines), date: MomentDates.day(date, zone: TimeZone.current.identifier), timeZone: TimeZone.current.identifier, weekly: weekly, revision: 0, items: useLast ? (previous?.items.map { var i = $0; i.checked = false; return i } ?? []) : [])
+                            if let saved = await store.action("create", input: ShoppingInput(value)) { onCreated?(saved); dismiss() }
+                        }
+                    }.disabled(store.busy || title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                        .padding(18).background(.ultraThinMaterial)
+                }
+                .onAppear { if let source { title = source.title; useLast = true } }
+        }
+    }
+    private func choice(_ title: String, subtitle: String, symbol: String, selected: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            MomentCard {
+                HStack(spacing: 14) {
+                    listTile(symbol, color: .nexdoIndigo)
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text(title).font(.headline).foregroundStyle(Color.nexdoInk)
+                        Text(subtitle).font(.subheadline).foregroundStyle(Color.nexdoSecondary)
+                    }
+                    Spacer(minLength: 0)
+                    Image(systemName: selected ? "checkmark.circle.fill" : "circle").foregroundStyle(Color.nexdoIndigo)
+                }
+            }.background(selected ? Color.nexdoIndigo.opacity(0.09) : .clear, in: RoundedRectangle(cornerRadius: 22))
+                .overlay(RoundedRectangle(cornerRadius: 22).stroke(selected ? Color.nexdoIndigo : .clear, lineWidth: 1.5))
+        }.buttonStyle(.plain).accessibilityAddTraits(selected ? .isSelected : [])
     }
 }
 struct ShoppingDetail:View {

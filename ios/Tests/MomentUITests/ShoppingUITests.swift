@@ -24,13 +24,23 @@ import XCTest
         XCTAssertTrue(app.navigationBars["Shopping List"].waitForExistence(timeout:5))
         let screenshot=XCTAttachment(screenshot:app.screenshot());screenshot.name="Shopping list in NexDo";screenshot.lifetime = .keepAlways;add(screenshot)
     }
+    func testCreateFromScratch() {
+        let home = XCTAttachment(screenshot: app.screenshot()); home.name = "My Lists"; home.lifetime = .keepAlways; add(home)
+        app.buttons["shopping-create-list"].tap()
+        XCTAssertTrue(app.navigationBars["New List"].waitForExistence(timeout: 5))
+        let newList = XCTAttachment(screenshot: app.screenshot()); newList.name = "New List"; newList.lifetime = .keepAlways; add(newList)
+        app.buttons["Create List"].tap()
+        XCTAssertTrue(app.navigationBars["Shopping List"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["Check Bananas"].exists)
+        XCTAssertTrue(app.buttons["Add groceries by voice"].exists)
+    }
     func testCreateFromLastList(){
         app.buttons["Create shopping list"].tap()
         XCTAssertTrue(app.navigationBars["New List"].waitForExistence(timeout:5))
-        app.buttons.matching(NSPredicate(format:"label CONTAINS %@", "Use Last List")).firstMatch.tap()
+        app.buttons["shopping-use-last"].tap()
         app.buttons["Create List"].tap()
-        XCTAssertTrue(app.navigationBars["My Lists"].waitForExistence(timeout:5))
-        XCTAssertGreaterThanOrEqual(app.buttons.matching(NSPredicate(format:"label CONTAINS %@", "Weekly Shopping List")).count,2)
+        XCTAssertTrue(app.navigationBars["Shopping List"].waitForExistence(timeout:5))
+        XCTAssertTrue(app.buttons["Check Bananas"].exists)
     }
     func testVoiceReviewUsesEditableTranscriptWithoutOpeningMicrophone(){
         openList();app.buttons["Add groceries by voice"].tap()

@@ -70,8 +70,7 @@ private struct TodayQuickAccessContent: View {
         }.buttonStyle(.plain).accessibilityIdentifier("quick-access-moments")
         separator
         NavigationLink {
-            if shopping.error == nil, let list = nextList { ShoppingDetail(store: shopping, initial: list) }
-            else { ShoppingHome(store: shopping) }
+            ShoppingHome(store: shopping)
         } label: {
             tile("Shopping", subtitle: shoppingSubtitle, symbol: "cart.fill", color: .green)
         }.buttonStyle(.plain).accessibilityIdentifier("quick-access-shopping")
