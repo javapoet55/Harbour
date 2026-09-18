@@ -43,9 +43,6 @@ private struct TodayQuickAccessContent: View {
             HStack {
                 Text("Quick Access").font(.title2.bold()).foregroundStyle(Color.nexdoInk)
                 Spacer()
-                NavigationLink("See all") {
-                    QuickAccessDirectory(shopping: shopping, onPlanWeek: onPlanWeek, onWeekly: onWeekly)
-                }.accessibilityIdentifier("quick-access-all")
             }
             Group {
                 if typeSize.isAccessibilitySize {
