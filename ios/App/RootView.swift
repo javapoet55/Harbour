@@ -1388,8 +1388,9 @@ private struct TodayIntelligenceCard: View {
                 Text("\(commitmentCount) commitment\(commitmentCount == 1 ? "" : "s") \(range == .today ? "today" : "ahead")")
                     .font(.system(.title, design: .rounded, weight: .bold)).foregroundStyle(Color.nexdoInk)
                     .accessibilityHeading(.h2)
-                Text("\(taskCount) Task\(taskCount == 1 ? "" : "s") · \(appointments) Appointment\(appointments == 1 ? "" : "s") · \(momentCount) Important Moment\(momentCount == 1 ? "" : "s")")
+                Text("\(taskCount) Task\(taskCount == 1 ? "" : "s") · \(appointments) Appointment\(appointments == 1 ? "" : "s") · \(momentCount) Moment\(momentCount == 1 ? "" : "s")")
                     .font(.subheadline).foregroundStyle(Color.nexdoSecondary)
+                    .lineLimit(1).minimumScaleFactor(0.7)
                 HStack(spacing: 10) {
                     if attentionCount > 0 {
                         Button(action: onAttention) {
