@@ -1075,36 +1075,25 @@ private struct TodayView: View {
                         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                         .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(Color.nexdoIndigo.opacity(0.12)))
 
-                        if queue.hasImmediateActions {
-                            HStack {
-                                Button { onPlanWeek("Give me today's daily briefing, prioritizing my due contact actions and upcoming calendar commitments.") } label: {
-                                    Label("Daily Briefing", systemImage: "chart.bar.xaxis").font(.headline)
-                                }
-                                Spacer()
-                                Button("Weekly Summary") { showingWeeklySummary = true }.font(.caption)
-                            }.padding(16).background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 20))
-                        } else {
-                        Button { showingWeeklySummary = true } label: {
-                            HStack(spacing: 14) {
-                                Image(systemName: "chart.bar.xaxis")
-                                    .font(.title3.weight(.semibold)).foregroundStyle(.white)
-                                    .frame(width: 44, height: 44).background(NexdoTheme.gradient, in: RoundedRectangle(cornerRadius: 14))
-                                VStack(alignment: .leading, spacing: 3) {
-                                    Text("Weekly Summary").font(.headline).foregroundStyle(Color.nexdoInk)
-                                    Text("Review progress, focus time, and accomplishments").font(.caption).foregroundStyle(Color.nexdoSecondary)
-                                }
-                                Spacer()
-                                Image(systemName: "chevron.right").foregroundStyle(Color.nexdoSecondary)
-                            }
-                            .padding(16).background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-                            .overlay(RoundedRectangle(cornerRadius: 20).stroke(Color.nexdoIndigo.opacity(0.12)))
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityHint("Opens your weekly progress report")
-                        }
+                        TodayQuickAccess(onPlanWeek: onPlanWeek) { showingWeeklySummary = true }
 
-                        ImportantMomentsTodayCard()
-                        ShoppingTodayCard()
+                        TodayIntelligenceCard(
+                            range: range,
+                            appointments: counts.appointments,
+                            taskCount: counts.tasks,
+                            momentCount: range == .today ? moments.today.count : 0,
+                            availableMinutes: range == .today ? model.scheduleIntelligence?.today.availableMinutes : nil,
+                            attentionCount: range == .today ? (model.scheduleIntelligence?.today.attention.count ?? model.agenda?.overdue.count ?? 0) : (model.agenda?.overdue.count ?? 0),
+                            schedule: remainingSchedule(queue),
+                            searchSchedule: schedule,
+                            recommendation: range == .today ? model.scheduleIntelligence?.today.recommendation : nil,
+                            actionRecommendation: queue.recommendation,
+                            showsSummary: true,
+                            onOpenTask: { editing = $0 },
+                            onAttention: { showingAttention = true },
+                            onAsk: { showingDoNow = true },
+                            onCalendar: onCalendar
+                        )
 
                         if range == .today {
                             TodayActionsView(queue: queue, now: context.date, onTask: { id in editing = model.tasks.first { $0.id == id } })
@@ -1143,23 +1132,7 @@ private struct TodayView: View {
                             }.padding(18).background(Color.nexdoIndigo.opacity(0.06), in: RoundedRectangle(cornerRadius: 20))
                         }
 
-                        TodayIntelligenceCard(
-                            range: range,
-                            appointments: counts.appointments,
-                            taskCount: counts.tasks,
-                            momentCount: range == .today ? moments.today.count : 0,
-                            availableMinutes: range == .today ? model.scheduleIntelligence?.today.availableMinutes : nil,
-                            attentionCount: range == .today ? (model.scheduleIntelligence?.today.attention.count ?? model.agenda?.overdue.count ?? 0) : (model.agenda?.overdue.count ?? 0),
-                            schedule: remainingSchedule(queue),
-                            searchSchedule: schedule,
-                            recommendation: range == .today ? model.scheduleIntelligence?.today.recommendation : nil,
-                            actionRecommendation: queue.recommendation,
-                            showsSummary: !queue.hasImmediateActions,
-                            onOpenTask: { editing = $0 },
-                            onAttention: { showingAttention = true },
-                            onAsk: { showingDoNow = true },
-                            onCalendar: onCalendar
-                        )
+
 
                         if range == .today, let attention = model.scheduleIntelligence?.today.attention, !attention.isEmpty {
                             VStack(alignment: .leading, spacing: 12) {
