@@ -52,4 +52,15 @@ describe('shopping lists',()=>{
   await shoppingAction(owner,{operation:'delete',id:list.id,revision:0});
   expect(await prisma.shoppingItem.count({where:{listId:list.id}})).toBe(0);
  });
+ it('keeps attached images through save and weekly copy, and removes them explicitly',async()=>{
+  const data={...input(),items:[{...input().items[0],imageData:'/9j/AA=='}]};
+  const created=await shoppingAction(owner,{operation:'create',input:data});if(!('list'in created)||!created.list)throw Error();
+  expect(created.list.items[0].imageData).toBe('/9j/AA==');
+  const copied=await shoppingAction(owner,{operation:'complete',id:created.list.id,revision:0});if(!('list'in copied)||!copied.list)throw Error();
+  expect(copied.list.items[0].imageData).toBe('/9j/AA==');
+  const saved=await shoppingAction(owner,{operation:'save',id:copied.list.id,revision:0,input:{...data,items:[{...data.items[0],imageData:null}]}});
+  if(!('list'in saved)||!saved.list)throw Error();expect(saved.list.items[0].imageData).toBeNull();
+  expect(listInput.safeParse({...data,items:[{...data.items[0],imageData:'<svg onload=bad>'}]}).success).toBe(false);
+ });
+
 });

@@ -7,9 +7,18 @@ public struct GroceryItem: Codable, Identifiable, Equatable, Sendable {
     public var quantity:String = "1"
     public var size:String = ""
     public var notes:String = ""
+    public var imageData:String?
     public var checked:Bool = false
     public init(name:String = "",category:String = "Other",quantity:String = "1",size:String = "",notes:String = "") {
         self.name=name;self.category=category;self.quantity=quantity;self.size=size;self.notes=notes
+    }
+    enum CodingKeys:String,CodingKey {case id,name,category,quantity,size,notes,checked,imageData}
+    public func encode(to encoder:Encoder) throws {
+        var c=encoder.container(keyedBy:CodingKeys.self)
+        try c.encode(id,forKey:.id);try c.encode(name,forKey:.name)
+        try c.encode(category,forKey:.category);try c.encode(quantity,forKey:.quantity)
+        try c.encode(size,forKey:.size);try c.encode(notes,forKey:.notes)
+        try c.encode(checked,forKey:.checked);try c.encode(imageData,forKey:.imageData)
     }
     public var amountLabel:String {
         guard !size.isEmpty else{return quantity}

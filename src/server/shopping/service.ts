@@ -29,12 +29,12 @@ export async function shoppingAction(userId:string,raw:unknown){
    await tx.shoppingList.update({where:{id:list.id},data:{completedAt:new Date()}});
    if(!list.weekly)return {list:await tx.shoppingList.findUnique({where:{id:list.id},include})};
    const today=new Intl.DateTimeFormat('en-CA',{timeZone:list.timeZone,year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
-   return {list:await tx.shoppingList.create({data:{userId,title:list.title,date:nextShoppingDate(list.date,today),timeZone:list.timeZone,weekly:true,generatedFrom:list.id,items:{create:list.items.map((i,sortOrder)=>({id:randomUUID(),name:i.name,category:i.category,quantity:i.quantity,size:i.size,notes:i.notes,checked:false,sortOrder}))}},include})};
+   return {list:await tx.shoppingList.create({data:{userId,title:list.title,date:nextShoppingDate(list.date,today),timeZone:list.timeZone,weekly:true,generatedFrom:list.id,items:{create:list.items.map((i,sortOrder)=>({id:randomUUID(),name:i.name,category:i.category,quantity:i.quantity,size:i.size,notes:i.notes,imageData:i.imageData,checked:false,sortOrder}))}},include})};
   }
   if(list.completedAt)throw new MomentError('Copy this completed list to make changes.');
   const {items,...data}=listInput.parse(p.input);
   await tx.shoppingItem.deleteMany({where:{listId:list.id}});
   // Always allocate server IDs so a client cannot move another list's items.
-  return {list:await tx.shoppingList.update({where:{id:list.id},data:{...data,items:{create:items.map((i,sortOrder)=>({...i,id:randomUUID(),sortOrder}))}},include})};
+  return {list:await tx.shoppingList.update({where:{id:list.id},data:{...data,items:{create:items.map((i,sortOrder)=>({...i,imageData:i.imageData === undefined ? list.items.find(old=>old.id===i.id)?.imageData ?? null : i.imageData,id:randomUUID(),sortOrder}))}},include})};
  });
 }

@@ -36,3 +36,12 @@ import Testing
     #expect(GroceryItem(name:"Milk",quantity:"2",size:"1 gallon").amountLabel=="2 × 1 gallon")
     #expect(GroceryItem(name:"Spinach",quantity:"1",size:"1 bag").amountLabel=="1 bag")
 }
+
+@Test func shoppingImageCanBeSavedAndExplicitlyRemoved() throws {
+    var item=GroceryItem(name:"Butter")
+    item.imageData="/9j/AA=="
+    #expect(try JSONDecoder().decode(GroceryItem.self,from:JSONEncoder().encode(item)).imageData==item.imageData)
+    item.imageData=nil
+    let json=try JSONSerialization.jsonObject(with:JSONEncoder().encode(item)) as! [String:Any]
+    #expect(json["imageData"] is NSNull)
+}

@@ -12,6 +12,9 @@ import XCTest
         XCTAssertTrue(NSPredicate(format:"enabled == true").evaluate(with:edit) || XCTWaiter.wait(for:[XCTNSPredicateExpectation(predicate:NSPredicate(format:"enabled == true"),object:edit)],timeout:5) == .completed)
         edit.tap()
         XCTAssertTrue(app.navigationBars["Item"].waitForExistence(timeout:5))
+        XCTAssertTrue(app.buttons["Choose from Photos"].exists)
+        XCTAssertTrue(app.buttons["Take a Picture"].exists)
+        XCTAssertTrue(app.buttons["Generate with AI"].exists)
         let quantity=app.textFields["1"];quantity.tap();quantity.press(forDuration:1.2)
         if app.menuItems["Select All"].exists{app.menuItems["Select All"].tap()}
         else if app.buttons["Select All"].exists{app.buttons["Select All"].tap()}

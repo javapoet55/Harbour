@@ -312,7 +312,7 @@
 				INFOPLIST_KEY_CFBundleURLTypes = "{\n    CFBundleURLSchemes =     (\n        nexdo\n    );\n}";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "Nexdo reads your selected calendars to suggest birthday and anniversary moments for your review.";
-				INFOPLIST_KEY_NSCameraUsageDescription = "Nexdo uses the camera only when required by voice and calling features.";
+				INFOPLIST_KEY_NSCameraUsageDescription = "Nexdo uses the camera when you choose to attach a photo to a shopping item.";
 				INFOPLIST_KEY_NSContactsUsageDescription = "Nexdo uses Contacts to let you choose who to call, message, or email for your tasks. Phone numbers and email addresses stay on this device; matching contact names may be shared during voice clarification. For Important Moments, only recipient details you review and save are synced to your Nexdo account.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Nexdo records your voice to transcribe questions and create tasks with OpenAI.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -352,7 +352,7 @@
 				INFOPLIST_KEY_CFBundleURLTypes = "{\n    CFBundleURLSchemes =     (\n        nexdo\n    );\n}";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "Nexdo reads your selected calendars to suggest birthday and anniversary moments for your review.";
-				INFOPLIST_KEY_NSCameraUsageDescription = "Nexdo uses the camera only when required by voice and calling features.";
+				INFOPLIST_KEY_NSCameraUsageDescription = "Nexdo uses the camera when you choose to attach a photo to a shopping item.";
 				INFOPLIST_KEY_NSContactsUsageDescription = "Nexdo uses Contacts to let you choose who to call, message, or email for your tasks. Phone numbers and email addresses stay on this device; matching contact names may be shared during voice clarification. For Important Moments, only recipient details you review and save are synced to your Nexdo account.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Nexdo records your voice to transcribe questions and create tasks with OpenAI.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;

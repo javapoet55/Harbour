@@ -179,7 +179,7 @@ struct ShoppingDetail:View {
                     Button("Delete list",role:.destructive){deleting=true}
                 }label:{Image(systemName:"ellipsis")}.accessibilityLabel("List options")}
             }
-            .sheet(item:$item){value in ShoppingItemEditor(initial:value){updated in var next=list;if let index=next.items.firstIndex(where:{$0.id==updated.id}){next.items[index]=updated}else{next.items.append(updated)};save(next)}}
+            .sheet(item:$item){value in ShoppingItemEditor(store:store,initial:value){updated in var next=list;if let index=next.items.firstIndex(where:{$0.id==updated.id}){next.items[index]=updated}else{next.items.append(updated)};save(next)}}
             .sheet(isPresented:$voice){ShoppingVoiceView(store:store){items in var next=list;next.items.append(contentsOf:items);save(next)}}
             .sheet(isPresented:$pendingReview){ShoppingBatchReview(items:pending){values in var next=list;next.items.append(contentsOf:values);save(next)}}
             .sheet(isPresented:$copy){NewShoppingList(store:store,source:list)}
@@ -213,18 +213,6 @@ private struct ShoppingBatchReview:View {
         ForEach($items){$item in VStack(alignment:.leading){TextField("Item",text:$item.name);HStack{TextField("Quantity",text:$item.quantity);TextField("Size",text:$item.size)}}}.onDelete{items.remove(atOffsets:$0)}
         Button("Add \(items.count) Items"){onAdd(items);dismiss()}.disabled(items.isEmpty || items.contains{$0.name.trimmingCharacters(in:.whitespaces).isEmpty})
     }.navigationTitle("Review Items").toolbar{Button("Cancel"){dismiss()}}}}
-}
-private struct ShoppingItemEditor:View {
-    @Environment(\.dismiss) private var dismiss
-    @State var initial:GroceryItem
-    let onSave:(GroceryItem)->Void
-    var body:some View{NavigationStack{Form{
-        TextField("Item name",text:$initial.name)
-        Picker("Category",selection:$initial.category){ForEach(GroceryItem.categories,id:\.self){Text($0)}}
-        HStack{Text("Quantity");TextField("1",text:$initial.quantity).multilineTextAlignment(.trailing).keyboardType(.decimalPad)}
-        TextField("Size, e.g. 1 gallon or 500 g",text:$initial.size)
-        TextField("Brand or notes",text:$initial.notes,axis:.vertical)
-    }.navigationTitle("Item").toolbar{ToolbarItem(placement:.cancellationAction){Button("Cancel"){dismiss()}};ToolbarItem(placement:.confirmationAction){Button("Save"){onSave(initial);dismiss()}.disabled(initial.name.trimmingCharacters(in:.whitespaces).isEmpty)}}}}
 }
 private struct ShoppingSettings:View {
     @Environment(\.dismiss) private var dismiss
@@ -270,7 +258,7 @@ private struct GroceryRow:View {
                 .accessibilityLabel(row.checked ? "Uncheck "+row.name:"Check "+row.name)
             Button(action:onEdit){
                 HStack {
-                    Image(systemName:GroceryItem.icon(row.category)).foregroundStyle(Color.nexdoIndigo)
+                    GroceryArtwork(item:row)
                     VStack(alignment:.leading){
                         Text(row.name).strikethrough(row.checked)
                         if !row.notes.isEmpty{Text(row.notes).font(.caption).foregroundStyle(.secondary)}
@@ -281,5 +269,46 @@ private struct GroceryRow:View {
                 }.contentShape(Rectangle())
             }.buttonStyle(.plain).disabled(readOnly).accessibilityLabel("Edit "+row.name)
         }
+    }
+}
+
+/// Keep grocery artwork in its original colors, independent of button tint.
+private struct GroceryArtwork:View {
+    let item:GroceryItem
+    private var words:Set<String> {Set(item.name.lowercased().split{!$0.isLetter}.map(String.init))}
+    private var asset:String? {
+        if !words.isDisjoint(with:["onion","onions"]){return "grocery-onion"}
+        if words.contains("milk"){return "grocery-milk"}
+        if !words.isDisjoint(with:["banana","bananas"]){return "grocery-banana"}
+        if !words.isDisjoint(with:["tomato","tomatoes"]){return "grocery-tomato"}
+        if !words.isDisjoint(with:["egg","eggs"]){return "grocery-eggs"}
+        return nil
+    }
+    private var fallback:String {
+        let items:[(Set<String>,String)]=[
+            (["apple","apples"],"🍎"),(["spinach","lettuce","kale"],"🥬"),
+            (["carrot","carrots"],"🥕"),(["potato","potatoes"],"🥔"),
+            (["avocado","avocados"],"🥑"),(["cheese"],"🧀"),(["bread"],"🍞"),
+            (["rice"],"🍚"),(["pasta","spaghetti"],"🍝"),(["chicken"],"🍗"),
+            (["fish","salmon"],"🐟"),(["coffee"],"☕️"),(["soap"],"🧼")]
+        if let match=items.first(where:{!words.isDisjoint(with:$0.0)}){return match.1}
+        switch item.category {
+        case "Produce":return "🥬"
+        case "Dairy & Eggs":return "🥛"
+        case "Meat & Seafood":return "🥩"
+        case "Bakery":return "🥐"
+        case "Pantry":return "🫙"
+        case "Frozen":return "🧊"
+        case "Drinks":return "🧃"
+        case "Household":return "🧺"
+        default:return "🛍️"
+        }
+    }
+    var body:some View {
+        Group {
+            if let encoded=item.imageData,let data=Data(base64Encoded:encoded),let photo=UIImage(data:data){Image(uiImage:photo).resizable().scaledToFill().frame(width:40,height:44).clipShape(RoundedRectangle(cornerRadius:8))}
+            else if let asset {Image(asset).renderingMode(.original).resizable().scaledToFit()}
+            else {Text(fallback).font(.system(size:29))}
+        }.frame(width:40,height:44).accessibilityHidden(true)
     }
 }
