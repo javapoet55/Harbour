@@ -4,7 +4,7 @@ const PUBLIC = ['/login', '/signup', '/verify-email', '/reset-password', '/manif
 
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
-  if (pathname.startsWith('/api/') || pathname.startsWith('/_next') || pathname.includes('.')) {
+  if (pathname.startsWith('/shared/shopping/') || pathname.startsWith('/api/') || pathname.startsWith('/_next') || pathname.includes('.')) {
     return NextResponse.next();
   }
   const session = req.cookies.get('harbor_session')?.value;

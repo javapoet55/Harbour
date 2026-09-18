@@ -9,6 +9,7 @@ datasource db {
 }
 
 model User {
+  shoppingLists ShoppingList[]
   id           String   @id @default(cuid())
   email        String   @unique
   name         String
@@ -482,4 +483,35 @@ model MomentEmailAccount {
   status String @default("connected")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+model ShoppingList {
+  id String @id @default(cuid())
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title String
+  date String
+  timeZone String
+  weekly Boolean @default(false)
+  completedAt DateTime?
+  revision Int @default(0)
+  generatedFrom String? @unique
+  shareToken String? @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  items ShoppingItem[]
+  @@index([userId, date])
+}
+model ShoppingItem {
+  id String @id
+  listId String
+  list ShoppingList @relation(fields: [listId], references: [id], onDelete: Cascade)
+  name String
+  category String
+  quantity String @default("1")
+  size String @default("")
+  notes String @default("")
+  checked Boolean @default(false)
+  sortOrder Int @default(0)
+  @@index([listId, sortOrder])
 }

@@ -293,7 +293,7 @@ final class AppModel: ObservableObject {
         struct Issued: Decodable, Sendable { let token: String }
         let issued: Issued = try await api.request("/api/calendar/oauth/\(provider)/connect-token", method: "POST")
         guard !issued.token.isEmpty,
-              var components = URLComponents(url: await api.baseURL, resolvingAgainstBaseURL: false) else {
+              var components = URLComponents(url: api.baseURL, resolvingAgainstBaseURL: false) else {
             throw CalendarConnectError.unavailable
         }
         components.path = "/api/calendar/oauth/\(provider)/start"

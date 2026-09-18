@@ -17,7 +17,9 @@ struct RootView: View {
     var body: some View {
         Group {
             #if DEBUG
-            if ProcessInfo.processInfo.arguments.contains("-moments-design-preview") {
+            if ProcessInfo.processInfo.arguments.contains("-shopping-design-preview") {
+                ShoppingDesignPreview()
+            } else if ProcessInfo.processInfo.arguments.contains("-moments-design-preview") {
                 MomentsDesignPreview()
             } else if ProcessInfo.processInfo.arguments.contains("-calendar-manual-preview") {
                 NavigationStack { CalendarEventEditor() }
@@ -1102,6 +1104,7 @@ private struct TodayView: View {
                         }
 
                         ImportantMomentsTodayCard()
+                        ShoppingTodayCard()
 
                         if range == .today {
                             TodayActionsView(queue: queue, now: context.date, onTask: { id in editing = model.tasks.first { $0.id == id } })
