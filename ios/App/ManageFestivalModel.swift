@@ -5,7 +5,19 @@ import CryptoKit
     enum Tab:String,CaseIterable {case details="Details",contacts="Contacts",message="Wish Message",schedule="Schedule"}
     @Published var tab:Tab = .details
     @Published var title:String
-    @Published var date:Date
+    @Published var date:Date {
+        didSet {
+            guard MomentDates.day(date,zone:zone) != MomentDates.day(oldValue,zone:zone) else {return}
+            // Move the proposed delivery to the edited day, preserving its local send time.
+            // Existing deliveries still go through the cancel-and-save confirmation.
+            var calendar=Calendar(identifier:.gregorian)
+            calendar.timeZone=TimeZone(identifier:zone) ?? .current
+            let time=calendar.dateComponents([.hour,.minute,.second],from:sendDate)
+            if let updated=calendar.date(bySettingHour:time.hour ?? 8,minute:time.minute ?? 0,second:time.second ?? 0,of:date) {
+                sendDate=updated
+            }
+        }
+    }
     @Published var zone:String
     @Published var yearly:Bool
     @Published var active:Bool
@@ -35,6 +47,8 @@ import CryptoKit
     private var draftIDs:[String:String]=[:]
     private let analytics=FestivalAnalytics()
     let contactsService=FestivalContactsService()
+    var occasionType:String {originals.first?.type ?? "festival"}
+    var occasionLabel:String {ImportantMoment.label(for:occasionType)}
     var source:String { originals.first?.source ?? "manual" }
     var hasSchedules:Bool {
         let current=originals.map { original in store.moments.first(where:{$0.id==original.id}) ?? original }
@@ -51,16 +65,17 @@ import CryptoKit
         let first=group.moments[0];title=first.title;zone=first.timeZoneID;date=MomentDates.date(first.nextOccurrence,zone:first.timeZoneID);yearly=first.yearly;active=group.moments.contains(where: \.enabled)
         var saved=FestivalSettings.read(first.festivalSettings) ?? FestivalSettings()
         recipients=group.moments.map { m in
-            let key=m.sourceKey.hasPrefix("festival:"+saved.groupID+":") ? String(m.sourceKey.dropFirst("festival:".count+saved.groupID.count+1)) : m.id
+            let key=m.sourceKey.hasPrefix(m.type+":"+saved.groupID+":") ? String(m.sourceKey.dropFirst(m.type.count+1+saved.groupID.count+1)) : m.id
             return ManagedFestivalRecipient(momentID:m.id,key:key,name:m.firstName,phone:m.phone,email:m.email,selected:saved.selected[key] ?? m.enabled,contactIdentifier:saved.contactIDs[key] ?? "")
         }
-        if saved.baseMessage.isEmpty {saved.baseMessage=first.latest?.body ?? FestivalValidation.fallback(name:first.title,tone:"Warm")}
+        if saved.baseMessage.isEmpty {saved.baseMessage=first.latest?.body ?? (first.type == "getWellSoon" ? "Get well soon. Wishing you comfort, rest, and brighter days ahead." : first.type == "festival" ? FestivalValidation.fallback(name:first.title,tone:"Warm") : "\(first.title)! Sending you warm wishes on your special day.")}
         for r in recipients where saved.channels[r.key] == nil {saved.channels[r.key]=r.phone.isEmpty ? (r.email.isEmpty ? "share":"email") : "messages"}
         settings=saved;sendDate=FestivalValidation.instant(day:first.nextOccurrence,hour:8,minute:0,zone:first.timeZoneID) ?? date
         if let plan=group.moments.compactMap(\.upcomingDelivery).first {sendDate=plan.date;zone=plan.timeZoneID}
         savedImageID=saved.imageID;imageData=imageStorage.load(saved.imageID);notice=saved.catalogNotice;baseline=fingerprint;analytics.record(.opened)
     }
     func loadCatalog() async {
+        guard occasionType == "festival" else{return}
         struct Response:Decodable,Sendable {let entries:[FestivalCatalogEntry]}
         do {let response:Response=try await store.request("festivalCatalog",[String:String]());catalog=response.entries} catch {notice="Catalog updates are unavailable. You can manage the festival date manually."}
     }
@@ -79,15 +94,15 @@ import CryptoKit
         guard !busy else{return}
         guard dirty else {error=nil;notice="No changes to save. Your existing schedule is unchanged.";return}
         busy=true;error=nil;notice=nil;defer{busy=false}
-        do {try await persist(cancelSchedules:cancelSchedules);notice=cancelSchedules ? "Changes saved. Review and schedule your updated wish again.":"Festival changes saved.";analytics.record(.saved)} catch {
+        do {try await persist(cancelSchedules:cancelSchedules);notice=cancelSchedules ? "Changes saved. Review and schedule your updated wish again.":"Moment changes saved.";analytics.record(.saved)} catch {
             if case APIError.server(409,let message)=error, message.contains("Existing schedules") {
                 needsScheduleConfirmation=true
             } else {self.error=error.localizedDescription}
         }
     }
     private func persist(cancelSchedules:Bool) async throws {
-        guard !title.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty,title.count<=80 else{throw FestivalError.message("Enter a festival name of 1–80 characters.")}
-        if MomentDates.day(date,zone:zone)<MomentDates.day(Date(),zone:zone) {throw FestivalError.message("Select today or a future festival date.")}
+        guard !title.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty,title.count<=150 else{throw FestivalError.message("Enter a moment name of 1–150 characters.")}
+        if MomentDates.day(date,zone:zone)<MomentDates.day(Date(),zone:zone) {throw FestivalError.message("Select today or a future moment date.")}
         if let error=FestivalValidation.recipients(recipients,settings:settings){throw FestivalError.message(error)}
         try contactsService.validate(recipients)
         struct Recipient:Encodable {let id:String?;let key,name,phone,email:String;let selected:Bool}
@@ -96,10 +111,10 @@ import CryptoKit
         let input=Input(ids:originals.map(\.id),title:title,date:MomentDates.day(date,zone:zone),timeZoneID:zone,yearly:yearly,active:active,recipients:recipients.map{Recipient(id:$0.momentID,key:$0.key,name:$0.name,phone:FestivalValidation.phone($0.phone),email:$0.email.trimmingCharacters(in:.whitespaces),selected:$0.selected)},settings:settings,cancelSchedules:cancelSchedules)
         let _:MomentOK=try await store.request("festivalSave",input)
         await store.refresh()
-        let updated=store.moments.filter{FestivalSettings.read($0.festivalSettings)?.groupID==settings.groupID}
+        let updated=store.moments.filter{$0.type==occasionType && FestivalSettings.read($0.festivalSettings)?.groupID==settings.groupID}
         guard !updated.isEmpty else {throw FestivalError.message("Saved. Refresh Moments before continuing.")}
         originals=updated
-        for i in recipients.indices {if let m=updated.first(where:{$0.id==recipients[i].momentID || $0.sourceKey=="festival:\(settings.groupID):\(recipients[i].key)"}){recipients[i].momentID=m.id}}
+        for i in recipients.indices {if let m=updated.first(where:{$0.id==recipients[i].momentID || $0.sourceKey=="\(occasionType):\(settings.groupID):\(recipients[i].key)"}){recipients[i].momentID=m.id}}
         if savedImageID != settings.imageID {imageStorage.delete(savedImageID)}
         for id in stagedImages where id != settings.imageID {imageStorage.delete(id)}
         stagedImages=[];savedImageID=settings.imageID
@@ -108,10 +123,10 @@ import CryptoKit
     func generate(aiConsent:Bool) async {
         guard !busy else{return};busy=true;error=nil;defer{busy=false}
         invalidateApproval()
-        guard aiConsent,let first=originals.first else {settings.baseMessage=FestivalValidation.fallback(name:title,tone:settings.tone);settings.manuallyEdited=false;notice="Offline draft — review before saving.";return}
+        guard aiConsent,let first=originals.first else {settings.baseMessage=FestivalValidation.fallback(name:title,tone:settings.tone,type:occasionType);settings.manuallyEdited=false;notice="Offline draft — review before saving.";return}
         struct Input:Encodable {let momentID,tone,personalContext,festivalName:String;let aiConsent=true;let shared=true}
         struct Response:Decodable,Sendable {let draft:WishDraft;let usedAI:Bool}
-        do {let result:Response=try await store.request("generate",Input(momentID:first.id,tone:settings.tone,personalContext:settings.personalContext,festivalName:title));settings.baseMessage=result.draft.body;settings.manuallyEdited=false;notice=result.usedAI ? "AI draft ready for review.":"AI unavailable; an editable fallback draft is ready.";analytics.record(.generated)} catch {settings.baseMessage=FestivalValidation.fallback(name:title,tone:settings.tone);notice="Offline fallback — review before saving."}
+        do {let result:Response=try await store.request("generate",Input(momentID:first.id,tone:settings.tone,personalContext:settings.personalContext,festivalName:title));settings.baseMessage=result.draft.body;settings.manuallyEdited=false;notice=result.usedAI ? "AI draft ready for review.":"AI unavailable; an editable fallback draft is ready.";analytics.record(.generated)} catch {settings.baseMessage=FestivalValidation.fallback(name:title,tone:settings.tone,type:occasionType);notice="Offline fallback — review before saving."}
     }
     func approve(cancelSchedules:Bool=false) async {
         guard !busy else{return}
@@ -141,6 +156,20 @@ import CryptoKit
                 try Task.checkCancellation();images=values;analytics.record(.imageCompleted)
             } catch is CancellationError {} catch {if !Task.isCancelled {self.error=error.localizedDescription;analytics.record(.imageFailed)}}
         }
+    }
+    func saveGreetingCard() async -> Bool {
+        guard !busy,let moment=originals.first else{return false}
+        busy=true;error=nil;defer{busy=false}
+        do {
+            struct Input:Encodable {let momentID:String;let settings:FestivalSettings}
+            let _:MomentOK=try await store.request("greetingCardSave",Input(momentID:moment.id,settings:settings))
+            if savedImageID != settings.imageID {imageStorage.delete(savedImageID)}
+            for id in stagedImages where id != settings.imageID {imageStorage.delete(id)}
+            stagedImages=[];savedImageID=settings.imageID
+            await store.refresh()
+            notice="Greeting card saved."
+            return true
+        } catch {self.error=error.localizedDescription;return false}
     }
     func cancelImage() {imageTask?.cancel();Task{await imageService?.cancel()}}
     func chooseImage(_ image:FestivalImageVariation) {do{settings.imageID=try imageStorage.store(image);stagedImages.insert(settings.imageID);imageData=image.data;images=[];invalidateApproval();analytics.record(.imageSelected)}catch{self.error="Could not save image preview."}}

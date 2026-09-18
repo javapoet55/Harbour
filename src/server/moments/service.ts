@@ -72,11 +72,11 @@ export async function schedule(userId:string,input:unknown) {
  if(!p.sendNow && ['copy','share'].includes(p.channel)) throw new MomentError('Copy and Share are available now only.');
  log('info','wish_scheduled');
  return prisma.$transaction(async tx=>{
-  // Serialize festival submissions through the parent row, including different drafts.
-  if(draft.moment.type==='festival') {
+  // Serialize managed occasion submissions through the parent row, including different drafts.
+  if(['festival','birthday','anniversary','getWellSoon'].includes(draft.moment.type)) {
    await tx.importantMoment.update({where:{id:draft.momentID},data:{updatedAt:new Date()}});
    const current=await tx.importantMoment.findUniqueOrThrow({where:{id:draft.momentID}});
-   if(!current.enabled||readFestivalSettings(current.festivalSettings).archived) throw new MomentError('This festival is inactive.');
+   if(!current.enabled||readFestivalSettings(current.festivalSettings).archived) throw new MomentError('This moment is inactive.');
    if(await tx.deliveryPlan.count({where:{draft:{momentID:draft.momentID},status:{in:['SCHEDULED','AWAITING_CONFIRMATION','SENDING','UNCERTAIN']}}})) throw new MomentError('This recipient already has an active wish. Cancel it before scheduling again.',409);
   }
   // Optimistic claim of the approved draft prevents double-tap with different request IDs.

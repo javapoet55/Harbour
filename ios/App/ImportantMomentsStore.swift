@@ -152,7 +152,7 @@ struct MomentOK: Decodable, Sendable {}
             }
         }
         for plan in plans where plan.editable && enabledDrafts.contains(plan.draftID) {
-            if !plan.automaticDelivery && plan.date > Date() { requests.append((plan.id,plan.date,"Your wish is ready. Open Nexdo to review and confirm delivery.")) }
+            if !plan.automaticDelivery && plan.date > Date() { requests.append((plan.id,plan.date,plan.channel == "messages" ? "Your wish is ready. Open Nexdo, then tap Send in Messages." : "Your wish is ready. Open Nexdo to send it.")) }
             if plan.reminderOffset == 60 && plan.date.addingTimeInterval(-3600) > Date() { requests.append((plan.id,plan.date.addingTimeInterval(-3600),"Your scheduled wish is due in one hour.")) }
         }
         for (index,item) in requests.sorted(by: { $0.1 < $1.1 }).prefix(available).enumerated() {

@@ -17,12 +17,12 @@ export const festivalSettings = z.object({
 });
 export function readFestivalSettings(value:string) { try { return JSON.parse(value) as Record<string,unknown>; } catch { return {}; } }
 const recipient = z.object({id:z.string().optional(),key:z.string().min(1).max(200),name:z.string().trim().min(1).max(80),phone:z.string().max(40),email:z.union([z.literal(''),z.email()]),selected:z.boolean()});
-export const festivalSaveInput = z.object({ids:z.array(z.string()).min(1).max(100),title:z.string().trim().min(1).max(80),date:day,timeZoneID:zone,yearly:z.boolean(),active:z.boolean(),recipients:z.array(recipient).min(1).max(100),settings:festivalSettings,cancelSchedules:z.boolean().default(false)});
+export const festivalSaveInput = z.object({ids:z.array(z.string()).min(1).max(100),title:z.string().trim().min(1).max(150),date:day,timeZoneID:zone,yearly:z.boolean(),active:z.boolean(),recipients:z.array(recipient).min(1).max(100),settings:festivalSettings,cancelSchedules:z.boolean().default(false)});
 export async function saveFestival(userId:string,input:unknown) {
  const p=festivalSaveInput.parse(input);
  const today=new Intl.DateTimeFormat('en-CA',{timeZone:p.timeZoneID,year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
- if(p.date<today) throw new MomentError('Choose today or a future festival date.');
- if(p.settings.archived) throw new MomentError('Use Delete Moment to remove a festival.');
+ if(p.date<today) throw new MomentError('Choose today or a future moment date.');
+ if(p.settings.archived) throw new MomentError('Use Delete Moment to remove a moment.');
  if(new Set(p.recipients.map(r=>r.key)).size!==p.recipients.length || new Set(p.recipients.flatMap(r=>r.id?[r.id]:[])).size!==p.recipients.filter(r=>r.id).length) throw new MomentError('Remove duplicate recipients.');
  if(!p.recipients.some(r=>r.selected)) throw new MomentError('Select at least one recipient.');
  if(p.settings.includeImage) throw new MomentError('Image attachments are not enabled. Exclude the preview image before saving for delivery.');
@@ -35,10 +35,12 @@ export async function saveFestival(userId:string,input:unknown) {
   addresses.add(channel+':'+address);
  }
  return prisma.$transaction(async tx=>{
-  const moments=await tx.importantMoment.findMany({where:{id:{in:p.ids},userId,type:'festival'}});
-  if(moments.length!==new Set(p.ids).size) throw new MomentError('Festival not found.',404);
+  const moments=await tx.importantMoment.findMany({where:{id:{in:p.ids},userId,type:{in:['festival','birthday','anniversary','getWellSoon']}}});
+  if(moments.length!==new Set(p.ids).size) throw new MomentError('Moment not found.',404);
   if(p.recipients.some(r=>r.id&&!p.ids.includes(r.id))) throw new MomentError('Invalid recipient.',400);
   const anchor=moments[0];
+  if(moments.some(m=>m.type!==anchor.type)) throw new MomentError('Manage one occasion category at a time.');
+  if(anchor.type!=='festival' && p.settings.catalogManaged) throw new MomentError('Catalog dates are only supported for festivals.');
   if(p.settings.catalogManaged && anchor.source!=='festivalCatalog') throw new MomentError('This festival uses manually managed dates.');
   if(p.settings.catalogManaged) {
    const entry=festivalCatalog().find(e=>e.id===p.settings.catalogID);
@@ -54,7 +56,7 @@ export async function saveFestival(userId:string,input:unknown) {
   for(const r of p.recipients) {
    const data={title:p.title,occurrenceDate:p.date,timeZoneID:p.timeZoneID,yearly:p.settings.catalogManaged?false:p.yearly,enabled:p.active&&r.selected,firstName:r.name,phone:r.phone,email:r.email,festivalSettings:settings};
    if(r.id) {await tx.importantMoment.update({where:{id:r.id},data});kept.push(r.id);}
-   else {const m=await tx.importantMoment.upsert({where:{userId_sourceKey:{userId,sourceKey:'festival:'+p.settings.groupID+':'+r.key}},update:data,create:{...data,userId,type:'festival',source:anchor.source,sourceKey:'festival:'+p.settings.groupID+':'+r.key}});kept.push(m.id);}
+   else {const m=await tx.importantMoment.upsert({where:{userId_sourceKey:{userId,sourceKey:anchor.type+':'+p.settings.groupID+':'+r.key}},update:data,create:{...data,userId,type:anchor.type,source:anchor.source,sourceKey:anchor.type+':'+p.settings.groupID+':'+r.key}});kept.push(m.id);}
   }
   await tx.importantMoment.updateMany({where:{id:{in:p.ids.filter(id=>!kept.includes(id))}},data:{enabled:false,festivalSettings:JSON.stringify({...p.settings,archived:true})}});
   log('info','festival_details_saved');
@@ -64,8 +66,8 @@ export async function saveFestival(userId:string,input:unknown) {
 export async function deleteFestival(userId:string,input:unknown) {
  const p=z.object({ids:z.array(z.string()).min(1).max(100)}).parse(input);
  return prisma.$transaction(async tx=>{
-  const moments=await tx.importantMoment.findMany({where:{id:{in:p.ids},userId,type:'festival'}});
-  if(moments.length!==new Set(p.ids).size) throw new MomentError('Festival not found.',404);
+  const moments=await tx.importantMoment.findMany({where:{id:{in:p.ids},userId,type:{in:['festival','birthday','anniversary','getWellSoon']}}});
+  if(moments.length!==new Set(p.ids).size) throw new MomentError('Moment not found.',404);
   if(await tx.deliveryPlan.count({where:{draft:{momentID:{in:p.ids}},status:'SENDING'}})) throw new MomentError('A send is in progress. Try again after it finishes.',409);
   await tx.deliveryPlan.updateMany({where:{draft:{momentID:{in:p.ids}},status:{in:['SCHEDULED','AWAITING_CONFIRMATION','FAILED']}},data:{status:'CANCELLED'}});
   if(await tx.deliveryPlan.count({where:{draft:{momentID:{in:p.ids}},status:'SENDING'}})) throw new MomentError('A delivery started. Refresh before editing.',409);

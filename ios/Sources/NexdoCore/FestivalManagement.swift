@@ -71,7 +71,10 @@ public enum FestivalValidation {
         guard let value=c.nextDate(after:start.addingTimeInterval(-1), matching:DateComponents(hour:hour,minute:minute), matchingPolicy:.strict, repeatedTimePolicy:.first), MomentDates.day(value,zone:zone)==day else { return nil }
         return value
     }
-    public static func fallback(name:String,tone:String) -> String {
+    public static func fallback(name:String,tone:String,type:String="festival") -> String {
+        if type == "getWellSoon" {
+            return tone == "Short" ? "Get well soon. Thinking of you." : "Get well soon. Sending care, comfort, and warm wishes for brighter days ahead."
+        }
         switch tone {
         case "Short": return "\(name)! Wishing you joy and happiness."
         case "Fun": return "\(name)! Here’s to a celebration full of smiles, good company, and wonderful memories! ✨"

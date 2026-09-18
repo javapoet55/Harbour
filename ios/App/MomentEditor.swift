@@ -23,12 +23,13 @@ struct MomentEditor: View {
                 Picker("Type", selection: Binding(get: { input.type }, set: { type in
                     let previousDefault = defaultTitle(for: input.type)
                     input.type = type
+                    if type == "getWellSoon" {input.yearly=false}
                     if let title = defaultTitle(for: type) {
                         input.title = title
                     } else if input.title == previousDefault {
                         input.title = ""
                     }
-                })) { ForEach(["birthday","anniversary","festival","custom"], id: \.self) { Text($0.capitalized).tag($0) } }.accessibilityIdentifier("moment-type")
+                })) { ForEach(["birthday","anniversary","festival","getWellSoon","custom"], id: \.self) { Text(ImportantMoment.label(for:$0)).tag($0) } }.accessibilityIdentifier("moment-type")
                 TextField("Title", text: $input.title).focused($focusedField, equals: .title).submitLabel(.done)
                 DatePicker("Date", selection: $date, displayedComponents: .date).environment(\.timeZone, TimeZone(identifier: input.timeZoneID) ?? .current)
                 Picker("Time zone", selection: $input.timeZoneID) { ForEach(TimeZone.knownTimeZoneIdentifiers, id: \.self) { Text($0) } }
@@ -73,6 +74,9 @@ struct MomentEditor: View {
                 Text("\(savedRecipientIDs.count) recipients saved. Tap Save again to retry the remaining recipients.").font(.caption)
             }
             if let moment { Section { Toggle("Show reminders", isOn: Binding(get: { store.moments.first { $0.id == moment.id }?.enabled ?? moment.enabled }, set: { value in Task { await store.perform { try await store.visibility(moment, enabled: value) } } })) } }
+            if let moment, moment.supportsGreetingCard {
+                Section("Greeting Card") {MomentGreetingCardSection(moment:moment,store:store)}
+            }
             if let error = store.error { Text(error).foregroundStyle(.red) }
             Button(input.type == "festival" && !festivalRecipients.isEmpty ? "Save for \(festivalRecipients.count) contacts" : "Save Moment") {
                 input.occurrenceDate = MomentDates.day(date, zone: input.timeZoneID)
@@ -140,6 +144,7 @@ struct MomentEditor: View {
         switch type {
         case "birthday": "Happy Birthday"
         case "anniversary": "Happy Anniversary"
+        case "getWellSoon": "Get Well Soon"
         default: nil
         }
     }

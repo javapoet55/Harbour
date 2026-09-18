@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { zonedDateTime, tzToday, ymd } from '@/lib/time';
 export const zone = z.string().refine(v => { try { new Intl.DateTimeFormat('en', { timeZone: v }); return true; } catch { return false; } }, 'Choose a valid IANA time zone.');
 export const day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(v => { const d = new Date(v+'T12:00:00Z'); return !isNaN(+d) && d.toISOString().slice(0,10) === v; });
-export const momentInput = z.object({ type: z.enum(['birthday','anniversary','festival','custom']), title: z.string().trim().min(1).max(150), firstName: z.string().trim().max(80).default(''), phone: z.string().max(40).default(''), email: z.union([z.literal(''), z.email()]).default(''), occurrenceDate: day, timeZoneID: zone, yearly: z.boolean().default(false), source: z.enum(['manual','contacts','calendar','festivalCatalog']).default('manual'), sourceKey: z.string().min(1).max(200) });
+export const momentInput = z.object({ type: z.enum(['birthday','anniversary','festival','getWellSoon','custom']), title: z.string().trim().min(1).max(150), firstName: z.string().trim().max(80).default(''), phone: z.string().max(40).default(''), email: z.union([z.literal(''), z.email()]).default(''), occurrenceDate: day, timeZoneID: zone, yearly: z.boolean().default(false), source: z.enum(['manual','contacts','calendar','festivalCatalog']).default('manual'), sourceKey: z.string().min(1).max(200) });
 export const toneSchema = z.enum(['Warm','Personal','Short','Fun']);
 export function occurrence(date: string, yearly: boolean, timeZone: string, now = new Date()) {
   if (!yearly) return date;
@@ -24,6 +24,13 @@ export function nextAnnual(date: Date, timeZone: string, anchor?: string) {
   return zonedDateTime(`${year}-${p.month}-${d}`,`${p.hour}:${p.minute}`,timeZone);
 }
 export function fallback(firstName: string, type: string, tone: string, version=1) {
+  if(type === 'getWellSoon') {
+    const name=firstName ? `, ${firstName}` : '';
+    if(tone==='Short') return `Get well soon${name}. Thinking of you.`;
+    if(tone==='Personal') return `Get well soon${name}. Sending care and comfort, and letting you know you are in my thoughts.`;
+    if(tone==='Fun') return `Get well soon${name}. Sending a little sunshine and plenty of warm wishes your way! ☀️`;
+    return `Get well soon${name}. Wishing you comfort, rest, and brighter days ahead.`;
+  }
   const greeting = type === 'birthday' ? 'Happy Birthday' : type === 'anniversary' ? 'Happy Anniversary' : 'Best wishes';
   const name = firstName ? `, ${firstName}` : '';
   if (tone === 'Short') return `${greeting}${name}! Wishing you a wonderful day.`;

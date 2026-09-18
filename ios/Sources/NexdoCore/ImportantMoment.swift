@@ -7,7 +7,10 @@ public struct ImportantMoment: Codable, Identifiable, Sendable {
     public var snoozedUntil: String?
     public var nextOccurrence: String
     public var drafts: [WishDraft]
-    public var icon: String { switch type { case "birthday": "gift.fill"; case "anniversary": "heart.fill"; case "festival": "sparkles"; default: "star.fill" } }
+    public var typeLabel: String { Self.label(for:type) }
+    public static func label(for type:String) -> String { type == "getWellSoon" ? "Get Well Soon" : type.capitalized }
+    public var supportsGreetingCard: Bool { ["birthday","anniversary","festival","getWellSoon"].contains(type) }
+    public var icon: String { switch type { case "birthday": "gift.fill"; case "anniversary": "heart.fill"; case "festival": "sparkles"; case "getWellSoon": "heart.text.clipboard.fill"; default: "star.fill" } }
     public var latest: WishDraft? { drafts.first }
 }
 public struct WishDraft: Codable, Identifiable, Sendable {
@@ -80,6 +83,15 @@ public extension ImportantMoment {
             MomentDates.day($0.date, zone: timeZoneID) == nextOccurrence
         }.sorted { $0.date < $1.date }.first
     }
+    /// Approval is distinct from scheduling. Annual occurrences need a fresh review.
+    var readyToSchedule: Bool {
+        guard enabled, upcomingDelivery == nil, occurrenceDate == nextOccurrence else {return false}
+        if supportsGreetingCard, let settings=FestivalSettings.read(festivalSettings) {
+            return settings.approvedAt != nil && !settings.baseMessage.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty
+        }
+        return latest?.status == "READY" && !(latest?.plans?.contains { ["SENT","COPIED","SHARED"].contains($0.status) } ?? false)
+    }
+    var needsWishReview: Bool { enabled && upcomingDelivery == nil && !readyToSchedule }
     func upcomingGroup(now: Date = Date()) -> MomentUpcomingGroup {
         var calendar = Calendar.current
         calendar.timeZone = TimeZone(identifier: timeZoneID) ?? .current
@@ -107,8 +119,8 @@ public struct MomentDisplayGroup: Identifiable, Sendable {
         var entries: [String: [ImportantMoment]] = [:]
         for moment in moments {
             let key: String
-            if moment.type == "festival", let settings = FestivalSettings.read(moment.festivalSettings) {
-                key = "festival-group:" + settings.groupID
+            if moment.supportsGreetingCard, let settings = FestivalSettings.read(moment.festivalSettings) {
+                key = moment.type + "-group:" + settings.groupID
             } else if moment.type == "festival" {
                 let title = moment.title.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
                 key = [title, moment.nextOccurrence, moment.timeZoneID, String(moment.yearly)]

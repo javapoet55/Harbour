@@ -2,8 +2,12 @@ import SwiftUI
 import MessageUI
 
 struct MomentCard<Content: View>: View {
+    var fill:LinearGradient? = nil
     @ViewBuilder var content: () -> Content
-    var body: some View { VStack(alignment: .leading, spacing: 14, content: content).frame(maxWidth: .infinity, alignment: .leading).padding(18).background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 22)).overlay(RoundedRectangle(cornerRadius: 22).stroke(Color.nexdoIndigo.opacity(0.18))) }
+    var body: some View { VStack(alignment: .leading, spacing: 14, content: content).frame(maxWidth: .infinity, alignment: .leading).padding(18).background {
+        if let fill {RoundedRectangle(cornerRadius:22).fill(fill)}
+        else {RoundedRectangle(cornerRadius:22).fill(.ultraThinMaterial)}
+    }.overlay(RoundedRectangle(cornerRadius: 22).stroke(Color.nexdoIndigo.opacity(0.18))) }
 }
 struct MomentPrimary: View {
     let title: String
@@ -32,14 +36,17 @@ struct ImportantMomentsTodayCard: View {
     }
 }
 struct MomentIconTile: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var appeared=false
     let type: String
     var title = ""
     private var color: Color {
-        switch type { case "birthday": .red; case "anniversary": .purple; case "festival": .orange; default: .nexdoIndigo }
+        switch type { case "birthday": .red; case "anniversary": .purple; case "festival": .orange; case "getWellSoon": .teal; default: .nexdoIndigo }
     }
     var body: some View {
         ZStack {
             RoundedRectangle(cornerRadius: 16).fill(color.opacity(0.16).gradient)
+            Group {
             if type == "anniversary" {
                 ZStack {
                     Image(systemName: "heart").offset(x: -7, y: -4)
@@ -52,10 +59,16 @@ struct MomentIconTile: View {
                         .frame(width: 38, height: 17)
                 }
             } else {
-                Image(systemName: type == "birthday" ? "gift.fill" : type == "festival" ? "sparkles" : type == "summary" ? "calendar" : "star.fill")
+                Image(systemName: type == "birthday" ? "gift.fill" : type == "festival" ? "sparkles" : type == "getWellSoon" ? "heart.text.clipboard.fill" : type == "summary" ? "calendar" : "star.fill")
                     .font(.system(size: 32, weight: .medium))
             }
+            }.scaleEffect(reduceMotion || appeared || type == "summary" ? 1 : 0.78)
         }
+        .onAppear {
+            if reduceMotion {appeared=true}
+            else {withAnimation(.spring(duration:0.8,bounce:0.4)){appeared=true}}
+        }
+        .onDisappear {appeared=false}
         .foregroundStyle(color).frame(width: 64, height: 64)
         .accessibilityHidden(true)
     }
@@ -79,7 +92,7 @@ private struct UpcomingMomentRow: View {
                 MomentIconTile(type: moment.type, title: moment.title)
                 VStack(alignment: .leading, spacing: 8) {
                     Text(moment.title).font(.title3.bold())
-                    Text("\(moment.type.capitalized) · \(MomentDates.relative(moment.nextOccurrence, zone: moment.timeZoneID))")
+                    Text("\(moment.typeLabel) · \(MomentDates.relative(moment.nextOccurrence, zone: moment.timeZoneID))")
                         .font(.subheadline).foregroundStyle(.secondary)
                     if !moment.enabled {
                         MomentStatusBadge(title: "Disabled", color: .secondary, icon: "pause.circle")
@@ -91,8 +104,8 @@ private struct UpcomingMomentRow: View {
                             .font(.caption).foregroundStyle(.secondary)
                         NavigationLink { WishPlanView(plan: plan) } label: { Label("Manage", systemImage: "chevron.right") }
                     } else {
-                        MomentStatusBadge(title: "Needs review", color: .orange, icon: "exclamationmark.circle.fill")
-                        Text(moment.latest == nil ? "Create a personal wish" : "Message draft ready").font(.caption).foregroundStyle(.secondary)
+                        MomentStatusBadge(title: moment.readyToSchedule ? "Ready to schedule" : "Needs review", color: moment.readyToSchedule ? .blue : .orange, icon: moment.readyToSchedule ? "clock" : "exclamationmark.circle.fill")
+                        Text(moment.readyToSchedule ? "Message approved · choose delivery" : moment.latest == nil ? "Create a personal wish" : "Message draft ready").font(.caption).foregroundStyle(.secondary)
                         NavigationLink { ReviewWishView(moment: moment) } label: {
                             Text("Review").font(.subheadline.bold()).foregroundStyle(.white)
                                 .padding(.horizontal, 22).padding(.vertical, 10)
@@ -106,34 +119,47 @@ private struct UpcomingMomentRow: View {
     }
 }
 private struct FestivalGroupCard: View {
-    @EnvironmentObject private var store: ImportantMomentsStore
+    let onManage: () -> Void
     let group: MomentDisplayGroup
     var body: some View {
         if let moment = group.moments.first {
             MomentCard {
                 HStack(alignment: .top, spacing: 14) {
-                    MomentIconTile(type: "festival", title: moment.title)
+                    MomentIconTile(type: moment.type, title: moment.title)
                     VStack(alignment: .leading, spacing: 8) {
-                        Text(moment.title).font(.title3.bold())
-                        Text("Festival · \(MomentDates.relative(moment.nextOccurrence, zone: moment.timeZoneID))")
+                        HStack(alignment:.top,spacing:8) {
+                            Text(moment.title).font(.title3.bold()).frame(maxWidth:.infinity,alignment:.leading)
+                            Button(action:onManage) {
+                                Image(systemName:"gearshape").font(.title3).frame(width:44,height:44)
+                            }.buttonStyle(.plain).foregroundStyle(Color.nexdoIndigo)
+                                .accessibilityLabel("Manage \(moment.title)")
+                                .accessibilityIdentifier("festival-manage-\(moment.id)")
+                        }
+                        Text("\(moment.typeLabel) · \(MomentDates.relative(moment.nextOccurrence, zone: moment.timeZoneID))")
                             .font(.subheadline).foregroundStyle(.secondary)
+                        Text(MomentDates.sendDayLabel(MomentDates.date(moment.nextOccurrence,zone:moment.timeZoneID),zone:moment.timeZoneID))
+                            .font(.subheadline).foregroundStyle(.secondary)
+                            .fixedSize(horizontal:false,vertical:true)
+                            .accessibilityIdentifier("festival-date-\(moment.id)")
                         let scheduled = group.moments.filter { $0.enabled && $0.upcomingDelivery != nil }.count
-                        let review = group.moments.filter { $0.enabled && $0.upcomingDelivery == nil }.count
+                        let review = group.moments.filter(\.needsWishReview).count
+                        let ready = group.moments.filter(\.readyToSchedule).count
+                        let active = group.moments.filter(\.enabled).count
                         if review > 0 {
-                            MomentStatusBadge(title: "\(review) need review", color: .orange, icon: "exclamationmark.circle.fill")
+                            MomentStatusBadge(title: review == active ? "Needs review" : "\(review) wish\(review == 1 ? " needs" : "es need") review", color: .orange, icon: "exclamationmark.circle.fill")
+                        }
+                        if ready > 0 {
+                            MomentStatusBadge(title: ready == active ? "Ready to schedule" : "\(ready) ready to schedule",color:.blue,icon:"clock")
                         }
                         if scheduled > 0 {
                             MomentStatusBadge(title: "\(scheduled) scheduled", color: .blue, icon: "clock")
                         }
-                        NavigationLink {
-                            ManageFestivalView(group: group, store: store)
-                        } label: {
-                            Label("Manage Moments", systemImage: "chevron.right")
-                                .font(.subheadline.bold())
-                        }.accessibilityIdentifier("festival-manage-\(moment.id)")
                     }.frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
+            .contentShape(Rectangle())
+            .onTapGesture(perform:onManage)
+            .accessibilityAction(named:Text("Manage moment"),onManage)
         }
     }
 }
@@ -180,18 +206,21 @@ private struct FestivalRecipientsView: View {
     }
 }
 struct ImportantMomentsView: View {
+    @ScaledMetric(relativeTo:.subheadline) private var summaryActionFontSize:CGFloat = 18
     @EnvironmentObject private var store: ImportantMomentsStore
     @State private var tab = "Upcoming"
     @State private var search = ""
     @State private var filter = "All"
     @State private var deliveryFilter = "All"
-    private var displayed: [ImportantMoment] { store.moments.filter { (tab == "Sent" || !($0.festivalSettings?.contains("\"archived\":true") ?? false)) && (tab != "Upcoming" || $0.nextOccurrence >= MomentDates.day(Date(), zone: $0.timeZoneID)) && (filter == "All" || $0.type == filter.lowercased()) && (search.isEmpty || $0.title.localizedCaseInsensitiveContains(search)) }.sorted { $0.nextOccurrence < $1.nextOccurrence } }
+    @State private var managingMoments = false
+    @State private var managingFestival: MomentDisplayGroup?
+    private var displayed: [ImportantMoment] { store.moments.filter { (tab == "Sent" || !($0.festivalSettings?.contains("\"archived\":true") ?? false)) && (tab != "Upcoming" || $0.nextOccurrence >= MomentDates.day(Date(), zone: $0.timeZoneID)) && (filter == "All" || $0.type == (filter == "Get Well Soon" ? "getWellSoon" : filter.lowercased())) && (search.isEmpty || $0.title.localizedCaseInsensitiveContains(search)) }.sorted { $0.nextOccurrence < $1.nextOccurrence } }
     var body: some View {
         ZStack { TodayBackdrop(); ScrollView { VStack(spacing: 16) {
             MomentSegments(options: ["Upcoming", "Scheduled", "Sent"], selection: $tab)
             HStack {
                 TextField("Search moments", text: $search).textFieldStyle(.roundedBorder)
-                Picker("Type", selection: $filter) { ForEach(["All","Birthday","Anniversary","Festival","Custom"], id: \.self) { Text($0) } }.labelsHidden().accessibilityLabel("Filter moment type")
+                Picker("Type", selection: $filter) { ForEach(["All","Birthday","Anniversary","Festival","Get Well Soon","Custom"], id: \.self) { Text($0) } }.labelsHidden().accessibilityLabel("Filter moment type")
             }
             if tab == "Upcoming" {
                 MomentCard {
@@ -200,12 +229,23 @@ struct ImportantMomentsView: View {
                         VStack(alignment: .leading, spacing: 6) {
                             Text("\(MomentDisplayGroup.groups(displayed.filter(\.enabled)).count) upcoming moment\(MomentDisplayGroup.groups(displayed.filter(\.enabled)).count == 1 ? "" : "s")").font(.title3.bold())
                             let scheduled = displayed.filter { $0.enabled && $0.upcomingDelivery != nil }.count
-                            let review = displayed.filter { $0.enabled && $0.upcomingDelivery == nil }.count
-                            Text("\(scheduled) wish\(scheduled == 1 ? "" : "es") scheduled · \(review) need\(review == 1 ? "s" : "") review")
+                            let review = displayed.filter(\.needsWishReview).count
+                            let ready = displayed.filter(\.readyToSchedule).count
+                            Text("\(scheduled) wish\(scheduled == 1 ? "" : "es") scheduled")
                                 .font(.subheadline).foregroundStyle(.secondary)
-                            NavigationLink { MomentsManagementEntry() } label: {
-                                Label("Manage Moments", systemImage: "slider.horizontal.3").foregroundStyle(Color.nexdoIndigo).frame(minHeight: 44)
-                            }
+                            Text("\(review) wish\(review == 1 ? " needs" : "es need") review")
+                                .font(.subheadline).foregroundStyle(.secondary)
+                            if ready > 0 {Text("\(ready) ready to schedule").font(.subheadline).foregroundStyle(.secondary)}
+                            HStack(spacing:20) {
+                                Button { managingMoments = true } label: {
+                                    Text("Manage").frame(minHeight:44)
+                                }.accessibilityIdentifier("moments-manage")
+                                NavigationLink { MomentEditor() } label: {
+                                    Text("Create New").frame(minHeight:44)
+                                }.accessibilityIdentifier("moments-create-new")
+                            }.font(.system(size:summaryActionFontSize,weight:.semibold)).foregroundStyle(Color.nexdoIndigo)
+                                .lineLimit(1)
+
                         }
                         Spacer(minLength: 0)
                     }
@@ -216,8 +256,8 @@ struct ImportantMomentsView: View {
                         Text(group.rawValue).font(.title.bold())
                             .frame(maxWidth: .infinity, alignment: .leading).padding(.top, 8)
                         ForEach(MomentDisplayGroup.groups(items)) { entry in
-                            if entry.moments.first?.type == "festival" {
-                                FestivalGroupCard(group: entry)
+                            if entry.moments.first?.supportsGreetingCard == true {
+                                FestivalGroupCard(onManage:{managingFestival=entry},group: entry)
                             } else if let moment = entry.moments.first {
                                 UpcomingMomentRow(moment: moment)
                             }
@@ -251,6 +291,12 @@ struct ImportantMomentsView: View {
             if let synced = store.lastSynced { Text("Updated \(synced.formatted(date: .omitted, time: .shortened))").font(.caption).foregroundStyle(.secondary) }
             NavigationLink { MomentEditor() } label: { Label("Add Moment", systemImage: "plus").font(.headline).frame(maxWidth: .infinity, minHeight: 52) }.buttonStyle(.borderedProminent)
         }.padding(18) } }
+        .navigationDestination(isPresented:$managingMoments) {
+            MomentsManagementEntry(onDone:{managingMoments=false})
+        }
+        .navigationDestination(isPresented:Binding(get:{managingFestival != nil},set:{if !$0{managingFestival=nil}})) {
+            if let group=managingFestival {ManageFestivalView(group:group,store:store,onDone:{managingFestival=nil})}
+        }
         .navigationTitle("Important Moments").navigationBarTitleDisplayMode(.inline)
         .toolbar { NavigationLink { MomentSettingsView() } label: { Image(systemName: "gearshape") }.accessibilityLabel("Important Moments settings") }
         .task { await store.prepareDefaultReminders(); await store.refresh() }.refreshable { await store.refresh() }
@@ -275,7 +321,7 @@ struct ReviewWishView: View {
                     Text("Festival: \(moment.title)").foregroundStyle(.secondary)
                     Text(moment.nextOccurrence).foregroundStyle(.secondary)
                 } else {
-                    Text("\(moment.type.capitalized) · \(moment.nextOccurrence)").foregroundStyle(.secondary)
+                    Text("\(moment.typeLabel) · \(moment.nextOccurrence)").foregroundStyle(.secondary)
                 }
             }
             MomentCard {
@@ -293,6 +339,7 @@ struct ReviewWishView: View {
                 Text("\(bodyText.count)/500").frame(maxWidth: .infinity, alignment: .trailing).foregroundStyle(bodyText.count > 500 ? .red : .secondary)
                 HStack { Button("Try another", systemImage: "sparkles") { generate() }; Spacer(); Button("Edit", systemImage: "pencil") { editing = true } }.buttonStyle(.bordered)
             }
+            if moment.supportsGreetingCard {MomentGreetingCardSection(moment:moment,store:store,greeting:bodyText)}
             Label("Nothing is sent without your approval.", systemImage: "checkmark.shield").font(.caption).foregroundStyle(.secondary)
             if let error = store.error { Text(error).foregroundStyle(.red) }
             MomentPrimary(title: "Approve & Continue") {
@@ -410,7 +457,7 @@ struct ScheduleWishView: View {
         ZStack { TodayBackdrop(); ScrollView { VStack(alignment: .leading, spacing: 18) {
             MomentCard { Label(moment.title, systemImage: moment.icon).font(.title2.bold()); Text(moment.nextOccurrence) }
             Text("Delivery method").font(.title.bold())
-            MomentCard { Label(channel.capitalized, systemImage: channel == "email" ? "envelope.fill" : "message.fill").font(.headline); Text(recipient); Text(channel == "messages" ? "Confirmation required" : store.snapshot?.emailAccount?.email ?? "Connect email in Settings").foregroundStyle(.secondary) }
+            MomentCard { Label(channel.capitalized, systemImage: channel == "email" ? "envelope.fill" : "message.fill").font(.headline); Text(recipient); Text(channel == "messages" ? "You tap Send at the scheduled time" : store.snapshot?.emailAccount?.email ?? "Connect email in Settings").foregroundStyle(.secondary) }
             Text("Send date & time").font(.title.bold())
             MomentCard {
                 DatePicker("Date and time", selection: $date, in: Date()...).environment(\.timeZone, TimeZone(identifier: zone) ?? .current)
@@ -420,10 +467,10 @@ struct ScheduleWishView: View {
                 if channel == "email" {
                     Toggle("Send automatically", isOn: $automatic).disabled(store.snapshot?.automaticEmailEnabled != true)
                     if store.snapshot?.automaticEmailEnabled != true { Text("Automatic delivery needs a connected email account and the server scheduler.").font(.caption) }
-                } else { Text("We’ll remind you to confirm in Messages.") }
+                } else { Text("We’ll remind you, the sender, to open the prepared wish and tap Send in Messages. Recipients do not need to confirm. iOS does not allow Nexdo to send Messages automatically.") }
                 Toggle("Notify me 1 hour before", isOn: $warning)
                 Toggle("Repeat yearly", isOn: $yearly)
-                if !automatic { Text("Yearly Messages wishes still require your confirmation each year. Reopen Nexdo to refresh local reminders.").font(.caption).foregroundStyle(.secondary) }
+                if !automatic { Text("For yearly Messages wishes, you must tap Send each year. Reopen Nexdo to refresh local reminders.").font(.caption).foregroundStyle(.secondary) }
             }
             MomentCard { Text("Approved message").font(.headline); Text(draft.body); Text("Go back to Review Wish to change the message.").font(.caption) }
             Text("Allow notifications to receive reminders. Email delivery runs on the server even when Nexdo is closed.").font(.caption).foregroundStyle(.secondary)
@@ -531,8 +578,8 @@ private struct MomentRoutedView: View {
                 .navigationDestination(isPresented: $showingDetail) {
                     if let plan = moment.drafts.flatMap({ $0.plans ?? [] }).first(where: { $0.editable }) {
                         WishPlanView(plan: plan)
-                    } else if moment.type == "festival", let group = MomentDisplayGroup.groups(store.moments.filter { $0.type == "festival" }).first(where: { $0.moments.contains { $0.id == moment.id } }) {
-                        ManageFestivalView(group: group, store: store)
+                    } else if moment.supportsGreetingCard, let group = MomentDisplayGroup.groups(store.moments.filter { $0.type == moment.type }).first(where: { $0.moments.contains { $0.id == moment.id } }) {
+                        ManageFestivalView(group: group, store: store,onDone:{showingDetail=false})
                     } else {
                         ReviewWishView(moment: moment)
                     }

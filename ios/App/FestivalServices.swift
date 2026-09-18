@@ -16,9 +16,14 @@ struct MockFestivalImageService: FestivalImageGenerationService {
                 let data=UIGraphicsImageRenderer(size:size).pngData { context in
                     let rect=CGRect(origin:.zero,size:size)
                     UIColor(red:0.15+Double(index)*0.08,green:0.08,blue:0.35,alpha:1).setFill();context.fill(rect)
+                    if !request.festival.localizedCaseInsensitiveContains("diwali") {
+                        let symbol=request.festival.localizedCaseInsensitiveContains("anniversary") ? "heart.fill" : request.festival.localizedCaseInsensitiveContains("well") ? "sun.max.fill" : "gift.fill"
+                        UIImage(systemName:symbol)?.withTintColor(.systemYellow,renderingMode:.alwaysOriginal).draw(in:CGRect(x:size.width*0.25,y:size.height*0.3,width:size.width*0.5,height:size.width*0.5))
+                    } else {
                     UIColor.systemOrange.setFill()
                     let bowl=UIBezierPath(ovalIn:CGRect(x:size.width*0.25,y:size.height*0.53,width:size.width*0.5,height:size.height*0.24));bowl.fill()
                     UIColor.systemYellow.setFill();UIBezierPath(ovalIn:CGRect(x:size.width*0.45,y:size.height*0.29,width:size.width*0.10,height:size.height*0.29)).fill()
+                    }
                     for i in 0..<12 { UIColor.systemYellow.withAlphaComponent(0.35).setFill(); UIBezierPath(ovalIn:CGRect(x:CGFloat(i)*size.width/12,y:CGFloat((i*53)%150)+12,width:8,height:8)).fill() }
                 }
                 return FestivalImageVariation(id:UUID().uuidString,data:data,isMock:true)
@@ -97,6 +102,7 @@ struct FestivalGreetingCard: View {
 }
 struct FestivalGreetingCardEditor:View {
     @ObservedObject var model:ManageFestivalModel
+    var saveOnUse=false
     @Environment(\.dismiss) private var dismiss
     @State private var selected:FestivalImageVariation?
     @State private var shared:CardShareItem?
@@ -145,11 +151,17 @@ struct FestivalGreetingCardEditor:View {
                     if let error=model.error {Text(error).foregroundStyle(.red)}
                     if artwork != nil {
                         MomentPrimary(title:"Use This Card") {
+                            model.settings.cardGreeting=greeting.wrappedValue
                             if let selected {model.chooseImage(selected)}
-                            if model.error == nil {dismiss()}
+                            if model.error == nil {
+                                if saveOnUse {Task{if await model.saveGreetingCard(){dismiss()}}}
+                                else {dismiss()}
+                            }
                         }
+                        .disabled(model.busy || model.generatingImage)
+                        if model.busy {ProgressView("Saving card…")}
                         Button("Share Card",systemImage:"square.and.arrow.up") {share()}.frame(maxWidth:.infinity,minHeight:44).buttonStyle(.bordered)
-                        Text("Use This Card applies it to this moment. Tap Save Message on the next screen to save your changes.").font(.caption).foregroundStyle(.secondary)
+                        Text(saveOnUse ? "Use This Card saves the greeting and signature to this moment. Artwork is stored on this device." : "Use This Card applies it to this moment. Tap Save Message on the next screen to save your changes.").font(.caption).foregroundStyle(.secondary)
                     }
                 }.padding(18)
             }.scrollDismissesKeyboard(.interactively)}
@@ -172,4 +184,29 @@ private struct CardActivitySheet:UIViewControllerRepresentable {
     let image:UIImage
     func makeUIViewController(context:Context)->UIActivityViewController {UIActivityViewController(activityItems:[image],applicationActivities:nil)}
     func updateUIViewController(_ controller:UIActivityViewController,context:Context){}
+}
+
+/// Reuses the festival card editor without changing a moment's recipients or scheduled text.
+struct MomentGreetingCardSection:View {
+    @StateObject private var model:ManageFestivalModel
+    @State private var showingEditor=false
+    var greeting:String?
+    init(moment:ImportantMoment,store:ImportantMomentsStore,greeting:String?=nil) {
+        let current=store.moments.first(where:{$0.id==moment.id}) ?? moment
+        _model=StateObject(wrappedValue:ManageFestivalModel(group:MomentDisplayGroup.groups([current])[0],store:store))
+        self.greeting=greeting
+    }
+    var body:some View {
+        VStack(alignment:.leading,spacing:14) {
+            if let data=model.imageData,let artwork=UIImage(data:data) {
+                FestivalGreetingCard(artwork:artwork,title:model.title,message:model.settings.cardGreeting ?? model.settings.baseMessage,signature:model.settings.cardSignature ?? "")
+            }
+            Button(model.imageData == nil ? "Create AI Greeting Card":"Edit Greeting Card",systemImage:"sparkles") {
+                if let greeting,!greeting.isEmpty {model.settings.baseMessage=greeting}
+                showingEditor=true
+            }.buttonStyle(.borderedProminent).accessibilityIdentifier("moment-greeting-card")
+            Text("Create and share a card with your greeting and signature. Scheduled wishes send text only.").font(.caption).foregroundStyle(.secondary)
+            if let notice=model.notice {Text(notice).font(.caption)}
+        }.sheet(isPresented:$showingEditor){FestivalGreetingCardEditor(model:model,saveOnUse:true)}
+    }
 }

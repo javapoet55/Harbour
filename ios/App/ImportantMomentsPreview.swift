@@ -7,6 +7,7 @@ final class MomentsPreviewProtocol: URLProtocol, @unchecked Sendable {
     private static let lock = NSLock()
     nonisolated(unsafe) private static var savedPlans: [[String: Any]] = []
     nonisolated(unsafe) private static var festivalSaved: [String: Any]?
+    nonisolated(unsafe) private static var cardSettings: [String:Any] = [:]
     nonisolated(unsafe) private static var festivalDeleted = false
     nonisolated(unsafe) private static var draftBody = "Happy Birthday, Damien! Wishing you a wonderful day and a fantastic year ahead! 🎉"
     override class func canInit(with request: URLRequest) -> Bool { request.url?.host == "moments-preview.invalid" }
@@ -27,6 +28,9 @@ final class MomentsPreviewProtocol: URLProtocol, @unchecked Sendable {
                 Self.festivalSaved = input
                 if input["cancelSchedules"] as? Bool == true {Self.savedPlans=Self.savedPlans.map{var plan=$0;plan["status"]="CANCELLED";return plan}}
                 result = ["ok":true]
+            case "greetingCardSave":
+                if let id=input["momentID"] as? String {Self.cardSettings[id]=input["settings"]}
+                result=["ok":true]
             case "festivalDelete": Self.festivalDeleted = true; result = ["ok":true]
             case "generate": result = ["draft":draft(),"usedAI":false]
             case "approve": Self.draftBody = input["body"] as? String ?? Self.draftBody; result = ["draft":draft()]
@@ -56,12 +60,26 @@ final class MomentsPreviewProtocol: URLProtocol, @unchecked Sendable {
                 var second=moment;second["id"]="moment2";second["firstName"]="Priya";second["phone"]="+15555550185";second["sourceKey"]="fixture2"
                 moments.append(second)
             }
+            if ProcessInfo.processInfo.arguments.contains("-festival-five-recipients") {
+                for index in 2...5 {
+                    var item=moment;item["id"]="moment\(index)";item["firstName"]="Contact \(index)";item["phone"]="+1555555018\(index)";item["sourceKey"]="fixture\(index)"
+                    moments.append(item)
+                }
+            }
             if ProcessInfo.processInfo.arguments.contains("-all-moment-categories") {
-                for type in ["anniversary","festival","custom"] {
+                for type in ["anniversary","festival","getWellSoon","custom"] {
                     var item=moment;item["id"]=type;item["type"]=type;item["title"]=type.capitalized+" example";item["sourceKey"]=type
                     moments.append(item)
                 }
             }
+            for i in moments.indices {
+                if let saved=Self.festivalSaved,let ids=saved["ids"] as? [String],let id=moments[i]["id"] as? String,ids.contains(id) {
+                    moments[i]["title"]=saved["title"];moments[i]["occurrenceDate"]=saved["date"];moments[i]["nextOccurrence"]=saved["date"]
+                    moments[i]["enabled"]=saved["active"];moments[i]["yearly"]=saved["yearly"]
+                    if let settings=saved["settings"],let data=try? JSONSerialization.data(withJSONObject:settings){moments[i]["festivalSettings"]=String(data:data,encoding:.utf8)}
+                }
+            }
+            for i in moments.indices {if let id=moments[i]["id"] as? String,let settings=Self.cardSettings[id],let data=try? JSONSerialization.data(withJSONObject:settings){moments[i]["festivalSettings"]=String(data:data,encoding:.utf8)}}
             result = ["moments":Self.festivalDeleted ? []:moments,"emailAccount":["email":"you@example.com","status":"connected"],"emailConfigured":true,"automaticEmailEnabled":true]
         }
         let data = try! JSONSerialization.data(withJSONObject: result)
@@ -70,7 +88,7 @@ final class MomentsPreviewProtocol: URLProtocol, @unchecked Sendable {
     }
     override func stopLoading() {}
     @MainActor static func store() -> ImportantMomentsStore {
-        lock.withLock { savedPlans = []; festivalSaved = nil; festivalDeleted = false; draftBody = "Happy Birthday, Damien! Wishing you a wonderful day and a fantastic year ahead! 🎉" }
+        lock.withLock { savedPlans = []; cardSettings = [:]; festivalSaved = nil; festivalDeleted = false; draftBody = "Happy Birthday, Damien! Wishing you a wonderful day and a fantastic year ahead! 🎉" }
         if ProcessInfo.processInfo.arguments.contains("-festival-manage-preview") {
             lock.withLock { draftBody = "Happy Diwali! Wishing you and your family joy, light and new beginnings." }
         }
