@@ -75,7 +75,7 @@ struct ManageFestivalView: View {
             if let notice=model.notice {Text(notice).font(.subheadline).foregroundStyle(.secondary).accessibilityIdentifier("festival-notice")}
         }.padding(18)}}
         .navigationTitle("Manage Moment").navigationBarTitleDisplayMode(.inline).navigationBarBackButtonHidden()
-        .navigationDestination(isPresented:$model.scheduleCompleted){FestivalScheduleSuccess(title:model.title,plans:model.savedPlans,manage:{model.tab = .schedule;model.scheduleCompleted=false},done:{if let onDone{onDone()}else{dismiss()}})}
+        .navigationDestination(isPresented:$model.scheduleCompleted){FestivalScheduleSuccess(title:model.title,occasionType:model.occasionType,plans:model.savedPlans,manage:{model.tab = .schedule;model.scheduleCompleted=false},done:{if let onDone{onDone()}else{dismiss()}})}
         .navigationDestination(isPresented:$showingSettings){MomentSettingsView().environmentObject(model.store)}
         .toolbar {
             ToolbarItem(placement:.topBarLeading){Button {if model.dirty{discard=true}else{dismiss()}}label:{Image(systemName:"chevron.left").frame(width:44,height:44)}.accessibilityLabel("Back")}
@@ -221,6 +221,7 @@ private struct FestivalManualRecipient:View {
 
 private struct FestivalScheduleSuccess:View {
     let title:String
+    let occasionType:String
     let plans:[WishDeliveryPlan]
     let manage:()->Void
     let done:()->Void
@@ -235,7 +236,7 @@ private struct FestivalScheduleSuccess:View {
     var body:some View {
         ZStack {TodayBackdrop();ScrollView{VStack(spacing:20){
             Image(systemName:"calendar.badge.checkmark").font(.system(size:68)).foregroundStyle(Color.nexdoIndigo)
-            Text("Wishes scheduled").font(.largeTitle.bold())
+            Text(occasionType == "getWellSoon" ? "Get Well Scheduled" : "Wishes scheduled").font(.largeTitle.bold()).multilineTextAlignment(.center)
             Text(title).font(.title2)
             MomentCard {
                 Text("For all \(plans.count) selected contact\(plans.count == 1 ? "":"s")").font(.headline)
@@ -243,11 +244,13 @@ private struct FestivalScheduleSuccess:View {
                 ForEach(deliverySummary,id:\.self) { summary in
                     Label(summary,systemImage:summary.hasPrefix("Will send") ? "envelope.fill":"bell.fill")
                 }
-                ForEach(sendTimes,id:\.self) { Text($0).foregroundStyle(.secondary) }
+                ForEach(sendTimes,id:\.self) { Text($0).fontWeight(.bold).multilineTextAlignment(.center).frame(maxWidth:.infinity).accessibilityIdentifier("schedule-confirmed-date") }
                 Button("Manage scheduled wish",action:manage).frame(minHeight:44)
                     .accessibilityIdentifier("festival-manage-schedule")
             }
             MomentPrimary(title:"Done",action:done)
-        }.padding(18)}}.navigationTitle("Schedule confirmed").navigationBarTitleDisplayMode(.inline)
+        }.padding(18)}}
+        .overlay { if ["birthday","anniversary","festival"].contains(occasionType) { MomentConfetti() } }
+        .navigationTitle("Schedule confirmed").navigationBarTitleDisplayMode(.inline)
     }
 }
