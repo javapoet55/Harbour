@@ -65,7 +65,7 @@ final class MomentsPreviewProtocol: URLProtocol, @unchecked Sendable {
                 if let settings=Self.festivalSaved?["settings"],let encoded=try? JSONSerialization.data(withJSONObject:settings) {moment["festivalSettings"]=String(data:encoded,encoding:.utf8)}
                 moment["enabled"]=Self.festivalSaved?["active"] ?? true
             }
-            var moments = [moment] + Self.createdMoments
+            var moments = [moment] + (ProcessInfo.processInfo.arguments.contains("-stale-moment-list-preview") ? [] : Self.createdMoments)
             if ProcessInfo.processInfo.arguments.contains("-festival-two-recipients") {
                 var second=moment;second["id"]="moment2";second["firstName"]="Priya";second["phone"]="+15555550185";second["sourceKey"]="fixture2"
                 moments.append(second)

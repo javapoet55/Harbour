@@ -36,6 +36,22 @@ import XCTest
         app.buttons["manage-moment-moment"].tap()
         XCTAssertTrue(app.navigationBars["Manage Moment"].waitForExistence(timeout:5))
     }
+    func testCreateMomentOpensEvenWhenListRefreshIsStale() {
+        app.terminate()
+        app.launchArguments = ["-moments-design-preview", "-stale-moment-list-preview"]
+        app.launch()
+        XCTAssertTrue(app.buttons["moments-create-new"].waitForExistence(timeout: 15))
+        app.buttons["moments-create-new"].tap()
+        let firstName = app.textFields["First name"]
+        for _ in 0..<4 { if firstName.isHittable { break }; app.swipeUp() }
+        firstName.tap(); firstName.typeText("Rahul")
+        app.buttons["moment-save-top"].tap()
+        XCTAssertTrue(app.navigationBars["Manage Moment"].waitForExistence(timeout: 10))
+        app.buttons["Contacts"].tap()
+        XCTAssertTrue(app.staticTexts["Rahul"].firstMatch.waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["Save Moment"].exists)
+    }
+
     func testCreateBirthdayOpensPersonalizedManager() {
         app.buttons["moments-create-new"].tap()
         XCTAssertTrue(app.navigationBars["Create Moment"].waitForExistence(timeout: 5))

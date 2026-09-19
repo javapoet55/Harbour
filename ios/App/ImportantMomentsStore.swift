@@ -99,8 +99,14 @@ struct MomentOK: Decodable, Sendable {}
         do { try await action(); await refresh() } catch { self.error = error.localizedDescription }
     }
     @discardableResult func save(_ input: MomentInput, id: String? = nil) async throws -> String {
-        struct Saved: Decodable, Sendable { struct Moment: Decodable, Sendable { let id: String }; let moment: Moment }
+        struct Saved: Decodable, Sendable { let moment: ImportantMoment }
         let result: Saved = try await request("save", input, id: id)
+        // Publish the authoritative save result before any list refresh or notification work.
+        var updated = moments.filter { $0.id != result.moment.id }
+        updated.append(result.moment)
+        snapshot = MomentsSnapshot(moments: updated, emailAccount: snapshot?.emailAccount,
+            emailConfigured: snapshot?.emailConfigured ?? false,
+            automaticEmailEnabled: snapshot?.automaticEmailEnabled ?? false)
         return result.moment.id
     }
     func planAction(_ plan: WishDeliveryPlan, action: String, date: Date? = nil, zone: String? = nil) async throws {

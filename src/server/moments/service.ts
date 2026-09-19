@@ -12,6 +12,11 @@ export async function listMoments(userId:string) {
  return {moments:moments.map(m=>({...m,nextOccurrence:occurrence(m.occurrenceDate,m.yearly,m.timeZoneID)})),emailAccount:account,emailConfigured:emailConfigured(),automaticEmailEnabled:emailConfigured()&&process.env.MOMENTS_SCHEDULER_ENABLED==='true'};
 }
 export async function saveMoment(userId:string,input:unknown,id?:string) {
+ const saved=await persistMoment(userId,input,id);
+ const moment=await prisma.importantMoment.findUniqueOrThrow({where:{id:saved.id},include});
+ return {...moment,nextOccurrence:occurrence(moment.occurrenceDate,moment.yearly,moment.timeZoneID)};
+}
+async function persistMoment(userId:string,input:unknown,id?:string) {
  const data=momentInput.parse(input);
  if(id) {
   const m=await prisma.importantMoment.findFirst({where:{id,userId}}); if(!m) throw new MomentError('Moment not found.',404);
@@ -19,7 +24,15 @@ export async function saveMoment(userId:string,input:unknown,id?:string) {
   return prisma.importantMoment.update({where:{id},data});
  }
  // Same explicitly selected source or same recipient/type/date must not produce duplicates.
- const existing=await prisma.importantMoment.findFirst({where:{userId,OR:[{sourceKey:data.sourceKey}, ...(data.email||data.phone ? [{type:data.type,occurrenceDate:data.occurrenceDate,...(data.email?{email:data.email}:{phone:data.phone})}] : [])]}});
+ const matches=await prisma.importantMoment.findMany({where:{userId,OR:[{sourceKey:data.sourceKey}, ...(data.email||data.phone ? [{type:data.type,occurrenceDate:data.occurrenceDate,...(data.email?{email:data.email}:{phone:data.phone})}] : [])]}});
+ const existing=matches.find(m=>readFestivalSettings(m.festivalSettings).archived!==true) ?? matches[0];
+ if(existing && readFestivalSettings(existing.festivalSettings).archived===true) {
+  // Preserve archived history, but free its source identity for explicit re-creation.
+  return prisma.$transaction(async tx=>{
+   await tx.importantMoment.update({where:{id:existing.id},data:{sourceKey:'archived:'+existing.id}});
+   return tx.importantMoment.create({data:{...data,userId}});
+  });
+ }
  if(existing) {
   if(existing.sourceKey===data.sourceKey && existing.source!=='manual') {
    if(await prisma.deliveryPlan.count({where:{draft:{momentID:existing.id},status:{in:['SENDING','SCHEDULED','AWAITING_CONFIRMATION']}}})) throw new MomentError('Cancel the active wish before updating imported details.',409);

@@ -16,12 +16,13 @@ struct MomentEditor: View {
     @State private var savedRecipientIDs: Set<String> = []
     @State private var createdID: String?
     @State private var completedSave = false
+    @State private var savedGroup: MomentDisplayGroup?
 
     private enum Field: Hashable { case title, firstName, phone, email }
     @FocusState private var focusedField: Field?
     var body: some View {
         if completedSave, let createdID,
-           let group = MomentDisplayGroup.editableGroups(store.moments).first(where: { $0.moments.contains(where: { $0.id == createdID }) }) {
+           let group = savedGroup ?? MomentDisplayGroup.editableGroups(store.moments).first(where: { $0.moments.contains(where: { $0.id == createdID }) }) {
             ManageFestivalView(group: group, store: store, onDone: { dismiss() })
         } else { editor }
     }
@@ -75,7 +76,7 @@ struct MomentEditor: View {
                 Text("Only the recipient and occasion you confirm here are saved to your Nexdo account. Your address book is never uploaded.").font(.caption)
             }.disabled(completedSave || !savedRecipientIDs.isEmpty)
             if completedSave {
-                Text("Moment saved. If it has not opened, tap Save to reload it.").font(.caption)
+                Text("Your moment is saved. Reload to open its details.").font(.caption)
             } else if !savedRecipientIDs.isEmpty {
                 Text("\(savedRecipientIDs.count) recipients saved. Tap Save again to retry the remaining recipients.").font(.caption)
             }
@@ -84,7 +85,7 @@ struct MomentEditor: View {
                 Section("Greeting Card") {MomentGreetingCardSection(moment:moment,store:store)}
             }
             if let error = store.error { Text(error).foregroundStyle(.red) }
-            Button(input.type == "festival" && !festivalRecipients.isEmpty ? "Save for \(festivalRecipients.count) contacts" : "Save Moment", action: save)
+            Button(completedSave ? "Open Saved Moment" : input.type == "festival" && !festivalRecipients.isEmpty ? "Save for \(festivalRecipients.count) contacts" : "Save Moment", action: save)
                 .disabled(saveDisabled)
 
         }
@@ -154,6 +155,9 @@ struct MomentEditor: View {
                             savedRecipientIDs.insert(recipient.id)
                         }
                     } else { createdID = try await store.save(input, id: moment?.id) }
+                    savedGroup = MomentDisplayGroup.editableGroups(store.moments).first {
+                        $0.moments.contains { $0.id == createdID }
+                    }
                     completedSave = true
                 }
                 if moment != nil || input.type == "custom" { dismiss() }

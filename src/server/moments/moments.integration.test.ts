@@ -26,3 +26,16 @@ describe('Important Moments',()=>{
  it('repeats a confirmed Messages wish without automatic sending',async()=>{const p=await plan();await prisma.deliveryPlan.update({where:{id:p.id},data:{repeatYearly:true}});await changePlan(userId,{id:p.id,action:'sent'});const next=await prisma.deliveryPlan.findUniqueOrThrow({where:{idempotencyKey:`${p.id}:annual`}});expect(next.automaticDelivery).toBe(false);expect(next.status).toBe('AWAITING_CONFIRMATION');});
  it('returns the same plan for an idempotent replay',async()=>{const d=await ready();const key=randomUUID();const v={draftID:d.id,channel:'copy',recipient:'',scheduledAtUTC:new Date().toISOString(),timeZoneID:'UTC',automaticDelivery:false,reminderOffset:0,repeatYearly:false,idempotencyKey:key,approved:true,sendNow:true};const a=await schedule(userId,v);expect((await schedule(userId,v)).id).toBe(a.id);});
 });
+
+it('recreating an archived source opens a fresh active moment and preserves history',async()=>{
+ const value={...input,sourceKey:randomUUID(),email:randomUUID()+'@example.com',source:'contacts'};
+ const old=await saveMoment(userId,value);
+ await prisma.importantMoment.update({where:{id:old.id},data:{enabled:false,festivalSettings:JSON.stringify({archived:true})}});
+ const saved=await saveMoment(userId,value);
+ expect(saved.id).not.toBe(old.id);
+ expect(saved.enabled).toBe(true);
+ expect(saved.nextOccurrence).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+ expect(saved.drafts).toEqual([]);
+ expect((await saveMoment(userId,value)).id).toBe(saved.id);
+ expect(JSON.parse((await prisma.importantMoment.findUniqueOrThrow({where:{id:old.id}})).festivalSettings).archived).toBe(true);
+});
