@@ -23,6 +23,8 @@ const mockNextAction = jest.fn();
 const mockProtectedTime = jest.fn();
 const mockRespond = jest.fn();
 const mockDismissNext = jest.fn();
+jest.mock('../api/moments', () => ({ momentsEndpoints: { list: async () => ({ moments: [], emailAccount: null, emailConfigured: false, automaticEmailEnabled: false }) } }));
+jest.mock('../api/shopping', () => ({ shoppingEndpoints: { list: async () => ({ lists: [] }) } }));
 jest.mock('../api', () => ({
   ...jest.requireActual('../api'),
   endpoints: {
@@ -269,12 +271,15 @@ describe('the last two Today sections', () => {
     recommendedActions: [{ type: 'START_FOCUS' }],
   };
 
-  it('renders neither card when the server offers nothing', async () => {
+  it('shows no proposal, and Focus next in its empty state, when the server offers nothing', async () => {
     await show(<Today />);
 
     await waitFor(() => expect(mockNextAction).toHaveBeenCalled());
     expect(screen.queryByTestId('today-protected-time')).toBeNull();
-    expect(screen.queryByTestId('today-next-action')).toBeNull();
+    // Since 63d9542 the card stays, offering "Find my next task" (RootView.swift:1127-1130).
+    expect(screen.getByTestId('today-focus-next')).toBeTruthy();
+    expect(screen.getByText('Find a task for the time you have.')).toBeTruthy();
+    expect(screen.queryByTestId('today-focus-start')).toBeNull();
   });
 
   it('renders the protected-time proposal with Swift’s copy', async () => {
@@ -328,22 +333,23 @@ describe('the last two Today sections', () => {
     await waitFor(() => expect(Alert.alert).toHaveBeenCalledWith('Unable to complete request', 'That block overlaps a meeting.'));
   });
 
-  it('renders the persistent next-action card with its duration line', async () => {
+  it('renders Focus next with the title and "N min · Fits your free time"', async () => {
     mockNextAction.mockResolvedValue({ enabled: true, recommendation: RECOMMENDATION, contextActionId: 'ctx-1' });
 
     await show(<Today />);
 
-    await waitFor(() => expect(screen.getByTestId('today-next-action')).toBeTruthy());
-    // The Do Now entry on the dashboard carries the same question, so this scopes to the card.
-    expect(screen.getAllByText('What should I do now?').length).toBeGreaterThanOrEqual(1);
-    expect(screen.getByText('Write the report')).toBeTruthy();
-    // `DurationDisplay.durationLabel(90)` is "1 hour 30 minutes".
-    expect(screen.getByText('~45 min · 1 hour 30 minutes available')).toBeTruthy();
-    expect(screen.getByText('Start Focus Session')).toBeTruthy();
-    expect(screen.getByText('Other options')).toBeTruthy();
+    await waitFor(() => expect(screen.getByTestId('today-focus-title').props.children).toBe('Write the report'));
+    expect(screen.getByText('Focus next')).toBeTruthy();
+    expect(screen.getByTestId('today-focus-detail').props.children).toBe('45 min · Fits your free time');
+    expect(screen.getByText('Start focus')).toBeTruthy();
+    expect(screen.getByTestId('today-focus-other')).toBeTruthy();
+    // The old card's copy is gone.
+    expect(screen.queryByText('What should I do now?')).toBeNull();
+    expect(screen.queryByText('Start Focus Session')).toBeNull();
+    expect(screen.queryByText(/available$/)).toBeNull();
   });
 
-  it('hides the card when the recommendation has no best action', async () => {
+  it('falls back to the empty state when the recommendation has no best action', async () => {
     mockNextAction.mockResolvedValue({
       enabled: true,
       recommendation: { ...RECOMMENDATION, nextAction: { bestAction: null, availableWindowMinutes: 0 } },
@@ -353,10 +359,11 @@ describe('the last two Today sections', () => {
     await show(<Today />);
 
     await waitFor(() => expect(mockNextAction).toHaveBeenCalled());
-    expect(screen.queryByTestId('today-next-action')).toBeNull();
+    await waitFor(() => expect(screen.getByTestId('today-focus-find')).toBeTruthy());
+    expect(screen.queryByTestId('today-focus-title')).toBeNull();
   });
 
-  it('disables Start Focus Session when the recommendation does not allow it', async () => {
+  it('drops "Fits your free time" and disables Start focus when the recommendation cannot start', async () => {
     mockNextAction.mockResolvedValue({
       enabled: true,
       recommendation: { ...RECOMMENDATION, recommendedActions: [{ type: 'REVIEW' }] },
@@ -365,37 +372,55 @@ describe('the last two Today sections', () => {
 
     await show(<Today />);
 
-    await waitFor(() => expect(screen.getByTestId('today-next-action-start')).toBeTruthy());
-    expect(screen.getByTestId('today-next-action-start').props.accessibilityState).toMatchObject({ disabled: true });
+    await waitFor(() => expect(screen.getByTestId('today-focus-start')).toBeTruthy());
+    expect(screen.getByTestId('today-focus-detail').props.children).toBe('45 min');
+    expect(screen.getByTestId('today-focus-start').props.accessibilityState).toMatchObject({ disabled: true });
   });
 
-  it('Other options opens Do Now', async () => {
+  it('Other options, beside Start focus and in the "…" menu, opens Do Now', async () => {
     mockNextAction.mockResolvedValue({ enabled: true, recommendation: RECOMMENDATION, contextActionId: 'ctx-1' });
     await show(<Today />);
-    await waitFor(() => expect(screen.getByTestId('today-next-action-other')).toBeTruthy());
+    await waitFor(() => expect(screen.getByTestId('today-focus-other')).toBeTruthy());
 
-    fireEvent.press(screen.getByTestId('today-next-action-other'));
-
+    await fireEvent.press(screen.getByTestId('today-focus-other'));
     expect(mockPush).toHaveBeenCalledWith('/today/do-now');
+
+    mockPush.mockClear();
+    await fireEvent.press(screen.getByLabelText('Focus options'));
+    await fireEvent.press(screen.getByTestId('today-focus-menu-other'));
+    expect(mockPush).toHaveBeenCalledWith('/today/do-now');
+    // Choosing closes the menu.
+    expect(screen.queryByTestId('today-focus-menu-other')).toBeNull();
   });
 
-  it('the dismiss button tells the server which suggestion was dismissed', async () => {
+  it('Dismiss suggestion in the "…" menu tells the server which suggestion was dismissed', async () => {
     mockNextAction.mockResolvedValue({ enabled: true, recommendation: RECOMMENDATION, contextActionId: 'ctx-1' });
     mockDismissNext.mockResolvedValue({ ok: true });
     await show(<Today />);
-    await waitFor(() => expect(screen.getByTestId('today-next-action-dismiss')).toBeTruthy());
+    await waitFor(() => expect(screen.getByTestId('today-focus-title')).toBeTruthy());
 
-    fireEvent.press(screen.getByTestId('today-next-action-dismiss'));
+    await fireEvent.press(screen.getByLabelText('Focus options'));
+    await fireEvent.press(screen.getByTestId('today-focus-menu-dismiss'));
 
     await waitFor(() => expect(mockDismissNext).toHaveBeenCalledWith('ctx-1'));
+  });
+
+  it('Dismiss suggestion does nothing without a suggestion id, as Swift guards', async () => {
+    await show(<Today />);
+    await waitFor(() => expect(mockNextAction).toHaveBeenCalled());
+
+    await fireEvent.press(screen.getByLabelText('Focus options'));
+    await fireEvent.press(screen.getByTestId('today-focus-menu-dismiss'));
+
+    expect(mockDismissNext).not.toHaveBeenCalled();
   });
 
   it('warns rather than starting focus on a task that is no longer in the list', async () => {
     mockNextAction.mockResolvedValue({ enabled: true, recommendation: RECOMMENDATION, contextActionId: 'ctx-1' });
     await show(<Today />);
-    await waitFor(() => expect(screen.getByTestId('today-next-action-start')).toBeTruthy());
+    await waitFor(() => expect(screen.getByTestId('today-focus-start')).toBeTruthy());
 
-    fireEvent.press(screen.getByTestId('today-next-action-start'));
+    fireEvent.press(screen.getByTestId('today-focus-start'));
 
     await waitFor(() =>
       expect(Alert.alert).toHaveBeenCalledWith('Unable to complete request', 'Your tasks changed. Refresh Tasks and try again.'),

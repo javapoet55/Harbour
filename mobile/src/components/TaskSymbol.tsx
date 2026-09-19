@@ -101,6 +101,12 @@ export const taskIcons = {
   'person.crop.circle.fill': 'person-circle',
   // Voice (Phase 9): the orb and the mute button (ios/App/AddTaskByVoiceView.swift:77, :153).
   'mic.slash.fill': 'mic-off',
+  // Phase 11 Run A: the Quick Access tiles and the "Focus next" card (TodayQuickAccess.swift:65-75,
+  // RootView.swift:1116, :1212).
+  'gift.fill': 'gift',
+  'cart.fill': 'cart',
+  ellipsis: 'ellipsis-horizontal',
+  'play.fill': 'play',
 } satisfies Record<string, IoniconName>;
 
 export type TaskSymbolName = keyof typeof taskIcons;

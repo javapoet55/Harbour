@@ -30,6 +30,8 @@ jest.mock('expo-crypto', () => ({
 const mockTasks = jest.fn();
 const mockAgenda = jest.fn();
 const mockIntelligence = jest.fn();
+jest.mock('../api/moments', () => ({ momentsEndpoints: { list: async () => ({ moments: [], emailAccount: null, emailConfigured: false, automaticEmailEnabled: false }) } }));
+jest.mock('../api/shopping', () => ({ shoppingEndpoints: { list: async () => ({ lists: [] }) } }));
 jest.mock('../api', () => ({
   ...jest.requireActual('../api'),
   endpoints: {
@@ -183,40 +185,19 @@ describe('the action queue on Today', () => {
   });
 });
 
-/** The `queue.hasImmediateActions` branch of the Weekly Summary card (RootView.swift:1063-1070). */
-describe('the Daily Briefing branch', () => {
-  it('shows the full Weekly Summary card when nothing is immediate', async () => {
-    await show([]);
-
-    expect(screen.getByTestId('today-weekly-summary')).toBeTruthy();
-    expect(screen.queryByTestId('today-daily-briefing')).toBeNull();
-  });
-
-  it('swaps to the compact Daily Briefing row when an action is due', async () => {
+/**
+ * The Daily Briefing row that replaced the Weekly Summary card while an action was due was removed in
+ * d444b37: Quick Access is shown whatever the queue holds.
+ */
+describe('Quick Access does not depend on the action queue', () => {
+  it('keeps Quick Access and shows no Daily Briefing row when an action is due', async () => {
     await seed([DUE_TASK]);
     mockTasks.mockResolvedValue({ tasks: [DUE_TASK], timeZone: ZONE });
 
     await show([DUE_TASK]);
 
-    await waitFor(() => expect(screen.getByTestId('today-daily-briefing')).toBeTruthy());
-    expect(screen.getByText('Daily Briefing')).toBeTruthy();
-    expect(screen.getByTestId('today-weekly-summary-compact')).toBeTruthy();
-    expect(screen.queryByTestId('today-weekly-summary')).toBeNull();
-  });
-
-  it('Daily Briefing opens Ask with Swift’s prompt', async () => {
-    await seed([DUE_TASK]);
-    mockTasks.mockResolvedValue({ tasks: [DUE_TASK], timeZone: ZONE });
-    await show([DUE_TASK]);
-    await waitFor(() => expect(screen.getByTestId('today-daily-briefing')).toBeTruthy());
-
-    fireEvent.press(screen.getByTestId('today-daily-briefing'));
-
-    expect(mockPush).toHaveBeenCalledWith({
-      pathname: '/ask',
-      params: {
-        prompt: "Give me today's daily briefing, prioritizing my due contact actions and upcoming calendar commitments.",
-      },
-    });
+    await waitFor(() => expect(screen.getByText('Action Needed')).toBeTruthy());
+    expect(screen.getByTestId('today-quick-access')).toBeTruthy();
+    expect(screen.queryByText('Daily Briefing')).toBeNull();
   });
 });

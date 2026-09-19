@@ -150,6 +150,9 @@ export function RootNavigator() {
         <Stack.Screen name="index" />
         <Stack.Protected guard={status === 'signedIn'}>
           <Stack.Screen name="(tabs)" />
+          {/* Phase 11 Run A placeholders for the Quick Access tiles; Runs B and C build the screens. */}
+          <Stack.Screen name="moments/index" />
+          <Stack.Screen name="shopping/index" />
         </Stack.Protected>
         <Stack.Protected guard={status === 'signedOut'}>
           <Stack.Screen name="(auth)" />
