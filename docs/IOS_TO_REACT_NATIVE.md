@@ -1854,3 +1854,73 @@ eas build --profile preview --platform android
 
 `preview` is the one testers install: internal distribution, an APK, no dev client, the production
 API URL. `production` (an AAB, with `autoIncrement`) is defined but nothing needs it yet.
+
+### New Swift screens after the migration baseline (not built)
+
+The `origin/main` merges `112b075` and `73ad9e1` brought in Important Moments, Shopping Lists and the
+calendar connections. `63d9542` simplified the Today focus and attention sections. None of this is in
+the React Native app yet. Each row below is one screen to port. **Reference PNGs** are in
+`mobile/docs/reference/ios/`, and the capture pass is described in `mobile/docs/reference/README.md`.
+Line numbers are as of `73ad9e1`.
+
+| Built | Screen | Swift `body` | Presentation | Entry point | Reference PNGs |
+| --- | --- | --- | --- | --- | --- |
+| [ ] | Today dashboard, **changed**: "Your day, in focus" card, attention row | `RootView.swift:1032-1203` (`TodayView`); attention row `:1146-1166` | Tab (Today) | Tab bar | `today-default`, `today-3days`, `today-5days`, `today-dark`, `today-scrolled-1`, `today-attention-row` |
+| [ ] | Quick Access tiles (Weekly / Moments / Shopping) | `TodayQuickAccess.swift:41-62` (`TodayQuickAccessContent`); tiles `:64-97` | Inline section of Today (`RootView.swift:1078`) | Today | `today-default`, `today-dark` |
+| [ ] | Needs attention | `TodayAttentionSheet.swift:17-100` | `.sheet`, detents `[.medium, .large]` (`RootView.swift:1188-1191`). **Replaces the pushed `/today/attention`** (`attentionDetails`, `RootView.swift:1217`, which has no caller left) | The Today attention row; `onAttention` in the focus card (`RootView.swift:1093`) | `today-attention`, `today-attention-sheet-half`, `today-attention-sheet-full`, `today-attention-sheet-dark` |
+| [ ] | Reschedule all | `TodayAttentionSheet.swift:87-98` | `.sheet`, `[.medium, .large]` | "Reschedule all" in Needs attention | `today-reschedule-all`, `today-reschedule-all-dark` |
+| [ ] | Important Moments (Upcoming / Scheduled / Sent) | `ImportantMomentsView.swift:219-307` | Push | Quick Access "Moments" (`TodayQuickAccess.swift:68`) | `moments-default`, `moments-default-scrolled`, `moments-default-dark`, `moments-empty`, `moments-scheduled`, `moments-scheduled-dark`, `moments-sent-empty`, `moments-filter-menu`, `moments-search-keyboard`, `moments-upcoming-row-needs-review` |
+| [ ] | Manage Moments (list) | `ManageFestivalView.swift:11-43` (`MomentsManagementEntry`) | Push (`ImportantMomentsView.swift:298`) | Summary card "Manage" (`moments-manage`) | `moments-manage-list`, `moments-manage-list-dark` |
+| [ ] | Create / Edit Moment | `MomentEditor.swift:24-31`; form `:32-139` | Push (`ImportantMomentsView.swift:295`; Edit links `:115`, `ManageFestivalView.swift:23`) | "Create New" (`moments-create-new`), "Add Moment", "Edit" | `moment-create-default`, `moment-create-dark`, `moment-create-type-menu`, `moment-create-date-picker`, `moment-create-contact-picker`, `moment-create-filled`, `moment-create-filled-scrolled`, `moment-create-error-empty-title`, `moment-create-past-date-before-save` |
+| [ ] | Manage Moment: 4 steps (Details / Contacts / Wish Message / Schedule) | `ManageFestivalView.swift:68-99`; header `:100-119`, tabs `:120`, details `:121-132`, recipients `:134-150`, message `:153-169`, schedule `:170-181` | Push (`ImportantMomentsView.swift:301`). After a new birthday, anniversary, festival or get-well moment is first saved, it **replaces the editor in place** (`MomentEditor.swift:25-29`) | The row chevron `festival-manage-<id>`; saving a new moment | `moment-manage-details`, `moment-manage-details-scrolled`, `moment-manage-details-dark`, `moment-manage-options-menu`, `moment-manage-saved-notice`, `moment-manage-discard-dialog`, `moment-manage-error-past-date`, `moment-manage-contacts`, `moment-manage-wish`, `moment-manage-wish-scrolled`, `moment-manage-wish-saved`, `moment-manage-wish-error-empty`, `moment-manage-schedule`, `moment-manage-schedule-scrolled`, `moment-manage-schedule-dark`, `moment-manage-schedule-channel-menu`, `moment-manage-schedule-error-unsaved-message`, `moment-manage-schedule-saving`, `moment-manage-schedule-scheduled`, `festival-manage-details`, `festival-manage-details-dark`, `festival-manage-contacts`, `festival-manage-wish`, `festival-manage-schedule` |
+| [ ] | Add Contact | `ManageFestivalView.swift:224` (`FestivalManualRecipient`) | `.sheet` in a `NavigationStack` (`:95`) | Contacts step | `moment-add-recipient-error-empty` |
+| [ ] | Review schedule (confirm) | `ManageFestivalView.swift:183-215` | `.sheet` (`:98`) | "Schedule Wish" on the Schedule step | `moment-manage-schedule-confirm` |
+| [ ] | Greeting Card editor | `FestivalServices.swift:114-180` (`FestivalGreetingCardEditor`) | `.sheet` (`ManageFestivalView.swift:97`, `FestivalServices.swift:216`) | Wish Message step, greeting card section | `greeting-card-editor`, `greeting-card-editor-scrolled` |
+| [ ] | Schedule confirmed, with confetti | `ManageFestivalView.swift:241-260` (`FestivalScheduleSuccess`); `MomentConfetti.swift:10-54` | Push (`.navigationDestination`, `ManageFestivalView.swift:78`) | "Confirm Schedule" | `moment-schedule-success` |
+| [ ] | Moments Settings | `MomentEditor.swift:212-244` | Push | Gear in the toolbar (`ImportantMomentsView.swift:305`); "Connect / Reconnect email" (`ManageFestivalView.swift:175`) | `moments-settings`, `moments-settings-scrolled`, `moments-settings-dark`, `moments-settings-contact-alert` |
+| [ ] | Calendar Moments (import) | `MomentEditor.swift:294-306` | Push | Settings, "Choose calendars and anniversary candidates" | `moments-calendar-import-empty` |
+| [ ] | Choose Festivals | `MomentEditor.swift:314-320` | Push | Settings, "Choose festivals" | `moments-festivals`, `moments-festivals-india`, `moments-festivals-region-menu`, `moments-festivals-dark` |
+| [ ] | Review Wish | `ImportantMomentsView.swift:320-364` | Push | "Create wish" / "Review" on an `UpcomingMomentRow` (`:109`); **only Custom moments** use this row (`supportsGreetingCard`, `Sources/NexdoCore/ImportantMoment.swift:12`); also the notification route (`:588`) | `review-wish-default`, `review-wish-scrolled`, `review-wish-personalize`, `review-wish-dark`, `review-wish-error-empty` |
+| [ ] | Choose Delivery | `ImportantMomentsView.swift:386-425` | Push (`:362`) | "Approve & Continue" | `wish-delivery-default`, `wish-delivery-schedule-option`, `wish-delivery-dark` |
+| [ ] | Schedule Wish | `ImportantMomentsView.swift:460-493` | Push (`:404`) | "Choose date & time" | `schedule-wish-default`, `schedule-wish-scrolled`, `schedule-wish-dark` |
+| [ ] | Wish details | `ImportantMomentsView.swift:506-550` | Push | A card on the Scheduled or Sent tab (`:274`); "Manage" on a row (`:105`); after Schedule Wish (`:492`) | `wish-details`, `wish-details-scrolled`, `wish-details-dark`, `wish-edit-schedule`, `wish-cancel-dialog` |
+| [ ] | Confirm email | `ImportantMomentsView.swift:600-612` | `.sheet` (`:415`, `:539`) | The Email channel with automatic send | **not captured** (needs a connected email account) |
+| [ ] | Moment notification route | `ImportantMomentsView.swift:565-593` (`MomentSheetHost`, `MomentRoutedView`) | `.sheet`, hosted from `RootView.swift:72` | A moment notification tap | **not captured** (needs a delivered notification) |
+| [ ] | My Lists | `ShoppingViews.swift:82-137` (`ShoppingHome`) | Push | Quick Access "Shopping" (`TodayQuickAccess.swift:72`) | `shopping-lists-default`, `shopping-lists-dark`; empty state **not captured** |
+| [ ] | New List | `ShoppingViews.swift:153-188` | `.sheet` (`:130`); also "Copy list" (`:273`) | "+" on My Lists; list options, "Copy list" | `shopping-new-list`, `shopping-new-list-filled`, `shopping-new-list-use-last`, `shopping-new-list-dark`, `shopping-new-list-error-empty-name` |
+| [ ] | List detail | `ShoppingViews.swift:224-280` (`ShoppingDetail`) | Push (`:107`, and `:133` after create) | A list row; creating a list | `shopping-detail-default`, `shopping-detail-empty`, `shopping-detail-checked`, `shopping-detail-typing`, `shopping-detail-options-menu`, `shopping-detail-dark`, `shopping-complete-trip-dialog` |
+| [ ] | Item | `ShoppingItemEditor.swift:21-67` | `.sheet` (`ShoppingViews.swift:270`) | Tapping an item | `shopping-item-editor`, `shopping-item-editor-scrolled`, `shopping-item-editor-category-menu`, `shopping-item-editor-dark`, `shopping-item-editor-error-empty-name` |
+| [ ] | Add by Voice | `ShoppingVoice.swift:89-130` | `.sheet` (`ShoppingViews.swift:271`) | The mic in the add row | `shopping-voice-ready`, `shopping-voice-listening`, `shopping-voice-stopped`, `shopping-voice-dark` |
+| [ ] | Review Items | `ShoppingViews.swift:300-303` (`ShoppingBatchReview`) | `.sheet` (`:272`) | Quick add or voice, after `parse` | `shopping-review-items`, `shopping-review-items-dark`, `shopping-review-items-error-empty-name` |
+| [ ] | List Settings | `ShoppingViews.swift:309-314` | `.sheet` (`:274`) | List options, "List settings" | `shopping-list-settings`, `shopping-list-settings-dark`, `shopping-list-settings-error-empty-name` |
+| [ ] | Share List | `ShoppingViews.swift:321-330` | `.sheet` (`:275`) | "Share list" in the toolbar | `shopping-share-list`, `shopping-share-list-link`, `shopping-share-list-dark`, `shopping-share-sheet-text` |
+| [ ] | Profile and settings, **changed**: calendar connections | `ProfileView.swift:150-288`; `connectionList` `:288-331`; Disconnect dialog `:273-284` | Push inside the Account sheet | Account, "Settings" or "Edit profile and settings" | `account-settings-default`, `account-settings-calendars-empty`, `account-settings-calendars-dark`, `account-settings-calendar-connecting`, `account-settings-calendar-error-cancelled`; the connected list, Disconnect and the write toggle are **not captured** (no connected calendar) |
+| — | Recurring Tasks hub, New Recurring Task | `ShoppingViews.swift:42-51`, `:61-76` | — | **Unreachable.** Linked only from `ShoppingTodayContent` and `QuickAccessDirectory`, neither of which is instantiated | none. Do not port until Swift wires them up |
+| — | Today Shopping card | `ShoppingViews.swift:5`, `:12-28` | — | **Unreachable.** `ShoppingTodayCard` is never instantiated | none |
+| — | Quick Access directory | `TodayQuickAccess.swift:103-113` | — | **Unreachable.** It is private and never instantiated | none |
+
+The Ask AI screen (`AskNexdoView.swift:182-278`) did not change in these merges. `ask-default` was
+re-shot only because the suggestions on it changed.
+
+#### Server endpoints the new screens call
+
+These are taken from the Swift API calls (`grep -rn '"/api/'` over `ios/`). **None of them is in
+`mobile/src/api` yet**, except where the table says so, so the mobile API layer needs new types for
+each one.
+
+| Endpoint | Method | Body / query | Called from | In `mobile/src`? |
+| --- | --- | --- | --- | --- |
+| `/api/moments` | GET | — (returns `MomentsSnapshot`) | `ImportantMomentsStore.swift:78` | No |
+| `/api/moments` | POST | `{ operation, input, id? }` (`MomentEnvelope`). Operations: `save`, `generate`, `approve`, `plan`, `schedule`, `visibility`, `festivalCatalog`, `festivalSave`, `festivalDelete`, `greetingArtwork`, `greetingCardSave`, `connectEmail`, `disconnectEmail` | `ImportantMomentsStore.swift:93`, used by the Moments views and `ManageFestivalModel.swift` | No |
+| `/api/moments` | DELETE | — (deletes all moment data) | `ImportantMomentsStore.swift:121` (Settings, "Delete all") | No |
+| `/api/shopping` | GET | — (returns `ShoppingSnapshot`) | `ShoppingStore.swift:16` | No |
+| `/api/shopping` | POST | `ShoppingEnvelope { operation, id?, revision?, input }`. Operations: `create`, `save`, `delete`, `share`, `revoke`, `complete`, and `parse` (`input: { text }`, returns `items`) | `ShoppingStore.swift:23`, `:32` | No |
+| `/api/shopping/image` | POST | `{ name, details, consent }` (returns image `data`) | `ShoppingItemEditor.swift:91` | No |
+| `/api/realtime/transcription-session` | POST | `{ consent: true, scope: "shopping" }` | `ShoppingStore.swift:36` (Add by Voice) | No. RN has `/api/realtime/task-session` only |
+| `/api/calendar/connections` | GET | — | `NexdoApp.swift:312` | No |
+| `/api/calendar/connections` | PATCH | `{ id, writeEnabled }` | `NexdoApp.swift:321` (the "Add my scheduled tasks here" toggle) | No |
+| `/api/calendar/connections?id=` | DELETE | — | `NexdoApp.swift:327` (Disconnect) | No |
+| `/api/calendar/oauth/{provider}/connect-token` | POST | — (returns a one-time token for `/start`) | `NexdoApp.swift:295` | No. RN opens `/start` directly (`src/query/useCalendar.ts:93`, TODO `server-connect-token`) |
+| `/api/calendar/oauth/{provider}/start` | GET (in a web auth session) | `?native=1&connect_token=…` | `NexdoApp.swift:300` | Yes, but without the token |
+| `/api/calendar/sync` | POST | — | `NexdoApp.swift:337` | Yes |
+| Task updates from Reschedule all | existing task endpoints | — | `TodayAttentionSheet.swift` | Yes |
