@@ -56,7 +56,7 @@ export default function MyListsScreen() {
         <Pressable accessibilityRole="button" onPress={() => setCreate(true)} testID="shopping-create-list">
           <MomentCard>
             <View style={styles.row}>
-              <ListTile icon="document-attach-outline" color={brand.nexdoIndigo} />
+              <ListTile icon="doc.badge.plus" color={brand.nexdoIndigo} />
               <View style={styles.grow}>
                 <Text style={[headline, { color: theme.colors.ink }]}>Create New List</Text>
                 <Text style={[textStyles.subheadline, { color: theme.colors.secondary }]}>Start from scratch or use last week’s list.</Text>

@@ -12,7 +12,7 @@ import { brand, textStyles, useTheme } from '../../theme';
 import { headline, KeyboardDoneBar, MomentCard, MomentPrimary, MomentSheet } from '../moments/components';
 import { deviceZone, momentDate, momentDay } from '../moments/dates';
 import { DateField, FormButton, FormField, FormRow, FormScroll, FormSection, FormText, FormToggle } from '../moments/form';
-import { ListTile } from './components';
+import { ListTile, type ListSymbol } from './components';
 import { shareMessage } from './device';
 import { copiedItems, listInput, previousList, shareText } from './model';
 import { shoppingStore, useShopping } from './store';
@@ -71,11 +71,11 @@ function NewListBody({ source, onCreated, onClose }: { source: GroceryList | nul
     <View style={styles.fill}>
       <TodayBackdrop />
       <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.content}>
-        <Choice title="Start from Scratch" subtitle="Create a brand new list." icon="document-attach-outline" selected={!useLast} onPress={() => setUseLast(false)} testID="shopping-scratch" />
+        <Choice title="Start from Scratch" subtitle="Create a brand new list." icon="doc.badge.plus" selected={!useLast} onPress={() => setUseLast(false)} testID="shopping-scratch" />
         <Choice
           title="Use Last Week’s List"
           subtitle={previous ? `Copy ${previous.items.length} items from “${previous.title}” and edit.` : 'Create your first list to reuse it next time.'}
-          icon="arrow-undo"
+          icon="arrow.counterclockwise"
           selected={useLast}
           disabled={!previous}
           onPress={() => setUseLast(true)}
@@ -109,7 +109,7 @@ function NewListBody({ source, onCreated, onClose }: { source: GroceryList | nul
   );
 }
 
-function Choice({ title, subtitle, icon, selected, disabled = false, onPress, testID }: { title: string; subtitle: string; icon: 'document-attach-outline' | 'arrow-undo'; selected: boolean; disabled?: boolean; onPress: () => void; testID: string }) {
+function Choice({ title, subtitle, icon, selected, disabled = false, onPress, testID }: { title: string; subtitle: string; icon: ListSymbol; selected: boolean; disabled?: boolean; onPress: () => void; testID: string }) {
   const theme = useTheme();
   return (
     <Pressable
@@ -117,9 +117,11 @@ function Choice({ title, subtitle, icon, selected, disabled = false, onPress, te
       accessibilityState={{ selected, disabled }}
       disabled={disabled}
       onPress={onPress}
-      style={[styles.choice, { opacity: disabled ? 0.5 : 1, borderColor: selected ? brand.nexdoIndigo : 'transparent', backgroundColor: selected ? withAlpha(brand.nexdoIndigo, 0.09) : 'transparent' }]}
+      style={[styles.choice, { opacity: disabled ? 0.5 : 1, backgroundColor: selected ? withAlpha(brand.nexdoIndigo, 0.09) : 'transparent' }]}
       testID={testID}
     >
+      {/* `.overlay(… .stroke(lineWidth: 1.5))` draws over the card and takes no layout space. */}
+      {selected ? <View pointerEvents="none" style={[styles.choiceStroke, { borderColor: brand.nexdoIndigo }]} /> : null}
       <MomentCard>
         <View style={styles.choiceRow}>
           <ListTile icon={icon} color={brand.nexdoIndigo} />
@@ -356,7 +358,8 @@ const styles = StyleSheet.create({
   divider: { height: StyleSheet.hairlineWidth },
   caption: { fontSize: 12, lineHeight: 16 },
   footer: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: 18, paddingTop: 18 },
-  choice: { borderRadius: 22, borderWidth: 1.5 },
+  choice: { borderRadius: 22 },
+  choiceStroke: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderRadius: 22, borderWidth: 1.5, zIndex: 1 },
   choiceRow: { flexDirection: 'row', alignItems: 'center', gap: 14 },
   grow: { flex: 1 },
   inline: { flexDirection: 'row', alignItems: 'center', gap: 8 },

@@ -8,7 +8,7 @@ import { brand, textStyles, useTheme } from '../../theme';
 import { systemColors, type IconName } from '../moments/components';
 import { amountLabel, artworkFor, type GroceryAsset } from './model';
 
-/** The five bundled illustrations (ios/Media.xcassets/grocery-*.imageset), copied unchanged. */
+/** The five bundled illustrations (ios/Media.xcassets/grocery-*.imageset), downscaled from 1254 px to 256 px: they draw at 44 dp, 176 px even at xxxhdpi. */
 export const GROCERY_ASSETS: Record<GroceryAsset, ImageSourcePropType> = {
   banana: require('../../../assets/grocery/banana.png'),
   eggs: require('../../../assets/grocery/eggs.png'),
@@ -38,13 +38,29 @@ export function GroceryArtwork({ item }: { item: Pick<GroceryItem, 'name' | 'cat
   );
 }
 
-/** `listTile(_:color:)` (ShoppingViews.swift:139-142): a 48pt symbol tile at 12%. */
-export function ListTile({ icon, color }: { icon: IconName; color: string }) {
-  return (
-    <View style={[styles.listTile, { backgroundColor: withAlpha(color, 0.12) }]}>
-      <Ionicons name={icon} size={24} color={color} />
-    </View>
-  );
+/**
+ * The SF Symbols `listTile` uses that Ionicons has no single glyph for: `doc.badge.plus` is a page with
+ * a plus badge at its lower leading corner, and `arrow.counterclockwise` is Ionicons' circular arrow
+ * mirrored.
+ */
+export type ListSymbol = IconName | 'doc.badge.plus' | 'arrow.counterclockwise';
+
+/** `listTile(_:color:)` (ShoppingViews.swift:139-142): a `.title2` symbol on a 48pt tile at 12%. */
+export function ListTile({ icon, color }: { icon: ListSymbol; color: string }) {
+  let glyph;
+  if (icon === 'doc.badge.plus') {
+    glyph = (
+      <View>
+        <Ionicons name="document-outline" size={24} color={color} />
+        <View style={[styles.badge, { backgroundColor: color }]}>
+          <Ionicons name="add" size={10} color="#FFFFFF" />
+        </View>
+      </View>
+    );
+  } else if (icon === 'arrow.counterclockwise') {
+    glyph = <Ionicons name="refresh" size={24} color={color} style={styles.mirrored} />;
+  } else glyph = <Ionicons name={icon} size={24} color={color} />;
+  return <View style={[styles.listTile, { backgroundColor: withAlpha(color, 0.12) }]}>{glyph}</View>;
 }
 
 /** `shoppingIcon` (ShoppingViews.swift:30): the green cart on a 56pt tile. */
@@ -111,6 +127,8 @@ const styles = StyleSheet.create({
   fill: { width: 40, height: 44 },
   emoji: { fontSize: 29, lineHeight: 36 },
   listTile: { width: 48, height: 48, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  badge: { position: 'absolute', left: -3, bottom: -2, width: 12, height: 12, borderRadius: 6, alignItems: 'center', justifyContent: 'center' },
+  mirrored: { transform: [{ scaleX: -1 }] },
   shoppingIcon: { width: 56, height: 56, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 52 },
   rowBody: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 },
