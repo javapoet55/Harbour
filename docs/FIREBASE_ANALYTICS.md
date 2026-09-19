@@ -2,9 +2,9 @@
 
 FirebaseAnalytics 12.19.2 is linked through Swift Package Manager. App startup calls `NexdoAnalytics.configureIfAvailable()`. Analytics stays inactive if the app bundle does not contain a matching Firebase configuration; the app continues to work normally.
 
-## Activation required
+## Project configuration
 
-Download the **iOS** `GoogleService-Info.plist` for bundle ID `com.pinslots.nexdo` from the intended Firebase project. Place it at `ios/App/GoogleService-Info.plist` (the synchronized App group includes it as a bundle resource). Rebuild and install the native app. The project configuration has not yet been supplied, so receipt of events in Firebase has not been verified.
+The Firebase project is `nexdoapp-19f07` (Nexdoapp), with the Apple app `Nexdo iOS` registered for bundle ID `com.pinslots.nexdo`. Its downloaded configuration is included at `ios/App/GoogleService-Info.plist`; the synchronized App group bundles it as a resource. Rebuild and install the native app to activate this configuration. Existing installed releases are not changed by backend deployment.
 
 ## Native and web usage
 
@@ -24,6 +24,8 @@ Only event names and primitive numeric/string parameters are supported. Do not s
 
 ## Verification
 
-Run the FirebaseBridge Swift tests and firebase-bridge JavaScript tests. After configuring the actual project, launch a debug build with `-FIRDebugEnabled`, log a test event, and verify it in that project's Firebase Analytics DebugView. Backend deployment alone cannot enable the native SDK or update an installed iOS app.
+Run the FirebaseBridge Swift tests and firebase-bridge JavaScript tests. To verify receipt in Firebase, launch a debug build with `-FIRDebugEnabled`, log a test event, and verify it in that project's Firebase Analytics DebugView. Backend deployment alone cannot enable the native SDK or update an installed iOS app.
 
 References: https://firebase.google.com/docs/analytics/webview and https://firebase.google.com/docs/analytics/ios/get-started
+
+Activation verified on September 18, 2026: simulator build succeeded, the matching plist was present in the app bundle, and SDK logs reported `Analytics v.12.19.2 started` and `Analytics collection enabled`. End-to-end receipt remains unverified: the local network returned DNS resolution failures for the analytics endpoint, and the console Analytics dashboard also failed DNS resolution.
