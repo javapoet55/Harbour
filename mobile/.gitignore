@@ -46,3 +46,8 @@ coverage/
 # Python bytecode from scripts/diff.py
 __pycache__/
 *.pyc
+
+# UI-parity captures of the Android app stay local; only the iPhone references are committed.
+# (Captures tracked before pass 2 are left as they were.)
+docs/reference/android/
+docs/reference/diff/

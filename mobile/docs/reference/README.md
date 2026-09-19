@@ -31,12 +31,15 @@ These first-pass captures show screens that `63d9542` changed:
 | Capture | Status |
 | --- | --- |
 | `today-default`, `today-3days`, `today-5days` | **Replaced in place.** The new captures show the simplified "Your day, in focus" card, the Quick Access tiles and the "Needs attention" row. |
-| `today-action-needed` | **Superseded** by `today-attention-row`. The "Action needed" section no longer exists. |
+| `today-action-needed` | **Still current.** Corrected in UI-parity pass 2: 63d9542 removed the inline "Needs your attention" list, not this card. `TodayActionsView` (the pink "Action Needed" card) is still rendered on the Today range, now after the intelligence card (`RootView.swift:1098-1100`). The list it was confused with is superseded by `today-attention-row`. |
 | `attention-details-default` | **Superseded** by `today-attention-sheet-half` and `today-attention-sheet-full`. "Needs attention" is now a `.sheet` with medium and large detents (`RootView.swift:1188-1191`, `TodayAttentionSheet`). The pushed `attentionDetails` view (`RootView.swift:1217`) has no caller left. |
 | `ask-default`, `account-default` | Re-shot, because the content under them changed. The layout did not change. |
 
-`schedule-check-default` and `overdue-default` are still current: the attention sheet pushes the same
-two destinations.
+`schedule-check-default` and `overdue-default` are **no longer reachable** (corrected in UI-parity pass 2).
+The attention sheet does not push them: it pushes its own inline `List` for a schedule check
+(`TodayAttentionSheet.swift:66-74`) and never opens `OverdueTasksView`. Their only remaining callers are
+the dead `attentionDetails` and two `navigationDestination`s whose state nothing sets
+(`RootView.swift:1193-1198`). The captures stay as a record; the RN routes stay registered, uncalled.
 
 ## Index
 
@@ -94,7 +97,7 @@ These are new since `PARITY.md`, and more than one screen uses each of them:
 9. **A keyboard accessory "Done"** (`ToolbarItemGroup(placement: .keyboard)`, `MomentEditor.swift:106-109`) on the Moment editors. Tapping outside the field does not dismiss the keyboard.
 10. **The iOS 26 floating glass sheet at the medium detent:** "Needs attention" and "Reschedule all" open at `.medium` as an inset, rounded, translucent card, and expand to `.large`.
 11. **The Quick Access tile row on Today** (`TodayQuickAccess.swift:41-97`): three equal glass tiles (Weekly / Moments / Shopping), each with a gradient icon tile, a title and a one-line status ("3 upcoming", "1 items · Fri").
-12. **The attention row on Today:** the old "Action needed" list is now one tappable row, with an orange triangle, "Needs attention" and a count ("1 overdue task"), that opens the sheet.
+12. **The attention row on Today:** the old inline "Needs your attention" list is now one tappable row, with an orange triangle, "Needs attention" and a count ("1 overdue task"), that opens the sheet.
 
 ## Test data
 
