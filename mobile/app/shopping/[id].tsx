@@ -234,7 +234,9 @@ export default function ShoppingDetailScreen() {
             return (
               <FormSection key={category} header={category} testID={`category-${category}`}>
                 {rows.map((row, index) => (
-                  <FormRow key={row.id} last={readOnly && index === rows.length - 1}>
+                  <FormRow key={row.id} last>
+                    {/* A `List` row separator starts under the item's name, not at the card edge. */}
+                    {!(readOnly && index === rows.length - 1) ? <View style={[styles.itemSeparator, { backgroundColor: theme.colors.listSeparator }]} /> : null}
                     <View style={styles.inline}>
                       {editing && !readOnly ? (
                         <Pressable accessibilityRole="button" accessibilityLabel={`Delete ${row.name}`} onPress={() => void save(removed(list, row.id))} hitSlop={6} testID={`grocery-delete-${row.id}`}>
@@ -276,37 +278,49 @@ export default function ShoppingDetailScreen() {
             );
           })}
 
-          {list.items.length === 0 ? (
-            <View style={styles.empty} testID="list-empty">
-              <Ionicons name="basket-outline" size={44} color={theme.colors.secondaryLabel} />
-              <Text style={[textStyles.title2, styles.bold, { color: theme.colors.label }]}>Nothing on the list yet</Text>
-              <Text style={[textStyles.subheadline, styles.center, { color: theme.colors.secondaryLabel }]}>Add items above or dictate a few groceries.</Text>
-            </View>
-          ) : null}
-          <View style={styles.actions}>
+          {/* The rows after the categories are one `List` section (ShoppingViews.swift:255-257): the empty
+              state, a failure with its two ways out, and Complete Shopping Trip / Use This List Again. */}
+          <FormSection testID="list-footer">
+            {list.items.length === 0 ? (
+              <FormRow>
+                <View style={styles.empty} testID="list-empty">
+                  <Ionicons name="basket-outline" size={52} color={theme.colors.secondaryLabel} />
+                  <Text style={[textStyles.title2, styles.bold, { color: theme.colors.label }]}>Nothing on the list yet</Text>
+                  <Text style={[textStyles.subheadline, styles.center, { color: theme.colors.secondaryLabel }]}>Add items above or dictate a few groceries.</Text>
+                </View>
+              </FormRow>
+            ) : null}
             {message ? (
               <>
-                <Text style={[textStyles.body, { color: theme.colors.danger }]} testID="list-error">
-                  {message}
-                </Text>
-                <Pressable accessibilityRole="button" disabled={readOnly} onPress={() => void save(list)} testID="list-retry">
-                  <Text style={[textStyles.body, { color: readOnly ? theme.colors.placeholder : theme.colors.tint }]}>Retry Save</Text>
-                </Pressable>
-                <Pressable accessibilityRole="button" onPress={() => void reload()} testID="list-reload">
-                  <Text style={[textStyles.body, { color: theme.colors.tint }]}>Discard local edits and reload</Text>
-                </Pressable>
+                <FormRow>
+                  <Text style={[textStyles.body, { color: theme.colors.danger }]} testID="list-error">
+                    {message}
+                  </Text>
+                </FormRow>
+                <FormRow>
+                  <Pressable accessibilityRole="button" disabled={readOnly} onPress={() => void save(list)} testID="list-retry">
+                    <Text style={[textStyles.body, { color: readOnly ? theme.colors.placeholder : theme.colors.tint }]}>Retry Save</Text>
+                  </Pressable>
+                </FormRow>
+                <FormRow>
+                  <Pressable accessibilityRole="button" onPress={() => void reload()} testID="list-reload">
+                    <Text style={[textStyles.body, { color: theme.colors.tint }]}>Discard local edits and reload</Text>
+                  </Pressable>
+                </FormRow>
               </>
             ) : null}
-            {!readOnly ? (
-              <Pressable accessibilityRole="button" onPress={confirmComplete} testID="list-complete">
-                <Text style={[headline, { color: theme.colors.tint }]}>Complete Shopping Trip</Text>
-              </Pressable>
-            ) : (
-              <Pressable accessibilityRole="button" onPress={() => setCopy(true)} testID="list-use-again">
-                <Text style={[textStyles.body, { color: theme.colors.tint }]}>Use This List Again</Text>
-              </Pressable>
-            )}
-          </View>
+            <FormRow last>
+              {!readOnly ? (
+                <Pressable accessibilityRole="button" onPress={confirmComplete} testID="list-complete">
+                  <Text style={[headline, { color: theme.colors.tint }]}>Complete Shopping Trip</Text>
+                </Pressable>
+              ) : (
+                <Pressable accessibilityRole="button" onPress={() => setCopy(true)} testID="list-use-again">
+                  <Text style={[textStyles.body, { color: theme.colors.tint }]}>Use This List Again</Text>
+                </Pressable>
+              )}
+            </FormRow>
+          </FormSection>
         </ScrollView>
       </View>
 
@@ -356,9 +370,10 @@ const styles = StyleSheet.create({
   iconButton: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
   caption: { fontSize: 12, lineHeight: 16 },
   reorder: { gap: 2 },
-  empty: { alignItems: 'center', gap: 8, paddingVertical: 24, paddingHorizontal: 32 },
+  empty: { alignItems: 'center', gap: 8, paddingVertical: 24 },
+  // check 26 + 12 + artwork 40 + 8 from the row's content edge.
+  itemSeparator: { position: 'absolute', left: 16 + 26 + 12 + 40 + 8, right: 16, bottom: 0, height: 1 },
   center: { textAlign: 'center' },
-  actions: { paddingHorizontal: 32, paddingTop: 16, gap: 12 },
   toolbar: { flexDirection: 'row', alignItems: 'center', gap: 18 },
   menuScrim: { flex: 1, backgroundColor: 'rgba(0,0,0,0.2)', alignItems: 'flex-end', paddingTop: 90, paddingRight: 16 },
   menu: { borderRadius: 14, minWidth: 220, paddingVertical: 4 },
