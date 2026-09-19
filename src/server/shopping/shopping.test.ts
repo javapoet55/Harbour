@@ -70,3 +70,17 @@ it('parses common metric sizes and spoken half measures without corrupting item 
   ['rice','500','g'],['milk','250','ml'],['milk','0.5','gallon']
  ]);
 });
+it('returns the original list on create retries and scopes keys to the owner',async()=>{
+ const key=randomUUID();const a=await shoppingAction(owner,{operation:'create',input:input()},key);
+ const b=await shoppingAction(owner,{operation:'create',input:input()},key);
+ const c=await shoppingAction(other,{operation:'create',input:input()},key);
+ if(!('list'in a)||!a.list||!('list'in b)||!b.list||!('list'in c)||!c.list)throw Error();
+ expect(a.list.id).toBe(b.list.id);expect(a.list.id).not.toBe(c.list.id);
+});
+it('keeps a shared link on the explicitly shared trip after weekly completion',async()=>{
+ const a=await shoppingAction(owner,{operation:'create',input:input()});if(!('list'in a)||!a.list)throw Error();
+ const shared=await shoppingAction(owner,{operation:'share',id:a.list.id});if(!('list'in shared)||!shared.list)throw Error();
+ const next=await shoppingAction(owner,{operation:'complete',id:a.list.id,revision:0});if(!('list'in next)||!next.list)throw Error();
+ expect(next.list.shareToken).toBeNull();
+ expect((await prisma.shoppingList.findUniqueOrThrow({where:{shareToken:shared.list.shareToken!}})).id).toBe(a.list.id);
+});

@@ -4,7 +4,7 @@ import OSLog
 
 /// No personal payloads: only fixed event names leave this interface.
 enum FestivalEvent: String { case opened="festival_manage_opened", tab="festival_tab_selected", saved="festival_details_saved", contactAdded="festival_contact_added", contactRemoved="festival_contact_removed", generated="festival_message_generated", approved="festival_message_approved", imageStarted="festival_image_generation_started", imageCompleted="festival_image_generation_completed", imageFailed="festival_image_generation_failed", imageSelected="festival_image_selected", scheduled="festival_wish_scheduled", disabled="festival_moment_disabled", deleted="festival_moment_deleted" }
-struct FestivalAnalytics { func record(_ event:FestivalEvent) { Logger(subsystem:"com.pinslots.nexdo",category:"festival").info("\(event.rawValue, privacy:.public)") } }
+@MainActor struct FestivalAnalytics { func record(_ event:FestivalEvent) { NexdoAnalytics.logEvent(event.rawValue, parameters:nil); Logger(subsystem:"com.pinslots.nexdo",category:"festival").info("\(event.rawValue, privacy:.public)") } }
 
 /// Preview-only provider: local artwork, no AI request and no production claims.
 struct MockFestivalImageService: FestivalImageGenerationService {

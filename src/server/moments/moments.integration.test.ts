@@ -47,3 +47,38 @@ it('explicit new manual moments do not inherit an existing recipient record',asy
  expect(second.firstName).toBe('New recipient');
  expect((await saveMoment(userId,details)).id).toBe(first.id);
 });
+
+it('expires overdue manual wishes on owner refresh but retains recent and sent wishes',async()=>{
+ const expired=await plan(),recent=await plan(),sent=await plan();
+ await prisma.deliveryPlan.update({where:{id:expired.id},data:{scheduledAtUTC:new Date(Date.now()-25*3600000)}});
+ await prisma.deliveryPlan.update({where:{id:recent.id},data:{scheduledAtUTC:new Date(Date.now()-23*3600000)}});
+ await prisma.deliveryPlan.update({where:{id:sent.id},data:{status:'SENT',scheduledAtUTC:new Date(0)}});
+ await listMoments(userId);
+ expect((await prisma.deliveryPlan.findUniqueOrThrow({where:{id:expired.id}})).status).toBe('EXPIRED');
+ expect((await prisma.deliveryPlan.findUniqueOrThrow({where:{id:recent.id}})).status).toBe('AWAITING_CONFIRMATION');
+ expect((await prisma.deliveryPlan.findUniqueOrThrow({where:{id:sent.id}})).status).toBe('SENT');
+});
+it('a per-plan send does not recover or repeat unrelated plans or scan catalog users',async()=>{
+ const target=await plan('email',true),stale=await plan('email',true),repeat=await plan();
+ await prisma.deliveryPlan.update({where:{id:target.id},data:{nextAttemptAt:new Date(0)}});
+ await prisma.deliveryPlan.update({where:{id:stale.id},data:{status:'SENDING',claimedAt:new Date(0)}});
+ await prisma.deliveryPlan.update({where:{id:repeat.id},data:{status:'SENT',repeatYearly:true}});
+ await runJobs({send:async()=>({kind:'sent',id:'scoped'})},target.id);
+ expect((await prisma.deliveryPlan.findUniqueOrThrow({where:{id:stale.id}})).status).toBe('SENDING');
+ expect(await prisma.deliveryPlan.findUnique({where:{idempotencyKey:repeat.id+':annual'}})).toBeNull();
+});
+it('records an opened SMS composer without claiming sent or failed',async()=>{
+ const p=await plan();await changePlan(userId,{id:p.id,action:'opened'});
+ const saved=await prisma.deliveryPlan.findUniqueOrThrow({where:{id:p.id}});
+ expect(saved.status).toBe('AWAITING_CONFIRMATION');expect(saved.sentAt).toBeNull();expect(saved.lastError).toContain('not confirmed');
+ await changePlan(userId,{id:p.id,action:'sent'});
+ expect((await prisma.deliveryPlan.findUniqueOrThrow({where:{id:p.id}})).lastError).toBeNull();
+ await expect(changePlan(userId,{id:p.id,action:'opened'})).rejects.toThrow('awaiting');
+ const email=await plan('email',true);await expect(changePlan(userId,{id:email.id,action:'opened'})).rejects.toThrow('awaiting');
+});
+it('uses the dedicated wish model independently of the assistant model',async()=>{
+ const m=await saveMoment(userId,{...input,sourceKey:randomUUID()});
+ vi.stubEnv('OPENAI_API_KEY','fixture');vi.stubEnv('OPENAI_MODEL','assistant-model');vi.stubEnv('MOMENTS_DRAFT_MODEL','wish-model');
+ const fetcher=vi.fn().mockResolvedValue(Response.json({choices:[{message:{content:'Happy birthday!'}}]}));vi.stubGlobal('fetch',fetcher);
+ try {await generateDraft(userId,{momentID:m.id,tone:'Warm',aiConsent:true});expect(JSON.parse(fetcher.mock.calls[0][1].body).model).toBe('wish-model');}finally{vi.unstubAllEnvs();vi.unstubAllGlobals();}
+});

@@ -33,7 +33,7 @@ public struct WishDeliveryPlan: Codable, Identifiable, Sendable {
     public var editable: Bool { ["SCHEDULED", "AWAITING_CONFIRMATION", "FAILED"].contains(status) }
     public var statusLabel: String { switch status {
     case "SCHEDULED": "Auto-send scheduled"
-    case "AWAITING_CONFIRMATION": "Confirmation required"
+    case "AWAITING_CONFIRMATION": lastError == "Messages opened; delivery not confirmed." ? "Opened — delivery not confirmed" : "Confirmation required"
     case "SENT": "Sent"
     case "COPIED": "Copied — delivery not confirmed"
     case "SHARED": "Shared — delivery not confirmed"

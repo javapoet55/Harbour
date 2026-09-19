@@ -4,6 +4,18 @@ import XCTest
     var app:XCUIApplication!
     override func setUp(){super.setUp();continueAfterFailure=false;app=XCUIApplication();app.launchArguments=["-shopping-design-preview"];app.launch();XCTAssertTrue(app.navigationBars["My Lists"].waitForExistence(timeout:15))}
     func openList(){app.buttons.matching(NSPredicate(format:"label CONTAINS %@", "Weekly Shopping List")).firstMatch.tap();XCTAssertTrue(app.navigationBars["Shopping List"].waitForExistence(timeout:5))}
+    func testTypedAddDoesNotOpenVoice() {
+        openList()
+        let field=app.textFields["Add an item"]
+        field.tap();field.typeText("Tomatoes")
+        app.buttons["Add typed items"].tap()
+        XCTAssertTrue(app.navigationBars["Review Items"].waitForExistence(timeout:5))
+        XCTAssertFalse(app.navigationBars["Add by Voice"].exists)
+        XCTAssertFalse(app.textViews["Shopping transcript"].exists)
+        app.buttons["Cancel"].tap()
+        app.buttons["Add groceries by voice"].tap()
+        XCTAssertTrue(app.navigationBars["Add by Voice"].waitForExistence(timeout:5))
+    }
     func testCheckOffAndEditQuantity(){
         openList()
         app.buttons["Check Bananas"].tap()

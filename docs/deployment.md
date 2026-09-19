@@ -31,3 +31,27 @@ Native profile photos require the server and database changes as well as the iOS
 - Deploy `/api/me` with `user.photo` and private, non-cached responses.
 
 An older settings handler returns `{ ok: true }` while ignoring the photo field. The native app intentionally rejects that response when a subsequent profile read cannot confirm the saved picture; rebuilding iOS alone does not resolve this server mismatch.
+
+## Important Moments email and worker
+
+Gmail sending requires `MOMENTS_GOOGLE_CLIENT_ID`, `MOMENTS_GOOGLE_CLIENT_SECRET`,
+and `MOMENTS_GOOGLE_REDIRECT_URI`. Register the exact HTTPS
+`/api/moments/email/callback` URI with the Google OAuth client and enable Gmail API.
+Calendar OAuth credentials alone do not grant Gmail sending consent. Keep the
+existing credential encryption key stable; replacing it invalidates stored tokens.
+
+Create a **separate persistent Railway service** from this repository with start
+command `node scripts/moments-worker.mjs`, no HTTP health check, and no cron schedule.
+Set `MOMENTS_API_BASE_URL` to the API HTTPS origin and share `HARBOR_CRON_SECRET`
+with the API service. The worker calls the protected tick every minute without
+concurrent requests. Enable `MOMENTS_SCHEDULER_ENABLED=true` on the API only after
+this worker is deployed and its cadence is verified. Keep it false otherwise.
+This repository change alone does not provision or activate that service.
+
+Manual deliveries expire 24 hours after their scheduled time if not confirmed.
+Expiration is applied during the worker sweep and the owner's Moments refresh,
+so it does not depend on automatic email being enabled. Expired wishes remain
+under Scheduled / Action needed; create a fresh reviewed wish to send later.
+
+`MOMENTS_DRAFT_MODEL` controls wish text generation independently of `OPENAI_MODEL`.
+Its default is `gpt-4o-mini`. The general assistant's model is unchanged.

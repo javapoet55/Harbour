@@ -114,12 +114,11 @@ import CryptoKit
         do {try await persist(cancelSchedules:cancelSchedules);if let target=pendingTab {tab=target;pendingTab=nil};notice=cancelSchedules ? "Changes saved. Review and schedule your updated wish again.":"Moment changes saved.";analytics.record(.saved)} catch {
             if case APIError.server(409,let message)=error, message.contains("Existing schedules") {
                 needsScheduleConfirmation=true
-            } else {self.error=error.localizedDescription;pendingTab=nil}
+            } else {self.error=error.localizedDescription;if let target=pendingTab {tab=target};pendingTab=nil}
         }
     }
     private func persist(cancelSchedules:Bool) async throws {
         guard !title.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty,title.count<=150 else{throw FestivalError.message("Enter a moment name of 1–150 characters.")}
-        if MomentDates.day(date,zone:zone)<MomentDates.day(Date(),zone:zone) {throw FestivalError.message("Select today or a future moment date.")}
         if !recipients.isEmpty, let error=FestivalValidation.recipients(recipients,settings:settings){throw FestivalError.message(error)}
         try contactsService.validate(recipients)
         struct Recipient:Encodable {let id:String?;let key,name,phone,email:String;let selected:Bool}

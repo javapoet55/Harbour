@@ -19,7 +19,7 @@ import AVFoundation
         transcript=ShoppingTranscript()
         if !text.isEmpty{transcript.append(id:UUID().uuidString,text:text,completed:true)}
         connecting=true;error=nil;let generation=UUID();run=generation
-        guard await AVAudioApplication.requestRecordPermission() else{connecting=false;error="Allow microphone access in iOS Settings, or type your items.";return}
+        guard await AVAudioApplication.requestRecordPermission() else{connecting=false;error="Allow microphone access in your phone’s Settings, or type your items.";return}
         guard run==generation else{return}
         do {
             let credential=try await store.credential()

@@ -43,3 +43,8 @@ it('rejects missing or foreign moments',async()=>{
  const input=fixture('birthday');tx.importantMoment.findMany.mockResolvedValue([]);
  await expect(saveFestival('owner',input)).rejects.toThrow('not found');
 });
+it('allows editing a historical occasion without allowing a past delivery',async()=>{
+ const input=fixture('birthday');input.date='2000-02-29';input.yearly=true;
+ await saveFestival('owner',input);
+ expect(tx.importantMoment.update.mock.calls[0][0].data.occurrenceDate).toBe('2000-02-29');
+});

@@ -90,7 +90,7 @@ struct TodayAttentionSheet: View {
                     DatePicker("Start at", selection: $start, in: Date()...)
                     Text("Schedule overdue tasks one after another, using each task’s duration. Existing calendar events are not moved.")
                     if let failure { Text(failure).foregroundStyle(.red) }
-                    Button(saving ? "Rescheduling…" : "Reschedule \(tasks.count) tasks") { Task { await rescheduleAll() } }
+                    Button(saving ? "Rescheduling…" : "Reschedule \(tasks.count) task\(tasks.count == 1 ? "" : "s")") { Task { await rescheduleAll() } }
                         .disabled(saving || model.busy || tasks.isEmpty || start <= Date())
                 }.navigationTitle("Reschedule all").navigationBarTitleDisplayMode(.inline)
                     .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { rescheduling = false }.disabled(saving) } }

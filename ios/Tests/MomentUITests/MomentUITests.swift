@@ -279,7 +279,7 @@ import XCTest
         app.buttons[formatter.string(from:changed)].tap()
         app.buttons["PopoverDismissRegion"].tap()
         formatter.dateFormat="EEE, MMM d, yyyy"
-        let expected="Send date · " + formatter.string(from:changed)
+        let expected="Moment date · " + formatter.string(from:changed)
         for _ in 0..<4 {if app.staticTexts["festival-send-date"].isHittable{break};app.swipeDown()}
         XCTAssertEqual(app.staticTexts["festival-send-date"].label,expected)
         let save=app.buttons.matching(identifier:"wish-primary").matching(NSPredicate(format:"label == %@","Save Changes")).firstMatch
@@ -317,6 +317,41 @@ import XCTest
     }
     func testFestivalDoneReturnsToImportantMomentsFromCard() {
         verifyFestivalDoneReturnsToImportantMoments(direct:true)
+    }
+    func testFailedAutosaveKeepsEditsAndAllowsTabNavigation() {
+        openFestivalManager()
+        let name=app.textFields["festival-name"]
+        name.tap();name.press(forDuration:1.2)
+        if app.menuItems["Select All"].exists {app.menuItems["Select All"].tap()}
+        else if app.buttons["Select All"].exists {app.buttons["Select All"].tap()}
+        name.typeText(XCUIKeyboardKey.delete.rawValue)
+        if app.buttons["festival-keyboard-done"].exists {app.buttons["festival-keyboard-done"].tap()}
+        app.buttons["festival-tab-Contacts"].tap()
+        XCTAssertTrue(app.staticTexts["Recipients"].waitForExistence(timeout:5))
+        app.buttons["festival-tab-Details"].tap()
+        XCTAssertEqual(name.value as? String, "Moment name") // Empty text fields expose their placeholder to XCTest.
+        name.tap();name.typeText("Corrected moment")
+        if app.buttons["festival-keyboard-done"].exists {app.buttons["festival-keyboard-done"].tap()}
+        app.buttons["festival-tab-Contacts"].tap()
+        XCTAssertTrue(app.staticTexts["Recipients"].waitForExistence(timeout:5))
+    }
+    func testSentTabExplainsEmptyHistory() {
+        app.buttons["Sent"].tap()
+        XCTAssertTrue(app.staticTexts["No sent wishes yet"].waitForExistence(timeout:5))
+    }
+    func testEmptyMessageCannotBeApproved() {
+        openFestivalManager()
+        app.buttons["festival-tab-Wish Message"].tap()
+        let editor=app.textViews.firstMatch
+        editor.tap();editor.press(forDuration:1.2)
+        if app.menuItems["Select All"].exists {app.menuItems["Select All"].tap()}
+        else if app.buttons["Select All"].exists {app.buttons["Select All"].tap()}
+        editor.typeText(XCUIKeyboardKey.delete.rawValue)
+        XCTAssertEqual(editor.value as? String, "")
+        if app.buttons["festival-keyboard-done"].exists {app.buttons["festival-keyboard-done"].tap()}
+        let save=app.buttons.matching(identifier:"wish-primary").matching(NSPredicate(format:"label == %@","Save Message")).firstMatch
+        for _ in 0..<6 {if save.isHittable{break};app.swipeUp()}
+        XCTAssertFalse(save.isEnabled)
     }
     func testCreatedBirthdayDoneReturnsToImportantMoments() {
         app.terminate()

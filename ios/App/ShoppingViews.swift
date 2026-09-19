@@ -149,6 +149,7 @@ private struct NewShoppingList: View {
     @State private var date = Date()
     @State private var weekly = true
     @State private var useLast = false
+    @State private var createKey = UUID().uuidString
     private var previous: GroceryList? { source ?? store.lists.first(where: { $0.completedAt != nil }) ?? store.lists.first }
     var body: some View {
         NavigationStack {
@@ -167,7 +168,7 @@ private struct NewShoppingList: View {
                             DatePicker("Shopping date", selection: $date, displayedComponents: .date)
                             Divider()
                             Toggle("Repeat every week", isOn: $weekly)
-                            Text("Complete a trip to create next week’s list with unchecked items.").font(.caption).foregroundStyle(Color.nexdoSecondary)
+                            Text("Complete a trip to copy all items into next week’s list, with every item unchecked.").font(.caption).foregroundStyle(Color.nexdoSecondary)
                         }
                         if let error = store.error { Text(error).foregroundStyle(.red) }
                     }.padding(18)
@@ -178,7 +179,7 @@ private struct NewShoppingList: View {
                     MomentPrimary(title: store.busy ? "Creating…" : "Create List") {
                         Task {
                             let value = GroceryList(id: UUID().uuidString, title: title.trimmingCharacters(in: .whitespacesAndNewlines), date: MomentDates.day(date, zone: TimeZone.current.identifier), timeZone: TimeZone.current.identifier, weekly: weekly, revision: 0, items: useLast ? (previous?.items.map { var i = $0; i.checked = false; return i } ?? []) : [])
-                            if let saved = await store.action("create", input: ShoppingInput(value)) { onCreated?(saved); dismiss() }
+                            if let saved = await store.action("create", input: ShoppingInput(value), idempotencyKey: createKey) { onCreated?(saved); dismiss() }
                         }
                     }.disabled(store.busy || title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                         .padding(18).background(.ultraThinMaterial)
@@ -230,8 +231,8 @@ struct ShoppingDetail:View {
                 if !readOnly {
                     HStack{
                         TextField("Add an item",text:$quick).submitLabel(.done).onSubmit{quickAdd()}
-                        Button{quickAdd()}label:{Image(systemName:"plus.circle.fill")}.disabled(quick.isEmpty || parseBusy).accessibilityLabel("Add typed items")
-                        Button{voice=true}label:{Image(systemName:"mic.fill")}.accessibilityLabel("Add groceries by voice")
+                        Button{quickAdd()}label:{Image(systemName:"plus.circle.fill").frame(width:44,height:44)}.buttonStyle(.borderless).disabled(quick.isEmpty || parseBusy).accessibilityLabel("Add typed items")
+                        Button{voice=true}label:{Image(systemName:"mic.fill").frame(width:44,height:44)}.buttonStyle(.borderless).accessibilityLabel("Add groceries by voice")
                     }
                     if !quick.isEmpty {
                         let suggestions=["Bananas","Apples","Tomatoes","Cherry Tomatoes","Spinach","Milk","Eggs","Cheese","Bread","Rice","Pasta","Coffee","Paper towels"].filter{$0.localizedCaseInsensitiveContains(quick)}
@@ -322,7 +323,7 @@ private struct ShoppingShare:View {
         Section{Label(list.title,systemImage:"cart.fill");Text("\(list.items.count) items")}
         Section("Share via Messages, Mail, or another app"){ShareLink(item:list.shareText){Label("Share list as text",systemImage:"square.and.arrow.up")}}
         Section("View-only link"){
-            Text("Anyone with the link can view this list, including future edits. Revoke it whenever you like.").font(.caption)
+            Text("Anyone with the link can view this list and its edits. The link stays with this trip; next week’s list needs a new link. Revoke it whenever you like.").font(.caption)
             if let url {ShareLink(item:url){Label("Share Link",systemImage:"link")};Button("Revoke Link",role:.destructive){Task{if let saved=await store.action("revoke",list:list,input:[String:String]()){list=saved;self.url=nil;onUpdate(saved)}}}}
             else{Button("Create Share Link"){Task{if let saved=await store.action("share",list:list,input:[String:String]()){list=saved;onUpdate(saved);updateURL()}}}}
         }
