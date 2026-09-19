@@ -30,7 +30,10 @@ p = sys.argv[1]
 im = Image.open(p).convert("RGB")
 if im.width > 720:
     im = im.resize((720, round(im.height * 720 / im.width)), Image.LANCZOS)
-im.convert("P", palette=Image.ADAPTIVE, colors=256).save(p, optimize=True)
+# Stored as plain RGB. Any 256-colour palette merges near colours the comparison depends on: the old
+# `convert("P", palette=ADAPTIVE)` turned the green Shopping cart on Today blue, and an octree palette
+# folded white rows into a (242, 242, 247) sheet. RGB costs ~270 KB a capture, under the 500 KB budget.
+im.save(p, optimize=True)
 PYEOF
 }
 

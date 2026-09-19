@@ -8,6 +8,7 @@ import { useStore } from 'zustand';
 import { ownerKeyFor } from '../../actions/persistence';
 import { Text } from '../../components/Text';
 import { TodayBackdrop } from '../../components/TodayShell';
+import { GlassCapsule, GlassCircle } from '../../components/PushedHeader';
 import { withAlpha } from '../../components/SignInBackdrop';
 import { brand, textStyles, useTheme } from '../../theme';
 import {
@@ -277,13 +278,18 @@ export function ManageMomentView({ group, onDone }: { group: MomentDisplayGroup;
           headerBackVisible: false,
           gestureEnabled: false,
           headerLeft: () => (
-            <Pressable accessibilityRole="button" accessibilityLabel="Back" onPress={back} style={styles.navButton} testID="festival-back">
-              <Ionicons name="chevron-back" size={24} color={theme.colors.tint} />
+            <Pressable accessibilityRole="button" accessibilityLabel="Back" onPress={back} hitSlop={6} testID="festival-back">
+              {/* A custom back (it auto-saves first), so SwiftUI draws it as a tinted glass capsule. */}
+              <GlassCapsule>
+                <Ionicons name="chevron-back" size={24} color={theme.colors.tint} />
+              </GlassCapsule>
             </Pressable>
           ),
           headerRight: () => (
-            <Pressable accessibilityRole="button" accessibilityLabel="Moment options" onPress={() => setMenu(true)} style={styles.navButton} testID="festival-options">
-              <Ionicons name="ellipsis-horizontal" size={22} color={theme.colors.tint} />
+            <Pressable accessibilityRole="button" accessibilityLabel="Moment options" onPress={() => setMenu(true)} hitSlop={6} testID="festival-options">
+              <GlassCapsule>
+                <Ionicons name="ellipsis-horizontal" size={22} color={theme.colors.tint} />
+              </GlassCapsule>
             </Pressable>
           ),
         }}
@@ -949,8 +955,10 @@ export function ScheduleSuccess({
           title: 'Schedule confirmed',
           headerBackVisible: false,
           headerLeft: () => (
-            <Pressable accessibilityRole="button" accessibilityLabel="Back" onPress={manage} style={styles.navButton} testID="success-back">
-              <Ionicons name="chevron-back" size={24} color={theme.colors.tint} />
+            <Pressable accessibilityRole="button" accessibilityLabel="Back" onPress={manage} hitSlop={6} testID="success-back">
+              <GlassCircle>
+                <Ionicons name="chevron-back" size={24} color={theme.colors.ink} />
+              </GlassCircle>
             </Pressable>
           ),
           headerRight: undefined,
@@ -1015,7 +1023,6 @@ const styles = StyleSheet.create({
   recipient: { gap: 10 },
   info: { flexDirection: 'row', gap: 8, padding: 16, borderRadius: 14 },
   progress: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  navButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   menuScrim: { flex: 1, backgroundColor: 'rgba(0,0,0,0.2)', alignItems: 'flex-end', paddingTop: 90, paddingRight: 16 },
   menu: { borderRadius: 14, minWidth: 220, paddingVertical: 4 },
   menuRow: { minHeight: 48, paddingHorizontal: 16, justifyContent: 'center' },

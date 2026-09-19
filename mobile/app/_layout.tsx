@@ -21,6 +21,19 @@ import { useLastSignedIn } from '../src/store/lastSignedIn';
 import { useSession } from '../src/store/session';
 import { useTheme } from '../src/theme';
 
+/**
+ * `[.medium, .large]`, opening at `.medium`, with the drag indicator (iOS; Android draws its own).
+ *
+ * `.medium` on iOS 26 puts the sheet's top edge at 47.6% of the screen (`today-attention-sheet-half`).
+ * Android's detent is a fraction of the height BELOW the status bar, so 0.54 lands the same edge.
+ */
+const SHEET_OPTIONS = {
+  presentation: 'formSheet' as const,
+  sheetAllowedDetents: [0.54, 1.0],
+  sheetInitialDetentIndex: 0,
+  sheetGrabberVisible: true,
+};
+
 export default function RootLayout() {
   const [queryClient] = useState(createQueryClient);
 
@@ -159,6 +172,15 @@ export function RootNavigator() {
         <Stack.Screen name="index" />
         <Stack.Protected guard={status === 'signedIn'}>
           <Stack.Screen name="(tabs)" />
+          {/*
+            Needs attention and Reschedule all: `.sheet`s with `.presentationDetents([.medium, .large])`
+            (RootView.swift:1188-1191, TodayAttentionSheet.swift:98). Presented from HERE rather than
+            the Today stack so they cover the tab bar, as a SwiftUI sheet does. A native form sheet is
+            the detent API — Material `BottomSheetBehavior` on Android — and needs no new dependency.
+            Both draw their own bar, since a form sheet has no navigator header on Android.
+          */}
+          <Stack.Screen name="attention" options={SHEET_OPTIONS} />
+          <Stack.Screen name="reschedule-all" options={SHEET_OPTIONS} />
         </Stack.Protected>
         <Stack.Protected guard={status === 'signedOut'}>
           <Stack.Screen name="(auth)" />
@@ -166,9 +188,6 @@ export function RootNavigator() {
         {/* Reminder screens sit OUTSIDE the tab group: a notification opens them over any tab. */}
         <Stack.Protected guard={profile != null}>
           <Stack.Screen name="action" />
-          {/* Important Moments. Outside the tab group, like `action`: a moment notification opens it over any tab. */}
-          <Stack.Screen name="moments" />
-          <Stack.Screen name="shopping" />
         </Stack.Protected>
       </Stack>
     </>

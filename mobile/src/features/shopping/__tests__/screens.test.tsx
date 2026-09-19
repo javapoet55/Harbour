@@ -32,8 +32,8 @@ jest.mock('../../../api/shopping', () => ({
 import type { GroceryItem, GroceryList } from '../../../api/shopping';
 import { ApiError } from '../../../api/client';
 import { shoppingStore } from '../store';
-import MyLists from '../../../../app/shopping/index';
-import Detail from '../../../../app/shopping/[id]';
+import MyLists from '../../../../app/(tabs)/(today)/shopping/index';
+import Detail from '../../../../app/(tabs)/(today)/shopping/[id]';
 
 function item(overrides: Partial<GroceryItem> = {}): GroceryItem {
   return { id: 'milk', name: 'Parity milk', category: 'Dairy & Eggs', quantity: '2', size: 'bottles', notes: '', imageData: null, checked: false, ...overrides };

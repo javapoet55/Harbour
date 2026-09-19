@@ -1,5 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 
 import { shoppingQueryKey } from '../../query/useQuickAccess';
 import { shoppingStore } from './store';
@@ -16,8 +16,13 @@ import { shoppingStore } from './store';
 export function useShoppingLifecycle(profileId: string | null | undefined): void {
   const queryClient = useQueryClient();
 
+  // Reset only when one account REPLACES another (or signs out). On the first sign-in there is nothing
+  // to clear, and a reset then would run AFTER the Today tile's first refresh — a parent's effect runs
+  // after its children's — and wipe the lists it had just loaded (UI-parity pass 2).
+  const previous = useRef(profileId);
   useEffect(() => {
-    shoppingStore.getState().reset();
+    if (previous.current !== undefined && previous.current !== null && previous.current !== profileId) shoppingStore.getState().reset();
+    previous.current = profileId;
   }, [profileId]);
 
   useEffect(

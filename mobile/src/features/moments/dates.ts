@@ -75,19 +75,31 @@ export function sendDayLabel(at: number, zone: string): string {
 }
 
 /**
- * `MomentDates.label(_:zone:)`: `dateStyle = .medium, timeStyle = .short` — "Oct 25, 2026 at 8:00 AM",
- * which is how iOS 26 joins the two styles in English.
+ * A `DateFormatter` with `dateStyle = .medium` in the DEVICE locale, as SwiftUI's compact `DatePicker`
+ * and `MomentDates.label` use: "19 Sep 2026" in an English (India/UK) locale, "Sep 19, 2026" in a US
+ * one. Built with `.format()`, never assembled from `formatToParts`, because the part ORDER is what
+ * differs between locales (UI-parity pass 2; SHARED-REQUESTS "DateField"). `locale` is a test seam.
  */
-export function momentLabel(at: number, zone: string): string {
-  const timeZone = safeZone(zone);
-  const date = new Intl.DateTimeFormat('en-US', { timeZone, month: 'short', day: 'numeric', year: 'numeric' }).format(new Date(at));
-  const time = new Intl.DateTimeFormat('en-US', { timeZone, hour: 'numeric', minute: '2-digit' }).format(new Date(at));
-  return `${date} at ${time}`;
+export function mediumDate(at: number, zone: string, locale?: string): string {
+  return new Intl.DateTimeFormat(locale, { timeZone: safeZone(zone), day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(at));
 }
 
-/** `synced.formatted(date: .omitted, time: .shortened)` in the device zone. */
-export function shortTime(at: number): string {
-  return new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit' }).format(new Date(at));
+/** `timeStyle = .short` in the device locale: "10:50 PM", or "22:50" where the locale uses 24 hours. */
+export function shortTimeIn(at: number, zone: string, locale?: string): string {
+  return new Intl.DateTimeFormat(locale, { timeZone: safeZone(zone), hour: 'numeric', minute: '2-digit' }).format(new Date(at));
+}
+
+/**
+ * `MomentDates.label(_:zone:)`: `dateStyle = .medium, timeStyle = .short` in the device locale, joined
+ * the way iOS 26 joins the two styles in English — "19 Sep 2026 at 10:50 PM".
+ */
+export function momentLabel(at: number, zone: string, locale?: string): string {
+  return `${mediumDate(at, zone, locale)} at ${shortTimeIn(at, zone, locale)}`;
+}
+
+/** `synced.formatted(date: .omitted, time: .shortened)` in the device zone and locale. */
+export function shortTime(at: number, locale?: string): string {
+  return new Intl.DateTimeFormat(locale, { hour: 'numeric', minute: '2-digit' }).format(new Date(at));
 }
 
 /** `MomentDates.parseInstant(_:)` and `WishDeliveryPlan.date`: ISO-8601 with or without fractions. */

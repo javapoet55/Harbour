@@ -6,6 +6,7 @@ import { brand, useTheme } from '../theme';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NexdoLogoMark } from './NexdoLogoMark';
 import { AccountAvatar } from './ProfileParts';
+import { useHeaderInset } from './PushedHeader';
 import { TaskSymbol } from './TaskSymbol';
 import { Text } from './Text';
 
@@ -79,9 +80,15 @@ function SoftBlob({
 export function TodayBackdrop({ subtle = false }: { subtle?: boolean }) {
   const theme = useTheme();
   const blobOpacity = subtle ? 0.25 : 1;
+  // Under a transparent pushed bar (`pushedHeaderOptions`), reach up behind it so the gradient starts
+  // at the top of the screen, as `.ignoresSafeArea()` does in SwiftUI. 0 on a screen with no bar.
+  const headerInset = useHeaderInset();
   return (
     <View
-      style={[StyleSheet.absoluteFill, { backgroundColor: subtle ? theme.colors.background : theme.colors.groupedBackground }]}
+      style={[
+        StyleSheet.absoluteFill,
+        { top: -headerInset, backgroundColor: subtle ? theme.colors.background : theme.colors.groupedBackground },
+      ]}
       pointerEvents="none"
       accessibilityElementsHidden
       importantForAccessibility="no-hide-descendants"

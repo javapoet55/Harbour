@@ -1,12 +1,12 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { useState, type ReactNode } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, Switch, TextInput, View, type KeyboardTypeOptions, type StyleProp, type ViewStyle } from 'react-native';
+import { useRef, useState, type ReactNode } from 'react';
+import { Modal, Pressable, ScrollView, StyleSheet, Switch, TextInput, useWindowDimensions, View, type KeyboardTypeOptions, type StyleProp, type ViewStyle } from 'react-native';
 
 import { MonthCalendar } from '../../components/MonthCalendar';
 import { withAlpha } from '../../components/SignInBackdrop';
 import { Text } from '../../components/Text';
 import { brand, textStyles, useTheme } from '../../theme';
-import { momentDay, momentLabel, momentStartOfDay, sendDayLabel, wallParts, zonedInstant } from './dates';
+import { mediumDate, momentDay, momentStartOfDay, shortTimeIn, wallParts, zonedInstant } from './dates';
 
 /**
  * SwiftUI `Form` pieces with the iOS 26 inset-grouped metrics the rest of the app measured (style map
@@ -160,6 +160,12 @@ export type PickerOption<T> = { value: T; title: string };
 /**
  * A SwiftUI `Picker`: the label, the current choice in the tint, and the choices on tap. `hideLabel`
  * is `.labelsHidden()` — the menu button alone.
+ *
+ * UI-parity pass 2: the choices open the way SwiftUI's menu does — a popover ANCHORED to the button,
+ * with no dimming, a leading checkmark on the current choice and a translucent surface — rather than a
+ * centred, dimmed list. Measured off `moments-filter-menu`: 250pt wide, its trailing edge on the
+ * button's when the button is on the right of the screen (leading edge otherwise), 42pt rows, a 26pt
+ * radius. Like iOS 26's it opens OVER the button, from its top edge, and above it when there is no room.
  */
 export function MenuPicker<T extends string | number>({
   label,
@@ -181,16 +187,36 @@ export function MenuPicker<T extends string | number>({
   accessibilityLabel?: string;
 }) {
   const theme = useTheme();
-  const [open, setOpen] = useState(false);
+  const window = useWindowDimensions();
+  const anchor = useRef<View>(null);
+  const [visible, setVisible] = useState(false);
+  const [frame, setFrame] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
   const current = options.find((option) => option.value === value);
+
+  // The menu is mounted at once and stays invisible until the button has been measured, so it never
+  // shows for a frame in the wrong place.
+  const open = () => {
+    setVisible(true);
+    anchor.current?.measureInWindow?.((x, y, width, height) => setFrame({ x, y, width, height }));
+  };
+  const close = () => {
+    setVisible(false);
+    setFrame(null);
+  };
+  const placement = frame
+    ? menuPlacement(frame, options.length, window.width, window.height)
+    : { left: 0, top: 0, width: MENU_WIDTH, maxHeight: window.height, opacity: 0 };
+
   return (
     <>
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={`${accessibilityLabel ?? label}, ${current?.title ?? ''}`}
         accessibilityState={{ disabled }}
+        collapsable={false}
         disabled={disabled}
-        onPress={() => setOpen(true)}
+        onPress={open}
+        ref={anchor}
         style={[hideLabel ? styles.menuButton : styles.inline, disabled && styles.dimmed]}
         testID={testID}
       >
@@ -200,32 +226,77 @@ export function MenuPicker<T extends string | number>({
         </Text>
         <Ionicons name="chevron-expand-outline" size={14} color={theme.colors.tint} />
       </Pressable>
-      <Modal animationType="fade" onRequestClose={() => setOpen(false)} transparent visible={open}>
-        <Pressable onPress={() => setOpen(false)} style={styles.scrim}>
-          <View style={[styles.menu, { backgroundColor: theme.colors.surface }]}>
-            <ScrollView>
-              {options.map((option) => (
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: option.value === value }}
-                  key={String(option.value)}
-                  onPress={() => {
-                    onChange(option.value);
-                    setOpen(false);
-                  }}
-                  style={styles.menuRow}
-                  testID={`${testID}-${option.value}`}
-                >
-                  <Text style={[textStyles.body, styles.grow, { color: theme.colors.ink }]}>{option.title}</Text>
-                  {option.value === value ? <Ionicons name="checkmark" size={17} color={theme.colors.tint} /> : null}
-                </Pressable>
-              ))}
-            </ScrollView>
-          </View>
+      <Modal animationType="fade" onRequestClose={close} transparent visible={visible}>
+        <Pressable onPress={close} style={styles.fill} testID={`${testID}-dismiss`}>
+          {visible ? (
+            <View
+              style={[
+                styles.menu,
+                placement,
+                {
+                  backgroundColor: theme.scheme === 'dark' ? 'rgba(44, 44, 46, 0.96)' : 'rgba(255, 255, 255, 0.94)',
+                  shadowColor: '#000000',
+                },
+              ]}
+            >
+              <ScrollView bounces={false}>
+                {options.map((option) => (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: option.value === value }}
+                    key={String(option.value)}
+                    onPress={() => {
+                      onChange(option.value);
+                      close();
+                    }}
+                    style={styles.menuRow}
+                    testID={`${testID}-${option.value}`}
+                  >
+                    <View style={styles.menuCheck}>
+                      {option.value === value ? <Ionicons name="checkmark" size={17} color={theme.colors.label} /> : null}
+                    </View>
+                    <Text numberOfLines={1} style={[textStyles.body, styles.grow, { color: theme.colors.label }]}>
+                      {option.title}
+                    </Text>
+                  </Pressable>
+                ))}
+              </ScrollView>
+            </View>
+          ) : null}
         </Pressable>
       </Modal>
     </>
   );
+}
+
+const MENU_WIDTH = 250;
+const MENU_ROW = 42;
+const MENU_PADDING = 8;
+const MENU_MARGIN = 12;
+
+/**
+ * Where the popover goes for a button at `frame`: below it if the rows fit, else above; trailing-edge
+ * aligned for a button on the right half of the screen, leading-edge aligned otherwise; never off
+ * screen. A list too long for the space scrolls.
+ */
+export function menuPlacement(
+  frame: { x: number; y: number; width: number; height: number },
+  count: number,
+  screenWidth: number,
+  screenHeight: number,
+): { left: number; top: number; width: number; maxHeight: number } {
+  const width = Math.min(MENU_WIDTH, screenWidth - MENU_MARGIN * 2);
+  const wanted = count * MENU_ROW + MENU_PADDING * 2;
+  const onRight = frame.x + frame.width / 2 > screenWidth / 2;
+  const left = Math.max(MENU_MARGIN, Math.min(onRight ? frame.x + frame.width - width : frame.x, screenWidth - width - MENU_MARGIN));
+  // iOS 26 grows the menu out of the button, so it covers the button from the button's top edge.
+  const below = screenHeight - frame.y - MENU_MARGIN;
+  const above = frame.y + frame.height - MENU_MARGIN;
+  if (wanted <= below || below >= above) {
+    return { left, top: frame.y, width, maxHeight: Math.max(MENU_ROW, below) };
+  }
+  const height = Math.min(wanted, above);
+  return { left, top: frame.y + frame.height - height, width, maxHeight: height };
 }
 
 const FALLBACK_ZONES = [
@@ -304,8 +375,9 @@ export function DateField({
     const at = zonedInstant(momentDay(value, zone), hour, minute, zone);
     if (at !== null) onChange(clamp(at));
   };
-  const dateText = sendDayLabel(value, zone).replace(/^\w+, /, '');
-  const timeText = momentLabel(value, zone).split(' at ')[1] ?? '';
+  // The compact `DatePicker`'s two pills, in the device locale (SHARED-REQUESTS "DateField").
+  const dateText = mediumDate(value, zone);
+  const timeText = shortTimeIn(value, zone);
   return (
     <View style={[styles.inline, disabled && styles.dimmed]}>
       <Text style={[textStyles.body, styles.grow, { color: theme.colors.label }]}>{label}</Text>
@@ -327,7 +399,7 @@ export function DateField({
       ) : null}
       <Modal animationType="fade" onRequestClose={() => setOpen(false)} transparent visible={open}>
         <Pressable onPress={() => setOpen(false)} style={styles.scrim}>
-          <Pressable style={[styles.menu, styles.calendarMenu, { backgroundColor: theme.colors.surface }]}>
+          <Pressable style={[styles.dialog, styles.calendarMenu, { backgroundColor: theme.colors.surface }]}>
             <MonthCalendar
               selected={value}
               timeZone={zone}
@@ -402,9 +474,12 @@ const styles = StyleSheet.create({
   input: { ...textStyles.body, lineHeight: undefined, paddingVertical: 4, minHeight: 32, backgroundColor: 'transparent' },
   menuButton: { flexDirection: 'row', alignItems: 'center', gap: 4, minHeight: 44, paddingHorizontal: 8 },
   scrim: { flex: 1, backgroundColor: 'rgba(0,0,0,0.3)', justifyContent: 'center', padding: 24 },
-  menu: { borderRadius: 16, paddingVertical: 8, maxHeight: '80%' },
+  fill: { flex: 1 },
+  dialog: { borderRadius: 16, paddingVertical: 8, maxHeight: '80%' },
+  menu: { position: 'absolute', borderRadius: 26, paddingVertical: MENU_PADDING, elevation: 12, shadowOpacity: 0.18, shadowRadius: 24, shadowOffset: { width: 0, height: 8 } },
+  menuCheck: { width: 24, alignItems: 'center' },
   calendarMenu: { paddingHorizontal: 12 },
-  menuRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, minHeight: 48, gap: 8 },
+  menuRow: { flexDirection: 'row', alignItems: 'center', paddingLeft: 14, paddingRight: 18, minHeight: MENU_ROW, gap: 8 },
   datePill: { borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6 },
   wheels: { flexDirection: 'row', gap: 12, height: 180, marginTop: 8 },
   wheel: { flex: 1 },

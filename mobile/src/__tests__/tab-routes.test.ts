@@ -29,11 +29,19 @@ function exists(routeFile: string): boolean {
 describe('routes Swift pushes stay inside the tab navigator', () => {
   const PUSHED: { file: string; url: string; swift: string }[] = [
     { file: '(tabs)/(tasks)/project/[id]/index.tsx', url: '/project/[id]', swift: 'NavigationLink (ProjectsView.swift:50, 54)' },
-    { file: '(tabs)/today/schedule-check.tsx', url: '/today/schedule-check', swift: '.navigationDestination (RootView.swift:1190)' },
-    { file: '(tabs)/today/overdue.tsx', url: '/today/overdue', swift: '.navigationDestination (RootView.swift:1193)' },
-    { file: '(tabs)/today/weekly-summary.tsx', url: '/today/weekly-summary', swift: '.navigationDestination (RootView.swift:1196)' },
+    { file: '(tabs)/(today)/today/schedule-check.tsx', url: '/today/schedule-check', swift: '.navigationDestination (RootView.swift:1190)' },
+    { file: '(tabs)/(today)/today/overdue.tsx', url: '/today/overdue', swift: '.navigationDestination (RootView.swift:1193)' },
+    { file: '(tabs)/(today)/today/weekly-summary.tsx', url: '/today/weekly-summary', swift: '.navigationDestination (RootView.swift:1196)' },
     // Pushed from weekly-summary, which is itself pushed.
-    { file: '(tabs)/today/weekly-tasks.tsx', url: '/today/weekly-tasks', swift: 'NavigationLink (WeeklySummaryView.swift:104, 110)' },
+    { file: '(tabs)/(today)/today/weekly-tasks.tsx', url: '/today/weekly-tasks', swift: 'NavigationLink (WeeklySummaryView.swift:104, 110)' },
+    // Phase 11: pushed from the Quick Access tiles into Today's stack (TodayQuickAccess.swift:68, :72),
+    // and on from there, so the bar stays — UI-parity pass 2.
+    { file: '(tabs)/(today)/moments/index.tsx', url: '/moments', swift: 'NavigationLink (TodayQuickAccess.swift:68)' },
+    { file: '(tabs)/(today)/moments/manage.tsx', url: '/moments/manage', swift: '.navigationDestination (ImportantMomentsView.swift:301)' },
+    { file: '(tabs)/(today)/moments/review.tsx', url: '/moments/review', swift: 'NavigationLink (ImportantMomentsView.swift:109)' },
+    { file: '(tabs)/(today)/moments/wish.tsx', url: '/moments/wish', swift: 'NavigationLink (ImportantMomentsView.swift:274)' },
+    { file: '(tabs)/(today)/shopping/index.tsx', url: '/shopping', swift: 'NavigationLink (TodayQuickAccess.swift:72)' },
+    { file: '(tabs)/(today)/shopping/[id].tsx', url: '/shopping/[id]', swift: 'NavigationLink (ShoppingViews.swift:107)' },
   ];
 
   it.each(PUSHED)('$url is under (tabs) — Swift uses $swift', ({ file }) => {
@@ -46,7 +54,7 @@ describe('routes Swift pushes stay inside the tab navigator', () => {
   });
 
   it('serves the two tab roots at the URLs they had before', () => {
-    expect(urlFor('(tabs)/today/index.tsx')).toBe('/today');
+    expect(urlFor('(tabs)/(today)/today/index.tsx')).toBe('/today');
     expect(urlFor('(tabs)/(tasks)/tasks.tsx')).toBe('/tasks');
   });
 
@@ -73,15 +81,24 @@ describe('routes Swift pushes stay inside the tab navigator', () => {
     ['calendar/conflicts.tsx', '.sheet (CalendarView.swift:163)'],
     ['today/do-now.tsx', '.sheet (RootView.swift:1180)'],
     ['today/weather.tsx', '.sheet (RootView.swift:1337)'],
-    // Phase 11: Needs attention became a `[.medium, .large]` sheet (RootView.swift:1188-1191), and
-    // Reschedule all is a sheet over it (TodayAttentionSheet.swift:87-98). Both are form sheets.
-    ['today/attention.tsx', '.sheet (RootView.swift:1188)'],
-    ['today/reschedule-all.tsx', '.sheet (TodayAttentionSheet.swift:87)'],
+    // Phase 11: Needs attention is a `[.medium, .large]` sheet (RootView.swift:1188-1191), and
+    // Reschedule all is a sheet over it (TodayAttentionSheet.swift:87-98). Both are root form sheets.
+    ['attention.tsx', '.sheet (RootView.swift:1188)'],
+    ['reschedule-all.tsx', '.sheet (TodayAttentionSheet.swift:87)'],
   ])('%s is presented as a sheet in Swift, so it covers the bar — %s', (file) => {
     // do-now and weather moved with the Today stack but are declared `presentation: 'modal'`, which
     // covers the bar; everything else is a sibling of `(tabs)`.
-    const inTabs = exists(path.join('(tabs)', file));
+    const inTabs = exists(path.join('(tabs)', '(today)', file));
     expect(inTabs || exists(file)).toBe(true);
+  });
+
+  it('presents Needs attention and Reschedule all from the ROOT stack, so they cover the bar', () => {
+    expect(exists('attention.tsx')).toBe(true);
+    expect(exists('reschedule-all.tsx')).toBe(true);
+    expect(exists('(tabs)/(today)/today/attention.tsx')).toBe(false);
+    const root = fs.readFileSync(path.join(APP, '_layout.tsx'), 'utf8');
+    expect(root).toMatch(/name="attention" options=\{SHEET_OPTIONS\}/);
+    expect(root).toMatch(/name="reschedule-all" options=\{SHEET_OPTIONS\}/);
   });
 });
 

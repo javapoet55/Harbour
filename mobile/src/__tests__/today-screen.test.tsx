@@ -6,6 +6,7 @@ import type { Agenda, NexdoTask } from '../api/types';
 import { resetRevisions } from '../query/taskRevision';
 import type { ImportantMoment } from '../api/moments';
 import { momentsStore } from '../features/moments/store';
+import { shoppingStore } from '../features/shopping/store';
 import { useFocus } from '../store/focus';
 import { useSession } from '../store/session';
 
@@ -31,13 +32,16 @@ jest.mock('../api', () => ({
 
 // Phase 11: the moment count and the Quick Access statuses.
 const mockShopping = jest.fn();
-jest.mock('../api/shopping', () => ({ shoppingEndpoints: { list: (...args: unknown[]) => mockShopping(...args) } }));
+jest.mock('../api/shopping', () => ({
+  ...jest.requireActual('../api/shopping'),
+  shoppingApi: { lists: (...args: unknown[]) => mockShopping(...args) },
+}));
 
 // The weather chip calls open-meteo directly, not the Nexdo API.
 const mockFetch = jest.fn();
 global.fetch = mockFetch as unknown as typeof fetch;
 
-import Today from '../../app/(tabs)/today/index';
+import Today from '../../app/(tabs)/(today)/today/index';
 
 const ZONE = 'Asia/Kolkata';
 /** 2026-09-16 09:00 in Asia/Kolkata (a Wednesday). */
@@ -98,6 +102,7 @@ beforeEach(() => {
   mockIntelligence.mockRejectedValue(new Error('unavailable'));
   setMoments([]);
   mockShopping.mockResolvedValue({ lists: [] });
+  shoppingStore.getState().reset();
   jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
 });
 
@@ -427,7 +432,7 @@ describe('Today attention row', () => {
     await waitFor(() => expect(screen.getByTestId('today-attention-summary')).toBeTruthy());
 
     await fireEvent.press(screen.getByTestId('today-attention-summary'));
-    expect(mockPush).toHaveBeenCalledWith('/today/attention');
+    expect(mockPush).toHaveBeenCalledWith('/attention');
   });
 
   it('uses the server timeline as the Today schedule once intelligence loads', async () => {
@@ -496,13 +501,14 @@ describe('Today navigation to the Run B screens', () => {
     await waitFor(() => expect(screen.getByTestId('today-attention-chip')).toBeTruthy());
 
     await fireEvent.press(screen.getByTestId('today-attention-chip'));
-    expect(mockPush).toHaveBeenCalledWith('/today/attention');
+    expect(mockPush).toHaveBeenCalledWith('/attention');
   });
 });
 
 /**
  * Phase 11: the moment count and the Moments status come from Run B's Moments store (the
- * `ImportantMomentsStore` port, activated by the root layout), and Shopping from `/api/shopping`.
+ * `ImportantMomentsStore` port, activated by the root layout), and Shopping from Run C's
+ * `shoppingStore` — the one store My Lists uses, as Swift shares one `ShoppingStore`.
  */
 describe('Today moments and shopping', () => {
   const moment = (id: string, nextOccurrence: string, extra: Partial<ImportantMoment> = {}): ImportantMoment => ({
@@ -557,6 +563,17 @@ describe('Today moments and shopping', () => {
     await renderToday();
 
     await waitFor(() => expect(screen.getByTestId('quick-access-shopping-subtitle').props.children).toBe('2 items · Fri'));
+  });
+
+  it('refreshes the shared store on mount, so a sign-in reset cannot leave it empty (pass 2)', async () => {
+    const item = { id: 'a', name: 'a', category: 'Other', quantity: '1', size: '', notes: '', checked: false };
+    mockShopping.mockResolvedValue({
+      lists: [{ id: 'l', title: 'L', date: '2026-09-18', timeZone: ZONE, weekly: false, completedAt: null, revision: 0, items: [item] }],
+    });
+    await renderToday();
+
+    await waitFor(() => expect(screen.getByTestId('quick-access-shopping-subtitle').props.children).toBe('1 items · Fri'));
+    expect(shoppingStore.getState().lists).toHaveLength(1);
   });
 
   it('reads "View lists" when the shopping refresh fails', async () => {

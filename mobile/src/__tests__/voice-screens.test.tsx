@@ -23,7 +23,7 @@ const mockNextAction = jest.fn();
 const mockProtectedTime = jest.fn();
 const mockRespond = jest.fn();
 const mockDismissNext = jest.fn();
-jest.mock('../api/shopping', () => ({ shoppingEndpoints: { list: async () => ({ lists: [] }) } }));
+jest.mock('../api/shopping', () => ({ ...jest.requireActual('../api/shopping'), shoppingApi: { lists: async () => ({ lists: [] }) } }));
 jest.mock('../api', () => ({
   ...jest.requireActual('../api'),
   endpoints: {
@@ -44,7 +44,7 @@ jest.mock('../voice/useVoiceSession', () => ({
   START_FAILED: 'Couldn’t start voice. Close this screen and try again.',
 }));
 
-import Today from '../../app/(tabs)/today/index';
+import Today from '../../app/(tabs)/(today)/today/index';
 import { AddTaskByVoiceView } from '../components/AddTaskByVoiceView';
 
 const ZONE = 'America/Los_Angeles';
