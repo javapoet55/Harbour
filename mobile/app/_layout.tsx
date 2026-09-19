@@ -10,6 +10,7 @@ import { useActionNotifications } from '../src/actions/useActionNotifications';
 import { onSignedOut } from '../src/api';
 import { RootErrorBoundary } from '../src/components/RootErrorBoundary';
 import { useMomentsLifecycle } from '../src/features/moments/useMomentsLifecycle';
+import { useShoppingLifecycle } from '../src/features/shopping/useShoppingLifecycle';
 import { createQueryClient } from '../src/query/client';
 import { queryKeys } from '../src/query/keys';
 import { useMe } from '../src/query/useMe';
@@ -148,6 +149,9 @@ export function RootNavigator() {
   // (ios/App/RootView.swift:57-72).
   useMomentsLifecycle(profile?.id);
 
+  // Shopping Lists: the lists belong to the signed-in account, so a different account starts empty.
+  useShoppingLifecycle(profile?.id);
+
   return (
     <>
       <StatusBar style={theme.scheme === 'dark' ? 'light' : 'dark'} />
@@ -164,6 +168,7 @@ export function RootNavigator() {
           <Stack.Screen name="action" />
           {/* Important Moments. Outside the tab group, like `action`: a moment notification opens it over any tab. */}
           <Stack.Screen name="moments" />
+          <Stack.Screen name="shopping" />
         </Stack.Protected>
       </Stack>
     </>

@@ -40,12 +40,14 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     // TODO(phase0-decision): EAS and prebuild need an Android package name; this mirrors the iOS bundle ID.
     package: 'com.pinslots.nexdo',
     // Permissions the Swift app has no equivalent for, removed from the merged manifest.
-    // - CAMERA and SYSTEM_ALERT_WINDOW: added by the WebRTC plugin for video calling; voice uses neither.
+    // - SYSTEM_ALERT_WINDOW: added by the WebRTC plugin for video calling; voice never uses it.
+    //   (CAMERA was blocked here until Phase 11 Run C: the Shopping item editor's "Take a Picture"
+    //   needs it — expo-image-picker's `launchCameraAsync` refuses to open without the permission on
+    //   Android — and Swift asks for the camera there too, ShoppingItemEditor.swift:81-84.)
     // - WRITE_CONTACTS: added by expo-contacts, which also offers contact creation. Nexdo only READS
     //   contacts — `AppleTaskActionContacts` (ios/App/TaskActionContacts.swift:18-46) opens the store
     //   read-only and never writes — so the write permission is dropped.
     blockedPermissions: [
-      'android.permission.CAMERA',
       'android.permission.SYSTEM_ALERT_WINDOW',
       'android.permission.WRITE_CONTACTS',
       // - WRITE_CALENDAR: added by expo-calendar. Important Moments only READS the calendar the person
@@ -163,9 +165,10 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       // Both permissions are therefore switched OFF, so the generated Info.plist and
       // AndroidManifest.xml stay as close to the Swift app as the plugin allows.
       // `launchImageLibraryAsync` uses the system photo picker, which needs neither.
-      // Swift offers NO camera option, so `cameraPermission` is off as well.
+      // Phase 11 Run C: the Shopping item editor DOES offer "Take a Picture", so the camera string is
+      // now the Swift target's, verbatim (ios/Nexdo.xcodeproj/project.pbxproj:320).
       'expo-image-picker',
-      { photosPermission: false, cameraPermission: false },
+      { photosPermission: false, cameraPermission: 'Nexdo uses the camera when you choose to attach a photo to a shopping item.' },
     ],
     [
       // Phase 0 voice PoC. Needs a development build; Expo Go cannot load react-native-webrtc.
@@ -173,8 +176,9 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       '@config-plugins/react-native-webrtc',
       {
         microphonePermission: 'Nexdo uses the microphone for voice conversations with your assistant.',
-        // TODO(phase0-decision): the plugin always sets a camera usage string; voice never opens the camera.
-        cameraPermission: 'Nexdo does not use the camera for voice conversations.',
+        // The plugin always sets a camera usage string; it must match expo-image-picker's, or the later
+        // plugin overwrites the shopping photo string on iOS. Voice never opens the camera.
+        cameraPermission: 'Nexdo uses the camera when you choose to attach a photo to a shopping item.',
       },
     ],
   ],
