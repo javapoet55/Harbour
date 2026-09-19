@@ -1,3 +1,4 @@
+import { nexdoPersonality } from "@/server/assistant-personality";
 import { requireUser } from '@/server/auth';
 import { jsonError } from '@/lib/http';
 
@@ -18,7 +19,7 @@ export async function POST(req: Request) {
       headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         model: 'gpt-4o-mini-tts', voice: 'coral', input: body.text.trim(),
-        instructions: 'Speak warmly and clearly at a natural conversational pace.',
+        instructions: nexdoPersonality,
         response_format: 'mp3',
       }),
       signal: AbortSignal.any([req.signal, AbortSignal.timeout(45000)]),

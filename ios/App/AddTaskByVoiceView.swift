@@ -45,6 +45,10 @@ struct AddTaskByVoiceView: View {
                         Text(starting ? "Connecting…" : voice.status).font(.title2.bold()).foregroundStyle(Color.nexdoIndigo)
                             .accessibilityAddTraits(.updatesFrequently)
                         if let error = startupError ?? voice.error { Text(error).foregroundStyle(.red).multilineTextAlignment(.center) }
+                        if startupError != nil {
+                            Button("Try again") { Task { await start() } }
+                                .buttonStyle(.borderedProminent).disabled(starting)
+                        }
                         if !voice.transcript.isEmpty { Text(voice.transcript).frame(maxWidth: .infinity, alignment: .leading).padding().background(.thinMaterial, in: RoundedRectangle(cornerRadius: 18)) }
                         if !voice.reply.isEmpty { Text(voice.reply).multilineTextAlignment(.center).foregroundStyle(Color.nexdoSecondary) }
                         if !voice.sessionCreatedTasks.isEmpty {
@@ -121,13 +125,17 @@ struct AddTaskByVoiceView: View {
     }
     private func start() async {
         guard !starting, voice.phase == .idle else { return }
-        starting = true; defer { starting = false }
+        starting = true; startupError = nil; defer { starting = false }
         executor.attach(model)
         do {
             let credential = try await model.voiceTaskSession(calendarOnly: calendarOnly)
             try Task.checkCancellation()
             voice.start(credential: credential)
-        } catch { startupError = "Couldn’t start voice. Close this screen and try again." }
+        } catch is CancellationError {
+            // Dismissing the screen cancels startup; it is not a connection failure.
+        } catch {
+            startupError = error.localizedDescription
+        }
     }
     private func endBackgroundTask() {
         if backgroundTask != .invalid { UIApplication.shared.endBackgroundTask(backgroundTask); backgroundTask = .invalid }

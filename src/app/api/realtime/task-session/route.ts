@@ -23,7 +23,16 @@ export async function POST(req: Request) {
         session,
       }),
     });
-    if (!response.ok) return Response.json({ error: 'Couldn’t connect to voice task creation. Please try again later.' }, { status: 502, headers });
+    if (!response.ok) {
+      // Never log response bodies, prompts, credentials, or user data.
+      console.error('Voice session rejected', { status: response.status });
+      const error = response.status === 429
+        ? 'Voice is temporarily at capacity. Please try again shortly.'
+        : response.status === 400
+          ? 'Voice setup could not be completed. Please try again after the service is updated.'
+          : 'Couldn’t connect to voice. Please try again shortly.';
+      return Response.json({ error }, { status: 502, headers });
+    }
     const result = await response.json();
     if (typeof result.value !== 'string' || typeof result.expires_at !== 'number') throw new Error('Invalid session');
     return Response.json({ value: result.value, expiresAt: result.expires_at, model }, { headers });

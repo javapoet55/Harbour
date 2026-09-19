@@ -1,3 +1,4 @@
+import { withNexdoPersonality } from "./assistant-personality";
 import { prisma } from './db';
 import { moduleTools, moduleInstructions, executeModuleTool, moduleSchemas } from './assistant-modules';
 import type { AssistantTurn } from './assistant';
@@ -22,7 +23,7 @@ export async function moduleConversation(userId:string,transcript:string,confirm
  const user=await prisma.user.findUniqueOrThrow({where:{id:userId},select:{timeZone:true}});
  const input:unknown[]=[{role:'user',content:JSON.stringify({request:transcript,previous:previous?JSON.parse(previous.payloadJson):null,now:new Date().toISOString(),timeZone:user.timeZone})}];
  for(let step=0;step<5;step++){
-  const response=await fetch('https://api.openai.com/v1/responses',{method:'POST',headers:{Authorization:`Bearer ${process.env.OPENAI_API_KEY}`,'Content-Type':'application/json'},body:JSON.stringify({model:process.env.OPENAI_MODEL||'gpt-5.4-mini',store:false,instructions:moduleInstructions+' Use tools for all reads and writes. Changes are proposals until the user confirms in the UI. Ask for missing information. Answer concisely. Do not claim a mutation succeeded before execution. Handle one mutation at a time. For unrelated requests ask the user to start a new request.',tools:moduleTools,parallel_tool_calls:false,input,max_output_tokens:1600}),signal:AbortSignal.timeout(20000)});
+  const response=await fetch('https://api.openai.com/v1/responses',{method:'POST',headers:{Authorization:`Bearer ${process.env.OPENAI_API_KEY}`,'Content-Type':'application/json'},body:JSON.stringify({model:process.env.OPENAI_MODEL||'gpt-5.4-mini',store:false,instructions:withNexdoPersonality(moduleInstructions+' Use tools for all reads and writes. Changes are proposals until the user confirms in the UI. Ask for missing information. Answer concisely. Do not claim a mutation succeeded before execution. Handle one mutation at a time. For unrelated requests ask the user to start a new request.'),tools:moduleTools,parallel_tool_calls:false,input,max_output_tokens:1600}),signal:AbortSignal.timeout(20000)});
   if(!response.ok)throw new Error('OpenAI module assistant unavailable');
   const payload=await response.json();
   const output=payload.output||[];input.push(...output);

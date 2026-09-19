@@ -1,3 +1,4 @@
+import { withNexdoPersonality } from "./assistant-personality";
 import { moduleConversation } from './module-conversation';
 import { scheduleContextVersion } from './replanner';
 import { creationWarnings, type AvailabilityContext } from '@/lib/availability';
@@ -125,7 +126,7 @@ Handle every requested operation in actions, not just the first.
 Capture task energy as LOW, MEDIUM, or HIGH and dependencies in depends_on_ids when expressed.
 If an essential target, destination, date, or meaning is genuinely ambiguous, set needs_clarification and ask one concise question; do not emit actions that depend on the missing fact.
 For read-only questions, answer only from context and use a NOOP action.
-Keep the spoken response to one sentence.
+Keep the spoken response to one or two sentences by default; expand only when useful.
 For response_sections, use 2 to 5 short titled groups with 1 to 6 grounded items each.
 Each item must be one short line, no line breaks, and no markdown formatting.
 For non-clarification responses, include 2 to 5 sections; for clarification, response_sections must be an empty array.
@@ -140,7 +141,7 @@ Material writes will be validated and confirmed by the application.`;
     method: 'POST',
     headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      model: process.env.OPENAI_MODEL || 'gpt-5.4-mini', instructions,
+      model: process.env.OPENAI_MODEL || 'gpt-5.4-mini', instructions: withNexdoPersonality(instructions),
       input: `USER REQUEST:\n${transcript}\n\nCURRENT USER CONTEXT:\n${JSON.stringify(context)}`,
       text: { format: { type: 'json_schema', name: 'harbour_agent_plan', strict: true, schema } },
       reasoning: { effort: 'low' }, max_output_tokens: 3000, store: false,

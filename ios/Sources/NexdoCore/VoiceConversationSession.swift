@@ -255,6 +255,9 @@ public extension VoiceRealtimeTransport {
             transcript = ""; reply = ""; setPhase(.userSpeaking)
         case "input_audio_buffer.speech_stopped":
             userSpeaking = false; if closingReason == nil { setPhase(.processing) }
+            // If commit arrived first, release the queued response now. Never
+            // wait for the independent transcription stream to finish.
+            if needsResponse { settle() }
         case "input_audio_buffer.committed":
             guard closingReason == nil, !muted else { return }
             if let itemID = event["item_id"] as? String, !committedItems.insert(itemID).inserted { return }

@@ -2,6 +2,34 @@ import Foundation
 import Testing
 @testable import NexdoCore
 
+@Test @MainActor func voiceRespondsBeforeTranscriptCompletes() async {
+    let h = VoiceHarness(); await h.ready()
+    h.send(["type": "input_audio_buffer.speech_started"])
+    h.send(["type": "input_audio_buffer.speech_stopped"])
+    h.send(["type": "input_audio_buffer.committed", "item_id": "turn-1"])
+    #expect(h.transport.sends.filter { $0["type"] as? String == "response.create" }.count == 1)
+    #expect(h.session.transcript.isEmpty)
+    h.send(["type": "response.created", "response": ["id": "answer"]])
+    h.send(["type": "output_audio_buffer.started", "response_id": "answer"])
+    #expect(h.session.phase == .assistantSpeaking)
+    h.send(["type": "conversation.item.input_audio_transcription.completed", "transcript": "What is next?"])
+    #expect(h.session.transcript == "What is next?")
+    #expect(h.session.phase == .assistantSpeaking)
+    #expect(h.transport.sends.filter { $0["type"] as? String == "response.create" }.count == 1)
+}
+
+@Test @MainActor func committedSpeechDoesNotStallWhenStopArrivesLater() async {
+    let h = VoiceHarness(); await h.ready()
+    h.send(["type": "input_audio_buffer.speech_started"])
+    h.send(["type": "input_audio_buffer.committed", "item_id": "turn-1"])
+    #expect(!h.transport.sends.contains { $0["type"] as? String == "response.create" })
+    h.send(["type": "input_audio_buffer.speech_stopped"])
+    h.send(["type": "input_audio_buffer.committed", "item_id": "turn-1"])
+    h.send(["type": "conversation.item.input_audio_transcription.failed", "item_id": "turn-1"])
+    #expect(h.transport.sends.filter { $0["type"] as? String == "response.create" }.count == 1)
+    #expect(!h.transport.closed)
+}
+
 @MainActor private final class MockVoiceTransport: VoiceRealtimeTransport {
     var onEvent: ((Data) -> Void)?; var onFailure: (() -> Void)?
     var sends: [[String: Any]] = []; var connects = 0; var closed = false; var silenced = 0; var muted = false

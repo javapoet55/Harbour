@@ -1,6 +1,7 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import { requireUser } from '@/server/auth';
 import { POST } from './route';
+import { nexdoPersonality } from '@/server/assistant-personality';
 
 vi.mock('@/server/auth', () => ({ requireUser: vi.fn() }));
 afterEach(() => { vi.unstubAllGlobals(); vi.unstubAllEnvs(); vi.resetAllMocks(); });
@@ -40,6 +41,7 @@ it('returns private MP3 audio and sends the key only to OpenAI', async () => {
   expect(url).toBe('https://api.openai.com/v1/audio/speech');
   expect(options.headers.Authorization).toBe('Bearer test-secret');
   expect(JSON.parse(options.body)).toMatchObject({ model: 'gpt-4o-mini-tts', voice: 'coral' });
+  expect(JSON.parse(options.body).instructions).toBe(nexdoPersonality);
 });
 
 it('handles missing credentials and redacts provider errors', async () => {
