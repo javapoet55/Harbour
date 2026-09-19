@@ -1,5 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { HeaderHeightContext } from 'expo-router/build/react-navigation/elements';
 import { useEffect, useState, type ComponentProps, type ReactNode } from 'react';
 import {
   AccessibilityInfo,
@@ -18,6 +19,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { GlassCard } from '../../components/GlassCard';
+import { GlassCapsule } from '../../components/PushedHeader';
 import { withAlpha } from '../../components/SignInBackdrop';
 import { Text } from '../../components/Text';
 import { brand, linearGradientStops, useTheme } from '../../theme';
@@ -289,6 +291,7 @@ export function BorderedButton({
   prominent = false,
   disabled = false,
   full = false,
+  centered = false,
   testID,
   accessibilityLabel,
 }: {
@@ -298,6 +301,8 @@ export function BorderedButton({
   prominent?: boolean;
   disabled?: boolean;
   full?: boolean;
+  /** In SwiftUI's default centred `VStack` (Wish details' actions). */
+  centered?: boolean;
   testID?: string;
   accessibilityLabel?: string;
 }) {
@@ -314,11 +319,13 @@ export function BorderedButton({
         styles.bordered,
         { backgroundColor: prominent ? brand.nexdoIndigo : withAlpha(brand.nexdoIndigo, 0.15) },
         full && styles.borderedFull,
+        centered && styles.borderedCentered,
         disabled && styles.disabledSoft,
       ]}
     >
       {icon ? <Ionicons name={icon} size={16} color={color} /> : null}
-      <Text style={{ fontSize: 17, lineHeight: 22, color, fontWeight: prominent ? '600' : '400' }}>{title}</Text>
+      {/* `.borderedProminent` keeps the body weight on iOS 26 (`wish-details-scrolled`). */}
+      <Text style={{ fontSize: 17, lineHeight: 22, color }}>{title}</Text>
     </Pressable>
   );
 }
@@ -348,7 +355,8 @@ export function IconLabel({ icon, title, style, color, size = 17 }: { icon: Icon
   const theme = useTheme();
   return (
     <View style={styles.label}>
-      <Ionicons name={icon} size={size} color={color ?? brand.nexdoIndigo} />
+      {/* A plain SwiftUI `Label` draws its icon in the primary colour, not the tint (`review-wish-*`). */}
+      <Ionicons name={icon} size={size} color={color ?? theme.colors.label} />
       <Text style={[{ fontSize: 17, lineHeight: 22, color: color ?? theme.colors.label, flexShrink: 1 }, style]}>{title}</Text>
     </View>
   );
@@ -366,6 +374,7 @@ export function MomentSheet({
   right,
   children,
   testID,
+  plain = false,
 }: {
   visible: boolean;
   title: string;
@@ -374,13 +383,27 @@ export function MomentSheet({
   right?: { title: string; onPress: () => void; disabled?: boolean; testID?: string; bold?: boolean };
   children: ReactNode;
   testID?: string;
+  /** A sheet whose body is a plain `ScrollView`, not a `Form`: iOS draws it on the system background. */
+  plain?: boolean;
 }) {
-  const theme = useTheme();
+  const theme = useTheme({ elevated: true });
   const insets = useSafeAreaInsets();
-  const background = theme.colors.groupedBackgroundElevated;
+  const background = plain ? theme.colors.background : theme.colors.groupedBackgroundElevated;
+  // iOS 26's `.large` sheet (`moment-manage-schedule-confirm`): its top edge just below the status bar,
+  // 38pt corners, over the page dimmed behind it. Android has no page sheet, so a transparent modal
+  // draws the same shape (UI-parity pass 2).
+  const top = Platform.OS === 'android' ? insets.top + 8 : 0;
   return (
-    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onRequestClose}>
-      <View style={[styles.sheet, { backgroundColor: background, paddingTop: Platform.OS === 'android' ? insets.top : 0 }]} testID={testID}>
+    <Modal
+      animationType="slide"
+      onRequestClose={onRequestClose}
+      presentationStyle={Platform.OS === 'ios' ? 'pageSheet' : undefined}
+      statusBarTranslucent
+      transparent={Platform.OS === 'android'}
+      visible={visible}
+    >
+      {Platform.OS === 'android' ? <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.sheetDim]} /> : null}
+      <View style={[styles.sheet, { backgroundColor: background, marginTop: top }, Platform.OS === 'android' && styles.sheetShape]} testID={testID}>
         <View style={styles.sheetBar}>
           <View style={styles.sheetSide}>
             {left ? <SheetButton {...left} /> : null}
@@ -390,7 +413,9 @@ export function MomentSheet({
           </Text>
           <View style={[styles.sheetSide, { alignItems: 'flex-end' }]}>{right ? <SheetButton {...right} /> : null}</View>
         </View>
-        {children}
+        {/* A sheet has no transparent bar above it: a backdrop inside must not reach up under the
+            page's bar (it would cover this sheet's own bar). */}
+        <HeaderHeightContext.Provider value={0}>{children}</HeaderHeightContext.Provider>
       </View>
     </Modal>
   );
@@ -408,7 +433,10 @@ function SheetButton({ title, onPress, disabled = false, testID, bold = false }:
       hitSlop={8}
       testID={testID}
     >
-      <Text style={{ fontSize: 17, lineHeight: 22, color: disabled ? theme.colors.placeholder : theme.colors.tint, fontWeight: bold ? '600' : '400' }}>{title}</Text>
+      {/* A toolbar button on iOS 26 sits on a glass capsule. */}
+      <GlassCapsule>
+        <Text style={{ fontSize: 17, lineHeight: 22, color: disabled ? theme.colors.placeholder : theme.colors.tint, fontWeight: bold ? '600' : '400' }}>{title}</Text>
+      </GlassCapsule>
     </Pressable>
   );
 }
@@ -433,7 +461,9 @@ export function KeyboardDoneBar({ onDone, testID = 'keyboard-done' }: { onDone?:
   }, []);
   if (height === null) return null;
   return (
-    <View style={[styles.keyboardBar, { bottom: Platform.OS === 'android' ? height : 0, backgroundColor: theme.colors.surface, borderTopColor: theme.colors.listSeparator }]}>
+    // iOS 26: no bar, just a glass "Done" capsule floating above the keyboard's trailing edge
+    // (`moment-create-error-empty-title`). The row passes touches through except on the capsule.
+    <View pointerEvents="box-none" style={[styles.keyboardBar, { bottom: Platform.OS === 'android' ? height : 0 }]}>
       <Pressable
         accessibilityRole="button"
         accessibilityLabel="Done"
@@ -444,7 +474,9 @@ export function KeyboardDoneBar({ onDone, testID = 'keyboard-done' }: { onDone?:
         hitSlop={8}
         testID={testID}
       >
-        <Text style={[headline, { color: theme.colors.tint }]}>Done</Text>
+        <GlassCapsule>
+          <Text style={{ fontSize: 17, lineHeight: 22, color: theme.colors.tint }}>Done</Text>
+        </GlassCapsule>
       </Pressable>
     </View>
   );
@@ -530,7 +562,7 @@ export function MomentScroll({ children, contentContainerStyle, testID }: { chil
 }
 
 const styles = StyleSheet.create({
-  cardShell: { borderRadius: 22, borderWidth: StyleSheet.hairlineWidth, overflow: 'hidden' },
+  cardShell: { borderRadius: 22, borderWidth: 1, overflow: 'hidden' },
   cardContent: { padding: 18, gap: 14, alignItems: 'stretch' },
   primary: { minHeight: 54, borderRadius: 18, justifyContent: 'center', paddingHorizontal: 16 },
   primaryLabel: { color: '#FFFFFF', alignSelf: 'stretch', textAlign: 'center' },
@@ -549,10 +581,13 @@ const styles = StyleSheet.create({
   tintButton: { flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 44 },
   bordered: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderRadius: 999, paddingHorizontal: 14, paddingVertical: 8, alignSelf: 'flex-start' },
   borderedFull: { alignSelf: 'stretch', minHeight: 48 },
+  borderedCentered: { alignSelf: 'center' },
   label: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   sheet: { flex: 1 },
-  sheetBar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, minHeight: 56 },
+  sheetShape: { borderTopLeftRadius: 38, borderTopRightRadius: 38, overflow: 'hidden' },
+  sheetDim: { backgroundColor: 'rgba(0, 0, 0, 0.25)' },
+  sheetBar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingTop: 12, minHeight: 64 },
   sheetSide: { width: 90 },
-  keyboardBar: { position: 'absolute', left: 0, right: 0, height: 44, flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', paddingHorizontal: 16, borderTopWidth: StyleSheet.hairlineWidth },
+  keyboardBar: { position: 'absolute', left: 0, right: 0, height: 60, flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', paddingHorizontal: 12 },
   confetti: { position: 'absolute', left: -4, top: -6, width: 8, borderRadius: 2 },
 });

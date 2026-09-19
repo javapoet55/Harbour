@@ -138,7 +138,8 @@ export default function ImportantMomentsScreen() {
             onChangeText={setSearch}
             placeholder="Search moments"
             placeholderTextColor={theme.colors.placeholder}
-            style={[styles.search, { color: theme.colors.label, backgroundColor: theme.colors.surface, borderColor: theme.colors.separator }]}
+            // `.textFieldStyle(.roundedBorder)` fills with the system background: white, and BLACK in dark.
+            style={[styles.search, { color: theme.colors.label, backgroundColor: theme.colors.background, borderColor: theme.colors.separator }]}
             testID="moments-search"
             value={search}
           />
@@ -236,7 +237,7 @@ export default function ImportantMomentsScreen() {
           </>
         ) : null}
         {loading ? <ActivityIndicator /> : null}
-        {lastSynced !== null ? <Text style={[caption, { color: theme.colors.secondaryLabel }]}>{`Updated ${shortTime(lastSynced)}`}</Text> : null}
+        {lastSynced !== null ? <Text style={[caption, styles.centredText, { color: theme.colors.secondaryLabel }]}>{`Updated ${shortTime(lastSynced)}`}</Text> : null}
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Add Moment"
@@ -397,9 +398,12 @@ const styles = StyleSheet.create({
   link: { flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start' },
   reviewButtonWrap: { alignSelf: 'flex-start' },
   reviewButton: { paddingHorizontal: 22, paddingVertical: 10, borderRadius: 12 },
-  // `ContentUnavailableView` insets its text further than the list: 295pt wide on a 402pt screen.
-  empty: { alignItems: 'center', gap: 8, paddingVertical: 24, paddingHorizontal: 35 },
+  // `ContentUnavailableView` insets its text further than the list: about 295pt wide on a 402pt screen.
+  empty: { alignItems: 'center', gap: 8, paddingVertical: 24, paddingHorizontal: 26 },
   centredRow: { alignItems: 'center' },
+  // In SwiftUI's centred `VStack`.
+  centredText: { alignSelf: 'center' },
   center: { textAlign: 'center' },
-  addButton: { minHeight: 52, borderRadius: 999, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
+  // `.frame(minHeight: 52)` inside `.borderedProminent`, which adds ~6pt above and below: 64 in all.
+  addButton: { minHeight: 64, borderRadius: 999, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
 });

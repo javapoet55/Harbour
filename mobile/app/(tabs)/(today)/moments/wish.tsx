@@ -91,6 +91,7 @@ export default function WishDetailsScreen() {
         {planEditable(current) ? (
           <>
             <BorderedButton
+              centered
               title="Edit Schedule"
               onPress={() => {
                 const now = Date.now();
@@ -101,7 +102,7 @@ export default function WishDetailsScreen() {
               testID="wish-edit-schedule"
             />
             {current.status === 'AWAITING_CONFIRMATION' && current.channel === 'messages' ? (
-              <BorderedButton prominent title="Review & Open Messages" onPress={() => void reviewAndOpen()} testID="wish-open-messages" />
+              <BorderedButton centered prominent title="Review & Open Messages" onPress={() => void reviewAndOpen()} testID="wish-open-messages" />
             ) : null}
             {current.channel === 'email' ? (
               <Pressable accessibilityRole="button" onPress={() => setSendEmailNow(true)} testID="wish-send-now">
@@ -190,5 +191,6 @@ const styles = StyleSheet.create({
   bold: { fontWeight: '700' },
   divider: { height: StyleSheet.hairlineWidth },
   body: { marginTop: 8 },
-  sheetTitle: { marginHorizontal: 16, marginTop: -20 },
+  // Just under the sheet's bar (FormScroll's top padding is 3 since UI-parity pass 2).
+  sheetTitle: { marginHorizontal: 16, marginTop: 4 },
 });

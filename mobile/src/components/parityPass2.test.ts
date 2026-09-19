@@ -23,6 +23,11 @@ describe('menuPlacement (SwiftUI menu popover, `moments-filter-menu`)', () => {
     expect(place.left).toBe(20);
   });
 
+  it('leading-aligns a button wider than the menu, even on the right', () => {
+    const place = menuPlacement({ x: 36, y: 470, width: 312, height: 44 }, 3, screen.width, screen.height);
+    expect(place.left).toBe(36);
+  });
+
   it('never leaves the screen', () => {
     const place = menuPlacement({ x: 360, y: 100, width: 20, height: 44 }, 2, screen.width, screen.height);
     expect(place.left + place.width).toBeLessThanOrEqual(screen.width - 12);

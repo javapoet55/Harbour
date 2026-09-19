@@ -1,8 +1,9 @@
 import { useRef, useState } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, Switch, TextInput, View } from 'react-native';
+import { Modal, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 
 import { formatClock, parseClock } from '../lib/profileSettings';
 import { brand, useTheme } from '../theme';
+import { IOSSwitch } from './IOSSwitch';
 import { withAlpha } from './SignInBackdrop';
 import { TaskSymbol } from './TaskSymbol';
 import { Text } from './Text';
@@ -105,12 +106,10 @@ export function SettingsToggle({
   return (
     <View style={styles.row}>
       <Text style={[theme.typography.body, styles.grow, { color: theme.colors.label }]}>{label}</Text>
-      <Switch
+      <IOSSwitch
         accessibilityLabel={label}
         onValueChange={onValueChange}
         testID={testID}
-        thumbColor="#FFFFFF"
-        trackColor={{ false: theme.colors.separator, true: theme.colors.tint }}
         value={value}
       />
     </View>

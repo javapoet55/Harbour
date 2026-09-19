@@ -113,7 +113,7 @@ export default function ReviewWishScreen() {
               onChangeText={setPersonalContext}
               placeholder="Personal context (optional)"
               placeholderTextColor={theme.colors.placeholder}
-              style={[styles.rounded, { color: theme.colors.label, backgroundColor: theme.colors.surface, borderColor: theme.colors.separator }]}
+              style={[styles.rounded, { color: theme.colors.label, backgroundColor: theme.colors.background, borderColor: theme.colors.separator }]}
               testID="review-context"
               value={personalContext}
             />
