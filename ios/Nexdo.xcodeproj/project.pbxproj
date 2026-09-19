@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		10F35F4F304E3F3500D2D029 /* Media.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 10F35F4E304E3F3500D2D029 /* Media.xcassets */; };
 		B00000000000000000000001 /* WebRTC in Frameworks */ = {isa = PBXBuildFile; productRef = B00000000000000000000002 /* WebRTC */; };
+		F10000000000000000000001 = {isa = PBXBuildFile; productRef = F10000000000000000000002; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -40,6 +41,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				B00000000000000000000001 /* WebRTC in Frameworks */,
+				F10000000000000000000001 /* FirebaseAnalytics in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -96,6 +98,7 @@
 			name = Nexdo;
 			packageProductDependencies = (
 				B00000000000000000000002 /* WebRTC */,
+				F10000000000000000000002 /* FirebaseAnalytics */,
 			);
 			productName = Nexdo;
 			productReference = A00000000000000000000012 /* Nexdo: AI Daily Planner.app */;
@@ -152,6 +155,7 @@
 			mainGroup = A00000000000000000000004;
 			packageReferences = (
 				B00000000000000000000003 /* XCRemoteSwiftPackageReference "WebRTC" */,
+				F10000000000000000000003 /* Firebase */,
 			);
 			productRefGroup = A00000000000000000000005 /* Products */;
 			projectDirPath = "";
@@ -441,6 +445,7 @@
 				version = 153.0.0;
 			};
 		};
+		F10000000000000000000003 = {isa = XCRemoteSwiftPackageReference; repositoryURL = "https://github.com/firebase/firebase-ios-sdk.git"; requirement = {kind = exactVersion; version = 12.19.2; }; };
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -449,6 +454,7 @@
 			package = B00000000000000000000003 /* XCRemoteSwiftPackageReference "WebRTC" */;
 			productName = WebRTC;
 		};
+		F10000000000000000000002 = {isa = XCSwiftPackageProductDependency; package = F10000000000000000000003; productName = FirebaseAnalytics; };
 /* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = A00000000000000000000001 /* Project object */;

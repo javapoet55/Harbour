@@ -2,6 +2,7 @@ import SwiftUI
 
 @main
 struct NexdoApp: App {
+    init() { NexdoAnalytics.configureIfAvailable() }
     @UIApplicationDelegateAdaptor(TaskActionAppDelegate.self) private var actionDelegate
     @AppStorage(AppAppearance.storageKey) private var appearance: AppAppearance = .system
     var body: some Scene {
