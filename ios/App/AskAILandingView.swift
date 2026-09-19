@@ -11,19 +11,19 @@ struct AskAILandingView: View {
     let ask: (String) -> Void
     let voice: () -> Void
     let close: () -> Void
-    @FocusState private var typing: Bool
+    @FocusState.Binding var typing: Bool
     @State private var destination: Destination?
     enum Destination: String, Identifiable { case shopping, moments; var id: String { rawValue } }
 
     private let cards: [(String, String, String, Color)] = [
-        ("My Full Day Briefing", "Priorities, deadlines, conflicts, and your next move", "calendar", .blue),
-        ("Top 3 Focus Tasks", "Ranked by urgency, effort, and impact", "scope", .green),
-        ("Deadlines & Risks", "See what’s due in the next 5 days", "exclamationmark.triangle", .orange),
-        ("Find Time", "Show available time around your commitments", "clock", .purple),
-        ("Plan Tomorrow", "Check if tomorrow has enough capacity", "sunrise", .pink),
-        ("Shopping List", "Manage, add items, shop or send to a store", "cart", .teal),
-        ("Important Moments", "Birthdays, festivals and special occasions", "gift", .orange),
-        ("Ask Anything", "Get answers, ideas, or help with planning", "lightbulb", .cyan)
+        ("My Full Day Briefing", "Priorities and\nyour next move", "calendar", .blue),
+        ("Top 3 Focus Tasks", "Urgency, effort\nand impact", "scope", .green),
+        ("Deadlines & Risks", "Due in the\nnext 5 days", "exclamationmark.triangle", .orange),
+        ("Find Time", "Free time around\nyour plans", "clock", .purple),
+        ("Plan Tomorrow", "Check tomorrow’s\navailable time", "sunrise", .pink),
+        ("Shopping List", "Add items and\nmanage lists", "cart", .teal),
+        ("Important Moments", "Birthdays, Festivals,\nand special events", "gift", .orange),
+        ("Ask Anything", "Answers, ideas\nand planning", "lightbulb", .cyan)
     ]
     private let shortcuts: [(String, String, String)] = [
         ("Summarize today", "calendar", "Summarize my day."),
@@ -115,7 +115,10 @@ struct AskAILandingView: View {
             Image(systemName: item.2).font(.system(size: 20)).foregroundStyle(item.3).frame(width: 34, height: 36).background(item.3.opacity(0.18), in: RoundedRectangle(cornerRadius: 13))
             VStack(alignment: .leading, spacing: 5) {
                 Text(item.0).font(typeSize.isAccessibilitySize ? .headline : .system(size: 12, weight: .bold))
-                Text(item.1).font(typeSize.isAccessibilitySize ? .body : .system(size: 11)).foregroundStyle(Color.nexdoSecondary)
+                Text(item.1).font(typeSize.isAccessibilitySize ? .body : .system(size: 11))
+                    .lineLimit(typeSize.isAccessibilitySize ? nil : 2)
+                    .minimumScaleFactor(0.85)
+                    .foregroundStyle(Color.nexdoSecondary)
             }.frame(maxWidth: .infinity, alignment: .leading)
             Image(systemName: "chevron.right").font(.caption2).foregroundStyle(Color.nexdoSecondary).padding(.top, 24)
         }.padding(10).frame(maxWidth: .infinity, minHeight: 84, alignment: .topLeading).background(pastel(item.3), in: RoundedRectangle(cornerRadius: 17))

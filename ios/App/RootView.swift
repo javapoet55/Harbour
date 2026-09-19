@@ -293,7 +293,7 @@ private struct SignInView: View {
                         .frame(width: 116, height: 84)
                         .accessibilityHidden(true)
 
-                    Text(model.lastSignedInFirstName.map { "Welcome back, \($0)" } ?? "Welcome back")
+                    Text("Welcome back, Sri")
                         .font(.system(size: 42, weight: .bold, design: .rounded))
                         .foregroundStyle(
                             LinearGradient(
@@ -308,7 +308,7 @@ private struct SignInView: View {
                         .shadow(color: Color.nexdoIndigo.opacity(0.20), radius: 12, y: 4)
                         .padding(.top, 22)
 
-                    Text("Your day is clearer with Nexdo.")
+                    Text("Your AI assistant for a smarter, more organized day.")
                         .font(.title3)
                         .foregroundStyle(Color.nexdoSecondary)
                         .multilineTextAlignment(.center)

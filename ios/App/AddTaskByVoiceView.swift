@@ -1,5 +1,22 @@
 import SwiftUI
 import AVFoundation
+import Network
+import Combine
+
+@MainActor
+private final class VoiceNetworkMonitor: ObservableObject {
+    @Published private(set) var isConnected = true
+    private let monitor = NWPathMonitor()
+    private let queue = DispatchQueue(label: "com.nexdo.voice.network-monitor")
+
+    init() {
+        monitor.pathUpdateHandler = { [weak self] path in
+            Task { @MainActor [weak self] in self?.isConnected = path.status == .satisfied }
+        }
+        monitor.start(queue: queue)
+    }
+    deinit { monitor.cancel() }
+}
 
 struct AddTaskByVoiceView: View {
     @EnvironmentObject private var model: AppModel
@@ -7,6 +24,7 @@ struct AddTaskByVoiceView: View {
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @StateObject private var voice: VoiceConversationSession
+    @StateObject private var connectivity = VoiceNetworkMonitor()
     @State private var executor: VoiceToolExecutor
     @State private var consent = false
     @State private var starting = false
@@ -14,6 +32,9 @@ struct AddTaskByVoiceView: View {
     private let clock = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
     @State private var startupError: String?
     @State private var backgroundTask: UIBackgroundTaskIdentifier = .invalid
+    @State private var recoveryTask: Task<Void, Never>?
+    @State private var recoveryAttempt = 0
+    @State private var recovering = false
     private let gradient = LinearGradient(colors: [.nexdoMagenta, .nexdoIndigo, .nexdoBlue], startPoint: .topLeading, endPoint: .bottomTrailing)
     private let askMode: Bool
     private let calendarOnly: Bool
@@ -42,11 +63,14 @@ struct AddTaskByVoiceView: View {
                         Text(calendarOnly ? "Tell me the event, date, and time. I’ll add it to your calendar." : askMode ? "Ask about tasks, calendar, important moments, or shopping lists. Keep talking to plan or make changes." : "Tell me what you want to do. Keep talking to add more or make changes.")
                             .foregroundStyle(Color.nexdoSecondary).multilineTextAlignment(.center)
                         orb
-                        Text(starting ? "Connecting…" : voice.status).font(.title2.bold()).foregroundStyle(Color.nexdoIndigo)
+                        Text(recovering && !connectivity.isConnected ? "Waiting for network…" : recovering ? "Reconnecting…" : starting ? "Connecting…" : voice.status).font(.title2.bold()).foregroundStyle(Color.nexdoIndigo)
                             .accessibilityAddTraits(.updatesFrequently)
                         if let error = startupError ?? voice.error { Text(error).foregroundStyle(.red).multilineTextAlignment(.center) }
-                        if startupError != nil {
-                            Button("Try again") { Task { await start() } }
+                        if voice.phase == .paused {
+                            Button("Resume") { Task { await voice.resumeAfterAudioInterruption() } }
+                                .buttonStyle(.borderedProminent)
+                        } else if (startupError != nil || voice.phase == .connectionLost) && !recovering {
+                            Button("Try again") { beginAutomaticRecovery(resetAttempts: true) }
                                 .buttonStyle(.borderedProminent).disabled(starting)
                         }
                         if !voice.transcript.isEmpty { Text(voice.transcript).frame(maxWidth: .infinity, alignment: .leading).padding().background(.thinMaterial, in: RoundedRectangle(cornerRadius: 18)) }
@@ -79,7 +103,7 @@ struct AddTaskByVoiceView: View {
                 }
                 HStack {
                     Button { voice.toggleMute() } label: { Label(voice.muted ? "Unmute" : "Mute", systemImage: voice.muted ? "mic.slash.fill" : "mic.fill") }
-                        .disabled(starting || [.idle, .connecting, .closing, .disconnected, .connectionLost].contains(voice.phase))
+                        .disabled(starting || recovering || [.idle, .connecting, .reconnecting, .paused, .closing, .disconnected, .connectionLost].contains(voice.phase))
                     Spacer()
                     Button { voice.finish(); if voice.phase == .idle { dismiss() } } label: { Text("Done").foregroundStyle(.white) }
                         .buttonStyle(.borderedProminent).disabled(voice.phase == .closing)
@@ -103,21 +127,36 @@ struct AddTaskByVoiceView: View {
                 readyBell = try? AVAudioPlayer(contentsOf: url)
                 readyBell?.volume = 1.0; readyBell?.play()
             } else { readyBell?.stop() }
+            if phase == .connectionLost, scenePhase == .active { beginAutomaticRecovery() }
+            if phase == .listening {
+                recoveryTask?.cancel(); recoveryTask = nil; recoveryAttempt = 0; recovering = false; startupError = nil
+            }
         }
-        .onDisappear { readyBell?.stop(); voice.close(); executor.clear(); endBackgroundTask() }
+        .onDisappear { recoveryTask?.cancel(); readyBell?.stop(); voice.close(); executor.clear(); endBackgroundTask() }
         .onChange(of: scenePhase) { _, phase in
             if phase == .background {
                 voice.background(true)
                 backgroundTask = UIApplication.shared.beginBackgroundTask(withName: "Finish voice session") { voice.close(reason: .appBackgrounded); endBackgroundTask() }
             } else if phase == .active {
                 voice.tick(); voice.background(false); endBackgroundTask()
+                if voice.phase == .connectionLost { beginAutomaticRecovery() }
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: AVAudioSession.interruptionNotification)) { event in
-            if (event.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt) == AVAudioSession.InterruptionType.began.rawValue { voice.interruptAudio() }
+            guard let raw = event.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt,
+                  let type = AVAudioSession.InterruptionType(rawValue: raw) else { return }
+            if type == .began { voice.pauseForAudioInterruption() }
+            else if type == .ended {
+                let rawOptions = event.userInfo?[AVAudioSessionInterruptionOptionKey] as? UInt ?? 0
+                if AVAudioSession.InterruptionOptions(rawValue: rawOptions).contains(.shouldResume) {
+                    Task { await voice.resumeAfterAudioInterruption() }
+                }
+            }
         }
         .onReceive(NotificationCenter.default.publisher(for: AVAudioSession.routeChangeNotification)) { event in
-            if (event.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt) == AVAudioSession.RouteChangeReason.oldDeviceUnavailable.rawValue { voice.interruptAudio() }
+            if (event.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt) == AVAudioSession.RouteChangeReason.oldDeviceUnavailable.rawValue {
+                Task { await voice.recoverAudioRoute() }
+            }
         }
         .onChange(of: model.profile?.id) { _, _ in voice.close() }
         .onChange(of: model.aiConsent) { _, allowed in if !allowed { voice.close() } }
@@ -135,6 +174,36 @@ struct AddTaskByVoiceView: View {
             // Dismissing the screen cancels startup; it is not a connection failure.
         } catch {
             startupError = error.localizedDescription
+        }
+    }
+    private func beginAutomaticRecovery(resetAttempts: Bool = false) {
+        if resetAttempts { recoveryAttempt = 0; startupError = nil }
+        guard recoveryTask == nil, voice.phase == .connectionLost else { return }
+        recovering = true
+        recoveryTask = Task { @MainActor in
+            defer { recoveryTask = nil; recovering = false }
+            while recoveryAttempt < 3, !Task.isCancelled, voice.phase == .connectionLost {
+                while !connectivity.isConnected, !Task.isCancelled {
+                    try? await Task.sleep(for: .milliseconds(500))
+                }
+                guard !Task.isCancelled else { return }
+                recoveryAttempt += 1
+                if recoveryAttempt > 1 { try? await Task.sleep(for: .seconds(Double(recoveryAttempt - 1))) }
+                do {
+                    let credential = try await model.voiceTaskSession(calendarOnly: calendarOnly)
+                    try Task.checkCancellation()
+                    voice.reconnect(credential: credential)
+                    for _ in 0..<120 {
+                        if voice.phase == .listening || voice.phase == .toolExecution || voice.phase == .paused { return }
+                        if voice.phase == .connectionLost { break }
+                        try? await Task.sleep(for: .milliseconds(250))
+                    }
+                } catch is CancellationError { return }
+                catch { startupError = error.localizedDescription }
+            }
+            if voice.phase == .connectionLost {
+                startupError = "Automatic reconnection couldn’t finish. Your saved tasks are safe. Tap Try Again."
+            }
         }
     }
     private func endBackgroundTask() {

@@ -18,6 +18,7 @@ final class VoiceWebRTCTransport: NSObject, VoiceRealtimeTransport {
     private var responseID: String?
     private var interruptedResponseID: String?
     private var voiceVolumeObserver: NSObjectProtocol?
+    private var iceDisconnectTask: Task<Void, Never>?
 
     override init() {
         super.init()
@@ -29,21 +30,11 @@ final class VoiceWebRTCTransport: NSObject, VoiceRealtimeTransport {
     }
 
     func connect(credential: VoiceTaskSession) async throws {
+        iceDisconnectTask?.cancel(); iceDisconnectTask = nil
         let token = run
         guard await AVAudioApplication.requestRecordPermission() else { throw URLError(.userAuthenticationRequired) }
         guard token == run else { throw CancellationError() }
-        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-            audioQueue.async {
-                do {
-                    let audio = RTCAudioSession.sharedInstance()
-                    audio.lockForConfiguration(); defer { audio.unlockForConfiguration() }
-                    try audio.setCategory(.playAndRecord, with: [.defaultToSpeaker, .allowBluetoothHFP])
-                    try audio.setMode(.voiceChat)
-                    try audio.setActive(true)
-                    continuation.resume()
-                } catch { continuation.resume(throwing: error) }
-            }
-        }
+        try await activateAudioSession()
         guard token == run else { throw CancellationError() }
         RTCInitializeSSL()
         let factory = RTCPeerConnectionFactory(); self.factory = factory
@@ -84,9 +75,13 @@ final class VoiceWebRTCTransport: NSObject, VoiceRealtimeTransport {
         guard let channel, channel.readyState == .open, channel.sendData(RTCDataBuffer(data: data, isBinary: false)) else { throw URLError(.networkConnectionLost) }
     }
     func setMuted(_ muted: Bool) { microphone?.isEnabled = !muted }
+    func resumeAudio() async throws {
+        try await activateAudioSession()
+    }
     func silencePlayback() { interruptedResponseID = responseID; outputMuted = true; remoteAudio?.isEnabled = false }
     func close() {
-        run = UUID(); microphone?.isEnabled = false; remoteAudio?.isEnabled = false
+        run = UUID(); iceDisconnectTask?.cancel(); iceDisconnectTask = nil
+        microphone?.isEnabled = false; remoteAudio?.isEnabled = false
         channel?.delegate = nil; channel?.close(); channel = nil
         peer?.delegate = nil; peer?.close(); peer = nil; microphone = nil; remoteAudio = nil; factory = nil
         network?.invalidateAndCancel(); network = nil
@@ -113,10 +108,50 @@ final class VoiceWebRTCTransport: NSObject, VoiceRealtimeTransport {
         onEvent?(data)
     }
 
+    private func activateAudioSession() async throws {
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            audioQueue.async {
+                do {
+                    let audio = RTCAudioSession.sharedInstance()
+                    audio.lockForConfiguration(); defer { audio.unlockForConfiguration() }
+                    try audio.setCategory(.playAndRecord, with: [.defaultToSpeaker, .allowBluetoothHFP])
+                    try audio.setMode(.voiceChat)
+                    try audio.setActive(true)
+                    continuation.resume()
+                } catch { continuation.resume(throwing: error) }
+            }
+        }
+    }
+
     private func applyVoiceVolume() {
         // Realtime's track supports gain above unity. 3.0 preserves Nexdo's
         // existing +200% voice gain at the slider's 100% position.
         remoteAudio?.source.volume = AppVoice.volume * 3
+    }
+
+    private func handleICEState(_ state: RTCIceConnectionState) {
+        switch state {
+        case .connected, .completed:
+            iceDisconnectTask?.cancel(); iceDisconnectTask = nil
+        case .failed:
+            iceDisconnectTask?.cancel(); iceDisconnectTask = nil
+            if peer != nil { onFailure?() }
+        case .disconnected:
+            // iOS commonly reports a short-lived disconnected state while Wi-Fi,
+            // cellular, Bluetooth, or the audio route is changing. Give ICE time
+            // to recover before ending an otherwise healthy conversation.
+            let expectedRun = run
+            iceDisconnectTask?.cancel()
+            iceDisconnectTask = Task { @MainActor [weak self] in
+                try? await Task.sleep(for: .seconds(8))
+                guard !Task.isCancelled, let self, self.run == expectedRun, let peer = self.peer else { return }
+                if peer.iceConnectionState == .disconnected || peer.iceConnectionState == .failed {
+                    self.onFailure?()
+                }
+            }
+        default:
+            break
+        }
     }
 }
 extension VoiceWebRTCTransport: RTCDataChannelDelegate {
@@ -140,7 +175,7 @@ extension VoiceWebRTCTransport: RTCPeerConnectionDelegate {
     nonisolated func peerConnection(_ peerConnection: RTCPeerConnection, didRemove stream: RTCMediaStream) {}
     nonisolated func peerConnectionShouldNegotiate(_ peerConnection: RTCPeerConnection) {}
     nonisolated func peerConnection(_ peerConnection: RTCPeerConnection, didChange newState: RTCIceConnectionState) {
-        if newState == .failed || newState == .disconnected { Task { @MainActor [weak self] in if self?.peer != nil { self?.onFailure?() } } }
+        Task { @MainActor [weak self] in self?.handleICEState(newState) }
     }
     nonisolated func peerConnection(_ peerConnection: RTCPeerConnection, didChange newState: RTCIceGatheringState) {}
     nonisolated func peerConnection(_ peerConnection: RTCPeerConnection, didGenerate candidate: RTCIceCandidate) {}

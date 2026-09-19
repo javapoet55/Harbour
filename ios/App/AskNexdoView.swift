@@ -226,7 +226,7 @@ struct AskNexdoView: View {
                         } else {
                             AskAILandingView(prompt: $prompt, busy: blocked, sendEnabled: validPrompt,
                                 ask: { request($0) }, voice: { stopSpeech(); showingVoice = true },
-                                close: { requestTask?.cancel(); stopSpeech(); dismiss() })
+                                close: { requestTask?.cancel(); stopSpeech(); dismiss() }, typing: $composerFocused)
 
                         }
                     } else {
@@ -260,7 +260,22 @@ struct AskNexdoView: View {
         }
         .background(AskStyle.background)
         .tint(.nexdoIndigo)
-        .safeAreaInset(edge: .bottom, spacing: 0) { if model.turn != nil { composer } }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            VStack(spacing: 0) {
+                if composerFocused {
+                    HStack {
+                        Spacer()
+                        Button("Done") { composerFocused = false }
+                            .font(.body.weight(.semibold))
+                            .frame(minWidth: 60, minHeight: 44)
+                            .accessibilityIdentifier("ask-keyboard-done")
+                    }
+                    .padding(.horizontal, 16)
+                    .background(.regularMaterial)
+                }
+                if model.turn != nil { composer }
+            }
+        }
         .interactiveDismissDisabled(composerFocused || submitting)
         .sheet(isPresented: $showConsent, onDismiss: { pendingQuery = nil }) {
             consentView.presentationDetents([.medium, .large])

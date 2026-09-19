@@ -106,6 +106,12 @@ import XCTest
         XCTAssertFalse(app.buttons["Send request"].isEnabled)
         field.tap()
         field.typeText("Plan tomorrow")
+        let done = app.buttons["ask-keyboard-done"]
+        XCTAssertTrue(done.waitForExistence(timeout: 5))
+        done.tap()
+        XCTAssertTrue(app.keyboards.firstMatch.waitForNonExistence(timeout: 5))
+        XCTAssertEqual(field.value as? String, "Plan tomorrow")
+        XCTAssertFalse(app.staticTexts["Before using Ask AI"].exists)
         XCTAssertTrue(app.buttons["Send request"].isEnabled)
         app.buttons["Send request"].tap()
         XCTAssertTrue(app.staticTexts["Before using Ask AI"].waitForExistence(timeout: 5))
