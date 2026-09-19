@@ -54,6 +54,19 @@ import XCTest
         XCTAssertTrue(app.navigationBars["Shopping List"].waitForExistence(timeout:5))
         XCTAssertTrue(app.buttons["Check Bananas"].exists)
     }
+    func testVoiceDefaultsOnAndRemembersOff() {
+        openList(); app.buttons["Add groceries by voice"].tap()
+        let toggle = app.switches["Allow live voice transcription"]
+        XCTAssertTrue(toggle.waitForExistence(timeout: 5))
+        XCTAssertEqual(toggle.value as? String, "1")
+        XCTAssertTrue(app.buttons["Start listening"].isEnabled)
+        toggle.tap()
+        XCTAssertFalse(app.buttons["Start listening"].isEnabled)
+        app.buttons["Close"].tap()
+        app.buttons["Add groceries by voice"].tap()
+        XCTAssertEqual(toggle.value as? String, "0")
+        toggle.tap()
+    }
     func testVoiceReviewUsesEditableTranscriptWithoutOpeningMicrophone(){
         openList();app.buttons["Add groceries by voice"].tap()
         XCTAssertTrue(app.navigationBars["Add by Voice"].waitForExistence(timeout:5))
