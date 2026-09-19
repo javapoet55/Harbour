@@ -38,7 +38,7 @@ enum TaskActionServiceError: LocalizedError {
         return FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first?
             .appendingPathComponent("TaskActions", isDirectory: true).appendingPathComponent(owner + ".json")
     }
-    static func ownerKey(_ id: String) -> String {
+    nonisolated static func ownerKey(_ id: String) -> String {
         SHA256.hash(data: Data(id.utf8)).map { String(format: "%02x", $0) }.joined()
     }
     func activate(userID: String?) {

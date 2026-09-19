@@ -9,6 +9,7 @@ datasource db {
 }
 
 model User {
+  shoppingLists ShoppingList[]
   id           String   @id @default(cuid())
   email        String   @unique
   name         String
@@ -20,6 +21,8 @@ model User {
   deletedAt    DateTime?
   emailVerifiedAt DateTime?
 
+  moments ImportantMoment[]
+  momentEmailAccount MomentEmailAccount?
   preference         UserPreference?
   lists              TaskList[]
   projects           Project[]
@@ -407,4 +410,109 @@ model ActivityLog {
   kind      String
   summary   String
   createdAt DateTime @default(now())
+}
+
+model ImportantMoment {
+  festivalSettings String @default("{}")
+  id String @id @default(cuid())
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type String
+  title String
+  firstName String @default("")
+  phone String @default("")
+  email String @default("")
+  occurrenceDate String
+  timeZoneID String
+  yearly Boolean @default(false)
+  source String @default("manual")
+  sourceKey String
+  enabled Boolean @default(true)
+  snoozedUntil DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  drafts WishDraft[]
+  @@unique([userId, sourceKey])
+}
+model WishDraft {
+  id String @id @default(cuid())
+  momentID String
+  moment ImportantMoment @relation(fields: [momentID], references: [id], onDelete: Cascade)
+  tone String @default("Warm")
+  body String
+  personalContext String @default("")
+  generationVersion Int @default(1)
+  status String @default("NEEDS_REVIEW")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  plans DeliveryPlan[]
+}
+model DeliveryPlan {
+  id String @id @default(cuid())
+  draftID String
+  draft WishDraft @relation(fields: [draftID], references: [id], onDelete: Cascade)
+  channel String
+  recipient String
+  subject String
+  body String
+  scheduledAtUTC DateTime
+  timeZoneID String
+  automaticDelivery Boolean @default(false)
+  reminderOffset Int @default(0)
+  annualMonthDay String @default("")
+  repeatYearly Boolean @default(false)
+  status String @default("SCHEDULED")
+  idempotencyKey String @unique
+  providerMessageID String?
+  lastError String?
+  attempts Int @default(0)
+  nextAttemptAt DateTime
+  claimedAt DateTime?
+  sentAt DateTime?
+  approvedAt DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([status, nextAttemptAt])
+}
+model MomentEmailAccount {
+  id String @id @default(cuid())
+  userId String @unique
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  email String
+  refreshToken String
+  status String @default("connected")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model ShoppingList {
+  id String @id @default(cuid())
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title String
+  date String
+  timeZone String
+  weekly Boolean @default(false)
+  completedAt DateTime?
+  revision Int @default(0)
+  generatedFrom String? @unique
+  shareToken String? @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  items ShoppingItem[]
+  @@index([userId, date])
+}
+model ShoppingItem {
+  id String @id
+  listId String
+  list ShoppingList @relation(fields: [listId], references: [id], onDelete: Cascade)
+  imageData String?
+  name String
+  category String
+  quantity String @default("1")
+  size String @default("")
+  notes String @default("")
+  checked Boolean @default(false)
+  sortOrder Int @default(0)
+  @@index([listId, sortOrder])
 }

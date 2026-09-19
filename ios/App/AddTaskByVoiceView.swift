@@ -39,7 +39,7 @@ struct AddTaskByVoiceView: View {
                 ScrollView {
                     VStack(spacing: 18) {
                         Text(calendarOnly ? "Speak your appointment" : askMode ? "Ask Nexdo anything" : "Speak your task").font(.largeTitle.bold()).multilineTextAlignment(.center)
-                        Text(calendarOnly ? "Tell me the event, date, and time. I’ll add it to your calendar." : askMode ? "Ask about your tasks, calendar, or next step. Keep talking to plan or make changes." : "Tell me what you want to do. Keep talking to add more or make changes.")
+                        Text(calendarOnly ? "Tell me the event, date, and time. I’ll add it to your calendar." : askMode ? "Ask about tasks, calendar, important moments, or shopping lists. Keep talking to plan or make changes." : "Tell me what you want to do. Keep talking to add more or make changes.")
                             .foregroundStyle(Color.nexdoSecondary).multilineTextAlignment(.center)
                         orb
                         Text(starting ? "Connecting…" : voice.status).font(.title2.bold()).foregroundStyle(Color.nexdoIndigo)
@@ -66,8 +66,8 @@ struct AddTaskByVoiceView: View {
                         } else if voice.transcript.isEmpty {
                             VStack(spacing: 12) {
                                 Text("Try saying something like:").foregroundStyle(Color.nexdoSecondary)
-                                Text(calendarOnly ? "“Dentist appointment tomorrow at 11 AM for 30 minutes”" : askMode ? "“What should I focus on today?”" : "“Call Damien tomorrow at 11 AM”")
-                                Text(calendarOnly ? "“Team meeting Friday at 2 PM for an hour”" : askMode ? "“Find time for a walk tomorrow”" : "“Actually make that noon”")
+                                Text(calendarOnly ? "“Dentist appointment tomorrow at 11 AM for 30 minutes”" : askMode ? "“What birthdays are coming up?”" : "“Call Damien tomorrow at 11 AM”")
+                                Text(calendarOnly ? "“Team meeting Friday at 2 PM for an hour”" : askMode ? "“Add two gallons of milk to my shopping list”" : "“Actually make that noon”")
                                 Text(calendarOnly ? "“That’s all”" : askMode ? "“Remind me to call Damien at 11 AM”" : "“That’s all”")
                             }.font(.subheadline).padding()
                         }

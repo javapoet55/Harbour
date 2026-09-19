@@ -3,14 +3,25 @@ import AuthenticationServices
 import CryptoKit
 
 struct RootView: View {
-    @StateObject private var model = AppModel()
+    @StateObject private var model: AppModel
+    @StateObject private var moments: ImportantMomentsStore
+    init() {
+        let model = AppModel()
+        _model = StateObject(wrappedValue: model)
+        _moments = StateObject(wrappedValue: ImportantMomentsStore(api: model.momentAPI))
+    }
+    @ObservedObject private var momentRoutes = MomentNotificationRoute.shared
     @ObservedObject private var taskActions = TaskActionCoordinator.shared
     @Environment(\.scenePhase) private var phase
     @State private var selectedTab: NexdoTab = .today
     var body: some View {
         Group {
             #if DEBUG
-            if ProcessInfo.processInfo.arguments.contains("-calendar-manual-preview") {
+            if ProcessInfo.processInfo.arguments.contains("-shopping-design-preview") {
+                ShoppingDesignPreview()
+            } else if ProcessInfo.processInfo.arguments.contains("-moments-design-preview") {
+                MomentsDesignPreview()
+            } else if ProcessInfo.processInfo.arguments.contains("-calendar-manual-preview") {
                 NavigationStack { CalendarEventEditor() }
             } else if ProcessInfo.processInfo.arguments.contains("-calendar-voice-preview") {
                 AddTaskByVoiceView(calendarOnly: true)
@@ -43,8 +54,9 @@ struct RootView: View {
             #endif
         }
         .environmentObject(model)
+        .environmentObject(moments)
         .tint(.nexdoIndigo)
-        .onChange(of: model.profile?.id) { _, id in taskActions.activate(userID: id); model.refreshNextAction() }
+        .onChange(of: model.profile?.id) { _, id in taskActions.activate(userID: id); model.refreshNextAction(); Task { await moments.activate(id) } }
         .onReceive(model.$tasks) { tasks in
             if let id = model.profile?.id { taskActions.synchronize(tasks: tasks, userID: id); if phase == .active { model.refreshNextAction() } }
         }
@@ -53,9 +65,11 @@ struct RootView: View {
         .task {
             while !Task.isCancelled {
                 do { try await Task.sleep(for: .seconds(60)) } catch { return }
-                if phase == .active { model.refreshNextAction() }
+                if phase == .active { model.refreshNextAction(); await moments.refresh() }
             }
         }
+        .onChange(of: momentRoutes.pending) { _, _ in Task { await moments.refresh(); moments.resolveRoute() } }
+        .background { MomentSheetHost().environmentObject(moments) }
         .sheet(item: $taskActions.route) { route in
             TaskActionView(actionID: route.id, preferred: route.preferred).environmentObject(model)
         }
@@ -64,7 +78,7 @@ struct RootView: View {
             Button("OK") { model.error = nil }
         } message: { Text(model.error ?? "") }
         .onChange(of: phase) { _, value in
-            if value == .active && model.profile != nil { model.refreshNextAction(); Task { await model.refresh() } }
+            if value == .active && model.profile != nil { model.refreshNextAction(); Task { await model.refresh(); await moments.refresh() } }
             else if value != .active { model.invalidateNextAction() }
         }
     }
@@ -909,6 +923,7 @@ private struct TodayScheduleItem: Identifiable {
 }
 
 private struct TodayView: View {
+    @EnvironmentObject private var moments: ImportantMomentsStore
     @EnvironmentObject private var model: AppModel
     @ObservedObject private var actionCoordinator = TaskActionCoordinator.shared
     let onAsk: () -> Void
@@ -1060,33 +1075,25 @@ private struct TodayView: View {
                         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                         .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(Color.nexdoIndigo.opacity(0.12)))
 
-                        if queue.hasImmediateActions {
-                            HStack {
-                                Button { onPlanWeek("Give me today's daily briefing, prioritizing my due contact actions and upcoming calendar commitments.") } label: {
-                                    Label("Daily Briefing", systemImage: "chart.bar.xaxis").font(.headline)
-                                }
-                                Spacer()
-                                Button("Weekly Summary") { showingWeeklySummary = true }.font(.caption)
-                            }.padding(16).background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 20))
-                        } else {
-                        Button { showingWeeklySummary = true } label: {
-                            HStack(spacing: 14) {
-                                Image(systemName: "chart.bar.xaxis")
-                                    .font(.title3.weight(.semibold)).foregroundStyle(.white)
-                                    .frame(width: 44, height: 44).background(NexdoTheme.gradient, in: RoundedRectangle(cornerRadius: 14))
-                                VStack(alignment: .leading, spacing: 3) {
-                                    Text("Weekly Summary").font(.headline).foregroundStyle(Color.nexdoInk)
-                                    Text("Review progress, focus time, and accomplishments").font(.caption).foregroundStyle(Color.nexdoSecondary)
-                                }
-                                Spacer()
-                                Image(systemName: "chevron.right").foregroundStyle(Color.nexdoSecondary)
-                            }
-                            .padding(16).background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-                            .overlay(RoundedRectangle(cornerRadius: 20).stroke(Color.nexdoIndigo.opacity(0.12)))
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityHint("Opens your weekly progress report")
-                        }
+                        TodayQuickAccess(onPlanWeek: onPlanWeek) { showingWeeklySummary = true }
+
+                        TodayIntelligenceCard(
+                            range: range,
+                            appointments: counts.appointments,
+                            taskCount: counts.tasks,
+                            momentCount: range == .today ? moments.today.count : 0,
+                            availableMinutes: range == .today ? model.scheduleIntelligence?.today.availableMinutes : nil,
+                            attentionCount: range == .today ? (model.scheduleIntelligence?.today.attention.count ?? model.agenda?.overdue.count ?? 0) : (model.agenda?.overdue.count ?? 0),
+                            schedule: remainingSchedule(queue),
+                            searchSchedule: schedule,
+                            recommendation: range == .today ? model.scheduleIntelligence?.today.recommendation : nil,
+                            actionRecommendation: queue.recommendation,
+                            showsSummary: true,
+                            onOpenTask: { editing = $0 },
+                            onAttention: { showingAttention = true },
+                            onAsk: { showingDoNow = true },
+                            onCalendar: onCalendar
+                        )
 
                         if range == .today {
                             TodayActionsView(queue: queue, now: context.date, onTask: { id in editing = model.tasks.first { $0.id == id } })
@@ -1105,66 +1112,60 @@ private struct TodayView: View {
                             }.padding(18).background(Color.nexdoIndigo.opacity(0.06), in: RoundedRectangle(cornerRadius: 20))
                         }
 
-                        if range == .today, let recommendation = model.persistentNext?.recommendation,
-                           let best = recommendation.nextAction?.bestAction {
+                        if range == .today {
                             VStack(alignment: .leading, spacing: 10) {
                                 HStack {
-                                    Text("What should I do now?").font(.headline)
+                                    Label("Focus next", systemImage: "sparkles").font(.subheadline.bold()).foregroundStyle(Color.nexdoIndigo)
                                     Spacer()
-                                    Button { model.dismissPersistentNext() } label: { Image(systemName: "xmark").frame(width: 44, height: 44) }.accessibilityLabel("Dismiss suggestion")
+                                    Menu {
+                                        Button("Other options") { showingDoNow = true }
+                                        Button("Dismiss suggestion") { model.dismissPersistentNext() }
+                                    } label: { Image(systemName: "ellipsis").frame(width: 44, height: 44) }
+                                    .accessibilityLabel("Focus options")
                                 }
-                                Text(best.title).font(.title3.bold())
-                                Text("~\(best.focusMinutes) min · \(DurationDisplay.durationLabel(recommendation.nextAction?.availableWindowMinutes ?? 0)) available").font(.subheadline).foregroundStyle(Color.nexdoSecondary)
-                                Button("Start Focus Session") {
-                                    Task {
-                                        do { try await model.startRecommendedFocus(best); model.refreshNextAction() }
-                                        catch { model.error = error.localizedDescription; model.refreshNextAction() }
+                                if let recommendation = model.persistentNext?.recommendation,
+                                   let best = recommendation.nextAction?.bestAction {
+                                    Text(best.title).font(.headline).foregroundStyle(Color.nexdoInk).lineLimit(2)
+                                    Text("\(best.focusMinutes) min\(recommendation.canStart ? " · Fits your free time" : "")")
+                                        .font(.subheadline).foregroundStyle(Color.nexdoSecondary)
+                                    ViewThatFits(in: .horizontal) {
+                                        HStack { focusStartButton; Spacer(); Button("Other options") { showingDoNow = true }.frame(minHeight: 44) }
+                                        VStack(alignment: .leading) { focusStartButton; Button("Other options") { showingDoNow = true }.frame(minHeight: 44) }
                                     }
-                                }.buttonStyle(.borderedProminent).disabled(!recommendation.canStart || model.busy)
-                                Button("Other options") { showingDoNow = true }
-                            }.padding(18).background(Color.nexdoIndigo.opacity(0.06), in: RoundedRectangle(cornerRadius: 20))
-                        }
-
-                        TodayIntelligenceCard(
-                            range: range,
-                            appointments: counts.appointments,
-                            taskCount: counts.tasks,
-                            availableMinutes: range == .today ? model.scheduleIntelligence?.today.availableMinutes : nil,
-                            attentionCount: range == .today ? (model.scheduleIntelligence?.today.attention.count ?? model.agenda?.overdue.count ?? 0) : (model.agenda?.overdue.count ?? 0),
-                            schedule: remainingSchedule(queue),
-                            searchSchedule: schedule,
-                            recommendation: range == .today ? model.scheduleIntelligence?.today.recommendation : nil,
-                            actionRecommendation: queue.recommendation,
-                            showsSummary: !queue.hasImmediateActions,
-                            onOpenTask: { editing = $0 },
-                            onAttention: { showingAttention = true },
-                            onAsk: { showingDoNow = true },
-                            onCalendar: onCalendar
-                        )
-
-                        if range == .today, let attention = model.scheduleIntelligence?.today.attention, !attention.isEmpty {
-                            VStack(alignment: .leading, spacing: 12) {
-                                Label("Needs your attention", systemImage: "exclamationmark.triangle.fill")
-                                    .font(.headline).foregroundStyle(.red)
-                                ForEach(attention.sorted { $0.id == "overdue" && $1.id != "overdue" }) { item in
-                                    if item.id == "overdue" {
-                                        Button { showingOverdueTasks = true } label: {
-                                            attentionCard(item, opensTasks: true)
-                                        }
-                                        .buttonStyle(.plain)
-                                        .accessibilityHint("Shows all unfinished overdue tasks")
-                                    } else {
-                                        Button { selectedScheduleCheck = item } label: {
-                                            attentionCard(item, opensTasks: !(item.taskIds?.isEmpty ?? true))
-                                        }
-                                        .buttonStyle(.plain)
-                                    }
+                                } else {
+                                    Text("Find a task for the time you have.").font(.subheadline).foregroundStyle(Color.nexdoSecondary)
+                                    Button("Find my next task") { showingDoNow = true }.buttonStyle(.borderedProminent).frame(minHeight: 44)
                                 }
                             }
-                            .padding(18)
-                            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
-                            .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).stroke(Color(uiColor: .separator).opacity(0.3)))
+                            .padding(.horizontal, 18).padding(.bottom, 16).padding(.top, 4)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(Color.nexdoIndigo.opacity(0.06), in: RoundedRectangle(cornerRadius: 20))
+                            .overlay(RoundedRectangle(cornerRadius: 20).stroke(Color.nexdoIndigo.opacity(0.12)))
+                            .accessibilityIdentifier("today-focus-next")
+
+                            let overdueCount = OverdueTasks.results(model.tasks, now: context.date).count
+                            let otherCount = model.scheduleIntelligence?.today.attention.filter { $0.id != "overdue" }.count ?? 0
+                            if overdueCount + otherCount > 0 {
+                                Button { showingAttention = true } label: {
+                                    HStack(spacing: 12) {
+                                        Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange).font(.title2)
+                                        VStack(alignment: .leading, spacing: 3) {
+                                            Text("Needs attention").font(.headline).foregroundStyle(Color.nexdoInk)
+                                            Text(overdueCount > 0 ? "\(overdueCount) overdue task\(overdueCount == 1 ? "" : "s")\(otherCount > 0 ? " · \(otherCount) other" : "")" : "\(otherCount) schedule check\(otherCount == 1 ? "" : "s")")
+                                                .font(.subheadline).foregroundStyle(Color.nexdoSecondary)
+                                        }
+                                        Spacer(minLength: 4)
+                                        Text("\(overdueCount + otherCount)").font(.subheadline.bold()).foregroundStyle(.brown)
+                                            .padding(.horizontal, 10).padding(.vertical, 5).background(Color.orange.opacity(0.18), in: Capsule())
+                                        Image(systemName: "chevron.right").foregroundStyle(Color.nexdoSecondary)
+                                    }.padding(18).frame(maxWidth: .infinity, alignment: .leading)
+                                        .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 20))
+                                        .overlay(RoundedRectangle(cornerRadius: 20).stroke(Color.nexdoIndigo.opacity(0.12)))
+                                        .contentShape(RoundedRectangle(cornerRadius: 20))
+                                }.buttonStyle(.plain).accessibilityIdentifier("today-attention-summary")
+                            }
                         }
+
                     }
                     .padding(.horizontal, 20)
                     .padding(.top, 12)
@@ -1184,8 +1185,10 @@ private struct TodayView: View {
                     .presentationDetents([.large])
                     .presentationCornerRadius(30)
             }
-            .navigationDestination(isPresented: $showingAttention) {
-                attentionDetails
+            .sheet(isPresented: $showingAttention) {
+                NavigationStack {
+                    TodayAttentionSheet()
+                }.presentationDetents([.medium, .large]).presentationDragIndicator(.visible)
             }
             .navigationDestination(item: $selectedScheduleCheck) { item in
                 scheduleCheckDetails(item)
@@ -1197,6 +1200,18 @@ private struct TodayView: View {
                 WeeklySummaryView(onPlanNextWeek: onPlanWeek)
             }
         }
+    }
+
+    private var focusStartButton: some View {
+        Button {
+            guard let best = model.persistentNext?.recommendation?.nextAction?.bestAction else { return }
+            Task {
+                do { try await model.startRecommendedFocus(best); model.refreshNextAction() }
+                catch { model.error = error.localizedDescription; model.refreshNextAction() }
+            }
+        } label: { Label("Start focus", systemImage: "play.fill").font(.subheadline.bold()).padding(.vertical, 5) }
+        .buttonStyle(.borderedProminent)
+        .disabled(model.persistentNext?.recommendation?.canStart != true || model.busy)
     }
 
     @ViewBuilder private var attentionDetails: some View {
@@ -1359,6 +1374,7 @@ private struct TodayIntelligenceCard: View {
     let range: TodayRange
     let appointments: Int
     let taskCount: Int
+    var momentCount: Int = 0
     let availableMinutes: Int?
     let attentionCount: Int
     let schedule: [TodayScheduleItem]
@@ -1385,7 +1401,7 @@ private struct TodayIntelligenceCard: View {
         }
     }
 
-    private var commitmentCount: Int { appointments + taskCount }
+    private var commitmentCount: Int { appointments + taskCount + momentCount }
     var body: some View {
         VStack(spacing: 0) {
             if showsSummary {
@@ -1395,8 +1411,9 @@ private struct TodayIntelligenceCard: View {
                 Text("\(commitmentCount) commitment\(commitmentCount == 1 ? "" : "s") \(range == .today ? "today" : "ahead")")
                     .font(.system(.title, design: .rounded, weight: .bold)).foregroundStyle(Color.nexdoInk)
                     .accessibilityHeading(.h2)
-                Text("\(taskCount) Task\(taskCount == 1 ? "" : "s") · \(appointments) Appointment\(appointments == 1 ? "" : "s")")
+                Text("\(taskCount) Task\(taskCount == 1 ? "" : "s") · \(appointments) Appointment\(appointments == 1 ? "" : "s") · \(momentCount) Moment\(momentCount == 1 ? "" : "s")")
                     .font(.subheadline).foregroundStyle(Color.nexdoSecondary)
+                    .lineLimit(1).minimumScaleFactor(0.7)
                 HStack(spacing: 10) {
                     if attentionCount > 0 {
                         Button(action: onAttention) {
@@ -1479,20 +1496,7 @@ private struct TodayIntelligenceCard: View {
                     }
                 }
 
-                Button(action: onAsk) {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Label("What should I do now?", systemImage: "sparkles").font(.subheadline.bold()).foregroundStyle(Color.nexdoIndigo)
-                        Text("Find the best task for the time you have, and start focusing.")
-                            .font(.subheadline).foregroundStyle(Color.nexdoSecondary).multilineTextAlignment(.leading)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(16)
-                    .background(Color.nexdoBlue.opacity(0.07), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(Color.nexdoBlue.opacity(0.16)))
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("What should I do now?")
-                .padding(.top, 16)
+
             }
             .padding(18)
             .background(Color(uiColor: .secondarySystemGroupedBackground))

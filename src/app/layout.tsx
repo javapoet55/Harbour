@@ -1,3 +1,4 @@
+import Script from 'next/script';
 import type { Metadata, Viewport } from 'next';
 import type { ReactNode } from 'react';
 import { Geist } from 'next/font/google';
@@ -24,7 +25,7 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en" className={`${geist.variable} h-full`}>
-      <body className="min-h-full antialiased">{children}</body>
+      <body className="min-h-full antialiased">{children}<Script src="/firebase-bridge.js" strategy="afterInteractive" /></body>
     </html>
   );
 }

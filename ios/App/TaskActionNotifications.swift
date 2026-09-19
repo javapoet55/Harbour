@@ -65,6 +65,9 @@ final class TaskActionAppDelegate: NSObject, UIApplicationDelegate, UNUserNotifi
     nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse,
                                             withCompletionHandler completionHandler: @escaping () -> Void) {
         let info = response.notification.request.content.userInfo
+        if let id = info["momentID"] as? String, let owner = info["momentOwner"] as? String, response.actionIdentifier != UNNotificationDismissActionIdentifier {
+            Task { @MainActor in MomentNotificationRoute.shared.receive(id, owner: owner) }
+        }
         if let id = info["actionID"] as? String, let owner = info["owner"] as? String {
             let choice = response.actionIdentifier
             Task { @MainActor in TaskActionCoordinator.shared.receive(actionID: id, owner: owner, choice: choice) }

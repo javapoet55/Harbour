@@ -35,7 +35,7 @@ public actor APIClient {
         config.urlCache = nil
         config.requestCachePolicy = .reloadIgnoringLocalCacheData
         config.timeoutIntervalForRequest = 60
-        config.timeoutIntervalForResource = 90
+        config.timeoutIntervalForResource = 180
         config.httpShouldSetCookies = true
         self.session = URLSession(configuration: config, delegate: NoRedirects(), delegateQueue: nil)
     }

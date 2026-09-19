@@ -2,6 +2,7 @@ import SwiftUI
 
 @main
 struct NexdoApp: App {
+    init() { NexdoAnalytics.configureIfAvailable() }
     @UIApplicationDelegateAdaptor(TaskActionAppDelegate.self) private var actionDelegate
     @AppStorage(AppAppearance.storageKey) private var appearance: AppAppearance = .system
     var body: some Scene {
@@ -12,6 +13,8 @@ struct NexdoApp: App {
 @MainActor
 final class AppModel: ObservableObject {
     @Published var profile: Profile?
+    @Published private(set) var calendarConnections: [CalendarConnection] = []
+    @Published private(set) var calendarConnectionsLoaded = false
     @Published private(set) var protectedTime: ProtectedTimeProposal?
     @Published private(set) var protectingTime = false
     @Published private(set) var persistentNext: ProactiveNextResponse?
@@ -129,6 +132,7 @@ final class AppModel: ObservableObject {
     private var photoSaveInProgress = false
     private var focusCompletion: Task<Void, Never>?
     // Ephemeral cookie session: credentials are never written to preferences, files, or logs.
+    var momentAPI: APIClient { api }
     private let api: APIClient
     private let weatherClient = WeatherClient()
     private var taskLoadID: UUID?
@@ -283,12 +287,55 @@ final class AppModel: ObservableObject {
             }
         }
     }
+    // ASWebAuthenticationSession runs outside this app's ephemeral cookie jar,
+    // so the start route is authorized with a short-lived token fetched here
+    // over the authenticated API session instead.
+    func calendarConnectURL(provider: String = "google") async throws -> URL {
+        struct Issued: Decodable, Sendable { let token: String }
+        let issued: Issued = try await api.request("/api/calendar/oauth/\(provider)/connect-token", method: "POST")
+        guard !issued.token.isEmpty,
+              var components = URLComponents(url: api.baseURL, resolvingAgainstBaseURL: false) else {
+            throw CalendarConnectError.unavailable
+        }
+        components.path = "/api/calendar/oauth/\(provider)/start"
+        components.queryItems = [URLQueryItem(name: "native", value: "1"), URLQueryItem(name: "connect_token", value: issued.token)]
+        guard let url = components.url else { throw CalendarConnectError.unavailable }
+        return url
+    }
+    enum CalendarConnectError: LocalizedError {
+        case unavailable
+        var errorDescription: String? { "Nexdo could not start the calendar connection. Please try again." }
+    }
+    func loadCalendarConnections() async {
+        struct Response: Decodable, Sendable { let connections: [CalendarConnection] }
+        do {
+            let response: Response = try await api.request("/api/calendar/connections")
+            calendarConnections = response.connections
+        } catch {
+            calendarConnections = []
+        }
+        calendarConnectionsLoaded = true
+    }
+    func setCalendarWrites(id: String, enabled: Bool) async throws -> String {
+        struct Input: Encodable, Sendable { let id: String; let writeEnabled: Bool }
+        let _: Ignore = try await api.request("/api/calendar/connections", method: "PATCH", body: JSONEncoder().encode(Input(id: id, writeEnabled: enabled)))
+        await loadCalendarConnections()
+        return enabled ? "Nexdo can now add your scheduled tasks to this calendar." : "Nexdo will no longer add events to this calendar."
+    }
+    func disconnectCalendar(id: String) async throws -> String {
+        guard let encoded = id.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) else { throw CalendarConnectError.unavailable }
+        let _: Ignore = try await api.request("/api/calendar/connections?id=\(encoded)", method: "DELETE")
+        await loadCalendarConnections()
+        refreshSupplementaryData()
+        return "Calendar disconnected. Imported events were removed with the connection."
+    }
     func syncProfileCalendars() async throws -> String {
         struct Sync: Decodable, Sendable {
             struct Result: Decodable, Sendable { let error: String? }
             let results: [Result]
         }
         let result: Sync = try await api.request("/api/calendar/sync", method: "POST")
+        await loadCalendarConnections()
         if result.results.contains(where: { $0.error != nil }) { return "Some calendars could not synchronize. Check their connections in calendar settings." }
         refreshSupplementaryData()
         return result.results.isEmpty ? "No calendars connected yet." : "Calendars synchronized."

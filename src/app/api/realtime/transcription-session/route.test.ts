@@ -20,18 +20,18 @@ it('returns a configured error when no server key exists', async () => {
   vi.stubEnv('OPENAI_API_KEY', '');
   expect((await POST(request())).status).toBe(503); expect(upstream).not.toHaveBeenCalled();
 });
-it('issues an expiring task-scoped session using the account timezone', async () => {
+it('issues an expiring continuous transcription session with a VAD-compatible model', async () => {
   upstream.mockResolvedValue(Response.json({ value: 'ephemeral', expires_at: 123 }));
   const response = await POST(request());
   expect(response.headers.get('Cache-Control')).toBe('private, no-store');
-  expect(await response.json()).toEqual({ value: 'ephemeral', expiresAt: 123, model: 'gpt-live-transcribe' });
+  expect(await response.json()).toEqual({ value: 'ephemeral', expiresAt: 123, model: 'gpt-4o-transcribe' });
   const payload = JSON.parse(upstream.mock.calls[0][1].body);
   expect(payload.expires_after.seconds).toBe(60);
   expect(payload.session.type).toBe('transcription');
   expect(payload.session.tools).toBeUndefined();
   expect(payload.session.audio.input.turn_detection).toEqual({ type: 'server_vad', silence_duration_ms: 1800, prefix_padding_ms: 300 });
   expect(payload.session.model).toBeUndefined();
-  expect(payload.session.audio.input.transcription).toEqual({ model: 'gpt-live-transcribe' });
+  expect(payload.session.audio.input.transcription).toEqual({ model: 'gpt-4o-transcribe' });
 });
 it('does not leak upstream errors or secrets', async () => {
   upstream.mockResolvedValue(new Response('server-key private diagnostic', { status: 500 }));
