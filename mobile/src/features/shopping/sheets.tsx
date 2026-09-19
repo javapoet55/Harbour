@@ -1,0 +1,366 @@
+import Ionicons from '@expo/vector-icons/Ionicons';
+import * as Crypto from 'expo-crypto';
+import { useState } from 'react';
+import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+import { shareUrl, type GroceryItem, type GroceryList } from '../../api/shopping';
+import { withAlpha } from '../../components/SignInBackdrop';
+import { Text } from '../../components/Text';
+import { TodayBackdrop } from '../../components/TodayShell';
+import { brand, textStyles, useTheme } from '../../theme';
+import { headline, KeyboardDoneBar, MomentCard, MomentPrimary, MomentSheet } from '../moments/components';
+import { deviceZone, momentDate, momentDay } from '../moments/dates';
+import { DateField, FormButton, FormField, FormRow, FormScroll, FormSection, FormText, FormToggle } from '../moments/form';
+import { ListTile } from './components';
+import { shareMessage } from './device';
+import { copiedItems, listInput, previousList, shareText } from './model';
+import { shoppingStore, useShopping } from './store';
+
+const bodyText = { fontSize: 17, lineHeight: 22 };
+
+// ---------------------------------------------------------------------------------------------
+// New List (ios/App/ShoppingViews.swift:143-205)
+
+/**
+ * `NewShoppingList`: Start from Scratch or Use Last Week's List, the name, the date and weekly repeat,
+ * and "Create List" pinned at the bottom. Also "Copy list" / "Use This List Again", with `source`.
+ * Save is disabled while the name is empty — the capture `shopping-new-list-error-empty-name`.
+ */
+export function NewListSheet({ visible, source, onCreated, onClose }: { visible: boolean; source?: GroceryList | null; onCreated: (list: GroceryList) => void; onClose: () => void }) {
+  return (
+    <MomentSheet visible={visible} title="New List" onRequestClose={onClose} left={{ title: 'Cancel', onPress: onClose, testID: 'new-list-cancel' }} testID="new-list-sheet">
+      {visible ? <NewListBody source={source ?? null} onCreated={onCreated} onClose={onClose} /> : null}
+    </MomentSheet>
+  );
+}
+
+function NewListBody({ source, onCreated, onClose }: { source: GroceryList | null; onCreated: (list: GroceryList) => void; onClose: () => void }) {
+  const theme = useTheme();
+  const insets = useSafeAreaInsets();
+  const lists = useShopping((state) => state.lists);
+  const busy = useShopping((state) => state.busy);
+  const error = useShopping((state) => state.error);
+  // `.onAppear { if let source { title = source.title; useLast = true } }`
+  const [title, setTitle] = useState(source?.title ?? 'Weekly Shopping List');
+  const [date, setDate] = useState(() => momentDate(momentDay(Date.now(), deviceZone()), deviceZone()));
+  const [weekly, setWeekly] = useState(true);
+  const [useLast, setUseLast] = useState(source !== null);
+  const previous = previousList(lists, source);
+  const disabled = busy || title.trim() === '';
+
+  const create = async () => {
+    const zone = deviceZone();
+    const value: GroceryList = {
+      id: Crypto.randomUUID().toUpperCase(),
+      title: title.trim(),
+      date: momentDay(date, zone),
+      timeZone: zone,
+      weekly,
+      revision: 0,
+      items: useLast ? copiedItems(previous) : [],
+    };
+    const saved = await shoppingStore.getState().action('create', null, listInput(value));
+    if (saved) {
+      onCreated(saved);
+      onClose();
+    }
+  };
+
+  return (
+    <View style={styles.fill}>
+      <TodayBackdrop />
+      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.content}>
+        <Choice title="Start from Scratch" subtitle="Create a brand new list." icon="document-attach-outline" selected={!useLast} onPress={() => setUseLast(false)} testID="shopping-scratch" />
+        <Choice
+          title="Use Last Week’s List"
+          subtitle={previous ? `Copy ${previous.items.length} items from “${previous.title}” and edit.` : 'Create your first list to reuse it next time.'}
+          icon="arrow-undo"
+          selected={useLast}
+          disabled={!previous}
+          onPress={() => setUseLast(true)}
+          testID="shopping-use-last"
+        />
+        <Text style={[headline, styles.sectionTitle, { color: theme.colors.label }]}>List Name</Text>
+        <MomentCard>
+          <TextInput
+            accessibilityLabel="List name"
+            onChangeText={setTitle}
+            placeholder="List name"
+            placeholderTextColor={theme.colors.placeholder}
+            style={[headline, styles.input, { color: theme.colors.label }]}
+            testID="shopping-list-name"
+            value={title}
+          />
+          <View style={[styles.divider, { backgroundColor: theme.colors.separator }]} />
+          <DateField label="Shopping date" value={date} onChange={setDate} zone={deviceZone()} testID="shopping-list-date" />
+          <View style={[styles.divider, { backgroundColor: theme.colors.separator }]} />
+          <FormToggle label="Repeat every week" value={weekly} onValueChange={setWeekly} testID="shopping-list-weekly" />
+          <Text style={[styles.caption, { color: theme.colors.secondary }]}>Complete a trip to create next week’s list with unchecked items.</Text>
+        </MomentCard>
+        {error ? <Text style={[bodyText, { color: theme.colors.danger }]}>{error}</Text> : null}
+      </ScrollView>
+      {/* `.safeAreaInset(edge: .bottom) { MomentPrimary … .padding(18).background(.ultraThinMaterial) }` */}
+      <View style={[styles.footer, { paddingBottom: 18 + insets.bottom, backgroundColor: theme.colors.glassFill }]}>
+        <MomentPrimary title={busy ? 'Creating…' : 'Create List'} onPress={() => void create()} disabled={disabled} testID="shopping-create" />
+      </View>
+      <KeyboardDoneBar />
+    </View>
+  );
+}
+
+function Choice({ title, subtitle, icon, selected, disabled = false, onPress, testID }: { title: string; subtitle: string; icon: 'document-attach-outline' | 'arrow-undo'; selected: boolean; disabled?: boolean; onPress: () => void; testID: string }) {
+  const theme = useTheme();
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityState={{ selected, disabled }}
+      disabled={disabled}
+      onPress={onPress}
+      style={[styles.choice, { opacity: disabled ? 0.5 : 1, borderColor: selected ? brand.nexdoIndigo : 'transparent', backgroundColor: selected ? withAlpha(brand.nexdoIndigo, 0.09) : 'transparent' }]}
+      testID={testID}
+    >
+      <MomentCard>
+        <View style={styles.choiceRow}>
+          <ListTile icon={icon} color={brand.nexdoIndigo} />
+          <View style={styles.grow}>
+            <Text style={[headline, { color: theme.colors.ink }]}>{title}</Text>
+            <Text style={[textStyles.subheadline, { color: theme.colors.secondary }]}>{subtitle}</Text>
+          </View>
+          <Ionicons name={selected ? 'checkmark-circle' : 'ellipse-outline'} size={22} color={brand.nexdoIndigo} />
+        </View>
+      </MomentCard>
+    </Pressable>
+  );
+}
+
+// ---------------------------------------------------------------------------------------------
+// Review Items (ShoppingViews.swift:296-304)
+
+/**
+ * `ShoppingBatchReview`: the parsed items, each editable, before they are appended. "Add N Items" is
+ * disabled while the list is empty or any name is blank.
+ */
+export function ReviewItemsSheet({ visible, items, onAdd, onClose }: { visible: boolean; items: GroceryItem[]; onAdd: (items: GroceryItem[]) => void; onClose: () => void }) {
+  return (
+    <MomentSheet visible={visible} title="" onRequestClose={onClose} right={{ title: 'Cancel', onPress: onClose, testID: 'review-items-cancel' }} testID="review-items-sheet">
+      {visible ? <ReviewItemsBody initial={items} onAdd={onAdd} onClose={onClose} /> : null}
+    </MomentSheet>
+  );
+}
+
+function ReviewItemsBody({ initial, onAdd, onClose }: { initial: GroceryItem[]; onAdd: (items: GroceryItem[]) => void; onClose: () => void }) {
+  const theme = useTheme();
+  const [items, setItems] = useState(initial);
+  const update = (id: string, patch: Partial<GroceryItem>) => setItems((list) => list.map((item) => (item.id === id ? { ...item, ...patch } : item)));
+  const disabled = items.length === 0 || items.some((item) => item.name.trim() === '');
+  return (
+    <View style={styles.fill}>
+      <FormScroll testID="review-items">
+        <Text style={[textStyles.largeTitle, styles.bold, styles.sheetTitle, { color: theme.colors.label }]}>Review Items</Text>
+        <FormSection>
+          {items.map((item) => (
+            <FormRow key={item.id}>
+              <View style={styles.inline}>
+                <View style={styles.grow}>
+                  <FormField placeholder="Item" value={item.name} onChangeText={(name) => update(item.id, { name })} testID={`review-name-${item.id}`} />
+                </View>
+                {/* `.onDelete` is a swipe on iOS; Android has no swipe row, so the delete is a button. */}
+                <Pressable accessibilityRole="button" accessibilityLabel={`Delete ${item.name}`} onPress={() => setItems((list) => list.filter((value) => value.id !== item.id))} hitSlop={8} testID={`review-delete-${item.id}`}>
+                  <Ionicons name="remove-circle" size={22} color={theme.colors.danger} />
+                </Pressable>
+              </View>
+              <View style={styles.inline}>
+                <View style={styles.grow}>
+                  <FormField placeholder="Quantity" value={item.quantity} onChangeText={(quantity) => update(item.id, { quantity })} testID={`review-quantity-${item.id}`} />
+                </View>
+                <View style={styles.grow}>
+                  <FormField placeholder="Size" value={item.size} onChangeText={(size) => update(item.id, { size })} testID={`review-size-${item.id}`} />
+                </View>
+              </View>
+            </FormRow>
+          ))}
+          <FormRow last>
+            <FormButton
+              title={`Add ${items.length} Items`}
+              disabled={disabled}
+              onPress={() => {
+                onAdd(items);
+                onClose();
+              }}
+              testID="review-items-add"
+            />
+          </FormRow>
+        </FormSection>
+      </FormScroll>
+      <KeyboardDoneBar />
+    </View>
+  );
+}
+
+// ---------------------------------------------------------------------------------------------
+// List Settings (ShoppingViews.swift:305-315)
+
+/** `ShoppingSettings`: name, date, weekly. Save only — no Cancel — and disabled while the name is empty. */
+export function ListSettingsSheet({ visible, list, onSave, onClose }: { visible: boolean; list: GroceryList; onSave: (list: GroceryList) => void; onClose: () => void }) {
+  const [draft, setDraft] = useState(list);
+  const [shown, setShown] = useState(visible);
+  // A fresh copy of the list each time the sheet opens, as Swift's `@State var initial` is.
+  if (shown !== visible) {
+    setShown(visible);
+    if (visible) setDraft(list);
+  }
+  const disabled = draft.title.trim() === '';
+  return (
+    <MomentSheet
+      visible={visible}
+      title=""
+      onRequestClose={onClose}
+      right={{
+        title: 'Save',
+        disabled,
+        bold: true,
+        onPress: () => {
+          onSave(draft);
+          onClose();
+        },
+        testID: 'list-settings-save',
+      }}
+      testID="list-settings-sheet"
+    >
+      <ListSettingsBody draft={draft} setDraft={setDraft} />
+    </MomentSheet>
+  );
+}
+
+function ListSettingsBody({ draft, setDraft }: { draft: GroceryList; setDraft: (list: GroceryList) => void }) {
+  const theme = useTheme();
+  return (
+    <FormScroll testID="list-settings">
+      <Text style={[textStyles.largeTitle, styles.bold, styles.sheetTitle, { color: theme.colors.label }]}>List Settings</Text>
+      <FormSection>
+        <FormRow>
+          <FormField placeholder="List name" value={draft.title} onChangeText={(title) => setDraft({ ...draft, title })} testID="list-settings-name" />
+        </FormRow>
+        <FormRow>
+          <DateField
+            label="Shopping date"
+            value={momentDate(draft.date, draft.timeZone)}
+            onChange={(value) => setDraft({ ...draft, date: momentDay(value, draft.timeZone) })}
+            zone={draft.timeZone}
+            testID="list-settings-date"
+          />
+        </FormRow>
+        <FormRow>
+          <FormToggle label="Repeat weekly" value={draft.weekly} onValueChange={(weekly) => setDraft({ ...draft, weekly })} testID="list-settings-weekly" />
+        </FormRow>
+        <FormRow last>
+          <FormText>Next week’s list is created when you complete this trip.</FormText>
+        </FormRow>
+      </FormSection>
+    </FormScroll>
+  );
+}
+
+// ---------------------------------------------------------------------------------------------
+// Share List (ShoppingViews.swift:316-332)
+
+/**
+ * `ShoppingShare`: the list as plain text through the share sheet, and the view-only link —
+ * `<API base URL>/shared/shopping/<token>` — created and revoked on the server.
+ */
+export function ShareListSheet({ visible, list, onUpdate, onClose }: { visible: boolean; list: GroceryList; onUpdate: (list: GroceryList) => void; onClose: () => void }) {
+  return (
+    <MomentSheet visible={visible} title="" onRequestClose={onClose} testID="share-list-sheet">
+      {visible ? <ShareListBody initial={list} onUpdate={onUpdate} /> : null}
+    </MomentSheet>
+  );
+}
+
+function ShareListBody({ initial, onUpdate }: { initial: GroceryList; onUpdate: (list: GroceryList) => void }) {
+  const theme = useTheme();
+  const error = useShopping((state) => state.error);
+  const [list, setList] = useState(initial);
+  // `.task { updateURL() }`
+  const [url, setUrl] = useState<string | null>(() => (initial.shareToken ? shareUrl(initial.shareToken) : null));
+
+  const create = async () => {
+    const saved = await shoppingStore.getState().action('share', list, {});
+    if (saved) {
+      setList(saved);
+      onUpdate(saved);
+      if (saved.shareToken) setUrl(shareUrl(saved.shareToken));
+    }
+  };
+  const revoke = async () => {
+    const saved = await shoppingStore.getState().action('revoke', list, {});
+    if (saved) {
+      setList(saved);
+      setUrl(null);
+      onUpdate(saved);
+    }
+  };
+
+  return (
+    <FormScroll testID="share-list">
+      <Text style={[textStyles.largeTitle, styles.bold, styles.sheetTitle, { color: theme.colors.label }]}>Share List</Text>
+      <FormSection>
+        <FormRow>
+          <View style={styles.inline}>
+            <Ionicons name="cart" size={20} color={brand.nexdoIndigo} />
+            <FormText>{list.title}</FormText>
+          </View>
+        </FormRow>
+        <FormRow last>
+          <FormText>{`${list.items.length} items`}</FormText>
+        </FormRow>
+      </FormSection>
+      <FormSection header="Share via Messages, Mail, or another app">
+        <FormRow last>
+          <FormButton icon="share-outline" title="Share list as text" onPress={() => void shareMessage(shareText(list))} testID="share-text" />
+        </FormRow>
+      </FormSection>
+      <FormSection header="View-only link">
+        <FormRow>
+          <FormText caption>Anyone with the link can view this list, including future edits. Revoke it whenever you like.</FormText>
+        </FormRow>
+        {url ? (
+          <>
+            <FormRow>
+              <FormButton icon="link" title="Share Link" onPress={() => void shareMessage(url)} testID="share-link" />
+            </FormRow>
+            <FormRow last>
+              <FormButton destructive title="Revoke Link" onPress={() => void revoke()} testID="share-revoke" />
+            </FormRow>
+          </>
+        ) : (
+          <FormRow last>
+            <FormButton title="Create Share Link" onPress={() => void create()} testID="share-create" />
+          </FormRow>
+        )}
+      </FormSection>
+      {error ? (
+        <View style={styles.error}>
+          <FormText tone="danger">{error}</FormText>
+        </View>
+      ) : null}
+    </FormScroll>
+  );
+}
+
+const styles = StyleSheet.create({
+  fill: { flex: 1 },
+  content: { padding: 18, gap: 18, paddingBottom: 140 },
+  sectionTitle: { marginTop: 10 },
+  input: { paddingVertical: 4, backgroundColor: 'transparent' },
+  divider: { height: StyleSheet.hairlineWidth },
+  caption: { fontSize: 12, lineHeight: 16 },
+  footer: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: 18, paddingTop: 18 },
+  choice: { borderRadius: 22, borderWidth: 1.5 },
+  choiceRow: { flexDirection: 'row', alignItems: 'center', gap: 14 },
+  grow: { flex: 1 },
+  inline: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  bold: { fontWeight: '700' },
+  sheetTitle: { marginHorizontal: 16, marginTop: -20 },
+  error: { marginHorizontal: 32, marginTop: 12 },
+});
