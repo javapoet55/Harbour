@@ -108,7 +108,13 @@ describe('the voice screen', () => {
 
     expect(screen.getByText('Ask by Voice')).toBeTruthy();
     expect(screen.getByText('Ask Nexdo anything')).toBeTruthy();
-    expect(screen.getByText('“What should I focus on today?”')).toBeTruthy();
+    // 8c5f969: the prompt and the first two examples name moments and shopping lists.
+    expect(screen.getByText('Ask about tasks, calendar, important moments, or shopping lists. Keep talking to plan or make changes.')).toBeTruthy();
+    expect(screen.getByText('“What birthdays are coming up?”')).toBeTruthy();
+    expect(screen.getByText('“Add two gallons of milk to my shopping list”')).toBeTruthy();
+    expect(screen.getByText('“Remind me to call Damien at 11 AM”')).toBeTruthy();
+    expect(screen.queryByText('“What should I focus on today?”')).toBeNull();
+    expect(screen.queryByText('“Find time for a walk tomorrow”')).toBeNull();
   });
 
   it('renders the calendar-mode copy and asks for the calendar scope', async () => {

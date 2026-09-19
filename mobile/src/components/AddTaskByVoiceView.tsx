@@ -34,10 +34,10 @@ export type AddTaskByVoiceViewProps = {
   calendarOnly?: boolean;
 };
 
-/** `AddTaskByVoiceView.swift:69-71`. */
+/** `AddTaskByVoiceView.swift:69-71`. The ask-mode examples changed in 8c5f969 (moments and shopping). */
 const EXAMPLES = {
   calendar: ['“Dentist appointment tomorrow at 11 AM for 30 minutes”', '“Team meeting Friday at 2 PM for an hour”', '“That’s all”'],
-  ask: ['“What should I focus on today?”', '“Find time for a walk tomorrow”', '“Remind me to call Damien at 11 AM”'],
+  ask: ['“What birthdays are coming up?”', '“Add two gallons of milk to my shopping list”', '“Remind me to call Damien at 11 AM”'],
   task: ['“Call Damien tomorrow at 11 AM”', '“Actually make that noon”', '“That’s all”'],
 } as const;
 
@@ -129,7 +129,8 @@ export function AddTaskByVoiceView({ askMode = false, calendarOnly = false }: Ad
           {calendarOnly
             ? 'Tell me the event, date, and time. I’ll add it to your calendar.'
             : askMode
-              ? 'Ask about your tasks, calendar, or next step. Keep talking to plan or make changes.'
+              ? // 8c5f969 (AddTaskByVoiceView.swift:42).
+                'Ask about tasks, calendar, important moments, or shopping lists. Keep talking to plan or make changes.'
               : 'Tell me what you want to do. Keep talking to add more or make changes.'}
         </Text>
 
