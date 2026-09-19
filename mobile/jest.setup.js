@@ -117,6 +117,25 @@ jest.mock('expo-contacts', () => ({
   requestPermissionsAsync: jest.fn(async () => ({ granted: true })),
   getContactsAsync: jest.fn(async () => ({ data: [] })),
   getContactByIdAsync: jest.fn(async () => undefined),
+  // Phase 11: the system picker Important Moments uses instead of reading the address book.
+  presentContactPickerAsync: jest.fn(async () => null),
+}));
+
+// Phase 11 Important Moments native modules. Suites that exercise them mock them again.
+jest.mock('expo-calendar', () => ({
+  EntityTypes: { EVENT: 'event' },
+  requestCalendarPermissionsAsync: jest.fn(async () => ({ granted: true })),
+  getCalendarsAsync: jest.fn(async () => []),
+  getEventsAsync: jest.fn(async () => []),
+}));
+
+jest.mock('expo-clipboard', () => ({
+  setStringAsync: jest.fn(async () => true),
+}));
+
+jest.mock('expo-sharing', () => ({
+  isAvailableAsync: jest.fn(async () => true),
+  shareAsync: jest.fn(async () => undefined),
 }));
 
 jest.mock('expo-sms', () => ({

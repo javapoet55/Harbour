@@ -9,6 +9,7 @@ import { useCoordinator } from '../src/actions/coordinator';
 import { useActionNotifications } from '../src/actions/useActionNotifications';
 import { onSignedOut } from '../src/api';
 import { RootErrorBoundary } from '../src/components/RootErrorBoundary';
+import { useMomentsLifecycle } from '../src/features/moments/useMomentsLifecycle';
 import { createQueryClient } from '../src/query/client';
 import { queryKeys } from '../src/query/keys';
 import { useMe } from '../src/query/useMe';
@@ -143,6 +144,10 @@ export function RootNavigator() {
   // The notification category, the foreground rule, and every tap or button response.
   useActionNotifications();
 
+  // Important Moments: `moments.activate(id)`, the foreground refresh and the notification route
+  // (ios/App/RootView.swift:57-72).
+  useMomentsLifecycle(profile?.id);
+
   return (
     <>
       <StatusBar style={theme.scheme === 'dark' ? 'light' : 'dark'} />
@@ -157,6 +162,8 @@ export function RootNavigator() {
         {/* Reminder screens sit OUTSIDE the tab group: a notification opens them over any tab. */}
         <Stack.Protected guard={profile != null}>
           <Stack.Screen name="action" />
+          {/* Important Moments. Outside the tab group, like `action`: a moment notification opens it over any tab. */}
+          <Stack.Screen name="moments" />
         </Stack.Protected>
       </Stack>
     </>

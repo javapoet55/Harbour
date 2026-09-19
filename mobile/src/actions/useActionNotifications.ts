@@ -2,8 +2,9 @@ import * as Notifications from 'expo-notifications';
 import { router } from 'expo-router';
 import { useEffect } from 'react';
 
+import { handleMomentNotification } from '../features/moments/useMomentsLifecycle';
 import { useCoordinator } from './coordinator';
-import { DEFAULT_ACTION_IDENTIFIER, FOREGROUND_PRESENTATION, registerActionCategory, readActionPayload } from './notifications';
+import { DEFAULT_ACTION_IDENTIFIER, DISMISS_ACTION_IDENTIFIER, FOREGROUND_PRESENTATION, registerActionCategory, readActionPayload } from './notifications';
 
 /**
  * `TaskActionAppDelegate` (ios/App/TaskActionNotifications.swift:42-73) and the `.sheet(item:
@@ -29,6 +30,8 @@ Notifications.setNotificationHandler({
 
 /** `didReceive response` (TaskActionNotifications.swift:65-72). */
 export function handleNotificationResponse(response: Notifications.NotificationResponse): void {
+  // Swift checks the Moments payload first and independently (TaskActionNotifications.swift:68-70).
+  handleMomentNotification(response.notification.request.content.data, response.actionIdentifier, DISMISS_ACTION_IDENTIFIER);
   const payload = readActionPayload(response.notification.request.content.data);
   if (!payload) return;
   useCoordinator.getState().receive({

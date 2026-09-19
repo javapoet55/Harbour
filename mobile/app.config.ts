@@ -48,6 +48,9 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       'android.permission.CAMERA',
       'android.permission.SYSTEM_ALERT_WINDOW',
       'android.permission.WRITE_CONTACTS',
+      // - WRITE_CALENDAR: added by expo-calendar. Important Moments only READS the calendar the person
+      //   picks (`MomentCalendarService`, ios/App/MomentEditor.swift:276-287); nothing is ever written.
+      'android.permission.WRITE_CALENDAR',
       // - FOREGROUND_SERVICE / FOREGROUND_SERVICE_MEDIA_PLAYBACK: added by expo-audio for background
       //   playback. Nexdo never plays audio in the background — `VoicePlayback`
       //   (ios/App/VoicePlayback.swift) is an in-app player, and the voice session closes five
@@ -133,11 +136,22 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     [
       // Phase 8 contacts. `AppleTaskActionContacts` (ios/App/TaskActionContacts.swift:19-26) asks the
       // first time a channel is chosen, and the Swift target's usage string is reused verbatim from
-      // ios/Nexdo.xcodeproj/project.pbxproj:246.
+      // ios/Nexdo.xcodeproj/project.pbxproj:321 (Phase 11: Swift added the Important Moments sentence).
       'expo-contacts',
       {
         contactsPermission:
-          'Nexdo uses Contacts to let you choose who to call, message, or email for your tasks. Phone numbers and email addresses stay on this device; matching contact names may be shared during voice clarification.',
+          'Nexdo uses Contacts to let you choose who to call, message, or email for your tasks. Phone numbers and email addresses stay on this device; matching contact names may be shared during voice clarification. For Important Moments, only recipient details you review and save are synced to your Nexdo account.',
+      },
+    ],
+    [
+      // Phase 11 Important Moments. "Choose calendars and anniversary candidates" reads ONE device
+      // calendar the person picks (`MomentCalendarService`, ios/App/MomentEditor.swift:276-287). The
+      // usage string is the Swift target's verbatim (ios/Nexdo.xcodeproj/project.pbxproj:319); reminders
+      // are never read, so that permission stays off.
+      'expo-calendar',
+      {
+        calendarPermission: 'Nexdo reads your selected calendars to suggest birthday and anniversary moments for your review.',
+        remindersPermission: false,
       },
     ],
     [
