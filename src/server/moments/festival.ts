@@ -23,7 +23,6 @@ export async function saveFestival(userId:string,input:unknown) {
  const p=festivalSaveInput.parse(input);
  const today=new Intl.DateTimeFormat('en-CA',{timeZone:p.timeZoneID,year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
  if(p.date<today) throw new MomentError('Choose today or a future moment date.');
- if(p.settings.archived) throw new MomentError('Use Delete Moment to remove a moment.');
  if(new Set(p.recipients.map(r=>r.key)).size!==p.recipients.length || new Set(p.recipients.flatMap(r=>r.id?[r.id]:[])).size!==p.recipients.filter(r=>r.id).length) throw new MomentError('Remove duplicate recipients.');
  if(!p.recipients.some(r=>r.selected)) throw new MomentError('Select at least one recipient.');
  if(p.settings.includeImage) throw new MomentError('Image attachments are not enabled. Exclude the preview image before saving for delivery.');
@@ -39,6 +38,8 @@ export async function saveFestival(userId:string,input:unknown) {
   const moments=await tx.importantMoment.findMany({where:{id:{in:p.ids},userId,type:{in:['festival','birthday','anniversary','getWellSoon']}}});
   if(moments.length!==new Set(p.ids).size) throw new MomentError('Moment not found.',404);
   if(p.recipients.some(r=>r.id&&!p.ids.includes(r.id))) throw new MomentError('Invalid recipient.',400);
+  // Archive state belongs to the stored record, not the editable settings payload.
+  if(moments.some(m=>readFestivalSettings(m.festivalSettings).archived===true)) throw new MomentError('This moment was removed. Refresh Moments before editing.',409);
   const anchor=moments[0];
   if(moments.some(m=>m.type!==anchor.type)) throw new MomentError('Manage one occasion category at a time.');
   if(anchor.type!=='festival' && p.settings.catalogManaged) throw new MomentError('Catalog dates are only supported for festivals.');

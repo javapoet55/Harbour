@@ -128,7 +128,7 @@ import CryptoKit
         let input=Input(ids:originals.map(\.id),title:title,date:MomentDates.day(date,zone:zone),timeZoneID:zone,yearly:yearly,active:active,recipients:recipients.map{Recipient(id:$0.momentID,key:$0.key,name:$0.name,phone:FestivalValidation.phone($0.phone),email:$0.email.trimmingCharacters(in:.whitespaces),selected:$0.selected)},settings:settings,cancelSchedules:cancelSchedules)
         let _:MomentOK=try await store.request("festivalSave",input)
         await store.refresh()
-        let updated=store.moments.filter{$0.type==occasionType && FestivalSettings.read($0.festivalSettings)?.groupID==settings.groupID}
+        let updated=store.moments.filter{!$0.isArchived && $0.type==occasionType && FestivalSettings.read($0.festivalSettings)?.groupID==settings.groupID}
         guard !updated.isEmpty else {throw FestivalError.message("Saved. Refresh Moments before continuing.")}
         originals=updated
         for i in recipients.indices {if let m=updated.first(where:{$0.id==recipients[i].momentID || $0.sourceKey=="\(occasionType):\(settings.groupID):\(recipients[i].key)"}){recipients[i].momentID=m.id}}

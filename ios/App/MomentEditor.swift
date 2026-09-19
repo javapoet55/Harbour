@@ -21,7 +21,7 @@ struct MomentEditor: View {
     @FocusState private var focusedField: Field?
     var body: some View {
         if completedSave, let createdID,
-           let group = MomentDisplayGroup.groups(store.moments).first(where: { $0.moments.contains(where: { $0.id == createdID }) }) {
+           let group = MomentDisplayGroup.editableGroups(store.moments).first(where: { $0.moments.contains(where: { $0.id == createdID }) }) {
             ManageFestivalView(group: group, store: store, onDone: { dismiss() })
         } else { editor }
     }

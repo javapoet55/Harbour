@@ -97,3 +97,22 @@ import Testing
         #expect(groups[0].moments.count == 2)
     }
 }
+
+@Test func editableMomentGroupsExcludeArchivedRecipientsButHistoryKeepsThem() throws {
+    var settings = FestivalSettings()
+    settings.groupID = "shared"
+    func moment(_ id: String, archived: Bool) throws -> ImportantMoment {
+        var saved = settings
+        saved.archived = archived
+        let raw: [String: Any] = ["id":id,"type":"birthday","title":"Birthday","firstName":id,"phone":"","email":"","occurrenceDate":"2030-01-01","nextOccurrence":"2030-01-01","timeZoneID":"UTC","source":"manual","sourceKey":id,"yearly":true,"enabled":!archived,"drafts":[],"festivalSettings":String(data:try JSONEncoder().encode(saved),encoding:.utf8)!]
+        return try JSONDecoder().decode(ImportantMoment.self,from:JSONSerialization.data(withJSONObject:raw))
+    }
+    let removed = try moment("removed", archived:true)
+    let current = try moment("current", archived:false)
+    #expect(MomentDisplayGroup.editableGroups([removed,current]).first?.moments.map(\.id) == ["current"])
+    #expect(MomentDisplayGroup.groups([removed,current]).first?.moments.count == 2)
+    var deleted = current
+    deleted.festivalSettings = "{ \"archived\" : true }"
+    #expect(deleted.isArchived)
+    #expect(MomentDisplayGroup.editableGroups([deleted]).isEmpty)
+}

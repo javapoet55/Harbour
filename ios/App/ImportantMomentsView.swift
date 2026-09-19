@@ -214,7 +214,7 @@ struct ImportantMomentsView: View {
     @State private var deliveryFilter = "All"
     @State private var managingMoments = false
     @State private var managingFestival: MomentDisplayGroup?
-    private var displayed: [ImportantMoment] { store.moments.filter { (tab == "Sent" || !($0.festivalSettings?.contains("\"archived\":true") ?? false)) && (tab != "Upcoming" || $0.nextOccurrence >= MomentDates.day(Date(), zone: $0.timeZoneID)) && (filter == "All" || $0.type == (filter == "Get Well Soon" ? "getWellSoon" : filter.lowercased())) && (search.isEmpty || $0.title.localizedCaseInsensitiveContains(search)) }.sorted { $0.nextOccurrence < $1.nextOccurrence } }
+    private var displayed: [ImportantMoment] { store.moments.filter { (tab == "Sent" || !$0.isArchived) && (tab != "Upcoming" || $0.nextOccurrence >= MomentDates.day(Date(), zone: $0.timeZoneID)) && (filter == "All" || $0.type == (filter == "Get Well Soon" ? "getWellSoon" : filter.lowercased())) && (search.isEmpty || $0.title.localizedCaseInsensitiveContains(search)) }.sorted { $0.nextOccurrence < $1.nextOccurrence } }
     var body: some View {
         ZStack { TodayBackdrop(); ScrollView { VStack(spacing: 16) {
             MomentSegments(options: ["Upcoming", "Scheduled", "Sent"], selection: $tab)
@@ -578,7 +578,7 @@ private struct MomentRoutedView: View {
                 .navigationDestination(isPresented: $showingDetail) {
                     if let plan = moment.drafts.flatMap({ $0.plans ?? [] }).first(where: { $0.editable }) {
                         WishPlanView(plan: plan)
-                    } else if moment.supportsGreetingCard, let group = MomentDisplayGroup.groups(store.moments.filter { $0.type == moment.type }).first(where: { $0.moments.contains { $0.id == moment.id } }) {
+                    } else if moment.supportsGreetingCard, let group = MomentDisplayGroup.editableGroups(store.moments.filter { $0.type == moment.type }).first(where: { $0.moments.contains { $0.id == moment.id } }) {
                         ManageFestivalView(group: group, store: store,onDone:{showingDetail=false})
                     } else {
                         ReviewWishView(moment: moment)

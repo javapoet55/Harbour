@@ -5,7 +5,7 @@ struct MomentsManagementEntry: View {
     @EnvironmentObject private var store:ImportantMomentsStore
     private var groups:[MomentDisplayGroup] {
         MomentDisplayGroup.groups(store.moments.filter {
-            !($0.festivalSettings?.contains("\"archived\":true") ?? false)
+            !$0.isArchived
         }.sorted { $0.nextOccurrence < $1.nextOccurrence })
     }
     var body:some View {

@@ -11,6 +11,11 @@ public struct ImportantMoment: Codable, Identifiable, Sendable {
     public static func label(for type:String) -> String { type == "getWellSoon" ? "Get Well Soon" : type.capitalized }
     public var supportsGreetingCard: Bool { ["birthday","anniversary","festival","getWellSoon"].contains(type) }
     public var icon: String { switch type { case "birthday": "gift.fill"; case "anniversary": "heart.fill"; case "festival": "sparkles"; case "getWellSoon": "heart.text.clipboard.fill"; default: "star.fill" } }
+    public var isArchived: Bool {
+        guard let data = festivalSettings?.data(using: .utf8),
+              let settings = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return false }
+        return settings["archived"] as? Bool == true
+    }
     public var latest: WishDraft? { drafts.first }
 }
 public struct WishDraft: Codable, Identifiable, Sendable {
@@ -114,6 +119,9 @@ public extension ImportantMoment {
 public struct MomentDisplayGroup: Identifiable, Sendable {
     public let id: String
     public let moments: [ImportantMoment]
+    public static func editableGroups(_ moments: [ImportantMoment]) -> [Self] {
+        groups(moments.filter { !$0.isArchived })
+    }
     public static func groups(_ moments: [ImportantMoment]) -> [Self] {
         var order: [String] = []
         var entries: [String: [ImportantMoment]] = [:]
