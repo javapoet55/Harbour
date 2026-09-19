@@ -4,34 +4,41 @@ import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 
 import type { NexdoTask } from '../api/types';
 import { standardContains } from '../lib/taskQuery';
+import { commitmentCount as totalCommitments, commitmentHeadline, summaryLine } from '../lib/todayQuickAccess';
 import type { TodayRange, TodayScheduleItem } from '../lib/todaySchedule';
 import { brand, useTheme } from '../theme';
 import { TaskSymbol } from './TaskSymbol';
 import { Text } from './Text';
 
 /**
- * Port of `TodayIntelligenceCard` (ios/App/RootView.swift:1358-1506) and `TodayScheduleRow`
- * (`:1507-1533`).
+ * Port of `TodayIntelligenceCard` (ios/App/RootView.swift:1373-1509) and `TodayScheduleRow`
+ * (`:1511-1536`).
  *
  * Two stacked halves inside one 24pt rounded card: a gradient summary (shown only when
  * `showsSummary`) and a schedule list on the grouped surface.
+ *
+ * Phase 11: the moment count joined the total and the summary line (d444b37, e0a7bcd), and the
+ * "What should I do now?" button at the foot of the schedule was removed (63d9542) — the
+ * "Focus next" card on Today replaced it.
  */
 export function TodayIntelligenceCard({
   range,
   appointments,
   taskCount,
+  momentCount = 0,
   attentionCount,
   schedule,
   searchSchedule,
   showsSummary = true,
   onOpenTask,
   onAttention,
-  onAsk,
   onCalendar,
 }: {
   range: TodayRange;
   appointments: number;
   taskCount: number;
+  /** `range == .today ? moments.today.count : 0` (RootView.swift:1084). */
+  momentCount?: number;
   attentionCount: number;
   schedule: TodayScheduleItem[];
   /** The whole selected range, which search looks through rather than the visible seven. */
@@ -39,7 +46,6 @@ export function TodayIntelligenceCard({
   showsSummary?: boolean;
   onOpenTask: (task: NexdoTask) => void;
   onAttention: () => void;
-  onAsk: () => void;
   onCalendar: () => void;
 }) {
   const theme = useTheme();
@@ -59,7 +65,8 @@ export function TodayIntelligenceCard({
       })
     : schedule.slice(0, 7);
 
-  const commitmentCount = appointments + taskCount;
+  // `commitmentCount` (`:1403`): appointments + tasks + moments.
+  const commitmentCount = totalCommitments(taskCount, appointments, momentCount);
 
   return (
     <View style={[styles.card, { borderColor: withAlpha(brand.nexdoIndigo, 0.11) }]} testID="today-intelligence">
@@ -77,10 +84,18 @@ export function TodayIntelligenceCard({
             </Text>
           </View>
           <Text accessibilityRole="header" style={[styles.headline, { color: theme.colors.ink }]} testID="today-commitments">
-            {`${commitmentCount} commitment${commitmentCount === 1 ? '' : 's'} ${range === 1 ? 'today' : 'ahead'}`}
+            {commitmentHeadline(commitmentCount, range === 1)}
           </Text>
-          <Text style={[styles.subheadline, { color: theme.colors.secondary }]}>
-            {`${taskCount} Task${taskCount === 1 ? '' : 's'} · ${appointments} Appointment${appointments === 1 ? '' : 's'}`}
+          {/* `.lineLimit(1).minimumScaleFactor(0.7)` (e0a7bcd). `adjustsFontSizeToFit` is iOS-only (style
+              map); on Android the line is one clipped line, which the 384dp phone does not reach. */}
+          <Text
+            adjustsFontSizeToFit
+            minimumFontScale={0.7}
+            numberOfLines={1}
+            style={[styles.subheadline, { color: theme.colors.secondary }]}
+            testID="today-summary-line"
+          >
+            {summaryLine(taskCount, appointments, momentCount)}
           </Text>
           {attentionCount > 0 ? (
             <Pressable
@@ -178,22 +193,6 @@ export function TodayIntelligenceCard({
           </>
         )}
 
-        {/* The "What should I do now?" entry (RootView.swift:1481-1494). */}
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="What should I do now?"
-          onPress={onAsk}
-          testID="today-do-now"
-          style={[styles.askCard, { backgroundColor: withAlpha(brand.nexdoBlue, 0.07), borderColor: withAlpha(brand.nexdoBlue, 0.16) }]}
-        >
-          <View style={styles.labelRow}>
-            <TaskSymbol name="sparkles" size={15} color={theme.colors.tint} />
-            <Text style={[styles.eyebrow, { color: theme.colors.tint }]}>What should I do now?</Text>
-          </View>
-          <Text style={[styles.subheadline, { color: theme.colors.secondary }]}>
-            Find the best task for the time you have, and start focusing.
-          </Text>
-        </Pressable>
       </View>
     </View>
   );
@@ -270,5 +269,4 @@ const styles = StyleSheet.create({
   rowTitle: { fontSize: 15, lineHeight: 20, fontWeight: '600' },
   rowDetail: { fontSize: 11, lineHeight: 14 },
   viewMore: { minHeight: 44, justifyContent: 'center', paddingTop: 12 },
-  askCard: { gap: 8, padding: 16, borderRadius: 16, borderWidth: StyleSheet.hairlineWidth, marginTop: 16 },
 });

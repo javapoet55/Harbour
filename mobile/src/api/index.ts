@@ -3,6 +3,7 @@ import { createApiClient, type ApiClient } from './client';
 import type {
   AppleAuthResponse,
   AssistantRequest,
+  CalendarConnectionsResponse,
   CalendarSyncResponse,
   ProactiveNextResponse,
   ProfileSettingsInput,
@@ -240,6 +241,25 @@ export const endpoints = {
 
   /** `AppModel.syncProfileCalendars()` (NexdoApp.swift:286-295). */
   syncCalendars: (client: ApiClient = getApi()) => client.post<CalendarSyncResponse>('/api/calendar/sync'),
+
+  /** `loadCalendarConnections()` (NexdoApp.swift:309-318). */
+  calendarConnections: (client: ApiClient = getApi()) => client.get<CalendarConnectionsResponse>('/api/calendar/connections'),
+
+  /** `setCalendarWrites(id:enabled:)` (NexdoApp.swift:319-324): the "Add my scheduled tasks here" toggle. */
+  setCalendarWrites: (id: string, writeEnabled: boolean, client: ApiClient = getApi()) =>
+    client.patch<{ ok: boolean }>('/api/calendar/connections', { id, writeEnabled }),
+
+  /** `disconnectCalendar(id:)` (NexdoApp.swift:325-331). The server deletes the imported events with it. */
+  disconnectCalendar: (id: string, client: ApiClient = getApi()) =>
+    client.del<{ ok: boolean }>(`/api/calendar/connections?id=${encodeURIComponent(id)}`),
+
+  /**
+   * `calendarConnectURL(provider:)` (NexdoApp.swift:293-304): a short-lived token, issued over the
+   * authenticated API session, that the OAuth start route accepts in place of the session cookie an
+   * in-app browser cannot send (src/app/api/calendar/oauth/[provider]/connect-token/route.ts).
+   */
+  calendarConnectToken: (provider: string, client: ApiClient = getApi()) =>
+    client.post<{ token: string }>(`/api/calendar/oauth/${encodeURIComponent(provider)}/connect-token`),
 
   /** `AppModel.deleteAccount()` (NexdoApp.swift:739-744). */
   deleteAccount: (client: ApiClient = getApi()) => client.del<{ ok: boolean }>('/api/account'),

@@ -26,9 +26,11 @@ export type GroceryItem = {
 export type GroceryList = {
   id: string;
   title: string;
+  /** `yyyy-MM-dd`, in the list's own `timeZone`. */
   date: string;
   timeZone: string;
   weekly: boolean;
+  /** ISO 8601 instant, or null while the trip is open. */
   completedAt?: string | null;
   revision: number;
   shareToken?: string | null;
@@ -64,6 +66,15 @@ export const shoppingApi = {
   /** `credential()` (ShoppingStore.swift:35-37): transcription only, no tools, 25s. */
   transcriptionSession: (client: ApiClient = getApi()) =>
     client.post<TranscriptionSession>('/api/realtime/transcription-session', { consent: true, scope: 'shopping' }, { timeoutMs: 25_000 }),
+};
+
+/**
+ * Run A's read for the Today Quick Access tile (`useShoppingLists`, src/query/useQuickAccess.ts), kept
+ * under its original name. It is the same `GET /api/shopping` as `shoppingApi.lists`.
+ */
+export const shoppingEndpoints = {
+  /** `ShoppingStore.refresh()` (ShoppingStore.swift:15-18). Swift uses the client's default timeout. */
+  list: (client: ApiClient = getApi()) => shoppingApi.lists(client),
 };
 
 /** `store.api.baseURL.appendingPathComponent("shared/shopping/" + token)` (ShoppingViews.swift:331). */

@@ -44,8 +44,6 @@ import { momentsStore, useMomentList, useMoments } from '../../src/features/mome
 import { routedDestination } from '../../src/features/moments/useMomentsLifecycle';
 import { brand, linearGradientStops, textStyles, useTheme } from '../../src/theme';
 
-// TODO(run-a): Today's Quick Access "Moments" tile (TodayQuickAccess.swift:68) pushes here: router.push('/moments'); its count is `upcomingMomentCount` in src/features/moments/domain.ts.
-
 const GRADIENT = linearGradientStops([brand.nexdoMagenta, brand.nexdoIndigo, brand.nexdoBlue]);
 
 function manageHref(group: MomentDisplayGroup) {

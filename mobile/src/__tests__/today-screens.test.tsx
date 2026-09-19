@@ -49,7 +49,6 @@ jest.mock('../api', () => ({
 const mockFetch = jest.fn();
 global.fetch = mockFetch as unknown as typeof fetch;
 
-import Attention from '../../app/(tabs)/today/attention';
 import Overdue from '../../app/(tabs)/today/overdue';
 import ScheduleCheck from '../../app/(tabs)/today/schedule-check';
 import Weather from '../../app/(tabs)/today/weather';
@@ -340,7 +339,8 @@ describe('Weekly tasks screen', () => {
 });
 
 /** `attentionDetails` and `scheduleCheckDetails` (ios/App/RootView.swift:1202-1259). */
-describe('Attention and schedule check screens', () => {
+// The Needs attention SHEET that replaced the pushed attention list is in attention-sheet.test.tsx.
+describe('Schedule check screen', () => {
   const ATTENTION = {
     today: {
       day: '2026-09-16',
@@ -380,26 +380,6 @@ describe('Attention and schedule check screens', () => {
       recommendation: { title: '', explanation: '', additionalAdvice: null, kind: '', taskId: null },
     },
   };
-
-  it('lists attention items with overdue first', async () => {
-    mockIntelligence.mockResolvedValue(ATTENTION);
-    await wrap(<Attention />);
-
-    await waitFor(() => expect(screen.getByTestId('attention-overdue')).toBeTruthy());
-    expect(screen.getByText('Not enough time')).toBeTruthy();
-    expect(screen.getByText('OVERDUE')).toBeTruthy();
-  });
-
-  it('shows the empty state when nothing needs attention', async () => {
-    mockIntelligence.mockResolvedValue({ ...ATTENTION, today: { ...ATTENTION.today, attention: [] } });
-    await wrap(<Attention />);
-    await waitFor(() => expect(screen.getByText('Nothing needs attention')).toBeTruthy());
-  });
-
-  it('falls back to the overdue screen when intelligence is unavailable', async () => {
-    await wrap(<Attention />);
-    await waitFor(() => expect(screen.getByTestId('attention-fallback')).toBeTruthy());
-  });
 
   it('renders the schedule check with its section title and tasks', async () => {
     mockIntelligence.mockResolvedValue(ATTENTION);

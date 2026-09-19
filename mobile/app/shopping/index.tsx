@@ -12,8 +12,6 @@ import { NewListSheet } from '../../src/features/shopping/sheets';
 import { shoppingStore, useShopping } from '../../src/features/shopping/store';
 import { brand, textStyles, useTheme } from '../../src/theme';
 
-// TODO(run-a): Today's Quick Access "Shopping" tile (TodayQuickAccess.swift:72) pushes here: router.push('/shopping'); its subtitle is `"\(remaining) items · \(EEE)"` of the next open list (`:32-40`).
-
 /** `.dateTime.month(.abbreviated).day()` in the device locale — "25 Sep" or "Sep 25". */
 function shortDay(day: string, zone: string): string {
   try {

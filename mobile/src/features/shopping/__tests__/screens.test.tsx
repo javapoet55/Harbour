@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { Alert, Share } from 'react-native';
 
 const mockPush = jest.fn();
@@ -237,7 +237,9 @@ describe('List detail', () => {
     const [title, message, buttons] = alert.mock.calls[0] as [string, string, { text: string; onPress?: () => void }[]];
     expect(title).toBe('Complete this trip and create next week’s list?');
     expect(message).toBe('2 items are unchecked. Your shopping history will be kept.');
-    buttons.find((button) => button.text === 'Complete trip')?.onPress?.();
+    await act(async () => {
+      buttons.find((button) => button.text === 'Complete trip')?.onPress?.();
+    });
     await waitFor(() => expect(screen.getByTestId('list-counts').props.children).toBe('1 remaining · 1 items'));
     expect(mockPost.mock.calls[0][0]).toMatchObject({ operation: 'complete', id: 'l1', revision: 7 });
   });
@@ -277,7 +279,9 @@ describe('List detail', () => {
     await fireEvent.press(screen.getByTestId('list-menu-delete'));
     const [title, , buttons] = alert.mock.calls[0] as [string, undefined, { text: string; onPress?: () => void }[]];
     expect(title).toBe('Delete this list?');
-    buttons.find((button) => button.text === 'Delete list')?.onPress?.();
+    await act(async () => {
+      buttons.find((button) => button.text === 'Delete list')?.onPress?.();
+    });
     await waitFor(() => expect(mockBack).toHaveBeenCalled());
   });
 });

@@ -456,13 +456,13 @@ describe('Calendar event editor', () => {
 /**
  * `CalendarOAuthCoordinator.connectGoogle` (ios/App/ProfileView.swift:10-30).
  *
- * The connect BUTTON is in `ProfileSettingsView`, which is Phase 7, so only the two pure functions
- * are built and tested here; Phase 7 wires them to `expo-web-browser`.
+ * The connect BUTTON and the token handshake are tested with the settings screen in account.test.tsx;
+ * these are the pure helpers.
  */
 describe('Google connect helpers', () => {
-  it('builds the start URL exactly as Swift does', () => {
-    expect(googleConnectStartUrl('https://harbour-production-f8a0.up.railway.app')).toBe(
-      'https://harbour-production-f8a0.up.railway.app/api/calendar/oauth/google/start?native=1',
+  it('builds the start URL as `calendarConnectURL` does, carrying the connect token (3a26c52)', () => {
+    expect(googleConnectStartUrl('https://harbour-production-f8a0.up.railway.app', 'tok+/=')).toBe(
+      'https://harbour-production-f8a0.up.railway.app/api/calendar/oauth/google/start?native=1&connect_token=tok%2B%2F%3D',
     );
   });
 

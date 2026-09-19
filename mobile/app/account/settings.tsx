@@ -2,10 +2,10 @@ import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Linking, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Alert, Linking, Pressable, ScrollView, StyleSheet, Switch, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import type { NextActionPreference, Profile, ProfilePreferences } from '../../src/api';
+import type { CalendarConnection, NextActionPreference, Profile, ProfilePreferences } from '../../src/api';
 import { AccountAvatar, ProfileBackground } from '../../src/components/ProfileParts';
 import {
   SettingsCaption,
@@ -30,8 +30,19 @@ import {
   timeZoneLabel,
   validateSettings,
 } from '../../src/lib/profileSettings';
+import {
+  connectButtonTitle,
+  connectionDetail,
+  DISCONNECT_MESSAGE,
+  disconnectTitle,
+  displayName,
+  isHealthy,
+  lastSyncedDescription,
+  READ_ONLY_CAPTION,
+} from '../../src/lib/calendarConnections';
+import { useBlockDismiss } from '../../src/lib/useBlockDismiss';
 import { encodeProfilePhoto } from '../../src/photo/encodePhoto';
-import { useConnectGoogleCalendar } from '../../src/query/useCalendar';
+import { useCalendarConnections, useConnectGoogleCalendar, useDisconnectCalendar, useSetCalendarWrites } from '../../src/query/useCalendar';
 import { useMe } from '../../src/query/useMe';
 import { useDeleteAccount, useSyncNow, useUpdateProfile, useUploadPhoto } from '../../src/query/useProfile';
 import { useAppearance } from '../../src/store/appearance';
@@ -44,8 +55,9 @@ import { brand, ElevatedSurface, useTheme } from '../../src/theme';
  * Children followed: `ProfileAvatar` (`:39`) and `ProfileBackground` (`:116`) in
  * `src/components/ProfileParts.tsx`; the private `card(_:content:)` (`:274`), `field(_:text:)`
  * (`:277`), `hours(_:start:end:)` (`:293`) and the SwiftUI `Picker`/`Toggle`/`Slider` in
- * `src/components/SettingsControls.tsx`; `CalendarOAuthCoordinator` (`:6-36`) in
- * `src/query/useCalendar.ts`; `ProfilePhotoEncoder` (ios/App/ProfilePhotoEncoder.swift) in
+ * `src/components/SettingsControls.tsx`; `CalendarOAuthCoordinator` (`:6-38`) and the connection
+ * list (`connectionList`, `:290-331`, Phase 11) in `src/query/useCalendar.ts` and
+ * `src/lib/calendarConnections.ts`; `ProfilePhotoEncoder` (ios/App/ProfilePhotoEncoder.swift) in
  * `src/lib/profilePhoto.ts` and `src/photo/encodePhoto.ts`.
  *
  * NOT IN `body`, and so not built — the brief asked after each of these:
@@ -105,6 +117,9 @@ function SettingsScreen({
   const uploadPhoto = useUploadPhoto();
   const syncNow = useSyncNow();
   const connect = useConnectGoogleCalendar();
+  const connections = useCalendarConnections();
+  const setWrites = useSetCalendarWrites();
+  const disconnect = useDisconnectCalendar();
   const deleteAccount = useDeleteAccount();
 
   // `@State private var name/preferences/next` (ProfileView.swift:132-134).
@@ -115,7 +130,15 @@ function SettingsScreen({
   const [failure, setFailure] = useState<string | null>(null);
   const [photoMessage, setPhotoMessage] = useState<string | null>(null);
 
-  const saving = update.isPending || uploadPhoto.isPending || syncNow.isPending || connect.isPending || deleteAccount.isPending;
+  const saving =
+    update.isPending || uploadPhoto.isPending || syncNow.isPending || setWrites.isPending || disconnect.isPending || deleteAccount.isPending;
+  // `@State private var connecting` (ProfileView.swift:141-142) is kept apart from `saving` "so the
+  // OAuth sheet never leaves Save stuck on Saving…". Both block the screen (`:243`, `:256`).
+  const connecting = connect.isPending;
+  const blocked = saving || connecting;
+  // `.interactiveDismissDisabled(saving || connecting)` (`:256`): settings is pushed inside the
+  // Account sheet, so the sheet itself must not be dismissed either.
+  useBlockDismiss(blocked, { parent: true });
   const savingPhoto = uploadPhoto.isPending;
   const zone = deviceTimeZone();
 
@@ -210,6 +233,30 @@ function SettingsScreen({
       ],
     );
 
+  /**
+   * `connect()` (ProfileView.swift:332-348). Not through `run`: it has its own `connecting` flag, and
+   * anything that is not a connection resumes the continuation with a throw, which lands in `failure`.
+   */
+  const connectCalendar = async () => {
+    if (saving || connecting) return;
+    setFailure(null);
+    setMessage(null);
+    try {
+      const result = await connect.mutateAsync();
+      if (!result.ok) throw new Error(result.message);
+      setMessage(result.message);
+    } catch (cause) {
+      setFailure(cause instanceof Error ? cause.message : String(cause));
+    }
+  };
+
+  /** The Disconnect `confirmationDialog` (ProfileView.swift:273-284). */
+  const confirmDisconnect = (connection: CalendarConnection) =>
+    Alert.alert(disconnectTitle(connection), DISCONNECT_MESSAGE, [
+      { text: 'Disconnect', style: 'destructive', onPress: () => void run(() => disconnect.mutateAsync(connection.id)) },
+      { text: 'Keep it', style: 'cancel' },
+    ]);
+
   const openWeb = (path: string) => void Linking.openURL('https://harbour-production-f8a0.up.railway.app' + path);
 
   return (
@@ -222,11 +269,11 @@ function SettingsScreen({
         <Pressable
           accessibilityLabel="Save settings and go back"
           accessibilityRole="button"
-          accessibilityState={{ disabled: loading || saving }}
-          disabled={loading || saving}
+          accessibilityState={{ disabled: loading || blocked }}
+          disabled={loading || blocked}
           hitSlop={8}
           onPress={() => void saveAndDismiss()}
-          style={{ opacity: loading || saving ? 0.25 : 1 }}
+          style={{ opacity: loading || blocked ? 0.25 : 1 }}
           testID="settings-back"
         >
           {/* `Image(systemName: "chevron.backward")` with no `.font` is `.body` (ProfileView.swift:251). */}
@@ -235,6 +282,8 @@ function SettingsScreen({
       </View>
 
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+        {/* `.disabled(saving || connecting)` on the whole column (`:243`). */}
+        <View pointerEvents={blocked ? 'none' : 'auto'} style={styles.column} testID="settings-column">
         <Text accessibilityRole="header" style={[styles.largeTitle, { color: theme.colors.ink }]}>
           Settings
         </Text>
@@ -441,24 +490,25 @@ function SettingsScreen({
               <Text style={[styles.subheadline, { color: theme.colors.secondary }]}>
                 Connect Google Calendar securely. You may need to sign in with Google.
               </Text>
+              <ConnectionList
+                connections={connections.data ?? []}
+                loaded={!connections.isPending}
+                onDisconnect={confirmDisconnect}
+                onWrites={(connection, enabled) => void run(() => setWrites.mutateAsync({ id: connection.id, enabled }))}
+              />
               <Pressable
-                accessibilityLabel="Connect Google Calendar"
+                accessibilityLabel={connectButtonTitle(connecting, connections.data?.length ?? 0)}
                 accessibilityRole="button"
-                accessibilityState={{ disabled: saving }}
-                disabled={saving}
-                onPress={() =>
-                  void run(async () => {
-                    const result = await connect.mutateAsync();
-                    // Swift resumes with a throw for anything that is not a connection (`:227-231`).
-                    if (!result.ok) throw new Error(result.message);
-                    return result.message;
-                  })
-                }
+                accessibilityState={{ disabled: blocked }}
+                disabled={blocked}
+                onPress={() => void connectCalendar()}
                 style={styles.linkRow}
                 testID="settings-connect-google"
               >
                 <TaskSymbol color={theme.colors.tint} name="calendar.badge.plus" size={17} />
-                <Text style={[theme.typography.body, { color: theme.colors.tint }]}>Connect Google Calendar</Text>
+                <Text style={[theme.typography.body, { color: theme.colors.tint }]} testID="settings-connect-label">
+                  {connectButtonTitle(connecting, connections.data?.length ?? 0)}
+                </Text>
               </Pressable>
               <Pressable
                 accessibilityLabel="Synchronize now"
@@ -546,9 +596,97 @@ function SettingsScreen({
             </Text>
           </View>
         ) : null}
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
+}
+
+/**
+ * `connectionList` (ProfileView.swift:290-331, commit 3ef906d): one bordered block per connection with
+ * its health icon, name, detail, last sync, Disconnect, and the "Add my scheduled tasks here" toggle.
+ * The demo account has no connected calendar, so this is ported from source, not from a capture.
+ */
+function ConnectionList({
+  connections,
+  loaded,
+  onDisconnect,
+  onWrites,
+}: {
+  connections: CalendarConnection[];
+  loaded: boolean;
+  onDisconnect: (connection: CalendarConnection) => void;
+  onWrites: (connection: CalendarConnection, enabled: boolean) => void;
+}) {
+  const theme = useTheme({ elevated: true });
+  if (connections.length === 0) {
+    // `else if model.calendarConnectionsLoaded` — nothing at all while the first load is in flight.
+    return loaded ? (
+      <Text style={[styles.caption, { color: theme.colors.secondary }]} testID="settings-no-calendars">
+        No calendars connected yet.
+      </Text>
+    ) : null;
+  }
+  const orange = theme.scheme === 'dark' ? '#FF9F0A' : '#FF9500';
+  return (
+    <View style={styles.connections} testID="settings-connections">
+      {connections.map((connection) => {
+        const healthy = isHealthy(connection);
+        const synced = lastSyncedDescription(connection);
+        return (
+          <View
+            key={connection.id}
+            style={[styles.connection, { backgroundColor: withAlpha(brand.nexdoIndigo, 0.035), borderColor: withAlpha(brand.nexdoIndigo, 0.16) }]}
+            testID={`settings-connection-${connection.id}`}
+          >
+            <View style={styles.connectionHeader}>
+              <TaskSymbol
+                color={healthy ? brand.nexdoIndigo : orange}
+                name={healthy ? 'checkmark.circle.fill' : 'exclamationmark.triangle.fill'}
+                size={17}
+              />
+              <View accessible style={styles.grow}>
+                <Text style={[styles.subheadline, styles.bold, { color: theme.colors.label }]}>{displayName(connection)}</Text>
+                <Text style={[styles.caption, { color: theme.colors.secondary }]}>{connectionDetail(connection)}</Text>
+                {synced ? <Text style={[styles.caption2, { color: theme.colors.secondary }]}>{synced}</Text> : null}
+              </View>
+              <Pressable
+                accessibilityRole="button"
+                hitSlop={8}
+                onPress={() => onDisconnect(connection)}
+                testID={`settings-disconnect-${connection.id}`}
+              >
+                <Text style={[styles.caption, { color: theme.colors.danger }]}>Disconnect</Text>
+              </Pressable>
+            </View>
+            <View style={[styles.connectionDivider, { backgroundColor: theme.colors.separator }]} />
+            <View style={styles.row}>
+              <Text style={[styles.subheadline, styles.grow, { color: theme.colors.label }]}>Add my scheduled tasks here</Text>
+              <Switch
+                accessibilityLabel="Add my scheduled tasks here"
+                onValueChange={(enabled) => onWrites(connection, enabled)}
+                testID={`settings-writes-${connection.id}`}
+                thumbColor="#FFFFFF"
+                trackColor={{ false: theme.colors.separator, true: theme.colors.tint }}
+                value={connection.writeEnabled}
+              />
+            </View>
+            {!connection.writeEnabled ? (
+              <Text style={[styles.caption2, { color: theme.colors.secondary }]} testID={`settings-read-only-${connection.id}`}>
+                {READ_ONLY_CAPTION}
+              </Text>
+            ) : null}
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
+function withAlpha(color: string, alpha: number): string {
+  const hex = color.replace('#', '');
+  const int = parseInt(hex.length === 3 ? hex.split('').map((part) => part + part).join('') : hex, 16);
+  return `rgba(${(int >> 16) & 255}, ${(int >> 8) & 255}, ${int & 255}, ${alpha})`;
 }
 
 const styles = StyleSheet.create({
@@ -562,7 +700,14 @@ const styles = StyleSheet.create({
 
   navBar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 14 },
   // `VStack(alignment: .leading, spacing: 18).padding(20)`
-  scroll: { padding: 20, gap: 18 },
+  scroll: { padding: 20 },
+  column: { gap: 18 },
+  caption2: { fontSize: 11, lineHeight: 13 },
+  // `VStack(spacing: 10)` of `.padding(12)` blocks, radius 12.
+  connections: { gap: 10 },
+  connection: { gap: 10, padding: 12, borderRadius: 12, borderWidth: StyleSheet.hairlineWidth },
+  connectionHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
+  connectionDivider: { height: StyleSheet.hairlineWidth },
   row: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   centred: { alignItems: 'center', gap: 8, paddingVertical: 12 },
 
