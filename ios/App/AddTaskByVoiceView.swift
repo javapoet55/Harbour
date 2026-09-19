@@ -202,7 +202,8 @@ struct AddTaskByVoiceView: View {
                 catch { startupError = error.localizedDescription }
             }
             if voice.phase == .connectionLost {
-                startupError = "Automatic reconnection couldn’t finish. Your saved tasks are safe. Tap Try Again."
+                let detail = voice.connectionFailureDetail.map { " (\($0))" } ?? ""
+                startupError = "Automatic reconnection couldn’t finish\(detail). Your saved tasks are safe. Tap Try Again."
             }
         }
     }

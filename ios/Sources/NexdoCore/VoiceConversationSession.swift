@@ -91,6 +91,7 @@ public extension VoiceRealtimeTransport {
     @Published public private(set) var transcript = ""
     @Published public private(set) var reply = ""
     @Published public private(set) var error: String?
+    @Published public private(set) var connectionFailureDetail: String?
     @Published public private(set) var sessionCreatedTasks: [NexdoTask] = []
     public private(set) var context = VoiceTaskSessionContext()
     public private(set) var telemetry = VoiceTelemetry()
@@ -165,7 +166,7 @@ public extension VoiceRealtimeTransport {
                 guard credential.expiresAt > now().timeIntervalSince1970 else { throw URLError(.userAuthenticationRequired) }
                 try await transport.connect(credential: credential)
                 guard run == generation else { return }
-            } catch { if run == generation { fail() } }
+            } catch { if run == generation { fail(error.localizedDescription) } }
         }
     }
     /// Replaces a failed WebRTC connection while preserving the logical voice
@@ -186,13 +187,13 @@ public extension VoiceRealtimeTransport {
                 guard credential.expiresAt > now().timeIntervalSince1970 else { throw URLError(.userAuthenticationRequired) }
                 try await transport.connect(credential: credential)
                 guard run == generation else { return }
-            } catch { if run == generation { fail() } }
+            } catch { if run == generation { fail(error.localizedDescription) } }
         }
     }
     public func restart(credential: VoiceTaskSession) {
         guard phase == .connectionLost || phase == .disconnected else { return }
         starter?.cancel(); starter = nil
-        didDisconnect = false; muted = false; error = nil
+        didDisconnect = false; muted = false; error = nil; connectionFailureDetail = nil
         sessionID = UUID(); generation = UUID(); context = .init(); telemetry = .init()
         isReconnecting = false; audioInterrupted = false; mutedBeforeInterruption = false
         backgrounded = nil; warned = false; playbackResponse = nil; activeResponse = nil
@@ -296,7 +297,8 @@ public extension VoiceRealtimeTransport {
         do { try transport.send(JSONSerialization.data(withJSONObject: event)) }
         catch { fail() }
     }
-    private func fail() {
+    private func fail(_ detail: String? = nil) {
+        if let detail, !detail.isEmpty { connectionFailureDetail = detail }
         error = "The voice connection was interrupted. Saved tasks are preserved while Nexdo reconnects."
         close(reason: .networkFailure)
     }
@@ -330,7 +332,7 @@ public extension VoiceRealtimeTransport {
                 restoreConversationContext()
             } else { telemetry.connectionLatency = now().timeIntervalSince(started) }
             guard !didDisconnect else { return }
-            isReconnecting = false; error = nil; activity = now()
+            isReconnecting = false; error = nil; connectionFailureDetail = nil; activity = now()
             setPhase(worker == nil ? .listening : .toolExecution)
         case "input_audio_buffer.speech_started":
             guard !muted, closingReason == nil, backgrounded == nil else { return }

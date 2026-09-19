@@ -19,6 +19,26 @@ final class VoiceWebRTCTransport: NSObject, VoiceRealtimeTransport {
     private var interruptedResponseID: String?
     private var voiceVolumeObserver: NSObjectProtocol?
     private var iceDisconnectTask: Task<Void, Never>?
+    private var iceGatheringContinuation: CheckedContinuation<Void, Error>?
+    private var iceGatheringTimeoutTask: Task<Void, Never>?
+
+    private enum ConnectionError: LocalizedError {
+        case iceGatheringTimedOut
+        case missingLocalDescription
+        case signalingRejected(Int, String?)
+
+        var errorDescription: String? {
+            switch self {
+            case .iceGatheringTimedOut:
+                return "The phone couldn’t prepare a network route for voice."
+            case .missingLocalDescription:
+                return "The phone couldn’t create a WebRTC offer."
+            case let .signalingRejected(status, detail):
+                let suffix = detail.map { ": \($0)" } ?? ""
+                return "The voice service rejected the WebRTC offer (HTTP \(status))\(suffix)"
+            }
+        }
+    }
 
     override init() {
         super.init()
@@ -58,15 +78,26 @@ final class VoiceWebRTCTransport: NSObject, VoiceRealtimeTransport {
             peer.setLocalDescription(offer) { error in if let error { continuation.resume(throwing: error) } else { continuation.resume() } }
         }
         guard run == token else { throw CancellationError() }
+        // Native WebRTC adds host/server-reflexive candidates asynchronously.
+        // Sending the original offer here omits those candidates and can make
+        // every OpenAI connection fail even though credential creation works.
+        try await waitForICEGathering(peer: peer, expectedRun: token)
+        guard run == token else { throw CancellationError() }
+        guard let localSDP = peer.localDescription?.sdp else { throw ConnectionError.missingLocalDescription }
         var request = URLRequest(url: URL(string: "https://api.openai.com/v1/realtime/calls")!)
         request.httpMethod = "POST"; request.timeoutInterval = 25
         request.setValue("Bearer \(credential.value)", forHTTPHeaderField: "Authorization")
         request.setValue("application/sdp", forHTTPHeaderField: "Content-Type")
-        request.httpBody = Data(offer.sdp.utf8)
+        request.httpBody = Data(localSDP.utf8)
         let network = URLSession(configuration: .ephemeral); self.network = network
         let (answer, response) = try await network.data(for: request)
         guard run == token else { throw CancellationError() }
-        guard let response = response as? HTTPURLResponse, (200..<300).contains(response.statusCode), let sdp = String(data: answer, encoding: .utf8) else { throw URLError(.badServerResponse) }
+        guard let response = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
+        guard (200..<300).contains(response.statusCode) else {
+            let detail = Self.signalingErrorDetail(from: answer)
+            throw ConnectionError.signalingRejected(response.statusCode, detail)
+        }
+        guard let sdp = String(data: answer, encoding: .utf8) else { throw URLError(.cannotDecodeContentData) }
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
             peer.setRemoteDescription(RTCSessionDescription(type: .answer, sdp: sdp)) { error in if let error { continuation.resume(throwing: error) } else { continuation.resume() } }
         }
@@ -81,6 +112,7 @@ final class VoiceWebRTCTransport: NSObject, VoiceRealtimeTransport {
     func silencePlayback() { interruptedResponseID = responseID; outputMuted = true; remoteAudio?.isEnabled = false }
     func close() {
         run = UUID(); iceDisconnectTask?.cancel(); iceDisconnectTask = nil
+        finishICEGatheringWait(throwing: CancellationError())
         microphone?.isEnabled = false; remoteAudio?.isEnabled = false
         channel?.delegate = nil; channel?.close(); channel = nil
         peer?.delegate = nil; peer?.close(); peer = nil; microphone = nil; remoteAudio = nil; factory = nil
@@ -127,6 +159,38 @@ final class VoiceWebRTCTransport: NSObject, VoiceRealtimeTransport {
         // Realtime's track supports gain above unity. 3.0 preserves Nexdo's
         // existing +200% voice gain at the slider's 100% position.
         remoteAudio?.source.volume = AppVoice.volume * 3
+    }
+
+    private func waitForICEGathering(peer: RTCPeerConnection, expectedRun: UUID) async throws {
+        if peer.iceGatheringState == .complete { return }
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            guard run == expectedRun, self.peer === peer else {
+                continuation.resume(throwing: CancellationError()); return
+            }
+            if peer.iceGatheringState == .complete {
+                continuation.resume(); return
+            }
+            iceGatheringContinuation = continuation
+            iceGatheringTimeoutTask?.cancel()
+            iceGatheringTimeoutTask = Task { @MainActor [weak self] in
+                try? await Task.sleep(for: .seconds(8))
+                guard !Task.isCancelled, let self, self.run == expectedRun else { return }
+                self.finishICEGatheringWait(throwing: ConnectionError.iceGatheringTimedOut)
+            }
+        }
+    }
+
+    private func finishICEGatheringWait(throwing error: Error? = nil) {
+        iceGatheringTimeoutTask?.cancel(); iceGatheringTimeoutTask = nil
+        guard let continuation = iceGatheringContinuation else { return }
+        iceGatheringContinuation = nil
+        if let error { continuation.resume(throwing: error) } else { continuation.resume() }
+    }
+
+    private static func signalingErrorDetail(from data: Data) -> String? {
+        guard let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
+        let error = object["error"] as? [String: Any]
+        return (error?["message"] as? String)?.prefix(240).description
     }
 
     private func handleICEState(_ state: RTCIceConnectionState) {
@@ -177,7 +241,13 @@ extension VoiceWebRTCTransport: RTCPeerConnectionDelegate {
     nonisolated func peerConnection(_ peerConnection: RTCPeerConnection, didChange newState: RTCIceConnectionState) {
         Task { @MainActor [weak self] in self?.handleICEState(newState) }
     }
-    nonisolated func peerConnection(_ peerConnection: RTCPeerConnection, didChange newState: RTCIceGatheringState) {}
+    nonisolated func peerConnection(_ peerConnection: RTCPeerConnection, didChange newState: RTCIceGatheringState) {
+        guard newState == .complete else { return }
+        Task { @MainActor [weak self] in
+            guard let self, self.peer === peerConnection else { return }
+            self.finishICEGatheringWait()
+        }
+    }
     nonisolated func peerConnection(_ peerConnection: RTCPeerConnection, didGenerate candidate: RTCIceCandidate) {}
     nonisolated func peerConnection(_ peerConnection: RTCPeerConnection, didRemove candidates: [RTCIceCandidate]) {}
     nonisolated func peerConnection(_ peerConnection: RTCPeerConnection, didOpen dataChannel: RTCDataChannel) {}
