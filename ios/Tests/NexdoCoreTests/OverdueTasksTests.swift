@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import NexdoCore
 
-@Test func overdueListUsesDeadlinesAndExcludesFinishedWork() throws {
+@Test func overdueListUsesEffectiveScheduleAndExcludesFinishedWork() throws {
     func task(_ id: String, _ due: String?, status: String = "PLANNED", start: String? = nil) -> NexdoTask {
         NexdoTask(id: id, title: id, status: status, priority: "NORMAL", durationMin: 30, notes: nil, startAt: start, dueAt: due)
     }
@@ -18,6 +18,8 @@ import Testing
         task("future", "2026-09-10T08:00:00Z"),
         task("invalid", "invalid")
     ]
-    #expect(OverdueTasks.results(tasks, now: now).map(\.id) == ["older", "recent"])
+    // A future reschedule supersedes an old deadline; a missed scheduled task
+    // still needs attention even when it has no separate deadline.
+    #expect(OverdueTasks.results(tasks, now: now).map(\.id) == ["older", "scheduledOnly"])
     #expect(OverdueTasks.results([], now: now).isEmpty)
 }

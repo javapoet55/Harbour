@@ -7,6 +7,28 @@ import XCTest
         app = XCUIApplication(); app.launchArguments = ["-moments-design-preview"]; app.launch()
         XCTAssertTrue(app.navigationBars["Important Moments"].waitForExistence(timeout: 15))
     }
+    func testTodayCompactAttentionOpensOnDemand() {
+        app.terminate()
+        app.launchArguments = ["-today-design-preview"]
+        app.launch()
+        let summary = app.buttons["today-attention-summary"]
+        for _ in 0..<8 {
+            if summary.isHittable { break }
+            app.swipeUp()
+        }
+        XCTAssertTrue(summary.waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["Focus next"].exists)
+        XCTAssertFalse(app.staticTexts["What should I do now?"].exists)
+        summary.tap()
+        XCTAssertTrue(app.navigationBars["Needs attention"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["Complete Gym"].exists)
+        app.buttons["Reschedule all"].tap()
+        XCTAssertTrue(app.navigationBars["Reschedule all"].waitForExistence(timeout: 5))
+        app.buttons["Cancel"].tap()
+        app.buttons["Close"].tap()
+        XCTAssertTrue(summary.waitForExistence(timeout: 5))
+    }
+
     func openFestivalManager() {
         app.terminate(); app.launchArguments.append("-festival-manage-preview"); app.launch()
         let manage=app.buttons["moments-manage"].firstMatch
