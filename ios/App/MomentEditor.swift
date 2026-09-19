@@ -7,6 +7,7 @@ struct MomentEditor: View {
     @Environment(\.dismiss) private var dismiss
     var moment: ImportantMoment? = nil
     var imported: MomentInput? = nil
+    var onDone: (() -> Void)? = nil
     @State private var input = MomentInput()
     @State private var date = Date()
     @State private var initialized = false
@@ -23,7 +24,9 @@ struct MomentEditor: View {
     var body: some View {
         if completedSave, let createdID,
            let group = savedGroup ?? MomentDisplayGroup.editableGroups(store.moments).first(where: { $0.moments.contains(where: { $0.id == createdID }) }) {
-            ManageFestivalView(group: group, store: store, onDone: { dismiss() })
+            ManageFestivalView(group: group, store: store, onDone: {
+                if let onDone { onDone() } else { dismiss() }
+            })
         } else { editor }
     }
     private var editor: some View {

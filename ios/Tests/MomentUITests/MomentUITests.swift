@@ -318,6 +318,23 @@ import XCTest
     func testFestivalDoneReturnsToImportantMomentsFromCard() {
         verifyFestivalDoneReturnsToImportantMoments(direct:true)
     }
+    func testCreatedBirthdayDoneReturnsToImportantMoments() {
+        app.terminate()
+        app.launchArguments = ["-moments-design-preview", "-future-created-moment-preview"]
+        app.launch()
+        XCTAssertTrue(app.buttons["moments-create-new"].waitForExistence(timeout: 15))
+        app.buttons["moments-create-new"].tap()
+        let name = app.textFields["First name"]
+        for _ in 0..<4 { if name.isHittable { break }; app.swipeUp() }
+        name.tap(); name.typeText("Rahul\n")
+        let phone = app.textFields["Phone (optional)"]
+        for _ in 0..<3 { if phone.isHittable { break }; app.swipeUp() }
+        phone.tap(); phone.typeText("+15555550123")
+        app.buttons["moment-save-top"].tap()
+        XCTAssertTrue(app.navigationBars["Manage Moment"].waitForExistence(timeout: 10))
+        completeScheduleAndReturnHome()
+    }
+
     private func verifyFestivalDoneReturnsToImportantMoments(direct:Bool) {
         openFestivalManager()
         if direct {
@@ -327,6 +344,9 @@ import XCTest
             for _ in 0..<5 {if card.isHittable{break};app.swipeUp()}
             card.tap()
         }
+        completeScheduleAndReturnHome()
+    }
+    private func completeScheduleAndReturnHome() {
         app.buttons["festival-tab-Wish Message"].tap()
         let save=app.buttons.matching(identifier:"wish-primary").matching(NSPredicate(format:"label == %@","Save Message")).firstMatch
         for _ in 0..<6 {if save.isHittable{break};app.swipeUp()};save.tap()

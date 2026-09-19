@@ -29,6 +29,10 @@ final class MomentsPreviewProtocol: URLProtocol, @unchecked Sendable {
                 let id = json["id"] as? String ?? "created-" + String(Self.createdMoments.count)
                 value["id"] = id; value["enabled"] = true; value["drafts"] = []
                 value["nextOccurrence"] = input["occurrenceDate"]
+                if ProcessInfo.processInfo.arguments.contains("-future-created-moment-preview") {
+                    let day = MomentDates.day(Date().addingTimeInterval(86400), zone: "America/Los_Angeles")
+                    value["occurrenceDate"] = day; value["nextOccurrence"] = day
+                }
                 Self.createdMoments.removeAll { $0["id"] as? String == id }
                 Self.createdMoments.append(value)
                 result = ["moment": value]

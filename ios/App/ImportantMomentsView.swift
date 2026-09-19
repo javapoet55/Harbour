@@ -213,6 +213,7 @@ struct ImportantMomentsView: View {
     @State private var filter = "All"
     @State private var deliveryFilter = "All"
     @State private var managingMoments = false
+    @State private var creatingMoment = false
     @State private var managingFestival: MomentDisplayGroup?
     private var displayed: [ImportantMoment] { store.moments.filter { (tab == "Sent" || !$0.isArchived) && (tab != "Upcoming" || $0.nextOccurrence >= MomentDates.day(Date(), zone: $0.timeZoneID)) && (filter == "All" || $0.type == (filter == "Get Well Soon" ? "getWellSoon" : filter.lowercased())) && (search.isEmpty || $0.title.localizedCaseInsensitiveContains(search)) }.sorted { $0.nextOccurrence < $1.nextOccurrence } }
     var body: some View {
@@ -240,7 +241,7 @@ struct ImportantMomentsView: View {
                                 Button { managingMoments = true } label: {
                                     Text("Manage").frame(minHeight:44)
                                 }.accessibilityIdentifier("moments-manage")
-                                NavigationLink { MomentEditor() } label: {
+                                Button { creatingMoment = true } label: {
                                     Text("Create New").frame(minHeight:44)
                                 }.accessibilityIdentifier("moments-create-new")
                             }.font(.system(size:summaryActionFontSize,weight:.semibold)).foregroundStyle(Color.nexdoIndigo)
@@ -289,8 +290,11 @@ struct ImportantMomentsView: View {
             if let error = store.error { Text(error).foregroundStyle(.red); Button("Retry") { Task { await store.refresh() } } }
             if store.loading { ProgressView() }
             if let synced = store.lastSynced { Text("Updated \(synced.formatted(date: .omitted, time: .shortened))").font(.caption).foregroundStyle(.secondary) }
-            NavigationLink { MomentEditor() } label: { Label("Add Moment", systemImage: "plus").font(.headline).frame(maxWidth: .infinity, minHeight: 52) }.buttonStyle(.borderedProminent)
+            Button { creatingMoment = true } label: { Label("Add Moment", systemImage: "plus").font(.headline).frame(maxWidth: .infinity, minHeight: 52) }.buttonStyle(.borderedProminent)
         }.padding(18) } }
+        .navigationDestination(isPresented: $creatingMoment) {
+            MomentEditor(onDone: { creatingMoment = false })
+        }
         .navigationDestination(isPresented:$managingMoments) {
             MomentsManagementEntry(onDone:{managingMoments=false})
         }
