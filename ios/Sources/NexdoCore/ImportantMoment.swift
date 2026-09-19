@@ -11,6 +11,7 @@ public struct ImportantMoment: Codable, Identifiable, Sendable {
     public static func label(for type:String) -> String { type == "getWellSoon" ? "Get Well Soon" : type.capitalized }
     public var supportsGreetingCard: Bool { ["birthday","anniversary","festival","getWellSoon"].contains(type) }
     public var icon: String { switch type { case "birthday": "gift.fill"; case "anniversary": "heart.fill"; case "festival": "sparkles"; case "getWellSoon": "heart.text.clipboard.fill"; default: "star.fill" } }
+    public var hasRecipient: Bool { [firstName, phone, email].contains { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty } }
     public var isArchived: Bool {
         guard let data = festivalSettings?.data(using: .utf8),
               let settings = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return false }
@@ -129,7 +130,7 @@ public struct MomentDisplayGroup: Identifiable, Sendable {
             let key: String
             if moment.supportsGreetingCard, let settings = FestivalSettings.read(moment.festivalSettings) {
                 key = moment.type + "-group:" + settings.groupID
-            } else if moment.type == "festival" {
+            } else if moment.type == "festival", moment.hasRecipient {
                 let title = moment.title.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
                 key = [title, moment.nextOccurrence, moment.timeZoneID, String(moment.yearly)]
                     .map { "\($0.utf8.count):\($0)" }.joined()

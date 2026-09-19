@@ -32,3 +32,13 @@ it('stale editors cannot restore a deleted moment',async()=>{
  expect(saved.enabled).toBe(false);
  expect(JSON.parse(saved.festivalSettings).archived).toBe(true);
 });
+it('saves an empty recipient list without deleting the moment or inheriting contact data',async()=>{
+ const {m,input}=await fixture();
+ await saveFestival(userId,{...input,recipients:[]});
+ const saved=await prisma.importantMoment.findUniqueOrThrow({where:{id:m.id}});
+ expect(saved.enabled).toBe(true);
+ expect([saved.firstName,saved.phone,saved.email]).toEqual(['','','']);
+ expect(JSON.parse(saved.festivalSettings).archived).toBe(false);
+ await saveFestival(userId,{...input,recipients:[],title:'Still empty'});
+ expect((await prisma.importantMoment.findUniqueOrThrow({where:{id:m.id}})).title).toBe('Still empty');
+});

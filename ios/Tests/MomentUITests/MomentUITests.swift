@@ -52,6 +52,19 @@ import XCTest
         XCTAssertFalse(app.buttons["Save Moment"].exists)
     }
 
+    func testNewMomentHasNoDefaultContacts() {
+        app.buttons["moments-create-new"].tap()
+        app.buttons["moment-save-top"].tap()
+        XCTAssertTrue(app.navigationBars["Manage Moment"].waitForExistence(timeout: 10))
+        app.buttons["Contacts"].tap()
+        XCTAssertTrue(app.staticTexts["0 selected"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["moment-no-recipients"].exists)
+        XCTAssertFalse(app.buttons["Select Damien"].exists)
+        XCTAssertFalse(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Mobile ·")).firstMatch.exists)
+        app.buttons["Wish Message"].tap()
+        XCTAssertTrue(app.buttons["Schedule"].exists)
+    }
+
     func testCreateBirthdayOpensPersonalizedManager() {
         app.buttons["moments-create-new"].tap()
         XCTAssertTrue(app.navigationBars["Create Moment"].waitForExistence(timeout: 5))

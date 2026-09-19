@@ -39,3 +39,11 @@ it('recreating an archived source opens a fresh active moment and preserves hist
  expect((await saveMoment(userId,value)).id).toBe(saved.id);
  expect(JSON.parse((await prisma.importantMoment.findUniqueOrThrow({where:{id:old.id}})).festivalSettings).archived).toBe(true);
 });
+it('explicit new manual moments do not inherit an existing recipient record',async()=>{
+ const details={...input,source:'manual',email:randomUUID()+'@example.com',sourceKey:randomUUID()};
+ const first=await saveMoment(userId,details);
+ const second=await saveMoment(userId,{...details,sourceKey:randomUUID(),firstName:'New recipient'});
+ expect(second.id).not.toBe(first.id);
+ expect(second.firstName).toBe('New recipient');
+ expect((await saveMoment(userId,details)).id).toBe(first.id);
+});

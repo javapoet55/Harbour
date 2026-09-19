@@ -133,7 +133,12 @@ struct ManageFestivalView: View {
     private var zonePicker:some View {HStack{Text("Time zone");Spacer();Picker("Time zone",selection:$model.zone){ForEach(TimeZone.knownTimeZoneIdentifiers,id:\.self){id in Text(TimeZone(identifier:id)?.localizedName(for:.generic,locale:.current) ?? id).tag(id)}}.labelsHidden()}}
     private var recipients:some View {Group{
         Text("Recipients").font(.largeTitle.bold());Text("\(model.selected.count) selected").foregroundStyle(.secondary)
+        if model.recipients.isEmpty {
+            Text("No contacts added yet. Add a contact to choose who receives this wish.").font(.subheadline).foregroundStyle(.secondary).accessibilityIdentifier("moment-no-recipients")
+        }
+        if !model.recipients.isEmpty {
         MomentCard{ForEach($model.recipients){$r in if showAllContacts || model.recipients.prefix(3).contains(where:{$0.id==r.id}) {VStack(alignment:.leading,spacing:10){HStack{Text(r.initials).font(.title2.bold()).frame(width:48,height:48).background(Color.nexdoIndigo.opacity(0.12),in:Circle());VStack(alignment:.leading){Text(r.name).font(.headline);Text(r.masked(channel:model.channel(r))).font(.subheadline).foregroundStyle(.secondary)};Spacer();Button{r.selected.toggle()}label:{Image(systemName:r.selected ? "checkmark.circle.fill":"circle").font(.title2).foregroundStyle(Color.nexdoIndigo).frame(width:44,height:44)}.buttonStyle(.plain).accessibilityLabel("Select \(r.name)").accessibilityAddTraits(r.selected ? .isSelected:[])};DisclosureGroup("Edit recipient"){TextField("Name",text:$r.name).focused($focusedField,equals:.recipientName(r.key)).submitLabel(.done).onSubmit{focusedField=nil};TextField("Phone",text:$r.phone).keyboardType(.phonePad).focused($focusedField,equals:.recipientPhone(r.key));TextField("Email",text:$r.email).keyboardType(.emailAddress).textInputAutocapitalization(.never).focused($focusedField,equals:.recipientEmail(r.key)).submitLabel(.done).onSubmit{focusedField=nil};Button("Use as manually entered contact"){r.contactIdentifier=""};Button("Remove contact",role:.destructive){let key=r.id;model.recipients.removeAll{$0.id==key};model.invalidateApproval()}};Divider()}}}}
+        }
         if model.recipients.count > 3 {
             Button(showAllContacts ? "Show less" : "Show more (\(model.recipients.count-3))") {showAllContacts.toggle()}
                 .frame(maxWidth:.infinity,minHeight:44).accessibilityIdentifier("festival-show-contacts")

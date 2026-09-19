@@ -18,13 +18,13 @@ export const festivalSettings = z.object({
 });
 export function readFestivalSettings(value:string) { try { return JSON.parse(value) as Record<string,unknown>; } catch { return {}; } }
 const recipient = z.object({id:z.string().optional(),key:z.string().min(1).max(200),name:z.string().trim().min(1).max(80),phone:z.string().max(40),email:z.union([z.literal(''),z.email()]),selected:z.boolean()});
-export const festivalSaveInput = z.object({ids:z.array(z.string()).min(1).max(100),title:z.string().trim().min(1).max(150),date:day,timeZoneID:zone,yearly:z.boolean(),active:z.boolean(),recipients:z.array(recipient).min(1).max(100),settings:festivalSettings,cancelSchedules:z.boolean().default(false)});
+export const festivalSaveInput = z.object({ids:z.array(z.string()).min(1).max(100),title:z.string().trim().min(1).max(150),date:day,timeZoneID:zone,yearly:z.boolean(),active:z.boolean(),recipients:z.array(recipient).max(100),settings:festivalSettings,cancelSchedules:z.boolean().default(false)});
 export async function saveFestival(userId:string,input:unknown) {
  const p=festivalSaveInput.parse(input);
  const today=new Intl.DateTimeFormat('en-CA',{timeZone:p.timeZoneID,year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
  if(p.date<today) throw new MomentError('Choose today or a future moment date.');
  if(new Set(p.recipients.map(r=>r.key)).size!==p.recipients.length || new Set(p.recipients.flatMap(r=>r.id?[r.id]:[])).size!==p.recipients.filter(r=>r.id).length) throw new MomentError('Remove duplicate recipients.');
- if(!p.recipients.some(r=>r.selected)) throw new MomentError('Select at least one recipient.');
+ if(p.recipients.length && !p.recipients.some(r=>r.selected)) throw new MomentError('Select at least one recipient.');
  if(p.settings.includeImage) throw new MomentError('Image attachments are not enabled. Exclude the preview image before saving for delivery.');
  const addresses=new Set<string>();
  for(const r of p.recipients.filter(r=>r.selected)) {
@@ -53,6 +53,13 @@ export async function saveFestival(userId:string,input:unknown) {
   if(active&&!p.cancelSchedules) throw new MomentError('Existing schedules must be cancelled before saving changes. Review and schedule again.',409);
   await tx.deliveryPlan.updateMany({where:{draft:{momentID:{in:p.ids}},status:{in:['SCHEDULED','AWAITING_CONFIRMATION','FAILED']}},data:{status:'CANCELLED'}});
   if(await tx.deliveryPlan.count({where:{draft:{momentID:{in:p.ids}},status:'SENDING'}})) throw new MomentError('A delivery started. Refresh before editing.',409);
+  // A moment can be saved before anyone is selected. Keep an empty anchor,
+  // without manufacturing a recipient or losing the moment's identity.
+  if(!p.recipients.length) {
+   await tx.importantMoment.update({where:{id:anchor.id},data:{title:p.title,occurrenceDate:p.date,timeZoneID:p.timeZoneID,yearly:p.settings.catalogManaged?false:p.yearly,enabled:p.active,firstName:'',phone:'',email:'',festivalSettings:JSON.stringify({...p.settings,selected:{},contactIDs:{},archived:false})}});
+   await tx.importantMoment.updateMany({where:{id:{in:p.ids.filter(id=>id!==anchor.id)}},data:{enabled:false,festivalSettings:JSON.stringify({...p.settings,archived:true})}});
+   return {ok:true};
+  }
   const settings=JSON.stringify({...p.settings,archived:false});
   const kept:string[]=[];
   for(const r of p.recipients) {

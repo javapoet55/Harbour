@@ -65,7 +65,7 @@ import CryptoKit
         self.store=store;self.originals=group.moments;self.imageService=imageService;self.imageStorage=imageStorage
         let first=group.moments[0];title=first.title;zone=first.timeZoneID;date=MomentDates.date(first.nextOccurrence,zone:first.timeZoneID);yearly=first.yearly;active=group.moments.contains(where: \.enabled)
         var saved=FestivalSettings.read(first.festivalSettings) ?? FestivalSettings()
-        recipients=group.moments.map { m in
+        recipients=group.moments.filter(\.hasRecipient).map { m in
             let key=m.sourceKey.hasPrefix(m.type+":"+saved.groupID+":") ? String(m.sourceKey.dropFirst(m.type.count+1+saved.groupID.count+1)) : m.id
             return ManagedFestivalRecipient(momentID:m.id,key:key,name:m.firstName,phone:m.phone,email:m.email,selected:saved.selected[key] ?? m.enabled,contactIdentifier:saved.contactIDs[key] ?? "")
         }
@@ -120,7 +120,7 @@ import CryptoKit
     private func persist(cancelSchedules:Bool) async throws {
         guard !title.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty,title.count<=150 else{throw FestivalError.message("Enter a moment name of 1–150 characters.")}
         if MomentDates.day(date,zone:zone)<MomentDates.day(Date(),zone:zone) {throw FestivalError.message("Select today or a future moment date.")}
-        if let error=FestivalValidation.recipients(recipients,settings:settings){throw FestivalError.message(error)}
+        if !recipients.isEmpty, let error=FestivalValidation.recipients(recipients,settings:settings){throw FestivalError.message(error)}
         try contactsService.validate(recipients)
         struct Recipient:Encodable {let id:String?;let key,name,phone,email:String;let selected:Bool}
         struct Input:Encodable {let ids:[String];let title,date,timeZoneID:String;let yearly,active:Bool;let recipients:[Recipient];let settings:FestivalSettings;let cancelSchedules:Bool}

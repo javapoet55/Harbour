@@ -23,8 +23,9 @@ async function persistMoment(userId:string,input:unknown,id?:string) {
   if(await prisma.deliveryPlan.count({where:{draft:{momentID:id},status:{in:['SENDING','SCHEDULED','AWAITING_CONFIRMATION']}}})) throw new MomentError('Cancel the active wish before changing its moment.',409);
   return prisma.importantMoment.update({where:{id},data});
  }
- // Same explicitly selected source or same recipient/type/date must not produce duplicates.
- const matches=await prisma.importantMoment.findMany({where:{userId,OR:[{sourceKey:data.sourceKey}, ...(data.email||data.phone ? [{type:data.type,occurrenceDate:data.occurrenceDate,...(data.email?{email:data.email}:{phone:data.phone})}] : [])]}});
+ // Retries share a source key. Only imports deduplicate by recipient/type/date;
+ // an explicit new manual moment must not open someone else’s saved composition.
+ const matches=await prisma.importantMoment.findMany({where:{userId,OR:[{sourceKey:data.sourceKey}, ...(data.source!=='manual' && (data.email||data.phone) ? [{type:data.type,occurrenceDate:data.occurrenceDate,...(data.email?{email:data.email}:{phone:data.phone})}] : [])]}});
  const existing=matches.find(m=>readFestivalSettings(m.festivalSettings).archived!==true) ?? matches[0];
  if(existing && readFestivalSettings(existing.festivalSettings).archived===true) {
   // Preserve archived history, but free its source identity for explicit re-creation.
