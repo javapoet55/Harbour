@@ -68,6 +68,24 @@ export type SettingsResponse = { ok: boolean; profile?: { id: string; photo: str
 /** POST /api/calendar/sync (src/app/api/calendar/sync/route.ts:24). Swift decodes only `error`. */
 export type CalendarSyncResponse = { results: { error?: string | null }[] };
 
+/**
+ * One row of `GET /api/calendar/connections` (src/app/api/calendar/connections/route.ts:9-12), as
+ * `CalendarConnection` decodes it (ios/Sources/NexdoCore/ProfileSettings.swift:28-35). The server also
+ * sends `calendarId` and `visible`, which Swift ignores.
+ */
+export type CalendarConnection = {
+  id: string;
+  provider: string;
+  accountEmail?: string | null;
+  calendarName?: string | null;
+  status: string;
+  /** ISO 8601 with fractional seconds, or null before the first sync. */
+  lastSyncedAt?: string | null;
+  writeEnabled: boolean;
+};
+
+export type CalendarConnectionsResponse = { connections: CalendarConnection[]; defaultCalendarId?: string | null };
+
 /** POST /api/auth/login success body (src/app/api/auth/login/route.ts). Swift discards it and reloads /api/me. */
 export type LoginResponse = { id: string; name: string; email: string };
 

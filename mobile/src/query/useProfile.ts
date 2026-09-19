@@ -31,7 +31,7 @@ export async function reloadProfile(queryClient: QueryClient): Promise<Profile> 
  * invalidated: `WeatherClient` uses hardcoded coordinates and its own `timezone=auto`, so it does not
  * depend on the account zone — see the note in `useToday.ts`.
  */
-function refreshSupplementaryData(queryClient: QueryClient): void {
+export function refreshSupplementaryData(queryClient: QueryClient): void {
   void queryClient.invalidateQueries({ queryKey: queryKeys.agenda.all() });
   void queryClient.invalidateQueries({ queryKey: queryKeys.scheduleIntelligence() });
 }
@@ -152,6 +152,8 @@ export function useSyncNow() {
   return useMutation<string, Error, void>({
     mutationFn: async () => {
       const result = await endpoints.syncCalendars();
+      // `await loadCalendarConnections()` runs before the error check (NexdoApp.swift:338).
+      void queryClient.invalidateQueries({ queryKey: queryKeys.calendar.connections() });
       if (result.results.some((item) => item.error)) {
         return 'Some calendars could not synchronize. Check their connections in calendar settings.';
       }
