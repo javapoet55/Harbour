@@ -563,10 +563,10 @@ the screen was opened on the SM-A055F during Run A and compared by eye, not meas
 | `today-reschedule-all`, `today-reschedule-all-dark` | `app/(tabs)/today/reschedule-all.tsx` | built; checked on phone — **re-capture** |
 | `ask-default`, `ask-text-dark` | unchanged (`AskNexdoView.swift` did not change) | no work |
 | `voice-ask-default` (first pass) | `src/components/AddTaskByVoiceView.tsx` | copy changed (8c5f969) — **re-capture** |
-| `account-settings-default`, `account-settings-calendars-empty`, `account-settings-calendars-dark` | `app/account/settings.tsx` | built; empty state checked on phone — **re-capture** |
-| `account-settings-calendar-connecting` | same | built; "Connecting…" is transient on the phone — **re-capture** |
-| `account-settings-calendar-error-cancelled` | same | built; checked on phone, alert text identical — **re-capture** |
-| (none) connected list, Disconnect dialog, "Add my scheduled tasks here" | same | **port from source, verify on phone** — needs an account with a connected calendar |
+| `account-settings-default`, `account-settings-calendars-empty`, `account-settings-calendars-dark` | `app/account/settings.tsx` | **passed** (pass 2, Windows): card copy, order, the caption/`nexdoSecondary` colours, glyphs and the empty line match; Android re-capture still pending |
+| `account-settings-calendar-connecting` | same | **platform gap**: iOS first shows `ASWebAuthenticationSession`'s own “Wants to Use … to Sign In” alert; Android's Custom Tab opens without one. The dimmed, locked form and “Connecting…” match |
+| `account-settings-calendar-error-cancelled` | same | **passed**: “Could not update profile”, Swift's message, OK, and the red failure line under Save |
+| (none) connected list, Disconnect dialog, "Add my scheduled tasks here" | same | **fixed, port from source** (pass 2): checked against `ProfileView.swift:290-331` line by line. The block's `.stroke()` is 1pt, not a hairline, and the name/detail/sync stack regains `spacing: 2`. Everything else matched: `VStack(spacing: 10)` of `.padding(12)` blocks at radius 12, `nexdoIndigo` 3.5% fill / 16% stroke, top-aligned 12pt `HStack`, health glyph indigo or orange, `.subheadline.bold` name, `.caption` detail, `.caption2` “Synchronized …”, `.caption` red Disconnect, `Divider`, `.subheadline` toggle, `.caption2` read-only line; dialog title, message, Disconnect / Keep it. The dialog is a Material alert (accepted platform gap, as for Sign out). Still needs a connected account on a device |
 
 ### Differences found in Run A
 
@@ -597,33 +597,35 @@ Windows runs.
 
 ## Run C — Shopping
 
-Phase 11 Run C, built on Windows from the Swift source and the second-pass iOS captures
-(`ios/shopping-*`). As for Run B, **no Android capture has been taken yet**; each row is "built,
-awaiting device capture" until a build with the camera permission and Run B's modules is on the phone.
+Built in Run C; compared in **parity pass 2 (Windows, `rn-ui-parity-2-win`)** against every
+`ios/shopping-*` capture and `ShoppingViews.swift`, `ShoppingItemEditor.swift`, `ShoppingVoice.swift`.
 
-| Screen | Swift `body` | React Native | iOS captures | Status |
-| --- | --- | --- | --- | --- |
-| My Lists | `ShoppingViews.swift:78-138` | `app/shopping/index.tsx` | `shopping-lists-default`, `-dark`; empty state not captured (ported from source) | built, awaiting device capture |
-| New List | `ShoppingViews.swift:143-205` | `NewListSheet` in `src/features/shopping/sheets.tsx` | `shopping-new-list`, `-filled`, `-use-last`, `-dark`, `-error-empty-name` | built, awaiting device capture |
-| List detail | `ShoppingViews.swift:206-295, :335-402` | `app/shopping/[id].tsx`, `components.tsx` | `shopping-detail-default`, `-empty`, `-checked`, `-typing`, `-options-menu`, `-dark`, `shopping-complete-trip-dialog` | built, awaiting device capture |
-| Item | `ShoppingItemEditor.swift:5-111` | `src/features/shopping/ItemEditorSheet.tsx` | `shopping-item-editor`, `-scrolled`, `-category-menu`, `-dark`, `-error-empty-name` | built, awaiting device capture |
-| Add by Voice | `ShoppingVoice.swift:77-127` | `src/features/shopping/VoiceSheet.tsx` | `shopping-voice-ready`, `-listening`, `-stopped`, `-dark` | built, awaiting device capture |
-| Review Items | `ShoppingViews.swift:296-304` | `ReviewItemsSheet` in `sheets.tsx` | `shopping-review-items`, `-dark`, `-error-empty-name` | built, awaiting device capture |
-| List Settings | `ShoppingViews.swift:305-315` | `ListSettingsSheet` in `sheets.tsx` | `shopping-list-settings`, `-dark`, `-error-empty-name` | built, awaiting device capture |
-| Share List | `ShoppingViews.swift:316-332` | `ShareListSheet` in `sheets.tsx` | `shopping-share-list`, `-link`, `-dark`, `shopping-share-sheet-text` | built, awaiting device capture |
+**No Android capture could be taken on this machine.** The only AVD (`Pixel_7a_API_34`, x86_64) will
+not start: "x86_64 emulation currently requires hardware acceleration — Android Emulator hypervisor
+driver is not installed", and installing it needs administrator rights and a reboot. So, as in the
+first Windows pass, each row was reviewed from the iPhone capture and the Swift source, the fixes are
+in code, and the mismatch column stays **pending device**.
 
-### Patterns reused from Run B
+| Screen | Swift `body` | React Native | iOS captures | Mismatch % | Result |
+| --- | --- | --- | --- | ---: | --- |
+| My Lists | `ShoppingViews.swift:78-138` | `app/shopping/index.tsx` | `shopping-lists-default`, `-dark`; empty state from source | pending device | **fixed**: `doc.badge.plus` is now a page with a plus badge (was a paperclip page). Otherwise matched: card copy and colours, `.title2.bold` Recent Lists, green cart / indigo `doc.on.doc` tiles, "· Completed", the locale date, `.caption` chevrons |
+| New List | `ShoppingViews.swift:143-205` | `NewListSheet`, `src/features/shopping/sheets.tsx` | `shopping-new-list`, `-filled`, `-use-last`, `-dark`, `-error-empty-name` | pending device | **fixed**: the selected choice's 1.5pt stroke is an overlay again (it took layout space and shifted the card); `arrow.counterclockwise` is the circular arrow mirrored (was a curved undo arrow); `doc.badge.plus` as above. Empty name greys Create List, as captured. Date pill format is the Mac's `DateField` (SHARED-REQUESTS) |
+| List detail | `ShoppingViews.swift:206-295, :335-402` | `app/shopping/[id].tsx`, `components.tsx` | `shopping-detail-default`, `-empty`, `-checked`, `-typing`, `-options-menu`, `-dark`, `shopping-complete-trip-dialog` | pending device | **fixed**: the empty state, a failure with Retry Save / Discard, and Complete Shopping Trip are rows of ONE card, as Swift's trailing `List` rows are (they floated on the backdrop); `ContentUnavailableView`'s glyph is 52pt; grocery-row separators start under the name. **Platform gaps**: swipe-to-delete and drag-to-reorder are an Edit mode; the options `Menu` and the Complete-trip `confirmationDialog` are an anchored list and a Material alert |
+| Item | `ShoppingItemEditor.swift:5-111` | `ItemEditorSheet.tsx`, `image.ts` | `shopping-item-editor`, `-scrolled`, `-category-menu`, `-dark`, `-error-empty-name` | pending device | **fixed**: a disabled image action keeps its glyph in the tint and its title in `.label` (it dimmed the row); **transparent images are flattened onto white** before the JPEG encode (below). **Platform gaps**: the category menu (Mac's `MenuPicker`); "Take a Picture" is never disabled — Android offers no camera-presence check without another native module, and every phone has one |
+| Add by Voice | `ShoppingVoice.swift:77-127` | `VoiceSheet.tsx` | `shopping-voice-ready`, `-listening`, `-stopped`, `-dark` | pending device | **fixed**: the transcript is a `TextEditor` on the sheet's background, inset 10pt inside a 16pt material card (it was one grey box); dark uses the elevated `#1C1C1E`. Title, hint, gradient mic, status line, toggle, caption and Review Items matched |
+| Review Items | `ShoppingViews.swift:296-304` | `ReviewItemsSheet`, `sheets.tsx` | `shopping-review-items`, `-dark`, `-error-empty-name` | pending device | **passed**; **platform gap**: `.onDelete` is a swipe on iOS, a delete button on each row here |
+| List Settings | `ShoppingViews.swift:305-315` | `ListSettingsSheet`, `sheets.tsx` | `shopping-list-settings`, `-dark`, `-error-empty-name` | pending device | **passed** (Save only, greyed with an empty name; the note row is `.body`). Date pill format: SHARED-REQUESTS |
+| Share List | `ShoppingViews.swift:316-332` | `ShareListSheet`, `sheets.tsx` | `shopping-share-list`, `-link`, `-dark`, `shopping-share-sheet-text` | pending device | **passed**; **platform gap**: Android's share sheet takes text only, so Share Link sends the URL as the message |
 
-| # | Pattern | Here |
-| --- | --- | --- |
-| 4 | `MomentCard` | My Lists' cards, New List's choices and name card, Add by Voice's review cards |
-| 5 | `MomentPrimary` | "Create List" / "Creating…", "Review Items" / "Organizing…", "Add N Items" |
-| 7 | Two-step confirmations | Complete trip and Delete list are `Alert.alert`s with Swift's titles and message |
-| 8 | Form sheets, Save disabled while required fields are empty | Item (Cancel/Save), Review Items (Cancel), List Settings (Save only), Share List; New List's "Create List" |
+### Run C's gaps, resolved
 
-### Differences to check on the device
+| Gap in the Run C report | Outcome |
+| --- | --- |
+| Transparent images not flattened before the JPEG encode | **Fixed.** Android's JPEG encoder drops alpha, so transparent pixels came out black, and expo-image-manipulator cannot fill (its `extent` is web-only). `image.ts` now decodes the resized PNG with `upng-js` (pure JavaScript, no native code), composites source-over onto white exactly as Swift's opaque renderer does, writes an uncompressed BMP and lets the manipulator do the JPEG encode. Tested with a real transparent PNG |
+| Bundled grocery art at 0.9–1.8 MB each | **Fixed.** Downscaled from 1254 px to 256 px (7.2 MB → 344 KB); they draw at 44 dp, 176 px at xxxhdpi |
+| Swipe-to-delete, drag-to-reorder, Review Items' swipe delete | **Platform gap.** React Native has no swipe row or drag list in core; `react-native-gesture-handler` is not a dependency here, and adding it is a native module and a rebuild |
+| Share Link sent as text | **Platform gap.** React Native's `Share` takes only `message` on Android; `url` is iOS-only |
+| "Take a Picture" always enabled | **Platform gap.** No camera-presence query without another native module; only emulators lack a camera |
+| Cancelling AI artwork does not abort the request | **Not a gap.** Swift does the same: Cancel only replaces `generation`, and the answer is ignored when it lands (`ShoppingItemEditor.swift:55`, `:86-95`) |
+| Tab bar hidden on Shopping screens | **Not this session's** — the Mac is fixing it app-wide |
 
-- The detail screen is Swift's inset-grouped `List` drawn with Run B's `FormSection`s over the Today
-  backdrop; the header row sits outside the first section, as Swift clears its background.
-- Swipe-to-delete and drag-to-reorder are replaced by an **Edit** mode (delete button and up/down
-  arrows); see the README's Known differences.

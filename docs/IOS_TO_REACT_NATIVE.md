@@ -2082,6 +2082,7 @@ fires both. Each has its own target here.
 
 **Gaps**: swipe-to-delete and drag-to-reorder have no core React Native equivalent — "Edit" in the
 options menu shows a delete button and up/down arrows instead, and Review Items has a delete button per
-row; the tab bar is hidden on these pushed screens (as for Moments); an image with transparency is not
-flattened onto white before the JPEG encode; the five bundled illustrations are Swift's 0.9–1.8 MB PNGs,
-unchanged.
+row; the tab bar is hidden on these pushed screens (as for Moments). Parity pass 2 (Windows) closed two
+more: transparent images are now flattened onto white before the JPEG encode (upng-js, pure
+JavaScript), and the five bundled illustrations are downscaled to 256 px (7.2 MB → 344 KB). See the
+"Run C — Shopping" block in `mobile/docs/reference/PARITY.md`.

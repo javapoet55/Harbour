@@ -63,3 +63,15 @@ They are kept here with what was done, so the measurement behind each one is not
 | What | Why |
 | --- | --- |
 | Present Event Details at full height, the way the app's other sheets are presented, instead of a bottom-anchored `Modal` about 45% tall. | Now that both sides have a capture, this is the whole of the 59.79% on screen 26: the content matches line for line — "Event Details" with Done trailing, the title card, the sentence-case "Calendar commitment" header, the Starts/Ends rows and the time-zone footer — but Swift's sheet covers most of the screen and Android's sits in the bottom 45%, so every row is displaced. Unlike Ask and the consent sheet, this is not a detent gap: Swift is at a large detent, which Android *can* match. `calendar-event-details-default.png` now exists on both platforms. |
+
+## Parity pass 2, Windows (`rn-ui-parity-2-win`): requests for the Mac
+
+Shopping and Account → Calendar are this session's; the Moments form pieces they borrow are the Mac's.
+Found while comparing the `shopping-*` captures; **not edited here**.
+
+| File | Request | Evidence |
+| --- | --- | --- |
+| `src/features/moments/form.tsx` — `DateField` | The date pill formats as `Sep 19, 2026` (fixed `en-US`, from `sendDayLabel`). SwiftUI's compact `DatePicker` follows the device locale: the captures read **`19 Sep 2026`**. Format with `Intl.DateTimeFormat(undefined, { day: 'numeric', month: 'short', year: 'numeric', timeZone })`. Affects New List and List Settings here, and every Moments date field. | `shopping-new-list.png`, `shopping-list-settings.png` |
+| `src/features/moments/form.tsx` — `FormRow` | A `List`/`Form` row that starts with a glyph (a `Label`, or a check circle and artwork) has its separator start under the TEXT, not at the row inset. `FormRow` always draws it from 16. An optional `separatorInset` prop would let callers match; Shopping draws its own for the grocery rows meanwhile. | `shopping-detail-default.png`, `shopping-item-editor.png`, `shopping-share-list-link.png` |
+| `src/features/moments/form.tsx` — `MenuPicker` | SwiftUI's menu `Picker` opens a popover anchored under the row with a checkmark on the LEADING side of the current value; `MenuPicker` opens a centred list with the checkmark trailing. | `shopping-item-editor-category-menu.png` |
+| `src/features/moments/form.tsx` — `FormButton` | A disabled `Button` with a `Label` in a `Form` keeps its glyph in the tint and draws the title in `.label`; `FormButton` dims the whole row to 0.4. Shopping's Item editor uses its own `ImageAction` for this. | `shopping-item-editor.png` ("Take a Picture", "Generate with AI") |
