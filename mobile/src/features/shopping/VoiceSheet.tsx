@@ -126,15 +126,19 @@ function VoiceBody({ onAdd, onClose }: { onAdd: (items: GroceryItem[]) => void; 
               <Text style={[styles.caption, styles.stretch, { color: theme.colors.secondaryLabel }]}>
                 Tap the mic to transcribe in English. Audio is sent only while listening. Review items before adding them.
               </Text>
-              <TextInput
-                accessibilityLabel="Shopping transcript"
-                multiline
-                onChangeText={(text) => voice.setText(text)}
-                style={[styles.transcript, { color: theme.colors.label, backgroundColor: theme.colors.glassFill }]}
-                testID="voice-transcript"
-                textAlignVertical="top"
-                value={state.text}
-              />
+              {/* `TextEditor(…).frame(minHeight: 120).padding(10).background(.ultraThinMaterial, in: 16)`: the
+                  editor keeps its own white background, inset 10pt inside the material card. */}
+              <View style={[styles.transcriptCard, { backgroundColor: theme.colors.glassFill }]}>
+                <TextInput
+                  accessibilityLabel="Shopping transcript"
+                  multiline
+                  onChangeText={(text) => voice.setText(text)}
+                  style={[styles.transcript, { color: theme.colors.label, backgroundColor: theme.colors.backgroundElevated }]}
+                  testID="voice-transcript"
+                  textAlignVertical="top"
+                  value={state.text}
+                />
+              </View>
               <View style={styles.stretch}>
                 <MomentPrimary title={parsing ? 'Organizing…' : 'Review Items'} onPress={() => void reviewItems()} disabled={parsing || state.text.trim() === ''} testID="voice-review" />
               </View>
@@ -214,7 +218,8 @@ const styles = StyleSheet.create({
   mic: { width: 140, height: 140, borderRadius: 70, alignItems: 'center', justifyContent: 'center' },
   dimmed: { opacity: 0.35 },
   caption: { fontSize: 12, lineHeight: 16 },
-  transcript: { alignSelf: 'stretch', minHeight: 120, padding: 10, borderRadius: 16, fontSize: 17 },
+  transcriptCard: { alignSelf: 'stretch', padding: 10, borderRadius: 16 },
+  transcript: { minHeight: 120, paddingHorizontal: 5, paddingVertical: 8, fontSize: 17 },
   inline: { flexDirection: 'row', gap: 8 },
   grow: { flex: 1 },
   field: { fontSize: 17, paddingVertical: 4, backgroundColor: 'transparent' },
