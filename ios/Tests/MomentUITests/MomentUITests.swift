@@ -121,7 +121,7 @@ import XCTest
         app.buttons["festival-tab-Details"].tap()
         XCTAssertEqual(name.value as? String,editedName)
     }
-    func testFestivalTabsPreserveEditsAndWarnOnExit() {
+    func testFestivalTabsAutosaveEdits() {
         openFestivalManager()
         let name=app.textFields["festival-name"];name.tap();name.typeText(" Edited")
         app.buttons["festival-tab-Contacts"].tap()
@@ -131,8 +131,10 @@ import XCTest
         app.buttons["festival-tab-Details"].tap()
         XCTAssertTrue((name.value as? String)?.contains("Edited") == true)
         app.navigationBars.buttons["Back"].tap()
-        XCTAssertTrue(app.buttons["Discard changes"].waitForExistence(timeout:3))
-        app.buttons["Keep editing"].tap()
+        XCTAssertTrue(app.navigationBars["Manage Moments"].waitForExistence(timeout:5))
+        app.buttons["manage-moment-moment"].tap()
+        XCTAssertTrue(app.navigationBars["Manage Moment"].waitForExistence(timeout:5))
+        XCTAssertTrue((app.textFields["festival-name"].value as? String)?.contains("Edited") == true)
     }
     func testFestivalImagePreviewAndSelection() {
         openFestivalManager();app.buttons["festival-tab-Wish Message"].tap()
@@ -142,7 +144,8 @@ import XCTest
         XCTAssertTrue(app.navigationBars["Greeting Card"].waitForExistence(timeout:5))
         let signature=app.textFields["card-signature"]
         for _ in 0..<5 {if signature.isHittable {break};app.swipeUp()}
-        signature.tap();signature.typeText("With love, Sri & family")
+        XCTAssertTrue((signature.value as? String ?? "").hasPrefix("With love,"))
+        signature.tap(withNumberOfTaps:3,numberOfTouches:1);signature.typeText("With love, Sri & family")
         app.toolbars.buttons["Done"].tap()
         let generate=app.buttons["Generate AI Greeting Card"]
         for _ in 0..<5 {if generate.isHittable {break};app.swipeUp()}
@@ -175,7 +178,7 @@ import XCTest
         let savedGreeting=greeting.value as? String
         let signature=app.textFields["card-signature"]
         for _ in 0..<5 {if signature.isHittable{break};app.swipeUp()}
-        signature.tap();signature.typeText("With love, Sam")
+        signature.tap(withNumberOfTaps:3,numberOfTouches:1);signature.typeText("With love, Sam")
         app.toolbars.buttons["Done"].tap()
         let generate=app.buttons["Generate AI Greeting Card"]
         for _ in 0..<5 {if generate.isHittable{break};app.swipeUp()};generate.tap()

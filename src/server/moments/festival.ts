@@ -9,6 +9,7 @@ export const festivalSettings = z.object({
  tone:z.enum(['Warm','Personal','Short','Fun']).default('Warm'), personalContext:z.string().max(500).default(''),
  manuallyEdited:z.boolean().default(false), approvedAt:z.string().nullable().default(null),
  includeImage:z.boolean().default(false), imageID:z.string().max(200).default(''), imageStyle:z.string().max(40).default('Traditional'),
+ draftSendDate:z.string().datetime().nullable().optional(), draftNotify:z.boolean().nullable().optional(),
  cardSignature:z.string().max(80).nullable().optional(), cardGreeting:z.string().max(500).nullable().optional(),
  imageAspect:z.string().max(40).default('Square'), imagePrompt:z.string().max(1000).default(''),
  overrides:z.record(z.string(),z.string().max(500)).default({}), channels:z.record(z.string(),z.enum(['messages','email','share'])).default({}),

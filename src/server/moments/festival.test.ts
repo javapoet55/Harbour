@@ -11,13 +11,13 @@ function fixture(type:string){
  tx.importantMoment.findMany.mockResolvedValue([{id:'m',type,source:'manual'}]);
  return {ids:['m'],title:'Warm wishes',date:'2099-09-20',timeZoneID:'UTC',yearly:false,active:true,
  recipients:[{id:'m',key:'a',name:'Sam',phone:'+15555550123',email:'',selected:true},{key:'b',name:'Alex',phone:'+15555550124',email:'',selected:true}],
- settings:festivalSettings.parse({groupID:'group',baseMessage:'Warm wishes',cardGreeting:'Thinking of you',cardSignature:'With love, Sri',approvedAt:'2026-09-17T00:00:00Z'})};
+ settings:festivalSettings.parse({groupID:'group',baseMessage:'Warm wishes',cardGreeting:'Thinking of you',cardSignature:'With love, Sri',draftSendDate:'2099-09-20T08:00:00Z',draftNotify:false,approvedAt:'2026-09-17T00:00:00Z'})};
 }
 describe.each(['birthday','anniversary','getWellSoon','festival'])('%s shared management',type=>{
  it('saves the message, greeting, signature and recipient category',async()=>{
   const input=fixture(type);await saveFestival('owner',input);
   const data=tx.importantMoment.update.mock.calls[0][0].data;
-  expect(JSON.parse(data.festivalSettings)).toMatchObject({cardSignature:'With love, Sri',cardGreeting:'Thinking of you',baseMessage:'Warm wishes'});
+  expect(JSON.parse(data.festivalSettings)).toMatchObject({cardSignature:'With love, Sri',cardGreeting:'Thinking of you',baseMessage:'Warm wishes',draftSendDate:'2099-09-20T08:00:00Z',draftNotify:false});
   expect(tx.importantMoment.upsert.mock.calls[0][0].create).toMatchObject({type,sourceKey:type+':group:b'});
   expect(tx.importantMoment.findMany.mock.calls[0][0].where.userId).toBe('owner');
   expect(tx.importantMoment.findMany.mock.calls[0][0].where.type.in).toContain(type);

@@ -102,6 +102,7 @@ struct FestivalGreetingCard: View {
 }
 struct FestivalGreetingCardEditor:View {
     @ObservedObject var model:ManageFestivalModel
+    @EnvironmentObject private var appModel: AppModel
     var saveOnUse=false
     @Environment(\.dismiss) private var dismiss
     @State private var selected:FestivalImageVariation?
@@ -127,7 +128,7 @@ struct FestivalGreetingCardEditor:View {
                         TextField("Your greeting",text:greeting,axis:.vertical).lineLimit(3...8).focused($editing).accessibilityIdentifier("card-greeting")
                         Divider()
                         Text("Your signature").font(.subheadline.bold())
-                        TextField("With love, Sri & family",text:signature,axis:.vertical).lineLimit(1...3).focused($editing).accessibilityIdentifier("card-signature")
+                        TextField("Your signature",text:signature,axis:.vertical).lineLimit(1...3).focused($editing).accessibilityIdentifier("card-signature")
                         Text("Appears at the bottom of your card. \(signature.wrappedValue.count)/80").font(.caption).foregroundStyle(.secondary)
                     }
                     MomentCard {
@@ -167,6 +168,11 @@ struct FestivalGreetingCardEditor:View {
             }.scrollDismissesKeyboard(.interactively)}
             .navigationTitle("Greeting Card").navigationBarTitleDisplayMode(.inline)
             .toolbar{ToolbarItem(placement:.topBarTrailing){Button("Done"){model.cancelImage();dismiss()}};ToolbarItemGroup(placement:.keyboard){Spacer();Button("Done"){editing=false}}}
+            .onAppear {
+                if model.settings.cardSignature == nil {
+                    model.settings.cardSignature = GreetingCardSignature.defaultValue(profileName: appModel.profile?.name ?? "")
+                }
+            }
             .onChange(of:model.images.map(\.id)){_,_ in selected=model.images.first}
             .onDisappear{model.cancelImage()}
             .sheet(item:$shared){CardActivitySheet(image:$0.image)}

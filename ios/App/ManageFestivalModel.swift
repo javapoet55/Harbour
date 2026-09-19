@@ -4,6 +4,7 @@ import CryptoKit
 @MainActor final class ManageFestivalModel: ObservableObject {
     enum Tab:String,CaseIterable {case details="Details",contacts="Contacts",message="Wish Message",schedule="Schedule"}
     @Published var tab:Tab = .details
+    private var pendingTab: Tab?
     @Published var title:String
     @Published var date:Date {
         didSet {
@@ -23,8 +24,8 @@ import CryptoKit
     @Published var active:Bool
     @Published var recipients:[ManagedFestivalRecipient]
     @Published var settings=FestivalSettings()
-    @Published var sendDate=Date()
-    @Published var notify=true
+    @Published var sendDate=Date() { didSet { settings.draftSendDate = ISO8601DateFormatter().string(from: sendDate) } }
+    @Published var notify=true { didSet { settings.draftNotify = notify } }
     @Published var needsScheduleConfirmation=false
     @Published var busy=false
     @Published var generatingImage=false
@@ -71,6 +72,8 @@ import CryptoKit
         if saved.baseMessage.isEmpty {saved.baseMessage=first.latest?.body ?? (first.type == "getWellSoon" ? "Get well soon. Wishing you comfort, rest, and brighter days ahead." : first.type == "festival" ? FestivalValidation.fallback(name:first.title,tone:"Warm") : "\(first.title)! Sending you warm wishes on your special day.")}
         for r in recipients where saved.channels[r.key] == nil {saved.channels[r.key]=r.phone.isEmpty ? (r.email.isEmpty ? "share":"email") : "messages"}
         settings=saved;sendDate=FestivalValidation.instant(day:first.nextOccurrence,hour:8,minute:0,zone:first.timeZoneID) ?? date
+        if let draft=saved.draftSendDate.flatMap({ISO8601DateFormatter().date(from:$0)}) {sendDate=draft}
+        notify=saved.draftNotify ?? true
         if let plan=group.moments.compactMap(\.upcomingDelivery).first {sendDate=plan.date;zone=plan.timeZoneID}
         savedImageID=saved.imageID;imageData=imageStorage.load(saved.imageID);notice=saved.catalogNotice;baseline=fingerprint;analytics.record(.opened)
     }
@@ -90,14 +93,21 @@ import CryptoKit
         await save(cancelSchedules:cancelSchedules)
         if error != nil {active=old}else if !value{analytics.record(.disabled)}
     }
+    func changeTab(to target: Tab) async {
+        guard target != tab, !busy else { return }
+        pendingTab = target
+        if dirty { await save() }
+        else { tab = target; pendingTab = nil }
+    }
+    func cancelTabChange() { pendingTab = nil }
     func save(cancelSchedules:Bool=false) async {
         guard !busy else{return}
         guard dirty else {error=nil;notice="No changes to save. Your existing schedule is unchanged.";return}
         busy=true;error=nil;notice=nil;defer{busy=false}
-        do {try await persist(cancelSchedules:cancelSchedules);notice=cancelSchedules ? "Changes saved. Review and schedule your updated wish again.":"Moment changes saved.";analytics.record(.saved)} catch {
+        do {try await persist(cancelSchedules:cancelSchedules);if let target=pendingTab {tab=target;pendingTab=nil};notice=cancelSchedules ? "Changes saved. Review and schedule your updated wish again.":"Moment changes saved.";analytics.record(.saved)} catch {
             if case APIError.server(409,let message)=error, message.contains("Existing schedules") {
                 needsScheduleConfirmation=true
-            } else {self.error=error.localizedDescription}
+            } else {self.error=error.localizedDescription;pendingTab=nil}
         }
     }
     private func persist(cancelSchedules:Bool) async throws {
