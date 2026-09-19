@@ -503,3 +503,49 @@ close affordance, what dismisses it and where it returns to.
   navigator"* — the route guard has already unmounted the navigator that owned the modal. The sheet
   has to be dismissed before the guard flips. Not fixed here: the sign-out call lives in
   `src/query/useAuth.ts`, which this pass does not touch.
+
+## Run A — Phase 11 changes to existing screens (branch `rn-run-a`)
+
+Built against the second capture pass (`README.md` in this folder). **Every row below needs an
+Android re-capture**: the RN screens changed after the last Android pass. "Checked on phone" means
+the screen was opened on the SM-A055F during Run A and compared by eye, not measured with `diff.py`.
+
+| Swift capture | RN route | Status |
+| --- | --- | --- |
+| `today-default`, `today-3days`, `today-5days`, `today-dark`, `today-scrolled-1` | `app/(tabs)/today/index.tsx` | built; checked on phone (light, Today range) — **re-capture** |
+| `today-attention-row` | `src/components/TodayAttentionRow.tsx` | built; checked on phone — **re-capture** |
+| `today-attention`, `today-attention-sheet-half`, `today-attention-sheet-full`, `today-attention-sheet-dark` | `app/(tabs)/today/attention.tsx` (form sheet, `[0.5, 1.0]`) | built; half detent checked on phone — **re-capture** |
+| `today-reschedule-all`, `today-reschedule-all-dark` | `app/(tabs)/today/reschedule-all.tsx` | built; checked on phone — **re-capture** |
+| `ask-default`, `ask-text-dark` | unchanged (`AskNexdoView.swift` did not change) | no work |
+| `voice-ask-default` (first pass) | `src/components/AddTaskByVoiceView.tsx` | copy changed (8c5f969) — **re-capture** |
+| `account-settings-default`, `account-settings-calendars-empty`, `account-settings-calendars-dark` | `app/account/settings.tsx` | built; empty state checked on phone — **re-capture** |
+| `account-settings-calendar-connecting` | same | built; "Connecting…" is transient on the phone — **re-capture** |
+| `account-settings-calendar-error-cancelled` | same | built; checked on phone, alert text identical — **re-capture** |
+| (none) connected list, Disconnect dialog, "Add my scheduled tasks here" | same | **port from source, verify on phone** — needs an account with a connected calendar |
+
+### Differences found in Run A
+
+- **The tab bar stays visible under the Needs attention sheet.** iOS covers it. The sheet is a
+  form sheet inside the Today tab stack; presenting it from the root stack would cover the bar.
+- **Reschedule all replaces Needs attention on screen** rather than stacking above it with the
+  first sheet visible behind, as iOS does.
+- **The date picker in Reschedule all** is the hand-built month grid plus hour and minute rows, not
+  the compact system picker, and it does not grey out past days; the button refuses a past start.
+
+### Corrections to the capture index (`README.md` in this folder)
+
+Checked against Swift source during Run A; not edited there, because that file is shared with the
+Windows runs.
+
+- **"Action Needed" still exists.** The index says the section "no longer exists". What 63d9542
+  removed is the inline "Needs your attention" list. `TodayActionsView` (the pink "Action Needed"
+  card) is still rendered, now after the intelligence card (`RootView.swift:1098-1100`), and RN keeps
+  it there.
+- **`schedule-check-default` and `overdue-default` are no longer reachable.** The index says the
+  attention sheet pushes them. It does not: it pushes its own inline List for a check
+  (`TodayAttentionSheet.swift:66-74`) and never opens `OverdueTasksView`. Their only remaining callers
+  are the dead `attentionDetails` and two `navigationDestination`s whose state nothing sets
+  (`RootView.swift:1193-1198`). The RN routes stay registered but have no caller either.
+- **The Moments "Review & Send" card is unreachable.** `ImportantMomentsTodayCard`
+  (`ImportantMomentsView.swift:17-37`) was removed from Today in d444b37 and has no other caller, so
+  it was not built.

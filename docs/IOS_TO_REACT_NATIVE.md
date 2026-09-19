@@ -1865,10 +1865,10 @@ Line numbers are as of `73ad9e1`.
 
 | Built | Screen | Swift `body` | Presentation | Entry point | Reference PNGs |
 | --- | --- | --- | --- | --- | --- |
-| [ ] | Today dashboard, **changed**: "Your day, in focus" card, attention row | `RootView.swift:1032-1203` (`TodayView`); attention row `:1146-1166` | Tab (Today) | Tab bar | `today-default`, `today-3days`, `today-5days`, `today-dark`, `today-scrolled-1`, `today-attention-row` |
-| [ ] | Quick Access tiles (Weekly / Moments / Shopping) | `TodayQuickAccess.swift:41-62` (`TodayQuickAccessContent`); tiles `:64-97` | Inline section of Today (`RootView.swift:1078`) | Today | `today-default`, `today-dark` |
-| [ ] | Needs attention | `TodayAttentionSheet.swift:17-100` | `.sheet`, detents `[.medium, .large]` (`RootView.swift:1188-1191`). **Replaces the pushed `/today/attention`** (`attentionDetails`, `RootView.swift:1217`, which has no caller left) | The Today attention row; `onAttention` in the focus card (`RootView.swift:1093`) | `today-attention`, `today-attention-sheet-half`, `today-attention-sheet-full`, `today-attention-sheet-dark` |
-| [ ] | Reschedule all | `TodayAttentionSheet.swift:87-98` | `.sheet`, `[.medium, .large]` | "Reschedule all" in Needs attention | `today-reschedule-all`, `today-reschedule-all-dark` |
+| [x] | Today dashboard, **changed**: "Your day, in focus" card, attention row | `RootView.swift:1032-1203` (`TodayView`); attention row `:1146-1166` | Tab (Today) | Tab bar | `today-default`, `today-3days`, `today-5days`, `today-dark`, `today-scrolled-1`, `today-attention-row` |
+| [x] | Quick Access tiles (Weekly / Moments / Shopping) | `TodayQuickAccess.swift:41-62` (`TodayQuickAccessContent`); tiles `:64-97` | Inline section of Today (`RootView.swift:1078`) | Today | `today-default`, `today-dark` |
+| [x] | Needs attention | `TodayAttentionSheet.swift:17-100` | `.sheet`, detents `[.medium, .large]` (`RootView.swift:1188-1191`). **Replaces the pushed `/today/attention`** (`attentionDetails`, `RootView.swift:1217`, which has no caller left) | The Today attention row; `onAttention` in the focus card (`RootView.swift:1093`) | `today-attention`, `today-attention-sheet-half`, `today-attention-sheet-full`, `today-attention-sheet-dark` |
+| [x] | Reschedule all | `TodayAttentionSheet.swift:87-98` | `.sheet`, `[.medium, .large]` | "Reschedule all" in Needs attention | `today-reschedule-all`, `today-reschedule-all-dark` |
 | [ ] | Important Moments (Upcoming / Scheduled / Sent) | `ImportantMomentsView.swift:219-307` | Push | Quick Access "Moments" (`TodayQuickAccess.swift:68`) | `moments-default`, `moments-default-scrolled`, `moments-default-dark`, `moments-empty`, `moments-scheduled`, `moments-scheduled-dark`, `moments-sent-empty`, `moments-filter-menu`, `moments-search-keyboard`, `moments-upcoming-row-needs-review` |
 | [ ] | Manage Moments (list) | `ManageFestivalView.swift:11-43` (`MomentsManagementEntry`) | Push (`ImportantMomentsView.swift:298`) | Summary card "Manage" (`moments-manage`) | `moments-manage-list`, `moments-manage-list-dark` |
 | [ ] | Create / Edit Moment | `MomentEditor.swift:24-31`; form `:32-139` | Push (`ImportantMomentsView.swift:295`; Edit links `:115`, `ManageFestivalView.swift:23`) | "Create New" (`moments-create-new`), "Add Moment", "Edit" | `moment-create-default`, `moment-create-dark`, `moment-create-type-menu`, `moment-create-date-picker`, `moment-create-contact-picker`, `moment-create-filled`, `moment-create-filled-scrolled`, `moment-create-error-empty-title`, `moment-create-past-date-before-save` |
@@ -1894,7 +1894,7 @@ Line numbers are as of `73ad9e1`.
 | [ ] | Review Items | `ShoppingViews.swift:300-303` (`ShoppingBatchReview`) | `.sheet` (`:272`) | Quick add or voice, after `parse` | `shopping-review-items`, `shopping-review-items-dark`, `shopping-review-items-error-empty-name` |
 | [ ] | List Settings | `ShoppingViews.swift:309-314` | `.sheet` (`:274`) | List options, "List settings" | `shopping-list-settings`, `shopping-list-settings-dark`, `shopping-list-settings-error-empty-name` |
 | [ ] | Share List | `ShoppingViews.swift:321-330` | `.sheet` (`:275`) | "Share list" in the toolbar | `shopping-share-list`, `shopping-share-list-link`, `shopping-share-list-dark`, `shopping-share-sheet-text` |
-| [ ] | Profile and settings, **changed**: calendar connections | `ProfileView.swift:150-288`; `connectionList` `:288-331`; Disconnect dialog `:273-284` | Push inside the Account sheet | Account, "Settings" or "Edit profile and settings" | `account-settings-default`, `account-settings-calendars-empty`, `account-settings-calendars-dark`, `account-settings-calendar-connecting`, `account-settings-calendar-error-cancelled`; the connected list, Disconnect and the write toggle are **not captured** (no connected calendar) |
+| [x] | Profile and settings, **changed**: calendar connections | `ProfileView.swift:150-288`; `connectionList` `:288-331`; Disconnect dialog `:273-284` | Push inside the Account sheet | Account, "Settings" or "Edit profile and settings" | `account-settings-default`, `account-settings-calendars-empty`, `account-settings-calendars-dark`, `account-settings-calendar-connecting`, `account-settings-calendar-error-cancelled`; the connected list, Disconnect and the write toggle are **not captured** (no connected calendar) |
 | — | Recurring Tasks hub, New Recurring Task | `ShoppingViews.swift:42-51`, `:61-76` | — | **Unreachable.** Linked only from `ShoppingTodayContent` and `QuickAccessDirectory`, neither of which is instantiated | none. Do not port until Swift wires them up |
 | — | Today Shopping card | `ShoppingViews.swift:5`, `:12-28` | — | **Unreachable.** `ShoppingTodayCard` is never instantiated | none |
 | — | Quick Access directory | `TodayQuickAccess.swift:103-113` | — | **Unreachable.** It is private and never instantiated | none |
@@ -1924,3 +1924,95 @@ each one.
 | `/api/calendar/oauth/{provider}/start` | GET (in a web auth session) | `?native=1&connect_token=…` | `NexdoApp.swift:300` | Yes, but without the token |
 | `/api/calendar/sync` | POST | — | `NexdoApp.swift:337` | Yes |
 | Task updates from Reschedule all | existing task endpoints | — | `TodayAttentionSheet.swift` | Yes |
+
+## 21. Phase 11 status (Important Moments, Shopping, and the changed screens)
+
+Phase 11 ports the screens in "New Swift screens after the migration baseline" (§20) in three runs.
+Rows are ticked in that table as each run lands.
+
+| Run | Scope | Branch | Machine |
+| --- | --- | --- | --- |
+| **A** | Changes to existing screens: Today, Ask by Voice copy, Account → Calendar. (Analytics was also scoped here and then **deferred**; see below.) | `rn-run-a` | Mac |
+| **B** | Important Moments | `react-native-migration` | Windows |
+| **C** | Shopping Lists | `react-native-migration` | Windows |
+
+### Run A: built, with the Swift ranges each feature was read from
+
+| Feature | Swift | RN |
+| --- | --- | --- |
+| Today body, new order | `RootView.swift:1032-1203` (`TodayView.body`); commits d444b37, e0a7bcd, 86a2b49, 63d9542 | `app/(tabs)/today/index.tsx` |
+| Quick Access row | `TodayQuickAccess.swift:4-97`; counts `:24-40`; `MomentDisplayGroup` `Sources/NexdoCore/ImportantMoment.swift:120-144`; `FestivalSettings.read` `FestivalManagement.swift:3-21` | `src/components/TodayQuickAccess.tsx`, `src/lib/todayQuickAccess.ts`, `src/query/useQuickAccess.ts`, `src/api/moments.ts`, `src/api/shopping.ts` |
+| Moment count in the summary | `ImportantMomentsStore.swift:65-67` (`today`); `RootView.swift:1084`; `TodayIntelligenceCard` `:1373-1509` | `src/components/TodayIntelligenceCard.tsx` |
+| Focus next | `RootView.swift:1115-1144`, `focusStartButton` `:1205-1215`; `dismissPersistentNext` `NexdoApp.swift:65-72` | `src/components/TodayNextAction.tsx` (`FocusNextCard`) |
+| Attention row | `RootView.swift:1146-1166`; `OverdueTasks.swift` | `src/components/TodayAttentionRow.tsx` |
+| Needs attention sheet | `TodayAttentionSheet.swift:4-100`; presentation `RootView.swift:1188-1191` | `app/(tabs)/today/attention.tsx` |
+| Reschedule all | `TodayAttentionSheet.swift:87-125`; `saveTaskDetails` `NexdoApp.swift:605-635`; `TaskEditError` `FocusSessionStrip.swift:12-22` | `app/(tabs)/today/reschedule-all.tsx`, `src/lib/rescheduleAll.ts`, `src/store/attention.ts` |
+| Ask by Voice copy | `AddTaskByVoiceView.swift:42`, `:69-70` (8c5f969) | `src/components/AddTaskByVoiceView.tsx` |
+| Calendar connections | `ProfileView.swift:6-38`, `:140-148`, `:227-236`, `:256`, `:273-284`, `:290-348`; `NexdoApp.swift:293-341`; `CalendarConnection` `Sources/NexdoCore/ProfileSettings.swift:28-75` (3a26c52, 3ef906d) | `app/account/settings.tsx`, `src/query/useCalendar.ts`, `src/lib/calendarConnections.ts` |
+
+Placeholders for Runs B and C: `app/moments/index.tsx` and `app/shopping/index.tsx` render only the
+Swift title ("Important Moments", "My Lists") and carry `TODO(phase11-run-b)` / `TODO(phase11-run-c)`.
+Note that Swift pushes both inside the Today tab's stack, so the tab bar stays; these placeholders are
+root routes (`/moments`, `/shopping`) as briefed, which hide it. Runs B and C should decide.
+
+### Server endpoints used, verified against `src/app/api`
+
+| Endpoint | Verified in |
+| --- | --- |
+| `GET /api/moments` | `src/app/api/moments/route.ts:12`, `listMoments` `src/server/moments/service.ts:9-13` |
+| `GET /api/shopping` | `src/app/api/shopping/route.ts:8`, `shoppingLists` `src/server/shopping/service.ts:7` |
+| `GET` / `PATCH` / `DELETE ?id=` `/api/calendar/connections` | `src/app/api/calendar/connections/route.ts` |
+| `POST /api/calendar/oauth/{provider}/connect-token` → `{ token }` | `src/app/api/calendar/oauth/[provider]/connect-token/route.ts` |
+| `GET /api/calendar/oauth/{provider}/start?native=1&connect_token=` | `…/start/route.ts:16-19`; callback redirects to `nexdo://calendar-connected?…` (`…/callback/route.ts:9`) |
+| `POST /api/calendar/sync`, `PATCH /api/tasks/{id}` | unchanged, already in `mobile/src/api` |
+
+**The Google Calendar backend gap (§20 "Backend gaps" 1) is closed.** The server shipped the connect
+token in 3a26c52; RN now uses it, and `TODO(server-connect-token)` is gone. Verified on the
+SM-A055F: Connect Google Calendar reaches Google's account chooser, and closing it shows Swift's
+cancelled-login message. Completing the consent was not done, because it would connect a real
+calendar.
+
+### Where the brief and Swift disagree
+
+- **The Moments "Review & Send" card was not built.** `ImportantMomentsTodayCard` was removed from
+  Today in d444b37 and nothing instantiates it.
+- **"Action Needed" (`TodayActionsView`) was kept**, moved after the intelligence card. 63d9542 removed
+  the inline "Needs your attention" list, not the Action Needed card.
+- **Ask AI text screen unchanged.** 8c5f969 changed only the voice view; "text" in its title refers
+  to the server.
+
+### Platform substitutions
+
+- Needs attention and Reschedule all are native form sheets (`presentation: 'formSheet'`,
+  `sheetAllowedDetents: [0.5, 1.0]`): Material `BottomSheetBehavior` on Android, from
+  react-native-screens, already installed. **No new dependency and no rebuild.**
+- A form sheet on Android cannot host a nested stack, so a schedule check opens inside the sheet with
+  a back chevron instead of being pushed.
+- SwiftUI `Menu` ("…" on Focus next) is an inline list, as on the project and task detail screens.
+- `.interactiveDismissDisabled` is `useBlockDismiss` (`src/lib/useBlockDismiss.ts`): `gestureEnabled`
+  plus a hardware-back listener, applied to the parent navigator for the settings screen.
+
+### Deferred: Firebase Analytics (was A4)
+
+Descoped from Run A by request. Nothing was added: no dependency, no config plugin, no analytics
+module. Findings from reading the Swift, for whoever picks it up:
+
+- `FirebaseAnalyticsBridge.swift` defines `NexdoAnalytics.configureIfAvailable()` (called once, at
+  `NexdoApp.swift:5`) and `logEvent`, plus a `WKScriptMessageHandler` bridge.
+- **Swift logs no events.** `grep` over `ios/App` finds no call to `NexdoAnalytics.logEvent`, and
+  `FirebaseAnalyticsBridge.makeWebView` is never called — the app has no web view. `FestivalAnalytics`
+  (`FestivalServices.swift:7`) writes to OSLog, not Firebase. So the only data is Firebase's automatic
+  collection; there is no user id, no user property and no manual screen view.
+- An RN port therefore needs only `@react-native-firebase/app` + `analytics` (native; rebuild) and
+  `mobile/google-services.json`, which does not exist yet. Firebase's Android SDK adds the `AD_ID`
+  permission, which affects the Play data-safety form.
+
+### Run A tests
+
+Added: `src/__tests__/attention-sheet.test.tsx`, `src/lib/todayQuickAccess.test.ts`,
+`src/lib/rescheduleAll.test.ts`, `src/lib/calendarConnections.test.ts`, and new cases in
+`today-screen`, `voice-screens`, `account` and `calendar`. Tests that asserted the old layout (Weekly
+Summary card, Daily Briefing, "What should I do now?", the inline attention list, the pushed
+attention screen) were rewritten to Swift's new behaviour. The manual test plan is in
+`mobile/README.md`, "Phase 11 Run A test plan".
+
