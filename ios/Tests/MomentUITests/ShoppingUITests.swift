@@ -92,3 +92,22 @@ import XCTest
         XCTAssertTrue(app.buttons["Check Apples"].waitForExistence(timeout:5))
     }
 }
+
+@MainActor final class AskLandingUITests: XCTestCase {
+    func testDashboardCardsAndInlineComposer() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-ask-design-preview"]
+        app.launch()
+        XCTAssertTrue(app.buttons["ask-card-0"].waitForExistence(timeout: 15))
+        for index in 0..<8 { XCTAssertTrue(app.buttons["ask-card-\(index)"].exists) }
+        app.swipeUp()
+        let field = app.textFields["Type your request"]
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["Send request"].isEnabled)
+        field.tap()
+        field.typeText("Plan tomorrow")
+        XCTAssertTrue(app.buttons["Send request"].isEnabled)
+        app.buttons["Send request"].tap()
+        XCTAssertTrue(app.staticTexts["Before using Ask AI"].waitForExistence(timeout: 5))
+    }
+}

@@ -26,8 +26,7 @@ struct RootView: View {
             } else if ProcessInfo.processInfo.arguments.contains("-calendar-voice-preview") {
                 AddTaskByVoiceView(calendarOnly: true)
             } else if ProcessInfo.processInfo.arguments.contains("-ask-design-preview") {
-                Color(uiColor: .systemGroupedBackground)
-                    .sheet(isPresented: .constant(true)) { AskNexdoView().presentationDetents([.fraction(0.92)]).presentationDragIndicator(.visible) }
+                AskNexdoView()
             } else if ProcessInfo.processInfo.arguments.contains("-ask-text-design-preview") {
                 AskNexdoView(textPage: true)
             } else if ProcessInfo.processInfo.arguments.contains("-ask-voice-design-preview") {
@@ -123,7 +122,7 @@ private struct NexdoTabShell: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .clipped()
         .blur(radius: showingAsk ? 2 : 0)
-        .sheet(isPresented: $showingAsk) {
+        .fullScreenCover(isPresented: $showingAsk) {
             AskNexdoView(initialPrompt: askPrompt)
                 .presentationDetents([.fraction(0.84)])
                 .presentationDragIndicator(.visible)
@@ -868,7 +867,7 @@ private struct SignInBackdrop: View {
     }
 }
 
-private struct NexdoLogoMark: View {
+struct NexdoLogoMark: View {
     var body: some View {
         GeometryReader { geometry in
             let width = geometry.size.width

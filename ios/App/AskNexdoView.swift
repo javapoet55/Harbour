@@ -33,8 +33,8 @@ enum NexdoAIIntent: String, CaseIterable, Identifiable {
     }
     var query: String {
         switch self {
-        case .dailyBriefing: "Nexdo, brief me for the next 5 days."
-        case .topFocusTasks: "Pick my top 3 focus tasks, ranked by urgency, estimated effort, and completion risk."
+        case .dailyBriefing: "Give me my full day briefing for today: priorities, deadlines, conflicts, and my next move."
+        case .topFocusTasks: "Pick my top 3 focus tasks, ranked by urgency, estimated effort, and impact."
         case .deadlinesAndRisks: "Show upcoming deadlines in the next 5 days, overdue work, conflicts, overloaded days, and high-priority unfinished tasks."
         case .findScheduleTime: "Find practical free time in my schedule around my calendar commitments using my availability."
         case .planTomorrow: "Do I have enough time to finish everything tomorrow? Consider tasks, events, deadlines, and estimated durations."
@@ -140,7 +140,7 @@ struct AskNexdoView: View {
         #"\bwhy\s+(?:is|are|did|does|do|can|would|should|could)\b"#,
         #"\bhow\s+(?:does|do|can|should|to|doesn't|does not)\b"#,
     ]
-    private let taskIntentHints = #"\b(task|tasks|todo|brief|briefing|deadline|due|overdue|schedule|appointments?|calendar|meeting|focus|remind|create|update|reschedule|complete|delete|move|today|tomorrow|weekly|next|hour|minute|plan|time|priority|free\s+time|working\s+day)\b"#
+    private let taskIntentHints = #"\b(shopping|groceries|moments?|birthdays?|anniversar(?:y|ies)|festivals?|task|tasks|todo|brief|briefing|deadline|due|overdue|schedule|appointments?|calendar|meeting|focus|remind|create|update|reschedule|complete|delete|move|today|tomorrow|weekly|next|hour|minute|plan|time|priority|free\s+time|working\s+day)\b"#
 
     private var blocked: Bool { submitting || model.busy }
     private var validPrompt: Bool { !prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && prompt.count <= 4000 }
@@ -181,7 +181,7 @@ struct AskNexdoView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack {
+            if textPage || model.turn != nil { HStack {
                 Text(textPage ? "Free form Text" : "Ask Nexdo").font(.title2.bold()).foregroundStyle(Color.nexdoInk)
                     .accessibilityAddTraits(.isHeader)
                 Spacer()
@@ -205,14 +205,11 @@ struct AskNexdoView: View {
                 .buttonStyle(.plain)
                 .accessibilityLabel("Close Ask Nexdo")
                 .accessibilityHint("Closes Ask Nexdo")
-            }.padding(.horizontal, 20).padding(.top, 22)
+            }.padding(.horizontal, 20).padding(.top, 22) }
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 10) {
                     if model.turn == nil {
-                        Text("Let’s make room for what matters.")
-                            .font(.subheadline).foregroundStyle(AskStyle.secondary)
-                            .padding(.top, 14).padding(.bottom, 8)
                         if textPage {
                             Text("What would you like help with?").font(.title2.bold())
                             Text("Type a question or tell Nexdo what to plan, create, or change.").font(.subheadline).foregroundStyle(.secondary)
@@ -227,9 +224,10 @@ struct AskNexdoView: View {
                                 }.buttonStyle(.plain).disabled(blocked)
                             }
                         } else {
-                            ForEach(NexdoAIIntent.allCases) { intent in
-                                NexdoAISuggestionCard(intent: intent) { request(intent.query) }.disabled(blocked)
-                            }
+                            AskAILandingView(prompt: $prompt, busy: blocked, sendEnabled: validPrompt,
+                                ask: { request($0) }, voice: { stopSpeech(); showingVoice = true },
+                                close: { requestTask?.cancel(); stopSpeech(); dismiss() })
+
                         }
                     } else {
                         if let query = model.lastAssistantPrompt {
@@ -261,8 +259,8 @@ struct AskNexdoView: View {
             }.scrollDismissesKeyboard(.interactively)
         }
         .background(AskStyle.background)
-        .tint(AskStyle.blue)
-        .safeAreaInset(edge: .bottom, spacing: 0) { if textPage { if model.turn != nil { composer } } else { entryCards } }
+        .tint(.nexdoIndigo)
+        .safeAreaInset(edge: .bottom, spacing: 0) { if model.turn != nil { composer } }
         .interactiveDismissDisabled(composerFocused || submitting)
         .sheet(isPresented: $showConsent, onDismiss: { pendingQuery = nil }) {
             consentView.presentationDetents([.medium, .large])
