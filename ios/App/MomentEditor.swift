@@ -14,21 +14,25 @@ struct MomentEditor: View {
     @State private var choosingRecipient = false
     @State private var festivalRecipients: [FestivalRecipient] = []
     @State private var savedRecipientIDs: Set<String> = []
+    @State private var createdID: String?
+    @State private var completedSave = false
 
     private enum Field: Hashable { case title, firstName, phone, email }
     @FocusState private var focusedField: Field?
     var body: some View {
+        if completedSave, let createdID,
+           let group = MomentDisplayGroup.groups(store.moments).first(where: { $0.moments.contains(where: { $0.id == createdID }) }) {
+            ManageFestivalView(group: group, store: store, onDone: { dismiss() })
+        } else { editor }
+    }
+    private var editor: some View {
         Form {
             Section("Important moment") {
                 Picker("Type", selection: Binding(get: { input.type }, set: { type in
-                    let previousDefault = defaultTitle(for: input.type)
+                    let previousType = input.type
+                    input.title = MomentTitles.updating(input.title, from: previousType, firstName: input.firstName, to: type, firstName: input.firstName)
                     input.type = type
-                    if type == "getWellSoon" {input.yearly=false}
-                    if let title = defaultTitle(for: type) {
-                        input.title = title
-                    } else if input.title == previousDefault {
-                        input.title = ""
-                    }
+                    if type == "getWellSoon" { input.yearly = false }
                 })) { ForEach(["birthday","anniversary","festival","getWellSoon","custom"], id: \.self) { Text(ImportantMoment.label(for:$0)).tag($0) } }.accessibilityIdentifier("moment-type")
                 TextField("Title", text: $input.title).focused($focusedField, equals: .title).submitLabel(.done)
                 DatePicker("Date", selection: $date, displayedComponents: .date).environment(\.timeZone, TimeZone(identifier: input.timeZoneID) ?? .current)
@@ -36,7 +40,7 @@ struct MomentEditor: View {
                 if !dateConfirmed { Toggle("I have confirmed the event date", isOn: $dateConfirmed) }
                 Toggle("Repeat yearly", isOn: $input.yearly)
                 Text("February 29 is observed on February 28 in non-leap years. Dates for festivals with moving calendars must be confirmed each year.").font(.caption)
-            }.disabled(!savedRecipientIDs.isEmpty)
+            }.disabled(completedSave || !savedRecipientIDs.isEmpty)
             Section(input.type == "festival" ? "Recipients" : "Recipient") {
                 Button {
                     focusedField = nil
@@ -69,8 +73,10 @@ struct MomentEditor: View {
                 TextField("Email (optional)", text: $input.email).keyboardType(.emailAddress).textInputAutocapitalization(.never).autocorrectionDisabled().focused($focusedField, equals: .email).submitLabel(.done)
                 }
                 Text("Only the recipient and occasion you confirm here are saved to your Nexdo account. Your address book is never uploaded.").font(.caption)
-            }.disabled(!savedRecipientIDs.isEmpty)
-            if !savedRecipientIDs.isEmpty {
+            }.disabled(completedSave || !savedRecipientIDs.isEmpty)
+            if completedSave {
+                Text("Moment saved. If it has not opened, tap Save to reload it.").font(.caption)
+            } else if !savedRecipientIDs.isEmpty {
                 Text("\(savedRecipientIDs.count) recipients saved. Tap Save again to retry the remaining recipients.").font(.caption)
             }
             if let moment { Section { Toggle("Show reminders", isOn: Binding(get: { store.moments.first { $0.id == moment.id }?.enabled ?? moment.enabled }, set: { value in Task { await store.perform { try await store.visibility(moment, enabled: value) } } })) } }
@@ -78,34 +84,21 @@ struct MomentEditor: View {
                 Section("Greeting Card") {MomentGreetingCardSection(moment:moment,store:store)}
             }
             if let error = store.error { Text(error).foregroundStyle(.red) }
-            Button(input.type == "festival" && !festivalRecipients.isEmpty ? "Save for \(festivalRecipients.count) contacts" : "Save Moment") {
-                input.occurrenceDate = MomentDates.day(date, zone: input.timeZoneID)
-                Task {
-                    await store.perform {
-                        if input.type == "festival" && !festivalRecipients.isEmpty {
-                            for (index, recipient) in festivalRecipients.enumerated() where !savedRecipientIDs.contains(recipient.id) {
-                                var value = input
-                                value.firstName = recipient.firstName
-                                value.phone = recipient.phone
-                                value.email = recipient.email
-                                value.source = "manual"
-                                value.sourceKey = "festival:" + TaskActionCoordinator.ownerKey(input.sourceKey + ":" + recipient.id)
-                                try await store.save(value, id: index == 0 ? moment?.id : nil)
-                                savedRecipientIDs.insert(recipient.id)
-                            }
-                        } else {
-                            try await store.save(input, id: moment?.id)
-                        }
-                        dismiss()
-                    }
-                }
-            }.disabled(store.busy || !dateConfirmed || input.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            Button(input.type == "festival" && !festivalRecipients.isEmpty ? "Save for \(festivalRecipients.count) contacts" : "Save Moment", action: save)
+                .disabled(saveDisabled)
+
         }
         .disabled(store.busy)
-        .navigationTitle(moment == nil ? "Add Moment" : "Edit Moment").navigationBarTitleDisplayMode(.inline)
+        .navigationTitle(moment == nil ? "Create Moment" : "Edit Moment").navigationBarTitleDisplayMode(.inline)
         .onSubmit { focusedField = nil }
         .scrollDismissesKeyboard(.interactively)
+        .onChange(of: input.firstName) { old, new in
+            input.title = MomentTitles.updating(input.title, from: input.type, firstName: old, to: input.type, firstName: new)
+        }
         .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button("Save", action: save).disabled(saveDisabled).accessibilityIdentifier("moment-save-top")
+            }
             ToolbarItemGroup(placement: .keyboard) {
                 Spacer()
                 Button("Done") { focusedField = nil }
@@ -135,17 +128,37 @@ struct MomentEditor: View {
                 input.type = m.type; input.title = m.title; input.firstName = m.firstName; input.phone = m.phone; input.email = m.email; input.yearly = m.yearly; input.timeZoneID = m.timeZoneID; input.source = m.source; input.sourceKey = m.sourceKey; input.occurrenceDate = m.occurrenceDate
             } else if let imported { input = imported; dateConfirmed = !imported.occurrenceDate.isEmpty }
             if moment == nil && input.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                input.title = defaultTitle(for: input.type) ?? ""
+                input.title = MomentTitles.defaultTitle(for: input.type, firstName: input.firstName) ?? ""
             }
             if !input.occurrenceDate.isEmpty { date = MomentDates.date(input.occurrenceDate, zone: input.timeZoneID) }
         }
     }
-    private func defaultTitle(for type: String) -> String? {
-        switch type {
-        case "birthday": "Happy Birthday"
-        case "anniversary": "Happy Anniversary"
-        case "getWellSoon": "Get Well Soon"
-        default: nil
+    private var saveDisabled: Bool {
+        store.busy || !dateConfirmed || input.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+    private func save() {
+        guard !saveDisabled else { return }
+        focusedField = nil
+        input.occurrenceDate = MomentDates.day(date, zone: input.timeZoneID)
+        Task {
+            await store.perform {
+                if !completedSave {
+                    if input.type == "festival" && !festivalRecipients.isEmpty {
+                        for (index, recipient) in festivalRecipients.enumerated() where !savedRecipientIDs.contains(recipient.id) {
+                            var value = input
+                            value.firstName = recipient.firstName; value.phone = recipient.phone; value.email = recipient.email
+                            value.source = "manual"
+                            value.sourceKey = "festival:" + TaskActionCoordinator.ownerKey(input.sourceKey + ":" + recipient.id)
+                            let id = try await store.save(value, id: index == 0 ? moment?.id : nil)
+                            if createdID == nil { createdID = id }
+                            savedRecipientIDs.insert(recipient.id)
+                        }
+                    } else { createdID = try await store.save(input, id: moment?.id) }
+                    completedSave = true
+                }
+                if moment != nil || input.type == "custom" { dismiss() }
+                // perform refreshes the snapshot; body then shows the saved moment's four-tab manager.
+            }
         }
     }
 }

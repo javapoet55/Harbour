@@ -14,6 +14,19 @@ import XCTest
         app.buttons["manage-moment-moment"].tap()
         XCTAssertTrue(app.navigationBars["Manage Moment"].waitForExistence(timeout:5))
     }
+    func testCreateBirthdayOpensPersonalizedManager() {
+        app.buttons["moments-create-new"].tap()
+        XCTAssertTrue(app.navigationBars["Create Moment"].waitForExistence(timeout: 5))
+        let firstName = app.textFields["First name"]
+        for _ in 0..<4 { if firstName.isHittable { break }; app.swipeUp() }
+        firstName.tap(); firstName.typeText("Rahul")
+        app.buttons["moment-save-top"].tap()
+        XCTAssertTrue(app.navigationBars["Manage Moment"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["Rahul’s Birthday"].firstMatch.exists)
+        for tab in ["Details", "Contacts", "Wish Message", "Schedule"] {
+            XCTAssertTrue(app.buttons[tab].exists)
+        }
+    }
     func testSummaryManageAndCreateNew() {
         let manage=app.buttons["moments-manage"]
         let create=app.buttons["moments-create-new"]
@@ -21,9 +34,9 @@ import XCTest
         XCTAssertEqual(create.label,"Create New")
         XCTAssertEqual(manage.frame.midY,create.frame.midY,accuracy:2)
         create.tap()
-        XCTAssertTrue(app.navigationBars["Add Moment"].waitForExistence(timeout:5))
+        XCTAssertTrue(app.navigationBars["Create Moment"].waitForExistence(timeout:5))
         XCTAssertTrue(app.textFields["Title"].exists)
-        app.navigationBars["Add Moment"].buttons.firstMatch.tap()
+        app.navigationBars["Create Moment"].buttons.firstMatch.tap()
         manage.tap()
         XCTAssertTrue(app.navigationBars["Manage Moments"].waitForExistence(timeout:5))
     }
@@ -342,7 +355,7 @@ import XCTest
     }
     func testFestivalOffersMultipleContactPicker() {
         app.buttons["Add Moment"].tap()
-        XCTAssertTrue(app.navigationBars["Add Moment"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.navigationBars["Create Moment"].waitForExistence(timeout: 5))
         app.buttons["moment-type"].tap()
         app.buttons["Festival"].tap()
         app.swipeUp()

@@ -5,6 +5,7 @@ import Foundation
 /// Local-only UI fixture. Never authenticates, contacts a provider, or sends a message.
 final class MomentsPreviewProtocol: URLProtocol, @unchecked Sendable {
     private static let lock = NSLock()
+    nonisolated(unsafe) private static var createdMoments: [[String: Any]] = []
     nonisolated(unsafe) private static var savedPlans: [[String: Any]] = []
     nonisolated(unsafe) private static var festivalSaved: [String: Any]?
     nonisolated(unsafe) private static var cardSettings: [String:Any] = [:]
@@ -23,6 +24,14 @@ final class MomentsPreviewProtocol: URLProtocol, @unchecked Sendable {
             let json = (try? JSONSerialization.jsonObject(with: data ?? Data())) as? [String: Any] ?? [:]
             let operation = json["operation"] as? String ?? ""; let input = json["input"] as? [String: Any] ?? [:]
             switch operation {
+            case "save":
+                var value = input
+                let id = json["id"] as? String ?? "created-" + String(Self.createdMoments.count)
+                value["id"] = id; value["enabled"] = true; value["drafts"] = []
+                value["nextOccurrence"] = input["occurrenceDate"]
+                Self.createdMoments.removeAll { $0["id"] as? String == id }
+                Self.createdMoments.append(value)
+                result = ["moment": value]
             case "festivalCatalog": result = ["entries":[]]
             case "festivalSave":
                 Self.festivalSaved = input
@@ -56,7 +65,7 @@ final class MomentsPreviewProtocol: URLProtocol, @unchecked Sendable {
                 if let settings=Self.festivalSaved?["settings"],let encoded=try? JSONSerialization.data(withJSONObject:settings) {moment["festivalSettings"]=String(data:encoded,encoding:.utf8)}
                 moment["enabled"]=Self.festivalSaved?["active"] ?? true
             }
-            var moments = [moment]
+            var moments = [moment] + Self.createdMoments
             if ProcessInfo.processInfo.arguments.contains("-festival-two-recipients") {
                 var second=moment;second["id"]="moment2";second["firstName"]="Priya";second["phone"]="+15555550185";second["sourceKey"]="fixture2"
                 moments.append(second)
@@ -89,7 +98,7 @@ final class MomentsPreviewProtocol: URLProtocol, @unchecked Sendable {
     }
     override func stopLoading() {}
     @MainActor static func store() -> ImportantMomentsStore {
-        lock.withLock { savedPlans = []; cardSettings = [:]; festivalSaved = nil; festivalDeleted = false; draftBody = "Happy Birthday, Damien! Wishing you a wonderful day and a fantastic year ahead! 🎉" }
+        lock.withLock { createdMoments = []; savedPlans = []; cardSettings = [:]; festivalSaved = nil; festivalDeleted = false; draftBody = "Happy Birthday, Damien! Wishing you a wonderful day and a fantastic year ahead! 🎉" }
         if ProcessInfo.processInfo.arguments.contains("-festival-manage-preview") {
             lock.withLock { draftBody = "Happy Diwali! Wishing you and your family joy, light and new beginnings." }
         }

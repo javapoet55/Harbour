@@ -98,7 +98,11 @@ struct MomentOK: Decodable, Sendable {}
         guard !busy else { return }; busy = true; error = nil; defer { busy = false }
         do { try await action(); await refresh() } catch { self.error = error.localizedDescription }
     }
-    func save(_ input: MomentInput, id: String? = nil) async throws { let _: MomentOK = try await request("save", input, id: id) }
+    @discardableResult func save(_ input: MomentInput, id: String? = nil) async throws -> String {
+        struct Saved: Decodable, Sendable { struct Moment: Decodable, Sendable { let id: String }; let moment: Moment }
+        let result: Saved = try await request("save", input, id: id)
+        return result.moment.id
+    }
     func planAction(_ plan: WishDeliveryPlan, action: String, date: Date? = nil, zone: String? = nil) async throws {
         var input = ["id":plan.id,"action":action]
         if let date { input["scheduledAtUTC"] = ISO8601DateFormatter().string(from: date) }; if let zone { input["timeZoneID"] = zone }
