@@ -39,3 +39,13 @@ it('does not leak upstream errors or secrets', async () => {
   expect(response.status).toBe(502); expect(await response.text()).not.toContain('server-key');
 });
 
+it('uses English grocery guidance for shopping without changing general dictation', async () => {
+  upstream.mockResolvedValue(Response.json({value:'ephemeral',expires_at:123}));
+  const response=await POST(new Request('https://nexdo.test/api/realtime/transcription-session',{method:'POST',body:JSON.stringify({consent:true,scope:'shopping'})}));
+  expect(response.status).toBe(200);
+  const input=JSON.parse(upstream.mock.calls[0][1].body).session.audio.input;
+  expect(input.transcription.language).toBe('en');
+  expect(input.transcription.prompt).toContain('English');
+  expect(input.transcription.prompt).toContain('quantities');
+  expect(input.noise_reduction.type).toBe('near_field');
+});

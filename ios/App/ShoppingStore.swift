@@ -33,7 +33,7 @@ struct ShoppingInput:Encodable {
         return result.items ?? []
     }
     func credential() async throws -> VoiceTaskSession {
-        try await api.request("/api/realtime/transcription-session",method:"POST",body:JSONEncoder().encode(["consent":true]),timeout:25)
+        try await api.request("/api/realtime/transcription-session",method:"POST",body:JSONSerialization.data(withJSONObject:["consent":true,"scope":"shopping"]),timeout:25)
     }
 }
 struct ShoppingEnvelope<T:Encodable>:Encodable {let operation:String;let id:String?;let revision:Int?;let input:T}

@@ -80,7 +80,8 @@ struct ShoppingVoiceView:View {
     @StateObject private var voice=ShoppingVoice()
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var phase
-    @State private var consent=false
+    @AppStorage("shopping.liveTranscriptionEnabled") private var consent = true
+    @State private var startBell = ShoppingVoiceBell()
     @State private var review:[GroceryItem]=[]
     @State private var reviewing=false
     @State private var parsing=false
@@ -91,12 +92,15 @@ struct ShoppingVoiceView:View {
                 Text(reviewing ? "Review your items":"Tell me what to add").font(.largeTitle.bold())
                 Text("Try “six bananas, one gallon of milk, and two bags of rice 5 kg.”").foregroundStyle(.secondary)
                 if !reviewing {
-                    Button{Task{if voice.listening{await voice.finish()}else{await voice.start(store:store)}}}label:{
+                    Button{
+                        if !voice.listening { startBell.play() }
+                        Task{if voice.listening{await voice.finish()}else{await voice.start(store:store)}}
+                    }label:{
                         Image(systemName:voice.listening ? "pause.fill":"mic.fill").font(.system(size:48)).foregroundStyle(.white).frame(width:140,height:140).background(NexdoTheme.gradient,in:Circle()).shadow(color:.nexdoIndigo.opacity(0.2),radius:24)
                     }.disabled(!consent || voice.connecting || voice.finishing).accessibilityLabel(voice.listening ? "Pause listening":"Start listening")
                     Text(!consent ? "Enable live transcription below to start":voice.finishing ? "Finishing transcription…":voice.connecting ? "Connecting…":voice.listening ? "Listening — keep going":"Ready when you are").font(.headline)
                     Toggle("Allow live voice transcription",isOn:$consent).onChange(of:consent){_,value in if !value{voice.close()}}
-                    Text("Audio is sent for transcription while listening. Items are saved only after you review and add them.").font(.caption).foregroundStyle(.secondary)
+                    Text("Tap the mic to transcribe in English. Audio is sent only while listening. Review items before adding them.").font(.caption).foregroundStyle(.secondary)
                     TextEditor(text:$voice.text).frame(minHeight:120).padding(10).background(.ultraThinMaterial,in:RoundedRectangle(cornerRadius:16)).accessibilityLabel("Shopping transcript")
                     MomentPrimary(title:parsing ? "Organizing…":"Review Items"){Task{
                         parsing=true;await voice.finish()
@@ -123,5 +127,18 @@ struct ShoppingVoiceView:View {
             .onDisappear{voice.close()}
             .onChange(of:phase){_,value in if value != .active{voice.close()}}
         }
+    }
+}
+
+
+/// A short local cue; it does not start recording or change the shared audio session.
+@MainActor private final class ShoppingVoiceBell {
+    private var player: AVAudioPlayer?
+    func play() {
+        guard let url = Bundle.main.url(forResource: "shopping-mic-bell", withExtension: "wav") else { return }
+        player = try? AVAudioPlayer(contentsOf: url)
+        player?.volume = 0.5
+        player?.prepareToPlay()
+        player?.play()
     }
 }
