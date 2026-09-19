@@ -1,4 +1,4 @@
-import * as Contacts from 'expo-contacts';
+import * as Contacts from 'expo-contacts/legacy';
 import * as MailComposer from 'expo-mail-composer';
 import * as SMS from 'expo-sms';
 import { Linking } from 'react-native';

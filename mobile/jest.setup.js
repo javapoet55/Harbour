@@ -111,7 +111,7 @@ jest.mock('react-native-incall-manager', () => ({
   default: { start: jest.fn(), stop: jest.fn(), setForceSpeakerphoneOn: jest.fn() },
 }));
 
-jest.mock('expo-contacts', () => ({
+jest.mock('expo-contacts/legacy', () => ({
   Fields: { ID: 'id', Name: 'name', PhoneNumbers: 'phoneNumbers', Emails: 'emails' },
   getPermissionsAsync: jest.fn(async () => ({ granted: true, canAskAgain: true })),
   requestPermissionsAsync: jest.fn(async () => ({ granted: true })),

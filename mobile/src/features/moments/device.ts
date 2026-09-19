@@ -1,11 +1,11 @@
 import * as Calendar from 'expo-calendar';
 import * as Clipboard from 'expo-clipboard';
-import * as Contacts from 'expo-contacts';
+import * as Contacts from 'expo-contacts/legacy';
 import * as Crypto from 'expo-crypto';
 import { Directory, File, Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import * as WebBrowser from 'expo-web-browser';
-import { Share } from 'react-native';
+import { Platform, Share } from 'react-native';
 
 import type { MomentInput } from '../../api/moments';
 import { composeMessage, canSendMessage, type ActionComposeResult } from '../../actions/composers';
@@ -128,6 +128,13 @@ export async function shareImage(uri: string): Promise<void> {
  * `ACTION_PICK` returns one, so each "Add Contact" adds one person.
  */
 export async function pickContact(): Promise<Contacts.ExistingContact | null> {
+  // PLATFORM GAP: on Android expo-contacts reads the picked person back from the contacts provider,
+  // which needs READ_CONTACTS — `ACTION_PICK` alone does not grant it — so ask first.
+  if (Platform.OS === 'android') {
+    const current = await Contacts.getPermissionsAsync();
+    const granted = current.granted || (current.canAskAgain && (await Contacts.requestPermissionsAsync()).granted);
+    if (!granted) throw new TaskActionError('contactsDenied');
+  }
   return Contacts.presentContactPickerAsync();
 }
 
