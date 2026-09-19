@@ -38,7 +38,7 @@ before, set a password on the web app first.
 ### 3. What to do
 
 Work through the walkthrough below **with the iPhone app open next to you**, on the same account.
-It is ordered so each step builds on the last: 12 parts, 78 numbered steps.
+It is ordered so each step builds on the last: 13 parts, 94 numbered steps.
 
 Anything in the **Known differences** table further down is already known — please do not report
 those. Everything else is worth reporting.
@@ -176,6 +176,55 @@ now>".
 77. The greeting still remembers your first name.
 78. Sign back in. Your data is all there.
 
+### Part 13 — Important Moments (16 steps)
+
+Added in Phase 11 Run B. **Needs a new development or preview build** — it adds three native modules
+(calendar, clipboard, sharing). The way in is the **Moments** tile in Today's Quick Access row, which
+arrives with Run A; until then a Moments reminder notification is the only entry point.
+
+Use a test moment named `Parity …`, as the iPhone captures did. Never confirm **Delete all** on real data.
+
+79. Today → **Moments**. The page is titled **Important Moments**, with Upcoming / Scheduled / Sent as a
+    gradient control, the search field and the type menu, the summary card ("N upcoming moments",
+    wishes scheduled, wishes needing review) with **Manage** and **Create New**, then This Week / Next
+    Week / This Month / Next Month / Later.
+80. The type menu offers All, Birthday, Anniversary, Festival, Get Well Soon, Custom. Search a title.
+81. **Scheduled** shows each wish card and the delivery menu (All / Automatic / Confirmation / Action
+    needed). **Sent** shows delivered, copied and shared wishes. An empty Sent tab shows no message —
+    the iPhone does the same.
+82. **Manage** → **Manage Moments**. Open a birthday: **Manage Moment** with the header card (icon,
+    name, type, the **Active** switch, "Send date · …") and the four steps.
+83. Details: rename the moment, then tap **Contacts**. It saves first — "Moment changes saved." — and
+    only then moves. Rename again and tap the back chevron: **Discard unsaved changes?**
+84. Contacts: **Add Contact** opens the phone's contact picker (one person each time), then **Choose
+    delivery address**. **Enter recipient manually** opens **Add Contact**; **Add recipient** stays
+    greyed until there is a name and a phone or an email.
+85. Wish Message: change the tone, edit the text (the counter reads n/500), tap **Regenerate** — it asks
+    first once you have edited. **Personalize** opens its sheet. **Save Message** → "Message approved
+    and saved. Nothing has been sent."
+86. Greeting Card: **Create AI Greeting Card** opens the editor. Each generation is a paid AI call — do
+    it once. **Use This Card**, then **Share Card**: the share sheet receives the artwork image.
+87. Schedule: tap **Schedule Wish** with unsaved changes — "Save changes first." appears in red under
+    the button. Save, then **Schedule Wish** → **Review schedule** → **Confirm Schedule** → **Schedule
+    confirmed** with confetti. **Done** returns to Important Moments.
+88. **Create New**: the type menu, the automatic title, the date (a past date is accepted, as on the
+    iPhone), the February 29 note. **Save** is greyed while the title is empty. A new birthday opens
+    straight into Manage Moment.
+89. A **Custom** moment's **Review** opens **Review Wish**: the tone, **Personalize with AI** with the
+    consent sentence, the 0/500 counter, **Try another**, **Edit**, **Approve & Continue**.
+90. **Choose Delivery**: Messages reads "Nexdo opens Messages. You confirm the final send." **Open
+    Messages**, then back out of the SMS app **without sending**. **View delivery status** appears.
+91. On another custom wish choose **Schedule** → **Choose date & time** → **Schedule Reminder** →
+    **Wish details** reading "Wish scheduled". **Edit Schedule** opens its sheet; **Cancel scheduled
+    wish** asks first.
+92. The gear → **Moments Settings**: **Choose a contact birthday** (an explanation, then the picker,
+    then the editor as a sheet with Close), **Choose calendars and anniversary candidates** (Allow
+    calendar access → a calendar → candidates), **Choose festivals** (India → Diwali, Holi, Eid,
+    Pongal). **Connect / Reconnect Gmail** is greyed when the server has no Gmail configured.
+93. Schedule a Messages wish a few minutes ahead. At that time the notification reads **Important
+    Moment** — "Your wish is ready. Open Nexdo, then tap Send in Messages."
+94. Tap it. Important Moments opens with **Close**, and that wish's details on top.
+
 ---
 
 ## Known differences
@@ -200,6 +249,14 @@ decision, or a server-side gap.
 | **Text does not re-flow at the largest accessibility sizes.** | The iPhone re-lays several cards vertically; not ported. |
 | **No "Updating…" pill** at the top during a save. | The iPhone shows an app-wide busy pill; each screen shows its own progress here. |
 | **Reminders are local, not pushed.** They fire even with the phone offline. | The iPhone works the same way: the server has no Android or iOS push path, only web push for browsers. |
+| **Important Moments hides the tab bar.** | Its screens sit outside the tab group so a Moments reminder can open them over any tab. On the iPhone they push inside the Today tab. |
+| **A sent text message is recorded as failed.** After **Open Messages**, the wish shows "Failed" even when you sent it. | Android's SMS app reports no result to the app that opened it. The iPhone's Messages sheet does, and Nexdo maps an unknown result to failed exactly as the iPhone maps its own. |
+| **Dismissing the share sheet still records "Shared".** | Android's share sheet always reports that something was shared. |
+| **Share Card shares the artwork only**, without the greeting and signature drawn on it. | Drawing the finished card into an image needs a further native module. The greeting stays in the app. |
+| **The contact pickers take one person at a time**, including "Choose multiple contacts". | Android's contact picker returns a single contact. Pick again to add more. |
+| **"Done" rides on a bar above the keyboard** in the Moments editors. | Android has no keyboard accessory bar. |
+| **Some Moments text says "iOS"** ("Open iOS Settings", "iOS does not allow Nexdo to send Messages automatically"). | The copy is the iPhone's, word for word, pending a decision on Android wording. **Open iOS Settings** opens Android's app settings. |
+| **The greeting card's typeface differs.** | The iPhone uses New York (serif); Android uses its own serif. |
 
 ---
 
@@ -269,6 +326,7 @@ app/                  routes (expo-router); the folder tree is the navigation tr
   today/              do now, overdue, weekly summary, weather, attention
   ask/ action/        Ask AI, reminder actions
   account/ calendar/  settings, calendar sheets
+  moments/            Important Moments (Phase 11 Run B)
 src/
   api/                the HTTP client and wire types
   query/              TanStack Query hooks, one file per feature
@@ -276,6 +334,7 @@ src/
   lib/                pure logic ported from NexdoCore, each with tests
   components/         shared views
   actions/            reminders: coordinator, notifications, contacts, composers
+  features/moments/   Important Moments: model, store, reminders, device services, shared views
   voice/              the realtime conversation, its transport and Read Loud
 docs/swift-to-rn-style-map.md   how SwiftUI idioms were translated
 ```

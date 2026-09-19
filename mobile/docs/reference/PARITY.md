@@ -503,3 +503,48 @@ close affordance, what dismisses it and where it returns to.
   navigator"* — the route guard has already unmounted the navigator that owned the modal. The sheet
   has to be dismissed before the guard flips. Not fixed here: the sign-out call lives in
   `src/query/useAuth.ts`, which this pass does not touch.
+
+## Run B — Moments
+
+Phase 11 Run B, built on Windows from the Swift source and the second-pass iOS captures
+(`ios/moments-*`, `ios/moment-*`, `ios/festival-*`, `ios/wish-*`, `ios/review-wish-*`,
+`ios/schedule-wish-*`, `ios/greeting-card-*`). **No Android capture has been taken yet**: this
+machine has no device attached, so every row below is "built, awaiting device capture". The Android
+side of each capture pair goes in `android/` under the same name once a build with the three new
+native modules is on the phone.
+
+| Screen | Swift `body` | React Native | iOS captures | Status |
+| --- | --- | --- | --- | --- |
+| Important Moments | `ImportantMomentsView.swift:208-307` | `app/moments/index.tsx` | `moments-default`, `-scrolled`, `-dark`, `-empty`, `-scheduled`, `-scheduled-dark`, `-sent-empty`, `-filter-menu`, `-search-keyboard`, `-upcoming-row-needs-review` | built, awaiting device capture |
+| Manage Moments | `ManageFestivalView.swift:3-44` | `app/moments/manage-list.tsx` | `moments-manage-list`, `-dark` | built, awaiting device capture |
+| Create / Edit Moment | `MomentEditor.swift:5-171` | `app/moments/editor.tsx`, `import-editor.tsx`, `src/features/moments/MomentEditorView.tsx` | `moment-create-*` | built, awaiting device capture |
+| Manage Moment, 4 steps | `ManageFestivalView.swift:45-220`, `ManageFestivalModel.swift:4-233` | `app/moments/manage.tsx`, `src/features/moments/ManageMomentView.tsx`, `manageModel.ts` | `moment-manage-*`, `festival-manage-*` | built, awaiting device capture |
+| Add Contact | `ManageFestivalView.swift:221-225` | `ManualRecipientSheet` in `ManageMomentView.tsx` | `moment-add-recipient-error-empty` | built, awaiting device capture |
+| Choose delivery address | `ManageFestivalView.swift:217` | `ManageMomentView.tsx` | not captured | built |
+| Personalize | `ManageFestivalView.swift:216` | `ManageMomentView.tsx` | `review-wish-personalize` (Review Wish's disclosure; the sheet itself is not captured) | built |
+| Review schedule | `ManageFestivalView.swift:183-215` | `ManageMomentView.tsx` | `moment-manage-schedule-confirm` | built, awaiting device capture |
+| Schedule confirmed + confetti | `ManageFestivalView.swift:227-261`, `MomentConfetti.swift:10-54` | `ScheduleSuccess` in `ManageMomentView.tsx`, `MomentConfetti` in `components.tsx` | `moment-schedule-success` | built, awaiting device capture |
+| Greeting Card editor | `FestivalServices.swift:103-187` | `src/features/moments/GreetingCard.tsx` | `greeting-card-editor`, `-scrolled` | built, awaiting device capture |
+| Review Wish | `ImportantMomentsView.swift:309-373` | `app/moments/review.tsx` | `review-wish-*` | built, awaiting device capture |
+| Choose Delivery | `ImportantMomentsView.swift:374-436` | `app/moments/delivery.tsx` | `wish-delivery-*` | built, awaiting device capture |
+| Confirm email | `ImportantMomentsView.swift:596-613` | `src/features/moments/WishEmailConfirmation.tsx` | not captured (needs Gmail) | built from source |
+| Schedule Wish | `ImportantMomentsView.swift:447-494` | `app/moments/schedule-wish.tsx` | `schedule-wish-*` | built, awaiting device capture |
+| Wish details, Edit Schedule, cancel | `ImportantMomentsView.swift:495-551` | `app/moments/wish.tsx` | `wish-details*`, `wish-edit-schedule`, `wish-cancel-dialog` | built, awaiting device capture |
+| Moments Settings | `MomentEditor.swift:205-245` | `app/moments/settings.tsx` | `moments-settings*` | built, awaiting device capture |
+| Calendar Moments | `MomentEditor.swift:288-310` | `app/moments/calendar-import.tsx` | `moments-calendar-import-empty` | built, awaiting device capture |
+| Choose Festivals | `MomentEditor.swift:311-322` | `app/moments/festivals.tsx` | `moments-festivals*` | built, awaiting device capture |
+| Notification route | `ImportantMomentsView.swift:563-594`, `ImportantMomentsStore.swift:12-17, :83-88` | `src/features/moments/useMomentsLifecycle.ts`, `app/moments/index.tsx` (`routed`) | not captured (needs a delivered notification) | built from source |
+
+### How the global patterns were translated
+
+| # | Pattern | React Native |
+| --- | --- | --- |
+| 1 | `MomentSegments` | `MomentSegments` in `components.tsx`: the brand gradient behind the selected segment, indigo text on the rest, over `glassFill`. Choose Delivery's "When" keeps the SYSTEM segmented control (`SettingsSegments`), because Swift uses `.pickerStyle(.segmented)` there. |
+| 2 | Step tabs with auto-save | `ManageMomentView` → `model.changeTab`: a dirty moment saves first and moves only on success; a 409 "Existing schedules" asks "Save changes to scheduled wishes?" and keeps the pending tab. |
+| 3 | Header summary card | The identity `MomentCard` with the `Switch` and "Active"/"Inactive". |
+| 4 | `MomentCard` | `GlassCard` at 22pt with a `nexdoIndigo` 18% stroke, or a gradient fill. |
+| 5 | `MomentPrimary` + inline error | `MomentPrimary`; the model's error renders as red text below the step content. |
+| 6 | In-content section titles | `largeTitle` / `title` / `title2` bold `Text`s; the navigation title stays centred and inline. |
+| 7 | Two-step confirmations | Review schedule is a sheet; Cancel wish, Disable moment, Delete Moment, Discard and Delete all are `Alert.alert`s, the accepted platform substitute for `confirmationDialog`. |
+| 8 | Form sheets | `MomentSheet` (a full-height page sheet) with the large title in the content and the toolbar buttons in the bar; Add Contact's "Add recipient" is disabled while required fields are empty. |
+| 9 | Keyboard "Done" | `KeyboardDoneBar`, a bar pinned to the top of the keyboard, since Android has no accessory view. |
