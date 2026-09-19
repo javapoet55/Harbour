@@ -645,7 +645,7 @@ function ConnectionList({
                 name={healthy ? 'checkmark.circle.fill' : 'exclamationmark.triangle.fill'}
                 size={17}
               />
-              <View accessible style={styles.grow}>
+              <View accessible style={styles.connectionText}>
                 <Text style={[styles.subheadline, styles.bold, { color: theme.colors.label }]}>{displayName(connection)}</Text>
                 <Text style={[styles.caption, { color: theme.colors.secondary }]}>{connectionDetail(connection)}</Text>
                 {synced ? <Text style={[styles.caption2, { color: theme.colors.secondary }]}>{synced}</Text> : null}
@@ -705,7 +705,10 @@ const styles = StyleSheet.create({
   caption2: { fontSize: 11, lineHeight: 13 },
   // `VStack(spacing: 10)` of `.padding(12)` blocks, radius 12.
   connections: { gap: 10 },
-  connection: { gap: 10, padding: 12, borderRadius: 12, borderWidth: StyleSheet.hairlineWidth },
+  // `.stroke(...)` with no `lineWidth` is 1pt, not a hairline.
+  connection: { gap: 10, padding: 12, borderRadius: 12, borderWidth: 1 },
+  // `VStack(alignment: .leading, spacing: 2)` around the name, detail and last sync.
+  connectionText: { flex: 1, gap: 2 },
   connectionHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
   connectionDivider: { height: StyleSheet.hairlineWidth },
   row: { flexDirection: 'row', alignItems: 'center', gap: 8 },
