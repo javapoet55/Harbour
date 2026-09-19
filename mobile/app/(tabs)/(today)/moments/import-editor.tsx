@@ -2,10 +2,10 @@ import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, View } from 'react-native';
 
-import type { MomentInput } from '../../src/api/moments';
-import { Text } from '../../src/components/Text';
-import { MomentEditorView } from '../../src/features/moments/MomentEditorView';
-import { useTheme } from '../../src/theme';
+import type { MomentInput } from '../../../../src/api/moments';
+import { Text } from '../../../../src/components/Text';
+import { MomentEditorView } from '../../../../src/features/moments/MomentEditorView';
+import { useTheme } from '../../../../src/theme';
 
 /**
  * The picked-contact editor Moments Settings presents as a `.sheet`, with a "Close" toolbar button

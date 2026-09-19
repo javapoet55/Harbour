@@ -5,6 +5,7 @@ import { Keyboard, Pressable, StyleSheet, View } from 'react-native';
 
 import type { ImportantMoment, MomentInput } from '../../api/moments';
 import { ownerKeyFor } from '../../actions/persistence';
+import { GlassCapsule } from '../../components/PushedHeader';
 import { Text } from '../../components/Text';
 import { textStyles, useTheme } from '../../theme';
 import { KeyboardDoneBar } from './components';
@@ -160,8 +161,10 @@ export function MomentEditorView({ moment, imported, onDone, dismiss }: { moment
         options={{
           title: moment ? 'Edit Moment' : 'Create Moment',
           headerRight: () => (
-            <Pressable accessibilityRole="button" accessibilityState={{ disabled: saveDisabled }} disabled={saveDisabled} onPress={save} hitSlop={8} testID="moment-save-top">
-              <Text style={{ fontSize: 17, lineHeight: 22, fontWeight: '600', color: saveDisabled ? theme.colors.placeholder : theme.colors.tint }}>Save</Text>
+            <Pressable accessibilityRole="button" accessibilityState={{ disabled: saveDisabled }} disabled={saveDisabled} onPress={save} hitSlop={6} testID="moment-save-top">
+              <GlassCapsule>
+                <Text style={{ fontSize: 17, lineHeight: 22, color: saveDisabled ? theme.colors.placeholder : theme.colors.tint }}>Save</Text>
+              </GlassCapsule>
             </Pressable>
           ),
         }}

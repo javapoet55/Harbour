@@ -47,7 +47,8 @@ export function GlassCard({ children, radius, stroke, shadow: withShadow = true,
       </View>
       <View
         pointerEvents="none"
-        style={[StyleSheet.absoluteFill, { borderRadius: radius, borderWidth: StyleSheet.hairlineWidth, borderColor: stroke ?? theme.colors.glassStroke }]}
+        // SwiftUI's `.stroke()` is 1pt; a hairline (0.53dp on this phone) read visibly thinner on every card (pass 2).
+        style={[StyleSheet.absoluteFill, { borderRadius: radius, borderWidth: 1, borderColor: stroke ?? theme.colors.glassStroke }]}
       />
       <View style={{ borderRadius: radius, overflow: 'hidden' }}>{children}</View>
     </View>

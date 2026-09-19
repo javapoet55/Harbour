@@ -3,17 +3,17 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
-import { Text } from '../../src/components/Text';
-import { TodayBackdrop } from '../../src/components/TodayShell';
-import { BorderedButton, ErrorText, MomentCard, MomentPrimary, MomentSheet } from '../../src/features/moments/components';
-import { momentLabel } from '../../src/features/moments/dates';
-import { canSendMessage, copyText, openMessages } from '../../src/features/moments/device';
-import { capitalized, HISTORY_STATUSES, momentForPlan, planDate, planEditable, planStatusLabel } from '../../src/features/moments/domain';
-import { DateField, FormButton, FormRow, FormScroll, FormSection, FormText, LabeledValue } from '../../src/features/moments/form';
-import { findPlan } from '../../src/features/moments/handoff';
-import { momentsStore, useMomentList, useMoments } from '../../src/features/moments/store';
-import { WishEmailConfirmation } from '../../src/features/moments/WishEmailConfirmation';
-import { brand, textStyles, useTheme } from '../../src/theme';
+import { Text } from '../../../../src/components/Text';
+import { TodayBackdrop } from '../../../../src/components/TodayShell';
+import { BorderedButton, ErrorText, MomentCard, MomentPrimary, MomentSheet } from '../../../../src/features/moments/components';
+import { momentLabel } from '../../../../src/features/moments/dates';
+import { canSendMessage, copyText, openMessages } from '../../../../src/features/moments/device';
+import { capitalized, HISTORY_STATUSES, momentForPlan, planDate, planEditable, planStatusLabel } from '../../../../src/features/moments/domain';
+import { DateField, FormButton, FormRow, FormScroll, FormSection, FormText, LabeledValue } from '../../../../src/features/moments/form';
+import { findPlan } from '../../../../src/features/moments/handoff';
+import { momentsStore, useMomentList, useMoments } from '../../../../src/features/moments/store';
+import { WishEmailConfirmation } from '../../../../src/features/moments/WishEmailConfirmation';
+import { brand, textStyles, useTheme } from '../../../../src/theme';
 
 /**
  * `WishPlanView` (ios/App/ImportantMomentsView.swift:495-551): one wish's delivery, always read back
@@ -91,6 +91,7 @@ export default function WishDetailsScreen() {
         {planEditable(current) ? (
           <>
             <BorderedButton
+              centered
               title="Edit Schedule"
               onPress={() => {
                 const now = Date.now();
@@ -101,7 +102,7 @@ export default function WishDetailsScreen() {
               testID="wish-edit-schedule"
             />
             {current.status === 'AWAITING_CONFIRMATION' && current.channel === 'messages' ? (
-              <BorderedButton prominent title="Review & Open Messages" onPress={() => void reviewAndOpen()} testID="wish-open-messages" />
+              <BorderedButton centered prominent title="Review & Open Messages" onPress={() => void reviewAndOpen()} testID="wish-open-messages" />
             ) : null}
             {current.channel === 'email' ? (
               <Pressable accessibilityRole="button" onPress={() => setSendEmailNow(true)} testID="wish-send-now">
@@ -190,5 +191,6 @@ const styles = StyleSheet.create({
   bold: { fontWeight: '700' },
   divider: { height: StyleSheet.hairlineWidth },
   body: { marginTop: 8 },
-  sheetTitle: { marginHorizontal: 16, marginTop: -20 },
+  // Just under the sheet's bar (FormScroll's top padding is 3 since UI-parity pass 2).
+  sheetTitle: { marginHorizontal: 16, marginTop: 4 },
 });

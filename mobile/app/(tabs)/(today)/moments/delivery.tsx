@@ -4,19 +4,19 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 
-import type { ImportantMoment, PlanResponse, WishDeliveryPlan, WishDraft } from '../../src/api/moments';
-import { TaskActionError } from '../../src/actions/errors';
-import { SettingsSegments } from '../../src/components/SettingsControls';
-import { Text } from '../../src/components/Text';
-import { TodayBackdrop } from '../../src/components/TodayShell';
-import { ErrorText, IconLabel, MomentCard, MomentPrimary, Secondary, headline, title1 } from '../../src/features/moments/components';
-import { isoString } from '../../src/features/moments/dates';
-import { canSendMessage, copyText, openMessages, shareText } from '../../src/features/moments/device';
-import { capitalized, momentIcon } from '../../src/features/moments/domain';
-import { findDraft, findPlan, rememberPlan } from '../../src/features/moments/handoff';
-import { momentsStore, useMoments } from '../../src/features/moments/store';
-import { WishEmailConfirmation } from '../../src/features/moments/WishEmailConfirmation';
-import { textStyles, useTheme } from '../../src/theme';
+import type { ImportantMoment, PlanResponse, WishDeliveryPlan, WishDraft } from '../../../../src/api/moments';
+import { TaskActionError } from '../../../../src/actions/errors';
+import { SettingsSegments } from '../../../../src/components/SettingsControls';
+import { Text } from '../../../../src/components/Text';
+import { TodayBackdrop } from '../../../../src/components/TodayShell';
+import { ErrorText, IconLabel, MomentCard, MomentPrimary, Secondary, headline, title1 } from '../../../../src/features/moments/components';
+import { isoString } from '../../../../src/features/moments/dates';
+import { canSendMessage, copyText, openMessages, shareText } from '../../../../src/features/moments/device';
+import { capitalized, momentIcon } from '../../../../src/features/moments/domain';
+import { findDraft, findPlan, rememberPlan } from '../../../../src/features/moments/handoff';
+import { momentsStore, useMoments } from '../../../../src/features/moments/store';
+import { WishEmailConfirmation } from '../../../../src/features/moments/WishEmailConfirmation';
+import { textStyles, useTheme } from '../../../../src/theme';
 
 const CHANNELS = [
   { id: 'messages', title: 'Messages', icon: 'chatbubble' },
@@ -140,7 +140,7 @@ export default function ChooseDeliveryScreen() {
               onChangeText={setRecipient}
               placeholder={channel === 'email' ? 'Recipient email' : 'Recipient phone'}
               placeholderTextColor={theme.colors.placeholder}
-              style={[styles.rounded, { color: theme.colors.label, backgroundColor: theme.colors.surface, borderColor: theme.colors.separator }]}
+              style={[styles.rounded, { color: theme.colors.label, backgroundColor: theme.colors.background, borderColor: theme.colors.separator }]}
               testID="delivery-recipient"
               value={recipient}
             />

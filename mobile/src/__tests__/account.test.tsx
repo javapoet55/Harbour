@@ -306,7 +306,7 @@ describe('the Settings screen', () => {
     await waitFor(() => expect(screen.getByTestId('settings-push')).toBeTruthy());
 
     fireEvent(screen.getByTestId('settings-push'), 'valueChange', false);
-    await waitFor(() => expect(screen.getByTestId('settings-push').props.value).toBe(false));
+    await waitFor(() => expect(screen.getByTestId('settings-push').props.accessibilityState).toMatchObject({ checked: false }));
     fireEvent.changeText(screen.getByTestId('settings-name'), 'Ada L');
     await waitFor(() => expect(screen.getByTestId('settings-name').props.value).toBe('Ada L'));
 
@@ -319,7 +319,7 @@ describe('the Settings screen', () => {
     await waitFor(() => expect(screen.getByTestId('settings-push')).toBeTruthy());
 
     fireEvent(screen.getByTestId('settings-push'), 'valueChange', false);
-    await waitFor(() => expect(screen.getByTestId('settings-push').props.value).toBe(false));
+    await waitFor(() => expect(screen.getByTestId('settings-push').props.accessibilityState).toMatchObject({ checked: false }));
     fireEvent.press(screen.getByTestId('settings-save'));
 
     await waitFor(() => expect(mockUpdateSettings).toHaveBeenCalledTimes(1));

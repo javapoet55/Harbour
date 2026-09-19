@@ -3,12 +3,12 @@ import { router } from 'expo-router';
 import { useEffect } from 'react';
 import { ActivityIndicator, Alert, Linking, StyleSheet, View } from 'react-native';
 
-import type { ConnectEmailResponse, MomentOK } from '../../src/api/moments';
-import { Text } from '../../src/components/Text';
-import { connectGmail, contactMomentInput, pickContact } from '../../src/features/moments/device';
-import { FormButton, FormLink, FormRow, FormScroll, FormSection, FormText } from '../../src/features/moments/form';
-import { momentsStore, reminderStatusText, useMoments } from '../../src/features/moments/store';
-import { textStyles, useTheme } from '../../src/theme';
+import type { ConnectEmailResponse, MomentOK } from '../../../../src/api/moments';
+import { Text } from '../../../../src/components/Text';
+import { connectGmail, contactMomentInput, pickContact } from '../../../../src/features/moments/device';
+import { FormButton, FormLink, FormRow, FormScroll, FormSection, FormText } from '../../../../src/features/moments/form';
+import { momentsStore, reminderStatusText, useMoments } from '../../../../src/features/moments/store';
+import { textStyles, useTheme } from '../../../../src/theme';
 
 /**
  * `MomentSettingsView` (ios/App/MomentEditor.swift:205-245): the imports, the connected Gmail account,

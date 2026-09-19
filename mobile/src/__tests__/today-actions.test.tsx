@@ -30,7 +30,7 @@ jest.mock('expo-crypto', () => ({
 const mockTasks = jest.fn();
 const mockAgenda = jest.fn();
 const mockIntelligence = jest.fn();
-jest.mock('../api/shopping', () => ({ shoppingEndpoints: { list: async () => ({ lists: [] }) } }));
+jest.mock('../api/shopping', () => ({ ...jest.requireActual('../api/shopping'), shoppingApi: { lists: async () => ({ lists: [] }) } }));
 jest.mock('../api', () => ({
   ...jest.requireActual('../api'),
   endpoints: {
@@ -40,7 +40,7 @@ jest.mock('../api', () => ({
   },
 }));
 
-import Today from '../../app/(tabs)/today/index';
+import Today from '../../app/(tabs)/(today)/today/index';
 
 const ZONE = 'America/Los_Angeles';
 const OWNER = 'user-1';

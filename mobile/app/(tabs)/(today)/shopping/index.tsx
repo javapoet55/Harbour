@@ -3,14 +3,14 @@ import { router, Stack } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 
-import { Text } from '../../src/components/Text';
-import { TodayBackdrop } from '../../src/components/TodayShell';
-import { headline, MomentCard, systemColors } from '../../src/features/moments/components';
-import { momentDate } from '../../src/features/moments/dates';
-import { ListTile } from '../../src/features/shopping/components';
-import { NewListSheet } from '../../src/features/shopping/sheets';
-import { shoppingStore, useShopping } from '../../src/features/shopping/store';
-import { brand, textStyles, useTheme } from '../../src/theme';
+import { Text } from '../../../../src/components/Text';
+import { TodayBackdrop } from '../../../../src/components/TodayShell';
+import { headline, MomentCard, systemColors } from '../../../../src/features/moments/components';
+import { momentDate } from '../../../../src/features/moments/dates';
+import { ListTile } from '../../../../src/features/shopping/components';
+import { NewListSheet } from '../../../../src/features/shopping/sheets';
+import { shoppingStore, useShopping } from '../../../../src/features/shopping/store';
+import { brand, textStyles, useTheme } from '../../../../src/theme';
 
 /** `.dateTime.month(.abbreviated).day()` in the device locale — "25 Sep" or "Sep 25". */
 function shortDay(day: string, zone: string): string {

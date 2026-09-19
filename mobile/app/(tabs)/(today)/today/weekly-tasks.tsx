@@ -2,13 +2,13 @@ import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 
-import type { NexdoTask } from '../../../src/api';
-import { Text } from '../../../src/components';
-import { TaskListRow } from '../../../src/components/ProjectParts';
-import { parseServerDate } from '../../../src/lib/taskQuery';
-import { taskRangeLabel, WEEKLY_TASK_FILTERS, type WeeklyTaskFilter } from '../../../src/lib/weeklySummary';
-import { useWeeklySummary } from '../../../src/query/useToday';
-import { useTheme } from '../../../src/theme';
+import type { NexdoTask } from '../../../../src/api';
+import { Text } from '../../../../src/components';
+import { TaskListRow } from '../../../../src/components/ProjectParts';
+import { parseServerDate } from '../../../../src/lib/taskQuery';
+import { taskRangeLabel, WEEKLY_TASK_FILTERS, type WeeklyTaskFilter } from '../../../../src/lib/weeklySummary';
+import { useWeeklySummary } from '../../../../src/query/useToday';
+import { useTheme } from '../../../../src/theme';
 
 /**
  * Port of `WeeklySummaryTasksView` (ios/App/WeeklySummaryView.swift), built from `body` at `:264-315`.

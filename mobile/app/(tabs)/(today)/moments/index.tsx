@@ -4,9 +4,10 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 
-import type { ImportantMoment, WishDeliveryPlan } from '../../src/api/moments';
-import { Text } from '../../src/components/Text';
-import { TodayBackdrop } from '../../src/components/TodayShell';
+import type { ImportantMoment, WishDeliveryPlan } from '../../../../src/api/moments';
+import { Text } from '../../../../src/components/Text';
+import { TodayBackdrop } from '../../../../src/components/TodayShell';
+import { GlassCapsule, GlassCircle } from '../../../../src/components/PushedHeader';
 import {
   caption,
   headline,
@@ -16,8 +17,8 @@ import {
   MomentStatusBadge,
   systemColors,
   title1,
-} from '../../src/features/moments/components';
-import { momentDate, momentLabel, momentRelative, sendDayLabel, shortTime, UPCOMING_GROUPS } from '../../src/features/moments/dates';
+} from '../../../../src/features/moments/components';
+import { momentDate, momentLabel, momentRelative, sendDayLabel, shortTime, UPCOMING_GROUPS } from '../../../../src/features/moments/dates';
 import {
   capitalized,
   DELIVERY_FILTERS,
@@ -38,11 +39,11 @@ import {
   latestDraft,
   type MomentDisplayGroup,
   type MomentsTab,
-} from '../../src/features/moments/domain';
-import { MenuPicker } from '../../src/features/moments/form';
-import { momentsStore, useMomentList, useMoments } from '../../src/features/moments/store';
-import { routedDestination } from '../../src/features/moments/useMomentsLifecycle';
-import { brand, linearGradientStops, textStyles, useTheme } from '../../src/theme';
+} from '../../../../src/features/moments/domain';
+import { MenuPicker } from '../../../../src/features/moments/form';
+import { momentsStore, useMomentList, useMoments } from '../../../../src/features/moments/store';
+import { routedDestination } from '../../../../src/features/moments/useMomentsLifecycle';
+import { brand, linearGradientStops, textStyles, useTheme } from '../../../../src/theme';
 
 const GRADIENT = linearGradientStops([brand.nexdoMagenta, brand.nexdoIndigo, brand.nexdoBlue]);
 
@@ -101,16 +102,24 @@ export default function ImportantMomentsScreen() {
     <View style={styles.fill}>
       <Stack.Screen
         options={{
-          headerLeft: routed
-            ? () => (
-                <Pressable accessibilityRole="button" accessibilityLabel="Close" onPress={() => router.back()} hitSlop={8} testID="moments-close">
-                  <Text style={{ fontSize: 17, lineHeight: 22, color: theme.colors.tint }}>Close</Text>
-                </Pressable>
-              )
-            : undefined,
+          // Only when routed from a notification; an explicit `undefined` would erase the glass back
+          // button the Today stack gives every push.
+          ...(routed
+            ? {
+                headerLeft: () => (
+                  <Pressable accessibilityRole="button" accessibilityLabel="Close" onPress={() => router.back()} hitSlop={8} testID="moments-close">
+                    <GlassCapsule>
+                      <Text style={{ fontSize: 17, lineHeight: 22, color: theme.colors.tint }}>Close</Text>
+                    </GlassCapsule>
+                  </Pressable>
+                ),
+              }
+            : {}),
           headerRight: () => (
-            <Pressable accessibilityRole="button" accessibilityLabel="Important Moments settings" onPress={() => router.push('/moments/settings')} hitSlop={8} testID="moments-settings">
-              <Ionicons name="settings-outline" size={22} color={theme.colors.tint} />
+            <Pressable accessibilityRole="button" accessibilityLabel="Important Moments settings" onPress={() => router.push('/moments/settings')} hitSlop={6} testID="moments-settings">
+              <GlassCircle>
+                <Ionicons name="settings-outline" size={22} color={theme.colors.tint} />
+              </GlassCircle>
             </Pressable>
           ),
         }}
@@ -129,7 +138,8 @@ export default function ImportantMomentsScreen() {
             onChangeText={setSearch}
             placeholder="Search moments"
             placeholderTextColor={theme.colors.placeholder}
-            style={[styles.search, { color: theme.colors.label, backgroundColor: theme.colors.surface, borderColor: theme.colors.separator }]}
+            // `.textFieldStyle(.roundedBorder)` fills with the system background: white, and BLACK in dark.
+            style={[styles.search, { color: theme.colors.label, backgroundColor: theme.colors.background, borderColor: theme.colors.separator }]}
             testID="moments-search"
             value={search}
           />
@@ -191,14 +201,17 @@ export default function ImportantMomentsScreen() {
         ) : (
           <>
             {tab === 'Scheduled' ? (
-              <MenuPicker
-                hideLabel
-                label="Delivery"
-                onChange={setDeliveryFilter}
-                options={DELIVERY_FILTERS.map((value) => ({ value, title: value }))}
-                testID="moments-delivery-filter"
-                value={deliveryFilter}
-              />
+              // A menu `Picker` in SwiftUI's default centred `VStack`.
+              <View style={styles.centredRow}>
+                <MenuPicker
+                  hideLabel
+                  label="Delivery"
+                  onChange={setDeliveryFilter}
+                  options={DELIVERY_FILTERS.map((value) => ({ value, title: value }))}
+                  testID="moments-delivery-filter"
+                  value={deliveryFilter}
+                />
+              </View>
             ) : null}
             {plans.map((plan) => (
               <PlanCard key={plan.id} plan={plan} moment={momentForPlan(displayed, plan)} />
@@ -224,7 +237,7 @@ export default function ImportantMomentsScreen() {
           </>
         ) : null}
         {loading ? <ActivityIndicator /> : null}
-        {lastSynced !== null ? <Text style={[caption, { color: theme.colors.secondaryLabel }]}>{`Updated ${shortTime(lastSynced)}`}</Text> : null}
+        {lastSynced !== null ? <Text style={[caption, styles.centredText, { color: theme.colors.secondaryLabel }]}>{`Updated ${shortTime(lastSynced)}`}</Text> : null}
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Add Moment"
@@ -385,7 +398,12 @@ const styles = StyleSheet.create({
   link: { flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start' },
   reviewButtonWrap: { alignSelf: 'flex-start' },
   reviewButton: { paddingHorizontal: 22, paddingVertical: 10, borderRadius: 12 },
-  empty: { alignItems: 'center', gap: 8, paddingVertical: 24 },
+  // `ContentUnavailableView` insets its text further than the list: about 295pt wide on a 402pt screen.
+  empty: { alignItems: 'center', gap: 8, paddingVertical: 24, paddingHorizontal: 26 },
+  centredRow: { alignItems: 'center' },
+  // In SwiftUI's centred `VStack`.
+  centredText: { alignSelf: 'center' },
   center: { textAlign: 'center' },
-  addButton: { minHeight: 52, borderRadius: 999, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
+  // `.frame(minHeight: 52)` inside `.borderedProminent`, which adds ~6pt above and below: 64 in all.
+  addButton: { minHeight: 64, borderRadius: 999, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
 });

@@ -26,6 +26,7 @@ export function MonthCalendar({
   onSelect,
   timeZone,
   now,
+  system = false,
 }: {
   /** The selected instant, epoch ms. */
   selected: number;
@@ -33,6 +34,12 @@ export function MonthCalendar({
   timeZone: string;
   /** Injected by tests; read once per mount otherwise, so "today" cannot shift mid-render. */
   now?: number;
+  /**
+   * The SYSTEM `DatePicker`'s `.graphical` grid, as the Moments date fields show it
+   * (`moment-create-date-picker`): weeks start on Sunday — the reference device's locale — with
+   * three-letter uppercase day names. The Tasks screens keep Swift's explicit `firstWeekday = 2`.
+   */
+  system?: boolean;
 }) {
   const theme = useTheme();
   const [mountedAt] = useState(() => Date.now());
@@ -43,9 +50,9 @@ export function MonthCalendar({
   const [year, month] = selectedDay.split('-').map(Number);
   const firstOfMonth = startOfDay(Date.UTC(year, month - 1, 1, 12), timeZone);
 
-  // Monday-first, matching `firstWeekday = 2` everywhere else in the app.
+  // Monday-first, matching `firstWeekday = 2` on the Tasks screens; Sunday-first for the system picker.
   const firstWeekday = new Date(Date.UTC(year, month - 1, 1)).getUTCDay();
-  const leading = (firstWeekday + 6) % 7;
+  const leading = system ? firstWeekday : (firstWeekday + 6) % 7;
   const daysInMonth = new Date(Date.UTC(month === 12 ? year + 1 : year, month === 12 ? 0 : month, 0)).getUTCDate();
 
   const cells: (number | null)[] = [
@@ -78,9 +85,9 @@ export function MonthCalendar({
       </View>
 
       <View style={styles.weekdays}>
-        {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((label) => (
-          <Text key={label} style={[styles.weekday, { color: theme.colors.secondary }]}>
-            {label.charAt(0)}
+        {(system ? ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'] : ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']).map((label) => (
+          <Text key={label} style={[styles.weekday, system && styles.systemWeekday, { color: theme.colors.secondary }]}>
+            {system ? label : label.charAt(0)}
           </Text>
         ))}
       </View>
@@ -136,6 +143,7 @@ export { addDays };
 const styles = StyleSheet.create({
   calendar: { gap: 10 },
   monthRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  systemWeekday: { fontSize: 13, fontWeight: '600' },
   monthButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   monthGlyph: { fontSize: 26, lineHeight: 30, fontWeight: '600' },
   monthLabel: { fontSize: 17, lineHeight: 22, fontWeight: '600' },

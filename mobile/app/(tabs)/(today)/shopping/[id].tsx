@@ -4,18 +4,18 @@ import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { Alert, Keyboard, Modal, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 
-import type { GroceryItem, GroceryList } from '../../src/api/shopping';
-import { Text } from '../../src/components/Text';
-import { TodayBackdrop } from '../../src/components/TodayShell';
-import { headline } from '../../src/features/moments/components';
-import { FormRow, FormSection } from '../../src/features/moments/form';
-import { GroceryRow, ProgressBar, ShoppingIcon } from '../../src/features/shopping/components';
-import { ItemEditorSheet } from '../../src/features/shopping/ItemEditorSheet';
-import { appended, CATEGORIES, listInput, moved, newItem, remaining, removed, suggestionsFor, toggled, uncheckedAll, upserted } from '../../src/features/shopping/model';
-import { ListSettingsSheet, NewListSheet, ReviewItemsSheet, ShareListSheet } from '../../src/features/shopping/sheets';
-import { shoppingStore, useShopping } from '../../src/features/shopping/store';
-import { VoiceSheet } from '../../src/features/shopping/VoiceSheet';
-import { textStyles, useTheme } from '../../src/theme';
+import type { GroceryItem, GroceryList } from '../../../../src/api/shopping';
+import { Text } from '../../../../src/components/Text';
+import { TodayBackdrop } from '../../../../src/components/TodayShell';
+import { headline } from '../../../../src/features/moments/components';
+import { FormRow, FormSection } from '../../../../src/features/moments/form';
+import { GroceryRow, ProgressBar, ShoppingIcon } from '../../../../src/features/shopping/components';
+import { ItemEditorSheet } from '../../../../src/features/shopping/ItemEditorSheet';
+import { appended, CATEGORIES, listInput, moved, newItem, remaining, removed, suggestionsFor, toggled, uncheckedAll, upserted } from '../../../../src/features/shopping/model';
+import { ListSettingsSheet, NewListSheet, ReviewItemsSheet, ShareListSheet } from '../../../../src/features/shopping/sheets';
+import { shoppingStore, useShopping } from '../../../../src/features/shopping/store';
+import { VoiceSheet } from '../../../../src/features/shopping/VoiceSheet';
+import { textStyles, useTheme } from '../../../../src/theme';
 
 /**
  * `ShoppingDetail` (ios/App/ShoppingViews.swift:206-295).

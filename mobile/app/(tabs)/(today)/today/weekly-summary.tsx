@@ -3,8 +3,8 @@ import { router } from 'expo-router';
 import { useState } from 'react';
 import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Share, StyleSheet, View } from 'react-native';
 
-import type { WeeklySummary } from '../../../src/api';
-import { TaskSymbol, Text } from '../../../src/components';
+import type { WeeklySummary } from '../../../../src/api';
+import { TaskSymbol, Text } from '../../../../src/components';
 import {
   addingWeek,
   apiDay,
@@ -14,10 +14,10 @@ import {
   startOfWeek,
   weekRangeLabel,
   weekdayInitial,
-} from '../../../src/lib/weeklySummary';
-import { useWeeklySummary } from '../../../src/query/useToday';
-import { useSession } from '../../../src/store/session';
-import { brand, useTheme } from '../../../src/theme';
+} from '../../../../src/lib/weeklySummary';
+import { useWeeklySummary } from '../../../../src/query/useToday';
+import { useSession } from '../../../../src/store/session';
+import { brand, useTheme } from '../../../../src/theme';
 
 /**
  * Port of `WeeklySummaryView` (ios/App/WeeklySummaryView.swift), built from `body` at `:24-42` and

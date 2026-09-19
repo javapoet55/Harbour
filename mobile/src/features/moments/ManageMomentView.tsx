@@ -2,12 +2,15 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import * as Crypto from 'expo-crypto';
 import { router, Stack } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Keyboard, Modal, Pressable, ScrollView, StyleSheet, Switch, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, Keyboard, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { useStore } from 'zustand';
 
 import { ownerKeyFor } from '../../actions/persistence';
 import { Text } from '../../components/Text';
 import { TodayBackdrop } from '../../components/TodayShell';
+import { FitText } from '../../components/FitText';
+import { IOSSwitch } from '../../components/IOSSwitch';
+import { GlassCapsule, GlassCircle } from '../../components/PushedHeader';
 import { withAlpha } from '../../components/SignInBackdrop';
 import { brand, textStyles, useTheme } from '../../theme';
 import {
@@ -42,7 +45,7 @@ import {
   type ManagedRecipient,
   type MomentDisplayGroup,
 } from './domain';
-import { DateField, Disclosure, FormField, FormScroll, FormSection, FormRow, FormToggle, FormButton, LabeledValue, MenuPicker, ZonePicker, genericZoneName } from './form';
+import { DateField, Disclosure, FormField, FormScroll, FormSection, FormRow, FormToggle, FormButton, LabeledValue, MenuPicker, PopoverMenu, usePopoverMenu, ZonePicker, genericZoneName } from './form';
 import { FestivalGreetingCard, GreetingCardEditor } from './GreetingCard';
 import {
   createManageModel,
@@ -103,7 +106,8 @@ export function ManageMomentView({ group, onDone }: { group: MomentDisplayGroup;
   const [contactChoices, setContactChoices] = useState<ContactChoice[]>([]);
   const [choicePhone, setChoicePhone] = useState('');
   const [choiceEmail, setChoiceEmail] = useState('');
-  const [menu, setMenu] = useState(false);
+  const optionsAnchor = useRef<View>(null);
+  const optionsMenu = usePopoverMenu(optionsAnchor);
   const messageRef = useRef<TextInput>(null);
   const [openedAt] = useState(() => Date.now());
 
@@ -277,13 +281,18 @@ export function ManageMomentView({ group, onDone }: { group: MomentDisplayGroup;
           headerBackVisible: false,
           gestureEnabled: false,
           headerLeft: () => (
-            <Pressable accessibilityRole="button" accessibilityLabel="Back" onPress={back} style={styles.navButton} testID="festival-back">
-              <Ionicons name="chevron-back" size={24} color={theme.colors.tint} />
+            <Pressable accessibilityRole="button" accessibilityLabel="Back" onPress={back} hitSlop={6} testID="festival-back">
+              {/* A custom back (it auto-saves first), so SwiftUI draws it as a tinted glass capsule. */}
+              <GlassCapsule>
+                <Ionicons name="chevron-back" size={24} color={theme.colors.tint} />
+              </GlassCapsule>
             </Pressable>
           ),
           headerRight: () => (
-            <Pressable accessibilityRole="button" accessibilityLabel="Moment options" onPress={() => setMenu(true)} style={styles.navButton} testID="festival-options">
-              <Ionicons name="ellipsis-horizontal" size={22} color={theme.colors.tint} />
+            <Pressable accessibilityRole="button" accessibilityLabel="Moment options" collapsable={false} onPress={optionsMenu.open} hitSlop={6} ref={optionsAnchor} testID="festival-options">
+              <GlassCapsule>
+                <Ionicons name="ellipsis-horizontal" size={22} color={theme.colors.tint} />
+              </GlassCapsule>
             </Pressable>
           ),
         }}
@@ -300,12 +309,10 @@ export function ManageMomentView({ group, onDone }: { group: MomentDisplayGroup;
                 <Secondary>{occasionLabel(state)}</Secondary>
               </View>
               <View style={styles.activeColumn}>
-                <Switch
+                <IOSSwitch
                   accessibilityLabel="Moment active"
                   onValueChange={setActive}
                   testID="festival-active"
-                  thumbColor="#FFFFFF"
-                  trackColor={{ false: theme.colors.separator, true: theme.colors.tint }}
                   value={state.active}
                 />
                 <Text style={[caption, { color: theme.colors.label }]}>{state.active ? 'Active' : 'Inactive'}</Text>
@@ -334,9 +341,16 @@ export function ManageMomentView({ group, onDone }: { group: MomentDisplayGroup;
                   style={[styles.tab, active && { backgroundColor: brand.nexdoIndigo }]}
                   testID={`festival-tab-${tab}`}
                 >
-                  <Text numberOfLines={1} style={[textStyles.subheadline, styles.tabLabel, { color: active ? '#FFFFFF' : brand.nexdoIndigo }]}>
+                  {/* `.lineLimit(1).minimumScaleFactor(0.7)` (ManageFestivalView.swift:120): "Wish Message"
+                      shrinks to fit its quarter rather than truncating. */}
+                  <FitText
+                    fontSize={textStyles.subheadline.fontSize}
+                    lineHeight={textStyles.subheadline.lineHeight}
+                    minimumScale={0.7}
+                    style={[styles.tabLabel, { color: active ? '#FFFFFF' : brand.nexdoIndigo }]}
+                  >
                     {tab}
-                  </Text>
+                  </FitText>
                 </Pressable>
               );
             })}
@@ -637,35 +651,22 @@ export function ManageMomentView({ group, onDone }: { group: MomentDisplayGroup;
       <KeyboardDoneBar testID="festival-keyboard-done" />
 
       {/* Options menu (:82) */}
-      <Modal animationType="fade" transparent visible={menu} onRequestClose={() => setMenu(false)}>
-        <Pressable style={styles.menuScrim} onPress={() => setMenu(false)}>
-          <View style={[styles.menu, { backgroundColor: theme.colors.surface }]}>
-            <Pressable
-              accessibilityRole="button"
-              onPress={() => {
-                setMenu(false);
-                Keyboard.dismiss();
-                router.push('/moments/settings');
-              }}
-              style={styles.menuRow}
-              testID="festival-settings-menu"
-            >
-              <Text style={[textStyles.body, { color: theme.colors.label }]}>{type === 'festival' ? 'Festival settings' : 'Moment settings'}</Text>
-            </Pressable>
-            <Pressable
-              accessibilityRole="button"
-              onPress={() => {
-                setMenu(false);
-                confirmDelete();
-              }}
-              style={styles.menuRow}
-              testID="festival-delete-menu"
-            >
-              <Text style={[textStyles.body, { color: theme.colors.danger }]}>Delete Moment</Text>
-            </Pressable>
-          </View>
-        </Pressable>
-      </Modal>
+      {/* The toolbar `Menu` (ManageFestivalView.swift): a popover from the "…" button, no dimming. */}
+      <PopoverMenu
+        items={[
+          {
+            key: 'settings',
+            title: type === 'festival' ? 'Festival settings' : 'Moment settings',
+            onPress: () => {
+              Keyboard.dismiss();
+              router.push('/moments/settings');
+            },
+            testID: 'festival-settings-menu',
+          },
+          { key: 'delete', title: 'Delete Moment', destructive: true, onPress: () => confirmDelete(), testID: 'festival-delete-menu' },
+        ]}
+        menu={optionsMenu}
+      />
 
       {/* `contactSelection` (:217) */}
       <MomentSheet
@@ -761,7 +762,7 @@ export function ManageMomentView({ group, onDone }: { group: MomentDisplayGroup;
       <GreetingCardEditor model={model} visible={imageSheet} onClose={() => setImageSheet(false)} />
 
       {/* `confirmation` (:183-215) */}
-      <MomentSheet visible={scheduleConfirm} title="" onRequestClose={() => setScheduleConfirm(false)} right={{ title: 'Cancel', onPress: () => setScheduleConfirm(false), testID: 'confirm-cancel' }} testID="schedule-confirm-sheet">
+      <MomentSheet plain visible={scheduleConfirm} title="" onRequestClose={() => setScheduleConfirm(false)} right={{ title: 'Cancel', onPress: () => setScheduleConfirm(false), testID: 'confirm-cancel' }} testID="schedule-confirm-sheet">
         <ScrollView contentContainerStyle={styles.confirm}>
           <Text style={[textStyles.largeTitle, styles.bold, { color: theme.colors.label }]}>Review schedule</Text>
           {selected.length === 1 && selected[0] ? (
@@ -949,8 +950,10 @@ export function ScheduleSuccess({
           title: 'Schedule confirmed',
           headerBackVisible: false,
           headerLeft: () => (
-            <Pressable accessibilityRole="button" accessibilityLabel="Back" onPress={manage} style={styles.navButton} testID="success-back">
-              <Ionicons name="chevron-back" size={24} color={theme.colors.tint} />
+            <Pressable accessibilityRole="button" accessibilityLabel="Back" onPress={manage} hitSlop={6} testID="success-back">
+              <GlassCircle>
+                <Ionicons name="chevron-back" size={24} color={theme.colors.ink} />
+              </GlassCircle>
             </Pressable>
           ),
           headerRight: undefined,
@@ -999,9 +1002,10 @@ const styles = StyleSheet.create({
   identityText: { flex: 1, gap: 8 },
   activeColumn: { alignItems: 'center', gap: 2 },
   tabs: { flexDirection: 'row', gap: 3, padding: 5, borderRadius: 22 },
-  tab: { flex: 1, minHeight: 44, paddingVertical: 5, borderRadius: 18, justifyContent: 'center' },
+  // `.frame(minHeight: 44).padding(.vertical, 5)`: 54 in all, as RN's minHeight includes padding.
+  tab: { flex: 1, minHeight: 54, paddingVertical: 5, borderRadius: 18, justifyContent: 'center' },
   tabLabel: { textAlign: 'center', alignSelf: 'stretch' },
-  nameInput: { flex: 1, textAlign: 'right', fontSize: 17, fontWeight: '700', paddingVertical: 4, backgroundColor: 'transparent' },
+  nameInput: { flex: 1, textAlign: 'right', fontSize: 17, fontWeight: '700', paddingVertical: 0, includeFontPadding: false, backgroundColor: 'transparent' },
   divider: { height: StyleSheet.hairlineWidth },
   deleteButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, minHeight: 48, borderRadius: 18, backgroundColor: 'rgba(255, 59, 48, 0.08)' },
   centerButton: { minHeight: 44, alignItems: 'center', justifyContent: 'center' },
@@ -1015,11 +1019,8 @@ const styles = StyleSheet.create({
   recipient: { gap: 10 },
   info: { flexDirection: 'row', gap: 8, padding: 16, borderRadius: 14 },
   progress: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  navButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
-  menuScrim: { flex: 1, backgroundColor: 'rgba(0,0,0,0.2)', alignItems: 'flex-end', paddingTop: 90, paddingRight: 16 },
-  menu: { borderRadius: 14, minWidth: 220, paddingVertical: 4 },
-  menuRow: { minHeight: 48, paddingHorizontal: 16, justifyContent: 'center' },
-  sheetTitle: { marginHorizontal: 16, marginTop: -20 },
+  // Just under the sheet's bar (FormScroll's top padding is 3 since UI-parity pass 2).
+  sheetTitle: { marginHorizontal: 16, marginTop: 4 },
   confirm: { padding: 16, gap: 18, paddingBottom: 60 },
 });
 

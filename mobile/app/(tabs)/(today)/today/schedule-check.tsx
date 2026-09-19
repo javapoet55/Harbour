@@ -1,11 +1,11 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
-import { TaskSymbol, Text } from '../../../src/components';
-import { parseServerDate } from '../../../src/lib/taskQuery';
-import { useTasks } from '../../../src/query/useTasks';
-import { useScheduleIntelligence } from '../../../src/query/useToday';
-import { useTheme } from '../../../src/theme';
+import { TaskSymbol, Text } from '../../../../src/components';
+import { parseServerDate } from '../../../../src/lib/taskQuery';
+import { useTasks } from '../../../../src/query/useTasks';
+import { useScheduleIntelligence } from '../../../../src/query/useToday';
+import { useTheme } from '../../../../src/theme';
 
 /**
  * Port of `scheduleCheckDetails(_:)` (ios/App/RootView.swift:1233-1259), a private func on

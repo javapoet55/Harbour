@@ -3,16 +3,17 @@ import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { Keyboard, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 
-import type { DraftResponse, GenerateResponse, ImportantMoment, WishDraft } from '../../src/api/moments';
-import { Text } from '../../src/components/Text';
-import { TodayBackdrop } from '../../src/components/TodayShell';
-import { BorderedButton, caption, ErrorText, IconLabel, KeyboardDoneBar, MomentCard, MomentPrimary, MomentSegments, Secondary } from '../../src/features/moments/components';
-import { characterCount, latestDraft, momentIcon, supportsGreetingCard, typeLabel } from '../../src/features/moments/domain';
-import { Disclosure, FormToggle } from '../../src/features/moments/form';
-import { rememberDraft } from '../../src/features/moments/handoff';
-import { MomentGreetingCardSection } from '../../src/features/moments/MomentGreetingCardSection';
-import { momentsStore, useMoments } from '../../src/features/moments/store';
-import { textStyles, useTheme } from '../../src/theme';
+import type { DraftResponse, GenerateResponse, ImportantMoment, WishDraft } from '../../../../src/api/moments';
+import { Text } from '../../../../src/components/Text';
+import { TodayBackdrop } from '../../../../src/components/TodayShell';
+import { GlassCapsule } from '../../../../src/components/PushedHeader';
+import { BorderedButton, caption, ErrorText, IconLabel, KeyboardDoneBar, MomentCard, MomentPrimary, MomentSegments, Secondary } from '../../../../src/features/moments/components';
+import { characterCount, latestDraft, momentIcon, supportsGreetingCard, typeLabel } from '../../../../src/features/moments/domain';
+import { Disclosure, FormToggle } from '../../../../src/features/moments/form';
+import { rememberDraft } from '../../../../src/features/moments/handoff';
+import { MomentGreetingCardSection } from '../../../../src/features/moments/MomentGreetingCardSection';
+import { momentsStore, useMoments } from '../../../../src/features/moments/store';
+import { textStyles, useTheme } from '../../../../src/theme';
 
 const TONES = ['Warm', 'Personal', 'Short', 'Fun'] as const;
 
@@ -80,8 +81,10 @@ export default function ReviewWishScreen() {
       <Stack.Screen
         options={{
           headerRight: () => (
-            <Pressable accessibilityRole="button" onPress={() => router.back()} hitSlop={8} testID="review-cancel">
-              <Text style={{ fontSize: 17, lineHeight: 22, color: theme.colors.tint }}>Cancel</Text>
+            <Pressable accessibilityRole="button" onPress={() => router.back()} hitSlop={6} testID="review-cancel">
+              <GlassCapsule>
+                <Text style={{ fontSize: 17, lineHeight: 22, color: theme.colors.tint }}>Cancel</Text>
+              </GlassCapsule>
             </Pressable>
           ),
         }}
@@ -110,7 +113,7 @@ export default function ReviewWishScreen() {
               onChangeText={setPersonalContext}
               placeholder="Personal context (optional)"
               placeholderTextColor={theme.colors.placeholder}
-              style={[styles.rounded, { color: theme.colors.label, backgroundColor: theme.colors.surface, borderColor: theme.colors.separator }]}
+              style={[styles.rounded, { color: theme.colors.label, backgroundColor: theme.colors.background, borderColor: theme.colors.separator }]}
               testID="review-context"
               value={personalContext}
             />

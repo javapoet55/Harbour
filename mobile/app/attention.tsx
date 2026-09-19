@@ -2,17 +2,19 @@ import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 
-import type { NexdoTask, ScheduleAttentionItem } from '../../../src/api';
-import { TaskSymbol, Text } from '../../../src/components';
-import { withAlpha } from '../../../src/components/SignInBackdrop';
-import { overdueDay, overdueResults } from '../../../src/lib/overdueTasks';
-import { parseServerDate } from '../../../src/lib/taskQuery';
-import { useBlockDismiss } from '../../../src/lib/useBlockDismiss';
-import { useScheduleIntelligence } from '../../../src/query/useToday';
-import { isConflictCancelled, isStaleWrite, useCompleteTask, useTasks, type ScheduleConflict } from '../../../src/query/useTasks';
-import { useAttentionSheet } from '../../../src/store/attention';
-import { useFocus } from '../../../src/store/focus';
-import { brand, useTheme } from '../../../src/theme';
+import type { NexdoTask, ScheduleAttentionItem } from '../src/api';
+import { TaskSymbol, Text } from '../src/components';
+import { withAlpha } from '../src/components/SignInBackdrop';
+import { overdueDay, overdueResults } from '../src/lib/overdueTasks';
+import { parseServerDate } from '../src/lib/taskQuery';
+import { useBlockDismiss } from '../src/lib/useBlockDismiss';
+import { useScheduleIntelligence } from '../src/query/useToday';
+import { isConflictCancelled, isStaleWrite, useCompleteTask, useTasks, type ScheduleConflict } from '../src/query/useTasks';
+import { useAttentionSheet } from '../src/store/attention';
+import { useFocus } from '../src/store/focus';
+import { GlassCapsule } from '../src/components/PushedHeader';
+import { useSheetSurface } from '../src/components/SheetSurface';
+import { brand, useTheme } from '../src/theme';
 
 /**
  * Port of `TodayAttentionSheet` (ios/App/TodayAttentionSheet.swift), `body` at `:17-100`, presented
@@ -101,10 +103,12 @@ export default function AttentionSheet() {
     }
   };
 
-  const section = { backgroundColor: theme.colors.surface };
+  // The glass card at `.medium`, the opaque grouped sheet at `.large` (pass 2).
+  const surface = useSheetSurface();
+  const section = { backgroundColor: surface.row };
 
   return (
-    <View style={[styles.fill, { backgroundColor: theme.colors.groupedBackground }]} testID="attention-sheet">
+    <View style={[styles.fill, { backgroundColor: surface.background }]} testID="attention-sheet">
       {Platform.OS === 'android' ? <View style={[styles.grabber, { backgroundColor: withAlpha(theme.colors.secondary, 0.5) }]} /> : null}
       {/* `.navigationTitle("Needs attention").navigationBarTitleDisplayMode(.inline)` with a
           `.confirmationAction` "Close", disabled while saving (`:80-81`). */}
@@ -129,7 +133,10 @@ export default function AttentionSheet() {
             onPress={() => router.back()}
             testID="attention-close"
           >
-            <Text style={[styles.barButton, { color: theme.colors.tint, opacity: saving ? 0.35 : 1 }]}>Close</Text>
+            {/* A `.confirmationAction` on iOS 26 sits on a glass capsule. */}
+            <GlassCapsule>
+              <Text style={[styles.barButton, { color: theme.colors.tint, opacity: saving ? 0.35 : 1 }]}>Close</Text>
+            </GlassCapsule>
           </Pressable>
         </View>
       </View>
@@ -141,7 +148,7 @@ export default function AttentionSheet() {
         refreshControl={<RefreshControl onRefresh={refresh} refreshing={tasks.isRefetching || intelligence.isRefetching} />}
       >
         {check ? (
-          <CheckDetails check={check} onTask={edit} tasks={tasks.data?.tasks ?? []} />
+          <CheckDetails check={check} onTask={edit} rowColor={surface.row} tasks={tasks.data?.tasks ?? []} />
         ) : (
           <>
             {overdue.length === 0 && checks.length === 0 ? (
@@ -184,7 +191,7 @@ export default function AttentionSheet() {
                     accessibilityRole="button"
                     accessibilityState={{ disabled: busy || saving }}
                     disabled={busy || saving}
-                    onPress={() => router.push('/today/reschedule-all')}
+                    onPress={() => router.push('/reschedule-all')}
                     style={[styles.prominent, { backgroundColor: theme.colors.tint, opacity: busy || saving ? 0.45 : 1 }]}
                     testID="attention-reschedule-all"
                   >
@@ -279,7 +286,7 @@ function OverdueRow({
 }
 
 /** The pushed schedule check (`:66-74`): the explanation, the recommendation, and its tasks. */
-function CheckDetails({ check, tasks, onTask }: { check: ScheduleAttentionItem; tasks: NexdoTask[]; onTask: (task: NexdoTask) => void }) {
+function CheckDetails({ check, tasks, onTask, rowColor }: { check: ScheduleAttentionItem; tasks: NexdoTask[]; onTask: (task: NexdoTask) => void; rowColor: string }) {
   const theme = useTheme({ elevated: true });
   // `model.tasks.filter { check.taskIds?.contains($0.id) == true }` — list order, not id order.
   const affected = tasks.filter((task) => check.taskIds?.includes(task.id) === true);
@@ -293,7 +300,7 @@ function CheckDetails({ check, tasks, onTask }: { check: ScheduleAttentionItem; 
     )),
   ];
   return (
-    <View style={[styles.section, { backgroundColor: theme.colors.surface }]} testID="attention-check-details">
+    <View style={[styles.section, { backgroundColor: rowColor }]} testID="attention-check-details">
       {rows.map((row, index) => (
         <View key={index} style={[styles.row, index > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.colors.separator }]}>
           {row}
@@ -308,15 +315,16 @@ const styles = StyleSheet.create({
   grow: { flex: 1 },
   grabber: { alignSelf: 'center', width: 36, height: 5, borderRadius: 3, marginTop: 6 },
   bar: { flexDirection: 'row', alignItems: 'center', minHeight: 52, paddingHorizontal: 16 },
-  barSide: { width: 72, flexDirection: 'row' },
+  barSide: { width: 104, flexDirection: 'row' },
   barRight: { justifyContent: 'flex-end' },
   barTitle: { flex: 1, textAlign: 'center', fontSize: 17, lineHeight: 22, fontWeight: '600' },
   barButton: { fontSize: 17, lineHeight: 22, fontWeight: '600' },
   // An inset-grouped `List` (style map §7, iOS 26 metrics): 16pt section inset, radius 26.
   scroll: { paddingBottom: 32 },
   section: { marginHorizontal: 16, borderRadius: 26, overflow: 'hidden' },
-  buttonSection: { marginTop: 20, padding: 12 },
-  header: { fontSize: 17, lineHeight: 22, fontWeight: '600', marginHorizontal: 32, marginTop: 20, marginBottom: 8 },
+  // Measured on `today-attention-sheet-half`: 33pt between the sections, a 55pt button.
+  buttonSection: { marginTop: 32, padding: 12 },
+  header: { fontSize: 17, lineHeight: 22, fontWeight: '600', marginHorizontal: 32, marginTop: 12, marginBottom: 8 },
   footer: { fontSize: 13, lineHeight: 18, marginHorizontal: 32, marginTop: 8 },
   inset: { marginHorizontal: 32, marginTop: 16 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 52, paddingHorizontal: 16, paddingVertical: 12 },
@@ -324,7 +332,7 @@ const styles = StyleSheet.create({
   taskRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 12, paddingVertical: 12 },
   square44: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   calendarButton: { borderRadius: 12 },
-  prominent: { minHeight: 50, borderRadius: 999, alignItems: 'center', justifyContent: 'center' },
+  prominent: { minHeight: 54, borderRadius: 999, alignItems: 'center', justifyContent: 'center' },
   headline: { fontSize: 17, lineHeight: 22, fontWeight: '600' },
   subheadline: { fontSize: 15, lineHeight: 20, marginTop: 4 },
   body: { fontSize: 17, lineHeight: 22 },

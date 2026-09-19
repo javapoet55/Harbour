@@ -364,6 +364,7 @@ const styles = StyleSheet.create({
   grow: { flex: 1 },
   inline: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   bold: { fontWeight: '700' },
-  sheetTitle: { marginHorizontal: 16, marginTop: -20 },
+  // Just under the sheet's bar (FormScroll's top padding is 3 since UI-parity pass 2).
+  sheetTitle: { marginHorizontal: 16, marginTop: 4 },
   error: { marginHorizontal: 32, marginTop: 12 },
 });

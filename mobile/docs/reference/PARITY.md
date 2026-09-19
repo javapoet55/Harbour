@@ -629,3 +629,113 @@ in code, and the mismatch column stays **pending device**.
 | Cancelling AI artwork does not abort the request | **Not a gap.** Swift does the same: Cancel only replaces `generation`, and the answer is ignored when it lands (`ShoppingItemEditor.swift:55`, `:86-95`) |
 | Tab bar hidden on Shopping screens | **Not this session's** — the Mac is fixing it app-wide |
 
+
+
+- The detail screen is Swift's inset-grouped `List` drawn with Run B's `FormSection`s over the Today
+  backdrop; the header row sits outside the first section, as Swift clears its background.
+- Swipe-to-delete and drag-to-reorder are replaced by an **Edit** mode (delete button and up/down
+  arrows); see the README's Known differences.
+
+## UI-parity pass 2 — Today and Important Moments (branch `rn-ui-parity-2`, Mac)
+
+SM-A055F at font scale 1.0 (it had drifted back to 0.9), Tools button off, same account as the
+iPhone captures. Android captures are kept locally, not committed (`docs/reference/android/` and
+`diff/` are git-ignored from this pass). Figures are `diff.py` percentages where one was taken; midway
+the method changed to one light screenshot per screen compared by eye, so later rows carry a status
+only. The iPhone captures predate some data changes on the account (an extra "Parity Custom" moment,
+a newer "Ready to schedule" state, different wishes on the Scheduled tab), so part of every Moments
+figure is data, not styling.
+
+### Structural fixes
+
+| Item | Fix |
+| --- | --- |
+| Tab bar hidden on Moments and Shopping | **fixed.** `(tabs)/(today)/` is now a route group holding `today/`, `moments/` and `shopping/` in ONE stack, as Swift pushes both from the Quick Access tiles into Today's `NavigationStack`. No URL changed. Verified on the phone. |
+| Tab bar visible under Needs attention | **fixed.** Needs attention and Reschedule all are presented from the root stack (`/attention`, `/reschedule-all`), so they cover the bar. |
+| Reschedule all replaced the first sheet | **fixed.** It now stacks above Needs attention, which stays visible (dimmed) behind it. |
+| Capture-index corrections | **applied** to `README.md` in this folder (Action Needed is current; schedule-check and overdue are unreachable). |
+| `assets/grocery/*.png` | **downscaled** 1254 → 512 px (6.9 MB → 1.2 MB). |
+
+### Shared components (the global-pattern checklist)
+
+| Component | Change | Patterns |
+| --- | --- | --- |
+| `PushedHeader` (new) | iOS 26 pushed bar: transparent over the page backdrop, round glass back button, glass circles/capsules for bar buttons; `TodayBackdrop` reaches up under it | all pushed screens |
+| `SheetSurface` (new) | medium-detent glass greys, opaque grouped at large, lighter when stacked | 10 |
+| `MenuPicker` → `PopoverMenu` (new) | anchored popover grown out of its button, no dimming, leading checkmark; leading-aligned for wide buttons. Closes SHARED-REQUESTS "MenuPicker" | Menus |
+| `IOSSwitch` (new) | the iOS 26 capsule switch (62 x 28, pill thumb), used by `FormToggle`, `SettingsToggle` and the Manage header | 3, 8 |
+| `FitText` (new) | `.minimumScaleFactor` that works on Android ("Wish Message" step tab) | 2 |
+| `DateField` | locale-ordered date via `.format()` (SHARED-REQUESTS "DateField"); capsule pills; anchored glass popover with a Sunday-first system grid, no Done for date-only | Forms |
+| `MonthCalendar` | `system` variant (Sunday-first, uppercase day names); Tasks keeps Monday-first | — |
+| `MomentSheet` | iOS 26 large sheet: rounded top just under the status bar over a dimmed page; glass bar buttons; `plain` for non-Form sheets; resets the header inset for its content | 7, 8 |
+| `KeyboardDoneBar` | a glass "Done" capsule floating above the keyboard, no bar | 9 |
+| `FormButton` | disabled title in `.tertiaryLabel`, glyph kept in the tint (SHARED-REQUESTS "FormButton") | 8 |
+| `FormRow` | inset separator; `separatorInset` prop (SHARED-REQUESTS "FormRow") | 8 |
+| `FormSection` | header-less sections keep the section spacing | 6 |
+| `GlassCard` / `MomentCard` | 1pt strokes (were hairlines, visibly thinner) | 4 |
+| `IconLabel`, `Disclosure` | a plain `Label`'s icon in the primary colour; disclosure title tinted | 6 |
+| `BorderedButton` | regular weight when prominent; `centered` for a centred `VStack` | 5 |
+| `capture.sh` | stores RGB: the 256-colour palette turned the green Shopping cart blue and merged white rows into grey | tooling |
+
+### Run A rows (Account → Calendar is Windows')
+
+| Row | Status |
+| --- | --- |
+| `today-default` | fixed: Shopping tile read "Your lists" (Run C's store reset overwrote the tile's copy; the tile now reads the one store) — 19.2% |
+| `today-3days`, `today-5days` | checked — 19.9%, 20.0% |
+| `today-dark` | checked — 19.8% (chip difference is data) |
+| `today-scrolled-1` | checked at a matched offset — 19.5% |
+| `today-attention`, `today-attention-row` | checked — 16.1%, 15.2% |
+| `today-attention-sheet-half` | fixed: covers the tab bar, 0.54 detent lands iOS's edge, glass greys, glass Close, spacing — ~58% (the dimmed page behind dominates) |
+| `today-attention-sheet-full` | fixed: opaque grouped sheet with white rows at large — 9.1% |
+| `today-attention-sheet-dark` | checked — 14.9% |
+| `today-reschedule-all` | fixed: stacks over the first sheet, lighter stacked greys, Cancel no longer wraps — ~55% (dim strength, see gaps) |
+| `today-reschedule-all-dark` | fixed: date/time pills visible in dark — 15.3% |
+| `voice-ask-default` | not re-checked: opening it starts a live voice session |
+
+### Run B rows
+
+| Row | Status |
+| --- | --- |
+| Important Moments `moments-default`, `-scheduled`, `-sent-empty` | fixed: glass bar buttons, centred delivery filter — 18.2%, 18.7%, 8.4% |
+| `moments-filter-menu` | fixed: anchored popover (was a centred dimmed list, 73%) — 18.3% |
+| `moments-empty` | fixed: empty-state inset, centred "Updated", 64pt Add Moment |
+| `moments-default-dark`, `-scheduled-dark` | fixed: search field black in dark |
+| `moments-default-scrolled`, `-upcoming-row-needs-review`, `-search-keyboard` | checked (data and keyboard dominate) |
+| Manage Moments `moments-manage-list`, `-dark` | checked — 11.5% |
+| Create Moment `moment-create-default`, `-dark`, `-filled`, `-filled-scrolled`, `-past-date-before-save` | fixed: form top spacing, capsule date pill — 10.6%, 13.9%, 10.6%, 10.4%, 10.7% |
+| `moment-create-type-menu` | fixed (popover) — 13.1% |
+| `moment-create-date-picker` | fixed: anchored popover, Sunday-first system grid (was 63%) — 11.7% |
+| `moment-create-error-empty-title` | fixed: glass keyboard Done (rest is the keyboard) |
+| `moment-create-contact-picker` | platform gap: the system contact picker |
+| Manage Moment `moment-manage-details`, `-dark`, `-scrolled` | fixed: card row heights, "Wish Message" tab fits, iOS switch — 14.0%, 17.8%, 20.6% |
+| `moment-manage-contacts`, `-wish`, `-schedule`, `-schedule-scrolled`, `-schedule-dark` | fixed: date label on one line, pill gap — 12.4%, 16.0%, 12.0%, 17.0%, 16.9% |
+| `moment-manage-wish-scrolled` | checked (scroll end cannot match: page is shorter above) |
+| `moment-manage-options-menu` | fixed: popover from "…", no dimming (was 94%) — 14.7% |
+| `moment-manage-schedule-channel-menu` | fixed: popover, leading-aligned — 15.0% |
+| `moment-manage-schedule-confirm` | fixed: white rounded sheet, glass Cancel — 20.2% (rewrap) |
+| `moment-manage-discard-dialog`, `wish-cancel-dialog` | platform gap: Android `AlertDialog` for `confirmationDialog` (pattern 7) |
+| `moment-add-recipient-error-empty` | checked |
+| `moment-manage-saved-notice`, `-error-past-date`, `-wish-saved`, `-wish-error-empty`, `-schedule-error-unsaved-message`, `-schedule-saving`, `-schedule-scheduled`, `moment-schedule-success` | not re-checked: each needs a save or a real schedule on the account |
+| Festival `festival-manage-details`, `-dark`, `-contacts`, `-wish`, `-schedule` | checked — 14.0%, 18.4%, 13.1%, 17.0%, 12.0% |
+| Greeting Card `greeting-card-editor` | fixed: the bar ("Greeting Card", Done) was hidden under the backdrop |
+| `greeting-card-editor-scrolled` | checked |
+| Moments Settings `moments-settings`, `-scrolled`, `-dark` | fixed: disabled "Connect / Reconnect Gmail" styling |
+| `moments-settings-contact-alert` | platform gap: the Contacts permission prompt is the system's |
+| `moments-calendar-import-empty` | checked |
+| Choose Festivals `moments-festivals`, `-dark`, `-region-menu`, `-india` | fixed: first card spacing (14.1% → 8.6% dark) |
+| Review Wish `review-wish-default`, `-personalize`, `-scrolled`, `-dark` | fixed: icon and disclosure colours, field background |
+| `review-wish-error-empty` | checked (keyboard dominates) |
+| Choose Delivery `wish-delivery-default`, `-schedule-option`, `-dark` | fixed: recipient field background — 11.0%, 14.0% dark |
+| Schedule Wish `schedule-wish-default`, `-scrolled`, `-dark` | checked — 13.5% |
+| Wish details `wish-details`, `-scrolled`, `-dark` | fixed: actions centred, prominent button at body weight |
+| `wish-edit-schedule` | fixed: sheet title was clipped under the bar |
+
+### Remaining gaps, each confirmed in one line
+
+- **Sheet dimming** is react-native-screens' fixed 0.3 alpha on Android (iOS ~0.12); not configurable — platform gap.
+- **Confirmation dialogs** are Android `AlertDialog`s (pattern 7) — platform gap.
+- **Keyboards, system contact picker, permission prompts** are the platform's — platform gap.
+- **The date picker's past days** are not greyed out as `in: Date()...` does; the button refuses a past start (from Run A) — kept.
+- **Festival date pill** reads "20/09/26" on the iPhone but "25 Oct 2026" for a birthday: the compact `DatePicker`'s own choice, with no rule in the source to port — left locale-medium.
+- **Run B "Sheets are full height"** (pattern 8): now the iOS 26 large-sheet shape; no medium detents inside `MomentSheet`.

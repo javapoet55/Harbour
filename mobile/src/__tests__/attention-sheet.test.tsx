@@ -34,8 +34,8 @@ jest.mock('../api', () => ({
   },
 }));
 
-import AttentionSheet from '../../app/(tabs)/today/attention';
-import RescheduleAll from '../../app/(tabs)/today/reschedule-all';
+import AttentionSheet from '../../app/attention';
+import RescheduleAll from '../../app/reschedule-all';
 
 const ZONE = 'Asia/Kolkata';
 /** 2026-09-16 09:00 in Asia/Kolkata. */
@@ -157,7 +157,7 @@ describe('Needs attention sheet', () => {
     await waitFor(() => expect(screen.getByTestId('attention-reschedule-all')).toBeTruthy());
 
     await fireEvent.press(screen.getByTestId('attention-reschedule-all'));
-    expect(mockPush).toHaveBeenCalledWith('/today/reschedule-all');
+    expect(mockPush).toHaveBeenCalledWith('/reschedule-all');
   });
 
   it('pushes a schedule check inside the sheet, and comes back', async () => {

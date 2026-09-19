@@ -2,17 +2,19 @@ import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Alert, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
-import { Text } from '../../../src/components';
-import { MonthCalendar } from '../../../src/components/MonthCalendar';
-import { withAlpha } from '../../../src/components/SignInBackdrop';
-import { overdueResults } from '../../../src/lib/overdueTasks';
-import { canReschedule, rescheduleAll, rescheduleButtonTitle, SCHEDULE_SAVE_FAILED } from '../../../src/lib/rescheduleAll';
-import { startOfDay } from '../../../src/lib/taskQuery';
-import { useBlockDismiss } from '../../../src/lib/useBlockDismiss';
-import { useScheduleIntelligence } from '../../../src/query/useToday';
-import { isConflictCancelled, useTasks, useUpdateTask, type ScheduleConflict } from '../../../src/query/useTasks';
-import { useAttentionSheet } from '../../../src/store/attention';
-import { useTheme } from '../../../src/theme';
+import { Text } from '../src/components';
+import { MonthCalendar } from '../src/components/MonthCalendar';
+import { withAlpha } from '../src/components/SignInBackdrop';
+import { overdueResults } from '../src/lib/overdueTasks';
+import { canReschedule, rescheduleAll, rescheduleButtonTitle, SCHEDULE_SAVE_FAILED } from '../src/lib/rescheduleAll';
+import { startOfDay } from '../src/lib/taskQuery';
+import { useBlockDismiss } from '../src/lib/useBlockDismiss';
+import { useScheduleIntelligence } from '../src/query/useToday';
+import { isConflictCancelled, useTasks, useUpdateTask, type ScheduleConflict } from '../src/query/useTasks';
+import { useAttentionSheet } from '../src/store/attention';
+import { GlassCapsule } from '../src/components/PushedHeader';
+import { useSheetSurface } from '../src/components/SheetSurface';
+import { useTheme } from '../src/theme';
 
 /**
  * Port of the "Reschedule all" form (ios/App/TodayAttentionSheet.swift:87-98) and `rescheduleAll()`
@@ -32,6 +34,7 @@ export default function RescheduleAll() {
   const failure = useAttentionSheet((state) => state.failure);
   const [conflict, setConflict] = useState<ScheduleConflict | null>(null);
   const update = useUpdateTask({ onConflict: setConflict });
+  const surface = useSheetSurface(0, { stacked: true });
 
   // `start = Date().addingTimeInterval(3600)` when the sheet opens (`:57`).
   const [start, setStart] = useState(() => Date.now() + 3_600_000);
@@ -92,7 +95,7 @@ export default function RescheduleAll() {
   const separator = { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.colors.separator };
 
   return (
-    <View style={[styles.fill, { backgroundColor: theme.colors.groupedBackground }]} testID="reschedule-all-sheet">
+    <View style={[styles.fill, { backgroundColor: surface.background }]} testID="reschedule-all-sheet">
       {Platform.OS === 'android' ? <View style={[styles.grabber, { backgroundColor: withAlpha(theme.colors.secondary, 0.5) }]} /> : null}
       {/* `.navigationTitle("Reschedule all")`, inline, with a `.cancellationAction` Cancel (`:95-96`). */}
       <View style={styles.bar}>
@@ -106,7 +109,9 @@ export default function RescheduleAll() {
             onPress={() => router.back()}
             testID="reschedule-cancel"
           >
-            <Text style={[styles.barButton, { color: theme.colors.tint, opacity: saving ? 0.35 : 1 }]}>Cancel</Text>
+            <GlassCapsule>
+              <Text style={[styles.barButton, { color: theme.colors.tint, opacity: saving ? 0.35 : 1 }]}>Cancel</Text>
+            </GlassCapsule>
           </Pressable>
         </View>
         <Text accessibilityRole="header" style={[styles.barTitle, { color: theme.colors.label }]}>
@@ -116,7 +121,7 @@ export default function RescheduleAll() {
       </View>
 
       <ScrollView contentContainerStyle={styles.scroll} nestedScrollEnabled>
-        <View style={[styles.section, { backgroundColor: theme.colors.surface }]}>
+        <View style={[styles.section, { backgroundColor: surface.row }]}>
           <View style={styles.row}>
             <Text style={[styles.body, styles.grow, { color: theme.colors.label }]}>Start at</Text>
             <Capsule label={dateLabel(start)} onPress={() => setPicking(picking === 'date' ? null : 'date')} selected={picking === 'date'} testID="reschedule-date" />
@@ -167,7 +172,8 @@ function Capsule({ label, selected, onPress, testID }: { label: string; selected
       accessibilityRole="button"
       accessibilityState={{ selected }}
       onPress={onPress}
-      style={[styles.capsule, { backgroundColor: withAlpha(theme.colors.secondary, 0.18) }]}
+      // The compact picker's pill: system grey (118, 118, 128) at ~24%, measured in both schemes.
+      style={[styles.capsule, { backgroundColor: withAlpha('#767680', 0.24) }]}
       testID={testID}
     >
       <Text style={[styles.body, { color: selected ? theme.colors.tint : theme.colors.label }]}>{label}</Text>
@@ -221,7 +227,8 @@ const styles = StyleSheet.create({
   grow: { flex: 1 },
   grabber: { alignSelf: 'center', width: 36, height: 5, borderRadius: 3, marginTop: 6 },
   bar: { flexDirection: 'row', alignItems: 'center', minHeight: 52, paddingHorizontal: 16 },
-  barSide: { width: 72 },
+  // Wide enough for a glass capsule around "Cancel" on one line.
+  barSide: { width: 104 },
   barTitle: { flex: 1, textAlign: 'center', fontSize: 17, lineHeight: 22, fontWeight: '600' },
   barButton: { fontSize: 17, lineHeight: 22 },
   // A `Form` on iOS 26 (style map §7): 16pt inset, radius 26, 35pt below the bar.

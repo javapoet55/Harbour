@@ -37,13 +37,13 @@ import type { ImportantMoment, MomentsSnapshot } from '../../../api/moments';
 import { momentsStore } from '../store';
 import { draft, moment, plan, settings } from '../testFixtures';
 
-import ImportantMoments from '../../../../app/moments/index';
-import ManageMoment from '../../../../app/moments/manage';
-import MomentEditor from '../../../../app/moments/editor';
-import MomentSettings from '../../../../app/moments/settings';
-import ChooseDelivery from '../../../../app/moments/delivery';
-import WishDetails from '../../../../app/moments/wish';
-import ChooseFestivals from '../../../../app/moments/festivals';
+import ImportantMoments from '../../../../app/(tabs)/(today)/moments/index';
+import ManageMoment from '../../../../app/(tabs)/(today)/moments/manage';
+import MomentEditor from '../../../../app/(tabs)/(today)/moments/editor';
+import MomentSettings from '../../../../app/(tabs)/(today)/moments/settings';
+import ChooseDelivery from '../../../../app/(tabs)/(today)/moments/delivery';
+import WishDetails from '../../../../app/(tabs)/(today)/moments/wish';
+import ChooseFestivals from '../../../../app/(tabs)/(today)/moments/festivals';
 
 function load(moments: ImportantMoment[], extra: Partial<MomentsSnapshot> = {}) {
   const snapshot: MomentsSnapshot = { moments, emailAccount: null, emailConfigured: false, automaticEmailEnabled: false, ...extra };

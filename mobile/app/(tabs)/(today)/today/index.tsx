@@ -3,19 +3,19 @@ import { router } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 
-import { useCoordinator } from '../../../src/actions/coordinator';
-import { GlassCard, Text } from '../../../src/components';
-import { TodayActionsView } from '../../../src/components/TodayActions';
-import { FocusNextCard, ProtectedTimeCard } from '../../../src/components/TodayNextAction';
-import { FocusSessionStrip } from '../../../src/components/FocusSessionStrip';
-import { TodayAttentionRow } from '../../../src/components/TodayAttentionRow';
-import { TodayIntelligenceCard } from '../../../src/components/TodayIntelligenceCard';
-import { TodayQuickAccess } from '../../../src/components/TodayQuickAccess';
-import { TasksTopBar, TodayBackdrop } from '../../../src/components/TodayShell';
-import { overdueResults } from '../../../src/lib/overdueTasks';
-import { todayMoments, upcomingMomentCount } from '../../../src/features/moments/domain';
-import { useMomentList } from '../../../src/features/moments/store';
-import { shoppingSubtitle, showsAttentionRow } from '../../../src/lib/todayQuickAccess';
+import { useCoordinator } from '../../../../src/actions/coordinator';
+import { GlassCard, Text } from '../../../../src/components';
+import { TodayActionsView } from '../../../../src/components/TodayActions';
+import { FocusNextCard, ProtectedTimeCard } from '../../../../src/components/TodayNextAction';
+import { FocusSessionStrip } from '../../../../src/components/FocusSessionStrip';
+import { TodayAttentionRow } from '../../../../src/components/TodayAttentionRow';
+import { TodayIntelligenceCard } from '../../../../src/components/TodayIntelligenceCard';
+import { TodayQuickAccess } from '../../../../src/components/TodayQuickAccess';
+import { TasksTopBar, TodayBackdrop } from '../../../../src/components/TodayShell';
+import { overdueResults } from '../../../../src/lib/overdueTasks';
+import { todayMoments, upcomingMomentCount } from '../../../../src/features/moments/domain';
+import { useMomentList } from '../../../../src/features/moments/store';
+import { shoppingSubtitle, showsAttentionRow } from '../../../../src/lib/todayQuickAccess';
 import {
   buildSchedule,
   dateLabel,
@@ -24,21 +24,21 @@ import {
   scheduleCounts,
   TODAY_RANGES,
   type TodayRange,
-} from '../../../src/lib/todaySchedule';
-import { buildActionQueue } from '../../../src/lib/todayActionQueue';
+} from '../../../../src/lib/todaySchedule';
+import { buildActionQueue } from '../../../../src/lib/todayActionQueue';
 import {
   invalidateNextAction,
   useDismissNextAction,
   useNextAction,
   useProtectedTime,
   useRespondToProtectedTime,
-} from '../../../src/query/useNextAction';
-import { useShoppingLists } from '../../../src/query/useQuickAccess';
-import { useTasks } from '../../../src/query/useTasks';
-import { canStartRecommendation, useAgenda, useScheduleIntelligence, useWeather } from '../../../src/query/useToday';
-import { useFocus } from '../../../src/store/focus';
-import { useSession } from '../../../src/store/session';
-import { brand, useTheme } from '../../../src/theme';
+} from '../../../../src/query/useNextAction';
+import { useQuickAccessShopping } from '../../../../src/query/useQuickAccess';
+import { useTasks } from '../../../../src/query/useTasks';
+import { canStartRecommendation, useAgenda, useScheduleIntelligence, useWeather } from '../../../../src/query/useToday';
+import { useFocus } from '../../../../src/store/focus';
+import { useSession } from '../../../../src/store/session';
+import { brand, useTheme } from '../../../../src/theme';
 
 /**
  * Port of `TodayView` (ios/App/RootView.swift:925), built from `body` at `:1032-1203` as of Phase 11
@@ -78,7 +78,7 @@ export default function Today() {
   // `ImportantMomentsStore` (activated and refreshed by the root layout, RootView.swift:59-81) and the
   // Quick Access `ShoppingStore` (TodayQuickAccess.swift:16-20).
   const moments = useMomentList();
-  const shopping = useShoppingLists(profile !== null);
+  const shopping = useQuickAccessShopping(profile !== null);
 
   // `TodayActionQueue(actions:tasks:now:timeZone:)` (RootView.swift:1137). Swift rebuilds it inside a
   // `TimelineView(.periodic(by: 60))`, so the relative labels tick over once a minute.
@@ -206,7 +206,7 @@ export default function Today() {
           onMoments={() => router.push('/moments')}
           onShopping={() => router.push('/shopping')}
           onWeekly={() => router.push('/today/weekly-summary')}
-          shoppingSubtitle={shoppingSubtitle(shopping.data?.lists ?? [], shopping.isError)}
+          shoppingSubtitle={shoppingSubtitle(shopping.lists, shopping.failed)}
         />
 
         {/* `FocusSessionStrip` renders itself only while a session is live. */}
@@ -222,7 +222,7 @@ export default function Today() {
           schedule={schedule}
           searchSchedule={schedule}
           onOpenTask={(task) => router.push(`/task/${task.id}`)}
-          onAttention={() => router.push('/today/attention')}
+          onAttention={() => router.push('/attention')}
           onCalendar={() => router.push('/calendar')}
         />
 
@@ -291,7 +291,7 @@ export default function Today() {
 
         {/* Section 10: the attention row (RootView.swift:1146-1166), which opens Needs attention. */}
         {range === 1 && showsAttentionRow(overdueCount, otherCount) ? (
-          <TodayAttentionRow onPress={() => router.push('/today/attention')} other={otherCount} overdue={overdueCount} />
+          <TodayAttentionRow onPress={() => router.push('/attention')} other={otherCount} overdue={overdueCount} />
         ) : null}
       </ScrollView>
     </View>

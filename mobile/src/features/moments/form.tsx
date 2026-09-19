@@ -1,12 +1,13 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { useState, type ReactNode } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, Switch, TextInput, View, type KeyboardTypeOptions, type StyleProp, type ViewStyle } from 'react-native';
+import { useRef, useState, type ReactNode } from 'react';
+import { Modal, Pressable, ScrollView, StyleSheet, TextInput, useWindowDimensions, View, type KeyboardTypeOptions, type StyleProp, type ViewStyle } from 'react-native';
 
 import { MonthCalendar } from '../../components/MonthCalendar';
+import { IOSSwitch } from '../../components/IOSSwitch';
 import { withAlpha } from '../../components/SignInBackdrop';
 import { Text } from '../../components/Text';
-import { brand, textStyles, useTheme } from '../../theme';
-import { momentDay, momentLabel, momentStartOfDay, sendDayLabel, wallParts, zonedInstant } from './dates';
+import { textStyles, useTheme } from '../../theme';
+import { mediumDate, momentDay, momentStartOfDay, shortTimeIn, wallParts, zonedInstant } from './dates';
 
 /**
  * SwiftUI `Form` pieces with the iOS 26 inset-grouped metrics the rest of the app measured (style map
@@ -25,7 +26,9 @@ export function FormScroll({ children, testID }: { children: ReactNode; testID?:
 export function FormSection({ children, header, footer, disabled = false, testID }: { children: ReactNode; header?: string; footer?: string; disabled?: boolean; testID?: string }) {
   const theme = useTheme();
   return (
-    <View style={[styles.section, disabled && styles.dimmed]} pointerEvents={disabled ? 'none' : 'auto'} testID={testID}>
+    // A section with no header still keeps iOS 26's section spacing above it (`moments-festivals`: the
+    // first card 45pt below the bar); a header supplies that space itself.
+    <View style={[styles.section, !header && styles.headerless, disabled && styles.dimmed]} pointerEvents={disabled ? 'none' : 'auto'} testID={testID}>
       {header ? <Text style={[styles.header, { color: theme.colors.secondaryLabel }]}>{header}</Text> : null}
       <View style={[styles.sectionBody, { backgroundColor: theme.colors.surface }]}>{children}</View>
       {footer ? <Text style={[styles.footer, { color: theme.colors.secondaryLabel }]}>{footer}</Text> : null}
@@ -33,9 +36,31 @@ export function FormSection({ children, header, footer, disabled = false, testID
   );
 }
 
-export function FormRow({ children, last = false, style }: { children: ReactNode; last?: boolean; style?: StyleProp<ViewStyle> }) {
+/**
+ * A `Form` row. Its separator starts at the row inset (16) and runs to the trailing edge, as iOS draws
+ * it; a row that begins with a glyph passes `separatorInset` so the line starts under its TEXT, as a
+ * `Label` row's does (SHARED-REQUESTS "FormRow").
+ */
+export function FormRow({
+  children,
+  last = false,
+  style,
+  separatorInset = 16,
+}: {
+  children: ReactNode;
+  last?: boolean;
+  style?: StyleProp<ViewStyle>;
+  separatorInset?: number;
+}) {
   const theme = useTheme();
-  return <View style={[styles.row, !last && { borderBottomWidth: 1, borderBottomColor: theme.colors.listSeparator }, style]}>{children}</View>;
+  return (
+    <View style={[styles.row, style]}>
+      {children}
+      {last ? null : (
+        <View pointerEvents="none" style={[styles.separator, { left: separatorInset, backgroundColor: theme.colors.listSeparator }]} />
+      )}
+    </View>
+  );
 }
 
 export function FormText({ children, caption = false, tone, testID }: { children: ReactNode; caption?: boolean; tone?: 'secondary' | 'danger'; testID?: string }) {
@@ -100,13 +125,11 @@ export function FormToggle({ label, value, onValueChange, disabled = false, test
   return (
     <View style={[styles.inline, disabled && styles.dimmed]}>
       <Text style={[textStyles.body, styles.grow, { color: theme.colors.label }]}>{label}</Text>
-      <Switch
+      <IOSSwitch
         accessibilityLabel={label}
         disabled={disabled}
         onValueChange={onValueChange}
         testID={testID}
-        thumbColor="#FFFFFF"
-        trackColor={{ false: theme.colors.separator, true: theme.colors.tint }}
         value={value}
       />
     </View>
@@ -116,6 +139,10 @@ export function FormToggle({ label, value, onValueChange, disabled = false, test
 export function FormButton({ title, onPress, destructive = false, disabled = false, testID, icon }: { title: string; onPress: () => void; destructive?: boolean; disabled?: boolean; testID?: string; icon?: keyof typeof Ionicons.glyphMap }) {
   const theme = useTheme();
   const color = destructive ? theme.colors.danger : theme.colors.tint;
+  // A disabled `Button` in a `Form` keeps its glyph in the tint and draws the title in `.tertiaryLabel`
+  // — measured (187, 187, 188) light and (88, 88, 89) dark on `moments-settings` — rather than dimming
+  // the whole row (SHARED-REQUESTS "FormButton").
+  const titleColor = disabled ? (theme.scheme === 'dark' ? 'rgba(235, 235, 245, 0.3)' : 'rgba(60, 60, 67, 0.3)') : color;
   return (
     <Pressable
       accessibilityRole="button"
@@ -123,11 +150,11 @@ export function FormButton({ title, onPress, destructive = false, disabled = fal
       accessibilityState={{ disabled }}
       disabled={disabled}
       onPress={onPress}
-      style={[styles.inline, disabled && styles.dimmed]}
+      style={styles.inline}
       testID={testID}
     >
       {icon ? <Ionicons name={icon} size={20} color={color} /> : null}
-      <Text style={[textStyles.body, { color }]}>{title}</Text>
+      <Text style={[textStyles.body, { color: titleColor }]}>{title}</Text>
     </Pressable>
   );
 }
@@ -160,6 +187,12 @@ export type PickerOption<T> = { value: T; title: string };
 /**
  * A SwiftUI `Picker`: the label, the current choice in the tint, and the choices on tap. `hideLabel`
  * is `.labelsHidden()` — the menu button alone.
+ *
+ * UI-parity pass 2: the choices open the way SwiftUI's menu does — a popover ANCHORED to the button,
+ * with no dimming, a leading checkmark on the current choice and a translucent surface — rather than a
+ * centred, dimmed list. Measured off `moments-filter-menu`: 250pt wide, its trailing edge on the
+ * button's when the button is on the right of the screen (leading edge otherwise), 42pt rows, a 26pt
+ * radius. Like iOS 26's it opens OVER the button, from its top edge, and above it when there is no room.
  */
 export function MenuPicker<T extends string | number>({
   label,
@@ -181,16 +214,20 @@ export function MenuPicker<T extends string | number>({
   accessibilityLabel?: string;
 }) {
   const theme = useTheme();
-  const [open, setOpen] = useState(false);
+  const anchor = useRef<View>(null);
+  const menu = usePopoverMenu(anchor);
   const current = options.find((option) => option.value === value);
+
   return (
     <>
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={`${accessibilityLabel ?? label}, ${current?.title ?? ''}`}
         accessibilityState={{ disabled }}
+        collapsable={false}
         disabled={disabled}
-        onPress={() => setOpen(true)}
+        onPress={menu.open}
+        ref={anchor}
         style={[hideLabel ? styles.menuButton : styles.inline, disabled && styles.dimmed]}
         testID={testID}
       >
@@ -200,32 +237,140 @@ export function MenuPicker<T extends string | number>({
         </Text>
         <Ionicons name="chevron-expand-outline" size={14} color={theme.colors.tint} />
       </Pressable>
-      <Modal animationType="fade" onRequestClose={() => setOpen(false)} transparent visible={open}>
-        <Pressable onPress={() => setOpen(false)} style={styles.scrim}>
-          <View style={[styles.menu, { backgroundColor: theme.colors.surface }]}>
-            <ScrollView>
-              {options.map((option) => (
+      <PopoverMenu
+        items={options.map((option) => ({
+          key: String(option.value),
+          title: option.title,
+          checked: option.value === value,
+          onPress: () => onChange(option.value),
+          testID: `${testID}-${option.value}`,
+        }))}
+        menu={menu}
+        showsChecks
+        testID={testID}
+      />
+    </>
+  );
+}
+
+type MenuFrame = { x: number; y: number; width: number; height: number };
+type MenuState = { visible: boolean; frame: MenuFrame | null; open: () => void; close: () => void };
+
+/** Open and close a `PopoverMenu` anchored to `anchor`, measured when it opens. */
+export function usePopoverMenu(anchor: { current: View | null }): MenuState {
+  const [visible, setVisible] = useState(false);
+  const [frame, setFrame] = useState<MenuFrame | null>(null);
+  return {
+    visible,
+    frame,
+    // The menu mounts at once and stays invisible until the anchor has been measured, so it never
+    // shows for a frame in the wrong place.
+    open: () => {
+      setVisible(true);
+      anchor.current?.measureInWindow?.((x, y, width, height) => setFrame({ x, y, width, height }));
+    },
+    close: () => {
+      setVisible(false);
+      setFrame(null);
+    },
+  };
+}
+
+export type PopoverItem = { key: string; title: string; onPress: () => void; destructive?: boolean; checked?: boolean; testID?: string };
+
+/**
+ * SwiftUI's `Menu` on iOS 26 (UI-parity pass 2): a translucent popover grown out of the button that
+ * opened it, with NO dimming behind it — measured on `moments-filter-menu` and
+ * `moment-manage-options-menu`. `showsChecks` reserves the leading checkmark column a `Picker` uses.
+ */
+export function PopoverMenu({ items, menu, showsChecks = false, testID }: { items: PopoverItem[]; menu: MenuState; showsChecks?: boolean; testID?: string }) {
+  const theme = useTheme();
+  const window = useWindowDimensions();
+  const placement = menu.frame
+    ? menuPlacement(menu.frame, items.length, window.width, window.height)
+    : { left: 0, top: 0, width: MENU_WIDTH, maxHeight: window.height, opacity: 0 };
+  return (
+    <Modal animationType="fade" onRequestClose={menu.close} transparent visible={menu.visible}>
+      <Pressable onPress={menu.close} style={styles.fill} testID={testID ? `${testID}-dismiss` : undefined}>
+        {menu.visible ? (
+          <View
+            style={[
+              styles.menu,
+              placement,
+              { backgroundColor: theme.scheme === 'dark' ? 'rgba(44, 44, 46, 0.96)' : 'rgba(255, 255, 255, 0.94)', shadowColor: '#000000' },
+            ]}
+          >
+            <ScrollView bounces={false}>
+              {items.map((item) => (
                 <Pressable
                   accessibilityRole="button"
-                  accessibilityState={{ selected: option.value === value }}
-                  key={String(option.value)}
+                  accessibilityState={item.checked === undefined ? undefined : { selected: item.checked }}
+                  key={item.key}
                   onPress={() => {
-                    onChange(option.value);
-                    setOpen(false);
+                    menu.close();
+                    item.onPress();
                   }}
-                  style={styles.menuRow}
-                  testID={`${testID}-${option.value}`}
+                  style={[styles.menuRow, !showsChecks && styles.menuRowPlain]}
+                  testID={item.testID}
                 >
-                  <Text style={[textStyles.body, styles.grow, { color: theme.colors.ink }]}>{option.title}</Text>
-                  {option.value === value ? <Ionicons name="checkmark" size={17} color={theme.colors.tint} /> : null}
+                  {showsChecks ? (
+                    <View style={styles.menuCheck}>{item.checked ? <Ionicons name="checkmark" size={17} color={theme.colors.label} /> : null}</View>
+                  ) : null}
+                  <Text numberOfLines={1} style={[textStyles.body, styles.grow, { color: item.destructive ? theme.colors.danger : theme.colors.label }]}>
+                    {item.title}
+                  </Text>
                 </Pressable>
               ))}
             </ScrollView>
           </View>
-        </Pressable>
-      </Modal>
-    </>
+        ) : null}
+      </Pressable>
+    </Modal>
   );
+}
+
+/**
+ * Where the compact `DatePicker`'s popover goes: 320pt wide (`moment-create-date-picker`), its
+ * trailing edge on the pill's, 8pt below it — or above when the grid will not fit below.
+ */
+export function datePopoverPlacement(frame: MenuFrame, screenWidth: number, screenHeight: number, withTime = false): { left: number; top: number; width: number } {
+  const width = Math.min(320, screenWidth - MENU_MARGIN * 2);
+  const height = withTime ? 520 : 360;
+  const left = Math.max(MENU_MARGIN, Math.min(frame.x + frame.width - width, screenWidth - width - MENU_MARGIN));
+  const below = frame.y + frame.height + 8;
+  const top = below + height <= screenHeight - MENU_MARGIN ? below : Math.max(MENU_MARGIN, frame.y - 8 - height);
+  return { left, top, width };
+}
+
+const MENU_WIDTH = 250;
+const MENU_ROW = 42;
+const MENU_PADDING = 8;
+const MENU_MARGIN = 12;
+
+/**
+ * Where the popover goes for a button at `frame`: below it if the rows fit, else above; trailing-edge
+ * aligned for a button on the right half of the screen, leading-edge aligned otherwise; never off
+ * screen. A list too long for the space scrolls.
+ */
+export function menuPlacement(
+  frame: { x: number; y: number; width: number; height: number },
+  count: number,
+  screenWidth: number,
+  screenHeight: number,
+): { left: number; top: number; width: number; maxHeight: number } {
+  const width = Math.min(MENU_WIDTH, screenWidth - MENU_MARGIN * 2);
+  const wanted = count * MENU_ROW + MENU_PADDING * 2;
+  // A button wider than the menu (a whole row) is always leading-aligned (`moment-manage-schedule-channel-menu`).
+  const onRight = frame.width < width && frame.x + frame.width / 2 > screenWidth / 2;
+  const left = Math.max(MENU_MARGIN, Math.min(onRight ? frame.x + frame.width - width : frame.x, screenWidth - width - MENU_MARGIN));
+  // iOS 26 grows the menu out of the button, so it covers the button from the button's top edge.
+  const below = screenHeight - frame.y - MENU_MARGIN;
+  const above = frame.y + frame.height - MENU_MARGIN;
+  if (wanted <= below || below >= above) {
+    return { left, top: frame.y, width, maxHeight: Math.max(MENU_ROW, below) };
+  }
+  const height = Math.min(wanted, above);
+  return { left, top: frame.y + frame.height - height, width, maxHeight: height };
 }
 
 const FALLBACK_ZONES = [
@@ -297,19 +442,34 @@ export function DateField({
   testID: string;
 }) {
   const theme = useTheme();
-  const [open, setOpen] = useState(false);
+  const window = useWindowDimensions();
+  const pill = useRef<View>(null);
+  const [open, setOpenState] = useState(false);
+  const [frame, setFrame] = useState<MenuFrame | null>(null);
+  // Opening measures the pill, so the popover can grow out from under it as iOS 26's does.
+  const setOpen = (next: boolean) => {
+    setOpenState(next);
+    if (!next) setFrame(null);
+    else pill.current?.measureInWindow?.((x, y, width, height) => setFrame({ x, y, width, height }));
+  };
+  const popover = frame ? datePopoverPlacement(frame, window.width, window.height, includeTime) : null;
   const clamp = (next: number) => (minimum !== undefined && next < minimum ? minimum : next);
   const wall = wallParts(value, zone);
   const setTime = (hour: number, minute: number) => {
     const at = zonedInstant(momentDay(value, zone), hour, minute, zone);
     if (at !== null) onChange(clamp(at));
   };
-  const dateText = sendDayLabel(value, zone).replace(/^\w+, /, '');
-  const timeText = momentLabel(value, zone).split(' at ')[1] ?? '';
+  // The compact `DatePicker`'s two pills, in the device locale (SHARED-REQUESTS "DateField").
+  const dateText = mediumDate(value, zone);
+  const timeText = shortTimeIn(value, zone);
   return (
-    <View style={[styles.inline, disabled && styles.dimmed]}>
+    // The phone is 18dp narrower than the 402pt iPhone, so the pills sit 6 apart rather than 8 to keep
+    // the label on one line where it fits; where it does not, it wraps, as SwiftUI's label would.
+    <View style={[styles.inline, styles.dateRow, disabled && styles.dimmed]}>
       <Text style={[textStyles.body, styles.grow, { color: theme.colors.label }]}>{label}</Text>
       <Pressable
+        collapsable={false}
+        ref={pill}
         accessibilityRole="button"
         accessibilityLabel={`${label}, ${dateText}${includeTime ? `, ${timeText}` : ''}`}
         accessibilityState={{ disabled }}
@@ -325,10 +485,19 @@ export function DateField({
           <Text style={[textStyles.body, { color: theme.colors.label }]}>{timeText}</Text>
         </Pressable>
       ) : null}
+      {/* iOS 26's compact `DatePicker` opens a glass popover under the pill, with NO dimming
+          (`moment-create-date-picker`). Tapping outside closes it; "Done" stays for the time wheels. */}
       <Modal animationType="fade" onRequestClose={() => setOpen(false)} transparent visible={open}>
-        <Pressable onPress={() => setOpen(false)} style={styles.scrim}>
-          <Pressable style={[styles.menu, styles.calendarMenu, { backgroundColor: theme.colors.surface }]}>
+        <Pressable onPress={() => setOpen(false)} style={styles.fill}>
+          <Pressable
+            style={[
+              styles.datePopover,
+              popover ?? { opacity: 0 },
+              { backgroundColor: theme.scheme === 'dark' ? 'rgba(44, 44, 46, 0.97)' : 'rgba(255, 255, 255, 0.96)', shadowColor: '#000000' },
+            ]}
+          >
             <MonthCalendar
+              system
               selected={value}
               timeZone={zone}
               onSelect={(next) => {
@@ -343,9 +512,11 @@ export function DateField({
                 <Wheel count={60} selected={wall.minute} onSelect={(minute) => setTime(wall.hour, minute)} testIDPrefix={`${testID}-minute`} />
               </View>
             ) : null}
-            <Pressable accessibilityRole="button" onPress={() => setOpen(false)} style={styles.menuRow} testID={`${testID}-done`}>
-              <Text style={[textStyles.body, { color: theme.colors.tint }]}>Done</Text>
-            </Pressable>
+            {includeTime ? (
+              <Pressable accessibilityRole="button" onPress={() => setOpen(false)} style={styles.menuRow} testID={`${testID}-done`}>
+                <Text style={[textStyles.body, { color: theme.colors.tint }]}>Done</Text>
+              </Pressable>
+            ) : null}
           </Pressable>
         </Pressable>
       </Modal>
@@ -380,8 +551,9 @@ export function Disclosure({ title, children, testID }: { title: string; childre
   return (
     <View style={styles.disclosure}>
       <Pressable accessibilityRole="button" accessibilityState={{ expanded: open }} accessibilityLabel={title} onPress={() => setOpen(!open)} style={styles.inline} testID={testID}>
-        <Text style={[textStyles.body, styles.grow, { color: theme.colors.label }]}>{title}</Text>
-        <Ionicons name={open ? 'chevron-down' : 'chevron-forward'} size={17} color={brand.nexdoIndigo} />
+        {/* A `DisclosureGroup`'s title takes the tint and its chevron the primary colour (`review-wish-*`). */}
+        <Text style={[textStyles.body, styles.grow, { color: theme.colors.tint }]}>{title}</Text>
+        <Ionicons name={open ? 'chevron-down' : 'chevron-forward'} size={17} color={theme.colors.label} />
       </Pressable>
       {open ? <View style={styles.disclosureBody}>{children}</View> : null}
     </View>
@@ -389,23 +561,36 @@ export function Disclosure({ title, children, testID }: { title: string; childre
 }
 
 const styles = StyleSheet.create({
-  form: { paddingTop: 35, paddingBottom: 60 },
+  // The first header's text sits 31pt below the bar on iOS 26 (`moment-create-dark`,
+  // `moments-settings`); the section's own header margin supplies most of that.
+  form: { paddingTop: 3, paddingBottom: 60 },
   section: { marginBottom: 0 },
+  headerless: { marginTop: 24 },
   sectionBody: { marginHorizontal: 16, borderRadius: 26, overflow: 'hidden', marginTop: 8 },
   row: { minHeight: 56, paddingHorizontal: 16, paddingVertical: 12, justifyContent: 'center', gap: 10 },
   header: { ...textStyles.body, marginHorizontal: 32, marginTop: 16 },
   footer: { ...textStyles.subheadline, marginHorizontal: 32, marginTop: 10, marginBottom: 12 },
-  inline: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 32 },
+  // A row of text in a `VStack` card is its line height, not a 32pt control; a `FormRow` still
+  // enforces its own 56 (`moment-manage-details`: 54pt from row to row, 14pt spacing).
+  inline: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 24 },
+  separator: { position: 'absolute', right: 0, bottom: 0, height: StyleSheet.hairlineWidth * 2 },
   grow: { flex: 1 },
   value: { flexShrink: 1 },
   dimmed: { opacity: 0.4 },
   input: { ...textStyles.body, lineHeight: undefined, paddingVertical: 4, minHeight: 32, backgroundColor: 'transparent' },
   menuButton: { flexDirection: 'row', alignItems: 'center', gap: 4, minHeight: 44, paddingHorizontal: 8 },
   scrim: { flex: 1, backgroundColor: 'rgba(0,0,0,0.3)', justifyContent: 'center', padding: 24 },
-  menu: { borderRadius: 16, paddingVertical: 8, maxHeight: '80%' },
+  fill: { flex: 1 },
+  dialog: { borderRadius: 16, paddingVertical: 8, maxHeight: '80%' },
+  menu: { position: 'absolute', borderRadius: 26, paddingVertical: MENU_PADDING, elevation: 12, shadowOpacity: 0.18, shadowRadius: 24, shadowOffset: { width: 0, height: 8 } },
+  menuCheck: { width: 24, alignItems: 'center' },
+  menuRowPlain: { paddingLeft: 20 },
   calendarMenu: { paddingHorizontal: 12 },
-  menuRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, minHeight: 48, gap: 8 },
-  datePill: { borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6 },
+  datePopover: { position: 'absolute', borderRadius: 26, paddingHorizontal: 12, paddingVertical: 10, elevation: 12, shadowOpacity: 0.18, shadowRadius: 24, shadowOffset: { width: 0, height: 8 } },
+  menuRow: { flexDirection: 'row', alignItems: 'center', paddingLeft: 14, paddingRight: 18, minHeight: MENU_ROW, gap: 8 },
+  // The compact `DatePicker`'s value is a capsule on iOS 26.
+  datePill: { borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6 },
+  dateRow: { gap: 6 },
   wheels: { flexDirection: 'row', gap: 12, height: 180, marginTop: 8 },
   wheel: { flex: 1 },
   wheelRow: { minHeight: 36, alignItems: 'center', justifyContent: 'center' },

@@ -2,12 +2,12 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { router } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
-import { Text } from '../../src/components/Text';
-import { TodayBackdrop } from '../../src/components/TodayShell';
-import { caption, headline, MomentCard, MomentIconTile } from '../../src/features/moments/components';
-import { displayGroups, isArchived, supportsGreetingCard, typeLabel } from '../../src/features/moments/domain';
-import { useMomentList } from '../../src/features/moments/store';
-import { textStyles, useTheme } from '../../src/theme';
+import { Text } from '../../../../src/components/Text';
+import { TodayBackdrop } from '../../../../src/components/TodayShell';
+import { caption, headline, MomentCard, MomentIconTile } from '../../../../src/features/moments/components';
+import { displayGroups, isArchived, supportsGreetingCard, typeLabel } from '../../../../src/features/moments/domain';
+import { useMomentList } from '../../../../src/features/moments/store';
+import { textStyles, useTheme } from '../../../../src/theme';
 
 /**
  * `MomentsManagementEntry` (ios/App/ManageFestivalView.swift:3-44): every non-archived moment, one row
