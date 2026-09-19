@@ -38,7 +38,7 @@ before, set a password on the web app first.
 ### 3. What to do
 
 Work through the walkthrough below **with the iPhone app open next to you**, on the same account.
-It is ordered so each step builds on the last: 13 parts, 94 numbered steps.
+It is ordered so each step builds on the last: 14 parts, 108 numbered steps.
 
 Anything in the **Known differences** table further down is already known — please do not report
 those. Everything else is worth reporting.
@@ -225,6 +225,46 @@ Use a test moment named `Parity …`, as the iPhone captures did. Never confirm 
     Moment** — "Your wish is ready. Open Nexdo, then tap Send in Messages."
 94. Tap it. Important Moments opens with **Close**, and that wish's details on top.
 
+### Part 14 — Shopping Lists (14 steps)
+
+Added in Phase 11 Run C. Needs the same new build as Part 13 (it also re-enables the camera
+permission). The way in is the **Shopping** tile in Today's Quick Access row, which arrives with Run A.
+Use a test list named `Parity …`.
+
+95. Today → **Shopping** → **My Lists**: **Create New List**, then **Recent Lists** with each list's
+    item count, "· Completed" on finished ones, and the date. With no lists at all it reads "Your next
+    trip starts here".
+96. **Create New List** (or the ⊕ at the top): Start from Scratch / Use Last Week's List, the name, the
+    date, **Repeat every week**. Clear the name — **Create List** greys out. Create it: the new list
+    opens.
+97. The list: the cart header, "N remaining · N items", the progress bar, the **Add an item** box with
+    a separate **+** and **mic**, and "Try “2 bottles of milk 1 gallon” or tap the mic."
+98. Type **ch** — up to three suggestions appear (Cheese, Cherry Tomatoes). Type **2 bottles of milk 1
+    gallon** and tap **+**: **Review Items** opens with the server's parse. Edit it, then **Add 1
+    Items**. The item appears under Dairy & Eggs with the milk illustration.
+99. Tap the **+** alone and then the **mic** alone: each does only its own thing. (On the iPhone a tap
+    on that row can fire both — a known iPhone defect, not reproduced here.)
+100. Check an item: it strikes through and "remaining" drops. It is checked on the iPhone too.
+101. Check an item on the iPhone, then check a different one here without refreshing: the save is
+     refused with "This list changed on another device. Refresh before saving." and **Retry Save** /
+     **Discard local edits and reload** appear. Discard reloads the iPhone's version.
+102. Tap an item → **Item**: name, category, quantity, size, notes. Clear the name — **Save** greys out.
+     **Choose from Photos**, then **Take a Picture** (allow the camera): the photo shows in the row.
+103. On an item, turn on **Allow AI image generation** and tap **Generate with AI** once (six per hour).
+     Save.
+104. **Mic** → **Add by Voice**: "Ready when you are", the bell, "Listening — keep going". Say "six
+     bananas, one gallon of milk". Tap **Review Items**: "Finishing transcription…", then **Review your
+     items**. **Add 2 Items**.
+105. Turn **Allow live voice transcription** off: the mic greys out and the status reads "Enable live
+     transcription below to start". Close and reopen — it is still off. Turn it back on.
+106. ⋯ → **List settings** (Save only, greyed with an empty name), **Uncheck all**, **Edit** (delete
+     and reorder controls), **Copy list**.
+107. Share → **Share List**: **Share list as text**, **Create Share Link**, **Share Link**, **Revoke
+     Link**. Open the link in a browser before revoking: it shows the list read-only.
+108. **Complete Shopping Trip** → "Complete this trip and create next week’s list?" → **Complete trip**:
+     the screen switches to next week's list, every item unchecked. The old list is read-only with **Use
+     This List Again**.
+
 ---
 
 ## Known differences
@@ -257,6 +297,10 @@ decision, or a server-side gap.
 | **"Done" rides on a bar above the keyboard** in the Moments editors. | Android has no keyboard accessory bar. |
 | **Some Moments text says "iOS"** ("Open iOS Settings", "iOS does not allow Nexdo to send Messages automatically"). | The copy is the iPhone's, word for word, pending a decision on Android wording. **Open iOS Settings** opens Android's app settings. |
 | **The greeting card's typeface differs.** | The iPhone uses New York (serif); Android uses its own serif. |
+| **Shopping Lists hides the tab bar**, like Important Moments. | The same reason: the screens sit outside the tab group. |
+| **No swipe to delete or drag to reorder** on a shopping list. Use ⋯ → **Edit**, which shows a delete button and up/down arrows; Review Items has a delete button on each row. | React Native has no built-in swipe row or drag reorder; adding one needs a further native module. |
+| **"+" and the mic are separate buttons.** | On the iPhone one tap on that row can trigger both — an iPhone defect deliberately not copied. |
+| **Share Link sends the link as a text message** to the share sheet. | Android's share sheet takes text only. |
 
 ---
 
@@ -327,6 +371,7 @@ app/                  routes (expo-router); the folder tree is the navigation tr
   ask/ action/        Ask AI, reminder actions
   account/ calendar/  settings, calendar sheets
   moments/            Important Moments (Phase 11 Run B)
+  shopping/           Shopping Lists (Phase 11 Run C)
 src/
   api/                the HTTP client and wire types
   query/              TanStack Query hooks, one file per feature
@@ -335,6 +380,7 @@ src/
   components/         shared views
   actions/            reminders: coordinator, notifications, contacts, composers
   features/moments/   Important Moments: model, store, reminders, device services, shared views
+  features/shopping/  Shopping Lists: model, store, voice, image pipeline, sheets
   voice/              the realtime conversation, its transport and Read Loud
 docs/swift-to-rn-style-map.md   how SwiftUI idioms were translated
 ```

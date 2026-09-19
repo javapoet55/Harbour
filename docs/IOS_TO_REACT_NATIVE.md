@@ -1886,14 +1886,14 @@ Line numbers are as of `73ad9e1`.
 | [x] | Wish details | `ImportantMomentsView.swift:506-550` | Push | A card on the Scheduled or Sent tab (`:274`); "Manage" on a row (`:105`); after Schedule Wish (`:492`) | `wish-details`, `wish-details-scrolled`, `wish-details-dark`, `wish-edit-schedule`, `wish-cancel-dialog` |
 | [x] | Confirm email | `ImportantMomentsView.swift:600-612` | `.sheet` (`:415`, `:539`) | The Email channel with automatic send | **not captured** (needs a connected email account) |
 | [x] | Moment notification route | `ImportantMomentsView.swift:565-593` (`MomentSheetHost`, `MomentRoutedView`) | `.sheet`, hosted from `RootView.swift:72` | A moment notification tap | **not captured** (needs a delivered notification) |
-| [ ] | My Lists | `ShoppingViews.swift:82-137` (`ShoppingHome`) | Push | Quick Access "Shopping" (`TodayQuickAccess.swift:72`) | `shopping-lists-default`, `shopping-lists-dark`; empty state **not captured** |
-| [ ] | New List | `ShoppingViews.swift:153-188` | `.sheet` (`:130`); also "Copy list" (`:273`) | "+" on My Lists; list options, "Copy list" | `shopping-new-list`, `shopping-new-list-filled`, `shopping-new-list-use-last`, `shopping-new-list-dark`, `shopping-new-list-error-empty-name` |
-| [ ] | List detail | `ShoppingViews.swift:224-280` (`ShoppingDetail`) | Push (`:107`, and `:133` after create) | A list row; creating a list | `shopping-detail-default`, `shopping-detail-empty`, `shopping-detail-checked`, `shopping-detail-typing`, `shopping-detail-options-menu`, `shopping-detail-dark`, `shopping-complete-trip-dialog` |
-| [ ] | Item | `ShoppingItemEditor.swift:21-67` | `.sheet` (`ShoppingViews.swift:270`) | Tapping an item | `shopping-item-editor`, `shopping-item-editor-scrolled`, `shopping-item-editor-category-menu`, `shopping-item-editor-dark`, `shopping-item-editor-error-empty-name` |
-| [ ] | Add by Voice | `ShoppingVoice.swift:89-130` | `.sheet` (`ShoppingViews.swift:271`) | The mic in the add row | `shopping-voice-ready`, `shopping-voice-listening`, `shopping-voice-stopped`, `shopping-voice-dark` |
-| [ ] | Review Items | `ShoppingViews.swift:300-303` (`ShoppingBatchReview`) | `.sheet` (`:272`) | Quick add or voice, after `parse` | `shopping-review-items`, `shopping-review-items-dark`, `shopping-review-items-error-empty-name` |
-| [ ] | List Settings | `ShoppingViews.swift:309-314` | `.sheet` (`:274`) | List options, "List settings" | `shopping-list-settings`, `shopping-list-settings-dark`, `shopping-list-settings-error-empty-name` |
-| [ ] | Share List | `ShoppingViews.swift:321-330` | `.sheet` (`:275`) | "Share list" in the toolbar | `shopping-share-list`, `shopping-share-list-link`, `shopping-share-list-dark`, `shopping-share-sheet-text` |
+| [x] | My Lists | `ShoppingViews.swift:82-137` (`ShoppingHome`) | Push | Quick Access "Shopping" (`TodayQuickAccess.swift:72`) | `shopping-lists-default`, `shopping-lists-dark`; empty state **not captured** |
+| [x] | New List | `ShoppingViews.swift:153-188` | `.sheet` (`:130`); also "Copy list" (`:273`) | "+" on My Lists; list options, "Copy list" | `shopping-new-list`, `shopping-new-list-filled`, `shopping-new-list-use-last`, `shopping-new-list-dark`, `shopping-new-list-error-empty-name` |
+| [x] | List detail | `ShoppingViews.swift:224-280` (`ShoppingDetail`) | Push (`:107`, and `:133` after create) | A list row; creating a list | `shopping-detail-default`, `shopping-detail-empty`, `shopping-detail-checked`, `shopping-detail-typing`, `shopping-detail-options-menu`, `shopping-detail-dark`, `shopping-complete-trip-dialog` |
+| [x] | Item | `ShoppingItemEditor.swift:21-67` | `.sheet` (`ShoppingViews.swift:270`) | Tapping an item | `shopping-item-editor`, `shopping-item-editor-scrolled`, `shopping-item-editor-category-menu`, `shopping-item-editor-dark`, `shopping-item-editor-error-empty-name` |
+| [x] | Add by Voice | `ShoppingVoice.swift:89-130` | `.sheet` (`ShoppingViews.swift:271`) | The mic in the add row | `shopping-voice-ready`, `shopping-voice-listening`, `shopping-voice-stopped`, `shopping-voice-dark` |
+| [x] | Review Items | `ShoppingViews.swift:300-303` (`ShoppingBatchReview`) | `.sheet` (`:272`) | Quick add or voice, after `parse` | `shopping-review-items`, `shopping-review-items-dark`, `shopping-review-items-error-empty-name` |
+| [x] | List Settings | `ShoppingViews.swift:309-314` | `.sheet` (`:274`) | List options, "List settings" | `shopping-list-settings`, `shopping-list-settings-dark`, `shopping-list-settings-error-empty-name` |
+| [x] | Share List | `ShoppingViews.swift:321-330` | `.sheet` (`:275`) | "Share list" in the toolbar | `shopping-share-list`, `shopping-share-list-link`, `shopping-share-list-dark`, `shopping-share-sheet-text` |
 | [ ] | Profile and settings, **changed**: calendar connections | `ProfileView.swift:150-288`; `connectionList` `:288-331`; Disconnect dialog `:273-284` | Push inside the Account sheet | Account, "Settings" or "Edit profile and settings" | `account-settings-default`, `account-settings-calendars-empty`, `account-settings-calendars-dark`, `account-settings-calendar-connecting`, `account-settings-calendar-error-cancelled`; the connected list, Disconnect and the write toggle are **not captured** (no connected calendar) |
 | — | Recurring Tasks hub, New Recurring Task | `ShoppingViews.swift:42-51`, `:61-76` | — | **Unreachable.** Linked only from `ShoppingTodayContent` and `QuickAccessDirectory`, neither of which is instantiated | none. Do not port until Swift wires them up |
 | — | Today Shopping card | `ShoppingViews.swift:5`, `:12-28` | — | **Unreachable.** `ShoppingTodayCard` is never instantiated | none |
@@ -1913,10 +1913,10 @@ each one.
 | `/api/moments` | GET | — (returns `MomentsSnapshot`) | `ImportantMomentsStore.swift:78` | Yes — `momentsApi.snapshot` in `src/api/moments.ts` (Run B) |
 | `/api/moments` | POST | `{ operation, input, id? }` (`MomentEnvelope`). Operations: `save`, `generate`, `approve`, `plan`, `schedule`, `visibility`, `festivalCatalog`, `festivalSave`, `festivalDelete`, `greetingArtwork`, `greetingCardSave`, `connectEmail`, `disconnectEmail` | `ImportantMomentsStore.swift:93`, used by the Moments views and `ManageFestivalModel.swift` | Yes — `momentsApi.post` (Run B) |
 | `/api/moments` | DELETE | — (deletes all moment data) | `ImportantMomentsStore.swift:121` (Settings, "Delete all") | Yes — `momentsApi.deleteAll` (Run B) |
-| `/api/shopping` | GET | — (returns `ShoppingSnapshot`) | `ShoppingStore.swift:16` | No |
-| `/api/shopping` | POST | `ShoppingEnvelope { operation, id?, revision?, input }`. Operations: `create`, `save`, `delete`, `share`, `revoke`, `complete`, and `parse` (`input: { text }`, returns `items`) | `ShoppingStore.swift:23`, `:32` | No |
-| `/api/shopping/image` | POST | `{ name, details, consent }` (returns image `data`) | `ShoppingItemEditor.swift:91` | No |
-| `/api/realtime/transcription-session` | POST | `{ consent: true, scope: "shopping" }` | `ShoppingStore.swift:36` (Add by Voice) | No. RN has `/api/realtime/task-session` only |
+| `/api/shopping` | GET | — (returns `ShoppingSnapshot`) | `ShoppingStore.swift:16` | Yes — `shoppingApi.lists` in `src/api/shopping.ts` (Run C) |
+| `/api/shopping` | POST | `ShoppingEnvelope { operation, id?, revision?, input }`. Operations: `create`, `save`, `delete`, `share`, `revoke`, `complete`, and `parse` (`input: { text }`, returns `items`) | `ShoppingStore.swift:23`, `:32` | Yes — `shoppingApi.post` (Run C) |
+| `/api/shopping/image` | POST | `{ name, details, consent }` (returns image `data`) | `ShoppingItemEditor.swift:91` | Yes — `shoppingApi.image` (Run C) |
+| `/api/realtime/transcription-session` | POST | `{ consent: true, scope: "shopping" }` | `ShoppingStore.swift:36` (Add by Voice) | Yes — `shoppingApi.transcriptionSession` (Run C), on the Phase 9 WebRTC transport |
 | `/api/calendar/connections` | GET | — | `NexdoApp.swift:312` | No |
 | `/api/calendar/connections` | PATCH | `{ id, writeEnabled }` | `NexdoApp.swift:321` (the "Add my scheduled tasks here" toggle) | No |
 | `/api/calendar/connections?id=` | DELETE | — | `NexdoApp.swift:327` (Disconnect) | No |
@@ -1924,3 +1924,74 @@ each one.
 | `/api/calendar/oauth/{provider}/start` | GET (in a web auth session) | `?native=1&connect_token=…` | `NexdoApp.swift:300` | Yes, but without the token |
 | `/api/calendar/sync` | POST | — | `NexdoApp.swift:337` | Yes |
 | Task updates from Reschedule all | existing task endpoints | — | `TodayAttentionSheet.swift` | Yes |
+
+## 21. Phase 11 status (Important Moments and Shopping Lists)
+
+Phase 11 ports the screens `origin/main` added after the migration baseline (§20, "New Swift screens
+after the migration baseline"). It ran in three parts: Run A (Today tiles, Account calendar
+connections, Firebase) on the Mac, branch `rn-run-a`; Run B (Important Moments) and Run C (Shopping
+Lists) on Windows, on this branch. **Run A had not landed when Run C finished**, so both Quick Access
+tiles are `TODO(run-a)` markers pointing at `/moments` and `/shopping`.
+
+### Run B — Important Moments (commits `530c96f`…`f0a084a`)
+
+17 §20 rows, built under `app/moments/` and `src/features/moments/`. The screen-by-screen table, with
+the Swift `body` ranges, is the "Run B — Moments" block in `mobile/docs/reference/PARITY.md`; the
+tester steps are Part 13 of `mobile/README.md`. Native modules added: `expo-calendar`,
+`expo-clipboard`, `expo-sharing`.
+
+### Run C — Shopping Lists
+
+8 §20 rows, built under `app/shopping/` and `src/features/shopping/`.
+
+| Screen | Built as | Swift `body` |
+| --- | --- | --- |
+| My Lists | `app/shopping/index.tsx` | `ShoppingViews.swift:78-138` |
+| New List (also Copy list / Use This List Again) | `NewListSheet`, `src/features/shopping/sheets.tsx` | `ShoppingViews.swift:143-205` |
+| List detail | `app/shopping/[id].tsx` | `ShoppingViews.swift:206-295`; rows `:335-361`; artwork `:363-402` |
+| Item | `src/features/shopping/ItemEditorSheet.tsx` | `ShoppingItemEditor.swift:5-111` |
+| Add by Voice | `src/features/shopping/VoiceSheet.tsx`, `voice.ts` | `ShoppingVoice.swift:5-140` |
+| Review Items | `ReviewItemsSheet`, `sheets.tsx` | `ShoppingViews.swift:296-304` |
+| List Settings | `ListSettingsSheet`, `sheets.tsx` | `ShoppingViews.swift:305-315` |
+| Share List | `ShareListSheet`, `sheets.tsx` | `ShoppingViews.swift:316-332` |
+
+Not built, because nothing in Swift reaches them: the Recurring Tasks hub and New Recurring Task
+(`ShoppingViews.swift:38-76`), the Today Shopping card (`:3-37`) and the Quick Access directory
+(`TodayQuickAccess.swift:98-113`).
+
+**How it talks to the server.** `GET /api/shopping` for the lists; `POST /api/shopping` with
+`{ operation, id?, revision?, input? }` for `parse`, `create`, `save`, `delete`, `complete`, `share`
+and `revoke`. Every write carries the list's revision; a stale one is refused with 409 "This list
+changed on another device. Refresh before saving.", which the detail screen shows with Swift's
+"Retry Save" and "Discard local edits and reload". Quick add and dictation are parsed ON THE SERVER
+(`parse`); the phone only holds Swift's 13 typing suggestions. Item artwork is `POST
+/api/shopping/image`; every image — photo, camera, AI — is redrawn to at most 480 px and JPEG of at
+most 67,000 bytes on the phone (which strips EXIF) and saved as base64 in the item. The view-only link
+is `<API base URL>/shared/shopping/<token>`.
+
+**Voice.** `POST /api/realtime/transcription-session { consent: true, scope: "shopping" }` returns a
+60-second key for a transcription-only session, carried by the Phase 9 `WebRtcTransport` unchanged.
+`src/features/shopping/voice.ts` ports `ShoppingVoice`: speech started/stopped, committed, transcription
+delta/completed deduplicated by item id, error/failed; five minutes and 12,000 characters at most;
+`finish()` mutes, commits a turn in progress, waits up to 8 seconds for outstanding finals and closes,
+and "Review Items" then sends the transcript to `parse`. The consent switch defaults on and is stored
+under Swift's key, `shopping.liveTranscriptionEnabled`. The start cue, `shopping-mic-bell.wav` at half
+volume, plays through expo-audio, the module Read Loud already uses.
+
+**Native modules: none added.** One configuration change needs the rebuild Run B already requires:
+`android.permission.CAMERA` is no longer blocked, because `expo-image-picker`'s `launchCameraAsync`
+refuses to open the camera without it on Android, and Swift's item editor asks for the camera too
+(`ShoppingItemEditor.swift:81-84`). The iOS camera string is Swift's.
+
+**Swift behaviour copied**: next week's list carries every item, including the checked ones, unchecked
+(server `complete`); `create` has no idempotency key; the store drops a second write while one is in
+flight; a list's date label follows the device locale.
+
+**Swift behaviour NOT copied**: the "+" and the mic share one `List` row with no button style, so a tap
+fires both. Each has its own target here.
+
+**Gaps**: swipe-to-delete and drag-to-reorder have no core React Native equivalent — "Edit" in the
+options menu shows a delete button and up/down arrows instead, and Review Items has a delete button per
+row; the tab bar is hidden on these pushed screens (as for Moments); an image with transparency is not
+flattened onto white before the JPEG encode; the five bundled illustrations are Swift's 0.9–1.8 MB PNGs,
+unchanged.

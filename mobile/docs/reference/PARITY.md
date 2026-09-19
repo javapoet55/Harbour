@@ -548,3 +548,36 @@ native modules is on the phone.
 | 7 | Two-step confirmations | Review schedule is a sheet; Cancel wish, Disable moment, Delete Moment, Discard and Delete all are `Alert.alert`s, the accepted platform substitute for `confirmationDialog`. |
 | 8 | Form sheets | `MomentSheet` (a full-height page sheet) with the large title in the content and the toolbar buttons in the bar; Add Contact's "Add recipient" is disabled while required fields are empty. |
 | 9 | Keyboard "Done" | `KeyboardDoneBar`, a bar pinned to the top of the keyboard, since Android has no accessory view. |
+
+## Run C — Shopping
+
+Phase 11 Run C, built on Windows from the Swift source and the second-pass iOS captures
+(`ios/shopping-*`). As for Run B, **no Android capture has been taken yet**; each row is "built,
+awaiting device capture" until a build with the camera permission and Run B's modules is on the phone.
+
+| Screen | Swift `body` | React Native | iOS captures | Status |
+| --- | --- | --- | --- | --- |
+| My Lists | `ShoppingViews.swift:78-138` | `app/shopping/index.tsx` | `shopping-lists-default`, `-dark`; empty state not captured (ported from source) | built, awaiting device capture |
+| New List | `ShoppingViews.swift:143-205` | `NewListSheet` in `src/features/shopping/sheets.tsx` | `shopping-new-list`, `-filled`, `-use-last`, `-dark`, `-error-empty-name` | built, awaiting device capture |
+| List detail | `ShoppingViews.swift:206-295, :335-402` | `app/shopping/[id].tsx`, `components.tsx` | `shopping-detail-default`, `-empty`, `-checked`, `-typing`, `-options-menu`, `-dark`, `shopping-complete-trip-dialog` | built, awaiting device capture |
+| Item | `ShoppingItemEditor.swift:5-111` | `src/features/shopping/ItemEditorSheet.tsx` | `shopping-item-editor`, `-scrolled`, `-category-menu`, `-dark`, `-error-empty-name` | built, awaiting device capture |
+| Add by Voice | `ShoppingVoice.swift:77-127` | `src/features/shopping/VoiceSheet.tsx` | `shopping-voice-ready`, `-listening`, `-stopped`, `-dark` | built, awaiting device capture |
+| Review Items | `ShoppingViews.swift:296-304` | `ReviewItemsSheet` in `sheets.tsx` | `shopping-review-items`, `-dark`, `-error-empty-name` | built, awaiting device capture |
+| List Settings | `ShoppingViews.swift:305-315` | `ListSettingsSheet` in `sheets.tsx` | `shopping-list-settings`, `-dark`, `-error-empty-name` | built, awaiting device capture |
+| Share List | `ShoppingViews.swift:316-332` | `ShareListSheet` in `sheets.tsx` | `shopping-share-list`, `-link`, `-dark`, `shopping-share-sheet-text` | built, awaiting device capture |
+
+### Patterns reused from Run B
+
+| # | Pattern | Here |
+| --- | --- | --- |
+| 4 | `MomentCard` | My Lists' cards, New List's choices and name card, Add by Voice's review cards |
+| 5 | `MomentPrimary` | "Create List" / "Creating…", "Review Items" / "Organizing…", "Add N Items" |
+| 7 | Two-step confirmations | Complete trip and Delete list are `Alert.alert`s with Swift's titles and message |
+| 8 | Form sheets, Save disabled while required fields are empty | Item (Cancel/Save), Review Items (Cancel), List Settings (Save only), Share List; New List's "Create List" |
+
+### Differences to check on the device
+
+- The detail screen is Swift's inset-grouped `List` drawn with Run B's `FormSection`s over the Today
+  backdrop; the header row sits outside the first section, as Swift clears its background.
+- Swipe-to-delete and drag-to-reorder are replaced by an **Edit** mode (delete button and up/down
+  arrows); see the README's Known differences.
