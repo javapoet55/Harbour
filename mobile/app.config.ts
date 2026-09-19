@@ -39,6 +39,9 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   android: {
     // TODO(phase0-decision): EAS and prebuild need an Android package name; this mirrors the iOS bundle ID.
     package: 'com.pinslots.nexdo',
+    // Firebase Analytics, the Android side of ios/App/FirebaseAnalyticsBridge.swift. Downloaded from
+    // the Nexdoapp Firebase project; it holds client identifiers only, no secrets.
+    googleServicesFile: './google-services.json',
     // Permissions the Swift app has no equivalent for, removed from the merged manifest.
     // - SYSTEM_ALERT_WINDOW: added by the WebRTC plugin for video calling; voice never uses it.
     //   (CAMERA was blocked here until Phase 11 Run C: the Shopping item editor's "Take a Picture"
@@ -110,6 +113,9 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     ],
     'expo-router',
     'expo-dev-client',
+    // Firebase Analytics. Android only for now: iOS still ships the Swift app, which has its own SDK.
+    '@react-native-firebase/app',
+    '@react-native-firebase/analytics',
     'expo-apple-authentication',
     // Phase 7. `expo-web-browser` drives the Google Calendar OAuth session
     // (`openAuthSessionAsync`), the analogue of Swift's `ASWebAuthenticationSession`
