@@ -1598,6 +1598,9 @@ private struct TaskRow: View {
                         .lineLimit(2)
 
                     HStack(spacing: 8) {
+                        if let lifeReminderLabel = task.lifeReminderLabel {
+                            TaskBadge(title: lifeReminderLabel.uppercased(), icon: "sparkles", color: .nexdoMagenta)
+                        }
                         TaskBadge(title: task.isDone ? "DONE" : task.priority, icon: task.isDone ? "checkmark" : "flag.fill", color: task.isDone ? .green : priorityColor)
                         TaskBadge(title: "\(task.durationMin) MIN", icon: "clock", color: .nexdoIndigo)
                         if let scheduleLabel {

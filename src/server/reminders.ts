@@ -36,6 +36,15 @@ export async function scheduleDefaultReminders(userId: string, taskId: string, d
   }
 }
 
+export async function scheduleRequestedReminder(userId: string, taskId: string, fireAt: Date, critical = false) {
+  const idempotencyKey = `${taskId}:requested`;
+  return prisma.reminder.upsert({
+    where: { idempotencyKey },
+    update: { fireAt, critical, status: 'SCHEDULED' },
+    create: { userId, taskId, fireAt, offsetLabel: 'requested reminder', critical, idempotencyKey, channelPlan: critical ? 'push,email,sms' : 'push,email' },
+  });
+}
+
 export async function tickReminders(now = new Date()) {
   const due = await prisma.reminder.findMany({
     where: {
@@ -105,7 +114,7 @@ export async function tickReminders(now = new Date()) {
 }
 
 export async function acknowledgeReminder(userId: string, reminderId: string) {
-  const reminder = await prisma.reminder.findFirst({ where: { id: reminderId, userId } });
+  const reminder = await prisma.reminder.findFirst({ where: { id: reminderId, userId }, include: { task: { select: { lifeReminderType: true } } } });
   if (!reminder) throw new Error('NOT_FOUND');
   await prisma.reminder.update({
     where: { id: reminderId },
@@ -114,4 +123,5 @@ export async function acknowledgeReminder(userId: string, reminderId: string) {
   await prisma.notificationAttempt.create({
     data: { reminderId, channel: 'push', status: 'OPENED', openedAt: new Date() },
   });
+  if (reminder.task?.lifeReminderType) inc('life_reminder_notification_opened');
 }

@@ -30,6 +30,49 @@ public struct GroceryItem: Codable, Identifiable, Equatable, Sendable {
         switch category {case "Produce":return "carrot.fill";case "Dairy & Eggs":return "mug.fill";case "Meat & Seafood":return "fish.fill";case "Bakery":return "birthday.cake.fill";case "Drinks":return "waterbottle.fill";case "Frozen":return "snowflake";case "Household":return "house.fill";default:return "basket.fill"}
     }
 }
+public struct ShoppingAlternative: Codable, Identifiable, Equatable, Sendable {
+    public var name:String
+    public var category:String
+    public var quantity:String
+    public var size:String
+    public var reason:String
+    public var detail:String
+    public var id:String { [name,category,quantity,size].joined(separator:"|") }
+    public init(name:String,category:String,quantity:String,size:String,reason:String,detail:String){
+        self.name=name;self.category=category;self.quantity=quantity;self.size=size;self.reason=reason;self.detail=detail
+    }
+    public var groceryItem:GroceryItem {
+        GroceryItem(name:name,category:category,quantity:quantity,size:size,notes:detail)
+    }
+}
+public struct ShoppingAlternativesResponse: Codable, Equatable, Sendable {
+    public var alternatives:[ShoppingAlternative]
+    public var tip:String
+    public var usedAI:Bool
+    public init(alternatives:[ShoppingAlternative],tip:String,usedAI:Bool){self.alternatives=alternatives;self.tip=tip;self.usedAI=usedAI}
+    public static func local(for item:GroceryItem)->ShoppingAlternativesResponse {
+        let text=item.name.lowercased()
+        if text.contains("chicken") {return .init(alternatives:[
+            .init(name:"Chicken breast (skinless)",category:"Meat & Seafood",quantity:item.quantity,size:item.size.isEmpty ? "lb":item.size,reason:"Lower calorie option",detail:"Lean cut with less saturated fat"),
+            .init(name:"Turkey breast",category:"Meat & Seafood",quantity:item.quantity,size:item.size.isEmpty ? "lb":item.size,reason:"Lean protein",detail:"Mild flavor and lower in fat"),
+            .init(name:"Salmon",category:"Meat & Seafood",quantity:item.quantity,size:item.size.isEmpty ? "lb":item.size,reason:"Omega-3 option",detail:"Rich flavor and useful nutrients"),
+            .init(name:"Firm tofu",category:"Produce",quantity:"1",size:"package",reason:"Plant-based alternative",detail:"Versatile source of protein"),
+            .init(name:"Chickpeas",category:"Pantry",quantity:"2",size:"cans",reason:"High-fiber option",detail:"Plant-based protein with fiber")
+        ],tip:"Try turkey breast for a lean swap with a similar mild flavor.",usedAI:false)}
+        if text.contains("milk") {return .init(alternatives:[
+            .init(name:"Low-fat milk",category:"Dairy & Eggs",quantity:item.quantity,size:item.size,reason:"Lower-fat option",detail:"Similar dairy taste with less fat"),
+            .init(name:"Lactose-free milk",category:"Dairy & Eggs",quantity:item.quantity,size:item.size,reason:"Lactose-free",detail:"Dairy milk without lactose"),
+            .init(name:"Unsweetened oat milk",category:"Dairy & Eggs",quantity:"1",size:"carton",reason:"Plant-based option",detail:"Creamy texture without dairy"),
+            .init(name:"Unsweetened soy milk",category:"Dairy & Eggs",quantity:"1",size:"carton",reason:"More plant protein",detail:"Neutral flavor with protein")
+        ],tip:"Choose an unsweetened alternative when you want to avoid added sugar.",usedAI:false)}
+        let base=item.name.replacingOccurrences(of:"Organic ",with:"")
+        return .init(alternatives:[
+            .init(name:"Organic \(base)",category:item.category,quantity:item.quantity,size:item.size,reason:"Organic option",detail:"A comparable certified-organic choice"),
+            .init(name:"Store-brand \(base)",category:item.category,quantity:item.quantity,size:item.size,reason:"Budget-friendly",detail:"A similar option that may cost less"),
+            .init(name:"Family-size \(base)",category:item.category,quantity:item.quantity,size:item.size.isEmpty ? "large pack":item.size,reason:"Larger package",detail:"Useful when you need more servings")
+        ],tip:"Compare unit prices and package sizes before replacing \(base).",usedAI:false)
+    }
+}
 public struct GroceryList: Codable, Identifiable, Equatable, Sendable {
     public var id:String
     public var title:String

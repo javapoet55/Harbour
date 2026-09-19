@@ -1,15 +1,15 @@
 import { beforeEach, expect, it, vi } from 'vitest';
 import { executeVoiceTool, validateVoiceTool } from './tools';
-const mocks = vi.hoisted(() => ({ createTask: vi.fn(), updateTask: vi.fn(), scheduleTask: vi.fn(), completeTask: vi.fn(), deleteTask: vi.fn(), reminders: vi.fn(), tasks: vi.fn(), owned: vi.fn(), events: vi.fn(), eventSave: vi.fn(), categories: vi.fn(), categoryCreate: vi.fn(), taskUpdate: vi.fn(), reminderSave: vi.fn(), user: vi.fn(), context: vi.fn(), recommend: vi.fn(), availability: vi.fn() }));
+const mocks = vi.hoisted(() => ({ createTask: vi.fn(), updateTask: vi.fn(), scheduleTask: vi.fn(), completeTask: vi.fn(), deleteTask: vi.fn(), reminders: vi.fn(), requestedReminder: vi.fn(), tasks: vi.fn(), owned: vi.fn(), events: vi.fn(), eventSave: vi.fn(), categories: vi.fn(), categoryCreate: vi.fn(), taskUpdate: vi.fn(), reminderSave: vi.fn(), recurrenceSave: vi.fn(), user: vi.fn(), context: vi.fn(), recommend: vi.fn(), availability: vi.fn() }));
 vi.mock('@/server/availability', () => ({ checkCreationAvailability: mocks.availability }));
 vi.mock('@/server/tasks', () => mocks);
 vi.mock('@/server/schedule-intelligence', () => ({ loadScheduleContext: mocks.context }));
 vi.mock('@/lib/executive-recommendations', () => ({ buildExecutiveRecommendation: mocks.recommend }));
-vi.mock('@/server/reminders', () => ({ scheduleDefaultReminders: mocks.reminders }));
+vi.mock('@/server/reminders', () => ({ scheduleDefaultReminders: mocks.reminders, scheduleRequestedReminder: mocks.requestedReminder }));
 vi.mock('@/server/calendar-sync', () => ({ pushTaskToExternal: vi.fn() }));
 vi.mock('@/server/replanner', () => ({ generateReplanProposal: vi.fn() }));
 vi.mock('@/server/agenda', () => ({ listEventsInRange: mocks.events }));
-vi.mock('@/server/db', () => ({ prisma: { task: { findMany: mocks.tasks, findFirst: mocks.owned, update: mocks.taskUpdate }, category: { findMany: mocks.categories, create: mocks.categoryCreate }, user: { findUniqueOrThrow: mocks.user }, calendarEvent: { upsert: mocks.eventSave }, reminder: { deleteMany: vi.fn(), upsert: mocks.reminderSave }, recurrenceRule: { deleteMany: vi.fn() } } }));
+vi.mock('@/server/db', () => ({ prisma: { task: { findMany: mocks.tasks, findFirst: mocks.owned, update: mocks.taskUpdate }, category: { findMany: mocks.categories, create: mocks.categoryCreate }, user: { findUniqueOrThrow: mocks.user }, calendarEvent: { upsert: mocks.eventSave }, reminder: { deleteMany: vi.fn(), upsert: mocks.reminderSave }, recurrenceRule: { deleteMany: vi.fn(), upsert: mocks.recurrenceSave } } }));
 const task = { id: 'task1', title: 'Call Damien', status: 'PLANNED', priority: 'NORMAL', durationMin: 30, startAt: new Date('2099-01-01T10:00:00Z'), dueAt: null, critical: false };
 const args = { title: 'Call Damien', scheduledAt: '2099-01-01T10:00:00Z', durationMin: 30 };
 it('reads a fresh clock in the account timezone without changing tasks', async () => {
@@ -30,7 +30,7 @@ it('passes the requested 6 AM Pacific instant unchanged to task creation', async
     expect(mocks.createTask).toHaveBeenCalledWith(expect.objectContaining({ startAt: new Date('2026-09-14T13:00:00Z') }));
   } finally { vi.useRealTimers(); }
 });
-beforeEach(() => { vi.clearAllMocks(); mocks.availability.mockResolvedValue([]); mocks.context.mockResolvedValue({ timeZone: "UTC", workingDays: "0,1,2,3,4,5,6", workStart: "00:00", workEnd: "23:59", bufferMinutes: 15, tasks: [], events: [] }); mocks.createTask.mockResolvedValue(task); mocks.reminders.mockResolvedValue(undefined); mocks.owned.mockResolvedValue(task); mocks.scheduleTask.mockResolvedValue(task); mocks.events.mockResolvedValue([]); mocks.tasks.mockResolvedValue([]); });
+beforeEach(() => { vi.clearAllMocks(); mocks.user.mockResolvedValue({ timeZone: 'America/Los_Angeles' }); mocks.availability.mockResolvedValue([]); mocks.context.mockResolvedValue({ timeZone: "UTC", workingDays: "0,1,2,3,4,5,6", workStart: "00:00", workEnd: "23:59", bufferMinutes: 15, tasks: [], events: [] }); mocks.createTask.mockResolvedValue(task); mocks.reminders.mockResolvedValue(undefined); mocks.requestedReminder.mockResolvedValue(undefined); mocks.owned.mockResolvedValue(task); mocks.scheduleTask.mockResolvedValue(task); mocks.events.mockResolvedValue([]); mocks.tasks.mockResolvedValue([]); });
 it('passes a stable per-user session and call idempotency key to the existing task engine', async () => {
   await executeVoiceTool('u', 's', 'c', 'create_task', args);
   await executeVoiceTool('u', 's', 'c', 'create_task', args);
@@ -86,8 +86,17 @@ it('assigns an existing owned category and preserves the exact requested reminde
   expect(result).toMatchObject({ success: true });
   expect(mocks.categories).toHaveBeenCalledWith({ where: { userId: 'u' }, take: 100 });
   expect(mocks.taskUpdate).toHaveBeenCalledWith({ where: { id: task.id, userId: 'u' }, data: { categoryId: 'health' } });
-  expect(mocks.reminderSave.mock.calls[0][0].create).toMatchObject({ userId: 'u', taskId: task.id, fireAt: new Date(args.scheduledAt) });
+  expect(mocks.requestedReminder).toHaveBeenCalledWith('u', task.id, new Date(args.scheduledAt), false);
   expect(mocks.categoryCreate).not.toHaveBeenCalled();
+});
+it('stores recurring life reminder metadata without creating a calendar event', async () => {
+  const scheduledAt = '2099-01-18T17:00:00Z';
+  await executeVoiceTool('u', 's', 'life', 'create_reminder', {
+    title: 'Pay electricity bill', originalUserText: 'Pay electricity bill every month on the 18th',
+    lifeReminderType: 'bill', scheduledAt, recurrence: { frequency: 'MONTHLY', interval: 1 },
+  });
+  expect(mocks.createTask).toHaveBeenCalledWith(expect.objectContaining({ lifeReminderType: 'bill', reminderAt: new Date(scheduledAt), kind: 'REMINDER' }));
+  expect(mocks.recurrenceSave).toHaveBeenCalledWith(expect.objectContaining({ create: expect.objectContaining({ frequency: 'MONTHLY', interval: 1 }) }));
 });
 it('grounds a recommendation in this user’s current schedule context', async () => {
   mocks.context.mockResolvedValue({ marker: 'owned-context' });

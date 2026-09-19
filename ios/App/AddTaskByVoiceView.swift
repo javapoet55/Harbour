@@ -35,6 +35,9 @@ struct AddTaskByVoiceView: View {
     @State private var recoveryTask: Task<Void, Never>?
     @State private var recoveryAttempt = 0
     @State private var recovering = false
+    @State private var usageSessionID=UUID()
+    @State private var activeVoiceSeconds:Double=0
+    @State private var lastReportedVoiceSeconds=0
     private let gradient = LinearGradient(colors: [.nexdoMagenta, .nexdoIndigo, .nexdoBlue], startPoint: .topLeading, endPoint: .bottomTrailing)
     private let askMode: Bool
     private let calendarOnly: Bool
@@ -119,9 +122,20 @@ struct AddTaskByVoiceView: View {
             if ProcessInfo.processInfo.arguments.contains("-ask-voice-design-preview") || ProcessInfo.processInfo.arguments.contains("-calendar-voice-preview") { return }
             #endif
             voice.onClose = { dismiss() }
+            voice.onTelemetry = { _ in Task{await model.recordVoiceUsage(sessionID:usageSessionID,duration:activeVoiceSeconds)} }
             if model.aiConsent && model.voiceConsent { await start() } else { consent = true }
         }
-        .onReceive(clock) { _ in voice.tick() }
+        .onReceive(clock) { _ in
+            voice.tick()
+            if [.listening,.userSpeaking,.processing,.toolExecution,.assistantSpeaking].contains(voice.phase) {
+                activeVoiceSeconds += 1
+                let completed=Int(activeVoiceSeconds)
+                if completed-lastReportedVoiceSeconds>=15 {
+                    lastReportedVoiceSeconds=completed
+                    Task{await model.recordVoiceUsage(sessionID:usageSessionID,duration:activeVoiceSeconds)}
+                }
+            }
+        }
         .onChange(of: voice.phase) { _, phase in
             if phase == .listening, !voice.muted, let url = Bundle.main.url(forResource: "ListeningReady", withExtension: "wav") {
                 readyBell = try? AVAudioPlayer(contentsOf: url)

@@ -4,12 +4,14 @@ import { jsonError } from '@/lib/http';
 import { NextResponse } from 'next/server';
 import { requireUser } from '@/server/auth';
 import { createTask } from '@/server/tasks';
-import { scheduleDefaultReminders } from '@/server/reminders';
+import { scheduleDefaultReminders, scheduleRequestedReminder } from '@/server/reminders';
 import { prisma } from '@/server/db';
 import { zonedDateTime } from '@/lib/time';
 import { pushTaskToExternal } from '@/server/calendar-sync';
 import { generateReplanProposal } from '@/server/replanner';
 import { taskTimelineCondition } from '@/lib/task-timeline';
+import { parseLifeReminder } from '@/lib/life-reminders';
+import { inc } from '@/lib/metrics';
 
 export async function GET(req: Request) {
   const user = await requireUser();
@@ -41,31 +43,45 @@ export async function POST(req: Request) {
   try {
     const user = await requireUser();
     const body = await req.json();
-    const startAt = body.startAt
+    const originalTitle = String(body.title ?? '').trim();
+    const intent = parseLifeReminder(originalTitle, user.timeZone);
+    const suppliedStartAt = body.startAt
       ? new Date(body.startAt)
       : body.date
         ? zonedDateTime(body.date, body.time || '09:00', user.timeZone)
         : null;
-    await requireAvailableSchedule(user.id, startAt, body.durationMin ?? 30, body.allowScheduleConflict);
+    const startAt = intent.recognized && intent.reminderDate ? intent.reminderDate : suppliedStartAt;
+    const dueAt = intent.recognized ? intent.dueDate ?? startAt : startAt;
+    if (!intent.recognized) await requireAvailableSchedule(user.id, startAt, body.durationMin ?? 30, body.allowScheduleConflict);
     const task = await createTask({
       userId: user.id,
       projectId: body.projectId === undefined ? undefined : parseProjectId(body.projectId),
-      title: String(body.title ?? '').trim(),
+      title: intent.recognized ? intent.title : originalTitle,
       notes: body.notes,
       priority: body.priority,
       status: body.status ?? 'PLANNED',
       startAt,
-      dueAt: startAt,
-      durationMin: body.durationMin,
+      dueAt,
+      reminderAt: intent.recognized ? intent.reminderDate : null,
+      lifeReminderType: intent.recognized ? intent.reminderType : null,
+      lifeReminderConfidence: intent.recognized ? intent.confidence : null,
+      originalUserText: intent.recognized ? intent.originalUserText : null,
+      durationMin: intent.recognized ? 5 : body.durationMin,
       energyLevel: ['LOW', 'MEDIUM', 'HIGH'].includes(body.energyLevel) ? body.energyLevel : undefined,
       waitingOn: body.waitingOn,
       critical: Boolean(body.critical),
     });
-    if (body.recurrence?.frequency && ['DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY'].includes(String(body.recurrence.frequency).toUpperCase())) {
-      await prisma.recurrenceRule.create({ data: { taskId: task.id, frequency: String(body.recurrence.frequency).toUpperCase(), interval: Math.max(1, Number(body.recurrence.interval) || 1), byWeekday: Array.isArray(body.recurrence.byWeekday) ? body.recurrence.byWeekday.join(',') : null, until: body.recurrence.until ? new Date(body.recurrence.until) : null, count: body.recurrence.count ? Math.max(1, Number(body.recurrence.count)) : null } });
+    const recurrence = intent.recognized ? intent.recurrenceRule : body.recurrence;
+    if (recurrence?.frequency && ['DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY'].includes(String(recurrence.frequency).toUpperCase())) {
+      await prisma.recurrenceRule.create({ data: { taskId: task.id, frequency: String(recurrence.frequency).toUpperCase(), interval: Math.max(1, Number(recurrence.interval) || 1), byWeekday: Array.isArray(recurrence.byWeekday) ? recurrence.byWeekday.join(',') : null, until: recurrence.until ? new Date(recurrence.until) : null, count: recurrence.count ? Math.max(1, Number(recurrence.count)) : null } });
     }
-    if (startAt) await scheduleDefaultReminders(user.id, task.id, startAt, Boolean(body.critical));
-    if (startAt) await pushTaskToExternal(user.id, task.id);
+    if (intent.recognized && intent.reminderDate) await scheduleRequestedReminder(user.id, task.id, intent.reminderDate, Boolean(body.critical));
+    else if (startAt) await scheduleDefaultReminders(user.id, task.id, startAt, Boolean(body.critical));
+    if (startAt && !intent.recognized) await pushTaskToExternal(user.id, task.id);
+    if (intent.recognized) {
+      inc('life_reminder_created');
+      if (intent.recurrenceRule) inc('life_reminder_recurring_created');
+    }
     await generateReplanProposal(user.id);
     return NextResponse.json({ task });
   } catch (error) { return jsonError(error); }

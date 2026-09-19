@@ -20,6 +20,14 @@ public struct Profile: Decodable, Sendable {
     public var nextAction: NextActionPreference? = nil
 }
 public struct ProfileResponse: Decodable, Sendable { public let user: Profile }
+public struct VoiceUsage: Codable, Equatable, Sendable {
+    public let month:String
+    public let usedSeconds:Int
+    public let limitMinutes:Int
+    public let remainingSeconds:Int
+    public let asOf:String
+    public var progress:Double {min(1,max(0,Double(usedSeconds)/Double(max(1,limitMinutes*60))))}
+}
 public struct PasswordResetResponse: Decodable, Sendable {
     public let message: String
     public let delivered: Bool
@@ -46,7 +54,23 @@ public struct NexdoTask: Decodable, Identifiable, Sendable {
     public var timeZone: String? = nil
     public var subtasks: [TaskStep]? = nil
     public var recurrence: TaskRecurrence? = nil
+    public var reminderAt: String? = nil
+    public var lifeReminderType: String? = nil
+    public var lifeReminderConfidence: Double? = nil
+    public var originalUserText: String? = nil
     public var isDone: Bool { status == "COMPLETED" }
+    public var lifeReminderLabel: String? {
+        switch lifeReminderType {
+        case "returnItem": "Return"
+        case "bill": "Bill"
+        case "expiration": "Expires"
+        case "maintenance": "Maintenance"
+        case "subscription": "Subscription"
+        case "renewal": "Renewal"
+        case "general": "Reminder"
+        default: nil
+        }
+    }
 }
 public struct TasksResponse: Decodable, Sendable {
     public let tasks: [NexdoTask]

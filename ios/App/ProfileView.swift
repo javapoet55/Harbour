@@ -74,6 +74,7 @@ struct AccountView: View {
                             Text(model.profile?.email ?? "").font(.caption).foregroundStyle(Color.nexdoSecondary)
                         }
                     }.padding(.vertical, 8)
+                    voiceUsageCard
                     NavigationLink { ProfileSettingsView() } label: { menuRow("Edit profile and settings", "person.crop.circle") }
                     VStack(spacing: 0) {
                         webRow("Inbox", "tray", "/inbox")
@@ -93,7 +94,53 @@ struct AccountView: View {
             .confirmationDialog("Sign out of Nexdo?", isPresented: $confirmsSignOut) {
                 Button("Sign out", role: .destructive) { Task { await model.logout(); if model.profile == nil { dismiss() } } }
             }
+            .task { await model.refreshVoiceUsage() }
         }.tint(.nexdoIndigo)
+    }
+
+    private var voiceUsageCard:some View {
+        let usage=model.voiceUsage
+        let used=usage?.usedSeconds ?? 0
+        let limit=usage?.limitMinutes ?? 100
+        let remaining=usage?.remainingSeconds ?? limit*60
+        return VStack(alignment:.leading,spacing:14){
+            HStack(alignment:.top,spacing:12){
+                Image(systemName:"waveform.circle.fill").font(.title2).foregroundStyle(Color.white)
+                    .frame(width:44,height:44).background(NexdoTheme.gradient,in:Circle())
+                VStack(alignment:.leading,spacing:3){
+                    Text("Real-time Voice").font(.headline).foregroundStyle(Color.nexdoInk)
+                    Text("Monthly usage").font(.caption).foregroundStyle(Color.nexdoSecondary)
+                }
+                Spacer()
+                Text(voiceMinutes(used)).font(.title3.bold()).foregroundStyle(Color.nexdoIndigo).monospacedDigit()
+            }
+            ProgressView(value:usage?.progress ?? 0)
+                .tint(.nexdoBlue).scaleEffect(x:1,y:1.8,anchor:.center)
+                .accessibilityLabel("Real-time voice usage")
+                .accessibilityValue("\(voiceMinutes(used)) used out of \(limit) minutes this month")
+            HStack{
+                Text("\(voiceMinutes(used)) used")
+                Spacer()
+                Text("\(voiceMinutes(remaining)) remaining")
+            }.font(.caption.weight(.medium)).foregroundStyle(Color.nexdoSecondary).monospacedDigit()
+            HStack{
+                Label(monthLabel(usage?.month),systemImage:"calendar")
+                Spacer()
+                Text("\(limit) min / month")
+            }.font(.caption2).foregroundStyle(Color.nexdoSecondary)
+        }.padding(16).profileCard()
+    }
+
+    private func voiceMinutes(_ seconds:Int)->String {
+        if seconds==0{return "0 min"}
+        if seconds<60{return "<1 min"}
+        let minutes=Double(seconds)/60
+        return minutes<10 ? String(format:"%.1f min",minutes):"\(Int(minutes.rounded())) min"
+    }
+
+    private func monthLabel(_ month:String?)->String {
+        guard let month,let date=DateFormatter.voiceMonth.date(from:month) else{return "This month · updated today"}
+        return date.formatted(.dateTime.month(.wide))+" · updated today"
     }
 
     private func closeAccount() {
@@ -122,6 +169,10 @@ private extension View {
         self.background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 20))
             .overlay(RoundedRectangle(cornerRadius: 20).stroke(Color.nexdoIndigo.opacity(0.13)))
     }
+}
+
+private extension DateFormatter {
+    static let voiceMonth:DateFormatter={let value=DateFormatter();value.locale=Locale(identifier:"en_US_POSIX");value.timeZone=TimeZone(secondsFromGMT:0);value.dateFormat="yyyy-MM";return value}()
 }
 
 struct ProfileSettingsView: View {

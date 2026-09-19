@@ -181,6 +181,9 @@ model Task {
   minFocusMin          Int       @default(15)
   energyLevel          String    @default("MEDIUM")
   reminderAt           DateTime?
+  lifeReminderType     String?
+  lifeReminderConfidence Float?
+  originalUserText     String?
   waitingOn            String?
   assignee             String?
   timeZone             String    @default("America/Los_Angeles")

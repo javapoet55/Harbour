@@ -45,3 +45,18 @@ import Testing
     let json=try JSONSerialization.jsonObject(with:JSONEncoder().encode(item)) as! [String:Any]
     #expect(json["imageData"] is NSNull)
 }
+
+@Test func shoppingAlternativeDecodesAndBecomesAnItem() throws {
+    let json=#"{"alternatives":[{"name":"Turkey breast","category":"Meat & Seafood","quantity":"1","size":"lb","reason":"Lean protein","detail":"Mild flavor"}],"tip":"Try a lean swap.","usedAI":true}"#.data(using:.utf8)!
+    let response=try JSONDecoder().decode(ShoppingAlternativesResponse.self,from:json)
+    #expect(response.alternatives.first?.groceryItem.name=="Turkey breast")
+    #expect(response.alternatives.first?.groceryItem.notes=="Mild flavor")
+    #expect(response.usedAI)
+}
+
+@Test func shoppingAlternativesHaveAnOfflineFallback() {
+    let response=ShoppingAlternativesResponse.local(for:GroceryItem(name:"Chicken breast",category:"Meat & Seafood",quantity:"1",size:"lb"))
+    #expect(response.alternatives.count==5)
+    #expect(response.alternatives.contains{$0.name=="Turkey breast"})
+    #expect(!response.usedAI)
+}

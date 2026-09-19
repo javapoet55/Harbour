@@ -95,6 +95,11 @@ struct TaskDetailsView: View {
         HStack {
             VStack(alignment: .leading, spacing: 5) {
                 Text("TASK DETAILS").font(.caption.weight(.bold)).tracking(1.7).foregroundStyle(Color.nexdoIndigo)
+                if let lifeReminderLabel = currentTask.lifeReminderLabel {
+                    Label(lifeReminderLabel, systemImage: "sparkles")
+                        .font(.caption.weight(.semibold)).foregroundStyle(Color.nexdoMagenta)
+                        .accessibilityLabel("Smart reminder: \(lifeReminderLabel)")
+                }
                 Text(draft.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? currentTask.title : draft.title)
                     .font(.title3.weight(.semibold))
                     .lineLimit(2)

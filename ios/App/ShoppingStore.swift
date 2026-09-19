@@ -6,6 +6,7 @@ struct ShoppingInput:Encodable {
     var title:String;var date:String;var timeZone:String;var weekly:Bool;var items:[GroceryItem]
     init(_ list:GroceryList){title=list.title;date=list.date;timeZone=list.timeZone;weekly=list.weekly;items=list.items}
 }
+private struct ShoppingAlternativeInput:Encodable {let name:String;let category:String;let quantity:String;let size:String}
 @MainActor final class ShoppingStore:ObservableObject {
     @Published var lists:[GroceryList]=[]
     @Published var busy=false
@@ -31,6 +32,13 @@ struct ShoppingInput:Encodable {
         let body=ShoppingEnvelope(operation:"parse",id:nil,revision:nil,input:["text":text])
         let result:ShoppingResult=try await api.request("/api/shopping",method:"POST",body:JSONEncoder().encode(body))
         return result.items ?? []
+    }
+    func alternatives(for item:GroceryItem) async throws -> ShoppingAlternativesResponse {
+        let input=ShoppingAlternativeInput(name:item.name,category:item.category,quantity:item.quantity,size:item.size)
+        let body=ShoppingEnvelope(operation:"alternatives",id:nil,revision:nil,input:input)
+        do{return try await api.request("/api/shopping",method:"POST",body:JSONEncoder().encode(body))}
+        catch APIError.signedOut{throw APIError.signedOut}
+        catch{return .local(for:item)}
     }
     func credential() async throws -> VoiceTaskSession {
         try await api.request("/api/realtime/transcription-session",method:"POST",body:JSONSerialization.data(withJSONObject:["consent":true,"scope":"shopping"]),timeout:25)
