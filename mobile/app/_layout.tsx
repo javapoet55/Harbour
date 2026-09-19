@@ -1,5 +1,6 @@
 import { focusManager, QueryClientProvider, useQuery, useQueryClient } from '@tanstack/react-query';
 import { router, Stack } from 'expo-router';
+import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
 import { Alert, AppState } from 'react-native';
@@ -20,6 +21,21 @@ import { useAppearance } from '../src/store/appearance';
 import { useLastSignedIn } from '../src/store/lastSignedIn';
 import { useSession } from '../src/store/session';
 import { useTheme } from '../src/theme';
+
+/**
+ * ONE launch splash, not two. Left to itself the native splash hides on the first React frame, and the
+ * app then shows `SplashView` (app/index.tsx) while the launch `GET /api/me` decides — a second splash
+ * with the logo at a different size. Holding the native splash until that decision is made (see
+ * `RootNavigator`) makes the launch a single splash straight into Today or sign-in, as iOS's
+ * `RootView` does. Called at module scope, as the docs require, so it runs before the first frame.
+ */
+void SplashScreen.preventAutoHideAsync();
+
+/**
+ * The longest the native splash is held. A launch that is still retrying `/api/me` after this falls
+ * back to `SplashView`, which looks the same, rather than leaving the app apparently frozen.
+ */
+const SPLASH_HOLD_LIMIT_MS = 8_000;
 
 /**
  * `[.medium, .large]`, opening at `.medium`, with the drag indicator (iOS; Android draws its own).
@@ -85,7 +101,7 @@ export default function RootLayout() {
 export function RootNavigator() {
   const theme = useTheme();
   const queryClient = useQueryClient();
-  const { data: profile } = useMe();
+  const { data: profile, isPending: launchUndecided } = useMe();
   const status = useSession((state) => state.status);
   const setProfile = useSession((state) => state.setProfile);
   const clear = useSession((state) => state.clear);
@@ -94,6 +110,17 @@ export function RootNavigator() {
     if (profile) setProfile(profile);
     else if (profile === null) clear();
   }, [profile, setProfile, clear]);
+
+  // Release the native splash once the launch is decided (signed in, signed out, or the error screen),
+  // one frame late so the screen it reveals has already drawn. `hide()` is a no-op once hidden.
+  useEffect(() => {
+    if (launchUndecided) {
+      const limit = setTimeout(SplashScreen.hide, SPLASH_HOLD_LIMIT_MS);
+      return () => clearTimeout(limit);
+    }
+    const frame = requestAnimationFrame(SplashScreen.hide);
+    return () => cancelAnimationFrame(frame);
+  }, [launchUndecided]);
 
   /**
    * Nothing is left presented over the sign-in screen. Whatever ends the session — the Sign out

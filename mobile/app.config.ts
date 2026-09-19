@@ -84,10 +84,14 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       // (https://docs.expo.dev/versions/v57.0.0/sdk/splash-screen/).
       //
       // The image is transparent, so a single file works against both backgrounds below.
+      //
+      // The backgrounds and the logo size match `SplashView` (src/components/SplashView.tsx), which
+      // takes over if the splash is held too long (app/_layout.tsx): its mark is 116 wide, and the
+      // "N" fills about 85% of this image's width, so 137 draws it at the same size.
       'expo-splash-screen',
       {
         image: './assets/splash-icon.png',
-        imageWidth: 200,
+        imageWidth: 137,
         resizeMode: 'contain',
         backgroundColor: '#FFFFFF',
         dark: {
