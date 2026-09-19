@@ -4,6 +4,15 @@ import { Pressable } from 'react-native';
 import { Text } from '../../../src/components';
 import { stackHeaderOptions, useTheme} from '../../../src/theme';
 
+/** `[.medium, .large]`, opening at `.medium`, with the drag indicator (iOS; Android draws its own). */
+const SHEET_OPTIONS = {
+  presentation: 'formSheet' as const,
+  headerShown: false,
+  sheetAllowedDetents: [0.5, 1.0],
+  sheetInitialDetentIndex: 0,
+  sheetGrabberVisible: true,
+};
+
 /**
  * The Today tab's navigation stack.
  *
@@ -46,8 +55,15 @@ export default function TodayLayout() {
       />
       {/* `.sheet(isPresented:)` on the weather chip (RootView.swift:1338). */}
       <Stack.Screen name="weather" options={{ presentation: 'modal', title: 'Weather', headerRight: doneButton() }} />
-      {/* The four `navigationDestination`s (RootView.swift:1191-1196) all PUSH. */}
-      <Stack.Screen name="attention" options={{ title: 'Needs your attention' }} />
+      {/*
+        Needs attention and Reschedule all (Phase 11): `.sheet`s with `.presentationDetents([.medium,
+        .large])` (RootView.swift:1188-1191, TodayAttentionSheet.swift:98). A native form sheet is the
+        only real detent API here — Material `BottomSheetBehavior` on Android — and it needs no new
+        dependency. Both draw their own bar, since a form sheet has no navigator header on Android.
+      */}
+      <Stack.Screen name="attention" options={SHEET_OPTIONS} />
+      <Stack.Screen name="reschedule-all" options={SHEET_OPTIONS} />
+      {/* The remaining `navigationDestination`s (RootView.swift:1193-1200) all PUSH. */}
       <Stack.Screen name="schedule-check" options={{ title: 'Schedule check' }} />
       <Stack.Screen name="overdue" options={{ title: 'Unfinished deadlines' }} />
       <Stack.Screen name="weekly-summary" options={{ title: 'Weekly Summary' }} />

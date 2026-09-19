@@ -63,11 +63,13 @@ those. Everything else is worth reporting.
    five-day forecast.
 8. The greeting line and today's date read the same as the iPhone's.
 9. The range pills (Today / 5 days / All). Switch between them and compare the counts.
-10. The Weekly Summary card. Tap it → progress, focus time, accomplishments.
+10. **Quick Access**: Weekly / Moments / Shopping. Tap **Weekly** → progress, focus time,
+    accomplishments. **Moments** opens Important Moments. (Shopping opens a title-only placeholder until Run C.)
 11. From Weekly Summary, **Plan next week with Nexdo AI →** opens Ask with the prompt filled in, not
     sent.
-12. **Needs your attention**, if your account has anything overdue or conflicting. Tap a row.
-13. The Schedule Intelligence card: appointments, usable minutes, the recommendation.
+12. **Needs attention**, if your account has anything overdue or conflicting: one row, then a
+    half-height sheet you can drag to full height.
+13. The "Your day, in focus" card: "X Tasks · Y Appointments · Z Moments", then **Focus next**.
 14. Pull down to refresh. The spinner appears and the numbers reload.
 15. Tap the avatar → **My Page** opens as a sheet over Today.
 
@@ -153,7 +155,8 @@ now>".
 64. Change the display name and the working hours. **Nothing saves until you press Save settings.**
 65. Press **Save settings** → "Settings saved."
 66. Set working hours to end before they start and save. It refuses, with the iPhone's message.
-67. **Connect Google Calendar** — **expected to fail today**; see Known differences.
+67. **Connect Google Calendar** opens Google's sign-in. Close it without choosing an account and the
+    iPhone's "sign-in was cancelled or blocked" message appears.
 68. **Synchronize now** works. Read the message it returns.
 
 ### Part 10 — Read Loud (3 steps)
@@ -234,14 +237,14 @@ decision, or a server-side gap.
 
 | What you will see | Why |
 | --- | --- |
-| **Connect Google Calendar fails.** A blank page, then "authorization was cancelled." | A server fix is pending: the OAuth route needs the account's session cookie, which no in-app browser sends. **The iPhone app fails in exactly the same way.** |
 | **No Sign in with Apple** on the Android build. | Apple's SDK is iOS-only. Use email and password. |
 | **The voice orb does not animate.** The rings and bars are drawn still. | The iPhone animates them at 24 frames a second; a per-frame loop in JavaScript costs more than it shows. |
 | **No chime when voice starts listening.** | The iPhone plays a short `ListeningReady.wav`; that file is not in this repository. |
 | **The App Voice slider does not change a live voice conversation** — only Read Loud. | The iPhone applies a ×3 gain to the realtime audio track; the Android WebRTC library exposes no per-track gain. Use the phone's volume keys. |
 | **A phone call during a voice session does not end it.** | The iPhone ends the session on an audio interruption; Android raises no equivalent event. Tap Done. |
 | **Swiping a reminder away does nothing.** | iOS reports a dismissal; Android does not. Use the buttons. |
-| **Sheets are full-height** rather than the iPhone's part-height cards with a grab handle. | Android has no detent API. |
+| **Most sheets are full-height** rather than the iPhone's part-height cards. **Needs attention** and **Reschedule all** are the exception: they open half-height and drag to full, as on the iPhone. | Only those two were moved to the native form sheet so far (Phase 11). |
+| **The tab bar stays visible under the Needs attention sheet**, and **Reschedule all replaces it rather than stacking on top**. | Android's bottom-sheet presentation; the content and detents match. |
 | **Blurred "frosted" panels are flat.** | `.ultraThinMaterial` has no Android equivalent. |
 | **Some icons differ slightly** — the diagonal "opens elsewhere" arrow, the calendar-with-a-clock, the sunrise. | The icon set has no exact match; the closest glyph is used. |
 | **Fonts are the system font,** not the iPhone's SF Rounded in headings. | SF Rounded is an Apple font. |
@@ -340,6 +343,25 @@ docs/swift-to-rn-style-map.md   how SwiftUI idioms were translated
 ```
 
 Every ported file names the Swift view and line range it came from. Start there.
+
+### Phase 11 Run A test plan
+
+Run on the phone with the iPhone next to it, same account. Automated coverage is in the suites named.
+
+| # | Check | Expect | Automated |
+| --- | --- | --- | --- |
+| A1.1 | Today, top to bottom | Quick Access, "Your day, in focus", Action Needed (if due), protected time (if proposed), Focus next, Needs attention row. No Weekly Summary card, no Daily Briefing, no "What should I do now?" | `today-screen`, `today-actions` |
+| A1.2 | Quick Access statuses | "N upcoming" and "N items · Fri" match the iPhone; airplane mode + reopen → Shopping reads "View lists" | `today-screen`, `lib/todayQuickAccess` |
+| A1.3 | Moments / Shopping tiles | Moments opens Important Moments; Shopping opens the title-only "My Lists" placeholder | `today-screen` |
+| A1.4 | Summary line | "X Tasks · Y Appointments · Z Moments"; the total includes today's moments; 3/5 days shows 0 Moments | `today-screen`, `lib/todayQuickAccess` |
+| A1.5 | Focus next | With a suggestion: title, "N min · Fits your free time", Start focus, Other options; "…" → Other options / Dismiss suggestion. Without: "Find my next task" | `voice-screens` |
+| A1.6 | Attention row | "N overdue tasks · N other" and the count badge; tap → half-height sheet, drag to full | `today-screen`, `attention-sheet` |
+| A1.7 | Needs attention sheet | Complete a task with the circle; the calendar button opens the task; a schedule check opens inside the sheet with a back chevron; Close | `attention-sheet` |
+| A1.8 | Reschedule all | Start at defaults to an hour from now; "Reschedule N tasks" moves them back to back; a failure stops and shows the red line | `attention-sheet`, `lib/rescheduleAll` |
+| A2 | Ask by Voice | "Ask about tasks, calendar, important moments, or shopping lists…", examples "What birthdays are coming up?" and "Add two gallons of milk to my shopping list" | `voice-screens` |
+| A3.1 | Connect Google Calendar | Opens Google's account chooser (not "Sign in required"); the label reads "Connecting…" and the screen is locked until the browser closes | `account` |
+| A3.2 | Cancel the sign-in | The long "sign-in was cancelled or blocked…" alert | `account` |
+| A3.3 | With a connected calendar | Name, detail, "Synchronized … ago"; the toggle and its read-only caption; Disconnect → "Disconnect X?" / Keep it. **Not captured on iOS — check against the iPhone.** | `account`, `lib/calendarConnections` |
 
 ### Where the migration is documented
 

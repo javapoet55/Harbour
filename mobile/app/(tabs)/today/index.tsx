@@ -1,17 +1,21 @@
 import { useQueryClient } from '@tanstack/react-query';
-import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 
 import { useCoordinator } from '../../../src/actions/coordinator';
-import { GlassCard, TaskSymbol, Text } from '../../../src/components';
+import { GlassCard, Text } from '../../../src/components';
 import { TodayActionsView } from '../../../src/components/TodayActions';
-import { PersistentNextCard, ProtectedTimeCard } from '../../../src/components/TodayNextAction';
+import { FocusNextCard, ProtectedTimeCard } from '../../../src/components/TodayNextAction';
 import { FocusSessionStrip } from '../../../src/components/FocusSessionStrip';
-import { AttentionCard } from '../../../src/components/AttentionCard';
+import { TodayAttentionRow } from '../../../src/components/TodayAttentionRow';
 import { TodayIntelligenceCard } from '../../../src/components/TodayIntelligenceCard';
-import { NEXDO_GRADIENT, TasksTopBar, TodayBackdrop } from '../../../src/components/TodayShell';
+import { TodayQuickAccess } from '../../../src/components/TodayQuickAccess';
+import { TasksTopBar, TodayBackdrop } from '../../../src/components/TodayShell';
+import { overdueResults } from '../../../src/lib/overdueTasks';
+import { todayMoments, upcomingMomentCount } from '../../../src/features/moments/domain';
+import { useMomentList } from '../../../src/features/moments/store';
+import { shoppingSubtitle, showsAttentionRow } from '../../../src/lib/todayQuickAccess';
 import {
   buildSchedule,
   dateLabel,
@@ -29,6 +33,7 @@ import {
   useProtectedTime,
   useRespondToProtectedTime,
 } from '../../../src/query/useNextAction';
+import { useShoppingLists } from '../../../src/query/useQuickAccess';
 import { useTasks } from '../../../src/query/useTasks';
 import { canStartRecommendation, useAgenda, useScheduleIntelligence, useWeather } from '../../../src/query/useToday';
 import { useFocus } from '../../../src/store/focus';
@@ -36,28 +41,29 @@ import { useSession } from '../../../src/store/session';
 import { brand, useTheme } from '../../../src/theme';
 
 /**
- * Port of `TodayView` (ios/App/RootView.swift), built from `body` at `:1017-1198`.
+ * Port of `TodayView` (ios/App/RootView.swift:925), built from `body` at `:1032-1203` as of Phase 11
+ * (commits d444b37, e0a7bcd, 86a2b49, 63d9542).
  *
- * Child view files followed: `TodayBackdrop` (`RootView.swift:1534`), `TodayTopBar` (`:1283`),
- * `TodayIntelligenceCard` (`:1358`), `TodayScheduleRow` (`:1507`), `DoNowView`
+ * Child view files followed: `TodayBackdrop` (`RootView.swift:1538`), `TodayTopBar` (`:1298`),
+ * `TodayQuickAccess` (`ios/App/TodayQuickAccess.swift:4-97`), `TodayIntelligenceCard` (`:1373`),
+ * `TodayScheduleRow` (`:1511`), `TodayActionsView` (`ios/App/TodayActionsView.swift:9`),
+ * `TodayAttentionSheet` (`ios/App/TodayAttentionSheet.swift:4`), `DoNowView`
  * (`ios/App/DoNowView.swift:3`), `FocusSessionStrip` (`ios/App/FocusSessionStrip.swift:25`).
  *
  * Sections in `body` order:
  *   1. `TodayBackdrop()` — full, not subtle
- *   2. `TodayTopBar(name:temperature:add:account:)`
- *   3. the greeting and the date
- *   4. the `TodayRange` segmented row
- *   5. the Weekly Summary card, or the Daily Briefing row when the queue has immediate actions
- *   6. `TodayActionsView` — Today only  [RUN B]
- *   7. the protected-time proposal — Today only  [RUN B]
- *   8. the "What should I do now?" recommendation card — Today only  [RUN B]
- *   9. `TodayIntelligenceCard`
- *  10. the "Needs your attention" list — Today only  [RUN B]
+ *   2. `TodayTopBar(name:temperature:add:account:)` (`:1041-1046`)
+ *   3. the greeting and the date (`:1048-1058`)
+ *   4. the `TodayRange` segmented row (`:1060-1076`)
+ *   5. `TodayQuickAccess` (`:1078`) — replaced the Weekly Summary card and the Daily Briefing row
+ *   6. `TodayIntelligenceCard` (`:1080-1096`), with the moment count
+ *   7. `TodayActionsView` — Today only (`:1098-1100`)
+ *   8. the protected-time proposal — Today only (`:1102-1113`)
+ *   9. the "Focus next" card — Today only (`:1115-1144`)
+ *  10. the "Needs attention" row — Today only, when anything needs attention (`:1146-1166`)
  *
- * RUN A SCOPE: sections 6-8 and 10 all hang off state this run does not build yet —
- * `TaskActionCoordinator` (Phase 8), `model.protectedTime` and `model.persistentNext`
- * (`/api/protected-time` and the next-action service), and `scheduleIntelligence.attention`. They are
- * Run B, and are marked below so the order is preserved when they land.
+ * Presented from here: Needs attention as a form sheet (`:1188-1191`), which replaced both the pushed
+ * `attentionDetails` list and the inline "Needs your attention" section.
  */
 export default function Today() {
   const theme = useTheme();
@@ -69,6 +75,10 @@ export default function Today() {
   const agenda = useAgenda(5);
   const weather = useWeather();
   const intelligence = useScheduleIntelligence();
+  // `ImportantMomentsStore` (activated and refreshed by the root layout, RootView.swift:59-81) and the
+  // Quick Access `ShoppingStore` (TodayQuickAccess.swift:16-20).
+  const moments = useMomentList();
+  const shopping = useShoppingLists(profile !== null);
 
   // `TodayActionQueue(actions:tasks:now:timeZone:)` (RootView.swift:1137). Swift rebuilds it inside a
   // `TimelineView(.periodic(by: 60))`, so the relative labels tick over once a minute.
@@ -109,6 +119,14 @@ export default function Today() {
   const attention = intelligence.data?.today.attention ?? [];
   const attentionCount =
     range === 1 ? (intelligence.data ? attention.length : (loadedAgenda?.overdue.length ?? 0)) : (loadedAgenda?.overdue.length ?? 0);
+
+  // `OverdueTasks.results(model.tasks, now: context.date)` and the other attention items
+  // (RootView.swift:1146-1147). `context.date` is the minute timeline, so `queueNow`.
+  const overdueCount = overdueResults(loadedTasks?.tasks ?? [], queueNow).length;
+  const otherCount = attention.filter((item) => item.id !== 'overdue').length;
+
+  // `range == .today ? moments.today.count : 0` (RootView.swift:1084).
+  const momentCount = range === 1 ? todayMoments(moments, queueNow).length : 0;
 
   const refresh = () => {
     void tasks.refetch();
@@ -181,86 +199,47 @@ export default function Today() {
         </View>
         </GlassCard>
 
-        {/*
-          The Weekly Summary card (RootView.swift:1070-1089), and the compact **Daily Briefing** row
-          Swift shows INSTEAD when the action queue has immediate actions (`:1063-1070`).
-        */}
-        {queue.hasImmediateActions ? (
-          // `.padding(16).background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 20))`
-          // (RootView.swift:1070) — the compact row is glass too, not an opaque card.
-          <GlassCard radius={20} shadow={false} stroke={withAlpha(brand.nexdoIndigo, 0.12)}>
-          <View style={styles.briefingRow}>
-            <Pressable
-              accessibilityLabel="Daily Briefing"
-              accessibilityRole="button"
-              onPress={() => router.push({ pathname: '/ask', params: { prompt: DAILY_BRIEFING_PROMPT } })}
-              style={styles.briefingButton}
-              testID="today-daily-briefing"
-            >
-              <TaskSymbol name="chart.bar.xaxis" size={17} color={theme.colors.tint} />
-              <Text style={[styles.summaryTitle, { color: theme.colors.tint }]}>Daily Briefing</Text>
-            </Pressable>
-            <View style={styles.grow} />
-            <Pressable
-              accessibilityLabel="Weekly Summary"
-              accessibilityRole="button"
-              onPress={() => router.push('/today/weekly-summary')}
-              testID="today-weekly-summary-compact"
-            >
-              <Text style={[styles.caption, { color: theme.colors.tint }]}>Weekly Summary</Text>
-            </Pressable>
-          </View>
-          </GlassCard>
-        ) : (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityHint="Opens your weekly progress report"
-            onPress={() => router.push('/today/weekly-summary')}
-            testID="today-weekly-summary"
-          >
-            {/* `.background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 20))` with an
-                indigo 12% stroke and no shadow (RootView.swift:1084-1085). An opaque `surface` fill
-                reads as flat white against the lavender backdrop; measured, Swift's card sits at
-                (238, 237, 240) with the backdrop showing through. */}
-            <GlassCard radius={20} shadow={false} stroke={withAlpha(brand.nexdoIndigo, 0.12)}>
-              <View style={styles.summaryCard}>
-                {/* `.background(NexdoTheme.gradient, in: RoundedRectangle(cornerRadius: 14))`
-                    (RootView.swift:1076) — the brand gradient, not a flat indigo fill. */}
-                <LinearGradient
-                  colors={[...NEXDO_GRADIENT]}
-                  start={{ x: 0, y: 0.5 }}
-                  end={{ x: 1, y: 0.5 }}
-                  style={styles.summaryIcon}
-                >
-                  <TaskSymbol name="chart.bar.xaxis" size={20} color="#FFFFFF" />
-                </LinearGradient>
-                <View style={styles.grow}>
-                  <Text style={[styles.summaryTitle, { color: theme.colors.ink }]}>Weekly Summary</Text>
-                  <Text style={[styles.caption, { color: theme.colors.secondary }]}>
-                    Review progress, focus time, and accomplishments
-                  </Text>
-                </View>
-                <TaskSymbol name="chevron.right" size={15} color={theme.colors.secondary} />
-              </View>
-            </GlassCard>
-          </Pressable>
-        )}
+        {/* Section 5: Quick Access (RootView.swift:1078). "Weekly" pushes Weekly Summary; Moments and
+            Shopping push their screens (TodayQuickAccess.swift:64-76). */}
+        <TodayQuickAccess
+          momentsSubtitle={`${upcomingMomentCount(moments, queueNow)} upcoming`}
+          onMoments={() => router.push('/moments')}
+          onShopping={() => router.push('/shopping')}
+          onWeekly={() => router.push('/today/weekly-summary')}
+          shoppingSubtitle={shoppingSubtitle(shopping.data?.lists ?? [], shopping.isError)}
+        />
 
         {/* `FocusSessionStrip` renders itself only while a session is live. */}
         <FocusSessionStrip />
 
-        {/* Section 6: `TodayActionsView` (RootView.swift:1136-1143). Renders nothing when the queue is
-            empty, which is what an account with no contact-shaped tasks sees. */}
-        <TodayActionsView
-          now={queueNow}
-          onOpen={(action, channel) => useCoordinator.getState().open(action.id, channel ?? action.preferredAction ?? null)}
-          onTask={(taskId) => router.push(`/task/${taskId}`)}
-          onViewAll={() => router.push('/action/queue')}
-          queue={queue}
-          timeZone={timeZone}
+        {/* Section 6 (RootView.swift:1080-1096). */}
+        <TodayIntelligenceCard
+          range={range}
+          appointments={counts.appointments}
+          taskCount={counts.tasks}
+          momentCount={momentCount}
+          attentionCount={attentionCount}
+          schedule={schedule}
+          searchSchedule={schedule}
+          onOpenTask={(task) => router.push(`/task/${task.id}`)}
+          onAttention={() => router.push('/today/attention')}
+          onCalendar={() => router.push('/calendar')}
         />
 
-        {/* Section 7: the protected-time proposal (RootView.swift:1095-1106). Today only. */}
+        {/* Section 7: `TodayActionsView` (RootView.swift:1098-1100), Today only. Renders nothing when the
+            queue is empty, which is what an account with no contact-shaped tasks sees. */}
+        {range === 1 ? (
+          <TodayActionsView
+            now={queueNow}
+            onOpen={(action, channel) => useCoordinator.getState().open(action.id, channel ?? action.preferredAction ?? null)}
+            onTask={(taskId) => router.push(`/task/${taskId}`)}
+            onViewAll={() => router.push('/action/queue')}
+            queue={queue}
+            timeZone={timeZone}
+          />
+        ) : null}
+
+        {/* Section 8: the protected-time proposal (RootView.swift:1102-1113). Today only. */}
         {range === 1 && protectedTime.data ? (
           <ProtectedTimeCard
             busy={respond.isPending}
@@ -283,20 +262,21 @@ export default function Today() {
           />
         ) : null}
 
-        {/* Section 8: the persistent next-action card (RootView.swift:1108-1126). Today only. */}
-        {range === 1 && bestAction && recommendation ? (
-          <PersistentNextCard
-            availableWindowMinutes={recommendation.nextAction?.availableWindowMinutes ?? 0}
-            best={bestAction}
+        {/* Section 9: "Focus next" (RootView.swift:1115-1144). Today only, with or without a suggestion. */}
+        {range === 1 ? (
+          <FocusNextCard
+            best={recommendation ? bestAction : null}
             busy={focusBusy}
-            canStart={canStartRecommendation(recommendation)}
+            canStart={recommendation ? canStartRecommendation(recommendation) : false}
             onDismiss={() => {
+              // `dismissPersistentNext()`: `guard let id = persistentNext?.contextActionId else { return }`.
               const id = nextAction.data?.contextActionId;
               if (id) dismissNext.mutate({ contextActionId: id });
             }}
             onOtherOptions={() => router.push('/today/do-now')}
             onStart={() => {
-              // `startRecommendedFocus(_:)` (NexdoApp.swift:611-616).
+              // `focusStartButton` (RootView.swift:1205-1215) → `startRecommendedFocus(_:)`.
+              if (!bestAction) return;
               const task = loadedTasks?.tasks.find((item) => item.id === bestAction.taskId);
               if (!task) {
                 Alert.alert('Unable to complete request', 'Your tasks changed. Refresh Tasks and try again.');
@@ -309,42 +289,9 @@ export default function Today() {
           />
         ) : null}
 
-        <TodayIntelligenceCard
-          range={range}
-          appointments={counts.appointments}
-          taskCount={counts.tasks}
-          attentionCount={attentionCount}
-          schedule={schedule}
-          searchSchedule={schedule}
-          onOpenTask={(task) => router.push(`/task/${task.id}`)}
-          onAttention={() => router.push('/today/attention')}
-          onAsk={() => router.push('/today/do-now')}
-          onCalendar={() => router.push('/calendar')}
-        />
-
-        {/* Section 10 of `body`: the "Needs your attention" list (RootView.swift:1145-1166). Today only. */}
-        {range === 1 && attention.length > 0 ? (
-          <View style={[styles.attentionCard, { backgroundColor: theme.colors.surface, borderColor: withAlpha(theme.colors.separator, 0.3) }]}>
-            <View style={styles.attentionHeader}>
-              <TaskSymbol name="exclamationmark.triangle.fill" size={17} color={theme.colors.danger} />
-              <Text style={[styles.attentionTitle, { color: theme.colors.danger }]}>Needs your attention</Text>
-            </View>
-            {[...attention]
-              .sort((left, right) => (left.id === 'overdue' ? -1 : right.id === 'overdue' ? 1 : 0))
-              .map((item) => (
-                <AttentionCard
-                  key={item.id}
-                  item={item}
-                  opensTasks={item.id === 'overdue' || (item.taskIds?.length ?? 0) > 0}
-                  onPress={
-                    item.id === 'overdue'
-                      ? () => router.push('/today/overdue')
-                      : () => router.push({ pathname: '/today/schedule-check', params: { id: item.id } })
-                  }
-                  testID={`today-attention-${item.id}`}
-                />
-              ))}
-          </View>
+        {/* Section 10: the attention row (RootView.swift:1146-1166), which opens Needs attention. */}
+        {range === 1 && showsAttentionRow(overdueCount, otherCount) ? (
+          <TodayAttentionRow onPress={() => router.push('/today/attention')} other={otherCount} overdue={overdueCount} />
         ) : null}
       </ScrollView>
     </View>
@@ -364,10 +311,6 @@ function withAlpha(color: string, alpha: number): string {
   return `rgba(${(int >> 16) & 255}, ${(int >> 8) & 255}, ${int & 255}, ${alpha})`;
 }
 
-/** `onPlanWeek(…)` on the Daily Briefing button (RootView.swift:1065). */
-const DAILY_BRIEFING_PROMPT =
-  "Give me today's daily briefing, prioritizing my due contact actions and upcoming calendar commitments.";
-
 const styles = StyleSheet.create({
   fill: { flex: 1 },
   // `.padding(.horizontal, 20).padding(.top, 12).padding(.bottom, 32)` with `LazyVStack(spacing: 16)`.
@@ -379,16 +322,4 @@ const styles = StyleSheet.create({
   rangeOption: { flex: 1, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
   rangeSelected: { backgroundColor: '#2E619E', borderRadius: 14 },
   rangeLabel: { fontSize: 15, lineHeight: 20, fontWeight: '500' },
-  // The compact Daily Briefing row (RootView.swift:1063-1070): `.padding(16)`, corner radius 20.
-  briefingRow: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16 },
-  briefingButton: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 32 },
-  summaryCard: { flexDirection: 'row', alignItems: 'center', gap: 14, padding: 16 },
-  summaryIcon: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
-  summaryTitle: { fontSize: 17, lineHeight: 22, fontWeight: '600' },
-  caption: { fontSize: 12, lineHeight: 16 },
-  grow: { flex: 1 },
-  // `.padding(18)`, corner radius 24 (RootView.swift:1163-1165).
-  attentionCard: { gap: 12, padding: 18, borderRadius: 24, borderWidth: StyleSheet.hairlineWidth },
-  attentionHeader: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  attentionTitle: { fontSize: 17, lineHeight: 22, fontWeight: '600' },
 });

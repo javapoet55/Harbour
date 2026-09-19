@@ -10,11 +10,18 @@ import { useSession } from '../store/session';
 
 const mockPush = jest.fn();
 const mockBack = jest.fn();
-jest.mock('expo-router', () => ({
-  router: { push: (...args: unknown[]) => mockPush(...args), replace: jest.fn(), back: (...args: unknown[]) => mockBack(...args) },
-  useLocalSearchParams: () => ({}),
-  Stack: { Screen: () => null },
-}));
+const mockSetOptions = jest.fn();
+const mockSetParentOptions = jest.fn();
+jest.mock('expo-router', () => {
+  const { useEffect } = require('react') as typeof import('react');
+  return {
+    router: { push: (...args: unknown[]) => mockPush(...args), replace: jest.fn(), back: (...args: unknown[]) => mockBack(...args) },
+    useLocalSearchParams: () => ({}),
+    useNavigation: () => ({ setOptions: mockSetOptions, getParent: () => ({ setOptions: mockSetParentOptions }) }),
+    useFocusEffect: (effect: () => void | (() => void)) => useEffect(effect, [effect]),
+    Stack: { Screen: () => null },
+  };
+});
 
 const mockLaunchLibrary = jest.fn();
 jest.mock('expo-image-picker', () => ({
@@ -41,6 +48,10 @@ const mockUpdatePhoto = jest.fn();
 const mockSync = jest.fn();
 const mockDelete = jest.fn();
 const mockLogout = jest.fn();
+const mockConnections = jest.fn();
+const mockSetWrites = jest.fn();
+const mockDisconnect = jest.fn();
+const mockConnectToken = jest.fn();
 jest.mock('../api', () => ({
   ...jest.requireActual('../api'),
   endpoints: {
@@ -50,6 +61,10 @@ jest.mock('../api', () => ({
     syncCalendars: (...args: unknown[]) => mockSync(...args),
     deleteAccount: (...args: unknown[]) => mockDelete(...args),
     logout: (...args: unknown[]) => mockLogout(...args),
+    calendarConnections: (...args: unknown[]) => mockConnections(...args),
+    setCalendarWrites: (...args: unknown[]) => mockSetWrites(...args),
+    disconnectCalendar: (...args: unknown[]) => mockDisconnect(...args),
+    calendarConnectToken: (...args: unknown[]) => mockConnectToken(...args),
   },
 }));
 
@@ -97,9 +112,11 @@ function show(node: React.ReactElement, seed: Profile | null = profile()) {
 }
 
 beforeEach(() => {
-  for (const mock of [mockPush, mockBack, mockMe, mockUpdateSettings, mockUpdatePhoto, mockSync, mockDelete, mockLogout, mockLaunchLibrary, mockOpenAuthSession, mockEncodePhoto]) {
+  for (const mock of [mockPush, mockBack, mockMe, mockUpdateSettings, mockUpdatePhoto, mockSync, mockDelete, mockLogout, mockLaunchLibrary, mockOpenAuthSession, mockEncodePhoto, mockConnections, mockSetWrites, mockDisconnect, mockConnectToken, mockSetOptions, mockSetParentOptions]) {
     mock.mockReset();
   }
+  mockConnections.mockResolvedValue({ connections: [] });
+  mockConnectToken.mockResolvedValue({ token: 'one-time-token' });
   mockMe.mockResolvedValue({ user: profile() });
   useSession.setState({ status: 'signedIn', profile: profile() });
   useConsent.setState({ ai: false, voice: false });
@@ -408,8 +425,8 @@ describe('the Settings screen', () => {
 
   /** "Calendars and privacy" (ProfileView.swift:223-244). */
   describe('calendars and privacy', () => {
-    it('opens the Google session at the start URL with the nexdo callback scheme', async () => {
-      mockOpenAuthSession.mockResolvedValue({ type: 'success', url: 'nexdo://?calendar=connected' });
+    it('fetches a connect token FIRST, then opens the start URL carrying it (3a26c52)', async () => {
+      mockOpenAuthSession.mockResolvedValue({ type: 'success', url: 'nexdo://calendar-connected?calendar=google-connected' });
       mockMe.mockResolvedValue({ user: profile() });
       await show(<Settings />);
       await waitFor(() => expect(screen.getByTestId('settings-connect-google')).toBeTruthy());
@@ -417,8 +434,10 @@ describe('the Settings screen', () => {
       fireEvent.press(screen.getByTestId('settings-connect-google'));
 
       await waitFor(() => expect(mockOpenAuthSession).toHaveBeenCalled());
+      expect(mockConnectToken).toHaveBeenCalledWith('google');
+      expect(mockConnectToken.mock.invocationCallOrder[0]).toBeLessThan(mockOpenAuthSession.mock.invocationCallOrder[0]);
       const [url, scheme] = mockOpenAuthSession.mock.calls[0] as [string, string];
-      expect(url).toMatch(/\/api\/calendar\/oauth\/google\/start\?native=1$/);
+      expect(url).toBe('https://api.example.com/api/calendar/oauth/google/start?native=1&connect_token=one-time-token');
       expect(scheme).toBe('nexdo://');
       await waitFor(() =>
         expect(screen.getByTestId('settings-message')).toHaveTextContent('Google Calendar connected and synchronized.'),
@@ -437,16 +456,65 @@ describe('the Settings screen', () => {
       );
     });
 
-    it('reports a dismissed session as cancelled', async () => {
-      mockOpenAuthSession.mockResolvedValue({ type: 'dismiss' });
+    it('reports a closed browser with Swift’s cancelled-login message (the error-cancelled capture)', async () => {
+      mockOpenAuthSession.mockResolvedValue({ type: 'cancel' });
       await show(<Settings />);
       await waitFor(() => expect(screen.getByTestId('settings-connect-google')).toBeTruthy());
 
       fireEvent.press(screen.getByTestId('settings-connect-google'));
 
       await waitFor(() =>
-        expect(screen.getByTestId('settings-failure')).toHaveTextContent('Google Calendar authorization was cancelled.'),
+        expect(screen.getByTestId('settings-failure')).toHaveTextContent(
+          'Google Calendar connection failed: sign-in was cancelled or blocked. If Google showed “OAuth client was disabled”, enable that Web client in Google Cloud Console → APIs & Services → Credentials, and keep the redirect URI https://harbour-production-f8a0.up.railway.app/api/calendar/oauth/google/callback.',
+        ),
       );
+      expect(Alert.alert).toHaveBeenCalledWith('Could not update profile', expect.stringContaining('sign-in was cancelled or blocked'), expect.any(Array));
+    });
+
+    it('never opens the browser when the connect token cannot be issued', async () => {
+      mockConnectToken.mockResolvedValue({ token: '' });
+      await show(<Settings />);
+      await waitFor(() => expect(screen.getByTestId('settings-connect-google')).toBeTruthy());
+
+      fireEvent.press(screen.getByTestId('settings-connect-google'));
+
+      await waitFor(() =>
+        expect(screen.getByTestId('settings-failure')).toHaveTextContent('Nexdo could not start the calendar connection. Please try again.'),
+      );
+      expect(mockOpenAuthSession).not.toHaveBeenCalled();
+    });
+
+    it('surfaces the API’s own message when the token request fails', async () => {
+      mockConnectToken.mockRejectedValue(new Error('Sign in required'));
+      await show(<Settings />);
+      await waitFor(() => expect(screen.getByTestId('settings-connect-google')).toBeTruthy());
+
+      fireEvent.press(screen.getByTestId('settings-connect-google'));
+
+      await waitFor(() => expect(screen.getByTestId('settings-failure')).toHaveTextContent('Sign in required'));
+      expect(mockOpenAuthSession).not.toHaveBeenCalled();
+    });
+
+    it('shows Connecting…, blocks the screen and the sheet, and never shows Saving… while connecting', async () => {
+      let finish: (value: unknown) => void = () => undefined;
+      mockOpenAuthSession.mockReturnValue(new Promise((resolve) => (finish = resolve)));
+      await show(<Settings />);
+      await waitFor(() => expect(screen.getByTestId('settings-connect-google')).toBeTruthy());
+
+      fireEvent.press(screen.getByTestId('settings-connect-google'));
+
+      await waitFor(() => expect(screen.getByTestId('settings-connect-label')).toHaveTextContent('Connecting…'));
+      expect(screen.getByTestId('settings-column').props.pointerEvents).toBe('none');
+      expect(screen.getByTestId('settings-back').props.accessibilityState).toMatchObject({ disabled: true });
+      expect(mockSetOptions).toHaveBeenLastCalledWith({ gestureEnabled: false });
+      expect(mockSetParentOptions).toHaveBeenLastCalledWith({ gestureEnabled: false });
+      expect(screen.getByText('Save settings')).toBeTruthy();
+      expect(screen.queryByText('Saving…')).toBeNull();
+
+      finish({ type: 'cancel' });
+      await waitFor(() => expect(screen.getByTestId('settings-connect-label')).toHaveTextContent('Connect Google Calendar'));
+      expect(screen.getByTestId('settings-column').props.pointerEvents).toBe('auto');
+      expect(mockSetParentOptions).toHaveBeenLastCalledWith({ gestureEnabled: true });
     });
 
     it('synchronizes now and shows the server’s outcome', async () => {
@@ -499,5 +567,141 @@ describe('the Settings screen', () => {
       await waitFor(() => expect(mockDelete).toHaveBeenCalled());
       await waitFor(() => expect(useSession.getState().status).toBe('signedOut'));
     });
+  });
+});
+
+/**
+ * The connected-calendar list (ProfileView.swift:290-331, commit 3ef906d). No capture exists — the
+ * demo account has no connected calendar — so these assert the Swift source.
+ */
+describe('calendar connections', () => {
+  const GOOGLE = {
+    id: 'c1',
+    provider: 'google',
+    accountEmail: 'ada@example.com',
+    calendarName: 'Work',
+    status: 'connected',
+    lastSyncedAt: new Date(Date.now() - 5 * 60_000).toISOString(),
+    writeEnabled: false,
+  };
+
+  it('says "No calendars connected yet." once an empty list has loaded', async () => {
+    await show(<Settings />);
+    await waitFor(() => expect(screen.getByTestId('settings-no-calendars')).toHaveTextContent('No calendars connected yet.'));
+    expect(screen.getByTestId('settings-connect-label')).toHaveTextContent('Connect Google Calendar');
+  });
+
+  it('treats a failed load as an empty list, as Swift does', async () => {
+    mockConnections.mockRejectedValue(new Error('offline'));
+    await show(<Settings />);
+    await waitFor(() => expect(screen.getByTestId('settings-no-calendars')).toBeTruthy());
+    expect(screen.queryByTestId('settings-failure')).toBeNull();
+  });
+
+  it('lists each connection with its name, detail and last sync, and relabels the button', async () => {
+    mockConnections.mockResolvedValue({ connections: [GOOGLE] });
+    await show(<Settings />);
+
+    await waitFor(() => expect(screen.getByTestId('settings-connection-c1')).toBeTruthy());
+    expect(screen.getByText('Work')).toBeTruthy();
+    expect(screen.getByText('Google Calendar · ada@example.com')).toBeTruthy();
+    expect(screen.getByText('Synchronized 5 minutes ago')).toBeTruthy();
+    expect(screen.getByTestId('settings-connect-label')).toHaveTextContent('Connect another calendar');
+    expect(screen.queryByTestId('settings-no-calendars')).toBeNull();
+  });
+
+  it('names an unhealthy status in the detail', async () => {
+    mockConnections.mockResolvedValue({ connections: [{ ...GOOGLE, status: 'ERROR', calendarName: null }] });
+    await show(<Settings />);
+    // With no calendar name, the account is the name, so it is not repeated in the detail.
+    await waitFor(() => expect(screen.getByText('Google Calendar · Error')).toBeTruthy());
+    expect(screen.getByText('ada@example.com')).toBeTruthy();
+  });
+
+  it('shows the read-only caption only while writes are off', async () => {
+    mockConnections.mockResolvedValue({ connections: [GOOGLE, { ...GOOGLE, id: 'c2', writeEnabled: true }] });
+    await show(<Settings />);
+
+    await waitFor(() => expect(screen.getByTestId('settings-read-only-c1')).toBeTruthy());
+    expect(screen.getByTestId('settings-read-only-c1')).toHaveTextContent(
+      'Read-only: events come into Nexdo, but tasks you schedule are not added to this calendar.',
+    );
+    expect(screen.queryByTestId('settings-read-only-c2')).toBeNull();
+  });
+
+  it('turns writes on with PATCH { id, writeEnabled }, reloads the list and says so', async () => {
+    mockConnections.mockResolvedValue({ connections: [GOOGLE] });
+    mockSetWrites.mockResolvedValue({ ok: true });
+    await show(<Settings />);
+    await waitFor(() => expect(screen.getByTestId('settings-writes-c1')).toBeTruthy());
+    const loads = mockConnections.mock.calls.length;
+
+    fireEvent(screen.getByTestId('settings-writes-c1'), 'valueChange', true);
+
+    await waitFor(() => expect(mockSetWrites).toHaveBeenCalledWith('c1', true));
+    await waitFor(() =>
+      expect(screen.getByTestId('settings-message')).toHaveTextContent('Nexdo can now add your scheduled tasks to this calendar.'),
+    );
+    expect(mockConnections.mock.calls.length).toBeGreaterThan(loads);
+  });
+
+  it('turns writes off with Swift’s message', async () => {
+    mockConnections.mockResolvedValue({ connections: [{ ...GOOGLE, writeEnabled: true }] });
+    mockSetWrites.mockResolvedValue({ ok: true });
+    await show(<Settings />);
+    await waitFor(() => expect(screen.getByTestId('settings-writes-c1')).toBeTruthy());
+
+    fireEvent(screen.getByTestId('settings-writes-c1'), 'valueChange', false);
+
+    await waitFor(() => expect(screen.getByTestId('settings-message')).toHaveTextContent('Nexdo will no longer add events to this calendar.'));
+  });
+
+  it('asks "Disconnect X?" with Disconnect and Keep it, and Keep it does nothing', async () => {
+    mockConnections.mockResolvedValue({ connections: [GOOGLE] });
+    await show(<Settings />);
+    await waitFor(() => expect(screen.getByTestId('settings-disconnect-c1')).toBeTruthy());
+
+    fireEvent.press(screen.getByTestId('settings-disconnect-c1'));
+
+    const [title, body, buttons] = (Alert.alert as jest.Mock).mock.calls.at(-1) as [string, string, { text: string; style: string; onPress?: () => void }[]];
+    expect(title).toBe('Disconnect Work?');
+    expect(body).toBe('Events imported from this calendar are removed with the connection.');
+    expect(buttons.map((button) => [button.text, button.style])).toEqual([
+      ['Disconnect', 'destructive'],
+      ['Keep it', 'cancel'],
+    ]);
+    buttons[1].onPress?.();
+    expect(mockDisconnect).not.toHaveBeenCalled();
+  });
+
+  it('Disconnect sends DELETE ?id= and reports it', async () => {
+    mockConnections.mockResolvedValue({ connections: [GOOGLE] });
+    mockDisconnect.mockResolvedValue({ ok: true });
+    await show(<Settings />);
+    await waitFor(() => expect(screen.getByTestId('settings-disconnect-c1')).toBeTruthy());
+
+    fireEvent.press(screen.getByTestId('settings-disconnect-c1'));
+    mockConnections.mockResolvedValue({ connections: [] });
+    const buttons = (Alert.alert as jest.Mock).mock.calls.at(-1)[2] as { text: string; onPress?: () => void }[];
+    buttons.find((button) => button.text === 'Disconnect')?.onPress?.();
+
+    await waitFor(() => expect(mockDisconnect).toHaveBeenCalledWith('c1'));
+    await waitFor(() =>
+      expect(screen.getByTestId('settings-message')).toHaveTextContent('Calendar disconnected. Imported events were removed with the connection.'),
+    );
+    await waitFor(() => expect(screen.getByTestId('settings-no-calendars')).toBeTruthy());
+  });
+
+  it('shows a failed disconnect in the profile alert', async () => {
+    mockConnections.mockResolvedValue({ connections: [GOOGLE] });
+    mockDisconnect.mockRejectedValue(new Error('Not found'));
+    await show(<Settings />);
+    await waitFor(() => expect(screen.getByTestId('settings-disconnect-c1')).toBeTruthy());
+
+    fireEvent.press(screen.getByTestId('settings-disconnect-c1'));
+    const buttons = (Alert.alert as jest.Mock).mock.calls.at(-1)[2] as { text: string; onPress?: () => void }[];
+    buttons.find((button) => button.text === 'Disconnect')?.onPress?.();
+
+    await waitFor(() => expect(screen.getByTestId('settings-failure')).toHaveTextContent('Not found'));
   });
 });
