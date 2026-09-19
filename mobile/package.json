@@ -44,6 +44,7 @@
     "react-native-safe-area-context": "~5.7.0",
     "react-native-screens": "~4.26.0",
     "react-native-webrtc": "^124.0.8",
+    "upng-js": "^2.1.0",
     "zod": "^4.6.5",
     "zustand": "^5.0.15"
   },
@@ -52,6 +53,7 @@
     "@testing-library/react-native": "^14.0.1",
     "@types/jest": "^29.5.14",
     "@types/react": "~19.2.2",
+    "@types/upng-js": "^2.1.5",
     "eslint": "^9.39.5",
     "eslint-config-expo": "~57.0.2",
     "jest": "^29.7.0",

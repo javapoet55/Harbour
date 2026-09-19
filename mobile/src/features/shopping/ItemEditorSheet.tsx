@@ -1,6 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRef, useState } from 'react';
-import { ActivityIndicator, Image, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Image, Pressable, StyleSheet, View } from 'react-native';
 
 import { shoppingApi, type GroceryItem } from '../../api/shopping';
 import { Text } from '../../components/Text';
@@ -149,10 +149,10 @@ function ItemEditorBody({ initialItem, onSave, onClose }: { initialItem: Grocery
             </FormRow>
           )}
           <FormRow>
-            <FormButton icon="images-outline" title="Choose from Photos" onPress={() => void fromPhotos()} testID="item-photos" />
+            <ImageAction icon="images-outline" title="Choose from Photos" onPress={() => void fromPhotos()} testID="item-photos" />
           </FormRow>
           <FormRow>
-            <FormButton icon="camera-outline" title="Take a Picture" onPress={() => void fromCamera()} testID="item-camera" />
+            <ImageAction icon="camera-outline" title="Take a Picture" onPress={() => void fromCamera()} testID="item-camera" />
           </FormRow>
           <FormRow>
             <FormField multiline placeholder="Describe the image (optional)" value={imageDetails} onChangeText={setImageDetails} testID="item-image-details" />
@@ -166,7 +166,7 @@ function ItemEditorBody({ initialItem, onSave, onClose }: { initialItem: Grocery
             </FormText>
           </FormRow>
           <FormRow last>
-            <FormButton icon="sparkles" title="Generate with AI" disabled={!aiConsent || nameEmpty} onPress={() => void generate()} testID="item-generate" />
+            <ImageAction icon="sparkles" title="Generate with AI" disabled={!aiConsent || nameEmpty} onPress={() => void generate()} testID="item-generate" />
           </FormRow>
         </FormSection>
         {busy ? (
@@ -189,7 +189,23 @@ function ItemEditorBody({ initialItem, onSave, onClose }: { initialItem: Grocery
   );
 }
 
+/**
+ * A `Button { … } label: { Label(_, systemImage:) }` row in the Item `Form`. Measured off
+ * `shopping-item-editor.png`: when disabled, iOS 26 keeps the glyph in the tint and draws the title in
+ * `.label` — it does not dim the row, which is what the shared `FormButton` does.
+ */
+function ImageAction({ icon, title, onPress, disabled = false, testID }: { icon: keyof typeof Ionicons.glyphMap; title: string; onPress: () => void; disabled?: boolean; testID: string }) {
+  const theme = useTheme();
+  return (
+    <Pressable accessibilityRole="button" accessibilityLabel={title} accessibilityState={{ disabled }} disabled={disabled} onPress={onPress} style={styles.action} testID={testID}>
+      <Ionicons name={icon} size={24} color={theme.colors.tint} />
+      <Text style={[textStyles.body, { color: disabled ? theme.colors.label : theme.colors.tint }]}>{title}</Text>
+    </Pressable>
+  );
+}
+
 const styles = StyleSheet.create({
+  action: { flexDirection: 'row', alignItems: 'center', gap: 16, minHeight: 32 },
   fill: { flex: 1 },
   grow: { flex: 1 },
   inline: { flexDirection: 'row', alignItems: 'center', gap: 8 },
