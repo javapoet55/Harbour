@@ -86,6 +86,13 @@ import CryptoKit
         guard let entry=catalog.first(where:{$0.id==settings.catalogID}),let day=entry.next(after:MomentDates.day(Date(),zone:zone)) else {error="No verified future catalog date is available.";settings.catalogManaged=false;return}
         date=MomentDates.date(day,zone:zone);yearly=false;notice="Catalog date applied. Saving will require rescheduling any existing wishes."
     }
+    func reviewHeading(for recipient: ManagedFestivalRecipient) -> String {
+        MomentGreeting.heading(type: occasionType, firstName: recipient.name) ?? title
+    }
+    func deliveryMessage(for recipient: ManagedFestivalRecipient) -> String {
+        if let custom = settings.overrides[recipient.key] { return custom }
+        return MomentGreeting.message(settings.baseMessage, type: occasionType, firstName: recipient.name)
+    }
     func channel(_ r:ManagedFestivalRecipient)->String {settings.channels[r.key] ?? "messages"}
     func invalidateApproval() {settings.approvedAt=nil;draftIDs=[:];keys=[:]}
     func setActive(_ value:Bool,cancelSchedules:Bool=false) async {
@@ -192,6 +199,7 @@ import CryptoKit
     func schedule() async {
         guard !busy else{return};error=nil
         if let issue=FestivalValidation.schedule(settings:settings,date:sendDate,active:active,emailReady:emailReady,recipients:recipients){error=issue;return}
+        if selected.contains(where: { deliveryMessage(for:$0).count > 500 }) {error="A personalized message exceeds 500 characters. Shorten the wish before scheduling.";return}
         if dirty {error="Save your changes before scheduling.";return}
         busy=true;defer{busy=false}
         do {
@@ -205,7 +213,7 @@ import CryptoKit
                     struct DraftResponse:Decodable,Sendable {let draft:WishDraft}
                     let generated:DraftResponse=try await store.request("generate",Gen(momentID:momentID,tone:settings.tone))
                     struct Approve:Encodable {let id,body:String;let approved=true}
-                    let approved:DraftResponse=try await store.request("approve",Approve(id:generated.draft.id,body:settings.overrides[r.key] ?? settings.baseMessage))
+                    let approved:DraftResponse=try await store.request("approve",Approve(id:generated.draft.id,body:deliveryMessage(for:r)))
                     draftIDs[r.key]=approved.draft.id
                 }
                 if keys[r.key]==nil {

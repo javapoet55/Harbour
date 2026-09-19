@@ -179,14 +179,22 @@ struct ManageFestivalView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment:.leading,spacing:18) {
-                    Text(model.title).font(.title.bold())
-                    Text(model.settings.baseMessage)
+                    if let recipient=model.selected.first, model.selected.count == 1 {
+                        Text(model.reviewHeading(for:recipient)).font(.title.bold())
+                        Text(model.deliveryMessage(for:recipient))
+                    } else {
+                        Text(model.title).font(.title.bold())
+                    }
                     Text(MomentDates.label(model.sendDate,zone:model.zone))
                     ForEach(model.selected) { r in
                         VStack(alignment:.leading) {
                             Text(r.name).font(.headline)
+                            if model.selected.count > 1 {
+                                Text(model.reviewHeading(for:r)).font(.headline)
+                                Text(model.deliveryMessage(for:r))
+                            }
                             Text(model.channel(r)=="email" && model.settings.automatic[r.key]==true
-                                 ? "Email · Automatic send" : model.channel(r)=="messages" ? "Messages · Sent by you" : "Manual delivery · Sent by you")
+                                 ? "Email · Automatic send" : model.channel(r)=="messages" ? "Messages · Will be sent by you" : "Manual delivery · Will be sent by you")
                                 .foregroundStyle(.secondary)
                         }
                     }
