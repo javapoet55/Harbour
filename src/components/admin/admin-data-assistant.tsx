@@ -101,6 +101,7 @@ export function AdminDataAssistant({ days, from, to }: { days: number; from: str
 
 function AdminInsightChart({ chart }: { chart: AdminAnswerChart }) {
   const labels = [...new Set(chart.series.flatMap((series) => series.data.map((point) => point.label)))];
+  const labelLimit = labels.length <= 6 ? 20 : labels.length <= 10 ? 12 : 8;
   const values = chart.series.flatMap((series) => series.data.map((point) => point.value));
   const max = Math.max(...values, 1);
   const min = Math.min(...values, 0);
@@ -130,7 +131,10 @@ function AdminInsightChart({ chart }: { chart: AdminAnswerChart }) {
         const groupStart = left + labelIndex * barGroup + (barGroup - barWidth * chart.series.length) / 2;
         return <rect key={`${series.name}-${label}`} x={groupStart + seriesIndex * barWidth} y={y(value)} width={barWidth} height={barHeight} rx="3" fill={series.color}><title>{series.name} · {label}: {value}</title></rect>;
       }))}
-      {labels.map((label, index) => <text key={label} x={chart.type === 'bar' ? left + index * barGroup + barGroup / 2 : x(index)} y={225} textAnchor="middle" className="admin-insight-axis-label">{label.length > 12 ? `${label.slice(0, 11)}…` : label}</text>)}
+      {labels.map((label, index) => <text key={label} x={chart.type === 'bar' ? left + index * barGroup + barGroup / 2 : x(index)} y={225} textAnchor="middle" className="admin-insight-axis-label">
+        <title>{label}</title>
+        {label.length > labelLimit ? `${label.slice(0, labelLimit - 1)}…` : label}
+      </text>)}
       <text x={left + plotWidth / 2} y={246} textAnchor="middle" className="admin-insight-axis-title">{chart.xLabel}</text>
     </svg>
     </div>
