@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { Activity, Bot, CircleDollarSign, Mic2, UserPlus, Users } from 'lucide-react';
 import { DatePill, Donut, formatCurrency, formatNumber, LineChart, MetricCard, PageHeading, Panel, ProgressList } from '@/components/admin/admin-ui';
+import { AdminDataAssistant } from '@/components/admin/admin-data-assistant';
 import { getAdminSnapshot } from '@/server/admin-analytics';
 
 export default async function AdminOverviewPage() {
@@ -20,6 +21,7 @@ export default async function AdminOverviewPage() {
       <MetricCard icon={<CircleDollarSign/>} value={formatCurrency(data.metrics.estimatedMrr)} label="Estimated MRR" note="From current plan selections"/>
       <MetricCard icon={<Activity/>} value={formatNumber(data.metrics.activeUsers)} label="Active users" note="Activity in the last 30 days"/>
     </div>
+    <AdminDataAssistant />
     <div className="admin-grid">
       <Panel title="User growth" className="admin-span-6"><LineChart data={data.trends.totalUsers} valueLabel="Total user trend"/></Panel>
       <Panel title="AI assistant usage" className="admin-span-3"><BarChartPanel data={data.trends.aiActions} /></Panel>
