@@ -6,6 +6,8 @@ The `/admin/engagement` report reads aggregate Google Analytics for Firebase dat
 
 - Firebase project: `nexdoapp-19f07`
 - GA4 property: `555023551`
+- iOS stream: `15805890673`
+- Dedicated Viewer identity: `nexdo-admin-analytics@nexdoapp-19f07.iam.gserviceaccount.com`
 - iOS bundle: `com.pinslots.nexdo`
 - The GA4 property also receives Android events. Reports default to the iOS platform.
 
@@ -33,3 +35,9 @@ Analytics device-based users may differ from registered Nexdo accounts. This int
 Run `npx vitest run src/server/firebase-engagement.test.ts src/lib/admin-date-range.test.ts` and `npm run typecheck`.
 
 Live verification remains required after secrets are provisioned: check authorized report loading, date/platform parity with Analytics, logged-out redirects, and access denial for non-admin sessions. Unit tests cover authorization before data access, signed read-only authentication, filters, mapping, cache reauthorization, missing configuration, and sanitized provider failures.
+
+## Activation verified — September 20, 2026
+
+The dedicated service account has property-level Viewer access, the Google Analytics Data API is enabled, and all three GA4 settings are configured in Railway Harbour production. A live batch request returned HTTP 200 for all five reports using iOS stream `15805890673`. The credential was transmitted via stdin, not command arguments or source files.
+
+The external report link selects `nexdoai@gmail.com` and opens GA4 directly. Previously the Firebase link used the browser’s default Google account, which could produce a project permission error. Google console access remains separate from ADMIN’s server-side reporting connection.

@@ -7,7 +7,7 @@ import { middleware } from '@/middleware';
 import { NextRequest } from 'next/server';
 
 const mocks = vi.hoisted(() => ({ send: vi.fn(), mocked: vi.fn(() => false), jar: new Map<string, string>() }));
-vi.mock('@/providers', () => ({ emailProvider: { send: mocks.send }, emailDeliveryMocked: mocks.mocked }));
+vi.mock('@/providers/admin-email', () => ({ adminEmailProvider: { send: mocks.send }, adminEmailConfigured: () => !mocks.mocked() }));
 vi.mock('next/headers', () => ({ cookies: async () => ({
   get: (key: string) => mocks.jar.has(key) ? { value: mocks.jar.get(key) } : undefined,
   set: (key: string, value: string) => { mocks.jar.set(key, value); },

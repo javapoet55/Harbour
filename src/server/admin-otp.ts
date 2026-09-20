@@ -3,7 +3,7 @@ import { createHash, randomBytes, randomInt } from 'node:crypto';
 import { prisma } from './db';
 import { normalizeEmail } from './account-auth';
 import { isAdminEmail } from './admin-allowlist';
-import { emailDeliveryMocked, emailProvider } from '@/providers';
+import { adminEmailConfigured, adminEmailProvider } from '@/providers/admin-email';
 
 export const adminTokenHash = (token: string) => createHash('sha256').update(token).digest('hex');
 const opaqueToken = () => randomBytes(32).toString('hex');
@@ -17,7 +17,7 @@ export async function requestAdminCode(value: string) {
   // Identical public response for unknown and unauthorized accounts.
   if (!user) return id;
   // Never pretend a mock delivery grants access, including in development.
-  if (emailDeliveryMocked()) throw new Error('EMAIL_UNAVAILABLE');
+  if (!adminEmailConfigured()) throw new Error('EMAIL_UNAVAILABLE');
   const created = await prisma.$transaction(async (tx) => {
     // Serialize sends for this account across instances, including concurrent resends.
     await tx.user.update({ where: { id: user.id }, data: { updatedAt: new Date() } });
@@ -30,7 +30,7 @@ export async function requestAdminCode(value: string) {
     return tx.adminLoginToken.create({ data: { id, userId: user.id, codeHash, expiresAt: new Date(Date.now() + 10 * 60_000) } });
   });
   try {
-    const delivery = await emailProvider.send({
+    const delivery = await adminEmailProvider.send({
       to: email, subject: 'Your NEXDO Admin sign-in code',
       text: `Your NEXDO Admin sign-in code is ${code}. It expires in 10 minutes and can be used once. Never share this code. If you did not request it, ignore this email.`,
     });

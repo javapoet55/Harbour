@@ -8,7 +8,8 @@ import { getFirebaseEngagement, type EngagementRow } from '@/server/firebase-eng
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
-const consoleURL = 'https://console.firebase.google.com/project/nexdoapp-19f07/analytics/overview';
+// Select the project owner's Google account rather than the browser's default account.
+const consoleURL = 'https://analytics.google.com/analytics/web/?authuser=nexdoai%40gmail.com#/a408783201p555023551/reports/dashboard?r=firebase-overview';
 function seconds(value: number) { const rounded = Math.round(value); return `${Math.floor(rounded / 60)}m ${rounded % 60}s`; }
 function Breakdown({ rows, dimension, metrics }: { rows: EngagementRow[]; dimension: string; metrics: [string, string][] }) {
   if (!rows.length) return <EmptyState>No recorded activity in this reporting period.</EmptyState>;
@@ -22,9 +23,9 @@ export default async function AdminEngagementPage({ searchParams }: { searchPara
   const result = await getFirebaseEngagement(range.from, range.to);
   const heading = <PageHeading title="Firebase Engagement" description="App usage and engagement reported by Google Analytics for Firebase."><AdminDateRangeFilter key={`${range.from}-${range.to}`} from={range.from} to={range.to} today={new Date().toISOString().slice(0, 10)} label={adminDateRangeLabel(range)} pathname="/admin/engagement"/></PageHeading>;
   if (result.status !== 'connected') return <>{heading}<div className="admin-callout" role="status"><Activity/><div><strong>{result.status === 'not_configured' ? 'Connection needed' : 'Reporting unavailable'}</strong><p>{result.message}</p></div></div>
-    <Panel title="Connect Firebase engagement"><p>This report uses the Google Analytics Data API with read-only access. A Firebase app configuration file or Google account password cannot authorize these reports.</p>
+    <Panel title="Connect Firebase engagement"><p>Reports load here after backend activation. Opening Google Analytics below does not connect this portal.</p><p>This report uses the Google Analytics Data API with read-only access. A Firebase app configuration file or Google account password cannot authorize these reports.</p>
       <ol><li>Use Nexdo’s verified GA4 property ID: 555023551.</li><li>Enable the Google Analytics Data API in the service account’s Cloud project.</li><li>Give a dedicated service account Viewer access to that GA4 property.</li><li>Configure GA4_PROPERTY_ID and GA4_SERVICE_ACCOUNT_JSON as server secrets. Optionally set GA4_STREAM_ID to restrict reports to one app stream.</li></ol>
-      <a href={consoleURL} target="_blank" rel="noreferrer">Open Firebase console ↗</a>
+      <a href={consoleURL} target="_blank" rel="noreferrer">Open Google Analytics reports ↗</a><p>Use nexdoai@gmail.com, which has access to this property. If Google opens another account, switch accounts in Google Analytics.</p>
     </Panel></>;
   const { data } = result;
   const m = data.summary;
@@ -47,6 +48,6 @@ export default async function AdminEngagementPage({ searchParams }: { searchPara
       <Panel title="Events · top 20" className="admin-span-6"><Breakdown rows={data.events} dimension="Event" metrics={[["eventCount", "Events"], ["totalUsers", "Users"]]}/></Panel>
       <Panel title="Screens · top 20" className="admin-span-6"><Breakdown rows={data.screens} dimension="Screen class" metrics={[["screenPageViews", "Views"], ["activeUsers", "Users"]]}/><p>Screen names reflect the events currently sent by the app.</p></Panel>
     </div>
-    <p><a href={consoleURL} target="_blank" rel="noreferrer">Open Firebase reports ↗</a></p>
+    <p><a href={consoleURL} target="_blank" rel="noreferrer">Open Google Analytics reports ↗</a></p>
   </>;
 }
