@@ -118,7 +118,8 @@ function AdminInsightChart({ chart }: { chart: AdminAnswerChart }) {
   return <figure className="admin-insight-chart">
     <figcaption><strong>{chart.title}</strong><span>{chart.yLabel}</span></figcaption>
     <div className="admin-insight-chart-legend">{chart.series.map((series) => <span key={series.name}><i style={{ background: series.color }}/>{series.name}</span>)}</div>
-    <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label={chart.title} preserveAspectRatio="none">
+    <div className="admin-insight-chart-canvas">
+    <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label={chart.title} preserveAspectRatio="xMidYMid meet">
       {[0, .25, .5, .75, 1].map((ratio) => <line key={ratio} x1={left} x2={left + plotWidth} y1={top + ratio * plotHeight} y2={top + ratio * plotHeight} className="admin-insight-grid"/>)}
       {chart.type === 'line' ? chart.series.map((series) => {
         const points = labels.map((label, index) => ({ label, index, value: series.data.find((point) => point.label === label)?.value ?? 0 }));
@@ -132,5 +133,6 @@ function AdminInsightChart({ chart }: { chart: AdminAnswerChart }) {
       {labels.map((label, index) => <text key={label} x={chart.type === 'bar' ? left + index * barGroup + barGroup / 2 : x(index)} y={225} textAnchor="middle" className="admin-insight-axis-label">{label.length > 12 ? `${label.slice(0, 11)}…` : label}</text>)}
       <text x={left + plotWidth / 2} y={246} textAnchor="middle" className="admin-insight-axis-title">{chart.xLabel}</text>
     </svg>
+    </div>
   </figure>;
 }
