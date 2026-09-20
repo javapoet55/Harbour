@@ -1,3 +1,5 @@
+import { readAdminSession } from '@/server/admin-session';
+import { redirect } from 'next/navigation';
 import { Bot, CalendarDays, Mic2, Users } from 'lucide-react';
 import { AdminUsersTable } from '@/components/admin/admin-users-table';
 import { AdminDateRangeFilter } from '@/components/admin/admin-date-range-filter';
@@ -6,6 +8,7 @@ import { adminDateRangeLabel, parseAdminDateRange } from '@/lib/admin-date-range
 import { getAdminSnapshot } from '@/server/admin-analytics';
 
 export default async function AdminUsersPage({ searchParams }: { searchParams: Promise<{ from?: string; to?: string }> }) {
+  if (!await readAdminSession()) redirect('/admin/login');
   const params = await searchParams;
   const range = parseAdminDateRange(params.from, params.to);
   const data = await getAdminSnapshot(range.days, { from: range.fromDate, to: range.toDate });

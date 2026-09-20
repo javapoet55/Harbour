@@ -1,8 +1,11 @@
+import { readAdminSession } from '@/server/admin-session';
+import { redirect } from 'next/navigation';
 import { Activity, Bot, ListChecks, Users } from 'lucide-react';
 import { BarChart, DatePill, Donut, formatNumber, LineChart, MetricCard, PageHeading, Panel, ProgressList } from '@/components/admin/admin-ui';
 import { getAdminSnapshot } from '@/server/admin-analytics';
 
 export default async function AdminUsagePage() {
+  if (!await readAdminSession()) redirect('/admin/login');
   const data = await getAdminSnapshot(15);
   const total = data.featureCounts.reduce((sum,row)=>sum+row.value,0);
   return <>

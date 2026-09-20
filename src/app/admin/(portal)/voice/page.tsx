@@ -1,8 +1,11 @@
+import { readAdminSession } from '@/server/admin-session';
+import { redirect } from 'next/navigation';
 import { Clock3, Mic2, Radio, Users } from 'lucide-react';
 import { BarChart, DatePill, Donut, formatNumber, LineChart, MetricCard, PageHeading, Panel } from '@/components/admin/admin-ui';
 import { getAdminSnapshot } from '@/server/admin-analytics';
 
 export default async function AdminVoicePage() {
+  if (!await readAdminSession()) redirect('/admin/login');
   const data = await getAdminSnapshot(15);
   const realtime = data.recentVoice.filter((row)=>row.type==='Realtime').length;
   const transcription = Math.max(0,data.metrics.voiceSessions-realtime);

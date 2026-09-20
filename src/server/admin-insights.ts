@@ -22,6 +22,58 @@ export const adminQuestionSchema = z.object({
 
 type Snapshot = Awaited<ReturnType<typeof getAdminSnapshot>>;
 
+export const adminAnswerSchema = z.object({
+  answer: z.string().trim().min(1).max(6000),
+  chart: z.object({
+    type: z.enum(['line', 'bar']),
+    title: z.string().trim().min(1).max(120),
+    xLabel: z.string().trim().max(80),
+    yLabel: z.string().trim().max(80),
+    series: z.array(z.object({
+      name: z.string().trim().min(1).max(80),
+      color: z.string().regex(/^#[0-9a-fA-F]{6}$/),
+      data: z.array(z.object({ label: z.string().trim().min(1).max(80), value: z.number().finite() }).strict()).min(1).max(40),
+    }).strict()).min(1).max(6),
+  }).strict().nullable(),
+}).strict();
+
+export type AdminAnswerChart = NonNullable<z.infer<typeof adminAnswerSchema>['chart']>;
+
+const adminAnswerFormat = {
+  type: 'json_schema',
+  name: 'admin_analytics_answer',
+  strict: true,
+  schema: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['answer', 'chart'],
+    properties: {
+      answer: { type: 'string' },
+      chart: {
+        anyOf: [
+          { type: 'null' },
+          {
+            type: 'object', additionalProperties: false, required: ['type', 'title', 'xLabel', 'yLabel', 'series'],
+            properties: {
+              type: { type: 'string', enum: ['line', 'bar'] }, title: { type: 'string' }, xLabel: { type: 'string' }, yLabel: { type: 'string' },
+              series: {
+                type: 'array', minItems: 1, maxItems: 6,
+                items: {
+                  type: 'object', additionalProperties: false, required: ['name', 'color', 'data'],
+                  properties: {
+                    name: { type: 'string' }, color: { type: 'string', pattern: '^#[0-9a-fA-F]{6}$' },
+                    data: { type: 'array', minItems: 1, maxItems: 40, items: { type: 'object', additionalProperties: false, required: ['label', 'value'], properties: { label: { type: 'string' }, value: { type: 'number' } } } },
+                  },
+                },
+              },
+            },
+          },
+        ],
+      },
+    },
+  },
+} as const;
+
 export function adminOverviewGrounding(snapshot: Snapshot) {
   return {
     report: {
@@ -56,6 +108,7 @@ Rules:
 - Never expose password hashes, credentials, tokens, private task text, calendar contents, or other fields not supplied by the tools.
 - Use user lookup tools only when the question asks for user-level data. Do not enumerate unrelated users.
 - Keep the answer concise and decision-oriented. Use short bullets when comparing values.
+- Return a relevant line or bar chart when the question involves a trend, history, comparison, ranking, or distribution. Copy chart labels and numeric values exactly from ADMIN_DATA or tool output; never invent chart points. Return chart as null when a graph would not improve the answer.
 - Do not claim that a database write or administrative action was performed. This assistant is read-only.`;
 
 const tools = [
@@ -162,6 +215,7 @@ export async function answerAdminAnalyticsQuestion(adminId: string, question: st
         input,
         max_output_tokens: 900,
         reasoning: { effort: 'low' },
+        text: { format: adminAnswerFormat },
         safety_identifier: `admin_${createHash('sha256').update(adminId).digest('hex').slice(0, 24)}`,
       }),
       signal: AbortSignal.timeout(20000),
@@ -179,9 +233,15 @@ export async function answerAdminAnalyticsQuestion(adminId: string, question: st
     input.push(...output);
     const call = output.find((item) => item.type === 'function_call');
     if (!call) {
-      const answer = outputText(payload).trim();
-      if (!answer) throw new Error('OPENAI_ADMIN_UNAVAILABLE');
-      return { answer, generatedAt: initial.generatedAt, days: initialDays };
+      let decoded: unknown;
+      try {
+        decoded = JSON.parse(outputText(payload) || 'null');
+      } catch {
+        throw new Error('OPENAI_ADMIN_UNAVAILABLE');
+      }
+      const structured = adminAnswerSchema.safeParse(decoded);
+      if (!structured.success) throw new Error('OPENAI_ADMIN_UNAVAILABLE');
+      return { ...structured.data, generatedAt: initial.generatedAt, days: initialDays };
     }
 
     if (!call.name || !call.call_id || !call.arguments) throw new Error('OPENAI_ADMIN_UNAVAILABLE');

@@ -9,6 +9,7 @@ datasource db {
 }
 
 model User {
+  adminLoginTokens AdminLoginToken[]
   shoppingLists ShoppingList[]
   id           String   @id @default(cuid())
   email        String   @unique
@@ -518,4 +519,18 @@ model ShoppingItem {
   checked Boolean @default(false)
   sortOrder Int @default(0)
   @@index([listId, sortOrder])
+}
+
+model AdminLoginToken {
+  id String @id
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  codeHash String
+  expiresAt DateTime
+  usedAt DateTime?
+  attempts Int @default(0)
+  createdAt DateTime @default(now())
+  sessionHash String? @unique
+  sessionExpiresAt DateTime?
+  @@index([userId, createdAt])
 }

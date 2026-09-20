@@ -25,7 +25,9 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en" className={`${geist.variable} h-full`}>
-      <body className="min-h-full antialiased">{children}<Script src="/firebase-bridge.js" strategy="afterInteractive" /></body>
+      {/* Extensions such as ClickUp add body attributes before React hydrates.
+          Suppress only this element's mismatch; child hydration checks stay active. */}
+      <body className="min-h-full antialiased" suppressHydrationWarning>{children}<Script src="/firebase-bridge.js" strategy="afterInteractive" /></body>
     </html>
   );
 }

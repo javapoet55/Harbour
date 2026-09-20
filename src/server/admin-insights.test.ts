@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { adminAssistantInstructions, adminOverviewGrounding, adminQuestionSchema } from './admin-insights';
+import { adminAnswerSchema, adminAssistantInstructions, adminOverviewGrounding, adminQuestionSchema } from './admin-insights';
 
 function snapshot() {
   return {
@@ -37,5 +37,8 @@ describe('admin analytics assistant grounding', () => {
     expect(adminAssistantInstructions).toMatch(/only facts returned/i);
     expect(adminAssistantInstructions).toMatch(/Never expose password hashes/i);
     expect(adminAssistantInstructions).toMatch(/read-only/i);
+    expect(adminAssistantInstructions).toMatch(/relevant line or bar chart/i);
+    expect(adminAnswerSchema.safeParse({ answer: 'Usage increased.', chart: { type: 'line', title: 'Usage', xLabel: 'Day', yLabel: 'Actions', series: [{ name: 'AI actions', color: '#287ff5', data: [{ label: 'Sep 20', value: 4 }] }] } }).success).toBe(true);
+    expect(adminAnswerSchema.safeParse({ answer: 'No chart needed.', chart: null }).success).toBe(true);
   });
 });

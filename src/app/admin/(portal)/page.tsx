@@ -1,12 +1,14 @@
+import { readAdminSession } from '@/server/admin-session';
+import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { Activity, Bot, CircleDollarSign, Mic2, UserPlus, Users } from 'lucide-react';
 import { Donut, formatCurrency, formatNumber, LineChart, MetricCard, PageHeading, Panel, ProgressList } from '@/components/admin/admin-ui';
-import { AdminDataAssistant } from '@/components/admin/admin-data-assistant';
 import { AdminDateRangeFilter } from '@/components/admin/admin-date-range-filter';
 import { adminDateRangeLabel, parseAdminDateRange } from '@/lib/admin-date-range';
 import { getAdminSnapshot } from '@/server/admin-analytics';
 
 export default async function AdminOverviewPage({ searchParams }: { searchParams: Promise<{ from?: string; to?: string }> }) {
+  if (!await readAdminSession()) redirect('/admin/login');
   const params = await searchParams;
   const range = parseAdminDateRange(params.from, params.to);
   const data = await getAdminSnapshot(range.days, { from: range.fromDate, to: range.toDate });
@@ -26,7 +28,6 @@ export default async function AdminOverviewPage({ searchParams }: { searchParams
       <MetricCard icon={<CircleDollarSign/>} value={formatCurrency(data.metrics.estimatedMrr)} label="Estimated MRR" note="From current plan selections"/>
       <MetricCard icon={<Activity/>} value={formatNumber(data.metrics.activeUsers)} label="Active users" note={`Activity during ${rangeLabel}`}/>
     </div>
-    <AdminDataAssistant days={range.days} from={range.from} to={range.to}/>
     <div className="admin-grid">
       <Panel title="User growth" className="admin-span-6"><LineChart data={data.trends.totalUsers} valueLabel="Total user trend"/></Panel>
       <Panel title="AI assistant usage" className="admin-span-3"><BarChartPanel data={data.trends.aiActions} /></Panel>

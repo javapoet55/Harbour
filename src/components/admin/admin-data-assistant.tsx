@@ -2,6 +2,7 @@
 
 import { FormEvent, KeyboardEvent, useRef, useState } from 'react';
 import { Bot, Database, LoaderCircle, Send, Sparkles } from 'lucide-react';
+import type { AdminAnswerChart } from '@/server/admin-insights';
 
 function prompts(days: number) { return [
   `Summarize platform usage for the selected ${days === 1 ? 'day' : `${days}-day period`}.`,
@@ -17,6 +18,7 @@ export function AdminDataAssistant({ days, from, to }: { days: number; from: str
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [generatedAt, setGeneratedAt] = useState('');
+  const [chart, setChart] = useState<AdminAnswerChart | null>(null);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -25,6 +27,7 @@ export function AdminDataAssistant({ days, from, to }: { days: number; from: str
     setBusy(true);
     setError('');
     setAnswer('');
+    setChart(null);
     try {
       const response = await fetch('/api/admin/insights', {
         method: 'POST',
@@ -34,6 +37,7 @@ export function AdminDataAssistant({ days, from, to }: { days: number; from: str
       const body = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(body.error || 'The question could not be answered.');
       setAnswer(body.answer);
+      setChart(body.chart ?? null);
       setGeneratedAt(body.generatedAt || '');
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : 'The question could not be answered.');
@@ -88,8 +92,45 @@ export function AdminDataAssistant({ days, from, to }: { days: number; from: str
       <div>
         <strong>{error ? 'Unable to answer' : 'Nexdo analysis'}</strong>
         <p>{error || answer}</p>
+        {!error && chart && <AdminInsightChart chart={chart}/>}
         {!error && generatedAt && <small>Based on Admin data refreshed {new Date(generatedAt).toLocaleString()}.</small>}
       </div>
     </div>}
   </section>;
+}
+
+function AdminInsightChart({ chart }: { chart: AdminAnswerChart }) {
+  const labels = [...new Set(chart.series.flatMap((series) => series.data.map((point) => point.label)))];
+  const values = chart.series.flatMap((series) => series.data.map((point) => point.value));
+  const max = Math.max(...values, 1);
+  const min = Math.min(...values, 0);
+  const range = Math.max(max - min, 1);
+  const width = 720;
+  const height = 250;
+  const left = 42;
+  const top = 18;
+  const plotWidth = 650;
+  const plotHeight = 180;
+  const y = (value: number) => top + plotHeight - ((value - min) / range) * plotHeight;
+  const x = (index: number) => left + (labels.length === 1 ? plotWidth / 2 : index / (labels.length - 1) * plotWidth);
+  const barGroup = plotWidth / Math.max(labels.length, 1);
+  const barWidth = Math.max(3, Math.min(28, barGroup * .72 / chart.series.length));
+  return <figure className="admin-insight-chart">
+    <figcaption><strong>{chart.title}</strong><span>{chart.yLabel}</span></figcaption>
+    <div className="admin-insight-chart-legend">{chart.series.map((series) => <span key={series.name}><i style={{ background: series.color }}/>{series.name}</span>)}</div>
+    <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label={chart.title} preserveAspectRatio="none">
+      {[0, .25, .5, .75, 1].map((ratio) => <line key={ratio} x1={left} x2={left + plotWidth} y1={top + ratio * plotHeight} y2={top + ratio * plotHeight} className="admin-insight-grid"/>)}
+      {chart.type === 'line' ? chart.series.map((series) => {
+        const points = labels.map((label, index) => ({ label, index, value: series.data.find((point) => point.label === label)?.value ?? 0 }));
+        return <g key={series.name}><polyline points={points.map((point) => `${x(point.index)},${y(point.value)}`).join(' ')} fill="none" stroke={series.color} strokeWidth="3" strokeLinejoin="round" strokeLinecap="round"/>{points.map((point) => <circle key={point.label} cx={x(point.index)} cy={y(point.value)} r="4" fill={series.color}><title>{point.label}: {point.value}</title></circle>)}</g>;
+      }) : chart.series.flatMap((series, seriesIndex) => labels.map((label, labelIndex) => {
+        const value = series.data.find((point) => point.label === label)?.value ?? 0;
+        const barHeight = Math.max(1, plotHeight - y(value) + top);
+        const groupStart = left + labelIndex * barGroup + (barGroup - barWidth * chart.series.length) / 2;
+        return <rect key={`${series.name}-${label}`} x={groupStart + seriesIndex * barWidth} y={y(value)} width={barWidth} height={barHeight} rx="3" fill={series.color}><title>{series.name} · {label}: {value}</title></rect>;
+      }))}
+      {labels.map((label, index) => <text key={label} x={chart.type === 'bar' ? left + index * barGroup + barGroup / 2 : x(index)} y={225} textAnchor="middle" className="admin-insight-axis-label">{label.length > 12 ? `${label.slice(0, 11)}…` : label}</text>)}
+      <text x={left + plotWidth / 2} y={246} textAnchor="middle" className="admin-insight-axis-title">{chart.xLabel}</text>
+    </svg>
+  </figure>;
 }

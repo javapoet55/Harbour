@@ -1,8 +1,11 @@
+import { readAdminSession } from '@/server/admin-session';
+import { redirect } from 'next/navigation';
 import { CircleDollarSign, CreditCard, RefreshCw, Users } from 'lucide-react';
 import { DatePill, Donut, formatCurrency, MetricCard, PageHeading, Panel, ProgressList } from '@/components/admin/admin-ui';
 import { getAdminSnapshot } from '@/server/admin-analytics';
 
 export default async function AdminRevenuePage() {
+  if (!await readAdminSession()) redirect('/admin/login');
   const data = await getAdminSnapshot(30);
   const paid = data.planCounts.PRO + data.planCounts.MAX;
   const planRows = [

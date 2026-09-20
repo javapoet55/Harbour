@@ -1,13 +1,16 @@
 'use client';
 
 import Link from 'next/link';
+import { useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
-import { BarChart3, CircleDollarSign, Gauge, LogOut, Mic2, Sparkles, Users } from 'lucide-react';
+import { BarChart3, Bot, CircleDollarSign, Gauge, LogOut, Mic2, Sparkles, Users } from 'lucide-react';
 
 const links = [
   { href: '/admin', label: 'Overview', icon: Gauge },
+  { href: '/admin/ask', label: 'Ask Nexdo', icon: Bot },
   { href: '/admin/users', label: 'Users', icon: Users },
   { href: '/admin/usage', label: 'Usage Analytics', icon: BarChart3 },
+  { href: '/admin/engagement', label: 'Firebase Engagement', icon: BarChart3 },
   { href: '/admin/voice', label: 'Voice Analytics', icon: Mic2 },
   { href: '/admin/revenue', label: 'Revenue', icon: CircleDollarSign },
 ];
@@ -15,10 +18,15 @@ const links = [
 export function AdminShell({ children, name, email }: { children: React.ReactNode; name: string; email: string }) {
   const pathname = usePathname();
   const router = useRouter();
+  const [signOutError, setSignOutError] = useState('');
   async function signOut() {
-    await fetch('/api/auth/logout', { method: 'POST' });
-    router.replace('/login');
-    router.refresh();
+    setSignOutError('');
+    try {
+      const response = await fetch('/api/admin/auth', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'logout' }) });
+      if (!response.ok) throw new Error('Sign-out failed');
+      router.replace('/admin/login');
+      router.refresh();
+    } catch { setSignOutError('Sign-out failed. Please try again.'); }
   }
   return (
     <div className="admin-app">
@@ -35,6 +43,7 @@ export function AdminShell({ children, name, email }: { children: React.ReactNod
           <div className="admin-avatar">{name.split(/\s+/).map((part) => part[0]).join('').slice(0, 2).toUpperCase()}</div>
           <div><strong>{name}</strong><small>{email}</small></div>
         </div>
+        {signOutError && <p role="alert">{signOutError}</p>}
         <button className="admin-signout" onClick={signOut}><LogOut size={18} /> Sign out</button>
       </aside>
       <main className="admin-main">{children}</main>

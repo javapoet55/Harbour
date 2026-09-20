@@ -1,0 +1,16 @@
+# Admin email login
+
+Open `/admin/login`, enter an authorized administrator's existing account email, and enter the six-digit code delivered by SendGrid. Ordinary account/password/Apple sessions cannot authorize admin pages or APIs.
+
+Codes expire after 10 minutes, allow five attempts, and can be redeemed once. A resend invalidates older unused codes; requests are limited to one per minute and three per 15 minutes per account, using database-backed limits. Verification is bound to the requesting browser's HttpOnly challenge cookie. Neither codes nor session secrets are stored in plaintext or returned by the API.
+
+The separate HttpOnly, SameSite=Strict admin session cookie has no persistent expiry. Server-side sessions expire absolutely after eight hours. Browser session restore may preserve session cookies; use the portal's Sign out to revoke a session immediately. Every new sign-in requires a new emailed code. Navigating between dashboard pages does not require another code.
+
+## Deployment
+
+- Apply the included `20260920000000_admin_email_otp` migration. The normal Railway migration deployment command includes it. SQLite has an equivalent migration for local tests.
+- Configure `SENDGRID_API_KEY` and a verified `SENDGRID_FROM_EMAIL`; `SENDGRID_FROM_NAME` is optional. Admin authentication fails closed if email delivery is mocked or unavailable, including development.
+- Existing administrator emails in `src/server/admin-allowlist.ts` are preserved. Add existing account emails through comma-separated `NEXDO_ADMIN_EMAILS` if needed. This change does not provision accounts or grant new administrators access.
+- The admin API accepts only same-origin browser POSTs. Deploy behind a proxy that preserves the public request origin.
+
+Validation: `npx vitest run src/server/admin-otp.integration.test.ts src/server/admin-auth.test.ts`, `npm run typecheck`, and targeted ESLint. Tests use an isolated SQLite database and mocked delivery; real email delivery must be checked with the deployed SendGrid configuration.

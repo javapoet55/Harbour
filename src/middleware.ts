@@ -7,6 +7,7 @@ export function middleware(req: NextRequest) {
   if (pathname.startsWith('/shared/shopping/') || pathname.startsWith('/api/') || pathname.startsWith('/_next') || pathname.includes('.')) {
     return NextResponse.next();
   }
+  if (pathname === '/admin' || pathname.startsWith('/admin/')) return NextResponse.next();
   const session = req.cookies.get('harbor_session')?.value;
   if (!session && !PUBLIC.includes(pathname)) {
     const url = req.nextUrl.clone();

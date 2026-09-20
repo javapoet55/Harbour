@@ -1,3 +1,5 @@
+import { readAdminSession } from '@/server/admin-session';
+import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import {
@@ -25,6 +27,7 @@ function formatDate(value: string, includeTime = false) {
 const colors = ['#287ff5', '#7b5ce8', '#29bfa8', '#ffb522', '#f05c6b', '#ef793e'];
 
 export default async function AdminUserDashboardPage({ params }: { params: Promise<{ userId: string }> }) {
+  if (!await readAdminSession()) redirect('/admin/login');
   const { userId } = await params;
   const data = await getAdminUserDashboard(userId, 15);
   if (!data) notFound();
