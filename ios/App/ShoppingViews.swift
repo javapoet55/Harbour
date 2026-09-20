@@ -216,6 +216,7 @@ struct ShoppingDetail:View {
     @State private var sharing=false
     @State private var deleting=false
     @State private var completing=false
+    @State private var completion:ShoppingCompletionSummary?
     @State private var recommendations=false
     @State private var alternativesFor:GroceryItem?
     @State private var pending:[GroceryItem]=[]
@@ -298,19 +299,22 @@ struct ShoppingDetail:View {
             .sheet(isPresented:$copy){NewShoppingList(store:store,source:list){list=$0}}
             .sheet(isPresented:$settings){ShoppingSettings(initial:list){save($0)}}
             .sheet(isPresented:$sharing){ShoppingShare(store:store,list:list){list=$0}}
-            .sheet(isPresented:$recommendations){AskNexdoView(initialPrompt:recommendationPrompt,textPage:true)}
+            .sheet(isPresented:$recommendations){AskNexdoView(textPage:true,shoppingContext:ShoppingRecommendationContext(listName:list.title,itemNames:list.items.map(\.name)))}
             .sheet(item:$alternativesFor){original in
                 ShoppingAlternativesView(store:store,original:original,onReplace:{alternative in replace(original,with:alternative)},onAdd:{alternative in add(alternative)})
                     .presentationDetents([.large]).presentationDragIndicator(.visible)
             }
+            .fullScreenCover(item:$completion){summary in
+                ShoppingCompletionView(summary:summary,onDone:{completion=nil;dismiss()},onUseAgain:{completion=nil;if list.completedAt != nil{copy=true}})
+            }
             .confirmationDialog("Delete this list?",isPresented:$deleting,titleVisibility:.visible){Button("Delete list",role:.destructive){Task{_ = await store.action("delete",list:list,input:[String:String]());if store.error==nil{dismiss()}}}}
-            .confirmationDialog(list.weekly ? "Complete this trip and create next week’s list?":"Complete this shopping trip?",isPresented:$completing,titleVisibility:.visible){
-                Button("Complete trip"){Task{if let next=await store.action("complete",list:list,input:[String:String]()){list=next}}}
-            }message:{Text("\(list.remaining) items are unchecked. Your shopping history will be kept.")}
+            .confirmationDialog("Complete with \(list.remaining) items remaining?",isPresented:$completing,titleVisibility:.visible){
+                Button("Complete Shopping"){Task{await completeTrip()}}
+            }message:{Text("The unchecked items will remain in your shopping history.")}
     }
     private var shoppingActions:some View {
         HStack(spacing:10){
-            Button{completing=true}label:{
+            Button{if list.remaining > 0{completing=true}else{Task{await completeTrip()}}}label:{
                 Label("Complete Shopping",systemImage:"checkmark.circle.fill")
                     .font(.subheadline.weight(.semibold)).lineLimit(2).minimumScaleFactor(0.78)
                     .foregroundStyle(Color.white).frame(maxWidth:.infinity,minHeight:52)
@@ -327,10 +331,6 @@ struct ShoppingDetail:View {
                 .accessibilityIdentifier("shopping-ai-recommendations")
         }.padding(.horizontal,16).padding(.vertical,10)
             .background(.ultraThinMaterial).overlay(alignment:.top){Divider().opacity(0.5)}
-    }
-    private var recommendationPrompt:String {
-        let names=list.items.prefix(30).map(\.name).joined(separator:", ")
-        return "Review my shopping list \"\(list.title)\" and recommend practical missing groceries based on these current items: \(names). Do not add anything until I approve it."
     }
     private func toggleItem(_ item: GroceryItem) {
         var next = list
@@ -353,6 +353,18 @@ struct ShoppingDetail:View {
         save(next)
     }
     private func add(_ alternative:ShoppingAlternative){var next=list;next.items.append(alternative.groceryItem);save(next)}
+    @MainActor private func completeTrip() async {
+        let finished=list
+        guard let next=await store.action("complete",list:finished,input:[String:String]()) else{return}
+        list=next
+        completion=ShoppingCompletionSummary(
+            listName:finished.title,
+            purchased:finished.items.count-finished.remaining,
+            total:finished.items.count,
+            remaining:finished.remaining,
+            nextListReady:next.completedAt == nil
+        )
+    }
     private func save(_ next:GroceryList){
         let original=list;list=next
         Task{
@@ -376,6 +388,84 @@ struct ShoppingDetail:View {
         switch category {case "Dairy & Eggs":return "Dairy";case "Meat & Seafood":return "Meat";default:return category}
     }
 }
+
+private struct ShoppingCompletionSummary:Identifiable {
+    let id=UUID()
+    let listName:String
+    let purchased:Int
+    let total:Int
+    let remaining:Int
+    let nextListReady:Bool
+}
+
+private struct ShoppingCompletionView:View {
+    let summary:ShoppingCompletionSummary
+    let onDone:()->Void
+    let onUseAgain:()->Void
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body:some View {
+        ZStack {
+            TodayBackdrop()
+            Circle().fill(Color.nexdoBlue.opacity(0.08)).frame(width:300,height:300).blur(radius:2).offset(x:-155,y:-310)
+            Circle().fill(Color.pink.opacity(0.08)).frame(width:260,height:260).blur(radius:2).offset(x:170,y:-220)
+            VStack(spacing:0) {
+                Spacer(minLength:44)
+                ZStack {
+                    Circle().fill(NexdoTheme.gradient).frame(width:132,height:132)
+                        .shadow(color:Color.nexdoIndigo.opacity(0.24),radius:24,y:12)
+                    Circle().stroke(Color.white.opacity(0.34),lineWidth:2).frame(width:108,height:108)
+                    Image(systemName:"cart.badge.checkmark").font(.system(size:52,weight:.semibold)).foregroundStyle(.white)
+                }
+                .accessibilityHidden(true)
+                .padding(.bottom,28)
+
+                Text("Great job!").font(.system(size:38,weight:.bold,design:.rounded)).foregroundStyle(Color.nexdoInk)
+                Text("Shopping trip complete").font(.title3.weight(.semibold)).foregroundStyle(Color.nexdoIndigo).padding(.top,8)
+                Text(summary.listName).font(.subheadline).foregroundStyle(Color.nexdoSecondary).padding(.top,5)
+
+                HStack(spacing:0) {
+                    metric(value:"\(summary.purchased)",label:"Purchased",icon:"checkmark.circle.fill",color:.green)
+                    Divider().frame(height:62)
+                    metric(value:"\(summary.total)",label:"Total items",icon:"basket.fill",color:.nexdoBlue)
+                    if summary.remaining > 0 {
+                        Divider().frame(height:62)
+                        metric(value:"\(summary.remaining)",label:"Saved",icon:"bookmark.fill",color:.orange)
+                    }
+                }
+                .padding(.vertical,20)
+                .background(Color(uiColor:.secondarySystemGroupedBackground),in:RoundedRectangle(cornerRadius:24,style:.continuous))
+                .overlay(RoundedRectangle(cornerRadius:24,style:.continuous).stroke(Color.nexdoIndigo.opacity(0.10)))
+                .shadow(color:Color.nexdoInk.opacity(0.07),radius:18,y:8)
+                .padding(.horizontal,24).padding(.top,30)
+
+                Text(summary.remaining == 0 ? "Everything on your list is taken care of.":"Your unchecked items are safely kept in this list.")
+                    .font(.subheadline).foregroundStyle(Color.nexdoSecondary).multilineTextAlignment(.center)
+                    .padding(.horizontal,38).padding(.top,18)
+
+                Spacer(minLength:32)
+
+                VStack(spacing:12) {
+                    Button(action:onDone){Text("Done").font(.headline).foregroundStyle(.white).frame(maxWidth:.infinity,minHeight:54).background(NexdoTheme.gradient,in:RoundedRectangle(cornerRadius:18,style:.continuous))}
+                        .buttonStyle(.plain).accessibilityIdentifier("shopping-completion-done")
+                    Button(action:onUseAgain){Label(summary.nextListReady ? "View Next Shopping List":"Use This List Again",systemImage:"arrow.counterclockwise").font(.headline).foregroundStyle(Color.nexdoIndigo).frame(maxWidth:.infinity,minHeight:54).background(Color(uiColor:.secondarySystemGroupedBackground),in:RoundedRectangle(cornerRadius:18,style:.continuous)).overlay(RoundedRectangle(cornerRadius:18,style:.continuous).stroke(Color.nexdoIndigo.opacity(0.18)))}
+                        .buttonStyle(.plain).accessibilityIdentifier("shopping-completion-use-again")
+                }.padding(.horizontal,24).padding(.bottom,28)
+            }
+            if !reduceMotion {MomentConfetti()}
+        }
+        .ignoresSafeArea(edges:.bottom)
+    }
+
+    private func metric(value:String,label:String,icon:String,color:Color)->some View {
+        VStack(spacing:5) {
+            Image(systemName:icon).font(.headline).foregroundStyle(color)
+            Text(value).font(.title2.bold()).foregroundStyle(Color.nexdoInk)
+            Text(label).font(.caption).foregroundStyle(Color.nexdoSecondary).lineLimit(1).minimumScaleFactor(0.75)
+        }.frame(maxWidth:.infinity)
+    }
+}
+
 private struct ShoppingBatchReview:View {
     @Environment(\.dismiss) private var dismiss
     @State var items:[GroceryItem]
@@ -536,9 +626,11 @@ private struct GroceryRow:View {
                         Text(row.amountLabel).font(.caption).foregroundStyle(Color.nexdoSecondary)
                         if !row.notes.isEmpty{Text(row.notes).font(.caption2).foregroundStyle(.secondary).lineLimit(1)}
                     }
-                }.contentShape(Rectangle())
+                    Spacer(minLength:4)
+                }
+                .frame(maxWidth:.infinity,alignment:.leading)
+                .contentShape(Rectangle())
             }.buttonStyle(.plain).disabled(readOnly).accessibilityLabel("Edit "+row.name)
-            Spacer(minLength:4)
             Button(action:onAlternatives){Image(systemName:"star.fill").font(.body.weight(.semibold)).foregroundStyle(Color.nexdoBlue).frame(width:38,height:38)}
                 .buttonStyle(.plain).disabled(readOnly).accessibilityLabel("Show alternatives for \(row.name)")
         }.padding(.vertical,5)
