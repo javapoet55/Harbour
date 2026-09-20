@@ -82,44 +82,25 @@ struct ShoppingVoiceView:View {
     @Environment(\.scenePhase) private var phase
     @AppStorage("shopping.liveTranscriptionEnabled") private var consent = true
     @State private var startBell = ShoppingVoiceBell()
-    @State private var review:[GroceryItem]=[]
-    @State private var reviewing=false
     @State private var parsing=false
     @State private var error:String?
     var body:some View {
         NavigationStack {
             ZStack{TodayBackdrop();ScrollView{VStack(spacing:22){
-                Text(reviewing ? "Review your items":"Tell me what to add").font(.largeTitle.bold())
+                Text("Tell me what to add").font(.largeTitle.bold())
                 Text("Try “six bananas, one gallon of milk, and two bags of rice 5 kg.”").foregroundStyle(.secondary)
-                if !reviewing {
-                    Button{
-                        if !voice.listening { startBell.play() }
-                        Task{if voice.listening{await voice.finish()}else{await voice.start(store:store)}}
-                    }label:{
-                        Image(systemName:voice.listening ? "pause.fill":"mic.fill").font(.system(size:48)).foregroundStyle(.white).frame(width:140,height:140).background(NexdoTheme.gradient,in:Circle()).shadow(color:.nexdoIndigo.opacity(0.2),radius:24)
-                    }.disabled(!consent || voice.connecting || voice.finishing).accessibilityLabel(voice.listening ? "Pause listening":"Start listening")
-                    Text(!consent ? "Enable live transcription below to start":voice.finishing ? "Finishing transcription…":voice.connecting ? "Connecting…":voice.listening ? "Listening — keep going":"Ready when you are").font(.headline)
-                    Toggle("Allow live voice transcription",isOn:$consent).onChange(of:consent){_,value in if !value{voice.close()}}
-                    Text("Tap the mic to transcribe in English. Audio is sent only while listening. Review items before adding them.").font(.caption).foregroundStyle(.secondary)
-                    TextEditor(text:$voice.text).frame(minHeight:120).padding(10).background(.ultraThinMaterial,in:RoundedRectangle(cornerRadius:16)).accessibilityLabel("Shopping transcript")
-                    MomentPrimary(title:parsing ? "Organizing…":"Review Items"){Task{
-                        parsing=true;await voice.finish()
-                        do{review=try await store.parse(voice.text);reviewing = !review.isEmpty;if review.isEmpty{error="No items found. Type or dictate an item."}}
-                        catch{self.error=error.localizedDescription};parsing=false
-                    }}.disabled(parsing || voice.text.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty)
-                }else{
-                    ForEach($review){$item in
-                        MomentCard {
-                            TextField("Item",text:$item.name)
-                            HStack{TextField("Quantity",text:$item.quantity);TextField("Size",text:$item.size)}
-                            Picker("Category",selection:$item.category){ForEach(GroceryItem.categories,id:\.self){Text($0)}}
-                            TextField("Notes",text:$item.notes)
-                            Button("Remove",role:.destructive){review.removeAll{$0.id==item.id}}
-                        }
-                    }
-                    MomentPrimary(title:"Add \(review.count) Items"){onAdd(review);dismiss()}.disabled(review.isEmpty || review.contains{$0.name.trimmingCharacters(in:.whitespaces).isEmpty})
-                    Button("Keep dictating"){reviewing=false}
-                }
+                Button{
+                    if !voice.listening { startBell.play() }
+                    Task{if voice.listening{await voice.finish()}else{await voice.start(store:store)}}
+                }label:{
+                    Image(systemName:voice.listening ? "pause.fill":"mic.fill").font(.system(size:48)).foregroundStyle(.white).frame(width:140,height:140).background(NexdoTheme.gradient,in:Circle()).shadow(color:.nexdoIndigo.opacity(0.2),radius:24)
+                }.disabled(!consent || voice.connecting || voice.finishing).accessibilityLabel(voice.listening ? "Pause listening":"Start listening")
+                Text(!consent ? "Enable live transcription below to start":voice.finishing ? "Finishing transcription…":voice.connecting ? "Connecting…":voice.listening ? "Listening — keep going":"Tap Mic and Talk").font(.headline)
+                Toggle("Allow live voice transcription",isOn:$consent).onChange(of:consent){_,value in if !value{voice.close()}}
+                Text("Tap the mic to transcribe in English. Audio is sent only while listening. Nexdo organizes your words into grocery items before adding them.").font(.caption).foregroundStyle(.secondary)
+                TextEditor(text:$voice.text).frame(minHeight:120).padding(10).background(.ultraThinMaterial,in:RoundedRectangle(cornerRadius:16)).accessibilityLabel("Shopping transcript")
+                MomentPrimary(title:parsing ? "Adding…":"Add to List"){Task{await addItems()}}
+                    .disabled(parsing || voice.text.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty)
                 if let message=error ?? voice.error {Text(message).foregroundStyle(.red)}
             }.padding(20)}}
             .navigationTitle("Add by Voice").navigationBarTitleDisplayMode(.inline)
@@ -127,6 +108,15 @@ struct ShoppingVoiceView:View {
             .onDisappear{voice.close()}
             .onChange(of:phase){_,value in if value != .active{voice.close()}}
         }
+    }
+    @MainActor private func addItems() async {
+        parsing=true;error=nil
+        await voice.finish()
+        do {
+            let items=try await store.parse(voice.text).filter{!$0.name.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty}
+            guard !items.isEmpty else{error="No items found. Type or dictate an item.";parsing=false;return}
+            onAdd(items);dismiss()
+        } catch {self.error=error.localizedDescription;parsing=false}
     }
 }
 

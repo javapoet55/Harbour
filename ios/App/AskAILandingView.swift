@@ -16,22 +16,14 @@ struct AskAILandingView: View {
     enum Destination: String, Identifiable { case shopping, moments; var id: String { rawValue } }
 
     private let cards: [(String, String, String, Color)] = [
-        ("My Full Day Briefing", "Priorities and\nyour next move", "calendar", .blue),
+        ("My Daily Brief", "Priorities and\nyour next move", "calendar", .blue),
         ("Top 3 Focus Tasks", "Urgency, effort\nand impact", "scope", .green),
         ("Deadlines & Risks", "Due in the\nnext 5 days", "exclamationmark.triangle", .orange),
         ("Find Time", "Free time around\nyour plans", "clock", .purple),
         ("Plan Tomorrow", "Check tomorrow’s\navailable time", "sunrise", .pink),
         ("Shopping List", "Add items and\nmanage lists", "cart", .teal),
-        ("Important Moments", "Birthdays, Festivals,\nand special events", "gift", .orange),
+        ("My Moments", "Birthdays, Festivals,\nand special events", "gift", .orange),
         ("Ask Anything", "Answers, ideas\nand planning", "lightbulb", .cyan)
-    ]
-    private let shortcuts: [(String, String, String)] = [
-        ("Summarize today", "calendar", "Summarize my day."),
-        ("What’s next?", "list.bullet", "What should I do next?"),
-        ("Find time for a workout", "figure.run", "Find time for a workout around my commitments."),
-        ("Add to shopping list", "cart", "Help me add items to my shopping list."),
-        ("Plan a special moment", "gift", "Help me plan a special moment."),
-        ("Call or message", "phone", "Help me prepare a call or message. Ask who I want to contact.")
     ]
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -52,10 +44,7 @@ struct AskAILandingView: View {
                     Text("Plan smarter. Do more. Stress less.").font(.subheadline).foregroundStyle(Color.nexdoSecondary)
                 }.frame(maxWidth: .infinity, alignment: .leading)
                 if !typeSize.isAccessibilitySize {
-                    VStack(spacing: 0) {
-                        Text("Let’s make room for what matters. 😊").font(.system(size: 11)).foregroundStyle(Color.nexdoIndigo).padding(10).background(.white.opacity(0.7), in: RoundedRectangle(cornerRadius: 18))
-                        NexdoAIOrb().frame(width: 64, height: 64)
-                    }.frame(width: 94)
+                    NexdoAIOrb().frame(width: 64, height: 64).frame(width: 94)
                 }
             }.padding(.vertical, 6)
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: typeSize.isAccessibilitySize ? 1 : 2), spacing: 8) {
@@ -85,16 +74,7 @@ struct AskAILandingView: View {
                     }.disabled(!sendEnabled || busy).accessibilityLabel("Send request")
                 }.padding(7).background(.white, in: RoundedRectangle(cornerRadius: 28))
                 if prompt.count > 4000 { Text("Keep your request under 4,000 characters.").font(.caption).foregroundStyle(.red) }
-            }.padding(12).background(pastel(.purple), in: RoundedRectangle(cornerRadius: 20))
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: typeSize.isAccessibilitySize ? 1 : 3), spacing: 8) {
-                ForEach(shortcuts.indices, id: \.self) { index in
-                    let shortcut = shortcuts[index]
-                    Button { ask(shortcut.2) } label: {
-                        Label(shortcut.0, systemImage: shortcut.1).font(.caption).frame(maxWidth: .infinity, minHeight: 44).padding(.horizontal, 6)
-                            .background(Color.nexdoIndigo.opacity(0.025), in: Capsule()).overlay(Capsule().stroke(Color.nexdoIndigo.opacity(0.12)))
-                    }.buttonStyle(.plain).disabled(busy)
-                }
-            }.foregroundStyle(Color.nexdoSecondary)
+            }.padding(12).frame(minHeight:240).background(pastel(.purple), in: RoundedRectangle(cornerRadius: 20))
             Label("Powered by Nexdo AI", systemImage: "sparkles").font(.caption).foregroundStyle(Color.nexdoSecondary.opacity(0.65)).frame(maxWidth: .infinity).padding(.vertical, 12)
         }
         .foregroundStyle(Color.nexdoInk)

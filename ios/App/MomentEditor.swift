@@ -9,7 +9,7 @@ struct MomentEditor: View {
     var imported: MomentInput? = nil
     var onDone: (() -> Void)? = nil
     @State private var input = MomentInput()
-    @State private var date = Date()
+    @State private var date = Calendar.current.date(byAdding:.day,value:1,to:Date()) ?? Date().addingTimeInterval(86_400)
     @State private var initialized = false
     @State private var dateConfirmed = true
     @State private var choosingRecipient = false
@@ -91,8 +91,11 @@ struct MomentEditor: View {
                 Section("Greeting Card") {MomentGreetingCardSection(moment:moment,store:store)}
             }
             if let error = store.error { Text(error).foregroundStyle(.red) }
-            Button(completedSave ? "Open Saved Moment" : input.type == "festival" && !festivalRecipients.isEmpty ? "Save for \(festivalRecipients.count) contacts" : "Save Moment", action: save)
+            MomentPrimary(title:moment == nil ? "Save Moment & Continue":"Save Changes",action:save)
                 .disabled(saveDisabled)
+                .listRowInsets(EdgeInsets(top:12,leading:20,bottom:16,trailing:20))
+                .listRowBackground(Color.clear)
+                .accessibilityIdentifier("moment-save-continue")
 
         }
         .disabled(store.busy)

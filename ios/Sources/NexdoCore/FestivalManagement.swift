@@ -2,7 +2,7 @@ import Foundation
 
 public struct FestivalSettings: Codable, Equatable, Sendable {
     public var groupID = UUID().uuidString
-    public var prepareDays = 7
+    public var prepareDays = 1
     public var catalogID = "", catalogManaged = false
     public var baseMessage = "", tone = "Warm", personalContext = ""
     public var manuallyEdited = false

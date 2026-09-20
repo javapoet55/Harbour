@@ -219,8 +219,6 @@ struct ShoppingDetail:View {
     @State private var completion:ShoppingCompletionSummary?
     @State private var recommendations=false
     @State private var alternativesFor:GroceryItem?
-    @State private var pending:[GroceryItem]=[]
-    @State private var pendingReview=false
     @State private var parseBusy=false
     @State private var error:String?
     @State private var selectedCategory="All"
@@ -295,7 +293,6 @@ struct ShoppingDetail:View {
             }
             .sheet(item:$item){value in ShoppingItemEditor(store:store,initial:value){updated in var next=list;if let index=next.items.firstIndex(where:{$0.id==updated.id}){next.items[index]=updated}else{next.items.append(updated)};save(next)}}
             .sheet(isPresented:$voice){ShoppingVoiceView(store:store){items in var next=list;next.items.append(contentsOf:items);save(next)}}
-            .sheet(isPresented:$pendingReview){ShoppingBatchReview(items:pending){values in var next=list;next.items.append(contentsOf:values);save(next)}}
             .sheet(isPresented:$copy){NewShoppingList(store:store,source:list){list=$0}}
             .sheet(isPresented:$settings){ShoppingSettings(initial:list){save($0)}}
             .sheet(isPresented:$sharing){ShoppingShare(store:store,list:list){list=$0}}
@@ -374,7 +371,20 @@ struct ShoppingDetail:View {
             } else if let saved=await store.action("save",list:original,input:ShoppingInput(next)){list=saved;error=nil}
         }
     }
-    private func quickAdd(){guard !quick.isEmpty else{return};parseBusy=true;Task{do{pending=try await store.parse(quick);pendingReview=true;quick=""}catch{self.error=error.localizedDescription};parseBusy=false}}
+    private func quickAdd(){
+        let value=quick.trimmingCharacters(in:.whitespacesAndNewlines)
+        guard !value.isEmpty else{return}
+        parseBusy=true;error=nil
+        Task{
+            defer{parseBusy=false}
+            do{
+                let items=try await store.parse(value).filter{!$0.name.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty}
+                guard !items.isEmpty else{error="No items found. Type an item and try again.";return}
+                var next=list;next.items.append(contentsOf:items)
+                quick="";save(next)
+            }catch{self.error=error.localizedDescription}
+        }
+    }
     @ViewBuilder private func categoryChip(_ category:String,count:Int)->some View {
         let selected=selectedCategory==category
         Button{selectedCategory=category}label:{
@@ -414,14 +424,17 @@ private struct ShoppingCompletionView:View {
                 ZStack {
                     Circle().fill(NexdoTheme.gradient).frame(width:132,height:132)
                         .shadow(color:Color.nexdoIndigo.opacity(0.24),radius:24,y:12)
-                    Circle().stroke(Color.white.opacity(0.34),lineWidth:2).frame(width:108,height:108)
-                    Image(systemName:"cart.badge.checkmark").font(.system(size:52,weight:.semibold)).foregroundStyle(.white)
+                    Circle().fill(Color.white.opacity(0.94)).frame(width:108,height:108)
+                    Circle().stroke(Color.white.opacity(0.42),lineWidth:2).frame(width:116,height:116)
+                    Image(systemName:"tree.fill").font(.system(size:52,weight:.semibold)).foregroundStyle(Color.green)
                 }
                 .accessibilityHidden(true)
                 .padding(.bottom,28)
 
-                Text("Great job!").font(.system(size:38,weight:.bold,design:.rounded)).foregroundStyle(Color.nexdoInk)
-                Text("Shopping trip complete").font(.title3.weight(.semibold)).foregroundStyle(Color.nexdoIndigo).padding(.top,8)
+                Text("Great job for saving a branch on a tree!")
+                    .font(.system(size:32,weight:.bold,design:.rounded)).foregroundStyle(Color.nexdoInk)
+                    .multilineTextAlignment(.center).padding(.horizontal,28)
+                Text("Completed").font(.title3.weight(.semibold)).foregroundStyle(Color.nexdoIndigo).padding(.top,10)
                 Text(summary.listName).font(.subheadline).foregroundStyle(Color.nexdoSecondary).padding(.top,5)
 
                 HStack(spacing:0) {
@@ -466,15 +479,6 @@ private struct ShoppingCompletionView:View {
     }
 }
 
-private struct ShoppingBatchReview:View {
-    @Environment(\.dismiss) private var dismiss
-    @State var items:[GroceryItem]
-    let onAdd:([GroceryItem])->Void
-    var body:some View{NavigationStack{List{
-        ForEach($items){$item in VStack(alignment:.leading){TextField("Item",text:$item.name);HStack{TextField("Quantity",text:$item.quantity);TextField("Size",text:$item.size)}}}.onDelete{items.remove(atOffsets:$0)}
-        Button("Add \(items.count) Items"){onAdd(items);dismiss()}.disabled(items.isEmpty || items.contains{$0.name.trimmingCharacters(in:.whitespaces).isEmpty})
-    }.navigationTitle("Review Items").toolbar{Button("Cancel"){dismiss()}}}}
-}
 private struct ShoppingSettings:View {
     @Environment(\.dismiss) private var dismiss
     @State var initial:GroceryList

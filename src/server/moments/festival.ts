@@ -4,7 +4,7 @@ import { day, zone, MomentError } from './domain';
 import { log } from '@/lib/logger';
 
 export const festivalSettings = z.object({
- groupID:z.string().min(1).max(200), prepareDays:z.union([z.literal(0),z.literal(1),z.literal(3),z.literal(7),z.literal(14)]).default(7),
+ groupID:z.string().min(1).max(200), prepareDays:z.union([z.literal(0),z.literal(1),z.literal(3),z.literal(7),z.literal(14)]).default(1),
  catalogID:z.string().max(80).default(''), catalogManaged:z.boolean().default(false), baseMessage:z.string().max(500).default(''),
  tone:z.enum(['Warm','Personal','Short','Fun']).default('Warm'), personalContext:z.string().max(500).default(''),
  manuallyEdited:z.boolean().default(false), approvedAt:z.string().nullable().default(null),

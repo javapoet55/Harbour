@@ -29,7 +29,8 @@ export default function LoginPage() {
       setError('Those credentials were not accepted.');
       return;
     }
-    router.push('/');
+    const body = await res.json().catch(() => ({}));
+    router.push(body.admin ? '/admin' : '/');
     router.refresh();
   }
 
