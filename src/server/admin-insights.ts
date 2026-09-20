@@ -25,7 +25,7 @@ export function adminOverviewGrounding(snapshot: Snapshot) {
     usersByPlan: snapshot.planCounts,
     featureUsage: snapshot.featureCounts,
     dailyTrends: snapshot.trends,
-    recentSignups: snapshot.users.slice(0, 8).map(({ name, email, plan, createdAt, verified }) => ({ name, email, plan, createdAt, verified })),
+    recentSignups: snapshot.users.slice(0, 8).map(({ name, email, plan, city, country, createdAt, verified }) => ({ name, email, plan, city, country, createdAt, verified })),
     recentVoiceActivity: snapshot.recentVoice,
     dataLimits: [
       'AI usage is stored as auditable assistant actions; raw model input and output token counts are not currently stored.',
@@ -107,6 +107,9 @@ function publicUser(user: Snapshot['users'][number]) {
     name: user.name,
     email: user.email,
     plan: user.plan,
+    city: user.city,
+    country: user.country,
+    timeZone: user.timeZone,
     createdAt: user.createdAt,
     lastActiveAt: user.lastActiveAt,
     aiActions: user.aiActions,
