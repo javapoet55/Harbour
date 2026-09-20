@@ -4,7 +4,7 @@ import { FormEvent, useRef, useState } from 'react';
 import { CalendarDays, ChevronDown } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
-type Props = { from: string; to: string; label: string; today: string };
+type Props = { from: string; to: string; label: string; today: string; pathname?: string };
 
 function shifted(today: string, days: number) {
   const date = new Date(`${today}T00:00:00.000Z`);
@@ -12,7 +12,7 @@ function shifted(today: string, days: number) {
   return date.toISOString().slice(0, 10);
 }
 
-export function AdminDateRangeFilter({ from: initialFrom, to: initialTo, label, today }: Props) {
+export function AdminDateRangeFilter({ from: initialFrom, to: initialTo, label, today, pathname = '/admin/users' }: Props) {
   const router = useRouter();
   const details = useRef<HTMLDetailsElement>(null);
   const [from, setFrom] = useState(initialFrom);
@@ -25,7 +25,7 @@ export function AdminDateRangeFilter({ from: initialFrom, to: initialTo, label, 
     const days = Math.floor((+new Date(`${nextTo}T00:00:00Z`) - +new Date(`${nextFrom}T00:00:00Z`)) / 86_400_000) + 1;
     if (days > 366) { setError('Choose a range of 366 days or less.'); return; }
     details.current?.removeAttribute('open');
-    router.push(`/admin/users?from=${encodeURIComponent(nextFrom)}&to=${encodeURIComponent(nextTo)}`);
+    router.push(`${pathname}?from=${encodeURIComponent(nextFrom)}&to=${encodeURIComponent(nextTo)}`);
   }
 
   function apply(event: FormEvent) { event.preventDefault(); navigate(from, to); }

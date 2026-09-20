@@ -2,14 +2,16 @@ import { NextResponse } from 'next/server';
 import { ZodError } from 'zod';
 import { requireAdmin } from '@/server/admin-auth';
 import { adminQuestionSchema, answerAdminAnalyticsQuestion } from '@/server/admin-insights';
+import { parseAdminDateRange } from '@/lib/admin-date-range';
 
 export const runtime = 'nodejs';
 
 export async function POST(request: Request) {
   try {
     const admin = await requireAdmin();
-    const { question, days } = adminQuestionSchema.parse(await request.json().catch(() => null));
-    const result = await answerAdminAnalyticsQuestion(admin.id, question, days);
+    const { question, days, from, to } = adminQuestionSchema.parse(await request.json().catch(() => null));
+    const range = from && to ? parseAdminDateRange(from, to) : undefined;
+    const result = await answerAdminAnalyticsQuestion(admin.id, question, days, range ? { from: range.fromDate, to: range.toDate } : undefined);
     return NextResponse.json(result, { headers: { 'Cache-Control': 'private, no-store' } });
   } catch (error) {
     if (error instanceof ZodError) return NextResponse.json({ error: error.issues[0]?.message ?? 'Enter a valid question.' }, { status: 400 });

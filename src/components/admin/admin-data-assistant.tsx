@@ -1,15 +1,17 @@
 'use client';
 
-import { FormEvent, useState } from 'react';
+import { FormEvent, KeyboardEvent, useRef, useState } from 'react';
 import { Bot, Database, LoaderCircle, Send, Sparkles } from 'lucide-react';
 
-const prompts = [
-  'Summarize platform usage over the last 30 days.',
+function prompts(days: number) { return [
+  `Summarize platform usage for the selected ${days === 1 ? 'day' : `${days}-day period`}.`,
   'Which features are used most, and what should I watch?',
   'How is voice usage changing compared with the previous period?',
-];
+]; }
 
-export function AdminDataAssistant() {
+export function AdminDataAssistant({ days, from, to }: { days: number; from: string; to: string }) {
+  const form = useRef<HTMLFormElement>(null);
+  const textarea = useRef<HTMLTextAreaElement>(null);
   const [question, setQuestion] = useState('');
   const [answer, setAnswer] = useState('');
   const [error, setError] = useState('');
@@ -27,7 +29,7 @@ export function AdminDataAssistant() {
       const response = await fetch('/api/admin/insights', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ question: value, days: 30 }),
+        body: JSON.stringify({ question: value, days, from, to }),
       });
       const body = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(body.error || 'The question could not be answered.');
@@ -40,6 +42,17 @@ export function AdminDataAssistant() {
     }
   }
 
+  function choosePrompt(prompt: string) {
+    setQuestion(prompt);
+    requestAnimationFrame(() => textarea.current?.focus());
+  }
+
+  function submitOnEnter(event: KeyboardEvent<HTMLTextAreaElement>) {
+    if (event.key !== 'Enter' || event.shiftKey || event.nativeEvent.isComposing) return;
+    event.preventDefault();
+    form.current?.requestSubmit();
+  }
+
   return <section className="admin-data-assistant" aria-labelledby="admin-data-assistant-title">
     <div className="admin-data-assistant-heading">
       <span><Sparkles size={21}/></span>
@@ -49,12 +62,14 @@ export function AdminDataAssistant() {
       </div>
       <div className="admin-data-badge"><Database size={14}/> Live database</div>
     </div>
-    <form onSubmit={submit} className="admin-data-form">
+    <form ref={form} onSubmit={submit} className="admin-data-form">
       <label htmlFor="admin-data-question" className="admin-sr-only">Ask a question about Nexdo usage data</label>
       <textarea
+        ref={textarea}
         id="admin-data-question"
         value={question}
         onChange={(event) => setQuestion(event.target.value)}
+        onKeyDown={submitOnEnter}
         placeholder="Ask about users, plans, AI actions, voice usage, features, or estimated revenue…"
         maxLength={600}
         rows={2}
@@ -66,7 +81,7 @@ export function AdminDataAssistant() {
       </button>
     </form>
     <div className="admin-data-prompts" aria-label="Suggested questions">
-      {prompts.map((prompt) => <button type="button" key={prompt} onClick={() => setQuestion(prompt)} disabled={busy}>{prompt}</button>)}
+      {prompts(days).map((prompt) => <button type="button" key={prompt} onClick={() => choosePrompt(prompt)} disabled={busy}>{prompt}</button>)}
     </div>
     {(answer || error) && <div className={`admin-data-answer${error ? ' error' : ''}`} role="status" aria-live="polite">
       <div className="admin-data-answer-icon"><Bot size={20}/></div>

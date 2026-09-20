@@ -2,14 +2,23 @@ import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { getAdminSnapshot } from '@/server/admin-analytics';
 import { log } from '@/lib/logger';
+import { parseAdminDateRange } from '@/lib/admin-date-range';
 
-const allowedPeriods = [7, 15, 30, 60, 90] as const;
-const periodSchema = z.union([z.literal(7), z.literal(15), z.literal(30), z.literal(60), z.literal(90)]);
+const periodSchema = z.number().int().min(1).max(366);
+const dateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 
 export const adminQuestionSchema = z.object({
   question: z.string().trim().min(3, 'Enter a question about Nexdo usage.').max(600, 'Keep the question under 600 characters.'),
   days: periodSchema.default(30),
-}).strict();
+  from: dateSchema.optional(),
+  to: dateSchema.optional(),
+}).strict().superRefine((value, context) => {
+  if (Boolean(value.from) !== Boolean(value.to)) context.addIssue({ code: 'custom', message: 'Choose both a start and end date.' });
+  if (value.from && value.to) {
+    const parsed = parseAdminDateRange(value.from, value.to);
+    if (parsed.from !== value.from || parsed.to !== value.to || parsed.days !== value.days) context.addIssue({ code: 'custom', message: 'Choose a valid reporting range.' });
+  }
+});
 
 type Snapshot = Awaited<ReturnType<typeof getAdminSnapshot>>;
 
@@ -57,7 +66,7 @@ const tools = [
     strict: true,
     parameters: {
       type: 'object', additionalProperties: false, required: ['days'],
-      properties: { days: { type: 'integer', enum: allowedPeriods } },
+      properties: { days: { type: 'integer', minimum: 1, maximum: 366 } },
     },
   },
   {
@@ -69,7 +78,7 @@ const tools = [
       type: 'object', additionalProperties: false, required: ['query', 'days'],
       properties: {
         query: { type: 'string', minLength: 2, maxLength: 120 },
-        days: { type: 'integer', enum: allowedPeriods },
+        days: { type: 'integer', minimum: 1, maximum: 366 },
       },
     },
   },
@@ -83,7 +92,7 @@ const tools = [
       properties: {
         metric: { type: 'string', enum: ['ai_actions', 'voice_minutes', 'latest_activity', 'latest_signup'] },
         limit: { type: 'integer', minimum: 1, maximum: 20 },
-        days: { type: 'integer', enum: allowedPeriods },
+        days: { type: 'integer', minimum: 1, maximum: 366 },
       },
     },
   },
@@ -118,16 +127,18 @@ function publicUser(user: Snapshot['users'][number]) {
   };
 }
 
-export async function answerAdminAnalyticsQuestion(adminId: string, question: string, initialDays = 30) {
+export async function answerAdminAnalyticsQuestion(adminId: string, question: string, initialDays = 30, initialRange?: { from: Date; to: Date }) {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) throw new Error('OPENAI_NOT_CONFIGURED');
 
-  const snapshots = new Map<number, Promise<Snapshot>>();
+  const snapshots = new Map<string, Promise<Snapshot>>();
   const snapshotFor = (days: number) => {
-    let pending = snapshots.get(days);
+    const selectedRange = initialRange && days === initialDays ? initialRange : undefined;
+    const key = selectedRange ? `${selectedRange.from.toISOString()}:${selectedRange.to.toISOString()}` : String(days);
+    let pending = snapshots.get(key);
     if (!pending) {
-      pending = getAdminSnapshot(days);
-      snapshots.set(days, pending);
+      pending = getAdminSnapshot(days, selectedRange);
+      snapshots.set(key, pending);
     }
     return pending;
   };

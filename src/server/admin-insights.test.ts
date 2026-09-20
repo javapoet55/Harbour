@@ -17,10 +17,12 @@ function snapshot() {
 }
 
 describe('admin analytics assistant grounding', () => {
-  it('accepts a bounded usage question and supported period', () => {
+  it('accepts a bounded usage question and selected date range', () => {
     expect(adminQuestionSchema.parse({ question: ' Which feature is most used? ', days: 30 })).toEqual({ question: 'Which feature is most used?', days: 30 });
+    expect(adminQuestionSchema.parse({ question: 'Show usage', days: 20, from: '2026-09-01', to: '2026-09-20' })).toMatchObject({ days: 20, from: '2026-09-01', to: '2026-09-20' });
     expect(adminQuestionSchema.safeParse({ question: 'x', days: 30 }).success).toBe(false);
-    expect(adminQuestionSchema.safeParse({ question: 'Show usage', days: 365 }).success).toBe(false);
+    expect(adminQuestionSchema.safeParse({ question: 'Show usage', days: 367 }).success).toBe(false);
+    expect(adminQuestionSchema.safeParse({ question: 'Show usage', days: 10, from: '2026-09-01', to: '2026-09-20' }).success).toBe(false);
   });
 
   it('grounds the model in reporting data without internal user identifiers', () => {

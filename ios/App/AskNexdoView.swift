@@ -289,7 +289,7 @@ struct AskNexdoView: View {
                     .padding(.horizontal, 16)
                     .background(.regularMaterial)
                 }
-                if model.turn != nil { composer }
+                if model.turn != nil && shoppingContext == nil { composer }
             }
         }
         .interactiveDismissDisabled(composerFocused || submitting)
