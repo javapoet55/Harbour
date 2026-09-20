@@ -1,6 +1,6 @@
 import { currentUser } from '@/server/auth';
 
-const defaultAdminEmails = ['jsriramk@mail.com'];
+const defaultAdminEmails = ['jsriramk@mail.com', 'jsriramk@gmail.com'];
 
 export function adminEmails() {
   const configured = (process.env.NEXDO_ADMIN_EMAILS ?? '').split(',');

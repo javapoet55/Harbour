@@ -11,6 +11,7 @@ afterEach(() => {
 describe('admin authorization', () => {
   it('allows the configured Nexdo administrator case-insensitively', () => {
     expect(isAdminEmail(' JSRIRAMK@MAIL.COM ')).toBe(true);
+    expect(isAdminEmail('jsriramk@gmail.com')).toBe(true);
     expect(isAdminEmail('someone@example.com')).toBe(false);
   });
 
