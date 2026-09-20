@@ -1,3 +1,4 @@
+import { healthRoute } from '@/server/health/telemetry';
 import { NextResponse } from 'next/server';
 import { requireUser } from '@/server/auth';
 import { prisma } from '@/server/db';
@@ -41,7 +42,7 @@ const settingsSchema = z.object({
   nextAction: z.object({ enabled: z.boolean().optional(), switchingThreshold: z.number().int().min(0).max(50).optional() }).optional(),
 });
 
-export async function PATCH(req: Request) {
+async function healthHandlerPATCH(req: Request) {
   try {
     const user = await requireUser();
     const parsed = settingsSchema.safeParse(await req.json());
@@ -81,3 +82,5 @@ export async function PATCH(req: Request) {
     return jsonError(err);
   }
 }
+
+export const PATCH = healthRoute('PATCH /api/settings', healthHandlerPATCH);

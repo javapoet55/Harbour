@@ -1,3 +1,4 @@
+import { healthRoute } from '@/server/health/telemetry';
 import { NextResponse } from 'next/server';
 import { requireUser } from '@/server/auth';
 import { prisma } from '@/server/db';
@@ -5,7 +6,7 @@ import { syncConnection } from '@/server/calendar-sync';
 import { jsonError } from '@/lib/http';
 import { generateReplanProposal } from '@/server/replanner';
 
-export async function POST(req: Request) {
+async function healthHandlerPOST(req: Request) {
   try {
     const cronSecret = process.env.HARBOR_CRON_SECRET;
     const isCron = Boolean(cronSecret && req.headers.get('authorization') === `Bearer ${cronSecret}`);
@@ -25,3 +26,5 @@ export async function POST(req: Request) {
     return NextResponse.json({ results, replans });
   } catch (error) { return jsonError(error); }
 }
+
+export const POST = healthRoute('POST /api/calendar/sync', healthHandlerPOST);

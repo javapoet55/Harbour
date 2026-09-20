@@ -1,3 +1,4 @@
+import { observedFetch } from '@/server/health/telemetry';
 import { z } from 'zod';
 import { prisma } from '@/server/db';
 import { MomentError } from './domain';
@@ -23,7 +24,7 @@ export async function generateGreetingArtwork(userId:string,input:unknown,signal
  if(usage.busy||usage.count>=6) throw new MomentError('Please wait before generating another greeting card.',429);
  usage.count++;usage.busy=true;attempts.set(userId,usage);
  try {
-  const response=await fetch('https://api.openai.com/v1/images/generations',{
+  const response=await observedFetch('https://api.openai.com/v1/images/generations',{
    method:'POST',signal:signal ? AbortSignal.any([signal,AbortSignal.timeout(130000)]) : AbortSignal.timeout(130000),
    headers:{Authorization:`Bearer ${process.env.OPENAI_API_KEY}`,'Content-Type':'application/json'},
    body:JSON.stringify({model:process.env.OPENAI_IMAGE_MODEL||'gpt-image-1.5',n:1,quality:'medium',output_format:'jpeg',output_compression:85,

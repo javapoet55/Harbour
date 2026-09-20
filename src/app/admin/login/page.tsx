@@ -2,8 +2,9 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { NexdoLogo } from '@/components/nexdo-logo';
 import { useRouter } from 'next/navigation';
-import { ArrowRight, LoaderCircle, Mail, ShieldCheck, Sparkles } from 'lucide-react';
+import { ArrowRight, LoaderCircle, Mail, ShieldCheck } from 'lucide-react';
 
 export default function AdminLoginPage() {
   const router = useRouter();
@@ -38,7 +39,7 @@ export default function AdminLoginPage() {
 
   return <main className="admin-login">
     <section className="admin-login-story" aria-label="NEXDO Admin">
-      <Link href="/admin/login" className="admin-login-brand"><Sparkles aria-hidden="true" size={30} /> NEXDO <span>ADMIN</span></Link>
+      <Link href="/admin/login" className="admin-login-brand"><NexdoLogo priority /><span>ADMIN</span></Link>
       <div className="admin-login-intro"><span className="admin-login-eyebrow">YOUR PLATFORM. ONE PLACE.</span><h1>A clear view.<br />A secure start.</h1><p>Manage your platform, understand your users, and keep Nexdo moving forward.</p></div>
       <p className="admin-login-security"><ShieldCheck size={20} aria-hidden="true" /> Protected with email verification at every sign-in.</p>
     </section>

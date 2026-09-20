@@ -1,3 +1,4 @@
+import { observedFetch } from '@/server/health/telemetry';
 import { z } from 'zod';
 import type { EmailProvider } from './types';
 
@@ -19,12 +20,12 @@ export const adminEmailProvider: EmailProvider = {
     const sender = process.env.NEXDO_ADMIN_FROM_EMAIL!.trim().toLowerCase();
     try {
       // Resolve the real sender from the authenticated mailbox, rather than spoofing a From header.
-      const account = await fetch(`${API}/me`, { headers, cache: 'no-store', redirect: 'error', signal: AbortSignal.timeout(10_000) });
+      const account = await observedFetch(`${API}/me`, { headers, cache: 'no-store', redirect: 'error', signal: AbortSignal.timeout(10_000) });
       if (!account.ok) return { id: '', status: 'FAILED', reason: `Hostinger account lookup failed (${account.status})` };
       const parsed = mailboxResponse.safeParse(await account.json());
       const mailbox = parsed.success ? parsed.data.data.mailboxes.find((entry) => entry.address.toLowerCase() === sender) : undefined;
       if (!mailbox) return { id: '', status: 'FAILED', reason: 'The configured admin sender is not available to this Hostinger key' };
-      const response = await fetch(`${API}/mailboxes/${encodeURIComponent(mailbox.resourceId)}/send`, {
+      const response = await observedFetch(`${API}/mailboxes/${encodeURIComponent(mailbox.resourceId)}/send`, {
         method: 'POST', headers, redirect: 'error', signal: AbortSignal.timeout(15_000),
         body: JSON.stringify({ to: [message.to], subject: message.subject, text: message.text,
           ...(message.html ? { html: message.html } : {}), displayName: 'NEXDO' }),

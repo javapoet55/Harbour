@@ -1,3 +1,4 @@
+import { healthRoute } from '@/server/health/telemetry';
 import { NextResponse } from 'next/server';
 import { currentUser } from '@/server/auth';
 import { withUser } from '@/lib/http';
@@ -6,7 +7,7 @@ import { oauthAuthorizationUrl, type OAuthProvider } from '@/providers/calendar'
 
 function valid(value: string): value is OAuthProvider { return value === 'google' || value === 'microsoft'; }
 
-export async function GET(req: Request, ctx: { params: Promise<{ provider: string }> }) {
+async function healthHandlerGET(req: Request, ctx: { params: Promise<{ provider: string }> }) {
   return withUser(async () => {
     const { provider } = await ctx.params;
     if (!valid(provider)) return NextResponse.json({ error: 'Unsupported provider.' }, { status: 400 });
@@ -22,3 +23,5 @@ export async function GET(req: Request, ctx: { params: Promise<{ provider: strin
     return NextResponse.redirect(oauthAuthorizationUrl(provider, await createOAuthState(userId, provider, native)));
   });
 }
+
+export const GET = healthRoute('GET /api/calendar/oauth/[provider]/start', healthHandlerGET);

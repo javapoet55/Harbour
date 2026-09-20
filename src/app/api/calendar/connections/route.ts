@@ -1,9 +1,10 @@
+import { healthRoute } from '@/server/health/telemetry';
 import { NextResponse } from 'next/server';
 import { requireUser } from '@/server/auth';
 import { prisma } from '@/server/db';
 import { jsonError } from '@/lib/http';
 
-export async function GET() {
+async function healthHandlerGET() {
   try {
     const user = await requireUser();
     const connections = await prisma.calendarConnection.findMany({
@@ -15,7 +16,7 @@ export async function GET() {
   } catch (error) { return jsonError(error); }
 }
 
-export async function PATCH(req: Request) {
+async function healthHandlerPATCH(req: Request) {
   try {
     const user = await requireUser();
     const body = await req.json();
@@ -30,7 +31,7 @@ export async function PATCH(req: Request) {
   } catch (error) { return jsonError(error); }
 }
 
-export async function DELETE(req: Request) {
+async function healthHandlerDELETE(req: Request) {
   try {
     const user = await requireUser();
     const id = new URL(req.url).searchParams.get('id');
@@ -46,3 +47,9 @@ export async function DELETE(req: Request) {
     return NextResponse.json({ ok: true });
   } catch (error) { return jsonError(error); }
 }
+
+export const GET = healthRoute('GET /api/calendar/connections', healthHandlerGET);
+
+export const PATCH = healthRoute('PATCH /api/calendar/connections', healthHandlerPATCH);
+
+export const DELETE = healthRoute('DELETE /api/calendar/connections', healthHandlerDELETE);

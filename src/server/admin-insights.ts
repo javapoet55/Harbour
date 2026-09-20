@@ -1,3 +1,4 @@
+import { observedFetch } from '@/server/health/telemetry';
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { getAdminSnapshot } from '@/server/admin-analytics';
@@ -203,7 +204,7 @@ export async function answerAdminAnalyticsQuestion(adminId: string, question: st
   }];
 
   for (let step = 0; step < 4; step += 1) {
-    const response = await fetch('https://api.openai.com/v1/responses', {
+    const response = await observedFetch('https://api.openai.com/v1/responses', {
       method: 'POST',
       headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({

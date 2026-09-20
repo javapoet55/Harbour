@@ -1,10 +1,12 @@
+import { observedFetch } from '@/server/health/telemetry';
+import { healthRoute } from '@/server/health/telemetry';
 import {z} from 'zod';
 import {requireUser} from '@/server/auth';
 import {jsonError} from '@/lib/http';
 export const runtime='nodejs';
 const attempts=new Map<string,{start:number,count:number,busy:boolean}>();
 const headers={'Cache-Control':'private, no-store'};
-export async function POST(req:Request){
+async function healthHandlerPOST(req:Request){
  try {
   const user=await requireUser();
   const parsed=z.object({name:z.string().trim().min(1).max(120),details:z.string().trim().max(300),consent:z.literal(true)}).safeParse(await req.json());
@@ -16,7 +18,7 @@ export async function POST(req:Request){
   if(usage.busy||usage.count>=6)return Response.json({error:'Please wait before generating another image.'},{status:429,headers});
   usage.count++;usage.busy=true;attempts.set(user.id,usage);
   try {
-   const response=await fetch('https://api.openai.com/v1/images/generations',{
+   const response=await observedFetch('https://api.openai.com/v1/images/generations',{
     method:'POST',signal:AbortSignal.any([req.signal,AbortSignal.timeout(130000)]),
     headers:{Authorization:`Bearer ${process.env.OPENAI_API_KEY}`,'Content-Type':'application/json'},
     body:JSON.stringify({model:process.env.OPENAI_IMAGE_MODEL||'gpt-image-1.5',n:1,size:'1024x1024',quality:'low',output_format:'jpeg',output_compression:75,
@@ -31,3 +33,5 @@ export async function POST(req:Request){
   return Response.json({error:'Image generation did not finish. Please try again.'},{status:502,headers});
  }
 }
+
+export const POST = healthRoute('POST /api/shopping/image', healthHandlerPOST);

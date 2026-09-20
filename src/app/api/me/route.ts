@@ -1,9 +1,10 @@
+import { healthRoute } from '@/server/health/telemetry';
 import { NextResponse } from 'next/server';
 import { currentUser } from '@/server/auth';
 import { prisma } from '@/server/db';
 import { NEXT_ACTION_POLICY } from '@/lib/next-action-config';
 
-export async function GET() {
+async function healthHandlerGET() {
   const user = await currentUser();
   if (!user) return NextResponse.json({ user: null }, { status: 401 });
   const memories = await prisma.userMemory.findMany({ where: { userId: user.id, key: { in: ['preference:next_action_enabled', 'preference:switching_threshold'] } }, select: { key: true, value: true } });
@@ -20,3 +21,5 @@ export async function GET() {
     },
   }, { headers: { 'Cache-Control': 'private, no-store' } });
 }
+
+export const GET = healthRoute('GET /api/me', healthHandlerGET);

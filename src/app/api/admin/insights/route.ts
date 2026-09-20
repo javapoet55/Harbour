@@ -1,3 +1,4 @@
+import { healthRoute } from '@/server/health/telemetry';
 import { NextResponse } from 'next/server';
 import { ZodError } from 'zod';
 import { requireAdmin } from '@/server/admin-auth';
@@ -6,7 +7,7 @@ import { parseAdminDateRange } from '@/lib/admin-date-range';
 
 export const runtime = 'nodejs';
 
-export async function POST(request: Request) {
+async function healthHandlerPOST(request: Request) {
   try {
     const admin = await requireAdmin();
     const { question, days, from, to } = adminQuestionSchema.parse(await request.json().catch(() => null));
@@ -22,3 +23,5 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'The usage question could not be answered.' }, { status: 500 });
   }
 }
+
+export const POST = healthRoute('POST /api/admin/insights', healthHandlerPOST);

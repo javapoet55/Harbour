@@ -1,3 +1,4 @@
+import { healthRoute } from '@/server/health/telemetry';
 import { generateGreetingArtwork, saveGreetingCard } from '@/server/moments/greeting-card';
 import { saveFestival, deleteFestival, festivalCatalog } from '@/server/moments/festival';
 import { NextResponse } from 'next/server';
@@ -9,8 +10,8 @@ import { listMoments, saveMoment, generateDraft, approveDraft, schedule, changeP
 import { connectURL, revokeEmail } from '@/server/moments/email';
 import { z } from 'zod';
 function failure(e:unknown) { if(e instanceof SyntaxError) return NextResponse.json({error:"Invalid JSON request."},{status:400}); return e instanceof MomentError ? NextResponse.json({error:e.message},{status:e.status}) : jsonError(e); }
-export async function GET() { try { return NextResponse.json(await listMoments((await requireUser()).id)); } catch(e) { return failure(e); } }
-export async function POST(req:Request) {
+async function healthHandlerGET() { try { return NextResponse.json(await listMoments((await requireUser()).id)); } catch(e) { return failure(e); } }
+async function healthHandlerPOST(req:Request) {
  try {
   const user=await requireUser();const raw=await req.text();if(raw.length>200000) throw new MomentError('Request too large.',413);
   const p=z.object({operation:z.string(),input:z.unknown().optional(),id:z.string().optional()}).parse(JSON.parse(raw));
@@ -40,8 +41,14 @@ export async function POST(req:Request) {
   }
  } catch(e) {return failure(e);}
 }
-export async function DELETE() {
+async function healthHandlerDELETE() {
  try { const user=await requireUser();if(await prisma.deliveryPlan.count({where:{draft:{moment:{userId:user.id}},status:'SENDING'}})) throw new MomentError('A send is in progress. Try again after it finishes.',409);
  await revokeEmail(user.id);
  await prisma.$transaction([prisma.importantMoment.deleteMany({where:{userId:user.id}}),prisma.momentEmailAccount.deleteMany({where:{userId:user.id}})]);return NextResponse.json({ok:true}); }catch(e){return failure(e);}
 }
+
+export const GET = healthRoute('GET /api/moments', healthHandlerGET);
+
+export const POST = healthRoute('POST /api/moments', healthHandlerPOST);
+
+export const DELETE = healthRoute('DELETE /api/moments', healthHandlerDELETE);

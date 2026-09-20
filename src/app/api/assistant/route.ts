@@ -1,3 +1,4 @@
+import { healthRoute } from '@/server/health/telemetry';
 import { NextResponse } from 'next/server';
 import { requireUser } from '@/server/auth';
 import { runConversationalAgent } from '@/server/conversational-agent';
@@ -5,7 +6,7 @@ import { jsonError } from '@/lib/http';
 import { assistantRequestSchema } from '@/lib/executive-contract';
 import { detectPolicyViolation, blockedAssistantTurn, sanitizeAssistantOutput } from '@/lib/llm-guard';
 
-export async function POST(req: Request) {
+async function healthHandlerPOST(req: Request) {
   try {
     const user = await requireUser();
     const parsed = assistantRequestSchema.safeParse(await req.json().catch(() => null));
@@ -31,3 +32,5 @@ export async function POST(req: Request) {
     return jsonError(err);
   }
 }
+
+export const POST = healthRoute('POST /api/assistant', healthHandlerPOST);

@@ -1,3 +1,4 @@
+import { measuredJob, recordEvent } from '@/server/health/telemetry';
 import { prisma } from './db';
 import { nextEscalationChannel } from '@/lib/escalation';
 import { emailProvider, pushProvider, smsProvider } from '@/providers';
@@ -45,7 +46,7 @@ export async function scheduleRequestedReminder(userId: string, taskId: string, 
   });
 }
 
-export async function tickReminders(now = new Date()) {
+async function tickRemindersImpl(now = new Date()) {
   const due = await prisma.reminder.findMany({
     where: {
       fireAt: { lte: now },
@@ -81,6 +82,7 @@ export async function tickReminders(now = new Date()) {
     );
     if (!channel) continue;
 
+    const healthStarted=performance.now();
     const title = reminder.task?.title ?? 'Harbor reminder';
     const body = reminder.offsetLabel;
     let result: { id: string; status: 'SENT' | 'FAILED'; reason?: string } = { id: '', status: 'FAILED', reason: 'unknown' };
@@ -104,6 +106,7 @@ export async function tickReminders(now = new Date()) {
       where: { id: reminder.id },
       data: { status: result.status === 'SENT' ? 'QUEUED' : 'RETRYING' },
     });
+    await recordEvent({kind:'job',service:'Task reminder',operation:reminder.id,status:result.status==='SENT'?200:500,durationMs:performance.now()-healthStarted,errorCode:result.status==='SENT'?undefined:'DELIVERY_FAILED'});
     inc(result.status === 'SENT' ? 'notifications.sent' : 'notifications.failed');
     inc(`notifications.${channel}`);
     log('info', 'reminder.attempt', { channel, status: result.status, retry: reminder.status === 'RETRYING' });
@@ -125,3 +128,5 @@ export async function acknowledgeReminder(userId: string, reminderId: string) {
   });
   if (reminder.task?.lifeReminderType) inc('life_reminder_notification_opened');
 }
+
+export const tickReminders = (...args: Parameters<typeof tickRemindersImpl>) => measuredJob('Reminder scheduler', () => tickRemindersImpl(...args));

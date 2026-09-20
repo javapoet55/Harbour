@@ -1,9 +1,10 @@
 'use client';
 
 import Link from 'next/link';
+import { NexdoLogo } from '@/components/nexdo-logo';
 import { useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
-import { BarChart3, Bot, CircleDollarSign, Gauge, LogOut, Mic2, Sparkles, Users } from 'lucide-react';
+import { BarChart3, Bot, CircleDollarSign, Gauge, HeartPulse, LogOut, Mic2, Users } from 'lucide-react';
 
 const links = [
   { href: '/admin', label: 'Overview', icon: Gauge },
@@ -13,6 +14,7 @@ const links = [
   { href: '/admin/engagement', label: 'Firebase Engagement', icon: BarChart3 },
   { href: '/admin/voice', label: 'Voice Analytics', icon: Mic2 },
   { href: '/admin/revenue', label: 'Revenue', icon: CircleDollarSign },
+  { href: '/admin/health', label: 'System Health', icon: HeartPulse },
 ];
 
 export function AdminShell({ children, name, email }: { children: React.ReactNode; name: string; email: string }) {
@@ -31,7 +33,7 @@ export function AdminShell({ children, name, email }: { children: React.ReactNod
   return (
     <div className="admin-app">
       <aside className="admin-sidebar">
-        <Link href="/admin" className="admin-brand"><span className="admin-brand-mark"><Sparkles size={24} /></span><span>Nexdo</span></Link>
+        <Link href="/admin" className="admin-brand"><NexdoLogo priority /></Link>
         <p className="admin-role">Super Admin</p>
         <nav className="admin-nav" aria-label="Admin navigation">
           {links.map(({ href, label, icon: Icon }) => {

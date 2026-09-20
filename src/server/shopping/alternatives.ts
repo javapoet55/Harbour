@@ -1,3 +1,4 @@
+import { observedFetch } from '@/server/health/telemetry';
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { categories, categoryFor } from './domain';
@@ -62,7 +63,7 @@ export async function recommendShoppingAlternatives(userId: string, input: { nam
         name: { type: 'string' }, category: { type: 'string', enum: categories }, quantity: { type: 'string' }, size: { type: 'string' }, reason: { type: 'string' }, detail: { type: 'string' },
       } } }, tip: { type: 'string' },
     } };
-    const response = await fetch('https://api.openai.com/v1/responses', { method: 'POST', signal: AbortSignal.timeout(12000), headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}`, 'Content-Type': 'application/json' }, body: JSON.stringify({
+    const response = await observedFetch('https://api.openai.com/v1/responses', { method: 'POST', signal: AbortSignal.timeout(12000), headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}`, 'Content-Type': 'application/json' }, body: JSON.stringify({
       model: process.env.OPENAI_MODEL || 'gpt-5.4-mini', store: false, max_output_tokens: 900,
       instructions: 'Suggest 3 to 5 practical grocery alternatives. Keep claims general and avoid medical advice. Preserve useful quantity or package context. Return only the requested JSON.',
       input: JSON.stringify({ item: { name: input.name, category, quantity, size } }),

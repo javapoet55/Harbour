@@ -1,3 +1,4 @@
+import { healthRoute } from '@/server/health/telemetry';
 import { checkOccurrenceAvailability } from '@/server/availability';
 import { ScheduleWarning } from '@/lib/schedule-warning';
 import { jsonError } from '@/lib/http';
@@ -7,7 +8,7 @@ import { requireUser } from '@/server/auth';
 import { executeVoiceTool, validateVoiceTool } from '@/server/voice/tools';
 import { z } from 'zod';
 const input = z.object({ allowScheduleConflict: z.boolean().optional(), repeat: eventRepeatSchema.optional(), requestId: z.string().uuid(), title: z.string(), notes: z.string(), startAt: z.string(), endAt: z.string(), location: z.string() }).strict();
-export async function POST(req: Request) {
+async function healthHandlerPOST(req: Request) {
   try {
     const user = await requireUser();
     const body = input.safeParse(await req.json().catch(() => null));
@@ -42,3 +43,5 @@ export async function POST(req: Request) {
     return Response.json({ error: error instanceof Error && error.message === 'UNAUTHENTICATED' ? 'Sign in required.' : 'Could not confirm the event. Check your calendar before trying again.' }, { status: error instanceof Error && error.message === 'UNAUTHENTICATED' ? 401 : 500 });
   }
 }
+
+export const POST = healthRoute('POST /api/calendar/events', healthHandlerPOST);

@@ -1,3 +1,5 @@
+import { observedFetch } from '@/server/health/telemetry';
+import { healthRoute } from '@/server/health/telemetry';
 import { voiceSessionConfiguration, calendarVoiceSessionConfiguration } from '@/server/voice/configuration';
 import { requireUser } from '@/server/auth';
 import { jsonError } from '@/lib/http';
@@ -5,7 +7,7 @@ import { jsonError } from '@/lib/http';
 export const runtime = 'nodejs';
 const headers = { 'Cache-Control': 'private, no-store' };
 
-export async function POST(req: Request) {
+async function healthHandlerPOST(req: Request) {
   try {
     const user = await requireUser();
     const consent = await req.json().catch(() => null);
@@ -14,7 +16,7 @@ export async function POST(req: Request) {
     if (!key) return Response.json({ error: 'Voice task creation is not configured yet. Please add your task manually.' }, { status: 503, headers });
     const session = consent.scope === 'calendar' ? calendarVoiceSessionConfiguration(user.timeZone) : voiceSessionConfiguration(user.timeZone);
     const model = session.model;
-    const response = await fetch('https://api.openai.com/v1/realtime/client_secrets', {
+    const response = await observedFetch('https://api.openai.com/v1/realtime/client_secrets', {
       method: 'POST',
       headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
       signal: AbortSignal.any([req.signal, AbortSignal.timeout(20000)]),
@@ -41,3 +43,5 @@ export async function POST(req: Request) {
     return Response.json({ error: 'Voice connection unavailable. Please try again later.' }, { status: 502, headers });
   }
 }
+
+export const POST = healthRoute('POST /api/realtime/task-session', healthHandlerPOST);

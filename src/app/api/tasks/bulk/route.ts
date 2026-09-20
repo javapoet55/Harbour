@@ -1,3 +1,4 @@
+import { healthRoute } from '@/server/health/telemetry';
 import { requireNonoverlappingBatch } from '@/lib/schedule-warning';
 import { nextTaskStart } from '@/lib/task-next-occurrence';
 import { requireAvailableSchedule } from '@/server/availability';
@@ -8,7 +9,7 @@ import { completeTask, deleteTask } from '@/server/tasks';
 import { generateReplanProposal } from '@/server/replanner';
 import { jsonError } from '@/lib/http';
 
-export async function PATCH(req: Request) {
+async function healthHandlerPATCH(req: Request) {
   try {
     const user = await requireUser();
     const body = await req.json();
@@ -45,3 +46,5 @@ export async function PATCH(req: Request) {
     return jsonError(error);
   }
 }
+
+export const PATCH = healthRoute('PATCH /api/tasks/bulk', healthHandlerPATCH);

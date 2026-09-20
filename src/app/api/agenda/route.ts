@@ -1,8 +1,9 @@
+import { healthRoute } from '@/server/health/telemetry';
 import { NextResponse } from 'next/server';
 import { requireUser } from '@/server/auth';
 import { highPriority, snapshotForRange, unscheduledTasks, waitingTasks } from '@/server/agenda';
 
-export async function GET(req: Request) {
+async function healthHandlerGET(req: Request) {
   try {
     const user = await requireUser();
     const params = new URL(req.url).searchParams;
@@ -34,3 +35,5 @@ export async function GET(req: Request) {
     throw error;
   }
 }
+
+export const GET = healthRoute('GET /api/agenda', healthHandlerGET);

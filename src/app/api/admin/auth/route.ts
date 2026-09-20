@@ -1,3 +1,4 @@
+import { healthRoute } from '@/server/health/telemetry';
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { z } from 'zod';
@@ -12,7 +13,7 @@ const input = z.discriminatedUnion('action', [
 ]);
 const reply = (body: object, status = 200) => NextResponse.json(body, { status, headers: { 'Cache-Control': 'no-store' } });
 
-export async function POST(request: Request) {
+async function healthHandlerPOST(request: Request) {
   // Next may normalize request.url to localhost behind the development server or a proxy.
   // Host is supplied by the browser/server, not by form data. Never trust an arbitrary forwarded host.
   const origin = request.headers.get('origin');
@@ -47,3 +48,5 @@ export async function POST(request: Request) {
     return reply({ error: 'We could not send or verify your code. Please try again shortly.' }, 503);
   }
 }
+
+export const POST = healthRoute('POST /api/admin/auth', healthHandlerPOST);

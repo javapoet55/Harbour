@@ -58,6 +58,7 @@ export async function verifyAdminCode(id: string, code: string) {
     data: { usedAt: new Date(), sessionHash: adminTokenHash(session), sessionExpiresAt: new Date(Date.now() + 8 * 60 * 60_000) },
   });
   if (claimed.count !== 1) throw invalid();
+  if (process.env.NEXDO_HEALTH_ENABLED === 'true') await prisma.healthAudit.create({ data: { actorId: token.userId, action: 'ADMIN_LOGIN', targetId: 'admin-session', detail: 'Email OTP verified' } });
   return session;
 }
 

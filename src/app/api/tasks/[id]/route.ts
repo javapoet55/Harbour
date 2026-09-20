@@ -1,3 +1,4 @@
+import { healthRoute } from '@/server/health/telemetry';
 import { requireAvailableSchedule } from '@/server/availability';
 import { parseProjectId } from '@/server/projects';
 import { NextResponse } from 'next/server';
@@ -16,7 +17,7 @@ import { loadScheduleContext } from '@/server/schedule-intelligence';
 import { buildExecutiveRecommendation } from '@/lib/executive-recommendations';
 import { randomUUID } from 'node:crypto';
 
-export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }> }) {
+async function healthHandlerPATCH(req: Request, ctx: { params: Promise<{ id: string }> }) {
   try {
     const user = await requireUser();
     const { id } = await ctx.params;
@@ -150,3 +151,5 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
     return jsonError(err);
   }
 }
+
+export const PATCH = healthRoute('PATCH /api/tasks/[id]', healthHandlerPATCH);

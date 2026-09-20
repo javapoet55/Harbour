@@ -1,10 +1,11 @@
+import { healthRoute } from '@/server/health/telemetry';
 import { NextResponse } from 'next/server';
 import { requireUser } from '@/server/auth';
 import { prisma } from '@/server/db';
 import { acknowledgeReminder, tickReminders } from '@/server/reminders';
 import { emailProvider, pushProvider, smsProvider } from '@/providers';
 
-export async function GET() {
+async function healthHandlerGET() {
   const user = await requireUser();
   const reminders = await prisma.reminder.findMany({
     where: { userId: user.id },
@@ -15,7 +16,7 @@ export async function GET() {
   return NextResponse.json({ reminders });
 }
 
-export async function POST(req: Request) {
+async function healthHandlerPOST(req: Request) {
   const body = await req.json().catch(() => ({}));
   if (body.action === 'tick') {
     const cronSecret = process.env.HARBOR_CRON_SECRET;
@@ -63,3 +64,7 @@ export async function POST(req: Request) {
   }
   return NextResponse.json({ error: 'Unknown action' }, { status: 400 });
 }
+
+export const GET = healthRoute('GET /api/notifications', healthHandlerGET);
+
+export const POST = healthRoute('POST /api/notifications', healthHandlerPOST);

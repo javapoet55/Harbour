@@ -1,3 +1,4 @@
+import { healthRoute } from '@/server/health/telemetry';
 import { requireAvailableSchedule } from '@/server/availability';
 import { parseProjectId } from '@/server/projects';
 import { jsonError } from '@/lib/http';
@@ -13,7 +14,7 @@ import { taskTimelineCondition } from '@/lib/task-timeline';
 import { parseLifeReminder } from '@/lib/life-reminders';
 import { inc } from '@/lib/metrics';
 
-export async function GET(req: Request) {
+async function healthHandlerGET(req: Request) {
   const user = await requireUser();
   const params = new URL(req.url).searchParams;
   const query = params.get('q')?.trim().slice(0, 100);
@@ -39,7 +40,7 @@ export async function GET(req: Request) {
   return NextResponse.json({ tasks, timeZone: user.timeZone });
 }
 
-export async function POST(req: Request) {
+async function healthHandlerPOST(req: Request) {
   try {
     const user = await requireUser();
     const body = await req.json();
@@ -86,3 +87,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ task });
   } catch (error) { return jsonError(error); }
 }
+
+export const GET = healthRoute('GET /api/tasks', healthHandlerGET);
+
+export const POST = healthRoute('POST /api/tasks', healthHandlerPOST);

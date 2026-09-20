@@ -1,10 +1,12 @@
+import { observedFetch } from '@/server/health/telemetry';
+import { healthRoute } from '@/server/health/telemetry';
 import { nexdoPersonality } from "@/server/assistant-personality";
 import { requireUser } from '@/server/auth';
 import { jsonError } from '@/lib/http';
 
 export const runtime = 'nodejs';
 
-export async function POST(req: Request) {
+async function healthHandlerPOST(req: Request) {
   try {
     const user = await requireUser();
     if (user?.preference?.voiceEnabled === false) return Response.json({ error: 'Spoken replies are disabled in Settings.' }, { status: 403 });
@@ -14,7 +16,7 @@ export async function POST(req: Request) {
     }
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) return Response.json({ error: 'OpenAI voice is not configured.' }, { status: 503 });
-    const response = await fetch('https://api.openai.com/v1/audio/speech', {
+    const response = await observedFetch('https://api.openai.com/v1/audio/speech', {
       method: 'POST',
       headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -32,3 +34,5 @@ export async function POST(req: Request) {
     return jsonError(err);
   }
 }
+
+export const POST = healthRoute('POST /api/speech', healthHandlerPOST);

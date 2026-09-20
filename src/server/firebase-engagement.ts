@@ -1,3 +1,4 @@
+import { observedFetch } from '@/server/health/telemetry';
 import { createHash } from 'node:crypto';
 import { importPKCS8, SignJWT } from 'jose';
 import { z } from 'zod';
@@ -54,7 +55,7 @@ async function accessToken(config: NonNullable<ReturnType<typeof configuration>>
     assertion = await new SignJWT({ scope: SCOPE }).setProtectedHeader({ alg: 'RS256', typ: 'JWT' })
       .setIssuer(config.credentials.client_email).setAudience(TOKEN_URL).setIssuedAt().setExpirationTime('1h').sign(key);
   } catch { throw new AnalyticsError('The analytics service-account private key could not be loaded.'); }
-  const response = await fetch(TOKEN_URL, { method: 'POST', cache: 'no-store', signal: AbortSignal.timeout(10_000),
+  const response = await observedFetch(TOKEN_URL, { method: 'POST', cache: 'no-store', signal: AbortSignal.timeout(10_000),
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({ grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer', assertion }) });
   if (!response.ok) throw new AnalyticsError('Google could not authenticate the analytics service account. Check that its key is active.');
@@ -106,7 +107,7 @@ export async function getFirebaseEngagement(from?: string, to?: string): Promise
     const cached = reportsCache.get(cacheKey);
     if (cached && cached.expires > Date.now()) return { status: 'connected', data: cached.data };
     const token = await accessToken(config);
-    const response = await fetch(`https://analyticsdata.googleapis.com/v1beta/properties/${config.propertyId}:batchRunReports`, {
+    const response = await observedFetch(`https://analyticsdata.googleapis.com/v1beta/properties/${config.propertyId}:batchRunReports`, {
       method: 'POST', cache: 'no-store', signal: AbortSignal.timeout(15_000),
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ requests: engagementRequests(range.from, range.to, config.streamId) }),
