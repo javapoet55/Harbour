@@ -1,3 +1,4 @@
+import { useQueryClient } from '@tanstack/react-query';
 import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
@@ -40,9 +41,10 @@ import {
   lastSyncedDescription,
   READ_ONLY_CAPTION,
 } from '../../src/lib/calendarConnections';
+import { useOAuthCallback } from '../../src/lib/oauthCallbacks';
 import { useBlockDismiss } from '../../src/lib/useBlockDismiss';
 import { encodeProfilePhoto } from '../../src/photo/encodePhoto';
-import { useCalendarConnections, useConnectGoogleCalendar, useDisconnectCalendar, useSetCalendarWrites } from '../../src/query/useCalendar';
+import { completeGoogleConnect, useCalendarConnections, useConnectGoogleCalendar, useDisconnectCalendar, useSetCalendarWrites } from '../../src/query/useCalendar';
 import { useMe } from '../../src/query/useMe';
 import { useDeleteAccount, useSyncNow, useUpdateProfile, useUploadPhoto } from '../../src/query/useProfile';
 import { useAppearance } from '../../src/store/appearance';
@@ -116,6 +118,7 @@ function SettingsScreen({
   const update = useUpdateProfile();
   const uploadPhoto = useUploadPhoto();
   const syncNow = useSyncNow();
+  const queryClient = useQueryClient();
   const connect = useConnectGoogleCalendar();
   const connections = useCalendarConnections();
   const setWrites = useSetCalendarWrites();
@@ -249,6 +252,14 @@ function SettingsScreen({
       setFailure(cause instanceof Error ? cause.message : String(cause));
     }
   };
+
+  // A calendar callback that arrived as a deep link after Android dropped the session: the same
+  // completion `connectCalendar` runs, with the same messages (ProfileView.swift:16-24, 339-346).
+  useOAuthCallback('calendar', (url) => {
+    setFailure(null);
+    setMessage(null);
+    void completeGoogleConnect(queryClient, url).then((result) => (result.ok ? setMessage(result.message) : setFailure(result.message)));
+  });
 
   /** The Disconnect `confirmationDialog` (ProfileView.swift:273-284). */
   const confirmDisconnect = (connection: CalendarConnection) =>

@@ -22,6 +22,11 @@ jest.mock('expo-router', () => ({
   },
 }));
 
+const mockOpenAuthSession = jest.fn();
+jest.mock('expo-web-browser', () => ({
+  openAuthSessionAsync: (...args: unknown[]) => mockOpenAuthSession(...args),
+}));
+
 const mockedSMS = SMS as unknown as Record<string, jest.Mock>;
 
 const mockPost = jest.fn();
@@ -43,6 +48,7 @@ import { OPENED_UNCONFIRMED } from '../domain';
 import { rememberDraft } from '../handoff';
 import { momentsStore } from '../store';
 import { draft, moment, plan, settings } from '../testFixtures';
+import { deliverOAuthCallback, redirectOAuthCallback, resetOAuthCallbacks } from '../../../lib/oauthCallbacks';
 
 import ImportantMoments from '../../../../app/(tabs)/(today)/moments/index';
 import ManageMoment from '../../../../app/(tabs)/(today)/moments/manage';
@@ -354,6 +360,49 @@ describe('Moments Settings', () => {
     expect(screen.getByText('me@gmail.com')).toBeTruthy();
     expect(screen.getByText('Disconnect email')).toBeTruthy();
     expect(screen.getByTestId('settings-connect').props.accessibilityState.disabled).toBe(false);
+  });
+
+  // A `nexdo://moments-email` callback that arrived as a deep link with no session open (Android
+  // restarted the app while the browser was up): ImportantMomentsStore.swift:185-189.
+  it('refreshes for a connected Gmail callback link that arrives with no session open', async () => {
+    resetOAuthCallbacks();
+    load([], { emailConfigured: true });
+    mockSnapshot.mockResolvedValue({ moments: [], emailAccount: { email: 'me@gmail.com', status: 'connected' }, emailConfigured: true, automaticEmailEnabled: false });
+    deliverOAuthCallback('moments-email', 'nexdo://moments-email?status=connected');
+    await render(<MomentSettings />);
+    await waitFor(() => expect(screen.getByText('me@gmail.com')).toBeTruthy());
+    expect(screen.queryByTestId('settings-error')).toBeNull();
+  });
+
+  it('shows Swift’s message for an error Gmail callback link', async () => {
+    resetOAuthCallbacks();
+    load([], { emailConfigured: true });
+    deliverOAuthCallback('moments-email', 'nexdo://moments-email?status=error');
+    await render(<MomentSettings />);
+    await waitFor(() =>
+      expect(screen.getByTestId('settings-error')).toHaveTextContent('Email connection cancelled or failed. Try connecting again.'),
+    );
+    expect(mockSnapshot).not.toHaveBeenCalled();
+  });
+
+  it('still connects Gmail when the session comes back dismissed and the callback link lands after it', async () => {
+    resetOAuthCallbacks();
+    load([], { emailConfigured: true });
+    mockPost.mockResolvedValueOnce({ url: 'https://accounts.example.com/consent' });
+    let redirected: string | null = 'unset';
+    mockOpenAuthSession.mockImplementation(async () => {
+      setTimeout(() => {
+        redirected = redirectOAuthCallback('nexdo://moments-email?status=connected');
+      }, 50);
+      return { type: 'dismiss' };
+    });
+    await render(<MomentSettings />);
+    await fireEvent.press(screen.getByTestId('settings-connect'));
+
+    await waitFor(() => expect(mockSnapshot).toHaveBeenCalled());
+    expect(mockOpenAuthSession).toHaveBeenCalledWith('https://accounts.example.com/consent', 'nexdo://moments-email', { preferEphemeralSession: true });
+    expect(screen.queryByTestId('settings-error')).toBeNull();
+    expect(redirected).toBeNull();
   });
 
   // MomentEditor.swift:232-237 — this copy names no platform.

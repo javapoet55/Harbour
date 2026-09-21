@@ -1,10 +1,11 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { randomUUID } from 'expo-crypto';
 import * as WebBrowser from 'expo-web-browser';
 
 import { endpoints, type Agenda, type CalendarConnection, type CalendarEventInput } from '../api';
 import { DISCONNECTED_MESSAGE, writesMessage } from '../lib/calendarConnections';
 import { getApiUrl } from '../config';
+import { beginOAuthSession, LATE_CALLBACK_MS, takeOAuthCallback, waitForOAuthCallback } from '../lib/oauthCallbacks';
 import { queryKeys } from './keys';
 import { bumpRevision, currentRevision, isCurrent } from './taskRevision';
 import { refreshSupplementaryData, reloadProfile } from './useProfile';
@@ -149,7 +150,7 @@ export function parseGoogleCallback(callbackUrl: string | null | undefined): Goo
  *    equivalent, with `prefersEphemeralWebBrowserSession = false`, so an existing Google sign-in in the
  *    system browser is reused. The server redirects back to `nexdo://calendar-connected?…`.
  * 3. Closing the browser is `.canceledLogin`, reported as `CONNECT_CANCELLED`.
- * 4. On success the profile is reloaded ("connected and synchronized"; a failed reload is still
+ * 4. On success (`completeGoogleConnect`) the profile is reloaded ("connected and synchronized"; a failed reload is still
  *    connected, with a softer message), and then the connection list (`:345`).
  */
 export function useConnectGoogleCalendar() {
@@ -159,27 +160,46 @@ export function useConnectGoogleCalendar() {
       const issued = await endpoints.calendarConnectToken('google');
       if (!issued?.token) throw new Error(CONNECT_UNAVAILABLE);
 
-      const result = await WebBrowser.openAuthSessionAsync(
-        googleConnectStartUrl(getApiUrl(), issued.token),
-        `${CONNECT_CALLBACK_SCHEME}://`,
-      );
-
-      if (result.type !== 'success') return { ok: false, message: CONNECT_CANCELLED };
-
-      const parsed = parseGoogleCallback(result.url);
-      if (!parsed.ok) return parsed;
-
-      let message = parsed.message;
+      // Open while the browser is: `+native-intent` then leaves the redirect to this session.
+      const end = beginOAuthSession('calendar');
+      let callback: string | null;
       try {
-        await reloadProfile(queryClient);
-      } catch {
-        message = 'Google Calendar connected, but Nexdo could not refresh it yet.';
+        takeOAuthCallback('calendar');
+        const result = await WebBrowser.openAuthSessionAsync(
+          googleConnectStartUrl(getApiUrl(), issued.token),
+          `${CONNECT_CALLBACK_SCHEME}://`,
+        );
+        // Android's polyfill reports `dismiss` when the app turns active, which can be just before the
+        // redirect's deep link lands. iOS reports a real cancel as `cancel`.
+        callback = result.type === 'success' ? result.url : result.type === 'dismiss' ? await waitForOAuthCallback('calendar', LATE_CALLBACK_MS) : null;
+        takeOAuthCallback('calendar');
+      } finally {
+        end();
       }
-      void queryClient.invalidateQueries({ queryKey: queryKeys.calendar.all() });
-      void queryClient.invalidateQueries({ queryKey: queryKeys.agenda.all() });
-      return { ok: true, message };
+
+      if (!callback) return { ok: false, message: CONNECT_CANCELLED };
+      return completeGoogleConnect(queryClient, callback);
     },
   });
+}
+
+/**
+ * Step 4 of `connectGoogle` (ProfileView.swift:16-24) for a callback URL, whichever way it arrived:
+ * from the session, or as a deep link after Android dropped the session (src/lib/oauthCallbacks.ts).
+ */
+export async function completeGoogleConnect(queryClient: QueryClient, callbackUrl: string): Promise<GoogleConnectResult> {
+  const parsed = parseGoogleCallback(callbackUrl);
+  if (!parsed.ok) return parsed;
+
+  let message = parsed.message;
+  try {
+    await reloadProfile(queryClient);
+  } catch {
+    message = 'Google Calendar connected, but Nexdo could not refresh it yet.';
+  }
+  void queryClient.invalidateQueries({ queryKey: queryKeys.calendar.all() });
+  void queryClient.invalidateQueries({ queryKey: queryKeys.agenda.all() });
+  return { ok: true, message };
 }
 
 /**

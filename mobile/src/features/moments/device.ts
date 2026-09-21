@@ -11,6 +11,7 @@ import type { MomentInput } from '../../api/moments';
 import { composeMessageOutcome, canSendMessage, type MessageComposeOutcome } from '../../actions/composers';
 import { TaskActionError } from '../../actions/errors';
 import { ownerKeyFor } from '../../actions/persistence';
+import { beginOAuthSession, LATE_CALLBACK_MS, takeOAuthCallback, waitForOAuthCallback } from '../../lib/oauthCallbacks';
 import { deviceZone, momentDay } from './dates';
 import { newMomentInput } from './domain';
 
@@ -295,10 +296,22 @@ export const EMAIL_CALLBACK = 'nexdo://moments-email';
  * `prefersEphemeralWebBrowserSession = true` in Swift, and the same here.
  */
 export async function connectGmail(url: string): Promise<boolean> {
-  const result = await WebBrowser.openAuthSessionAsync(url, EMAIL_CALLBACK, { preferEphemeralSession: true });
-  if (result.type !== 'success') return false;
-  return emailCallbackConnected(result.url);
+  // Open while the browser is: `+native-intent` then leaves the redirect to this session, and
+  // Android's polyfill can report `dismiss` just before that deep link lands (src/lib/oauthCallbacks.ts).
+  const end = beginOAuthSession('moments-email');
+  try {
+    takeOAuthCallback('moments-email');
+    const result = await WebBrowser.openAuthSessionAsync(url, EMAIL_CALLBACK, { preferEphemeralSession: true });
+    const callback = result.type === 'success' ? result.url : result.type === 'dismiss' ? await waitForOAuthCallback('moments-email', LATE_CALLBACK_MS) : null;
+    takeOAuthCallback('moments-email');
+    return callback ? emailCallbackConnected(callback) : false;
+  } finally {
+    end();
+  }
 }
+
+/** Swift's failure message for any callback that is not `status=connected` (ImportantMomentsStore.swift:186). */
+export const EMAIL_CONNECT_FAILED = 'Email connection cancelled or failed. Try connecting again.';
 
 export function emailCallbackConnected(url: string): boolean {
   const match = /^nexdo:\/\/([^/?#]*)\??([^#]*)/.exec(url);

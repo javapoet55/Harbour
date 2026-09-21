@@ -5,9 +5,10 @@ import { ActivityIndicator, Alert, Linking, StyleSheet, View } from 'react-nativ
 
 import type { ConnectEmailResponse, MomentOK } from '../../../../src/api/moments';
 import { Text } from '../../../../src/components/Text';
-import { connectGmail, contactMomentInput, pickContact } from '../../../../src/features/moments/device';
+import { connectGmail, contactMomentInput, EMAIL_CONNECT_FAILED, emailCallbackConnected, pickContact } from '../../../../src/features/moments/device';
 import { FormButton, FormLink, FormRow, FormScroll, FormSection, FormText } from '../../../../src/features/moments/form';
 import { momentsStore, reminderStatusText, useMoments } from '../../../../src/features/moments/store';
+import { useOAuthCallback } from '../../../../src/lib/oauthCallbacks';
 import { textStyles, useTheme } from '../../../../src/theme';
 
 /**
@@ -30,6 +31,13 @@ export default function MomentSettingsScreen() {
   useEffect(() => {
     void momentsStore.getState().prepareDefaultReminders();
   }, []);
+
+  // A Gmail callback that arrived as a deep link after Android dropped the session: Swift's
+  // completion handler (ImportantMomentsStore.swift:185-189) — refresh on `connected`, else the error.
+  useOAuthCallback('moments-email', (url) => {
+    if (emailCallbackConnected(url)) void momentsStore.getState().refresh();
+    else momentsStore.getState().setError(EMAIL_CONNECT_FAILED);
+  });
 
   const chooseContact = async () => {
     try {
@@ -55,7 +63,7 @@ export default function MomentSettingsScreen() {
   const connect = () =>
     void momentsStore.getState().perform(async () => {
       const link = await momentsStore.getState().request<ConnectEmailResponse>('connectEmail', {});
-      if (!(await connectGmail(link.url))) throw new Error('Email connection cancelled or failed. Try connecting again.');
+      if (!(await connectGmail(link.url))) throw new Error(EMAIL_CONNECT_FAILED);
     });
 
   const deleteAll = () =>

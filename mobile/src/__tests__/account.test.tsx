@@ -3,6 +3,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react-nativ
 import { Alert, Linking } from 'react-native';
 
 import type { Profile } from '../api';
+import { deliverOAuthCallback, redirectOAuthCallback, resetOAuthCallbacks } from '../lib/oauthCallbacks';
 import { queryKeys } from '../query/keys';
 import { useAppearance } from '../store/appearance';
 import { useConsent } from '../store/consent';
@@ -521,6 +522,51 @@ describe('the Settings screen', () => {
         ),
       );
       expect(Alert.alert).toHaveBeenCalledWith('Could not update profile', expect.stringContaining('sign-in was cancelled or blocked'), expect.any(Array));
+    });
+
+    // Android's `openAuthSessionAsync` polyfill reports `dismiss` as the app turns active, which can
+    // be a moment before the `nexdo://calendar-connected` deep link lands (src/lib/oauthCallbacks.ts).
+    it('still connects when the session comes back dismissed and the callback link lands after it', async () => {
+      resetOAuthCallbacks();
+      let redirected: string | null = 'unset';
+      mockOpenAuthSession.mockImplementation(async () => {
+        setTimeout(() => {
+          redirected = redirectOAuthCallback('nexdo://calendar-connected?calendar=google-connected');
+        }, 50);
+        return { type: 'dismiss' };
+      });
+      await show(<Settings />);
+      await waitFor(() => expect(screen.getByTestId('settings-connect-google')).toBeTruthy());
+
+      fireEvent.press(screen.getByTestId('settings-connect-google'));
+
+      await waitFor(() =>
+        expect(screen.getByTestId('settings-message')).toHaveTextContent('Google Calendar connected and synchronized.'),
+      );
+      // The router was told to stay put: no "Unmatched Route".
+      expect(redirected).toBeNull();
+    });
+
+    it('handles a callback link that arrives with no session open, with Swift’s messages', async () => {
+      resetOAuthCallbacks();
+      deliverOAuthCallback('calendar', 'nexdo://calendar-connected?calendar=google-connected');
+      await show(<Settings />);
+
+      await waitFor(() =>
+        expect(screen.getByTestId('settings-message')).toHaveTextContent('Google Calendar connected and synchronized.'),
+      );
+      expect(mockMe).toHaveBeenCalled();
+      expect(mockOpenAuthSession).not.toHaveBeenCalled();
+    });
+
+    it('reports an error callback link that arrives with no session open', async () => {
+      resetOAuthCallbacks();
+      deliverOAuthCallback('calendar', 'nexdo://calendar-connected?calendar=error&detail=Authorization+was+cancelled');
+      await show(<Settings />);
+
+      await waitFor(() =>
+        expect(screen.getByTestId('settings-failure')).toHaveTextContent('Google Calendar connection failed: Authorization was cancelled'),
+      );
     });
 
     it('never opens the browser when the connect token cannot be issued', async () => {
