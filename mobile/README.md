@@ -261,13 +261,17 @@ Use a test list named `Parity …`.
      items**. **Add 2 Items**.
 105. Turn **Allow live voice transcription** off: the mic greys out and the status reads "Enable live
      transcription below to start". Close and reopen — it is still off. Turn it back on.
-106. ⋯ → **List settings** (Save only, greyed with an empty name), **Uncheck all**, **Edit** (delete
-     and reorder controls), **Copy list**.
+106. ⋯ → **List settings** (Save only, greyed with an empty name), **Copy list**, **Uncheck all**,
+     **Delete list**. There is no **Edit** any more: swipe an item left to delete it. Items can't be
+     reordered.
 107. Share → **Share List**: **Share list as text**, **Create Share Link**, **Share Link**, **Revoke
      Link**. Open the link in a browser before revoking: it shows the list read-only.
-108. **Complete Shopping Trip** → "Complete this trip and create next week’s list?" → **Complete trip**:
-     the screen switches to next week's list, every item unchecked. The old list is read-only with **Use
-     This List Again**.
+108. **Complete Shopping** is in the bar pinned to the bottom of the screen, next to **AI Powered
+     Recommendations**. There is no Complete row in the list. With unchecked items it asks "Complete with
+     N items remaining?" → **Complete Shopping**; with none it completes at once. A full-screen "Great
+     job for saving a branch on a tree!" summary shows Purchased / Total items / Saved, then **Done**
+     (back to My Lists) and either **View Next Shopping List** (weekly list: next week's list, every
+     item unchecked) or **Use This List Again** (one-off list: opens Copy list).
 
 ---
 
