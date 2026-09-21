@@ -18,6 +18,8 @@ export function useVoiceUsage() {
     queryKey: queryKeys.voiceUsage(ownerId ?? ''),
     queryFn: () => endpoints.voiceUsage(),
     enabled: Boolean(ownerId),
+    // Swift's `.task` asks on every appearance of Account, however fresh the last answer is.
+    refetchOnMount: 'always',
   });
 }
 

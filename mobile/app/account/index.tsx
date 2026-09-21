@@ -6,8 +6,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { AccountAvatar, AccountMenuRow, ProfileBackground, ProfileCard } from '../../src/components/ProfileParts';
 import { TaskSymbol } from '../../src/components/TaskSymbol';
 import { Text } from '../../src/components/Text';
+import { VoiceUsageCard } from '../../src/features/account/VoiceUsageCard';
 import { useSignOut } from '../../src/query/useAuth';
 import { useMe } from '../../src/query/useMe';
+import { useVoiceUsage } from '../../src/query/useVoiceUsage';
 import { ElevatedSurface, useTheme } from '../../src/theme';
 
 /**
@@ -44,6 +46,8 @@ function AccountSheet() {
   // the system backgrounds one level up inside a sheet (style map section 3).
   const theme = useTheme({ elevated: true });
   const { data: profile } = useMe();
+  // `.task { await model.refreshVoiceUsage() }` (ProfileView.swift:97): asked every time Account opens.
+  const { data: voiceUsage } = useVoiceUsage();
   const signOut = useSignOut();
   const [signingOut, setSigningOut] = useState(false);
 
@@ -117,7 +121,10 @@ function AccountSheet() {
           </View>
         </View>
 
-        {/* 2. The standalone link to Settings (`:75`). */}
+        {/* 2. The Real-time Voice card (`:77`, card `:101-132`). */}
+        <VoiceUsageCard usage={voiceUsage} />
+
+        {/* 3. The standalone link to Settings (`:78`). */}
         <AccountMenuRow
           icon="person.crop.circle"
           onPress={() => router.push('/account/settings')}
@@ -125,7 +132,7 @@ function AccountSheet() {
           title="Edit profile and settings"
         />
 
-        {/* 3. The card of web rows, then Settings again (`:76-83`). */}
+        {/* 4. The card of web rows, then Settings again (`:79-86`). */}
         <ProfileCard style={styles.menuCard} testID="account-menu">
           <AccountMenuRow icon="tray" onPress={() => openWeb('/inbox')} testID="account-inbox" title="Inbox" web />
           <AccountMenuRow icon="stopwatch" onPress={() => openWeb('/waiting')} testID="account-waiting" title="Waiting For" web />
@@ -140,7 +147,7 @@ function AccountSheet() {
           />
         </ProfileCard>
 
-        {/* 4. Sign out (`:84-86`). */}
+        {/* 5. Sign out (`:87-89`). */}
         <Pressable
           accessibilityLabel="Sign out"
           accessibilityRole="button"

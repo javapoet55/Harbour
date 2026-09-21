@@ -52,6 +52,7 @@ const mockConnections = jest.fn();
 const mockSetWrites = jest.fn();
 const mockDisconnect = jest.fn();
 const mockConnectToken = jest.fn();
+const mockVoiceUsage = jest.fn();
 jest.mock('../api', () => ({
   ...jest.requireActual('../api'),
   endpoints: {
@@ -65,6 +66,7 @@ jest.mock('../api', () => ({
     setCalendarWrites: (...args: unknown[]) => mockSetWrites(...args),
     disconnectCalendar: (...args: unknown[]) => mockDisconnect(...args),
     calendarConnectToken: (...args: unknown[]) => mockConnectToken(...args),
+    voiceUsage: (...args: unknown[]) => mockVoiceUsage(...args),
   },
 }));
 
@@ -86,6 +88,9 @@ const PREFERENCES = {
   eveningSummary: true,
   phoneNumber: null,
 };
+
+/** The demo account's receipt in `account-voice-usage`: 8.2 min of 100 used in September. */
+const SEPTEMBER = { month: '2026-09', usedSeconds: 492, limitMinutes: 100, remainingSeconds: 5508, asOf: '2026-09-21T10:00:00.000Z' };
 
 function profile(overrides: Partial<Profile> = {}): Profile {
   return {
@@ -112,11 +117,12 @@ function show(node: React.ReactElement, seed: Profile | null = profile()) {
 }
 
 beforeEach(() => {
-  for (const mock of [mockPush, mockBack, mockMe, mockUpdateSettings, mockUpdatePhoto, mockSync, mockDelete, mockLogout, mockLaunchLibrary, mockOpenAuthSession, mockEncodePhoto, mockConnections, mockSetWrites, mockDisconnect, mockConnectToken, mockSetOptions, mockSetParentOptions]) {
+  for (const mock of [mockPush, mockBack, mockMe, mockUpdateSettings, mockUpdatePhoto, mockSync, mockDelete, mockLogout, mockLaunchLibrary, mockOpenAuthSession, mockEncodePhoto, mockConnections, mockSetWrites, mockDisconnect, mockConnectToken, mockSetOptions, mockSetParentOptions, mockVoiceUsage]) {
     mock.mockReset();
   }
   mockConnections.mockResolvedValue({ connections: [] });
   mockConnectToken.mockResolvedValue({ token: 'one-time-token' });
+  mockVoiceUsage.mockResolvedValue(SEPTEMBER);
   mockMe.mockResolvedValue({ user: profile() });
   useSession.setState({ status: 'signedIn', profile: profile() });
   useConsent.setState({ ai: false, voice: false });
@@ -235,6 +241,52 @@ describe('the Account sheet', () => {
 });
 
 /** `ProfileSettingsView` body (ProfileView.swift:146-270). */
+/** `voiceUsageCard` (ios/App/ProfileView.swift:101-144), placed at `:77`. */
+describe('the Real-time Voice card', () => {
+  it('asks for this month’s usage on open and shows the captured receipt', async () => {
+    await show(<Account />);
+
+    await waitFor(() => expect(screen.getByTestId('voice-usage-total')).toHaveTextContent('8.2 min'));
+    expect(mockVoiceUsage).toHaveBeenCalledTimes(1);
+    expect(screen.getByText('Real-time Voice')).toBeTruthy();
+    expect(screen.getByText('Monthly usage')).toBeTruthy();
+    expect(screen.getByText('8.2 min used')).toBeTruthy();
+    expect(screen.getByText('92 min remaining')).toBeTruthy();
+    expect(screen.getByText('September · updated today')).toBeTruthy();
+    expect(screen.getByText('100 min / month')).toBeTruthy();
+    const bar = screen.getByTestId('voice-usage-bar');
+    expect(bar.props.accessibilityLabel).toBe('Real-time voice usage');
+    expect(bar.props.accessibilityValue).toEqual({ text: '8.2 min used out of 100 minutes this month' });
+    expect(screen.getByTestId('voice-usage-fill')).toHaveStyle({ flex: 0.082 });
+  });
+
+  it('sits between the profile header and "Edit profile and settings"', async () => {
+    await show(<Account />);
+    const json = JSON.stringify(screen.toJSON());
+    const at = (needle: string) => json.indexOf(needle);
+    expect(at('account-email')).toBeLessThan(at('account-voice-usage'));
+    expect(at('account-voice-usage')).toBeLessThan(at('account-edit-profile'));
+  });
+
+  it('shows the zero state before (or without) an answer', async () => {
+    mockVoiceUsage.mockReturnValue(new Promise(() => undefined));
+    await show(<Account />);
+
+    expect(screen.getByTestId('voice-usage-total')).toHaveTextContent('0 min');
+    expect(screen.getByText('0 min used')).toBeTruthy();
+    expect(screen.getByText('100 min remaining')).toBeTruthy();
+    expect(screen.getByText('This month · updated today')).toBeTruthy();
+    expect(screen.getByTestId('voice-usage-fill')).toHaveStyle({ flex: 0 });
+  });
+
+  it('keeps the zero state when the request fails', async () => {
+    mockVoiceUsage.mockRejectedValue(new Error('offline'));
+    await show(<Account />);
+    await waitFor(() => expect(mockVoiceUsage).toHaveBeenCalled());
+    expect(screen.getByText('This month · updated today')).toBeTruthy();
+  });
+});
+
 describe('the Settings screen', () => {
   it('renders every card in body order', async () => {
     await show(<Settings />);
