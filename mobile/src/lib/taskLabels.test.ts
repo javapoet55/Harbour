@@ -1,6 +1,6 @@
 import type { NexdoTask } from '../api/types';
 import { DISTANT_FUTURE, startOfDay } from './taskQuery';
-import { scheduleLabel, sectionTitle, serverTime, taskSubtitle } from './taskLabels';
+import { lifeReminderLabel, scheduleLabel, sectionTitle, serverTime, taskSubtitle } from './taskLabels';
 
 const ZONE = 'Asia/Kolkata';
 /** 2026-09-16 09:00 in Asia/Kolkata (a Wednesday). */
@@ -76,5 +76,20 @@ describe('scheduleLabel', () => {
 
   it('is the time for a scheduled task', () => {
     expect(scheduleLabel(task({ startAt: '2026-09-16T03:30:00.000Z' }), ZONE)).toBe('9:00 AM');
+  });
+});
+
+describe('lifeReminderLabel', () => {
+  it('names every server life-reminder type as Swift does', () => {
+    const labels = ['returnItem', 'bill', 'expiration', 'maintenance', 'subscription', 'renewal', 'general'].map((type) =>
+      lifeReminderLabel(task({ lifeReminderType: type })),
+    );
+    expect(labels).toEqual(['Return', 'Bill', 'Expires', 'Maintenance', 'Subscription', 'Renewal', 'Reminder']);
+  });
+
+  it('is null for an ordinary task and for a type this build does not know', () => {
+    expect(lifeReminderLabel(task())).toBeNull();
+    expect(lifeReminderLabel(task({ lifeReminderType: null }))).toBeNull();
+    expect(lifeReminderLabel(task({ lifeReminderType: 'warranty' }))).toBeNull();
   });
 });

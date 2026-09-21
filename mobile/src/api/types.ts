@@ -155,6 +155,19 @@ export type NexdoTask = {
   timeZone?: string | null;
   subtasks?: TaskStep[] | null;
   recurrence?: TaskRecurrence | null;
+  /**
+   * Smart life reminders (ios/Sources/NexdoCore/Models.swift:57-60; Prisma `Task` columns,
+   * prisma/schema.prisma:184-187). Set by the server when `POST /api/tasks` recognises a life reminder
+   * (src/app/api/tasks/route.ts:46-67); null or absent on every other task.
+   *
+   * `reminderAt` is an ISO 8601 instant. `lifeReminderType` is a `String?` in Swift, not an enum: the
+   * server writes one of `LIFE_REMINDER_TYPES` (src/lib/life-reminders.ts:3), and an unknown value
+   * simply has no label (`lifeReminderLabel`). `lifeReminderConfidence` is 0...1.
+   */
+  reminderAt?: string | null;
+  lifeReminderType?: string | null;
+  lifeReminderConfidence?: number | null;
+  originalUserText?: string | null;
   // DIVERGENCE: the web `AgendaTask` requires `createdAt` and has `waitingOn`; Swift decodes neither.
   createdAt?: string;
   waitingOn?: string | null;

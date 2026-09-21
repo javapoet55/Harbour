@@ -59,6 +59,31 @@ export function scheduleLabel(task: NexdoTask, fallbackZone: string): string | n
   return scheduled ? serverTime(scheduled, task.timeZone ?? fallbackZone) : null;
 }
 
+/**
+ * `NexdoTask.lifeReminderLabel` (Models.swift:62-73): the smart-reminder badge text, or null for an
+ * ordinary task or a type this build does not know.
+ */
+export function lifeReminderLabel(task: Pick<NexdoTask, 'lifeReminderType'>): string | null {
+  switch (task.lifeReminderType) {
+    case 'returnItem':
+      return 'Return';
+    case 'bill':
+      return 'Bill';
+    case 'expiration':
+      return 'Expires';
+    case 'maintenance':
+      return 'Maintenance';
+    case 'subscription':
+      return 'Subscription';
+    case 'renewal':
+      return 'Renewal';
+    case 'general':
+      return 'Reminder';
+    default:
+      return null;
+  }
+}
+
 /** `TaskRow.priorityColor` (RootView.swift:1557-1564). */
 export function priorityColor(priority: string, brand: { nexdoBlue: string; nexdoIndigo: string }): string {
   switch (priority) {
