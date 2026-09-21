@@ -2,6 +2,7 @@ import { measuredJob, recordEvent } from '@/server/health/telemetry';
 import { prisma } from './db';
 import { nextEscalationChannel } from '@/lib/escalation';
 import { emailProvider, pushProvider, smsProvider } from '@/providers';
+import { reminderMessage } from './email/messages';
 import { inc } from '@/lib/metrics';
 import { log } from '@/lib/logger';
 
@@ -87,7 +88,7 @@ async function tickRemindersImpl(now = new Date()) {
     const body = reminder.offsetLabel;
     let result: { id: string; status: 'SENT' | 'FAILED'; reason?: string } = { id: '', status: 'FAILED', reason: 'unknown' };
     if (channel === 'push') result = await pushProvider.send({ userId: reminder.userId, title, body });
-    if (channel === 'email') result = await emailProvider.send({ to: reminder.user.email, subject: title, text: body });
+    if (channel === 'email') result = await emailProvider.send({ to: reminder.user.email, ...reminderMessage(title, body) });
     if (channel === 'sms') result = prefs.phoneNumber
       ? await smsProvider.send({ to: prefs.phoneNumber, text: `${title}: ${body}` })
       : { id: '', status: 'FAILED', reason: 'No SMS phone number configured' };
