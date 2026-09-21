@@ -18,6 +18,8 @@ export const queryKeys = {
     range: (from: string, to: string) => ['agenda', from, to] as const,
   },
   weather: () => ['weather'] as const,
+  /** `AppModel.voiceUsage` (ios/App/NexdoApp.swift:16), per account like Swift's owner check. */
+  voiceUsage: (ownerId: string) => ['voice-usage', ownerId] as const,
   scheduleIntelligence: () => ['schedule-intelligence'] as const,
   /** `persistentNext` and `protectedTime` (ios/App/NexdoApp.swift:15-17). */
   nextAction: () => ['next-action'] as const,

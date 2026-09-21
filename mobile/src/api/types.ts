@@ -48,6 +48,26 @@ export type Profile = {
 
 export type ProfileResponse = { user: Profile };
 
+/**
+ * `VoiceUsage` (ios/Sources/NexdoCore/Models.swift:23-30): the receipt both `GET` and `POST
+ * /api/voice/usage` answer with (src/server/voice/usage.ts:12-15). `month` is `yyyy-MM` in the
+ * account zone; `asOf` is an ISO 8601 instant.
+ */
+export type VoiceUsage = {
+  month: string;
+  usedSeconds: number;
+  limitMinutes: number;
+  remainingSeconds: number;
+  asOf: string;
+};
+
+/**
+ * The `POST /api/voice/usage` body (src/app/api/voice/usage/route.ts:8; Swift's `Input`,
+ * ios/App/NexdoApp.swift:536). `durationSeconds` is the session's CUMULATIVE active time: the server
+ * keeps the larger of it and what it already has for that `sessionId` (src/server/voice/usage.ts:28).
+ */
+export type VoiceUsageInput = { sessionId: string; durationSeconds: number };
+
 /** `ProfileSettingsInput` (ios/Sources/NexdoCore/ProfileSettings.swift:22-27). PATCH /api/settings. */
 export type ProfileSettingsInput = {
   name: string;

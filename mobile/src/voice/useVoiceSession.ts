@@ -5,6 +5,7 @@ import { AppState } from 'react-native';
 
 import { getApi } from '../api';
 import { synchronizeDeviceTimeZone } from '../query/useProfile';
+import { recordVoiceUsage } from '../query/useVoiceUsage';
 import { useConsent } from '../store/consent';
 import { useAppearance } from '../store/appearance';
 import { useSession } from '../store/session';
@@ -13,6 +14,7 @@ import { createNativeDriver, isWebRtcAvailable } from './nativeDriver';
 import { TASK_SESSION_PATH, type VoiceScope } from './protocol';
 import { VoiceToolExecutor } from './toolExecutor';
 import { WebRtcTransport } from './transport';
+import { VoiceUsageMeter } from './usageMeter';
 
 /**
  * The React side of `AddTaskByVoiceView`'s session ownership
@@ -56,6 +58,7 @@ export function useVoiceSession({
   const session = useRef<VoiceConversation | null>(null);
   const executor = useRef<VoiceToolExecutor | null>(null);
   const transport = useRef<WebRtcTransport | null>(null);
+  const meter = useRef<VoiceUsageMeter | null>(null);
   const closer = useRef(onClose);
   useEffect(() => {
     closer.current = onClose;
@@ -82,14 +85,22 @@ export function useVoiceSession({
       driver: createNativeDriver(),
       volume: () => useAppearance.getState().voiceVolume,
     });
+    // `usageSessionID=UUID()` and `voice.onTelemetry` (AddTaskByVoiceView.swift:38, `:125`): one usage
+    // session per conversation, reported once more when the conversation closes.
+    const usage = new VoiceUsageMeter({
+      sessionId: randomUUID().toUpperCase(),
+      record: (sessionId, durationSeconds) => recordVoiceUsage(queryClient, sessionId, durationSeconds),
+    });
     const conversation = new VoiceConversation({
       transport: peer,
       executor: tools,
       uuid: randomUUID,
       onState: setState,
       onClose: () => closer.current(),
+      onTelemetry: () => usage.finish(),
     });
 
+    meter.current = usage;
     executor.current = tools;
     transport.current = peer;
     session.current = conversation;
@@ -119,14 +130,21 @@ export function useVoiceSession({
       conversation.close();
       tools.clear();
       session.current = null;
+      meter.current = null;
       executor.current = null;
       transport.current = null;
     };
   }, [enabled, ownerId, queryClient, scope]);
 
-  // `.onReceive(clock) { voice.tick() }` (AddTaskByVoiceView.swift:103).
+  // `.onReceive(clock)` (AddTaskByVoiceView.swift:128-138): tick the session, then meter the phase it
+  // is in afterwards.
   useEffect(() => {
-    const timer = setInterval(() => session.current?.tick(), 1000);
+    const timer = setInterval(() => {
+      const conversation = session.current;
+      if (!conversation) return;
+      conversation.tick();
+      meter.current?.tick(conversation.snapshot.phase);
+    }, 1000);
     return () => clearInterval(timer);
   }, []);
 

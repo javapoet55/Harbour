@@ -28,6 +28,8 @@ import type {
   ProfileResponse,
   RegistrationResponse,
   TasksResponse,
+  VoiceUsage,
+  VoiceUsageInput,
 } from './types';
 
 export * from './client';
@@ -260,6 +262,19 @@ export const endpoints = {
    */
   calendarConnectToken: (provider: string, client: ApiClient = getApi()) =>
     client.post<{ token: string }>(`/api/calendar/oauth/${encodeURIComponent(provider)}/connect-token`),
+
+  /**
+   * `AppModel.refreshVoiceUsage()` (ios/App/NexdoApp.swift:529-532): this month's receipt, 15s.
+   * `GET /api/voice/usage` (src/app/api/voice/usage/route.ts:10-15).
+   */
+  voiceUsage: (client: ApiClient = getApi()) => client.get<VoiceUsage>('/api/voice/usage', { timeoutMs: 15_000 }),
+
+  /**
+   * `AppModel.recordVoiceUsage(sessionID:duration:)` (NexdoApp.swift:534-539), 15s.
+   * `POST /api/voice/usage` (route.ts:17-23) answers with the updated receipt.
+   */
+  recordVoiceUsage: (input: VoiceUsageInput, client: ApiClient = getApi()) =>
+    client.post<VoiceUsage>('/api/voice/usage', input, { timeoutMs: 15_000 }),
 
   /** `AppModel.deleteAccount()` (NexdoApp.swift:739-744). */
   deleteAccount: (client: ApiClient = getApi()) => client.del<{ ok: boolean }>('/api/account'),
