@@ -36,6 +36,15 @@ anything.
 
 Any future sheet gets this right by wrapping itself; add new requests below.
 
+### Run D (Windows): no shared-file requests
+
+Run D needed no change to a Mac-owned shared file. It uses `ProfileCard`, `TaskSymbol`, `GlassCircle`,
+`TodayBackdrop` and the theme as they are; the few glyphs `TaskSymbol` does not map (the waveform
+badge, the shopping prompt icons, the star, the tree) are drawn or imported from `@expo/vector-icons`
+inside the feature files. The only `src/components/` files it edited are `AskNexdoView.tsx` and
+`AskParts.tsx`, which the exception above gives to the Windows session: a `shoppingContext` and an
+`onClose` prop on `AskNexdoView`, and an optional leading `icon` on `AskExampleRow`.
+
 ---
 
 # Requests the other way: Mac → Windows

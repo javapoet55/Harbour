@@ -1888,10 +1888,10 @@ Line numbers are as of `73ad9e1`.
 | [x] | Moment notification route | `ImportantMomentsView.swift:565-593` (`MomentSheetHost`, `MomentRoutedView`) | `.sheet`, hosted from `RootView.swift:72` | A moment notification tap | **not captured** (needs a delivered notification) |
 | [x] | My Lists | `ShoppingViews.swift:82-137` (`ShoppingHome`) | Push | Quick Access "Shopping" (`TodayQuickAccess.swift:72`) | `shopping-lists-default`, `shopping-lists-dark`; empty state **not captured** |
 | [x] | New List | `ShoppingViews.swift:153-188` | `.sheet` (`:130`); also "Copy list" (`:273`) | "+" on My Lists; list options, "Copy list" | `shopping-new-list`, `shopping-new-list-filled`, `shopping-new-list-use-last`, `shopping-new-list-dark`, `shopping-new-list-error-empty-name` |
-| [x] | List detail | `ShoppingViews.swift:224-280` (`ShoppingDetail`) | Push (`:107`, and `:133` after create) | A list row; creating a list | `shopping-detail-default`, `shopping-detail-empty`, `shopping-detail-checked`, `shopping-detail-typing`, `shopping-detail-options-menu`, `shopping-detail-dark`, `shopping-complete-trip-dialog` |
+| [x] | List detail — **redesigned in Run D** (see `mobile/docs/reference/README.md`, "Run D"; the captures in this row are superseded by `shopping-detail-redesign*`) | `ShoppingViews.swift:224-280` (`ShoppingDetail`) | Push (`:107`, and `:133` after create) | A list row; creating a list | `shopping-detail-default`, `shopping-detail-empty`, `shopping-detail-checked`, `shopping-detail-typing`, `shopping-detail-options-menu`, `shopping-detail-dark`, `shopping-complete-trip-dialog` |
 | [x] | Item | `ShoppingItemEditor.swift:21-67` | `.sheet` (`ShoppingViews.swift:270`) | Tapping an item | `shopping-item-editor`, `shopping-item-editor-scrolled`, `shopping-item-editor-category-menu`, `shopping-item-editor-dark`, `shopping-item-editor-error-empty-name` |
 | [x] | Add by Voice | `ShoppingVoice.swift:89-130` | `.sheet` (`ShoppingViews.swift:271`) | The mic in the add row | `shopping-voice-ready`, `shopping-voice-listening`, `shopping-voice-stopped`, `shopping-voice-dark` |
-| [x] | Review Items | `ShoppingViews.swift:300-303` (`ShoppingBatchReview`) | `.sheet` (`:272`) | Quick add or voice, after `parse` | `shopping-review-items`, `shopping-review-items-dark`, `shopping-review-items-error-empty-name` |
+| — | Review Items — **removed.** `987a90e` deleted `ShoppingBatchReview`; quick add appends straight to the list (`ShoppingViews.swift:374-387`). Run D deleted `ReviewItemsSheet` | `ShoppingViews.swift:300-303` as of `73ad9e1` | — | — | `shopping-review-items*` (out of date) |
 | [x] | List Settings | `ShoppingViews.swift:309-314` | `.sheet` (`:274`) | List options, "List settings" | `shopping-list-settings`, `shopping-list-settings-dark`, `shopping-list-settings-error-empty-name` |
 | [x] | Share List | `ShoppingViews.swift:321-330` | `.sheet` (`:275`) | "Share list" in the toolbar | `shopping-share-list`, `shopping-share-list-link`, `shopping-share-list-dark`, `shopping-share-sheet-text` |
 | [x] | Profile and settings, **changed**: calendar connections | `ProfileView.swift:150-288`; `connectionList` `:288-331`; Disconnect dialog `:273-284` | Push inside the Account sheet | Account, "Settings" or "Edit profile and settings" | `account-settings-default`, `account-settings-calendars-empty`, `account-settings-calendars-dark`, `account-settings-calendar-connecting`, `account-settings-calendar-error-cancelled`; the connected list, Disconnect and the write toggle are **not captured** (no connected calendar) |
@@ -2035,7 +2035,7 @@ tester steps are Part 13 of `mobile/README.md`. Native modules added: `expo-cale
 | List detail | `app/shopping/[id].tsx` | `ShoppingViews.swift:206-295`; rows `:335-361`; artwork `:363-402` |
 | Item | `src/features/shopping/ItemEditorSheet.tsx` | `ShoppingItemEditor.swift:5-111` |
 | Add by Voice | `src/features/shopping/VoiceSheet.tsx`, `voice.ts` | `ShoppingVoice.swift:5-140` |
-| Review Items | `ReviewItemsSheet`, `sheets.tsx` | `ShoppingViews.swift:296-304` |
+| Review Items (**removed in Run D**) | — | `ShoppingViews.swift:296-304` as of Run C |
 | List Settings | `ListSettingsSheet`, `sheets.tsx` | `ShoppingViews.swift:305-315` |
 | Share List | `ShareListSheet`, `sheets.tsx` | `ShoppingViews.swift:316-332` |
 
@@ -2082,7 +2082,31 @@ fires both. Each has its own target here.
 
 **Gaps**: swipe-to-delete and drag-to-reorder have no core React Native equivalent — "Edit" in the
 options menu shows a delete button and up/down arrows instead, and Review Items has a delete button per
-row; the tab bar is hidden on these pushed screens (as for Moments). Parity pass 2 (Windows) closed two
+row; the tab bar is hidden on these pushed screens (as for Moments). **Superseded by Run D**: Swift
+dropped Edit, reorder and Review Items, and Run D added a `PanResponder` swipe-to-delete (no native
+module).
+
+### Run D: smart reminders and shopping intelligence
+
+Ports `e13730b` and the Shopping Detail rebuild in `987a90e`. The spec is the "Run D" section of
+`mobile/docs/reference/README.md`; its screen inventory is ticked there.
+
+| Screen | Built as | Swift `body` |
+| --- | --- | --- |
+| Task Details, smart-reminder label | `app/task/[id].tsx` header | `TaskDetailsView.swift:98-102`; labels `Models.swift:62-73` |
+| Tasks tab | unchanged: the live `taskCard` has no reminder badge | `RootView.swift:1860-1890` |
+| Account, Real-time Voice card | `src/features/account/VoiceUsageCard.tsx` | `ProfileView.swift:101-144` |
+| Shopping Detail (redesigned) | `app/(tabs)/(today)/shopping/[id].tsx`, `src/features/shopping/components.tsx` | `ShoppingViews.swift:207-400`, row `:612-642` |
+| Complete Shopping, completion screen | `src/features/shopping/CompletionView.tsx` | `ShoppingViews.swift:308-310`, `:402-480` |
+| Item Alternatives | `src/features/shopping/AlternativesSheet.tsx` | `ShoppingViews.swift:511-609` |
+| Shopping Recommendations | `AskNexdoView` with `shoppingContext`, in `src/features/shopping/RecommendationsSheet.tsx` | `AskNexdoView.swift:89-95`, `:195`, `:309-344`, `:402-418`, `:469-473` |
+
+**Server calls added**: `GET`/`POST /api/voice/usage` (`endpoints.voiceUsage`, `endpoints.recordVoiceUsage`),
+metered by `src/voice/usageMeter.ts` from `useVoiceSession` (1 s ticks in active phases, the cumulative
+total every 15 s and on `onTelemetry`); `POST /api/shopping` with `operation: "alternatives"`
+(`shoppingApi.alternatives`), which falls back to the phone's own suggestions on any failure but a lost
+session. **Native modules: none added** (`expo-linear-gradient` and `expo-blur` were already in).
+ Parity pass 2 (Windows) closed two
 more: transparent images are now flattened onto white before the JPEG encode (upng-js, pure
 JavaScript), and the five bundled illustrations are downscaled to 256 px (7.2 MB → 344 KB). See the
 "Run C — Shopping" block in `mobile/docs/reference/PARITY.md`.

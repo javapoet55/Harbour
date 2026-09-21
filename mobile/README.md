@@ -228,7 +228,7 @@ Use a test moment named `Parity …`, as the iPhone captures did. Never confirm 
     Moment** — "Your wish is ready. Open Nexdo, then tap Send in Messages."
 94. Tap it. Important Moments opens with **Close**, and that wish's details on top.
 
-### Part 14 — Shopping Lists (14 steps)
+### Part 14 — Shopping Lists (16 steps)
 
 Added in Phase 11 Run C. Needs the same new build as Part 13 (it also re-enables the camera
 permission). The way in is the **Shopping** tile in Today's Quick Access row; its status line ("N items
@@ -241,14 +241,21 @@ Use a test list named `Parity …`.
 96. **Create New List** (or the ⊕ at the top): Start from Scratch / Use Last Week's List, the name, the
     date, **Repeat every week**. Clear the name — **Create List** greys out. Create it: the new list
     opens.
-97. The list: the cart header, "N remaining · N items", the progress bar, the **Add an item** box with
-    a separate **+** and **mic**, and "Try “2 bottles of milk 1 gallon” or tap the mic."
-98. Type **ch** — up to three suggestions appear (Cheese, Cherry Tomatoes). Type **2 bottles of milk 1
-    gallon** and tap **+**: **Review Items** opens with the server's parse. Edit it, then **Add 1
-    Items**. The item appears under Dairy & Eggs with the milk illustration.
-99. Tap the **+** alone and then the **mic** alone: each does only its own thing. (On the iPhone a tap
-    on that row can fire both — a known iPhone defect, not reproduced here.)
-100. Check an item: it strikes through and "remaining" drops. It is checked on the iPhone too.
+97. The list: the cart header with "N added · N items" (N added counts the checked items), then one
+    rounded bar with a blue **+** on the left, "Add an item (e.g. eggs, milk, bread)" and a **mic** on
+    the right. Below it, the category chips — "All (N)" and one per category ("Dairy", "Meat" are
+    shortened) — and one card of items, each with a square checkbox, its picture, the name, the amount
+    and a blue **star**. **Complete Shopping** and **AI Powered Recommendations** are pinned to the
+    bottom. There is no progress bar and no hint line.
+98. Type **ch** — up to three suggestions appear (Cheese, Cherry Tomatoes); tapping one adds it at once.
+    Type **2 bottles of milk 1 gallon** and tap **+**: the server parses it and the item goes straight
+    onto the list, with the milk illustration — there is no Review Items step. Type **zzz** and tap
+    **+**: "No items found. Type an item and try again." With the field empty, **+** just puts the
+    cursor in it.
+99. Tap a chip: only that category's items show, and the chip turns solid blue. Swipe an item left and
+    tap **Delete** (or swipe all the way): it goes. Delete a chip's last item and the list falls back to
+    **All**. The **mic** and **+** are separate buttons, as on the iPhone.
+100. Check an item: it strikes through and "added" goes up. It is checked on the iPhone too.
 101. Check an item on the iPhone, then check a different one here without refreshing: the save is
      refused with "This list changed on another device. Refresh before saving." and **Retry Save** /
      **Discard local edits and reload** appear. Discard reloads the iPhone's version.
@@ -258,7 +265,8 @@ Use a test list named `Parity …`.
      Save.
 104. **Mic** → **Add by Voice**: "Ready when you are", the bell, "Listening — keep going". Say "six
      bananas, one gallon of milk". Tap **Review Items**: "Finishing transcription…", then **Review your
-     items**. **Add 2 Items**.
+     items** inside the same sheet. **Add 2 Items**. (This voice review step is still in the Android
+     build; see Known differences.)
 105. Turn **Allow live voice transcription** off: the mic greys out and the status reads "Enable live
      transcription below to start". Close and reopen — it is still off. Turn it back on.
 106. ⋯ → **List settings** (Save only, greyed with an empty name), **Copy list**, **Uncheck all**,
@@ -272,6 +280,15 @@ Use a test list named `Parity …`.
      job for saving a branch on a tree!" summary shows Purchased / Total items / Saved, then **Done**
      (back to My Lists) and either **View Next Shopping List** (weekly list: next week's list, every
      item unchecked) or **Use This List Again** (one-off list: opens Copy list).
+109. Tap an item's **star** → **Item Alternatives**: "Finding useful alternatives…", then the item as
+     "Original Item", "AI Recommended Alternatives" with the first one **Selected**, and a **Nexdo Tip**.
+     Pick another row, then **Replace with Selected Item**: the item is swapped in place, keeps its
+     check mark, and shows the alternative's detail as its note. Open it again and use **Add to Cart
+     Instead**: the alternative is added as a new item.
+110. **AI Powered Recommendations** → **Shopping Recommendations**: "Plan a smarter cart" with the list's
+     name, "Ask about this shopping list…", **Get Recommendations** (greyed until you type), and four
+     prompts with icons. Tap a prompt: it fills the field without sending. Send it: the answer shows your
+     question, not the list details sent with it.
 
 ---
 
@@ -306,8 +323,8 @@ decision, or a server-side gap.
 | **Some Moments text says "iOS"** ("Open iOS Settings", "iOS does not allow Nexdo to send Messages automatically"). | The copy is the iPhone's, word for word, pending a decision on Android wording. **Open iOS Settings** opens Android's app settings. |
 | **The greeting card's typeface differs.** | The iPhone uses New York (serif); Android uses its own serif. |
 | **Shopping Lists hides the tab bar**, like Important Moments. | The same reason: the screens sit outside the tab group. |
-| **No swipe to delete or drag to reorder** on a shopping list. Use ⋯ → **Edit**, which shows a delete button and up/down arrows; Review Items has a delete button on each row. | React Native has no built-in swipe row or drag reorder; adding one needs a further native module. |
-| **"+" and the mic are separate buttons.** | On the iPhone one tap on that row can trigger both — an iPhone defect deliberately not copied. |
+| **Shopping Add by Voice still ends with a review step** ("Review Items", then "Review your items") before the items are added. | The iPhone now adds dictated items straight away (`987a90e`). That change has no reference capture yet and was left out of Run D. |
+| **Complete Shopping asks in a centred dialog**, not a popover over the button. | Android has no popover confirmation; the title, message and button are the iPhone's. |
 | **Share Link sends the link as a text message** to the share sheet. | Android's share sheet takes text only. |
 
 ---
