@@ -32,9 +32,9 @@ export function rescheduleFailure(title: string, message: string): string {
   return `Couldn’t reschedule ${title}: ${message}. Earlier changes were saved.`;
 }
 
-/** `Button(saving ? "Rescheduling…" : "Reschedule \(tasks.count) tasks")` (`:93`) — never singular. */
+/** `Button(saving ? "Rescheduling…" : "Reschedule \(tasks.count) task\(tasks.count == 1 ? "" : "s")")` (`:93`). */
 export function rescheduleButtonTitle(saving: boolean, count: number): string {
-  return saving ? 'Rescheduling…' : `Reschedule ${count} tasks`;
+  return saving ? 'Rescheduling…' : `Reschedule ${count} task${count === 1 ? '' : 's'}`;
 }
 
 /** `.disabled(saving || model.busy || tasks.isEmpty || start <= Date())` (`:94`). */

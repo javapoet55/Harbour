@@ -62,7 +62,9 @@ describe('rescheduleAll', () => {
 
 describe('the Reschedule button', () => {
   it('never singularises, and reads Rescheduling… while saving', () => {
-    expect(rescheduleButtonTitle(false, 1)).toBe('Reschedule 1 tasks');
+    // TodayAttentionSheet.swift:93 — singular for one task.
+    expect(rescheduleButtonTitle(false, 1)).toBe('Reschedule 1 task');
+    expect(rescheduleButtonTitle(false, 0)).toBe('Reschedule 0 tasks');
     expect(rescheduleButtonTitle(false, 3)).toBe('Reschedule 3 tasks');
     expect(rescheduleButtonTitle(true, 3)).toBe('Rescheduling…');
   });
