@@ -282,6 +282,39 @@ describe('list filters', () => {
     expect(scheduled('Action needed')).toEqual(['p4']);
   });
 
+  // ImportantMomentsView.swift:273. The server moves an unconfirmed manual delivery to EXPIRED
+  // after a 24-hour grace period; it needs the owner's attention, not silence.
+  it('lists an expired delivery under Action needed', () => {
+    const expired = [
+      moment({
+        id: 'e',
+        occurrenceDate: '2030-09-20',
+        nextOccurrence: '2030-09-20',
+        drafts: [
+          draft({
+            id: 'de',
+            plans: [
+              plan({
+                id: 'pe',
+                draftID: 'de',
+                status: 'EXPIRED',
+                lastError: 'Delivery was not confirmed within one day. Create a new wish to send it.',
+              }),
+            ],
+          }),
+        ],
+      }),
+    ];
+    const displayed = displayedMoments(expired, { tab: 'Scheduled', filter: 'All', search: '' }, now);
+    const ids = (deliveryFilter: string) => tabPlans(sortedPlans(expired), displayed, { tab: 'Scheduled', deliveryFilter }).map((item) => item.id);
+    expect(ids('All')).toEqual(['pe']);
+    expect(ids('Action needed')).toEqual(['pe']);
+    // Swift gives EXPIRED no case of its own, so the label falls through to the default branch,
+    // and an expired delivery can no longer be edited.
+    expect(planStatusLabel(plan({ status: 'EXPIRED' }))).toBe('Expired');
+    expect(planEditable(plan({ status: 'EXPIRED' }))).toBe(false);
+  });
+
   it('copies Swift: an empty Sent tab still "displays" moments, so it shows no empty message', () => {
     const noHistory = [moment({ id: 'x' })];
     const displayed = displayedMoments(noHistory, { tab: 'Sent', filter: 'All', search: '' }, now);

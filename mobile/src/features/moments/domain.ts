@@ -570,7 +570,7 @@ export function tabPlans(
         tab === 'Sent' ||
         (deliveryFilter === 'Automatic' && plan.automaticDelivery) ||
         (deliveryFilter === 'Confirmation' && !plan.automaticDelivery) ||
-        (deliveryFilter === 'Action needed' && ['FAILED', 'UNCERTAIN'].includes(plan.status)))
+        (deliveryFilter === 'Action needed' && ['FAILED', 'UNCERTAIN', 'EXPIRED'].includes(plan.status)))
     );
   });
 }
