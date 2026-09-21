@@ -1,4 +1,4 @@
-import type { GroceryItem, GroceryList, ShoppingInput } from '../../api/shopping';
+import type { GroceryItem, GroceryList, ShoppingAlternative, ShoppingAlternativesResponse, ShoppingInput } from '../../api/shopping';
 
 /**
  * The pure Shopping model: ios/Sources/NexdoCore/ShoppingList.swift and the logic ShoppingViews.swift
@@ -118,6 +118,101 @@ export function previousList(lists: GroceryList[], source?: GroceryList | null):
 /** The copy "Use Last Week's List" and "Use This List Again" create (ShoppingViews.swift:180): unchecked. */
 export function copiedItems(list: GroceryList | undefined): GroceryItem[] {
   return (list?.items ?? []).map((item) => ({ ...item, checked: false }));
+}
+
+// ---------------------------------------------------------------------------------------------
+// Item alternatives (ShoppingList.swift:33-76, ShoppingViews.swift:344-352)
+
+/** `ShoppingAlternative.id` (ShoppingList.swift:40): the four item fields joined with `|`. */
+export function alternativeId(alternative: Pick<ShoppingAlternative, 'name' | 'category' | 'quantity' | 'size'>): string {
+  return [alternative.name, alternative.category, alternative.quantity, alternative.size].join('|');
+}
+
+/**
+ * `ShoppingAlternative.groceryItem` (ShoppingList.swift:44-46): a new, unchecked item with no image,
+ * whose notes are the alternative's `detail`. `id` is the new item's (Swift: `UUID().uuidString`).
+ */
+export function alternativeItem(alternative: ShoppingAlternative, id: string): GroceryItem {
+  return {
+    id,
+    name: alternative.name,
+    category: alternative.category,
+    quantity: alternative.quantity,
+    size: alternative.size,
+    notes: alternative.detail,
+    imageData: null,
+    checked: false,
+  };
+}
+
+function alternative(name: string, category: string, quantity: string, size: string, reason: string, detail: string): ShoppingAlternative {
+  return { name, category, quantity, size, reason, detail };
+}
+
+/**
+ * `ShoppingAlternativesResponse.local(for:)` (ShoppingList.swift:53-75), verbatim: what
+ * `ShoppingStore.alternatives(for:)` shows when the request fails for any reason but a lost session.
+ * It is the PHONE's list, not the server's fallback (src/server/shopping/alternatives.ts:45-55): the
+ * reasons differ in places and the item's own quantity and size are kept.
+ */
+export function localAlternatives(item: Pick<GroceryItem, 'name' | 'category' | 'quantity' | 'size'>): ShoppingAlternativesResponse {
+  const text = item.name.toLowerCase();
+  if (text.includes('chicken')) {
+    const size = item.size === '' ? 'lb' : item.size;
+    return {
+      alternatives: [
+        alternative('Chicken breast (skinless)', 'Meat & Seafood', item.quantity, size, 'Lower calorie option', 'Lean cut with less saturated fat'),
+        alternative('Turkey breast', 'Meat & Seafood', item.quantity, size, 'Lean protein', 'Mild flavor and lower in fat'),
+        alternative('Salmon', 'Meat & Seafood', item.quantity, size, 'Omega-3 option', 'Rich flavor and useful nutrients'),
+        alternative('Firm tofu', 'Produce', '1', 'package', 'Plant-based alternative', 'Versatile source of protein'),
+        alternative('Chickpeas', 'Pantry', '2', 'cans', 'High-fiber option', 'Plant-based protein with fiber'),
+      ],
+      tip: 'Try turkey breast for a lean swap with a similar mild flavor.',
+      usedAI: false,
+    };
+  }
+  if (text.includes('milk')) {
+    return {
+      alternatives: [
+        alternative('Low-fat milk', 'Dairy & Eggs', item.quantity, item.size, 'Lower-fat option', 'Similar dairy taste with less fat'),
+        alternative('Lactose-free milk', 'Dairy & Eggs', item.quantity, item.size, 'Lactose-free', 'Dairy milk without lactose'),
+        alternative('Unsweetened oat milk', 'Dairy & Eggs', '1', 'carton', 'Plant-based option', 'Creamy texture without dairy'),
+        alternative('Unsweetened soy milk', 'Dairy & Eggs', '1', 'carton', 'More plant protein', 'Neutral flavor with protein'),
+      ],
+      tip: 'Choose an unsweetened alternative when you want to avoid added sugar.',
+      usedAI: false,
+    };
+  }
+  // `replacingOccurrences(of:"Organic ",with:"")`: every occurrence, case-sensitive.
+  const base = item.name.split('Organic ').join('');
+  return {
+    alternatives: [
+      alternative(`Organic ${base}`, item.category, item.quantity, item.size, 'Organic option', 'A comparable certified-organic choice'),
+      alternative(`Store-brand ${base}`, item.category, item.quantity, item.size, 'Budget-friendly', 'A similar option that may cost less'),
+      alternative(`Family-size ${base}`, item.category, item.quantity, item.size === '' ? 'large pack' : item.size, 'Larger package', 'Useful when you need more servings'),
+    ],
+    tip: `Compare unit prices and package sizes before replacing ${base}.`,
+    usedAI: false,
+  };
+}
+
+/**
+ * "Replace with Selected Item" — `ShoppingDetail.replace(_:with:)` (ShoppingViews.swift:344-351): the
+ * alternative takes the original's slot, id and checked state. `null` when the original is no longer
+ * on the list, where Swift returns without saving.
+ */
+export function replacedWithAlternative(list: GroceryList, originalId: string, choice: ShoppingAlternative): GroceryList | null {
+  const index = list.items.findIndex((item) => item.id === originalId);
+  if (index === -1) return null;
+  const original = list.items[index];
+  const items = [...list.items];
+  items[index] = { ...alternativeItem(choice, original.id), checked: original.checked };
+  return { ...list, items };
+}
+
+/** "Add to Cart Instead" — `ShoppingDetail.add(_:)` (ShoppingViews.swift:352): appended as a new item. */
+export function addedAlternative(list: GroceryList, choice: ShoppingAlternative, id: string): GroceryList {
+  return { ...list, items: [...list.items, alternativeItem(choice, id)] };
 }
 
 // ---------------------------------------------------------------------------------------------

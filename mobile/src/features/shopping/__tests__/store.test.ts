@@ -10,7 +10,7 @@ function list(overrides: Partial<GroceryList> = {}): GroceryList {
 function harness(lists: GroceryList[] = [list()]) {
   const post = jest.fn<Promise<ShoppingResult>, [ShoppingEnvelope]>(async () => ({ list: list() }));
   const snapshot = jest.fn(async () => ({ lists }));
-  const store = createShoppingStore({ lists: snapshot, post, transcriptionSession: jest.fn() });
+  const store = createShoppingStore({ lists: snapshot, post, alternatives: jest.fn(), transcriptionSession: jest.fn() });
   return { store, post, snapshot };
 }
 

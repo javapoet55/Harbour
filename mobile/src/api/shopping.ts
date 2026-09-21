@@ -46,7 +46,22 @@ export type ShoppingResult = { list?: GroceryList | null; items?: GroceryItem[] 
 /** `ShoppingInput` (ShoppingStore.swift:5-8). */
 export type ShoppingInput = { title: string; date: string; timeZone: string; weekly: boolean; items: GroceryItem[] };
 
-export type ShoppingOperation = 'parse' | 'create' | 'save' | 'delete' | 'complete' | 'share' | 'revoke';
+export type ShoppingOperation = 'parse' | 'create' | 'save' | 'delete' | 'complete' | 'share' | 'revoke' | 'alternatives';
+
+/** `ShoppingAlternativeInput` (ShoppingStore.swift:9): the item, every field sent even when empty. */
+export type ShoppingAlternativeInput = { name: string; category: string; quantity: string; size: string };
+
+/**
+ * `ShoppingAlternative` (ShoppingList.swift:33-47; server `ShoppingAlternative`,
+ * src/server/shopping/alternatives.ts:5). `category` is always one of `CATEGORIES`.
+ */
+export type ShoppingAlternative = { name: string; category: string; quantity: string; size: string; reason: string; detail: string };
+
+/**
+ * `ShoppingAlternativesResponse` (ShoppingList.swift:48-52; src/server/shopping/alternatives.ts:6): three
+ * to five alternatives, a tip, and whether the model wrote them (`false` for the curated fallback).
+ */
+export type ShoppingAlternativesResponse = { alternatives: ShoppingAlternative[]; tip: string; usedAI: boolean };
 
 /**
  * `ShoppingEnvelope` (ShoppingStore.swift:39). `id` and `revision` are omitted when there is no list.
@@ -63,6 +78,14 @@ export const shoppingApi = {
   lists: (client: ApiClient = getApi()) => client.get<ShoppingSnapshot>('/api/shopping'),
 
   post: (envelope: ShoppingEnvelope, client: ApiClient = getApi()) => client.post<ShoppingResult>('/api/shopping', envelope),
+
+  /**
+   * `ShoppingStore.alternatives(for:)` (ShoppingStore.swift:36-42): the `alternatives` operation
+   * (src/server/shopping/service.ts:12-15). Like `parse` it names no list, so there is no `id`,
+   * `revision` or idempotency key. Swift's default timeout.
+   */
+  alternatives: (input: ShoppingAlternativeInput, client: ApiClient = getApi()) =>
+    client.post<ShoppingAlternativesResponse>('/api/shopping', { operation: 'alternatives', input }),
 
   /** `POST /api/shopping/image` (ShoppingItemEditor.swift:91), 150s like Swift. Six per hour; 503 without a key. */
   image: (input: { name: string; details: string; consent: boolean }, client: ApiClient = getApi()) =>

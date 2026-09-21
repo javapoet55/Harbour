@@ -1,7 +1,19 @@
 import { createStore, useStore } from 'zustand';
 
-import { messages } from '../../api/client';
-import { shoppingApi, type GroceryItem, type GroceryList, type ShoppingEnvelope, type ShoppingOperation, type ShoppingResult, type ShoppingSnapshot, type TranscriptionSession } from '../../api/shopping';
+import { isApiError, messages } from '../../api/client';
+import {
+  shoppingApi,
+  type GroceryItem,
+  type GroceryList,
+  type ShoppingAlternativeInput,
+  type ShoppingAlternativesResponse,
+  type ShoppingEnvelope,
+  type ShoppingOperation,
+  type ShoppingResult,
+  type ShoppingSnapshot,
+  type TranscriptionSession,
+} from '../../api/shopping';
+import { localAlternatives } from './model';
 
 /**
  * `ShoppingStore` (ios/App/ShoppingStore.swift:9-38).
@@ -15,6 +27,7 @@ import { shoppingApi, type GroceryItem, type GroceryList, type ShoppingEnvelope,
 export type ShoppingDeps = {
   lists: () => Promise<ShoppingSnapshot>;
   post: (envelope: ShoppingEnvelope) => Promise<ShoppingResult>;
+  alternatives: (input: ShoppingAlternativeInput) => Promise<ShoppingAlternativesResponse>;
   transcriptionSession: () => Promise<TranscriptionSession>;
 };
 
@@ -24,8 +37,13 @@ export type ShoppingState = {
   error: string | null;
   refresh: () => Promise<void>;
   /** Returns the list the server answered with, or `null` on failure, on delete, or while busy. */
-  action: (operation: Exclude<ShoppingOperation, 'parse'>, list: GroceryList | null, input: unknown, idempotencyKey?: string) => Promise<GroceryList | null>;
+  action: (operation: Exclude<ShoppingOperation, 'parse' | 'alternatives'>, list: GroceryList | null, input: unknown, idempotencyKey?: string) => Promise<GroceryList | null>;
   parse: (text: string) => Promise<GroceryItem[]>;
+  /**
+   * `alternatives(for:)` (ShoppingStore.swift:36-42). Never touches `busy` or `error`. A lost session
+   * is rethrown; ANY other failure answers with the phone's own `localAlternatives(item)`.
+   */
+  alternatives: (item: Pick<GroceryItem, 'name' | 'category' | 'quantity' | 'size'>) => Promise<ShoppingAlternativesResponse>;
   credential: () => Promise<TranscriptionSession>;
   setError: (error: string | null) => void;
   reset: () => void;
@@ -74,6 +92,15 @@ export function createShoppingStore(deps: ShoppingDeps) {
       return result.items ?? [];
     },
 
+    async alternatives(item) {
+      try {
+        return await deps.alternatives({ name: item.name, category: item.category, quantity: item.quantity, size: item.size });
+      } catch (error) {
+        if (isApiError(error) && error.code === 'SIGNED_OUT') throw error;
+        return localAlternatives(item);
+      }
+    },
+
     credential: () => deps.transcriptionSession(),
 
     setError: (error) => set({ error }),
@@ -85,6 +112,7 @@ export function createShoppingStore(deps: ShoppingDeps) {
 export const shoppingStore = createShoppingStore({
   lists: () => shoppingApi.lists(),
   post: (envelope) => shoppingApi.post(envelope),
+  alternatives: (input) => shoppingApi.alternatives(input),
   transcriptionSession: () => shoppingApi.transcriptionSession(),
 });
 
