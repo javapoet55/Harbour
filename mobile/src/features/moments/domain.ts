@@ -1,4 +1,5 @@
-import type { FestivalCatalogEntry, ImportantMoment, MomentInput, WishDeliveryPlan, WishDraft } from '../../api/moments';
+import type { MessageComposeOutcome } from '../../actions/composers';
+import type { FestivalCatalogEntry, ImportantMoment, MomentInput, PlanAction, WishDeliveryPlan, WishDraft } from '../../api/moments';
 import { deviceZone, momentDate, momentDay, parseInstant, upcomingGroupFor, zonedInstant, type UpcomingGroup } from './dates';
 
 /**
@@ -62,13 +63,34 @@ export function planEditable(plan: Pick<WishDeliveryPlan, 'status'>): boolean {
   return ['SCHEDULED', 'AWAITING_CONFIRMATION', 'FAILED'].includes(plan.status);
 }
 
+/** The `lastError` the server records for a Messages plan opened without a confirmed send. */
+export const OPENED_UNCONFIRMED = 'Messages opened; delivery not confirmed.';
+
+/**
+ * The `plan` action recording a Messages composer outcome: `sent` only for a verified send,
+ * `failed` only for a real composer error, and `opened` when the platform cannot tell us which
+ * happened. `null` for a cancelled composer, which each screen handles its own way.
+ */
+export function composerPlanAction(outcome: MessageComposeOutcome): PlanAction | null {
+  switch (outcome) {
+    case 'submitted':
+      return 'sent';
+    case 'unknown':
+      return 'opened';
+    case 'failed':
+      return 'failed';
+    default:
+      return null;
+  }
+}
+
 /** `statusLabel` (ImportantMoment.swift:34-42). */
-export function planStatusLabel(plan: Pick<WishDeliveryPlan, 'status'>): string {
+export function planStatusLabel(plan: Pick<WishDeliveryPlan, 'status' | 'lastError'>): string {
   switch (plan.status) {
     case 'SCHEDULED':
       return 'Auto-send scheduled';
     case 'AWAITING_CONFIRMATION':
-      return 'Confirmation required';
+      return plan.lastError === OPENED_UNCONFIRMED ? 'Opened — delivery not confirmed' : 'Confirmation required';
     case 'SENT':
       return 'Sent';
     case 'COPIED':

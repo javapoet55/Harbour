@@ -22,6 +22,8 @@ jest.mock('expo-router', () => ({
   },
 }));
 
+const mockedSMS = SMS as unknown as Record<string, jest.Mock>;
+
 const mockPost = jest.fn();
 const mockSnapshot = jest.fn();
 jest.mock('../../../api/moments', () => ({
@@ -33,7 +35,10 @@ jest.mock('../../../api/moments', () => ({
   },
 }));
 
+import * as SMS from 'expo-sms';
+
 import type { ImportantMoment, MomentsSnapshot } from '../../../api/moments';
+import { OPENED_UNCONFIRMED } from '../domain';
 import { momentsStore } from '../store';
 import { draft, moment, plan, settings } from '../testFixtures';
 
@@ -282,6 +287,38 @@ describe('Wish details', () => {
     expect(screen.getByText('Review & Open Messages')).toBeTruthy();
     await fireEvent.press(screen.getByTestId('wish-cancel'));
     expect(alert).toHaveBeenCalledWith('Cancel this wish?', undefined, expect.any(Array));
+  });
+
+  // Android's composer cannot report whether the person tapped Send, so the wish is recorded as
+  // opened — not sent, and not failed — and stays awaiting confirmation.
+  it('records an unverifiable Messages outcome as opened', async () => {
+    mockedSMS.sendSMSAsync.mockResolvedValueOnce({ result: 'unknown' });
+    load([moment({ drafts: [draft({ plans: [plan({ id: 'p1' })] })] })]);
+    mockParams = { planId: 'p1' };
+    await render(<WishDetails />);
+    await fireEvent.press(screen.getByTestId('wish-open-messages'));
+    await waitFor(() => expect(mockPost).toHaveBeenCalledWith('plan', { id: 'p1', action: 'opened' }, undefined));
+  });
+
+  it('records a verified send as sent and a composer error as failed', async () => {
+    load([moment({ drafts: [draft({ plans: [plan({ id: 'p1' })] })] })]);
+    mockParams = { planId: 'p1' };
+    await render(<WishDetails />);
+
+    mockedSMS.sendSMSAsync.mockResolvedValueOnce({ result: 'sent' });
+    await fireEvent.press(screen.getByTestId('wish-open-messages'));
+    await waitFor(() => expect(mockPost).toHaveBeenCalledWith('plan', { id: 'p1', action: 'sent' }, undefined));
+
+    mockedSMS.sendSMSAsync.mockRejectedValueOnce(new Error('boom'));
+    await fireEvent.press(screen.getByTestId('wish-open-messages'));
+    await waitFor(() => expect(mockPost).toHaveBeenCalledWith('plan', { id: 'p1', action: 'failed' }, undefined));
+  });
+
+  it('shows the opened, unconfirmed state once Messages has been opened', async () => {
+    load([moment({ drafts: [draft({ plans: [plan({ id: 'p1', lastError: OPENED_UNCONFIRMED })] })] })]);
+    mockParams = { planId: 'p1' };
+    await render(<WishDetails />);
+    expect(screen.getByTestId('wish-title').props.children).toBe('Opened — delivery not confirmed');
   });
 
   it('shows the scheduled confirmation and history actions', async () => {

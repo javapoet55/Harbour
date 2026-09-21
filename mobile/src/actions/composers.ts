@@ -52,18 +52,37 @@ export async function canSendEmail(): Promise<boolean> {
 }
 
 /**
- * Opens the message composer. `messageComposeViewController(_:didFinishWith:)`
- * (TaskActionComposers.swift:37-39) maps `.sent` to submitted, `.cancelled` to cancelled and
- * anything else to failed — SMS has no "saved" outcome.
+ * `ActionComposeResult` plus the outcome iOS never produces: Android's SMS intent resolves
+ * `unknown` whether or not the person tapped Send. That is not an error, so callers that can
+ * represent "opened, unconfirmed" must tell it apart from a genuine failure.
  */
-export async function composeMessage({ recipient, body }: { recipient: string; body: string }): Promise<ActionComposeResult> {
+export type MessageComposeOutcome = ActionComposeResult | 'unknown';
+
+/**
+ * Opens the message composer, keeping an unverifiable outcome as `unknown`.
+ * `MFMessageComposeViewController` always reports a definite result, so on iOS this never returns
+ * `unknown`; `expo-sms` returns it for every Android send.
+ */
+export async function composeMessageOutcome({ recipient, body }: { recipient: string; body: string }): Promise<MessageComposeOutcome> {
   if (!(await canSendMessage())) throw new TaskActionError('unavailable');
   try {
     const { result } = await SMS.sendSMSAsync([recipient], body);
-    return result === 'sent' ? 'submitted' : result === 'cancelled' ? 'cancelled' : 'failed';
+    return result === 'sent' ? 'submitted' : result === 'cancelled' ? 'cancelled' : 'unknown';
   } catch {
     return 'failed';
   }
+}
+
+/**
+ * Opens the message composer. `messageComposeViewController(_:didFinishWith:)`
+ * (TaskActionComposers.swift:37-39) maps `.sent` to submitted, `.cancelled` to cancelled and
+ * anything else to failed — SMS has no "saved" outcome.
+ *
+ * Task actions have no "opened" state to record, so an unverifiable outcome stays `failed` here.
+ */
+export async function composeMessage(input: { recipient: string; body: string }): Promise<ActionComposeResult> {
+  const outcome = await composeMessageOutcome(input);
+  return outcome === 'unknown' ? 'failed' : outcome;
 }
 
 /**

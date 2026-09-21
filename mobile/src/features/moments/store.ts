@@ -8,6 +8,7 @@ import {
   type MomentOK,
   type MomentOperation,
   type MomentsSnapshot,
+  type PlanAction,
   type SaveMomentResponse,
   type WishDeliveryPlan,
 } from '../../api/moments';
@@ -72,7 +73,7 @@ export type MomentsState = {
   request: <R>(operation: MomentOperation, input: unknown, id?: string) => Promise<R>;
   perform: (action: () => Promise<void>) => Promise<void>;
   save: (input: MomentInput, id?: string) => Promise<string>;
-  planAction: (plan: WishDeliveryPlan, action: string, date?: number, zone?: string) => Promise<void>;
+  planAction: (plan: WishDeliveryPlan, action: PlanAction, date?: number, zone?: string) => Promise<void>;
   visibility: (moment: ImportantMoment, enabled: boolean, snooze?: boolean) => Promise<void>;
   deleteData: () => Promise<void>;
   authorizeNotifications: () => Promise<void>;

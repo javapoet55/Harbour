@@ -12,7 +12,7 @@ import { TodayBackdrop } from '../../../../src/components/TodayShell';
 import { ErrorText, IconLabel, MomentCard, MomentPrimary, Secondary, headline, title1 } from '../../../../src/features/moments/components';
 import { isoString } from '../../../../src/features/moments/dates';
 import { canSendMessage, copyText, openMessages, shareText } from '../../../../src/features/moments/device';
-import { capitalized, momentIcon } from '../../../../src/features/moments/domain';
+import { capitalized, composerPlanAction, momentIcon } from '../../../../src/features/moments/domain';
 import { findDraft, findPlan, rememberPlan } from '../../../../src/features/moments/handoff';
 import { momentsStore, useMoments } from '../../../../src/features/moments/store';
 import { WishEmailConfirmation } from '../../../../src/features/moments/WishEmailConfirmation';
@@ -87,7 +87,7 @@ export default function ChooseDeliveryScreen() {
       const result = await openMessages(recipient, draft.body);
       setComposing(false);
       await momentsStore.getState().perform(async () => {
-        await momentsStore.getState().planAction(created, result === 'submitted' ? 'sent' : result === 'failed' ? 'failed' : 'cancel');
+        await momentsStore.getState().planAction(created, composerPlanAction(result) ?? 'cancel');
         await momentsStore.getState().refresh();
         const updated = findPlan(created.id);
         if (updated) setPlan(updated);

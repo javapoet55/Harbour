@@ -12,6 +12,7 @@ import {
 } from '../dates';
 import {
   capitalized,
+  composerPlanAction,
   defaultSignature,
   defaultTitle,
   displayedMoments,
@@ -23,6 +24,7 @@ import {
   maskedAddress,
   needsWishReview,
   normalizedPhone,
+  OPENED_UNCONFIRMED,
   planEditable,
   planStatusLabel,
   readFestivalSettings,
@@ -115,6 +117,22 @@ describe('plans', () => {
     const copied = plan({ channel: 'copy', status: 'COPIED', scheduledAtUTC: '2026-09-17T16:00:00.000Z', timeZoneID: 'America/Los_Angeles' });
     expect(planStatusLabel(copied)).toBe('Copied — delivery not confirmed');
     expect(planEditable(copied)).toBe(false);
+  });
+
+  // An Android composer cannot confirm a send, so the wish stays awaiting confirmation and reads
+  // the same way Copy and Share do rather than claiming it was sent or failed.
+  it('distinguishes an opened Messages wish from one still awaiting the composer', () => {
+    expect(planStatusLabel(plan({ status: 'AWAITING_CONFIRMATION', lastError: OPENED_UNCONFIRMED }))).toBe('Opened — delivery not confirmed');
+    expect(planStatusLabel(plan({ status: 'AWAITING_CONFIRMATION', lastError: 'Something else went wrong.' }))).toBe('Confirmation required');
+  });
+
+  it.each([
+    ['submitted', 'sent'],
+    ['unknown', 'opened'],
+    ['failed', 'failed'],
+    ['cancelled', null],
+  ] as const)('records the %s composer outcome as %s', (outcome, expected) => {
+    expect(composerPlanAction(outcome)).toBe(expected);
   });
 
   it('labels every status', () => {

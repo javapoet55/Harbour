@@ -115,6 +115,23 @@ export type MomentOperation =
   | 'greetingArtwork'
   | 'greetingCardSave';
 
+/**
+ * The `action` accepted by the `plan` operation (service.ts `changePlan`).
+ *
+ * `opened` applies only to a manual Messages plan that is AWAITING_CONFIRMATION: it holds that
+ * status, records "Messages opened; delivery not confirmed." and never sets `sentAt`.
+ */
+export type PlanAction =
+  | 'cancel'
+  | 'sent'
+  | 'failed'
+  | 'copied'
+  | 'shared'
+  | 'reschedule'
+  | 'retry'
+  | 'sendNow'
+  | 'opened';
+
 /** Response bodies, per operation (route.ts:219-241). */
 export type MomentOK = { ok: true };
 export type SaveMomentResponse = { moment: ImportantMoment };

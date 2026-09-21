@@ -3,7 +3,7 @@ import * as MailComposer from 'expo-mail-composer';
 import * as SMS from 'expo-sms';
 import { Linking } from 'react-native';
 
-import { canSendEmail, canSendMessage, composeEmail, composeMessage, emailDraft, messageBody, placeCall, telUrl } from './composers';
+import { canSendEmail, canSendMessage, composeEmail, composeMessage, composeMessageOutcome, emailDraft, messageBody, placeCall, telUrl } from './composers';
 import { resolveContacts, toActionContact } from './contacts';
 
 const mockedContacts = Contacts as unknown as Record<string, jest.Mock>;
@@ -151,6 +151,20 @@ describe('the composers', () => {
   ])('maps the SMS result %s to %s', async (result, expected) => {
     mockedSMS.sendSMSAsync.mockResolvedValue({ result });
     expect(await composeMessage({ recipient: '+15551234567', body: 'hi' })).toBe(expected);
+  });
+
+  it.each([
+    ['sent', 'submitted'],
+    ['cancelled', 'cancelled'],
+    ['unknown', 'unknown'],
+  ])('keeps the SMS result %s as %s for callers that can record "opened"', async (result, expected) => {
+    mockedSMS.sendSMSAsync.mockResolvedValue({ result });
+    expect(await composeMessageOutcome({ recipient: '+15551234567', body: 'hi' })).toBe(expected);
+  });
+
+  it('reports a thrown composer as failed, not as an unverifiable outcome', async () => {
+    mockedSMS.sendSMSAsync.mockRejectedValue(new Error('boom'));
+    expect(await composeMessageOutcome({ recipient: '+1555', body: 'hi' })).toBe('failed');
   });
 
   it.each([

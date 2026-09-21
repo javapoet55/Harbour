@@ -8,7 +8,7 @@ import * as WebBrowser from 'expo-web-browser';
 import { Platform, Share } from 'react-native';
 
 import type { MomentInput } from '../../api/moments';
-import { composeMessage, canSendMessage, type ActionComposeResult } from '../../actions/composers';
+import { composeMessageOutcome, canSendMessage, type MessageComposeOutcome } from '../../actions/composers';
 import { TaskActionError } from '../../actions/errors';
 import { ownerKeyFor } from '../../actions/persistence';
 import { deviceZone, momentDay } from './dates';
@@ -26,15 +26,16 @@ import { newMomentInput } from './domain';
 export { canSendMessage };
 
 /**
- * `ActionMessageComposer` → `planAction("sent" | "failed" | "cancel")`.
+ * `ActionMessageComposer` → `planAction("sent" | "opened" | "failed" | "cancel")`.
  *
- * PLATFORM GAP: Swift's `MFMessageComposeViewController` reports `.sent` only when the person tapped
- * Send. Android's SMS intent has no such callback — `expo-sms` resolves `unknown` whatever happened —
- * so `composeMessage` maps that to `failed` exactly as Swift maps an unknown result, and the wish is
- * then recorded as failed rather than sent. Recorded under the Moments gaps.
+ * Swift's `MFMessageComposeViewController` reports `.sent` only when the person tapped Send, so iOS
+ * records `sent` or `failed`. Android's SMS intent has no such callback — `expo-sms` resolves
+ * `unknown` whatever happened — so the outcome is reported as `opened`, which keeps the plan
+ * AWAITING_CONFIRMATION and shows the same "delivery not confirmed" state Copy and Share show.
+ * `sent` is recorded only for a verified send; `failed` only for a real composer error.
  */
-export async function openMessages(recipient: string, body: string): Promise<ActionComposeResult> {
-  return composeMessage({ recipient, body });
+export async function openMessages(recipient: string, body: string): Promise<MessageComposeOutcome> {
+  return composeMessageOutcome({ recipient, body });
 }
 
 /**

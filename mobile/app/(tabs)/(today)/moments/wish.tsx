@@ -8,7 +8,7 @@ import { TodayBackdrop } from '../../../../src/components/TodayShell';
 import { BorderedButton, ErrorText, MomentCard, MomentPrimary, MomentSheet } from '../../../../src/features/moments/components';
 import { momentLabel } from '../../../../src/features/moments/dates';
 import { canSendMessage, copyText, openMessages } from '../../../../src/features/moments/device';
-import { capitalized, HISTORY_STATUSES, momentForPlan, planDate, planEditable, planStatusLabel } from '../../../../src/features/moments/domain';
+import { capitalized, composerPlanAction, HISTORY_STATUSES, momentForPlan, planDate, planEditable, planStatusLabel } from '../../../../src/features/moments/domain';
 import { DateField, FormButton, FormRow, FormScroll, FormSection, FormText, LabeledValue } from '../../../../src/features/moments/form';
 import { findPlan } from '../../../../src/features/moments/handoff';
 import { momentsStore, useMomentList, useMoments } from '../../../../src/features/moments/store';
@@ -50,8 +50,9 @@ export default function WishDetailsScreen() {
       return;
     }
     const result = await openMessages(current.recipient, current.body);
-    if (result !== 'cancelled') {
-      await momentsStore.getState().perform(() => momentsStore.getState().planAction(current, result === 'submitted' ? 'sent' : 'failed'));
+    const action = composerPlanAction(result);
+    if (action) {
+      await momentsStore.getState().perform(() => momentsStore.getState().planAction(current, action));
     }
   };
 
