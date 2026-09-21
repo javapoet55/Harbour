@@ -38,6 +38,7 @@ jest.mock('../../../api/moments', () => ({
 import * as SMS from 'expo-sms';
 
 import type { ImportantMoment, MomentsSnapshot } from '../../../api/moments';
+import { momentDate, sendDayLabel } from '../dates';
 import { OPENED_UNCONFIRMED } from '../domain';
 import { momentsStore } from '../store';
 import { draft, moment, plan, settings } from '../testFixtures';
@@ -131,7 +132,30 @@ describe('Manage Moment', () => {
     expect(screen.getByText('Moment Details')).toBeTruthy();
     for (const tab of ['Details', 'Contacts', 'Wish Message', 'Schedule']) expect(screen.getByTestId(`festival-tab-${tab}`)).toBeTruthy();
     expect(screen.getByText('Active')).toBeTruthy();
-    expect(screen.getByText(/^Send date · /)).toBeTruthy();
+    // The header reads the occasion date, not the delivery date (ManageFestivalView.swift:114).
+    expect(screen.getByText(`Moment date · ${sendDayLabel(momentDate(day, 'UTC'), 'UTC')}`)).toBeTruthy();
+  });
+
+  // The header used to show the delivery date. A draft send date moves delivery to another day
+  // while the occasion stays put, which is exactly where the two disagreed.
+  it('header shows the occasion date even when delivery is set for another day', async () => {
+    const delivery = future(35);
+    load([
+      moment({
+        id: 'a',
+        type: 'birthday',
+        title: 'Sam’s Birthday',
+        firstName: 'Sam',
+        occurrenceDate: day,
+        nextOccurrence: day,
+        sourceKey: 'birthday:g:k1',
+        festivalSettings: settings({ groupID: 'g', draftSendDate: `${delivery}T08:00:00.000Z` }),
+      }),
+    ]);
+    mockParams = { ids: 'a' };
+    await render(<ManageMoment />);
+    expect(screen.getByText(`Moment date · ${sendDayLabel(momentDate(day, 'UTC'), 'UTC')}`)).toBeTruthy();
+    expect(screen.queryByText(`Moment date · ${sendDayLabel(momentDate(delivery, 'UTC'), 'UTC')}`)).toBeNull();
   });
 
   it('changes step without saving when nothing changed, and shows the recipients', async () => {

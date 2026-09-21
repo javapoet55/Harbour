@@ -319,7 +319,9 @@ export function ManageMomentView({ group, onDone }: { group: MomentDisplayGroup;
               </View>
             </View>
             <View testID="festival-send-date">
-              <IconLabel icon="calendar-outline" title={`Send date · ${sendDayLabel(state.sendDate, state.zone)}`} color={theme.colors.secondaryLabel} style={textStyles.subheadline} size={15} />
+              {/* The header shows the occasion date, the same value Details edits; the Schedule
+                  step keeps its own delivery date and time (ManageFestivalView.swift:114). */}
+              <IconLabel icon="calendar-outline" title={`Moment date · ${sendDayLabel(state.date, state.zone)}`} color={theme.colors.secondaryLabel} style={textStyles.subheadline} size={15} />
             </View>
           </MomentCard>
 
