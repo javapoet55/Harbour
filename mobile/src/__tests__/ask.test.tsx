@@ -22,6 +22,8 @@ jest.mock('../api', () => ({
 
 import Ask from '../../app/ask/index';
 import AskText from '../../app/ask/text';
+import { AskNexdoView } from '../components/AskNexdoView';
+import { shoppingSubmission } from '../lib/shoppingRecommendations';
 
 function turn(overrides: Partial<AssistantTurn> = {}): AssistantTurn {
   return {
@@ -371,5 +373,66 @@ describe('the free-form text page', () => {
 
     expect(screen.getByTestId('ask-field').props.value).toBe('Plan my next week around these commitments.');
     expect(mockAssistant).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * Shopping Recommendations: `AskNexdoView(textPage: true, shoppingContext:)` (ios/App/AskNexdoView.swift:89-95,
+ * :195, :309-344, :402-418, :469-473), presented as a sheet from Shopping Detail (ShoppingViews.swift:299).
+ */
+describe('Shopping Recommendations', () => {
+  const CONTEXT = { listName: 'Parity Run D List', itemNames: ['whole milk', 'eggs', 'bananas'] };
+
+  it('renders its title, the intro card, the shopping field and button, and four prompts with icons', async () => {
+    const onClose = jest.fn();
+    await show(<AskNexdoView textPage shoppingContext={CONTEXT} onClose={onClose} />);
+
+    expect(screen.getByRole('header', { name: 'Shopping Recommendations' })).toBeTruthy();
+    expect(screen.queryByText('Let’s make room for what matters.')).toBeNull();
+    expect(screen.queryByText('What would you like help with?')).toBeNull();
+    expect(screen.getByText('Plan a smarter cart')).toBeTruthy();
+    expect(screen.getByTestId('shopping-recommendations-list').props.children).toBe('Parity Run D List');
+    expect(
+      screen.getByText('Ask Nexdo to spot missing staples, suggest meal ideas, compare alternatives, or check quantities using the items already on this list.'),
+    ).toBeTruthy();
+    expect(screen.getByText('Suggestions only—your list changes after you approve them.')).toBeTruthy();
+    expect(screen.getByTestId('ask-field').props.placeholder).toBe('Ask about this shopping list…');
+    expect(screen.getByText('Get Recommendations')).toBeTruthy();
+    expect(screen.getByLabelText('Get shopping recommendations').props.accessibilityState.disabled).toBe(true);
+    expect(screen.getByText('Try asking about your list')).toBeTruthy();
+    expect(screen.getByTestId('ask-example-icon-basket.fill')).toBeTruthy();
+    expect(screen.getByTestId('ask-example-icon-fork.knife')).toBeTruthy();
+    expect(screen.getByTestId('ask-example-icon-dollarsign.circle')).toBeTruthy();
+    expect(screen.getByTestId('ask-example-icon-number.circle')).toBeTruthy();
+    expect(screen.getByText('Check whether these quantities look right for one week.')).toBeTruthy();
+
+    fireEvent.press(screen.getByTestId('ask-close'));
+    expect(onClose).toHaveBeenCalled();
+    expect(mockBack).not.toHaveBeenCalled();
+  });
+
+  it('sends the list ahead of the request and shows only the words typed as the question', async () => {
+    mockAssistant.mockResolvedValue(turn());
+    await show(<AskNexdoView textPage shoppingContext={CONTEXT} onClose={jest.fn()} />);
+
+    await fireEvent.press(screen.getByText('Suggest groceries for three balanced dinners.'));
+    expect(screen.getByTestId('ask-field').props.value).toBe('Suggest groceries for three balanced dinners.');
+    expect(mockAssistant).not.toHaveBeenCalled();
+    await fireEvent.press(screen.getByLabelText('Get shopping recommendations'));
+
+    await waitFor(() => expect(screen.getByTestId('ask-summary')).toBeTruthy());
+    const transcript = mockAssistant.mock.calls[0][0].transcript;
+    expect(transcript).toBe(
+      'Review my shopping list "Parity Run D List". Current items: whole milk, eggs, bananas. Give practical grocery advice for this list. Do not add, replace, remove, or complete anything without my explicit approval.\n\nCustomer request: Suggest groceries for three balanced dinners.',
+    );
+    expect(screen.getByTestId('ask-last-prompt').props.children).toBe('Suggest groceries for three balanced dinners.');
+    // No bottom composer after an answer in shopping mode (:263).
+    expect(screen.queryAllByTestId('ask-field')).toHaveLength(0);
+  });
+
+  it('says "none yet" for an empty list', () => {
+    expect(shoppingSubmission({ listName: 'Empty', itemNames: [] }, 'Hi')).toBe(
+      'Review my shopping list "Empty". Current items: none yet. Give practical grocery advice for this list. Do not add, replace, remove, or complete anything without my explicit approval.\n\nCustomer request: Hi',
+    );
   });
 });

@@ -1,3 +1,5 @@
+import Ionicons from '@expo/vector-icons/Ionicons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Linking, Modal, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
@@ -6,11 +8,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { ASK_INTENTS, ASK_MAX_LENGTH, ASK_TEXT_EXAMPLES } from '../lib/askIntents';
 import { blockedTurn, policyGuardRefusal } from '../lib/assistantPolicy';
 import { spokenText } from '../lib/assistantPresentation';
+import { SHOPPING_PROMPTS, shoppingPromptIcon, shoppingSubmission, type ShoppingRecommendationContext } from '../lib/shoppingRecommendations';
 import { speechChunks } from '../lib/speechText';
 import { useAsk } from '../query/useAssistant';
 import { useAssistantStore } from '../store/assistant';
 import { useConsent } from '../store/consent';
-import { brand, useTheme } from '../theme';
+import { brand, linearGradientStops, useTheme } from '../theme';
 import { playSpeech, type SpeechPlayback } from '../voice/speech';
 import { AskEntryCards, AskExampleRow, AskSuggestionCard } from './AskParts';
 import { AskResponse } from './AskResponse';
@@ -35,20 +38,34 @@ import { Text } from './Text';
  * There is NO message list. Swift shows one `model.turn` at a time and "Show suggestions" (`:246`)
  * throws it away, so `useAssistantStore` holds exactly one turn.
  *
+ * - `textPage: true` with a `shoppingContext` — Shopping Recommendations (global pattern 16), opened
+ *   from Shopping Detail's AI Powered Recommendations as a `.sheet` (ShoppingViews.swift:299): its own
+ *   title (`:195`), an intro card instead of the heading (`:325-344`), four shopping prompts with icons
+ *   (`:309-323`), "Ask about this shopping list…" and "Get Recommendations" (`:402`, `:415-418`), the
+ *   list sent ahead of the question (`:469-473`), and no bottom composer after an answer (`:263`).
+ *
  * NOT PORTED: `startWithVoice`, because no call site in the Swift app passes it (the only three are
  * RootView.swift:113, RootView.swift:19-21 behind DEBUG launch arguments, and CalendarView.swift:158).
  */
 export type AskNexdoViewProps = {
   textPage: boolean;
   initialPrompt?: string;
+  shoppingContext?: ShoppingRecommendationContext;
+  /** Set when the view is presented as a sheet by its caller rather than as an `app/ask` route. */
+  onClose?: () => void;
 };
 
-export function AskNexdoView({ textPage, initialPrompt = '' }: AskNexdoViewProps) {
+/** `NexdoTheme.gradient`: magenta → indigo → blue, leading to trailing. */
+const INTRO_TILE = linearGradientStops([brand.nexdoMagenta, brand.nexdoIndigo, brand.nexdoBlue]);
+
+export function AskNexdoView({ textPage, initialPrompt = '', shoppingContext, onClose }: AskNexdoViewProps) {
   // The suggestions page is a `.sheet` (RootView.swift:110), and iOS resolves `AskStyle.background`
   // and `AskStyle.cardBackground` one level up inside one — #1C1C1E in dark mode, not black.
-  // "Free form Text" is a `.fullScreenCover` (AskNexdoView.swift:271), which does NOT elevate.
+  // "Free form Text" is a `.fullScreenCover` (AskNexdoView.swift:271), which does NOT elevate; Shopping
+  // Recommendations is a `.sheet` again (`shopping-ai-recommendations-sheet-dark`).
   // `app/ask/_layout.tsx` sets the matching `contentStyle` on `index` only.
-  const theme = useTheme({ elevated: !textPage });
+  const presentedAsSheet = onClose !== undefined;
+  const theme = useTheme({ elevated: !textPage || presentedAsSheet });
   // `consentView` is always presented as a sheet (`:266`), whichever page opened it.
   const sheetTheme = useTheme({ elevated: true });
   const consent = useConsent();
@@ -140,15 +157,24 @@ export function AskNexdoView({ textPage, initialPrompt = '' }: AskNexdoViewProps
     setLastRequestWasVoice(speakResponse);
     setFailedQuery(null);
     ask.mutate(
-      { text: query },
+      { text: submission(query) },
       {
         onSuccess: () => {
+          showAsAsked(query);
           if (prompt.trim() === query) setPrompt('');
           if (speakResponse) speakAnswer();
         },
         onError: () => setFailedQuery(query),
       },
     );
+  };
+
+  /** `shoppingContext.map { $0.assistantContext + "\n\nCustomer request: " + query } ?? query` (:469). */
+  const submission = (query: string) => (shoppingContext ? shoppingSubmission(shoppingContext, query) : query);
+
+  /** `if shoppingContext != nil { model.lastAssistantPrompt = query }` (:472): show the words typed. */
+  const showAsAsked = (query: string) => {
+    if (shoppingContext) useAssistantStore.setState({ lastAssistantPrompt: query });
   };
 
   /**
@@ -162,9 +188,10 @@ export function AskNexdoView({ textPage, initialPrompt = '' }: AskNexdoViewProps
     setLastRequestWasVoice(false);
     setFailedQuery(null);
     ask.mutate(
-      { text: query },
+      { text: submission(query) },
       {
         onSuccess: () => {
+          showAsAsked(query);
           if (prompt.trim() === query) setPrompt('');
         },
         onError: () => setFailedQuery(query),
@@ -178,7 +205,8 @@ export function AskNexdoView({ textPage, initialPrompt = '' }: AskNexdoViewProps
     setFailedQuery(null);
     setPendingQuery(null);
     useAssistantStore.getState().clearTurn();
-    router.back();
+    if (onClose) onClose();
+    else router.back();
   };
 
   const field = (
@@ -186,7 +214,7 @@ export function AskNexdoView({ textPage, initialPrompt = '' }: AskNexdoViewProps
       accessibilityLabel="Ask Nexdo follow-up"
       multiline
       onChangeText={setPrompt}
-      placeholder="Type your prompt…"
+      placeholder={shoppingContext ? 'Ask about this shopping list…' : 'Type your prompt…'}
       placeholderTextColor={theme.colors.placeholder}
       style={[
         styles.field,
@@ -204,7 +232,7 @@ export function AskNexdoView({ textPage, initialPrompt = '' }: AskNexdoViewProps
   const controls = (
     <View style={styles.controls}>
       <Pressable
-        accessibilityLabel="Ask Nexdo"
+        accessibilityLabel={shoppingContext ? 'Get shopping recommendations' : 'Ask Nexdo'}
         accessibilityRole="button"
         accessibilityState={{ disabled: !validPrompt || blocked }}
         disabled={!validPrompt || blocked}
@@ -217,7 +245,7 @@ export function AskNexdoView({ textPage, initialPrompt = '' }: AskNexdoViewProps
         {submitting ? (
           <ActivityIndicator color="#FFFFFF" size="small" />
         ) : (
-          <Text style={[styles.subheadline, styles.semibold, { color: '#FFFFFF' }]}>Ask Nexdo</Text>
+          <Text style={[styles.subheadline, styles.semibold, { color: '#FFFFFF' }]}>{shoppingContext ? 'Get Recommendations' : 'Ask Nexdo'}</Text>
         )}
       </Pressable>
       {!textPage ? (
@@ -300,11 +328,12 @@ export function AskNexdoView({ textPage, initialPrompt = '' }: AskNexdoViewProps
   );
 
   return (
-    <SafeAreaView edges={['top', 'left', 'right', 'bottom']} style={[styles.fill, { backgroundColor: theme.colors.background }]}>
+    // A sheet's top edge sits below the status bar already, so only a route needs the top inset.
+    <SafeAreaView edges={presentedAsSheet ? ['left', 'right', 'bottom'] : ['top', 'left', 'right', 'bottom']} style={[styles.fill, { backgroundColor: theme.colors.background }]}>
       {/* Header (AskNexdoView.swift:184-208). */}
       <View style={styles.header}>
         <Text accessibilityRole="header" style={[styles.title2, styles.bold, styles.grow, { color: theme.colors.ink }]}>
-          {textPage ? 'Free form Text' : 'Ask Nexdo'}
+          {shoppingContext ? 'Shopping Recommendations' : textPage ? 'Free form Text' : 'Ask Nexdo'}
         </Text>
         <Pressable
           accessibilityHint="Closes Ask Nexdo"
@@ -322,20 +351,34 @@ export function AskNexdoView({ textPage, initialPrompt = '' }: AskNexdoViewProps
         {turn === null ? (
           <>
             {/* `AskStyle.secondary` is `Color(uiColor: .secondaryLabel)` (`:51`), not nexdoSecondary. */}
-            <Text style={[styles.subheadline, styles.tagline, { color: theme.colors.secondaryLabel }]}>Let’s make room for what matters.</Text>
+            {shoppingContext ? null : (
+              <Text style={[styles.subheadline, styles.tagline, { color: theme.colors.secondaryLabel }]}>Let’s make room for what matters.</Text>
+            )}
 
             {textPage ? (
               <>
-                {/* No `.foregroundStyle` in Swift (`:217`), so `Color.primary` — `.label`, not nexdoInk. */}
-                <Text style={[styles.title2, styles.bold, { color: theme.colors.label }]}>What would you like help with?</Text>
-                <Text style={[styles.subheadline, { color: theme.colors.secondaryLabel }]}>
-                  Type a question or tell Nexdo what to plan, create, or change.
-                </Text>
+                {shoppingContext ? (
+                  <ShoppingIntro context={shoppingContext} />
+                ) : (
+                  <>
+                    {/* No `.foregroundStyle` in Swift (`:217`), so `Color.primary` — `.label`, not nexdoInk. */}
+                    <Text style={[styles.title2, styles.bold, { color: theme.colors.label }]}>What would you like help with?</Text>
+                    <Text style={[styles.subheadline, { color: theme.colors.secondaryLabel }]}>
+                      Type a question or tell Nexdo what to plan, create, or change.
+                    </Text>
+                  </>
+                )}
                 {field}
                 <View style={styles.controlsRow}>{controls}</View>
-                <Text style={[styles.headline, styles.tryHeading, { color: theme.colors.ink }]}>Try a prompt</Text>
-                {ASK_TEXT_EXAMPLES.map((example) => (
-                  <AskExampleRow key={example} example={example} disabled={blocked} onPress={() => setPrompt(example)} />
+                <Text style={[styles.headline, styles.tryHeading, { color: theme.colors.ink }]}>{shoppingContext ? 'Try asking about your list' : 'Try a prompt'}</Text>
+                {(shoppingContext ? SHOPPING_PROMPTS : ASK_TEXT_EXAMPLES).map((example) => (
+                  <AskExampleRow
+                    key={example}
+                    example={example}
+                    disabled={blocked}
+                    icon={shoppingContext ? shoppingPromptIcon(example) : undefined}
+                    onPress={() => setPrompt(example)}
+                  />
                 ))}
               </>
             ) : (
@@ -413,7 +456,8 @@ export function AskNexdoView({ textPage, initialPrompt = '' }: AskNexdoViewProps
       </ScrollView>
 
       {/* `.safeAreaInset(edge: .bottom)` (AskNexdoView.swift:264). */}
-      {textPage ? (turn !== null ? composer : null) : (
+      {/* `if model.turn != nil && shoppingContext == nil { composer }` (:263). */}
+      {textPage ? (turn !== null && !shoppingContext ? composer : null) : (
         <AskEntryCards
           disabled={blocked}
           onText={() => {
@@ -498,8 +542,48 @@ export function AskNexdoView({ textPage, initialPrompt = '' }: AskNexdoViewProps
   );
 }
 
+/** `shoppingRecommendationIntro(_:)` (AskNexdoView.swift:325-344). */
+function ShoppingIntro({ context }: { context: ShoppingRecommendationContext }) {
+  const theme = useTheme();
+  return (
+    <LinearGradient
+      colors={[withAlpha(brand.nexdoBlue, 0.1), withAlpha(brand.nexdoMagenta, 0.07)]}
+      end={{ x: 1, y: 1 }}
+      start={{ x: 0, y: 0 }}
+      style={[styles.intro, { borderColor: withAlpha(brand.nexdoIndigo, 0.12) }]}
+      testID="shopping-recommendations-intro"
+    >
+      <View style={styles.introHeader}>
+        <LinearGradient colors={INTRO_TILE} end={{ x: 1, y: 0.5 }} start={{ x: 0, y: 0.5 }} style={styles.introTile}>
+          <Ionicons name="sparkles" size={24} color="#FFFFFF" />
+        </LinearGradient>
+        <View style={styles.introTitles}>
+          <Text style={[styles.title2, styles.bold, { color: theme.colors.ink }]}>Plan a smarter cart</Text>
+          <Text style={[styles.subheadline, styles.semibold, { color: brand.nexdoIndigo }]} testID="shopping-recommendations-list">
+            {context.listName}
+          </Text>
+        </View>
+      </View>
+      <Text style={[styles.subheadline, { color: theme.colors.secondary }]}>
+        Ask Nexdo to spot missing staples, suggest meal ideas, compare alternatives, or check quantities using the items already on this list.
+      </Text>
+      <View style={styles.introNote}>
+        <Ionicons name="shield-checkmark" size={17} color="#34C759" />
+        <Text style={[styles.caption, styles.medium, styles.grow, { color: theme.colors.secondary }]}>Suggestions only—your list changes after you approve them.</Text>
+      </View>
+    </LinearGradient>
+  );
+}
+
 const styles = StyleSheet.create({
   fill: { flex: 1 },
+  medium: { fontWeight: '500' },
+  // `VStack(alignment: .leading, spacing: 14).padding(16)`, radius 20, 12% indigo stroke.
+  intro: { padding: 16, gap: 14, borderRadius: 20, borderWidth: 1 },
+  introHeader: { flexDirection: 'row', alignItems: 'center', gap: 13 },
+  introTile: { width: 48, height: 48, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
+  introTitles: { flex: 1, gap: 3 },
+  introNote: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   grow: { flex: 1 },
   semibold: { fontWeight: '600' },
   bold: { fontWeight: '700' },

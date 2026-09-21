@@ -1,3 +1,4 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { Alert, Share } from 'react-native';
 
@@ -318,6 +319,24 @@ describe('List detail', () => {
     expect(mockPost).toHaveBeenCalledWith({ operation: 'parse', input: { text: 'six bananas' } });
     await fireEvent.press(screen.getByTestId('voice-add'));
     await waitFor(() => expect(screen.getByTestId('list-counts').props.children).toBe('0 added · 1 items'));
+  });
+
+  it('AI Powered Recommendations opens Ask with this list as its context', async () => {
+    load([list()]);
+    mockParams = { id: 'l1' };
+    // The app's root provides React Query to every screen; Ask needs it for its request.
+    await render(
+      <QueryClientProvider client={new QueryClient()}>
+        <Detail />
+      </QueryClientProvider>,
+    );
+    expect(screen.queryByText('Shopping Recommendations')).toBeNull();
+    await fireEvent.press(screen.getByTestId('shopping-ai-recommendations'));
+    expect(screen.getByText('Shopping Recommendations')).toBeTruthy();
+    expect(screen.getByTestId('shopping-recommendations-list').props.children).toBe('Parity Shopping List');
+    await fireEvent.press(screen.getByTestId('ask-close'));
+    expect(screen.queryByText('Shopping Recommendations')).toBeNull();
+    expect(mockBack).not.toHaveBeenCalled();
   });
 
   it('keeps Uncheck all in the ⋯ menu and has no Edit or reorder', async () => {

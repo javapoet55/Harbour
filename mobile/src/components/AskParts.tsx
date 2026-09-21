@@ -1,8 +1,10 @@
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useState } from 'react';
 import { Platform, Pressable, StyleSheet, View, type LayoutChangeEvent } from 'react-native';
 
 import type { AskIntent } from '../lib/askIntents';
+import type { ShoppingPromptIcon } from '../lib/shoppingRecommendations';
 import { brand, useTheme } from '../theme';
 import { withAlpha } from './SignInBackdrop';
 import { TaskSymbol } from './TaskSymbol';
@@ -197,7 +199,22 @@ export function FittedText({
 }
 
 /** One "Try a prompt" row (AskNexdoView.swift:220-227). Fills the composer; it does not send. */
-export function AskExampleRow({ example, disabled, onPress }: { example: string; disabled: boolean; onPress: () => void }) {
+/**
+ * `ShoppingPromptIcon` glyphs (AskNexdoView.swift:318-323) in `nexdoBlue`, 24 pt wide. Ionicons has a
+ * basket and a knife-and-fork; SF's `dollarsign.circle` and `number.circle` are a symbol inside a
+ * circle outline, drawn here as exactly that.
+ */
+function ShoppingPromptGlyph({ icon }: { icon: ShoppingPromptIcon }) {
+  if (icon === 'basket.fill') return <Ionicons name="basket" size={20} color={brand.nexdoBlue} />;
+  if (icon === 'fork.knife') return <Ionicons name="restaurant" size={19} color={brand.nexdoBlue} />;
+  return (
+    <View style={[styles.circledGlyph, { borderColor: brand.nexdoBlue }]}>
+      <Text style={[styles.circledText, { color: brand.nexdoBlue }]}>{icon === 'dollarsign.circle' ? '$' : '#'}</Text>
+    </View>
+  );
+}
+
+export function AskExampleRow({ example, disabled, onPress, icon }: { example: string; disabled: boolean; onPress: () => void; icon?: ShoppingPromptIcon }) {
   const theme = useTheme();
   return (
     <Pressable
@@ -207,8 +224,15 @@ export function AskExampleRow({ example, disabled, onPress }: { example: string;
       disabled={disabled}
       onPress={onPress}
       testID={`ask-example-${example}`}
-      style={[styles.example, { backgroundColor: withAlpha(brand.nexdoIndigo, 0.06), opacity: disabled ? 0.45 : 1 }]}
+      // `HStack(spacing: 12)` once the row has an icon.
+      style={[styles.example, icon ? styles.exampleWithIcon : null, { backgroundColor: withAlpha(brand.nexdoIndigo, 0.06), opacity: disabled ? 0.45 : 1 }]}
     >
+      {/* With a shopping context the row leads with its icon (AskNexdoView.swift:228). */}
+      {icon ? (
+        <View style={styles.exampleIcon} testID={`ask-example-icon-${icon}`}>
+          <ShoppingPromptGlyph icon={icon} />
+        </View>
+      ) : null}
       {/* The row carries no `.font` and no `.foregroundStyle` (AskNexdoView.swift:221-225), so both
           children are `.body` in `Color.primary`. */}
       <Text style={[theme.typography.body, styles.grow, { color: theme.colors.label }]}>{example}</Text>
@@ -219,6 +243,9 @@ export function AskExampleRow({ example, disabled, onPress }: { example: string;
 
 const styles = StyleSheet.create({
   grow: { flex: 1 },
+  exampleIcon: { width: 24, alignItems: 'center' },
+  circledGlyph: { width: 19, height: 19, borderRadius: 9.5, borderWidth: 1.6, alignItems: 'center', justifyContent: 'center' },
+  circledText: { fontSize: 11, lineHeight: 13, fontWeight: '700' },
   semibold: { fontWeight: '600' },
   // Named text styles carry their own leading (style map section 2).
   subheadline: { fontSize: 15, lineHeight: 21 },
@@ -256,6 +283,7 @@ const styles = StyleSheet.create({
 
   // A bare `HStack` spaces its children by 8 (AskNexdoView.swift:222).
   example: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 16, borderRadius: 16 },
+  exampleWithIcon: { gap: 12 },
 
   // Absolute, so it neither sizes its parent nor paints over the label it is measuring; wide
   // enough that the copy inside it is never the one deciding where the line breaks.
