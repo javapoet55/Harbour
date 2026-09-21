@@ -190,6 +190,31 @@ describe('Manage Moment', () => {
     expect(alert).toHaveBeenCalledWith('Replace the edited message with a new draft?', undefined, expect.any(Array));
   });
 
+  // ManageFestivalView.swift:168
+  it('disables Save Message when the message is blank or over 500 characters', async () => {
+    load(group());
+    mockParams = { ids: 'a' };
+    await render(<ManageMoment />);
+    await fireEvent.press(screen.getByTestId('festival-tab-Wish Message'));
+    const save = () => screen.getByTestId('festival-save-message').props.accessibilityState.disabled;
+
+    await fireEvent.changeText(screen.getByTestId('festival-message'), 'Happy birthday!');
+    expect(save()).toBe(false);
+
+    await fireEvent.changeText(screen.getByTestId('festival-message'), '');
+    expect(save()).toBe(true);
+
+    // Whitespace only is still nothing to approve.
+    await fireEvent.changeText(screen.getByTestId('festival-message'), '   \n\t ');
+    expect(save()).toBe(true);
+
+    await fireEvent.changeText(screen.getByTestId('festival-message'), 'x'.repeat(500));
+    expect(save()).toBe(false);
+
+    await fireEvent.changeText(screen.getByTestId('festival-message'), 'x'.repeat(501));
+    expect(save()).toBe(true);
+  });
+
   it('asks before discarding unsaved changes', async () => {
     load(group());
     mockParams = { ids: 'a' };

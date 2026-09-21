@@ -547,7 +547,14 @@ export function ManageMomentView({ group, onDone }: { group: MomentDisplayGroup;
                   <Text style={[textStyles.body, { color: theme.colors.danger }]}>Remove greeting card</Text>
                 </Pressable>
               ) : null}
-              <MomentPrimary title="Save Message" onPress={() => save(true)} testID="festival-save-message" />
+              {/* ManageFestivalView.swift:168: nothing to approve while the message is blank,
+                  and the server rejects one over 500 characters. */}
+              <MomentPrimary
+                title="Save Message"
+                onPress={() => save(true)}
+                disabled={state.settings.baseMessage.trim() === '' || characterCount(state.settings.baseMessage) > 500}
+                testID="festival-save-message"
+              />
             </>
           ) : null}
 
