@@ -55,10 +55,20 @@ describe('ShoppingStore', () => {
     expect(h.store.getState().busy).toBe(false);
   });
 
-  it('creates without an id or revision — and without an idempotency key, as Swift', async () => {
+  it('creates without an id or revision, and omits the idempotency key when there is none', async () => {
     const h = harness();
     await h.store.getState().action('create', null, { title: 'New' });
     expect(h.post.mock.calls[0][0]).toEqual({ operation: 'create', input: { title: 'New' } });
+  });
+
+  it('sends the idempotency key when one is given, so a replayed create collapses', async () => {
+    const h = harness();
+    await h.store.getState().action('create', null, { title: 'New' }, '3f2504e0-4f89-41d3-9a0c-0305e82c3301');
+    expect(h.post.mock.calls[0][0]).toEqual({
+      operation: 'create',
+      input: { title: 'New' },
+      idempotencyKey: '3f2504e0-4f89-41d3-9a0c-0305e82c3301',
+    });
   });
 
   it('surfaces a stale-revision 409 as the server’s message and returns nothing', async () => {

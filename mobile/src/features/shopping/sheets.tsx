@@ -46,6 +46,11 @@ function NewListBody({ source, onCreated, onClose }: { source: GroceryList | nul
   const [date, setDate] = useState(() => momentDate(momentDay(Date.now(), deviceZone()), deviceZone()));
   const [weekly, setWeekly] = useState(true);
   const [useLast, setUseLast] = useState(source !== null);
+  // `@State private var createKey = UUID().uuidString` (ShoppingViews.swift:152): one key per
+  // presentation of this sheet, so a retried Create List replays the same write rather than
+  // creating a second list. Swift drops the key by dismissing; a new one is minted after a
+  // success here for the same effect.
+  const [createKey, setCreateKey] = useState(() => Crypto.randomUUID());
   const previous = previousList(lists, source);
   const disabled = busy || title.trim() === '';
 
@@ -60,8 +65,9 @@ function NewListBody({ source, onCreated, onClose }: { source: GroceryList | nul
       revision: 0,
       items: useLast ? copiedItems(previous) : [],
     };
-    const saved = await shoppingStore.getState().action('create', null, listInput(value));
+    const saved = await shoppingStore.getState().action('create', null, listInput(value), createKey);
     if (saved) {
+      setCreateKey(Crypto.randomUUID());
       onCreated(saved);
       onClose();
     }

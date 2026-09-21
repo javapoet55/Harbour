@@ -48,8 +48,13 @@ export type ShoppingInput = { title: string; date: string; timeZone: string; wee
 
 export type ShoppingOperation = 'parse' | 'create' | 'save' | 'delete' | 'complete' | 'share' | 'revoke';
 
-/** `ShoppingEnvelope` (ShoppingStore.swift:39). `id` and `revision` are omitted when there is no list. */
-export type ShoppingEnvelope = { operation: ShoppingOperation; id?: string; revision?: number; input: unknown };
+/**
+ * `ShoppingEnvelope` (ShoppingStore.swift:39). `id` and `revision` are omitted when there is no list.
+ *
+ * `idempotencyKey` is a UUID the server validates and uses to collapse a replayed write, so a
+ * retried create cannot produce a second list.
+ */
+export type ShoppingEnvelope = { operation: ShoppingOperation; id?: string; revision?: number; input: unknown; idempotencyKey?: string };
 
 /** The transcription-session answer: a 60-second client secret (`VoiceTaskSession`). */
 export type TranscriptionSession = { value: string; expiresAt: number; model: string };

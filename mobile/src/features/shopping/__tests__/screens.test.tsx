@@ -29,11 +29,15 @@ jest.mock('../../../api/shopping', () => ({
   shareUrl: (token: string) => `https://api.example.com/shared/shopping/${token}`,
 }));
 
+import * as Crypto from 'expo-crypto';
+
 import type { GroceryItem, GroceryList } from '../../../api/shopping';
 import { ApiError } from '../../../api/client';
 import { shoppingStore } from '../store';
 import MyLists from '../../../../app/(tabs)/(today)/shopping/index';
 import Detail from '../../../../app/(tabs)/(today)/shopping/[id]';
+
+const mockedCrypto = Crypto as unknown as Record<string, jest.Mock>;
 
 function item(overrides: Partial<GroceryItem> = {}): GroceryItem {
   return { id: 'milk', name: 'Parity milk', category: 'Dairy & Eggs', quantity: '2', size: 'bottles', notes: '', imageData: null, checked: false, ...overrides };
@@ -100,6 +104,37 @@ describe('My Lists', () => {
     expect(envelope.operation).toBe('create');
     expect(envelope.id).toBeUndefined();
     expect(envelope.input.items).toEqual([expect.objectContaining({ name: 'Parity milk', checked: false })]);
+  });
+
+  // `@State private var createKey` (ShoppingViews.swift:152): the server collapses a replayed
+  // create by this key, so a retry after a failure must not create a second list.
+  it('retries a failed create with the same idempotency key, and mints a new one after success', async () => {
+    let nth = 0;
+    mockedCrypto.randomUUID.mockImplementation(() => `00000000-0000-4000-8000-${String(++nth).padStart(12, '0')}`);
+    const created = list({ id: 'new', title: 'Weekly Shopping List', revision: 0 });
+    load([]);
+    await render(<MyLists />);
+    await fireEvent.press(screen.getByTestId('shopping-create-list'));
+
+    mockPost.mockRejectedValueOnce(new Error('offline'));
+    await fireEvent.press(screen.getByTestId('shopping-create'));
+    await waitFor(() => expect(mockPost).toHaveBeenCalledTimes(1));
+
+    mockPost.mockResolvedValueOnce({ list: created });
+    await fireEvent.press(screen.getByTestId('shopping-create'));
+    await waitFor(() => expect(mockPush).toHaveBeenCalled());
+
+    // The replay repeats the failed attempt, so it carries that attempt's key.
+    const firstKey = mockPost.mock.calls[0][0].idempotencyKey;
+    expect(firstKey).toMatch(/^[0-9a-f-]{36}$/);
+    expect(mockPost.mock.calls[1][0].idempotencyKey).toBe(firstKey);
+
+    // A completed create must not have its key reused by the next one.
+    await fireEvent.press(screen.getByTestId('shopping-create-list'));
+    mockPost.mockResolvedValueOnce({ list: created });
+    await fireEvent.press(screen.getByTestId('shopping-create'));
+    await waitFor(() => expect(mockPost).toHaveBeenCalledTimes(3));
+    expect(mockPost.mock.calls[2][0].idempotencyKey).not.toBe(firstKey);
   });
 });
 

@@ -24,7 +24,7 @@ export type ShoppingState = {
   error: string | null;
   refresh: () => Promise<void>;
   /** Returns the list the server answered with, or `null` on failure, on delete, or while busy. */
-  action: (operation: Exclude<ShoppingOperation, 'parse'>, list: GroceryList | null, input: unknown) => Promise<GroceryList | null>;
+  action: (operation: Exclude<ShoppingOperation, 'parse'>, list: GroceryList | null, input: unknown, idempotencyKey?: string) => Promise<GroceryList | null>;
   parse: (text: string) => Promise<GroceryItem[]>;
   credential: () => Promise<TranscriptionSession>;
   setError: (error: string | null) => void;
@@ -50,11 +50,11 @@ export function createShoppingStore(deps: ShoppingDeps) {
       }
     },
 
-    async action(operation, list, input) {
+    async action(operation, list, input, idempotencyKey) {
       if (get().busy) return null;
       set({ busy: true, error: null });
       try {
-        const envelope: ShoppingEnvelope = { operation, input, ...(list ? { id: list.id, revision: list.revision } : {}) };
+        const envelope: ShoppingEnvelope = { operation, input, ...(list ? { id: list.id, revision: list.revision } : {}), ...(idempotencyKey ? { idempotencyKey } : {}) };
         const result = await deps.post(envelope);
         const value = result.list ?? null;
         if (value) set((state) => ({ lists: [value, ...state.lists.filter((item) => item.id !== value.id)] }));
