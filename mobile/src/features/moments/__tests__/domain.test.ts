@@ -72,7 +72,9 @@ describe('MomentDates', () => {
   it('formats the send day and the medium/short label', () => {
     const at = Date.parse('2026-10-25T15:00:00Z');
     expect(sendDayLabel(at, 'America/Los_Angeles')).toBe('Sun, Oct 25, 2026');
-    expect(momentLabel(at, 'America/Los_Angeles')).toBe('Oct 25, 2026 at 8:00 AM');
+    // momentLabel formats in the device locale by design, so pin one here; the
+    // assertion would otherwise depend on the machine running the suite.
+    expect(momentLabel(at, 'America/Los_Angeles', 'en-US')).toBe('Oct 25, 2026 at 8:00 AM');
   });
 
   it('writes ISO instants without fractions, as ISO8601DateFormatter does', () => {
