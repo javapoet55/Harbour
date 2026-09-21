@@ -33,13 +33,26 @@ describe('transactional email template', () => {
 
   it.each([
     ['test notification', () => testNotificationMessage()],
-    ['reminder', () => reminderMessage('Send the board deck', '1 hour before')],
+    ['reminder', () => reminderMessage('Send the board deck', '1 hour before', 'Due Sep 6, 9:00 AM')],
   ])('renders the %s email without a code block', (_name, render) => {
     const email = render();
     expect(email.html).toContain(LOGO);
     expect(email.html).not.toContain('single use');
     expect(email.html).toMatchSnapshot('html');
     expect(email.text).toMatchSnapshot('text');
+  });
+
+  it('shows the due time under the reminder title', () => {
+    const email = reminderMessage('Send the board deck', '1 hour before', 'Due Sep 6, 9:00 AM');
+    expect(email.html).toMatch(/Send the board deck<\/h1><p [^>]*>Due Sep 6, 9:00 AM<\/p>/);
+    expect(email.text).toContain('Send the board deck\nDue Sep 6, 9:00 AM');
+    expect(reminderMessage('Undated', 'custom reminder').html).not.toContain('Due ');
+  });
+
+  it('does not repeat the heading in the test-notification body', () => {
+    const email = testNotificationMessage();
+    expect(email.text).toContain("This is a test message from your Nexdo notification settings. You're all set.");
+    expect(email.text).not.toContain('Your email notifications are working.');
   });
 
   it('escapes every user-visible string', () => {

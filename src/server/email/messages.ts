@@ -51,18 +51,20 @@ export function testNotificationMessage(): TransactionalEmail {
     ...renderEmail({
       preheader: 'Your Nexdo email notifications are working.',
       heading: 'Email notifications are working',
-      intro: 'Your email notifications are working.',
+      intro: "This is a test message from your Nexdo notification settings. You're all set.",
       footerNote: "You're receiving this because you sent a test email from your Nexdo notification settings.",
     }),
   };
 }
 
-export function reminderMessage(title: string, when: string): TransactionalEmail {
+/** `due` is the task's due or scheduled time as the app shows it, e.g. "Due Sep 6, 9:00 AM". */
+export function reminderMessage(title: string, when: string, due?: string): TransactionalEmail {
   return {
     subject: title,
     ...renderEmail({
-      preheader: `Reminder: ${when}`,
+      preheader: due ? `${due} · Reminder: ${when}` : `Reminder: ${when}`,
       heading: title,
+      subheading: due,
       intro: `Reminder: ${when}`,
       footerNote: "You're receiving this because email reminders are turned on for your Nexdo account.",
     }),

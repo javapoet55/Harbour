@@ -12,7 +12,7 @@ const emails = {
   'password-reset': passwordResetMessage(sampleCode, '15 minutes'),
   'admin-sign-in': adminSignInMessage(sampleCode, '10 minutes'),
   'test-notification': testNotificationMessage(),
-  reminder: reminderMessage('Send the board deck', '1 hour before'),
+  reminder: reminderMessage('Send the board deck', '1 hour before', 'Due Sep 6, 9:00 AM'),
 };
 for (const [name, email] of Object.entries(emails)) {
   writeFileSync(path.join(outDir, `${name}.html`), email.html);

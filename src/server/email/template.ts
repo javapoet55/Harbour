@@ -16,6 +16,8 @@ export type EmailTemplateInput = {
   /** Inbox preview text; hidden in the body. */
   preheader: string;
   heading: string;
+  /** Short line directly under the heading, e.g. a due date. */
+  subheading?: string;
   intro: string;
   /** One-time code shown in the code card, with its lifetime, e.g. "15 minutes". */
   code?: { value: string; expiresIn: string };
@@ -103,7 +105,7 @@ function renderHtml(input: EmailTemplateInput) {
 <tr><td height="4" bgcolor="${colors.primary}" style="height:4px;line-height:4px;font-size:0;background-color:${colors.primary};background-image:linear-gradient(90deg,${colors.primary},${colors.violet},${colors.pink});border-radius:12px 12px 0 0;">&nbsp;</td></tr>
 <tr><td style="padding:32px;">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
-<tr><td style="padding:0 0 12px;"><h1 style="margin:0;font-family:${fontStack};font-size:24px;line-height:32px;font-weight:700;color:${colors.heading};">${escapeHtml(input.heading)}</h1></td></tr>
+<tr><td style="padding:0 0 12px;"><h1 style="margin:0;font-family:${fontStack};font-size:24px;line-height:32px;font-weight:700;color:${colors.heading};">${escapeHtml(input.heading)}</h1>${input.subheading ? `<p style="margin:4px 0 0;font-family:${fontStack};font-size:15px;line-height:22px;font-weight:600;color:${colors.primary};">${escapeHtml(input.subheading)}</p>` : ''}</td></tr>
 <tr><td>${paragraph(input.intro, bodyText)}</td></tr>${code}
 ${body ? `<tr><td style="padding-top:24px;">${body}</td></tr>` : ''}
 </table>
@@ -128,7 +130,8 @@ function renderText(input: EmailTemplateInput) {
   const support = emailSupportAddress();
   const sections = [
     'Nexdo',
-    input.heading,
+    input.subheading ? `${input.heading}
+${input.subheading}` : input.heading,
     input.intro,
     input.code ? `Your code is ${input.code.value}.\nExpires in ${input.code.expiresIn} · single use` : '',
     ...(input.body ?? []),
