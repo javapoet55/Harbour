@@ -102,7 +102,7 @@ function NewListBody({ source, onCreated, onClose }: { source: GroceryList | nul
           <DateField label="Shopping date" value={date} onChange={setDate} zone={deviceZone()} testID="shopping-list-date" />
           <View style={[styles.divider, { backgroundColor: theme.colors.separator }]} />
           <FormToggle label="Repeat every week" value={weekly} onValueChange={setWeekly} testID="shopping-list-weekly" />
-          <Text style={[styles.caption, { color: theme.colors.secondary }]}>Complete a trip to create next week’s list with unchecked items.</Text>
+          <Text style={[styles.caption, { color: theme.colors.secondary }]}>Complete a trip to copy all items into next week’s list, with every item unchecked.</Text>
         </MomentCard>
         {error ? <Text style={[bodyText, { color: theme.colors.danger }]}>{error}</Text> : null}
       </ScrollView>
@@ -330,7 +330,7 @@ function ShareListBody({ initial, onUpdate }: { initial: GroceryList; onUpdate: 
       </FormSection>
       <FormSection header="View-only link">
         <FormRow>
-          <FormText caption>Anyone with the link can view this list, including future edits. Revoke it whenever you like.</FormText>
+          <FormText caption>Anyone with the link can view this list and its edits. The link stays with this trip; next week’s list needs a new link. Revoke it whenever you like.</FormText>
         </FormRow>
         {url ? (
           <>

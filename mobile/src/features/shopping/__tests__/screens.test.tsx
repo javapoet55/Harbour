@@ -106,6 +106,14 @@ describe('My Lists', () => {
     expect(envelope.input.items).toEqual([expect.objectContaining({ name: 'Parity milk', checked: false })]);
   });
 
+  // ShoppingViews.swift:171 — says what completing a trip actually does to next week's list.
+  it('explains that completing a trip copies every item, unchecked', async () => {
+    load([]);
+    await render(<MyLists />);
+    await fireEvent.press(screen.getByTestId('shopping-create-list'));
+    expect(screen.getByText('Complete a trip to copy all items into next week’s list, with every item unchecked.')).toBeTruthy();
+  });
+
   // `@State private var createKey` (ShoppingViews.swift:152): the server collapses a replayed
   // create by this key, so a retry after a failure must not create a second list.
   it('retries a failed create with the same idempotency key, and mints a new one after success', async () => {
@@ -139,6 +147,19 @@ describe('My Lists', () => {
 });
 
 describe('List detail', () => {
+  // ShoppingViews.swift:326 — the link belongs to this trip, not to next week's list.
+  it('explains that a share link does not follow next week’s list', async () => {
+    load([list()]);
+    mockParams = { id: 'l1' };
+    await render(<Detail />);
+    await fireEvent.press(screen.getByTestId('list-share'));
+    expect(
+      screen.getByText(
+        'Anyone with the link can view this list and its edits. The link stays with this trip; next week’s list needs a new link. Revoke it whenever you like.',
+      ),
+    ).toBeTruthy();
+  });
+
   it('shows counts, sections, artwork and the hint', async () => {
     load([list()]);
     mockParams = { id: 'l1' };
