@@ -104,3 +104,7 @@ public struct ShoppingTranscript: Sendable {
     public var completedText:String {order.compactMap{final[$0]}.filter{!$0.isEmpty}.joined(separator:"; ")}
     public var hasPending:Bool {!partial.isEmpty}
 }
+public extension GroceryList {
+    /// "1 item" / "N items" for list counts shown in the UI.
+    static func itemCount(_ count:Int)->String { count == 1 ? "1 item" : "\(count) items" }
+}
