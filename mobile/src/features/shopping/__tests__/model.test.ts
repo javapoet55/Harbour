@@ -7,7 +7,6 @@ import {
   groceryAsset,
   groceryEmoji,
   listInput,
-  moved,
   newItem,
   previousList,
   remaining,
@@ -101,8 +100,6 @@ describe('GroceryList', () => {
     expect(toggled(base, 'a').items[0].checked).toBe(true);
     expect(upserted(base, item({ id: 'x', name: 'Y', category: 'Dairy & Eggs' })).items[1].name).toBe('Y');
     expect(upserted(base, item({ id: 'new' })).items).toHaveLength(4);
-    expect(moved(base, 'Produce', 1, 0).items.map((value) => value.id)).toEqual(['b', 'x', 'a']);
-    expect(moved(base, 'Produce', 0, 5)).toBe(base);
   });
 
   it('reuses the newest completed list, else the newest, and copies its items unchecked', () => {

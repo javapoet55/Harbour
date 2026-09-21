@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { shareUrl, type GroceryItem, type GroceryList } from '../../api/shopping';
+import { shareUrl, type GroceryList } from '../../api/shopping';
 import { withAlpha } from '../../components/SignInBackdrop';
 import { Text } from '../../components/Text';
 import { TodayBackdrop } from '../../components/TodayShell';
@@ -139,70 +139,6 @@ function Choice({ title, subtitle, icon, selected, disabled = false, onPress, te
         </View>
       </MomentCard>
     </Pressable>
-  );
-}
-
-// ---------------------------------------------------------------------------------------------
-// Review Items (ShoppingViews.swift:296-304)
-
-/**
- * `ShoppingBatchReview`: the parsed items, each editable, before they are appended. "Add N Items" is
- * disabled while the list is empty or any name is blank.
- */
-export function ReviewItemsSheet({ visible, items, onAdd, onClose }: { visible: boolean; items: GroceryItem[]; onAdd: (items: GroceryItem[]) => void; onClose: () => void }) {
-  return (
-    <MomentSheet visible={visible} title="" onRequestClose={onClose} right={{ title: 'Cancel', onPress: onClose, testID: 'review-items-cancel' }} testID="review-items-sheet">
-      {visible ? <ReviewItemsBody initial={items} onAdd={onAdd} onClose={onClose} /> : null}
-    </MomentSheet>
-  );
-}
-
-function ReviewItemsBody({ initial, onAdd, onClose }: { initial: GroceryItem[]; onAdd: (items: GroceryItem[]) => void; onClose: () => void }) {
-  const theme = useTheme();
-  const [items, setItems] = useState(initial);
-  const update = (id: string, patch: Partial<GroceryItem>) => setItems((list) => list.map((item) => (item.id === id ? { ...item, ...patch } : item)));
-  const disabled = items.length === 0 || items.some((item) => item.name.trim() === '');
-  return (
-    <View style={styles.fill}>
-      <FormScroll testID="review-items">
-        <Text style={[textStyles.largeTitle, styles.bold, styles.sheetTitle, { color: theme.colors.label }]}>Review Items</Text>
-        <FormSection>
-          {items.map((item) => (
-            <FormRow key={item.id}>
-              <View style={styles.inline}>
-                <View style={styles.grow}>
-                  <FormField placeholder="Item" value={item.name} onChangeText={(name) => update(item.id, { name })} testID={`review-name-${item.id}`} />
-                </View>
-                {/* `.onDelete` is a swipe on iOS; Android has no swipe row, so the delete is a button. */}
-                <Pressable accessibilityRole="button" accessibilityLabel={`Delete ${item.name}`} onPress={() => setItems((list) => list.filter((value) => value.id !== item.id))} hitSlop={8} testID={`review-delete-${item.id}`}>
-                  <Ionicons name="remove-circle" size={22} color={theme.colors.danger} />
-                </Pressable>
-              </View>
-              <View style={styles.inline}>
-                <View style={styles.grow}>
-                  <FormField placeholder="Quantity" value={item.quantity} onChangeText={(quantity) => update(item.id, { quantity })} testID={`review-quantity-${item.id}`} />
-                </View>
-                <View style={styles.grow}>
-                  <FormField placeholder="Size" value={item.size} onChangeText={(size) => update(item.id, { size })} testID={`review-size-${item.id}`} />
-                </View>
-              </View>
-            </FormRow>
-          ))}
-          <FormRow last>
-            <FormButton
-              title={`Add ${items.length} Items`}
-              disabled={disabled}
-              onPress={() => {
-                onAdd(items);
-                onClose();
-              }}
-              testID="review-items-add"
-            />
-          </FormRow>
-        </FormSection>
-      </FormScroll>
-      <KeyboardDoneBar />
-    </View>
   );
 }
 

@@ -95,19 +95,6 @@ export function appended(list: GroceryList, items: GroceryItem[]): GroceryList {
 }
 
 /**
- * `move(category:from:to:)` (ShoppingViews.swift:294): reorder within one category and write the
- * category's rows back into their original slots, so other categories keep their positions.
- */
-export function moved(list: GroceryList, category: string, from: number, to: number): GroceryList {
-  const rows = list.items.filter((item) => item.category === category);
-  if (from < 0 || from >= rows.length || to < 0 || to >= rows.length) return list;
-  const [row] = rows.splice(from, 1);
-  rows.splice(to, 0, row);
-  let index = 0;
-  return { ...list, items: list.items.map((item) => (item.category === category ? rows[index++] : item)) };
-}
-
-/**
  * `previous` for "Use Last Week's List" (ShoppingViews.swift:152): the given source, else the newest
  * completed list, else the newest list.
  */
