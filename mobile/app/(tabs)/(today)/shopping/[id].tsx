@@ -13,7 +13,7 @@ import { ShoppingRecommendationsSheet } from '../../../../src/features/shopping/
 import { CategoryChip, GroceryRow, grocerySeparatorInset, ShoppingActionBar, ShoppingIcon, SwipeToDelete } from '../../../../src/features/shopping/components';
 import { completionSummary, ShoppingCompletionView, type ShoppingCompletionSummary } from '../../../../src/features/shopping/CompletionView';
 import { ItemEditorSheet } from '../../../../src/features/shopping/ItemEditorSheet';
-import { appended, CATEGORIES, listInput, remaining, removed, suggestionsFor, toggled, uncheckedAll, upserted } from '../../../../src/features/shopping/model';
+import { appended, CATEGORIES, itemCount, listInput, remaining, removed, suggestionsFor, toggled, uncheckedAll, upserted } from '../../../../src/features/shopping/model';
 import { ListSettingsSheet, NewListSheet, ShareListSheet } from '../../../../src/features/shopping/sheets';
 import { shoppingStore, useShopping } from '../../../../src/features/shopping/store';
 import { VoiceSheet } from '../../../../src/features/shopping/VoiceSheet';
@@ -124,7 +124,7 @@ export default function ShoppingDetailScreen() {
       void completeTrip();
       return;
     }
-    Alert.alert(`Complete with ${left} items remaining?`, 'The unchecked items will remain in your shopping history.', [
+    Alert.alert(`Complete with ${itemCount(left)} remaining?`, 'The unchecked items will remain in your shopping history.', [
       { text: 'Complete Shopping', onPress: () => void completeTrip() },
       { text: 'Cancel', style: 'cancel' },
     ]);
@@ -192,7 +192,7 @@ export default function ShoppingDetailScreen() {
             <ShoppingIcon />
             <View style={styles.grow}>
               <Text style={[textStyles.title2, styles.bold, { color: theme.colors.label }]}>{list.title}</Text>
-              <Text style={[textStyles.body, { color: theme.colors.secondaryLabel }]} testID="list-counts">{`${list.items.length - left} added · ${list.items.length} items`}</Text>
+              <Text style={[textStyles.body, { color: theme.colors.secondaryLabel }]} testID="list-counts">{`${list.items.length - left} added · ${itemCount(list.items.length)}`}</Text>
             </View>
           </View>
 

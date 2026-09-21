@@ -1,4 +1,5 @@
 import type { GroceryList } from '../api/shopping';
+import { itemCount } from '../features/shopping/model';
 
 /**
  * The pure logic behind the Phase 11 Today changes: the Shopping status, the summary line and the
@@ -36,13 +37,13 @@ function shortWeekday(date: string): string {
 
 /**
  * `shoppingSubtitle` (TodayQuickAccess.swift:32-40). A failed refresh reads "View lists", no open
- * list reads "Your lists", otherwise "N items · Fri" — Swift does not singularise "items".
+ * list reads "Your lists", otherwise "N items · Fri" ("1 item · Fri" for one).
  */
 export function shoppingSubtitle(lists: GroceryList[], failed: boolean): string {
   if (failed) return 'View lists';
   const list = nextShoppingList(lists);
   if (!list) return 'Your lists';
-  return `${remainingItems(list)} items · ${shortWeekday(list.date)}`;
+  return `${itemCount(remainingItems(list))} · ${shortWeekday(list.date)}`;
 }
 
 // MARK: The "Your day, in focus" summary

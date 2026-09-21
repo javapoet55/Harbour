@@ -6,6 +6,7 @@ import {
   copiedItems,
   groceryAsset,
   groceryEmoji,
+  itemCount,
   listInput,
   newItem,
   previousList,
@@ -82,6 +83,12 @@ describe('GroceryItem', () => {
 describe('GroceryList', () => {
   it('counts what is left', () => {
     expect(remaining(list({ items: [item(), item({ id: 'j', checked: true })] }))).toBe(1);
+  });
+
+  it('singularises one item (shoppingItemCountUsesSingularForOne)', () => {
+    expect(itemCount(0)).toBe('0 items');
+    expect(itemCount(1)).toBe('1 item');
+    expect(itemCount(2)).toBe('2 items');
   });
 
   it('shares as Swift’s text, line for line', () => {

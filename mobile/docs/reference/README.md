@@ -102,7 +102,7 @@ These are new since `PARITY.md`, and more than one screen uses each of them:
 8. **`Form` sheets with large titles and Cancel/Save in the toolbar:** Add Contact, Review Items, List Settings (Save only, no Cancel), Share List, and Item. Save is **disabled** while a required field is empty, which is how validation shows on every Shopping editor.
 9. **A keyboard accessory "Done"** (`ToolbarItemGroup(placement: .keyboard)`, `MomentEditor.swift:106-109`) on the Moment editors. Tapping outside the field does not dismiss the keyboard.
 10. **The iOS 26 floating glass sheet at the medium detent:** "Needs attention" and "Reschedule all" open at `.medium` as an inset, rounded, translucent card, and expand to `.large`.
-11. **The Quick Access tile row on Today** (`TodayQuickAccess.swift:41-97`): three equal glass tiles (Weekly / Moments / Shopping), each with a gradient icon tile, a title and a one-line status ("3 upcoming", "1 items · Fri").
+11. **The Quick Access tile row on Today** (`TodayQuickAccess.swift:41-97`): three equal glass tiles (Weekly / Moments / Shopping), each with a gradient icon tile, a title and a one-line status ("3 upcoming", "1 item · Fri").
 12. **The attention row on Today:** the old inline "Needs your attention" list is now one tappable row, with an orange triangle, "Needs attention" and a count ("1 overdue task"), that opens the sheet.
 
 ## Test data

@@ -64,8 +64,8 @@ describe('the Shopping tile', () => {
     expect(nextShoppingList(lists)?.id).toBe('soon');
   });
 
-  it('reads "N items · Day", counting unchecked items and never singularising', () => {
-    expect(shoppingSubtitle([list('soon', '2026-09-18', [item('a', false), item('b', true)])], false)).toBe('1 items · Fri');
+  it('reads "N items · Day", counting unchecked items and singularising one', () => {
+    expect(shoppingSubtitle([list('soon', '2026-09-18', [item('a', false), item('b', true)])], false)).toBe('1 item · Fri');
     expect(shoppingSubtitle([list('soon', '2026-09-20', [item('a', false), item('b', false)])], false)).toBe('2 items · Sun');
   });
 

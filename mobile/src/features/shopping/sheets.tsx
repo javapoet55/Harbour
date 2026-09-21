@@ -14,7 +14,7 @@ import { deviceZone, momentDate, momentDay } from '../moments/dates';
 import { DateField, FormButton, FormField, FormRow, FormScroll, FormSection, FormText, FormToggle } from '../moments/form';
 import { ListTile, type ListSymbol } from './components';
 import { shareMessage } from './device';
-import { copiedItems, listInput, previousList, shareText } from './model';
+import { copiedItems, itemCount, listInput, previousList, shareText } from './model';
 import { shoppingStore, useShopping } from './store';
 
 const bodyText = { fontSize: 17, lineHeight: 22 };
@@ -80,7 +80,7 @@ function NewListBody({ source, onCreated, onClose }: { source: GroceryList | nul
         <Choice title="Start from Scratch" subtitle="Create a brand new list." icon="doc.badge.plus" selected={!useLast} onPress={() => setUseLast(false)} testID="shopping-scratch" />
         <Choice
           title="Use Last Week’s List"
-          subtitle={previous ? `Copy ${previous.items.length} items from “${previous.title}” and edit.` : 'Create your first list to reuse it next time.'}
+          subtitle={previous ? `Copy ${itemCount(previous.items.length)} from “${previous.title}” and edit.` : 'Create your first list to reuse it next time.'}
           icon="arrow.counterclockwise"
           selected={useLast}
           disabled={!previous}
@@ -256,7 +256,7 @@ function ShareListBody({ initial, onUpdate }: { initial: GroceryList; onUpdate: 
           </View>
         </FormRow>
         <FormRow last>
-          <FormText>{`${list.items.length} items`}</FormText>
+          <FormText>{itemCount(list.items.length)}</FormText>
         </FormRow>
       </FormSection>
       <FormSection header="Share via Messages, Mail, or another app">

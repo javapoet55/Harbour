@@ -25,6 +25,11 @@ export function remaining(list: Pick<GroceryList, 'items'>): number {
   return list.items.filter((item) => !item.checked).length;
 }
 
+/** `GroceryList.itemCount(_:)` (ShoppingList.swift:107-110): "1 item" / "N items" for list counts shown in the UI. */
+export function itemCount(count: number): string {
+  return count === 1 ? '1 item' : `${count} items`;
+}
+
 /** `shareText` (ShoppingList.swift:44-46), character for character. */
 export function shareText(list: Pick<GroceryList, 'title' | 'date' | 'items'>): string {
   return [

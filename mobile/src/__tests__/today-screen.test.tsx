@@ -572,7 +572,7 @@ describe('Today moments and shopping', () => {
     });
     await renderToday();
 
-    await waitFor(() => expect(screen.getByTestId('quick-access-shopping-subtitle').props.children).toBe('1 items · Fri'));
+    await waitFor(() => expect(screen.getByTestId('quick-access-shopping-subtitle').props.children).toBe('1 item · Fri'));
     expect(shoppingStore.getState().lists).toHaveLength(1);
   });
 

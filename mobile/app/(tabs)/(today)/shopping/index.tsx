@@ -8,6 +8,7 @@ import { TodayBackdrop } from '../../../../src/components/TodayShell';
 import { headline, MomentCard, systemColors } from '../../../../src/features/moments/components';
 import { momentDate } from '../../../../src/features/moments/dates';
 import { ListTile } from '../../../../src/features/shopping/components';
+import { itemCount } from '../../../../src/features/shopping/model';
 import { NewListSheet } from '../../../../src/features/shopping/sheets';
 import { shoppingStore, useShopping } from '../../../../src/features/shopping/store';
 import { brand, textStyles, useTheme } from '../../../../src/theme';
@@ -83,7 +84,7 @@ export default function MyListsScreen() {
                     <ListTile icon={open ? 'cart' : 'copy-outline'} color={open ? systemColors.green : brand.nexdoIndigo} />
                     <View style={styles.grow}>
                       <Text style={[headline, { color: theme.colors.ink }]}>{list.title}</Text>
-                      <Text style={[styles.caption, { color: theme.colors.secondary }]}>{`${list.items.length} items${open ? '' : ' · Completed'}`}</Text>
+                      <Text style={[styles.caption, { color: theme.colors.secondary }]}>{`${itemCount(list.items.length)}${open ? '' : ' · Completed'}`}</Text>
                     </View>
                     <Text style={[styles.caption, { color: theme.colors.secondary }]}>{shortDay(list.date, list.timeZone)}</Text>
                     <Ionicons name="chevron-forward" size={12} color={theme.colors.secondary} />

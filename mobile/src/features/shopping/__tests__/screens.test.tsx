@@ -73,12 +73,12 @@ beforeEach(() => {
 
 describe('My Lists', () => {
   it('shows Create New List and the recent lists, and opens one', async () => {
-    load([list(), list({ id: 'l2', title: 'Costco Shopping List', completedAt: '2026-09-18T10:00:00Z' })]);
+    load([list(), list({ id: 'l2', title: 'Costco Shopping List', completedAt: '2026-09-18T10:00:00Z', items: [item()] })]);
     await render(<MyLists />);
     expect(screen.getByText('Create New List')).toBeTruthy();
     expect(screen.getByText('Recent Lists')).toBeTruthy();
     expect(screen.getByText('2 items')).toBeTruthy();
-    expect(screen.getByText('2 items · Completed')).toBeTruthy();
+    expect(screen.getByText('1 item · Completed')).toBeTruthy();
     await fireEvent.press(screen.getByTestId('shopping-list-l2'));
     expect(mockPush).toHaveBeenCalledWith({ pathname: '/shopping/[id]', params: { id: 'l2' } });
   });
@@ -96,7 +96,7 @@ describe('My Lists', () => {
     mockPost.mockResolvedValueOnce({ list: created });
     await render(<MyLists />);
     await fireEvent.press(screen.getByTestId('shopping-create-list'));
-    expect(screen.getByText('Copy 1 items from “Parity Shopping List” and edit.')).toBeTruthy();
+    expect(screen.getByText('Copy 1 item from “Parity Shopping List” and edit.')).toBeTruthy();
     await fireEvent.changeText(screen.getByTestId('shopping-list-name'), '  ');
     expect(screen.getByTestId('shopping-create').props.accessibilityState.disabled).toBe(true);
     await fireEvent.changeText(screen.getByTestId('shopping-list-name'), 'Weekly Shopping List');
@@ -156,6 +156,7 @@ describe('List detail', () => {
     mockParams = { id: 'l1' };
     await render(<Detail />);
     await fireEvent.press(screen.getByTestId('list-share'));
+    expect(screen.getByText('2 items')).toBeTruthy();
     expect(
       screen.getByText(
         'Anyone with the link can view this list and its edits. The link stays with this trip; next week’s list needs a new link. Revoke it whenever you like.',
@@ -232,7 +233,7 @@ describe('List detail', () => {
     expect(screen.getByTestId('list-retry')).toBeTruthy();
     mockLists.mockResolvedValueOnce({ lists: [list({ revision: 9, items: [item()] })] });
     await fireEvent.press(screen.getByTestId('list-reload'));
-    await waitFor(() => expect(screen.getByTestId('list-counts').props.children).toBe('0 added · 1 items'));
+    await waitFor(() => expect(screen.getByTestId('list-counts').props.children).toBe('0 added · 1 item'));
     expect(screen.queryByTestId('list-error')).toBeNull();
   });
 
@@ -322,7 +323,7 @@ describe('List detail', () => {
     expect(screen.getByTestId('voice-add').props.accessibilityState.disabled).toBe(true);
     await fireEvent.changeText(screen.getByTestId('voice-transcript'), 'six bananas');
     await fireEvent.press(screen.getByTestId('voice-add'));
-    await waitFor(() => expect(screen.getByTestId('list-counts').props.children).toBe('0 added · 1 items'));
+    await waitFor(() => expect(screen.getByTestId('list-counts').props.children).toBe('0 added · 1 item'));
     expect(mockPost).toHaveBeenCalledWith({ operation: 'parse', input: { text: 'six bananas' } });
     expect(screen.queryByText('Review your items')).toBeNull();
     expect(screen.queryByTestId('shopping-voice')).toBeNull();
@@ -383,7 +384,18 @@ describe('List detail', () => {
     ]);
     expect(screen.queryByText('Edit')).toBeNull();
     await fireEvent.press(screen.getByTestId('list-menu-uncheck'));
-    await waitFor(() => expect(screen.getByTestId('list-counts').props.children).toBe('0 added · 1 items'));
+    await waitFor(() => expect(screen.getByTestId('list-counts').props.children).toBe('0 added · 1 item'));
+  });
+
+  it('asks with the singular when one item is left', async () => {
+    load([list({ items: [item(), item({ id: 'banana', name: 'bananas', checked: true })] })]);
+    mockParams = { id: 'l1' };
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    await render(<Detail />);
+    expect(screen.getByTestId('list-counts').props.children).toBe('1 added · 2 items');
+    await fireEvent.press(screen.getByTestId('shopping-complete-trip'));
+    expect(alert.mock.calls[0][0]).toBe('Complete with 1 item remaining?');
+    alert.mockRestore();
   });
 
   it('completes with items left: asks, then shows the completion screen for next week’s list', async () => {
@@ -411,7 +423,7 @@ describe('List detail', () => {
     expect(screen.getByText('View Next Shopping List')).toBeTruthy();
     await fireEvent.press(screen.getByTestId('shopping-completion-use-again'));
     expect(screen.queryByTestId('shopping-completion')).toBeNull();
-    expect(screen.getByTestId('list-counts').props.children).toBe('0 added · 1 items');
+    expect(screen.getByTestId('list-counts').props.children).toBe('0 added · 1 item');
     expect(mockBack).not.toHaveBeenCalled();
   });
 
