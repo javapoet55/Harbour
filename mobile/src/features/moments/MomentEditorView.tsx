@@ -182,6 +182,16 @@ export function MomentEditorView({ moment, imported, onDone, dismiss }: { moment
               {/* No lower bound: Swift's editor accepts a past date. */}
               <DateField label="Date" value={date} onChange={setDate} zone={input.timeZoneID} testID="moment-date" />
             </FormRow>
+            {momentDay(date, input.timeZoneID) < momentDay(Date.now(), input.timeZoneID) ? (
+              <FormRow>
+                {/* MomentEditor.swift:43-45 */}
+                <FormText caption testID="moment-past-date">
+                  {input.yearly
+                    ? 'The original date is kept; the next yearly occurrence appears in Moments.'
+                    : 'This date is in the past. You can save it, but choose a future time before scheduling delivery.'}
+                </FormText>
+              </FormRow>
+            ) : null}
             <FormRow>
               <ZonePicker value={input.timeZoneID} onChange={(timeZoneID) => setInput((value) => ({ ...value, timeZoneID }))} testID="moment-zone" />
             </FormRow>

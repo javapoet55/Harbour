@@ -219,6 +219,25 @@ describe('Create Moment', () => {
     expect(screen.getByTestId('moment-save').props.accessibilityState.disabled).toBe(true);
     expect(screen.getByText('Choose multiple contacts')).toBeTruthy();
   });
+
+  // MomentEditor.swift:43-45: a past date is accepted, and explained rather than rejected.
+  it('explains a past date instead of refusing it, and says what repeats yearly', async () => {
+    const past = new Date(Date.now() - 30 * 86_400_000).toISOString().slice(0, 10);
+    load([]);
+    mockParams = { imported: JSON.stringify({ type: 'custom', title: 'Past thing', firstName: '', phone: '', email: '', occurrenceDate: past, timeZoneID: 'UTC', yearly: false, source: 'manual', sourceKey: 'k' }) };
+    await render(<MomentEditor />);
+    expect(screen.getByTestId('moment-past-date').props.children).toBe('This date is in the past. You can save it, but choose a future time before scheduling delivery.');
+
+    await fireEvent.press(screen.getByTestId('moment-yearly'));
+    expect(screen.getByTestId('moment-past-date').props.children).toBe('The original date is kept; the next yearly occurrence appears in Moments.');
+  });
+
+  it('shows no past-date note for a future date', async () => {
+    load([]);
+    mockParams = { imported: JSON.stringify({ type: 'custom', title: 'Later', firstName: '', phone: '', email: '', occurrenceDate: future(10), timeZoneID: 'UTC', yearly: false, source: 'manual', sourceKey: 'k' }) };
+    await render(<MomentEditor />);
+    expect(screen.queryByTestId('moment-past-date')).toBeNull();
+  });
 });
 
 describe('Moments Settings', () => {

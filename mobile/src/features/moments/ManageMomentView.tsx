@@ -30,7 +30,7 @@ import {
   systemColors,
   title1,
 } from './components';
-import { momentLabel, momentStartOfDay, sendDayLabel } from './dates';
+import { momentLabel, sendDayLabel } from './dates';
 import { contactChoice, imageStorage, pickContact, validatePickedContacts, type ContactChoice } from './device';
 import {
   capitalized,
@@ -383,7 +383,6 @@ export function ManageMomentView({ group, onDone }: { group: MomentDisplayGroup;
                   value={state.date}
                   onChange={(value) => model.getState().setDate(value)}
                   zone={state.zone}
-                  minimum={momentStartOfDay(openedAt, state.zone)}
                   disabled={state.settings.catalogManaged}
                   testID="festival-details-date"
                 />

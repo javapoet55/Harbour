@@ -136,15 +136,20 @@ describe('tab changes auto-save', () => {
     expect(isDirty(model.getState())).toBe(false);
   });
 
-  it('a failed save keeps you on the current tab', async () => {
+  // ManageFestivalModel.swift:117: a failed ordinary save shows the error and keeps the edits,
+  // but does not trap you on the tab you were leaving.
+  it('a failed save keeps the edits and the error, and still moves between steps', async () => {
     const h = harness(festivalGroup());
     await h.store.getState().activate('u');
     const model = createManageModel({ id: 'g', moments: festivalGroup() }, h.deps);
     model.getState().setTitle('');
     await model.getState().changeTab('Schedule');
-    expect(model.getState().tab).toBe('Details');
+    expect(model.getState().tab).toBe('Schedule');
     expect(model.getState().error).toBe('Enter a moment name of 1–150 characters.');
     expect(model.getState().pendingTab).toBeNull();
+    // The edit is still in memory, so it can be corrected rather than retyped.
+    expect(model.getState().title).toBe('');
+    expect(isDirty(model.getState())).toBe(true);
   });
 
   it('asks before cancelling existing schedules, then saves with cancelSchedules and moves on', async () => {
@@ -208,14 +213,16 @@ describe('recipient and archive rules', () => {
     expect(model.getState().error).toBe('Saved. Refresh Moments before continuing.');
   });
 
-  it('refuses a past moment date before sending anything', async () => {
+  // ManageFestivalModel.swift:122: the past-date rejection is gone. A moment that has already
+  // happened saves; only scheduling a delivery still needs a future time.
+  it('saves a past moment date', async () => {
     const h = harness(festivalGroup());
     await h.store.getState().activate('u');
     const model = createManageModel({ id: 'g', moments: festivalGroup() }, h.deps);
     model.getState().setDate(Date.parse('2030-08-01T00:00:00Z'));
     await model.getState().save();
-    expect(model.getState().error).toBe('Select today or a future moment date.');
-    expect(h.post).not.toHaveBeenCalledWith('festivalSave', expect.anything(), undefined);
+    expect(model.getState().error).toBeNull();
+    expect(h.post).toHaveBeenCalledWith('festivalSave', expect.objectContaining({ date: '2030-08-01' }), undefined);
   });
 });
 

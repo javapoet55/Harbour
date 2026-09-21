@@ -263,7 +263,6 @@ export function createManageModel(group: MomentDisplayGroup, deps: ManageDeps): 
     async function persist(cancelSchedules: boolean): Promise<void> {
       const state = get();
       if (state.title.trim() === '' || characterCount(state.title) > 150) throw new ManageError('Enter a moment name of 1–150 characters.');
-      if (momentDay(state.date, state.zone) < momentDay(deps.now(), state.zone)) throw new ManageError('Select today or a future moment date.');
       if (state.recipients.length > 0) {
         const issue = validateRecipients(state.recipients, state.settings);
         if (issue) throw new ManageError(issue);
@@ -426,7 +425,12 @@ export function createManageModel(group: MomentDisplayGroup, deps: ManageDeps): 
           set({ notice: cancelSchedules ? 'Changes saved. Review and schedule your updated wish again.' : 'Moment changes saved.' });
         } catch (error) {
           if (isApiError(error) && error.status === 409 && error.message.includes('Existing schedules')) set({ needsScheduleConfirmation: true });
-          else set({ error: errorMessage(error), pendingTab: null });
+          else {
+            // A failed ordinary save keeps the edits and shows the error, but still lets the
+            // person move between steps (ManageFestivalModel.swift:117).
+            const target = get().pendingTab;
+            set({ error: errorMessage(error), ...(target ? { tab: target } : {}), pendingTab: null });
+          }
         } finally {
           set({ busy: false });
         }
