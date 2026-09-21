@@ -5,6 +5,7 @@ import { Component, type ReactNode } from 'react';
 import { Animated, Image, PanResponder, Pressable, StyleSheet, View, type GestureResponderHandlers, type ImageSourcePropType, type StyleProp, type ViewStyle } from 'react-native';
 
 import type { GroceryItem } from '../../api/shopping';
+import { FittedText } from '../../components/AskParts';
 import { withAlpha } from '../../components/SignInBackdrop';
 import { Text } from '../../components/Text';
 import { brand, linearGradientStops, useTheme } from '../../theme';
@@ -284,7 +285,8 @@ export function StickyActionBar({ children, onHeight, style, testID }: { childre
 
 /**
  * `shoppingActions` (ShoppingViews.swift:312-331): Complete Shopping (gradient) and AI Powered
- * Recommendations (outlined), both disabled while the store is busy.
+ * Recommendations (outlined), both disabled while the store is busy. Each label is
+ * `.lineLimit(2).minimumScaleFactor(0.78)`: it wraps between words and shrinks rather than split one.
  */
 export function ShoppingActionBar({ busy, onComplete, onRecommendations, onHeight }: { busy: boolean; onComplete: () => void; onRecommendations: () => void; onHeight?: (height: number) => void }) {
   const theme = useTheme();
@@ -301,9 +303,9 @@ export function ShoppingActionBar({ busy, onComplete, onRecommendations, onHeigh
       >
         <LinearGradient colors={SHOPPING_GRADIENT} end={{ x: 1, y: 0.5 }} start={{ x: 0, y: 0.5 }} style={[styles.actionFill, busy && styles.dimmed]}>
           <Ionicons name="checkmark-circle" size={18} color="#FFFFFF" />
-          <Text adjustsFontSizeToFit minimumFontScale={0.78} numberOfLines={2} style={[styles.actionText, { color: '#FFFFFF' }]}>
+          <FittedText containerStyle={styles.actionLabel} minimumFontScale={0.78} numberOfLines={2} style={[styles.actionText, { color: '#FFFFFF' }]}>
             Complete Shopping
-          </Text>
+          </FittedText>
         </LinearGradient>
       </Pressable>
       <Pressable
@@ -316,9 +318,9 @@ export function ShoppingActionBar({ busy, onComplete, onRecommendations, onHeigh
         testID="shopping-ai-recommendations"
       >
         <Ionicons name="sparkles" size={18} color={brand.nexdoIndigo} />
-        <Text adjustsFontSizeToFit minimumFontScale={0.78} numberOfLines={2} style={[styles.actionText, { color: brand.nexdoIndigo }]}>
+        <FittedText containerStyle={styles.actionLabel} minimumFontScale={0.78} numberOfLines={2} style={[styles.actionText, { color: brand.nexdoIndigo }]}>
           AI Powered Recommendations
-        </Text>
+        </FittedText>
       </Pressable>
     </StickyActionBar>
   );
@@ -356,6 +358,7 @@ const styles = StyleSheet.create({
   actionButton: { flex: 1, borderRadius: 17 },
   // `.frame(maxWidth: .infinity, minHeight: 52)`, radius 17; the `Label` centred.
   actionFill: { minHeight: 52, borderRadius: 17, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12, gap: 8 },
-  actionText: { flexShrink: 1, fontSize: 15, lineHeight: 20, fontWeight: '600' },
+  actionText: { fontSize: 15, lineHeight: 20, fontWeight: '600' },
+  actionLabel: { flexShrink: 1 },
   dimmed: { opacity: 0.55 },
 });

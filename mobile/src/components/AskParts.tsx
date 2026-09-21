@@ -1,7 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useState } from 'react';
-import { Platform, Pressable, StyleSheet, View, type LayoutChangeEvent } from 'react-native';
+import { Platform, Pressable, StyleSheet, View, type LayoutChangeEvent, type StyleProp, type ViewStyle } from 'react-native';
 
 import type { AskIntent } from '../lib/askIntents';
 import type { ShoppingPromptIcon } from '../lib/shoppingRecommendations';
@@ -138,7 +138,15 @@ export function AskEntryCard({
 }
 
 /**
- * One line that shrinks to fit, on both platforms: SwiftUI's `.lineLimit(1).minimumScaleFactor(_:)`.
+ * The font scale a fitted label needs: the widest measured run over the width available, clamped at
+ * `minimumFontScale` exactly as SwiftUI clamps at its scale factor. 1 until both widths are known.
+ */
+export function fittedScale(available: number, natural: number, minimumFontScale: number) {
+  return available > 0 && natural > available ? Math.max(minimumFontScale, available / natural) : 1;
+}
+
+/**
+ * Text that shrinks to fit, on both platforms: SwiftUI's `.lineLimit(n).minimumScaleFactor(_:)`.
  *
  * `adjustsFontSizeToFit` is iOS-only in React Native — see docs/swift-to-rn-style-map.md,
  * "`.minimumScaleFactor` has no Android equivalent". On Android it is silently ignored and the
@@ -149,33 +157,44 @@ export function AskEntryCard({
  * inside an over-wide absolute layer, where it is a shrink-to-fit child and so reports its *own*
  * content width through `onLayout` — the ink width, not the container width that `onTextLayout`
  * hands back (style map §4). The row reports the width available, and the font is scaled by the
- * ratio, clamped at `minimumFontScale` exactly as SwiftUI clamps at its scale factor.
+ * ratio (`fittedScale`).
+ *
+ * With `numberOfLines > 1` SwiftUI wraps between words and shrinks before it splits one, so the
+ * measured runs are the label's words and the widest must fit a line. That is measured on both
+ * platforms, because neither `adjustsFontSizeToFit` breaks at words: on a OnePlus the Shopping
+ * Detail button painted "AI Powered Reco / mmendations" where Swift shrinks to keep
+ * "Recommendations" whole (ShoppingViews.swift:321-323).
  *
  * `lineHeight` is left alone so the shrunk label keeps its box and the card does not change height.
  */
 export function FittedText({
   minimumFontScale = 0.75,
+  numberOfLines = 1,
   style,
+  containerStyle,
   children,
 }: {
   minimumFontScale?: number;
+  numberOfLines?: number;
   style: TextProps['style'];
+  containerStyle?: StyleProp<ViewStyle>;
   children: string;
 }) {
   const [available, setAvailable] = useState(0);
-  const [natural, setNatural] = useState(0);
-  const measures = Platform.OS === 'android';
+  const [widths, setWidths] = useState<Record<number, number>>({});
+  const runs = numberOfLines > 1 ? children.split(/\s+/).filter(Boolean) : [children];
+  const measures = Platform.OS === 'android' || runs.length > 1;
 
-  const width = (set: (value: number) => void) => (event: LayoutChangeEvent) => set(event.nativeEvent.layout.width);
   const base = StyleSheet.flatten(style);
   const fontSize = typeof base?.fontSize === 'number' ? base.fontSize : undefined;
-  const scale = measures && available > 0 && natural > available ? Math.max(minimumFontScale, available / natural) : 1;
+  const natural = Math.max(0, ...runs.map((_, index) => widths[index] ?? 0));
+  const scale = measures ? fittedScale(available, natural, minimumFontScale) : 1;
 
   return (
-    <View onLayout={measures ? width(setAvailable) : undefined}>
+    <View onLayout={measures ? (event: LayoutChangeEvent) => setAvailable(event.nativeEvent.layout.width) : undefined} style={containerStyle}>
       <Text
-        numberOfLines={1}
-        // Right on iOS, and a no-op on Android, where `scale` is what actually fits the label.
+        numberOfLines={numberOfLines}
+        // Right on iOS for a single line, and a no-op on Android, where `scale` is what actually fits the label.
         adjustsFontSizeToFit
         minimumFontScale={minimumFontScale}
         style={[style, scale < 1 && fontSize !== undefined && { fontSize: fontSize * scale }]}
@@ -189,9 +208,18 @@ export function FittedText({
           pointerEvents="none"
           style={styles.measureLayer}
         >
-          <Text onLayout={width(setNatural)} style={[style, styles.measured]}>
-            {children}
-          </Text>
+          {runs.map((run, index) => (
+            <Text
+              key={index}
+              onLayout={(event: LayoutChangeEvent) => {
+                const width = event.nativeEvent.layout.width;
+                setWidths((current) => (current[index] === width ? current : { ...current, [index]: width }));
+              }}
+              style={[style, styles.measured]}
+            >
+              {run}
+            </Text>
+          ))}
         </View>
       ) : null}
     </View>
