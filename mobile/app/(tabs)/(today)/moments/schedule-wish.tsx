@@ -98,7 +98,7 @@ export default function ScheduleWishScreen() {
             </>
           ) : (
             <Text style={[textStyles.body, { color: theme.colors.label }]}>
-              We’ll remind you, the sender, to open the prepared wish and tap Send in Messages. Recipients do not need to confirm. iOS does not allow Nexdo to send Messages automatically.
+              We’ll remind you, the sender, to open the prepared wish and tap Send in Messages. Recipients do not need to confirm. Nexdo does not send Messages automatically.
             </Text>
           )}
           <FormToggle label="Notify me 1 hour before" value={warning} onValueChange={setWarning} testID="schedule-wish-warning" />

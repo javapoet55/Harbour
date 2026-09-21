@@ -621,7 +621,7 @@ export function ManageMomentView({ group, onDone }: { group: MomentDisplayGroup;
               <View style={[styles.info, { backgroundColor: withAlpha(systemColors.blue, 0.08) }]}>
                 <Ionicons name="information-circle" size={17} color={brand.nexdoIndigo} />
                 <Text style={[textStyles.subheadline, styles.grow, { color: theme.colors.label }]}>
-                  At the scheduled time, open your reminder to send the prepared wish. iOS requires you, the sender, to tap Send in Messages. Recipients do not need to confirm.
+                  At the scheduled time, open your reminder to send the prepared wish. You, the sender, must tap Send in Messages. Recipients do not need to confirm.
                 </Text>
               </View>
               {dirty ? <MomentPrimary title="Save Changes" onPress={() => save()} testID="festival-schedule-save" /> : null}
@@ -795,7 +795,7 @@ export function ManageMomentView({ group, onDone }: { group: MomentDisplayGroup;
           <Text style={[textStyles.body, { color: theme.colors.label }]}>You are confirming this schedule for all selected contacts. Recipients do not need to confirm.</Text>
           {selected.some((recipient) => recipientChannel(state, recipient) === 'messages') ? (
             <Text style={[textStyles.subheadline, { color: theme.colors.secondaryLabel }]}>
-              At the scheduled time, we’ll remind you to open the prepared wish and tap Send in Messages. iOS does not allow Nexdo to send Messages automatically.
+              At the scheduled time, we’ll remind you to open the prepared wish and tap Send in Messages. Nexdo does not send Messages automatically.
             </Text>
           ) : null}
           <MomentPrimary

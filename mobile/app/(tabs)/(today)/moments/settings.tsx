@@ -132,13 +132,13 @@ export default function MomentSettingsScreen() {
             </FormRow>
           ) : null}
           <FormRow>
-            <FormText caption>Reminders are on by default once you allow iOS notifications. They apply to wishes you schedule; enabling them does not send messages.</FormText>
+            <FormText caption>Reminders are on by default once you allow notifications. They apply to wishes you schedule; enabling them does not send messages.</FormText>
           </FormRow>
           <FormRow>
-            <FormButton title="Open iOS Settings" onPress={() => void Linking.openSettings()} testID="settings-open-settings" />
+            <FormButton title="Open Settings" onPress={() => void Linking.openSettings()} testID="settings-open-settings" />
           </FormRow>
           <FormRow last>
-            <FormText caption>Reminders require notifications. Denied or limited Contacts and Calendar access can be changed in iOS Settings.</FormText>
+            <FormText caption>Reminders require notifications. Denied or limited Contacts and Calendar access can be changed in your phone’s Settings.</FormText>
           </FormRow>
         </FormSection>
 

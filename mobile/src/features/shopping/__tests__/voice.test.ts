@@ -63,6 +63,8 @@ describe('ShoppingVoice', () => {
     await h.voice.start();
     expect(h.transport.connect).not.toHaveBeenCalled();
     expect(h.voice.state.getState()).toMatchObject({ connecting: false, listening: false, error: VOICE_MESSAGES.microphone });
+    // ShoppingVoice.swift:22 — the prompt names no platform.
+    expect(VOICE_MESSAGES.microphone).toBe('Allow microphone access in your phone’s Settings, or type your items.');
   });
 
   it('keeps the transcript when the session cannot be created', async () => {

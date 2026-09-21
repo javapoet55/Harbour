@@ -22,7 +22,7 @@ export default function CalendarImportScreen() {
     try {
       setCalendars(await deviceCalendars());
     } catch {
-      setError('Calendar access is unavailable. Enable Calendar access for Nexdo in iOS Settings.');
+      setError('Calendar access is unavailable. Enable Calendar access for Nexdo in your phone’s Settings.');
     } finally {
       setLoading(false);
     }

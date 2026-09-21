@@ -240,6 +240,16 @@ describe('Moments Settings', () => {
     expect(screen.getByText('Disconnect email')).toBeTruthy();
     expect(screen.getByTestId('settings-connect').props.accessibilityState.disabled).toBe(false);
   });
+
+  // MomentEditor.swift:232-237 — this copy names no platform.
+  it('names no platform in the reminder and Settings copy', async () => {
+    load([]);
+    await render(<MomentSettings />);
+    expect(screen.getByText('Open Settings')).toBeTruthy();
+    expect(screen.getByText('Reminders are on by default once you allow notifications. They apply to wishes you schedule; enabling them does not send messages.')).toBeTruthy();
+    expect(screen.getByText('Reminders require notifications. Denied or limited Contacts and Calendar access can be changed in your phone’s Settings.')).toBeTruthy();
+    expect(screen.queryByText(/iOS/)).toBeNull();
+  });
 });
 
 describe('Choose Delivery', () => {

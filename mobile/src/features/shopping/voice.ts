@@ -31,7 +31,7 @@ export type ShoppingVoiceDeps = {
 };
 
 export const VOICE_MESSAGES = {
-  microphone: 'Allow microphone access in iOS Settings, or type your items.',
+  microphone: 'Allow microphone access in your phone’s Settings, or type your items.',
   disconnected: 'Voice disconnected. Your transcript is kept. Review it or reconnect.',
   timeLimit: 'Five-minute session ended. Your transcript is ready to review.',
   full: 'Transcript is full. Review these items before adding more.',
