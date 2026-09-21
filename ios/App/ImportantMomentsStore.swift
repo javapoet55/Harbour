@@ -31,9 +31,9 @@ struct MomentOK: Decodable, Sendable {}
         case .authorized: return "Wish reminders are enabled"
         case .provisional: return "Wish reminders are enabled quietly"
         case .ephemeral: return "Wish reminders are temporarily enabled"
-        case .denied: return "Wish reminders are off in iOS Settings"
+        case .denied: return "Wish reminders are off in your phone's Settings"
         case .notDetermined: return "Allow notifications to enable wish reminders"
-        @unknown default: return "Check notification permission in iOS Settings"
+        @unknown default: return "Check notification permission in your phone's Settings"
         }
     }
     func updateReminderStatus() async {

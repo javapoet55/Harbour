@@ -68,6 +68,25 @@ type AgentPlan = {
 };
 type StoredAgentPlan = { scheduleVersion?: string; agentVersion: 1; plan: AgentPlan; taskVersions: Record<string, string> };
 
+/** The Ask UI renders plain text, so drop inline markdown markers the model sometimes emits despite instructions. */
+export function stripInlineMarkdown(text: string): string {
+  return text
+    .replace(/\*\*(.+?)\*\*/g, '$1')
+    .replace(/(^|[^\w*])\*(?=\S)([^*\n]*?\S)\*(?![\w*])/g, '$1$2')
+    .replace(/`+([^`\n]+?)`+/g, '$1')
+    .replace(/\*\*|`/g, '');
+}
+
+function plainTextPlan(plan: AgentPlan): AgentPlan {
+  return {
+    ...plan,
+    interpretation: stripInlineMarkdown(plan.interpretation),
+    response: stripInlineMarkdown(plan.response),
+    clarification_question: plan.clarification_question === null ? null : stripInlineMarkdown(plan.clarification_question),
+    response_sections: plan.response_sections.map((section) => ({ title: stripInlineMarkdown(section.title), items: section.items.map(stripInlineMarkdown) })),
+  };
+}
+
 function normalizePlan(plan: AgentPlan): AgentPlan {
   return { ...plan, response_sections: plan.response_sections ?? [], actions: plan.actions.map((action) => ({ ...action, depends_on_ids: action.depends_on_ids ?? [], energy_level: action.energy_level ?? null })) };
 }
@@ -153,7 +172,7 @@ Material writes will be validated and confirmed by the application.`;
   if (!response.ok) throw new Error(payload.error?.message || `OpenAI request failed (${response.status})`);
   const text = outputText(payload);
   if (!text) throw new Error('OpenAI returned no structured plan');
-  return normalizePlan(JSON.parse(text) as AgentPlan);
+  return plainTextPlan(normalizePlan(JSON.parse(text) as AgentPlan));
 }
 
 function validDate(value: string | null) {

@@ -31,7 +31,7 @@ private var shoppingIcon:some View {Image(systemName:"cart.fill").font(.title).f
 private func shoppingSummary(_ list:GroceryList)->some View {
     HStack(spacing:14){shoppingIcon;VStack(alignment:.leading,spacing:5){
         Text(list.title).font(.headline)
-        Text("\(list.weekly ? "Every week":"Shopping list") · \(list.items.count) items").font(.subheadline).foregroundStyle(.secondary)
+        Text("\(list.weekly ? "Every week":"Shopping list") · \(GroceryList.itemCount(list.items.count))").font(.subheadline).foregroundStyle(.secondary)
         Text("Next: "+MomentDates.sendDayLabel(MomentDates.date(list.date,zone:list.timeZone),zone:list.timeZone)).font(.caption).foregroundStyle(.green)
     };Spacer();Image(systemName:"chevron.right").foregroundStyle(.secondary)}
 }
@@ -109,7 +109,7 @@ struct ShoppingHome: View {
                                         listTile(list.completedAt == nil ? "cart.fill" : "doc.on.doc", color: list.completedAt == nil ? .green : .nexdoIndigo)
                                         VStack(alignment: .leading, spacing: 4) {
                                             Text(list.title).font(.headline).foregroundStyle(Color.nexdoInk)
-                                            Text("\(list.items.count) items" + (list.completedAt == nil ? "" : " · Completed")).font(.caption).foregroundStyle(Color.nexdoSecondary)
+                                            Text(GroceryList.itemCount(list.items.count) + (list.completedAt == nil ? "" : " · Completed")).font(.caption).foregroundStyle(Color.nexdoSecondary)
                                         }
                                         Spacer(minLength: 4)
                                         Text(MomentDates.date(list.date, zone: list.timeZone), format: .dateTime.month(.abbreviated).day()).font(.caption).foregroundStyle(Color.nexdoSecondary)
@@ -158,7 +158,7 @@ private struct NewShoppingList: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 18) {
                         choice("Start from Scratch", subtitle: "Create a brand new list.", symbol: "doc.badge.plus", selected: !useLast) { useLast = false }
-                        choice("Use Last Week’s List", subtitle: previous.map { "Copy \($0.items.count) items from “\($0.title)” and edit." } ?? "Create your first list to reuse it next time.", symbol: "arrow.counterclockwise", selected: useLast) { useLast = true }
+                        choice("Use Last Week’s List", subtitle: previous.map { "Copy \(GroceryList.itemCount($0.items.count)) from “\($0.title)” and edit." } ?? "Create your first list to reuse it next time.", symbol: "arrow.counterclockwise", selected: useLast) { useLast = true }
                             .disabled(previous == nil).opacity(previous == nil ? 0.5 : 1)
                             .accessibilityIdentifier("shopping-use-last")
                         Text("List Name").font(.headline).padding(.top, 10)
@@ -230,7 +230,7 @@ struct ShoppingDetail:View {
     var body:some View {
         List {
             Section {
-                HStack{shoppingIcon;VStack(alignment:.leading){Text(list.title).font(.title2.bold());Text("\(list.items.count-list.remaining) added · \(list.items.count) items").foregroundStyle(.secondary)}}
+                HStack{shoppingIcon;VStack(alignment:.leading){Text(list.title).font(.title2.bold());Text("\(list.items.count-list.remaining) added · \(GroceryList.itemCount(list.items.count))").foregroundStyle(.secondary)}}
                     .listRowInsets(EdgeInsets(top:0,leading:16,bottom:3,trailing:16)).listRowBackground(Color.clear).listRowSeparator(.hidden)
                 HStack(spacing:8){
                         Button{
@@ -305,7 +305,7 @@ struct ShoppingDetail:View {
                 ShoppingCompletionView(summary:summary,onDone:{completion=nil;dismiss()},onUseAgain:{completion=nil;if list.completedAt != nil{copy=true}})
             }
             .confirmationDialog("Delete this list?",isPresented:$deleting,titleVisibility:.visible){Button("Delete list",role:.destructive){Task{_ = await store.action("delete",list:list,input:[String:String]());if store.error==nil{dismiss()}}}}
-            .confirmationDialog("Complete with \(list.remaining) items remaining?",isPresented:$completing,titleVisibility:.visible){
+            .confirmationDialog("Complete with \(GroceryList.itemCount(list.remaining)) remaining?",isPresented:$completing,titleVisibility:.visible){
                 Button("Complete Shopping"){Task{await completeTrip()}}
             }message:{Text("The unchecked items will remain in your shopping history.")}
     }
@@ -496,7 +496,7 @@ private struct ShoppingShare:View {
     let onUpdate:(GroceryList)->Void
     @State private var url:URL?
     var body:some View{NavigationStack{List{
-        Section{Label(list.title,systemImage:"cart.fill");Text("\(list.items.count) items")}
+        Section{Label(list.title,systemImage:"cart.fill");Text(GroceryList.itemCount(list.items.count))}
         Section("Share via Messages, Mail, or another app"){ShareLink(item:list.shareText){Label("Share list as text",systemImage:"square.and.arrow.up")}}
         Section("View-only link"){
             Text("Anyone with the link can view this list and its edits. The link stays with this trip; next week’s list needs a new link. Revoke it whenever you like.").font(.caption)
