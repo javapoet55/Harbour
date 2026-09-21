@@ -21,6 +21,7 @@ import {
   withAlpha,
 } from '../../src/components/TaskDetailParts';
 import { detailsBody, draftFrom, draftsEqual, isDraftValid, scheduleBody, type TaskDraft } from '../../src/lib/taskDraft';
+import { lifeReminderLabel } from '../../src/lib/taskLabels';
 import { dayKey, isDone, startOfDay } from '../../src/lib/taskQuery';
 import {
   useCompleteTask,
@@ -143,6 +144,7 @@ export default function TaskDetail() {
   };
 
   const scheduleAt = current.schedule;
+  const reminderLabel = lifeReminderLabel(task);
 
   return (
     // The keyboard OVERLAYS the window on this build rather than resizing it — measured on the
@@ -155,6 +157,14 @@ export default function TaskDetail() {
       <View style={[styles.header, { borderBottomColor: withAlpha(brand.nexdoIndigo, 0.1) }]}>
         <View style={styles.headerText}>
           <Text style={[styles.eyebrow, { color: theme.colors.tint }]}>TASK DETAILS</Text>
+          {/* `Label(lifeReminderLabel, systemImage: "sparkles")`, `.caption.weight(.semibold)`, magenta
+              (TaskDetailsView.swift:98-102). Read as one element: "Smart reminder: <label>". */}
+          {reminderLabel ? (
+            <View accessible accessibilityLabel={`Smart reminder: ${reminderLabel}`} style={styles.reminderLabel} testID="detail-life-reminder">
+              <TaskSymbol name="sparkles" size={12} color={brand.nexdoMagenta} />
+              <Text style={[styles.reminderText, { color: brand.nexdoMagenta }]}>{reminderLabel}</Text>
+            </View>
+          ) : null}
           <Text accessibilityRole="header" numberOfLines={2} style={[styles.headerTitle, { color: theme.colors.ink }]}>
             {current.title.trim().length === 0 ? task.title : current.title}
           </Text>
@@ -539,6 +549,9 @@ const styles = StyleSheet.create({
   headerText: { flex: 1, gap: 5 },
   // `.font(.caption.weight(.bold)).tracking(1.7)`
   eyebrow: { fontSize: 12, lineHeight: 16, fontWeight: '700', letterSpacing: 1.7 },
+  // `Label` spacing with `.caption.weight(.semibold)`.
+  reminderLabel: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  reminderText: { fontSize: 12, lineHeight: 16, fontWeight: '600' },
   // `.font(.title3.weight(.semibold))`
   headerTitle: { fontSize: 20, lineHeight: 25, fontWeight: '600' },
   close: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },

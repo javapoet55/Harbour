@@ -88,6 +88,28 @@ describe('Task detail sections, in Swift order', () => {
     expect(screen.getByLabelText('Close task details')).toBeTruthy();
   });
 
+  it('shows the smart-reminder label between the eyebrow and the title (TaskDetailsView.swift:98-102)', async () => {
+    await renderDetail({ title: 'The laptop warranty', lifeReminderType: 'expiration', reminderAt: '2026-09-26T16:00:00Z' });
+
+    const label = screen.getByTestId('detail-life-reminder');
+    expect(label.props.accessibilityLabel).toBe('Smart reminder: Expires');
+    expect(screen.getByText('Expires')).toBeTruthy();
+  });
+
+  it.each([
+    ['renewal', 'Renewal'],
+    ['returnItem', 'Return'],
+    ['bill', 'Bill'],
+  ])('labels lifeReminderType %s as %s', async (type, label) => {
+    await renderDetail({ lifeReminderType: type });
+    expect(screen.getByLabelText(`Smart reminder: ${label}`)).toBeTruthy();
+  });
+
+  it.each([[undefined], ['warranty']])('shows no reminder label for lifeReminderType %s', async (type) => {
+    await renderDetail({ lifeReminderType: type });
+    expect(screen.queryByTestId('detail-life-reminder')).toBeNull();
+  });
+
   it('renders the clarify card for a vague title', async () => {
     await renderDetail();
 

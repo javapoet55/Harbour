@@ -95,6 +95,19 @@ describe('Tasks screen', () => {
     expect(screen.getByText('2 tasks')).toBeTruthy();
   });
 
+  it('draws a life-reminder task as a plain row, with no reminder badge (RootView.swift:1860-1890)', async () => {
+    mockTasks.mockResolvedValue({
+      tasks: [task({ id: 'r', title: 'Return the jacket by Friday', durationMin: 5, startAt: atLocal('2026-09-16', '12:24'), lifeReminderType: 'returnItem', reminderAt: atLocal('2026-09-16', '12:24') })],
+      timeZone: ZONE,
+    });
+    await renderTasks();
+
+    await waitFor(() => expect(screen.getByText('Return the jacket by Friday')).toBeTruthy());
+    // `TaskRow`'s badge (RootView.swift:1601-1603) is dead code on the iPhone; the live `taskCard` has none.
+    expect(screen.queryByText(/^return$/i)).toBeNull();
+    expect(screen.queryByLabelText(/Smart reminder/)).toBeNull();
+  });
+
   it('counts each date pill from the same filtered pass', async () => {
     await renderTasks();
 
