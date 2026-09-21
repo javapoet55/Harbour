@@ -60,3 +60,9 @@ import Testing
     #expect(response.alternatives.contains{$0.name=="Turkey breast"})
     #expect(!response.usedAI)
 }
+
+@Test func shoppingItemCountUsesSingularForOne(){
+    #expect(GroceryList.itemCount(0)=="0 items")
+    #expect(GroceryList.itemCount(1)=="1 item")
+    #expect(GroceryList.itemCount(2)=="2 items")
+}

@@ -36,7 +36,7 @@ private struct TodayQuickAccessContent: View {
         formatter.locale = .current
         formatter.timeZone = TimeZone(identifier: list.timeZone)
         formatter.dateFormat = "EEE"
-        return "\(list.remaining) items · \(formatter.string(from: MomentDates.date(list.date, zone: list.timeZone)))"
+        return "\(GroceryList.itemCount(list.remaining)) · \(formatter.string(from: MomentDates.date(list.date, zone: list.timeZone)))"
     }
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {

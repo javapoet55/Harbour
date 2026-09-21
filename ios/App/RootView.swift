@@ -1548,81 +1548,6 @@ struct TodayBackdrop: View {
     }
 }
 
-private struct TaskRow: View {
-    @EnvironmentObject var model: AppModel
-    let task: NexdoTask
-
-    private var taskZone: String { task.timeZone ?? model.profile?.timeZone ?? TimeZone.current.identifier }
-
-    private var priorityColor: Color {
-        switch task.priority {
-        case "CRITICAL": return .red
-        case "HIGH": return .orange
-        case "LOW": return .nexdoBlue
-        default: return .nexdoIndigo
-        }
-    }
-
-    private var scheduleLabel: String? {
-        guard let value = task.startAt ?? task.dueAt else { return nil }
-        return ServerDate.time(value, timeZone: taskZone)
-    }
-
-    var body: some View {
-        HStack(spacing: 14) {
-            Button {
-                Task { await model.complete(task) }
-            } label: {
-                ZStack {
-                    Circle()
-                        .stroke(task.isDone ? Color.clear : priorityColor.opacity(0.55), lineWidth: 2)
-                        .background(Circle().fill(task.isDone ? AnyShapeStyle(NexdoTheme.gradient) : AnyShapeStyle(Color.white.opacity(0.65))))
-                    if task.isDone {
-                        Image(systemName: "checkmark")
-                            .font(.caption.bold())
-                            .foregroundStyle(.white)
-                    }
-                }
-                .frame(width: 30, height: 30)
-            }
-            .buttonStyle(.plain)
-            .disabled(model.busy)
-            .accessibilityLabel(task.isDone ? "Restore \(task.title)" : "Complete \(task.title)")
-
-            NavigationLink { TaskEditor(task: task) } label: {
-                VStack(alignment: .leading, spacing: 10) {
-                    Text(task.title)
-                        .font(.headline)
-                        .foregroundStyle(Color.nexdoInk)
-                        .strikethrough(task.isDone, color: Color.nexdoSecondary)
-                        .lineLimit(2)
-
-                    HStack(spacing: 8) {
-                        if let lifeReminderLabel = task.lifeReminderLabel {
-                            TaskBadge(title: lifeReminderLabel.uppercased(), icon: "sparkles", color: .nexdoMagenta)
-                        }
-                        TaskBadge(title: task.isDone ? "DONE" : task.priority, icon: task.isDone ? "checkmark" : "flag.fill", color: task.isDone ? .green : priorityColor)
-                        TaskBadge(title: "\(task.durationMin) MIN", icon: "clock", color: .nexdoIndigo)
-                        if let scheduleLabel {
-                            TaskBadge(title: scheduleLabel.uppercased(), icon: "calendar", color: .nexdoBlue)
-                        }
-                    }
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .buttonStyle(.plain)
-
-            Image(systemName: "chevron.right")
-                .font(.caption.bold())
-                .foregroundStyle(Color.nexdoSecondary.opacity(0.6))
-        }
-        .padding(18)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).stroke(Color.white.opacity(0.85)))
-        .shadow(color: Color.nexdoIndigo.opacity(0.08), radius: 18, y: 8)
-    }
-}
-
 struct TasksView: View {
     @EnvironmentObject var model: AppModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -2124,21 +2049,6 @@ private enum TaskFilter: String, CaseIterable, Identifiable {
 enum NexdoTheme {
     static let gradient = LinearGradient(colors: [.nexdoMagenta, .nexdoIndigo, .nexdoBlue], startPoint: .leading, endPoint: .trailing)
     static let saveGradient = LinearGradient(colors: [.nexdoBlue, .nexdoIndigo, .nexdoMagenta], startPoint: .leading, endPoint: .trailing)
-}
-
-private struct TaskBadge: View {
-    let title: String
-    let icon: String
-    let color: Color
-    var body: some View {
-        Label(title, systemImage: icon)
-            .font(.system(size: 9, weight: .bold))
-            .foregroundStyle(color)
-            .lineLimit(1)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 6)
-            .background(color.opacity(0.09), in: Capsule())
-    }
 }
 
 private struct TasksHero: View {
