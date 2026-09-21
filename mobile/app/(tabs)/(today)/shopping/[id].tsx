@@ -8,6 +8,7 @@ import type { GroceryItem, GroceryList } from '../../../../src/api/shopping';
 import { withAlpha } from '../../../../src/components/SignInBackdrop';
 import { Text } from '../../../../src/components/Text';
 import { TodayBackdrop } from '../../../../src/components/TodayShell';
+import { ShoppingAlternativesSheet } from '../../../../src/features/shopping/AlternativesSheet';
 import { CategoryChip, GroceryRow, grocerySeparatorInset, ShoppingActionBar, ShoppingIcon, SwipeToDelete } from '../../../../src/features/shopping/components';
 import { completionSummary, ShoppingCompletionView, type ShoppingCompletionSummary } from '../../../../src/features/shopping/CompletionView';
 import { ItemEditorSheet } from '../../../../src/features/shopping/ItemEditorSheet';
@@ -47,7 +48,7 @@ export default function ShoppingDetailScreen() {
   const [sharing, setSharing] = useState(false);
   const [completion, setCompletion] = useState<ShoppingCompletionSummary | null>(null);
   const [, setRecommendations] = useState(false);
-  const [, setAlternativesFor] = useState<GroceryItem | null>(null);
+  const [alternativesFor, setAlternativesFor] = useState<GroceryItem | null>(null);
   const [parseBusy, setParseBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = useState('All');
@@ -338,6 +339,7 @@ export default function ShoppingDetailScreen() {
       <NewListSheet visible={copy} source={list} onCreated={setList} onClose={() => setCopy(false)} />
       <ListSettingsSheet visible={settings} list={list} onSave={(next) => void save(next)} onClose={() => setSettings(false)} />
       <ShareListSheet visible={sharing} list={list} onUpdate={setList} onClose={() => setSharing(false)} />
+      <ShoppingAlternativesSheet list={list} original={alternativesFor} save={save} onClose={() => setAlternativesFor(null)} />
       <ShoppingCompletionView
         summary={completion}
         onDone={() => {

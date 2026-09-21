@@ -18,11 +18,13 @@ jest.mock('expo-router', () => ({
 
 const mockPost = jest.fn();
 const mockLists = jest.fn();
+const mockAlternatives = jest.fn();
 jest.mock('../../../api/shopping', () => ({
   ...jest.requireActual('../../../api/shopping'),
   shoppingApi: {
     lists: (...args: unknown[]) => mockLists(...args),
     post: (...args: unknown[]) => mockPost(...args),
+    alternatives: (...args: unknown[]) => mockAlternatives(...args),
     image: jest.fn(),
     transcriptionSession: jest.fn(),
   },
@@ -474,5 +476,103 @@ describe('List detail', () => {
       buttons.find((button) => button.text === 'Delete list')?.onPress?.();
     });
     await waitFor(() => expect(mockBack).toHaveBeenCalled());
+  });
+});
+
+/**
+ * Item Alternatives (ShoppingViews.swift:511-609), opened from a row's star (:300-303, :638-639).
+ * The answer is the `rice` request from Run D's test data, which the capture replaced with Brown rice.
+ */
+describe('Item Alternatives', () => {
+  const RICE = item({ id: 'rice', name: 'rice', category: 'Pantry', quantity: '1', size: 'bag', checked: false });
+  const ANSWER = {
+    alternatives: [
+      { name: 'Brown rice', category: 'Pantry', quantity: '1', size: 'bag', reason: 'More whole grains', detail: 'Works well as a direct swap in most rice dishes.' },
+      { name: 'Quinoa', category: 'Pantry', quantity: '1', size: 'bag', reason: 'Protein-rich grain', detail: 'Quick-cooking complete protein' },
+      { name: 'Cauliflower rice', category: 'Frozen', quantity: '1', size: 'bag', reason: 'Vegetable option', detail: 'Light substitute for rice dishes' },
+    ],
+    tip: 'Brown rice is the closest whole-grain swap for everyday meals.',
+    usedAI: true,
+  };
+
+  async function open(answer: () => Promise<unknown> = async () => ANSWER) {
+    load([list({ items: [item(), RICE] })]);
+    mockParams = { id: 'l1' };
+    mockAlternatives.mockImplementation(answer);
+    mockPost.mockImplementation(async (envelope) => ({ list: { ...list({ revision: 8 }), items: envelope.input.items } }));
+    await render(<Detail />);
+    await fireEvent.press(screen.getByLabelText('Show alternatives for rice'));
+  }
+
+  it('shows the loading state, then the original, the alternatives with the first selected, and the tip', async () => {
+    let answer: (value: unknown) => void = () => undefined;
+    await open(() => new Promise((resolve) => (answer = resolve)));
+    expect(screen.getByText('Item Alternatives')).toBeTruthy();
+    expect(screen.getByText('Finding useful alternatives…')).toBeTruthy();
+    expect(mockAlternatives).toHaveBeenCalledWith({ name: 'rice', category: 'Pantry', quantity: '1', size: 'bag' });
+    await act(async () => answer(ANSWER));
+
+    expect(screen.getByTestId('alternatives-original')).toHaveTextContent(/rice1 bagOriginal Item/);
+    expect(screen.getByText('AI Recommended Alternatives')).toBeTruthy();
+    expect(screen.getByText('Practical swaps based on the item in your list.')).toBeTruthy();
+    expect(screen.getByText('More whole grains')).toBeTruthy();
+    expect(screen.getByLabelText('Select Brown rice as replacement').props.accessibilityState.selected).toBe(true);
+    expect(screen.getByTestId('alternative-pill-Brown rice')).toHaveTextContent('Selected');
+    expect(screen.getByTestId('alternative-pill-Quinoa')).toHaveTextContent('Replace');
+    expect(screen.getByText('Nexdo Tip')).toBeTruthy();
+    expect(screen.getByText('Brown rice is the closest whole-grain swap for everyday meals.')).toBeTruthy();
+    expect(screen.getByText('Replace with Selected Item')).toBeTruthy();
+    expect(screen.getByText('Add to Cart Instead')).toBeTruthy();
+  });
+
+  it('Replace swaps the item in place, keeping its id and checked state, with the detail as notes', async () => {
+    await open();
+    await waitFor(() => expect(screen.getByTestId('alternatives-replace')).toBeTruthy());
+    await fireEvent.press(screen.getByTestId('alternatives-replace'));
+    await waitFor(() => expect(screen.queryByTestId('alternatives-list')).toBeNull());
+    const envelope = mockPost.mock.calls[0][0];
+    expect(envelope).toMatchObject({ operation: 'save', id: 'l1', revision: 7 });
+    expect(envelope.input.items.map((value: GroceryItem) => [value.id, value.name, value.notes, value.checked])).toEqual([
+      ['milk', 'Parity milk', '', false],
+      ['rice', 'Brown rice', 'Works well as a direct swap in most rice dishes.', false],
+    ]);
+    // `shopping-detail-after-replace`: the row reads Brown rice, 1 bag, and the detail as its note.
+    await waitFor(() => expect(screen.getByText('Brown rice')).toBeTruthy());
+    expect(screen.getByText('Works well as a direct swap in most rice dishes.')).toBeTruthy();
+  });
+
+  it('Add to Cart Instead appends the selected alternative as a new item', async () => {
+    await open();
+    await waitFor(() => expect(screen.getByLabelText('Select Quinoa as replacement')).toBeTruthy());
+    await fireEvent.press(screen.getByLabelText('Select Quinoa as replacement'));
+    expect(screen.getByTestId('alternative-pill-Quinoa')).toHaveTextContent('Selected');
+    await fireEvent.press(screen.getByTestId('alternatives-add'));
+    await waitFor(() => expect(mockPost).toHaveBeenCalled());
+    const names = mockPost.mock.calls[0][0].input.items.map((value: GroceryItem) => value.name);
+    expect(names).toEqual(['Parity milk', 'rice', 'Quinoa']);
+    await waitFor(() => expect(screen.getByTestId('list-counts').props.children).toBe('0 added · 3 items'));
+  });
+
+  it('falls back to the phone’s own suggestions when the request fails', async () => {
+    await open(async () => {
+      throw new ApiError({ status: 0, code: 'NETWORK', message: 'offline' });
+    });
+    await waitFor(() => expect(screen.getByText('Organic rice')).toBeTruthy());
+    expect(screen.getByText('Store-brand rice')).toBeTruthy();
+    expect(screen.getByText('Compare unit prices and package sizes before replacing rice.')).toBeTruthy();
+  });
+
+  it('shows the expired-session error with Try Again, and closes with the xmark', async () => {
+    await open(async () => {
+      throw new ApiError({ status: 401, code: 'SIGNED_OUT', message: 'Your session has expired. Please sign in again.' });
+    });
+    await waitFor(() => expect(screen.getByText('Couldn’t load alternatives')).toBeTruthy());
+    expect(screen.getByText('Your session has expired. Please sign in again.')).toBeTruthy();
+    mockAlternatives.mockResolvedValueOnce(ANSWER);
+    await fireEvent.press(screen.getByTestId('alternatives-retry'));
+    await waitFor(() => expect(screen.getByText('Brown rice')).toBeTruthy());
+    await fireEvent.press(screen.getByLabelText('Close alternatives'));
+    expect(screen.queryByText('Item Alternatives')).toBeNull();
+    expect(mockPost).not.toHaveBeenCalled();
   });
 });
