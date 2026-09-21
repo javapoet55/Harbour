@@ -1,6 +1,7 @@
 import { createApiClient } from '../../../api/client';
 import { momentsApi, operationTimeout, type MomentsSnapshot } from '../../../api/moments';
 import { createMomentsStore, reminderStatusText, type MomentsDeps } from '../store';
+import type { ReminderAuthorization } from '../notifications';
 import { draft, moment, plan } from '../testFixtures';
 
 function snapshot(overrides: Partial<MomentsSnapshot> = {}): MomentsSnapshot {
@@ -187,8 +188,10 @@ describe('ImportantMomentsStore', () => {
     (d.authorization as jest.Mock).mockResolvedValue('denied');
     await store.getState().prepareDefaultReminders();
     expect(d.requestAuthorization).toHaveBeenCalledTimes(1);
-    expect(reminderStatusText(store.getState())).toBe('Wish reminders are off in iOS Settings');
+    expect(reminderStatusText(store.getState())).toBe("Wish reminders are off in your phone's Settings");
     expect(reminderStatusText({ reminderStatusLoaded: false, reminderAuthorization: 'authorized' })).toBe('Checking notification permission…');
+    const unknown = 'restricted' as unknown as ReminderAuthorization;
+    expect(reminderStatusText({ reminderStatusLoaded: true, reminderAuthorization: unknown })).toBe("Check notification permission in your phone's Settings");
   });
 
   it('resolves a notification route to an enabled moment, by its id or an editable plan id, for the same owner only', async () => {

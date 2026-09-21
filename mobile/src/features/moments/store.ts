@@ -97,14 +97,17 @@ export const REMINDER_STATUS_TEXT: Record<ReminderAuthorization, string> = {
   authorized: 'Wish reminders are enabled',
   provisional: 'Wish reminders are enabled quietly',
   ephemeral: 'Wish reminders are temporarily enabled',
-  denied: 'Wish reminders are off in iOS Settings',
+  denied: "Wish reminders are off in your phone's Settings",
   notDetermined: 'Allow notifications to enable wish reminders',
 };
+
+export const UNKNOWN_REMINDER_STATUS_TEXT = "Check notification permission in your phone's Settings";
 
 /** `reminderStatusText` (ImportantMomentsStore.swift:27-37). */
 export function reminderStatusText(state: Pick<MomentsState, 'reminderStatusLoaded' | 'reminderAuthorization'>): string {
   if (!state.reminderStatusLoaded) return 'Checking notification permission…';
-  return REMINDER_STATUS_TEXT[state.reminderAuthorization];
+  // Swift's `@unknown default`: a status this build does not know about.
+  return REMINDER_STATUS_TEXT[state.reminderAuthorization] ?? UNKNOWN_REMINDER_STATUS_TEXT;
 }
 
 export function createMomentsStore(deps: MomentsDeps) {
