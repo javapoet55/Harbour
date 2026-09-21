@@ -263,10 +263,11 @@ Use a test list named `Parity …`.
      **Choose from Photos**, then **Take a Picture** (allow the camera): the photo shows in the row.
 103. On an item, turn on **Allow AI image generation** and tap **Generate with AI** once (six per hour).
      Save.
-104. **Mic** → **Add by Voice**: "Ready when you are", the bell, "Listening — keep going". Say "six
-     bananas, one gallon of milk". Tap **Review Items**: "Finishing transcription…", then **Review your
-     items** inside the same sheet. **Add 2 Items**. (This voice review step is still in the Android
-     build; see Known differences.)
+104. **Mic** → **Add by Voice**: "Tap Mic and Talk", the bell, "Listening — keep going". Say "six
+     bananas, one gallon of milk". Tap **Add to List**: "Finishing transcription…", the button reads
+     "Adding…", then the sheet closes and both items are on the list — there is no review step, as with
+     quick add. Clear the transcript to "hmm" and tap **Add to List**: "No items found. Type or dictate
+     an item." and the sheet stays open.
 105. Turn **Allow live voice transcription** off: the mic greys out and the status reads "Enable live
      transcription below to start". Close and reopen — it is still off. Turn it back on.
 106. ⋯ → **List settings** (Save only, greyed with an empty name), **Copy list**, **Uncheck all**,
@@ -323,7 +324,6 @@ decision, or a server-side gap.
 | **Some Moments text says "iOS"** ("Open iOS Settings", "iOS does not allow Nexdo to send Messages automatically"). | The copy is the iPhone's, word for word, pending a decision on Android wording. **Open iOS Settings** opens Android's app settings. |
 | **The greeting card's typeface differs.** | The iPhone uses New York (serif); Android uses its own serif. |
 | **Shopping Lists hides the tab bar**, like Important Moments. | The same reason: the screens sit outside the tab group. |
-| **Shopping Add by Voice still ends with a review step** ("Review Items", then "Review your items") before the items are added. | The iPhone now adds dictated items straight away (`987a90e`). That change has no reference capture yet and was left out of Run D. |
 | **Complete Shopping asks in a centred dialog**, not a popover over the button. | Android has no popover confirmation; the title, message and button are the iPhone's. |
 | **Share Link sends the link as a text message** to the share sheet. | Android's share sheet takes text only. |
 

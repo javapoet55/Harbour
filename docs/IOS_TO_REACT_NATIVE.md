@@ -2058,7 +2058,8 @@ is `<API base URL>/shared/shopping/<token>`.
 `src/features/shopping/voice.ts` ports `ShoppingVoice`: speech started/stopped, committed, transcription
 delta/completed deduplicated by item id, error/failed; five minutes and 12,000 characters at most;
 `finish()` mutes, commits a turn in progress, waits up to 8 seconds for outstanding finals and closes,
-and "Review Items" then sends the transcript to `parse`. The consent switch defaults on and is stored
+and "Review Items" then sends the transcript to `parse`. (Since Run D's D7, following Swift `d76f460`,
+the button is "Add to List" and the parsed items go straight onto the list with no review step.) The consent switch defaults on and is stored
 under Swift's key, `shopping.liveTranscriptionEnabled`. The start cue, `shopping-mic-bell.wav` at half
 volume, plays through expo-audio, the module Read Loud already uses.
 

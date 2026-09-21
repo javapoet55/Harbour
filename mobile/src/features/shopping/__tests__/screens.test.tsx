@@ -298,12 +298,17 @@ describe('List detail', () => {
     expect(mockPost).not.toHaveBeenCalled();
   });
 
-  it('hands the voice transcript to parse and adds the reviewed items', async () => {
+  it('voice adds the parsed items straight to the list and closes — no review step (ShoppingVoice.swift:112-120)', async () => {
     load([list({ items: [] })]);
     mockParams = { id: 'l1' };
     mockPost.mockImplementation(async (envelope) =>
       envelope.operation === 'parse'
-        ? { items: [{ id: 'v1', name: 'bananas', category: 'Produce', quantity: '6', size: '', notes: '', checked: false }] }
+        ? {
+            items: [
+              { id: 'v1', name: 'bananas', category: 'Produce', quantity: '6', size: '', notes: '', checked: false },
+              { id: 'v2', name: '  ', category: 'Other', quantity: '1', size: '', notes: '', checked: false },
+            ],
+          }
         : { list: { ...list({ revision: 8 }), items: envelope.input.items } },
     );
     await render(<Detail />);
@@ -311,14 +316,39 @@ describe('List detail', () => {
     expect(screen.getByText('Add items above or dictate a few groceries.')).toBeTruthy();
     expect(screen.queryByTestId('category-chips')).toBeNull();
     await fireEvent.press(screen.getByTestId('quick-add-mic'));
-    expect(screen.getByTestId('voice-status').props.children).toBe('Ready when you are');
-    expect(screen.getByTestId('voice-review').props.accessibilityState.disabled).toBe(true);
+    expect(screen.getByTestId('voice-status').props.children).toBe('Tap Mic and Talk');
+    expect(screen.getByText('Tap the mic to transcribe in English. Audio is sent only while listening. Nexdo organizes your words into grocery items before adding them.')).toBeTruthy();
+    expect(screen.getByText('Add to List')).toBeTruthy();
+    expect(screen.getByTestId('voice-add').props.accessibilityState.disabled).toBe(true);
     await fireEvent.changeText(screen.getByTestId('voice-transcript'), 'six bananas');
-    await fireEvent.press(screen.getByTestId('voice-review'));
-    await waitFor(() => expect(screen.getByText('Review your items')).toBeTruthy());
-    expect(mockPost).toHaveBeenCalledWith({ operation: 'parse', input: { text: 'six bananas' } });
     await fireEvent.press(screen.getByTestId('voice-add'));
     await waitFor(() => expect(screen.getByTestId('list-counts').props.children).toBe('0 added · 1 items'));
+    expect(mockPost).toHaveBeenCalledWith({ operation: 'parse', input: { text: 'six bananas' } });
+    expect(screen.queryByText('Review your items')).toBeNull();
+    expect(screen.queryByTestId('shopping-voice')).toBeNull();
+    // The same save quick add makes: appended to the list against its revision, blank names dropped.
+    const save = mockPost.mock.calls.find(([envelope]) => envelope.operation === 'save')[0];
+    expect(save).toMatchObject({ operation: 'save', id: 'l1', revision: 7 });
+    expect(save.input.items.map((value: GroceryItem) => value.name)).toEqual(['bananas']);
+  });
+
+  it('voice keeps the sheet open with Swift’s message when nothing is found, and on a failed parse', async () => {
+    load([list()]);
+    mockParams = { id: 'l1' };
+    mockPost
+      .mockResolvedValueOnce({ items: [{ id: 'b', name: ' ', category: 'Other', quantity: '1', size: '', notes: '', checked: false }] })
+      .mockRejectedValueOnce(new ApiError({ status: 500, message: 'The server is busy.' }));
+    await render(<Detail />);
+    await fireEvent.press(screen.getByTestId('quick-add-mic'));
+    await fireEvent.changeText(screen.getByTestId('voice-transcript'), 'hmm');
+    await fireEvent.press(screen.getByTestId('voice-add'));
+    await waitFor(() => expect(screen.getByTestId('voice-error').props.children).toBe('No items found. Type or dictate an item.'));
+    expect(screen.getByTestId('voice-add').props.accessibilityState.disabled).toBe(false);
+    await fireEvent.press(screen.getByTestId('voice-add'));
+    await waitFor(() => expect(screen.getByTestId('voice-error').props.children).toBe('The server is busy.'));
+    expect(screen.getByTestId('shopping-voice')).toBeTruthy();
+    expect(mockPost.mock.calls.every(([envelope]) => envelope.operation === 'parse')).toBe(true);
+    expect(screen.getByTestId('list-counts').props.children).toBe('0 added · 2 items');
   });
 
   it('AI Powered Recommendations opens Ask with this list as its context', async () => {

@@ -9,19 +9,22 @@ import { withAlpha } from '../../components/SignInBackdrop';
 import { Text } from '../../components/Text';
 import { TodayBackdrop } from '../../components/TodayShell';
 import { brand, linearGradientStops, textStyles, useTheme } from '../../theme';
-import { headline, KeyboardDoneBar, MomentCard, MomentPrimary, MomentSheet } from '../moments/components';
-import { FormToggle, MenuPicker } from '../moments/form';
+import { headline, KeyboardDoneBar, MomentPrimary, MomentSheet } from '../moments/components';
+import { FormToggle } from '../moments/form';
 import { createShoppingVoice, playStartBell, useTranscriptionConsent } from './device';
-import { CATEGORIES } from './model';
 import { shoppingStore } from './store';
 import type { ShoppingVoice } from './voice';
 
 const GRADIENT = linearGradientStops([brand.nexdoMagenta, brand.nexdoIndigo, brand.nexdoBlue]);
 
+/** `ShoppingVoiceView`'s "No items found" (ShoppingVoice.swift:117). Quick add has its own wording. */
+export const NO_VOICE_ITEMS = 'No items found. Type or dictate an item.';
+
 /**
- * `ShoppingVoiceView` (ios/App/ShoppingVoice.swift:77-127): ready → listening → stopped, the editable
- * transcript, "Review Items" (which finishes the session and sends the text to the server's `parse`),
- * and the in-place review before "Add N Items". Leaving the sheet or the app closes the session.
+ * `ShoppingVoiceView` (ios/App/ShoppingVoice.swift:77-121): ready → listening → stopped, the editable
+ * transcript, and "Add to List", which finishes the session, sends the text to the server's `parse`
+ * and hands the items straight to the list — the review step went in `d76f460`, matching quick add.
+ * Leaving the sheet or the app closes the session.
  */
 export function VoiceSheet({ visible, onAdd, onClose }: { visible: boolean; onAdd: (items: GroceryItem[]) => void; onClose: () => void }) {
   return visible ? <VoiceBody onAdd={onAdd} onClose={onClose} /> : null;
@@ -33,8 +36,6 @@ function VoiceBody({ onAdd, onClose }: { onAdd: (items: GroceryItem[]) => void; 
   const state = useStore(voice.state);
   const consent = useTranscriptionConsent((value) => value.enabled);
   const setConsent = useTranscriptionConsent((value) => value.setEnabled);
-  const [review, setReview] = useState<GroceryItem[]>([]);
-  const [reviewing, setReviewing] = useState(false);
   const [parsing, setParsing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -60,21 +61,25 @@ function VoiceBody({ onAdd, onClose }: { onAdd: (items: GroceryItem[]) => void; 
     void (state.listening ? voice.finish() : voice.start());
   };
 
-  const reviewItems = async () => {
+  /** `addItems()` (ShoppingVoice.swift:112-120): blank names are dropped; on success the sheet closes. */
+  const addItems = async () => {
     setParsing(true);
+    setError(null);
     await voice.finish();
     try {
-      const items = await shoppingStore.getState().parse(voice.state.getState().text);
-      setReview(items);
-      setReviewing(items.length > 0);
-      if (items.length === 0) setError('No items found. Type or dictate an item.');
+      const items = (await shoppingStore.getState().parse(voice.state.getState().text)).filter((item) => item.name.trim() !== '');
+      if (items.length === 0) {
+        setError(NO_VOICE_ITEMS);
+        setParsing(false);
+        return;
+      }
+      onAdd(items);
+      close();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : String(caught));
+      setParsing(false);
     }
-    setParsing(false);
   };
-
-  const update = (id: string, patch: Partial<GroceryItem>) => setReview((items) => items.map((item) => (item.id === id ? { ...item, ...patch } : item)));
   const status = !consent
     ? 'Enable live transcription below to start'
     : state.finishing
@@ -83,7 +88,7 @@ function VoiceBody({ onAdd, onClose }: { onAdd: (items: GroceryItem[]) => void; 
         ? 'Connecting…'
         : state.listening
           ? 'Listening — keep going'
-          : 'Ready when you are';
+          : 'Tap Mic and Talk';
   const micDisabled = !consent || state.connecting || state.finishing;
   const message = error ?? state.error;
 
@@ -92,95 +97,54 @@ function VoiceBody({ onAdd, onClose }: { onAdd: (items: GroceryItem[]) => void; 
       <View style={styles.fill}>
         <TodayBackdrop />
         <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.content}>
-          <Text style={[textStyles.largeTitle, styles.bold, styles.center, { color: theme.colors.label }]}>{reviewing ? 'Review your items' : 'Tell me what to add'}</Text>
+          <Text style={[textStyles.largeTitle, styles.bold, styles.center, { color: theme.colors.label }]}>Tell me what to add</Text>
           <Text style={[textStyles.body, styles.center, { color: theme.colors.secondaryLabel }]}>Try “six bananas, one gallon of milk, and two bags of rice 5 kg.”</Text>
-          {!reviewing ? (
-            <>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={state.listening ? 'Pause listening' : 'Start listening'}
-                accessibilityState={{ disabled: micDisabled }}
-                disabled={micDisabled}
-                onPress={toggleMic}
-                style={[styles.micShadow, micDisabled && styles.dimmed]}
-                testID="voice-mic"
-              >
-                <LinearGradient colors={GRADIENT} start={{ x: 0, y: 0.5 }} end={{ x: 1, y: 0.5 }} style={styles.mic}>
-                  <Ionicons name={state.listening ? 'pause' : 'mic'} size={48} color="#FFFFFF" />
-                </LinearGradient>
-              </Pressable>
-              <Text style={[headline, styles.center, { color: theme.colors.label }]} testID="voice-status">
-                {status}
-              </Text>
-              <View style={styles.stretch}>
-                <FormToggle
-                  label="Allow live voice transcription"
-                  value={consent}
-                  onValueChange={(value) => {
-                    setConsent(value);
-                    if (!value) voice.close();
-                  }}
-                  testID="voice-consent"
-                />
-              </View>
-              <Text style={[styles.caption, styles.stretch, { color: theme.colors.secondaryLabel }]}>
-                Tap the mic to transcribe in English. Audio is sent only while listening. Review items before adding them.
-              </Text>
-              {/* `TextEditor(…).frame(minHeight: 120).padding(10).background(.ultraThinMaterial, in: 16)`: the
-                  editor keeps its own white background, inset 10pt inside the material card. */}
-              <View style={[styles.transcriptCard, { backgroundColor: theme.colors.glassFill }]}>
-                <TextInput
-                  accessibilityLabel="Shopping transcript"
-                  multiline
-                  onChangeText={(text) => voice.setText(text)}
-                  style={[styles.transcript, { color: theme.colors.label, backgroundColor: theme.colors.backgroundElevated }]}
-                  testID="voice-transcript"
-                  textAlignVertical="top"
-                  value={state.text}
-                />
-              </View>
-              <View style={styles.stretch}>
-                <MomentPrimary title={parsing ? 'Organizing…' : 'Review Items'} onPress={() => void reviewItems()} disabled={parsing || state.text.trim() === ''} testID="voice-review" />
-              </View>
-            </>
-          ) : (
-            <>
-              {review.map((item) => (
-                <View key={item.id} style={styles.stretch}>
-                  <MomentCard>
-                    <Field placeholder="Item" value={item.name} onChangeText={(name) => update(item.id, { name })} testID={`voice-item-${item.id}`} />
-                    <View style={styles.inline}>
-                      <View style={styles.grow}>
-                        <Field placeholder="Quantity" value={item.quantity} onChangeText={(quantity) => update(item.id, { quantity })} />
-                      </View>
-                      <View style={styles.grow}>
-                        <Field placeholder="Size" value={item.size} onChangeText={(size) => update(item.id, { size })} />
-                      </View>
-                    </View>
-                    <MenuPicker hideLabel label="Category" options={CATEGORIES.map((value) => ({ value, title: value }))} value={item.category} onChange={(category) => update(item.id, { category })} testID={`voice-category-${item.id}`} />
-                    <Field placeholder="Notes" value={item.notes} onChangeText={(notes) => update(item.id, { notes })} />
-                    <Pressable accessibilityRole="button" onPress={() => setReview((items) => items.filter((value) => value.id !== item.id))} testID={`voice-remove-${item.id}`}>
-                      <Text style={[textStyles.body, { color: theme.colors.danger }]}>Remove</Text>
-                    </Pressable>
-                  </MomentCard>
-                </View>
-              ))}
-              <View style={styles.stretch}>
-                <MomentPrimary
-                  title={`Add ${review.length} Items`}
-                  onPress={() => {
-                    onAdd(review);
-                    close();
-                  }}
-                  disabled={review.length === 0 || review.some((item) => item.name.trim() === '')}
-                  testID="voice-add"
-                />
-              </View>
-              <Pressable accessibilityRole="button" onPress={() => setReviewing(false)} testID="voice-keep-dictating">
-                <Text style={[textStyles.body, { color: theme.colors.tint }]}>Keep dictating</Text>
-              </Pressable>
-            </>
-          )}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={state.listening ? 'Pause listening' : 'Start listening'}
+            accessibilityState={{ disabled: micDisabled }}
+            disabled={micDisabled}
+            onPress={toggleMic}
+            style={[styles.micShadow, micDisabled && styles.dimmed]}
+            testID="voice-mic"
+          >
+            <LinearGradient colors={GRADIENT} start={{ x: 0, y: 0.5 }} end={{ x: 1, y: 0.5 }} style={styles.mic}>
+              <Ionicons name={state.listening ? 'pause' : 'mic'} size={48} color="#FFFFFF" />
+            </LinearGradient>
+          </Pressable>
+          <Text style={[headline, styles.center, { color: theme.colors.label }]} testID="voice-status">
+            {status}
+          </Text>
+          <View style={styles.stretch}>
+            <FormToggle
+              label="Allow live voice transcription"
+              value={consent}
+              onValueChange={(value) => {
+                setConsent(value);
+                if (!value) voice.close();
+              }}
+              testID="voice-consent"
+            />
+          </View>
+          <Text style={[styles.caption, styles.stretch, { color: theme.colors.secondaryLabel }]}>
+            Tap the mic to transcribe in English. Audio is sent only while listening. Nexdo organizes your words into grocery items before adding them.
+          </Text>
+          {/* `TextEditor(…).frame(minHeight: 120).padding(10).background(.ultraThinMaterial, in: 16)`: the
+              editor keeps its own white background, inset 10pt inside the material card. */}
+          <View style={[styles.transcriptCard, { backgroundColor: theme.colors.glassFill }]}>
+            <TextInput
+              accessibilityLabel="Shopping transcript"
+              multiline
+              onChangeText={(text) => voice.setText(text)}
+              style={[styles.transcript, { color: theme.colors.label, backgroundColor: theme.colors.backgroundElevated }]}
+              testID="voice-transcript"
+              textAlignVertical="top"
+              value={state.text}
+            />
+          </View>
+          <View style={styles.stretch}>
+            <MomentPrimary title={parsing ? 'Adding…' : 'Add to List'} onPress={() => void addItems()} disabled={parsing || state.text.trim() === ''} testID="voice-add" />
+          </View>
           {message ? (
             <Text style={[textStyles.body, styles.stretch, { color: theme.colors.danger }]} testID="voice-error">
               {message}
@@ -190,21 +154,6 @@ function VoiceBody({ onAdd, onClose }: { onAdd: (items: GroceryItem[]) => void; 
         <KeyboardDoneBar />
       </View>
     </MomentSheet>
-  );
-}
-
-function Field({ placeholder, value, onChangeText, testID }: { placeholder: string; value: string; onChangeText: (value: string) => void; testID?: string }) {
-  const theme = useTheme();
-  return (
-    <TextInput
-      accessibilityLabel={placeholder}
-      onChangeText={onChangeText}
-      placeholder={placeholder}
-      placeholderTextColor={theme.colors.placeholder}
-      style={[styles.field, { color: theme.colors.label }]}
-      testID={testID}
-      value={value}
-    />
   );
 }
 
@@ -220,7 +169,4 @@ const styles = StyleSheet.create({
   caption: { fontSize: 12, lineHeight: 16 },
   transcriptCard: { alignSelf: 'stretch', padding: 10, borderRadius: 16 },
   transcript: { minHeight: 120, paddingHorizontal: 5, paddingVertical: 8, fontSize: 17 },
-  inline: { flexDirection: 'row', gap: 8 },
-  grow: { flex: 1 },
-  field: { fontSize: 17, paddingVertical: 4, backgroundColor: 'transparent' },
 });
