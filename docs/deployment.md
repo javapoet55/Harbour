@@ -7,8 +7,16 @@
 3. Optionally set SendGrid, Twilio, VAPID, OpenAI, and calendar OAuth client IDs.
    - Set `HARBOR_CREDENTIAL_ENCRYPTION_KEY` to 32 random bytes encoded as 64 hex characters.
    - Register the exact Google and Microsoft callback URLs shown in `.env.example` (replace the local origin in production).
-   - Configure a verified `SENDGRID_FROM_EMAIL`, a Twilio sender, and a `VAPID_SUBJECT` contact URI.
-   - Sign-up email verification and password reset require `SENDGRID_API_KEY` and a verified `SENDGRID_FROM_EMAIL` in production. Both send a six-digit, one-time code: verification codes expire after 24 hours and reset codes after 15 minutes. Five wrong entries lock a code until a new one is sent.
+   - Configure a verified sender (`EMAIL_FROM_ADDRESS`, or the older `SENDGRID_FROM_EMAIL`), a Twilio sender, and a `VAPID_SUBJECT` contact URI.
+   - Sign-up email verification and password reset require `SENDGRID_API_KEY` and a verified sender address (`EMAIL_FROM_ADDRESS`, falling back to `SENDGRID_FROM_EMAIL`) in production. Both send a six-digit, one-time code: verification codes expire after 24 hours and reset codes after 15 minutes. Five wrong entries lock a code until a new one is sent.
+   - Transactional emails share one branded template (`src/server/email/template.ts`); `src/server/email/messages.ts` holds the verification, password reset, admin sign-in, reminder and test-notification emails. Email variables:
+     - `EMAIL_FROM_ADDRESS`: sender address. Falls back to `SENDGRID_FROM_EMAIL`.
+     - `EMAIL_FROM_NAME`: sender name, e.g. `Nexdo`. Falls back to `SENDGRID_FROM_NAME`, then `Nexdo`.
+     - `EMAIL_SUPPORT_ADDRESS`: support address in the footer. Falls back to the sender address.
+     - `APP_URL`: public HTTPS origin that serves `public/email/nexdo-logo-email.png`. Falls back to `https://harbour-production-f8a0.up.railway.app`. Set it when the app moves to its own domain.
+   - The sender is currently the single-sender-verified `support@pgrentalapp.com`. Once SendGrid domain authentication (SPF/DKIM) is done for nexdoai.com, move `EMAIL_FROM_ADDRESS` to a nexdoai.com address.
+   - Admin sign-in codes use the same template but are still sent only through Hostinger (`HOSTINGER_MAIL_API_KEY`, `NEXDO_ADMIN_FROM_EMAIL`).
+   - Preview every email with `npx tsx scripts/render-email-previews.ts`, which writes HTML and text to `output/email-previews/`. It never sends email.
    - Native Sign in with Apple requires `APPLE_CLIENT_ID=com.pinslots.nexdo`, `APPLE_TEAM_ID`, `APPLE_KEY_ID`, and the Sign in with Apple `.p8` contents in `APPLE_PRIVATE_KEY`. Keep the private key server-side only.
 4. Set `HARBOR_CRON_SECRET`, then point a cron job at `POST /api/notifications` with `Authorization: Bearer <HARBOR_CRON_SECRET>` and `{ "action": "tick" }` every minute. Do not rely on an open browser tab.
    Point a second job at `POST /api/calendar/sync` with the same bearer token every 5–15 minutes. It incrementally syncs every connected calendar and refreshes continuous-replanning proposals.

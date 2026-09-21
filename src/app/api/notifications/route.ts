@@ -4,6 +4,7 @@ import { requireUser } from '@/server/auth';
 import { prisma } from '@/server/db';
 import { acknowledgeReminder, tickReminders } from '@/server/reminders';
 import { emailProvider, pushProvider, smsProvider } from '@/providers';
+import { testNotificationMessage } from '@/server/email/messages';
 
 async function healthHandlerGET() {
   const user = await requireUser();
@@ -36,7 +37,7 @@ async function healthHandlerPOST(req: Request) {
   if (body.action === 'test') {
     const channel = body.channel === 'email' || body.channel === 'sms' ? body.channel : 'push';
     const result = channel === 'email'
-      ? await emailProvider.send({ to: user.email, subject: 'Harbour test notification', text: 'Your email notifications are working.' })
+      ? await emailProvider.send({ to: user.email, ...testNotificationMessage() })
       : channel === 'sms'
         ? user.preference?.phoneNumber
           ? await smsProvider.send({ to: user.preference.phoneNumber, text: 'Harbour: your SMS notifications are working.' })
