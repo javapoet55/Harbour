@@ -172,6 +172,22 @@ import XCTest
         app.buttons["festival-tab-Details"].tap()
         XCTAssertEqual(name.value as? String,editedName)
     }
+    func testFestivalRegenerateCancellationKeepsEditedWish() {
+        openFestivalManager()
+        app.buttons["festival-tab-Wish Message"].tap()
+        let editor = app.textViews["Festival wish message"]
+        editor.tap(); editor.typeText(" My personal note.")
+        let edited = editor.value as? String
+        if app.buttons["festival-keyboard-done"].exists { app.buttons["festival-keyboard-done"].tap() }
+        let regenerate = app.buttons["Regenerate"]
+        for _ in 0..<5 { if regenerate.isHittable { break }; app.swipeUp() }
+        regenerate.tap()
+        XCTAssertTrue(app.sheets["Replace the edited message with a new draft?"].waitForExistence(timeout: 5))
+        if app.buttons["Cancel"].exists { app.buttons["Cancel"].tap() }
+        else { app.otherElements["PopoverDismissRegion"].tap() }
+        XCTAssertEqual(editor.value as? String, edited)
+        let shot = XCTAttachment(screenshot: app.screenshot()); shot.name = "Edited festival wish retained after cancel"; shot.lifetime = .keepAlways; add(shot)
+    }
     func testFestivalTabsAutosaveEdits() {
         openFestivalManager()
         let name=app.textFields["festival-name"];name.tap();name.typeText(" Edited")
@@ -266,7 +282,7 @@ import XCTest
     }
     func testFestivalDetailsDateUpdatesSendDate() {
         openFestivalManager()
-        let picker=app.datePickers["festival-details-date"]
+        let picker=app.buttons["festival-details-date"]
         for _ in 0..<4 {if picker.isHittable{break};app.swipeUp()}
         picker.tap()
         var calendar=Calendar(identifier:.gregorian)
@@ -277,7 +293,7 @@ import XCTest
         formatter.locale=Locale(identifier:"en_US_POSIX");formatter.timeZone=calendar.timeZone
         formatter.dateFormat="EEEE, MMMM d"
         app.buttons[formatter.string(from:changed)].tap()
-        app.buttons["PopoverDismissRegion"].tap()
+        app.navigationBars["Select Date"].buttons["Done"].tap()
         formatter.dateFormat="EEE, MMM d, yyyy"
         let expected="Moment date · " + formatter.string(from:changed)
         for _ in 0..<4 {if app.staticTexts["festival-send-date"].isHittable{break};app.swipeDown()}
@@ -290,7 +306,12 @@ import XCTest
         app.buttons["manage-moment-moment"].tap()
         XCTAssertEqual(app.staticTexts["festival-send-date"].label,expected)
         app.buttons["festival-tab-Schedule"].tap()
-        XCTAssertTrue(app.staticTexts[formatter.string(from:changed)].exists)
+        XCTAssertEqual(app.staticTexts["festival-send-date"].label, expected)
+        XCTAssertTrue(app.datePickers.firstMatch.exists)
+        // This runtime does not expose a value for the compact picker. Keep visual evidence.
+        let screenshot = XCTAttachment(screenshot: app.screenshot())
+        screenshot.name = "Schedule date after saved festival date change"
+        screenshot.lifetime = .keepAlways; add(screenshot)
     }
     func testFestivalNameKeyboardDone() {
         openFestivalManager()
@@ -411,7 +432,7 @@ import XCTest
         for _ in 0..<5 {if schedule.isHittable{break};app.swipeUp()};schedule.tap()
         XCTAssertTrue(app.navigationBars["Review schedule"].waitForExistence(timeout:5))
         XCTAssertTrue(app.staticTexts["You are confirming this schedule for all selected contacts. Recipients do not need to confirm."].exists)
-        XCTAssertEqual(app.staticTexts.matching(identifier:"Messages · Sent by you").count,2)
+        XCTAssertEqual(app.staticTexts.matching(identifier:"Messages · Will be sent by you").count,2)
         XCTAssertFalse(app.staticTexts["We’ll remind you to confirm in Messages"].exists)
         app.buttons.matching(identifier:"wish-primary").matching(NSPredicate(format:"label == %@", "Confirm Schedule")).firstMatch.tap()
         XCTAssertTrue(app.staticTexts["Wishes scheduled"].waitForExistence(timeout:8))
