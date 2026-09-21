@@ -1,9 +1,10 @@
+import { healthRoute } from '@/server/health/telemetry';
 import { NextResponse } from 'next/server';
 import { requireUser } from '@/server/auth';
 import { buildWeeklySummary, startOfAccountWeek } from '@/server/weekly-summary';
 import { jsonError } from '@/lib/http';
 
-export async function GET(request: Request) {
+async function healthHandlerGET(request: Request) {
   try {
     const user = await requireUser();
     const start = new URL(request.url).searchParams.get('start') ?? startOfAccountWeek(user.timeZone);
@@ -17,3 +18,5 @@ export async function GET(request: Request) {
     return jsonError(error);
   }
 }
+
+export const GET = healthRoute('GET /api/weekly-summary', healthHandlerGET);

@@ -1,3 +1,4 @@
+import { healthRoute } from '@/server/health/telemetry';
 import { NextResponse } from 'next/server';
 import { requireUser } from '@/server/auth';
 import { prisma } from '@/server/db';
@@ -6,7 +7,7 @@ import { revokeAppleIdentity } from '@/server/apple-auth';
 import { revokeEmail } from '@/server/moments/email';
 import { jsonError } from '@/lib/http';
 
-export async function DELETE() {
+async function healthHandlerDELETE() {
   try {
     const user = await requireUser();
     if (await prisma.deliveryPlan.count({where:{draft:{moment:{userId:user.id}},status:'SENDING'}})) return NextResponse.json({error:'A wish is being submitted. Wait for its status before deleting your account.'},{status:409});
@@ -20,3 +21,5 @@ export async function DELETE() {
     return jsonError(error);
   }
 }
+
+export const DELETE = healthRoute('DELETE /api/account', healthHandlerDELETE);

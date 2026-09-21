@@ -1,3 +1,5 @@
+import { observedFetch } from '@/server/health/telemetry';
+import { healthRoute } from '@/server/health/telemetry';
 import { requireUser } from '@/server/auth';
 import { jsonError } from '@/lib/http';
 
@@ -32,7 +34,7 @@ async function readAudio(req: Request): Promise<Blob | null> {
   return file;
 }
 
-export async function POST(req: Request) {
+async function healthHandlerPOST(req: Request) {
   try { await requireUser(); } catch (err) { return jsonError(err); }
   try {
     const audio = await readAudio(req);
@@ -43,7 +45,7 @@ export async function POST(req: Request) {
     form.set('file', audio, 'voice.m4a');
     form.set('model', 'gpt-4o-mini-transcribe');
     form.set('response_format', 'json');
-    const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+    const response = await observedFetch('https://api.openai.com/v1/audio/transcriptions', {
       method: 'POST', headers: { Authorization: `Bearer ${key}` }, body: form,
       signal: AbortSignal.any([req.signal, AbortSignal.timeout(45000)]),
     });
@@ -58,3 +60,5 @@ export async function POST(req: Request) {
     return failure('Couldn’t transcribe your recording. Please try again.', 502);
   }
 }
+
+export const POST = healthRoute('POST /api/transcribe', healthHandlerPOST);

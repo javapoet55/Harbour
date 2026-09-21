@@ -1,3 +1,4 @@
+import { observedFetch } from '@/server/health/telemetry';
 import type { EmailProvider, PushProvider, SmsProvider } from './types';
 import webpush from 'web-push';
 import { prisma } from '@/server/db';
@@ -16,7 +17,7 @@ export const emailProvider: EmailProvider = {
     const from = process.env.SENDGRID_FROM_EMAIL;
     if (!from) return { id: '', status: 'FAILED', reason: 'SENDGRID_FROM_EMAIL is not configured' };
     try {
-      const response = await fetch('https://api.sendgrid.com/v3/mail/send', {
+      const response = await observedFetch('https://api.sendgrid.com/v3/mail/send', {
         method: 'POST',
         headers: { Authorization: `Bearer ${process.env.SENDGRID_API_KEY}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ personalizations: [{ to: [{ email: message.to }] }], from: { email: from, name: process.env.SENDGRID_FROM_NAME || 'Harbour' }, subject: message.subject, content: [{ type: 'text/plain', value: message.text }, ...(message.html ? [{ type: 'text/html', value: message.html }] : [])] }),
@@ -39,7 +40,7 @@ export const smsProvider: SmsProvider = {
     const token = process.env.TWILIO_AUTH_TOKEN;
     if (!from || !token) return { id: '', status: 'FAILED', reason: 'Twilio sender or auth token is not configured' };
     try {
-      const response = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${encodeURIComponent(sid)}/Messages.json`, {
+      const response = await observedFetch(`https://api.twilio.com/2010-04-01/Accounts/${encodeURIComponent(sid)}/Messages.json`, {
         method: 'POST',
         headers: { Authorization: `Basic ${Buffer.from(`${sid}:${token}`).toString('base64')}`, 'Content-Type': 'application/x-www-form-urlencoded' },
         body: new URLSearchParams({ To: message.to, From: from, Body: message.text }),

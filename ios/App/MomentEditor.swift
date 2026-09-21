@@ -9,7 +9,7 @@ struct MomentEditor: View {
     var imported: MomentInput? = nil
     var onDone: (() -> Void)? = nil
     @State private var input = MomentInput()
-    @State private var date = Date()
+    @State private var date = Calendar.current.date(byAdding:.day,value:1,to:Date()) ?? Date().addingTimeInterval(86_400)
     @State private var initialized = false
     @State private var dateConfirmed = true
     @State private var choosingRecipient = false
@@ -40,6 +40,9 @@ struct MomentEditor: View {
                 })) { ForEach(["birthday","anniversary","festival","getWellSoon","custom"], id: \.self) { Text(ImportantMoment.label(for:$0)).tag($0) } }.accessibilityIdentifier("moment-type")
                 TextField("Title", text: $input.title).focused($focusedField, equals: .title).submitLabel(.done)
                 DatePicker("Date", selection: $date, displayedComponents: .date).environment(\.timeZone, TimeZone(identifier: input.timeZoneID) ?? .current)
+                if MomentDates.day(date,zone:input.timeZoneID) < MomentDates.day(Date(),zone:input.timeZoneID) {
+                    Text(input.yearly ? "The original date is kept; the next yearly occurrence appears in Moments." : "This date is in the past. You can save it, but choose a future time before scheduling delivery.").font(.caption).foregroundStyle(.secondary)
+                }
                 Picker("Time zone", selection: $input.timeZoneID) { ForEach(TimeZone.knownTimeZoneIdentifiers, id: \.self) { Text($0) } }
                 if !dateConfirmed { Toggle("I have confirmed the event date", isOn: $dateConfirmed) }
                 Toggle("Repeat yearly", isOn: $input.yearly)
@@ -88,8 +91,11 @@ struct MomentEditor: View {
                 Section("Greeting Card") {MomentGreetingCardSection(moment:moment,store:store)}
             }
             if let error = store.error { Text(error).foregroundStyle(.red) }
-            Button(completedSave ? "Open Saved Moment" : input.type == "festival" && !festivalRecipients.isEmpty ? "Save for \(festivalRecipients.count) contacts" : "Save Moment", action: save)
+            MomentPrimary(title:moment == nil ? "Save Moment & Continue":"Save Changes",action:save)
                 .disabled(saveDisabled)
+                .listRowInsets(EdgeInsets(top:12,leading:20,bottom:16,trailing:20))
+                .listRowBackground(Color.clear)
+                .accessibilityIdentifier("moment-save-continue")
 
         }
         .disabled(store.busy)
@@ -229,9 +235,9 @@ struct MomentSettingsView: View {
                 } else if store.reminderAuthorization == .notDetermined {
                     Button("Enable wish reminders") { Task { await store.enableWishReminders() } }
                 }
-                Text("Reminders are on by default once you allow iOS notifications. They apply to wishes you schedule; enabling them does not send messages.").font(.caption)
-                Button("Open iOS Settings") { if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) } }
-                Text("Reminders require notifications. Denied or limited Contacts and Calendar access can be changed in iOS Settings.").font(.caption)
+                Text("Reminders are on by default once you allow notifications. They apply to wishes you schedule; enabling them does not send messages.").font(.caption)
+                Button("Open Settings") { if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) } }
+                Text("Reminders require notifications. Denied or limited Contacts and Calendar access can be changed in your phone’s Settings.").font(.caption)
             }
             Section("Privacy") { Button("Delete all Important Moments data", role: .destructive) { delete = true }; Text("Deletes moments, drafts, delivery history and the connected email credentials. An email already submitted cannot be recalled.").font(.caption) }
             if let error = store.error { Text(error).foregroundStyle(.red) }
@@ -296,7 +302,7 @@ struct MomentCalendarImportView: View {
             Text("Nexdo reads only the calendar you choose to suggest recurring birthday or anniversary candidates. You review each candidate before saving. Calendar access stays on this device.")
             Button("Allow calendar access") { Task {
                 loading = true; defer { loading = false }
-                do { calendars = try await service.calendars() } catch { self.error = "Calendar access is unavailable. Enable Calendar access for Nexdo in iOS Settings." }
+                do { calendars = try await service.calendars() } catch { self.error = "Calendar access is unavailable. Enable Calendar access for Nexdo in your phone’s Settings." }
             } }
             ForEach(calendars) { calendar in Button(calendar.title) { Task { candidates = await service.candidates(calendarID: calendar.id) } } }
             if loading { ProgressView() }

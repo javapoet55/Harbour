@@ -9,6 +9,7 @@ datasource db {
 }
 
 model User {
+  adminLoginTokens AdminLoginToken[]
   shoppingLists ShoppingList[]
   id           String   @id @default(cuid())
   email        String   @unique
@@ -181,6 +182,9 @@ model Task {
   minFocusMin          Int       @default(15)
   energyLevel          String    @default("MEDIUM")
   reminderAt           DateTime?
+  lifeReminderType     String?
+  lifeReminderConfidence Float?
+  originalUserText     String?
   waitingOn            String?
   assignee             String?
   timeZone             String    @default("America/Los_Angeles")
@@ -515,4 +519,70 @@ model ShoppingItem {
   checked Boolean @default(false)
   sortOrder Int @default(0)
   @@index([listId, sortOrder])
+}
+
+model AdminLoginToken {
+  id String @id
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  codeHash String
+  expiresAt DateTime
+  usedAt DateTime?
+  attempts Int @default(0)
+  createdAt DateTime @default(now())
+  sessionHash String? @unique
+  sessionExpiresAt DateTime?
+  @@index([userId, createdAt])
+}
+
+model HealthEvent {
+  id String @id @default(cuid())
+  createdAt DateTime @default(now())
+  kind String
+  service String
+  operation String
+  feature String
+  model String?
+  traceId String
+  status Int
+  durationMs Float
+  errorCode String?
+  inputTokens Int?
+  outputTokens Int?
+  costUsd Float?
+  @@index([createdAt])
+  @@index([kind, service, createdAt])
+  @@index([traceId])
+}
+
+model HealthIncident {
+  id String @id @default(cuid())
+  activeKey String? @unique
+  service String
+  severity String
+  trigger String
+  status String @default("OPEN")
+  ownerId String?
+  startedAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  resolvedAt DateTime?
+  @@index([startedAt])
+}
+
+model HealthRule {
+  id String @id
+  threshold Float
+  minimumSamples Int @default(20)
+  enabled Boolean @default(true)
+  updatedAt DateTime @updatedAt
+}
+
+model HealthAudit {
+  id String @id @default(cuid())
+  createdAt DateTime @default(now())
+  actorId String
+  action String
+  targetId String
+  detail String
+  @@index([targetId, createdAt])
 }

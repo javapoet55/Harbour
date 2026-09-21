@@ -1,9 +1,10 @@
+import { healthRoute } from '@/server/health/telemetry';
 import { NextResponse } from 'next/server';
 import { verifyEmail } from '@/server/account-auth';
 import { writeSession } from '@/server/session';
 import { jsonError } from '@/lib/http';
 
-export async function POST(req: Request) {
+async function healthHandlerPOST(req: Request) {
   try {
     const body = await req.json().catch(() => ({}));
     const user = await verifyEmail(String(body.email ?? ''), String(body.code ?? ''));
@@ -13,3 +14,5 @@ export async function POST(req: Request) {
     return jsonError(error);
   }
 }
+
+export const POST = healthRoute('POST /api/auth/verify-email', healthHandlerPOST);

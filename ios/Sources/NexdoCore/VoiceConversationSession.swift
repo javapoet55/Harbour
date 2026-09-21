@@ -7,7 +7,7 @@ public struct VoiceTaskSession: Decodable, Sendable {
     public let model: String
 }
 public enum VoicePhase: String, Sendable {
-    case idle, connecting, listening, userSpeaking, processing, toolExecution, assistantSpeaking, closing, disconnected, connectionLost
+    case idle, connecting, reconnecting, paused, listening, userSpeaking, processing, toolExecution, assistantSpeaking, closing, disconnected, connectionLost
 }
 /// The model resolves conversational meaning; this guard prevents ambiguous
 /// short answers from bypassing the question that was active when speech began.
@@ -59,6 +59,9 @@ public struct VoiceTelemetry: Sendable {
     public var toolCalls = 0
     public var toolFailures = 0
     public var interruptions = 0
+    public var reconnectAttempts = 0
+    public var successfulReconnects = 0
+    public var audioInterruptions = 0
     public var terminationReason: VoiceTerminationReason?
 }
 @MainActor public protocol VoiceRealtimeTransport: AnyObject {
@@ -67,11 +70,13 @@ public struct VoiceTelemetry: Sendable {
     func connect(credential: VoiceTaskSession) async throws
     func send(_ data: Data) throws
     func setMuted(_ muted: Bool)
+    func resumeAudio() async throws
     func silencePlayback()
     func close()
     func closeAfterReleasingAudio(_ completion: @escaping @MainActor () -> Void)
 }
 public extension VoiceRealtimeTransport {
+    func resumeAudio() async throws {}
     func closeAfterReleasingAudio(_ completion: @escaping @MainActor () -> Void) { close(); completion() }
 }
 @MainActor public protocol VoiceToolExecuting: AnyObject {
@@ -86,6 +91,7 @@ public extension VoiceRealtimeTransport {
     @Published public private(set) var transcript = ""
     @Published public private(set) var reply = ""
     @Published public private(set) var error: String?
+    @Published public private(set) var connectionFailureDetail: String?
     @Published public private(set) var sessionCreatedTasks: [NexdoTask] = []
     public private(set) var context = VoiceTaskSessionContext()
     public private(set) var telemetry = VoiceTelemetry()
@@ -121,6 +127,10 @@ public extension VoiceRealtimeTransport {
     private var worker: Task<Void, Never>?
     private var starter: Task<Void, Never>?
     private var didDisconnect = false
+    private var connectionEpoch = 0
+    private var isReconnecting = false
+    private var audioInterrupted = false
+    private var mutedBeforeInterruption = false
 
     public init(transport: any VoiceRealtimeTransport, executor: any VoiceToolExecuting, timeouts: VoiceTimeoutConfiguration = .init(), now: @escaping () -> Date = Date.init) {
         self.transport = transport; self.executor = executor; self.timeouts = timeouts; self.now = now
@@ -132,6 +142,8 @@ public extension VoiceRealtimeTransport {
         switch phase {
         case .idle: return "Ready"
         case .connecting: return "Connecting…"
+        case .reconnecting: return "Reconnecting…"
+        case .paused: return "Paused…"
         case .listening: return "Listening…"
         case .userSpeaking: return "Listening to you…"
         case .processing: return "Understanding…"
@@ -144,6 +156,7 @@ public extension VoiceRealtimeTransport {
     }
     public func start(credential: VoiceTaskSession) {
         guard phase == .idle else { return }
+        error = nil
         started = now(); activity = started; telemetry.model = credential.model
         setPhase(.connecting)
         let run = generation
@@ -153,11 +166,46 @@ public extension VoiceRealtimeTransport {
                 guard credential.expiresAt > now().timeIntervalSince1970 else { throw URLError(.userAuthenticationRequired) }
                 try await transport.connect(credential: credential)
                 guard run == generation else { return }
-            } catch { if run == generation { fail() } }
+            } catch { if run == generation { fail(error.localizedDescription) } }
         }
     }
+    /// Replaces a failed WebRTC connection while preserving the logical voice
+    /// session, saved tasks, idempotency keys, and clarification context.
+    public func reconnect(credential: VoiceTaskSession) {
+        guard phase == .connectionLost else { return }
+        starter?.cancel(); starter = nil
+        didDisconnect = false; error = nil; isReconnecting = true
+        responsePending = false; responseCompleted = false; audioPlaying = false; audioFinished = false
+        activeResponse = nil; playbackResponse = nil; userSpeaking = false; needsResponse = false
+        audioInterrupted = false; backgrounded = nil
+        telemetry.reconnectAttempts += 1
+        setPhase(.reconnecting)
+        let run = generation
+        starter = Task { [weak self] in
+            guard let self else { return }
+            do {
+                guard credential.expiresAt > now().timeIntervalSince1970 else { throw URLError(.userAuthenticationRequired) }
+                try await transport.connect(credential: credential)
+                guard run == generation else { return }
+            } catch { if run == generation { fail(error.localizedDescription) } }
+        }
+    }
+    public func restart(credential: VoiceTaskSession) {
+        guard phase == .connectionLost || phase == .disconnected else { return }
+        starter?.cancel(); starter = nil
+        didDisconnect = false; muted = false; error = nil; connectionFailureDetail = nil
+        sessionID = UUID(); generation = UUID(); context = .init(); telemetry = .init()
+        isReconnecting = false; audioInterrupted = false; mutedBeforeInterruption = false
+        backgrounded = nil; warned = false; playbackResponse = nil; activeResponse = nil
+        responsePending = false; responseCompleted = false; audioPlaying = false; audioFinished = false
+        userSpeaking = false; needsResponse = false; closingReason = nil
+        results.removeAll(); queuedIDs.removeAll(); committedItems.removeAll(); interruptedResponses.removeAll(); queue.removeAll()
+        questionAtSpeechStart = nil; latestUserUtterance = ""; transcript = ""; reply = ""; sessionCreatedTasks.removeAll()
+        setPhase(.idle)
+        start(credential: credential)
+    }
     public func toggleMute() {
-        guard ![.idle, .connecting, .closing, .disconnected, .connectionLost].contains(phase) else { return }
+        guard ![.idle, .connecting, .reconnecting, .paused, .closing, .disconnected, .connectionLost].contains(phase) else { return }
         muted.toggle(); transport.setMuted(muted); activity = now()
         if muted { emit(["type": "input_audio_buffer.clear"]); userSpeaking = false; if phase == .userSpeaking { setPhase(.listening) } }
     }
@@ -170,10 +218,37 @@ public extension VoiceRealtimeTransport {
             transport.silencePlayback()
         } else { settle() }
     }
-    public func interruptAudio() { close(reason: .audioInterruption) }
+    public func pauseForAudioInterruption() {
+        guard !didDisconnect, ![.idle, .connecting, .reconnecting, .closing, .disconnected, .connectionLost].contains(phase) else { return }
+        guard !audioInterrupted else { return }
+        audioInterrupted = true; mutedBeforeInterruption = muted; telemetry.audioInterruptions += 1
+        transport.setMuted(true); userSpeaking = false
+        if activeResponse != nil { emit(["type": "response.cancel"]) }
+        if audioPlaying { emit(["type": "output_audio_buffer.clear"]) }
+        transport.silencePlayback(); audioPlaying = false; audioFinished = true
+        setPhase(.paused)
+    }
+    public func resumeAfterAudioInterruption() async {
+        guard audioInterrupted, !didDisconnect else { return }
+        do {
+            try await transport.resumeAudio()
+            guard audioInterrupted, !didDisconnect else { return }
+            audioInterrupted = false; transport.setMuted(mutedBeforeInterruption)
+            if worker != nil { setPhase(.toolExecution) }
+            else if activeResponse != nil || responsePending { setPhase(.processing) }
+            else { settle() }
+        } catch { fail() }
+    }
+    public func recoverAudioRoute() async {
+        guard !didDisconnect, ![.idle, .connecting, .reconnecting, .closing, .disconnected, .connectionLost].contains(phase) else { return }
+        let alreadyInterrupted = audioInterrupted
+        if !alreadyInterrupted { pauseForAudioInterruption() }
+        try? await Task.sleep(for: .milliseconds(350))
+        await resumeAfterAudioInterruption()
+    }
     public func finish() {
         guard closingReason == nil, ![.disconnected, .connectionLost].contains(phase) else { return }
-        if phase == .idle || phase == .connecting { close(reason: .userTappedDone); return }
+        if phase == .idle || phase == .connecting || phase == .reconnecting { close(reason: .userTappedDone); return }
         closingReason = .userTappedDone; transport.setMuted(true)
         userSpeaking = false; needsResponse = false
         // Let dispatched mutations finish; their results remain canonical even if UI closes.
@@ -184,16 +259,21 @@ public extension VoiceRealtimeTransport {
     public func close(reason: VoiceTerminationReason = .userClosed) {
         guard !didDisconnect else { return }
         didDisconnect = true
-        generation = UUID(); transport.setMuted(true); starter?.cancel(); starter = nil
+        connectionEpoch += 1
+        if reason != .networkFailure { generation = UUID() }
+        transport.setMuted(true); starter?.cancel(); starter = nil
         // Do not cancel a dispatched mutation: its result still reconciles the app.
-        queue.removeAll(); needsResponse = false; activeResponse = nil; responsePending = false
+        if reason != .networkFailure { queue.removeAll() }
+        needsResponse = false; activeResponse = nil; responsePending = false
         telemetry.duration = now().timeIntervalSince(started); telemetry.terminationReason = reason
         onTelemetry?(telemetry)
         transport.closeAfterReleasingAudio { [weak self] in
             guard let self else { return }
-            self.context = .init(); self.results.removeAll(); self.queuedIDs.removeAll(); self.committedItems.removeAll(); self.interruptedResponses.removeAll()
-            self.questionAtSpeechStart = nil; self.latestUserUtterance = ""; self.transcript = ""; self.reply = ""
-            self.sessionCreatedTasks.removeAll()
+            if reason != .networkFailure {
+                self.context = .init(); self.results.removeAll(); self.queuedIDs.removeAll(); self.committedItems.removeAll(); self.interruptedResponses.removeAll()
+                self.questionAtSpeechStart = nil; self.latestUserUtterance = ""; self.transcript = ""; self.reply = ""
+                self.sessionCreatedTasks.removeAll()
+            }
             self.setPhase(reason == .networkFailure ? .connectionLost : .disconnected)
             if reason != .networkFailure { self.onClose?() }
         }
@@ -203,7 +283,7 @@ public extension VoiceRealtimeTransport {
         guard ![.idle, .disconnected, .connectionLost].contains(phase) else { return }
         let time = now()
         if let backgrounded, time.timeIntervalSince(backgrounded) >= timeouts.backgroundGrace { close(reason: .appBackgrounded); return }
-        if phase == .connecting && time.timeIntervalSince(phaseStarted) > timeouts.connection { fail(); return }
+        if (phase == .connecting || phase == .reconnecting) && time.timeIntervalSince(phaseStarted) > timeouts.connection { fail(); return }
         if phase == .closing && time.timeIntervalSince(phaseStarted) > timeouts.closing { close(reason: closingReason ?? .userTappedDone); return }
         if phase == .processing && time.timeIntervalSince(phaseStarted) > timeouts.response { fail(); return }
         guard phase == .listening, worker == nil, activeResponse == nil, !responsePending, !audioPlaying, !userSpeaking, backgrounded == nil else { return }
@@ -217,9 +297,13 @@ public extension VoiceRealtimeTransport {
         do { try transport.send(JSONSerialization.data(withJSONObject: event)) }
         catch { fail() }
     }
-    private func fail() { error = "The voice connection ended. Saved tasks are preserved. Close and try again."; close(reason: .networkFailure) }
+    private func fail(_ detail: String? = nil) {
+        if let detail, !detail.isEmpty { connectionFailureDetail = detail }
+        error = "The voice connection was interrupted. Saved tasks are preserved while Nexdo reconnects."
+        close(reason: .networkFailure)
+    }
     private func requestResponse(instructions: String? = nil) {
-        guard activeResponse == nil, !responsePending, worker == nil, !userSpeaking, backgrounded == nil else { needsResponse = true; return }
+        guard activeResponse == nil, !responsePending, worker == nil, !userSpeaking, backgrounded == nil, !audioInterrupted else { needsResponse = true; return }
         needsResponse = false; responsePending = true; responseCompleted = false; audioFinished = false
         setPhase(closingReason == nil ? .processing : .closing)
         var response: [String: Any] = [:]
@@ -230,6 +314,7 @@ public extension VoiceRealtimeTransport {
         requestResponse(instructions: closingReason == .inactivityTimeout ? "Say only: I'll close voice mode for now." : "Say only: You're all set.")
     }
     private func settle() {
+        guard !audioInterrupted else { setPhase(.paused); return }
         guard worker == nil, activeResponse == nil, !responsePending, !audioPlaying, !userSpeaking else { return }
         if let reason = closingReason {
             if phase == .closing && responseCompleted && audioFinished { close(reason: reason) }
@@ -242,7 +327,13 @@ public extension VoiceRealtimeTransport {
         guard ![.disconnected, .connectionLost].contains(phase), let event = try? JSONSerialization.jsonObject(with: data) as? [String: Any], let type = event["type"] as? String else { return }
         switch type {
         case "session.created":
-            telemetry.connectionLatency = now().timeIntervalSince(started); activity = now(); setPhase(.listening)
+            if isReconnecting {
+                telemetry.successfulReconnects += 1
+                restoreConversationContext()
+            } else { telemetry.connectionLatency = now().timeIntervalSince(started) }
+            guard !didDisconnect else { return }
+            isReconnecting = false; error = nil; connectionFailureDetail = nil; activity = now()
+            setPhase(worker == nil ? .listening : .toolExecution)
         case "input_audio_buffer.speech_started":
             guard !muted, closingReason == nil, backgrounded == nil else { return }
             if audioPlaying || activeResponse != nil {
@@ -255,6 +346,9 @@ public extension VoiceRealtimeTransport {
             transcript = ""; reply = ""; setPhase(.userSpeaking)
         case "input_audio_buffer.speech_stopped":
             userSpeaking = false; if closingReason == nil { setPhase(.processing) }
+            // If commit arrived first, release the queued response now. Never
+            // wait for the independent transcription stream to finish.
+            if needsResponse { settle() }
         case "input_audio_buffer.committed":
             guard closingReason == nil, !muted else { return }
             if let itemID = event["item_id"] as? String, !committedItems.insert(itemID).inserted { return }
@@ -301,9 +395,20 @@ public extension VoiceRealtimeTransport {
         default: break
         }
     }
+    private func restoreConversationContext() {
+        var details: [String] = ["The realtime connection was restored. Do not respond to this recovery note."]
+        if !sessionCreatedTasks.isEmpty {
+            details.append("Tasks already saved during this voice session: " + sessionCreatedTasks.map { "\($0.title) [id=\($0.id)]" }.joined(separator: "; "))
+        }
+        if !context.pendingIntent.isEmpty { details.append("Pending user intent: \(context.pendingIntent)") }
+        if context.pendingClarification != "none" { details.append("Pending clarification: \(context.pendingClarification)") }
+        if !latestUserUtterance.isEmpty { details.append("Last completed user transcript: \(latestUserUtterance)") }
+        emit(["type": "conversation.item.create", "item": ["type": "message", "role": "user", "content": [["type": "input_text", "text": details.joined(separator: "\n")]]]])
+    }
     private func startTools() {
         guard worker == nil else { return }
         let run = generation
+        let toolConnectionEpoch = connectionEpoch
         setPhase(.toolExecution)
         worker = Task { [weak self] in
             guard let self else { return }
@@ -354,10 +459,16 @@ public extension VoiceRealtimeTransport {
                         }
                     }
                 }
-                emit(["type": "conversation.item.create", "item": ["type": "function_call_output", "call_id": id, "output": String(decoding: result, as: UTF8.self)]])
+                if !didDisconnect, connectionEpoch == toolConnectionEpoch {
+                    emit(["type": "conversation.item.create", "item": ["type": "function_call_output", "call_id": id, "output": String(decoding: result, as: UTF8.self)]])
+                }
             }
             worker = nil
             guard run == generation else { return }
+            if connectionEpoch != toolConnectionEpoch || didDisconnect {
+                if !didDisconnect { restoreConversationContext(); setPhase(.listening) }
+                return
+            }
             if closingReason != nil { farewell() }
             else { needsResponse = true; settle() }
         }

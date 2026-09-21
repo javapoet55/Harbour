@@ -1,3 +1,5 @@
+import { observedFetch } from '@/server/health/telemetry';
+import { healthRoute } from '@/server/health/telemetry';
 import { voiceSessionConfiguration, calendarVoiceSessionConfiguration } from '@/server/voice/configuration';
 import { requireUser } from '@/server/auth';
 import { jsonError } from '@/lib/http';
@@ -5,7 +7,7 @@ import { jsonError } from '@/lib/http';
 export const runtime = 'nodejs';
 const headers = { 'Cache-Control': 'private, no-store' };
 
-export async function POST(req: Request) {
+async function healthHandlerPOST(req: Request) {
   try {
     const user = await requireUser();
     const consent = await req.json().catch(() => null);
@@ -14,7 +16,7 @@ export async function POST(req: Request) {
     if (!key) return Response.json({ error: 'Voice task creation is not configured yet. Please add your task manually.' }, { status: 503, headers });
     const session = consent.scope === 'calendar' ? calendarVoiceSessionConfiguration(user.timeZone) : voiceSessionConfiguration(user.timeZone);
     const model = session.model;
-    const response = await fetch('https://api.openai.com/v1/realtime/client_secrets', {
+    const response = await observedFetch('https://api.openai.com/v1/realtime/client_secrets', {
       method: 'POST',
       headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
       signal: AbortSignal.any([req.signal, AbortSignal.timeout(20000)]),
@@ -23,7 +25,16 @@ export async function POST(req: Request) {
         session,
       }),
     });
-    if (!response.ok) return Response.json({ error: 'Couldn’t connect to voice task creation. Please try again later.' }, { status: 502, headers });
+    if (!response.ok) {
+      // Never log response bodies, prompts, credentials, or user data.
+      console.error('Voice session rejected', { status: response.status });
+      const error = response.status === 429
+        ? 'Voice is temporarily at capacity. Please try again shortly.'
+        : response.status === 400
+          ? 'Voice setup could not be completed. Please try again after the service is updated.'
+          : 'Couldn’t connect to voice. Please try again shortly.';
+      return Response.json({ error }, { status: 502, headers });
+    }
     const result = await response.json();
     if (typeof result.value !== 'string' || typeof result.expires_at !== 'number') throw new Error('Invalid session');
     return Response.json({ value: result.value, expiresAt: result.expires_at, model }, { headers });
@@ -32,3 +43,5 @@ export async function POST(req: Request) {
     return Response.json({ error: 'Voice connection unavailable. Please try again later.' }, { status: 502, headers });
   }
 }
+
+export const POST = healthRoute('POST /api/realtime/task-session', healthHandlerPOST);

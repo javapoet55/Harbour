@@ -4,7 +4,7 @@ import { day, zone, MomentError } from './domain';
 import { log } from '@/lib/logger';
 
 export const festivalSettings = z.object({
- groupID:z.string().min(1).max(200), prepareDays:z.union([z.literal(0),z.literal(1),z.literal(3),z.literal(7),z.literal(14)]).default(7),
+ groupID:z.string().min(1).max(200), prepareDays:z.union([z.literal(0),z.literal(1),z.literal(3),z.literal(7),z.literal(14)]).default(1),
  catalogID:z.string().max(80).default(''), catalogManaged:z.boolean().default(false), baseMessage:z.string().max(500).default(''),
  tone:z.enum(['Warm','Personal','Short','Fun']).default('Warm'), personalContext:z.string().max(500).default(''),
  manuallyEdited:z.boolean().default(false), approvedAt:z.string().nullable().default(null),
@@ -21,8 +21,6 @@ const recipient = z.object({id:z.string().optional(),key:z.string().min(1).max(2
 export const festivalSaveInput = z.object({ids:z.array(z.string()).min(1).max(100),title:z.string().trim().min(1).max(150),date:day,timeZoneID:zone,yearly:z.boolean(),active:z.boolean(),recipients:z.array(recipient).max(100),settings:festivalSettings,cancelSchedules:z.boolean().default(false)});
 export async function saveFestival(userId:string,input:unknown) {
  const p=festivalSaveInput.parse(input);
- const today=new Intl.DateTimeFormat('en-CA',{timeZone:p.timeZoneID,year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
- if(p.date<today) throw new MomentError('Choose today or a future moment date.');
  if(new Set(p.recipients.map(r=>r.key)).size!==p.recipients.length || new Set(p.recipients.flatMap(r=>r.id?[r.id]:[])).size!==p.recipients.filter(r=>r.id).length) throw new MomentError('Remove duplicate recipients.');
  if(p.recipients.length && !p.recipients.some(r=>r.selected)) throw new MomentError('Select at least one recipient.');
  if(p.settings.includeImage) throw new MomentError('Image attachments are not enabled. Exclude the preview image before saving for delivery.');

@@ -1,3 +1,4 @@
+import { observedFetch } from '@/server/health/telemetry';
 import bcrypt from 'bcryptjs';
 import { createRemoteJWKSet, importPKCS8, jwtVerify, SignJWT } from 'jose';
 import { createHash, randomBytes } from 'node:crypto';
@@ -29,7 +30,7 @@ async function clientSecret(clientId: string) {
 }
 
 async function exchangeCode(code: string, clientId: string) {
-  const response = await fetch('https://appleid.apple.com/auth/token', {
+  const response = await observedFetch('https://appleid.apple.com/auth/token', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({ client_id: clientId, client_secret: await clientSecret(clientId), code, grant_type: 'authorization_code' }),
@@ -82,7 +83,7 @@ export async function revokeAppleIdentity(encryptedRefreshToken: string) {
   const clientId = process.env.APPLE_CLIENT_ID?.trim() || 'com.pinslots.nexdo';
   const token = decryptCredential(encryptedRefreshToken);
   if (!token) return;
-  const response = await fetch('https://appleid.apple.com/auth/revoke', {
+  const response = await observedFetch('https://appleid.apple.com/auth/revoke', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({ client_id: clientId, client_secret: await clientSecret(clientId), token, token_type_hint: 'refresh_token' }),

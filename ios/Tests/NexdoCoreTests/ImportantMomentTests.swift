@@ -116,3 +116,13 @@ import Testing
     #expect(deleted.isArchived)
     #expect(MomentDisplayGroup.editableGroups([deleted]).isEmpty)
 }
+
+@Test func openedMessagesAreNotReportedAsSent() throws {
+    let raw: [String: Any] = ["id":"plan","draftID":"draft","channel":"messages","recipient":"+15555550123","subject":"Wish","body":"Hello","scheduledAtUTC":"2026-09-17T16:00:00Z","timeZoneID":"UTC","status":"AWAITING_CONFIRMATION","lastError":"Messages opened; delivery not confirmed.","idempotencyKey":"key","automaticDelivery":false,"repeatYearly":false,"reminderOffset":0]
+    var plan=try JSONDecoder().decode(WishDeliveryPlan.self, from:JSONSerialization.data(withJSONObject:raw))
+    #expect(plan.statusLabel == "Opened — delivery not confirmed")
+    #expect(plan.sentAt == nil)
+    #expect(plan.editable)
+    plan.status="EXPIRED"
+    #expect(!plan.editable)
+}

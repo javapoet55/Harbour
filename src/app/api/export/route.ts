@@ -1,9 +1,10 @@
+import { healthRoute } from '@/server/health/telemetry';
 import { NextResponse } from 'next/server';
 import { requireUser } from '@/server/auth';
 import { prisma } from '@/server/db';
 import { jsonError } from '@/lib/http';
 
-export async function GET() {
+async function healthHandlerGET() {
   try {
     const user = await requireUser();
     const [tasks, projects, preference] = await Promise.all([
@@ -14,3 +15,5 @@ export async function GET() {
     return NextResponse.json({ exportedAt: new Date().toISOString(), profile: { name: user.name, email: user.email, timeZone: user.timeZone }, preference, projects, tasks });
   } catch (error) { return jsonError(error); }
 }
+
+export const GET = healthRoute('GET /api/export', healthHandlerGET);

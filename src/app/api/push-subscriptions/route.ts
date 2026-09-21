@@ -1,16 +1,17 @@
+import { healthRoute } from '@/server/health/telemetry';
 import { NextResponse } from 'next/server';
 import { requireUser } from '@/server/auth';
 import { prisma } from '@/server/db';
 import { jsonError } from '@/lib/http';
 
-export async function GET() {
+async function healthHandlerGET() {
   try {
     await requireUser();
     return NextResponse.json({ publicKey: process.env.VAPID_PUBLIC_KEY || '', configured: Boolean(process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) });
   } catch (error) { return jsonError(error); }
 }
 
-export async function POST(req: Request) {
+async function healthHandlerPOST(req: Request) {
   try {
     const user = await requireUser();
     const body = await req.json();
@@ -27,7 +28,7 @@ export async function POST(req: Request) {
   } catch (error) { return jsonError(error); }
 }
 
-export async function DELETE(req: Request) {
+async function healthHandlerDELETE(req: Request) {
   try {
     const user = await requireUser();
     const endpoint = String((await req.json()).endpoint || '');
@@ -35,3 +36,9 @@ export async function DELETE(req: Request) {
     return NextResponse.json({ ok: true });
   } catch (error) { return jsonError(error); }
 }
+
+export const GET = healthRoute('GET /api/push-subscriptions', healthHandlerGET);
+
+export const POST = healthRoute('POST /api/push-subscriptions', healthHandlerPOST);
+
+export const DELETE = healthRoute('DELETE /api/push-subscriptions', healthHandlerDELETE);

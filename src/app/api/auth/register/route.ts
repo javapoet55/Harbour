@@ -1,9 +1,10 @@
+import { healthRoute } from '@/server/health/telemetry';
 import { NextResponse } from 'next/server';
 import { registerAccount, sendEmailVerification } from '@/server/account-auth';
 import { jsonError } from '@/lib/http';
 import { log } from '@/lib/logger';
 
-export async function POST(req: Request) {
+async function healthHandlerPOST(req: Request) {
   try {
     const body = await req.json().catch(() => ({}));
     const user = await registerAccount({ name: String(body.name ?? ''), email: String(body.email ?? ''), password: String(body.password ?? '') });
@@ -27,3 +28,5 @@ export async function POST(req: Request) {
     return jsonError(error);
   }
 }
+
+export const POST = healthRoute('POST /api/auth/register', healthHandlerPOST);

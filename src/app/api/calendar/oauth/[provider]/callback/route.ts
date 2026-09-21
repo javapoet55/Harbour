@@ -1,3 +1,4 @@
+import { healthRoute } from '@/server/health/telemetry';
 import { NextResponse } from 'next/server';
 import { connectCalendar, type OAuthProvider } from '@/providers/calendar';
 import { isNativeOAuthState, verifyOAuthState } from '@/server/oauth-state';
@@ -19,7 +20,7 @@ function settingsRedirect(params: Record<string, string>, native = false) {
   });
 }
 
-export async function GET(req: Request, ctx: { params: Promise<{ provider: string }> }) {
+async function healthHandlerGET(req: Request, ctx: { params: Promise<{ provider: string }> }) {
   const { provider } = await ctx.params;
   const url = new URL(req.url);
   if (!valid(provider)) return settingsRedirect({ calendar: 'unsupported' });
@@ -38,3 +39,5 @@ export async function GET(req: Request, ctx: { params: Promise<{ provider: strin
     return settingsRedirect({ calendar: 'error', detail: message.slice(0, 120) }, native);
   }
 }
+
+export const GET = healthRoute('GET /api/calendar/oauth/[provider]/callback', healthHandlerGET);

@@ -5,6 +5,7 @@ import { prisma } from './db';
 import { validateProjectAssignment } from './projects';
 import { zonedDateTime } from '@/lib/time';
 import { nextOccurrence } from '@/lib/recurrence';
+import { inc } from '@/lib/metrics';
 
 function localYmd(date: Date, timeZone: string) {
   const parts = Object.fromEntries(new Intl.DateTimeFormat('en-US', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(date).map((part) => [part.type, part.value]));
@@ -20,6 +21,10 @@ export async function createTask(input: {
   priority?: string;
   startAt?: Date | null;
   dueAt?: Date | null;
+  reminderAt?: Date | null;
+  lifeReminderType?: string | null;
+  lifeReminderConfidence?: number | null;
+  originalUserText?: string | null;
   durationMin?: number;
   energyLevel?: string;
   waitingOn?: string | null;
@@ -29,7 +34,7 @@ export async function createTask(input: {
   projectId?: string | null;
 }) {
   if (!input.title.trim() || input.title.length > 200 || (input.durationMin !== undefined && (!Number.isInteger(input.durationMin) || input.durationMin < 1 || input.durationMin > 1440))) throw new Error('INVALID_TASK');
-  if ([input.startAt, input.dueAt].some((date) => date && !Number.isFinite(+date))) throw new Error('INVALID_TASK');
+  if ([input.startAt, input.dueAt, input.reminderAt].some((date) => date && !Number.isFinite(+date))) throw new Error('INVALID_TASK');
   if (input.idempotencyKey) {
     const existing = await prisma.task.findFirst({ where: { idempotencyKey: input.idempotencyKey, userId: input.userId } });
     if (existing) return existing;
@@ -48,6 +53,10 @@ export async function createTask(input: {
         priority: input.priority ?? 'NORMAL',
         startAt: input.startAt ?? null,
         dueAt: input.dueAt ?? input.startAt ?? null,
+        reminderAt: input.reminderAt ?? null,
+        lifeReminderType: input.lifeReminderType ?? null,
+        lifeReminderConfidence: input.lifeReminderConfidence ?? null,
+        originalUserText: input.originalUserText ?? null,
         durationMin: input.durationMin ?? 30,
         energyLevel: input.energyLevel ?? 'MEDIUM',
         waitingOn: input.waitingOn ?? null,
@@ -94,16 +103,25 @@ export async function completeTask(userId: string, id: string, allowScheduleConf
       const nextStart = zonedDateTime(nextYmd, hm, task.timeZone);
       if (!task.recurrence.until || nextStart <= task.recurrence.until) {
         const dueOffset = task.dueAt ? task.dueAt.getTime() - task.startAt.getTime() : 0;
-        await tx.task.create({ data: {
+        const reminderOffset = task.reminderAt ? task.reminderAt.getTime() - task.startAt.getTime() : null;
+        const nextReminderAt = reminderOffset === null ? null : new Date(nextStart.getTime() + reminderOffset);
+        const nextTask = await tx.task.create({ data: {
           userId, listId: task.listId, projectId: task.projectId, categoryId: task.categoryId, title: task.title, notes: task.notes, kind: task.kind,
           status: 'PLANNED', priority: task.priority, startAt: nextStart, dueAt: task.dueAt ? new Date(nextStart.getTime() + dueOffset) : null,
+          reminderAt: nextReminderAt,
+          lifeReminderType: task.lifeReminderType, lifeReminderConfidence: task.lifeReminderConfidence, originalUserText: task.originalUserText,
           durationMin: task.durationMin, energyLevel: task.energyLevel, timeZone: task.timeZone, notifyPush: task.notifyPush, notifyEmail: task.notifyEmail,
           splittable: task.splittable, minFocusMin: task.minFocusMin,
           notifySms: task.notifySms, critical: task.critical, dependencies: { create: task.dependencies.map((dependency) => ({ dependsOnId: dependency.dependsOnId })) },
           recurrence: { create: { frequency: task.recurrence.frequency, interval: task.recurrence.interval, byWeekday: task.recurrence.byWeekday, until: task.recurrence.until, count: task.recurrence.count ? task.recurrence.count - 1 : null } },
         } });
+        if (nextReminderAt) await tx.reminder.create({ data: {
+          userId, taskId: nextTask.id, fireAt: nextReminderAt, offsetLabel: 'requested reminder', critical: task.critical,
+          idempotencyKey: `${nextTask.id}:requested`, channelPlan: task.critical ? 'push,email,sms' : 'push,email',
+        } });
       }
     }
+    if (task.lifeReminderType) inc('life_reminder_completed');
     return completed;
   });
 }
@@ -145,9 +163,11 @@ export async function scheduleTask(userId: string, id: string, startAt: Date, du
     const postponed = Boolean(task.user.preference?.personalizationEnabled && task.startAt && startAt.getTime() > task.startAt.getTime());
     const startAndDueCoupled = task.dueAt == null || (task.startAt != null && task.dueAt.getTime() === task.startAt.getTime());
     const shiftedDueAt = startAndDueCoupled ? new Date(startAt.getTime() + duration * 60_000) : task.dueAt;
+    const shiftedReminderAt = task.reminderAt && task.startAt ? new Date(task.reminderAt.getTime() + startAt.getTime() - task.startAt.getTime()) : task.reminderAt;
     return tx.task.update({ where: { id }, data: {
       startAt,
       dueAt: shiftedDueAt,
+      reminderAt: shiftedReminderAt,
       durationMin: duration,
       status: 'PLANNED',
       postponeCount: postponed ? { increment: 1 } : undefined,

@@ -1,0 +1,12 @@
+import { it,expect,vi,beforeEach } from 'vitest';
+vi.mock('@/server/health/access',()=>({healthAccess:vi.fn(),canOperate:vi.fn(()=>false)}));
+vi.mock('@/server/health/service',()=>({getHealth:vi.fn(),incidentAction:vi.fn(),updateRule:vi.fn()}));
+import { healthAccess } from '@/server/health/access';
+import { getHealth,incidentAction } from '@/server/health/service';
+import { GET,POST } from './route';
+beforeEach(()=>vi.resetAllMocks());
+it('rejects normal users and unauthenticated reads',async()=>{vi.mocked(healthAccess).mockRejectedValue(new Error('UNAUTHENTICATED'));expect((await GET(new Request('https://nexdo.test/api/admin/health'))).status).toBe(401);expect(getHealth).not.toHaveBeenCalled();});
+it('fails closed for unauthorized operators',async()=>{vi.mocked(healthAccess).mockRejectedValue(new Error('FORBIDDEN'));expect((await POST(new Request('https://nexdo.test/api/admin/health',{method:'POST'}))).status).toBe(403);expect(incidentAction).not.toHaveBeenCalled();});
+it('rejects cross-origin mutation',async()=>{vi.mocked(healthAccess).mockResolvedValue({id:'operator'} as Awaited<ReturnType<typeof healthAccess>>);expect((await POST(new Request('https://nexdo.test/api/admin/health',{method:'POST',headers:{origin:'https://evil.test'}}))).status).toBe(403);});
+it('sanitizes internal failures',async()=>{vi.mocked(healthAccess).mockRejectedValue(new Error('secret database url'));const r=await GET(new Request('https://nexdo.test/api/admin/health'));expect(r.status).toBe(503);expect(await r.text()).not.toContain('secret database');});
+it('rejects invalid range and never calls the database',async()=>{vi.mocked(healthAccess).mockResolvedValue({id:'reader'} as Awaited<ReturnType<typeof healthAccess>>);expect((await GET(new Request('https://nexdo.test/api/admin/health?range=bad'))).status).toBe(400);expect(getHealth).not.toHaveBeenCalled();});

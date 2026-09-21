@@ -111,6 +111,23 @@ describe('task and reminder integration', () => {
     expect(['sms', null]).toContain(channel);
   });
 
+  it('generates the next recurring life reminder and surfaces advance notice in Daily Brief', async () => {
+    const reminderAt = zonedDateTime('2026-09-30', '09:00', 'America/Los_Angeles');
+    const dueAt = zonedDateTime('2026-10-15', '09:00', 'America/Los_Angeles');
+    const task = await createTask({ userId: userA, title: 'Renew vehicle registration', kind: 'REMINDER', startAt: reminderAt, reminderAt, dueAt,
+      durationMin: 5, lifeReminderType: 'renewal', lifeReminderConfidence: 0.96, originalUserText: 'Registration expires October 15; remind me September 30' });
+    await prisma.recurrenceRule.create({ data: { taskId: task.id, frequency: 'YEARLY', interval: 1 } });
+    const briefing = await buildCompleteBriefing(userA, 5, zonedDateTime('2026-09-29', '09:00', 'America/Los_Angeles'));
+    expect(briefing.spoken).toContain('Renew vehicle registration');
+
+    await completeTask(userA, task.id, true);
+    const next = await prisma.task.findFirstOrThrow({ where: { userId: userA, title: task.title, status: 'PLANNED', id: { not: task.id } }, orderBy: { createdAt: 'desc' } });
+    expect(next.lifeReminderType).toBe('renewal');
+    expect(next.originalUserText).toBe(task.originalUserText);
+    expect(next.reminderAt?.toISOString()).toBe('2027-09-30T16:00:00.000Z');
+    expect(await prisma.reminder.count({ where: { taskId: next.id, fireAt: next.reminderAt! } })).toBe(1);
+  });
+
   it('reschedules a task without duplicating the calendar event', async () => {
     const connection = await prisma.calendarConnection.create({
       data: {

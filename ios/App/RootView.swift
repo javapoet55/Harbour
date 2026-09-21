@@ -26,8 +26,7 @@ struct RootView: View {
             } else if ProcessInfo.processInfo.arguments.contains("-calendar-voice-preview") {
                 AddTaskByVoiceView(calendarOnly: true)
             } else if ProcessInfo.processInfo.arguments.contains("-ask-design-preview") {
-                Color(uiColor: .systemGroupedBackground)
-                    .sheet(isPresented: .constant(true)) { AskNexdoView().presentationDetents([.fraction(0.92)]).presentationDragIndicator(.visible) }
+                AskNexdoView()
             } else if ProcessInfo.processInfo.arguments.contains("-ask-text-design-preview") {
                 AskNexdoView(textPage: true)
             } else if ProcessInfo.processInfo.arguments.contains("-ask-voice-design-preview") {
@@ -123,7 +122,7 @@ private struct NexdoTabShell: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .clipped()
         .blur(radius: showingAsk ? 2 : 0)
-        .sheet(isPresented: $showingAsk) {
+        .fullScreenCover(isPresented: $showingAsk) {
             AskNexdoView(initialPrompt: askPrompt)
                 .presentationDetents([.fraction(0.84)])
                 .presentationDragIndicator(.visible)
@@ -294,7 +293,7 @@ private struct SignInView: View {
                         .frame(width: 116, height: 84)
                         .accessibilityHidden(true)
 
-                    Text(model.lastSignedInFirstName.map { "Welcome back, \($0)" } ?? "Welcome back")
+                    Text("Welcome back, Sri")
                         .font(.system(size: 42, weight: .bold, design: .rounded))
                         .foregroundStyle(
                             LinearGradient(
@@ -309,7 +308,7 @@ private struct SignInView: View {
                         .shadow(color: Color.nexdoIndigo.opacity(0.20), radius: 12, y: 4)
                         .padding(.top, 22)
 
-                    Text("Your day is clearer with Nexdo.")
+                    Text("Your AI assistant for a smarter, more organized day.")
                         .font(.title3)
                         .foregroundStyle(Color.nexdoSecondary)
                         .multilineTextAlignment(.center)
@@ -868,7 +867,7 @@ private struct SignInBackdrop: View {
     }
 }
 
-private struct NexdoLogoMark: View {
+struct NexdoLogoMark: View {
     var body: some View {
         GeometryReader { geometry in
             let width = geometry.size.width
@@ -1599,6 +1598,9 @@ private struct TaskRow: View {
                         .lineLimit(2)
 
                     HStack(spacing: 8) {
+                        if let lifeReminderLabel = task.lifeReminderLabel {
+                            TaskBadge(title: lifeReminderLabel.uppercased(), icon: "sparkles", color: .nexdoMagenta)
+                        }
                         TaskBadge(title: task.isDone ? "DONE" : task.priority, icon: task.isDone ? "checkmark" : "flag.fill", color: task.isDone ? .green : priorityColor)
                         TaskBadge(title: "\(task.durationMin) MIN", icon: "clock", color: .nexdoIndigo)
                         if let scheduleLabel {

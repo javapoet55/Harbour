@@ -1,3 +1,4 @@
+import { healthRoute } from '@/server/health/telemetry';
 import { NextResponse } from 'next/server';
 import { requireUser } from '@/server/auth';
 import { withUser } from '@/lib/http';
@@ -8,7 +9,7 @@ function valid(value: string): value is OAuthProvider { return value === 'google
 
 // Issues a short-lived token the native app hands to the OAuth start route,
 // which runs in ASWebAuthenticationSession and cannot send the session cookie.
-export async function POST(_req: Request, ctx: { params: Promise<{ provider: string }> }) {
+async function healthHandlerPOST(_req: Request, ctx: { params: Promise<{ provider: string }> }) {
   return withUser(async () => {
     const user = await requireUser();
     const { provider } = await ctx.params;
@@ -19,3 +20,5 @@ export async function POST(_req: Request, ctx: { params: Promise<{ provider: str
     );
   });
 }
+
+export const POST = healthRoute('POST /api/calendar/oauth/[provider]/connect-token', healthHandlerPOST);

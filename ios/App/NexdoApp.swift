@@ -13,6 +13,7 @@ struct NexdoApp: App {
 @MainActor
 final class AppModel: ObservableObject {
     @Published var profile: Profile?
+    @Published private(set) var voiceUsage: VoiceUsage?
     @Published private(set) var calendarConnections: [CalendarConnection] = []
     @Published private(set) var calendarConnectionsLoaded = false
     @Published private(set) var protectedTime: ProtectedTimeProposal?
@@ -525,6 +526,18 @@ final class AppModel: ObservableObject {
         return try await api.request("/api/realtime/transcription-session", method: "POST", body: JSONEncoder().encode(["consent": true]), timeout: 25)
     }
 
+    func refreshVoiceUsage() async {
+        let owner=profile?.id
+        if let usage:VoiceUsage=try? await api.request("/api/voice/usage",timeout:15),profile?.id==owner {voiceUsage=usage}
+    }
+
+    func recordVoiceUsage(sessionID:UUID,duration:TimeInterval) async {
+        guard duration>0 else{return}
+        struct Input:Encodable {let sessionId:String;let durationSeconds:Double}
+        let owner=profile?.id
+        if let usage:VoiceUsage=try? await api.request("/api/voice/usage",method:"POST",body:JSONEncoder().encode(Input(sessionId:sessionID.uuidString,durationSeconds:duration)),timeout:15),profile?.id==owner {voiceUsage=usage}
+    }
+
     func executeVoiceTool(name: String, arguments: Data, sessionID: UUID, callID: String, calendarOnly: Bool = false) async throws -> Data {
         guard aiConsent && voiceConsent, let userID = profile?.id else { throw APIError.signedOut }
         let args = try JSONSerialization.jsonObject(with: arguments)
@@ -774,7 +787,7 @@ final class AppModel: ObservableObject {
         await api.clearSession()
         focusCompletion?.cancel(); focusCompletion = nil
         focusSession = nil
-        taskQuery = TaskQuery(); tasksLoadFailed = false; profile = nil; tasks = []; agenda = nil; scheduleIntelligence = nil; weather = nil; withdrawConsent()
+        taskQuery = TaskQuery(); tasksLoadFailed = false; profile = nil; voiceUsage = nil; tasks = []; agenda = nil; scheduleIntelligence = nil; weather = nil; withdrawConsent()
     }
     func logout() async {
         guard !busy else { return }

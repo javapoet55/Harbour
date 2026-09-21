@@ -1,3 +1,4 @@
+import { observedFetch } from '@/server/health/telemetry';
 import type { CalendarConnection } from '@/generated/prisma';
 import type { CalendarProvider, CalendarWrite } from './types';
 import { decryptCredential, encryptCredential } from '@/lib/credentials';
@@ -54,7 +55,7 @@ export function oauthAuthorizationUrl(provider: OAuthProvider, state: string) {
 
 async function tokenRequest(provider: OAuthProvider, params: Record<string, string>) {
   const cfg = oauthConfig(provider);
-  const response = await fetch(cfg.token, {
+  const response = await observedFetch(cfg.token, {
     method: 'POST',
     signal: AbortSignal.timeout(15000),
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -73,8 +74,8 @@ export async function connectCalendar(provider: OAuthProvider, userId: string, c
   let calendarName = 'Primary';
   if (provider === 'google') {
     const [profileRes, calendarRes] = await Promise.all([
-      fetch('https://openidconnect.googleapis.com/v1/userinfo', { headers }),
-      fetch('https://www.googleapis.com/calendar/v3/calendars/primary', { headers }),
+      observedFetch('https://openidconnect.googleapis.com/v1/userinfo', { headers }),
+      observedFetch('https://www.googleapis.com/calendar/v3/calendars/primary', { headers }),
     ]);
     if (!profileRes.ok || !calendarRes.ok) throw new Error('Unable to read Google account calendar');
     const profile = await profileRes.json() as { email?: string };
@@ -84,8 +85,8 @@ export async function connectCalendar(provider: OAuthProvider, userId: string, c
     calendarName = calendar.summary || 'Google Calendar';
   } else {
     const [profileRes, calendarRes] = await Promise.all([
-      fetch('https://graph.microsoft.com/v1.0/me?$select=mail,userPrincipalName', { headers }),
-      fetch('https://graph.microsoft.com/v1.0/me/calendar', { headers }),
+      observedFetch('https://graph.microsoft.com/v1.0/me?$select=mail,userPrincipalName', { headers }),
+      observedFetch('https://graph.microsoft.com/v1.0/me/calendar', { headers }),
     ]);
     if (!profileRes.ok || !calendarRes.ok) throw new Error('Unable to read Microsoft account calendar');
     const profile = await profileRes.json() as { mail?: string; userPrincipalName?: string };
@@ -128,7 +129,7 @@ async function accessToken(connection: CalendarConnection) {
 }
 
 async function api(url: string, token: string, init?: RequestInit) {
-  const response = await fetch(url, { ...init, signal: init?.signal ?? AbortSignal.timeout(15000), headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', ...(init?.headers || {}) } });
+  const response = await observedFetch(url, { ...init, signal: init?.signal ?? AbortSignal.timeout(15000), headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', ...(init?.headers || {}) } });
   if (!response.ok) {
     const error = new Error(`Calendar provider returned ${response.status}`);
     Object.assign(error, { status: response.status });

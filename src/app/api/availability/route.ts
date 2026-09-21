@@ -1,10 +1,11 @@
+import { healthRoute } from '@/server/health/telemetry';
 import { eventRepeatSchema, eventOccurrences } from '@/server/voice/event-repeat';
 import { requireUser } from '@/server/auth';
 import { jsonError } from '@/lib/http';
 import { checkCreationAvailability, checkOccurrenceAvailability } from '@/server/availability';
 import { z } from 'zod';
 const input = z.object({ startAt: z.string().datetime({ offset: true }), endAt: z.string().datetime({ offset: true }), repeat: eventRepeatSchema.optional(), kind: z.enum(['task', 'event']), excludeTaskId: z.string().optional() });
-export async function POST(req: Request) {
+async function healthHandlerPOST(req: Request) {
   try {
     const user = await requireUser();
     const parsed = input.safeParse(await req.json().catch(() => null));
@@ -22,3 +23,5 @@ export async function POST(req: Request) {
     return Response.json({ warnings: await checkCreationAvailability(user.id, start, end, kind, excludeTaskId) }, { headers: { 'Cache-Control': 'private, no-store' } });
   } catch (error) { return jsonError(error); }
 }
+
+export const POST = healthRoute('POST /api/availability', healthHandlerPOST);

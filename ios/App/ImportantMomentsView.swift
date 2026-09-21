@@ -267,11 +267,15 @@ struct ImportantMomentsView: View {
                 }
             } else {
                 if tab == "Scheduled" { Picker("Delivery", selection: $deliveryFilter) { ForEach(["All","Automatic","Confirmation","Action needed"], id: \.self) { Text($0) } } }
-                ForEach(store.plans.filter { p in
+                let visiblePlans = store.plans.filter { p in
                     let matches = displayed.contains { $0.drafts.contains { $0.id == p.draftID } }
                     let history = ["SENT","COPIED","SHARED"].contains(p.status)
-                    return matches && (tab == "Sent" ? history : !history && p.status != "CANCELLED") && (deliveryFilter == "All" || tab == "Sent" || deliveryFilter == "Automatic" && p.automaticDelivery || deliveryFilter == "Confirmation" && !p.automaticDelivery || deliveryFilter == "Action needed" && ["FAILED","UNCERTAIN"].contains(p.status))
-                }) { plan in NavigationLink { WishPlanView(plan: plan) } label: {
+                    return matches && (tab == "Sent" ? history : !history && p.status != "CANCELLED") && (deliveryFilter == "All" || tab == "Sent" || deliveryFilter == "Automatic" && p.automaticDelivery || deliveryFilter == "Confirmation" && !p.automaticDelivery || deliveryFilter == "Action needed" && ["FAILED","UNCERTAIN","EXPIRED"].contains(p.status))
+                }
+                if visiblePlans.isEmpty {
+                    ContentUnavailableView(tab == "Sent" ? "No sent wishes yet" : "No scheduled wishes", systemImage: tab == "Sent" ? "paperplane" : "calendar", description: Text("Wishes matching your filters will appear here."))
+                }
+                ForEach(visiblePlans) { plan in NavigationLink { WishPlanView(plan: plan) } label: {
                     MomentCard {
                         HStack(alignment: .top, spacing: 14) {
                             let moment = displayed.first { $0.drafts.contains { $0.id == plan.draftID } }
@@ -286,7 +290,7 @@ struct ImportantMomentsView: View {
                     }
                 }.buttonStyle(.plain) }
             }
-            if displayed.isEmpty { ContentUnavailableView("No moments yet", systemImage: "gift", description: Text("Add a moment manually, or select contacts and calendars in Settings.")) }
+            if tab == "Upcoming" && displayed.isEmpty { ContentUnavailableView("No moments yet", systemImage: "gift", description: Text("Add a moment manually, or select contacts and calendars in Settings.")) }
             if let error = store.error { Text(error).foregroundStyle(.red); Button("Retry") { Task { await store.refresh() } } }
             if store.loading { ProgressView() }
             if let synced = store.lastSynced { Text("Updated \(synced.formatted(date: .omitted, time: .shortened))").font(.caption).foregroundStyle(.secondary) }
@@ -457,6 +461,7 @@ struct ScheduleWishView: View {
     @State private var key = UUID().uuidString
     @State private var saved: WishDeliveryPlan?
     @State private var next = false
+    @State private var now = Date()
     var body: some View {
         ZStack { TodayBackdrop(); ScrollView { VStack(alignment: .leading, spacing: 18) {
             MomentCard { Label(moment.title, systemImage: moment.icon).font(.title2.bold()); Text(moment.nextOccurrence) }
@@ -471,7 +476,7 @@ struct ScheduleWishView: View {
                 if channel == "email" {
                     Toggle("Send automatically", isOn: $automatic).disabled(store.snapshot?.automaticEmailEnabled != true)
                     if store.snapshot?.automaticEmailEnabled != true { Text("Automatic delivery needs a connected email account and the server scheduler.").font(.caption) }
-                } else { Text("We’ll remind you, the sender, to open the prepared wish and tap Send in Messages. Recipients do not need to confirm. iOS does not allow Nexdo to send Messages automatically.") }
+                } else { Text("We’ll remind you, the sender, to open the prepared wish and tap Send in Messages. Recipients do not need to confirm. Nexdo does not send Messages automatically.") }
                 Toggle("Notify me 1 hour before", isOn: $warning)
                 Toggle("Repeat yearly", isOn: $yearly)
                 if !automatic { Text("For yearly Messages wishes, you must tap Send each year. Reopen Nexdo to refresh local reminders.").font(.caption).foregroundStyle(.secondary) }
@@ -480,13 +485,15 @@ struct ScheduleWishView: View {
             Text("Allow notifications to receive reminders. Email delivery runs on the server even when Nexdo is closed.").font(.caption).foregroundStyle(.secondary)
             if let error = store.error { Text(error).foregroundStyle(.red) }
             MomentPrimary(title: automatic ? "Schedule Automatic Send" : "Schedule Reminder") {
+                guard date > Date() else {store.error="Choose a future time.";return}
                 Task { await store.perform {
                     if !automatic || warning { try await store.authorizeNotifications() }
                     let response: WishPlanResponse = try await store.request("schedule", WishScheduleInput(draftID: draft.id, channel: channel, recipient: recipient, scheduledAtUTC: ISO8601DateFormatter().string(from: date), timeZoneID: zone, automaticDelivery: automatic, reminderOffset: warning ? 60 : 0, repeatYearly: yearly, idempotencyKey: key))
                     saved = response.plan; next = true
                 } }
-            }.disabled(store.busy || saved != nil || date <= Date())
+            }.disabled(store.busy || saved != nil || date <= now)
         }.padding(18) } }
+        .onReceive(Timer.publish(every:1,on:.main,in:.common).autoconnect()) { now=$0 }
         .navigationTitle("Schedule Wish").navigationBarTitleDisplayMode(.inline)
         .onAppear { zone = moment.timeZoneID }
         .navigationDestination(isPresented: $next) { if let saved { WishPlanView(plan: saved, confirmation: true) } }

@@ -1,10 +1,12 @@
+import { observedFetch } from '@/server/health/telemetry';
+import { healthRoute } from '@/server/health/telemetry';
 import { requireUser } from '@/server/auth';
 import { jsonError } from '@/lib/http';
 
 export const runtime = 'nodejs';
 const headers = { 'Cache-Control': 'private, no-store' };
 
-export async function POST(req: Request) {
+async function healthHandlerPOST(req: Request) {
   try {
     await requireUser();
     const consent = await req.json().catch(() => null);
@@ -17,7 +19,7 @@ export async function POST(req: Request) {
       : { model: 'gpt-4o-transcribe' };
     const session = { type: 'transcription', audio: { input: { transcription, ...(consent.scope === 'shopping' ? { noise_reduction: { type: 'near_field' } } : {}), turn_detection: { type: 'server_vad', silence_duration_ms: 1800, prefix_padding_ms: 300 } } } };
     const model = 'gpt-4o-transcribe';
-    const response = await fetch('https://api.openai.com/v1/realtime/client_secrets', {
+    const response = await observedFetch('https://api.openai.com/v1/realtime/client_secrets', {
       method: 'POST',
       headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
       signal: AbortSignal.any([req.signal, AbortSignal.timeout(20000)]),
@@ -35,3 +37,5 @@ export async function POST(req: Request) {
     return Response.json({ error: 'Voice connection unavailable. Please try again later.' }, { status: 502, headers });
   }
 }
+
+export const POST = healthRoute('POST /api/realtime/transcription-session', healthHandlerPOST);

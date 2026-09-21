@@ -3,11 +3,16 @@ import {prisma} from '@/server/db';
 import {z} from 'zod';
 import {listInput,nextShoppingDate,parseShopping} from './domain';
 import {MomentError} from '@/server/moments/domain';
+import {recommendShoppingAlternatives} from './alternatives';
 const include={items:{orderBy:{sortOrder:'asc' as const}}};
 export async function shoppingLists(userId:string){return prisma.shoppingList.findMany({where:{userId},include,orderBy:[{date:'desc'},{createdAt:'desc'}],take:200});}
 export async function shoppingAction(userId:string,raw:unknown,idempotencyKey?:string){
- const p=z.object({operation:z.enum(['create','save','delete','complete','share','revoke','parse']),id:z.string().optional(),revision:z.number().int().nonnegative().optional(),input:z.unknown().optional()}).parse(raw);
+ const p=z.object({operation:z.enum(['create','save','delete','complete','share','revoke','parse','alternatives']),id:z.string().optional(),revision:z.number().int().nonnegative().optional(),input:z.unknown().optional()}).parse(raw);
  if(p.operation==='parse'){const {text}=z.object({text:z.string().min(1).max(12000)}).parse(p.input);return {items:parseShopping(text).map(i=>({...i,id:randomUUID()}))};}
+ if(p.operation==='alternatives'){
+  const input=z.object({name:z.string().trim().min(1).max(120),category:z.string().max(80).optional(),quantity:z.string().max(40).optional(),size:z.string().max(80).optional()}).parse(p.input);
+  return recommendShoppingAlternatives(userId,input);
+ }
  if(p.operation==='create'){
   const input=listInput.parse(p.input);const {items,...data}=input;
   const id=idempotencyKey ? createHash('sha256').update(userId+':'+idempotencyKey).digest('hex') : randomUUID();

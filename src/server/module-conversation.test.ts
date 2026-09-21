@@ -2,6 +2,7 @@ import {beforeAll,afterAll,afterEach,it,expect,vi} from 'vitest';
 import {randomUUID} from 'node:crypto';
 import {prisma} from './db';
 import {moduleConversation} from './module-conversation';
+import {nexdoPersonality} from './assistant-personality';
 let user='';
 beforeAll(async()=>{user=(await prisma.user.create({data:{email:randomUUID()+'@example.com',name:'Test',passwordHash:''}})).id;});
 afterEach(()=>{vi.unstubAllGlobals();vi.unstubAllEnvs();});
@@ -10,6 +11,9 @@ it('typed proposal saves only after confirmation and cannot execute twice',async
  vi.stubEnv('OPENAI_API_KEY','test');
  vi.stubGlobal('fetch',vi.fn().mockResolvedValue(new Response(JSON.stringify({output:[{type:'function_call',name:'create_moment',call_id:'one',arguments:JSON.stringify({title:'Sam birthday',type:'birthday',date:'2030-10-12',yearly:true,firstName:'Sam'})}]}))));
  const proposal=await moduleConversation(user,'Add Sam birthday on October 12 2030');
+ const request=JSON.parse(vi.mocked(fetch).mock.calls[0][1]!.body as string);
+ expect(request.instructions).toContain(nexdoPersonality);
+ expect(request.instructions).toContain('Changes are proposals until the user confirms in the UI');
  expect(proposal?.confirmation?.actionId).toBeTruthy();
  expect(await prisma.importantMoment.count({where:{userId:user}})).toBe(0);
  const id=proposal!.confirmation!.actionId;

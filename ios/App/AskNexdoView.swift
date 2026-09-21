@@ -33,8 +33,8 @@ enum NexdoAIIntent: String, CaseIterable, Identifiable {
     }
     var query: String {
         switch self {
-        case .dailyBriefing: "Nexdo, brief me for the next 5 days."
-        case .topFocusTasks: "Pick my top 3 focus tasks, ranked by urgency, estimated effort, and completion risk."
+        case .dailyBriefing: "Give me my full day briefing for today: priorities, deadlines, conflicts, and my next move."
+        case .topFocusTasks: "Pick my top 3 focus tasks, ranked by urgency, estimated effort, and impact."
         case .deadlinesAndRisks: "Show upcoming deadlines in the next 5 days, overdue work, conflicts, overloaded days, and high-priority unfinished tasks."
         case .findScheduleTime: "Find practical free time in my schedule around my calendar commitments using my availability."
         case .planTomorrow: "Do I have enough time to finish everything tomorrow? Consider tasks, events, deadlines, and estimated durations."
@@ -86,6 +86,14 @@ struct NexdoAISuggestionCard: View {
     }
 }
 
+struct ShoppingRecommendationContext:Sendable {
+    let listName:String
+    let itemNames:[String]
+    var assistantContext:String {
+        "Review my shopping list \"\(listName)\". Current items: \(itemNames.isEmpty ? "none yet":itemNames.joined(separator:", ")). Give practical grocery advice for this list. Do not add, replace, remove, or complete anything without my explicit approval."
+    }
+}
+
 struct AskNexdoView: View {
     @EnvironmentObject private var model: AppModel
     @Environment(\.dismiss) private var dismiss
@@ -109,12 +117,14 @@ struct AskNexdoView: View {
     @StateObject private var playback = VoicePlayback()
     private let startWithVoice: Bool
     private let textPage: Bool
+    private let shoppingContext:ShoppingRecommendationContext?
     @FocusState private var composerFocused: Bool
 
-    init(initialPrompt: String = "", startWithVoice: Bool = false, textPage: Bool = false) {
+    init(initialPrompt: String = "", startWithVoice: Bool = false, textPage: Bool = false, shoppingContext:ShoppingRecommendationContext? = nil) {
         _prompt = State(initialValue: initialPrompt)
         self.startWithVoice = startWithVoice
         self.textPage = textPage
+        self.shoppingContext=shoppingContext
     }
 
     private let policyRefusal = "I can’t help with political, violent, sexual, or general-knowledge questions. I can help with your tasks, calendar, and scheduling questions instead."
@@ -140,7 +150,7 @@ struct AskNexdoView: View {
         #"\bwhy\s+(?:is|are|did|does|do|can|would|should|could)\b"#,
         #"\bhow\s+(?:does|do|can|should|to|doesn't|does not)\b"#,
     ]
-    private let taskIntentHints = #"\b(task|tasks|todo|brief|briefing|deadline|due|overdue|schedule|appointments?|calendar|meeting|focus|remind|create|update|reschedule|complete|delete|move|today|tomorrow|weekly|next|hour|minute|plan|time|priority|free\s+time|working\s+day)\b"#
+    private let taskIntentHints = #"\b(shopping|groceries|moments?|birthdays?|anniversar(?:y|ies)|festivals?|task|tasks|todo|brief|briefing|deadline|due|overdue|schedule|appointments?|calendar|meeting|focus|remind|create|update|reschedule|complete|delete|move|today|tomorrow|weekly|next|hour|minute|plan|time|priority|free\s+time|working\s+day)\b"#
 
     private var blocked: Bool { submitting || model.busy }
     private var validPrompt: Bool { !prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && prompt.count <= 4000 }
@@ -181,8 +191,8 @@ struct AskNexdoView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack {
-                Text(textPage ? "Free form Text" : "Ask Nexdo").font(.title2.bold()).foregroundStyle(Color.nexdoInk)
+            if textPage || model.turn != nil { HStack {
+                Text(shoppingContext == nil ? (textPage ? "Free form Text" : "Ask Nexdo") : "Shopping Recommendations").font(.title2.bold()).foregroundStyle(Color.nexdoInk)
                     .accessibilityAddTraits(.isHeader)
                 Spacer()
                 Button {
@@ -205,31 +215,35 @@ struct AskNexdoView: View {
                 .buttonStyle(.plain)
                 .accessibilityLabel("Close Ask Nexdo")
                 .accessibilityHint("Closes Ask Nexdo")
-            }.padding(.horizontal, 20).padding(.top, 22)
+            }.padding(.horizontal, 20).padding(.top, 22) }
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 10) {
                     if model.turn == nil {
-                        Text("Let’s make room for what matters.")
-                            .font(.subheadline).foregroundStyle(AskStyle.secondary)
-                            .padding(.top, 14).padding(.bottom, 8)
                         if textPage {
-                            Text("What would you like help with?").font(.title2.bold())
-                            Text("Type a question or tell Nexdo what to plan, create, or change.").font(.subheadline).foregroundStyle(.secondary)
+                            if let shoppingContext {shoppingRecommendationIntro(shoppingContext)}
+                            else {
+                                Text("What would you like help with?").font(.title2.bold())
+                                Text("Type a question or tell Nexdo what to plan, create, or change.").font(.subheadline).foregroundStyle(.secondary)
+                            }
                             field
                             HStack { Spacer(); controls }
-                            Text("Try a prompt").font(.headline).padding(.top, 16)
-                            ForEach(["What should I focus on today?", "Find 30 minutes free tomorrow for a walk.", "Remind me to call Damien tomorrow at 11 AM."], id: \.self) { example in
+                            Text(shoppingContext == nil ? "Try a prompt":"Try asking about your list").font(.headline).padding(.top, 16)
+                            ForEach(promptSuggestions,id:\.self) { example in
                                 Button { prompt = example; composerFocused = true } label: {
-                                    HStack { Text(example).multilineTextAlignment(.leading); Spacer(); Image(systemName: "arrow.up.left") }
+                                    HStack(spacing:12) {
+                                        if shoppingContext != nil {Image(systemName:suggestionIcon(example)).foregroundStyle(Color.nexdoBlue).frame(width:24)}
+                                        Text(example).multilineTextAlignment(.leading); Spacer(); Image(systemName: "arrow.up.left")
+                                    }
                                         .padding(16).frame(maxWidth: .infinity, alignment: .leading)
                                         .background(Color.nexdoIndigo.opacity(0.06), in: RoundedRectangle(cornerRadius: 16))
                                 }.buttonStyle(.plain).disabled(blocked)
                             }
                         } else {
-                            ForEach(NexdoAIIntent.allCases) { intent in
-                                NexdoAISuggestionCard(intent: intent) { request(intent.query) }.disabled(blocked)
-                            }
+                            AskAILandingView(prompt: $prompt, busy: blocked, sendEnabled: validPrompt,
+                                ask: { request($0) }, voice: { stopSpeech(); showingVoice = true },
+                                close: { requestTask?.cancel(); stopSpeech(); dismiss() }, typing: $composerFocused)
+
                         }
                     } else {
                         if let query = model.lastAssistantPrompt {
@@ -261,8 +275,23 @@ struct AskNexdoView: View {
             }.scrollDismissesKeyboard(.interactively)
         }
         .background(AskStyle.background)
-        .tint(AskStyle.blue)
-        .safeAreaInset(edge: .bottom, spacing: 0) { if textPage { if model.turn != nil { composer } } else { entryCards } }
+        .tint(.nexdoIndigo)
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            VStack(spacing: 0) {
+                if composerFocused {
+                    HStack {
+                        Spacer()
+                        Button("Done") { composerFocused = false }
+                            .font(.body.weight(.semibold))
+                            .frame(minWidth: 60, minHeight: 44)
+                            .accessibilityIdentifier("ask-keyboard-done")
+                    }
+                    .padding(.horizontal, 16)
+                    .background(.regularMaterial)
+                }
+                if model.turn != nil && shoppingContext == nil { composer }
+            }
+        }
         .interactiveDismissDisabled(composerFocused || submitting)
         .sheet(isPresented: $showConsent, onDismiss: { pendingQuery = nil }) {
             consentView.presentationDetents([.medium, .large])
@@ -275,6 +304,43 @@ struct AskNexdoView: View {
         .onDisappear { if !showingVoice { requestTask?.cancel(); stopSpeech() } }
         .onChange(of: scenePhase) { _, phase in if phase != .active { stopSpeech() } }
         .onChange(of: model.aiConsent) { _, allowed in if !allowed { stopSpeech() } }
+    }
+
+    private var promptSuggestions:[String] {
+        shoppingContext == nil ? ["What should I focus on today?", "Find 30 minutes free tomorrow for a walk.", "Remind me to call Damien tomorrow at 11 AM."] : [
+            "What practical essentials are missing from this list?",
+            "Suggest groceries for three balanced dinners.",
+            "Find budget-friendly swaps for items on this list.",
+            "Check whether these quantities look right for one week."
+        ]
+    }
+
+    private func suggestionIcon(_ prompt:String)->String {
+        if prompt.contains("dinners"){return "fork.knife"}
+        if prompt.contains("budget"){return "dollarsign.circle"}
+        if prompt.contains("quantities"){return "number.circle"}
+        return "basket.fill"
+    }
+
+    private func shoppingRecommendationIntro(_ context:ShoppingRecommendationContext)->some View {
+        VStack(alignment:.leading,spacing:14){
+            HStack(spacing:13){
+                Image(systemName:"sparkles").font(.title2).foregroundStyle(.white)
+                    .frame(width:48,height:48).background(NexdoTheme.gradient,in:RoundedRectangle(cornerRadius:15,style:.continuous))
+                VStack(alignment:.leading,spacing:3){
+                    Text("Plan a smarter cart").font(.title2.bold()).foregroundStyle(Color.nexdoInk)
+                    Text(context.listName).font(.subheadline.weight(.semibold)).foregroundStyle(Color.nexdoIndigo)
+                }
+            }
+            Text("Ask Nexdo to spot missing staples, suggest meal ideas, compare alternatives, or check quantities using the items already on this list.")
+                .font(.subheadline).foregroundStyle(Color.nexdoSecondary).fixedSize(horizontal:false,vertical:true)
+            HStack(spacing:8){
+                Image(systemName:"checkmark.shield.fill").foregroundStyle(Color.green)
+                Text("Suggestions only—your list changes after you approve them.").font(.caption.weight(.medium)).foregroundStyle(Color.nexdoSecondary)
+            }
+        }.padding(16).frame(maxWidth:.infinity,alignment:.leading)
+            .background(LinearGradient(colors:[Color.nexdoBlue.opacity(0.10),Color.nexdoMagenta.opacity(0.07)],startPoint:.topLeading,endPoint:.bottomTrailing),in:RoundedRectangle(cornerRadius:20,style:.continuous))
+            .overlay(RoundedRectangle(cornerRadius:20,style:.continuous).stroke(Color.nexdoIndigo.opacity(0.12)))
     }
 
     private var entryCards: some View {
@@ -333,7 +399,7 @@ struct AskNexdoView: View {
     }
 
     private var field: some View {
-        TextField("Type your prompt…", text: $prompt, axis: .vertical)
+        TextField(shoppingContext == nil ? "Type your prompt…":"Ask about this shopping list…", text: $prompt, axis: .vertical)
             .font(.subheadline).lineLimit(textPage && model.turn == nil ? 4...8 : 1...4).focused($composerFocused)
             .padding(.horizontal, 12).padding(.vertical, 12)
             .frame(minHeight: 44)
@@ -346,10 +412,10 @@ struct AskNexdoView: View {
         Button { request(prompt) } label: {
             Group {
                 if submitting { ProgressView().tint(.white) }
-                else { Text("Ask Nexdo").font(.subheadline.weight(.semibold)) }
+                else { Text(shoppingContext == nil ? "Ask Nexdo":"Get Recommendations").font(.subheadline.weight(.semibold)) }
             }.padding(.horizontal, 16).frame(minHeight: 44)
                 .background(AskStyle.blue, in: RoundedRectangle(cornerRadius: 13)).foregroundStyle(.white)
-        }.disabled(!validPrompt || blocked).opacity(validPrompt && !blocked ? 1 : 0.55).accessibilityLabel("Ask Nexdo")
+        }.disabled(!validPrompt || blocked).opacity(validPrompt && !blocked ? 1 : 0.55).accessibilityLabel(shoppingContext == nil ? "Ask Nexdo":"Get shopping recommendations")
         if !textPage {
             Button { composerFocused = false; stopSpeech(); showingVoice = true } label: {
                 Image(systemName: playback.isPlaying ? "speaker.wave.2.fill" : "mic").frame(width: 44, height: 44)
@@ -400,9 +466,11 @@ struct AskNexdoView: View {
         submitting = true
         failedQuery = nil
         requestTask = Task {
-            let succeeded = await model.ask(query)
+            let submitted=shoppingContext.map{$0.assistantContext+"\n\nCustomer request: "+query} ?? query
+            let succeeded = await model.ask(submitted)
             guard !Task.isCancelled else { submitting = false; return }
             if succeeded {
+                if shoppingContext != nil {model.lastAssistantPrompt=query}
                 if prompt.trimmingCharacters(in: .whitespacesAndNewlines) == query { prompt = "" }
                 if speakResponse { speakAnswer() }
             } else { failedQuery = query }

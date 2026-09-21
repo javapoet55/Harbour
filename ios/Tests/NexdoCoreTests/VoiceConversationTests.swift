@@ -2,12 +2,41 @@ import Foundation
 import Testing
 @testable import NexdoCore
 
+@Test @MainActor func voiceRespondsBeforeTranscriptCompletes() async {
+    let h = VoiceHarness(); await h.ready()
+    h.send(["type": "input_audio_buffer.speech_started"])
+    h.send(["type": "input_audio_buffer.speech_stopped"])
+    h.send(["type": "input_audio_buffer.committed", "item_id": "turn-1"])
+    #expect(h.transport.sends.filter { $0["type"] as? String == "response.create" }.count == 1)
+    #expect(h.session.transcript.isEmpty)
+    h.send(["type": "response.created", "response": ["id": "answer"]])
+    h.send(["type": "output_audio_buffer.started", "response_id": "answer"])
+    #expect(h.session.phase == .assistantSpeaking)
+    h.send(["type": "conversation.item.input_audio_transcription.completed", "transcript": "What is next?"])
+    #expect(h.session.transcript == "What is next?")
+    #expect(h.session.phase == .assistantSpeaking)
+    #expect(h.transport.sends.filter { $0["type"] as? String == "response.create" }.count == 1)
+}
+
+@Test @MainActor func committedSpeechDoesNotStallWhenStopArrivesLater() async {
+    let h = VoiceHarness(); await h.ready()
+    h.send(["type": "input_audio_buffer.speech_started"])
+    h.send(["type": "input_audio_buffer.committed", "item_id": "turn-1"])
+    #expect(!h.transport.sends.contains { $0["type"] as? String == "response.create" })
+    h.send(["type": "input_audio_buffer.speech_stopped"])
+    h.send(["type": "input_audio_buffer.committed", "item_id": "turn-1"])
+    h.send(["type": "conversation.item.input_audio_transcription.failed", "item_id": "turn-1"])
+    #expect(h.transport.sends.filter { $0["type"] as? String == "response.create" }.count == 1)
+    #expect(!h.transport.closed)
+}
+
 @MainActor private final class MockVoiceTransport: VoiceRealtimeTransport {
     var onEvent: ((Data) -> Void)?; var onFailure: (() -> Void)?
-    var sends: [[String: Any]] = []; var connects = 0; var closed = false; var silenced = 0; var muted = false
+    var sends: [[String: Any]] = []; var connects = 0; var closed = false; var silenced = 0; var muted = false; var audioResumes = 0
     func connect(credential: VoiceTaskSession) async throws { connects += 1 }
     func send(_ data: Data) throws { sends.append(try JSONSerialization.jsonObject(with: data) as! [String: Any]) }
     func setMuted(_ value: Bool) { muted = value }
+    func resumeAudio() async throws { audioResumes += 1 }
     func silencePlayback() { silenced += 1 }
     var deferRelease = false
     var released: (@MainActor () -> Void)?
@@ -18,13 +47,16 @@ import Testing
     }
 }
 @MainActor private final class MockVoiceTools: VoiceToolExecuting {
-    var calls: [(String, [String: Any])] = []; var fails = false
+    var calls: [(String, [String: Any])] = []; var fails = false; var blocks = false
+    private var blockedExecution: CheckedContinuation<Void, Never>?
     func execute(name: String, arguments: Data, sessionID: UUID, callID: String) async throws -> Data {
         let args = try JSONSerialization.jsonObject(with: arguments) as! [String: Any]; calls.append((name, args))
+        if blocks { await withCheckedContinuation { blockedExecution = $0 } }
         if fails { return Data("{\"success\":false,\"error\":\"Database failed\"}".utf8) }
         let id = args["taskId"] as? String ?? "task-\(calls.count)"
         return try JSONSerialization.data(withJSONObject: ["success": true, "task": ["id": id, "title": args["title"] as? String ?? "Task", "status": "PLANNED", "priority": "NORMAL", "durationMin": 30, "startAt": "2027-01-01T10:00:00Z"]])
     }
+    func unblock() { blocks = false; blockedExecution?.resume(); blockedExecution = nil }
 }
 @MainActor private final class VoiceHarness {
     let transport = MockVoiceTransport(); let tools = MockVoiceTools()
@@ -32,9 +64,9 @@ import Testing
     var time = Date(); var counter = 0
     func send(_ object: [String: Any]) { session.receive(try! JSONSerialization.data(withJSONObject: object)) }
     func ready() async {
-        let credential = try! JSONDecoder().decode(VoiceTaskSession.self, from: Data("{\"value\":\"mock\",\"expiresAt\":9999999999,\"model\":\"mock\"}".utf8))
-        session.start(credential: credential); await Task.yield(); send(["type": "session.created"])
+        session.start(credential: credential()); await Task.yield(); send(["type": "session.created"])
     }
+    func credential() -> VoiceTaskSession { try! JSONDecoder().decode(VoiceTaskSession.self, from: Data("{\"value\":\"mock\",\"expiresAt\":9999999999,\"model\":\"mock\"}".utf8)) }
     func tool(_ name: String, _ args: [String: Any], id: String = UUID().uuidString) -> [String: Any] {
         ["type": "function_call", "name": name, "call_id": id, "arguments": String(data: try! JSONSerialization.data(withJSONObject: args), encoding: .utf8)!]
     }
@@ -51,6 +83,81 @@ import Testing
         send(["type": "response.done", "response": ["id": id, "status": "completed", "output": []]])
         send(["type": "output_audio_buffer.stopped", "response_id": id])
     }
+}
+@Test @MainActor func connectionFailureCanRestartWithFreshCredential() async {
+    let h = VoiceHarness(); await h.ready()
+    h.transport.onFailure?()
+    #expect(h.session.phase == .connectionLost)
+    #expect(h.session.error?.contains("reconnects") == true)
+
+    h.session.reconnect(credential: h.credential())
+    await Task.yield()
+    #expect(h.transport.connects == 2)
+    #expect(h.session.phase == .reconnecting)
+    h.send(["type": "session.created"])
+    #expect(h.session.phase == .listening)
+    #expect(h.session.error == nil)
+    #expect(h.session.telemetry.reconnectAttempts == 1)
+    #expect(h.session.telemetry.successfulReconnects == 1)
+}
+
+@Test @MainActor func reconnectPreservesSavedTasksContextAndIdempotencySession() async {
+    let h = VoiceHarness(); await h.ready()
+    await h.respond([h.tool("create_task", ["title": "Call Damien"], id: "create-1")])
+    #expect(h.session.sessionCreatedTasks.map(\.title) == ["Call Damien"])
+    let originalTaskID = h.session.context.lastCreatedTaskID
+
+    h.transport.onFailure?()
+    h.session.reconnect(credential: h.credential())
+    await Task.yield(); h.send(["type": "session.created"])
+
+    #expect(h.session.context.lastCreatedTaskID == originalTaskID)
+    #expect(h.session.sessionCreatedTasks.map(\.title) == ["Call Damien"])
+    let recoveryText = h.transport.sends.compactMap { event -> String? in
+        guard event["type"] as? String == "conversation.item.create",
+              let item = event["item"] as? [String: Any], item["type"] as? String == "message",
+              let content = item["content"] as? [[String: Any]] else { return nil }
+        return content.first?["text"] as? String
+    }.last
+    #expect(recoveryText?.contains("Call Damien") == true)
+
+    await h.respond([h.tool("update_task", ["taskId": "last", "scheduledAt": "2027-01-01T11:00:00Z"], id: "update-1")])
+    #expect(h.tools.calls.last?.1["taskId"] as? String == originalTaskID)
+}
+
+@Test @MainActor func audioInterruptionPausesAndResumesWithoutClosingConnection() async {
+    let h = VoiceHarness(); await h.ready()
+    h.session.pauseForAudioInterruption()
+    #expect(h.session.phase == .paused)
+    #expect(h.transport.muted)
+    #expect(!h.transport.closed)
+
+    await h.session.resumeAfterAudioInterruption()
+    #expect(h.session.phase == .listening)
+    #expect(!h.transport.muted)
+    #expect(h.transport.audioResumes == 1)
+    #expect(h.session.telemetry.audioInterruptions == 1)
+}
+
+@Test @MainActor func inFlightToolFinishesSafelyAcrossReconnectWithoutSendingStaleCallOutput() async {
+    let h = VoiceHarness(); await h.ready(); h.tools.blocks = true
+    await h.respond([h.tool("create_task", ["title": "Safe during reconnect"], id: "old-call")])
+    #expect(h.session.phase == .toolExecution)
+
+    h.transport.onFailure?()
+    h.session.reconnect(credential: h.credential())
+    await Task.yield(); h.send(["type": "session.created"])
+    h.tools.unblock()
+    for _ in 0..<40 { await Task.yield() }
+
+    #expect(h.session.phase == .listening)
+    #expect(h.session.sessionCreatedTasks.map(\.title) == ["Safe during reconnect"])
+    let staleOutputs = h.transport.sends.filter { event in
+        guard event["type"] as? String == "conversation.item.create",
+              let item = event["item"] as? [String: Any] else { return false }
+        return item["type"] as? String == "function_call_output" && item["call_id"] as? String == "old-call"
+    }
+    #expect(staleOutputs.isEmpty)
 }
 @Test @MainActor func sequentialTasksKeepOneConnectionUntilGoodbyeAudioFinishes() async {
     let h = VoiceHarness(); await h.ready()

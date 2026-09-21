@@ -1,6 +1,8 @@
+import { observedFetch } from '@/server/health/telemetry';
+import { healthRoute } from '@/server/health/telemetry';
 import { NextResponse } from 'next/server';
 
-export async function GET(req: Request) {
+async function healthHandlerGET(req: Request) {
   const params = new URL(req.url).searchParams;
   const latitude = Number(params.get('lat'));
   const longitude = Number(params.get('lon'));
@@ -17,7 +19,7 @@ export async function GET(req: Request) {
   url.searchParams.set('wind_speed_unit', 'mph');
   url.searchParams.set('timezone', 'auto');
   try {
-    const response = await fetch(url, { next: { revalidate: 600 }, signal: AbortSignal.timeout(12000) });
+    const response = await observedFetch(url, { next: { revalidate: 600 }, signal: AbortSignal.timeout(12000) });
     if (!response.ok) throw new Error(`Weather provider returned ${response.status}`);
     const payload = await response.json();
     return NextResponse.json({ current: payload.current, units: payload.current_units, daily: payload.daily, timezone: payload.timezone });
@@ -25,3 +27,5 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: 'Weather is temporarily unavailable.' }, { status: 502 });
   }
 }
+
+export const GET = healthRoute('GET /api/weather', healthHandlerGET);

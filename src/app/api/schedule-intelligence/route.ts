@@ -1,3 +1,4 @@
+import { healthRoute } from '@/server/health/telemetry';
 import { NextResponse } from 'next/server';
 import { requireUser } from '@/server/auth';
 import { getScheduleIntelligence } from '@/server/schedule-intelligence';
@@ -6,7 +7,7 @@ import { jsonError } from '@/lib/http';
 import { proactiveNextAction, dismissNextAction } from '@/server/executive-companion';
 import { z } from 'zod';
 
-export async function GET(req: Request) {
+async function healthHandlerGET(req: Request) {
   try {
     const user = await requireUser();
     const params = new URL(req.url).searchParams;
@@ -19,7 +20,7 @@ export async function GET(req: Request) {
   } catch (error) { return jsonError(error); }
 }
 
-export async function POST(req: Request) {
+async function healthHandlerPOST(req: Request) {
   try {
     const user = await requireUser();
     const body = req ? await req.json().catch(() => null) : null;
@@ -33,3 +34,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ proposal: await generateReplanProposal(user.id) });
   } catch (error) { return jsonError(error); }
 }
+
+export const GET = healthRoute('GET /api/schedule-intelligence', healthHandlerGET);
+
+export const POST = healthRoute('POST /api/schedule-intelligence', healthHandlerPOST);

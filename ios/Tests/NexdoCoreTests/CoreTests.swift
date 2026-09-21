@@ -34,6 +34,13 @@ import Testing
     #expect(task.isDone)
     #expect(task.durationMin == 45)
 }
+@Test func taskDecodesInternalLifeReminderMetadata() throws {
+    let data = Data(#"{"id":"t1","title":"Return shoes","status":"PLANNED","priority":"NORMAL","durationMin":5,"notes":"","startAt":"2026-10-10T16:00:00Z","dueAt":"2026-10-14T16:00:00Z","reminderAt":"2026-10-10T16:00:00Z","lifeReminderType":"returnItem","lifeReminderConfidence":0.96,"originalUserText":"Return shoes before October 14"}"#.utf8)
+    let task = try JSONDecoder().decode(NexdoTask.self, from: data)
+    #expect(task.lifeReminderType == "returnItem")
+    #expect(task.lifeReminderLabel == "Return")
+    #expect(task.originalUserText == "Return shoes before October 14")
+}
 @Test func todayIntelligenceDecodesRealScheduleFacts() throws {
     let data = Data(#"{"today":{"day":"2026-09-07","timeZone":"America/Los_Angeles","commitments":3,"appointments":1,"tasks":2,"overdue":1,"availableMinutes":90,"timeline":[{"id":"task:t1","sourceId":"t1","kind":"task","title":"Finish proposal","startAt":"2026-09-07T16:00:00Z","endAt":"2026-09-07T16:30:00Z","allDay":false,"deadlineOnly":false,"past":false}],"attention":[{"id":"overdue","label":"Overdue","title":"1 unfinished deadline","explanation":"Finish proposal","recommendedAction":"Review overdue work.","kind":"task","taskId":"t1"}],"recommendation":{"title":"Protect 9:00 AM–9:30 AM","explanation":"Use this opening for Finish proposal.","kind":"task","taskId":"t1"}}}"#.utf8)
     let result = try JSONDecoder().decode(ScheduleIntelligenceResponse.self, from: data)

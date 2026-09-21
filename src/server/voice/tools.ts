@@ -7,13 +7,16 @@ import { z } from 'zod';
 import { createHash } from 'node:crypto';
 import { prisma } from '@/server/db';
 import { createTask, updateTask, scheduleTask, completeTask, deleteTask } from '@/server/tasks';
-import { scheduleDefaultReminders } from '@/server/reminders';
+import { scheduleDefaultReminders, scheduleRequestedReminder } from '@/server/reminders';
 import { listEventsInRange } from '@/server/agenda';
 import { pushTaskToExternal } from '@/server/calendar-sync';
 import { generateReplanProposal } from '@/server/replanner';
+import { LIFE_REMINDER_TYPES, parseLifeReminder } from '@/lib/life-reminders';
+import { inc } from '@/lib/metrics';
 
 const timestamp = z.string().datetime({ offset: true });
 const fields = { title: z.string().trim().min(1).max(200), notes: z.string().max(4000), scheduledAt: timestamp, durationMin: z.number().int().min(1).max(1440), categoryName: z.string().trim().min(1).max(80) };
+const recurrence = z.object({ frequency: z.enum(['DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY']), interval: z.number().int().min(1).max(120) }).strict();
 const id = z.string().min(1).max(200);
 const schemas = {
   ...moduleSchemas,
@@ -21,7 +24,7 @@ const schemas = {
   get_recommendations: z.object({ minutes: z.number().int().min(1).max(480).optional() }).strict(),
   list_categories: z.object({}).strict(),
   create_calendar_event: z.object({ allowScheduleConflict: z.boolean().optional(), title: fields.title, notes: fields.notes.optional(), startAt: timestamp, endAt: timestamp, location: z.string().max(200).optional() }).strict(),
-  create_reminder: z.object({ title: fields.title, notes: fields.notes.optional(), categoryName: fields.categoryName.optional(), scheduledAt: timestamp }).strict(),
+  create_reminder: z.object({ title: fields.title, notes: fields.notes.optional(), categoryName: fields.categoryName.optional(), scheduledAt: timestamp, dueAt: timestamp.optional(), originalUserText: z.string().max(500).optional(), lifeReminderType: z.enum(LIFE_REMINDER_TYPES).optional(), recurrence: recurrence.optional() }).strict(),
   create_task: z.object({ allowScheduleConflict: z.boolean().optional(), title: fields.title, notes: fields.notes.optional(), scheduledAt: timestamp, durationMin: fields.durationMin, categoryName: fields.categoryName.optional() }).strict(),
   update_task: z.object({ allowScheduleConflict: z.boolean().optional(), taskId: id, title: fields.title.optional(), notes: fields.notes.optional(), categoryName: fields.categoryName.optional(), scheduledAt: timestamp.optional(), durationMin: fields.durationMin.optional(), recurrence: z.null().optional() }).strict(),
   delete_task: z.object({ taskId: id }).strict(), complete_task: z.object({ allowScheduleConflict: z.boolean().optional(), taskId: id }).strict(),
@@ -42,7 +45,7 @@ export async function executeVoiceTool(userId: string, sessionId: string, callId
     const user = await prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { timeZone: true } });
     return { success: true, ...voiceClock(user.timeZone) };
   }
-  const args = input as Record<string, string | number | boolean | null>;
+  const args = input as Record<string, unknown>;
   if (typeof args.scheduledAt === 'string' && +new Date(args.scheduledAt) <= Date.now()) throw new Error('Schedule must be in the future');
   if (['create_task', 'create_calendar_event'].includes(name) && args.allowScheduleConflict !== true) {
     const start = new Date(String(name === 'create_task' ? args.scheduledAt : args.startAt));
@@ -98,7 +101,19 @@ export async function executeVoiceTool(userId: string, sessionId: string, callId
   let task;
   if (name === 'create_task' || name === 'create_reminder') {
     const key = 'voice:' + createHash('sha256').update(`${userId}:${sessionId}:${callId}`).digest('hex');
-    task = await createTask({ userId, title: String(args.title), notes: args.notes as string | undefined, startAt: new Date(String(args.scheduledAt)), durationMin: name === 'create_reminder' ? 5 : Number(args.durationMin), kind: name === 'create_reminder' ? 'REMINDER' : undefined, idempotencyKey: key });
+    const scheduledAt = new Date(String(args.scheduledAt));
+    const user = await prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { timeZone: true } });
+    const intent = name === 'create_reminder' ? parseLifeReminder(String(args.originalUserText ?? args.title), user.timeZone) : null;
+    const lifeType = name === 'create_reminder' ? String(args.lifeReminderType ?? (intent?.recognized ? intent.reminderType : 'general')) : null;
+    task = await createTask({ userId, title: intent?.recognized ? intent.title : String(args.title), notes: args.notes as string | undefined, startAt: scheduledAt,
+      dueAt: name === 'create_reminder' ? new Date(String(args.dueAt ?? intent?.dueDate?.toISOString() ?? args.scheduledAt)) : scheduledAt,
+      reminderAt: name === 'create_reminder' ? scheduledAt : null, lifeReminderType: lifeType,
+      lifeReminderConfidence: name === 'create_reminder' ? intent?.confidence || 0.9 : null,
+      originalUserText: name === 'create_reminder' ? String(args.originalUserText ?? args.title) : null,
+      durationMin: name === 'create_reminder' ? 5 : Number(args.durationMin), kind: name === 'create_reminder' ? 'REMINDER' : undefined, idempotencyKey: key });
+    const rule = args.recurrence as { frequency: string; interval: number } | undefined;
+    if (name === 'create_reminder' && rule) await prisma.recurrenceRule.upsert({ where: { taskId: task.id }, update: rule, create: { taskId: task.id, ...rule } });
+    if (name === 'create_reminder') { inc('life_reminder_created'); if (rule) inc('life_reminder_recurring_created'); }
   } else {
     const owned = await prisma.task.findFirst({ where: { id: String(args.taskId), userId, deletedAt: null } });
     if (!owned) return { success: false, error: 'Task not found. Ask the user which task.' };
@@ -136,9 +151,8 @@ export async function executeVoiceTool(userId: string, sessionId: string, callId
   }
   if (name === 'create_reminder') {
     const fireAt = new Date(String(args.scheduledAt));
-    const idempotencyKey = `voice-reminder:${task.id}:${fireAt.toISOString()}`;
     try {
-      await prisma.reminder.upsert({ where: { idempotencyKey }, update: {}, create: { userId, taskId: task.id, fireAt, offsetLabel: 'requested reminder', idempotencyKey } });
+      await scheduleRequestedReminder(userId, task.id, fireAt, Boolean(task.critical));
     } catch { warnings.push('Task saved, but its requested reminder could not be set.'); }
   }
   // A reminder failure must not disguise a successful task save as an unsaved task.
@@ -150,7 +164,7 @@ export async function executeVoiceTool(userId: string, sessionId: string, callId
   if (name === 'delete_task' || name === 'complete_task') await prisma.reminder.deleteMany({ where: { taskId: task.id, userId, status: { in: ['SCHEDULED', 'QUEUED', 'RETRYING'] } } });
   // Preserve the existing task workflow's configured calendar sync and replanning.
   // A downstream failure must not invite a duplicate task creation.
-  try { await pushTaskToExternal(userId, task.id); } catch { warnings.push('Task saved, but connected calendar sync failed.'); }
+  if (name !== 'create_reminder') try { await pushTaskToExternal(userId, task.id); } catch { warnings.push('Task saved, but connected calendar sync failed.'); }
   try { await generateReplanProposal(userId); } catch { warnings.push('Task saved, but schedule suggestions could not refresh.'); }
   return { success: true, warnings, task: { id: task.id, title: task.title, status: task.status, priority: task.priority, durationMin: task.durationMin, startAt: task.startAt, dueAt: task.dueAt }, reminderWarning };
 }

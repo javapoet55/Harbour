@@ -13,6 +13,7 @@ struct ShoppingItemEditor:View {
     @State private var error:String?
     @State private var aiConsent=false
     @State private var imageDetails=""
+    @State private var imageExpanded=false
     @State private var generation=UUID()
     private var photo:UIImage? {
         guard let value=initial.imageData,let data=Data(base64Encoded:value) else{return nil}
@@ -28,29 +29,31 @@ struct ShoppingItemEditor:View {
                     TextField("Size, e.g. 1 gallon or 500 g",text:$initial.size)
                     TextField("Brand or notes",text:$initial.notes,axis:.vertical)
                 }
-                Section("Item Image") {
-                    if let photo {
-                        Image(uiImage:photo).resizable().scaledToFit().frame(maxWidth:.infinity,maxHeight:200)
-                            .accessibilityLabel("Attached item image")
-                        Button("Remove Image",role:.destructive){initial.imageData=nil}
-                    }else {
-                        Label("Attach a photo or create an illustration",systemImage:"photo.badge.plus")
-                            .foregroundStyle(.secondary)
+                Section {
+                    DisclosureGroup("Item Image",isExpanded:$imageExpanded) {
+                        if let photo {
+                            Image(uiImage:photo).resizable().scaledToFit().frame(maxWidth:.infinity,maxHeight:200)
+                                .accessibilityLabel("Attached item image")
+                            Button("Remove Image",role:.destructive){initial.imageData=nil}
+                        }else {
+                            Label("Attach a photo or create an illustration",systemImage:"photo.badge.plus")
+                                .foregroundStyle(.secondary)
+                        }
+                        PhotosPicker(selection:$selectedPhoto,matching:.images,preferredItemEncoding:.compatible){Label("Choose from Photos",systemImage:"photo.on.rectangle")}
+                        Button{Task{await openCamera()}}label:{Label("Take a Picture",systemImage:"camera")}
+                            .disabled(!UIImagePickerController.isSourceTypeAvailable(.camera))
+                        if !UIImagePickerController.isSourceTypeAvailable(.camera){Text("Camera is available on a supported device.").font(.caption).foregroundStyle(.secondary)}
+                        TextField("Describe the image (optional)",text:$imageDetails,axis:.vertical)
+                        Toggle("Allow AI image generation",isOn:$aiConsent)
+                        Text("AI receives the item name and image description. Photos you attach are not sent to AI. The image is saved with the item when you tap Save.").font(.caption).foregroundStyle(.secondary)
+                        Button{Task{await generate()}}label:{Label("Generate with AI",systemImage:"sparkles")}
+                            .disabled(!aiConsent || initial.name.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty)
                     }
-                    PhotosPicker(selection:$selectedPhoto,matching:.images,preferredItemEncoding:.compatible){Label("Choose from Photos",systemImage:"photo.on.rectangle")}
-                    Button{Task{await openCamera()}}label:{Label("Take a Picture",systemImage:"camera")}
-                        .disabled(!UIImagePickerController.isSourceTypeAvailable(.camera))
-                    if !UIImagePickerController.isSourceTypeAvailable(.camera){Text("Camera is available on a supported device.").font(.caption).foregroundStyle(.secondary)}
-                    TextField("Describe the image (optional)",text:$imageDetails,axis:.vertical)
-                    Toggle("Allow AI image generation",isOn:$aiConsent)
-                    Text("AI receives the item name and image description. Photos you attach are not sent to AI. The image is saved with the item when you tap Save.").font(.caption).foregroundStyle(.secondary)
-                    Button{Task{await generate()}}label:{Label("Generate with AI",systemImage:"sparkles")}
-                        .disabled(!aiConsent || initial.name.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty)
                 }.disabled(busy)
                 if busy {ProgressView("Preparing image…")}
                 if let error {Text(error).foregroundStyle(.red)}
             }
-            .navigationTitle("Item")
+            .navigationTitle("Edit Item")
             .toolbar {
                 ToolbarItem(placement:.cancellationAction){Button("Cancel"){generation=UUID();dismiss()}}
                 ToolbarItem(placement:.confirmationAction){Button("Save"){onSave(initial);dismiss()}.disabled(busy || initial.name.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty)}
