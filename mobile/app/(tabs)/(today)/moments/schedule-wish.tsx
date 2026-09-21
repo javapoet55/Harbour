@@ -1,6 +1,6 @@
 import * as Crypto from 'expo-crypto';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 
 import type { ImportantMoment, PlanResponse, WishDeliveryPlan, WishDraft } from '../../../../src/api/moments';
@@ -20,8 +20,9 @@ import { textStyles, useTheme } from '../../../../src/theme';
  * pushes the new plan's Wish details in its confirmation form.
  *
  * "Send automatically" is email-only and greyed out unless the server reports
- * `automaticEmailEnabled`. The button's `date <= Date()` guard is evaluated when the screen renders,
- * not continuously — the same as Swift.
+ * `automaticEmailEnabled`. The send time is compared against a clock that ticks every second, so a
+ * time that lapses while the screen is open disables the button on its own
+ * (ImportantMomentsView.swift:464, :496).
  */
 export default function ScheduleWishScreen() {
   const theme = useTheme();
@@ -36,17 +37,28 @@ export default function ScheduleWishScreen() {
   const [date, setDate] = useState(() => Date.now() + 3_600_000);
   // `.onAppear { zone = moment.timeZoneID }`
   const [zone, setZone] = useState(() => moment?.timeZoneID ?? deviceZone());
-  const [now] = useState(() => Date.now());
+  const [now, setNow] = useState(() => Date.now());
   const [automatic, setAutomatic] = useState(false);
   const [warning, setWarning] = useState(true);
   const [yearly, setYearly] = useState(false);
   const [key] = useState(() => Crypto.randomUUID());
   const [saved, setSaved] = useState<WishDeliveryPlan | null>(null);
 
+  // `.onReceive(Timer.publish(every:1, ...))` (:496): re-evaluates the disabled state as time passes.
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
   if (!moment || !draft) return null;
   const automaticEnabled = snapshot?.automaticEmailEnabled === true;
 
-  const schedule = () =>
+  const schedule = () => {
+    // `guard date > Date()` (:488): the time may have lapsed between the last tick and this tap.
+    if (date <= Date.now()) {
+      momentsStore.getState().setError('Choose a future time.');
+      return;
+    }
     void momentsStore.getState().perform(async () => {
       if (!automatic || warning) await momentsStore.getState().authorizeNotifications();
       const response = await momentsStore.getState().request<PlanResponse>('schedule', {
@@ -66,6 +78,7 @@ export default function ScheduleWishScreen() {
       rememberPlan(response.plan);
       router.push({ pathname: '/moments/wish', params: { planId: response.plan.id, confirmation: '1' } });
     });
+  };
 
   return (
     <View style={styles.fill}>

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { Alert } from 'react-native';
 
 const mockPush = jest.fn();
@@ -40,6 +40,7 @@ import * as SMS from 'expo-sms';
 import type { ImportantMoment, MomentsSnapshot } from '../../../api/moments';
 import { momentDate, sendDayLabel } from '../dates';
 import { OPENED_UNCONFIRMED } from '../domain';
+import { rememberDraft } from '../handoff';
 import { momentsStore } from '../store';
 import { draft, moment, plan, settings } from '../testFixtures';
 
@@ -50,6 +51,7 @@ import MomentSettings from '../../../../app/(tabs)/(today)/moments/settings';
 import ChooseDelivery from '../../../../app/(tabs)/(today)/moments/delivery';
 import WishDetails from '../../../../app/(tabs)/(today)/moments/wish';
 import ChooseFestivals from '../../../../app/(tabs)/(today)/moments/festivals';
+import ScheduleWish from '../../../../app/(tabs)/(today)/moments/schedule-wish';
 
 function load(moments: ImportantMoment[], extra: Partial<MomentsSnapshot> = {}) {
   const snapshot: MomentsSnapshot = { moments, emailAccount: null, emailConfigured: false, automaticEmailEnabled: false, ...extra };
@@ -418,5 +420,47 @@ describe('Choose Festivals', () => {
     for (const name of ['Diwali', 'Holi', 'Eid', 'Pongal']) expect(screen.getByText(name)).toBeTruthy();
     await fireEvent.press(screen.getByTestId('festival-Diwali'));
     expect(mockPush).toHaveBeenCalledWith({ pathname: '/moments/editor', params: { imported: expect.stringContaining('"title":"Diwali Wishes"'), done: 'back' } });
+  });
+});
+
+describe('Schedule Wish', () => {
+  const setup = async () => {
+    const item = moment({ id: 'm', type: 'custom', title: 'Lunch', phone: '+15555550100', drafts: [draft({ id: 'd', body: 'See you!' })] });
+    load([item]);
+    // The screen reads the draft through the handoff cache, as Choose Delivery leaves it.
+    rememberDraft(item.drafts[0]);
+    mockParams = { momentId: 'm', draftId: 'd', channel: 'messages', recipient: '+15555550100' };
+    await render(<ScheduleWish />);
+  };
+
+  beforeEach(() => jest.useFakeTimers());
+  afterEach(() => jest.useRealTimers());
+
+  // ImportantMomentsView.swift:496: the disabled state follows a one-second clock.
+  it('disables the button on its own once the send time lapses', async () => {
+    await setup();
+    const submit = () => screen.getByTestId('schedule-wish-submit').props.accessibilityState.disabled;
+    expect(submit()).toBe(false);
+
+    // The default send time is an hour out; step past it, then let one tick land.
+    await act(async () => {
+      jest.setSystemTime(Date.now() + 3_600_000 + 1_000);
+      jest.advanceTimersByTime(1000);
+    });
+    expect(submit()).toBe(true);
+  });
+
+  // `guard date > Date()` (:488): the time can lapse between the last tick and the tap.
+  it('re-checks the time on submit and does not schedule a lapsed wish', async () => {
+    await setup();
+    // Move the clock without letting the interval fire, so the button is still enabled.
+    jest.setSystemTime(Date.now() + 3_600_000 + 1_000);
+    expect(screen.getByTestId('schedule-wish-submit').props.accessibilityState.disabled).toBe(false);
+
+    await act(async () => {
+      fireEvent.press(screen.getByTestId('schedule-wish-submit'));
+    });
+    expect(screen.getByTestId('schedule-wish-error').props.children).toBe('Choose a future time.');
+    expect(mockPost).not.toHaveBeenCalledWith('schedule', expect.anything(), undefined);
   });
 });
