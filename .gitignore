@@ -61,3 +61,12 @@ yarn-error.log*
 /mobile/web-build
 /mobile/ios
 /mobile/android
+
+# mobile build artefacts (mobile/ itself is tracked on react-native-migration)
+mobile/node_modules/
+mobile/.expo/
+mobile/android/
+mobile/dist/
+
+# local previews and generated artifacts
+/output/

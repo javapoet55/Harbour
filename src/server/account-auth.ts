@@ -3,6 +3,7 @@ import { randomInt } from 'node:crypto';
 import { z } from 'zod';
 import { prisma } from './db';
 import { emailDeliveryMocked, emailProvider } from '@/providers';
+import { passwordResetMessage, verifyEmailMessage } from './email/messages';
 
 const emailSchema = z.string().trim().toLowerCase().email().max(254);
 const nameSchema = z.string().trim().min(1).max(100);
@@ -47,22 +48,7 @@ function developmentCode(code: string): Pick<CodeDelivery, 'developmentCode'> {
 }
 
 function codeEmail(code: string, purpose: CodePurpose) {
-  const heading = purpose === 'verify' ? 'Verify your email' : 'Reset your password';
-  const intro = purpose === 'verify' ? 'Use this code to finish creating your Nexdo account.' : 'Use this code to reset your Nexdo password.';
-  const ignore = purpose === 'verify'
-    ? 'If you did not create a Nexdo account, you can ignore this email.'
-    : 'If you did not request a password reset, you can ignore this email. Your password will not change.';
-  return {
-    subject: purpose === 'verify' ? 'Verify your Nexdo email' : 'Your Nexdo password reset code',
-    text: `${intro}\n\nYour code is ${code}. It expires in ${codeLifetime(purpose)} and can be used once.\n\n${ignore}`,
-    html: `<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;max-width:480px;margin:0 auto;padding:32px 24px;color:#1f2933">`
-      + `<h1 style="font-size:22px;margin:0 0 12px">${heading}</h1>`
-      + `<p style="font-size:15px;line-height:1.6;margin:0 0 24px">${intro}</p>`
-      + `<p style="font-size:32px;font-weight:700;letter-spacing:8px;margin:0 0 24px;font-family:ui-monospace,Menlo,Consolas,monospace">${code}</p>`
-      + `<p style="font-size:14px;line-height:1.6;color:#52606d;margin:0 0 8px">This code expires in ${codeLifetime(purpose)} and can be used once.</p>`
-      + `<p style="font-size:14px;line-height:1.6;color:#52606d;margin:0">${ignore}</p>`
-      + `</div>`,
-  };
+  return purpose === 'verify' ? verifyEmailMessage(code, codeLifetime(purpose)) : passwordResetMessage(code, codeLifetime(purpose));
 }
 
 export async function registerAccount(input: { name: string; email: string; password: string }) {

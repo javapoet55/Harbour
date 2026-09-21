@@ -14,13 +14,15 @@ export const emailProvider: EmailProvider = {
       if (process.env.NODE_ENV === 'production') return { id: '', status: 'FAILED', reason: 'Email provider is not configured' };
       return { id: `mock-email-${Date.now()}`, status: 'SENT' };
     }
-    const from = process.env.SENDGRID_FROM_EMAIL;
-    if (!from) return { id: '', status: 'FAILED', reason: 'SENDGRID_FROM_EMAIL is not configured' };
+    // EMAIL_FROM_* take precedence; the SENDGRID_FROM_* names remain as fallbacks for existing deployments.
+    const from = process.env.EMAIL_FROM_ADDRESS?.trim() || process.env.SENDGRID_FROM_EMAIL?.trim();
+    if (!from) return { id: '', status: 'FAILED', reason: 'EMAIL_FROM_ADDRESS is not configured' };
+    const fromName = process.env.EMAIL_FROM_NAME?.trim() || process.env.SENDGRID_FROM_NAME?.trim() || 'Nexdo';
     try {
       const response = await observedFetch('https://api.sendgrid.com/v3/mail/send', {
         method: 'POST',
         headers: { Authorization: `Bearer ${process.env.SENDGRID_API_KEY}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ personalizations: [{ to: [{ email: message.to }] }], from: { email: from, name: process.env.SENDGRID_FROM_NAME || 'Harbour' }, subject: message.subject, content: [{ type: 'text/plain', value: message.text }, ...(message.html ? [{ type: 'text/html', value: message.html }] : [])] }),
+        body: JSON.stringify({ personalizations: [{ to: [{ email: message.to }] }], from: { email: from, name: fromName }, subject: message.subject, content: [{ type: 'text/plain', value: message.text }, ...(message.html ? [{ type: 'text/html', value: message.html }] : [])] }),
       });
       if (!response.ok) return { id: '', status: 'FAILED', reason: `SendGrid ${response.status}` };
       return { id: response.headers.get('x-message-id') || `sendgrid-${Date.now()}`, status: 'SENT' };

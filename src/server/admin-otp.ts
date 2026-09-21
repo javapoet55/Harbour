@@ -4,6 +4,9 @@ import { prisma } from './db';
 import { normalizeEmail } from './account-auth';
 import { isAdminEmail } from './admin-allowlist';
 import { adminEmailConfigured, adminEmailProvider } from '@/providers/admin-email';
+import { adminSignInMessage } from './email/messages';
+
+const ADMIN_CODE_TTL_MINUTES = 10;
 
 export const adminTokenHash = (token: string) => createHash('sha256').update(token).digest('hex');
 const opaqueToken = () => randomBytes(32).toString('hex');
@@ -27,13 +30,10 @@ export async function requestAdminCode(value: string) {
     });
     if (recent.length >= 3 || (recent[0] && recent[0].createdAt.getTime() > Date.now() - 60_000)) throw new Error('RATE_LIMITED');
     await tx.adminLoginToken.updateMany({ where: { userId: user.id, usedAt: null }, data: { usedAt: new Date() } });
-    return tx.adminLoginToken.create({ data: { id, userId: user.id, codeHash, expiresAt: new Date(Date.now() + 10 * 60_000) } });
+    return tx.adminLoginToken.create({ data: { id, userId: user.id, codeHash, expiresAt: new Date(Date.now() + ADMIN_CODE_TTL_MINUTES * 60_000) } });
   });
   try {
-    const delivery = await adminEmailProvider.send({
-      to: email, subject: 'Your NEXDO Admin sign-in code',
-      text: `Your NEXDO Admin sign-in code is ${code}. It expires in 10 minutes and can be used once. Never share this code. If you did not request it, ignore this email.`,
-    });
+    const delivery = await adminEmailProvider.send({ to: email, ...adminSignInMessage(code, `${ADMIN_CODE_TTL_MINUTES} minutes`) });
     if (delivery.status === 'FAILED') throw new Error('EMAIL_UNAVAILABLE');
   } catch {
     await prisma.adminLoginToken.update({ where: { id: created.id }, data: { usedAt: new Date() } });
