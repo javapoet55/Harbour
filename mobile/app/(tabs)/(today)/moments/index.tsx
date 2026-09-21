@@ -213,13 +213,23 @@ export default function ImportantMomentsScreen() {
                 />
               </View>
             ) : null}
+            {/* The wish tabs stand on their own filtered plans: a tab with no matching wish says
+                so, whether or not any moments exist (ImportantMomentsView.swift:274-276). */}
+            {plans.length === 0 ? (
+              <View style={styles.empty} testID="moments-plans-empty">
+                <Ionicons name={tab === 'Sent' ? 'paper-plane-outline' : 'calendar-outline'} size={44} color={theme.colors.secondaryLabel} />
+                <Text style={[textStyles.title2, styles.bold, { color: theme.colors.label }]}>{tab === 'Sent' ? 'No sent wishes yet' : 'No scheduled wishes'}</Text>
+                <Text style={[textStyles.subheadline, styles.center, { color: theme.colors.secondaryLabel }]}>Wishes matching your filters will appear here.</Text>
+              </View>
+            ) : null}
             {plans.map((plan) => (
               <PlanCard key={plan.id} plan={plan} moment={momentForPlan(displayed, plan)} />
             ))}
           </>
         )}
 
-        {displayed.length === 0 ? (
+        {/* "No moments yet" belongs to Upcoming only (:293). */}
+        {tab === 'Upcoming' && displayed.length === 0 ? (
           <View style={styles.empty} testID="moments-empty">
             <Ionicons name="gift-outline" size={44} color={theme.colors.secondaryLabel} />
             <Text style={[textStyles.title2, styles.bold, { color: theme.colors.label }]}>No moments yet</Text>

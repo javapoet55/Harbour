@@ -99,6 +99,51 @@ describe('Important Moments list', () => {
     expect(mockPush).toHaveBeenCalledWith({ pathname: '/moments/editor', params: { done: 'list' } });
   });
 
+  // ImportantMomentsView.swift:274-276, :293: the wish tabs answer for their own filtered plans.
+  it('shows a per-tab empty state when no wish matches, even though moments exist', async () => {
+    const d = future(5);
+    load([moment({ id: 'x', occurrenceDate: d, nextOccurrence: d })]);
+    await render(<ImportantMoments />);
+
+    await fireEvent.press(screen.getByTestId('moments-tab-Scheduled'));
+    expect(screen.getByText('No scheduled wishes')).toBeTruthy();
+    expect(screen.getByText('Wishes matching your filters will appear here.')).toBeTruthy();
+    expect(screen.queryByTestId('moments-empty')).toBeNull();
+
+    await fireEvent.press(screen.getByTestId('moments-tab-Sent'));
+    expect(screen.getByText('No sent wishes yet')).toBeTruthy();
+    expect(screen.queryByTestId('moments-empty')).toBeNull();
+  });
+
+  // The filter, not the absence of moments, decides the wish tabs' empty state.
+  it('shows the Scheduled empty state when the delivery filter excludes every wish', async () => {
+    const d = future(5);
+    load([
+      moment({
+        id: 'x',
+        occurrenceDate: d,
+        nextOccurrence: d,
+        drafts: [draft({ plans: [plan({ id: 'p1', scheduledAtUTC: `${d}T08:00:00Z` })] })],
+      }),
+    ]);
+    await render(<ImportantMoments />);
+    await fireEvent.press(screen.getByTestId('moments-tab-Scheduled'));
+    expect(screen.queryByText('No scheduled wishes')).toBeNull();
+
+    await fireEvent.press(screen.getByTestId('moments-delivery-filter'));
+    await fireEvent.press(screen.getByTestId('moments-delivery-filter-Automatic'));
+    expect(screen.getByText('No scheduled wishes')).toBeTruthy();
+  });
+
+  it('keeps "No moments yet" on Upcoming only', async () => {
+    load([]);
+    await render(<ImportantMoments />);
+    expect(screen.getByTestId('moments-empty')).toBeTruthy();
+    await fireEvent.press(screen.getByTestId('moments-tab-Scheduled'));
+    expect(screen.queryByTestId('moments-empty')).toBeNull();
+    expect(screen.getByText('No scheduled wishes')).toBeTruthy();
+  });
+
   it('lists wishes on the Scheduled tab and filters them by delivery', async () => {
     const d = future(5);
     load([
