@@ -690,3 +690,60 @@ been measured on a device yet.
    not fit, the row scrolls. Tapping Schedule keeps it in view.
 3. Calendar, Settings → Appearance, Tasks / Projects: the segments size to their labels at one size.
 4. iOS: every row is still equal widths, as before.
+
+---
+
+## 10. Calendar timeline rows (2026-09-22)
+
+JavaScript only; no new build needed. All changes are Android only. iOS is unchanged, and so are
+the text and behaviour. Colours come from tokens only.
+
+### What was wrong
+
+- **Chevron.** Each timeline row was top-aligned, so its `>` chevron sat at the top-right and
+  seemed to float between rows.
+- **Divider.** The divider was drawn inside the text column above a 4pt bottom pad, so it read as a
+  short line hanging between rows.
+- **Tile.** The glyph tile was 32×36 on a tint and did not line up with the rail's dot.
+- **Cards.** Schedule Intelligence, the summary card and "Unscheduled & overdue" each had their own
+  tint instead of the shared card look.
+- **"Review conflicts"** could be clipped by the header row.
+- **Day headers** sat tight on the previous day's rows.
+
+### What changed
+
+**Timeline row** (`CalendarTimelineRow`, `src/components/CalendarParts.tsx`):
+- **Layout.** A row of centred columns with 12pt of padding above and below:
+  - **Time:** 72pt wide, left-aligned.
+  - **Rail:** the 8pt rail, whose line runs through the row padding so it is continuous. Its dot
+    sits on the icon's centre.
+  - **Icon:** a 44×44 tile on `fieldSurface` with a hairline `fieldBorder`, glyph 22.
+  - **Text:** title 17 in `ink`, detail 14 in `secondary`. The badges, including "Deadline", are
+    unchanged.
+  - **Chevron:** centred vertically in `secondary`, 16pt from the row's right edge.
+- **Tapping.** The whole row is the target, with a `fieldSurface` fill while pressed and a ripple.
+- **Separator.** One 1px separator (`androidSeparator`) along the row's bottom, from the text
+  column's left edge (`ANDROID_TEXT_INSET` = 72 + 8 + 44 + 3 gaps of 10 = 154) to the row's right
+  edge. The short line inside the text column is gone on Android.
+
+**Screen** (`app/(tabs)/calendar.tsx`):
+
+| Part | Android change |
+|---|---|
+| Day sections | 20pt above each day header, 8pt below it. "Nothing scheduled. Room to breathe." (and "No items match your filters.") stays in `secondary`, with 12pt above and 24pt below |
+| Schedule Intelligence card | The shared group (`fieldSurface`, 1px `fieldBorder`). "Schedule Intelligence" takes `flex: 1` and can shrink. "Review conflicts" can shrink to half the row and wrap, right-aligned, so it is never clipped |
+| Add by Voice / Add Manually in that card | Both titles are measured at the base size. The cards stay two-up only if each title fits on one line in half the row (the row less the gap, halved, less padding, border, the 38pt icon and its gap: `creationTitlesFit`). Otherwise they stack full width, 12pt apart, like Tasks. The per-title auto-shrink is off on Android |
+| Summary card (`CalendarSummaryCard`), "Unscheduled & overdue" | The shared group |
+
+### Check it on a phone
+
+1. Calendar: in each row the time, dot, tile, text and chevron line up on one centre line. The
+   chevron is in its row, 16pt from the edge. Rows are separated by a thin line that starts under
+   the text, not under the time.
+2. Press and hold a row: it fills lightly. Release and it opens the task or event.
+3. Each day header has clear space above it. An empty day's "Room to breathe." line has space below
+   it.
+4. Schedule Intelligence, the summary card and "Unscheduled & overdue" have the thin outline and
+   field surface. "Review conflicts" wraps instead of clipping.
+5. On a narrow phone or with a large font, Add by Voice and Add Manually stack instead of squeezing.
+6. iOS: the Calendar looks as before.

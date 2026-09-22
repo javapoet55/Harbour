@@ -31,7 +31,7 @@ import { useCalendarAgenda } from '../../src/query/useCalendar';
 import { useTasks } from '../../src/query/useTasks';
 import { useScheduleIntelligence } from '../../src/query/useToday';
 import { useSession } from '../../src/store/session';
-import { brand, useTheme } from '../../src/theme';
+import { androidGroup, brand, isAndroid, useTheme } from '../../src/theme';
 
 /**
  * Port of `CalendarView` (ios/App/CalendarView.swift), built from `body` at `:72-176`.
@@ -50,6 +50,21 @@ import { brand, useTheme } from '../../src/theme';
  * a week strip plus a day agenda. Schedule mode shows a rolling range (Next 3 days / Next 7 days /
  * This week); Week and Month show a date grid with ONE selected day's items beneath it.
  */
+/**
+ * Android: whether "Add by Voice" and "Add Manually" each fit on one line in half the creation row,
+ * at the base size. A card is (row - gap) / 2 wide; its title gets that less the card's padding and
+ * border, the 38pt icon and the gap beside it. Unmeasured, it keeps the two-up row.
+ */
+export function creationTitlesFit({ row, voice, manual }: { row: number; voice: number; manual: number }): boolean {
+  if (row <= 0 || voice <= 0 || manual <= 0) return true;
+  const title = (row - CREATION_GAP) / 2 - CREATION_PADDING * 2 - 2 - CREATION_ICON - CREATION_GAP_INSIDE;
+  return voice <= title && manual <= title;
+}
+const CREATION_GAP = 10;
+const CREATION_PADDING = 8;
+const CREATION_ICON = 38;
+const CREATION_GAP_INSIDE = 8;
+
 export default function Calendar() {
   const theme = useTheme();
   // The event detail is a `.sheet` (CalendarView.swift:168); iOS resolves its backgrounds one level
@@ -64,6 +79,14 @@ export default function Calendar() {
   const [range, setRange] = useState<CalendarRange>('Next 3 days');
   const [selected, setSelected] = useState(() => Date.now());
   const [now] = useState(() => Date.now());
+  const android = isAndroid();
+  // Android: the creation row's width and each creation title's width at the base size, to decide
+  // whether "Add by Voice" and "Add Manually" fit two-up on one line each (docs/android-polish.md §10).
+  // Held here, not in `IntelligenceCard`, which is re-created on every render.
+  const [creationFit, setCreationFit] = useState({ row: 0, voice: 0, manual: 0 });
+  const measureCreation = (key: 'row' | 'voice' | 'manual', width: number) =>
+    setCreationFit((current) => (current[key] === width ? current : { ...current, [key]: width }));
+  const creationTwoUp = !android || creationTitlesFit(creationFit);
   const [searching, setSearching] = useState(false);
   const [searchText, setSearchText] = useState('');
   const [rangeOpen, setRangeOpen] = useState(false);
@@ -143,8 +166,8 @@ export default function Calendar() {
   const daySection = (day: number, relative: boolean) => {
     const rows = calendarRows({ tasks: tasksFor(day), events: eventsFor(day), day, timeZone: zone, now });
     return (
-      <View key={calendarKey(day, zone)} style={styles.daySection}>
-        <View style={styles.dayHeader}>
+      <View key={calendarKey(day, zone)} style={[styles.daySection, android && styles.androidDaySection]} testID={`calendar-day-${calendarKey(day, zone)}`}>
+        <View style={[styles.dayHeader, android && styles.androidDayHeader]} testID={`calendar-day-header-${calendarKey(day, zone)}`}>
           <Text style={[styles.heading, { color: theme.colors.ink }]}>{dayTitle(day, relative)}</Text>
           <View style={styles.grow} />
           <Text style={[styles.subheadline, { color: theme.colors.secondary }]}>{itemCount(countFor(day))}</Text>
@@ -152,7 +175,7 @@ export default function Calendar() {
         </View>
         <View style={[styles.divider, { backgroundColor: withAlpha(brand.nexdoIndigo, 0.08) }]} />
         {rows.length === 0 ? (
-          <Text style={[styles.subheadline, styles.emptyDay, { color: theme.colors.secondary }]} testID={`calendar-empty-${calendarKey(day, zone)}`}>
+          <Text style={[styles.subheadline, styles.emptyDay, android && styles.androidEmptyDay, { color: theme.colors.secondary }]} testID={`calendar-empty-${calendarKey(day, zone)}`}>
             {filtersActive ? 'No items match your filters.' : 'Nothing scheduled. Room to breathe.'}
           </Text>
         ) : (
@@ -423,7 +446,10 @@ export default function Calendar() {
 
               {/* The backlog disclosure (CalendarView.swift:98-110) */}
               {!completedOnly ? (
-                <View style={[styles.backlog, { backgroundColor: withAlpha(theme.colors.surface, 0.7), borderColor: withAlpha(brand.nexdoBlue, 0.18) }]}>
+                <View
+                  style={[styles.backlog, { backgroundColor: withAlpha(theme.colors.surface, 0.7), borderColor: withAlpha(brand.nexdoBlue, 0.18) }, androidGroup(theme)]}
+                  testID="calendar-backlog-card"
+                >
                   <Pressable
                     accessibilityRole="button"
                     accessibilityLabel={`Unscheduled & overdue  ${backlog.length}`}
@@ -619,19 +645,30 @@ export default function Calendar() {
     const today = intelligence.data?.today ?? null;
     const current = today !== null && today.day === calendarKey(now, zone);
     return (
-      <View style={[styles.intelligence, { backgroundColor: withAlpha(brand.nexdoBlue, 0.045), borderColor: withAlpha(brand.nexdoBlue, 0.2) }]}>
+      // Android: the shared form group, like every other card (docs/android-polish.md §10).
+      <View
+        style={[styles.intelligence, { backgroundColor: withAlpha(brand.nexdoBlue, 0.045), borderColor: withAlpha(brand.nexdoBlue, 0.2) }, androidGroup(theme)]}
+        testID="calendar-intelligence"
+      >
         <View style={styles.intelligenceHeader}>
           <TaskSymbol name="sparkles" size={15} color="#007AFF" />
           {/* `.font(.subheadline.bold())` (CalendarView.swift:253) — bold, not semibold. */}
-          <Text style={[styles.subheadline, styles.bold, styles.grow, { color: '#007AFF' }]}>Schedule Intelligence</Text>
+          <Text style={[styles.subheadline, styles.bold, styles.grow, android && styles.androidShrink, { color: '#007AFF' }]}>Schedule Intelligence</Text>
           {/* `.sheet(isPresented: $conflicts) { conflictSheet }` (CalendarView.swift:163, `:463-477`).
               It does NOT link into Ask: `CalendarView`'s `ask` state (`:14`) and the
               `AskNexdoView(initialPrompt:)` sheet it would present (`:157-160`) are dead code —
               nothing in the file ever sets `ask = true`. Verified in Phase 6.
               Phase 5 pointed this at `/today/attention`, a port of a different view; Phase 10 built
               the sheet itself. */}
-          <Pressable accessibilityRole="button" accessibilityLabel="Review conflicts" onPress={() => router.push('/calendar/conflicts')} style={styles.cancel} testID="calendar-conflicts">
-            <Text style={[styles.caption, styles.semibold, { color: '#007AFF' }]}>Review conflicts</Text>
+          {/* Android: the link may shrink and wrap, so the header row never clips it. */}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Review conflicts"
+            onPress={() => router.push('/calendar/conflicts')}
+            style={[styles.cancel, android && styles.androidConflicts]}
+            testID="calendar-conflicts"
+          >
+            <Text style={[styles.caption, styles.semibold, android && styles.androidConflictsLabel, { color: '#007AFF' }]}>Review conflicts</Text>
           </Pressable>
         </View>
         {current && today ? (
@@ -656,7 +693,22 @@ export default function Calendar() {
         )}
         {/* `intelligenceStatus(allowCreation: true)` (CalendarView.swift:268, defined `:295-312`). */}
         <IntelligenceStatus current={current} />
-        <View style={styles.creationRow}>
+        <View
+          onLayout={android ? (event) => measureCreation('row', event.nativeEvent.layout.width) : undefined}
+          style={[styles.creationRow, android && !creationTwoUp && styles.creationColumn]}
+          testID="calendar-creation-row"
+        >
+          {/* Android: both titles measured at the base size, off to the side. */}
+          {android ? (
+            <View pointerEvents="none" style={styles.measure} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+              <Text onLayout={(event) => measureCreation('voice', event.nativeEvent.layout.width)} style={[styles.caption, styles.semibold, styles.natural]} testID="calendar-creation-measure-voice">
+                Add by Voice
+              </Text>
+              <Text onLayout={(event) => measureCreation('manual', event.nativeEvent.layout.width)} style={[styles.caption, styles.semibold, styles.natural]} testID="calendar-creation-measure-manual">
+                Add Manually
+              </Text>
+            </View>
+          ) : null}
           {/* `.fullScreenCover { AddTaskByVoiceView(calendarOnly: true) }` (CalendarView.swift:161). */}
           <CreationCard title="Add by Voice" subtitle="Tap and speak" voice onPress={() => router.push('/calendar/voice')} testID="calendar-add-voice" />
           <CreationCard title="Add Manually" subtitle="Type an event" voice={false} onPress={() => router.push('/calendar/event/new')} testID="calendar-add-manual" />
@@ -740,6 +792,7 @@ export default function Calendar() {
             backgroundColor: voice ? withAlpha(brand.nexdoIndigo, 0.05) : theme.colors.background,
             borderColor: withAlpha(brand.nexdoIndigo, 0.18),
           },
+          android && !creationTwoUp && styles.creationCardStacked,
         ]}
       >
         {/* The voice circle is a leading-to-trailing indigo-to-blue gradient (CalendarView.swift:283). */}
@@ -761,10 +814,12 @@ export default function Calendar() {
         <View style={styles.creationText}>
           {/* `.lineLimit(1).minimumScaleFactor(0.8)` (CalendarView.swift:287): Roboto is ~9% narrower
               than SF Pro on a 4.5% narrower screen, so "Add Manually" is the label that runs out. */}
+          {/* Android draws the title at the base size: two-up only when it fits on one line, else the
+              cards stack (docs/android-polish.md §10). */}
           <Text
             numberOfLines={1}
-            adjustsFontSizeToFit
-            minimumFontScale={0.8}
+            adjustsFontSizeToFit={!android}
+            minimumFontScale={android ? undefined : 0.8}
             style={[styles.caption, styles.semibold, { color: theme.colors.ink }]}
           >
             {title}
@@ -864,6 +919,18 @@ const styles = StyleSheet.create({
   menuRow: { flexDirection: 'row', alignItems: 'center', minHeight: 44, paddingHorizontal: 16 },
   filtersMenu: { position: 'absolute', right: 24, bottom: 24, minWidth: 220, borderRadius: 14, borderWidth: StyleSheet.hairlineWidth, overflow: 'hidden' },
   daySection: { gap: 0 },
+  // Android (docs/android-polish.md §10): 20 above each day header, 8 below it, and room under an empty day.
+  androidDaySection: { paddingTop: 20 },
+  androidDayHeader: { paddingBottom: 8 },
+  androidEmptyDay: { paddingTop: 12, paddingBottom: 24 },
+  androidShrink: { flexShrink: 1 },
+  // "Review conflicts" may shrink and wrap rather than be clipped by the title.
+  androidConflicts: { flexShrink: 1, maxWidth: '50%' },
+  androidConflictsLabel: { textAlign: 'right' },
+  creationColumn: { flexDirection: 'column', gap: 12 },
+  creationCardStacked: { flex: 0, alignSelf: 'stretch' },
+  measure: { position: 'absolute', left: 0, top: 0, width: 1000, opacity: 0, flexDirection: 'row' },
+  natural: { alignSelf: 'flex-start' },
   dayHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingBottom: 16 },
   divider: { height: StyleSheet.hairlineWidth },
   emptyDay: { paddingVertical: 26 },

@@ -1,12 +1,13 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
-import { Alert } from 'react-native';
+import { Alert, Platform, StyleSheet } from 'react-native';
 
 import { ApiError } from '../api/client';
 import type { Agenda, NexdoTask } from '../api/types';
 import { resetRevisions } from '../query/taskRevision';
 import { googleConnectStartUrl, parseGoogleCallback, CONNECT_CALLBACK_SCHEME } from '../query/useCalendar';
 import { useSession } from '../store/session';
+import { palettes } from '../theme';
 
 const mockPush = jest.fn();
 const mockBack = jest.fn();
@@ -34,7 +35,7 @@ jest.mock('../api', () => ({
   },
 }));
 
-import Calendar from '../../app/(tabs)/calendar';
+import Calendar, { creationTitlesFit } from '../../app/(tabs)/calendar';
 import NewCalendarEvent from '../../app/calendar/event/new';
 
 const ZONE = 'Asia/Kolkata';
@@ -496,3 +497,62 @@ describe('Google connect helpers', () => {
     });
   });
 });
+
+/** docs/android-polish.md §10: the Calendar screen on Android. */
+describe('Calendar on Android', () => {
+  const light = palettes.light;
+  const flat = (testID: string) => StyleSheet.flatten(screen.getByTestId(testID).props.style);
+  const group = { backgroundColor: light.fieldSurface, borderWidth: 1, borderColor: light.fieldBorder };
+  const layout = (width: number) => ({ nativeEvent: { layout: { x: 0, y: 0, width, height: 20 } } });
+
+  beforeEach(() => jest.replaceProperty(Platform, 'OS', 'android'));
+  afterEach(() => jest.restoreAllMocks());
+
+  it('spaces each day: 20 above the header, 8 below, and 24 under an empty day', async () => {
+    await renderCalendar();
+    expect(flat('calendar-day-2026-09-16')).toMatchObject({ paddingTop: 20 });
+    expect(flat('calendar-day-header-2026-09-16')).toMatchObject({ paddingBottom: 8 });
+    const empty = screen.getAllByText('Nothing scheduled. Room to breathe.')[0];
+    expect(StyleSheet.flatten(empty.props.style)).toMatchObject({ paddingBottom: 24, color: light.secondary });
+  });
+
+  it('draws the summary, Schedule Intelligence and backlog cards as the shared group', async () => {
+    await renderCalendar();
+    expect(flat('calendar-summary')).toMatchObject(group);
+    expect(flat('calendar-intelligence')).toMatchObject(group);
+    expect(flat('calendar-backlog-card')).toMatchObject(group);
+  });
+
+  it('lets "Review conflicts" shrink and wrap instead of being clipped', async () => {
+    await renderCalendar();
+    expect(flat('calendar-conflicts')).toMatchObject({ flexShrink: 1, maxWidth: '50%' });
+    expect(StyleSheet.flatten(screen.getByText('Review conflicts').props.style)).toMatchObject({ textAlign: 'right' });
+    expect(screen.getByText('Review conflicts').props.numberOfLines).toBeUndefined();
+  });
+
+  it('keeps the creation cards two-up only while both titles fit on one line', async () => {
+    await renderCalendar();
+    const measure = async (row: number, voice: number, manual: number) => {
+      await fireEvent(screen.getByTestId('calendar-creation-row'), 'layout', layout(row));
+      await fireEvent(screen.getByTestId('calendar-creation-measure-voice', { includeHiddenElements: true }), 'layout', layout(voice));
+      await fireEvent(screen.getByTestId('calendar-creation-measure-manual', { includeHiddenElements: true }), 'layout', layout(manual));
+    };
+    await measure(340, 70, 76);
+    expect(flat('calendar-creation-row')).toMatchObject({ flexDirection: 'row' });
+    expect(screen.getByText('Add Manually').props.adjustsFontSizeToFit).toBe(false);
+
+    await measure(260, 70, 76);
+    expect(flat('calendar-creation-row')).toMatchObject({ flexDirection: 'column', gap: 12 });
+    expect(flat('calendar-add-manual')).toMatchObject({ flex: 0, alignSelf: 'stretch' });
+  });
+});
+
+describe('creationTitlesFit', () => {
+  it('fits two-up when each title fits half the row less the padding, border, icon and gap', () => {
+    // (340 - 10) / 2 - 16 - 2 - 38 - 8 = 101
+    expect(creationTitlesFit({ row: 340, voice: 101, manual: 101 })).toBe(true);
+    expect(creationTitlesFit({ row: 340, voice: 101, manual: 102 })).toBe(false);
+    expect(creationTitlesFit({ row: 0, voice: 70, manual: 76 })).toBe(true);
+  });
+});
+

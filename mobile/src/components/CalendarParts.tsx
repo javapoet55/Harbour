@@ -1,9 +1,10 @@
+import { useState } from 'react';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import type { CalendarRow } from '../lib/calendarRows';
 import { rowSymbol, rowTone } from '../lib/calendarRows';
-import { brand, isAndroid, useTheme } from '../theme';
+import { androidGroup, androidSeparator, brand, isAndroid, useTheme } from '../theme';
 import { SegmentRow } from './SegmentRow';
 import { TaskSymbol } from './TaskSymbol';
 import { Text } from './Text';
@@ -13,6 +14,14 @@ import { Text } from './Text';
  * (`:341-347`), `segments` (`:239-249`) and `timeline` (`:436-454`). All are private funcs on the
  * view; they are components here so each can be render-tested.
  */
+
+/** Android timeline row geometry (docs/android-polish.md §10). */
+const ANDROID_TIME_WIDTH = 72;
+const ANDROID_RAIL_WIDTH = 8;
+const ANDROID_GLYPH = 44;
+const ANDROID_ROW_GAP = 10;
+/** Where the text column — and so the row separator — starts. */
+export const ANDROID_TEXT_INSET = ANDROID_TIME_WIDTH + ANDROID_RAIL_WIDTH + ANDROID_GLYPH + ANDROID_ROW_GAP * 3;
 
 /** `badge(_:color:)` (CalendarView.swift:456-458). */
 export function CalendarBadge({ text, tone }: { text: string; tone: 'green' | 'orange' | 'red' | 'indigo' }) {
@@ -29,7 +38,8 @@ export function CalendarBadge({ text, tone }: { text: string; tone: 'green' | 'o
 export function CalendarSummaryCard({ title, detail, testID }: { title: string; detail: string; testID?: string }) {
   const theme = useTheme();
   return (
-    <View style={[styles.summaryCard, { backgroundColor: withAlpha(brand.nexdoIndigo, 0.075) }]} testID={testID}>
+    // Android: the shared form group (docs/android-polish.md §10), as every other card.
+    <View style={[styles.summaryCard, { backgroundColor: withAlpha(brand.nexdoIndigo, 0.075) }, androidGroup(theme)]} testID={testID}>
       <TaskSymbol name="sparkles" size={22} color={theme.colors.link} />
       <View style={styles.grow}>
         <Text style={[styles.summaryTitle, { color: theme.colors.link }]}>{title}</Text>
@@ -148,10 +158,60 @@ export function CalendarTimelineRow({
   onPress: () => void;
 }) {
   const theme = useTheme();
+  // Android's pressed fill, held here so it follows the finger (onPressIn / onPressOut).
+  const [pressed, setPressed] = useState(false);
   const tone = rowTone(row, timeZone, now);
   const colour = tone === 'critical' ? '#FF3B30' : tone === 'late' ? '#FF9500' : theme.colors.link;
   const late = tone === 'late';
   const critical = tone === 'critical';
+  const badges = (
+    <View style={styles.badges}>
+      {completedOnly ? <CalendarBadge text={row.event !== null ? 'Past event' : 'Completed'} tone="green" /> : null}
+      {late ? <CalendarBadge text="Overdue" tone="orange" /> : null}
+      {critical ? <CalendarBadge text="Critical" tone="red" /> : null}
+      {row.deadline ? <CalendarBadge text="Deadline" tone="indigo" /> : null}
+    </View>
+  );
+
+  if (isAndroid()) {
+    // Android (docs/android-polish.md §10): every part centred on the row — the time, the rail's dot,
+    // the 44pt tile, the text and the chevron — so the chevron sits in its own row rather than
+    // floating at the top between rows. The whole row is the target, with a pressed fill, and the
+    // separator runs from the text column to the row's right edge.
+    return (
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`${row.time}, ${row.title}, ${row.detail}`}
+        onPress={onPress}
+        onPressIn={() => setPressed(true)}
+        onPressOut={() => setPressed(false)}
+        android_ripple={{ color: theme.colors.fieldBorder }}
+        testID={`calendar-row-${row.id}`}
+        style={[styles.androidRow, pressed && { backgroundColor: theme.colors.fieldSurface }]}
+      >
+        <Text style={[styles.androidTime, { color: theme.colors.ink }]}>{row.time}</Text>
+        <View style={styles.androidRail}>
+          <View style={[styles.railLine, { backgroundColor: withAlpha(brand.nexdoIndigo, 0.18) }]} />
+          <View style={[styles.railDot, { backgroundColor: colour }]} testID={`calendar-row-${row.id}-dot`} />
+        </View>
+        <View
+          style={[styles.androidGlyph, { backgroundColor: theme.colors.fieldSurface, borderColor: theme.colors.fieldBorder }]}
+          testID={`calendar-row-${row.id}-glyph`}
+        >
+          <TaskSymbol name={rowSymbol(row, timeZone, now)} size={22} color={colour} />
+        </View>
+        <View style={styles.androidText}>
+          <Text style={[styles.androidTitle, { color: theme.colors.ink }]}>{row.title}</Text>
+          <Text style={[styles.androidDetail, { color: theme.colors.secondary }]}>{row.detail}</Text>
+          {badges}
+        </View>
+        <View style={styles.androidChevron} testID={`calendar-row-${row.id}-chevron`}>
+          <TaskSymbol name="chevron.right" size={12} color={theme.colors.secondary} />
+        </View>
+        <View pointerEvents="none" style={[styles.androidSeparator, androidSeparator(theme)]} testID={`calendar-row-${row.id}-separator`} />
+      </Pressable>
+    );
+  }
 
   return (
     <Pressable
@@ -175,12 +235,7 @@ export function CalendarTimelineRow({
       <View style={styles.rowText}>
         <Text style={[theme.typography.body, { color: theme.colors.ink }]}>{row.title}</Text>
         <Text style={[styles.caption, { color: theme.colors.secondary }]}>{row.detail}</Text>
-        <View style={styles.badges}>
-          {completedOnly ? <CalendarBadge text={row.event !== null ? 'Past event' : 'Completed'} tone="green" /> : null}
-          {late ? <CalendarBadge text="Overdue" tone="orange" /> : null}
-          {critical ? <CalendarBadge text="Critical" tone="red" /> : null}
-          {row.deadline ? <CalendarBadge text="Deadline" tone="indigo" /> : null}
-        </View>
+        {badges}
         <View style={[styles.rowDivider, { backgroundColor: theme.colors.separator }]} />
       </View>
       <TaskSymbol name="chevron.right" size={12} color={theme.colors.secondary} />
@@ -218,4 +273,17 @@ const styles = StyleSheet.create({
   caption: { fontSize: 12, lineHeight: 16 },
   badges: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   rowDivider: { height: StyleSheet.hairlineWidth, marginTop: 10 },
+
+  // Android timeline row (docs/android-polish.md §10). Every column is centred on the row.
+  androidRow: { flexDirection: 'row', alignItems: 'center', gap: ANDROID_ROW_GAP, paddingVertical: 12, paddingRight: 16 },
+  androidTime: { width: ANDROID_TIME_WIDTH, fontSize: 12, lineHeight: 16, textAlign: 'left' },
+  // The rail runs through the row's padding too, so it is continuous from one row to the next.
+  androidRail: { width: ANDROID_RAIL_WIDTH, alignSelf: 'stretch', marginVertical: -12, alignItems: 'center', justifyContent: 'center' },
+  androidGlyph: { width: ANDROID_GLYPH, height: ANDROID_GLYPH, borderRadius: 12, borderWidth: StyleSheet.hairlineWidth, alignItems: 'center', justifyContent: 'center' },
+  androidText: { flex: 1, gap: 4 },
+  androidTitle: { fontSize: 17, lineHeight: 22 },
+  androidDetail: { fontSize: 14, lineHeight: 19 },
+  androidChevron: { alignSelf: 'center' },
+  // From the text column's left edge to the row's right edge, on the row's bottom.
+  androidSeparator: { position: 'absolute', left: ANDROID_TEXT_INSET, right: 0, bottom: 0 },
 });
