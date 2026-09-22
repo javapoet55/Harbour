@@ -1,9 +1,11 @@
-import { render, renderHook, screen } from '@testing-library/react-native';
+import { fireEvent, render, renderHook, screen } from '@testing-library/react-native';
 import * as fs from 'fs';
 import * as path from 'path';
 import { Platform, StyleSheet } from 'react-native';
 
 import { IOSSwitch } from '../components/IOSSwitch';
+import { SettingsSegments } from '../components/SettingsControls';
+import { DetailOutlineButton, DetailTextInput } from '../components/TaskDetailParts';
 import { useAppearance } from '../store/appearance';
 import { brand, palettes, stackHeaderOptions, useTheme } from '../theme';
 
@@ -27,8 +29,8 @@ describe('the link colour', () => {
     const { result } = await renderHook(() => useTheme());
     expect(result.current.colors.link).toBe(dark.askBlue);
     expect(result.current.colors.link).toBe('#6BB8FF');
-    // Not the lighter indigo `accent` a first pass used.
-    expect(result.current.colors.link).not.toBe(dark.accent);
+    // One accent (§7): the outlined-button and focus `accent` is the same blue, not §2's #8F85FF.
+    expect(result.current.colors.accent).toBe(result.current.colors.link);
     // Filled controls still resolve to the brand indigo.
     expect(result.current.colors.tint).toBe(brand.nexdoIndigo);
   });
@@ -85,6 +87,57 @@ describe('the audit', () => {
     );
     expect(hits.map((hit) => hit.at)).toEqual([]);
     expect(sources.length).toBeGreaterThan(100);
+  });
+
+  it('finds the retired #8F85FF accent nowhere, theme included', () => {
+    const theme = path.join(__dirname, '..', 'theme');
+    const all = [...sources, ...fs.readdirSync(theme).filter((name) => /\.tsx?$/.test(name)).map((name) => path.join(theme, name))];
+    const retired = /8F85FF|143, 133, 255/i;
+    expect(all.filter((file) => retired.test(fs.readFileSync(file, 'utf8'))).map((file) => path.relative(process.cwd(), file))).toEqual([]);
+  });
+});
+
+/** §7: one blue for everything tappable or active on Android in dark; indigo only for fills. */
+describe('the single accent on Android in dark', () => {
+  const flat = (testID: string) => StyleSheet.flatten(screen.getByTestId(testID).props.style);
+  beforeEach(() => {
+    onPlatform('android');
+    useAppearance.setState({ appearance: 'night' });
+  });
+
+  it('is the Ask blue in every accent token', () => {
+    expect(dark.accent).toBe(dark.askBlue);
+    expect(dark.accentTint).toBe('rgba(107, 184, 255, 0.10)');
+    expect(dark.accentBorder).toBe('rgba(107, 184, 255, 0.45)');
+  });
+
+  it('draws the outlined buttons in it', async () => {
+    await render(<DetailOutlineButton title="Start task" onPress={jest.fn()} testID="start" />);
+    expect(StyleSheet.flatten(screen.getByText('Start task').props.style).color).toBe('#6BB8FF');
+    expect(flat('start-surface')).toMatchObject({ backgroundColor: dark.accentTint, borderColor: dark.accentBorder });
+  });
+
+  it('borders a focused field in it', async () => {
+    await render(<DetailTextInput value="" onChangeText={jest.fn()} accessibilityLabel="Task title" testID="input" />);
+    await fireEvent(screen.getByTestId('input'), 'focus');
+    expect(flat('input')).toMatchObject({ borderColor: '#6BB8FF' });
+  });
+
+  it('marks the selected Appearance segment in it', async () => {
+    await render(
+      <SettingsSegments
+        label="Appearance"
+        options={[
+          { value: 'system', title: 'System' },
+          { value: 'night', title: 'Night' },
+        ]}
+        value="night"
+        onChange={jest.fn()}
+        testIDPrefix="appearance"
+      />,
+    );
+    expect(StyleSheet.flatten(screen.getByText('Night').props.style).color).toBe('#6BB8FF');
+    expect(flat('appearance-night')).toMatchObject({ backgroundColor: dark.accentTint, borderColor: dark.accentBorder });
   });
 });
 

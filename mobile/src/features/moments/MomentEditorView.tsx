@@ -1,6 +1,6 @@
 import * as Crypto from 'expo-crypto';
 import { Stack } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Keyboard, Pressable, StyleSheet, View } from 'react-native';
 
 import type { ImportantMoment, MomentInput } from '../../api/moments';
@@ -30,6 +30,20 @@ import { momentsStore, useMomentList, useMoments } from './store';
  * `onDone` is the editor's own `onDone`: "Create New" and "Add Moment" pass one that returns to the
  * list; every other entry point has none, so Done dismisses (`if let onDone … else { dismiss() }`).
  */
+/**
+ * The current time, for the past-date note (MomentEditor.swift:43-45). Reading `Date.now()` in render
+ * is impure (react-hooks/purity), so it is held in state: taken on mount and refreshed each minute,
+ * so "today" still rolls over at midnight while the editor stays open.
+ */
+function useNow(): number {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const tick = setInterval(() => setNow(Date.now()), 60_000);
+    return () => clearInterval(tick);
+  }, []);
+  return now;
+}
+
 export function MomentEditorView({ moment, imported, onDone, dismiss }: { moment?: ImportantMoment; imported?: MomentInput; onDone?: () => void; dismiss: () => void }) {
   const theme = useTheme();
   const moments = useMomentList();
@@ -69,6 +83,7 @@ export function MomentEditorView({ moment, imported, onDone, dismiss }: { moment
   const [completedSave, setCompletedSave] = useState(false);
   const [savedGroup, setSavedGroup] = useState<MomentDisplayGroup | null>(null);
   const [leaving, setLeaving] = useState(false);
+  const now = useNow();
 
   const saveDisabled = busy || !dateConfirmed || input.title.trim() === '';
   const locked = completedSave || savedRecipientIDs.length > 0;
@@ -182,7 +197,7 @@ export function MomentEditorView({ moment, imported, onDone, dismiss }: { moment
               {/* No lower bound: Swift's editor accepts a past date. */}
               <DateField label="Date" value={date} onChange={setDate} zone={input.timeZoneID} testID="moment-date" />
             </FormRow>
-            {momentDay(date, input.timeZoneID) < momentDay(Date.now(), input.timeZoneID) ? (
+            {momentDay(date, input.timeZoneID) < momentDay(now, input.timeZoneID) ? (
               <FormRow>
                 {/* MomentEditor.swift:43-45 */}
                 <FormText caption testID="moment-past-date">

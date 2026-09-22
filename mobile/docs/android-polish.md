@@ -517,3 +517,68 @@ Android in dark:
 4. Toggles: on is a softer indigo that does not glow. Off is a grey pill with a thin outline.
 5. Shopping → a list: the quick-add placeholder is one line ending in "…"; typing replaces it.
 6. Switch to light: links are the brand indigo again. iOS: unchanged in both.
+
+---
+
+## 7. One accent for tappable and active (2026-09-22)
+
+JavaScript only; no new build needed. All changes are Android only, and only affect dark mode. iOS
+and Android light are unchanged, and so are the text and behaviour.
+
+### What was wrong
+
+After §6, Android in dark mode had two accents for tappable and active things:
+- **The Ask blue `#6BB8FF`** (`link`): links, text buttons, icon buttons and header actions.
+- **§2's lighter indigo `#8F85FF`** (`accent`): the outlined secondary buttons, the focused-field
+  border and the selected Settings Appearance segment (§5).
+
+### What changed
+
+In the dark palette, `accent`, `accentTint` and `accentBorder` are now the Ask blue.
+`src/theme/colors.ts` keeps it in one constant, `ASK_BLUE_DARK`, shared by `askBlue` and `accent`:
+
+| Token (dark) | Was | Now |
+|---|---|---|
+| `accent` | `#8F85FF` | `#6BB8FF` (same as `link`) |
+| `accentTint` | `rgba(143, 133, 255, 0.10)` | `rgba(107, 184, 255, 0.10)` |
+| `accentBorder` | `rgba(143, 133, 255, 0.45)` | `rgba(107, 184, 255, 0.45)` |
+
+The light values are unchanged; they are the brand indigo, the same as `link` in light.
+
+**On Android in dark**, the Ask blue now covers everything **tappable or active**:
+- links and text buttons
+- icon buttons, header back chevrons and actions, and the active tab
+- outlined buttons ("Start a 25-minute focus session", "Start task", "Add", "Set date and start time")
+- the focused-field border on every form (Task Details, New Task, New Event, New List, Settings)
+- the selected Appearance segment
+
+The brand indigo is left for **filled** controls only: switch-on tracks, selected chips, prominent
+and gradient buttons.
+
+**Guard tests** (`src/__tests__/android-links.test.tsx`):
+- `accent` equals `link` equals `askBlue` on Android in dark.
+- The outlined button, the focused field and the selected Appearance segment render in `#6BB8FF`.
+- `#8F85FF` appears nowhere in `app/`, `src/` or the theme.
+
+### Check it on a phone
+
+Android in dark:
+
+1. Task Details: "Start task" and "Add" are outlined in the same light blue as "Open Notification
+   Center" in Settings.
+2. Tap a field: its border turns that blue.
+3. Settings → Appearance: the selected option is tinted that blue.
+4. Switches and gradient buttons are still the brand indigo.
+
+---
+
+## Lint fix: MomentEditorView purity (2026-09-22)
+
+This is not Android polish, but it shipped in the same commit.
+
+`MomentEditorView` compared the picked date with `momentDay(Date.now(), zone)` during render.
+eslint flags that as react-hooks/purity: an impure call in render. The current time now comes from a
+small `useNow()` hook. It is taken on mount and refreshed once a minute from an effect, so the "This
+date is in the past" / "The original date is kept" note shows for exactly the same dates as before.
+The one difference is that "today" now also rolls over at midnight while the editor stays open,
+where before it waited for something else to re-render.

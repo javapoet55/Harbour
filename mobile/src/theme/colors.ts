@@ -8,6 +8,13 @@ export const brand = {
   nexdoMagenta: '#F014C7', // RootView.swift:891 Color(red: 0.94, green: 0.08, blue: 0.78)
 } as const;
 
+/**
+ * `AskStyle.blue` in dark (AskNexdoView.swift:46: UIColor(red: 0.42, green: 0.72, blue: 1.00)). It is
+ * `askBlue` on the Ask screen and, on Android in dark, the ONE accent for anything tappable or active:
+ * `link` and `accent` (docs/android-polish.md §6, §7). Filled controls stay the brand indigo.
+ */
+const ASK_BLUE_DARK = '#6BB8FF';
+
 export type Palette = {
   ink: string;
   /** iOS `.label` — what an unstyled SwiftUI `Text` uses. Not the same as `ink` (`nexdoInk`). */
@@ -82,9 +89,9 @@ export type Palette = {
   /** The 1px hairline around an Android field or card, and on top of a bottom bar. */
   fieldBorder: string;
   /**
-   * The accent for a focused Android field and an outlined secondary button's border, tint and
-   * label. `nexdoIndigo` in light mode; a lighter indigo in dark, where #3D29F0 text on black is
-   * about 2.6:1.
+   * The accent for a focused Android field, an outlined secondary button's border, tint and label,
+   * and the selected Settings Appearance segment. `nexdoIndigo` in light mode; in dark, the same Ask
+   * blue as `link` (docs/android-polish.md §7), where #3D29F0 on black is about 2.8:1.
    */
   accent: string;
   /** `accent` at 10%: the outlined secondary button's fill. */
@@ -176,7 +183,7 @@ export const palettes: Record<ColorScheme, Palette> = {
     // TODO(phase1-decision): the Swift dark variant is the dynamic system `.secondaryLabel`; this is its standard dark value.
     secondary: 'rgba(235, 235, 245, 0.6)', // RootView.swift:886 dark: .secondaryLabel
     scheduleBlue: '#7ABAFF', // RootView.swift:887 dark: UIColor(red: 0.48, green: 0.73, blue: 1)
-    askBlue: '#6BB8FF', // AskNexdoView.swift:46 dark: UIColor(red: 0.42, green: 0.72, blue: 1.00)
+    askBlue: ASK_BLUE_DARK, // AskNexdoView.swift:46 dark: UIColor(red: 0.42, green: 0.72, blue: 1.00)
     secondaryBackground: '#1C1C1E',
     tint: brand.nexdoIndigo,
     onTint: '#FFFFFF',
@@ -206,9 +213,10 @@ export const palettes: Record<ColorScheme, Palette> = {
     fieldSurface: '#1C1C1E',
     fieldSurfaceElevated: '#2C2C2E',
     fieldBorder: 'rgba(255, 255, 255, 0.14)',
-    accent: '#8F85FF',
-    accentTint: 'rgba(143, 133, 255, 0.10)',
-    accentBorder: 'rgba(143, 133, 255, 0.45)',
+    // The same blue as `link` (§7): one accent for tappable and active, replacing §2's lighter indigo.
+    accent: ASK_BLUE_DARK,
+    accentTint: 'rgba(107, 184, 255, 0.10)',
+    accentBorder: 'rgba(107, 184, 255, 0.45)',
     barSurface: '#242427',
     fieldLabel: '#A1A1AA',
     fieldOnGroup: '#2C2C2E',
