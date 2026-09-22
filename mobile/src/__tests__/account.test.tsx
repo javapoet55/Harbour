@@ -186,7 +186,7 @@ describe('the Account sheet', () => {
 
     fireEvent.press(screen.getByTestId('account-inbox'));
 
-    expect(Linking.openURL).toHaveBeenCalledWith('https://harbour-production-f8a0.up.railway.app/inbox');
+    expect(Linking.openURL).toHaveBeenCalledWith('https://app.nexdoapp.com/inbox');
   });
 
   /** `.confirmationDialog("Sign out of Nexdo?", …)` (ProfileView.swift:96-98). */

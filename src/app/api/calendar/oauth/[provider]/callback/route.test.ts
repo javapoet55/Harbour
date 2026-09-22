@@ -12,7 +12,7 @@ vi.mock('@/server/calendar-sync', () => ({ syncConnection: mocks.syncConnection 
 
 import { GET } from './route';
 
-const productionOrigin = 'https://harbour-production-f8a0.up.railway.app';
+const productionOrigin = 'https://app.nexdoapp.com';
 const localOrigin = 'http://127.0.0.1:43217';
 
 function callback(origin: string, provider = 'google', query = '?code=test-code&state=test-state', headers?: HeadersInit) {

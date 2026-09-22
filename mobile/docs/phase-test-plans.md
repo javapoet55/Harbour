@@ -54,7 +54,8 @@ so only appears in a build made from `app.config.ts` (see "Development builds" b
 
 The API origin comes from `extra.apiUrl` in `app.config.ts`:
 
-- Default: `https://harbour-production-f8a0.up.railway.app`
+- Default (`DEFAULT_API_URL`, used by `expo start` and the `development` profile): `https://harbour-production-f8a0.up.railway.app`
+- `preview` and `production` EAS builds: `https://app.nexdoapp.com` (set in `eas.json`)
 - Override: set `EXPO_PUBLIC_API_URL` before starting Metro. The value must be an `https://` origin with no path.
 
 ```bash
@@ -277,7 +278,7 @@ Open the **Nexdo** development build on the phone and pick the Metro server it l
 
 ### Test procedure (Android phone)
 
-You need a verified account, and a web browser signed in to the same account at `https://harbour-production-f8a0.up.railway.app/tasks`.
+You need a verified account, and a web browser signed in to the same account at `https://app.nexdoapp.com/tasks`.
 
 1. **Cookie in the dev build.**
    - The first time, the app opens on the sign-in placeholder, because cookies are not shared with Expo Go. Open **session check** and sign in. The app switches to **Today**.
@@ -967,7 +968,7 @@ Use a throwaway account for step 11.
 3. A card of six rows, in this order: **Inbox**, **Waiting For**, **AI Planner**, **Insights**,
    **Notifications** — each with an outward arrow — then **Settings** with a chevron.
 4. **Sign out** in red at the bottom.
-5. Tap **Inbox**. The system browser opens `harbour-production-f8a0.up.railway.app/inbox`. Come back.
+5. Tap **Inbox**. The system browser opens `app.nexdoapp.com/inbox`. Come back.
 6. There is no Delete account and no Appearance here. Both live one screen deeper. That is correct.
 
 ### 3. Settings, top to bottom

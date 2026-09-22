@@ -23,7 +23,7 @@ import { ElevatedSurface, useTheme } from '../../src/theme';
  * (`:112`) rather than using the configured API base, and this does the same: those pages exist only
  * on the deployed site, so pointing them at a development server would open nothing.
  */
-const WEB_ORIGIN = 'https://harbour-production-f8a0.up.railway.app';
+const WEB_ORIGIN = 'https://app.nexdoapp.com';
 
 /**
  * `AccountView` is a `.sheet` from both entry points (RootView.swift:1181, `:1702`), so everything below resolves the *elevated* system backgrounds.

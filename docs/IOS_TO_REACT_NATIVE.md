@@ -7,7 +7,7 @@ Last updated: 2026-09-17
 Replace the native SwiftUI iPhone app in `ios/` with a React Native app built on Expo, while:
 
 - **Keeping the Swift app** working until the React Native app reaches parity.
-- **Keeping the backend unchanged.** The React Native app uses the same Railway API (`https://harbour-production-f8a0.up.railway.app`) and the same session cookie auth.
+- **Keeping the backend unchanged.** The React Native app uses the same Railway API (`https://app.nexdoapp.com`; the older `https://harbour-production-f8a0.up.railway.app` hostname still works) and the same session cookie auth.
 - **Leaving Android optional.** Expo can build it, but it needs extra work (section 8).
 
 This document lists everything the Swift app does, maps each piece to React Native, and proposes a phased plan with estimates.

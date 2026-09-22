@@ -461,8 +461,8 @@ describe('Calendar event editor', () => {
  */
 describe('Google connect helpers', () => {
   it('builds the start URL as `calendarConnectURL` does, carrying the connect token (3a26c52)', () => {
-    expect(googleConnectStartUrl('https://harbour-production-f8a0.up.railway.app', 'tok+/=')).toBe(
-      'https://harbour-production-f8a0.up.railway.app/api/calendar/oauth/google/start?native=1&connect_token=tok%2B%2F%3D',
+    expect(googleConnectStartUrl('https://app.nexdoapp.com', 'tok+/=')).toBe(
+      'https://app.nexdoapp.com/api/calendar/oauth/google/start?native=1&connect_token=tok%2B%2F%3D',
     );
   });
 

@@ -268,7 +268,7 @@ function SettingsScreen({
       { text: 'Keep it', style: 'cancel' },
     ]);
 
-  const openWeb = (path: string) => void Linking.openURL('https://harbour-production-f8a0.up.railway.app' + path);
+  const openWeb = (path: string) => void Linking.openURL('https://app.nexdoapp.com' + path);
 
   return (
     <SafeAreaView edges={['top', 'left', 'right', 'bottom']} style={styles.fill}>

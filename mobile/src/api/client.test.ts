@@ -54,7 +54,7 @@ describe('HTTPS enforcement', () => {
   });
 
   it('accepts an https origin and strips a trailing slash', () => {
-    expect(normalizeBaseUrl('https://harbour-production-f8a0.up.railway.app/')).toBe('https://harbour-production-f8a0.up.railway.app');
+    expect(normalizeBaseUrl('https://app.nexdoapp.com/')).toBe('https://app.nexdoapp.com');
     expect(normalizeBaseUrl('https://localhost:8443')).toBe('https://localhost:8443');
   });
 
