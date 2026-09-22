@@ -795,3 +795,38 @@ which already has the group look (§3, §4).
 4. Create account: close the keyboard and scroll to the bottom. The copy under Create Account is
    fully visible, with space below it.
 5. iOS: the auth screens look as before.
+
+---
+
+## 12. Reset password actions (2026-09-22)
+
+JavaScript only; no new build needed. All changes are Android only. iOS keeps the Swift `Form` rows,
+and the text and behaviour are unchanged. Colours come from tokens only.
+
+### What was wrong
+
+Reset password is a Swift `Form`, so its actions were grey list rows inside a group. "Send
+Verification Code", then "Update Password" with "Send a new code", read as settings rows rather than
+the screen's main action. The email field was a plain row, unlike the other auth screens.
+
+### What changed (`app/(auth)/reset-password.tsx`)
+
+| Piece | Android change |
+|---|---|
+| Email | The auth screens' field row (`AuthFieldRow`): the envelope tile, bordered in the focus accent while editing (§11). It stays in its group, with its helper text ("We'll email a six-digit code…") kept as the footer |
+| "Send Verification Code" (before a code is sent) | The primary `GradientButton`, 52pt, full width inside the sections' 16pt inset, 24pt under the email group. This row was not in the request, but it is the same kind of action; leaving it grey would have given the two stages different primary buttons |
+| "Update Password" | The primary `GradientButton`, 52pt, full width, 24pt under the Verification group. It is disabled until the code has six digits and the new password has at least 12 characters (RootView.swift:620), drawn in §11's disabled state: the gradient at 40% and the label at 70% |
+| "Send a new code" | A centred text link in `link`, 16pt under the button, dimmed while a request is running |
+| Verification group | Unchanged group style. The 6-digit code was already `number-pad`, and `sanitizeCode` already stripped non-digits and capped it at six. Android now also sets `maxLength={6}` |
+
+An error ("The passwords do not match.", or a server error) still shows in its own group above the
+button.
+
+### Check it on a phone
+
+1. Sign in → Forgot password?: the email field has the envelope tile, which gets the accent outline
+   while typing. "Send Verification Code" is the gradient button below it.
+2. After the code is sent: "Update Password" is a faded gradient until the code and password are
+   valid, then full strength. "Send a new code" is a centred link under it.
+3. The code field opens the number pad and stops at six digits.
+4. iOS: the screen looks as before.

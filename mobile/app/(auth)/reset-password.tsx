@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 import { useState } from 'react';
 import { Alert, Pressable, StyleSheet, TextInput, View } from 'react-native';
 
-import { KeyboardAvoidingView, KeyboardAwareScrollView, RevealablePasswordField, Text } from '../../src/components';
+import { AuthFieldRow, GradientButton, KeyboardAvoidingView, KeyboardAwareScrollView, RevealablePasswordField, Text } from '../../src/components';
 import { useConfirmPasswordReset, useRequestPasswordReset } from '../../src/query/useAuth';
 import { sanitizeCode } from '../../src/schemas/auth';
 import { androidGroup, androidLabel, inputText, isAndroid, textStyles, useTheme } from '../../src/theme';
@@ -29,6 +29,9 @@ export default function ResetPassword() {
   const [confirmation, setConfirmation] = useState('');
   const [codeSent, setCodeSent] = useState(false);
   const [localError, setLocalError] = useState<string | undefined>();
+  // Android: the email row's icon tile takes the focus accent while editing (docs/android-polish.md §12).
+  const [emailFocused, setEmailFocused] = useState(false);
+  const android = isAndroid();
 
   const request = useRequestPasswordReset();
   const confirm = useConfirmPasswordReset();
@@ -66,7 +69,9 @@ export default function ResetPassword() {
       <KeyboardAvoidingView style={styles.fill} behavior="padding">
         <KeyboardAwareScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.form}>
           <FormSection footer="We’ll email a six-digit code if an account exists. Codes expire after 15 minutes.">
-            <FormRow>
+            {/* Android (docs/android-polish.md §12): the auth screens' field row — the envelope tile,
+                bordered in the focus accent while editing. */}
+            <EmailRow android={android} focused={emailFocused}>
               <TextInput
                 // Android draws its own underline drawable behind a TextInput; it showed
                 // as a pale hard-edged box inside the glass card.
@@ -82,9 +87,12 @@ export default function ResetPassword() {
                 autoCapitalize="none"
                 autoCorrect={false}
                 returnKeyType="next"
+                onFocus={() => setEmailFocused(true)}
+                onBlur={() => setEmailFocused(false)}
                 style={[inputText(theme.typography.body), styles.input, { color: theme.colors.ink }]}
+                testID="reset-email"
               />
-            </FormRow>
+            </EmailRow>
           </FormSection>
 
           {codeSent ? (
@@ -100,6 +108,8 @@ export default function ResetPassword() {
                   value={code}
                   onChangeText={(value) => setCode(sanitizeCode(value))}
                   keyboardType="number-pad"
+                  // `sanitizeCode` already strips non-digits and caps at six; Android also stops the keyboard there.
+                  maxLength={android ? 6 : undefined}
                   textContentType="oneTimeCode"
                   autoComplete="one-time-code"
                   style={[inputText(theme.typography.body), styles.input, { color: theme.colors.ink }]}
@@ -135,31 +145,83 @@ export default function ResetPassword() {
             </FormSection>
           ) : null}
 
-          <FormSection>
-            {codeSent ? (
+          {/* Android (docs/android-polish.md §12): the primary action is the auth screens' gradient button,
+              24 under the groups, and "Send a new code" a centred link 16 under it. */}
+          {android ? (
+            codeSent ? (
               <>
-                <FormButton
+                <GradientButton
                   title={confirm.isPending ? 'Updating…' : 'Update Password'}
                   onPress={updatePassword}
                   // RootView.swift:620: six digits and at least twelve characters.
                   disabled={busy || code.length !== 6 || password.length < 12}
+                  minHeight={52}
+                  style={styles.androidPrimary}
                   testID="reset-update"
                 />
-                <FormButton title="Send a new code" onPress={requestCode} disabled={busy} last />
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Send a new code"
+                  accessibilityState={{ disabled: busy }}
+                  disabled={busy}
+                  onPress={requestCode}
+                  hitSlop={8}
+                  style={[styles.androidLink, busy && styles.androidLinkDisabled]}
+                  testID="reset-resend"
+                >
+                  <Text style={[theme.typography.body, { color: theme.colors.link }]}>Send a new code</Text>
+                </Pressable>
               </>
             ) : (
-              <FormButton
+              <GradientButton
                 title={request.isPending ? 'Sending…' : 'Send Verification Code'}
                 onPress={requestCode}
                 disabled={busy || !email.includes('@')}
-                last
+                minHeight={52}
+                style={styles.androidPrimary}
                 testID="reset-request"
               />
-            )}
-          </FormSection>
+            )
+          ) : (
+            <FormSection>
+              {codeSent ? (
+                <>
+                  <FormButton
+                    title={confirm.isPending ? 'Updating…' : 'Update Password'}
+                    onPress={updatePassword}
+                    // RootView.swift:620: six digits and at least twelve characters.
+                    disabled={busy || code.length !== 6 || password.length < 12}
+                    testID="reset-update"
+                  />
+                  <FormButton title="Send a new code" onPress={requestCode} disabled={busy} last />
+                </>
+              ) : (
+                <FormButton
+                  title={request.isPending ? 'Sending…' : 'Send Verification Code'}
+                  onPress={requestCode}
+                  disabled={busy || !email.includes('@')}
+                  last
+                  testID="reset-request"
+                />
+              )}
+            </FormSection>
+          )}
         </KeyboardAwareScrollView>
       </KeyboardAvoidingView>
     </View>
+  );
+}
+
+/**
+ * The email row. iOS: a plain `Form` row. Android: the auth screens' field row, with the envelope tile
+ * that takes the focus accent while the field is edited (docs/android-polish.md §12).
+ */
+function EmailRow({ android, focused, children }: { android: boolean; focused: boolean; children: ReactNode }) {
+  if (!android) return <FormRow>{children}</FormRow>;
+  return (
+    <AuthFieldRow icon="envelope" paddingHorizontal={16} minHeight={64} focused={focused}>
+      {children}
+    </AuthFieldRow>
   );
 }
 
@@ -248,5 +310,10 @@ const styles = StyleSheet.create({
   // Header and footer sit 16pt inside the section, so 32pt from the screen edge.
   header: { ...textStyles.body, marginHorizontal: 32, marginTop: 16, marginBottom: 8 },
   androidHeader: { marginTop: 20, marginBottom: 8 },
+  // Android: the primary button, full width inside the sections' 16pt inset, 24 under the groups.
+  androidPrimary: { marginHorizontal: 16, marginTop: 24 },
+  // "Send a new code": a centred text link 16 under the button.
+  androidLink: { alignSelf: 'center', marginTop: 16, minHeight: 44, justifyContent: 'center' },
+  androidLinkDisabled: { opacity: 0.4 },
   footer: { ...textStyles.subheadline, marginHorizontal: 32, marginTop: 10, marginBottom: 12 },
 });
