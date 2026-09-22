@@ -364,3 +364,64 @@ Android, dark mode first, then light:
    outlined pill.
 7. Reset password, then Projects → New Project: labels and grouped sections match.
 8. iOS: all of the above look as before.
+
+---
+
+## 5. Settings rows and fields (2026-09-22)
+
+JavaScript only; no new build needed. All changes are Android only. iOS is unchanged, and so are
+the text and behaviour. Colours come from the §2–§4 tokens; nothing new was added. The changes are
+in `src/components/SettingsControls.tsx`; `app/account/settings.tsx` itself did not change.
+
+### What was wrong
+
+- **"AI confirmation" wrapped one letter per line** ("AI / co / nfi / rm / ati / on"). In
+  `SettingsPicker` the label was `flex: 1` (a zero basis) and the value had no flex at all, so the
+  long value "Confirm changes and deletions" kept its full width and the label got what was left.
+  "Protect my current focus / Balanced" was cramped for the same reason.
+- The Display name, Working hours and Quiet hours fields were a faint indigo tint on the card.
+- Toggle rows floated with nothing between them.
+- The cards and the selected Appearance segment were grey on grey.
+
+### What changed
+
+| Piece | Android change |
+|---|---|
+| `SettingsPicker`, `SettingsToggle`, `SettingsLabeledValue` (every label+value, label+picker and label+switch row) | The label is `flex: 1`, `flexShrink: 1`, `minWidth: '40%'`, so it keeps at least 40% of the row and wraps by word. The value is `numberOfLines={1}` and `flexShrink: 1`, so it ellipsises. The chevron and switch keep their size. "AI confirmation" and "Protect my current focus" now read on one or two lines, with the choice cut short if it has to be |
+| `SettingsCard` | The §3 form group: `fieldSurface` and a 1px `fieldBorder`. It also inserts the shared 1px separator between two **adjacent rows** (toggle, picker or labelled value), but not where a `SettingsDivider` already sits, and not between fields, captions or buttons |
+| `SettingsDivider` | the shared 1px separator |
+| `SettingsField` (Display name) | The field style: surface, 1px hairline, 12pt radius, accent border while focused. It keeps its padding. Its title uses the shared field label (§4) |
+| `SettingsHours` / `ClockField` (Working hours and Quiet hours, Start and End) | The same field surface and hairline. Each keeps its half-row width, 40pt height and padding. The titles and the Start/End captions use the shared field label |
+| Time zone (Automatic) | A read-only `SettingsLabeledValue`, not tappable, so it stays a row. It only gets the row layout fix |
+| `SettingsSegments` (System / Day / Night) | The selected segment is `accentTint` with a 1px `accentBorder`, and its title is `accent`, semibold. The track and the unselected segments are unchanged |
+
+**Why the fields use the in-group surface, not "raised".** A settings card is now a form group,
+and Settings is an elevated sheet. In the elevated palette the raised surface and the group are the
+same colour (#2C2C2E in dark), so a raised field would have disappeared into its card. The fields
+take `fieldOnGroup` instead: `#3A3A3C` on the `#2C2C2E` card in dark, and white on the `#F2F2F7`
+card in light. That is the same one-step-above-the-card rule, correct for a group.
+
+**Left as they were:**
+- The App Voice volume row (icon, label, percentage) in `settings.tsx`. Its value is at most four
+  characters.
+- The calendar connection boxes in "Calendars and privacy".
+
+### For Sri (copy, not changed)
+
+- **Appearance caption:** "Day uses a light view. Night uses a dark view. **System follows your
+  iPhone.** Changes apply immediately and are saved on this device." Android users see
+  iPhone-specific copy. This is the same family as bug #18. The text is left as it is, as asked.
+
+### Check it on a phone
+
+Android, dark mode first, then light:
+
+1. Settings → Voice and confirmation: "AI confirmation" reads as words on the left, and "Confirm
+   changes and deletions" is on one line, cut with "…" if it has to be. The same goes for
+   Notifications and focus → "Protect my current focus / Balanced".
+2. Each settings card has a thin outline and sits a shade above the page. Toggle rows have a thin
+   line between them.
+3. Display name and the four time fields are outlined boxes, lighter than the card. Tap Display name
+   and the outline turns indigo. The time fields are still half the row each.
+4. Appearance: the selected option is tinted indigo with indigo text.
+5. iOS: Settings looks as before.

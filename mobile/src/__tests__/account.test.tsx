@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
-import { Alert, Linking } from 'react-native';
+import { Alert, Linking, Platform, StyleSheet } from 'react-native';
 
 import type { Profile } from '../api';
 import { deliverOAuthCallback, redirectOAuthCallback, resetOAuthCallbacks } from '../lib/oauthCallbacks';
@@ -8,6 +8,7 @@ import { queryKeys } from '../query/keys';
 import { useAppearance } from '../store/appearance';
 import { useConsent } from '../store/consent';
 import { useSession } from '../store/session';
+import { palettes } from '../theme';
 
 const mockPush = jest.fn();
 const mockBack = jest.fn();
@@ -803,3 +804,89 @@ describe('calendar connections', () => {
     await waitFor(() => expect(screen.getByTestId('settings-failure')).toHaveTextContent('Not found'));
   });
 });
+
+/**
+ * docs/android-polish.md §5: Settings on Android. Tests render in the light scheme; Settings is an
+ * elevated sheet, so a card is the elevated `fieldSurface` and a field in it `fieldOnGroupElevated`.
+ */
+describe('the Settings screen on Android', () => {
+  const light = palettes.light;
+  const flat = (testID: string) => StyleSheet.flatten(screen.getByTestId(testID).props.style);
+  const textStyle = (text: string) => StyleSheet.flatten(screen.getByText(text).props.style);
+
+  afterEach(() => jest.restoreAllMocks());
+
+  async function showAndroid() {
+    jest.replaceProperty(Platform, 'OS', 'android');
+    await show(<Settings />);
+    await waitFor(() => expect(screen.getByTestId('settings-notifications')).toBeTruthy());
+  }
+
+  it('keeps a picker row’s label at 40% of the row and ellipsises the value instead', async () => {
+    await showAndroid();
+    for (const [label, value] of [
+      ['AI confirmation', 'settings-confirmation-value'],
+      ['Protect my current focus', 'settings-switching-threshold-value'],
+    ]) {
+      expect(textStyle(label)).toMatchObject({ flex: 1, flexShrink: 1, minWidth: '40%' });
+      expect(screen.getByTestId(value).props.numberOfLines).toBe(1);
+      expect(flat(value)).toMatchObject({ flexShrink: 1 });
+    }
+    // The text is unchanged.
+    expect(screen.getByText('Confirm changes and deletions')).toBeTruthy();
+    expect(screen.getByText('Balanced')).toBeTruthy();
+    // The read-only time zone row gets the same room rules.
+    expect(textStyle('Time zone (Automatic)')).toMatchObject({ minWidth: '40%' });
+  });
+
+  it('draws every card as a form group, with a separator between adjacent rows only', async () => {
+    await showAndroid();
+    for (const card of ['settings-appearance', 'settings-profile-time', 'settings-voice', 'settings-notifications', 'settings-calendars']) {
+      expect(flat(card)).toMatchObject({ backgroundColor: light.fieldSurfaceElevated, borderWidth: 1, borderColor: light.fieldBorder });
+    }
+    // Notifications: next action | focus picker, then push | email | morning | evening.
+    expect(screen.getAllByTestId('settings-notifications-separator')).toHaveLength(4);
+    // Voice: confirmation | spoken replies; the existing divider already splits the next pair.
+    expect(screen.getAllByTestId('settings-voice-separator')).toHaveLength(1);
+    // Profile and time: its rows are fields, not list rows.
+    expect(screen.queryByTestId('settings-profile-time-separator')).toBeNull();
+    expect(flat('settings-voice-separator')).toMatchObject({ height: 1, backgroundColor: light.fieldBorder });
+  });
+
+  it('gives the name and the four time fields the field surface inside the card', async () => {
+    await showAndroid();
+    const field = { backgroundColor: light.fieldOnGroupElevated, borderWidth: 1, borderColor: light.fieldBorder, borderRadius: 12 };
+    expect(flat('settings-name')).toMatchObject(field);
+    for (const id of ['working-hours-start', 'working-hours-end', 'quiet-hours-start', 'quiet-hours-end']) {
+      expect(flat(id)).toMatchObject({ ...field, minHeight: 40, paddingHorizontal: 12 });
+    }
+    fireEvent(screen.getByTestId('settings-name'), 'focus');
+    await waitFor(() => expect(flat('settings-name')).toMatchObject({ borderColor: light.accent }));
+    // The time zone is read-only, so it stays a row.
+    expect(flat('settings-time-zone').borderWidth).toBeUndefined();
+  });
+
+  it('marks the selected appearance with the accent tint and accent text', async () => {
+    await showAndroid();
+    expect(flat('appearance-system')).toMatchObject({ backgroundColor: light.accentTint, borderColor: light.accentBorder });
+    expect(textStyle('System')).toMatchObject({ color: light.accent });
+    expect(flat('appearance-day').backgroundColor).toBeUndefined();
+    expect(textStyle('Day').color).toBe(light.label);
+  });
+});
+
+describe('the Settings screen on iOS', () => {
+  const flat = (testID: string) => StyleSheet.flatten(screen.getByTestId(testID).props.style);
+
+  it('keeps the Swift rows, cards and segments', async () => {
+    await show(<Settings />);
+    await waitFor(() => expect(screen.getByTestId('settings-notifications')).toBeTruthy());
+    expect(screen.queryByTestId('settings-notifications-separator')).toBeNull();
+    expect(screen.getByTestId('settings-confirmation-value').props.numberOfLines).toBeUndefined();
+    expect(flat('settings-notifications').borderWidth).toBe(StyleSheet.hairlineWidth);
+    expect(flat('appearance-system')).toMatchObject({ backgroundColor: palettes.light.segmentSelected });
+    expect(flat('settings-name').borderRadius).toBe(12);
+    expect(flat('settings-name').borderWidth).toBe(StyleSheet.hairlineWidth);
+  });
+});
+

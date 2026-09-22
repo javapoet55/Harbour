@@ -1,8 +1,8 @@
-import { useRef, useState } from 'react';
+import { Children, Fragment, isValidElement, useRef, useState, type ReactNode } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 
 import { formatClock, parseClock } from '../lib/profileSettings';
-import { brand, useTheme } from '../theme';
+import { androidField, androidGroup, androidLabel, androidSeparator, brand, isAndroid, useTheme } from '../theme';
 import { IOSSwitch } from './IOSSwitch';
 import { withAlpha } from './SignInBackdrop';
 import { TaskSymbol } from './TaskSymbol';
@@ -16,19 +16,45 @@ import { Text } from './Text';
  * They are components here so each can be render-tested on its own.
  */
 
-/** `card(_:content:)` + `profileCard()` (ProfileView.swift:119-123, :274-276). */
+/**
+ * `card(_:content:)` + `profileCard()` (ProfileView.swift:119-123, :274-276).
+ *
+ * Android (docs/android-polish.md §5): the card is the shared form group — field surface and a 1px
+ * hairline — and a 1px separator sits between two adjacent rows (toggle, picker, labelled value), so
+ * a run of toggles does not float. A spot that already has a `SettingsDivider` gets no second line.
+ */
 export function SettingsCard({ title, children, testID }: { title: string; children: React.ReactNode; testID?: string }) {
   const theme = useTheme();
   return (
     <View
-      style={[styles.card, { backgroundColor: theme.colors.surface, borderColor: withAlpha(brand.nexdoIndigo, 0.13) }]}
+      style={[styles.card, { backgroundColor: theme.colors.surface, borderColor: withAlpha(brand.nexdoIndigo, 0.13) }, androidGroup(theme)]}
       testID={testID}
     >
       {/* `Text(title).font(.headline)` (ProfileView.swift:281) carries no `.foregroundStyle`. */}
       <Text style={[styles.headline, { color: theme.colors.label }]}>{title}</Text>
-      {children}
+      {isAndroid() ? separateRows(children, testID) : children}
     </View>
   );
+}
+
+/** The one-line controls that read as rows of a list, and so take a separator between them. */
+const ROW_TYPES: unknown[] = [SettingsToggle, SettingsPicker, SettingsLabeledValue];
+
+/** `children` with a `SettingsDivider` between each two adjacent rows (Android only). */
+function separateRows(children: ReactNode, testID?: string): ReactNode {
+  const items = Children.toArray(children);
+  return items.map((child, index) => {
+    const previous = items[index - 1];
+    const needsLine = isValidElement(child) && isValidElement(previous) && ROW_TYPES.includes(child.type) && ROW_TYPES.includes(previous.type);
+    return needsLine ? (
+      <Fragment key={isValidElement(child) ? child.key : index}>
+        <SettingsDivider testID={testID ? `${testID}-separator` : undefined} />
+        {child}
+      </Fragment>
+    ) : (
+      child
+    );
+  });
 }
 
 /** The grey caption under most cards: `.font(.caption).foregroundStyle(Color.nexdoSecondary)`. */
@@ -54,15 +80,19 @@ export function SettingsField({
   testID?: string;
 }) {
   const theme = useTheme();
+  const [focused, setFocused] = useState(false);
   return (
     <View style={styles.fieldGroup}>
-      <Text style={[styles.subheadline, { color: theme.colors.label }]}>{title}</Text>
+      {/* Android: the shared field label (docs/android-polish.md §4, §5). */}
+      <Text style={[styles.subheadline, { color: theme.colors.label }, androidLabel(theme)]}>{title}</Text>
       {/* `.textInputAutocapitalization(.words)` for "Display name", `.autocorrectionDisabled()`. */}
       <TextInput
         accessibilityLabel={title}
         autoCapitalize={title === 'Display name' ? 'words' : 'none'}
         autoCorrect={false}
         onChangeText={onChangeText}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
         style={[
           styles.input,
           {
@@ -70,6 +100,8 @@ export function SettingsField({
             backgroundColor: withAlpha(brand.nexdoIndigo, 0.035),
             borderColor: withAlpha(brand.nexdoIndigo, 0.16),
           },
+          // Android: a field inside the card's group, one step above it; accent while focused.
+          androidField(theme, focused, { inGroup: true, padded: false }),
         ]}
         testID={testID}
         value={value}
@@ -83,9 +115,14 @@ export function SettingsLabeledValue({ label, value, testID }: { label: string; 
   const theme = useTheme();
   return (
     <View style={styles.row} testID={testID}>
-      <Text style={[theme.typography.body, { color: theme.colors.label }]}>{label}</Text>
-      <View style={styles.grow} />
-      <Text style={[theme.typography.body, { color: theme.colors.secondaryLabel }]}>{value}</Text>
+      <Text style={[theme.typography.body, { color: theme.colors.label }, isAndroid() && styles.androidRowLabel]}>{label}</Text>
+      {isAndroid() ? null : <View style={styles.grow} />}
+      <Text
+        numberOfLines={isAndroid() ? 1 : undefined}
+        style={[theme.typography.body, { color: theme.colors.secondaryLabel }, isAndroid() && styles.androidRowValue]}
+      >
+        {value}
+      </Text>
     </View>
   );
 }
@@ -105,7 +142,7 @@ export function SettingsToggle({
   const theme = useTheme();
   return (
     <View style={styles.row}>
-      <Text style={[theme.typography.body, styles.grow, { color: theme.colors.label }]}>{label}</Text>
+      <Text style={[theme.typography.body, styles.grow, { color: theme.colors.label }, isAndroid() && styles.androidRowLabel]}>{label}</Text>
       <IOSSwitch
         accessibilityLabel={label}
         onValueChange={onValueChange}
@@ -146,10 +183,17 @@ export function SettingsSegments<T extends string>({
             accessibilityState={{ selected }}
             key={option.value}
             onPress={() => onChange(option.value)}
-            style={[styles.segment, selected ? { backgroundColor: theme.colors.segmentSelected } : null]}
+            style={[
+              styles.segment,
+              selected ? { backgroundColor: theme.colors.segmentSelected } : null,
+              // Android: the selected segment in the accent tint, so it is plainly the chosen one.
+              selected && isAndroid() ? { backgroundColor: theme.colors.accentTint, borderWidth: 1, borderColor: theme.colors.accentBorder } : null,
+            ]}
             testID={`${testIDPrefix}-${option.value}`}
           >
-            <Text style={[styles.subheadline, { color: theme.colors.label }]}>{option.title}</Text>
+            <Text style={[styles.subheadline, { color: theme.colors.label }, selected && isAndroid() ? styles.androidSelectedSegment : null, selected && isAndroid() ? { color: theme.colors.accent } : null]}>
+              {option.title}
+            </Text>
           </Pressable>
         );
       })}
@@ -188,8 +232,17 @@ export function SettingsPicker<T extends string | number>({
         style={styles.row}
         testID={testID}
       >
-        <Text style={[theme.typography.body, styles.grow, { color: theme.colors.ink }]}>{label}</Text>
-        <Text style={[theme.typography.body, { color: theme.colors.tint }]}>{current?.title ?? ''}</Text>
+        {/* Android (docs/android-polish.md §5): the label keeps at least 40% of the row and wraps by
+            word; the value takes one line and ellipsises. Before, the value kept its full width and
+            the label collapsed to a letter per line ("AI / co / nfi / rm…"). */}
+        <Text style={[theme.typography.body, styles.grow, { color: theme.colors.ink }, isAndroid() && styles.androidRowLabel]}>{label}</Text>
+        <Text
+          numberOfLines={isAndroid() ? 1 : undefined}
+          style={[theme.typography.body, { color: theme.colors.tint }, isAndroid() && styles.androidRowValue]}
+          testID={`${testID}-value`}
+        >
+          {current?.title ?? ''}
+        </Text>
         <TaskSymbol color={theme.colors.tint} name="chevron.up.chevron.down" size={13} />
       </Pressable>
 
@@ -242,7 +295,7 @@ export function SettingsHours({
   const theme = useTheme();
   return (
     <View style={styles.fieldGroup}>
-      <Text style={[styles.subheadline, { color: theme.colors.ink }]}>{title}</Text>
+      <Text style={[styles.subheadline, { color: theme.colors.ink }, androidLabel(theme)]}>{title}</Text>
       <View style={styles.hoursRow}>
         <ClockField label="Start" onChange={onChangeStart} testID={`${testIDPrefix}-start`} value={start} />
         <ClockField label="End" onChange={onChangeEnd} testID={`${testIDPrefix}-end`} value={end} />
@@ -276,12 +329,17 @@ export function ClockField({
 
   return (
     <View style={styles.clockGroup}>
-      <Text style={[styles.caption, { color: theme.colors.secondary }]}>{label}</Text>
+      <Text style={[styles.caption, { color: theme.colors.secondary }, androidLabel(theme)]}>{label}</Text>
       <Pressable
         accessibilityLabel={`${label}, ${value}`}
         accessibilityRole="button"
         onPress={() => setOpen(true)}
-        style={[styles.clockField, { backgroundColor: withAlpha(brand.nexdoIndigo, 0.035), borderColor: withAlpha(brand.nexdoIndigo, 0.16) }]}
+        style={[
+          styles.clockField,
+          { backgroundColor: withAlpha(brand.nexdoIndigo, 0.035), borderColor: withAlpha(brand.nexdoIndigo, 0.16) },
+          // Android: a field inside the card's group; it keeps its own width and padding.
+          androidField(theme, false, { inGroup: true, padded: false }),
+        ]}
         testID={testID}
       >
         <Text style={[theme.typography.body, { color: theme.colors.ink }]}>{value}</Text>
@@ -413,10 +471,10 @@ export function SettingsSlider({
   );
 }
 
-/** `Divider()`. */
-export function SettingsDivider() {
+/** `Divider()`. Android: the shared 1px form separator. */
+export function SettingsDivider({ testID }: { testID?: string } = {}) {
   const theme = useTheme();
-  return <View style={[styles.divider, { backgroundColor: theme.colors.separator }]} />;
+  return <View style={[styles.divider, { backgroundColor: theme.colors.separator }, androidSeparator(theme)]} testID={testID} />;
 }
 
 const styles = StyleSheet.create({
@@ -428,6 +486,10 @@ const styles = StyleSheet.create({
   // `.padding(18)` with corner radius 20 and the indigo hairline from `profileCard()`.
   card: { gap: 16, padding: 18, borderRadius: 20, borderWidth: StyleSheet.hairlineWidth },
   row: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 32 },
+  // Android: a row's label keeps at least 40% of the row and wraps by word; its value gives way.
+  androidRowLabel: { flex: 1, flexShrink: 1, minWidth: '40%' },
+  androidRowValue: { flexShrink: 1, textAlign: 'right' },
+  androidSelectedSegment: { fontWeight: '600' },
   fieldGroup: { gap: 8 },
   input: { minHeight: 44, paddingHorizontal: 12, paddingVertical: 12, borderRadius: 12, borderWidth: StyleSheet.hairlineWidth, fontSize: 17 },
 
