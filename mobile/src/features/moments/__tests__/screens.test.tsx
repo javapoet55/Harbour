@@ -5,6 +5,8 @@ const mockPush = jest.fn();
 const mockBack = jest.fn();
 const mockDismissTo = jest.fn();
 let mockParams: Record<string, string> = {};
+/** Every focus callback a screen registered, so a test can bring the screen back into focus. */
+const mockFocusCallbacks: (() => void)[] = [];
 jest.mock('expo-router', () => ({
   router: {
     push: (...args: unknown[]) => mockPush(...args),
@@ -12,6 +14,14 @@ jest.mock('expo-router', () => ({
     dismissTo: (...args: unknown[]) => mockDismissTo(...args),
   },
   useLocalSearchParams: () => mockParams,
+  // Runs the callback on mount, like a first focus, and records it so a test can focus the screen again.
+  useFocusEffect: (callback: () => void) => {
+    const React = jest.requireActual('react');
+    React.useEffect(() => {
+      mockFocusCallbacks.push(callback);
+      callback();
+    }, [callback]);
+  },
   // The header buttons are part of each screen, so the mock draws them.
   Stack: {
     Screen: ({ options }: { options?: { headerLeft?: () => unknown; headerRight?: () => unknown } }) => {
@@ -169,6 +179,53 @@ describe('Important Moments list', () => {
     expect(screen.queryByText('Sam’s Birthday')).toBeNull();
     await fireEvent.press(screen.getByTestId('moments-tab-Sent'));
     expect(screen.queryByText('No moments yet')).toBeNull();
+  });
+});
+
+/**
+ * Moments issue A: after the worker sent an automatic email, the wish stayed under Scheduled. The list
+ * refreshed only on mount; SwiftUI's `.task` re-runs whenever the list appears again.
+ */
+describe('Moments list after an automatic send', () => {
+  const d = future(5);
+  const withPlans = (plans: ReturnType<typeof plan>[]) => [
+    moment({ id: 'x', title: 'Sam’s Birthday', occurrenceDate: d, nextOccurrence: d, drafts: [draft({ plans })] }),
+  ];
+
+  it('moves the wish to Sent when the list comes back into focus', async () => {
+    load(withPlans([plan({ id: 'p1', subject: 'Sam’s Birthday', channel: 'email', automaticDelivery: true, status: 'SCHEDULED', scheduledAtUTC: `${d}T08:00:00Z` })]));
+    mockFocusCallbacks.length = 0;
+    await render(<ImportantMoments />);
+    await fireEvent.press(screen.getByTestId('moments-tab-Scheduled'));
+    await waitFor(() => expect(screen.getByText('Auto-send scheduled')).toBeTruthy());
+    const fetches = mockSnapshot.mock.calls.length;
+
+    // The worker sends it while the person is on another screen.
+    load(withPlans([plan({ id: 'p1', subject: 'Sam’s Birthday', channel: 'email', automaticDelivery: true, status: 'SENT', sentAt: `${d}T08:00:05Z`, scheduledAtUTC: `${d}T08:00:00Z` })]));
+    await act(async () => mockFocusCallbacks[mockFocusCallbacks.length - 1]());
+
+    await waitFor(() => expect(mockSnapshot.mock.calls.length).toBeGreaterThan(fetches));
+    await waitFor(() => expect(screen.getByText('No scheduled wishes')).toBeTruthy());
+    await fireEvent.press(screen.getByTestId('moments-tab-Sent'));
+    expect(within(screen.getByTestId('plan-card-p1')).getByText('Sent')).toBeTruthy();
+  });
+
+  // service.ts:167-168: a sent yearly wish gets next year's plan at once, as SCHEDULED. Both tabs are right.
+  it('lists a yearly wish under Sent and next year’s under Scheduled', async () => {
+    const nextYear = `${Number(d.slice(0, 4)) + 1}${d.slice(4)}`;
+    load(
+      withPlans([
+        plan({ id: 'p1', subject: 'Sam’s Birthday', channel: 'email', automaticDelivery: true, repeatYearly: true, status: 'SENT', sentAt: `${d}T08:00:05Z`, scheduledAtUTC: `${d}T08:00:00Z` }),
+        plan({ id: 'p2', subject: 'Sam’s Birthday', channel: 'email', automaticDelivery: true, repeatYearly: true, status: 'SCHEDULED', scheduledAtUTC: `${nextYear}T08:00:00Z` }),
+      ]),
+    );
+    await render(<ImportantMoments />);
+    await fireEvent.press(screen.getByTestId('moments-tab-Scheduled'));
+    await waitFor(() => expect(within(screen.getByTestId('plan-card-p2')).getByText('Auto-send scheduled')).toBeTruthy());
+    expect(screen.queryByTestId('plan-card-p1')).toBeNull();
+    await fireEvent.press(screen.getByTestId('moments-tab-Sent'));
+    expect(within(screen.getByTestId('plan-card-p1')).getByText('Sent')).toBeTruthy();
+    expect(screen.queryByTestId('plan-card-p2')).toBeNull();
   });
 });
 

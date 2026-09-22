@@ -1,6 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { router, Stack, useLocalSearchParams } from 'expo-router';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { router, Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 
@@ -72,13 +72,18 @@ export default function ImportantMomentsScreen() {
   const [deliveryFilter, setDeliveryFilter] = useState<string>('All');
   const [now] = useState(() => Date.now());
 
-  // `.task { await store.prepareDefaultReminders(); await store.refresh() }`
-  useEffect(() => {
-    void (async () => {
-      await momentsStore.getState().prepareDefaultReminders();
-      await momentsStore.getState().refresh();
-    })();
-  }, []);
+  // `.task { await store.prepareDefaultReminders(); await store.refresh() }`. SwiftUI re-runs `.task`
+  // each time the list APPEARS, including when you come back to it from Manage Moment, a wish or the
+  // editor. A mount-only effect missed those returns, so a wish the worker had just sent stayed under
+  // Scheduled until the screen was left and reopened; a focus effect runs on both.
+  useFocusEffect(
+    useCallback(() => {
+      void (async () => {
+        await momentsStore.getState().prepareDefaultReminders();
+        await momentsStore.getState().refresh();
+      })();
+    }, []),
+  );
 
   const routedOnce = useRef(false);
   useEffect(() => {
