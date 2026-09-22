@@ -276,12 +276,21 @@ export type Artwork = { kind: 'photo'; base64: string } | { kind: 'asset'; asset
 
 /**
  * The image priority (`body`, `:395-401`): the attached photo, then the bundled illustration, then the
- * emoji. Swift falls through when the stored data does not decode; a non-empty string stands in here.
+ * emoji.
+ *
+ * Swift falls through when the stored data does not DECODE (`UIImage(data:)` is nil). Whether it
+ * decodes is only known once the image loads, so `GroceryArtwork` passes `skip` for a stage whose
+ * image failed. The server accepts any string shaped like JPEG base64 (`/^\/9j\/…$/`), so `/9j/AA==`
+ * passes validation and decodes to nothing: without the skip it drew an empty slot where the
+ * illustration belongs.
  */
-export function artworkFor(item: Pick<GroceryItem, 'name' | 'category' | 'imageData'>): Artwork {
-  if (item.imageData) return { kind: 'photo', base64: item.imageData };
+export function artworkFor(
+  item: Pick<GroceryItem, 'name' | 'category' | 'imageData'>,
+  skip: { photo?: boolean; asset?: boolean } = {},
+): Artwork {
+  if (item.imageData && !skip.photo) return { kind: 'photo', base64: item.imageData };
   const asset = groceryAsset(item.name);
-  if (asset) return { kind: 'asset', asset };
+  if (asset && !skip.asset) return { kind: 'asset', asset };
   return { kind: 'emoji', emoji: groceryEmoji(item) };
 }
 

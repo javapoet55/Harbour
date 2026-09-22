@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
-import { Alert, Platform, Share } from 'react-native';
+import { Alert, AppState, Platform, Share } from 'react-native';
 
 const mockPush = jest.fn();
 const mockBack = jest.fn();
@@ -37,6 +37,10 @@ import * as Crypto from 'expo-crypto';
 import type { GroceryItem, GroceryList } from '../../../api/shopping';
 import { ApiError } from '../../../api/client';
 import { shoppingStore } from '../store';
+import { shoppingApi } from '../../../api/shopping';
+import { VOICE_MESSAGES } from '../voice';
+import { CONSENT_KEY, useTranscriptionConsent } from '../device';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import MyLists from '../../../../app/(tabs)/(today)/shopping/index';
 import Detail from '../../../../app/(tabs)/(today)/shopping/[id]';
 
@@ -670,6 +674,78 @@ describe('Shopping Detail quick-add on Android', () => {
     expect(screen.getByTestId('shopping-quick-add').props.placeholder).toBe('Add an item (e.g. eggs, milk, bread)');
     expect(screen.getByTestId('shopping-quick-add').props.numberOfLines).toBeUndefined();
     expect(screen.queryByTestId('shopping-quick-add-placeholder')).toBeNull();
+  });
+});
+
+/**
+ * The Android mic bug, end to end through the real sheet: the permission prompt pauses the app, and
+ * the AppState change it causes must not cancel the tap that opened it.
+ */
+describe('Add by Voice: the microphone permission', () => {
+  const audio = jest.requireMock('expo-audio') as Record<string, unknown>;
+  let appStateHandlers: ((state: string) => void)[] = [];
+
+  beforeEach(async () => {
+    // An earlier test turns live transcription off; the sheet re-hydrates it from storage on mount.
+    await AsyncStorage.removeItem(CONSENT_KEY);
+    useTranscriptionConsent.setState({ enabled: true });
+    appStateHandlers = [];
+    jest.spyOn(AppState, 'addEventListener').mockImplementation((_type, handler) => {
+      appStateHandlers.push(handler as (state: string) => void);
+      return { remove: jest.fn() } as unknown as ReturnType<typeof AppState.addEventListener>;
+    });
+    (shoppingApi.transcriptionSession as jest.Mock).mockReset().mockRejectedValue(new Error('offline'));
+  });
+
+  afterEach(() => {
+    delete audio.requestRecordingPermissionsAsync;
+    jest.restoreAllMocks();
+  });
+
+  async function openVoice() {
+    load([list()]);
+    mockParams = { id: 'l1' };
+    await render(<Detail />);
+    await fireEvent.press(screen.getByTestId('quick-add-mic'));
+  }
+
+  it('carries on after the prompt, even though the prompt sent the app to the background', async () => {
+    let answer: (value: { granted: boolean }) => void = () => undefined;
+    audio.requestRecordingPermissionsAsync = jest.fn(() => new Promise((resolve) => (answer = resolve)));
+    jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+    await openVoice();
+
+    await fireEvent.press(screen.getByTestId('voice-mic'));
+    expect(audio.requestRecordingPermissionsAsync).toHaveBeenCalledTimes(1);
+    expect(screen.getByTestId('voice-status').props.children).toBe('Connecting…');
+
+    // Android opens the permission dialog as its own activity: AppState reports `background`.
+    await act(async () => appStateHandlers.forEach((handler) => handler('background')));
+    expect(screen.getByTestId('voice-status').props.children).toBe('Connecting…');
+
+    await act(async () => answer({ granted: true }));
+    // It went on to open the transcription session rather than returning silently.
+    await waitFor(() => expect(shoppingApi.transcriptionSession).toHaveBeenCalled());
+    // Here the session fails (offline), and that failure is shown, not swallowed.
+    await waitFor(() => expect(screen.getByTestId('voice-error').props.children).toBe(VOICE_MESSAGES.connect('offline')));
+  });
+
+  it('says so when the microphone is refused', async () => {
+    audio.requestRecordingPermissionsAsync = jest.fn(async () => ({ granted: false }));
+    await openVoice();
+    await fireEvent.press(screen.getByTestId('voice-mic'));
+    await waitFor(() => expect(screen.getByTestId('voice-error').props.children).toBe(VOICE_MESSAGES.microphone));
+    expect(screen.getByTestId('voice-status').props.children).toBe('Tap Mic and Talk');
+    expect(shoppingApi.transcriptionSession).not.toHaveBeenCalled();
+  });
+
+  it('shows the error when the permission request itself fails', async () => {
+    audio.requestRecordingPermissionsAsync = jest.fn(async () => Promise.reject(new Error('No activity')));
+    jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+    await openVoice();
+    await fireEvent.press(screen.getByTestId('voice-mic'));
+    await waitFor(() => expect(screen.getByTestId('voice-error').props.children).toBe(VOICE_MESSAGES.connect('No activity')));
+    expect(screen.getByTestId('voice-status').props.children).toBe('Tap Mic and Talk');
   });
 });
 

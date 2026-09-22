@@ -67,7 +67,76 @@ describe('ShoppingVoice', () => {
     expect(VOICE_MESSAGES.microphone).toBe('Allow microphone access in your phone’s Settings, or type your items.');
   });
 
+  /**
+   * The Android mic bug (docs/android-polish.md, "Shopping voice"): the permission dialog pauses the
+   * app, React Native reports AppState `background`, and the sheet closed the session — so after Allow
+   * `start()` returned silently and the first tap never reached "Listening".
+   */
+  describe('the permission prompt', () => {
+    it('does not cancel the session when the prompt sends the app to the background', async () => {
+      let answer: (granted: boolean) => void = () => undefined;
+      const h = harness({ requestMicrophone: () => new Promise<boolean>((resolve) => (answer = resolve)) });
+      const starting = h.voice.start();
+      expect(h.voice.state.getState().connecting).toBe(true);
+
+      // The dialog opens: AppState goes to `background`.
+      h.voice.leaveApp();
+      expect(h.voice.state.getState().connecting).toBe(true);
+
+      answer(true);
+      await starting;
+      expect(h.transport.connect).toHaveBeenCalled();
+      expect(h.voice.state.getState()).toMatchObject({ listening: true, connecting: false, error: null });
+    });
+
+    it('still closes when the app really leaves the foreground while listening', async () => {
+      const h = harness();
+      await h.voice.start();
+      h.voice.leaveApp();
+      expect(h.transport.closed).toBe(true);
+      expect(h.voice.state.getState()).toMatchObject({ listening: false, connecting: false });
+    });
+
+    it('shows the refusal when permission is denied, and never connects', async () => {
+      const h = harness({ requestMicrophone: jest.fn(async () => false) });
+      await h.voice.start();
+      expect(h.deps.requestMicrophone).toHaveBeenCalledTimes(1);
+      expect(h.transport.connect).not.toHaveBeenCalled();
+      expect(h.voice.state.getState()).toMatchObject({ listening: false, connecting: false, error: VOICE_MESSAGES.microphone });
+    });
+
+    it('shows an error, rather than sticking on "Connecting…", when the permission request throws', async () => {
+      const warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+      const h = harness({ requestMicrophone: async () => Promise.reject(new Error('The current activity is no longer available.')) });
+      await expect(h.voice.start()).resolves.toBeUndefined();
+      expect(h.transport.connect).not.toHaveBeenCalled();
+      expect(h.voice.state.getState()).toMatchObject({
+        listening: false,
+        connecting: false,
+        error: 'The current activity is no longer available. Your transcript is kept; retry or type your items.',
+      });
+      expect(warn).toHaveBeenCalledWith('[ShoppingVoice] microphone permission request failed', expect.any(Error));
+      warn.mockRestore();
+    });
+
+    it('shows an error and logs when starting to listen fails', async () => {
+      const warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+      const h = harness();
+      h.transport.connect.mockRejectedValueOnce(new Error('Microphone is in use by another app.'));
+      await h.voice.start();
+      expect(h.voice.state.getState()).toMatchObject({
+        listening: false,
+        connecting: false,
+        error: 'Microphone is in use by another app. Your transcript is kept; retry or type your items.',
+      });
+      expect(h.transport.closed).toBe(true);
+      expect(warn).toHaveBeenCalledWith('[ShoppingVoice] could not start listening', expect.any(Error));
+      warn.mockRestore();
+    });
+  });
+
   it('keeps the transcript when the session cannot be created', async () => {
+    jest.spyOn(console, 'warn').mockImplementationOnce(() => undefined);
     const h = harness({ credential: async () => Promise.reject(new Error('Live transcription is not configured yet.')) });
     h.voice.setText('milk');
     await h.voice.start();

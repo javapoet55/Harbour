@@ -1,7 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Component, type ReactNode } from 'react';
+import { Component, useState, type ReactNode } from 'react';
 import { Animated, Image, PanResponder, Pressable, StyleSheet, View, type GestureResponderHandlers, type ImageSourcePropType, type StyleProp, type ViewStyle } from 'react-native';
 
 import type { GroceryItem } from '../../api/shopping';
@@ -9,7 +9,7 @@ import { FittedText } from '../../components/AskParts';
 import { KeyboardLift } from '../../components/keyboard';
 import { withAlpha } from '../../components/SignInBackdrop';
 import { Text } from '../../components/Text';
-import { brand, linearGradientStops, useTheme } from '../../theme';
+import { brand, isAndroid, linearGradientStops, useTheme } from '../../theme';
 import { systemColors, type IconName } from '../moments/components';
 import { amountLabel, artworkFor, type GroceryAsset } from './model';
 
@@ -25,15 +25,50 @@ export const GROCERY_ASSETS: Record<GroceryAsset, ImageSourcePropType> = {
 /**
  * `GroceryArtwork` (ios/App/ShoppingViews.swift:363-402): the attached photo, else the bundled
  * illustration, else an emoji — 40×44, in its own colours, hidden from accessibility.
+ *
+ * An image that fails to load falls through to the next stage, as Swift's does when the data does
+ * not decode (see `artworkFor`). On Android the slot shows a neutral basket tile until the picture
+ * has loaded, so a row is never an empty gap and every row's text lines up
+ * (docs/android-polish.md, "Grocery image placeholder").
  */
 export function GroceryArtwork({ item }: { item: Pick<GroceryItem, 'name' | 'category' | 'imageData'> }) {
-  const artwork = artworkFor(item);
+  const theme = useTheme();
+  // Which stored photo failed, and whether the illustration failed. Keyed by the data, so editing the
+  // item's photo tries again.
+  const [brokenPhoto, setBrokenPhoto] = useState<string | null>(null);
+  const [brokenAsset, setBrokenAsset] = useState(false);
+  const [loaded, setLoaded] = useState<string | null>(null);
+  const artwork = artworkFor(item, { photo: brokenPhoto !== null && brokenPhoto === item.imageData, asset: brokenAsset });
+  const key = artwork.kind === 'photo' ? `photo:${artwork.base64}` : artwork.kind === 'asset' ? `asset:${artwork.asset}` : null;
+  const placeholder =
+    isAndroid() && key !== null && loaded !== key ? (
+      <View
+        style={[styles.placeholder, { backgroundColor: theme.colors.fieldSurface, borderColor: theme.colors.fieldBorder }]}
+        testID="grocery-artwork-placeholder"
+      >
+        <Ionicons name="basket-outline" size={20} color={theme.colors.secondary} />
+      </View>
+    ) : null;
   return (
     <View style={styles.artwork} accessibilityElementsHidden importantForAccessibility="no-hide-descendants" testID="grocery-artwork">
+      {placeholder}
       {artwork.kind === 'photo' ? (
-        <Image source={{ uri: `data:image/jpeg;base64,${artwork.base64}` }} style={styles.photo} testID="grocery-artwork-photo" />
+        <Image
+          source={{ uri: `data:image/jpeg;base64,${artwork.base64}` }}
+          onError={() => setBrokenPhoto(artwork.base64)}
+          onLoad={() => setLoaded(key)}
+          style={styles.photo}
+          testID="grocery-artwork-photo"
+        />
       ) : artwork.kind === 'asset' ? (
-        <Image source={GROCERY_ASSETS[artwork.asset]} resizeMode="contain" style={styles.fill} testID={`grocery-artwork-${artwork.asset}`} />
+        <Image
+          source={GROCERY_ASSETS[artwork.asset]}
+          onError={() => setBrokenAsset(true)}
+          onLoad={() => setLoaded(key)}
+          resizeMode="contain"
+          style={styles.fill}
+          testID={`grocery-artwork-${artwork.asset}`}
+        />
       ) : (
         <Text style={styles.emoji} testID="grocery-artwork-emoji">
           {artwork.emoji}
@@ -333,6 +368,18 @@ const styles = StyleSheet.create({
   artwork: { width: 40, height: 44, alignItems: 'center', justifyContent: 'center' },
   photo: { width: 40, height: 44, borderRadius: 8 },
   fill: { width: 40, height: 44 },
+  // Android: the empty-slot tile, drawn under a picture until it has loaded. Same 40×44 and radius as a photo.
+  placeholder: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    width: 40,
+    height: 44,
+    borderRadius: 8,
+    borderWidth: StyleSheet.hairlineWidth,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   emoji: { fontSize: 29, lineHeight: 36 },
   listTile: { width: 48, height: 48, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
   badge: { position: 'absolute', left: -3, bottom: -2, width: 12, height: 12, borderRadius: 6, alignItems: 'center', justifyContent: 'center' },

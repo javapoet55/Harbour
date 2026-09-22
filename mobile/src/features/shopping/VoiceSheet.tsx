@@ -42,9 +42,11 @@ function VoiceBody({ onAdd, onClose }: { onAdd: (items: GroceryItem[]) => void; 
 
   useEffect(() => {
     void useTranscriptionConsent.getState().hydrate();
-    // `.onChange(of: phase) { if value != .active { voice.close() } }` and `.onDisappear { voice.close() }`
+    // `.onChange(of: phase) { if value != .active { voice.close() } }` and `.onDisappear { voice.close() }`.
+    // `leaveApp` skips the close while the microphone prompt is up: on Android the prompt itself sends
+    // the app to `background`, which closed the session and silently cancelled the first tap.
     const subscription = AppState.addEventListener('change', (next) => {
-      if (next !== 'active') voice.close();
+      if (next !== 'active') voice.leaveApp();
     });
     return () => {
       subscription.remove();
@@ -59,7 +61,10 @@ function VoiceBody({ onAdd, onClose }: { onAdd: (items: GroceryItem[]) => void; 
 
   const toggleMic = () => {
     if (!state.listening) playStartBell();
-    void (state.listening ? voice.finish() : voice.start());
+    (state.listening ? voice.finish() : voice.start()).catch((error: unknown) => {
+      // `start()` and `finish()` report their own failures; this only catches the unexpected.
+      console.warn('[ShoppingVoice] mic toggle failed', error);
+    });
   };
 
   /** `addItems()` (ShoppingVoice.swift:112-120): blank names are dropped; on success the sheet closes. */

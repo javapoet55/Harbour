@@ -582,3 +582,56 @@ small `useNow()` hook. It is taken on mount and refreshed once a minute from an 
 date is in the past" / "The original date is kept" note shows for exactly the same dates as before.
 The one difference is that "today" now also rolls over at midnight while the editor stays open,
 where before it waited for something else to re-render.
+
+---
+
+## 8. Grocery image placeholder (2026-09-22)
+
+JavaScript only; no new build needed. The tile is drawn on Android only. The fall-through fix beneath
+it applies to both platforms, because the empty slot was a bug.
+
+### What was wrong
+
+Some grocery rows showed an empty gap where the picture belongs. In the reported list this was Milk
+and Bananas.
+
+**The name matching was not the fault.** `groceryAsset` lower-cases the name and matches whole
+words, so "Milk" gives `milk.png` and "Bananas" gives `banana.png` on both platforms. It is now
+pinned by a test.
+
+The only path in `GroceryArtwork` that can leave the 40×44 slot empty for those names is the
+**photo** branch:
+- Any non-empty `imageData` was drawn as `data:image/jpeg;base64,…`, with no fallback.
+- The server accepts any string shaped like JPEG base64 (`/^\/9j\/[A-Za-z0-9+/]*={0,2}$/`), so a value
+  like `/9j/AA==` (which the server's and the app's own tests use) passes validation and decodes to
+  nothing.
+- Swift checks `UIImage(data:)` and falls through to the illustration when it is nil
+  (ShoppingViews.swift:395-401). The React Native port drew an empty image instead; the old comment
+  noted that "a non-empty string stands in" for the decode check.
+
+I could not read the phone's data from here. So this is the one code path that explains a blank slot
+for those two names, not a confirmed look at the stored values. If those items do have a real,
+readable photo, the gap has another cause and needs a device to find it.
+
+### What changed
+
+- **Fall-through, both platforms** (`artworkFor` and `GroceryArtwork`): an image that fails to load
+  falls to the next stage, as Swift's does. A photo that does not decode drops to the illustration,
+  and an illustration that fails drops to the emoji. The failure is keyed by the photo data, so
+  changing the photo tries again.
+- **Placeholder, Android** (`GroceryArtwork`): until the picture has loaded, or if nothing can be
+  drawn, the slot shows a neutral tile the same size as a photo:
+  - 40×44, 8pt radius
+  - `fieldSurface` fill and a hairline `fieldBorder`
+  - Ionicons `basket-outline` at 20pt in `secondary`
+
+  The tile disappears once the photo or illustration loads, so it never sits behind a transparent
+  illustration. Rows with an emoji show no tile. Every row keeps the same artwork width, so the names
+  line up.
+
+### Check it on a phone
+
+1. Shopping → a list with Milk and Bananas: each row shows the carton or the bananas. If a picture
+   is slow, a grey basket tile fills its place first.
+2. An item with a broken photo shows its illustration or emoji, not a gap.
+3. iOS: no tile. A broken photo falls through to the illustration, as in Swift.

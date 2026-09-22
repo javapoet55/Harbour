@@ -135,9 +135,16 @@ describe('item image priority (ShoppingViews.swift:363-402)', () => {
     expect(artworkFor({ name: 'Milk', category: 'Dairy & Eggs', imageData: '/9j/AA==' })).toEqual({ kind: 'photo', base64: '/9j/AA==' });
     expect(artworkFor({ name: 'Parity milk', category: 'Dairy & Eggs', imageData: null })).toEqual({ kind: 'asset', asset: 'milk' });
     expect(artworkFor({ name: 'Cheddar cheese', category: 'Dairy & Eggs', imageData: null })).toEqual({ kind: 'emoji', emoji: '🧀' });
+    // A photo that did not decode falls through to the illustration, then the emoji (Swift's `UIImage(data:)` nil).
+    expect(artworkFor({ name: 'Milk', category: 'Dairy & Eggs', imageData: '/9j/AA==' }, { photo: true })).toEqual({ kind: 'asset', asset: 'milk' });
+    expect(artworkFor({ name: 'Milk', category: 'Dairy & Eggs', imageData: '/9j/AA==' }, { photo: true, asset: true })).toEqual({ kind: 'emoji', emoji: '🥛' });
   });
 
   it('matches bundled art by whole word only, in Swift’s order', () => {
+    // The rows in the Android report: the matching is not the fault (see GroceryArtwork's fall-through).
+    expect(groceryAsset('Milk')).toBe('milk');
+    expect(groceryAsset('Bananas')).toBe('banana');
+    expect(groceryAsset('banana')).toBe('banana');
     expect(groceryAsset('red onions')).toBe('onion');
     expect(groceryAsset('milk-chocolate eggs')).toBe('milk');
     expect(groceryAsset('buttermilk')).toBeNull();

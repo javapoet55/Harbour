@@ -51,6 +51,8 @@ export class ShoppingVoice {
   private cancelTimer: (() => void) | null = null;
   private speaking = false;
   private waiting = new Set<string>();
+  /** True while the microphone permission request is in flight (see `leaveApp`). */
+  private requestingPermission = false;
 
   constructor(private readonly deps: ShoppingVoiceDeps) {
     this.state = createStore<ShoppingVoiceState>()(() => ({ listening: false, connecting: false, finishing: false, text: '', error: null }));
@@ -77,7 +79,21 @@ export class ShoppingVoice {
     if (this.snapshot.text !== '') this.transcript.append(this.deps.uuid(), this.snapshot.text, true);
     const generation = ++this.run;
     this.set({ connecting: true, error: null });
-    if (!(await this.deps.requestMicrophone())) {
+    let granted: boolean;
+    this.requestingPermission = true;
+    try {
+      granted = await this.deps.requestMicrophone();
+    } catch (error) {
+      // The request itself failed (a native error, not a refusal). It used to escape `start()` as an
+      // unhandled rejection and leave the sheet on "Connecting…"; show it instead.
+      console.warn('[ShoppingVoice] microphone permission request failed', error);
+      if (this.run !== generation) return;
+      this.set({ connecting: false, error: VOICE_MESSAGES.connect(error instanceof Error ? error.message : String(error)) });
+      return;
+    } finally {
+      this.requestingPermission = false;
+    }
+    if (!granted) {
       this.set({ connecting: false, error: VOICE_MESSAGES.microphone });
       return;
     }
@@ -106,9 +122,24 @@ export class ShoppingVoice {
       }, SESSION_LIMIT_MS);
     } catch (error) {
       if (this.run !== generation) return;
+      console.warn('[ShoppingVoice] could not start listening', error);
       this.set({ error: VOICE_MESSAGES.connect(error instanceof Error ? error.message : String(error)) });
       this.close();
     }
+  }
+
+  /**
+   * The app left the foreground: `.onChange(of: scenePhase) { if value != .active { voice.close() } }`.
+   *
+   * EXCEPT while the microphone permission request is in flight. The system permission dialog is its
+   * own activity on Android, so opening it pauses the app and React Native reports AppState
+   * `background`. Closing then bumped `run`, and when the person tapped Allow, `start()` saw a new
+   * generation and returned silently: the first tap on the mic never reached "Listening". iOS reports
+   * `inactive` under its permission alert, so the same guard covers it.
+   */
+  leaveApp(): void {
+    if (this.requestingPermission) return;
+    this.close();
   }
 
   /** `receive(_:)` (`:42-59`). */
