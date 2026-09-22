@@ -1,10 +1,11 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { router } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
-import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
+import { Alert, Pressable, RefreshControl, StyleSheet, View } from 'react-native';
 
 import { useCoordinator } from '../../../../src/actions/coordinator';
 import { GlassCard, Text } from '../../../../src/components';
+import { KeyboardAwareScrollView } from '../../../../src/components/keyboard';
 import { TodayActionsView } from '../../../../src/components/TodayActions';
 import { FocusNextCard, ProtectedTimeCard } from '../../../../src/components/TodayNextAction';
 import { FocusSessionStrip } from '../../../../src/components/FocusSessionStrip';
@@ -138,7 +139,7 @@ export default function Today() {
   return (
     <View style={styles.fill}>
       <TodayBackdrop />
-      <ScrollView
+      <KeyboardAwareScrollView
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scroll}
@@ -293,7 +294,7 @@ export default function Today() {
         {range === 1 && showsAttentionRow(overdueCount, otherCount) ? (
           <TodayAttentionRow onPress={() => router.push('/attention')} other={otherCount} overdue={overdueCount} />
         ) : null}
-      </ScrollView>
+      </KeyboardAwareScrollView>
     </View>
   );
 }

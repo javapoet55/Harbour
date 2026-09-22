@@ -1,10 +1,10 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, KeyboardAvoidingView, Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Alert, Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { KeyboardAwareScrollView, NexdoLogoMark, TaskSymbol, Text } from '../../src/components';
+import { KeyboardAvoidingView, KeyboardAwareScrollView, NexdoLogoMark, TaskSymbol, Text } from '../../src/components';
 import { useCoordinator } from '../../src/actions/coordinator';
 import { ClarifyTaskActionCard } from '../../src/components/ClarifyTaskActionCard';
 import { TaskActionCard } from '../../src/components/TaskActionCard';
@@ -147,11 +147,9 @@ export default function TaskDetail() {
   const reminderLabel = lifeReminderLabel(task);
 
   return (
-    // The keyboard OVERLAYS the window on this build rather than resizing it — measured on the
-    // device: with the keyboard up, the notes field and the pinned footer both stayed at their
-    // full-height positions while the keyboard covered everything below its top edge. So `padding`
-    // is needed on Android too, not just iOS; without it the footer and any field below the fold sit
-    // behind the keyboard with no way to reach them.
+    // The keyboard OVERLAYS the window on Android (edge to edge) rather than resizing it, so the
+    // shared `KeyboardAvoidingView` lifts the pinned footer there with keyboard-controller; iOS keeps
+    // React Native's `padding`. See src/components/keyboard.tsx.
     <KeyboardAvoidingView behavior="padding" style={[styles.fill, { backgroundColor: theme.colors.background }]}>
       {/* `header` (TaskDetailsView.swift:94-112) */}
       <View style={[styles.header, { borderBottomColor: withAlpha(brand.nexdoIndigo, 0.1) }]}>

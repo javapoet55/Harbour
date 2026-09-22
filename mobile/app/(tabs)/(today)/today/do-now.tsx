@@ -1,9 +1,10 @@
 import { router } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, StyleSheet, TextInput, View } from 'react-native';
 
 import type { DoNowChoice, DoNowRecommendation } from '../../../../src/api';
 import { Text } from '../../../../src/components';
+import { KeyboardAwareScrollView } from '../../../../src/components/keyboard';
 import { durationLabel } from '../../../../src/lib/focusClock';
 import { parseServerDate } from '../../../../src/lib/taskQuery';
 import { useTasks } from '../../../../src/query/useTasks';
@@ -116,7 +117,7 @@ export default function DoNow() {
   const canStart = recommendation ? canStartRecommendation(recommendation) : false;
 
   return (
-    <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.scroll} style={{ backgroundColor: theme.colors.background }}>
+    <KeyboardAwareScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.scroll} style={{ backgroundColor: theme.colors.background }}>
       {!consent.ai ? (
         <>
           <Text style={[theme.typography.body, { color: theme.colors.ink }]}>
@@ -300,7 +301,7 @@ export default function DoNow() {
           ) : null}
         </>
       )}
-    </ScrollView>
+    </KeyboardAwareScrollView>
   );
 }
 

@@ -72,6 +72,9 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       monochromeImage: './assets/android-icon-monochrome.png',
     },
     predictiveBackGestureEnabled: false,
+    // `adjustResize`. Edge to edge (always on since SDK 54) stops it resizing the window on its own;
+    // react-native-keyboard-controller reads the keyboard frame instead (src/components/keyboard.tsx).
+    softwareKeyboardLayoutMode: 'resize',
   },
   web: {
     favicon: './assets/favicon.png',

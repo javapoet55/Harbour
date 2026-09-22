@@ -4,6 +4,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
 import { Alert, AppState } from 'react-native';
+import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { useCoordinator } from '../src/actions/coordinator';
@@ -79,9 +80,13 @@ export default function RootLayout() {
   return (
     <RootErrorBoundary>
       <SafeAreaProvider>
-        <QueryClientProvider client={queryClient}>
-          <RootNavigator />
-        </QueryClientProvider>
+        {/* Keyboard frames for src/components/keyboard.tsx. It detects the app's edge-to-edge
+            window on its own, so it leaves the status and navigation bar insets alone. */}
+        <KeyboardProvider>
+          <QueryClientProvider client={queryClient}>
+            <RootNavigator />
+          </QueryClientProvider>
+        </KeyboardProvider>
       </SafeAreaProvider>
     </RootErrorBoundary>
   );

@@ -1,9 +1,9 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { ActivityIndicator, Alert, KeyboardAvoidingView, Modal, Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, Modal, Pressable, StyleSheet, TextInput, View } from 'react-native';
 
-import { KeyboardAwareScrollView, NexdoTaskBackdrop, StickyFooter, TaskSymbol, Text } from '../../src/components';
+import { KeyboardAvoidingView, KeyboardAwareScrollView, NexdoTaskBackdrop, StickyFooter, TaskSymbol, Text } from '../../src/components';
 import { MonthCalendar } from '../../src/components/MonthCalendar';
 import { ProjectAssignmentField } from '../../src/components/ProjectAssignmentField';
 import { detectTaskAction } from '../../src/lib/taskActionDetector';

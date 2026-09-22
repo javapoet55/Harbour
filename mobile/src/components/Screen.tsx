@@ -1,8 +1,9 @@
 import type { ReactNode } from 'react';
-import { ScrollView, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
+import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import { SafeAreaView, type Edge } from 'react-native-safe-area-context';
 
 import { useTheme } from '../theme';
+import { KeyboardAwareScrollView } from './keyboard';
 
 export type ScreenProps = {
   children: ReactNode;
@@ -18,9 +19,9 @@ export function Screen({ children, scroll = false, edges = ['top', 'right', 'bot
   return (
     <SafeAreaView edges={edges} style={[styles.fill, { backgroundColor: theme.colors.groupedBackground }]}>
       {scroll ? (
-        <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={[padding, contentStyle]}>
+        <KeyboardAwareScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={[padding, contentStyle]}>
           {children}
-        </ScrollView>
+        </KeyboardAwareScrollView>
       ) : (
         <View style={[styles.fill, padding, contentStyle]}>{children}</View>
       )}

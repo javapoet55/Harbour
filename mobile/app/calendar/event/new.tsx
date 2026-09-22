@@ -2,9 +2,9 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { randomUUID } from 'expo-crypto';
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { ActivityIndicator, Alert, KeyboardAvoidingView, Modal, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, Modal, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 
-import { KeyboardAwareScrollView, NexdoTaskBackdrop, StickyFooter, TaskSymbol, Text } from '../../../src/components';
+import { KeyboardAvoidingView, KeyboardAwareScrollView, NexdoTaskBackdrop, StickyFooter, TaskSymbol, Text } from '../../../src/components';
 import { MonthCalendar } from '../../../src/components/MonthCalendar';
 import { calendarKey } from '../../../src/lib/calendarDates';
 import { serverTime } from '../../../src/lib/taskLabels';

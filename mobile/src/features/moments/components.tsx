@@ -10,7 +10,6 @@ import {
   Modal,
   Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   View,
   type StyleProp,
@@ -19,6 +18,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { GlassCard } from '../../components/GlassCard';
+import { KeyboardAwareScrollView } from '../../components/keyboard';
 import { GlassCapsule } from '../../components/PushedHeader';
 import { withAlpha } from '../../components/SignInBackdrop';
 import { Text } from '../../components/Text';
@@ -448,6 +448,9 @@ function SheetButton({ title, onPress, disabled = false, testID, bold = false }:
  * the keyboard while it is up. Tapping it dismisses the keyboard; tapping outside a field does not,
  * as in Swift.
  */
+/** The height of the row `KeyboardDoneBar` floats on the keyboard; a field has to stay clear of it. */
+export const KEYBOARD_DONE_BAR_HEIGHT = 60;
+
 export function KeyboardDoneBar({ onDone, testID = 'keyboard-done' }: { onDone?: () => void; testID?: string }) {
   const theme = useTheme();
   const [height, setHeight] = useState<number | null>(null);
@@ -552,12 +555,21 @@ export function MomentConfetti({ width, height }: { width: number; height: numbe
   );
 }
 
-/** A scroll view whose taps reach buttons while a field is focused (the keyboard stays up). */
+/**
+ * A scroll view whose taps reach buttons while a field is focused (the keyboard stays up). On Android
+ * it keeps the focused field above the keyboard and the "Done" capsule riding on it.
+ */
 export function MomentScroll({ children, contentContainerStyle, testID }: { children: ReactNode; contentContainerStyle?: StyleProp<ViewStyle>; testID?: string }) {
   return (
-    <ScrollView keyboardShouldPersistTaps="handled" contentInsetAdjustmentBehavior="automatic" contentContainerStyle={contentContainerStyle} testID={testID}>
+    <KeyboardAwareScrollView
+      bottomOffset={KEYBOARD_DONE_BAR_HEIGHT}
+      keyboardShouldPersistTaps="handled"
+      contentInsetAdjustmentBehavior="automatic"
+      contentContainerStyle={contentContainerStyle}
+      testID={testID}
+    >
       {children}
-    </ScrollView>
+    </KeyboardAwareScrollView>
   );
 }
 
@@ -588,6 +600,6 @@ const styles = StyleSheet.create({
   sheetDim: { backgroundColor: 'rgba(0, 0, 0, 0.25)' },
   sheetBar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingTop: 12, minHeight: 64 },
   sheetSide: { width: 90 },
-  keyboardBar: { position: 'absolute', left: 0, right: 0, height: 60, flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', paddingHorizontal: 12 },
+  keyboardBar: { position: 'absolute', left: 0, right: 0, height: KEYBOARD_DONE_BAR_HEIGHT, flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', paddingHorizontal: 12 },
   confetti: { position: 'absolute', left: -4, top: -6, width: 8, borderRadius: 2 },
 });

@@ -1,7 +1,8 @@
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, TextInput, View } from 'react-native';
 
 import { isValidProjectName, PROJECT_PALETTE, projectColor, projectColorName } from '../lib/projectQuery';
 import { useTheme } from '../theme';
+import { KeyboardAwareScrollView } from './keyboard';
 import { TaskSymbol } from './TaskSymbol';
 import { Text } from './Text';
 
@@ -35,7 +36,7 @@ export function ProjectEditorForm({
   const nameInvalid = name.length > 0 && !isValidProjectName(name);
 
   return (
-    <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.form}>
+    <KeyboardAwareScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.form}>
       <Section title="Project name">
         <View style={styles.row}>
           <TextInput
@@ -108,7 +109,7 @@ export function ProjectEditorForm({
           <Text style={[theme.typography.body, { color: theme.colors.secondary }]}>Saving project…</Text>
         </View>
       ) : null}
-    </ScrollView>
+    </KeyboardAwareScrollView>
   );
 }
 

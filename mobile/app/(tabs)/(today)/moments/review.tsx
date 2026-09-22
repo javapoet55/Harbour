@@ -1,13 +1,14 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { Keyboard, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { Keyboard, Pressable, StyleSheet, TextInput, View } from 'react-native';
 
 import type { DraftResponse, GenerateResponse, ImportantMoment, WishDraft } from '../../../../src/api/moments';
+import { KeyboardAwareScrollView } from '../../../../src/components/keyboard';
 import { Text } from '../../../../src/components/Text';
 import { TodayBackdrop } from '../../../../src/components/TodayShell';
 import { GlassCapsule } from '../../../../src/components/PushedHeader';
-import { BorderedButton, caption, ErrorText, IconLabel, KeyboardDoneBar, MomentCard, MomentPrimary, MomentSegments, Secondary } from '../../../../src/features/moments/components';
+import { BorderedButton, caption, ErrorText, IconLabel, KEYBOARD_DONE_BAR_HEIGHT, KeyboardDoneBar, MomentCard, MomentPrimary, MomentSegments, Secondary } from '../../../../src/features/moments/components';
 import { characterCount, latestDraft, momentIcon, supportsGreetingCard, typeLabel } from '../../../../src/features/moments/domain';
 import { Disclosure, FormToggle } from '../../../../src/features/moments/form';
 import { rememberDraft } from '../../../../src/features/moments/handoff';
@@ -90,7 +91,7 @@ export default function ReviewWishScreen() {
         }}
       />
       <TodayBackdrop />
-      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.content} testID="review-wish">
+      <KeyboardAwareScrollView bottomOffset={KEYBOARD_DONE_BAR_HEIGHT} keyboardShouldPersistTaps="handled" contentContainerStyle={styles.content} testID="review-wish">
         <MomentCard>
           <IconLabel icon={momentIcon(moment.type) as never} title={moment.firstName === '' ? moment.title : moment.firstName} style={[textStyles.title2, styles.bold]} size={22} />
           {moment.type === 'festival' ? (
@@ -150,7 +151,7 @@ export default function ReviewWishScreen() {
         </View>
         {error ? <ErrorText testID="review-error">{error}</ErrorText> : null}
         <MomentPrimary title="Approve & Continue" onPress={approve} disabled={disabled} testID="review-approve" />
-      </ScrollView>
+      </KeyboardAwareScrollView>
       <KeyboardDoneBar />
     </View>
   );

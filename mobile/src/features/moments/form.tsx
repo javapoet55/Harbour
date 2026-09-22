@@ -2,11 +2,13 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRef, useState, type ReactNode } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, TextInput, useWindowDimensions, View, type KeyboardTypeOptions, type StyleProp, type ViewStyle } from 'react-native';
 
+import { KeyboardAwareScrollView } from '../../components/keyboard';
 import { MonthCalendar } from '../../components/MonthCalendar';
 import { IOSSwitch } from '../../components/IOSSwitch';
 import { withAlpha } from '../../components/SignInBackdrop';
 import { Text } from '../../components/Text';
 import { textStyles, useTheme } from '../../theme';
+import { KEYBOARD_DONE_BAR_HEIGHT } from './components';
 import { mediumDate, momentDay, momentStartOfDay, shortTimeIn, wallParts, zonedInstant } from './dates';
 
 /**
@@ -15,11 +17,12 @@ import { mediumDate, momentDay, momentStartOfDay, shortTimeIn, wallParts, zonedI
  * footers — and the pickers Moments uses in and out of a `Form`.
  */
 
+/** A `Form`'s scroll. On Android it keeps the focused field above the keyboard and its "Done" capsule. */
 export function FormScroll({ children, testID }: { children: ReactNode; testID?: string }) {
   return (
-    <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.form} testID={testID}>
+    <KeyboardAwareScrollView bottomOffset={KEYBOARD_DONE_BAR_HEIGHT} keyboardShouldPersistTaps="handled" contentContainerStyle={styles.form} testID={testID}>
       {children}
-    </ScrollView>
+    </KeyboardAwareScrollView>
   );
 }
 

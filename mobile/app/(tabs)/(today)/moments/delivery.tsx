@@ -2,10 +2,11 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import * as Crypto from 'expo-crypto';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, TextInput, View } from 'react-native';
 
 import type { ImportantMoment, PlanResponse, WishDeliveryPlan, WishDraft } from '../../../../src/api/moments';
 import { TaskActionError } from '../../../../src/actions/errors';
+import { KeyboardAwareScrollView } from '../../../../src/components/keyboard';
 import { SettingsSegments } from '../../../../src/components/SettingsControls';
 import { Text } from '../../../../src/components/Text';
 import { TodayBackdrop } from '../../../../src/components/TodayShell';
@@ -105,7 +106,7 @@ export default function ChooseDeliveryScreen() {
   return (
     <View style={styles.fill}>
       <TodayBackdrop />
-      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.content} testID="wish-delivery">
+      <KeyboardAwareScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.content} testID="wish-delivery">
         <MomentCard>
           <IconLabel icon={momentIcon(moment.type) as never} title={moment.title} style={[textStyles.title2, styles.bold]} size={22} />
           <Secondary numberOfLines={3}>{draft.body}</Secondary>
@@ -185,7 +186,7 @@ export default function ChooseDeliveryScreen() {
             <Text style={[textStyles.body, { color: theme.colors.tint }]}>View delivery status</Text>
           </Pressable>
         ) : null}
-      </ScrollView>
+      </KeyboardAwareScrollView>
       <WishEmailConfirmation
         visible={confirmEmail}
         account={account ?? 'No connected account'}

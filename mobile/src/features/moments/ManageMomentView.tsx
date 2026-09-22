@@ -6,6 +6,7 @@ import { ActivityIndicator, Alert, Keyboard, Pressable, ScrollView, StyleSheet, 
 import { useStore } from 'zustand';
 
 import { ownerKeyFor } from '../../actions/persistence';
+import { KeyboardAwareScrollView } from '../../components/keyboard';
 import { Text } from '../../components/Text';
 import { TodayBackdrop } from '../../components/TodayShell';
 import { FitText } from '../../components/FitText';
@@ -19,6 +20,7 @@ import {
   ErrorText,
   headline,
   IconLabel,
+  KEYBOARD_DONE_BAR_HEIGHT,
   KeyboardDoneBar,
   MomentCard,
   MomentConfetti,
@@ -299,7 +301,7 @@ export function ManageMomentView({ group, onDone }: { group: MomentDisplayGroup;
       />
       <TodayBackdrop />
       <View style={styles.fill} pointerEvents={state.busy ? 'none' : 'auto'}>
-        <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.content} testID="festival-scroll">
+        <KeyboardAwareScrollView bottomOffset={KEYBOARD_DONE_BAR_HEIGHT} keyboardShouldPersistTaps="handled" contentContainerStyle={styles.content} testID="festival-scroll">
           {/* identity (:100-118) */}
           <MomentCard testID="festival-identity">
             <View style={styles.identity}>
@@ -654,7 +656,7 @@ export function ManageMomentView({ group, onDone }: { group: MomentDisplayGroup;
               {state.notice}
             </Text>
           ) : null}
-        </ScrollView>
+        </KeyboardAwareScrollView>
       </View>
       <KeyboardDoneBar testID="festival-keyboard-done" />
 

@@ -1,9 +1,9 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import type { ReactNode } from 'react';
 import { useState } from 'react';
-import { Alert, KeyboardAvoidingView, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { Alert, Pressable, StyleSheet, TextInput, View } from 'react-native';
 
-import { RevealablePasswordField, Text } from '../../src/components';
+import { KeyboardAvoidingView, KeyboardAwareScrollView, RevealablePasswordField, Text } from '../../src/components';
 import { useConfirmPasswordReset, useRequestPasswordReset } from '../../src/query/useAuth';
 import { sanitizeCode } from '../../src/schemas/auth';
 import { inputText, textStyles, useTheme } from '../../src/theme';
@@ -64,7 +64,7 @@ export default function ResetPassword() {
   return (
     <View style={[styles.fill, { backgroundColor: theme.colors.groupedBackground }]}>
       <KeyboardAvoidingView style={styles.fill} behavior="padding">
-        <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.form}>
+        <KeyboardAwareScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.form}>
           <FormSection footer="We’ll email a six-digit code if an account exists. Codes expire after 15 minutes.">
             <FormRow>
               <TextInput
@@ -157,7 +157,7 @@ export default function ResetPassword() {
               />
             )}
           </FormSection>
-        </ScrollView>
+        </KeyboardAwareScrollView>
       </KeyboardAvoidingView>
     </View>
   );

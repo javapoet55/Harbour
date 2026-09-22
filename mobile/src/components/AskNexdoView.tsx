@@ -17,6 +17,7 @@ import { brand, linearGradientStops, useTheme } from '../theme';
 import { playSpeech, type SpeechPlayback } from '../voice/speech';
 import { AskEntryCards, AskExampleRow, AskSuggestionCard } from './AskParts';
 import { AskResponse } from './AskResponse';
+import { KeyboardAvoidingView, KeyboardAwareScrollView } from './keyboard';
 import { withAlpha } from './SignInBackdrop';
 import { TaskSymbol } from './TaskSymbol';
 import { Text } from './Text';
@@ -330,146 +331,150 @@ export function AskNexdoView({ textPage, initialPrompt = '', shoppingContext, on
   return (
     // A sheet's top edge sits below the status bar already, so only a route needs the top inset.
     <SafeAreaView edges={presentedAsSheet ? ['left', 'right', 'bottom'] : ['top', 'left', 'right', 'bottom']} style={[styles.fill, { backgroundColor: theme.colors.background }]}>
-      {/* Header (AskNexdoView.swift:184-208). */}
-      <View style={styles.header}>
-        <Text accessibilityRole="header" style={[styles.title2, styles.bold, styles.grow, { color: theme.colors.ink }]}>
-          {shoppingContext ? 'Shopping Recommendations' : textPage ? 'Free form Text' : 'Ask Nexdo'}
-        </Text>
-        <Pressable
-          accessibilityHint="Closes Ask Nexdo"
-          accessibilityLabel="Close Ask Nexdo"
-          accessibilityRole="button"
-          onPress={close}
-          style={[styles.close, { backgroundColor: withAlpha(brand.nexdoBlue, 0.12), borderColor: withAlpha(brand.nexdoBlue, 0.22) }]}
-          testID="ask-close"
-        >
-          <TaskSymbol name="xmark" size={22} color={brand.nexdoBlue} />
-        </Pressable>
-      </View>
+      {/* Android: the composer and entry cards ride up on the keyboard and the field scrolls into view.
+          iOS gets no behaviour here, exactly as before. */}
+      <KeyboardAvoidingView style={styles.fill}>
+        {/* Header (AskNexdoView.swift:184-208). */}
+        <View style={styles.header}>
+          <Text accessibilityRole="header" style={[styles.title2, styles.bold, styles.grow, { color: theme.colors.ink }]}>
+            {shoppingContext ? 'Shopping Recommendations' : textPage ? 'Free form Text' : 'Ask Nexdo'}
+          </Text>
+          <Pressable
+            accessibilityHint="Closes Ask Nexdo"
+            accessibilityLabel="Close Ask Nexdo"
+            accessibilityRole="button"
+            onPress={close}
+            style={[styles.close, { backgroundColor: withAlpha(brand.nexdoBlue, 0.12), borderColor: withAlpha(brand.nexdoBlue, 0.22) }]}
+            testID="ask-close"
+          >
+            <TaskSymbol name="xmark" size={22} color={brand.nexdoBlue} />
+          </Pressable>
+        </View>
 
-      <ScrollView contentContainerStyle={styles.scroll} keyboardDismissMode="interactive" keyboardShouldPersistTaps="handled">
-        {turn === null ? (
-          <>
-            {/* `AskStyle.secondary` is `Color(uiColor: .secondaryLabel)` (`:51`), not nexdoSecondary. */}
-            {shoppingContext ? null : (
-              <Text style={[styles.subheadline, styles.tagline, { color: theme.colors.secondaryLabel }]}>Let’s make room for what matters.</Text>
-            )}
+        <KeyboardAwareScrollView contentContainerStyle={styles.scroll} keyboardDismissMode="interactive" keyboardShouldPersistTaps="handled">
+          {turn === null ? (
+            <>
+              {/* `AskStyle.secondary` is `Color(uiColor: .secondaryLabel)` (`:51`), not nexdoSecondary. */}
+              {shoppingContext ? null : (
+                <Text style={[styles.subheadline, styles.tagline, { color: theme.colors.secondaryLabel }]}>Let’s make room for what matters.</Text>
+              )}
 
-            {textPage ? (
-              <>
-                {shoppingContext ? (
-                  <ShoppingIntro context={shoppingContext} />
-                ) : (
-                  <>
-                    {/* No `.foregroundStyle` in Swift (`:217`), so `Color.primary` — `.label`, not nexdoInk. */}
-                    <Text style={[styles.title2, styles.bold, { color: theme.colors.label }]}>What would you like help with?</Text>
-                    <Text style={[styles.subheadline, { color: theme.colors.secondaryLabel }]}>
-                      Type a question or tell Nexdo what to plan, create, or change.
-                    </Text>
-                  </>
-                )}
-                {field}
-                <View style={styles.controlsRow}>{controls}</View>
-                <Text style={[styles.headline, styles.tryHeading, { color: theme.colors.ink }]}>{shoppingContext ? 'Try asking about your list' : 'Try a prompt'}</Text>
-                {(shoppingContext ? SHOPPING_PROMPTS : ASK_TEXT_EXAMPLES).map((example) => (
-                  <AskExampleRow
-                    key={example}
-                    example={example}
-                    disabled={blocked}
-                    icon={shoppingContext ? shoppingPromptIcon(example) : undefined}
-                    onPress={() => setPrompt(example)}
-                  />
-                ))}
-              </>
-            ) : (
-              ASK_INTENTS.map((intent) => (
-                <AskSuggestionCard key={intent.id} intent={intent} disabled={blocked} onPress={() => request(intent.query)} />
-              ))
-            )}
-          </>
-        ) : (
-          <>
-            {lastAssistantPrompt !== null ? (
-              <View accessibilityLabel={`Your question: ${lastAssistantPrompt}`} style={styles.questionRow}>
-                <TaskSymbol name="questionmark.circle" size={15} color={theme.colors.secondaryLabel} />
-                <Text numberOfLines={2} style={[styles.subheadline, styles.grow, { color: theme.colors.secondaryLabel }]} testID="ask-last-prompt">
-                  {lastAssistantPrompt}
-                </Text>
-              </View>
-            ) : null}
+              {textPage ? (
+                <>
+                  {shoppingContext ? (
+                    <ShoppingIntro context={shoppingContext} />
+                  ) : (
+                    <>
+                      {/* No `.foregroundStyle` in Swift (`:217`), so `Color.primary` — `.label`, not nexdoInk. */}
+                      <Text style={[styles.title2, styles.bold, { color: theme.colors.label }]}>What would you like help with?</Text>
+                      <Text style={[styles.subheadline, { color: theme.colors.secondaryLabel }]}>
+                        Type a question or tell Nexdo what to plan, create, or change.
+                      </Text>
+                    </>
+                  )}
+                  {field}
+                  <View style={styles.controlsRow}>{controls}</View>
+                  <Text style={[styles.headline, styles.tryHeading, { color: theme.colors.ink }]}>{shoppingContext ? 'Try asking about your list' : 'Try a prompt'}</Text>
+                  {(shoppingContext ? SHOPPING_PROMPTS : ASK_TEXT_EXAMPLES).map((example) => (
+                    <AskExampleRow
+                      key={example}
+                      example={example}
+                      disabled={blocked}
+                      icon={shoppingContext ? shoppingPromptIcon(example) : undefined}
+                      onPress={() => setPrompt(example)}
+                    />
+                  ))}
+                </>
+              ) : (
+                ASK_INTENTS.map((intent) => (
+                  <AskSuggestionCard key={intent.id} intent={intent} disabled={blocked} onPress={() => request(intent.query)} />
+                ))
+              )}
+            </>
+          ) : (
+            <>
+              {lastAssistantPrompt !== null ? (
+                <View accessibilityLabel={`Your question: ${lastAssistantPrompt}`} style={styles.questionRow}>
+                  <TaskSymbol name="questionmark.circle" size={15} color={theme.colors.secondaryLabel} />
+                  <Text numberOfLines={2} style={[styles.subheadline, styles.grow, { color: theme.colors.secondaryLabel }]} testID="ask-last-prompt">
+                    {lastAssistantPrompt}
+                  </Text>
+                </View>
+              ) : null}
 
-            <AskResponse
-              busy={blocked}
-              onApprove={() => ask.mutate({ text: 'yes', accept: true })}
-              onReadLoud={(index, text) => (readingSection === index ? stopSpeech() : speakAnswer(text, index))}
-              onReject={() => ask.mutate({ text: 'no', accept: false })}
-              preparingSpeech={preparingSpeech}
-              readingSection={readingSection}
-              turn={turn}
-            />
+              <AskResponse
+                busy={blocked}
+                onApprove={() => ask.mutate({ text: 'yes', accept: true })}
+                onReadLoud={(index, text) => (readingSection === index ? stopSpeech() : speakAnswer(text, index))}
+                onReject={() => ask.mutate({ text: 'no', accept: false })}
+                preparingSpeech={preparingSpeech}
+                readingSection={readingSection}
+                turn={turn}
+              />
 
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Show suggestions"
-              accessibilityState={{ disabled: blocked }}
-              disabled={blocked}
-              onPress={() => {
-                stopSpeech();
-                useAssistantStore.getState().clearTurn();
-              }}
-              style={styles.showSuggestions}
-              testID="ask-show-suggestions"
-            >
-              <Text style={[theme.typography.body, { color: blue }]}>Show suggestions</Text>
-            </Pressable>
-          </>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Show suggestions"
+                accessibilityState={{ disabled: blocked }}
+                disabled={blocked}
+                onPress={() => {
+                  stopSpeech();
+                  useAssistantStore.getState().clearTurn();
+                }}
+                style={styles.showSuggestions}
+                testID="ask-show-suggestions"
+              >
+                <Text style={[theme.typography.body, { color: blue }]}>Show suggestions</Text>
+              </Pressable>
+            </>
+          )}
+
+          {submitting ? (
+            // `ProgressView("Asking Nexdo…")` (`:250`) puts its label under the spinner.
+            <View style={styles.progress}>
+              <ActivityIndicator color={blue} size="small" />
+              <Text style={[theme.typography.body, styles.centred, { color: theme.colors.secondaryLabel }]} testID="ask-submitting">
+                Asking Nexdo…
+              </Text>
+            </View>
+          ) : null}
+
+          {failedQuery !== null ? (
+            <View style={styles.failure}>
+              {/* `.font(.subheadline)` on the VStack, no `.foregroundStyle` (`:252-256`). */}
+              <Text style={[styles.subheadline, { color: theme.colors.label }]} testID="ask-failed">
+                Nexdo couldn’t complete that request. Please try again.
+              </Text>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Retry"
+                accessibilityState={{ disabled: blocked }}
+                disabled={blocked}
+                onPress={() => request(failedQuery, lastRequestWasVoice)}
+                testID="ask-retry"
+              >
+                <Text style={[styles.subheadline, { color: blue, opacity: blocked ? 0.45 : 1 }]}>Retry</Text>
+              </Pressable>
+            </View>
+          ) : null}
+        </KeyboardAwareScrollView>
+
+        {/* `.safeAreaInset(edge: .bottom)` (AskNexdoView.swift:264). */}
+        {/* `if model.turn != nil && shoppingContext == nil { composer }` (:263). */}
+        {textPage ? (turn !== null && !shoppingContext ? composer : null) : (
+          <AskEntryCards
+            disabled={blocked}
+            onText={() => {
+              stopSpeech();
+              router.push('/ask/text');
+            }}
+            onVoice={() => {
+              stopSpeech();
+              router.push('/ask/voice');
+            }}
+          />
         )}
-
-        {submitting ? (
-          // `ProgressView("Asking Nexdo…")` (`:250`) puts its label under the spinner.
-          <View style={styles.progress}>
-            <ActivityIndicator color={blue} size="small" />
-            <Text style={[theme.typography.body, styles.centred, { color: theme.colors.secondaryLabel }]} testID="ask-submitting">
-              Asking Nexdo…
-            </Text>
-          </View>
-        ) : null}
-
-        {failedQuery !== null ? (
-          <View style={styles.failure}>
-            {/* `.font(.subheadline)` on the VStack, no `.foregroundStyle` (`:252-256`). */}
-            <Text style={[styles.subheadline, { color: theme.colors.label }]} testID="ask-failed">
-              Nexdo couldn’t complete that request. Please try again.
-            </Text>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Retry"
-              accessibilityState={{ disabled: blocked }}
-              disabled={blocked}
-              onPress={() => request(failedQuery, lastRequestWasVoice)}
-              testID="ask-retry"
-            >
-              <Text style={[styles.subheadline, { color: blue, opacity: blocked ? 0.45 : 1 }]}>Retry</Text>
-            </Pressable>
-          </View>
-        ) : null}
-      </ScrollView>
-
-      {/* `.safeAreaInset(edge: .bottom)` (AskNexdoView.swift:264). */}
-      {/* `if model.turn != nil && shoppingContext == nil { composer }` (:263). */}
-      {textPage ? (turn !== null && !shoppingContext ? composer : null) : (
-        <AskEntryCards
-          disabled={blocked}
-          onText={() => {
-            stopSpeech();
-            router.push('/ask/text');
-          }}
-          onVoice={() => {
-            stopSpeech();
-            router.push('/ask/voice');
-          }}
-        />
-      )}
+      </KeyboardAvoidingView>
 
       {/* `consentView` in a `.sheet` with `[.medium, .large]` detents (AskNexdoView.swift:266-268, :348-364). */}
       <Modal

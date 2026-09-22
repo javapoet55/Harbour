@@ -3,12 +3,13 @@ import { useEffect, useState } from 'react';
 import { ActivityIndicator, Image, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { useStore } from 'zustand';
 
+import { KeyboardAwareScrollView } from '../../components/keyboard';
 import { Text } from '../../components/Text';
 import { TodayBackdrop } from '../../components/TodayShell';
 import { withAlpha } from '../../components/SignInBackdrop';
 import { useSession } from '../../store/session';
 import { brand, textStyles, useTheme } from '../../theme';
-import { BorderedButton, caption, ErrorText, headline, IconLabel, KeyboardDoneBar, MomentCard, MomentPrimary, MomentSheet, Secondary, title1 } from './components';
+import { BorderedButton, caption, ErrorText, headline, IconLabel, KEYBOARD_DONE_BAR_HEIGHT, KeyboardDoneBar, MomentCard, MomentPrimary, MomentSheet, Secondary, title1 } from './components';
 import { shareImage } from './device';
 import { characterCount, defaultSignature } from './domain';
 import { MenuPicker } from './form';
@@ -103,7 +104,7 @@ export function GreetingCardEditor({ model, visible, onClose, saveOnUse = false 
     <MomentSheet visible={visible} title="Greeting Card" onRequestClose={close} right={{ title: 'Done', onPress: close, testID: 'greeting-card-done' }} testID="greeting-card-editor">
       <View style={styles.fill}>
         <TodayBackdrop />
-        <ScrollView keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" contentContainerStyle={styles.content}>
+        <KeyboardAwareScrollView bottomOffset={KEYBOARD_DONE_BAR_HEIGHT} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" contentContainerStyle={styles.content}>
           <Text style={[title1, styles.bold, { color: theme.colors.label }]}>A little more personal.</Text>
           <Secondary>Create artwork for your occasion, then finish your card with a greeting and signature.</Secondary>
           {artwork ? (
@@ -222,7 +223,7 @@ export function GreetingCardEditor({ model, visible, onClose, saveOnUse = false 
               </Text>
             </>
           ) : null}
-        </ScrollView>
+        </KeyboardAwareScrollView>
         <KeyboardDoneBar />
       </View>
     </MomentSheet>

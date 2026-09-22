@@ -1,9 +1,10 @@
 import type { ReactNode } from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
+import { Platform, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useTheme } from '../theme';
+import { KeyboardAvoidingView, KeyboardAwareScrollView } from './keyboard';
 import { SignInBackdrop } from './SignInBackdrop';
 
 /**
@@ -38,7 +39,7 @@ export function AuthScreen({
       <SignInBackdrop />
       {/* `.scrollDismissesKeyboard(.interactively)` has no RN equivalent; "on-drag" is the closest. */}
       <KeyboardAvoidingView style={styles.fill} behavior="padding">
-        <ScrollView
+        <KeyboardAwareScrollView
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
           // SwiftUI's ScrollView insets its content by the safe area while still drawing under it.
@@ -48,7 +49,7 @@ export function AuthScreen({
           contentContainerStyle={[styles.scroll, { paddingTop: androidTopInset }]}
         >
           <View style={[styles.column, contentStyle]}>{children}</View>
-        </ScrollView>
+        </KeyboardAwareScrollView>
       </KeyboardAvoidingView>
     </View>
   );

@@ -3,10 +3,11 @@ import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Linking, Pressable, ScrollView, StyleSheet, Switch, View } from 'react-native';
+import { ActivityIndicator, Alert, Linking, Pressable, StyleSheet, Switch, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import type { CalendarConnection, NextActionPreference, Profile, ProfilePreferences } from '../../src/api';
+import { KeyboardAwareScrollView } from '../../src/components/keyboard';
 import { AccountAvatar, ProfileBackground } from '../../src/components/ProfileParts';
 import {
   SettingsCaption,
@@ -292,7 +293,7 @@ function SettingsScreen({
         </Pressable>
       </View>
 
-      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+      <KeyboardAwareScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
         {/* `.disabled(saving || connecting)` on the whole column (`:243`). */}
         <View pointerEvents={blocked ? 'none' : 'auto'} style={styles.column} testID="settings-column">
         <Text accessibilityRole="header" style={[styles.largeTitle, { color: theme.colors.ink }]}>
@@ -608,7 +609,7 @@ function SettingsScreen({
           </View>
         ) : null}
         </View>
-      </ScrollView>
+      </KeyboardAwareScrollView>
     </SafeAreaView>
   );
 }

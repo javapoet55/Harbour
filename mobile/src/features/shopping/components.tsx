@@ -6,6 +6,7 @@ import { Animated, Image, PanResponder, Pressable, StyleSheet, View, type Gestur
 
 import type { GroceryItem } from '../../api/shopping';
 import { FittedText } from '../../components/AskParts';
+import { KeyboardLift } from '../../components/keyboard';
 import { withAlpha } from '../../components/SignInBackdrop';
 import { Text } from '../../components/Text';
 import { brand, linearGradientStops, useTheme } from '../../theme';
@@ -271,15 +272,17 @@ export const SHOPPING_GRADIENT = linearGradientStops([brand.nexdoMagenta, brand.
  * Global pattern 13: `safeAreaInset(edge: .bottom, spacing: 0)` holding the buttons on
  * `.ultraThinMaterial`, with a half-opacity `Divider` along the top. The content scrolls underneath,
  * so the bar floats over it and the screen pads its scroll content by the bar's measured height.
+ *
+ * On Android it rides up on top of the keyboard (`KeyboardLift`); iOS keeps it where it was.
  */
 export function StickyActionBar({ children, onHeight, style, testID }: { children: ReactNode; onHeight?: (height: number) => void; style?: StyleProp<ViewStyle>; testID?: string }) {
   const theme = useTheme();
   return (
-    <View onLayout={(event) => onHeight?.(event.nativeEvent.layout.height)} style={[styles.stickyBar, { backgroundColor: theme.colors.glassFill }, style]} testID={testID}>
+    <KeyboardLift onLayout={(event) => onHeight?.(event.nativeEvent.layout.height)} style={[styles.stickyBar, { backgroundColor: theme.colors.glassFill }, style]} testID={testID}>
       <BlurView intensity={40} tint={theme.scheme === 'dark' ? 'dark' : 'light'} style={StyleSheet.absoluteFill} />
       <View pointerEvents="none" style={[styles.stickyDivider, { backgroundColor: withAlpha(theme.colors.separator, 0.5) }]} />
       {children}
-    </View>
+    </KeyboardLift>
   );
 }
 

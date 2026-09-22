@@ -1,15 +1,16 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useEffect, useState } from 'react';
-import { AppState, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { AppState, Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { useStore } from 'zustand';
 
 import type { GroceryItem } from '../../api/shopping';
+import { KeyboardAwareScrollView } from '../../components/keyboard';
 import { withAlpha } from '../../components/SignInBackdrop';
 import { Text } from '../../components/Text';
 import { TodayBackdrop } from '../../components/TodayShell';
 import { brand, linearGradientStops, textStyles, useTheme } from '../../theme';
-import { headline, KeyboardDoneBar, MomentPrimary, MomentSheet } from '../moments/components';
+import { headline, KEYBOARD_DONE_BAR_HEIGHT, KeyboardDoneBar, MomentPrimary, MomentSheet } from '../moments/components';
 import { FormToggle } from '../moments/form';
 import { createShoppingVoice, playStartBell, useTranscriptionConsent } from './device';
 import { shoppingStore } from './store';
@@ -96,7 +97,7 @@ function VoiceBody({ onAdd, onClose }: { onAdd: (items: GroceryItem[]) => void; 
     <MomentSheet visible title="Add by Voice" onRequestClose={close} left={{ title: 'Close', onPress: close, testID: 'voice-close' }} testID="shopping-voice">
       <View style={styles.fill}>
         <TodayBackdrop />
-        <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.content}>
+        <KeyboardAwareScrollView bottomOffset={KEYBOARD_DONE_BAR_HEIGHT} keyboardShouldPersistTaps="handled" contentContainerStyle={styles.content}>
           <Text style={[textStyles.largeTitle, styles.bold, styles.center, { color: theme.colors.label }]}>Tell me what to add</Text>
           <Text style={[textStyles.body, styles.center, { color: theme.colors.secondaryLabel }]}>Try “six bananas, one gallon of milk, and two bags of rice 5 kg.”</Text>
           <Pressable
@@ -150,7 +151,7 @@ function VoiceBody({ onAdd, onClose }: { onAdd: (items: GroceryItem[]) => void; 
               {message}
             </Text>
           ) : null}
-        </ScrollView>
+        </KeyboardAwareScrollView>
         <KeyboardDoneBar />
       </View>
     </MomentSheet>

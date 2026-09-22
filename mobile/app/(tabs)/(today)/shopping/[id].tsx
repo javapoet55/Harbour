@@ -5,6 +5,7 @@ import { useRef, useState } from 'react';
 import { Alert, Keyboard, Modal, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 
 import type { GroceryItem, GroceryList } from '../../../../src/api/shopping';
+import { KeyboardAwareScrollView } from '../../../../src/components/keyboard';
 import { withAlpha } from '../../../../src/components/SignInBackdrop';
 import { Text } from '../../../../src/components/Text';
 import { TodayBackdrop } from '../../../../src/components/TodayShell';
@@ -186,7 +187,8 @@ export default function ShoppingDetailScreen() {
       <TodayBackdrop />
       {/* `.disabled(store.busy)` (:283) covers the list; the action bar disables its own buttons. */}
       <View style={styles.fill} pointerEvents={busy ? 'none' : 'auto'}>
-        <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingBottom: barHeight + 16 }} testID="shopping-detail">
+        {/* On Android the action bar rides up on the keyboard, so the focused field has to clear it too. */}
+        <KeyboardAwareScrollView bottomOffset={barHeight} keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingBottom: barHeight + 16 }} testID="shopping-detail">
           {/* Header (:233-234). */}
           <View style={styles.header}>
             <ShoppingIcon />
@@ -305,7 +307,7 @@ export default function ShoppingDetailScreen() {
               </Pressable>
             </View>
           ) : null}
-        </ScrollView>
+        </KeyboardAwareScrollView>
       </View>
 
       <ShoppingActionBar busy={busy} onComplete={onComplete} onRecommendations={() => setRecommendations(true)} onHeight={setBarHeight} />

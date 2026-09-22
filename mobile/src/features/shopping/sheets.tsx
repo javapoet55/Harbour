@@ -1,15 +1,16 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import * as Crypto from 'expo-crypto';
 import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { shareUrl, type GroceryList } from '../../api/shopping';
+import { KeyboardAwareScrollView, KeyboardLift } from '../../components/keyboard';
 import { withAlpha } from '../../components/SignInBackdrop';
 import { Text } from '../../components/Text';
 import { TodayBackdrop } from '../../components/TodayShell';
 import { brand, textStyles, useTheme } from '../../theme';
-import { headline, KeyboardDoneBar, MomentCard, MomentPrimary, MomentSheet } from '../moments/components';
+import { headline, KEYBOARD_DONE_BAR_HEIGHT, KeyboardDoneBar, MomentCard, MomentPrimary, MomentSheet } from '../moments/components';
 import { deviceZone, momentDate, momentDay } from '../moments/dates';
 import { DateField, FormButton, FormField, FormRow, FormScroll, FormSection, FormText, FormToggle } from '../moments/form';
 import { ListTile, type ListSymbol } from './components';
@@ -51,6 +52,7 @@ function NewListBody({ source, onCreated, onClose }: { source: GroceryList | nul
   // creating a second list. Swift drops the key by dismissing; a new one is minted after a
   // success here for the same effect.
   const [createKey, setCreateKey] = useState(() => Crypto.randomUUID());
+  const [footerHeight, setFooterHeight] = useState(0);
   const previous = previousList(lists, source);
   const disabled = busy || title.trim() === '';
 
@@ -76,7 +78,8 @@ function NewListBody({ source, onCreated, onClose }: { source: GroceryList | nul
   return (
     <View style={styles.fill}>
       <TodayBackdrop />
-      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.content}>
+      {/* On Android the name field has to clear the "Done" capsule AND the Create List footer riding on it. */}
+      <KeyboardAwareScrollView bottomOffset={KEYBOARD_DONE_BAR_HEIGHT + footerHeight} keyboardShouldPersistTaps="handled" contentContainerStyle={styles.content}>
         <Choice title="Start from Scratch" subtitle="Create a brand new list." icon="doc.badge.plus" selected={!useLast} onPress={() => setUseLast(false)} testID="shopping-scratch" />
         <Choice
           title="Use Last Week’s List"
@@ -105,11 +108,15 @@ function NewListBody({ source, onCreated, onClose }: { source: GroceryList | nul
           <Text style={[styles.caption, { color: theme.colors.secondary }]}>Complete a trip to copy all items into next week’s list, with every item unchecked.</Text>
         </MomentCard>
         {error ? <Text style={[bodyText, { color: theme.colors.danger }]}>{error}</Text> : null}
-      </ScrollView>
+      </KeyboardAwareScrollView>
       {/* `.safeAreaInset(edge: .bottom) { MomentPrimary … .padding(18).background(.ultraThinMaterial) }` */}
-      <View style={[styles.footer, { paddingBottom: 18 + insets.bottom, backgroundColor: theme.colors.glassFill }]}>
+      <KeyboardLift
+        aboveKeyboard={KEYBOARD_DONE_BAR_HEIGHT}
+        onLayout={(event) => setFooterHeight(event.nativeEvent.layout.height)}
+        style={[styles.footer, { paddingBottom: 18 + insets.bottom, backgroundColor: theme.colors.glassFill }]}
+      >
         <MomentPrimary title={busy ? 'Creating…' : 'Create List'} onPress={() => void create()} disabled={disabled} testID="shopping-create" />
-      </View>
+      </KeyboardLift>
       <KeyboardDoneBar />
     </View>
   );
