@@ -47,6 +47,8 @@ export default function VerifyEmail() {
   const resend = useResendVerification();
 
   const [code, setCode] = useState('');
+  // Android: the code row's icon tile takes the focus accent while editing (docs/android-polish.md §11).
+  const [codeFocused, setCodeFocused] = useState(false);
   // Lazy initialisers, so the opening message is computed once, as `init(pending:showsCancel:)` does.
   const [message, setMessage] = useState<string | undefined>(() => initialMessages(email, reason).message);
   const [errorMessage, setErrorMessage] = useState<string | undefined>(() => initialMessages(email, reason).errorMessage);
@@ -108,8 +110,8 @@ export default function VerifyEmail() {
         Enter the six-digit code we emailed to {email}.
       </Text>
 
-      <GlassCard radius={26} style={styles.card}>
-        <AuthFieldRow icon="number" paddingHorizontal={18} minHeight={72}>
+      <GlassCard radius={26} style={styles.card} formGroup testID="verify-card">
+        <AuthFieldRow icon="number" paddingHorizontal={18} minHeight={72} focused={codeFocused}>
           <TextInput
             // Android draws its own underline drawable behind a TextInput; it showed
             // as a pale hard-edged box inside the glass card.
@@ -124,6 +126,8 @@ export default function VerifyEmail() {
             textContentType="oneTimeCode"
             autoComplete="one-time-code"
             autoFocus
+            onFocus={() => setCodeFocused(true)}
+            onBlur={() => setCodeFocused(false)}
             returnKeyType="go"
             onSubmitEditing={submit}
             style={[styles.codeInput, { color: theme.colors.ink }]}

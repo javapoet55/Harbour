@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { Platform, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import { BlurView } from 'expo-blur';
 
-import { useTheme } from '../theme';
+import { androidGroup, useTheme } from '../theme';
 
 export type GlassCardProps = {
   children: ReactNode;
@@ -17,6 +17,13 @@ export type GlassCardProps = {
   /** Swift only shadows the auth cards; a `.ultraThinMaterial` card elsewhere carries none. */
   shadow?: boolean;
   style?: StyleProp<ViewStyle>;
+  /**
+   * The card holds a form (the auth screens). On Android it drops the glass — the blur and the bright
+   * 1pt white stroke, far heavier than any other card — for the shared form group: `fieldSurface` and
+   * a `fieldBorder` hairline, at the same radius (docs/android-polish.md §11). iOS ignores it.
+   */
+  formGroup?: boolean;
+  testID?: string;
 };
 
 /**
@@ -27,8 +34,15 @@ export type GlassCardProps = {
  *   .overlay(RoundedRectangle(cornerRadius: r, style: .continuous).stroke(Color.white.opacity(0.8)))
  *   .shadow(color: Color.purple.opacity(0.09), radius: 25, y: 12)
  */
-export function GlassCard({ children, radius, stroke, shadow: withShadow = true, style }: GlassCardProps) {
+export function GlassCard({ children, radius, stroke, shadow: withShadow = true, style, formGroup = false, testID }: GlassCardProps) {
   const theme = useTheme();
+  if (formGroup && Platform.OS === 'android') {
+    return (
+      <View style={[{ borderRadius: radius, overflow: 'hidden' }, androidGroup(theme), style]} testID={testID}>
+        {children}
+      </View>
+    );
+  }
   const shadow = !withShadow
     ? null
     :
@@ -41,7 +55,7 @@ export function GlassCard({ children, radius, stroke, shadow: withShadow = true,
       : { shadowColor: theme.colors.glassShadow, shadowOpacity: 1, shadowRadius: 25 / 2, shadowOffset: { width: 0, height: 12 } };
 
   return (
-    <View style={[{ borderRadius: radius, backgroundColor: theme.colors.glassFill }, shadow, style]}>
+    <View style={[{ borderRadius: radius, backgroundColor: theme.colors.glassFill }, shadow, style]} testID={testID}>
       <View style={[StyleSheet.absoluteFill, { borderRadius: radius, overflow: 'hidden' }]}>
         <BlurView intensity={40} tint={theme.scheme === 'dark' ? 'dark' : 'light'} style={StyleSheet.absoluteFill} />
       </View>

@@ -37,6 +37,9 @@ export default function SignIn() {
   const apple = useAppleSignIn();
   const greetingName = useLastSignedIn((state) => state.value);
   const [passwordField, setPasswordField] = useState<TextInput | null>(null);
+  // The field being edited, so its row's icon tile takes the focus accent (Android, docs/android-polish.md §11).
+  const [focusedField, setFocusedField] = useState<string | null>(null);
+  const blurField = (name: string) => setFocusedField((current) => (current === name ? null : current));
   const appleAvailable = useAppleSignInAvailable();
 
   const { control, handleSubmit, setValue } = useForm<SignInValues>({
@@ -105,8 +108,8 @@ export default function SignIn() {
 
       <Text style={[styles.subtitle, { color: theme.colors.secondary }]}>Your day is clearer with Nexdo.</Text>
 
-      <GlassCard radius={28} style={styles.card}>
-        <AuthFieldRow icon="envelope" paddingHorizontal={20} minHeight={72}>
+      <GlassCard radius={28} style={styles.card} formGroup testID="sign-in-card">
+        <AuthFieldRow icon="envelope" paddingHorizontal={20} minHeight={72} focused={focusedField === 'email'}>
           <Controller
             control={control}
             name="email"
@@ -120,7 +123,11 @@ export default function SignIn() {
                 placeholderTextColor={theme.colors.placeholder}
                 value={field.value}
                 onChangeText={field.onChange}
-                onBlur={field.onBlur}
+                onFocus={() => setFocusedField('email')}
+                onBlur={() => {
+                  field.onBlur();
+                  blurField('email');
+                }}
                 keyboardType="email-address"
                 textContentType="username"
                 autoComplete="email"
@@ -137,7 +144,7 @@ export default function SignIn() {
 
         <AuthFieldDivider />
 
-        <AuthFieldRow icon="lock" paddingHorizontal={20} minHeight={72}>
+        <AuthFieldRow icon="lock" paddingHorizontal={20} minHeight={72} focused={focusedField === 'password'}>
           <Controller
             control={control}
             name="password"
@@ -150,7 +157,11 @@ export default function SignIn() {
                 autoComplete="current-password"
                 value={field.value}
                 onChangeText={field.onChange}
-                onBlur={field.onBlur}
+                onFocus={() => setFocusedField('password')}
+                onBlur={() => {
+                  field.onBlur();
+                  blurField('password');
+                }}
                 returnKeyType="go"
                 onSubmitEditing={() => submit()}
               />

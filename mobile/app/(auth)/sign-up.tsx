@@ -1,7 +1,8 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { router } from 'expo-router';
+import { useState } from 'react';
 import { Controller, useForm, useWatch } from 'react-hook-form';
-import { StyleSheet, TextInput, View } from 'react-native';
+import { Platform, StyleSheet, TextInput, View } from 'react-native';
 
 import {
   AuthFieldDivider,
@@ -27,6 +28,9 @@ import { inputText, systemText, textStyles, useTheme } from '../../src/theme';
 export default function SignUp() {
   // `presentation: 'modal'`, so the dark background elevates (see useTheme).
   const theme = useTheme({ elevated: true });
+  // The field being edited, so its row's icon tile takes the focus accent (Android, docs/android-polish.md §11).
+  const [focusedField, setFocusedField] = useState<string | null>(null);
+  const blurField = (name: string) => setFocusedField((current) => (current === name ? null : current));
   const signUp = useSignUp();
 
   const {
@@ -71,8 +75,8 @@ export default function SignUp() {
         Make your day easier with an AI-powered to-do app that turns a busy mind into a clear plan.
       </Text>
 
-      <GlassCard radius={26} style={styles.card}>
-        <AuthFieldRow icon="person" paddingHorizontal={18} minHeight={68}>
+      <GlassCard radius={26} style={styles.card} formGroup testID="sign-up-card">
+        <AuthFieldRow icon="person" paddingHorizontal={18} minHeight={68} focused={focusedField === 'name'}>
           <Controller
             control={control}
             name="name"
@@ -86,7 +90,11 @@ export default function SignUp() {
                 placeholderTextColor={theme.colors.placeholder}
                 value={field.value}
                 onChangeText={field.onChange}
-                onBlur={field.onBlur}
+                onFocus={() => setFocusedField('name')}
+                onBlur={() => {
+                  field.onBlur();
+                  blurField('name');
+                }}
                 textContentType="name"
                 autoComplete="name"
                 returnKeyType="next"
@@ -98,7 +106,7 @@ export default function SignUp() {
 
         <AuthFieldDivider />
 
-        <AuthFieldRow icon="envelope" paddingHorizontal={18} minHeight={68}>
+        <AuthFieldRow icon="envelope" paddingHorizontal={18} minHeight={68} focused={focusedField === 'email'}>
           <Controller
             control={control}
             name="email"
@@ -112,7 +120,11 @@ export default function SignUp() {
                 placeholderTextColor={theme.colors.placeholder}
                 value={field.value}
                 onChangeText={field.onChange}
-                onBlur={field.onBlur}
+                onFocus={() => setFocusedField('email')}
+                onBlur={() => {
+                  field.onBlur();
+                  blurField('email');
+                }}
                 keyboardType="email-address"
                 textContentType="username"
                 autoComplete="email"
@@ -127,7 +139,7 @@ export default function SignUp() {
 
         <AuthFieldDivider />
 
-        <AuthFieldRow icon="lock" paddingHorizontal={18} minHeight={68}>
+        <AuthFieldRow icon="lock" paddingHorizontal={18} minHeight={68} focused={focusedField === 'password'}>
           <Controller
             control={control}
             name="password"
@@ -137,7 +149,11 @@ export default function SignUp() {
                 autoComplete="new-password"
                 value={field.value}
                 onChangeText={field.onChange}
-                onBlur={field.onBlur}
+                onFocus={() => setFocusedField('password')}
+                onBlur={() => {
+                  field.onBlur();
+                  blurField('password');
+                }}
                 returnKeyType="next"
               />
             )}
@@ -146,7 +162,7 @@ export default function SignUp() {
 
         <AuthFieldDivider />
 
-        <AuthFieldRow icon="checkmark.shield" paddingHorizontal={18} minHeight={68}>
+        <AuthFieldRow icon="checkmark.shield" paddingHorizontal={18} minHeight={68} focused={focusedField === 'confirmation'}>
           <Controller
             control={control}
             name="confirmation"
@@ -156,7 +172,11 @@ export default function SignUp() {
                 autoComplete="new-password"
                 value={field.value}
                 onChangeText={field.onChange}
-                onBlur={field.onBlur}
+                onFocus={() => setFocusedField('confirmation')}
+                onBlur={() => {
+                  field.onBlur();
+                  blurField('confirmation');
+                }}
                 returnKeyType="go"
                 onSubmitEditing={() => submit()}
               />
@@ -188,8 +208,9 @@ export default function SignUp() {
         Nexdo captures tasks in your own words, finds the right next step, and helps you protect time for what matters.
       </Text>
 
-      {/* .padding(.vertical, 28) closes the column. */}
-      <View style={styles.bottomInset} />
+      {/* .padding(.vertical, 28) closes the column. Android: 24 under the closing copy, with the
+          navigation bar's inset added by AuthScreen so the copy scrolls clear of it. */}
+      <View style={[styles.bottomInset, Platform.OS === 'android' && styles.androidBottomInset]} testID="sign-up-bottom" />
     </AuthScreen>
   );
 }
@@ -208,4 +229,5 @@ const styles = StyleSheet.create({
   createButton: { marginTop: 20 },
   closing: { marginTop: 18 },
   bottomInset: { height: 28 },
+  androidBottomInset: { height: 24 },
 });

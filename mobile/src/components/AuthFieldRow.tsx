@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Platform, StyleSheet, View } from 'react-native';
 
-import { useTheme } from '../theme';
+import { androidSeparator, useTheme } from '../theme';
 import { SignInFieldIcon, type FieldIconName } from './SignInFieldIcon';
 
 /**
@@ -13,16 +13,19 @@ export function AuthFieldRow({
   icon,
   paddingHorizontal,
   minHeight,
+  focused = false,
   children,
 }: {
   icon: FieldIconName;
   paddingHorizontal: number;
   minHeight: number;
+  /** The row's field is being edited: Android borders the icon tile in the focus accent. */
+  focused?: boolean;
   children: ReactNode;
 }) {
   return (
     <View style={[styles.row, { paddingHorizontal, minHeight }]}>
-      <SignInFieldIcon name={icon} />
+      <SignInFieldIcon name={icon} focused={focused} />
       {children}
     </View>
   );
@@ -31,7 +34,13 @@ export function AuthFieldRow({
 /** `Divider().padding(.leading, 78)` between rows of an auth card. */
 export function AuthFieldDivider() {
   const theme = useTheme();
-  return <View style={{ height: StyleSheet.hairlineWidth, marginLeft: 78, backgroundColor: theme.colors.separator }} />;
+  // Android: the group's 1px separator (docs/android-polish.md §11).
+  return (
+    <View
+      style={[{ height: StyleSheet.hairlineWidth, marginLeft: 78, backgroundColor: theme.colors.separator }, Platform.OS === 'android' ? androidSeparator(theme) : null]}
+      testID="auth-field-divider"
+    />
+  );
 }
 
 const styles = StyleSheet.create({

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { View, type LayoutRectangle } from 'react-native';
+import { Platform, View, type LayoutRectangle } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 
 import { brand } from '../theme';
@@ -48,7 +48,10 @@ export function SignInBackdrop() {
       accessibilityElementsHidden
       importantForAccessibility="no-hide-descendants"
       onLayout={(event) => setLayout(event.nativeEvent.layout)}
-      style={{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0 }}
+      // Android (docs/android-polish.md §11): kept strictly behind the screen's content, and at 60% of
+      // the Swift opacity so the form card and the primary button read cleanly over it.
+      style={[{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0 }, Platform.OS === 'android' ? ANDROID_BACKDROP : null]}
+      testID="sign-in-backdrop"
     >
       {layout === null ? null : (
         <>
@@ -78,6 +81,9 @@ export function SignInBackdrop() {
     </View>
   );
 }
+
+/** Android: behind everything (`zIndex` 0 under the content's 1), at 60% of the circles' own opacity. */
+export const ANDROID_BACKDROP = { zIndex: 0, opacity: 0.6 } as const;
 
 /** `Color.opacity(_:)` on a six-digit hex brand colour. */
 export function withAlpha(hex: string, alpha: number): string {

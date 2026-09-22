@@ -747,3 +747,51 @@ the text and behaviour. Colours come from tokens only.
    field surface. "Review conflicts" wraps instead of clipping.
 5. On a narrow phone or with a large font, Add by Voice and Add Manually stack instead of squeezing.
 6. iOS: the Calendar looks as before.
+
+---
+
+## 11. Auth screens (2026-09-22)
+
+JavaScript only; no new build needed. All changes are Android only. iOS is unchanged, and so are
+the text and behaviour. Colours come from tokens only.
+
+### What was wrong
+
+- **Card border.** Sign in, Create account and Verify email drew their form card as glass: a blur, a
+  72% fill and a bright 1pt white stroke (`glassStroke`), far heavier than any other card.
+- **Backdrop blobs.** The gradient circles showed through the translucent card and crowded the Sign
+  In button.
+- **Disabled button.** It dimmed the whole button, label and all, to 25%, so it read as a broken,
+  muddy block.
+- **Active field.** Nothing marked the field being edited.
+- **Create account's closing copy** could not be reached. Android draws edge to edge, and
+  `contentInsetAdjustmentBehavior` only insets the scroll on iOS, so the last lines sat under the
+  navigation bar.
+
+### What changed
+
+| Piece | Android change |
+|---|---|
+| `GlassCard formGroup` (the Sign in, Create account and Verify email cards) | The shared form group: `fieldSurface` and a 1px `fieldBorder` hairline. No blur, no white stroke, no shadow. Each card keeps its radius: 28 on Sign in, 26 on Create account and Verify email |
+| `SignInBackdrop` | Explicitly behind the content (`zIndex` 0 under the content's 1) and at 60% of its opacity (`opacity: 0.6` on the whole backdrop) |
+| `GradientButton` disabled ("Sign In", "Create Account", "Verify Email" before the form is valid) | The full gradient drawn at 40% as a layer, and the label at 70% of `onTint` (white), so it reads as "not yet". The button itself is not dimmed. Enabled is unchanged: the full gradient and a white label |
+| `AuthFieldRow` / `SignInFieldIcon` | The icon tiles stay. The row being edited borders its tile in `accent`, which is the Ask blue in dark (§7) and the brand indigo in light. Idle tiles keep a transparent 1pt border, so focusing shifts nothing. Each screen tracks the focused field from its inputs' `onFocus`/`onBlur` |
+| `AuthFieldDivider` | The group separator (`androidSeparator`: 1px `fieldBorder`) |
+| `AuthScreen` | The scroll pads its bottom by the navigation bar's inset |
+| Create account | The closing spacer is 24pt, on top of the navigation-bar inset, so the copy under Create Account scrolls clear and ends 24pt above the bar. The title may wrap |
+| Sign in | Unchanged: the subtitle ("Your day is clearer with Nexdo.") and the trust line already used the `secondary` token, with no hard-coded grey anywhere in the auth screens. A test pins it |
+
+**Reset password** does not use these components. Its form is the Moments-style `FormSection`,
+which already has the group look (§3, §4).
+
+### Check it on a phone
+
+1. Sign in: the form card has a thin, quiet outline like every other card. The background circles
+   are soft and never show through the card.
+2. With the fields empty, Sign In is a faded gradient with a readable, slightly dimmed label. Fill
+   both fields and it is full strength.
+3. Tap the email field: its envelope tile gets a blue outline in dark (indigo in light). Tap the
+   password field: the outline moves to the lock tile.
+4. Create account: close the keyboard and scroll to the bottom. The copy under Create Account is
+   fully visible, with space below it.
+5. iOS: the auth screens look as before.

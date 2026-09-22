@@ -33,12 +33,17 @@ export function AuthScreen({
 }) {
   const theme = useTheme({ elevated });
   const insets = useSafeAreaInsets();
-  const androidTopInset = Platform.OS === 'android' && topInset ? insets.top : 0;
+  const android = Platform.OS === 'android';
+  const androidTopInset = android && topInset ? insets.top : 0;
+  // Android draws edge to edge and `contentInsetAdjustmentBehavior` is iOS-only, so the last lines of
+  // a long screen (Create account's closing copy) sat under the navigation bar. Pad by its inset.
+  const androidBottomInset = android ? insets.bottom : 0;
   return (
     <View style={[styles.fill, { backgroundColor: theme.colors.background }]}>
       <SignInBackdrop />
       {/* `.scrollDismissesKeyboard(.interactively)` has no RN equivalent; "on-drag" is the closest. */}
-      <KeyboardAvoidingView style={styles.fill} behavior="padding">
+      {/* Android: the content sits above the backdrop (`zIndex` 1 over its 0). */}
+      <KeyboardAvoidingView style={[styles.fill, android && styles.aboveBackdrop]} behavior="padding">
         <KeyboardAwareScrollView
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
@@ -46,7 +51,8 @@ export function AuthScreen({
           // "always" is the UIScrollView behaviour that does the same, and it measures the screen's
           // own safe area, so it is correct both here and under a navigation header.
           contentInsetAdjustmentBehavior="always"
-          contentContainerStyle={[styles.scroll, { paddingTop: androidTopInset }]}
+          contentContainerStyle={[styles.scroll, { paddingTop: androidTopInset, paddingBottom: androidBottomInset }]}
+          testID="auth-scroll"
         >
           <View style={[styles.column, contentStyle]}>{children}</View>
         </KeyboardAwareScrollView>
@@ -58,5 +64,6 @@ export function AuthScreen({
 const styles = StyleSheet.create({
   fill: { flex: 1 },
   scroll: { flexGrow: 1 },
+  aboveBackdrop: { zIndex: 1 },
   column: { width: '100%', maxWidth: 560, alignSelf: 'center' },
 });
