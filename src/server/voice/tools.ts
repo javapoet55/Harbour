@@ -99,12 +99,15 @@ export async function executeVoiceTool(userId: string, sessionId: string, callId
     return { success: true, tasks: overlapping, events: events.map(e => ({ title: e.title, startAt: e.startAt, endAt: e.endAt })) };
   }
   let task;
+  // Only a reminder the life-reminder parser recognizes stays off the connected calendar (see the push below).
+  let lifeReminder = false;
   if (name === 'create_task' || name === 'create_reminder') {
     const key = 'voice:' + createHash('sha256').update(`${userId}:${sessionId}:${callId}`).digest('hex');
     const scheduledAt = new Date(String(args.scheduledAt));
     const user = await prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { timeZone: true } });
     const intent = name === 'create_reminder' ? parseLifeReminder(String(args.originalUserText ?? args.title), user.timeZone) : null;
     const lifeType = name === 'create_reminder' ? String(args.lifeReminderType ?? (intent?.recognized ? intent.reminderType : 'general')) : null;
+    lifeReminder = Boolean(intent?.recognized);
     task = await createTask({ userId, title: intent?.recognized ? intent.title : String(args.title), notes: args.notes as string | undefined, startAt: scheduledAt,
       dueAt: name === 'create_reminder' ? new Date(String(args.dueAt ?? intent?.dueDate?.toISOString() ?? args.scheduledAt)) : scheduledAt,
       reminderAt: name === 'create_reminder' ? scheduledAt : null, lifeReminderType: lifeType,
@@ -164,7 +167,11 @@ export async function executeVoiceTool(userId: string, sessionId: string, callId
   if (name === 'delete_task' || name === 'complete_task') await prisma.reminder.deleteMany({ where: { taskId: task.id, userId, status: { in: ['SCHEDULED', 'QUEUED', 'RETRYING'] } } });
   // Preserve the existing task workflow's configured calendar sync and replanning.
   // A downstream failure must not invite a duplicate task creation.
-  if (name !== 'create_reminder') try { await pushTaskToExternal(userId, task.id); } catch { warnings.push('Task saved, but connected calendar sync failed.'); }
+  // Calendar sync follows the manual task route (src/app/api/tasks/route.ts:81), which pushes every
+  // timed task except a RECOGNIZED life reminder. The voice model may call create_reminder for a plain
+  // timed task ("call Damien at 10"); skipping every create_reminder kept such a task out of the
+  // connected calendar although the same words typed into New Task reached it.
+  if (!lifeReminder) try { await pushTaskToExternal(userId, task.id); } catch { warnings.push('Task saved, but connected calendar sync failed.'); }
   try { await generateReplanProposal(userId); } catch { warnings.push('Task saved, but schedule suggestions could not refresh.'); }
   return { success: true, warnings, task: { id: task.id, title: task.title, status: task.status, priority: task.priority, durationMin: task.durationMin, startAt: task.startAt, dueAt: task.dueAt }, reminderWarning };
 }
