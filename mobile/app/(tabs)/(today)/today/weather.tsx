@@ -1,9 +1,13 @@
+import { useQueryClient } from '@tanstack/react-query';
+import * as Location from 'expo-location';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useEffect } from 'react';
 import { ActivityIndicator, Linking, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 
 import { TaskSymbol, Text } from '../../../../src/components';
 import { conditionLabel, conditionSymbol, forecastDayLabel, temperatureLabel, weatherDays } from '../../../../src/lib/weather';
-import { useWeather } from '../../../../src/query/useToday';
+import { queryKeys } from '../../../../src/query/keys';
+import { LOCATION_UNAVAILABLE, requestWeatherLocation, useWeather } from '../../../../src/query/useToday';
 import { brand, useTheme } from '../../../../src/theme';
 
 /**
@@ -11,14 +15,36 @@ import { brand, useTheme } from '../../../../src/theme';
  * Child view files followed: none — `temperatures`, `temperature` and `dateLabel` are private funcs
  * on the same view; the condition glyph and label come from `WeatherResponse` in `Models.swift`.
  *
- * The title is the literal string "San Ramon", because `WeatherClient` hardcodes those coordinates.
- * It is not derived from the account, and the app never asks for the device's location.
+ * The title is the forecast's place: "San Ramon" on iOS, where `WeatherClient` hardcodes those
+ * coordinates, and the device's town on Android. Android asks for APPROXIMATE location the first time
+ * this screen opens; without it, the screen says the location is unavailable instead of showing some
+ * other city's weather.
  */
 export default function Weather() {
   const theme = useTheme();
   const weather = useWeather();
+  const queryClient = useQueryClient();
 
-  const forecast = weather.data ?? null;
+  // After a grant, fetch again for wherever the phone is. The first fetch may still be in flight
+  // (it found no permission); React Query folds an invalidation into a data-less in-flight fetch, so
+  // cancel that one first or its "unavailable" answer would stand.
+  const refetchForLocation = async () => {
+    await queryClient.cancelQueries({ queryKey: queryKeys.weather() });
+    await queryClient.invalidateQueries({ queryKey: queryKeys.weather() });
+  };
+
+  // Android: ask on first open.
+  useEffect(() => {
+    void requestWeatherLocation().then(async (granted) => {
+      if (!granted) return;
+      await queryClient.cancelQueries({ queryKey: queryKeys.weather() });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.weather() });
+    });
+  }, [queryClient]);
+
+  const place = weather.data?.place ?? null;
+  const unavailable = place?.kind === 'unavailable';
+  const forecast = weather.data?.forecast ?? null;
   const days = weatherDays(forecast?.daily);
   // `failure` (WeatherForecastView.swift:99-101): the wording depends on whether anything is shown.
   const failure = weather.isError
@@ -40,9 +66,27 @@ export default function Weather() {
         refreshControl={<RefreshControl refreshing={weather.isRefetching} onRefresh={() => void weather.refetch()} />}
       >
         <View style={styles.heading}>
-          <Text style={[styles.title, { color: theme.colors.ink }]}>San Ramon</Text>
+          <Text style={[styles.title, { color: theme.colors.ink }]} testID="weather-title">
+            {place === null || place.kind === 'unavailable' ? 'Weather' : place.name}
+          </Text>
           <Text style={[styles.subheadline, { color: theme.colors.secondary }]}>5-day forecast · °F</Text>
         </View>
+
+        {/* Android without location: say so, and offer the way to turn it on. Never another city. */}
+        {unavailable ? (
+          <View style={styles.unavailable} testID="weather-location-unavailable">
+            <Text style={[theme.typography.body, { color: theme.colors.secondary }]}>{LOCATION_UNAVAILABLE}</Text>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Enable location"
+              onPress={() => void enableLocation().then(refetchForLocation)}
+              style={styles.retry}
+              testID="weather-enable-location"
+            >
+              <Text style={[styles.retryLabel, { color: theme.colors.link }]}>Enable location</Text>
+            </Pressable>
+          </View>
+        ) : null}
 
         {forecast ? (
           <>
@@ -131,6 +175,20 @@ export default function Weather() {
   );
 }
 
+/**
+ * "Enable location": asks again while Android still allows it; once it does not ("Don't allow" twice,
+ * or "never ask"), only the app's settings can turn it on.
+ */
+async function enableLocation(): Promise<void> {
+  try {
+    const current = await Location.getForegroundPermissionsAsync();
+    if (current.canAskAgain) await Location.requestForegroundPermissionsAsync();
+    else await Linking.openSettings();
+  } catch {
+    await Linking.openSettings();
+  }
+}
+
 function withAlpha(hex: string, alpha: number): string {
   const value = hex.replace('#', '');
   const int = parseInt(value, 16);
@@ -159,6 +217,7 @@ const styles = StyleSheet.create({
   divider: { height: StyleSheet.hairlineWidth, marginHorizontal: 16 },
   grow: { flex: 1 },
   loading: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  unavailable: { gap: 12 },
   retry: { minHeight: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 11, paddingHorizontal: 16, alignSelf: 'flex-start' },
   retryLabel: { fontSize: 15, lineHeight: 20, fontWeight: '600' },
   footnote: { fontSize: 13, lineHeight: 18 },

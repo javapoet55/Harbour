@@ -558,9 +558,9 @@ synced calendar event today.
 
 21. The chip shows a condition glyph over a temperature in Fahrenheit.
 22. Turn airplane mode on and reopen the tab: the chip shows "–°" and NO error alert appears.
-23. NOTE: the coordinates are hardcoded to San Ramon, California, in Swift (`WeatherClient.swift:17`).
-    The reading is NOT for your location, and the app never asks for location permission. If the
-    temperature looks wrong for where you are, that is why, and it matches the iPhone.
+23. NOTE: iOS keeps Swift's hardcoded San Ramon, California coordinates (`WeatherClient.swift:17`) and
+    never asks for location. ANDROID forecasts the phone's approximate location: the chip stays "–°"
+    until location is allowed on the Weather screen, then shows the local reading.
 24. Tapping the chip does nothing yet; the forecast sheet is Phase 4B.
 
 ### 7. Do Now
@@ -628,8 +628,11 @@ completed work so the weekly summary has something to show.
 ### 2. Weather forecast
 
 7. Tap the weather chip on Today. The sheet is titled "Weather".
-8. The heading reads "San Ramon" and "5-day forecast · °F". San Ramon is CORRECT: the coordinates are
-   hardcoded in Swift and the app never asks for your location.
+8. The heading reads the place and "5-day forecast · °F". iOS: "San Ramon" is CORRECT (Swift's
+   hardcoded coordinates, no location prompt). Android: the first open asks for approximate location.
+   Allow it and the heading is your town, with its forecast. Deny it and the screen reads "Location
+   unavailable — enable location to see local weather" with an "Enable location" button, and no
+   forecast for any other city.
 9. The current reading shows a condition glyph and a large temperature.
 10. Five day rows follow, each with a weekday, a condition name, a glyph, and H/L temperatures.
 11. The first row reads "Today" — note this is today in the FORECAST's zone (America/Los_Angeles),

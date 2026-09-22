@@ -156,17 +156,20 @@ export function TodayHeaderButton({
  * The weather chip (RootView.swift:1310-1325): a 44pt gradient circle carrying the condition glyph
  * over the temperature in Fahrenheit, or an en dash when the forecast has not loaded.
  *
- * The accessibility label names San Ramon because `WeatherClient` hardcodes those coordinates; it is
- * not derived from the account.
+ * The accessibility label names the forecast's place: San Ramon on iOS, where `WeatherClient`
+ * hardcodes those coordinates, and the device's town on Android (see `resolveWeatherPlace`).
  */
 export function WeatherChip({
   temperature,
   weatherCode,
+  place = 'San Ramon',
   onPress,
   testID,
 }: {
   temperature: number | null;
   weatherCode: number | null | undefined;
+  /** The forecast's place, for the accessibility label. */
+  place?: string;
   onPress: () => void;
   testID?: string;
 }) {
@@ -175,7 +178,7 @@ export function WeatherChip({
       accessible
       accessibilityRole="button"
       accessibilityLabel={
-        temperature === null ? 'Weather temporarily unavailable' : `San Ramon weather, ${temperature} degrees Fahrenheit`
+        temperature === null ? 'Weather temporarily unavailable' : `${place} weather, ${temperature} degrees Fahrenheit`
       }
       accessibilityHint="Opens the five-day forecast"
       onPress={onPress}
@@ -203,7 +206,7 @@ export function TasksTopBar({
   name: string;
   onAccount: () => void;
   /** Omitted by the Tasks tab, which sets `showsWeather: false`. */
-  weather?: { temperature: number | null; weatherCode: number | null | undefined; onPress: () => void };
+  weather?: { temperature: number | null; weatherCode: number | null | undefined; place?: string; onPress: () => void };
   /** Omitted by the Tasks tab, which passes `add: nil`. */
   onAdd?: () => void;
   /** `model.profile?.photo` — the stored `data:image/jpeg;base64,…` URL, when there is one. */
@@ -239,6 +242,7 @@ export function TasksTopBar({
         <WeatherChip
           temperature={weather.temperature}
           weatherCode={weather.weatherCode}
+          place={weather.place}
           onPress={weather.onPress}
           testID="weather-chip"
         />

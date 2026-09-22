@@ -149,8 +149,9 @@ export default function Today() {
           name={profile?.name ?? ''}
           weather={{
             // `model.weather.map { Int($0.current.temperature.rounded()) }` (RootView.swift:1029)
-            temperature: weather.data ? Math.round(weather.data.current.temperature_2m) : null,
-            weatherCode: weather.data?.current.weather_code,
+            temperature: weather.data?.forecast ? Math.round(weather.data.forecast.current.temperature_2m) : null,
+            weatherCode: weather.data?.forecast?.current.weather_code,
+            place: weather.data?.place.kind === 'unavailable' ? undefined : weather.data?.place.name,
             onPress: () => router.push('/today/weather'),
           }}
           onAdd={() => router.push('/task/new')}

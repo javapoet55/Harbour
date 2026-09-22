@@ -64,6 +64,11 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       //   seconds after the app is backgrounded (VoiceConversationSession.swift:209).
       'android.permission.FOREGROUND_SERVICE',
       'android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK',
+      // - ACCESS_FINE_LOCATION: added by expo-location. Weather needs only the town, so Android asks for
+      //   APPROXIMATE location (ACCESS_COARSE_LOCATION, which expo-location's manifest also declares and
+      //   which alone counts as granted). expo-location's config plugin is deliberately NOT listed: its
+      //   only job would be iOS usage strings, and iOS weather keeps Swift's fixed coordinates.
+      'android.permission.ACCESS_FINE_LOCATION',
     ],
     adaptiveIcon: {
       // The mark is drawn on white, exactly as the Swift app's AppIcon is

@@ -196,3 +196,13 @@ afterEach(async () => {
   mountedQueryClients.clear();
   await new Promise((resolve) => realSetTimeout(resolve, 0));
 });
+
+// expo-location is native. Weather only reads it on Android; suites that exercise it mock it again.
+jest.mock('expo-location', () => ({
+  Accuracy: { Lowest: 1, Low: 2, Balanced: 3, High: 4, Highest: 5, BestForNavigation: 6 },
+  getForegroundPermissionsAsync: jest.fn(async () => ({ granted: false, status: 'undetermined', canAskAgain: true })),
+  requestForegroundPermissionsAsync: jest.fn(async () => ({ granted: false, status: 'denied', canAskAgain: false })),
+  getLastKnownPositionAsync: jest.fn(async () => null),
+  getCurrentPositionAsync: jest.fn(async () => ({ coords: { latitude: 0, longitude: 0 } })),
+  reverseGeocodeAsync: jest.fn(async () => []),
+}));
