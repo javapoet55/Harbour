@@ -467,7 +467,7 @@ Ask blue before commit.
 
 **The audit.** Every text colour and icon tint in `mobile/app` and `mobile/src` that read the brand
 indigo or `colors.tint` now reads `colors.link`:
-- **Covered:** 211 places in 70 files. Most are `color:` style keys and `color={…}` icon props. The
+- **Covered:** 219 places in 70 files. Most are `color:` style keys and `color={…}` icon props. The
   rest are ternaries and variables such as `TintButton`, `BorderedButton`, `FormButton`, the Calendar
   and Moments segment labels, the Manage Moment tabs, "today" in `MonthCalendar`, the wheel pickers,
   `Button`'s secondary and plain titles (via a new `link` text tone), `CalendarBadge` and the
