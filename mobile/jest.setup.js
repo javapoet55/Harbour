@@ -166,3 +166,33 @@ jest.mock('react-native-safe-area-context', () => {
     initialWindowMetrics: { insets, frame },
   };
 });
+
+// React Query teardown. React Query 5 delivers query results through `notifyManager`, which batches
+// them onto a real `setTimeout(0)`, and a `gcTime` removal is a timer too. Every suite builds its own
+// `QueryClient` and none was ever cleared, so those timers outlived their test: a late result could
+// land in the NEXT assertion (the "Your profile" flake in account.test.tsx) and jest reported "A
+// worker process has failed to exit gracefully". After each test: unmount what the test rendered,
+// cancel and clear every client a `QueryClientProvider` mounted, then let `notifyManager`'s pending
+// flush run while this test still owns the environment.
+const { cleanup: unmountRendered } = require('@testing-library/react-native/pure');
+const { QueryClient } = require('@tanstack/query-core');
+
+// Captured before any suite installs fake timers, so the final tick is always a real one.
+const realSetTimeout = global.setTimeout;
+const mountedQueryClients = new Set();
+const mountQueryClient = QueryClient.prototype.mount;
+// `QueryClientProvider` calls `client.mount()` on mount, so this sees every client a test renders.
+QueryClient.prototype.mount = function mount() {
+  mountedQueryClients.add(this);
+  return mountQueryClient.call(this);
+};
+
+afterEach(async () => {
+  await unmountRendered();
+  for (const client of mountedQueryClients) {
+    await client.cancelQueries();
+    client.clear();
+  }
+  mountedQueryClients.clear();
+  await new Promise((resolve) => realSetTimeout(resolve, 0));
+});

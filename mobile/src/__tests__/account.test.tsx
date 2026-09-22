@@ -162,6 +162,9 @@ describe('the Account sheet', () => {
   });
 
   it('falls back to "Your profile" before the profile arrives', async () => {
+    // Hold `me` in flight. The shared `beforeEach` answers it with Ada's profile, and whether that
+    // answer's notification (React Query's `setTimeout(0)`) landed before this assertion was a race.
+    mockMe.mockReturnValue(new Promise(() => undefined));
     await show(<Account />, null);
     expect(screen.getByTestId('account-name')).toHaveTextContent('Your profile');
   });
