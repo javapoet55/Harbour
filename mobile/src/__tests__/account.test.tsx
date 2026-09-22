@@ -16,10 +16,21 @@ const mockPush = jest.fn();
 const mockBack = jest.fn();
 const mockSetOptions = jest.fn();
 const mockSetParentOptions = jest.fn();
+const mockReplace = jest.fn();
+const mockDismissAll = jest.fn();
+const mockCanDismiss = jest.fn(() => false);
+const mockCanGoBack = jest.fn(() => false);
 jest.mock('expo-router', () => {
   const { useEffect } = require('react') as typeof import('react');
   return {
-    router: { push: (...args: unknown[]) => mockPush(...args), replace: jest.fn(), back: (...args: unknown[]) => mockBack(...args) },
+    router: {
+      push: (...args: unknown[]) => mockPush(...args),
+      replace: (...args: unknown[]) => mockReplace(...args),
+      back: (...args: unknown[]) => mockBack(...args),
+      dismissAll: () => mockDismissAll(),
+      canDismiss: () => mockCanDismiss(),
+      canGoBack: () => mockCanGoBack(),
+    },
     useLocalSearchParams: () => ({}),
     useNavigation: () => ({ setOptions: mockSetOptions, getParent: () => ({ setOptions: mockSetParentOptions }) }),
     useFocusEffect: (effect: () => void | (() => void)) => useEffect(effect, [effect]),
@@ -121,7 +132,9 @@ function show(node: React.ReactElement, seed: Profile | null = profile()) {
 }
 
 beforeEach(() => {
-  for (const mock of [mockPush, mockBack, mockMe, mockUpdateSettings, mockUpdatePhoto, mockSync, mockDelete, mockLogout, mockLaunchLibrary, mockOpenAuthSession, mockEncodePhoto, mockConnections, mockSetWrites, mockDisconnect, mockConnectToken, mockSetOptions, mockSetParentOptions, mockVoiceUsage]) {
+  mockCanDismiss.mockReset().mockReturnValue(false);
+  mockCanGoBack.mockReset().mockReturnValue(false);
+  for (const mock of [mockReplace, mockDismissAll, mockPush, mockBack, mockMe, mockUpdateSettings, mockUpdatePhoto, mockSync, mockDelete, mockLogout, mockLaunchLibrary, mockOpenAuthSession, mockEncodePhoto, mockConnections, mockSetWrites, mockDisconnect, mockConnectToken, mockSetOptions, mockSetParentOptions, mockVoiceUsage]) {
     mock.mockReset();
   }
   mockConnections.mockResolvedValue({ connections: [] });
@@ -218,26 +231,50 @@ describe('the Account sheet', () => {
    * navigator". Swift dismisses after `logout()` (ProfileView.swift:99) because its sheet outlives
    * the presenter; the visible result — the sheet gone, sign-in behind it — is the same.
    */
-  it('dismisses the sheet before the session clears', async () => {
+  /**
+   * Expo Router dispatches navigation a render late, and the session gate removes this sheet's
+   * navigator in the render that ends the session. So the sheet is closed BEFORE the session clears,
+   * only because there is something to close, and Sign in then replaces the stack.
+   */
+  it('closes the sheet while its navigator exists, then ends the session and replaces with Sign in', async () => {
     const order: string[] = [];
-    mockBack.mockImplementation(() => order.push('dismiss'));
+    mockCanGoBack.mockReturnValue(true);
+    mockBack.mockImplementation(() => {
+      order.push(`back while ${useSession.getState().status}`);
+      mockCanGoBack.mockReturnValue(false);
+    });
     mockLogout.mockImplementation(async () => {
       order.push('logout');
       return { ok: true };
     });
+    mockReplace.mockImplementation((href: string) => order.push(`replace ${href} while ${useSession.getState().status}`));
     await show(<Account />);
 
     fireEvent.press(screen.getByTestId('account-sign-out'));
     const buttons = (Alert.alert as jest.Mock).mock.calls.at(-1)?.[2] as { text: string; onPress?: () => void }[];
     buttons[1].onPress?.();
 
-    // Dismissed in the press itself, while the session — and so the navigator — is still there.
-    expect(order).toEqual(['dismiss']);
-    expect(useSession.getState().status).toBe('signedIn');
-
-    await waitFor(() => expect(useSession.getState().status).toBe('signedOut'));
-    expect(order).toEqual(['dismiss', 'logout']);
+    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/sign-in'));
+    expect(order).toEqual(['logout', 'back while signedIn', 'replace /sign-in while signedOut']);
     expect(mockBack).toHaveBeenCalledTimes(1);
+    expect(mockDismissAll).not.toHaveBeenCalled();
+  });
+
+  /** The POP_TO_TOP LogBox: nothing is ever dispatched to a stack with nothing to pop. */
+  it('sends no dismissal or back when there is nothing to close — only the Sign in replace', async () => {
+    mockCanDismiss.mockReturnValue(false);
+    mockCanGoBack.mockReturnValue(false);
+    mockLogout.mockResolvedValue({ ok: true });
+    await show(<Account />);
+
+    fireEvent.press(screen.getByTestId('account-sign-out'));
+    const buttons = (Alert.alert as jest.Mock).mock.calls.at(-1)?.[2] as { text: string; onPress?: () => void }[];
+    buttons[1].onPress?.();
+
+    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/sign-in'));
+    expect(useSession.getState().status).toBe('signedOut');
+    expect(mockDismissAll).not.toHaveBeenCalled();
+    expect(mockBack).not.toHaveBeenCalled();
   });
 
   it('closes back to the tab behind it', async () => {
@@ -677,8 +714,20 @@ describe('the Settings screen', () => {
      * out then threw GO_BACK. `deleteAccount()` → `reset()` (NexdoApp.swift:781-803) lands on Sign in.
      */
     it('after a successful delete, forgets the account and replaces the stack with Sign in', async () => {
-      const { router } = jest.requireMock('expo-router') as { router: { replace: jest.Mock } };
-      router.replace.mockClear();
+      const router = { replace: mockReplace };
+      // Settings is pushed in the Account sheet: it pops to the sheet, then the sheet closes, both
+      // while the session (and so the navigators) still exist.
+      const order: string[] = [];
+      mockCanDismiss.mockReturnValue(true);
+      mockDismissAll.mockImplementation(() => {
+        order.push(`dismissAll while ${useSession.getState().status}`);
+        mockCanDismiss.mockReturnValue(false);
+        mockCanGoBack.mockReturnValue(true);
+      });
+      mockBack.mockImplementation(() => {
+        order.push(`back while ${useSession.getState().status}`);
+        mockCanGoBack.mockReturnValue(false);
+      });
       mockDelete.mockResolvedValue({ ok: true });
       useLastSignedIn.setState({ value: 'Ada' });
       useConsent.setState({ ai: true, voice: true });
@@ -696,13 +745,13 @@ describe('the Settings screen', () => {
       expect(useLastSignedIn.getState().value).toBeNull();
       expect(useConsent.getState()).toMatchObject({ ai: false, voice: false });
       expect(clearFocus).toHaveBeenCalled();
-      // Never "back": there is nothing under the Account sheet once the session is gone.
-      expect(mockBack).not.toHaveBeenCalled();
+      // Closed while signed in; nothing sent once the session — and the stacks — are gone.
+      expect(order).toEqual(['dismissAll while signedIn', 'back while signedIn']);
     });
 
     it('when the delete fails, says why and stays put, still signed in', async () => {
-      const { router } = jest.requireMock('expo-router') as { router: { replace: jest.Mock } };
-      router.replace.mockClear();
+      const router = { replace: mockReplace };
+      mockCanDismiss.mockReturnValue(true);
       mockDelete.mockRejectedValue(new Error('A wish is being submitted. Wait for its status before deleting your account.'));
       await show(<Settings />);
       await waitFor(() => expect(screen.getByTestId('settings-delete-account')).toBeTruthy());
@@ -722,6 +771,7 @@ describe('the Settings screen', () => {
       expect(useSession.getState().status).toBe('signedIn');
       expect(router.replace).not.toHaveBeenCalled();
       expect(mockBack).not.toHaveBeenCalled();
+      expect(mockDismissAll).not.toHaveBeenCalled();
     });
   });
 });

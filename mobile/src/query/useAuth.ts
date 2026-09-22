@@ -132,13 +132,15 @@ export function useAppleSignIn() {
  * survives into the next session. `me` is seeded with `null` so the gate resolves to the auth group
  * immediately instead of showing the splash while /api/me refetches.
  */
-export function useSignOut() {
+export function useSignOut({ beforeSessionEnds }: { beforeSessionEnds?: () => Promise<void> } = {}) {
   const queryClient = useQueryClient();
   return useMutation<void, Error, void>({
     mutationFn: async () => {
       try {
         await endpoints.logout();
       } finally {
+        // Close the signed-in screens while they still exist (src/lib/sessionNavigation.ts).
+        await beforeSessionEnds?.().catch(() => undefined);
         useSession.getState().clear();
         queryClient.clear();
         queryClient.setQueryData(queryKeys.me(), null);

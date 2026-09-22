@@ -1,5 +1,5 @@
 import { focusManager, QueryClientProvider, useQuery, useQueryClient } from '@tanstack/react-query';
-import { router, Stack } from 'expo-router';
+import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
@@ -128,26 +128,18 @@ export function RootNavigator() {
   }, [launchUndecided]);
 
   /**
-   * Nothing is left presented over the sign-in screen. Whatever ends the session — the Sign out
-   * button, a 401 from any request, Delete account — reaches the store, and the guards below then
-   * unmount the navigator that owns any presented modal. A modal outliving its navigator is the
-   * "GO_BACK was not handled by any navigator" warning, with the sheet still on screen; Swift has
-   * no equivalent state, because `RootView` swaps its body and the sheet goes with it.
+   * Nothing is left presented over the sign-in screen, and NO navigation action is sent when the
+   * session ends. Every signed-in group — the tabs and everything that opens over them (account, ask,
+   * calendar, task, the sheets) — is declared inside the signed-in guard below, so the flip to
+   * `signedOut` removes them all, presented modals included; Swift's `RootView` swaps its body the
+   * same way.
    *
-   * So the dismissal belongs to the TRANSITION, not to any one screen: the store notifies its
-   * subscribers synchronously inside `clear()`, while React has only scheduled the re-render, so
-   * this runs while the navigator is still mounted to receive it. `canDismiss()` makes it a no-op
-   * when nothing is presented — including when the screen already dismissed itself, as the Account
-   * sheet does so that it closes on the confirmation rather than on the logout response.
+   * This used to call `router.dismissAll()` from the store's subscriber. Expo Router queues that and
+   * dispatches it a render later — by which time the guard had removed the stack it was aimed at:
+   * "The action 'POP_TO_TOP' was not handled by any navigator". Screens that end the session on
+   * purpose (Sign out, Delete account) close themselves FIRST, while their stacks exist
+   * (src/lib/sessionNavigation.ts); a 401 leaves it to the guards.
    */
-  useEffect(
-    () =>
-      useSession.subscribe((state, previous) => {
-        if (state.status !== 'signedOut' || previous.status === 'signedOut') return;
-        if (router.canDismiss()) router.dismissAll();
-      }),
-    [],
-  );
 
   /**
    * A 401 from ANY request, on any screen, ends the session here. There is no navigation call: the

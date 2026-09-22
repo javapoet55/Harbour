@@ -170,7 +170,7 @@ export function useSyncNow() {
  * `deleteAccount()` (NexdoApp.swift:739-744): DELETE /api/account, then the same local teardown
  * `logout()` performs. The server clears the session cookie itself.
  */
-export function useDeleteAccount() {
+export function useDeleteAccount({ beforeSessionEnds }: { beforeSessionEnds?: () => Promise<void> } = {}) {
   const queryClient = useQueryClient();
   return useMutation<void, Error, void>({
     mutationFn: async () => {
@@ -184,6 +184,8 @@ export function useDeleteAccount() {
       await useLastSignedIn.getState().remember('');
       useConsent.getState().withdraw();
       useFocus.getState().clear();
+      // Close the signed-in screens while they still exist (src/lib/sessionNavigation.ts).
+      await beforeSessionEnds?.().catch(() => undefined);
       useSession.getState().clear();
       queryClient.clear();
       queryClient.setQueryData(queryKeys.me(), null);

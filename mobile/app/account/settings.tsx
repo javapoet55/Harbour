@@ -43,6 +43,7 @@ import {
   READ_ONLY_CAPTION,
 } from '../../src/lib/calendarConnections';
 import { useOAuthCallback } from '../../src/lib/oauthCallbacks';
+import { closePresentedScreens, replaceWithSignIn } from '../../src/lib/sessionNavigation';
 import { useBlockDismiss } from '../../src/lib/useBlockDismiss';
 import { encodeProfilePhoto } from '../../src/photo/encodePhoto';
 import { completeGoogleConnect, useCalendarConnections, useConnectGoogleCalendar, useDisconnectCalendar, useSetCalendarWrites } from '../../src/query/useCalendar';
@@ -124,7 +125,7 @@ function SettingsScreen({
   const connections = useCalendarConnections();
   const setWrites = useSetCalendarWrites();
   const disconnect = useDisconnectCalendar();
-  const deleteAccount = useDeleteAccount();
+  const deleteAccount = useDeleteAccount({ beforeSessionEnds: closePresentedScreens });
 
   // `@State private var name/preferences/next` (ProfileView.swift:132-134).
   const [name, setName] = useState(() => profile?.name ?? '');
@@ -229,8 +230,9 @@ function SettingsScreen({
   /** `.confirmationDialog("Permanently delete this account?", …)` (`:267-269`). */
   /**
    * `deleteAccount()` (NexdoApp.swift:799-803). On success the session is gone and Swift's `RootView`
-   * shows `SignInView`; here the root guards remove the signed-in screens and this REPLACES the stack
-   * with Sign in, so nothing is left to go back to. A failure shows the server's reason in Swift's
+   * shows `SignInView`. Here the hook closes the Account screens WHILE they exist, only if there is
+   * something to close, then ends the session; this then REPLACES the stack with Sign in. No
+   * navigation action reaches a stack the session gate has already removed (src/lib/sessionNavigation.ts). A failure shows the server's reason in Swift's
    * `model.error` alert (RootView.swift:76-78) and navigates nowhere: the account still exists.
    */
   const removeAccount = async () => {
@@ -240,7 +242,7 @@ function SettingsScreen({
       Alert.alert('Unable to complete request', cause instanceof Error ? cause.message : String(cause), [{ text: 'OK' }]);
       return;
     }
-    router.replace('/sign-in');
+    replaceWithSignIn();
   };
 
   const confirmDelete = () =>

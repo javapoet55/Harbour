@@ -167,26 +167,20 @@ describe('a session that ends while a sheet is presented', () => {
     });
   }
 
-  it('dismisses the sheet before the guards swap to the auth group', async () => {
+  /**
+   * The POP_TO_TOP LogBox: a dismissal sent from the session flip was dispatched a render late, onto
+   * a stack the guard had just removed. The root sends none; the guards remove what was presented.
+   */
+  it('sends no dismissal when a 401 ends the session with a sheet presented; the guards remove it', async () => {
     await show(makeClient());
     await waitFor(() => expect(screen.getByTestId('screen-(tabs)')).toBeTruthy());
 
-    // The sheet is up over the tabs.
     mockCanDismiss.mockReturnValue(true);
-    const tabsStillMounted: boolean[] = [];
-    mockDismissAll.mockImplementation(() => {
-      // The navigator that owns the sheet has to be there to receive this.
-      tabsStillMounted.push(screen.queryByTestId('screen-(tabs)') !== null);
-      mockCanDismiss.mockReturnValue(false);
-    });
-
     await respondWith401();
 
-    expect(mockDismissAll).toHaveBeenCalledTimes(1);
-    expect(tabsStillMounted).toEqual([true]);
-    // ...and only then does the gate swap groups, with nothing left presented over it.
     await waitFor(() => expect(screen.queryByTestId('screen-(tabs)')).toBeNull());
     expect(screen.getByTestId('screen-(auth)')).toBeTruthy();
+    expect(mockDismissAll).not.toHaveBeenCalled();
   });
 
   // The GO_BACK bug: the Account sheet, and the other groups that open over the tabs, were undeclared,
@@ -213,8 +207,8 @@ describe('a session that ends while a sheet is presented', () => {
     await waitFor(() => expect(screen.getByTestId('screen-(auth)')).toBeTruthy());
   });
 
-  /** The same 401 burst `onSignedOut` is idempotent against must not dismiss the screen behind it. */
-  it('dismisses once for a burst of 401s, not once each', async () => {
+  /** A burst of 401s — the case `onSignedOut` is idempotent against — sends nothing either. */
+  it('sends no dismissal for a burst of 401s', async () => {
     await show(makeClient());
     await waitFor(() => expect(screen.getByTestId('screen-(tabs)')).toBeTruthy());
 
@@ -222,6 +216,6 @@ describe('a session that ends while a sheet is presented', () => {
     await respondWith401();
     await respondWith401();
 
-    expect(mockDismissAll).toHaveBeenCalledTimes(1);
+    expect(mockDismissAll).not.toHaveBeenCalled();
   });
 });

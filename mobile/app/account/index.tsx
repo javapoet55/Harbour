@@ -7,6 +7,7 @@ import { AccountAvatar, AccountMenuRow, ProfileBackground, ProfileCard } from '.
 import { TaskSymbol } from '../../src/components/TaskSymbol';
 import { Text } from '../../src/components/Text';
 import { VoiceUsageCard } from '../../src/features/account/VoiceUsageCard';
+import { closePresentedScreens, replaceWithSignIn } from '../../src/lib/sessionNavigation';
 import { useSignOut } from '../../src/query/useAuth';
 import { useMe } from '../../src/query/useMe';
 import { useVoiceUsage } from '../../src/query/useVoiceUsage';
@@ -48,7 +49,7 @@ function AccountSheet() {
   const { data: profile } = useMe();
   // `.task { await model.refreshVoiceUsage() }` (ProfileView.swift:97): asked every time Account opens.
   const { data: voiceUsage } = useVoiceUsage();
-  const signOut = useSignOut();
+  const signOut = useSignOut({ beforeSessionEnds: closePresentedScreens });
   const [signingOut, setSigningOut] = useState(false);
 
   const openWeb = (path: string) => void Linking.openURL(WEB_ORIGIN + path);
@@ -65,15 +66,16 @@ function AccountSheet() {
         style: 'destructive',
         onPress: () => {
           setSigningOut(true);
-          // `await model.logout(); if model.profile == nil { dismiss() }` (ProfileView.swift:99) —
-          // same two steps, ORDER REVERSED. SwiftUI's sheet outlives the logout, so Swift can
-          // dismiss afterwards; here the session gate in app/_layout.tsx unmounts the navigator
-          // that owns this modal the moment the store flips to `signedOut`, and a dismissal with no
-          // navigator left to receive it is the "GO_BACK was not handled by any navigator" warning
-          // — with the sheet still on screen over the sign-in view. Closing FIRST leaves the gate a
-          // plain screen swap to make, and the sign-in screen is what remains behind the sheet.
-          dismiss();
-          signOut.mutate(undefined, { onSettled: () => setSigningOut(false) });
+          // `await model.logout(); if model.profile == nil { dismiss() }` (ProfileView.swift:99).
+          // The session gate in app/_layout.tsx removes this sheet's navigator the moment the store
+          // flips to `signedOut`, and Expo Router dispatches navigation actions a render late, so a
+          // dismissal at or after the flip reaches no navigator ("GO_BACK/POP_TO_TOP was not handled").
+          // `useSignOut` therefore closes the sheet — only if it can — BEFORE ending the session, and
+          // Sign in then replaces the stack (src/lib/sessionNavigation.ts).
+          signOut.mutate(undefined, {
+            onSuccess: replaceWithSignIn,
+            onSettled: () => setSigningOut(false),
+          });
         },
       },
     ]);
