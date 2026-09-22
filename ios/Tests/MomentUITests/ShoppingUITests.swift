@@ -4,15 +4,41 @@ import XCTest
     var app:XCUIApplication!
     override func setUp(){super.setUp();continueAfterFailure=false;app=XCUIApplication();app.launchArguments=["-shopping-design-preview"];app.launch();XCTAssertTrue(app.navigationBars["My Lists"].waitForExistence(timeout:15))}
     func openList(){app.buttons.matching(NSPredicate(format:"label CONTAINS %@", "Weekly Shopping List")).firstMatch.tap();XCTAssertTrue(app.navigationBars["Shopping List"].waitForExistence(timeout:5))}
+    func testAlternativesKeepAndReplaceOnlyOriginal() {
+        openList()
+        app.buttons["Show alternatives for Milk"].tap()
+        XCTAssertTrue(app.staticTexts["Original Item"].waitForExistence(timeout: 8))
+        app.buttons["Close alternatives"].tap()
+        XCTAssertTrue(app.buttons["Edit Milk"].waitForExistence(timeout: 5))
+        app.buttons["Show alternatives for Milk"].tap()
+        let replace = app.buttons["Replace with Selected Item"]
+        XCTAssertTrue(replace.waitForExistence(timeout: 8))
+        replace.tap()
+        XCTAssertTrue(app.navigationBars["Shopping List"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["Edit Milk"].exists)
+        XCTAssertTrue(app.buttons["Edit Bananas"].exists)
+        let shot = XCTAttachment(screenshot: app.screenshot()); shot.name = "Replacement preserves other items"; shot.lifetime = .keepAlways; add(shot)
+    }
+    func testShareLinkCreateRevokeAndDismiss() {
+        openList()
+        app.buttons["Share list"].tap()
+        XCTAssertTrue(app.navigationBars["Share List"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["Share list as text"].exists)
+        app.buttons["Create Share Link"].tap()
+        XCTAssertTrue(app.buttons["Revoke Link"].waitForExistence(timeout: 5))
+        app.buttons["Revoke Link"].tap()
+        XCTAssertTrue(app.buttons["Create Share Link"].waitForExistence(timeout: 5))
+        app.swipeDown()
+        XCTAssertTrue(app.buttons["Edit Milk"].waitForExistence(timeout: 5))
+    }
     func testTypedAddDoesNotOpenVoice() {
         openList()
-        let field=app.textFields["Add an item"]
+        let field=app.textFields["shopping-quick-add"]
         field.tap();field.typeText("Tomatoes")
         app.buttons["Add typed items"].tap()
-        XCTAssertTrue(app.navigationBars["Review Items"].waitForExistence(timeout:5))
+        XCTAssertTrue(app.buttons["Check Apples"].waitForExistence(timeout:5))
         XCTAssertFalse(app.navigationBars["Add by Voice"].exists)
         XCTAssertFalse(app.textViews["Shopping transcript"].exists)
-        app.buttons["Cancel"].tap()
         app.buttons["Add groceries by voice"].tap()
         XCTAssertTrue(app.navigationBars["Add by Voice"].waitForExistence(timeout:5))
     }
@@ -23,13 +49,16 @@ import XCTest
         let edit=app.buttons["Edit Milk"]
         XCTAssertTrue(NSPredicate(format:"enabled == true").evaluate(with:edit) || XCTWaiter.wait(for:[XCTNSPredicateExpectation(predicate:NSPredicate(format:"enabled == true"),object:edit)],timeout:5) == .completed)
         edit.tap()
-        XCTAssertTrue(app.navigationBars["Item"].waitForExistence(timeout:5))
+        XCTAssertTrue(app.navigationBars["Edit Item"].waitForExistence(timeout:5))
+        app.buttons["Item Image"].tap()
         XCTAssertTrue(app.buttons["Choose from Photos"].exists)
         XCTAssertTrue(app.buttons["Take a Picture"].exists)
-        XCTAssertTrue(app.buttons["Generate with AI"].exists)
-        let quantity=app.textFields["1"];quantity.tap();quantity.press(forDuration:1.2)
-        if app.menuItems["Select All"].exists{app.menuItems["Select All"].tap()}
-        else if app.buttons["Select All"].exists{app.buttons["Select All"].tap()}
+        app.buttons["Item Image"].tap()
+        let quantity=app.textFields["1"]
+        quantity.tap();quantity.press(forDuration:1.2)
+        if app.menuItems["Select All"].exists { app.menuItems["Select All"].tap() }
+        else if app.buttons["Select All"].exists { app.buttons["Select All"].tap() }
+        else { quantity.doubleTap() }
         quantity.typeText("2")
         XCTAssertEqual(quantity.value as? String,"2")
         app.buttons["Save"].tap()
@@ -79,14 +108,12 @@ import XCTest
         XCTAssertEqual(toggle.value as? String, "0")
         toggle.tap()
     }
-    func testVoiceReviewUsesEditableTranscriptWithoutOpeningMicrophone(){
+    func testVoiceAddsEditableTranscriptWithoutOpeningMicrophone(){
         openList();app.buttons["Add groceries by voice"].tap()
         XCTAssertTrue(app.navigationBars["Add by Voice"].waitForExistence(timeout:5))
         let transcript=app.textViews["Shopping transcript"];transcript.tap();transcript.typeText("three apples")
         app.swipeUp()
-        app.buttons["Review Items"].tap()
-        XCTAssertTrue(app.buttons["Add 1 Items"].waitForExistence(timeout:8))
-        app.buttons["Add 1 Items"].tap()
+        app.buttons["Add to List"].tap()
         XCTAssertTrue(app.navigationBars["Shopping List"].waitForExistence(timeout:5))
         app.swipeUp()
         XCTAssertTrue(app.buttons["Check Apples"].waitForExistence(timeout:5))
