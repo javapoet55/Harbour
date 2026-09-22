@@ -104,10 +104,10 @@ export const CONNECT_UNAVAILABLE = 'Nexdo could not start the calendar connectio
 /**
  * `describe(_:)` for `ASWebAuthenticationSessionError.canceledLogin` (ProfileView.swift:32-35): what
  * the person sees when they close the browser — the `account-settings-calendar-error-cancelled`
- * capture. The redirect URI is Swift's literal, production origin included.
+ * capture. The redirect URI names the production origin, app.nexdoapp.com, not the raw Railway host.
  */
 export const CONNECT_CANCELLED =
-  'Google Calendar connection failed: sign-in was cancelled or blocked. If Google showed “OAuth client was disabled”, enable that Web client in Google Cloud Console → APIs & Services → Credentials, and keep the redirect URI https://harbour-production-f8a0.up.railway.app/api/calendar/oauth/google/callback.';
+  'Google Calendar connection failed: sign-in was cancelled or blocked. If Google showed “OAuth client was disabled”, enable that Web client in Google Cloud Console → APIs & Services → Credentials, and keep the redirect URI https://app.nexdoapp.com/api/calendar/oauth/google/callback.';
 
 /** The callback scheme `ASWebAuthenticationSession` is started with (ProfileView.swift:13). */
 export const CONNECT_CALLBACK_SCHEME = 'nexdo';

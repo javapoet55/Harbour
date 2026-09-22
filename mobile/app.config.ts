@@ -1,7 +1,9 @@
 import type { ConfigContext, ExpoConfig } from 'expo/config';
 
-// The production API. Override per shell with EXPO_PUBLIC_API_URL (restart `expo start` after changing it).
-const DEFAULT_API_URL = 'https://harbour-production-f8a0.up.railway.app';
+// The DEV API, used by `expo start` and the `development` EAS profile. `preview` and `production` set
+// EXPO_PUBLIC_API_URL to https://app.nexdoapp.com in eas.json. Override per shell with
+// EXPO_PUBLIC_API_URL (restart `expo start` after changing it).
+const DEFAULT_API_URL = 'https://app-dev.nexdoapp.com';
 
 export default ({ config }: ConfigContext): ExpoConfig => ({
   ...config,

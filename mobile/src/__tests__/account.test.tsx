@@ -522,7 +522,7 @@ describe('the Settings screen', () => {
 
       await waitFor(() =>
         expect(screen.getByTestId('settings-failure')).toHaveTextContent(
-          'Google Calendar connection failed: sign-in was cancelled or blocked. If Google showed “OAuth client was disabled”, enable that Web client in Google Cloud Console → APIs & Services → Credentials, and keep the redirect URI https://harbour-production-f8a0.up.railway.app/api/calendar/oauth/google/callback.',
+          'Google Calendar connection failed: sign-in was cancelled or blocked. If Google showed “OAuth client was disabled”, enable that Web client in Google Cloud Console → APIs & Services → Credentials, and keep the redirect URI https://app.nexdoapp.com/api/calendar/oauth/google/callback.',
         ),
       );
       expect(Alert.alert).toHaveBeenCalledWith('Could not update profile', expect.stringContaining('sign-in was cancelled or blocked'), expect.any(Array));

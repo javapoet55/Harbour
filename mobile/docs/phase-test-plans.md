@@ -54,7 +54,7 @@ so only appears in a build made from `app.config.ts` (see "Development builds" b
 
 The API origin comes from `extra.apiUrl` in `app.config.ts`:
 
-- Default (`DEFAULT_API_URL`, used by `expo start` and the `development` profile): `https://harbour-production-f8a0.up.railway.app`
+- Default (`DEFAULT_API_URL`, used by `expo start` and the `development` profile): `https://app-dev.nexdoapp.com`, the dev API
 - `preview` and `production` EAS builds: `https://app.nexdoapp.com` (set in `eas.json`)
 - Override: set `EXPO_PUBLIC_API_URL` before starting Metro. The value must be an `https://` origin with no path.
 
