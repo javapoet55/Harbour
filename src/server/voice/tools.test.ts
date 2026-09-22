@@ -1,5 +1,6 @@
 import { beforeEach, expect, it, vi } from 'vitest';
 import { executeVoiceTool, validateVoiceTool } from './tools';
+import { pushTaskToExternal } from '@/server/calendar-sync';
 const mocks = vi.hoisted(() => ({ createTask: vi.fn(), updateTask: vi.fn(), scheduleTask: vi.fn(), completeTask: vi.fn(), deleteTask: vi.fn(), reminders: vi.fn(), requestedReminder: vi.fn(), tasks: vi.fn(), owned: vi.fn(), events: vi.fn(), eventSave: vi.fn(), categories: vi.fn(), categoryCreate: vi.fn(), taskUpdate: vi.fn(), reminderSave: vi.fn(), recurrenceSave: vi.fn(), user: vi.fn(), context: vi.fn(), recommend: vi.fn(), availability: vi.fn() }));
 vi.mock('@/server/availability', () => ({ checkCreationAvailability: mocks.availability }));
 vi.mock('@/server/tasks', () => mocks);
@@ -129,3 +130,29 @@ it('lets voice ask about a conflicting recurring occurrence before completion', 
   expect(voiceTools.find(tool => tool.name === 'complete_task')?.parameters.properties).toHaveProperty('allowScheduleConflict');
   expect(voiceTools.find(tool => tool.name === 'update_task')?.parameters.properties).toHaveProperty('allowScheduleConflict');
 });
+
+// Calendar sync matches the manual task route (src/app/api/tasks/route.ts:81): every timed task reaches
+// the connected calendar except a recognized life reminder.
+it('pushes a voice-created task to the connected calendar', async () => {
+  await executeVoiceTool('u', 's', 'push-task', 'create_task', args);
+  expect(pushTaskToExternal).toHaveBeenCalledWith('u', task.id);
+});
+it('pushes a create_reminder the life-reminder parser does not recognize, as New Task would', async () => {
+  // The model chose create_reminder for a plain timed task; typed into New Task it is not a life reminder.
+  await executeVoiceTool('u', 's', 'push-plain', 'create_reminder', { title: 'Call Damien', originalUserText: 'Call Damien at 10', scheduledAt: args.scheduledAt });
+  expect(mocks.createTask).toHaveBeenCalledWith(expect.objectContaining({ kind: 'REMINDER' }));
+  expect(pushTaskToExternal).toHaveBeenCalledWith('u', task.id);
+});
+it('keeps a recognized life reminder off the connected calendar', async () => {
+  await executeVoiceTool('u', 's', 'push-life', 'create_reminder', {
+    title: 'Pay electricity bill', originalUserText: 'Pay electricity bill every month on the 18th',
+    lifeReminderType: 'bill', scheduledAt: '2099-01-18T17:00:00Z', recurrence: { frequency: 'MONTHLY', interval: 1 },
+  });
+  expect(pushTaskToExternal).not.toHaveBeenCalled();
+});
+it('reports, rather than hides, a failed calendar push', async () => {
+  vi.mocked(pushTaskToExternal).mockRejectedValueOnce(new Error('provider down'));
+  const result = await executeVoiceTool('u', 's', 'push-fail', 'create_task', args);
+  expect(result).toMatchObject({ success: true, warnings: expect.arrayContaining(['Task saved, but connected calendar sync failed.']) });
+});
+
