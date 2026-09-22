@@ -7,6 +7,8 @@ import { deliverOAuthCallback, redirectOAuthCallback, resetOAuthCallbacks } from
 import { queryKeys } from '../query/keys';
 import { useAppearance } from '../store/appearance';
 import { useConsent } from '../store/consent';
+import { useFocus } from '../store/focus';
+import { useLastSignedIn } from '../store/lastSignedIn';
 import { useSession } from '../store/session';
 import { palettes } from '../theme';
 
@@ -668,6 +670,58 @@ describe('the Settings screen', () => {
       buttons[1].onPress?.();
       await waitFor(() => expect(mockDelete).toHaveBeenCalled());
       await waitFor(() => expect(useSession.getState().status).toBe('signedOut'));
+    });
+
+    /**
+     * The Android bug: after a successful delete the app stayed on the profile screen, and Back or Sign
+     * out then threw GO_BACK. `deleteAccount()` → `reset()` (NexdoApp.swift:781-803) lands on Sign in.
+     */
+    it('after a successful delete, forgets the account and replaces the stack with Sign in', async () => {
+      const { router } = jest.requireMock('expo-router') as { router: { replace: jest.Mock } };
+      router.replace.mockClear();
+      mockDelete.mockResolvedValue({ ok: true });
+      useLastSignedIn.setState({ value: 'Ada' });
+      useConsent.setState({ ai: true, voice: true });
+      const clearFocus = jest.spyOn(useFocus.getState(), 'clear');
+      await show(<Settings />);
+      await waitFor(() => expect(screen.getByTestId('settings-delete-account')).toBeTruthy());
+
+      fireEvent.press(screen.getByTestId('settings-delete-account'));
+      const buttons = (Alert.alert as jest.Mock).mock.calls.at(-1)?.[2] as { text: string; onPress?: () => void }[];
+      buttons[1].onPress?.();
+
+      await waitFor(() => expect(router.replace).toHaveBeenCalledWith('/sign-in'));
+      expect(useSession.getState()).toMatchObject({ status: 'signedOut', profile: null });
+      // Sign in must not greet the deleted account by name.
+      expect(useLastSignedIn.getState().value).toBeNull();
+      expect(useConsent.getState()).toMatchObject({ ai: false, voice: false });
+      expect(clearFocus).toHaveBeenCalled();
+      // Never "back": there is nothing under the Account sheet once the session is gone.
+      expect(mockBack).not.toHaveBeenCalled();
+    });
+
+    it('when the delete fails, says why and stays put, still signed in', async () => {
+      const { router } = jest.requireMock('expo-router') as { router: { replace: jest.Mock } };
+      router.replace.mockClear();
+      mockDelete.mockRejectedValue(new Error('A wish is being submitted. Wait for its status before deleting your account.'));
+      await show(<Settings />);
+      await waitFor(() => expect(screen.getByTestId('settings-delete-account')).toBeTruthy());
+
+      fireEvent.press(screen.getByTestId('settings-delete-account'));
+      const buttons = (Alert.alert as jest.Mock).mock.calls.at(-1)?.[2] as { text: string; onPress?: () => void }[];
+      buttons[1].onPress?.();
+
+      // `model.error`'s alert (RootView.swift:76-78).
+      await waitFor(() =>
+        expect(Alert.alert).toHaveBeenCalledWith(
+          'Unable to complete request',
+          'A wish is being submitted. Wait for its status before deleting your account.',
+          [{ text: 'OK' }],
+        ),
+      );
+      expect(useSession.getState().status).toBe('signedIn');
+      expect(router.replace).not.toHaveBeenCalled();
+      expect(mockBack).not.toHaveBeenCalled();
     });
   });
 });

@@ -213,6 +213,16 @@ export function RootNavigator() {
           */}
           <Stack.Screen name="attention" options={SHEET_OPTIONS} />
           <Stack.Screen name="reschedule-all" options={SHEET_OPTIONS} />
+          {/*
+            The signed-in groups that open over the tabs. Left undeclared, Expo Router registered them
+            OUTSIDE every guard, so ending the session did not remove them: after Delete account the
+            Account sheet stayed on screen, and Back or Sign out then hit "The action 'GO_BACK' was not
+            handled by any navigator". Declared here, they go with the session like the tabs.
+          */}
+          <Stack.Screen name="account" />
+          <Stack.Screen name="ask" />
+          <Stack.Screen name="calendar" />
+          <Stack.Screen name="task" />
         </Stack.Protected>
         <Stack.Protected guard={status === 'signedOut'}>
           <Stack.Screen name="(auth)" />

@@ -189,6 +189,19 @@ describe('a session that ends while a sheet is presented', () => {
     expect(screen.getByTestId('screen-(auth)')).toBeTruthy();
   });
 
+  // The GO_BACK bug: the Account sheet, and the other groups that open over the tabs, were undeclared,
+  // so no guard removed them when the session ended.
+  it('removes the signed-in groups that open over the tabs when the session ends', async () => {
+    await show(makeClient());
+    await waitFor(() => expect(screen.getByTestId('screen-(tabs)')).toBeTruthy());
+    for (const group of ['account', 'ask', 'calendar', 'task']) expect(screen.getByTestId(`screen-${group}`)).toBeTruthy();
+
+    await respondWith401();
+
+    await waitFor(() => expect(screen.getByTestId('screen-(auth)')).toBeTruthy());
+    for (const group of ['account', 'ask', 'calendar', 'task']) expect(screen.queryByTestId(`screen-${group}`)).toBeNull();
+  });
+
   it('dismisses nothing when no sheet is presented', async () => {
     await show(makeClient());
     await waitFor(() => expect(screen.getByTestId('screen-(tabs)')).toBeTruthy());

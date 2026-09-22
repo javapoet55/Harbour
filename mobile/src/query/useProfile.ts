@@ -2,6 +2,8 @@ import { useMutation, useQueryClient, type QueryClient } from '@tanstack/react-q
 
 import { endpoints, type Profile, type ProfileSettingsInput } from '../api';
 import { deviceTimeZone } from '../lib/profileSettings';
+import { useConsent } from '../store/consent';
+import { useFocus } from '../store/focus';
 import { useLastSignedIn } from '../store/lastSignedIn';
 import { useSession } from '../store/session';
 import { queryKeys } from './keys';
@@ -172,7 +174,16 @@ export function useDeleteAccount() {
   const queryClient = useQueryClient();
   return useMutation<void, Error, void>({
     mutationFn: async () => {
+      // A failure (409 while a wish is sending, offline, a 5xx) throws here, before anything local
+      // changes: the account still exists, so the caller shows the error and stays put.
       await endpoints.deleteAccount();
+      // `deleteAccount()` → `reset()` (NexdoApp.swift:781-803): no profile, AI and voice consent
+      // withdrawn, no focus session. The account is gone, so unlike Sign out the greeting name is
+      // forgotten too: Sign in must not say "Welcome back" to a deleted account. The session is a
+      // cookie the server already cleared in its response; there is no stored token to delete.
+      await useLastSignedIn.getState().remember('');
+      useConsent.getState().withdraw();
+      useFocus.getState().clear();
       useSession.getState().clear();
       queryClient.clear();
       queryClient.setQueryData(queryKeys.me(), null);
