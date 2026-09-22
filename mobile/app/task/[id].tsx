@@ -155,7 +155,7 @@ export default function TaskDetail() {
       {/* `header` (TaskDetailsView.swift:94-112) */}
       <View style={[styles.header, { borderBottomColor: withAlpha(brand.nexdoIndigo, 0.1) }]}>
         <View style={styles.headerText}>
-          <Text style={[styles.eyebrow, { color: theme.colors.tint }]}>TASK DETAILS</Text>
+          <Text style={[styles.eyebrow, { color: theme.colors.link }]}>TASK DETAILS</Text>
           {/* `Label(lifeReminderLabel, systemImage: "sparkles")`, `.caption.weight(.semibold)`, magenta
               (TaskDetailsView.swift:98-102). Read as one element: "Smart reminder: <label>". */}
           {reminderLabel ? (
@@ -177,7 +177,7 @@ export default function TaskDetail() {
           testID="detail-close"
           style={[styles.close, { backgroundColor: withAlpha(brand.nexdoIndigo, 0.09) }]}
         >
-          <TaskSymbol name="xmark" size={17} color={theme.colors.tint} />
+          <TaskSymbol name="xmark" size={17} color={theme.colors.link} />
         </Pressable>
       </View>
 
@@ -296,7 +296,7 @@ export default function TaskDetail() {
                   testID="detail-estimate-less"
                   style={styles.controlButton}
                 >
-                  <Text style={[theme.typography.body, { color: theme.colors.tint }]}>− Less</Text>
+                  <Text style={[theme.typography.body, { color: theme.colors.link }]}>− Less</Text>
                 </Pressable>
                 <Pressable
                   accessibilityRole="button"
@@ -305,7 +305,7 @@ export default function TaskDetail() {
                   testID="detail-estimate-more"
                   style={styles.controlButton}
                 >
-                  <Text style={[theme.typography.body, { color: theme.colors.tint }]}>+ More</Text>
+                  <Text style={[theme.typography.body, { color: theme.colors.link }]}>+ More</Text>
                 </Pressable>
               </View>
             </DetailMenu>
@@ -489,7 +489,7 @@ export default function TaskDetail() {
                 {picking === 'time' ? 'Start time' : 'Schedule date'}
               </Text>
               <Pressable accessibilityRole="button" accessibilityLabel="Done" onPress={() => setPicking(null)} style={styles.sheetDone} testID="detail-schedule-done">
-                <Text style={[theme.typography.body, { color: theme.colors.tint }]}>Done</Text>
+                <Text style={[theme.typography.body, { color: theme.colors.link }]}>Done</Text>
               </Pressable>
             </View>
             {/* Both chips only exist once `schedule` is set, so there is never a null to fall back from. */}
@@ -531,7 +531,7 @@ function TimeGrid({ selected, onSelect, timeZone }: { selected: number; onSelect
             testID={`time-slot-${slot}`}
             style={styles.timeRow}
           >
-            <Text style={[theme.typography.body, { color: isSelected ? theme.colors.tint : theme.colors.ink }]}>{label}</Text>
+            <Text style={[theme.typography.body, { color: isSelected ? theme.colors.link : theme.colors.ink }]}>{label}</Text>
           </Pressable>
         );
       })}

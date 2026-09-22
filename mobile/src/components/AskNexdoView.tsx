@@ -564,7 +564,7 @@ function ShoppingIntro({ context }: { context: ShoppingRecommendationContext }) 
         </LinearGradient>
         <View style={styles.introTitles}>
           <Text style={[styles.title2, styles.bold, { color: theme.colors.ink }]}>Plan a smarter cart</Text>
-          <Text style={[styles.subheadline, styles.semibold, { color: brand.nexdoIndigo }]} testID="shopping-recommendations-list">
+          <Text style={[styles.subheadline, styles.semibold, { color: theme.colors.link }]} testID="shopping-recommendations-list">
             {context.listName}
           </Text>
         </View>

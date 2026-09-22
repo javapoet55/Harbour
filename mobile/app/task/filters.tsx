@@ -1,6 +1,6 @@
 import { router, Stack } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Switch, View } from 'react-native';
+import { Platform, Pressable, ScrollView, StyleSheet, Switch, View } from 'react-native';
 
 import { TaskSymbol, Text } from '../../src/components';
 import { useTasks } from '../../src/query/useTasks';
@@ -49,7 +49,7 @@ export default function TaskFilters() {
           headerBackVisible: false,
           headerRight: () => (
             <Pressable accessibilityRole="button" accessibilityLabel="Done" onPress={() => router.back()} hitSlop={8} testID="filters-done">
-              <Text style={[theme.typography.body, { color: theme.colors.tint, fontWeight: '600' }]}>Done</Text>
+              <Text style={[theme.typography.body, { color: theme.colors.link, fontWeight: '600' }]}>Done</Text>
             </Pressable>
           ),
         }}
@@ -127,7 +127,7 @@ export default function TaskFilters() {
                 accessibilityLabel="Earliest due first"
                 value={query.earliestFirst}
                 onValueChange={(next) => setQuery({ earliestFirst: next })}
-                trackColor={{ false: theme.colors.separator, true: theme.colors.tint }}
+                trackColor={Platform.OS === 'android' ? { false: theme.colors.switchOff, true: theme.colors.switchOn } : { false: theme.colors.separator, true: theme.colors.tint }}
                 thumbColor="#FFFFFF"
                 testID="earliest-first"
               />
@@ -135,7 +135,7 @@ export default function TaskFilters() {
           ) : null}
 
           <Pressable accessibilityRole="button" accessibilityLabel="Reset filters" onPress={resetFilters} style={styles.row} testID="reset-filters">
-            <Text style={[theme.typography.body, { color: theme.colors.tint }]}>Reset filters</Text>
+            <Text style={[theme.typography.body, { color: theme.colors.link }]}>Reset filters</Text>
           </Pressable>
         </View>
       </ScrollView>
@@ -186,7 +186,7 @@ function OptionRow({ label, selected, onPress, testID }: { label: string; select
       style={[styles.row, styles.option, styles.divider, { borderBottomColor: theme.colors.separator }]}
     >
       <Text style={[theme.typography.body, styles.rowLabel, { color: theme.colors.ink }]}>{label}</Text>
-      {selected ? <TaskSymbol name="checkmark" size={16} color={theme.colors.tint} /> : null}
+      {selected ? <TaskSymbol name="checkmark" size={16} color={theme.colors.link} /> : null}
     </Pressable>
   );
 }

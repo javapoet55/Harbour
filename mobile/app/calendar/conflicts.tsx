@@ -44,7 +44,7 @@ export default function CalendarConflicts() {
           Schedule review
         </Text>
         <Pressable accessibilityLabel="Done" accessibilityRole="button" hitSlop={8} onPress={() => router.back()} style={styles.navSide} testID="conflicts-done">
-          <Text style={[theme.typography.body, styles.trailing, { color: theme.colors.tint }]}>Done</Text>
+          <Text style={[theme.typography.body, styles.trailing, { color: theme.colors.link }]}>Done</Text>
         </Pressable>
       </View>
 
@@ -112,7 +112,7 @@ function IntelligenceStatus({
   if (loading) {
     return (
       <View style={[styles.row, styles.stacked]} testID="conflicts-loading">
-        <ActivityIndicator color={theme.colors.tint} size="small" />
+        <ActivityIndicator color={theme.colors.link} size="small" />
         <Text style={[styles.subheadline, styles.centred, { color: theme.colors.ink }]}>Reviewing your schedule…</Text>
       </View>
     );
@@ -126,7 +126,7 @@ function IntelligenceStatus({
           <Text style={[styles.caption, { color: theme.colors.secondary }]}>Showing the last successful review.</Text>
         ) : null}
         <Pressable accessibilityLabel="Retry schedule intelligence" accessibilityRole="button" onPress={onRetry} style={styles.action} testID="conflicts-retry">
-          <Text style={[styles.subheadline, styles.semibold, { color: theme.colors.tint }]}>Retry schedule intelligence</Text>
+          <Text style={[styles.subheadline, styles.semibold, { color: theme.colors.link }]}>Retry schedule intelligence</Text>
         </Pressable>
       </View>
     );
@@ -135,7 +135,7 @@ function IntelligenceStatus({
   if (stale) {
     return (
       <Pressable accessibilityLabel="Review schedule" accessibilityRole="button" onPress={onRetry} style={styles.action} testID="conflicts-review">
-        <Text style={[styles.subheadline, styles.semibold, { color: theme.colors.tint }]}>Review schedule</Text>
+        <Text style={[styles.subheadline, styles.semibold, { color: theme.colors.link }]}>Review schedule</Text>
       </Pressable>
     );
   }

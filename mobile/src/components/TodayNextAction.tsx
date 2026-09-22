@@ -66,7 +66,7 @@ export function ProtectedTimeCard({
           style={[styles.plain, { opacity: busy ? 0.55 : 1 }]}
           testID="today-protected-decline"
         >
-          <Text style={[theme.typography.body, { color: theme.colors.tint }]}>Not now</Text>
+          <Text style={[theme.typography.body, { color: theme.colors.link }]}>Not now</Text>
         </Pressable>
       </View>
     </View>
@@ -120,8 +120,8 @@ export function FocusNextCard({
     >
       <View style={styles.row}>
         {/* `Label("Focus next", systemImage: "sparkles").font(.subheadline.bold())` in nexdoIndigo. */}
-        <TaskSymbol color={brand.nexdoIndigo} name="sparkles" size={15} />
-        <Text style={[styles.subheadlineBold, styles.grow, { color: brand.nexdoIndigo }]}>Focus next</Text>
+        <TaskSymbol color={theme.colors.link} name="sparkles" size={15} />
+        <Text style={[styles.subheadlineBold, styles.grow, { color: theme.colors.link }]}>Focus next</Text>
         <Pressable
           accessibilityLabel="Focus options"
           accessibilityRole="button"
@@ -130,7 +130,7 @@ export function FocusNextCard({
           style={styles.menuButton}
           testID="today-focus-options"
         >
-          <TaskSymbol color={theme.colors.tint} name="ellipsis" size={17} />
+          <TaskSymbol color={theme.colors.link} name="ellipsis" size={17} />
         </Pressable>
       </View>
 
@@ -170,7 +170,7 @@ export function FocusNextCard({
             </Pressable>
             <View style={styles.grow} />
             <Pressable accessibilityRole="button" onPress={onOtherOptions} style={styles.plain} testID="today-focus-other">
-              <Text style={[theme.typography.body, { color: theme.colors.tint }]}>Other options</Text>
+              <Text style={[theme.typography.body, { color: theme.colors.link }]}>Other options</Text>
             </Pressable>
           </View>
         </>

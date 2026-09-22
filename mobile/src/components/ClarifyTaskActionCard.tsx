@@ -104,7 +104,7 @@ export function ClarifyTaskActionCard({
                     (saving || contact.trim().length === 0) && styles.dimmed,
                   ]}
                 >
-                  <Text style={[styles.choiceLabel, { color: theme.colors.tint }]}>{verb}</Text>
+                  <Text style={[styles.choiceLabel, { color: theme.colors.link }]}>{verb}</Text>
                 </Pressable>
               );
             })}

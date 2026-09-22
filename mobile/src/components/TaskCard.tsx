@@ -53,7 +53,7 @@ export function TaskCard({ task, timeZone, project, busy = false, onToggle, onOp
         <TaskSymbol
           name={done ? 'checkmark.circle.fill' : 'circle'}
           size={25}
-          color={done ? theme.colors.tint : theme.colors.secondary}
+          color={done ? theme.colors.link : theme.colors.secondary}
         />
       </Pressable>
 

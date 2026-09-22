@@ -869,6 +869,16 @@ describe('the Settings screen on Android', () => {
     expect(flat('settings-time-zone').borderWidth).toBeUndefined();
   });
 
+  it('draws its links in the Ask blue in dark, and keeps Delete account red (§6)', async () => {
+    useAppearance.setState({ appearance: 'night', voiceVolume: 1 });
+    await showAndroid();
+    const dark = palettes.dark;
+    for (const link of ['Open Notification Center', 'Synchronize now', 'Change photo']) {
+      expect(textStyle(link).color).toBe(dark.askBlue);
+    }
+    expect(textStyle('Delete account').color).toBe(dark.danger);
+  });
+
   it('marks the selected appearance with the accent tint and accent text', async () => {
     await showAndroid();
     expect(flat('appearance-system')).toMatchObject({ backgroundColor: light.accentTint, borderColor: light.accentBorder });

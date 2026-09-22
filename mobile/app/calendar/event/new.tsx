@@ -335,7 +335,7 @@ export default function NewCalendarEvent() {
                 {picking === 'start' ? 'Starts' : picking === 'end' ? 'Ends' : 'Repeat until'}
               </Text>
               <Pressable accessibilityRole="button" accessibilityLabel="Done" onPress={() => setPicking(null)} style={styles.sheetDone} testID="event-picker-done">
-                <Text style={[theme.typography.body, { color: theme.colors.tint }]}>Done</Text>
+                <Text style={[theme.typography.body, { color: theme.colors.link }]}>Done</Text>
               </Pressable>
             </View>
             {picking !== null ? (

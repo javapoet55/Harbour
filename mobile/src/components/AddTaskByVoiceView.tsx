@@ -108,8 +108,8 @@ export function AddTaskByVoiceView({ askMode = false, calendarOnly = false }: Ad
           testID="voice-close"
         >
           <View style={styles.closeRow}>
-            <TaskSymbol color={theme.colors.tint} name="xmark" size={17} />
-            <Text style={[theme.typography.body, { color: theme.colors.tint }]}>Close</Text>
+            <TaskSymbol color={theme.colors.link} name="xmark" size={17} />
+            <Text style={[theme.typography.body, { color: theme.colors.link }]}>Close</Text>
           </View>
         </Pressable>
         <View style={styles.grow} />
@@ -138,7 +138,7 @@ export function AddTaskByVoiceView({ askMode = false, calendarOnly = false }: Ad
 
         <Text
           accessibilityLiveRegion="polite"
-          style={[styles.title2, styles.centred, { color: brand.nexdoIndigo }]}
+          style={[styles.title2, styles.centred, { color: theme.colors.link }]}
           testID="voice-status"
         >
           {status}
@@ -206,8 +206,8 @@ export function AddTaskByVoiceView({ askMode = false, calendarOnly = false }: Ad
           style={[styles.muteRow, { opacity: muteDisabled ? 0.55 : 1 }]}
           testID="voice-mute"
         >
-          <TaskSymbol color={theme.colors.tint} name={voice.state.muted ? 'mic.slash.fill' : 'mic.fill'} size={17} />
-          <Text style={[theme.typography.body, { color: theme.colors.tint }]}>{voice.state.muted ? 'Unmute' : 'Mute'}</Text>
+          <TaskSymbol color={theme.colors.link} name={voice.state.muted ? 'mic.slash.fill' : 'mic.fill'} size={17} />
+          <Text style={[theme.typography.body, { color: theme.colors.link }]}>{voice.state.muted ? 'Unmute' : 'Mute'}</Text>
         </Pressable>
         <View style={styles.grow} />
         <Pressable

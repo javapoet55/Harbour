@@ -78,8 +78,8 @@ export function TodayIntelligenceCard({
           style={styles.summary}
         >
           <View style={styles.labelRow}>
-            <TaskSymbol name="sparkles" size={15} color={theme.colors.tint} />
-            <Text style={[styles.eyebrow, { color: theme.colors.tint }]}>
+            <TaskSymbol name="sparkles" size={15} color={theme.colors.link} />
+            <Text style={[styles.eyebrow, { color: theme.colors.link }]}>
               {range === 1 ? 'Your day, in focus' : `Your next ${range} days`}
             </Text>
           </View>
@@ -139,8 +139,8 @@ export function TodayIntelligenceCard({
             <TaskSymbol name="magnifyingglass" size={17} color={theme.colors.ink} />
           </Pressable>
           <Pressable accessibilityRole="button" accessibilityLabel="Open Calendar" onPress={onCalendar} testID="today-view-day" style={styles.viewDay}>
-            <TaskSymbol name="chevron.down" size={12} color={theme.colors.tint} />
-            <Text style={[styles.caption, { color: theme.colors.tint }]}>View day</Text>
+            <TaskSymbol name="chevron.down" size={12} color={theme.colors.link} />
+            <Text style={[styles.caption, { color: theme.colors.link }]}>View day</Text>
           </Pressable>
         </View>
 
@@ -167,7 +167,7 @@ export function TodayIntelligenceCard({
 
         {visibleSchedule.length === 0 ? (
           <View accessible style={styles.empty} testID="today-schedule-empty">
-            <TaskSymbol name="calendar" size={22} color={theme.colors.tint} />
+            <TaskSymbol name="calendar" size={22} color={theme.colors.link} />
             <Text style={[styles.heading, { color: theme.colors.ink }]}>
               {searching ? 'No matching tasks' : 'Your schedule is clear'}
             </Text>
@@ -185,7 +185,7 @@ export function TodayIntelligenceCard({
             ))}
             {!searching && schedule.length > 7 ? (
               <Pressable accessibilityRole="button" accessibilityLabel={`View ${schedule.length - 7} more`} onPress={onCalendar} style={styles.viewMore} testID="today-view-more">
-                <Text style={[styles.subheadline, styles.semibold, { color: theme.colors.tint }]}>
+                <Text style={[styles.subheadline, styles.semibold, { color: theme.colors.link }]}>
                   {`View ${schedule.length - 7} more`}
                 </Text>
               </Pressable>
@@ -218,7 +218,7 @@ export function TodayScheduleRow({ item, onPress }: { item: TodayScheduleItem; o
         {item.timeLabel}
       </Text>
       <View style={[styles.rowIcon, { backgroundColor: withAlpha(isEvent ? brand.nexdoIndigo : '#34C759', 0.08) }]}>
-        <TaskSymbol name={isEvent ? 'calendar' : 'checkmark.square.fill'} size={17} color={isEvent ? theme.colors.tint : '#34C759'} />
+        <TaskSymbol name={isEvent ? 'calendar' : 'checkmark.square.fill'} size={17} color={isEvent ? theme.colors.link : '#34C759'} />
       </View>
       <View style={styles.grow}>
         <Text numberOfLines={2} style={[styles.rowTitle, { color: critical ? theme.colors.danger : theme.colors.ink }]}>

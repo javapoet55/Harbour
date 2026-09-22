@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Animated, Pressable, StyleSheet } from 'react-native';
+import { Animated, Platform, Pressable, StyleSheet } from 'react-native';
 
 import { useTheme } from '../theme';
 
@@ -39,8 +39,11 @@ export function IOSSwitch({
   }, [value, position]);
 
   const travel = IOS_SWITCH.width - IOS_SWITCH.thumbWidth - IOS_SWITCH.inset * 2;
-  const off = theme.scheme === 'dark' ? 'rgba(120, 120, 128, 0.32)' : 'rgba(120, 120, 128, 0.5)';
-  const on = tint ?? theme.colors.tint;
+  // Android (docs/android-polish.md §6): the track is the brand indigo at 85% in dark, so it does not
+  // glow against a grey card, and off is a neutral grey that keeps a hairline so it stays visible.
+  const android = Platform.OS === 'android';
+  const off = android ? theme.colors.switchOff : theme.scheme === 'dark' ? 'rgba(120, 120, 128, 0.32)' : 'rgba(120, 120, 128, 0.5)';
+  const on = tint ?? (android ? theme.colors.switchOn : theme.colors.tint);
 
   return (
     <Pressable
@@ -57,7 +60,9 @@ export function IOSSwitch({
         style={[
           styles.track,
           { backgroundColor: position.interpolate({ inputRange: [0, 1], outputRange: [off, on] }) },
+          android && { borderWidth: StyleSheet.hairlineWidth, borderColor: theme.colors.fieldBorder },
         ]}
+        testID={testID ? `${testID}-track` : undefined}
       >
         <Animated.View
           style={[

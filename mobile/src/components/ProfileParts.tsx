@@ -86,7 +86,7 @@ export function AccountMenuRow({
       {/* `Image(systemName: icon)` (ProfileView.swift:105) carries no `.font`, so it is `.body` — 17,
           not 20. */}
       <View style={styles.menuIcon}>
-        <TaskSymbol color={brand.nexdoIndigo} name={icon} size={17} />
+        <TaskSymbol color={theme.colors.link} name={icon} size={17} />
       </View>
       <Text style={[theme.typography.body, styles.grow, { color: theme.colors.ink }]}>{title}</Text>
       {/* The trailing one is `.font(.caption)` (`:108`) — 12. */}

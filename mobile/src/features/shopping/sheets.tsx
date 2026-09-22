@@ -152,12 +152,12 @@ function Choice({ title, subtitle, icon, selected, disabled = false, onPress, te
       {selected ? <View pointerEvents="none" style={[styles.choiceStroke, { borderColor: brand.nexdoIndigo }]} /> : null}
       <MomentCard>
         <View style={styles.choiceRow}>
-          <ListTile icon={icon} color={brand.nexdoIndigo} />
+          <ListTile icon={icon} color={theme.colors.link} />
           <View style={styles.grow}>
             <Text style={[headline, { color: theme.colors.ink }]}>{title}</Text>
             <Text style={[textStyles.subheadline, { color: theme.colors.secondary }]}>{subtitle}</Text>
           </View>
-          <Ionicons name={selected ? 'checkmark-circle' : 'ellipse-outline'} size={22} color={brand.nexdoIndigo} />
+          <Ionicons name={selected ? 'checkmark-circle' : 'ellipse-outline'} size={22} color={theme.colors.link} />
         </View>
       </MomentCard>
     </Pressable>
@@ -273,7 +273,7 @@ function ShareListBody({ initial, onUpdate }: { initial: GroceryList; onUpdate: 
       <FormSection>
         <FormRow>
           <View style={styles.inline}>
-            <Ionicons name="cart" size={20} color={brand.nexdoIndigo} />
+            <Ionicons name="cart" size={20} color={theme.colors.link} />
             <FormText>{list.title}</FormText>
           </View>
         </FormRow>

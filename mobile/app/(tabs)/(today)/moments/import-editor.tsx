@@ -27,7 +27,7 @@ export default function ImportEditorScreen() {
         options={{
           headerLeft: () => (
             <Pressable accessibilityRole="button" accessibilityLabel="Close" onPress={() => router.back()} hitSlop={8} testID="import-close">
-              <Text style={{ fontSize: 17, lineHeight: 22, color: theme.colors.tint }}>Close</Text>
+              <Text style={{ fontSize: 17, lineHeight: 22, color: theme.colors.link }}>Close</Text>
             </Pressable>
           ),
         }}

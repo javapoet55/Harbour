@@ -25,7 +25,7 @@ export function HeaderButton({ icon, label, onPress }: { icon: TaskSymbolName; l
       onPress={onPress}
       style={[styles.headerButton, { backgroundColor: withAlpha(brand.nexdoIndigo, 0.06), borderColor: withAlpha(brand.nexdoIndigo, 0.14) }]}
     >
-      <TaskSymbol name={icon} size={20} color={theme.colors.tint} />
+      <TaskSymbol name={icon} size={20} color={theme.colors.link} />
     </Pressable>
   );
 }
@@ -126,7 +126,7 @@ export function CreationCard({
         </LinearGradient>
       ) : (
         <View style={[styles.creationIcon, { backgroundColor: withAlpha(brand.nexdoMagenta, 0.08) }]}>
-          <TaskSymbol name={icon} size={24} color={theme.colors.tint} />
+          <TaskSymbol name={icon} size={24} color={theme.colors.link} />
         </View>
       )}
       <View style={styles.creationText}>
@@ -173,7 +173,7 @@ export function TaskEmptyState({ title, onAdd, style }: { title: string; onAdd: 
         onPress={onAdd}
         style={[styles.emptyAction, { borderColor: withAlpha(brand.nexdoIndigo, 0.16), backgroundColor: withAlpha(brand.nexdoIndigo, 0.06) }]}
       >
-        <Text style={[theme.typography.body, { color: theme.colors.tint }]}>Add Manually</Text>
+        <Text style={[theme.typography.body, { color: theme.colors.link }]}>Add Manually</Text>
       </Pressable>
     </View>
   );

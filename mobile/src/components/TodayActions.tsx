@@ -92,7 +92,7 @@ export function TodayActionsView({
             <Text style={[styles.caption, { color: theme.colors.secondary }]}>{`${next.length} actions`}</Text>
             <View style={styles.grow} />
             <Pressable accessibilityLabel="View all" accessibilityRole="button" onPress={onViewAll} testID="today-actions-view-all">
-              <Text style={[styles.subheadline, { color: theme.colors.tint }]}>View all</Text>
+              <Text style={[styles.subheadline, { color: theme.colors.link }]}>View all</Text>
             </Pressable>
           </View>
           {next.slice(0, 3).map((action) => (
@@ -217,7 +217,7 @@ export function ActionNeededCard({
 
       {channels.length === 0 ? (
         <Pressable accessibilityRole="button" onPress={() => onExecute(action.preferredAction ?? 'call')} testID="today-actions-choose-contact">
-          <Text style={[theme.typography.body, { color: theme.colors.tint }]}>Choose contact</Text>
+          <Text style={[theme.typography.body, { color: theme.colors.link }]}>Choose contact</Text>
         </Pressable>
       ) : null}
 
@@ -230,8 +230,8 @@ export function ActionNeededCard({
           style={[styles.bordered, { backgroundColor: withAlpha(brand.nexdoIndigo, 0.18) }]}
           testID="today-actions-dismiss"
         >
-          <TaskSymbol color={theme.colors.tint} name="xmark" size={15} />
-          <Text style={[theme.typography.body, { color: theme.colors.tint }]}>Dismiss</Text>
+          <TaskSymbol color={theme.colors.link} name="xmark" size={15} />
+          <Text style={[theme.typography.body, { color: theme.colors.link }]}>Dismiss</Text>
         </Pressable>
       </View>
     </View>
@@ -253,8 +253,8 @@ export function SnoozeMenu({ action }: { action: StoredTaskAction }) {
         style={[styles.bordered, { backgroundColor: withAlpha(brand.nexdoIndigo, 0.18) }]}
         testID="today-actions-snooze"
       >
-        <TaskSymbol color={theme.colors.tint} name="clock" size={15} />
-        <Text style={[theme.typography.body, { color: theme.colors.tint }]}>Remind me later</Text>
+        <TaskSymbol color={theme.colors.link} name="clock" size={15} />
+        <Text style={[theme.typography.body, { color: theme.colors.link }]}>Remind me later</Text>
       </Pressable>
 
       <Modal animationType="fade" onRequestClose={() => setOpen(false)} transparent visible={open}>

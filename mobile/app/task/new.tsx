@@ -282,7 +282,7 @@ export default function NewTask() {
               style={styles.stepperButton}
               testID="duration-decrease"
             >
-              <Text style={[styles.stepperGlyph, { color: theme.colors.tint }]}>−</Text>
+              <Text style={[styles.stepperGlyph, { color: theme.colors.link }]}>−</Text>
             </Pressable>
             <Pressable
               accessibilityRole="button"
@@ -291,7 +291,7 @@ export default function NewTask() {
               style={styles.stepperButton}
               testID="duration-increase"
             >
-              <Text style={[styles.stepperGlyph, { color: theme.colors.tint }]}>+</Text>
+              <Text style={[styles.stepperGlyph, { color: theme.colors.link }]}>+</Text>
             </Pressable>
           </View>
         </View>
@@ -313,7 +313,7 @@ export default function NewTask() {
                 style={styles.sheetDone}
                 testID="date-picker-done"
               >
-                <Text style={[theme.typography.body, { color: theme.colors.tint }]}>Done</Text>
+                <Text style={[theme.typography.body, { color: theme.colors.link }]}>Done</Text>
               </Pressable>
             </View>
             <MonthCalendar selected={customDate} onSelect={setCustomDate} timeZone={zone} />
@@ -380,7 +380,7 @@ function EditorLabel({ title, icon }: { title: string; icon: EditorIcon }) {
   return (
     <View style={[styles.editorLabel, android && androidLabelRow]}>
       <TaskSymbol name={icon} size={android ? ANDROID_LABEL_ICON : 13} color={android ? theme.colors.fieldLabel : theme.colors.tint} />
-      <Text style={[styles.editorLabelText, { color: theme.colors.tint }, androidLabel(theme)]}>{title}</Text>
+      <Text style={[styles.editorLabelText, { color: theme.colors.link }, androidLabel(theme)]}>{title}</Text>
     </View>
   );
 }

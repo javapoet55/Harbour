@@ -27,7 +27,7 @@ export function Button({ title, onPress, variant = 'primary', loading = false, d
       : variant === 'secondary'
         ? { backgroundColor: 'transparent', borderWidth: 1, borderColor: theme.colors.tint }
         : { backgroundColor: 'transparent' };
-  const tone = variant === 'primary' ? 'onTint' : 'tint';
+  const tone = variant === 'primary' ? 'onTint' : 'link';
 
   return (
     <Pressable

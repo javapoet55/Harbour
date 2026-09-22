@@ -1,4 +1,4 @@
-import { useColorScheme } from 'react-native';
+import { Platform, useColorScheme } from 'react-native';
 
 import { useAppearance } from '../store/appearance';
 import { useElevated } from './elevation';
@@ -36,7 +36,7 @@ export function useTheme(options?: { elevated?: boolean }): Theme {
   const scheme: ColorScheme = appearance === 'day' ? 'light' : appearance === 'night' ? 'dark' : system;
   const palette = palettes[scheme];
   const inherited = useElevated();
-  const colors: Palette = (options?.elevated ?? inherited)
+  const levelled: Palette = (options?.elevated ?? inherited)
     ? {
         ...palette,
         background: palette.backgroundElevated,
@@ -46,5 +46,11 @@ export function useTheme(options?: { elevated?: boolean }): Theme {
         fieldOnGroup: palette.fieldOnGroupElevated,
       }
     : palette;
+  // Android, dark: tappable text and icons take the Ask screen's blue (`askBlue`, Swift's
+  // `AskStyle.blue`) in place of the brand indigo (docs/android-polish.md §6). Light keeps the brand
+  // indigo, and iOS keeps `link` equal to `tint` in both. Read at render time so a test can switch
+  // `Platform.OS`.
+  const colors: Palette =
+    Platform.OS === 'android' && scheme === 'dark' ? { ...levelled, link: levelled.askBlue } : levelled;
   return { scheme, colors, spacing, radii, typography, textStyles };
 }

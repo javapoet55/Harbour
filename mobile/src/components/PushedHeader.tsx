@@ -35,7 +35,7 @@ export function pushedHeaderOptions(theme: Theme, topInset: number) {
     headerStyle: { backgroundColor: 'transparent' },
     headerShadowVisible: false,
     headerTitleAlign: 'center' as const,
-    headerTintColor: theme.colors.tint,
+    headerTintColor: theme.colors.link,
     headerTitleStyle: { color: theme.colors.ink, fontSize: 17, fontWeight: '600' as const },
     contentStyle: { backgroundColor: theme.colors.groupedBackground, paddingTop: pushedBarHeight(topInset) },
     // Only ever spread onto PUSHED screens, so there is always somewhere to go back to.

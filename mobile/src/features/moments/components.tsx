@@ -159,7 +159,7 @@ export function MomentSegments<T extends string>({
             testID={`${testIDPrefix}-${option}`}
           >
             {selected ? <LinearGradient colors={GRADIENT} start={{ x: 0, y: 0.5 }} end={{ x: 1, y: 0.5 }} style={[StyleSheet.absoluteFill, styles.segmentFill]} /> : null}
-            <Text style={[styles.segmentLabel, { color: selected ? '#FFFFFF' : brand.nexdoIndigo }]}>{option}</Text>
+            <Text style={[styles.segmentLabel, { color: selected ? '#FFFFFF' : theme.colors.link }]}>{option}</Text>
           </Pressable>
         );
       })}
@@ -280,7 +280,7 @@ export function TintButton({
   accessibilityLabel?: string;
 }) {
   const theme = useTheme();
-  const color = destructive ? theme.colors.danger : theme.colors.tint;
+  const color = destructive ? theme.colors.danger : theme.colors.link;
   return (
     <Pressable
       accessibilityRole="button"
@@ -323,7 +323,8 @@ export function BorderedButton({
   testID?: string;
   accessibilityLabel?: string;
 }) {
-  const color = prominent ? '#FFFFFF' : brand.nexdoIndigo;
+  const theme = useTheme();
+  const color = prominent ? '#FFFFFF' : theme.colors.link;
   return (
     <Pressable
       accessibilityRole="button"
@@ -454,7 +455,7 @@ function SheetButton({ title, onPress, disabled = false, testID, bold = false }:
     >
       {/* A toolbar button on iOS 26 sits on a glass capsule. */}
       <GlassCapsule>
-        <Text style={{ fontSize: 17, lineHeight: 22, color: disabled ? theme.colors.placeholder : theme.colors.tint, fontWeight: bold ? '600' : '400' }}>{title}</Text>
+        <Text style={{ fontSize: 17, lineHeight: 22, color: disabled ? theme.colors.placeholder : theme.colors.link, fontWeight: bold ? '600' : '400' }}>{title}</Text>
       </GlassCapsule>
     </Pressable>
   );
@@ -497,7 +498,7 @@ export function KeyboardDoneBar({ onDone, testID = 'keyboard-done' }: { onDone?:
         testID={testID}
       >
         <GlassCapsule>
-          <Text style={{ fontSize: 17, lineHeight: 22, color: theme.colors.tint }}>Done</Text>
+          <Text style={{ fontSize: 17, lineHeight: 22, color: theme.colors.link }}>Done</Text>
         </GlassCapsule>
       </Pressable>
     </View>

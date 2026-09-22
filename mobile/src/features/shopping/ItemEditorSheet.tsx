@@ -198,8 +198,8 @@ function ImageAction({ icon, title, onPress, disabled = false, testID }: { icon:
   const theme = useTheme();
   return (
     <Pressable accessibilityRole="button" accessibilityLabel={title} accessibilityState={{ disabled }} disabled={disabled} onPress={onPress} style={styles.action} testID={testID}>
-      <Ionicons name={icon} size={24} color={theme.colors.tint} />
-      <Text style={[textStyles.body, { color: disabled ? theme.colors.label : theme.colors.tint }]}>{title}</Text>
+      <Ionicons name={icon} size={24} color={theme.colors.link} />
+      <Text style={[textStyles.body, { color: disabled ? theme.colors.label : theme.colors.link }]}>{title}</Text>
     </Pressable>
   );
 }

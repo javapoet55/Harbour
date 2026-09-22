@@ -7,7 +7,7 @@ export function LoadingView({ message }: { message?: string }) {
   const theme = useTheme();
   return (
     <View style={[styles.center, { backgroundColor: theme.colors.groupedBackground, gap: theme.spacing.md }]}>
-      <ActivityIndicator color={theme.colors.tint} />
+      <ActivityIndicator color={theme.colors.link} />
       {message ? <Text tone="secondary">{message}</Text> : null}
     </View>
   );

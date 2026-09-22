@@ -74,13 +74,13 @@ export function MonthCalendar({
     <View style={styles.calendar}>
       <View style={styles.monthRow}>
         <Pressable accessibilityRole="button" accessibilityLabel="Previous month" onPress={() => step(-1)} style={styles.monthButton} testID="calendar-previous">
-          <Text style={[styles.monthGlyph, { color: theme.colors.tint }]}>‹</Text>
+          <Text style={[styles.monthGlyph, { color: theme.colors.link }]}>‹</Text>
         </Pressable>
         <Text accessibilityRole="header" style={[styles.monthLabel, { color: theme.colors.ink }]} testID="calendar-month">
           {monthLabel}
         </Text>
         <Pressable accessibilityRole="button" accessibilityLabel="Next month" onPress={() => step(1)} style={styles.monthButton} testID="calendar-next">
-          <Text style={[styles.monthGlyph, { color: theme.colors.tint }]}>›</Text>
+          <Text style={[styles.monthGlyph, { color: theme.colors.link }]}>›</Text>
         </Pressable>
       </View>
 
@@ -114,7 +114,7 @@ export function MonthCalendar({
                 <Text
                   style={[
                     styles.dayLabel,
-                    { color: isSelected ? '#FFFFFF' : isToday ? theme.colors.tint : theme.colors.ink },
+                    { color: isSelected ? '#FFFFFF' : isToday ? theme.colors.link : theme.colors.ink },
                     isToday && !isSelected && styles.todayLabel,
                   ]}
                 >

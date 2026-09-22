@@ -26,7 +26,7 @@ export default function TasksTabLayout() {
     function CloseButton() {
       return (
         <Pressable accessibilityRole="button" accessibilityLabel={label} onPress={() => router.back()} hitSlop={8}>
-          <Text style={{ fontSize: 17, lineHeight: 22, color: theme.colors.tint }}>{label}</Text>
+          <Text style={{ fontSize: 17, lineHeight: 22, color: theme.colors.link }}>{label}</Text>
         </Pressable>
       );
     }

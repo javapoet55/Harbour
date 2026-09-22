@@ -97,7 +97,7 @@ export default function WeeklySummaryScreen() {
             {/* `weekSelector` (WeeklySummaryView.swift:75-89) */}
             <View style={[styles.weekSelector, { backgroundColor: theme.colors.surface, borderColor: withAlpha(brand.nexdoIndigo, 0.12) }]}>
               <Pressable accessibilityRole="button" accessibilityLabel="Previous week" onPress={() => moveWeek(-1)} style={styles.weekArrow} testID="weekly-previous">
-                <Text style={[styles.arrowGlyph, { color: theme.colors.tint }]}>‹</Text>
+                <Text style={[styles.arrowGlyph, { color: theme.colors.link }]}>‹</Text>
               </Pressable>
               <Text numberOfLines={1} style={[styles.weekLabel, { color: theme.colors.ink }]} testID="weekly-range">
                 {rangeLabel}
@@ -111,7 +111,7 @@ export default function WeeklySummaryScreen() {
                 style={[styles.weekArrow, !canMoveForward && styles.dimmed]}
                 testID="weekly-next"
               >
-                <Text style={[styles.arrowGlyph, { color: theme.colors.tint }]}>›</Text>
+                <Text style={[styles.arrowGlyph, { color: theme.colors.link }]}>›</Text>
               </Pressable>
             </View>
 
@@ -230,8 +230,8 @@ export default function WeeklySummaryScreen() {
             {summary.productivityInsight ? (
               <Card>
                 <View style={styles.summaryRow}>
-                  <TaskSymbol name="sparkles" size={17} color={theme.colors.tint} />
-                  <Text style={[styles.insight, styles.grow, { color: theme.colors.tint }]} testID="weekly-insight">
+                  <TaskSymbol name="sparkles" size={17} color={theme.colors.link} />
+                  <Text style={[styles.insight, styles.grow, { color: theme.colors.link }]} testID="weekly-insight">
                     {summary.productivityInsight}
                   </Text>
                 </View>
@@ -269,7 +269,7 @@ export default function WeeklySummaryScreen() {
           style={styles.share}
           testID="weekly-share"
         >
-          <Text style={[theme.typography.body, { color: theme.colors.tint }]}>Share</Text>
+          <Text style={[theme.typography.body, { color: theme.colors.link }]}>Share</Text>
         </Pressable>
       ) : null}
     </View>

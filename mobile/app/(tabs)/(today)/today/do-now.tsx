@@ -163,7 +163,7 @@ export default function DoNow() {
               style={styles.update}
               testID="do-now-update"
             >
-              <Text style={[theme.typography.body, { color: theme.colors.tint }]}>Update</Text>
+              <Text style={[theme.typography.body, { color: theme.colors.link }]}>Update</Text>
             </Pressable>
           </View>
 
@@ -186,7 +186,7 @@ export default function DoNow() {
               style={styles.link}
               testID="do-now-calendar-opening"
             >
-              <Text style={[theme.typography.body, { color: theme.colors.tint }]}>Use my calendar opening</Text>
+              <Text style={[theme.typography.body, { color: theme.colors.link }]}>Use my calendar opening</Text>
             </Pressable>
           ) : null}
 
@@ -211,7 +211,7 @@ export default function DoNow() {
                 style={styles.link}
                 testID="do-now-refresh"
               >
-                <Text style={[theme.typography.body, { color: theme.colors.tint }]}>Refresh recommendation</Text>
+                <Text style={[theme.typography.body, { color: theme.colors.link }]}>Refresh recommendation</Text>
               </Pressable>
             </>
           ) : null}
@@ -238,7 +238,7 @@ export default function DoNow() {
               {next.bestAction ? (
                 <>
                   <View style={[styles.bestCard, { backgroundColor: withAlpha(brand.nexdoIndigo, 0.07) }]} testID="do-now-best">
-                    <Text style={[styles.bestLabel, { color: theme.colors.tint }]}>
+                    <Text style={[styles.bestLabel, { color: theme.colors.link }]}>
                       {next.continuingFocus ? 'Keep your focus' : 'Best thing to do now'}
                     </Text>
                     <ChoiceLabel choice={next.bestAction} zone={recommendation.timeZone} />
@@ -281,7 +281,7 @@ export default function DoNow() {
                           <View style={styles.grow}>
                             <ChoiceLabel choice={choice} zone={recommendation.timeZone} />
                           </View>
-                          <Text style={[theme.typography.body, { color: theme.colors.tint }]}>▶</Text>
+                          <Text style={[theme.typography.body, { color: theme.colors.link }]}>▶</Text>
                         </Pressable>
                       ))}
                     </>

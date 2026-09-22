@@ -121,7 +121,7 @@ export default function MomentSettingsScreen() {
         <FormSection header="Notifications">
           <FormRow>
             <View style={styles.inline}>
-              <Ionicons name={authorization === 'denied' ? 'notifications-off-outline' : 'notifications-outline'} size={20} color={theme.colors.tint} />
+              <Ionicons name={authorization === 'denied' ? 'notifications-off-outline' : 'notifications-outline'} size={20} color={theme.colors.link} />
               <Text style={[textStyles.body, styles.grow, { color: theme.colors.label }]} testID="settings-reminder-status">
                 {statusText}
               </Text>

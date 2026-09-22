@@ -109,7 +109,7 @@ export default function ImportantMomentsScreen() {
                 headerLeft: () => (
                   <Pressable accessibilityRole="button" accessibilityLabel="Close" onPress={() => router.back()} hitSlop={8} testID="moments-close">
                     <GlassCapsule>
-                      <Text style={{ fontSize: 17, lineHeight: 22, color: theme.colors.tint }}>Close</Text>
+                      <Text style={{ fontSize: 17, lineHeight: 22, color: theme.colors.link }}>Close</Text>
                     </GlassCapsule>
                   </Pressable>
                 ),
@@ -118,7 +118,7 @@ export default function ImportantMomentsScreen() {
           headerRight: () => (
             <Pressable accessibilityRole="button" accessibilityLabel="Important Moments settings" onPress={() => router.push('/moments/settings')} hitSlop={6} testID="moments-settings">
               <GlassCircle>
-                <Ionicons name="settings-outline" size={22} color={theme.colors.tint} />
+                <Ionicons name="settings-outline" size={22} color={theme.colors.link} />
               </GlassCircle>
             </Pressable>
           ),
@@ -166,12 +166,12 @@ export default function ImportantMomentsScreen() {
                   {ready > 0 ? <Text style={[styles.subheadline, { color: theme.colors.secondaryLabel }]}>{`${ready} ready to schedule`}</Text> : null}
                   <View style={styles.summaryActions}>
                     <Pressable accessibilityRole="button" onPress={() => router.push('/moments/manage-list')} style={styles.summaryAction} testID="moments-manage">
-                      <Text numberOfLines={1} style={styles.summaryActionLabel}>
+                      <Text numberOfLines={1} style={[styles.summaryActionLabel, { color: theme.colors.link }]}>
                         Manage
                       </Text>
                     </Pressable>
                     <Pressable accessibilityRole="button" onPress={() => router.push({ pathname: '/moments/editor', params: { done: 'list' } })} style={styles.summaryAction} testID="moments-create-new">
-                      <Text numberOfLines={1} style={styles.summaryActionLabel}>
+                      <Text numberOfLines={1} style={[styles.summaryActionLabel, { color: theme.colors.link }]}>
                         Create New
                       </Text>
                     </Pressable>
@@ -242,7 +242,7 @@ export default function ImportantMomentsScreen() {
               {error}
             </Text>
             <Pressable accessibilityRole="button" onPress={() => void momentsStore.getState().refresh()} testID="moments-retry">
-              <Text style={[textStyles.body, { color: theme.colors.tint }]}>Retry</Text>
+              <Text style={[textStyles.body, { color: theme.colors.link }]}>Retry</Text>
             </Pressable>
           </>
         ) : null}
@@ -287,8 +287,8 @@ function UpcomingMomentRow({ moment, now }: { moment: ImportantMoment; now: numb
               />
               <Text style={[caption, { color: theme.colors.secondaryLabel }]}>{`${capitalized(plan.channel)} · ${momentLabel(planDate(plan), plan.timeZoneID)}`}</Text>
               <Pressable accessibilityRole="button" accessibilityLabel="Manage" onPress={() => router.push({ pathname: '/moments/wish', params: { planId: plan.id } })} style={styles.link} testID={`moment-manage-${moment.id}`}>
-                <Ionicons name="chevron-forward" size={17} color={theme.colors.tint} />
-                <Text style={[textStyles.body, { color: theme.colors.tint }]}>Manage</Text>
+                <Ionicons name="chevron-forward" size={17} color={theme.colors.link} />
+                <Text style={[textStyles.body, { color: theme.colors.link }]}>Manage</Text>
               </Pressable>
             </>
           ) : (
@@ -315,7 +315,7 @@ function UpcomingMomentRow({ moment, now }: { moment: ImportantMoment; now: numb
             </>
           )}
           <Pressable accessibilityRole="button" onPress={() => router.push({ pathname: '/moments/editor', params: { id: moment.id, done: 'back' } })} style={styles.link} testID={`moment-edit-${moment.id}`}>
-            <Text style={[styles.subheadline, { color: theme.colors.tint }]}>Edit</Text>
+            <Text style={[styles.subheadline, { color: theme.colors.link }]}>Edit</Text>
           </Pressable>
         </View>
       </View>
@@ -340,7 +340,7 @@ function FestivalGroupCard({ group, onManage, now }: { group: MomentDisplayGroup
             <View style={styles.titleRow}>
               <Text style={[styles.title3, styles.grow, { color: theme.colors.label }]}>{moment.title}</Text>
               <Pressable accessibilityRole="button" accessibilityLabel={`Manage ${moment.title}`} onPress={onManage} style={styles.gear} testID={`festival-manage-${moment.id}`}>
-                <Ionicons name="settings-outline" size={20} color={brand.nexdoIndigo} />
+                <Ionicons name="settings-outline" size={20} color={theme.colors.link} />
               </Pressable>
             </View>
             <Text style={[styles.subheadline, { color: theme.colors.secondaryLabel }]}>{`${typeLabel(moment.type)} · ${momentRelative(moment.nextOccurrence, moment.timeZoneID, now)}`}</Text>
@@ -373,7 +373,7 @@ function PlanCard({ plan, moment }: { plan: WishDeliveryPlan; moment: ImportantM
           <MomentIconTile type={moment?.type ?? 'custom'} title={moment?.title ?? plan.subject} />
           <View style={styles.rowText}>
             <Text style={[headline, { color: theme.colors.label }]}>{plan.subject}</Text>
-            <Text style={[textStyles.body, { color: brand.nexdoIndigo }]}>{planStatusLabel(plan)}</Text>
+            <Text style={[textStyles.body, { color: theme.colors.link }]}>{planStatusLabel(plan)}</Text>
             <Text numberOfLines={2} style={[textStyles.body, { color: theme.colors.label }]}>
               {plan.body}
             </Text>
@@ -394,7 +394,7 @@ const styles = StyleSheet.create({
   summaryText: { flex: 1, gap: 6 },
   summaryActions: { flexDirection: 'row', gap: 20 },
   summaryAction: { minHeight: 44, justifyContent: 'center' },
-  summaryActionLabel: { fontSize: 18, lineHeight: 22, fontWeight: '600', color: brand.nexdoIndigo },
+  summaryActionLabel: { fontSize: 18, lineHeight: 22, fontWeight: '600' },
   title3: { ...textStyles.title3, fontWeight: '700' },
   subheadline: { ...textStyles.subheadline },
   bold: { fontWeight: '700' },

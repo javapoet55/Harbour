@@ -163,7 +163,7 @@ export function MomentEditorView({ moment, imported, onDone, dismiss }: { moment
           headerRight: () => (
             <Pressable accessibilityRole="button" accessibilityState={{ disabled: saveDisabled }} disabled={saveDisabled} onPress={save} hitSlop={6} testID="moment-save-top">
               <GlassCapsule>
-                <Text style={{ fontSize: 17, lineHeight: 22, color: saveDisabled ? theme.colors.placeholder : theme.colors.tint }}>Save</Text>
+                <Text style={{ fontSize: 17, lineHeight: 22, color: saveDisabled ? theme.colors.placeholder : theme.colors.link }}>Save</Text>
               </GlassCapsule>
             </Pressable>
           ),

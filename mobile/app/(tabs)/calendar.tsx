@@ -249,7 +249,7 @@ export default function Calendar() {
                 style={styles.cancel}
                 testID="calendar-search-cancel"
               >
-                <Text style={[theme.typography.body, { color: theme.colors.tint }]}>Cancel</Text>
+                <Text style={[theme.typography.body, { color: theme.colors.link }]}>Cancel</Text>
               </Pressable>
             </View>
             <Text style={[styles.caption, { color: theme.colors.secondary }]}>
@@ -290,7 +290,7 @@ export default function Calendar() {
                 <TaskSymbol name="chevron.right" size={17} color={theme.colors.ink} />
               </Pressable>
               <Pressable accessibilityRole="button" accessibilityLabel="Today" onPress={() => setSelected(Date.now())} style={styles.todayButton} testID="calendar-today">
-                <Text style={[styles.subheadline, { color: theme.colors.tint }]}>Today</Text>
+                <Text style={[styles.subheadline, { color: theme.colors.link }]}>Today</Text>
               </Pressable>
             </View>
 
@@ -410,7 +410,7 @@ export default function Calendar() {
                       testID={`calendar-range-${option}`}
                     >
                       <Text style={[theme.typography.body, styles.grow, { color: theme.colors.ink }]}>{option}</Text>
-                      {range === option ? <Text style={[theme.typography.body, { color: theme.colors.tint }]}>✓</Text> : null}
+                      {range === option ? <Text style={[theme.typography.body, { color: theme.colors.link }]}>✓</Text> : null}
                     </Pressable>
                   ))}
                 </View>
@@ -436,7 +436,7 @@ export default function Calendar() {
                       {`Unscheduled & overdue  ${backlog.length}`}
                     </Text>
                     {/* A `DisclosureGroup` draws its chevron in the accent colour, not secondary. */}
-                    <TaskSymbol name={expanded ? 'chevron.down' : 'chevron.right'} size={14} color={theme.colors.tint} />
+                    <TaskSymbol name={expanded ? 'chevron.down' : 'chevron.right'} size={14} color={theme.colors.link} />
                   </Pressable>
                   {expanded ? (
                     backlog.length === 0 ? (
@@ -518,7 +518,7 @@ export default function Calendar() {
             style={styles.menuRow}
             testID="filter-reset"
           >
-            <Text style={[theme.typography.body, { color: theme.colors.tint }]}>Reset filters</Text>
+            <Text style={[theme.typography.body, { color: theme.colors.link }]}>Reset filters</Text>
           </Pressable>
         </View>
       ) : null}
@@ -535,7 +535,7 @@ export default function Calendar() {
                 Event Details
               </Text>
               <Pressable accessibilityRole="button" accessibilityLabel="Done" onPress={() => setEventDetail(null)} style={[styles.cancel, styles.sheetBarSide]} testID="event-detail-done">
-                <Text style={[theme.typography.body, styles.trailing, { color: sheetTheme.colors.tint }]}>Done</Text>
+                <Text style={[theme.typography.body, styles.trailing, { color: sheetTheme.colors.link }]}>Done</Text>
               </Pressable>
             </View>
             {eventDetail ? (
@@ -693,7 +693,7 @@ export default function Calendar() {
             style={styles.retry}
             testID="calendar-intelligence-retry"
           >
-            <Text style={[styles.subheadline, styles.semibold, { color: theme.colors.tint }]}>Retry schedule intelligence</Text>
+            <Text style={[styles.subheadline, styles.semibold, { color: theme.colors.link }]}>Retry schedule intelligence</Text>
           </Pressable>
         </View>
       );
@@ -707,7 +707,7 @@ export default function Calendar() {
           style={styles.retry}
           testID="calendar-create-appointments"
         >
-          <Text style={[styles.subheadline, styles.semibold, { color: theme.colors.tint }]}>Create Appointments</Text>
+          <Text style={[styles.subheadline, styles.semibold, { color: theme.colors.link }]}>Create Appointments</Text>
         </Pressable>
       );
     }
@@ -755,7 +755,7 @@ export default function Calendar() {
         ) : (
           <View style={[styles.creationIcon, { backgroundColor: withAlpha(brand.nexdoMagenta, 0.07) }]}>
             {/* `.font(.title2)` (CalendarView.swift:280). */}
-            <TaskSymbol name="plus" size={22} color={theme.colors.tint} />
+            <TaskSymbol name="plus" size={22} color={theme.colors.link} />
           </View>
         )}
         <View style={styles.creationText}>
@@ -798,7 +798,7 @@ export default function Calendar() {
         testID={testID}
       >
         <Text style={[theme.typography.body, styles.grow, { color: theme.colors.ink }]}>{name}</Text>
-        {value ? <Text style={[theme.typography.body, { color: theme.colors.tint }]}>✓</Text> : null}
+        {value ? <Text style={[theme.typography.body, { color: theme.colors.link }]}>✓</Text> : null}
       </Pressable>
     );
   }

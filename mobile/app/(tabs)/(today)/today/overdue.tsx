@@ -42,7 +42,7 @@ export default function Overdue() {
             Couldn’t refresh overdue tasks. Showing the available tasks.
           </Text>
           <Pressable accessibilityRole="button" accessibilityLabel="Retry" onPress={() => void tasks.refetch()} style={styles.retry} testID="overdue-retry">
-            <Text style={[theme.typography.body, { color: theme.colors.tint }]}>Retry</Text>
+            <Text style={[theme.typography.body, { color: theme.colors.link }]}>Retry</Text>
           </Pressable>
         </View>
       ) : null}

@@ -320,8 +320,8 @@ export function ShoppingActionBar({ busy, onComplete, onRecommendations, onHeigh
         style={[styles.actionButton, styles.actionFill, busy && styles.dimmed, { backgroundColor: theme.colors.surface, borderColor: withAlpha(brand.nexdoIndigo, 0.22), borderWidth: 1 }]}
         testID="shopping-ai-recommendations"
       >
-        <Ionicons name="sparkles" size={18} color={brand.nexdoIndigo} />
-        <FittedText containerStyle={styles.actionLabel} minimumFontScale={0.78} numberOfLines={2} style={[styles.actionText, { color: brand.nexdoIndigo }]}>
+        <Ionicons name="sparkles" size={18} color={theme.colors.link} />
+        <FittedText containerStyle={styles.actionLabel} minimumFontScale={0.78} numberOfLines={2} style={[styles.actionText, { color: theme.colors.link }]}>
           AI Powered Recommendations
         </FittedText>
       </Pressable>

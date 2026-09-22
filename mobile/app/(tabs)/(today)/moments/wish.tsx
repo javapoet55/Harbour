@@ -13,7 +13,7 @@ import { DateField, FormButton, FormRow, FormScroll, FormSection, FormText, Labe
 import { findPlan } from '../../../../src/features/moments/handoff';
 import { momentsStore, useMomentList, useMoments } from '../../../../src/features/moments/store';
 import { WishEmailConfirmation } from '../../../../src/features/moments/WishEmailConfirmation';
-import { brand, textStyles, useTheme } from '../../../../src/theme';
+import { textStyles, useTheme } from '../../../../src/theme';
 
 /**
  * `WishPlanView` (ios/App/ImportantMomentsView.swift:495-551): one wish's delivery, always read back
@@ -61,7 +61,7 @@ export default function WishDetailsScreen() {
       <TodayBackdrop />
       <ScrollView contentContainerStyle={styles.content} testID="wish-details">
         <View style={styles.hero}>
-          <Ionicons name={confirming ? 'calendar' : 'gift'} size={76} color={brand.nexdoIndigo} />
+          <Ionicons name={confirming ? 'calendar' : 'gift'} size={76} color={theme.colors.link} />
         </View>
         <Text style={[textStyles.largeTitle, styles.bold, styles.center, { color: theme.colors.label }]} testID="wish-title">
           {confirming && ['SCHEDULED', 'AWAITING_CONFIRMATION'].includes(current.status) ? 'Wish scheduled' : planStatusLabel(current)}
@@ -107,12 +107,12 @@ export default function WishDetailsScreen() {
             ) : null}
             {current.channel === 'email' ? (
               <Pressable accessibilityRole="button" onPress={() => setSendEmailNow(true)} testID="wish-send-now">
-                <Text style={[textStyles.body, { color: theme.colors.tint }]}>Send email now</Text>
+                <Text style={[textStyles.body, { color: theme.colors.link }]}>Send email now</Text>
               </Pressable>
             ) : null}
             {current.status === 'FAILED' && current.automaticDelivery ? (
               <Pressable accessibilityRole="button" onPress={() => void momentsStore.getState().perform(() => momentsStore.getState().planAction(current, 'retry'))} testID="wish-retry">
-                <Text style={[textStyles.body, { color: theme.colors.tint }]}>Retry after reconnecting</Text>
+                <Text style={[textStyles.body, { color: theme.colors.link }]}>Retry after reconnecting</Text>
               </Pressable>
             ) : null}
             <Pressable accessibilityRole="button" onPress={cancel} testID="wish-cancel">
@@ -123,11 +123,11 @@ export default function WishDetailsScreen() {
         {HISTORY_STATUSES.includes(current.status) ? (
           <>
             <Pressable accessibilityRole="button" onPress={() => void copyText(current.body)} testID="wish-copy">
-              <Text style={[textStyles.body, { color: theme.colors.tint }]}>Copy message</Text>
+              <Text style={[textStyles.body, { color: theme.colors.link }]}>Copy message</Text>
             </Pressable>
             {moment ? (
               <Pressable accessibilityRole="button" onPress={() => router.push({ pathname: '/moments/review', params: { id: moment.id } })} testID="wish-reuse">
-                <Text style={[textStyles.body, { color: theme.colors.tint }]}>Reuse next year</Text>
+                <Text style={[textStyles.body, { color: theme.colors.link }]}>Reuse next year</Text>
               </Pressable>
             ) : null}
           </>

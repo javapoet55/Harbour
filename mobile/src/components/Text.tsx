@@ -2,7 +2,7 @@ import { Platform, StyleSheet, Text as RNText, type TextProps as RNTextProps } f
 
 import { useTheme, type Palette, type TextVariant } from '../theme';
 
-export type TextTone = keyof Pick<Palette, 'ink' | 'secondary' | 'tint' | 'onTint' | 'danger' | 'scheduleBlue'>;
+export type TextTone = keyof Pick<Palette, 'ink' | 'secondary' | 'tint' | 'link' | 'onTint' | 'danger' | 'scheduleBlue'>;
 
 export type TextProps = RNTextProps & {
   variant?: TextVariant;

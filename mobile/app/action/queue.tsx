@@ -61,7 +61,7 @@ export default function ActionQueue() {
           Nexdo Actions
         </Text>
         <Pressable accessibilityLabel="Done" accessibilityRole="button" hitSlop={8} onPress={() => router.back()} style={styles.navSide} testID="queue-done">
-          <Text style={[theme.typography.body, styles.trailing, { color: theme.colors.tint }]}>Done</Text>
+          <Text style={[theme.typography.body, styles.trailing, { color: theme.colors.link }]}>Done</Text>
         </Pressable>
       </View>
 

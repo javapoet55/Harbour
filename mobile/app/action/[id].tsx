@@ -208,7 +208,7 @@ export default function TaskAction() {
       {/* `.navigationTitle("Nexdo Action")` with a leading Close (TaskActionView.swift:206-208). */}
       <View style={styles.navBar}>
         <Pressable accessibilityLabel="Close" accessibilityRole="button" hitSlop={8} onPress={closeAction} testID="action-close">
-          <Text style={[theme.typography.body, { color: theme.colors.tint }]}>Close</Text>
+          <Text style={[theme.typography.body, { color: theme.colors.link }]}>Close</Text>
         </Pressable>
         <Text accessibilityRole="header" style={[styles.navTitle, styles.grow, { color: theme.colors.ink }]}>
           Nexdo Action
@@ -244,7 +244,7 @@ export default function TaskAction() {
             {busy ? (
               // `ProgressView("Finding contact…")` puts its label under the spinner.
               <View style={styles.progress}>
-                <ActivityIndicator color={theme.colors.tint} size="small" />
+                <ActivityIndicator color={theme.colors.link} size="small" />
                 <Text style={[theme.typography.body, { color: theme.colors.secondary }]}>Finding contact…</Text>
               </View>
             ) : null}
@@ -283,7 +283,7 @@ export default function TaskAction() {
                     style={styles.candidate}
                     testID={`action-address-${address.id}`}
                   >
-                    <Text style={[theme.typography.body, { color: theme.colors.tint }]}>{`${address.label}: ${address.value}`}</Text>
+                    <Text style={[theme.typography.body, { color: theme.colors.link }]}>{`${address.label}: ${address.value}`}</Text>
                   </Pressable>
                 ))}
               </>
@@ -318,7 +318,7 @@ export default function TaskAction() {
                 }}
                 testID="action-complete-task"
               >
-                <Text style={[theme.typography.body, { color: theme.colors.tint }]}>Mark task complete</Text>
+                <Text style={[theme.typography.body, { color: theme.colors.link }]}>Mark task complete</Text>
               </Pressable>
             ) : null}
 
@@ -370,7 +370,7 @@ export default function TaskAction() {
                 }}
                 testID="action-change-contact"
               >
-                <Text style={[styles.subheadline, { color: theme.colors.tint }]}>Choose a different contact</Text>
+                <Text style={[styles.subheadline, { color: theme.colors.link }]}>Choose a different contact</Text>
               </Pressable>
             ) : null}
 
@@ -385,7 +385,7 @@ export default function TaskAction() {
                   onPress={() => useCoordinator.getState().retryNotifications()}
                   testID="action-retry-reminders"
                 >
-                  <Text style={[theme.typography.body, { color: theme.colors.tint }]}>Retry reminders</Text>
+                  <Text style={[theme.typography.body, { color: theme.colors.link }]}>Retry reminders</Text>
                 </Pressable>
               </>
             ) : null}
@@ -401,7 +401,7 @@ export default function TaskAction() {
               This task may be completed, deleted, or rescheduled. Open your task list to check it.
             </Text>
             <Pressable accessibilityLabel="Close" accessibilityRole="button" onPress={closeAction} testID="action-close-unavailable">
-              <Text style={[theme.typography.body, { color: theme.colors.tint }]}>Close</Text>
+              <Text style={[theme.typography.body, { color: theme.colors.link }]}>Close</Text>
             </Pressable>
           </View>
         )}

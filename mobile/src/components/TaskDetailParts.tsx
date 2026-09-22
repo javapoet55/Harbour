@@ -133,7 +133,7 @@ export function DetailMenu({
               style={styles.menuRow}
             >
               <Text style={[theme.typography.body, styles.grow, { color: theme.colors.ink }]}>{display(option)}</Text>
-              {option === value ? <Text style={[theme.typography.body, { color: theme.colors.tint }]}>✓</Text> : null}
+              {option === value ? <Text style={[theme.typography.body, { color: theme.colors.link }]}>✓</Text> : null}
             </Pressable>
           ))}
           {children}
@@ -230,7 +230,7 @@ export function DetailCheckbox({
       <TaskSymbol
         name={value ? 'checkmark.square.fill' : 'square'}
         size={22}
-        color={value ? theme.colors.tint : theme.colors.secondary}
+        color={value ? theme.colors.link : theme.colors.secondary}
       />
       <View style={styles.grow}>
         <Text style={[styles.checkboxTitle, { color: theme.colors.ink }]}>{title}</Text>

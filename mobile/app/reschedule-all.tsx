@@ -110,7 +110,7 @@ export default function RescheduleAll() {
             testID="reschedule-cancel"
           >
             <GlassCapsule>
-              <Text style={[styles.barButton, { color: theme.colors.tint, opacity: saving ? 0.35 : 1 }]}>Cancel</Text>
+              <Text style={[styles.barButton, { color: theme.colors.link, opacity: saving ? 0.35 : 1 }]}>Cancel</Text>
             </GlassCapsule>
           </Pressable>
         </View>
@@ -154,7 +154,7 @@ export default function RescheduleAll() {
             style={[styles.row, separator]}
             testID="reschedule-submit"
           >
-            <Text style={[styles.body, { color: enabled ? theme.colors.tint : theme.colors.secondary }]}>
+            <Text style={[styles.body, { color: enabled ? theme.colors.link : theme.colors.secondary }]}>
               {rescheduleButtonTitle(saving, overdue.length)}
             </Text>
           </Pressable>
@@ -176,7 +176,7 @@ function Capsule({ label, selected, onPress, testID }: { label: string; selected
       style={[styles.capsule, { backgroundColor: withAlpha('#767680', 0.24) }]}
       testID={testID}
     >
-      <Text style={[styles.body, { color: selected ? theme.colors.tint : theme.colors.label }]}>{label}</Text>
+      <Text style={[styles.body, { color: selected ? theme.colors.link : theme.colors.label }]}>{label}</Text>
     </Pressable>
   );
 }

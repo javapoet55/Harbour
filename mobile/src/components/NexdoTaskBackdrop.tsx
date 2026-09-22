@@ -19,7 +19,7 @@ export function NexdoTaskBackdrop() {
       {/* Circle().fill(Color.nexdoMagenta.opacity(0.11)).frame(width: 270).offset(x: 190, y: -170) */}
       <Blob size={270} x={190} y={-170} color={brand.nexdoMagenta} opacity={0.11} />
       {/* Circle().fill(Color.nexdoIndigo.opacity(0.10)).frame(width: 330).offset(x: 170, y: 420) */}
-      <Blob size={330} x={170} y={420} color={brand.nexdoIndigo} opacity={0.1} />
+      <Blob size={330} x={170} y={420} color={theme.colors.link} opacity={0.1} />
     </View>
   );
 }

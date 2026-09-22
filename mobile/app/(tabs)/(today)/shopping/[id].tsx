@@ -2,7 +2,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import * as Crypto from 'expo-crypto';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useRef, useState } from 'react';
-import { Alert, Keyboard, Modal, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { Alert, Keyboard, Modal, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 
 import type { GroceryItem, GroceryList } from '../../../../src/api/shopping';
 import { KeyboardAwareScrollView } from '../../../../src/components/keyboard';
@@ -175,10 +175,10 @@ export default function ShoppingDetailScreen() {
           headerRight: () => (
             <View style={styles.toolbar}>
               <Pressable accessibilityRole="button" accessibilityLabel="Share list" onPress={() => setSharing(true)} hitSlop={8} testID="list-share">
-                <Ionicons name="share-outline" size={22} color={theme.colors.tint} />
+                <Ionicons name="share-outline" size={22} color={theme.colors.link} />
               </Pressable>
               <Pressable accessibilityRole="button" accessibilityLabel="List options" onPress={() => setMenu(true)} hitSlop={8} testID="list-options">
-                <Ionicons name="ellipsis-horizontal" size={22} color={theme.colors.tint} />
+                <Ionicons name="ellipsis-horizontal" size={22} color={theme.colors.link} />
               </Pressable>
             </View>
           ),
@@ -211,18 +211,36 @@ export default function ShoppingDetailScreen() {
             >
               <Ionicons name="add" size={22} color={brand.nexdoBlue} />
             </Pressable>
-            <TextInput
-              ref={quickField}
-              accessibilityLabel="Add an item (e.g. eggs, milk, bread)"
-              onChangeText={setQuick}
-              onSubmitEditing={() => void quickAdd()}
-              placeholder="Add an item (e.g. eggs, milk, bread)"
-              placeholderTextColor={theme.colors.placeholder}
-              returnKeyType="done"
-              style={[styles.quickField, { color: theme.colors.ink }]}
-              testID="shopping-quick-add"
-              value={quick}
-            />
+            {/* Android (docs/android-polish.md §6): the placeholder wrapped to a second line and was
+                clipped. The field is held to one line, and since Android cannot ellipsise a
+                TextInput placeholder, the same text is drawn as a one-line overlay that ends in "…". */}
+            <View style={styles.quickFieldWrap}>
+              <TextInput
+                ref={quickField}
+                accessibilityLabel="Add an item (e.g. eggs, milk, bread)"
+                numberOfLines={Platform.OS === 'android' ? 1 : undefined}
+                onChangeText={setQuick}
+                onSubmitEditing={() => void quickAdd()}
+                placeholder={Platform.OS === 'android' ? undefined : 'Add an item (e.g. eggs, milk, bread)'}
+                placeholderTextColor={theme.colors.placeholder}
+                returnKeyType="done"
+                style={[styles.quickField, { color: theme.colors.ink }, Platform.OS === 'android' && styles.androidQuickField]}
+                testID="shopping-quick-add"
+                value={quick}
+              />
+              {Platform.OS === 'android' && quick === '' ? (
+                <Text
+                  accessible={false}
+                  ellipsizeMode="tail"
+                  numberOfLines={1}
+                  pointerEvents="none"
+                  style={[styles.quickPlaceholder, { color: theme.colors.placeholder }]}
+                  testID="shopping-quick-add-placeholder"
+                >
+                  Add an item (e.g. eggs, milk, bread)
+                </Text>
+              ) : null}
+            </View>
             <Pressable accessibilityRole="button" accessibilityLabel="Add groceries by voice" onPress={() => setVoice(true)} style={styles.mic} testID="quick-add-mic">
               <Ionicons name="mic" size={20} color={theme.colors.secondary} />
             </Pressable>
@@ -243,7 +261,7 @@ export default function ShoppingDetailScreen() {
                   style={styles.suggestion}
                   testID={`suggestion-${name}`}
                 >
-                  <Text style={[textStyles.subheadline, { color: theme.colors.tint }]}>{name}</Text>
+                  <Text style={[textStyles.subheadline, { color: theme.colors.link }]}>{name}</Text>
                   {index < suggestions.length - 1 ? <View style={[styles.separator, { left: 16, backgroundColor: theme.colors.listSeparator }]} /> : null}
                 </Pressable>
               ))}
@@ -299,11 +317,11 @@ export default function ShoppingDetailScreen() {
                 <View style={[styles.separator, { left: 16, backgroundColor: theme.colors.listSeparator }]} />
               </View>
               <Pressable accessibilityRole="button" accessibilityState={{ disabled: readOnly }} disabled={readOnly} onPress={() => void save(list)} style={styles.errorRow} testID="list-retry">
-                <Text style={[textStyles.body, { color: readOnly ? theme.colors.placeholder : theme.colors.tint }]}>Retry Save</Text>
+                <Text style={[textStyles.body, { color: readOnly ? theme.colors.placeholder : theme.colors.link }]}>Retry Save</Text>
                 <View style={[styles.separator, { left: 16, backgroundColor: theme.colors.listSeparator }]} />
               </Pressable>
               <Pressable accessibilityRole="button" onPress={() => void reload()} style={styles.errorRow} testID="list-reload">
-                <Text style={[textStyles.body, { color: theme.colors.tint }]}>Discard local edits and reload</Text>
+                <Text style={[textStyles.body, { color: theme.colors.link }]}>Discard local edits and reload</Text>
               </Pressable>
             </View>
           ) : null}
@@ -386,7 +404,13 @@ const styles = StyleSheet.create({
   },
   plus: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
   // `.font(.subheadline)`
-  quickField: { flex: 1, fontSize: 15, paddingVertical: 4, backgroundColor: 'transparent' },
+  // `flex: 1` is on `quickFieldWrap`, which now holds the field in the row.
+  quickField: { fontSize: 15, paddingVertical: 4, backgroundColor: 'transparent' },
+  // Holds the field and, on Android, its one-line placeholder overlay.
+  quickFieldWrap: { flex: 1, justifyContent: 'center' },
+  // Android's EditText pads its text by default; zero it so the overlay sits exactly on the text.
+  androidQuickField: { paddingHorizontal: 0 },
+  quickPlaceholder: { position: 'absolute', left: 0, right: 0, fontSize: 15 },
   mic: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
   suggestions: { marginHorizontal: 16, marginTop: 5, borderBottomLeftRadius: 26, borderBottomRightRadius: 26, overflow: 'hidden' },
   suggestion: { minHeight: 56, paddingHorizontal: 16, justifyContent: 'center' },

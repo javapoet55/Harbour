@@ -43,7 +43,7 @@ export default function MyListsScreen() {
         options={{
           headerRight: () => (
             <Pressable accessibilityRole="button" accessibilityLabel="Create shopping list" onPress={() => setCreate(true)} hitSlop={8} testID="shopping-plus">
-              <Ionicons name="add-circle" size={28} color={brand.nexdoIndigo} />
+              <Ionicons name="add-circle" size={28} color={theme.colors.link} />
             </Pressable>
           ),
         }}
@@ -57,7 +57,7 @@ export default function MyListsScreen() {
         <Pressable accessibilityRole="button" onPress={() => setCreate(true)} testID="shopping-create-list">
           <MomentCard>
             <View style={styles.row}>
-              <ListTile icon="doc.badge.plus" color={brand.nexdoIndigo} />
+              <ListTile icon="doc.badge.plus" color={theme.colors.link} />
               <View style={styles.grow}>
                 <Text style={[headline, { color: theme.colors.ink }]}>Create New List</Text>
                 <Text style={[textStyles.subheadline, { color: theme.colors.secondary }]}>Start from scratch or use last week’s list.</Text>
@@ -100,7 +100,7 @@ export default function MyListsScreen() {
               {error}
             </Text>
             <Pressable accessibilityRole="button" onPress={() => void shoppingStore.getState().refresh()} testID="shopping-retry">
-              <Text style={[textStyles.body, { color: theme.colors.tint }]}>Try again</Text>
+              <Text style={[textStyles.body, { color: theme.colors.link }]}>Try again</Text>
             </Pressable>
           </>
         ) : null}

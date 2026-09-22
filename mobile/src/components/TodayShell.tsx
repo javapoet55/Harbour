@@ -227,7 +227,7 @@ export function TasksTopBar({
             <Text style={[styles.brandName, { color: theme.colors.ink }]}>Nexdo</Text>
             {/* `Image(systemName: "sparkles").font(.system(size: 17.28))` in indigo, 3pt after the
                 wordmark (RootView.swift:1298-1299). */}
-            <TaskSymbol name="sparkles" size={17} color={brand.nexdoIndigo} />
+            <TaskSymbol name="sparkles" size={17} color={theme.colors.link} />
           </View>
           <Text numberOfLines={1} style={[styles.brandTag, { color: theme.colors.secondary }]}>
             GET MORE DONE WITH AI

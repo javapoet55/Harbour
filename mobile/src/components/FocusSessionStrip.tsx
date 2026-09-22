@@ -73,7 +73,7 @@ export function FocusSessionStrip() {
         testID="focus-finish"
         style={styles.finish}
       >
-        <Text style={[theme.typography.body, { color: theme.colors.tint }]}>{finished ? 'Finish' : 'End focus'}</Text>
+        <Text style={[theme.typography.body, { color: theme.colors.link }]}>{finished ? 'Finish' : 'End focus'}</Text>
       </Pressable>
     </View>
   );

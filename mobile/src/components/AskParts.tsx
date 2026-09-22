@@ -122,7 +122,7 @@ export function AskEntryCard({
         </LinearGradient>
       ) : (
         <View style={[styles.entryIcon, { backgroundColor: withAlpha(brand.nexdoMagenta, 0.08) }]}>
-          <TaskSymbol name={icon} size={22} color={brand.nexdoIndigo} />
+          <TaskSymbol name={icon} size={22} color={theme.colors.link} />
         </View>
       )}
       <View style={styles.entryText}>

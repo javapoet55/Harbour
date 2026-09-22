@@ -167,7 +167,7 @@ export default function SignIn() {
           onPress={() => router.push({ pathname: '/reset-password', params: { email } })}
           style={styles.forgotRow}
         >
-          <Text style={[styles.forgot, { color: theme.colors.tint }]}>Forgot password?</Text>
+          <Text style={[styles.forgot, { color: theme.colors.link }]}>Forgot password?</Text>
         </Pressable>
       </GlassCard>
 
@@ -199,7 +199,7 @@ export default function SignIn() {
         {/* Unstyled in Swift, so it takes `Color.primary` (.label), not `nexdoInk`. */}
         <Text style={[styles.subheadline, { color: theme.colors.label }]}>New to Nexdo?</Text>
         <Pressable accessibilityRole="button" accessibilityLabel="Create account" onPress={() => router.push('/sign-up')}>
-          <Text style={[styles.subheadline, { color: theme.colors.tint }]}>Create account</Text>
+          <Text style={[styles.subheadline, { color: theme.colors.link }]}>Create account</Text>
         </Pressable>
       </View>
 

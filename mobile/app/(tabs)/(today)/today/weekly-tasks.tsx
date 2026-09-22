@@ -82,7 +82,7 @@ export default function WeeklyTasks() {
           testID="weekly-tasks-filter"
         >
           <Text style={[theme.typography.body, styles.grow, { color: theme.colors.ink }]}>Tasks in this week</Text>
-          <Text style={[theme.typography.body, { color: theme.colors.tint }]}>{filter}</Text>
+          <Text style={[theme.typography.body, { color: theme.colors.link }]}>{filter}</Text>
         </Pressable>
         {pickerOpen
           ? WEEKLY_TASK_FILTERS.map((option) => (
@@ -99,7 +99,7 @@ export default function WeeklyTasks() {
                 testID={`weekly-tasks-filter-${option}`}
               >
                 <Text style={[theme.typography.body, styles.grow, { color: theme.colors.ink }]}>{option}</Text>
-                {filter === option ? <Text style={[theme.typography.body, { color: theme.colors.tint }]}>✓</Text> : null}
+                {filter === option ? <Text style={[theme.typography.body, { color: theme.colors.link }]}>✓</Text> : null}
               </Pressable>
             ))
           : null}
@@ -121,7 +121,7 @@ export default function WeeklyTasks() {
               </Text>
             </View>
             <Pressable accessibilityRole="button" accessibilityLabel="Retry" onPress={() => void query.refetch()} style={styles.row} testID="weekly-tasks-retry">
-              <Text style={[theme.typography.body, { color: theme.colors.tint }]}>Retry</Text>
+              <Text style={[theme.typography.body, { color: theme.colors.link }]}>Retry</Text>
             </Pressable>
           </View>
         ) : (

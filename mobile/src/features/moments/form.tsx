@@ -150,7 +150,7 @@ export function FormToggle({ label, value, onValueChange, disabled = false, test
 
 export function FormButton({ title, onPress, destructive = false, disabled = false, testID, icon }: { title: string; onPress: () => void; destructive?: boolean; disabled?: boolean; testID?: string; icon?: keyof typeof Ionicons.glyphMap }) {
   const theme = useTheme();
-  const color = destructive ? theme.colors.danger : theme.colors.tint;
+  const color = destructive ? theme.colors.danger : theme.colors.link;
   // A disabled `Button` in a `Form` keeps its glyph in the tint and draws the title in `.tertiaryLabel`
   // — measured (187, 187, 188) light and (88, 88, 89) dark on `moments-settings` — rather than dimming
   // the whole row (SHARED-REQUESTS "FormButton").
@@ -233,10 +233,10 @@ export function MenuPicker<T extends string | number>({
   const pill = androidPill(theme, useContext(FieldGroupContext));
   const choice = (
     <>
-      <Text numberOfLines={1} style={[textStyles.body, styles.value, { color: theme.colors.tint }]}>
+      <Text numberOfLines={1} style={[textStyles.body, styles.value, { color: theme.colors.link }]}>
         {current?.title ?? ''}
       </Text>
-      <Ionicons name="chevron-expand-outline" size={14} color={theme.colors.tint} />
+      <Ionicons name="chevron-expand-outline" size={14} color={theme.colors.link} />
     </>
   );
 
@@ -541,7 +541,7 @@ export function DateField({
             ) : null}
             {includeTime ? (
               <Pressable accessibilityRole="button" onPress={() => setOpen(false)} style={styles.menuRow} testID={`${testID}-done`}>
-                <Text style={[textStyles.body, { color: theme.colors.tint }]}>Done</Text>
+                <Text style={[textStyles.body, { color: theme.colors.link }]}>Done</Text>
               </Pressable>
             ) : null}
           </Pressable>
@@ -564,7 +564,7 @@ function Wheel({ count, selected, onSelect, testIDPrefix }: { count: number; sel
           style={styles.wheelRow}
           testID={`${testIDPrefix}-${index}`}
         >
-          <Text style={[textStyles.body, { color: index === selected ? theme.colors.tint : theme.colors.ink }]}>{String(index).padStart(2, '0')}</Text>
+          <Text style={[textStyles.body, { color: index === selected ? theme.colors.link : theme.colors.ink }]}>{String(index).padStart(2, '0')}</Text>
         </Pressable>
       ))}
     </ScrollView>
@@ -579,7 +579,7 @@ export function Disclosure({ title, children, testID }: { title: string; childre
     <View style={styles.disclosure}>
       <Pressable accessibilityRole="button" accessibilityState={{ expanded: open }} accessibilityLabel={title} onPress={() => setOpen(!open)} style={styles.inline} testID={testID}>
         {/* A `DisclosureGroup`'s title takes the tint and its chevron the primary colour (`review-wish-*`). */}
-        <Text style={[textStyles.body, styles.grow, { color: theme.colors.tint }]}>{title}</Text>
+        <Text style={[textStyles.body, styles.grow, { color: theme.colors.link }]}>{title}</Text>
         <Ionicons name={open ? 'chevron-down' : 'chevron-forward'} size={17} color={theme.colors.label} />
       </Pressable>
       {open ? <View style={styles.disclosureBody}>{children}</View> : null}

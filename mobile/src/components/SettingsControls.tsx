@@ -238,12 +238,12 @@ export function SettingsPicker<T extends string | number>({
         <Text style={[theme.typography.body, styles.grow, { color: theme.colors.ink }, isAndroid() && styles.androidRowLabel]}>{label}</Text>
         <Text
           numberOfLines={isAndroid() ? 1 : undefined}
-          style={[theme.typography.body, { color: theme.colors.tint }, isAndroid() && styles.androidRowValue]}
+          style={[theme.typography.body, { color: theme.colors.link }, isAndroid() && styles.androidRowValue]}
           testID={`${testID}-value`}
         >
           {current?.title ?? ''}
         </Text>
-        <TaskSymbol color={theme.colors.tint} name="chevron.up.chevron.down" size={13} />
+        <TaskSymbol color={theme.colors.link} name="chevron.up.chevron.down" size={13} />
       </Pressable>
 
       <Modal animationType="fade" onRequestClose={() => setOpen(false)} transparent visible={open}>
@@ -263,7 +263,7 @@ export function SettingsPicker<T extends string | number>({
                 testID={`${testID}-${option.value}`}
               >
                 <Text style={[theme.typography.body, styles.grow, { color: theme.colors.ink }]}>{option.title}</Text>
-                {option.value === value ? <TaskSymbol color={theme.colors.tint} name="checkmark" size={17} /> : null}
+                {option.value === value ? <TaskSymbol color={theme.colors.link} name="checkmark" size={17} /> : null}
               </Pressable>
             ))}
           </View>
@@ -364,7 +364,7 @@ export function ClockField({
               />
             </View>
             <Pressable accessibilityRole="button" onPress={() => setOpen(false)} style={styles.menuRow} testID={`${testID}-done`}>
-              <Text style={[theme.typography.body, { color: theme.colors.tint }]}>Done</Text>
+              <Text style={[theme.typography.body, { color: theme.colors.link }]}>Done</Text>
             </Pressable>
           </View>
         </Pressable>
@@ -396,7 +396,7 @@ function Wheel({
           style={styles.wheelRow}
           testID={`${testIDPrefix}-${index}`}
         >
-          <Text style={[theme.typography.body, { color: index === selected ? theme.colors.tint : theme.colors.ink }]}>
+          <Text style={[theme.typography.body, { color: index === selected ? theme.colors.link : theme.colors.ink }]}>
             {String(index).padStart(2, '0')}
           </Text>
         </Pressable>

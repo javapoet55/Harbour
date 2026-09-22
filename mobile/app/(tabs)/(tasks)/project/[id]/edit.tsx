@@ -76,7 +76,7 @@ function EditProjectForm({ project }: { project: NexdoProject }) {
               hitSlop={8}
               testID="project-done"
             >
-              <Text style={[theme.typography.body, { color: canSave ? theme.colors.tint : theme.colors.secondary, fontWeight: '600' }]}>
+              <Text style={[theme.typography.body, { color: canSave ? theme.colors.link : theme.colors.secondary, fontWeight: '600' }]}>
                 Done
               </Text>
             </Pressable>

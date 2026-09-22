@@ -125,7 +125,7 @@ export default function ChooseDeliveryScreen() {
           >
             <MomentCard>
               <View style={styles.inline}>
-                <Ionicons name={item.icon} size={28} color={theme.colors.tint} />
+                <Ionicons name={item.icon} size={28} color={theme.colors.link} />
                 <Text style={[textStyles.title3, styles.bold, styles.grow, { color: theme.colors.label }]}>{item.title}</Text>
                 <Ionicons name={channel === item.id ? 'checkmark-circle' : 'ellipse-outline'} size={22} color={theme.colors.label} />
               </View>
@@ -183,7 +183,7 @@ export default function ChooseDeliveryScreen() {
         )}
         {plan && !composing ? (
           <Pressable accessibilityRole="button" onPress={() => router.push({ pathname: '/moments/wish', params: { planId: plan.id } })} testID="delivery-status">
-            <Text style={[textStyles.body, { color: theme.colors.tint }]}>View delivery status</Text>
+            <Text style={[textStyles.body, { color: theme.colors.link }]}>View delivery status</Text>
           </Pressable>
         ) : null}
       </KeyboardAwareScrollView>

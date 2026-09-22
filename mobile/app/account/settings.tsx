@@ -3,7 +3,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Linking, Pressable, StyleSheet, Switch, View } from 'react-native';
+import { ActivityIndicator, Alert, Linking, Platform, Pressable, StyleSheet, Switch, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import type { CalendarConnection, NextActionPreference, Profile, ProfilePreferences } from '../../src/api';
@@ -289,7 +289,7 @@ function SettingsScreen({
           testID="settings-back"
         >
           {/* `Image(systemName: "chevron.backward")` with no `.font` is `.body` (ProfileView.swift:251). */}
-          <TaskSymbol color={theme.colors.tint} name="chevron.backward" size={17} />
+          <TaskSymbol color={theme.colors.link} name="chevron.backward" size={17} />
         </Pressable>
       </View>
 
@@ -352,8 +352,8 @@ function SettingsScreen({
                 style={styles.photoButton}
                 testID="settings-change-photo"
               >
-                <TaskSymbol color={theme.colors.tint} name="photo" size={17} />
-                <Text style={[theme.typography.body, { color: theme.colors.tint }]}>Change photo</Text>
+                <TaskSymbol color={theme.colors.link} name="photo" size={17} />
+                <Text style={[theme.typography.body, { color: theme.colors.link }]}>Change photo</Text>
               </Pressable>
               {profile?.photo ? (
                 <Pressable
@@ -372,12 +372,12 @@ function SettingsScreen({
           {savingPhoto ? (
             // `ProgressView("Saving profile photo…")` puts its label under the spinner.
             <View style={styles.centred}>
-              <ActivityIndicator color={theme.colors.tint} size="small" />
+              <ActivityIndicator color={theme.colors.link} size="small" />
               <Text style={[theme.typography.body, { color: theme.colors.secondary }]}>Saving profile photo…</Text>
             </View>
           ) : null}
           {photoMessage !== null ? (
-            <Text style={[styles.caption, { color: theme.colors.tint }]} testID="settings-photo-message">
+            <Text style={[styles.caption, { color: theme.colors.link }]} testID="settings-photo-message">
               {photoMessage}
             </Text>
           ) : null}
@@ -386,7 +386,7 @@ function SettingsScreen({
         {/* 4. `if loading … else if preferences != nil … else` (`:191`, `:245`). */}
         {loading ? (
           <View style={styles.centred}>
-            <ActivityIndicator color={theme.colors.tint} size="small" />
+            <ActivityIndicator color={theme.colors.link} size="small" />
             <Text style={[theme.typography.body, { color: theme.colors.secondary }]} testID="settings-loading">
               Loading settings…
             </Text>
@@ -493,7 +493,7 @@ function SettingsScreen({
                 onPress={() => openWeb('/notifications')}
                 testID="settings-notification-center"
               >
-                <Text style={[theme.typography.body, { color: theme.colors.tint }]}>Open Notification Center</Text>
+                <Text style={[theme.typography.body, { color: theme.colors.link }]}>Open Notification Center</Text>
               </Pressable>
             </SettingsCard>
 
@@ -517,8 +517,8 @@ function SettingsScreen({
                 style={styles.linkRow}
                 testID="settings-connect-google"
               >
-                <TaskSymbol color={theme.colors.tint} name="calendar.badge.plus" size={17} />
-                <Text style={[theme.typography.body, { color: theme.colors.tint }]} testID="settings-connect-label">
+                <TaskSymbol color={theme.colors.link} name="calendar.badge.plus" size={17} />
+                <Text style={[theme.typography.body, { color: theme.colors.link }]} testID="settings-connect-label">
                   {connectButtonTitle(connecting, connections.data?.length ?? 0)}
                 </Text>
               </Pressable>
@@ -531,8 +531,8 @@ function SettingsScreen({
                 style={styles.linkRow}
                 testID="settings-sync-now"
               >
-                <TaskSymbol color={theme.colors.tint} name="arrow.triangle.2.circlepath" size={17} />
-                <Text style={[theme.typography.body, { color: theme.colors.tint }]}>Synchronize now</Text>
+                <TaskSymbol color={theme.colors.link} name="arrow.triangle.2.circlepath" size={17} />
+                <Text style={[theme.typography.body, { color: theme.colors.link }]}>Synchronize now</Text>
               </Pressable>
               <SettingsDivider />
               {/* `.font(.caption)` with no `.foregroundStyle` (ProfileView.swift:235). */}
@@ -546,7 +546,7 @@ function SettingsScreen({
                   onPress={() => consent.withdraw()}
                   testID="settings-withdraw-consent"
                 >
-                  <Text style={[theme.typography.body, { color: theme.colors.tint }]}>Withdraw AI permission</Text>
+                  <Text style={[theme.typography.body, { color: theme.colors.link }]}>Withdraw AI permission</Text>
                 </Pressable>
               ) : null}
               <Pressable
@@ -590,7 +590,7 @@ function SettingsScreen({
             onPress={onRetry}
             testID="settings-retry"
           >
-            <Text style={[theme.typography.body, { color: theme.colors.tint }]}>Retry loading settings</Text>
+            <Text style={[theme.typography.body, { color: theme.colors.link }]}>Retry loading settings</Text>
           </Pressable>
         )}
 
@@ -602,8 +602,8 @@ function SettingsScreen({
         ) : null}
         {message !== null ? (
           <View style={styles.row}>
-            <TaskSymbol color={theme.colors.tint} name="checkmark.circle" size={17} />
-            <Text style={[theme.typography.body, { color: theme.colors.tint }]} testID="settings-message">
+            <TaskSymbol color={theme.colors.link} name="checkmark.circle" size={17} />
+            <Text style={[theme.typography.body, { color: theme.colors.link }]} testID="settings-message">
               {message}
             </Text>
           </View>
@@ -653,7 +653,7 @@ function ConnectionList({
           >
             <View style={styles.connectionHeader}>
               <TaskSymbol
-                color={healthy ? brand.nexdoIndigo : orange}
+                color={healthy ? theme.colors.link : orange}
                 name={healthy ? 'checkmark.circle.fill' : 'exclamationmark.triangle.fill'}
                 size={17}
               />
@@ -679,7 +679,7 @@ function ConnectionList({
                 onValueChange={(enabled) => onWrites(connection, enabled)}
                 testID={`settings-writes-${connection.id}`}
                 thumbColor="#FFFFFF"
-                trackColor={{ false: theme.colors.separator, true: theme.colors.tint }}
+                trackColor={Platform.OS === 'android' ? { false: theme.colors.switchOff, true: theme.colors.switchOn } : { false: theme.colors.separator, true: theme.colors.tint }}
                 value={connection.writeEnabled}
               />
             </View>

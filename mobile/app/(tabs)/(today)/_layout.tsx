@@ -34,7 +34,7 @@ export default function TodayLayout() {
     function DoneButton() {
       return (
         <Pressable accessibilityRole="button" accessibilityLabel="Done" onPress={() => router.back()} hitSlop={8}>
-          <Text style={{ fontSize: 17, lineHeight: 22, color: theme.colors.tint }}>Done</Text>
+          <Text style={{ fontSize: 17, lineHeight: 22, color: theme.colors.link }}>Done</Text>
         </Pressable>
       );
     }

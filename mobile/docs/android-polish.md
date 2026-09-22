@@ -425,3 +425,95 @@ Android, dark mode first, then light:
    and the outline turns indigo. The time fields are still half the row each.
 4. Appearance: the selected option is tinted indigo with indigo text.
 5. iOS: Settings looks as before.
+
+---
+
+## 6. Links and icons in dark mode (2026-09-22)
+
+JavaScript only; no new build needed. All changes are Android only. iOS is unchanged, and so are
+the text and behaviour. Colours come from tokens only.
+
+### What was wrong
+
+- **Links and icons.** Tappable text and icons used the deep brand indigo `#3D29F0`, on dark as well
+  as light. This covered text links, text buttons, icon buttons, header back chevrons and actions,
+  and spinners: "Open Notification Center", "Synchronize now", "Change photo", "Connect another
+  calendar", "Connect / Reconnect Gmail", "Choose a contact birthday", and similar. On dark the
+  indigo is 2.2:1 on `#1C1C1E` and 1.8:1 on `#2C2C2E`, so it read as muddy.
+- **Switches.** The on track was solid brand indigo and glowed against the grey cards. The off track
+  was a translucent grey that nearly vanished.
+- **Shopping Detail quick-add.** The "Add an item (e.g. eggs, milk, bread)" placeholder wrapped to a
+  second line and was clipped.
+
+### What changed
+
+**Tokens** (`src/theme/colors.ts`):
+
+| Token | Light | Dark | Use |
+|---|---|---|---|
+| `link` | brand indigo | brand indigo, but see below | every tappable text colour and icon tint |
+| `switchOn` | brand indigo | `rgba(61, 41, 240, 0.85)` | Android switch track, on |
+| `switchOff` | `rgba(120, 120, 128, 0.5)` | `#48484A` | Android switch track, off, with a hairline border |
+
+**How `link` resolves** (`useTheme`):
+- **Android, dark:** `askBlue`, `#6BB8FF`. This is the blue the Ask screen already uses for "Read
+  Loud", "Show suggestions" and its section labels (Swift's `AskStyle.blue`), so no new colour is
+  added. It measures 9.9:1 on black, 8.0:1 on `#1C1C1E`, 6.6:1 on `#2C2C2E` and 5.4:1 on `#3A3A3C`.
+- **Android, light:** the brand indigo.
+- **iOS, both schemes:** `tint`, the brand indigo, so iOS is unchanged by construction.
+
+A first pass of this change used the lighter indigo `accent` (`#8F85FF`). It was switched to the
+Ask blue before commit.
+
+**The audit.** Every text colour and icon tint in `mobile/app` and `mobile/src` that read the brand
+indigo or `colors.tint` now reads `colors.link`:
+- **Covered:** 211 places in 70 files. Most are `color:` style keys and `color={…}` icon props. The
+  rest are ternaries and variables such as `TintButton`, `BorderedButton`, `FormButton`, the Calendar
+  and Moments segment labels, the Manage Moment tabs, "today" in `MonthCalendar`, the wheel pickers,
+  `Button`'s secondary and plain titles (via a new `link` text tone), `CalendarBadge` and the
+  Calendar timeline.
+- **Headers and tabs:** header back chevrons and actions (`headerTintColor` in
+  `stackHeaderOptions`, `pushedHeaderOptions` and the auth stack) and the active tab icon
+  (`tabBarActiveTintColor`).
+- **A guard test** in `src/__tests__/android-links.test.tsx` scans the sources and fails if a text or
+  icon colour on the raw brand indigo or `tint` comes back.
+
+**Left on the brand indigo, as asked:**
+- **Filled controls:** switch-on tracks, selected chips and segments, prominent and gradient buttons,
+  "Save next step" (a filled button), the month calendar's selected day, and the slider fill.
+- **Tints, borders and gradients:** `withAlpha(brand.nexdoIndigo, …)` tints, outline borders and
+  gradients.
+
+**Destructive text** (Disconnect, Delete account, Remove) stays `danger` red.
+
+**Switches:**
+- **`IOSSwitch` on Android:** the on track is `switchOn`, which is the brand indigo at 85% in dark.
+  The off track is `switchOff` with a hairline `fieldBorder`, so it stays visible on a card.
+- **The two native `Switch`es** (Settings' calendar writes, Task filters): they take the same track
+  colours. Android's native switch cannot draw a border on its track.
+
+**Shopping Detail quick-add** (`app/(tabs)/(today)/shopping/[id].tsx`): the field is
+`numberOfLines={1}`. React Native cannot ellipsise a `TextInput` placeholder on Android, so while the
+field is empty the same text is drawn as a one-line overlay with `ellipsizeMode="tail"` that ends in
+"…". The field keeps "Add an item (e.g. eggs, milk, bread)" as its accessibility label.
+
+### Not changed
+
+- **The §2 `accent` (`#8F85FF`)** is still the focused-field border, the outlined secondary buttons
+  ("Start a 25-minute focus session", "Start task", "Add", "Set date and start time") and the
+  selected Settings Appearance segment (§5). These are outlined or selected controls, not links.
+  Moving them to the Ask blue is a one-token change if wanted.
+- **Decorative colour roles** keep their own colours: category and project colours, the Shopping
+  list tiles, and `scheduleBlue`.
+
+### Check it on a phone
+
+Android in dark:
+
+1. Settings: "Change photo", "Open Notification Center", "Connect another calendar" and "Synchronize
+   now" are a clear light blue. "Disconnect" and "Delete account" are red.
+2. Any pushed screen: the back chevron and header actions are the same blue.
+3. The tab bar: the selected tab's icon and label are blue.
+4. Toggles: on is a softer indigo that does not glow. Off is a grey pill with a thin outline.
+5. Shopping → a list: the quick-add placeholder is one line ending in "…"; typing replaces it.
+6. Switch to light: links are the brand indigo again. iOS: unchanged in both.

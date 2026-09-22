@@ -229,8 +229,8 @@ export default function Tasks() {
                     style={styles.historyRangeValue}
                     testID="history-range"
                   >
-                    <Text style={[theme.typography.body, { color: theme.colors.tint }]}>{query.historyRange}</Text>
-                    <TaskSymbol name="chevron.up.chevron.down" size={13} color={theme.colors.tint} />
+                    <Text style={[theme.typography.body, { color: theme.colors.link }]}>{query.historyRange}</Text>
+                    <TaskSymbol name="chevron.up.chevron.down" size={13} color={theme.colors.link} />
                   </Pressable>
                 </View>
                 {rangeOpen ? (
@@ -252,7 +252,7 @@ export default function Tasks() {
                         testID={`history-range-${range}`}
                       >
                         <Text style={[theme.typography.body, styles.grow, { color: theme.colors.ink }]}>{range}</Text>
-                        {query.historyRange === range ? <TaskSymbol name="checkmark" size={16} color={theme.colors.tint} /> : null}
+                        {query.historyRange === range ? <TaskSymbol name="checkmark" size={16} color={theme.colors.link} /> : null}
                       </Pressable>
                     ))}
                   </View>
@@ -273,7 +273,7 @@ export default function Tasks() {
                   <View style={styles.loadFailed}>
                     <Text style={[theme.typography.body, { color: theme.colors.ink }]}>Couldn’t load your tasks.</Text>
                     <Pressable accessibilityRole="button" accessibilityLabel="Retry" onPress={() => void tasks.refetch()} style={styles.retry}>
-                      <Text style={[theme.typography.body, { color: theme.colors.tint }]}>Retry</Text>
+                      <Text style={[theme.typography.body, { color: theme.colors.link }]}>Retry</Text>
                     </Pressable>
                   </View>
                 ) : null}

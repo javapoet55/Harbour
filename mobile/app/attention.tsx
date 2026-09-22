@@ -116,7 +116,7 @@ export default function AttentionSheet() {
         <View style={styles.barSide}>
           {check ? (
             <Pressable accessibilityLabel="Back" accessibilityRole="button" hitSlop={8} onPress={() => setCheck(null)} testID="attention-check-back">
-              <TaskSymbol color={theme.colors.tint} name="chevron.backward" size={20} />
+              <TaskSymbol color={theme.colors.link} name="chevron.backward" size={20} />
             </Pressable>
           ) : null}
         </View>
@@ -135,7 +135,7 @@ export default function AttentionSheet() {
           >
             {/* A `.confirmationAction` on iOS 26 sits on a glass capsule. */}
             <GlassCapsule>
-              <Text style={[styles.barButton, { color: theme.colors.tint, opacity: saving ? 0.35 : 1 }]}>Close</Text>
+              <Text style={[styles.barButton, { color: theme.colors.link, opacity: saving ? 0.35 : 1 }]}>Close</Text>
             </GlassCapsule>
           </Pressable>
         </View>
@@ -263,7 +263,7 @@ function OverdueRow({
         testID={`attention-complete-${task.id}`}
       >
         {/* `Image(systemName: "circle").font(.title2)` in the tint. */}
-        <TaskSymbol color={theme.colors.tint} name="circle" size={26} />
+        <TaskSymbol color={theme.colors.link} name="circle" size={26} />
       </Pressable>
       <Pressable accessibilityRole="button" onPress={onEdit} style={styles.grow} testID={`attention-open-${task.id}`}>
         <Text style={[styles.headline, { color: theme.colors.ink }]}>{task.title}</Text>
@@ -279,7 +279,7 @@ function OverdueRow({
         style={[styles.square44, styles.calendarButton, { backgroundColor: withAlpha(brand.nexdoIndigo, 0.06) }]}
         testID={`attention-reschedule-${task.id}`}
       >
-        <TaskSymbol color={theme.colors.tint} name="calendar" size={17} />
+        <TaskSymbol color={theme.colors.link} name="calendar" size={17} />
       </Pressable>
     </View>
   );
@@ -295,7 +295,7 @@ function CheckDetails({ check, tasks, onTask, rowColor }: { check: ScheduleAtten
     <Text key="recommended" style={[styles.body, { color: theme.colors.secondary }]}>{check.recommendedAction}</Text>,
     ...affected.map((task) => (
       <Pressable accessibilityRole="button" key={task.id} onPress={() => onTask(task)} testID={`attention-check-task-${task.id}`}>
-        <Text style={[styles.body, { color: theme.colors.tint }]}>{task.title}</Text>
+        <Text style={[styles.body, { color: theme.colors.link }]}>{task.title}</Text>
       </Pressable>
     )),
   ];

@@ -228,7 +228,7 @@ function FormButton({
       testID={testID}
       style={[styles.row, !last && { borderBottomWidth: 1, borderBottomColor: theme.colors.listSeparator }]}
     >
-      <Text style={[theme.typography.body, { color: disabled ? theme.colors.secondary : theme.colors.tint }]}>{title}</Text>
+      <Text style={[theme.typography.body, { color: disabled ? theme.colors.secondary : theme.colors.link }]}>{title}</Text>
     </Pressable>
   );
 }

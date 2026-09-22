@@ -15,7 +15,8 @@ import { Text } from './Text';
 
 /** `badge(_:color:)` (CalendarView.swift:456-458). */
 export function CalendarBadge({ text, tone }: { text: string; tone: 'green' | 'orange' | 'red' | 'indigo' }) {
-  const colour = tone === 'green' ? '#34C759' : tone === 'orange' ? '#FF9500' : tone === 'red' ? '#FF3B30' : brand.nexdoIndigo;
+  const theme = useTheme();
+  const colour = tone === 'green' ? '#34C759' : tone === 'orange' ? '#FF9500' : tone === 'red' ? '#FF3B30' : theme.colors.link;
   return (
     <View style={[styles.badge, { backgroundColor: withAlpha(colour, 0.12) }]}>
       <Text style={[styles.badgeText, { color: colour }]}>{text}</Text>
@@ -28,9 +29,9 @@ export function CalendarSummaryCard({ title, detail, testID }: { title: string; 
   const theme = useTheme();
   return (
     <View style={[styles.summaryCard, { backgroundColor: withAlpha(brand.nexdoIndigo, 0.075) }]} testID={testID}>
-      <TaskSymbol name="sparkles" size={22} color={theme.colors.tint} />
+      <TaskSymbol name="sparkles" size={22} color={theme.colors.link} />
       <View style={styles.grow}>
-        <Text style={[styles.summaryTitle, { color: theme.colors.tint }]}>{title}</Text>
+        <Text style={[styles.summaryTitle, { color: theme.colors.link }]}>{title}</Text>
         <Text style={[styles.subheadline, { color: theme.colors.secondary }]}>{detail}</Text>
       </View>
     </View>
@@ -55,7 +56,7 @@ export function CalendarSegments<T extends string>({
       {options.map((option) => {
         const selected = option === value;
         const label = (
-          <Text style={[styles.segmentLabel, { color: selected ? '#FFFFFF' : theme.colors.tint }]}>{option}</Text>
+          <Text style={[styles.segmentLabel, { color: selected ? '#FFFFFF' : theme.colors.link }]}>{option}</Text>
         );
         return (
           <Pressable
@@ -106,7 +107,7 @@ export function CalendarTimelineRow({
 }) {
   const theme = useTheme();
   const tone = rowTone(row, timeZone, now);
-  const colour = tone === 'critical' ? '#FF3B30' : tone === 'late' ? '#FF9500' : brand.nexdoIndigo;
+  const colour = tone === 'critical' ? '#FF3B30' : tone === 'late' ? '#FF9500' : theme.colors.link;
   const late = tone === 'late';
   const critical = tone === 'critical';
 

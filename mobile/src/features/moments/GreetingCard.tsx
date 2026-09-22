@@ -111,7 +111,7 @@ export function GreetingCardEditor({ model, visible, onClose, saveOnUse = false 
             <FestivalGreetingCard artwork={artwork} title={title} message={greeting} signature={signature} />
           ) : (
             <View style={[styles.placeholder, { backgroundColor: theme.colors.glassFill }]}>
-              <Ionicons name="mail-open" size={54} color={brand.nexdoIndigo} />
+              <Ionicons name="mail-open" size={54} color={theme.colors.link} />
               <Text style={[textStyles.title2, styles.bold, { color: theme.colors.label }]}>{title}</Text>
               <Secondary>Your greeting card will appear here</Secondary>
             </View>
@@ -181,7 +181,7 @@ export function GreetingCardEditor({ model, visible, onClose, saveOnUse = false 
                   <Secondary>Creating your artwork…</Secondary>
                 </View>
                 <Pressable accessibilityRole="button" onPress={() => model.getState().cancelImage()} testID="card-cancel-generation">
-                  <Text style={[textStyles.body, { color: theme.colors.tint }]}>Cancel generation</Text>
+                  <Text style={[textStyles.body, { color: theme.colors.link }]}>Cancel generation</Text>
                 </Pressable>
               </>
             ) : (

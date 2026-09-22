@@ -19,7 +19,7 @@ export default function TabsLayout() {
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: theme.colors.tint,
+        tabBarActiveTintColor: theme.colors.link,
         tabBarInactiveTintColor: theme.colors.secondary,
         // The bar needs room for the capsule: with the default height the vertical inset below
         // clipped the label. 58dp of content plus whatever the gesture bar takes.

@@ -1,7 +1,7 @@
 import { View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 
-import { brand } from '../theme';
+import { brand, useTheme } from '../theme';
 import { withAlpha } from './SignInBackdrop';
 
 /** SF Symbol names used by the auth screens, mapped to the closest Ionicons glyph. */
@@ -24,6 +24,7 @@ export type FieldIconName = keyof typeof fieldIcons;
  *     .background(Color.nexdoIndigo.opacity(0.08), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
  */
 export function SignInFieldIcon({ name }: { name: FieldIconName }) {
+  const theme = useTheme();
   return (
     <View
       accessibilityElementsHidden
@@ -38,7 +39,7 @@ export function SignInFieldIcon({ name }: { name: FieldIconName }) {
       }}
     >
       {/* .title3 is 20pt; Ionicons has no weight axis, so `.weight(.medium)` is not reproduced. */}
-      <Ionicons name={fieldIcons[name]} size={20} color={brand.nexdoIndigo} />
+      <Ionicons name={fieldIcons[name]} size={20} color={theme.colors.link} />
     </View>
   );
 }

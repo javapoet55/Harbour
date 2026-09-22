@@ -80,7 +80,7 @@ export function ShoppingCompletionView({ summary, onDone, onUseAgain }: { summar
             </View>
 
             <Text style={[styles.title, { color: theme.colors.ink }]}>Great job for saving a branch on a tree!</Text>
-            <Text style={[styles.completed, { color: brand.nexdoIndigo }]}>Completed</Text>
+            <Text style={[styles.completed, { color: theme.colors.link }]}>Completed</Text>
             <Text style={[styles.listName, { color: theme.colors.secondary }]} testID="completion-list-name">
               {summary.listName}
             </Text>
@@ -116,8 +116,8 @@ export function ShoppingCompletionView({ summary, onDone, onUseAgain }: { summar
                 testID="shopping-completion-use-again"
               >
                 {/* `arrow.counterclockwise`: Ionicons' circular arrow, mirrored. */}
-                <Ionicons name="refresh" size={19} color={brand.nexdoIndigo} style={styles.mirrored} />
-                <Text style={[styles.headline, { color: brand.nexdoIndigo }]}>{summary.nextListReady ? 'View Next Shopping List' : 'Use This List Again'}</Text>
+                <Ionicons name="refresh" size={19} color={theme.colors.link} style={styles.mirrored} />
+                <Text style={[styles.headline, { color: theme.colors.link }]}>{summary.nextListReady ? 'View Next Shopping List' : 'Use This List Again'}</Text>
               </Pressable>
             </View>
           </SafeAreaView>

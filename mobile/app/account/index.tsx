@@ -102,7 +102,7 @@ function AccountSheet() {
             style={[styles.closeCapsule, { backgroundColor: theme.colors.background }]}
             testID="account-close"
           >
-            <TaskSymbol color={theme.colors.tint} name="xmark" size={20} />
+            <TaskSymbol color={theme.colors.link} name="xmark" size={20} />
           </Pressable>
         </View>
       </View>

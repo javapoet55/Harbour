@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
-import { Alert, Share } from 'react-native';
+import { Alert, Platform, Share } from 'react-native';
 
 const mockPush = jest.fn();
 const mockBack = jest.fn();
@@ -637,3 +637,39 @@ describe('Item Alternatives', () => {
     expect(mockPost).not.toHaveBeenCalled();
   });
 });
+
+/** docs/android-polish.md §6: the quick-add placeholder stays on one line on Android, ending in "…". */
+describe('Shopping Detail quick-add on Android', () => {
+  afterEach(() => jest.restoreAllMocks());
+
+  it('holds the field to one line and draws the placeholder as a one-line, ellipsised overlay', async () => {
+    jest.replaceProperty(Platform, 'OS', 'android');
+    load([list()]);
+    mockParams = { id: 'l1' };
+    await render(<Detail />);
+
+    const field = screen.getByTestId('shopping-quick-add');
+    expect(field.props.numberOfLines).toBe(1);
+    expect(field.props.placeholder).toBeUndefined();
+    const placeholder = screen.getByTestId('shopping-quick-add-placeholder');
+    expect(placeholder.props.children).toBe('Add an item (e.g. eggs, milk, bread)');
+    expect(placeholder.props.numberOfLines).toBe(1);
+    expect(placeholder.props.ellipsizeMode).toBe('tail');
+    // The field is still labelled with the same text for a screen reader.
+    expect(field.props.accessibilityLabel).toBe('Add an item (e.g. eggs, milk, bread)');
+
+    // Typing hides the overlay, as a placeholder hides.
+    await fireEvent.changeText(field, 'eggs');
+    expect(screen.queryByTestId('shopping-quick-add-placeholder')).toBeNull();
+  });
+
+  it('keeps the native placeholder on iOS', async () => {
+    load([list()]);
+    mockParams = { id: 'l1' };
+    await render(<Detail />);
+    expect(screen.getByTestId('shopping-quick-add').props.placeholder).toBe('Add an item (e.g. eggs, milk, bread)');
+    expect(screen.getByTestId('shopping-quick-add').props.numberOfLines).toBeUndefined();
+    expect(screen.queryByTestId('shopping-quick-add-placeholder')).toBeNull();
+  });
+});
+

@@ -70,7 +70,7 @@ function AlternativesBody({ list, original, save, onClose }: { list: GroceryList
       <View style={[styles.side, styles.trailing]}>
         <Pressable accessibilityLabel="Close alternatives" accessibilityRole="button" hitSlop={6} onPress={onClose} testID="alternatives-close">
           <GlassCircle>
-            <Ionicons name="close" size={24} color={theme.colors.tint} />
+            <Ionicons name="close" size={24} color={theme.colors.link} />
           </GlassCircle>
         </Pressable>
       </View>
@@ -82,7 +82,7 @@ function AlternativesBody({ list, original, save, onClose }: { list: GroceryList
       <View style={styles.fill}>
         {bar}
         <View style={styles.center} testID="alternatives-loading">
-          <ActivityIndicator color={brand.nexdoIndigo} />
+          <ActivityIndicator color={theme.colors.link} />
           <Text style={[styles.body, { color: theme.colors.secondaryLabel }]}>Finding useful alternatives…</Text>
         </View>
       </View>

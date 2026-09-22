@@ -47,7 +47,7 @@ export default function Weather() {
         {forecast ? (
           <>
             <View accessible style={styles.current} testID="weather-current">
-              <TaskSymbol name={conditionSymbol(forecast.current.weather_code)} size={34} color={theme.colors.tint} />
+              <TaskSymbol name={conditionSymbol(forecast.current.weather_code)} size={34} color={theme.colors.link} />
               <Text style={[styles.currentTemperature, { color: theme.colors.ink }]}>
                 {`${Math.round(forecast.current.temperature_2m)}°`}
               </Text>
@@ -65,7 +65,7 @@ export default function Weather() {
                         </Text>
                         <Text style={[styles.caption, { color: theme.colors.secondary }]}>{conditionLabel(day.code)}</Text>
                       </View>
-                      <TaskSymbol name={conditionSymbol(day.code)} size={22} color={theme.colors.tint} />
+                      <TaskSymbol name={conditionSymbol(day.code)} size={22} color={theme.colors.link} />
                       <View
                         accessibilityLabel={`High ${temperatureLabel(day.high)}, low ${temperatureLabel(day.low)} Fahrenheit`}
                         style={styles.temperatures}
@@ -124,7 +124,7 @@ export default function Weather() {
           onPress={() => void Linking.openURL('https://open-meteo.com/')}
           testID="weather-attribution"
         >
-          <Text style={[styles.footnote, { color: theme.colors.tint }]}>Weather by Open-Meteo</Text>
+          <Text style={[styles.footnote, { color: theme.colors.link }]}>Weather by Open-Meteo</Text>
         </Pressable>
       </ScrollView>
     </View>

@@ -84,7 +84,7 @@ export default function ReviewWishScreen() {
           headerRight: () => (
             <Pressable accessibilityRole="button" onPress={() => router.back()} hitSlop={6} testID="review-cancel">
               <GlassCapsule>
-                <Text style={{ fontSize: 17, lineHeight: 22, color: theme.colors.tint }}>Cancel</Text>
+                <Text style={{ fontSize: 17, lineHeight: 22, color: theme.colors.link }}>Cancel</Text>
               </GlassCapsule>
             </Pressable>
           ),

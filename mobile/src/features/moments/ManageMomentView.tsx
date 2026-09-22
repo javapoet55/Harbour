@@ -309,14 +309,14 @@ export function ManageMomentView({ group, onDone }: { group: MomentDisplayGroup;
             <Pressable accessibilityRole="button" accessibilityLabel="Back" onPress={back} hitSlop={6} testID="festival-back">
               {/* A custom back (it auto-saves first), so SwiftUI draws it as a tinted glass capsule. */}
               <GlassCapsule>
-                <Ionicons name="chevron-back" size={24} color={theme.colors.tint} />
+                <Ionicons name="chevron-back" size={24} color={theme.colors.link} />
               </GlassCapsule>
             </Pressable>
           ),
           headerRight: () => (
             <Pressable accessibilityRole="button" accessibilityLabel="Moment options" collapsable={false} onPress={optionsMenu.open} hitSlop={6} ref={optionsAnchor} testID="festival-options">
               <GlassCapsule>
-                <Ionicons name="ellipsis-horizontal" size={22} color={theme.colors.tint} />
+                <Ionicons name="ellipsis-horizontal" size={22} color={theme.colors.link} />
               </GlassCapsule>
             </Pressable>
           ),
@@ -374,7 +374,7 @@ export function ManageMomentView({ group, onDone }: { group: MomentDisplayGroup;
                     fontSize={textStyles.subheadline.fontSize}
                     lineHeight={textStyles.subheadline.lineHeight}
                     minimumScale={0.7}
-                    style={[styles.tabLabel, { color: active ? '#FFFFFF' : brand.nexdoIndigo }]}
+                    style={[styles.tabLabel, { color: active ? '#FFFFFF' : theme.colors.link }]}
                   >
                     {tab}
                   </FitText>
@@ -496,12 +496,12 @@ export function ManageMomentView({ group, onDone }: { group: MomentDisplayGroup;
               )}
               {state.recipients.length > 3 ? (
                 <Pressable accessibilityRole="button" onPress={() => setShowAllContacts(!showAllContacts)} style={styles.centerButton} testID="festival-show-contacts">
-                  <Text style={[textStyles.body, { color: theme.colors.tint }]}>{showAllContacts ? 'Show less' : `Show more (${state.recipients.length - 3})`}</Text>
+                  <Text style={[textStyles.body, { color: theme.colors.link }]}>{showAllContacts ? 'Show less' : `Show more (${state.recipients.length - 3})`}</Text>
                 </Pressable>
               ) : null}
               <BorderedButton full icon="add" title="Add Contact" onPress={() => void addContact()} testID="festival-add-contact" />
               <Pressable accessibilityRole="button" onPress={() => setManual(true)} style={styles.plainButton} testID="festival-manual">
-                <Text style={[textStyles.body, { color: theme.colors.tint }]}>Enter recipient manually</Text>
+                <Text style={[textStyles.body, { color: theme.colors.link }]}>Enter recipient manually</Text>
               </Pressable>
               <IconLabel icon="lock-closed" title="Only selected contacts receive this wish." color={theme.colors.secondaryLabel} style={textStyles.subheadline} size={15} />
               {saveButtons}
@@ -516,7 +516,7 @@ export function ManageMomentView({ group, onDone }: { group: MomentDisplayGroup;
                   <IconLabel icon="people" title={`For ${selected.length} selected contact${selected.length === 1 ? '' : 's'}`} style={textStyles.subheadline} size={15} />
                 </View>
                 <Pressable accessibilityRole="button" onPress={() => setPersonalize(true)} style={styles.plainButton} testID="festival-personalize">
-                  <Text style={[textStyles.body, { color: theme.colors.tint }]}>Personalize</Text>
+                  <Text style={[textStyles.body, { color: theme.colors.link }]}>Personalize</Text>
                 </Pressable>
               </View>
               <MomentSegments options={TONES} value={state.settings.tone as (typeof TONES)[number]} onChange={(tone) => model.getState().updateSettings({ tone })} testIDPrefix="festival-tone" />
@@ -645,7 +645,7 @@ export function ManageMomentView({ group, onDone }: { group: MomentDisplayGroup;
                 <>
                   <Text style={[caption, { color: theme.colors.label }]}>Automatic email needs a connected account and backend scheduler.</Text>
                   <Pressable accessibilityRole="button" onPress={() => router.push('/moments/settings')} testID="festival-connect-email">
-                    <Text style={[textStyles.body, { color: theme.colors.tint }]}>Connect / Reconnect email</Text>
+                    <Text style={[textStyles.body, { color: theme.colors.link }]}>Connect / Reconnect email</Text>
                   </Pressable>
                 </>
               ) : null}
@@ -655,7 +655,7 @@ export function ManageMomentView({ group, onDone }: { group: MomentDisplayGroup;
                 <LabeledValue label="Send if app is closed" value="Email only" />
               </MomentCard>
               <View style={[styles.info, { backgroundColor: withAlpha(systemColors.blue, 0.08) }]}>
-                <Ionicons name="information-circle" size={17} color={brand.nexdoIndigo} />
+                <Ionicons name="information-circle" size={17} color={theme.colors.link} />
                 <Text style={[textStyles.subheadline, styles.grow, { color: theme.colors.label }]}>
                   At the scheduled time, open your reminder to send the prepared wish. You, the sender, must tap Send in Messages. Recipients do not need to confirm.
                 </Text>
@@ -664,7 +664,7 @@ export function ManageMomentView({ group, onDone }: { group: MomentDisplayGroup;
               <MomentPrimary title="Schedule Wish" onPress={scheduleWish} disabled={state.generatingImage} testID="festival-schedule" />
               {planLinks.map((plan) => (
                 <Pressable key={plan.id} accessibilityRole="button" onPress={() => router.push({ pathname: '/moments/wish', params: { planId: plan.id } })} testID={`festival-plan-${plan.id}`}>
-                  <Text style={[textStyles.body, { color: theme.colors.tint }]}>{`${planStatusLabel(plan)} · ${capitalized(plan.channel)}`}</Text>
+                  <Text style={[textStyles.body, { color: theme.colors.link }]}>{`${planStatusLabel(plan)} · ${capitalized(plan.channel)}`}</Text>
                 </Pressable>
               ))}
             </>
@@ -879,7 +879,7 @@ function RecipientEditor({
           style={styles.select}
           testID={`recipient-select-${recipient.key}`}
         >
-          <Ionicons name={recipient.selected ? 'checkmark-circle' : 'ellipse-outline'} size={26} color={brand.nexdoIndigo} />
+          <Ionicons name={recipient.selected ? 'checkmark-circle' : 'ellipse-outline'} size={26} color={theme.colors.link} />
         </Pressable>
       </View>
       <Disclosure title="Edit recipient" testID={`recipient-edit-${recipient.key}`}>
@@ -887,7 +887,7 @@ function RecipientEditor({
         <FormField placeholder="Phone" keyboardType="phone-pad" value={recipient.phone} onChangeText={(phone) => onChange({ phone })} testID={`recipient-phone-${recipient.key}`} />
         <FormField placeholder="Email" keyboardType="email-address" autoCapitalize="none" value={recipient.email} onChangeText={(email) => onChange({ email })} testID={`recipient-email-${recipient.key}`} />
         <Pressable accessibilityRole="button" onPress={() => onChange({ contactIdentifier: '' })}>
-          <Text style={[textStyles.body, { color: theme.colors.tint }]}>Use as manually entered contact</Text>
+          <Text style={[textStyles.body, { color: theme.colors.link }]}>Use as manually entered contact</Text>
         </Pressable>
         <Pressable accessibilityRole="button" onPress={onRemove} testID={`recipient-remove-${recipient.key}`}>
           <Text style={[textStyles.body, { color: theme.colors.danger }]}>Remove contact</Text>
@@ -997,7 +997,7 @@ export function ScheduleSuccess({
       />
       <TodayBackdrop />
       <ScrollView contentContainerStyle={[styles.content, styles.centered]}>
-        <Ionicons name="calendar" size={68} color={brand.nexdoIndigo} />
+        <Ionicons name="calendar" size={68} color={theme.colors.link} />
         <Text style={[textStyles.largeTitle, styles.bold, styles.center, { color: theme.colors.label }]}>{occasion === 'getWellSoon' ? 'Get Well Scheduled' : 'Wishes scheduled'}</Text>
         <Text style={[textStyles.title2, { color: theme.colors.label }]}>{title}</Text>
         <View style={styles.stretch}>
@@ -1012,7 +1012,7 @@ export function ScheduleSuccess({
               </Text>
             ))}
             <Pressable accessibilityRole="button" onPress={manage} style={styles.plainButton} testID="festival-manage-schedule">
-              <Text style={[textStyles.body, { color: theme.colors.tint }]}>Manage scheduled wish</Text>
+              <Text style={[textStyles.body, { color: theme.colors.link }]}>Manage scheduled wish</Text>
             </Pressable>
           </MomentCard>
         </View>

@@ -98,7 +98,7 @@ export function ProjectEditorForm({
             style={styles.row}
             testID="project-retry"
           >
-            <Text style={[theme.typography.body, { color: theme.colors.tint }]}>Retry</Text>
+            <Text style={[theme.typography.body, { color: theme.colors.link }]}>Retry</Text>
           </Pressable>
         </Section>
       ) : null}

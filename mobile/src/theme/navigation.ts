@@ -14,7 +14,7 @@ import type { Theme } from './useTheme';
  */
 export function stackHeaderOptions(theme: Theme, background: string) {
   return {
-    headerTintColor: theme.colors.tint,
+    headerTintColor: theme.colors.link,
     headerTitleStyle: { color: theme.colors.ink, fontSize: 17, fontWeight: '600' as const },
     headerStyle: { backgroundColor: background },
     contentStyle: { backgroundColor: background },

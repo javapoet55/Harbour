@@ -22,7 +22,7 @@ export default function AuthLayout() {
 
   const cancelButton = () => (
     <Pressable accessibilityRole="button" accessibilityLabel="Cancel" onPress={() => router.back()} hitSlop={8}>
-      <Text style={{ ...textStyles.body, color: theme.colors.tint }}>Cancel</Text>
+      <Text style={{ ...textStyles.body, color: theme.colors.link }}>Cancel</Text>
     </Pressable>
   );
 
@@ -31,7 +31,7 @@ export default function AuthLayout() {
       screenOptions={{
         headerShown: false,
         contentStyle: { backgroundColor: theme.colors.background },
-        headerTintColor: theme.colors.tint,
+        headerTintColor: theme.colors.link,
         headerTitleStyle: { color: theme.colors.ink, fontSize: 17, fontWeight: '600' },
         headerStyle: { backgroundColor: theme.colors.background },
         headerShadowVisible: false,

@@ -105,6 +105,18 @@ export type Palette = {
    */
   fieldOnGroup: string;
   fieldOnGroupElevated: string;
+  /**
+   * Tappable text and icon tint: links, text buttons, icon buttons, header chevrons and actions,
+   * spinners (docs/android-polish.md §6). The palettes set it to `tint`; on Android in dark `useTheme`
+   * resolves it to `askBlue` — the blue the Ask screen already uses for "Read Loud" and "Show
+   * suggestions" — where the deep brand indigo read as muddy (2.2:1 on #1C1C1E). Filled controls —
+   * switches on, selected chips, prominent buttons — keep `tint`.
+   */
+  link: string;
+  /** An Android switch track, on: the brand indigo, at 85% over the surface in dark so it does not glow. */
+  switchOn: string;
+  /** An Android switch track, off: a neutral grey, drawn with a `fieldBorder` hairline. */
+  switchOff: string;
 };
 
 export type ColorScheme = 'light' | 'dark';
@@ -151,6 +163,9 @@ export const palettes: Record<ColorScheme, Palette> = {
     fieldLabel: '#575C80',
     fieldOnGroup: '#FFFFFF',
     fieldOnGroupElevated: '#FFFFFF',
+    link: brand.nexdoIndigo,
+    switchOn: brand.nexdoIndigo,
+    switchOff: 'rgba(120, 120, 128, 0.5)',
   },
   dark: {
     // TODO(phase1-decision): the Swift dark variant is the dynamic system `.label`; this is its standard dark value.
@@ -198,5 +213,8 @@ export const palettes: Record<ColorScheme, Palette> = {
     fieldLabel: '#A1A1AA',
     fieldOnGroup: '#2C2C2E',
     fieldOnGroupElevated: '#3A3A3C',
+    link: brand.nexdoIndigo,
+    switchOn: 'rgba(61, 41, 240, 0.85)',
+    switchOff: '#48484A',
   },
 };

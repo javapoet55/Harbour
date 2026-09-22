@@ -163,7 +163,7 @@ export default function VerifyEmail() {
         <Text
           style={[
             styles.resendLabel,
-            { color: working || secondsLeft > 0 ? theme.colors.secondary : theme.colors.tint },
+            { color: working || secondsLeft > 0 ? theme.colors.secondary : theme.colors.link },
           ]}
         >
           {secondsLeft > 0 ? `Send a new code in ${secondsLeft}s` : 'Send a new code'}

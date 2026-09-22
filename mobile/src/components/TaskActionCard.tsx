@@ -50,8 +50,8 @@ export function TaskActionCard({ task, onOpen, now }: { task: NexdoTask; onOpen:
       testID="task-action-card"
     >
       <View style={styles.row}>
-        <TaskSymbol color={brand.nexdoIndigo} name="sparkles" size={15} />
-        <Text style={[styles.subheadline, styles.bold, { color: brand.nexdoIndigo }]}>Nexdo Action</Text>
+        <TaskSymbol color={theme.colors.link} name="sparkles" size={15} />
+        <Text style={[styles.subheadline, styles.bold, { color: theme.colors.link }]}>Nexdo Action</Text>
       </View>
       <Text style={[styles.headline, { color: theme.colors.ink }]}>{`Contact ${action.contactName}`}</Text>
       <Text style={[styles.subheadline, { color: theme.colors.secondary }]}>Call • Message • Email</Text>
