@@ -4,6 +4,7 @@ import { Modal, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react
 import { formatClock, parseClock } from '../lib/profileSettings';
 import { androidField, androidGroup, androidLabel, androidSeparator, brand, isAndroid, useTheme } from '../theme';
 import { IOSSwitch } from './IOSSwitch';
+import { SegmentRow } from './SegmentRow';
 import { withAlpha } from './SignInBackdrop';
 import { TaskSymbol } from './TaskSymbol';
 import { Text } from './Text';
@@ -168,6 +169,51 @@ export function SettingsSegments<T extends string>({
   testIDPrefix: string;
 }) {
   const theme = useTheme();
+  // Android (docs/android-polish.md §9): the shared `SegmentRow` sizes each segment to its label; the
+  // selected one keeps its accent tint (§5, §7).
+  if (isAndroid()) {
+    return (
+      <SegmentRow
+        labels={options.map((option) => option.title)}
+        selected={options.findIndex((option) => option.value === value)}
+        base={{ fontSize: styles.subheadline.fontSize, lineHeight: styles.subheadline.lineHeight }}
+        labelStyle={styles.androidSelectedSegment}
+        gap={0}
+        inset={2}
+        style={[styles.segments, { backgroundColor: theme.colors.segmentTrack }]}
+        testID={`${testIDPrefix}-row`}
+        renderSegment={(index, fit, segmentStyle) => {
+          const option = options[index];
+          const selected = option.value === value;
+          return (
+            <Pressable
+              accessibilityLabel={option.title}
+              accessibilityRole="button"
+              accessibilityState={{ selected }}
+              onPress={() => onChange(option.value)}
+              style={[
+                styles.androidSegment,
+                segmentStyle,
+                selected ? { backgroundColor: theme.colors.accentTint, borderWidth: 1, borderColor: theme.colors.accentBorder } : null,
+              ]}
+              testID={`${testIDPrefix}-${option.value}`}
+            >
+              <Text
+                numberOfLines={1}
+                style={[
+                  styles.subheadline,
+                  { fontSize: fit.fontSize, lineHeight: fit.lineHeight, color: selected ? theme.colors.accent : theme.colors.label },
+                  selected ? styles.androidSelectedSegment : null,
+                ]}
+              >
+                {option.title}
+              </Text>
+            </Pressable>
+          );
+        }}
+      />
+    );
+  }
   return (
     // `.pickerStyle(.segmented)` (ProfileView.swift:154): a translucent track carrying a raised,
     // light capsule with a label-coloured title — not a tint-filled segment with white text. This is
@@ -495,6 +541,8 @@ const styles = StyleSheet.create({
 
   segments: { flexDirection: 'row', borderRadius: 9, padding: 2 },
   segment: { flex: 1, minHeight: 32, alignItems: 'center', justifyContent: 'center', borderRadius: 7 },
+  // Android: sized by `SegmentRow`, so no `flex: 1` share of the row.
+  androidSegment: { minHeight: 32, alignItems: 'center', justifyContent: 'center', borderRadius: 7 },
 
   scrim: { flex: 1, justifyContent: 'center', padding: 24, backgroundColor: 'rgba(0,0,0,0.35)' },
   menu: { borderRadius: 18, paddingVertical: 8, maxHeight: '75%' },

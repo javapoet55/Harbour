@@ -3,7 +3,8 @@ import { Pressable, StyleSheet, View } from 'react-native';
 
 import type { CalendarRow } from '../lib/calendarRows';
 import { rowSymbol, rowTone } from '../lib/calendarRows';
-import { brand, useTheme } from '../theme';
+import { brand, isAndroid, useTheme } from '../theme';
+import { SegmentRow } from './SegmentRow';
 import { TaskSymbol } from './TaskSymbol';
 import { Text } from './Text';
 
@@ -51,6 +52,47 @@ export function CalendarSegments<T extends string>({
   testIDPrefix: string;
 }) {
   const theme = useTheme();
+  // Android (docs/android-polish.md §9): the shared `SegmentRow` sizes each segment to its label.
+  if (isAndroid()) {
+    return (
+      <SegmentRow
+        labels={options}
+        selected={options.indexOf(value)}
+        base={{ fontSize: 15, lineHeight: 21 }}
+        labelStyle={styles.segmentLabel}
+        gap={0}
+        inset={0}
+        style={[styles.segments, { backgroundColor: withAlpha(brand.nexdoIndigo, 0.07) }]}
+        testID={`${testIDPrefix}-row`}
+        renderSegment={(index, fit, segmentStyle) => {
+          const option = options[index];
+          const selected = option === value;
+          const label = (
+            <Text numberOfLines={1} style={[styles.segmentLabel, { fontSize: fit.fontSize, lineHeight: fit.lineHeight, color: selected ? '#FFFFFF' : theme.colors.link }]}>
+              {option}
+            </Text>
+          );
+          return (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={option}
+              accessibilityState={{ selected }}
+              onPress={() => onChange(option)}
+              testID={`${testIDPrefix}-${option}`}
+            >
+              {selected ? (
+                <LinearGradient colors={[brand.nexdoBlue, brand.nexdoIndigo, brand.nexdoMagenta]} start={{ x: 0, y: 0.5 }} end={{ x: 1, y: 0.5 }} style={[styles.segment, segmentStyle]}>
+                  {label}
+                </LinearGradient>
+              ) : (
+                <View style={[styles.segment, segmentStyle]}>{label}</View>
+              )}
+            </Pressable>
+          );
+        }}
+      />
+    );
+  }
   return (
     <View style={[styles.segments, { backgroundColor: withAlpha(brand.nexdoIndigo, 0.07) }]}>
       {options.map((option) => {

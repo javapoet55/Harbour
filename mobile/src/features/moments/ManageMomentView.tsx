@@ -11,6 +11,7 @@ import { Text } from '../../components/Text';
 import { TodayBackdrop } from '../../components/TodayShell';
 import { FitText } from '../../components/FitText';
 import { IOSSwitch } from '../../components/IOSSwitch';
+import { SegmentRow } from '../../components/SegmentRow';
 import { GlassCapsule, GlassCircle } from '../../components/PushedHeader';
 import { withAlpha } from '../../components/SignInBackdrop';
 import { androidLabel, androidSeparator, ANDROID_LABEL_GAP, brand, isAndroid, textStyles, useTheme } from '../../theme';
@@ -350,7 +351,45 @@ export function ManageMomentView({ group, onDone }: { group: MomentDisplayGroup;
             </View>
           </MomentCard>
 
-          {/* tabs (:120) */}
+          {/* tabs (:120). Android (docs/android-polish.md §9): the shared `SegmentRow` — every tab at one
+              size, each as wide as its label, one step smaller together or scrolling if they do not fit. */}
+          {isAndroid() ? (
+            <SegmentRow
+              labels={MANAGE_TABS}
+              selected={MANAGE_TABS.indexOf(state.tab)}
+              base={textStyles.subheadline}
+              labelStyle={styles.tabLabel}
+              gap={3}
+              inset={5}
+              style={[styles.tabs, { backgroundColor: theme.colors.glassFill }]}
+              testID="festival-tabs"
+              renderSegment={(index, fit, segmentStyle) => {
+                const tab = MANAGE_TABS[index];
+                const active = state.tab === tab;
+                return (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: active }}
+                    accessibilityLabel={tab}
+                    onPress={() => {
+                      Keyboard.dismiss();
+                      approveAfterCancel.current = false;
+                      void model.getState().changeTab(tab);
+                    }}
+                    style={[styles.androidTab, segmentStyle, active && { backgroundColor: brand.nexdoIndigo }]}
+                    testID={`festival-tab-${tab}`}
+                  >
+                    <Text
+                      numberOfLines={1}
+                      style={[styles.tabLabel, { fontSize: fit.fontSize, lineHeight: fit.lineHeight, color: active ? '#FFFFFF' : theme.colors.link }]}
+                    >
+                      {tab}
+                    </Text>
+                  </Pressable>
+                );
+              }}
+            />
+          ) : (
           <View style={[styles.tabs, { backgroundColor: theme.colors.glassFill }]}>
             {MANAGE_TABS.map((tab) => {
               const active = state.tab === tab;
@@ -382,6 +421,7 @@ export function ManageMomentView({ group, onDone }: { group: MomentDisplayGroup;
               );
             })}
           </View>
+          )}
 
           {state.tab === 'Details' ? (
             <>
@@ -1042,6 +1082,8 @@ const styles = StyleSheet.create({
   // `.frame(minHeight: 44).padding(.vertical, 5)`: 54 in all, as RN's minHeight includes padding.
   tab: { flex: 1, minHeight: 54, paddingVertical: 5, borderRadius: 18, justifyContent: 'center' },
   tabLabel: { textAlign: 'center', alignSelf: 'stretch' },
+  // Android: sized by `SegmentRow`, so no `flex: 1` share of the row.
+  androidTab: { minHeight: 54, paddingVertical: 5, borderRadius: 18, justifyContent: 'center' },
   nameInput: { flex: 1, textAlign: 'right', fontSize: 17, fontWeight: '700', paddingVertical: 0, includeFontPadding: false, backgroundColor: 'transparent' },
   divider: { height: StyleSheet.hairlineWidth },
   deleteButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, minHeight: 48, borderRadius: 18, backgroundColor: 'rgba(255, 59, 48, 0.08)' },

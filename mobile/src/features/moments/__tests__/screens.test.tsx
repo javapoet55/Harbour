@@ -1,5 +1,5 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
-import { Alert } from 'react-native';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
+import { Alert, Platform, StyleSheet } from 'react-native';
 
 const mockPush = jest.fn();
 const mockBack = jest.fn();
@@ -177,6 +177,33 @@ describe('Manage Moment', () => {
   const group = () => [
     moment({ id: 'a', type: 'birthday', title: 'Sam’s Birthday', firstName: 'Sam', phone: '+15555550100', occurrenceDate: day, nextOccurrence: day, sourceKey: 'birthday:g:k1', festivalSettings: settings({ groupID: 'g' }) }),
   ];
+
+  /** docs/android-polish.md §9: the four steps share one size, each as wide as its label. */
+  it('draws the four steps at one size on Android, dropping together when they do not fit', async () => {
+    jest.replaceProperty(Platform, 'OS', 'android');
+    load(group());
+    mockParams = { ids: 'a' };
+    await render(<ManageMoment />);
+    const tabs = ['Details', 'Contacts', 'Wish Message', 'Schedule'];
+    const size = (tab: string) => StyleSheet.flatten(within(screen.getByTestId(`festival-tab-${tab}`)).getByText(tab).props.style).fontSize;
+    const layout = (width: number) => ({ nativeEvent: { layout: { x: 0, y: 0, width, height: 64 } } });
+
+    // No per-tab shrink: each label is one line of plain text, not a FitText.
+    for (const tab of tabs) expect(within(screen.getByTestId(`festival-tab-${tab}`)).getByText(tab).props.numberOfLines).toBe(1);
+
+    // "Wish Message" is the long one; on a 360dp-wide row they only fit a step down — all four.
+    await fireEvent(screen.getByTestId('festival-tabs'), 'layout', layout(360));
+    for (const [index, width] of [50, 66, 98, 66].entries()) {
+      await fireEvent(screen.getByTestId(`festival-tabs-measure-${index}`, { includeHiddenElements: true }), 'layout', layout(width));
+    }
+    expect(tabs.map(size)).toEqual([13, 13, 13, 13]);
+
+    // The selected step keeps its filled indigo pill, and a tab still switches the step.
+    expect(StyleSheet.flatten(screen.getByTestId('festival-tab-Details').props.style).backgroundColor).toBe('#3D29F0');
+    await fireEvent.press(screen.getByTestId('festival-tab-Contacts'));
+    expect(StyleSheet.flatten(screen.getByTestId('festival-tab-Contacts').props.style).backgroundColor).toBe('#3D29F0');
+    jest.restoreAllMocks();
+  });
 
   it('shows the header card, the four steps and the in-content section title', async () => {
     load(group());

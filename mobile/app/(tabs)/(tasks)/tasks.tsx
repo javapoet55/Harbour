@@ -4,6 +4,7 @@ import { ActivityIndicator, Alert, Pressable, RefreshControl, ScrollView, StyleS
 
 import { CreationCard, DatePill, HeaderButton, SectionHeader, TaskCard, TaskEmptyState, TaskSymbol, Text } from '../../../src/components';
 import { ProjectsList } from '../../../src/components/ProjectsList';
+import { SegmentRow } from '../../../src/components/SegmentRow';
 import { TasksTopBar, TodayBackdrop } from '../../../src/components/TodayShell';
 import {
   DATE_FILTER_EMPTY_TITLE,
@@ -105,7 +106,38 @@ export default function Tasks() {
           ) : null}
         </View>
 
-        {/* `Picker(...).pickerStyle(.segmented)` (RootView.swift:1650-1655) */}
+        {/* `Picker(...).pickerStyle(.segmented)` (RootView.swift:1650-1655). Android: the shared
+            `SegmentRow` (docs/android-polish.md §9). */}
+        {android ? (
+          <SegmentRow
+            labels={['Tasks', 'Projects']}
+            selected={showingProjects ? 1 : 0}
+            base={{ fontSize: 13, lineHeight: 18 }}
+            labelStyle={styles.segmentLabel}
+            gap={0}
+            inset={2}
+            style={[styles.segmented, { backgroundColor: theme.colors.segmentTrack }]}
+            testID="tasks-segments"
+            renderSegment={(index, fit, segmentStyle) => {
+              const label = index === 0 ? 'Tasks' : 'Projects';
+              const selected = (label === 'Projects') === showingProjects;
+              return (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={label}
+                  accessibilityState={{ selected }}
+                  onPress={() => setShowingProjects(label === 'Projects')}
+                  testID={`segment-${label}`}
+                  style={[styles.androidSegment, segmentStyle, selected && { backgroundColor: theme.colors.segmentSelected }]}
+                >
+                  <Text numberOfLines={1} style={[styles.segmentLabel, { fontSize: fit.fontSize, lineHeight: fit.lineHeight, color: theme.colors.ink }]}>
+                    {label}
+                  </Text>
+                </Pressable>
+              );
+            }}
+          />
+        ) : (
         <View style={[styles.segmented, { backgroundColor: theme.colors.segmentTrack }]}>
           {(['Tasks', 'Projects'] as const).map((label) => {
             const selected = (label === 'Projects') === showingProjects;
@@ -124,6 +156,7 @@ export default function Tasks() {
             );
           })}
         </View>
+        )}
 
         {showingProjects ? (
           <ProjectsList
@@ -333,6 +366,8 @@ const styles = StyleSheet.create({
   segmented: { flexDirection: 'row', borderRadius: 9, padding: 2 },
   segment: { flex: 1, alignItems: 'center', justifyContent: 'center', minHeight: 32, borderRadius: 7 },
   segmentLabel: { fontSize: 13, lineHeight: 18, fontWeight: '500' },
+  // Android: sized by `SegmentRow`, so no `flex: 1` share of the row.
+  androidSegment: { alignItems: 'center', justifyContent: 'center', minHeight: 32, borderRadius: 7 },
   list: { gap: 12, paddingBottom: 24 },
   searchField: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingLeft: 14, borderRadius: 16 },
   searchInput: { flex: 1, paddingVertical: 0 },

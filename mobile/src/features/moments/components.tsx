@@ -18,6 +18,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { GlassCard } from '../../components/GlassCard';
+import { SegmentRow } from '../../components/SegmentRow';
 import { KeyboardAwareScrollView } from '../../components/keyboard';
 import { GlassCapsule } from '../../components/PushedHeader';
 import { withAlpha } from '../../components/SignInBackdrop';
@@ -144,6 +145,40 @@ export function MomentSegments<T extends string>({
   testIDPrefix: string;
 }) {
   const theme = useTheme();
+  // Android (docs/android-polish.md §9): the shared `SegmentRow` sizes each segment to its label.
+  if (isAndroid()) {
+    return (
+      <SegmentRow
+        labels={options}
+        selected={options.indexOf(value)}
+        base={{ fontSize: 15, lineHeight: 20 }}
+        labelStyle={styles.segmentLabel}
+        gap={4}
+        inset={4}
+        style={[styles.segments, { backgroundColor: theme.colors.glassFill }]}
+        testID={`${testIDPrefix}-row`}
+        renderSegment={(index, fit, segmentStyle) => {
+          const option = options[index];
+          const selected = option === value;
+          return (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityState={{ selected }}
+              accessibilityLabel={option}
+              onPress={() => onChange(option)}
+              style={[styles.androidSegment, segmentStyle]}
+              testID={`${testIDPrefix}-${option}`}
+            >
+              {selected ? <LinearGradient colors={GRADIENT} start={{ x: 0, y: 0.5 }} end={{ x: 1, y: 0.5 }} style={[StyleSheet.absoluteFill, styles.segmentFill]} /> : null}
+              <Text numberOfLines={1} style={[styles.segmentLabel, { fontSize: fit.fontSize, lineHeight: fit.lineHeight, color: selected ? '#FFFFFF' : theme.colors.link }]}>
+                {option}
+              </Text>
+            </Pressable>
+          );
+        }}
+      />
+    );
+  }
   return (
     <View style={[styles.segments, { backgroundColor: theme.colors.glassFill }]}>
       {options.map((option) => {
@@ -602,6 +637,8 @@ const styles = StyleSheet.create({
   disabledSoft: { opacity: 0.35 },
   segments: { flexDirection: 'row', gap: 4, padding: 4, borderRadius: 18 },
   segment: { flex: 1, minHeight: 42, borderRadius: 15, justifyContent: 'center', overflow: 'hidden' },
+  // Android: sized by `SegmentRow`, so no `flex: 1` share of the row.
+  androidSegment: { minHeight: 42, borderRadius: 15, justifyContent: 'center', overflow: 'hidden' },
   segmentFill: { borderRadius: 15 },
   segmentLabel: { fontSize: 15, lineHeight: 20, fontWeight: '500', textAlign: 'center', alignSelf: 'stretch' },
   tile: { width: 64, height: 64, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },

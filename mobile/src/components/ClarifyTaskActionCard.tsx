@@ -4,7 +4,8 @@ import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 import type { NexdoTask } from '../api/types';
 import { contactActionTitle, isClarificationCandidate, nextStepTitle } from '../lib/taskClarification';
 import { isDone } from '../lib/taskQuery';
-import { brand, useTheme } from '../theme';
+import { brand, isAndroid, useTheme } from '../theme';
+import { SegmentRow } from './SegmentRow';
 import { DetailTextInput, withAlpha } from './TaskDetailParts';
 import { Text } from './Text';
 
@@ -20,6 +21,12 @@ import { Text } from './Text';
  * The second branch, ported in full below, shows when the task is open, has NO steps yet, and its
  * title is vague enough that `TaskActionClarification.isCandidate` returns true.
  */
+/** The two modes of the "Next step type" picker, in Swift's order. */
+const MODES = [
+  { label: 'Work on it', mode: false },
+  { label: 'Contact someone', mode: true },
+] as const;
+
 export function ClarifyTaskActionCard({
   task,
   onSaveNextStep,
@@ -57,7 +64,37 @@ export function ClarifyTaskActionCard({
         {`What would you like to do about “${task.title}”?`}
       </Text>
 
-      {/* `Picker("Next step type", …).pickerStyle(.segmented)` (TaskActionView.swift:55-58) */}
+      {/* `Picker("Next step type", …).pickerStyle(.segmented)` (TaskActionView.swift:55-58). Android: the
+          shared `SegmentRow` (docs/android-polish.md §9). */}
+      {isAndroid() ? (
+        <SegmentRow
+          labels={MODES.map((mode) => mode.label)}
+          selected={contactMode ? 1 : 0}
+          base={{ fontSize: 13, lineHeight: 18 }}
+          labelStyle={styles.segmentLabel}
+          gap={0}
+          inset={2}
+          style={[styles.segmented, { backgroundColor: theme.colors.groupedBackground }]}
+          testID="clarify-modes"
+          renderSegment={(index, fit, segmentStyle) => {
+            const { label, mode } = MODES[index];
+            return (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={label}
+                accessibilityState={{ selected: contactMode === mode }}
+                onPress={() => setContactMode(mode)}
+                testID={`clarify-mode-${mode ? 'contact' : 'work'}`}
+                style={[styles.androidSegment, segmentStyle, contactMode === mode && { backgroundColor: theme.colors.surface }]}
+              >
+                <Text numberOfLines={1} style={[styles.segmentLabel, { fontSize: fit.fontSize, lineHeight: fit.lineHeight, color: theme.colors.ink }]}>
+                  {label}
+                </Text>
+              </Pressable>
+            );
+          }}
+        />
+      ) : (
       <View style={[styles.segmented, { backgroundColor: theme.colors.groupedBackground }]}>
         {[
           { label: 'Work on it', mode: false },
@@ -76,6 +113,7 @@ export function ClarifyTaskActionCard({
           </Pressable>
         ))}
       </View>
+      )}
 
       {contactMode ? (
         <>
@@ -163,6 +201,8 @@ const styles = StyleSheet.create({
   segmented: { flexDirection: 'row', borderRadius: 9, padding: 2 },
   segment: { flex: 1, alignItems: 'center', justifyContent: 'center', minHeight: 32, borderRadius: 7 },
   segmentLabel: { fontSize: 13, lineHeight: 18, fontWeight: '500' },
+  // Android: sized by `SegmentRow`, so no `flex: 1` share of the row.
+  androidSegment: { alignItems: 'center', justifyContent: 'center', minHeight: 32, borderRadius: 7 },
   choices: { flexDirection: 'row', gap: 8 },
   choice: { flex: 1, minHeight: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 11, borderWidth: StyleSheet.hairlineWidth },
   choiceLabel: { fontSize: 15, lineHeight: 20, fontWeight: '600' },

@@ -635,3 +635,58 @@ readable photo, the gap has another cause and needs a device to find it.
    is slow, a grey basket tile fills its place first.
 2. An item with a broken photo shows its illustration or emoji, not a gap.
 3. iOS: no tile. A broken photo falls through to the illustration, as in Swift.
+
+---
+
+## 9. Segmented tabs size to their labels (2026-09-22)
+
+JavaScript only; no new build needed. All changes are Android only. iOS is unchanged, and so are
+the text, order and behaviour.
+
+### What was wrong
+
+- **Manage Moment's tabs** (Details / Contacts / Wish Message / Schedule) were four equal quarters,
+  and each label shrank on its own (`FitText`, `minimumScale 0.7`) to fit its quarter. "Wish
+  Message" came out smaller than its neighbours, and the short labels floated in wide segments.
+- **The other segmented rows** split the row equally too, so a long label was squeezed or clipped
+  while a short one had spare room. These were the Moments segments, Calendar's Schedule / Week /
+  Month, Settings' Appearance, Tasks / Projects and the clarify card's "Work on it / Contact
+  someone".
+
+### What changed
+
+There was no shared segmented control, so each row was its own implementation. They now share one
+layout, **`SegmentRow`** (`src/components/SegmentRow.tsx`), used only on Android. The rule:
+
+1. **One size for every label in the row**, with no per-segment shrink. The labels are measured once
+   at the base size, off to the side and invisible.
+2. **Each segment is its label's width plus 12pt each side.** If there is room to spare, the segments
+   share it (`flexGrow: 1` from their own width), so the row still fills its track.
+3. **If the row does not fit at the base size, every label drops one step together** on the type
+   scale (15 → 13, 13 → 12).
+4. **If it still does not fit, the row scrolls sideways**, with no scroll indicator. The segments keep
+   their own widths, and the selected segment is scrolled into view when the row lays out and
+   whenever the selection changes.
+
+`SegmentRow` only lays the row out. Each control still draws its own segments:
+
+| Row | Base size | Selected segment (unchanged) |
+|---|---|---|
+| Manage Moment (Details / Contacts / Wish Message / Schedule) | 15 | filled indigo pill, white label |
+| `MomentSegments` (Moments' Upcoming / Scheduled / Sent, the review and tone rows) | 15 | brand-gradient fill, white label |
+| `CalendarSegments` (Schedule / Week / Month) | 15 | save-gradient fill, white label |
+| `SettingsSegments` (Appearance, and Moments delivery's row) | 15 | accent tint and border, accent label (§5, §7) |
+| Tasks / Projects | 13 | raised segment |
+| Clarify card (Work on it / Contact someone) | 13 | surface segment |
+
+Which of the three outcomes a phone gets depends on its width and system font size. It has not
+been measured on a device yet.
+
+### Check it on a phone
+
+1. Moments → a birthday → Manage Moment: all four tab labels are the same size. "Wish Message" is not
+   smaller than "Details", and each segment hugs its label.
+2. With the system font size set to Largest: the four labels drop together and, if they still do
+   not fit, the row scrolls. Tapping Schedule keeps it in view.
+3. Calendar, Settings → Appearance, Tasks / Projects: the segments size to their labels at one size.
+4. iOS: every row is still equal widths, as before.
