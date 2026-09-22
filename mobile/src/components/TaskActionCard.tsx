@@ -5,7 +5,7 @@ import { useCoordinator } from '../actions/coordinator';
 import type { NexdoTask } from '../api/types';
 import { notificationDate } from '../lib/taskAction';
 import { isDone } from '../lib/taskQuery';
-import { brand, useTheme } from '../theme';
+import { androidCard, brand, useTheme } from '../theme';
 import { withAlpha } from './SignInBackdrop';
 import { TaskSymbol } from './TaskSymbol';
 import { Text } from './Text';
@@ -45,7 +45,8 @@ export function TaskActionCard({ task, onOpen, now }: { task: NexdoTask; onOpen:
       accessibilityLabel={`Nexdo Action: contact ${action.contactName}`}
       accessibilityRole="button"
       onPress={() => onOpen(action.id)}
-      style={[styles.card, { backgroundColor: theme.colors.surface, borderColor: withAlpha(brand.nexdoIndigo, 0.18) }]}
+      // Android: the shared card hairline and surface (docs/android-polish.md §2).
+      style={[styles.card, { backgroundColor: theme.colors.surface, borderColor: withAlpha(brand.nexdoIndigo, 0.18) }, androidCard(theme)]}
       testID="task-action-card"
     >
       <View style={styles.row}>

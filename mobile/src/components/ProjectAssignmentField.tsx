@@ -3,7 +3,7 @@ import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 
 import { projectColor, projectResults } from '../lib/projectQuery';
 import { useProjects } from '../query/useProjects';
-import { useTheme } from '../theme';
+import { androidField, useTheme } from '../theme';
 import { ProjectFolder, useProjectAccent, useProjectCardSurface } from './ProjectParts';
 import { TaskSymbol } from './TaskSymbol';
 import { Text } from './Text';
@@ -43,7 +43,8 @@ export function ProjectAssignmentField({
         accessibilityState={{ expanded: open }}
         onPress={() => setOpen((value) => !value)}
         testID="project-field"
-        style={[styles.field, surface]}
+        // Android: the shared field look, as on every other Task Details field (docs/android-polish.md §2).
+        style={[styles.field, surface, androidField(theme)]}
       >
         <TaskSymbol name="folder.fill" size={17} color={selected ? projectColor(selected.color) : theme.colors.secondary} />
         <Text style={[theme.typography.body, styles.grow, { color: theme.colors.ink }]}>{label}</Text>
@@ -53,7 +54,7 @@ export function ProjectAssignmentField({
       </Pressable>
 
       {open ? (
-        <View style={[styles.menu, surface]}>
+        <View style={[styles.menu, surface, androidField(theme), styles.androidMenu]}>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="No project"
@@ -127,6 +128,8 @@ const styles = StyleSheet.create({
   // `.padding(.horizontal, 14).frame(minHeight: 48)`
   field: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, minHeight: 48 },
   menu: { overflow: 'hidden' },
+  // The option rows carry their own padding; the field's does not apply to the open list.
+  androidMenu: { paddingVertical: 0, paddingHorizontal: 0 },
   option: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 44, paddingHorizontal: 14 },
   grow: { flex: 1 },
   status: { gap: 4 },

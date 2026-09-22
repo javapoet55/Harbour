@@ -42,6 +42,7 @@ export function useTheme(options?: { elevated?: boolean }): Theme {
         background: palette.backgroundElevated,
         groupedBackground: palette.groupedBackgroundElevated,
         surface: palette.surfaceElevated,
+        fieldSurface: palette.fieldSurfaceElevated,
       }
     : palette;
   return { scheme, colors, spacing, radii, typography, textStyles };

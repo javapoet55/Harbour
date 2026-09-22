@@ -34,7 +34,7 @@ import {
 import { canStartFocusSession, canStartTask, FOCUS_SESSION_MINUTES, useFocus } from '../../src/store/focus';
 import { FocusSessionStrip } from '../../src/components/FocusSessionStrip';
 import { useSession } from '../../src/store/session';
-import { brand, useTheme } from '../../src/theme';
+import { androidBar, brand, isAndroid, useTheme } from '../../src/theme';
 
 /**
  * Port of `TaskDetailsView` (ios/App/TaskDetailsView.swift), rebuilt element by element from the view
@@ -54,6 +54,7 @@ const SAVE_GRADIENT = [brand.nexdoBlue, brand.nexdoIndigo, brand.nexdoMagenta] a
 export default function TaskDetail() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
+  const android = isAndroid();
   const { id } = useLocalSearchParams<{ id: string }>();
   const profile = useSession((state) => state.profile);
   const task = useTask(id);
@@ -180,7 +181,11 @@ export default function TaskDetail() {
         </Pressable>
       </View>
 
-      <KeyboardAwareScrollView keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive" contentContainerStyle={styles.scroll}>
+      <KeyboardAwareScrollView
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="interactive"
+        contentContainerStyle={[styles.scroll, android && styles.androidScroll]}
+      >
         {/* `TaskActionCard(task:)` (TaskDetailsView.swift:34). Its FIRST branch — a scheduled contact
             action — wins; the clarify card below is the fall-through (TaskActionView.swift:10, `:36`). */}
         <TaskActionCard task={task} onOpen={(id) => useCoordinator.getState().open(id)} />
@@ -312,7 +317,16 @@ export default function TaskDetail() {
         </DetailField>
 
         {/* `schedule` (TaskDetailsView.swift:150-171) */}
-        <View style={[styles.scheduleCard, { backgroundColor: theme.colors.background, borderColor: withAlpha(brand.nexdoIndigo, 0.16) }]}>
+        {/* Android lays SCHEDULE out like every other field — label, then the date and time fields —
+            rather than as a card: a card on the field surface would hide the fields inside it. */}
+        <View
+          style={
+            android
+              ? styles.androidSchedule
+              : [styles.scheduleCard, { backgroundColor: theme.colors.background, borderColor: withAlpha(brand.nexdoIndigo, 0.16) }]
+          }
+          testID="detail-schedule"
+        >
           <SectionLabel title="SCHEDULE" />
           {scheduleAt !== null ? (
             <View style={styles.scheduleRow}>
@@ -428,7 +442,16 @@ export default function TaskDetail() {
       </KeyboardAwareScrollView>
 
       {/* `footer` (TaskDetailsView.swift:203-227): Mark complete and Save changes, side by side. */}
-      <View style={[styles.footer, { backgroundColor: theme.colors.surface, borderTopColor: withAlpha(brand.nexdoIndigo, 0.1), paddingBottom: 12 + insets.bottom }]}>
+      {/* Android: a raised surface and a top hairline, so the bar separates from the scroll content. */}
+      <View
+        style={[
+          styles.footer,
+          { backgroundColor: theme.colors.surface, borderTopColor: withAlpha(brand.nexdoIndigo, 0.1) },
+          androidBar(theme),
+          { paddingBottom: 12 + insets.bottom },
+        ]}
+        testID="detail-footer"
+      >
         <View style={styles.footerButton}>
           <DetailOutlineButton
             title={isDone(task) ? 'Mark incomplete' : 'Mark complete'}
@@ -555,12 +578,15 @@ const styles = StyleSheet.create({
   close: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
   // `.padding(20)` with `VStack(spacing: 24)`.
   scroll: { padding: 20, gap: 24 },
+  // Android: 20 between one field and the next section label (docs/android-polish.md §2).
+  androidScroll: { gap: 20 },
   actions: { gap: 8 },
   metadata: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
   controlGroup: { flexDirection: 'row', borderTopWidth: StyleSheet.hairlineWidth },
   controlButton: { flex: 1, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
   // `.padding(12)`, corner radius 17.
   scheduleCard: { gap: 8, padding: 12, borderRadius: 17, borderWidth: StyleSheet.hairlineWidth },
+  androidSchedule: { gap: 8 },
   scheduleRow: { flexDirection: 'row', gap: 12 },
   chip: { flex: 1, justifyContent: 'center' },
   steps: { gap: 8 },

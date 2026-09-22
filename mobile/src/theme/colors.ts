@@ -70,6 +70,29 @@ export type Palette = {
    */
   tabBarBackground: string;
   tabBarSelected: string;
+  /**
+   * Android form chrome (docs/android-polish.md §2). On Android the Swift look — inputs, menus,
+   * cards and buttons all filled with the page colour behind a faint indigo hairline — reads as flat
+   * dark rectangles, so fields sit one step above the page with a neutral hairline instead.
+   * `fieldSurface` is one step above `background`; `fieldSurfaceElevated` is the same step above the
+   * elevated (sheet) background, and `useTheme` swaps it in with the other elevated colours.
+   */
+  fieldSurface: string;
+  fieldSurfaceElevated: string;
+  /** The 1px hairline around an Android field or card, and on top of a bottom bar. */
+  fieldBorder: string;
+  /**
+   * The accent for a focused Android field and an outlined secondary button's border, tint and
+   * label. `nexdoIndigo` in light mode; a lighter indigo in dark, where #3D29F0 text on black is
+   * about 2.6:1.
+   */
+  accent: string;
+  /** `accent` at 10%: the outlined secondary button's fill. */
+  accentTint: string;
+  /** `accent` at 45%: the outlined secondary button's border. */
+  accentBorder: string;
+  /** An Android bottom bar, a shade above `fieldSurface` so it separates from the scroll content. */
+  barSurface: string;
 };
 
 export type ColorScheme = 'light' | 'dark';
@@ -106,6 +129,13 @@ export const palettes: Record<ColorScheme, Palette> = {
     segmentSelected: '#FFFFFF',
     tabBarBackground: '#F5F5F5',
     tabBarSelected: 'rgba(61, 41, 240, 0.10)',
+    fieldSurface: '#F2F2F7',
+    fieldSurfaceElevated: '#F2F2F7',
+    fieldBorder: 'rgba(0, 0, 0, 0.12)',
+    accent: brand.nexdoIndigo,
+    accentTint: 'rgba(61, 41, 240, 0.10)',
+    accentBorder: 'rgba(61, 41, 240, 0.45)',
+    barSurface: '#FAFAFC',
   },
   dark: {
     // TODO(phase1-decision): the Swift dark variant is the dynamic system `.label`; this is its standard dark value.
@@ -143,5 +173,12 @@ export const palettes: Record<ColorScheme, Palette> = {
     // Measured off the Swift app in dark mode: the capsule is (34, 32, 52) over a (31, 31, 31) bar,
     // which is `nexdoIndigo` at 10% — the *same* value as light mode, not a lighter indigo at 22%.
     tabBarSelected: 'rgba(61, 41, 240, 0.10)',
+    fieldSurface: '#1C1C1E',
+    fieldSurfaceElevated: '#2C2C2E',
+    fieldBorder: 'rgba(255, 255, 255, 0.14)',
+    accent: '#8F85FF',
+    accentTint: 'rgba(143, 133, 255, 0.10)',
+    accentBorder: 'rgba(143, 133, 255, 0.45)',
+    barSurface: '#242427',
   },
 };

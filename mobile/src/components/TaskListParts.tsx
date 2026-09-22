@@ -1,7 +1,7 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import { Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 
-import { brand, useTheme } from '../theme';
+import { brand, isAndroid, useTheme } from '../theme';
 import type { TaskDateFilter } from '../lib/taskQuery';
 import { TaskSymbol, type TaskSymbolName } from './TaskSymbol';
 import { Text } from './Text';
@@ -65,11 +65,18 @@ export function DatePill({
       testID={`date-pill-${filter}`}
     >
       {selected ? (
-        <LinearGradient colors={[...TASK_ACCENT]} start={{ x: 0, y: 0.5 }} end={{ x: 1, y: 0.5 }} style={styles.pill}>
+        <LinearGradient colors={[...TASK_ACCENT]} start={{ x: 0, y: 0.5 }} end={{ x: 1, y: 0.5 }} style={[styles.pill, isAndroid() && styles.androidPill]} testID={`date-pill-${filter}-surface`}>
           {content}
         </LinearGradient>
       ) : (
-        <View style={[styles.pill, { backgroundColor: theme.colors.surface, borderWidth: StyleSheet.hairlineWidth, borderColor: withAlpha(brand.nexdoIndigo, 0.16) }]}>
+        <View
+          style={[
+            styles.pill,
+            isAndroid() && styles.androidPill,
+            { backgroundColor: theme.colors.surface, borderWidth: StyleSheet.hairlineWidth, borderColor: withAlpha(brand.nexdoIndigo, 0.16) },
+          ]}
+          testID={`date-pill-${filter}-surface`}
+        >
           {content}
         </View>
       )}
@@ -94,6 +101,9 @@ export function CreationCard({
   testID?: string;
 }) {
   const theme = useTheme();
+  // Android stacks the two cards full width (docs/android-polish.md §2), so the title has the room
+  // to show in full and is never cut to one line.
+  const android = isAndroid();
   return (
     <Pressable
       accessibilityRole="button"
@@ -103,6 +113,7 @@ export function CreationCard({
       testID={testID}
       style={[
         styles.creationCard,
+        android && styles.androidCreationCard,
         {
           backgroundColor: isVoice ? withAlpha(brand.nexdoIndigo, 0.05) : withAlpha(theme.colors.surface, 0.7),
           borderColor: withAlpha(brand.nexdoIndigo, 0.16),
@@ -119,7 +130,7 @@ export function CreationCard({
         </View>
       )}
       <View style={styles.creationText}>
-        <Text numberOfLines={1} style={[styles.creationTitle, { color: theme.colors.ink }]}>
+        <Text numberOfLines={android ? undefined : 1} style={[styles.creationTitle, { color: theme.colors.ink }]}>
           {title}
         </Text>
         <Text numberOfLines={1} style={[styles.creationSubtitle, { color: theme.colors.secondary }]}>
@@ -181,10 +192,14 @@ const styles = StyleSheet.create({
   // `.padding(.horizontal, 8).frame(minHeight: 44)`, capsule.
   pill: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 8, minHeight: 44, borderRadius: 999 },
   pillLabel: { fontSize: 13, lineHeight: 18 },
+  // Android: a fixed 36 chip with 12 inside, so the row sits tight in its horizontal scroll.
+  androidPill: { height: 36, minHeight: 36, paddingHorizontal: 12 },
   pillCount: { paddingHorizontal: 5, paddingVertical: 2, borderRadius: 999 },
   pillCountLabel: { fontSize: 12, lineHeight: 16 },
   // `.padding(12).frame(maxWidth: .infinity, minHeight: 72)`, corner radius 20.
   creationCard: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12, minHeight: 72, borderRadius: 20, borderWidth: StyleSheet.hairlineWidth },
+  // Android: one card per row, full width. `flex: 1` in the stacked column would share out height.
+  androidCreationCard: { flex: 0, alignSelf: 'stretch' },
   creationIcon: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center' },
   creationText: { flex: 1, gap: 5 },
   creationTitle: { fontSize: 13, lineHeight: 18, fontWeight: '600' },

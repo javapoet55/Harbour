@@ -1,8 +1,17 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import { useState } from 'react';
-import { Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, TextInput, View, type ViewStyle } from 'react-native';
 
-import { brand, useTheme } from '../theme';
+import {
+  androidCard,
+  androidField,
+  androidSecondaryButton,
+  androidSecondaryLabel,
+  androidSectionLabel,
+  brand,
+  isAndroid,
+  useTheme,
+} from '../theme';
 import { TaskSymbol } from './TaskSymbol';
 import { Text } from './Text';
 
@@ -12,11 +21,14 @@ import { Text } from './Text';
  * helpers on that view or in that file; they are components here so each can be render-tested.
  */
 
-/** `sectionLabel` (TaskDetailsView.swift:266-268): `.caption.weight(.bold)`, secondary. */
+/**
+ * `sectionLabel` (TaskDetailsView.swift:266-268): `.caption.weight(.bold)`, secondary. Android tracks
+ * it out (docs/android-polish.md §2).
+ */
 export function SectionLabel({ title }: { title: string }) {
   const theme = useTheme();
   return (
-    <Text accessibilityRole="header" style={[styles.sectionLabel, { color: theme.colors.secondary }]}>
+    <Text accessibilityRole="header" style={[styles.sectionLabel, { color: theme.colors.secondary }, androidSectionLabel(theme)]}>
       {title}
     </Text>
   );
@@ -32,8 +44,12 @@ export function DetailField({ title, children, style }: { title: string; childre
   );
 }
 
-/** `DetailInput` (TaskDetailsView.swift:288-295): the 13pt rounded input surface. */
-export function detailInputStyle(theme: ReturnType<typeof useTheme>, focused = false) {
+/**
+ * `DetailInput` (TaskDetailsView.swift:288-295): the 13pt rounded input surface. On Android it is the
+ * shared field look instead — a hairline one step above the page, accent when focused
+ * (docs/android-polish.md §2).
+ */
+export function detailInputStyle(theme: ReturnType<typeof useTheme>, focused = false): ViewStyle {
   return {
     paddingHorizontal: 14,
     paddingVertical: 11,
@@ -42,7 +58,8 @@ export function detailInputStyle(theme: ReturnType<typeof useTheme>, focused = f
     backgroundColor: theme.colors.background,
     borderWidth: focused ? 2 : StyleSheet.hairlineWidth,
     borderColor: focused ? brand.nexdoBlue : withAlpha(brand.nexdoIndigo, 0.16),
-  } as const;
+    ...androidField(theme, focused),
+  };
 }
 
 /**
@@ -95,7 +112,13 @@ export function DetailMenu({
       </Pressable>
 
       {open ? (
-        <View style={[styles.menu, { backgroundColor: theme.colors.surface, borderColor: withAlpha(brand.nexdoIndigo, 0.16) }]}>
+        <View
+          style={[
+            styles.menu,
+            { backgroundColor: theme.colors.surface, borderColor: withAlpha(brand.nexdoIndigo, 0.16) },
+            isAndroid() && { backgroundColor: theme.colors.fieldSurface, borderColor: theme.colors.fieldBorder, borderWidth: 1, borderRadius: 12 },
+          ]}
+        >
           {all.map((option) => (
             <Pressable
               key={option}
@@ -138,7 +161,9 @@ export function DetailOutlineButton({
 }) {
   const theme = useTheme();
   const body = (
-    <Text style={[styles.outlineLabel, { color: greenBackground ? '#FFFFFF' : theme.colors.ink }]}>{title}</Text>
+    <Text style={[styles.outlineLabel, { color: greenBackground ? '#FFFFFF' : theme.colors.ink }, !greenBackground && androidSecondaryLabel(theme)]}>
+      {title}
+    </Text>
   );
 
   return (
@@ -158,7 +183,15 @@ export function DetailOutlineButton({
           {body}
         </LinearGradient>
       ) : (
-        <View style={[styles.outlineButton, { backgroundColor: theme.colors.background, borderWidth: StyleSheet.hairlineWidth, borderColor: withAlpha(brand.nexdoIndigo, 0.16) }]}>
+        // Android: outlined in the accent so it reads as tappable, not as another input.
+        <View
+          style={[
+            styles.outlineButton,
+            { backgroundColor: theme.colors.background, borderWidth: StyleSheet.hairlineWidth, borderColor: withAlpha(brand.nexdoIndigo, 0.16) },
+            androidSecondaryButton(theme),
+          ]}
+          testID={testID ? `${testID}-surface` : undefined}
+        >
           {body}
         </View>
       )}
@@ -192,7 +225,7 @@ export function DetailCheckbox({
       accessibilityState={{ checked: value }}
       onPress={() => onChange(!value)}
       testID={testID}
-      style={[styles.checkbox, { backgroundColor: theme.colors.background, borderColor: withAlpha(brand.nexdoIndigo, 0.16) }]}
+      style={[styles.checkbox, { backgroundColor: theme.colors.background, borderColor: withAlpha(brand.nexdoIndigo, 0.16) }, androidCard(theme)]}
     >
       <TaskSymbol
         name={value ? 'checkmark.square.fill' : 'square'}

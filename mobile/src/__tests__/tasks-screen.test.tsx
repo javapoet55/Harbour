@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { Platform, StyleSheet } from 'react-native';
 
 import type { NexdoTask } from '../api/types';
 import { DEFAULT_TASK_QUERY } from '../lib/taskQuery';
@@ -220,5 +221,52 @@ describe('Tasks screen', () => {
     // The header button and the "No project" folder, both from ProjectsView.swift.
     expect(screen.getByLabelText('New project')).toBeTruthy();
     expect(screen.getByText('No project')).toBeTruthy();
+  });
+});
+
+/** docs/android-polish.md §2: the creation cards stack and the date chips scroll edge to edge. */
+describe('Tasks screen on Android', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    jest.useFakeTimers({ now: NOW, doNotFake: ['nextTick', 'setImmediate'] });
+    resetRevisions();
+    useTaskQuery.setState({ query: DEFAULT_TASK_QUERY });
+    useSession.setState({ status: 'signedIn', profile: { id: 'u1', name: 'Sri Ram', email: 'a@b.com', timeZone: ZONE } });
+    mockTasks.mockResolvedValue({ tasks: FIXTURE, timeZone: ZONE });
+    mockProjects.mockResolvedValue({ projects: [], unassignedTaskCount: 0 });
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+    jest.restoreAllMocks();
+  });
+
+  const flat = (testID: string) => StyleSheet.flatten(screen.getByTestId(testID).props.style);
+
+  it('stacks Add by Voice over Add Manually, 12 apart', async () => {
+    jest.replaceProperty(Platform, 'OS', 'android');
+    await renderTasks();
+
+    expect(flat('creation-row')).toMatchObject({ flexDirection: 'column', gap: 12 });
+    expect(screen.getByText('Add Manually').props.numberOfLines).toBeUndefined();
+  });
+
+  it('bleeds the chip row to the screen edges with 16 of padding and 8 between chips', async () => {
+    jest.replaceProperty(Platform, 'OS', 'android');
+    await renderTasks();
+
+    const pills = screen.getByTestId('date-pills');
+    expect(pills.props.horizontal).toBe(true);
+    expect(pills.props.showsHorizontalScrollIndicator).toBe(false);
+    expect(StyleSheet.flatten(pills.props.style)).toMatchObject({ marginHorizontal: -20 });
+    expect(StyleSheet.flatten(pills.props.contentContainerStyle)).toMatchObject({ gap: 8, paddingHorizontal: 16 });
+  });
+
+  it('keeps the side-by-side row and the inset chips on iOS', async () => {
+    jest.replaceProperty(Platform, 'OS', 'ios');
+    await renderTasks();
+
+    expect(flat('creation-row')).toMatchObject({ flexDirection: 'row', gap: 12 });
+    expect(StyleSheet.flatten(screen.getByTestId('date-pills').props.contentContainerStyle)).toEqual({ gap: 7 });
   });
 });

@@ -1,11 +1,12 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
-import { Alert } from 'react-native';
+import { Alert, Platform, StyleSheet } from 'react-native';
 
 import type { NexdoProject, NexdoTask } from '../api/types';
 import { resetRevisions } from '../query/taskRevision';
 import { useFocus } from '../store/focus';
 import { useSession } from '../store/session';
+import { palettes } from '../theme';
 
 const mockBack = jest.fn();
 const mockParams = jest.fn(() => ({ id: 't1' }) as Record<string, string>);
@@ -316,5 +317,50 @@ describe('Footer actions', () => {
     await fireEvent.press(screen.getByTestId('detail-save'));
 
     await waitFor(() => expect(mockUpdateTask).toHaveBeenCalledWith('t1', { subtasks: ['Clear the counters'] }));
+  });
+});
+
+/** docs/android-polish.md §2: fields, labels, buttons and the footer bar on Android. */
+describe('Task detail on Android', () => {
+  const light = palettes.light;
+  const flat = (testID: string) => StyleSheet.flatten(screen.getByTestId(testID).props.style);
+
+  afterEach(() => jest.restoreAllMocks());
+
+  it('gives every field the shared field look', async () => {
+    jest.replaceProperty(Platform, 'OS', 'android');
+    await renderDetail();
+
+    for (const id of ['detail-title', 'detail-priority', 'detail-estimate', 'project-field', 'detail-schedule-date', 'detail-schedule-time', 'detail-repeat', 'detail-new-step', 'detail-notes']) {
+      expect(flat(id)).toMatchObject({ backgroundColor: light.fieldSurface, borderWidth: 1, borderColor: light.fieldBorder, borderRadius: 12 });
+    }
+  });
+
+  it('outlines the secondary buttons in the accent', async () => {
+    jest.replaceProperty(Platform, 'OS', 'android');
+    await renderDetail();
+
+    for (const id of ['detail-start-focus', 'detail-start-task', 'detail-add-step']) {
+      expect(flat(`${id}-surface`)).toMatchObject({ backgroundColor: light.accentTint, borderColor: light.accentBorder, minHeight: 48 });
+    }
+  });
+
+  it('lays SCHEDULE out as a field rather than a card, and raises the footer', async () => {
+    jest.replaceProperty(Platform, 'OS', 'android');
+    await renderDetail();
+
+    expect(flat('detail-schedule')).toEqual({ gap: 8 });
+    expect(flat('detail-footer')).toMatchObject({ backgroundColor: light.barSurface, borderTopWidth: 1, borderTopColor: light.fieldBorder });
+    // Text and behaviour are unchanged: both footer buttons are still there.
+    expect(screen.getByLabelText('Mark task complete')).toBeTruthy();
+    expect(screen.getByLabelText('Save task changes')).toBeTruthy();
+  });
+
+  it('keeps the schedule card and the surface footer on iOS', async () => {
+    jest.replaceProperty(Platform, 'OS', 'ios');
+    await renderDetail();
+
+    expect(flat('detail-schedule')).toMatchObject({ padding: 12, borderRadius: 17 });
+    expect(flat('detail-footer')).toMatchObject({ backgroundColor: light.surface });
   });
 });

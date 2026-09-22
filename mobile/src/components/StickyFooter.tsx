@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { useTheme } from '../theme';
+import { androidBar, useTheme } from '../theme';
 
 /**
  * The bar pinned to the bottom of a sheet — "Create Task", "Save", "Apply" and friends.
@@ -18,10 +18,12 @@ export function StickyFooter({
   style,
   /** Most footers sit on `surface`; a few inherit the screen's own background. */
   background,
+  testID,
 }: {
   children: ReactNode;
   style?: StyleProp<ViewStyle>;
   background?: string;
+  testID?: string;
 }) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
@@ -31,9 +33,12 @@ export function StickyFooter({
         styles.footer,
         { borderTopColor: theme.colors.separator },
         background ? { backgroundColor: background } : null,
+        // Android: a raised surface and a top hairline, so the bar separates from the scroll above it.
+        androidBar(theme),
         style,
         { paddingBottom: styles.footer.paddingVertical + insets.bottom },
       ]}
+      testID={testID}
     >
       {children}
     </View>

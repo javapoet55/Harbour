@@ -7,7 +7,7 @@ import { MonthCalendar } from '../../components/MonthCalendar';
 import { IOSSwitch } from '../../components/IOSSwitch';
 import { withAlpha } from '../../components/SignInBackdrop';
 import { Text } from '../../components/Text';
-import { textStyles, useTheme } from '../../theme';
+import { isAndroid, textStyles, useTheme } from '../../theme';
 import { KEYBOARD_DONE_BAR_HEIGHT } from './components';
 import { mediumDate, momentDay, momentStartOfDay, shortTimeIn, wallParts, zonedInstant } from './dates';
 
@@ -33,7 +33,8 @@ export function FormSection({ children, header, footer, disabled = false, testID
     // first card 45pt below the bar); a header supplies that space itself.
     <View style={[styles.section, !header && styles.headerless, disabled && styles.dimmed]} pointerEvents={disabled ? 'none' : 'auto'} testID={testID}>
       {header ? <Text style={[styles.header, { color: theme.colors.secondaryLabel }]}>{header}</Text> : null}
-      <View style={[styles.sectionBody, { backgroundColor: theme.colors.surface }]}>{children}</View>
+      {/* Android: the shared card hairline, so a section separates from the page (docs/android-polish.md §2). */}
+      <View style={[styles.sectionBody, { backgroundColor: theme.colors.surface }, isAndroid() && { borderWidth: 1, borderColor: theme.colors.fieldBorder }]}>{children}</View>
       {footer ? <Text style={[styles.footer, { color: theme.colors.secondaryLabel }]}>{footer}</Text> : null}
     </View>
   );

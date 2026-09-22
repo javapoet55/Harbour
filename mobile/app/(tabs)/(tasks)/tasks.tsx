@@ -18,7 +18,7 @@ import { useProjects } from '../../../src/query/useProjects';
 import { useCompleteTask, useTasks, type ScheduleConflict } from '../../../src/query/useTasks';
 import { useSession } from '../../../src/store/session';
 import { useTaskQuery } from '../../../src/store/taskQuery';
-import { useTheme } from '../../../src/theme';
+import { isAndroid, useTheme } from '../../../src/theme';
 
 /** The caption under the history-range picker (RootView.swift:1678). */
 const HISTORY_RANGE_CAPTION: Record<TaskHistoryRange, string> = {
@@ -50,6 +50,7 @@ export default function Tasks() {
   const [conflict, setConflict] = useState<ScheduleConflict | null>(null);
   const [rangeOpen, setRangeOpen] = useState(false);
 
+  const android = isAndroid();
   const tasks = useTasks();
   const projects = useProjects();
   const complete = useCompleteTask({ onConflict: setConflict });
@@ -172,7 +173,8 @@ export default function Tasks() {
             ) : null}
 
             {/* `creationActions` (RootView.swift:1795-1801) */}
-            <View style={styles.creationRow}>
+            {/* Android stacks the two cards, one per row (docs/android-polish.md §2). */}
+            <View style={[styles.creationRow, android && styles.creationColumn]} testID="creation-row">
               <CreationCard
                 title="Add by Voice"
                 subtitle="Tap and speak"
@@ -192,7 +194,15 @@ export default function Tasks() {
             </View>
 
             {/* `datePills` (RootView.swift:1783-1806) */}
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pills}>
+            {/* Android: the row bleeds to the screen edges with 16 of content padding, so the last
+                chip scrolls fully into view instead of being cut at the content inset. */}
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={android ? styles.androidPillScroll : undefined}
+              contentContainerStyle={[styles.pills, android && styles.androidPills]}
+              testID="date-pills"
+            >
               {TASK_DATE_FILTERS.map((filter) => (
                 <DatePill
                   key={filter}
@@ -325,8 +335,12 @@ const styles = StyleSheet.create({
   searchInput: { flex: 1, paddingVertical: 0 },
   searchClose: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   creationRow: { flexDirection: 'row', gap: 12 },
+  creationColumn: { flexDirection: 'column' },
   grow: { flex: 1 },
   pills: { gap: 7 },
+  // Cancels `content`'s 20 so the scroll reaches the screen edges.
+  androidPillScroll: { marginHorizontal: -20 },
+  androidPills: { gap: 8, paddingHorizontal: 16 },
   // `VStack(alignment: .leading, spacing: 6)` (RootView.swift:1670).
   historyRange: { gap: 6 },
   historyRangeRow: { flexDirection: 'row', alignItems: 'center' },
