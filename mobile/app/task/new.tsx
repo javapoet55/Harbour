@@ -1,7 +1,7 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { ActivityIndicator, Alert, Modal, Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, Modal, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 
 import { KeyboardAvoidingView, KeyboardAwareScrollView, NexdoTaskBackdrop, StickyFooter, TaskSymbol, Text } from '../../src/components';
 import { MonthCalendar } from '../../src/components/MonthCalendar';
@@ -10,7 +10,17 @@ import { detectTaskAction } from '../../src/lib/taskActionDetector';
 import { creationDateFor, TASK_CREATION_DATES, type TaskCreationDate } from '../../src/lib/taskCreation';
 import { useCreateTask, type ScheduleConflict } from '../../src/query/useTasks';
 import { useSession } from '../../src/store/session';
-import { androidField, isAndroid, useTheme } from '../../src/theme';
+import {
+  ANDROID_LABEL_GAP,
+  ANDROID_LABEL_ICON,
+  androidChip,
+  androidChipScroll,
+  androidField,
+  androidLabel,
+  androidLabelRow,
+  isAndroid,
+  useTheme,
+} from '../../src/theme';
 
 /**
  * Port of `TaskEditor`'s `creationForm` (ios/App/RootView.swift:1932-2050).
@@ -93,6 +103,28 @@ export default function NewTask() {
     );
   };
 
+  const android = isAndroid();
+  const notesPreview = notes.length === 0 ? 'Add a note (optional)' : notes;
+  const notesInput = (
+    <TextInput
+      accessibilityLabel="Task notes"
+      placeholder="Add context, links, or a definition of done…"
+      placeholderTextColor={theme.colors.secondary}
+      value={notes}
+      onChangeText={setNotes}
+      onFocus={() => setFocused('notes')}
+      onBlur={() => setFocused(null)}
+      multiline
+      style={[
+        styles.input,
+        styles.notesInput,
+        { color: theme.colors.ink, backgroundColor: theme.colors.groupedBackground, borderColor: theme.colors.separator },
+        androidField(theme, focused === 'notes', { raised: true }),
+      ]}
+      testID="task-notes"
+    />
+  );
+
   return (
     // The keyboard OVERLAYS the window on this build rather than resizing it — measured on the
     // device: with the keyboard up, the notes field and the pinned footer both stayed at their
@@ -103,92 +135,117 @@ export default function NewTask() {
       <NexdoTaskBackdrop />
       <KeyboardAwareScrollView keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive" contentContainerStyle={styles.scroll}>
         <View style={[styles.card, { backgroundColor: theme.colors.surface, borderColor: theme.colors.separator }]}>
-          <EditorLabel title="TASK NAME" icon="checklist" />
-          <TextInput
-            accessibilityLabel="Task name"
-            placeholder="What needs to get done?"
-            placeholderTextColor={theme.colors.secondary}
-            value={title}
-            onChangeText={setTitle}
-            onFocus={() => setFocused('title')}
-            onBlur={() => setFocused(null)}
-            multiline
-            style={[
-              styles.input,
-              styles.titleInput,
-              { color: theme.colors.ink, backgroundColor: theme.colors.groupedBackground, borderColor: theme.colors.separator },
-              androidField(theme, focused === 'title', { raised: true }),
-            ]}
-            testID="task-title"
-          />
-
-          <View style={[styles.divider, { backgroundColor: theme.colors.separator }]} />
-
-          {/* `DisclosureGroup` (RootView.swift:1953-1976) */}
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Notes"
-            accessibilityState={{ expanded: notesExpanded }}
-            onPress={() => setNotesExpanded((value) => !value)}
-            style={styles.disclosure}
-            testID="notes-disclosure"
-          >
-            <View style={styles.disclosureLabel}>
-              <EditorLabel title="NOTES" icon="text.alignleft" />
-              {!notesExpanded ? (
-                <Text numberOfLines={1} style={[styles.notesPreview, { color: theme.colors.secondary }]}>
-                  {notes.length === 0 ? 'Add a note (optional)' : notes}
-                </Text>
-              ) : null}
-            </View>
-            {/* A `DisclosureGroup` chevron, which rotates in place. Notes expand HERE; they do not
-                navigate to a notes screen, so the collapsed glyph must not imply a push. */}
-            <TaskSymbol name={notesExpanded ? 'chevron.down' : 'chevron.right'} size={15} color={theme.colors.secondary} />
-          </Pressable>
-          {notesExpanded ? (
+          <LabeledField title="TASK NAME" icon="checklist">
             <TextInput
-              accessibilityLabel="Task notes"
-              placeholder="Add context, links, or a definition of done…"
+              accessibilityLabel="Task name"
+              placeholder="What needs to get done?"
               placeholderTextColor={theme.colors.secondary}
-              value={notes}
-              onChangeText={setNotes}
-              onFocus={() => setFocused('notes')}
+              value={title}
+              onChangeText={setTitle}
+              onFocus={() => setFocused('title')}
               onBlur={() => setFocused(null)}
               multiline
               style={[
                 styles.input,
-                styles.notesInput,
+                styles.titleInput,
                 { color: theme.colors.ink, backgroundColor: theme.colors.groupedBackground, borderColor: theme.colors.separator },
-                androidField(theme, focused === 'notes', { raised: true }),
+                androidField(theme, focused === 'title', { raised: true }),
               ]}
-              testID="task-notes"
+              testID="task-title"
             />
-          ) : null}
+          </LabeledField>
 
           <View style={[styles.divider, { backgroundColor: theme.colors.separator }]} />
-          <EditorLabel title="PROJECT" icon="folder" />
-          <ProjectAssignmentField projectID={projectID} onChange={setProjectID} raised />
+
+          {/* `DisclosureGroup` (RootView.swift:1953-1976). Android (docs/android-polish.md §4): the NOTES
+              label sits above a field like every other label, and the collapsed preview IS that
+              field — a lighter, outlined row that reads as tappable. Both expand the notes, as the
+              disclosure does; the label row collapses them again. */}
+          {android ? (
+            <View style={styles.androidField}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Notes"
+                accessibilityState={{ expanded: notesExpanded }}
+                onPress={() => setNotesExpanded((value) => !value)}
+                hitSlop={12}
+                style={styles.androidNotesHeader}
+                testID="notes-disclosure"
+              >
+                <EditorLabel title="NOTES" icon="text.alignleft" />
+                <View style={styles.grow} />
+                {notesExpanded ? <TaskSymbol name="chevron.down" size={15} color={theme.colors.secondary} /> : null}
+              </Pressable>
+              {notesExpanded ? (
+                notesInput
+              ) : (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={notesPreview}
+                  accessibilityState={{ expanded: false }}
+                  onPress={() => setNotesExpanded(true)}
+                  style={[androidField(theme, false, { raised: true }), styles.androidNotesField]}
+                  testID="notes-preview"
+                >
+                  <Text numberOfLines={1} style={[styles.notesPreview, styles.grow, { color: theme.colors.secondary }]}>
+                    {notesPreview}
+                  </Text>
+                  <TaskSymbol name="chevron.right" size={15} color={theme.colors.secondary} />
+                </Pressable>
+              )}
+            </View>
+          ) : (
+            <>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Notes"
+                accessibilityState={{ expanded: notesExpanded }}
+                onPress={() => setNotesExpanded((value) => !value)}
+                style={styles.disclosure}
+                testID="notes-disclosure"
+              >
+                <View style={styles.disclosureLabel}>
+                  <EditorLabel title="NOTES" icon="text.alignleft" />
+                  {!notesExpanded ? (
+                    <Text numberOfLines={1} style={[styles.notesPreview, { color: theme.colors.secondary }]}>
+                      {notesPreview}
+                    </Text>
+                  ) : null}
+                </View>
+                {/* A `DisclosureGroup` chevron, which rotates in place. Notes expand HERE; they do not
+                    navigate to a notes screen, so the collapsed glyph must not imply a push. */}
+                <TaskSymbol name={notesExpanded ? 'chevron.down' : 'chevron.right'} size={15} color={theme.colors.secondary} />
+              </Pressable>
+              {notesExpanded ? notesInput : null}
+            </>
+          )}
 
           <View style={[styles.divider, { backgroundColor: theme.colors.separator }]} />
-          <EditorLabel title="DATE" icon="calendar" />
-          <View style={styles.choiceRow}>
-            {TASK_CREATION_DATES.map((choice) => (
-              <ChoiceButton
-                key={choice}
-                // RootView.swift:2060 — once chosen, the custom button shows the date instead of its title.
-                label={choice === 'Select Date' && dateChoice === 'Select Date' ? customDateLabel(customDate, zone) : choice}
-                selected={dateChoice === choice}
-                onPress={() => {
-                  setDateChoice(choice);
-                  // `dateExplicitlyChosen = true` (RootView.swift:2061): from here on, a time in the
-                  // title no longer overrides the pills.
-                  setDateExplicitlyChosen(true);
-                  if (choice === 'Select Date') setShowingDatePicker(true);
-                }}
-                testID={`date-${choice}`}
-              />
-            ))}
-          </View>
+          <LabeledField title="PROJECT" icon="folder">
+            <ProjectAssignmentField projectID={projectID} onChange={setProjectID} raised />
+          </LabeledField>
+
+          <View style={[styles.divider, { backgroundColor: theme.colors.separator }]} />
+          <LabeledField title="DATE" icon="calendar">
+            <ChoiceRow testID="date-choices">
+              {TASK_CREATION_DATES.map((choice) => (
+                <ChoiceButton
+                  key={choice}
+                  // RootView.swift:2060 — once chosen, the custom button shows the date instead of its title.
+                  label={choice === 'Select Date' && dateChoice === 'Select Date' ? customDateLabel(customDate, zone) : choice}
+                  selected={dateChoice === choice}
+                  onPress={() => {
+                    setDateChoice(choice);
+                    // `dateExplicitlyChosen = true` (RootView.swift:2061): from here on, a time in the
+                    // title no longer overrides the pills.
+                    setDateExplicitlyChosen(true);
+                    if (choice === 'Select Date') setShowingDatePicker(true);
+                  }}
+                  testID={`date-${choice}`}
+                />
+              ))}
+            </ChoiceRow>
+          </LabeledField>
 
           {/* `if let detected = DeterministicTaskActionDetector().detect(title:)` (RootView.swift:1983-1986). */}
           {detected ? (
@@ -198,18 +255,19 @@ export default function NewTask() {
           ) : null}
 
           <View style={[styles.divider, { backgroundColor: theme.colors.separator }]} />
-          <EditorLabel title="TIME ESTIMATE" icon="clock" />
-          <View style={styles.choiceRow}>
-            {[15, 30, 45, 60].map((minutes) => (
-              <ChoiceButton
-                key={minutes}
-                label={`${minutes}m`}
-                selected={duration === minutes}
-                onPress={() => setDuration(minutes)}
-                testID={`duration-${minutes}`}
-              />
-            ))}
-          </View>
+          <LabeledField title="TIME ESTIMATE" icon="clock">
+            <ChoiceRow testID="duration-choices">
+              {[15, 30, 45, 60].map((minutes) => (
+                <ChoiceButton
+                  key={minutes}
+                  label={`${minutes}m`}
+                  selected={duration === minutes}
+                  onPress={() => setDuration(minutes)}
+                  testID={`duration-${minutes}`}
+                />
+              ))}
+            </ChoiceRow>
+          </LabeledField>
 
           {/* `Stepper(value: $duration, in: 5...480, step: 5)` (RootView.swift:2000-2008) */}
           <View style={[styles.stepper, { backgroundColor: theme.colors.groupedBackground }, androidField(theme, false, { raised: true, padded: false })]} testID="duration-stepper">
@@ -310,14 +368,53 @@ function customDateLabel(at: number, timeZone: string): string {
   return new Intl.DateTimeFormat('en-US', { timeZone, month: 'short', day: 'numeric', year: 'numeric' }).format(new Date(at));
 }
 
-/** `TaskEditorLabel` (RootView.swift:2207-2217). */
-function EditorLabel({ title, icon }: { title: string; icon: 'checklist' | 'text.alignleft' | 'folder' | 'calendar' | 'clock' }) {
+type EditorIcon = 'checklist' | 'text.alignleft' | 'folder' | 'calendar' | 'clock';
+
+/**
+ * `TaskEditorLabel` (RootView.swift:2207-2217). Android draws the one shared field label instead
+ * (`androidLabel`, docs/android-polish.md §4): the tint read as dim on the dark card.
+ */
+function EditorLabel({ title, icon }: { title: string; icon: EditorIcon }) {
   const theme = useTheme();
+  const android = isAndroid();
   return (
-    <View style={styles.editorLabel}>
-      <TaskSymbol name={icon} size={13} color={theme.colors.tint} />
-      <Text style={[styles.editorLabelText, { color: theme.colors.tint }]}>{title}</Text>
+    <View style={[styles.editorLabel, android && androidLabelRow]}>
+      <TaskSymbol name={icon} size={android ? ANDROID_LABEL_ICON : 13} color={android ? theme.colors.fieldLabel : theme.colors.tint} />
+      <Text style={[styles.editorLabelText, { color: theme.colors.tint }, androidLabel(theme)]}>{title}</Text>
     </View>
+  );
+}
+
+/**
+ * A label and its field. On iOS the pair sits the card's 20 apart, exactly as when they were
+ * siblings; on Android the label is 8 above its field.
+ */
+function LabeledField({ title, icon, children }: { title: string; icon: EditorIcon; children: React.ReactNode }) {
+  return (
+    <View style={isAndroid() ? styles.androidField : styles.labeledField}>
+      <EditorLabel title={title} icon={icon} />
+      {children}
+    </View>
+  );
+}
+
+/** Android: the card's 20 is cancelled so the chips scroll to its edges. */
+const CHIP_SCROLL = androidChipScroll(20);
+
+/** The DATE and TIME ESTIMATE rows: equal-width buttons on iOS, a horizontal chip row on Android. */
+function ChoiceRow({ children, testID }: { children: React.ReactNode; testID: string }) {
+  if (!isAndroid()) return <View style={styles.choiceRow}>{children}</View>;
+  return (
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      keyboardShouldPersistTaps="handled"
+      style={CHIP_SCROLL.style}
+      contentContainerStyle={CHIP_SCROLL.contentContainerStyle}
+      testID={testID}
+    >
+      {children}
+    </ScrollView>
   );
 }
 
@@ -331,7 +428,8 @@ function ChoiceButton({ label, selected, onPress, testID }: { label: string; sel
       accessibilityState={{ selected }}
       onPress={onPress}
       testID={testID}
-      style={styles.choiceWrapper}
+      // Android: a chip as wide as its label, not an equal share of the row.
+      style={isAndroid() ? null : styles.choiceWrapper}
     >
       {selected ? (
         <LinearGradient
@@ -339,10 +437,12 @@ function ChoiceButton({ label, selected, onPress, testID }: { label: string; sel
           start={{ x: 0, y: 0.5 }}
           end={{ x: 1, y: 0.5 }}
           // Android: the field radius, so selected and unselected choices share a shape.
-          style={[styles.choice, isAndroid() && styles.androidChoice]}
+          style={[styles.choice, isAndroid() && styles.androidChoice, isAndroid() && androidChip]}
           testID={testID ? `${testID}-surface` : undefined}
         >
-          <Text style={[styles.choiceLabel, { color: '#FFFFFF' }]}>{label}</Text>
+          <Text numberOfLines={isAndroid() ? 1 : undefined} style={[styles.choiceLabel, { color: '#FFFFFF' }]}>
+            {label}
+          </Text>
         </LinearGradient>
       ) : (
         <View
@@ -350,10 +450,13 @@ function ChoiceButton({ label, selected, onPress, testID }: { label: string; sel
             styles.choice,
             { backgroundColor: theme.colors.groupedBackground, borderWidth: StyleSheet.hairlineWidth, borderColor: theme.colors.separator },
             androidField(theme, false, { raised: true, padded: false }),
+            isAndroid() && androidChip,
           ]}
           testID={testID ? `${testID}-surface` : undefined}
         >
-          <Text style={[styles.choiceLabel, { color: theme.colors.ink }]}>{label}</Text>
+          <Text numberOfLines={isAndroid() ? 1 : undefined} style={[styles.choiceLabel, { color: theme.colors.ink }]}>
+            {label}
+          </Text>
         </View>
       )}
     </Pressable>
@@ -378,6 +481,12 @@ const styles = StyleSheet.create({
   disclosureLabel: { flex: 1, gap: 6 },
   notesPreview: { fontSize: 15, lineHeight: 20 },
   choiceRow: { flexDirection: 'row', gap: 9 },
+  // The card's own gap: a label and its field are 20 apart on iOS, as siblings were.
+  labeledField: { gap: 20 },
+  androidField: { gap: ANDROID_LABEL_GAP },
+  androidNotesHeader: { flexDirection: 'row', alignItems: 'center', minHeight: 24 },
+  androidNotesField: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  grow: { flex: 1 },
   choiceWrapper: { flex: 1 },
   choice: { minHeight: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 13, paddingHorizontal: 6 },
   androidChoice: { borderRadius: 12 },

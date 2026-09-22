@@ -1,5 +1,5 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { useRef, useState, type ReactNode } from 'react';
+import { useContext, useRef, useState, type ReactNode } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, TextInput, useWindowDimensions, View, type KeyboardTypeOptions, type StyleProp, type ViewStyle } from 'react-native';
 
 import { KeyboardAwareScrollView } from '../../components/keyboard';
@@ -7,7 +7,7 @@ import { MonthCalendar } from '../../components/MonthCalendar';
 import { IOSSwitch } from '../../components/IOSSwitch';
 import { withAlpha } from '../../components/SignInBackdrop';
 import { Text } from '../../components/Text';
-import { androidGroup, androidSeparator, textStyles, useTheme } from '../../theme';
+import { androidGroup, androidLabel, androidPill, androidSeparator, FieldGroupContext, isAndroid, textStyles, useTheme } from '../../theme';
 import { KEYBOARD_DONE_BAR_HEIGHT } from './components';
 import { mediumDate, momentDay, momentStartOfDay, shortTimeIn, wallParts, zonedInstant } from './dates';
 
@@ -32,11 +32,16 @@ export function FormSection({ children, header, footer, disabled = false, testID
     // A section with no header still keeps iOS 26's section spacing above it (`moments-festivals`: the
     // first card 45pt below the bar); a header supplies that space itself.
     <View style={[styles.section, !header && styles.headerless, disabled && styles.dimmed]} pointerEvents={disabled ? 'none' : 'auto'} testID={testID}>
-      {header ? <Text style={[styles.header, { color: theme.colors.secondaryLabel }]}>{header}</Text> : null}
+      {/* Android: the shared field label, 20 below the section before it (docs/android-polish.md §4). */}
+      {header ? (
+        <Text style={[styles.header, { color: theme.colors.secondaryLabel }, androidLabel(theme), isAndroid() && styles.androidHeader]} testID={testID ? `${testID}-header` : undefined}>
+          {header}
+        </Text>
+      ) : null}
       {/* Android: the field surface and hairline round the group, rows split by `androidSeparator`
           (docs/android-polish.md §2, §3). */}
       <View style={[styles.sectionBody, { backgroundColor: theme.colors.surface }, androidGroup(theme)]} testID={testID ? `${testID}-body` : undefined}>
-        {children}
+        <FieldGroupContext.Provider value={isAndroid() ? 'group' : null}>{children}</FieldGroupContext.Provider>
       </View>
       {footer ? <Text style={[styles.footer, { color: theme.colors.secondaryLabel }]}>{footer}</Text> : null}
     </View>
@@ -224,6 +229,16 @@ export function MenuPicker<T extends string | number>({
   const anchor = useRef<View>(null);
   const menu = usePopoverMenu(anchor);
   const current = options.find((option) => option.value === value);
+  // Android, in a form: the choice and its chevron sit in a field pill (docs/android-polish.md §4).
+  const pill = androidPill(theme, useContext(FieldGroupContext));
+  const choice = (
+    <>
+      <Text numberOfLines={1} style={[textStyles.body, styles.value, { color: theme.colors.tint }]}>
+        {current?.title ?? ''}
+      </Text>
+      <Ionicons name="chevron-expand-outline" size={14} color={theme.colors.tint} />
+    </>
+  );
 
   return (
     <>
@@ -239,10 +254,13 @@ export function MenuPicker<T extends string | number>({
         testID={testID}
       >
         {hideLabel ? null : <Text style={[textStyles.body, styles.grow, { color: theme.colors.label }]}>{label}</Text>}
-        <Text numberOfLines={1} style={[textStyles.body, styles.value, { color: theme.colors.tint }]}>
-          {current?.title ?? ''}
-        </Text>
-        <Ionicons name="chevron-expand-outline" size={14} color={theme.colors.tint} />
+        {pill ? (
+          <View style={[styles.menuPill, pill]} testID={`${testID}-pill`}>
+            {choice}
+          </View>
+        ) : (
+          choice
+        )}
       </Pressable>
       <PopoverMenu
         items={options.map((option) => ({
@@ -451,6 +469,8 @@ export function DateField({
   const theme = useTheme();
   const window = useWindowDimensions();
   const pill = useRef<View>(null);
+  // Android, in a form: the date and time pills take the field chrome (docs/android-polish.md §4).
+  const pillChrome = androidPill(theme, useContext(FieldGroupContext));
   const [open, setOpenState] = useState(false);
   const [frame, setFrame] = useState<MenuFrame | null>(null);
   // Opening measures the pill, so the popover can grow out from under it as iOS 26's does.
@@ -482,13 +502,13 @@ export function DateField({
         accessibilityState={{ disabled }}
         disabled={disabled}
         onPress={() => setOpen(true)}
-        style={[styles.datePill, { backgroundColor: withAlpha('#767680', 0.12) }]}
+        style={[styles.datePill, { backgroundColor: withAlpha('#767680', 0.12) }, pillChrome]}
         testID={testID}
       >
         <Text style={[textStyles.body, { color: theme.colors.label }]}>{dateText}</Text>
       </Pressable>
       {includeTime ? (
-        <Pressable accessibilityRole="button" accessibilityLabel={`${label} time, ${timeText}`} disabled={disabled} onPress={() => setOpen(true)} style={[styles.datePill, { backgroundColor: withAlpha('#767680', 0.12) }]} testID={`${testID}-time`}>
+        <Pressable accessibilityRole="button" accessibilityLabel={`${label} time, ${timeText}`} disabled={disabled} onPress={() => setOpen(true)} style={[styles.datePill, { backgroundColor: withAlpha('#767680', 0.12) }, pillChrome]} testID={`${testID}-time`}>
           <Text style={[textStyles.body, { color: theme.colors.label }]}>{timeText}</Text>
         </Pressable>
       ) : null}
@@ -576,6 +596,10 @@ const styles = StyleSheet.create({
   sectionBody: { marginHorizontal: 16, borderRadius: 26, overflow: 'hidden', marginTop: 8 },
   row: { minHeight: 56, paddingHorizontal: 16, paddingVertical: 12, justifyContent: 'center', gap: 10 },
   header: { ...textStyles.body, marginHorizontal: 32, marginTop: 16 },
+  // Android: 20 above the label; `sectionBody`'s 8 is the label-to-group gap.
+  androidHeader: { marginTop: 20 },
+  // Android: the menu choice's field pill; 36 tall with 12 inside, like a chip.
+  menuPill: { flexDirection: 'row', alignItems: 'center', gap: 4, minHeight: 36, paddingHorizontal: 12 },
   footer: { ...textStyles.subheadline, marginHorizontal: 32, marginTop: 10, marginBottom: 12 },
   // A row of text in a `VStack` card is its line height, not a 32pt control; a `FormRow` still
   // enforces its own 56 (`moment-manage-details`: 54pt from row to row, 14pt spacing).

@@ -1,6 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import * as Crypto from 'expo-crypto';
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -9,7 +9,7 @@ import { KeyboardAwareScrollView, KeyboardLift } from '../../components/keyboard
 import { withAlpha } from '../../components/SignInBackdrop';
 import { Text } from '../../components/Text';
 import { TodayBackdrop } from '../../components/TodayShell';
-import { brand, textStyles, useTheme } from '../../theme';
+import { androidField, androidLabel, androidSeparator, brand, FieldGroupContext, isAndroid, textStyles, useTheme } from '../../theme';
 import { headline, KEYBOARD_DONE_BAR_HEIGHT, KeyboardDoneBar, MomentCard, MomentPrimary, MomentSheet } from '../moments/components';
 import { deviceZone, momentDate, momentDay } from '../moments/dates';
 import { DateField, FormButton, FormField, FormRow, FormScroll, FormSection, FormText, FormToggle } from '../moments/form';
@@ -53,6 +53,8 @@ function NewListBody({ source, onCreated, onClose }: { source: GroceryList | nul
   // success here for the same effect.
   const [createKey, setCreateKey] = useState(() => Crypto.randomUUID());
   const [footerHeight, setFooterHeight] = useState(0);
+  // Android: the name field's accent border while it has focus (docs/android-polish.md §4).
+  const [nameFocused, setNameFocused] = useState(false);
   const previous = previousList(lists, source);
   const disabled = busy || title.trim() === '';
 
@@ -90,23 +92,31 @@ function NewListBody({ source, onCreated, onClose }: { source: GroceryList | nul
           onPress={() => setUseLast(true)}
           testID="shopping-use-last"
         />
-        <Text style={[headline, styles.sectionTitle, { color: theme.colors.label }]}>List Name</Text>
-        <MomentCard>
-          <TextInput
-            accessibilityLabel="List name"
-            onChangeText={setTitle}
-            placeholder="List name"
-            placeholderTextColor={theme.colors.placeholder}
-            style={[headline, styles.input, { color: theme.colors.label }]}
-            testID="shopping-list-name"
-            value={title}
-          />
-          <View style={[styles.divider, { backgroundColor: theme.colors.separator }]} />
-          <DateField label="Shopping date" value={date} onChange={setDate} zone={deviceZone()} testID="shopping-list-date" />
-          <View style={[styles.divider, { backgroundColor: theme.colors.separator }]} />
-          <FormToggle label="Repeat every week" value={weekly} onValueChange={setWeekly} testID="shopping-list-weekly" />
-          <Text style={[styles.caption, { color: theme.colors.secondary }]}>Complete a trip to copy all items into next week’s list, with every item unchecked.</Text>
-        </MomentCard>
+        {/* Android (docs/android-polish.md §4): "List Name" is the shared field label, 8 above its card;
+            the name is a raised field on the card, and the date pill takes the same surface. */}
+        <ListNameSection>
+          <Text style={[headline, styles.sectionTitle, { color: theme.colors.label }, androidLabel(theme), isAndroid() && styles.androidLabel]}>List Name</Text>
+          <MomentCard>
+            <FieldGroupContext.Provider value={isAndroid() ? 'card' : null}>
+              <TextInput
+                accessibilityLabel="List name"
+                onChangeText={setTitle}
+                onFocus={() => setNameFocused(true)}
+                onBlur={() => setNameFocused(false)}
+                placeholder="List name"
+                placeholderTextColor={theme.colors.placeholder}
+                style={[headline, styles.input, { color: theme.colors.label }, androidField(theme, nameFocused, { raised: true })]}
+                testID="shopping-list-name"
+                value={title}
+              />
+              <View style={[styles.divider, { backgroundColor: theme.colors.separator }, androidSeparator(theme)]} />
+              <DateField label="Shopping date" value={date} onChange={setDate} zone={deviceZone()} testID="shopping-list-date" />
+              <View style={[styles.divider, { backgroundColor: theme.colors.separator }, androidSeparator(theme)]} />
+              <FormToggle label="Repeat every week" value={weekly} onValueChange={setWeekly} testID="shopping-list-weekly" />
+              <Text style={[styles.caption, { color: theme.colors.secondary }]}>Complete a trip to copy all items into next week’s list, with every item unchecked.</Text>
+            </FieldGroupContext.Provider>
+          </MomentCard>
+        </ListNameSection>
         {error ? <Text style={[bodyText, { color: theme.colors.danger }]}>{error}</Text> : null}
       </KeyboardAwareScrollView>
       {/* `.safeAreaInset(edge: .bottom) { MomentPrimary … .padding(18).background(.ultraThinMaterial) }` */}
@@ -120,6 +130,11 @@ function NewListBody({ source, onCreated, onClose }: { source: GroceryList | nul
       <KeyboardDoneBar />
     </View>
   );
+}
+
+/** iOS: the label and card stay siblings in the content's 18 gap. Android: the pair, 8 apart. */
+function ListNameSection({ children }: { children: ReactNode }) {
+  return isAndroid() ? <View style={styles.androidSection}>{children}</View> : <>{children}</>;
 }
 
 function Choice({ title, subtitle, icon, selected, disabled = false, onPress, testID }: { title: string; subtitle: string; icon: ListSymbol; selected: boolean; disabled?: boolean; onPress: () => void; testID: string }) {
@@ -303,6 +318,9 @@ const styles = StyleSheet.create({
   fill: { flex: 1 },
   content: { padding: 18, gap: 18, paddingBottom: 140 },
   sectionTitle: { marginTop: 10 },
+  // Android: 18 + 2 = 20 above the label, 8 from the label to its card.
+  androidSection: { gap: 8, marginTop: 2 },
+  androidLabel: { marginTop: 0 },
   input: { paddingVertical: 4, backgroundColor: 'transparent' },
   divider: { height: StyleSheet.hairlineWidth },
   caption: { fontSize: 12, lineHeight: 16 },

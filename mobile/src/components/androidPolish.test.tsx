@@ -93,9 +93,11 @@ describe('Task Details parts on Android', () => {
   it('tracks out a section label', async () => {
     await render(<SectionLabel title="PRIORITY" />);
     expect(StyleSheet.flatten(screen.getByText('PRIORITY').props.style)).toMatchObject({
-      color: light.secondary,
+      color: light.fieldLabel,
       fontSize: 12,
+      fontWeight: '600',
       letterSpacing: 0.6,
+      textTransform: 'uppercase',
     });
   });
 

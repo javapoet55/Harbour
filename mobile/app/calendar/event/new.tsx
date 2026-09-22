@@ -12,7 +12,19 @@ import { startOfDay } from '../../../src/lib/taskQuery';
 import { useCreateCalendarEvent } from '../../../src/query/useCalendar';
 import { type ScheduleConflict } from '../../../src/query/useTasks';
 import { useSession } from '../../../src/store/session';
-import { androidField, inputText, textStyles, useTheme } from '../../../src/theme';
+import {
+  ANDROID_LABEL_GAP,
+  ANDROID_LABEL_ICON,
+  androidChip,
+  androidChipScroll,
+  androidField,
+  androidLabel,
+  androidLabelRow,
+  inputText,
+  isAndroid,
+  textStyles,
+  useTheme,
+} from '../../../src/theme';
 
 /**
  * Port of `CalendarEventEditor` (ios/App/CalendarView.swift), built from `body` at `:518-588`.
@@ -137,42 +149,47 @@ export default function NewCalendarEvent() {
       <NexdoTaskBackdrop />
       <KeyboardAwareScrollView keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive" contentContainerStyle={styles.scroll}>
         <View style={[styles.card, { backgroundColor: theme.colors.surface, borderColor: theme.colors.separator }]}>
-          <EditorLabel title="APPOINTMENT / EVENT" icon="calendar" accent={accent} />
-          <TextInput
-            accessibilityLabel="Event title"
-            placeholder="What’s on your calendar?"
-            placeholderTextColor={theme.colors.placeholder}
-            value={title}
-            onChangeText={setTitle}
-            onFocus={() => setFocused('title')}
-            onBlur={() => setFocused(null)}
-            multiline
-            style={[styles.input, styles.titleInput, { color: theme.colors.ink, backgroundColor: inputFill }, field('title')]}
-            testID="event-title"
-          />
+          <LabeledField title="APPOINTMENT / EVENT" icon="calendar" accent={accent}>
+            <TextInput
+              accessibilityLabel="Event title"
+              placeholder="What’s on your calendar?"
+              placeholderTextColor={theme.colors.placeholder}
+              value={title}
+              onChangeText={setTitle}
+              onFocus={() => setFocused('title')}
+              onBlur={() => setFocused(null)}
+              multiline
+              style={[styles.input, styles.titleInput, { color: theme.colors.ink, backgroundColor: inputFill }, field('title')]}
+              testID="event-title"
+            />
+          </LabeledField>
           <Text style={[styles.caption, { color: theme.colors.secondary }]}>Create a calendar event or appointment.</Text>
 
           <Divider />
-          <EditorLabel title="SCHEDULE" icon="clock" accent={accent} />
-          <FieldRow label="Starts" value={dateTimeLabel(start)} fill={inputFill} capsule={capsule} onPress={() => setPicking('start')} testID="event-start" />
+          <LabeledField title="SCHEDULE" icon="clock" accent={accent}>
+            <FieldRow label="Starts" value={dateTimeLabel(start)} fill={inputFill} capsule={capsule} onPress={() => setPicking('start')} testID="event-start" />
+          </LabeledField>
           <FieldRow label="Ends" value={dateTimeLabel(end)} fill={inputFill} capsule={capsule} onPress={() => setPicking('end')} testID="event-end" />
           <Text style={[styles.caption, { color: theme.colors.secondary }]}>{zone}</Text>
 
           <Divider />
-          <EditorLabel title="REPEAT" icon="repeat" accent={accent} />
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Repeat"
-            accessibilityValue={{ text: REPEAT_LABELS[repeatFrequency] }}
-            onPress={() => setRepeatOpen((open) => !open)}
-            style={styles.menuPicker}
-            testID="event-repeat"
-          >
-            {/* `.pickerStyle(.menu)` (CalendarView.swift:541): the current value in the accent
-                colour with an up/down chevron, on the card — not a filled field. */}
-            <Text style={[theme.typography.body, { color: accent }]}>{REPEAT_LABELS[repeatFrequency]}</Text>
-            <TaskSymbol name="chevron.down" size={13} color={accent} />
-          </Pressable>
+          <LabeledField title="REPEAT" icon="repeat" accent={accent}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Repeat"
+              accessibilityValue={{ text: REPEAT_LABELS[repeatFrequency] }}
+              onPress={() => setRepeatOpen((open) => !open)}
+              // Android: a dropdown field like every other one (docs/android-polish.md §4).
+              style={[styles.menuPicker, field(null), isAndroid() && styles.androidMenuPicker]}
+              testID="event-repeat"
+            >
+              {/* `.pickerStyle(.menu)` (CalendarView.swift:541): the current value in the accent
+                  colour with an up/down chevron, on the card — not a filled field. On Android it
+                  is a filled field, with the value and chevron unchanged. */}
+              <Text style={[theme.typography.body, { color: accent }]}>{REPEAT_LABELS[repeatFrequency]}</Text>
+              <TaskSymbol name="chevron.down" size={13} color={accent} />
+            </Pressable>
+          </LabeledField>
           {repeatOpen ? (
             <View style={[styles.menu, { backgroundColor: inputFill }, capsule]} testID="event-repeat-menu">
               {Object.entries(REPEAT_LABELS).map(([value, name]) => (
@@ -197,7 +214,7 @@ export default function NewCalendarEvent() {
 
           {/* The weekday grid, ordered Mon…Sat, Sun (CalendarView.swift:543). */}
           {repeatFrequency === 'weekdays' ? (
-            <View style={styles.weekdays}>
+            <WeekdayRow>
               {[1, 2, 3, 4, 5, 6, 0].map((day) => {
                 const on = weekdays.includes(day);
                 return (
@@ -210,15 +227,19 @@ export default function NewCalendarEvent() {
                     testID={`event-weekday-${day}`}
                     style={[
                       styles.weekday,
+                      // Android: a content-width chip in the row's horizontal scroll.
+                      isAndroid() && styles.androidWeekday,
                       { backgroundColor: on ? accent : inputFill },
                       on ? null : capsule,
                     ]}
                   >
-                    <Text style={[styles.weekdayLabel, { color: on ? '#FFFFFF' : accent }]}>{WEEKDAY_NAMES[day]}</Text>
+                    <Text numberOfLines={isAndroid() ? 1 : undefined} style={[styles.weekdayLabel, { color: on ? '#FFFFFF' : accent }]}>
+                      {WEEKDAY_NAMES[day]}
+                    </Text>
                   </Pressable>
                 );
               })}
-            </View>
+            </WeekdayRow>
           ) : null}
 
           {repeatFrequency !== 'none' ? (
@@ -240,33 +261,35 @@ export default function NewCalendarEvent() {
           ) : null}
 
           <Divider />
-          <EditorLabel title="LOCATION" icon="mappin.and.ellipse" accent={accent} />
-          <TextInput
-            accessibilityLabel="Location"
-            placeholder="Add a location (optional)"
-            placeholderTextColor={theme.colors.placeholder}
-            value={location}
-            onChangeText={setLocation}
-            onFocus={() => setFocused('location')}
-            onBlur={() => setFocused(null)}
-            style={[styles.input, styles.bodyInput, { color: theme.colors.ink, backgroundColor: inputFill }, field('location')]}
-            testID="event-location"
-          />
+          <LabeledField title="LOCATION" icon="mappin.and.ellipse" accent={accent}>
+            <TextInput
+              accessibilityLabel="Location"
+              placeholder="Add a location (optional)"
+              placeholderTextColor={theme.colors.placeholder}
+              value={location}
+              onChangeText={setLocation}
+              onFocus={() => setFocused('location')}
+              onBlur={() => setFocused(null)}
+              style={[styles.input, styles.bodyInput, { color: theme.colors.ink, backgroundColor: inputFill }, field('location')]}
+              testID="event-location"
+            />
+          </LabeledField>
 
           <Divider />
-          <EditorLabel title="NOTES" icon="text.alignleft" accent={accent} />
-          <TextInput
-            accessibilityLabel="Notes"
-            placeholder="Add details (optional)"
-            placeholderTextColor={theme.colors.placeholder}
-            value={notes}
-            onChangeText={setNotes}
-            onFocus={() => setFocused('notes')}
-            onBlur={() => setFocused(null)}
-            multiline
-            style={[styles.input, styles.bodyInput, styles.notesInput, { color: theme.colors.ink, backgroundColor: inputFill }, field('notes')]}
-            testID="event-notes"
-          />
+          <LabeledField title="NOTES" icon="text.alignleft" accent={accent}>
+            <TextInput
+              accessibilityLabel="Notes"
+              placeholder="Add details (optional)"
+              placeholderTextColor={theme.colors.placeholder}
+              value={notes}
+              onChangeText={setNotes}
+              onFocus={() => setFocused('notes')}
+              onBlur={() => setFocused(null)}
+              multiline
+              style={[styles.input, styles.bodyInput, styles.notesInput, { color: theme.colors.ink, backgroundColor: inputFill }, field('notes')]}
+              testID="event-notes"
+            />
+          </LabeledField>
 
           {failure !== null ? (
             <Text style={[styles.subheadline, { color: theme.colors.danger }]} testID="event-failure">
@@ -372,21 +395,53 @@ function TimeRow({ selected, timeZone, onSelect }: { selected: number; timeZone:
   );
 }
 
-/** `TaskEditorLabel` (RootView.swift:2207-2217). */
-function EditorLabel({
-  title,
-  icon,
-  accent,
-}: {
-  title: string;
-  icon: 'calendar' | 'clock' | 'repeat' | 'mappin.and.ellipse' | 'text.alignleft';
-  accent: string;
-}) {
+type EditorIcon = 'calendar' | 'clock' | 'repeat' | 'mappin.and.ellipse' | 'text.alignleft';
+
+/**
+ * `TaskEditorLabel` (RootView.swift:2207-2217). Android draws the one shared field label instead
+ * (`androidLabel`, docs/android-polish.md §4), in place of the editor accent.
+ */
+function EditorLabel({ title, icon, accent }: { title: string; icon: EditorIcon; accent: string }) {
+  const theme = useTheme();
+  const android = isAndroid();
   return (
-    <View style={styles.editorLabel}>
-      <TaskSymbol name={icon} size={13} color={accent} />
-      <Text style={[styles.editorLabelText, { color: accent }]}>{title}</Text>
+    <View style={[styles.editorLabel, android && androidLabelRow]}>
+      <TaskSymbol name={icon} size={android ? ANDROID_LABEL_ICON : 13} color={android ? theme.colors.fieldLabel : accent} />
+      <Text style={[styles.editorLabelText, { color: accent }, androidLabel(theme)]}>{title}</Text>
     </View>
+  );
+}
+
+/**
+ * A label and the field under it. On iOS the pair sits the card's 20 apart, exactly as when they
+ * were siblings; on Android the label is 8 above its field.
+ */
+function LabeledField({ title, icon, accent, children }: { title: string; icon: EditorIcon; accent: string; children: React.ReactNode }) {
+  return (
+    <View style={isAndroid() ? styles.androidField : styles.labeledField}>
+      <EditorLabel title={title} icon={icon} accent={accent} />
+      {children}
+    </View>
+  );
+}
+
+/** Android: the card's 20 is cancelled so the chips scroll to its edges. */
+const CHIP_SCROLL = androidChipScroll(20);
+
+/** The weekday grid (CalendarView.swift:543): a wrapping grid on iOS, a horizontal chip row on Android. */
+function WeekdayRow({ children }: { children: React.ReactNode }) {
+  if (!isAndroid()) return <View style={styles.weekdays}>{children}</View>;
+  return (
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      keyboardShouldPersistTaps="handled"
+      style={CHIP_SCROLL.style}
+      contentContainerStyle={CHIP_SCROLL.contentContainerStyle}
+      testID="event-weekdays"
+    >
+      {children}
+    </ScrollView>
   );
 }
 
@@ -462,6 +517,9 @@ const styles = StyleSheet.create({
   scroll: { padding: 20 },
   card: { gap: 20, padding: 20, borderRadius: 26, borderWidth: StyleSheet.hairlineWidth },
   editorLabel: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  // The card's own gap: a label and its field are 20 apart on iOS, as siblings were.
+  labeledField: { gap: 20 },
+  androidField: { gap: ANDROID_LABEL_GAP },
   editorLabelText: { fontSize: 12, lineHeight: 16, fontWeight: '600', letterSpacing: 0.8 },
   // `.padding(15).background(TaskCreationStyle.input, in: RoundedRectangle(cornerRadius: 15))` —
   // the fill carries the field; Swift draws no stroke on it (CalendarView.swift:524-525).
@@ -481,8 +539,11 @@ const styles = StyleSheet.create({
   menu: { borderRadius: 15, overflow: 'hidden' },
   menuRow: { flexDirection: 'row', alignItems: 'center', minHeight: 44, paddingHorizontal: 15 },
   menuPicker: { flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 44 },
+  // The field's 14 of vertical padding would make a 72pt row; the chips' height suits a picker.
+  androidMenuPicker: { paddingVertical: 10, justifyContent: 'space-between' },
   weekdays: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   weekday: { flexGrow: 1, flexBasis: 64, minHeight: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 12 },
+  androidWeekday: { ...androidChip, flexGrow: 0, flexBasis: 'auto' },
   weekdayLabel: { fontSize: 15, lineHeight: 21, fontWeight: '600' },
   footer: { paddingHorizontal: 20, paddingVertical: 12, borderTopWidth: StyleSheet.hairlineWidth },
   // A bare `HStack` spaces by 8 (CalendarView.swift:579).

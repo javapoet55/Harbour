@@ -6,7 +6,7 @@ import { Alert, Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { KeyboardAvoidingView, KeyboardAwareScrollView, RevealablePasswordField, Text } from '../../src/components';
 import { useConfirmPasswordReset, useRequestPasswordReset } from '../../src/query/useAuth';
 import { sanitizeCode } from '../../src/schemas/auth';
-import { androidGroup, inputText, isAndroid, textStyles, useTheme } from '../../src/theme';
+import { androidGroup, androidLabel, inputText, isAndroid, textStyles, useTheme } from '../../src/theme';
 
 /**
  * Port of `PasswordResetView` (ios/App/RootView.swift:574-640).
@@ -174,7 +174,8 @@ function FormSection({ children, header, footer }: { children: ReactNode; header
   const theme = useTheme({ elevated: true });
   return (
     <View style={styles.section}>
-      {header ? <Text style={[styles.header, { color: theme.colors.secondaryLabel }]}>{header}</Text> : null}
+      {/* Android: the shared field label, 20 above and 8 to the group (docs/android-polish.md §4). */}
+      {header ? <Text style={[styles.header, { color: theme.colors.secondaryLabel }, androidLabel(theme), isAndroid() && styles.androidHeader]}>{header}</Text> : null}
       {/* Android: the shared form group — field surface a step above this sheet, and a hairline
           (docs/android-polish.md §3). */}
       <View style={[styles.sectionBody, { backgroundColor: theme.colors.surface }, androidGroup(theme)]} testID="reset-section">
@@ -246,5 +247,6 @@ const styles = StyleSheet.create({
   row: { minHeight: 56, paddingHorizontal: 16, paddingVertical: 15, flexDirection: 'row', alignItems: 'center' },
   // Header and footer sit 16pt inside the section, so 32pt from the screen edge.
   header: { ...textStyles.body, marginHorizontal: 32, marginTop: 16, marginBottom: 8 },
+  androidHeader: { marginTop: 20, marginBottom: 8 },
   footer: { ...textStyles.subheadline, marginHorizontal: 32, marginTop: 10, marginBottom: 12 },
 });

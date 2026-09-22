@@ -1,7 +1,7 @@
 import { ActivityIndicator, Pressable, StyleSheet, TextInput, View } from 'react-native';
 
 import { isValidProjectName, PROJECT_PALETTE, projectColor, projectColorName } from '../lib/projectQuery';
-import { useTheme } from '../theme';
+import { androidGroup, androidLabel, isAndroid, useTheme } from '../theme';
 import { KeyboardAwareScrollView } from './keyboard';
 import { TaskSymbol } from './TaskSymbol';
 import { Text } from './Text';
@@ -116,11 +116,17 @@ export function ProjectEditorForm({
 function Section({ title, children }: { title?: string; children: React.ReactNode }) {
   const theme = useTheme();
   return (
-    <View style={styles.section}>
+    <View style={[styles.section, isAndroid() && styles.androidSection]}>
       {/* iOS 26 no longer uppercases a `Form` section header — `Section("Project name")` renders as
-          written. Uppercasing it is the pre-iOS-15 behaviour. */}
-      {title ? <Text style={[styles.sectionHeader, { color: theme.colors.secondaryLabel }]}>{title}</Text> : null}
-      <View style={[styles.sectionBody, { backgroundColor: theme.colors.surface }]}>{children}</View>
+          written. Uppercasing it is the pre-iOS-15 behaviour. Android draws the one shared field
+          label, which is uppercase (docs/android-polish.md §4). */}
+      {title ? (
+        <Text style={[styles.sectionHeader, { color: theme.colors.secondaryLabel }, androidLabel(theme), isAndroid() && styles.androidHeader]}>{title}</Text>
+      ) : null}
+      {/* Android: the shared form group, as on the Moments and Shopping forms. */}
+      <View style={[styles.sectionBody, { backgroundColor: theme.colors.surface }, androidGroup(theme)]} testID="project-section">
+        {children}
+      </View>
     </View>
   );
 }
@@ -130,6 +136,9 @@ const styles = StyleSheet.create({
   section: { marginBottom: 22 },
   sectionBody: { marginHorizontal: 20, borderRadius: 10, overflow: 'hidden' },
   sectionHeader: { fontSize: 13, lineHeight: 18, marginHorizontal: 36, marginBottom: 7 },
+  // Android: 20 from one section to the next label, 8 from the label to its group.
+  androidSection: { marginBottom: 20 },
+  androidHeader: { marginBottom: 8 },
   row: { minHeight: 44, paddingHorizontal: 16, paddingVertical: 11, justifyContent: 'center' },
   input: { paddingVertical: 0 },
   caption: { fontSize: 12, lineHeight: 16 },

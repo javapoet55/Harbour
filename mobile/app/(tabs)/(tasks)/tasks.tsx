@@ -18,7 +18,7 @@ import { useProjects } from '../../../src/query/useProjects';
 import { useCompleteTask, useTasks, type ScheduleConflict } from '../../../src/query/useTasks';
 import { useSession } from '../../../src/store/session';
 import { useTaskQuery } from '../../../src/store/taskQuery';
-import { isAndroid, useTheme } from '../../../src/theme';
+import { androidChipScroll, isAndroid, useTheme } from '../../../src/theme';
 
 /** The caption under the history-range picker (RootView.swift:1678). */
 const HISTORY_RANGE_CAPTION: Record<TaskHistoryRange, string> = {
@@ -199,8 +199,8 @@ export default function Tasks() {
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
-              style={android ? styles.androidPillScroll : undefined}
-              contentContainerStyle={[styles.pills, android && styles.androidPills]}
+              style={android ? PILL_SCROLL.style : undefined}
+              contentContainerStyle={[styles.pills, android && PILL_SCROLL.contentContainerStyle]}
               testID="date-pills"
             >
               {TASK_DATE_FILTERS.map((filter) => (
@@ -317,6 +317,9 @@ export default function Tasks() {
   );
 }
 
+/** Android: the shared chip row, cancelling `content`'s 20 so it scrolls to the screen edges. */
+const PILL_SCROLL = androidChipScroll(20);
+
 const styles = StyleSheet.create({
   fill: { flex: 1 },
   // `.padding(.horizontal, 20)` with `VStack(spacing: 20)` (RootView.swift:1641, 1727).
@@ -338,9 +341,6 @@ const styles = StyleSheet.create({
   creationColumn: { flexDirection: 'column' },
   grow: { flex: 1 },
   pills: { gap: 7 },
-  // Cancels `content`'s 20 so the scroll reaches the screen edges.
-  androidPillScroll: { marginHorizontal: -20 },
-  androidPills: { gap: 8, paddingHorizontal: 16 },
   // `VStack(alignment: .leading, spacing: 6)` (RootView.swift:1670).
   historyRange: { gap: 6 },
   historyRangeRow: { flexDirection: 'row', alignItems: 'center' },

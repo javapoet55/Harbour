@@ -22,7 +22,7 @@ import { KeyboardAwareScrollView } from '../../components/keyboard';
 import { GlassCapsule } from '../../components/PushedHeader';
 import { withAlpha } from '../../components/SignInBackdrop';
 import { Text } from '../../components/Text';
-import { androidGroup, brand, ElevatedSurface, isAndroid, linearGradientStops, useTheme } from '../../theme';
+import { androidGroup, brand, ElevatedSurface, FieldGroupContext, isAndroid, linearGradientStops, useTheme } from '../../theme';
 
 /**
  * The Moments building blocks shared by more than one screen — global patterns 1, 3, 4 and 5 in
@@ -82,7 +82,7 @@ export function MomentCard({
     return (
       <View style={[styles.cardShell, androidGroup(theme), style]} testID={testID ? `${testID}-group` : undefined}>
         <View style={styles.cardContent} testID={testID}>
-          {children}
+          <FieldGroupContext.Provider value="group">{children}</FieldGroupContext.Provider>
         </View>
       </View>
     );

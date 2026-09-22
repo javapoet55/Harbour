@@ -7,7 +7,7 @@ import {
   androidField,
   androidSecondaryButton,
   androidSecondaryLabel,
-  androidSectionLabel,
+  androidLabel,
   brand,
   isAndroid,
   useTheme,
@@ -28,7 +28,7 @@ import { Text } from './Text';
 export function SectionLabel({ title }: { title: string }) {
   const theme = useTheme();
   return (
-    <Text accessibilityRole="header" style={[styles.sectionLabel, { color: theme.colors.secondary }, androidSectionLabel(theme)]}>
+    <Text accessibilityRole="header" style={[styles.sectionLabel, { color: theme.colors.secondary }, androidLabel(theme)]}>
       {title}
     </Text>
   );

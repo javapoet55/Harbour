@@ -1,7 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import * as Crypto from 'expo-crypto';
 import { router, Stack } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { ActivityIndicator, Alert, Keyboard, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { useStore } from 'zustand';
 
@@ -13,7 +13,7 @@ import { FitText } from '../../components/FitText';
 import { IOSSwitch } from '../../components/IOSSwitch';
 import { GlassCapsule, GlassCircle } from '../../components/PushedHeader';
 import { withAlpha } from '../../components/SignInBackdrop';
-import { androidSeparator, brand, textStyles, useTheme } from '../../theme';
+import { androidLabel, androidSeparator, ANDROID_LABEL_GAP, brand, isAndroid, textStyles, useTheme } from '../../theme';
 import {
   BorderedButton,
   caption,
@@ -88,6 +88,29 @@ const TONES = ['Warm', 'Personal', 'Short', 'Fun'] as const;
  *
  * `onDone` is the `onDone` closure Swift threads through: Done on the success screen, and nothing else.
  */
+/**
+ * A heading over one of the form cards (Reminder & Repeat, Send time, Delivery). iOS keeps the
+ * Swift `.title2` heading, the content's 20 above the card. Android draws the one shared field label
+ * (docs/android-polish.md §4), 8 above its card, so these read like every other form's labels.
+ */
+function CardHeading({ title, children }: { title: string; children: ReactNode }) {
+  const theme = useTheme();
+  if (!isAndroid()) {
+    return (
+      <>
+        <Text style={[textStyles.title2, styles.bold, { color: theme.colors.label }]}>{title}</Text>
+        {children}
+      </>
+    );
+  }
+  return (
+    <View style={styles.androidCardSection}>
+      <Text style={androidLabel(theme)}>{title}</Text>
+      {children}
+    </View>
+  );
+}
+
 export function ManageMomentView({ group, onDone }: { group: MomentDisplayGroup; onDone: () => void }) {
   const theme = useTheme();
   const [model] = useState(() => newManageModel(group));
@@ -391,55 +414,56 @@ export function ManageMomentView({ group, onDone }: { group: MomentDisplayGroup;
                   testID="festival-details-date"
                 />
               </MomentCard>
-              <Text style={[textStyles.title2, styles.bold, { color: theme.colors.label }]}>Reminder & Repeat</Text>
-              <MomentCard grouped>
-                {occasionSource(state) === 'festivalCatalog' ? (
-                  <>
-                    <FormToggle
-                      label="Update festival date automatically"
-                      value={state.settings.catalogManaged}
-                      onValueChange={(value) => {
-                        model.getState().updateSettings({ catalogManaged: value });
-                        if (value) model.getState().useCatalog();
-                      }}
-                      testID="festival-catalog-managed"
-                    />
+              <CardHeading title="Reminder & Repeat">
+                <MomentCard grouped>
+                  {occasionSource(state) === 'festivalCatalog' ? (
+                    <>
+                      <FormToggle
+                        label="Update festival date automatically"
+                        value={state.settings.catalogManaged}
+                        onValueChange={(value) => {
+                          model.getState().updateSettings({ catalogManaged: value });
+                          if (value) model.getState().useCatalog();
+                        }}
+                        testID="festival-catalog-managed"
+                      />
+                      <MenuPicker
+                        hideLabel
+                        label="Catalog festival"
+                        options={[{ value: '', title: 'Select festival' }, ...state.catalog.map((entry) => ({ value: entry.id, title: entry.name }))]}
+                        value={state.settings.catalogID}
+                        onChange={(value) => model.getState().updateSettings({ catalogID: value })}
+                        testID="festival-catalog"
+                      />
+                      <Text style={[caption, { color: theme.colors.label }]}>Only verified catalog dates are used. If no date is available, confirm it manually.</Text>
+                    </>
+                  ) : (
+                    <>
+                      <FormToggle label="Repeat every year" value={state.yearly} onValueChange={(value) => model.getState().setYearly(value)} testID="festival-yearly" />
+                      <Text style={[caption, { color: theme.colors.secondaryLabel }]}>
+                        {type === 'festival'
+                          ? 'Dates repeat yearly; festivals may move.\nConfirm the date and schedule each year.'
+                          : 'Repeats on this date each year.\nReview and schedule each wish separately.'}
+                      </Text>
+                    </>
+                  )}
+                  <View style={[styles.divider, { backgroundColor: theme.colors.separator }, androidSeparator(theme)]} />
+                  <View style={styles.inline}>
+                    <Text style={[textStyles.body, styles.grow, { color: theme.colors.label }]}>Prepare reminder</Text>
                     <MenuPicker
                       hideLabel
-                      label="Catalog festival"
-                      options={[{ value: '', title: 'Select festival' }, ...state.catalog.map((entry) => ({ value: entry.id, title: entry.name }))]}
-                      value={state.settings.catalogID}
-                      onChange={(value) => model.getState().updateSettings({ catalogID: value })}
-                      testID="festival-catalog"
+                      label="Prepare reminder"
+                      options={[{ value: 0, title: 'None' }, ...[1, 3, 7, 14].map((days) => ({ value: days, title: `${days} day${days === 1 ? '' : 's'} before` }))]}
+                      value={state.settings.prepareDays}
+                      onChange={(value) => model.getState().updateSettings({ prepareDays: value })}
+                      testID="festival-prepare"
                     />
-                    <Text style={[caption, { color: theme.colors.label }]}>Only verified catalog dates are used. If no date is available, confirm it manually.</Text>
-                  </>
-                ) : (
-                  <>
-                    <FormToggle label="Repeat every year" value={state.yearly} onValueChange={(value) => model.getState().setYearly(value)} testID="festival-yearly" />
-                    <Text style={[caption, { color: theme.colors.secondaryLabel }]}>
-                      {type === 'festival'
-                        ? 'Dates repeat yearly; festivals may move.\nConfirm the date and schedule each year.'
-                        : 'Repeats on this date each year.\nReview and schedule each wish separately.'}
-                    </Text>
-                  </>
-                )}
-                <View style={[styles.divider, { backgroundColor: theme.colors.separator }, androidSeparator(theme)]} />
-                <View style={styles.inline}>
-                  <Text style={[textStyles.body, styles.grow, { color: theme.colors.label }]}>Prepare reminder</Text>
-                  <MenuPicker
-                    hideLabel
-                    label="Prepare reminder"
-                    options={[{ value: 0, title: 'None' }, ...[1, 3, 7, 14].map((days) => ({ value: days, title: `${days} day${days === 1 ? '' : 's'} before` }))]}
-                    value={state.settings.prepareDays}
-                    onChange={(value) => model.getState().updateSettings({ prepareDays: value })}
-                    testID="festival-prepare"
-                  />
-                </View>
-                <Text style={[caption, { color: theme.colors.secondaryLabel }]}>Review only. Nothing is sent.</Text>
-                <View style={[styles.divider, { backgroundColor: theme.colors.separator }, androidSeparator(theme)]} />
-                {zoneOptions(state.zone, (zone) => model.getState().setZone(zone), 'festival-zone')}
-              </MomentCard>
+                  </View>
+                  <Text style={[caption, { color: theme.colors.secondaryLabel }]}>Review only. Nothing is sent.</Text>
+                  <View style={[styles.divider, { backgroundColor: theme.colors.separator }, androidSeparator(theme)]} />
+                  {zoneOptions(state.zone, (zone) => model.getState().setZone(zone), 'festival-zone')}
+                </MomentCard>
+              </CardHeading>
               {saveButtons}
             </>
           ) : null}
@@ -564,56 +588,58 @@ export function ManageMomentView({ group, onDone }: { group: MomentDisplayGroup;
             <>
               <Text style={[textStyles.largeTitle, styles.bold, { color: theme.colors.label }]}>Schedule</Text>
               <IconLabel icon="calendar-outline" title={sendDayLabel(state.sendDate, state.zone)} color={theme.colors.secondaryLabel} />
-              <Text style={[textStyles.title2, styles.bold, { color: theme.colors.label }]}>Send time</Text>
-              <MomentCard grouped>
-                <DateField includeTime label="Date and time" value={state.sendDate} onChange={(value) => model.getState().setSendDate(value)} zone={state.zone} minimum={openedAt} testID="festival-send-time" />
-                {zoneOptions(state.zone, (zone) => model.getState().setZone(zone), 'festival-schedule-zone')}
-              </MomentCard>
-              <Text style={[textStyles.title2, styles.bold, { color: theme.colors.label }]}>Delivery</Text>
-              <MomentCard grouped>
-                {selected.map((recipient) => {
-                  const channel = recipientChannel(state, recipient);
-                  const options = [
-                    ...(recipient.phone !== '' ? [{ value: 'messages', title: 'Messages' }] : []),
-                    ...(recipient.email !== '' ? [{ value: 'email', title: 'Email' }] : []),
-                    { value: 'share', title: 'Copy / Share' },
-                  ];
-                  return (
-                    <View key={recipient.key} style={styles.deliveryRow}>
-                      <View style={styles.inline}>
-                        <View style={[styles.initialsSmall, { backgroundColor: withAlpha(brand.nexdoIndigo, 0.12) }]}>
-                          <Text style={[textStyles.body, { color: theme.colors.label }]}>{recipientInitials(recipient.name)}</Text>
+              <CardHeading title="Send time">
+                <MomentCard grouped>
+                  <DateField includeTime label="Date and time" value={state.sendDate} onChange={(value) => model.getState().setSendDate(value)} zone={state.zone} minimum={openedAt} testID="festival-send-time" />
+                  {zoneOptions(state.zone, (zone) => model.getState().setZone(zone), 'festival-schedule-zone')}
+                </MomentCard>
+              </CardHeading>
+              <CardHeading title="Delivery">
+                <MomentCard grouped>
+                  {selected.map((recipient) => {
+                    const channel = recipientChannel(state, recipient);
+                    const options = [
+                      ...(recipient.phone !== '' ? [{ value: 'messages', title: 'Messages' }] : []),
+                      ...(recipient.email !== '' ? [{ value: 'email', title: 'Email' }] : []),
+                      { value: 'share', title: 'Copy / Share' },
+                    ];
+                    return (
+                      <View key={recipient.key} style={styles.deliveryRow}>
+                        <View style={styles.inline}>
+                          <View style={[styles.initialsSmall, { backgroundColor: withAlpha(brand.nexdoIndigo, 0.12) }]}>
+                            <Text style={[textStyles.body, { color: theme.colors.label }]}>{recipientInitials(recipient.name)}</Text>
+                          </View>
+                          <Text style={[headline, { color: theme.colors.label }]}>{recipient.name}</Text>
                         </View>
-                        <Text style={[headline, { color: theme.colors.label }]}>{recipient.name}</Text>
+                        <MenuPicker
+                          hideLabel
+                          accessibilityLabel={`Channel for ${recipient.name}`}
+                          label={`Channel for ${recipient.name}`}
+                          options={options}
+                          value={channel}
+                          onChange={(value) => model.getState().updateSettings({ channels: { ...model.getState().settings.channels, [recipient.key]: value } })}
+                          testID={`festival-channel-${recipient.key}`}
+                        />
+                        {channel === 'email' ? (
+                          <>
+                            <FormToggle
+                              disabled={!ready}
+                              label="Send automatically"
+                              value={state.settings.automatic[recipient.key] ?? false}
+                              onValueChange={(value) => model.getState().updateSettings({ automatic: { ...model.getState().settings.automatic, [recipient.key]: value } })}
+                              testID={`festival-automatic-${recipient.key}`}
+                            />
+                            <Text style={[caption, { color: theme.colors.label }]}>{state.settings.automatic[recipient.key] === true ? 'Auto-send' : 'You send at the scheduled time'}</Text>
+                          </>
+                        ) : (
+                          <Text style={[caption, { color: theme.colors.label }]}>{channel === 'messages' ? 'You tap Send at the scheduled time' : 'Manual share only'}</Text>
+                        )}
+                        <View style={[styles.divider, { backgroundColor: theme.colors.separator }, androidSeparator(theme)]} />
                       </View>
-                      <MenuPicker
-                        hideLabel
-                        accessibilityLabel={`Channel for ${recipient.name}`}
-                        label={`Channel for ${recipient.name}`}
-                        options={options}
-                        value={channel}
-                        onChange={(value) => model.getState().updateSettings({ channels: { ...model.getState().settings.channels, [recipient.key]: value } })}
-                        testID={`festival-channel-${recipient.key}`}
-                      />
-                      {channel === 'email' ? (
-                        <>
-                          <FormToggle
-                            disabled={!ready}
-                            label="Send automatically"
-                            value={state.settings.automatic[recipient.key] ?? false}
-                            onValueChange={(value) => model.getState().updateSettings({ automatic: { ...model.getState().settings.automatic, [recipient.key]: value } })}
-                            testID={`festival-automatic-${recipient.key}`}
-                          />
-                          <Text style={[caption, { color: theme.colors.label }]}>{state.settings.automatic[recipient.key] === true ? 'Auto-send' : 'You send at the scheduled time'}</Text>
-                        </>
-                      ) : (
-                        <Text style={[caption, { color: theme.colors.label }]}>{channel === 'messages' ? 'You tap Send at the scheduled time' : 'Manual share only'}</Text>
-                      )}
-                      <View style={[styles.divider, { backgroundColor: theme.colors.separator }, androidSeparator(theme)]} />
-                    </View>
-                  );
-                })}
-              </MomentCard>
+                    );
+                  })}
+                </MomentCard>
+              </CardHeading>
               <Text style={[textStyles.subheadline, { color: theme.colors.label }]}>{`${automaticCount} automatic · ${selected.length - automaticCount} will be sent by you`}</Text>
               {!ready ? (
                 <>
@@ -1002,6 +1028,7 @@ export function ScheduleSuccess({
 const styles = StyleSheet.create({
   fill: { flex: 1 },
   content: { padding: 18, gap: 20, paddingBottom: 60 },
+  androidCardSection: { gap: ANDROID_LABEL_GAP },
   centered: { alignItems: 'center' },
   stretch: { alignSelf: 'stretch' },
   center: { textAlign: 'center' },

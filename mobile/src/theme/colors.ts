@@ -93,6 +93,18 @@ export type Palette = {
   accentBorder: string;
   /** An Android bottom bar, a shade above `fieldSurface` so it separates from the scroll content. */
   barSurface: string;
+  /**
+   * The Android field label (TASK NAME, PRIORITY, a form section header…): an opaque secondary grey
+   * that reads at 4.5:1 or better on every page, card and group surface in its scheme
+   * (docs/android-polish.md §4). Opaque so its contrast does not depend on what is behind it.
+   */
+  fieldLabel: string;
+  /**
+   * A value pill or input INSIDE a grouped form card (`androidGroup`), which is already on
+   * `fieldSurface`: white in light, one step lighter in dark. `useTheme` swaps in the elevated one.
+   */
+  fieldOnGroup: string;
+  fieldOnGroupElevated: string;
 };
 
 export type ColorScheme = 'light' | 'dark';
@@ -136,6 +148,9 @@ export const palettes: Record<ColorScheme, Palette> = {
     accentTint: 'rgba(61, 41, 240, 0.10)',
     accentBorder: 'rgba(61, 41, 240, 0.45)',
     barSurface: '#FAFAFC',
+    fieldLabel: '#575C80',
+    fieldOnGroup: '#FFFFFF',
+    fieldOnGroupElevated: '#FFFFFF',
   },
   dark: {
     // TODO(phase1-decision): the Swift dark variant is the dynamic system `.label`; this is its standard dark value.
@@ -180,5 +195,8 @@ export const palettes: Record<ColorScheme, Palette> = {
     accentTint: 'rgba(143, 133, 255, 0.10)',
     accentBorder: 'rgba(143, 133, 255, 0.45)',
     barSurface: '#242427',
+    fieldLabel: '#A1A1AA',
+    fieldOnGroup: '#2C2C2E',
+    fieldOnGroupElevated: '#3A3A3C',
   },
 };

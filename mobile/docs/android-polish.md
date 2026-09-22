@@ -273,3 +273,94 @@ Android, dark mode first, then light:
 6. Reset password: both sections are outlined cards above the sheet.
 7. iOS: all of the above look as before.
 
+
+---
+
+## 4. Chip rows and one field label (2026-09-22)
+
+JavaScript only; no new build needed. All changes are Android only. iOS is unchanged, and so are
+the text, order and behaviour. Colours come from theme tokens.
+
+### What was wrong
+
+- **Chip rows.** New Task's DATE (Today / Tomorrow / Select Date) and TIME ESTIMATE (15m–60m) rows
+  split the card width equally, so "Select Date" wrapped or was squeezed. New Event's weekday grid
+  wrapped onto two lines.
+- **Field labels.** Each form had its own caption style:
+  - New Task's icon labels were in the indigo tint, 2.2:1 on the dark card.
+  - New Event's were in its editor accent.
+  - Task Details used plain secondary text.
+  - The Moments/Shopping forms, Reset password and the project editor used sentence-case body text.
+  - New List and Manage Moment used large headings.
+
+  None of them matched, and the New Task ones were hard to read.
+- **New Task NOTES.** The collapsed "Add a note (optional)" row was plain text on the card, so it
+  did not read as something to tap.
+- **Flat inputs left.** New List's name field, the date/time and menu value pills on the Moments
+  forms, and New Event's Repeat dropdown still had no field surface.
+
+### New tokens
+
+| Token | Light | Dark | Use |
+|---|---|---|---|
+| `fieldLabel` | `#575C80` | `#A1A1AA` | every Android field label. It is opaque, so its contrast does not depend on what sits behind it. Dark measures 8.2:1 on black, 6.6:1 on #1C1C1E and 5.4:1 on #2C2C2E. Light measures 6.5:1 on white and 5.8:1 on #F2F2F7. A test checks it is at least 4.5:1 on every page, card, sheet and field surface in both themes |
+| `fieldOnGroup` / `fieldOnGroupElevated` | `#FFFFFF` / `#FFFFFF` | `#2C2C2E` / `#3A3A3C` | a value pill or input inside a group card, which is already on `fieldSurface`. `useTheme` swaps in the elevated one inside a sheet |
+
+### Shared pieces (`src/theme/androidForm.ts`)
+
+- **`androidLabel(theme)`** is the one field label: 12pt, weight 600, letter-spacing 0.6,
+  `textTransform: 'uppercase'`, in `fieldLabel`. The uppercase is drawing only: the string, and what
+  a screen reader says, are unchanged. With an icon, the icon is `ANDROID_LABEL_ICON` (14pt) in
+  `fieldLabel`, 6pt from the text (`androidLabelRow`). The spacing is 8pt to the field
+  (`ANDROID_LABEL_GAP`) and 20pt above (`ANDROID_SECTION_GAP`). It replaces §2's
+  `androidSectionLabel`.
+- **`androidChipScroll(inset)` and `androidChip`** are the chip row from §2's Tasks filter chips,
+  now shared:
+  - The row is a horizontal `ScrollView` with no indicator, 8pt between chips and 16pt of content
+    padding. It cancels its container's inset so it scrolls edge to edge.
+  - A chip is 36pt tall with 12pt inside, as wide as its label, with `numberOfLines={1}`.
+  - The Tasks screen now uses these too, with the same values as §2.
+- **`androidField(…, { inGroup })`** puts a field inside a group card, using `fieldOnGroup`.
+- **`FieldGroupContext` and `androidPill(theme, placement)`** handle the value pills. A group card
+  (`FormSection`, `MomentCard grouped`) provides `'group'`, and New List's card provides `'card'`.
+  The Moments `MenuPicker` and `DateField` read it, so their pills take the field look inside a form
+  and stay as they were anywhere else, such as the Moments filter menu.
+
+### Where
+
+| Screen / component | Android change |
+|---|---|
+| **New Task** | TASK NAME, NOTES, PROJECT, DATE, TIME ESTIMATE use the shared label, 8pt above their field; a divider is still 20pt above each label. DATE and TIME ESTIMATE are chip rows: they bleed to the card's edges, so the first chip starts 16pt from the card edge, 4pt left of the labels. "Select Date", and the date that replaces it, stay on one line. **NOTES**: the label now sits above a field like the others. The collapsed "Add a note (optional)" preview *is* that field, a raised, outlined row with its chevron; tapping it expands the notes. While expanded, the label row shows the down chevron and collapses them, as the disclosure did |
+| **New Event** | APPOINTMENT / EVENT, SCHEDULE, REPEAT, LOCATION, NOTES use the shared label, 8pt above the first field under each. The weekday chips (under "Particular days of the week") are a chip row. The Repeat dropdown is now a raised field, keeping its accent value and chevron |
+| **Task Details** | `SectionLabel` uses the shared label (weight 600 instead of 700, `fieldLabel`, uppercase) |
+| Moments/Shopping `FormSection` header | shared label, 20pt above, 8pt to the group. This covers the Moment editor, Moment settings, Festivals, Calendar import, Wish, Manage Moment's sheets, and the Shopping item editor, List settings and Share list |
+| Moments `MenuPicker`, `DateField` | inside a form, the value (and chevron) or the date and time pills get the field surface for where they sit: `fieldOnGroup` in a group, raised on a card. Padding is 12 for the menu pill, and the date pills keep theirs |
+| Manage Moment | the headings over the form cards (Reminder & Repeat, Send time, Delivery) use the shared label, 8pt above their card. "Greeting Card" and the page titles stay as headings, because they are not labels on a form field |
+| Shopping **New List** | "List Name" uses the shared label, 20pt above and 8pt to its card. The name input is a raised field with an accent border while focused, the Shopping date pill takes the raised surface, and the card's dividers use the §3 separator |
+| Reset password | its section headers use the shared label, 20pt above and 8pt to the group |
+| Project editor (new and edit) | its section headers use the shared label. Each section is now the §3 form group, which it did not have before |
+
+### Left as they were
+
+- The Moments/Shopping `FormField` text rows inside a group. They stay borderless rows, per §3.
+- Manage Moment's gradient wish-message card.
+
+### Check it on a phone
+
+Android, dark mode first, then light:
+
+1. New Task: every label is the same light grey, small and spaced caps, with a 14pt icon, sitting
+   just above its field. Swipe DATE and TIME ESTIMATE sideways; "Select Date" is one line. Pick a
+   date, and the chip shows it on one line. Tap "Add a note (optional)" to open notes; tap NOTES to
+   close them.
+2. New Event: the same labels. Repeat is a filled field. Choose "Particular days of the week": the
+   days scroll sideways as chips.
+3. Task Details: the labels match New Task's, without icons.
+4. Moment settings, a Moment editor, Shopping item editor: each section header is the same small
+   grey caps label above its card. Date and menu values sit in outlined pills.
+5. Manage Moment → Details and Schedule: Reminder & Repeat, Send time and Delivery are labels, not
+   large headings.
+6. Shopping → New List: "LIST NAME" above the card, the name an outlined field, the date an
+   outlined pill.
+7. Reset password, then Projects → New Project: labels and grouped sections match.
+8. iOS: all of the above look as before.

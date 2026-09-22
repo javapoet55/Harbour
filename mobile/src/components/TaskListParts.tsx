@@ -1,7 +1,7 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import { Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 
-import { brand, isAndroid, useTheme } from '../theme';
+import { androidChip, brand, isAndroid, useTheme } from '../theme';
 import type { TaskDateFilter } from '../lib/taskQuery';
 import { TaskSymbol, type TaskSymbolName } from './TaskSymbol';
 import { Text } from './Text';
@@ -65,14 +65,14 @@ export function DatePill({
       testID={`date-pill-${filter}`}
     >
       {selected ? (
-        <LinearGradient colors={[...TASK_ACCENT]} start={{ x: 0, y: 0.5 }} end={{ x: 1, y: 0.5 }} style={[styles.pill, isAndroid() && styles.androidPill]} testID={`date-pill-${filter}-surface`}>
+        <LinearGradient colors={[...TASK_ACCENT]} start={{ x: 0, y: 0.5 }} end={{ x: 1, y: 0.5 }} style={[styles.pill, isAndroid() && androidChip]} testID={`date-pill-${filter}-surface`}>
           {content}
         </LinearGradient>
       ) : (
         <View
           style={[
             styles.pill,
-            isAndroid() && styles.androidPill,
+            isAndroid() && androidChip,
             { backgroundColor: theme.colors.surface, borderWidth: StyleSheet.hairlineWidth, borderColor: withAlpha(brand.nexdoIndigo, 0.16) },
           ]}
           testID={`date-pill-${filter}-surface`}
@@ -192,8 +192,6 @@ const styles = StyleSheet.create({
   // `.padding(.horizontal, 8).frame(minHeight: 44)`, capsule.
   pill: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 8, minHeight: 44, borderRadius: 999 },
   pillLabel: { fontSize: 13, lineHeight: 18 },
-  // Android: a fixed 36 chip with 12 inside, so the row sits tight in its horizontal scroll.
-  androidPill: { height: 36, minHeight: 36, paddingHorizontal: 12 },
   pillCount: { paddingHorizontal: 5, paddingVertical: 2, borderRadius: 999 },
   pillCountLabel: { fontSize: 12, lineHeight: 16 },
   // `.padding(12).frame(maxWidth: .infinity, minHeight: 72)`, corner radius 20.

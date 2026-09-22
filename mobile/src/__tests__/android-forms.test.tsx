@@ -81,7 +81,7 @@ describe('New Task on Android', () => {
   it('gives the choice buttons, the stepper and the project field the raised field surface', async () => {
     await wrap(<NewTask />);
     // Unselected choices keep their own padding and take the surface, hairline and radius.
-    expect(flat('date-Tomorrow-surface')).toMatchObject({ ...raisedField, minHeight: 44, paddingHorizontal: 6 });
+    expect(flat('date-Tomorrow-surface')).toMatchObject({ ...raisedField, height: 36, paddingHorizontal: 12 });
     expect(flat('duration-15-surface')).toMatchObject(raisedField);
     // The selected choice keeps its gradient, in the same 12 radius.
     expect(flat('date-Today-surface')).toMatchObject({ borderRadius: 12 });
