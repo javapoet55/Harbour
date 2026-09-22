@@ -18,9 +18,12 @@ import { Text } from './Text';
 export function ProjectAssignmentField({
   projectID,
   onChange,
+  raised = false,
 }: {
   projectID: string | null;
   onChange: (next: string | null) => void;
+  /** Android: the field sits on a card (New Task), not on the page. See `androidField`. */
+  raised?: boolean;
 }) {
   const theme = useTheme();
   const accent = useProjectAccent();
@@ -44,7 +47,7 @@ export function ProjectAssignmentField({
         onPress={() => setOpen((value) => !value)}
         testID="project-field"
         // Android: the shared field look, as on every other Task Details field (docs/android-polish.md §2).
-        style={[styles.field, surface, androidField(theme)]}
+        style={[styles.field, surface, androidField(theme, false, { raised })]}
       >
         <TaskSymbol name="folder.fill" size={17} color={selected ? projectColor(selected.color) : theme.colors.secondary} />
         <Text style={[theme.typography.body, styles.grow, { color: theme.colors.ink }]}>{label}</Text>
@@ -54,7 +57,7 @@ export function ProjectAssignmentField({
       </Pressable>
 
       {open ? (
-        <View style={[styles.menu, surface, androidField(theme), styles.androidMenu]}>
+        <View style={[styles.menu, surface, androidField(theme, false, { raised }), styles.androidMenu]}>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="No project"

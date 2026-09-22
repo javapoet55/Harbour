@@ -13,7 +13,7 @@ import { FitText } from '../../components/FitText';
 import { IOSSwitch } from '../../components/IOSSwitch';
 import { GlassCapsule, GlassCircle } from '../../components/PushedHeader';
 import { withAlpha } from '../../components/SignInBackdrop';
-import { brand, textStyles, useTheme } from '../../theme';
+import { androidSeparator, brand, textStyles, useTheme } from '../../theme';
 import {
   BorderedButton,
   caption,
@@ -363,7 +363,7 @@ export function ManageMomentView({ group, onDone }: { group: MomentDisplayGroup;
           {state.tab === 'Details' ? (
             <>
               <Text style={[textStyles.largeTitle, styles.bold, { color: theme.colors.label }]}>Moment Details</Text>
-              <MomentCard>
+              <MomentCard grouped>
                 <View style={styles.inline}>
                   <Text style={[textStyles.body, { color: theme.colors.label }]}>Moment name</Text>
                   <TextInput
@@ -379,9 +379,9 @@ export function ManageMomentView({ group, onDone }: { group: MomentDisplayGroup;
                   />
                   <Ionicons name="pencil" size={17} color={theme.colors.label} />
                 </View>
-                <View style={[styles.divider, { backgroundColor: theme.colors.separator }]} />
+                <View style={[styles.divider, { backgroundColor: theme.colors.separator }, androidSeparator(theme)]} />
                 <LabeledValue label="Type" value={occasionLabel(state)} />
-                <View style={[styles.divider, { backgroundColor: theme.colors.separator }]} />
+                <View style={[styles.divider, { backgroundColor: theme.colors.separator }, androidSeparator(theme)]} />
                 <DateField
                   label="Date"
                   value={state.date}
@@ -392,7 +392,7 @@ export function ManageMomentView({ group, onDone }: { group: MomentDisplayGroup;
                 />
               </MomentCard>
               <Text style={[textStyles.title2, styles.bold, { color: theme.colors.label }]}>Reminder & Repeat</Text>
-              <MomentCard>
+              <MomentCard grouped>
                 {occasionSource(state) === 'festivalCatalog' ? (
                   <>
                     <FormToggle
@@ -424,7 +424,7 @@ export function ManageMomentView({ group, onDone }: { group: MomentDisplayGroup;
                     </Text>
                   </>
                 )}
-                <View style={[styles.divider, { backgroundColor: theme.colors.separator }]} />
+                <View style={[styles.divider, { backgroundColor: theme.colors.separator }, androidSeparator(theme)]} />
                 <View style={styles.inline}>
                   <Text style={[textStyles.body, styles.grow, { color: theme.colors.label }]}>Prepare reminder</Text>
                   <MenuPicker
@@ -437,7 +437,7 @@ export function ManageMomentView({ group, onDone }: { group: MomentDisplayGroup;
                   />
                 </View>
                 <Text style={[caption, { color: theme.colors.secondaryLabel }]}>Review only. Nothing is sent.</Text>
-                <View style={[styles.divider, { backgroundColor: theme.colors.separator }]} />
+                <View style={[styles.divider, { backgroundColor: theme.colors.separator }, androidSeparator(theme)]} />
                 {zoneOptions(state.zone, (zone) => model.getState().setZone(zone), 'festival-zone')}
               </MomentCard>
               {saveButtons}
@@ -453,7 +453,7 @@ export function ManageMomentView({ group, onDone }: { group: MomentDisplayGroup;
                   No contacts added yet. Add a contact to choose who receives this wish.
                 </Text>
               ) : (
-                <MomentCard>
+                <MomentCard grouped>
                   {state.recipients
                     .filter((recipient, index) => showAllContacts || index < 3)
                     .map((recipient) => (
@@ -565,12 +565,12 @@ export function ManageMomentView({ group, onDone }: { group: MomentDisplayGroup;
               <Text style={[textStyles.largeTitle, styles.bold, { color: theme.colors.label }]}>Schedule</Text>
               <IconLabel icon="calendar-outline" title={sendDayLabel(state.sendDate, state.zone)} color={theme.colors.secondaryLabel} />
               <Text style={[textStyles.title2, styles.bold, { color: theme.colors.label }]}>Send time</Text>
-              <MomentCard>
+              <MomentCard grouped>
                 <DateField includeTime label="Date and time" value={state.sendDate} onChange={(value) => model.getState().setSendDate(value)} zone={state.zone} minimum={openedAt} testID="festival-send-time" />
                 {zoneOptions(state.zone, (zone) => model.getState().setZone(zone), 'festival-schedule-zone')}
               </MomentCard>
               <Text style={[textStyles.title2, styles.bold, { color: theme.colors.label }]}>Delivery</Text>
-              <MomentCard>
+              <MomentCard grouped>
                 {selected.map((recipient) => {
                   const channel = recipientChannel(state, recipient);
                   const options = [
@@ -609,7 +609,7 @@ export function ManageMomentView({ group, onDone }: { group: MomentDisplayGroup;
                       ) : (
                         <Text style={[caption, { color: theme.colors.label }]}>{channel === 'messages' ? 'You tap Send at the scheduled time' : 'Manual share only'}</Text>
                       )}
-                      <View style={[styles.divider, { backgroundColor: theme.colors.separator }]} />
+                      <View style={[styles.divider, { backgroundColor: theme.colors.separator }, androidSeparator(theme)]} />
                     </View>
                   );
                 })}
@@ -623,9 +623,9 @@ export function ManageMomentView({ group, onDone }: { group: MomentDisplayGroup;
                   </Pressable>
                 </>
               ) : null}
-              <MomentCard>
+              <MomentCard grouped>
                 <FormToggle label="Notify me 1 hour before" value={state.notify} onValueChange={(value) => model.getState().setNotify(value)} testID="festival-notify" />
-                <View style={[styles.divider, { backgroundColor: theme.colors.separator }]} />
+                <View style={[styles.divider, { backgroundColor: theme.colors.separator }, androidSeparator(theme)]} />
                 <LabeledValue label="Send if app is closed" value="Email only" />
               </MomentCard>
               <View style={[styles.info, { backgroundColor: withAlpha(systemColors.blue, 0.08) }]}>
@@ -867,7 +867,7 @@ function RecipientEditor({
           <Text style={[textStyles.body, { color: theme.colors.danger }]}>Remove contact</Text>
         </Pressable>
       </Disclosure>
-      <View style={[styles.divider, { backgroundColor: theme.colors.separator }]} />
+      <View style={[styles.divider, { backgroundColor: theme.colors.separator }, androidSeparator(theme)]} />
     </View>
   );
 }

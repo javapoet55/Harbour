@@ -22,7 +22,7 @@ import { KeyboardAwareScrollView } from '../../components/keyboard';
 import { GlassCapsule } from '../../components/PushedHeader';
 import { withAlpha } from '../../components/SignInBackdrop';
 import { Text } from '../../components/Text';
-import { brand, linearGradientStops, useTheme } from '../../theme';
+import { androidGroup, brand, ElevatedSurface, isAndroid, linearGradientStops, useTheme } from '../../theme';
 
 /**
  * The Moments building blocks shared by more than one screen — global patterns 1, 3, 4 and 5 in
@@ -63,13 +63,30 @@ export function MomentCard({
   fill,
   style,
   testID,
+  grouped = false,
 }: {
   children: ReactNode;
   fill?: { colors: readonly [string, string, ...string[]]; start: { x: number; y: number }; end: { x: number; y: number } };
   style?: StyleProp<ViewStyle>;
   testID?: string;
+  /**
+   * The card holds form rows (Manage Moment's Details, Reminder & Repeat, Recipients, Send time,
+   * Delivery, Notify). On Android it drops the glass for the shared form group — field surface and
+   * hairline — so its rows read like every other form's (docs/android-polish.md §3). iOS ignores it.
+   */
+  grouped?: boolean;
 }) {
+  const theme = useTheme();
   const stroke = withAlpha(brand.nexdoIndigo, 0.18);
+  if (grouped && !fill && isAndroid()) {
+    return (
+      <View style={[styles.cardShell, androidGroup(theme), style]} testID={testID ? `${testID}-group` : undefined}>
+        <View style={styles.cardContent} testID={testID}>
+          {children}
+        </View>
+      </View>
+    );
+  }
   if (fill) {
     return (
       <View style={[styles.cardShell, { borderColor: stroke }, style]} testID={testID}>
@@ -415,7 +432,9 @@ export function MomentSheet({
         </View>
         {/* A sheet has no transparent bar above it: a backdrop inside must not reach up under the
             page's bar (it would cover this sheet's own bar). */}
-        <HeaderHeightContext.Provider value={0}>{children}</HeaderHeightContext.Provider>
+        {/* Android: the sheet is the elevated background, so its forms take the elevated field
+            surface and stay a step above it (docs/android-polish.md §3). iOS keeps its own colours. */}
+        <HeaderHeightContext.Provider value={0}>{Platform.OS === 'android' ? <ElevatedSurface>{children}</ElevatedSurface> : children}</HeaderHeightContext.Provider>
       </View>
     </Modal>
   );

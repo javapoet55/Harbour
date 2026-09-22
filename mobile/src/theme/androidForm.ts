@@ -11,17 +11,43 @@ import type { Theme } from './useTheme';
  */
 export const isAndroid = () => Platform.OS === 'android';
 
-/** An input or dropdown field: hairline, one step above the page, 12 radius, 14/16 padding. */
-export function androidField(theme: Theme, focused = false): ViewStyle | null {
+/**
+ * An input or dropdown field: hairline, one step above the page, 12 radius, 14/16 padding.
+ *
+ * - `raised`: the field sits on a card (New Task, New Event) rather than on the page, so it takes
+ *   the step above the card's `surface` (`fieldSurfaceElevated`) and stays distinct from it.
+ * - `padded: false`: a choice button, value capsule or control group that keeps its own padding
+ *   and takes only the surface, hairline and radius.
+ */
+export function androidField(
+  theme: Theme,
+  focused = false,
+  { raised = false, padded = true }: { raised?: boolean; padded?: boolean } = {},
+): ViewStyle | null {
   if (!isAndroid()) return null;
   return {
-    backgroundColor: theme.colors.fieldSurface,
+    backgroundColor: raised ? theme.colors.fieldSurfaceElevated : theme.colors.fieldSurface,
     borderWidth: 1,
     borderColor: focused ? theme.colors.accent : theme.colors.fieldBorder,
     borderRadius: 12,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
+    ...(padded ? { paddingVertical: 14, paddingHorizontal: 16 } : null),
   };
+}
+
+/**
+ * A grouped card of form rows (Moments and Shopping `Form` sections, Manage Moment's form cards):
+ * the field surface and hairline round the whole group, with `androidSeparator` between rows.
+ * The rows themselves carry no border — a bordered field inside a bordered card doubles the line.
+ */
+export function androidGroup(theme: Theme): ViewStyle | null {
+  if (!isAndroid()) return null;
+  return { backgroundColor: theme.colors.fieldSurface, borderWidth: 1, borderColor: theme.colors.fieldBorder };
+}
+
+/** The 1px line between two rows of an `androidGroup`. */
+export function androidSeparator(theme: Theme): ViewStyle | null {
+  if (!isAndroid()) return null;
+  return { height: 1, backgroundColor: theme.colors.fieldBorder };
 }
 
 /** A card: the same hairline and surface as a field, 16 padding. */

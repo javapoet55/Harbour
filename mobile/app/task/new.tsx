@@ -10,7 +10,7 @@ import { detectTaskAction } from '../../src/lib/taskActionDetector';
 import { creationDateFor, TASK_CREATION_DATES, type TaskCreationDate } from '../../src/lib/taskCreation';
 import { useCreateTask, type ScheduleConflict } from '../../src/query/useTasks';
 import { useSession } from '../../src/store/session';
-import { useTheme } from '../../src/theme';
+import { androidField, isAndroid, useTheme } from '../../src/theme';
 
 /**
  * Port of `TaskEditor`'s `creationForm` (ios/App/RootView.swift:1932-2050).
@@ -29,6 +29,8 @@ export default function NewTask() {
   const [title, setTitle] = useState('');
   const [notes, setNotes] = useState('');
   const [notesExpanded, setNotesExpanded] = useState(false);
+  // Which input has focus, for the Android field's accent border (docs/android-polish.md §3).
+  const [focused, setFocused] = useState<'title' | 'notes' | null>(null);
   const [duration, setDuration] = useState(30);
   const [dateChoice, setDateChoice] = useState<TaskCreationDate>('Today');
   // `TaskEditor.initialProjectID` (RootView.swift:1912, 1978): the project detail's "Add task"
@@ -108,8 +110,15 @@ export default function NewTask() {
             placeholderTextColor={theme.colors.secondary}
             value={title}
             onChangeText={setTitle}
+            onFocus={() => setFocused('title')}
+            onBlur={() => setFocused(null)}
             multiline
-            style={[styles.input, styles.titleInput, { color: theme.colors.ink, backgroundColor: theme.colors.groupedBackground, borderColor: theme.colors.separator }]}
+            style={[
+              styles.input,
+              styles.titleInput,
+              { color: theme.colors.ink, backgroundColor: theme.colors.groupedBackground, borderColor: theme.colors.separator },
+              androidField(theme, focused === 'title', { raised: true }),
+            ]}
             testID="task-title"
           />
 
@@ -143,15 +152,22 @@ export default function NewTask() {
               placeholderTextColor={theme.colors.secondary}
               value={notes}
               onChangeText={setNotes}
+              onFocus={() => setFocused('notes')}
+              onBlur={() => setFocused(null)}
               multiline
-              style={[styles.input, styles.notesInput, { color: theme.colors.ink, backgroundColor: theme.colors.groupedBackground, borderColor: theme.colors.separator }]}
+              style={[
+                styles.input,
+                styles.notesInput,
+                { color: theme.colors.ink, backgroundColor: theme.colors.groupedBackground, borderColor: theme.colors.separator },
+                androidField(theme, focused === 'notes', { raised: true }),
+              ]}
               testID="task-notes"
             />
           ) : null}
 
           <View style={[styles.divider, { backgroundColor: theme.colors.separator }]} />
           <EditorLabel title="PROJECT" icon="folder" />
-          <ProjectAssignmentField projectID={projectID} onChange={setProjectID} />
+          <ProjectAssignmentField projectID={projectID} onChange={setProjectID} raised />
 
           <View style={[styles.divider, { backgroundColor: theme.colors.separator }]} />
           <EditorLabel title="DATE" icon="calendar" />
@@ -196,7 +212,7 @@ export default function NewTask() {
           </View>
 
           {/* `Stepper(value: $duration, in: 5...480, step: 5)` (RootView.swift:2000-2008) */}
-          <View style={[styles.stepper, { backgroundColor: theme.colors.groupedBackground }]}>
+          <View style={[styles.stepper, { backgroundColor: theme.colors.groupedBackground }, androidField(theme, false, { raised: true, padded: false })]} testID="duration-stepper">
             <View style={styles.stepperText}>
               <Text style={[theme.typography.body, { color: theme.colors.secondary }]}>Custom estimate</Text>
               <Text style={[theme.typography.body, styles.stepperValue, { color: theme.colors.ink }]}>{duration} min</Text>
@@ -318,11 +334,25 @@ function ChoiceButton({ label, selected, onPress, testID }: { label: string; sel
       style={styles.choiceWrapper}
     >
       {selected ? (
-        <LinearGradient colors={SELECTED_GRADIENT} start={{ x: 0, y: 0.5 }} end={{ x: 1, y: 0.5 }} style={styles.choice}>
+        <LinearGradient
+          colors={SELECTED_GRADIENT}
+          start={{ x: 0, y: 0.5 }}
+          end={{ x: 1, y: 0.5 }}
+          // Android: the field radius, so selected and unselected choices share a shape.
+          style={[styles.choice, isAndroid() && styles.androidChoice]}
+          testID={testID ? `${testID}-surface` : undefined}
+        >
           <Text style={[styles.choiceLabel, { color: '#FFFFFF' }]}>{label}</Text>
         </LinearGradient>
       ) : (
-        <View style={[styles.choice, { backgroundColor: theme.colors.groupedBackground, borderWidth: StyleSheet.hairlineWidth, borderColor: theme.colors.separator }]}>
+        <View
+          style={[
+            styles.choice,
+            { backgroundColor: theme.colors.groupedBackground, borderWidth: StyleSheet.hairlineWidth, borderColor: theme.colors.separator },
+            androidField(theme, false, { raised: true, padded: false }),
+          ]}
+          testID={testID ? `${testID}-surface` : undefined}
+        >
           <Text style={[styles.choiceLabel, { color: theme.colors.ink }]}>{label}</Text>
         </View>
       )}
@@ -350,6 +380,7 @@ const styles = StyleSheet.create({
   choiceRow: { flexDirection: 'row', gap: 9 },
   choiceWrapper: { flex: 1 },
   choice: { minHeight: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 13, paddingHorizontal: 6 },
+  androidChoice: { borderRadius: 12 },
   choiceLabel: { fontSize: 15, lineHeight: 20, fontWeight: '600' },
   stepper: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 15, borderRadius: 15 },
   stepperText: { flex: 1, gap: 4 },

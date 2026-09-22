@@ -7,7 +7,7 @@ import { MonthCalendar } from '../../components/MonthCalendar';
 import { IOSSwitch } from '../../components/IOSSwitch';
 import { withAlpha } from '../../components/SignInBackdrop';
 import { Text } from '../../components/Text';
-import { isAndroid, textStyles, useTheme } from '../../theme';
+import { androidGroup, androidSeparator, textStyles, useTheme } from '../../theme';
 import { KEYBOARD_DONE_BAR_HEIGHT } from './components';
 import { mediumDate, momentDay, momentStartOfDay, shortTimeIn, wallParts, zonedInstant } from './dates';
 
@@ -33,8 +33,11 @@ export function FormSection({ children, header, footer, disabled = false, testID
     // first card 45pt below the bar); a header supplies that space itself.
     <View style={[styles.section, !header && styles.headerless, disabled && styles.dimmed]} pointerEvents={disabled ? 'none' : 'auto'} testID={testID}>
       {header ? <Text style={[styles.header, { color: theme.colors.secondaryLabel }]}>{header}</Text> : null}
-      {/* Android: the shared card hairline, so a section separates from the page (docs/android-polish.md §2). */}
-      <View style={[styles.sectionBody, { backgroundColor: theme.colors.surface }, isAndroid() && { borderWidth: 1, borderColor: theme.colors.fieldBorder }]}>{children}</View>
+      {/* Android: the field surface and hairline round the group, rows split by `androidSeparator`
+          (docs/android-polish.md §2, §3). */}
+      <View style={[styles.sectionBody, { backgroundColor: theme.colors.surface }, androidGroup(theme)]} testID={testID ? `${testID}-body` : undefined}>
+        {children}
+      </View>
       {footer ? <Text style={[styles.footer, { color: theme.colors.secondaryLabel }]}>{footer}</Text> : null}
     </View>
   );
@@ -61,7 +64,7 @@ export function FormRow({
     <View style={[styles.row, style]}>
       {children}
       {last ? null : (
-        <View pointerEvents="none" style={[styles.separator, { left: separatorInset, backgroundColor: theme.colors.listSeparator }]} />
+        <View pointerEvents="none" style={[styles.separator, { left: separatorInset, backgroundColor: theme.colors.listSeparator }, androidSeparator(theme)]} testID="form-row-separator" />
       )}
     </View>
   );

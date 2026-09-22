@@ -10,6 +10,8 @@ export {
   androidBar,
   androidCard,
   androidField,
+  androidGroup,
+  androidSeparator,
   androidSecondaryButton,
   androidSecondaryLabel,
   androidSectionLabel,

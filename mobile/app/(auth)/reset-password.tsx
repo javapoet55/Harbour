@@ -6,7 +6,7 @@ import { Alert, Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { KeyboardAvoidingView, KeyboardAwareScrollView, RevealablePasswordField, Text } from '../../src/components';
 import { useConfirmPasswordReset, useRequestPasswordReset } from '../../src/query/useAuth';
 import { sanitizeCode } from '../../src/schemas/auth';
-import { inputText, textStyles, useTheme } from '../../src/theme';
+import { androidGroup, inputText, isAndroid, textStyles, useTheme } from '../../src/theme';
 
 /**
  * Port of `PasswordResetView` (ios/App/RootView.swift:574-640).
@@ -175,7 +175,11 @@ function FormSection({ children, header, footer }: { children: ReactNode; header
   return (
     <View style={styles.section}>
       {header ? <Text style={[styles.header, { color: theme.colors.secondaryLabel }]}>{header}</Text> : null}
-      <View style={[styles.sectionBody, { backgroundColor: theme.colors.surface }]}>{children}</View>
+      {/* Android: the shared form group — field surface a step above this sheet, and a hairline
+          (docs/android-polish.md §3). */}
+      <View style={[styles.sectionBody, { backgroundColor: theme.colors.surface }, androidGroup(theme)]} testID="reset-section">
+        {children}
+      </View>
       {footer ? <Text style={[styles.footer, { color: theme.colors.secondaryLabel }]}>{footer}</Text> : null}
     </View>
   );
@@ -185,7 +189,14 @@ function FormSection({ children, header, footer }: { children: ReactNode; header
 function FormRow({ children, last = false }: { children: ReactNode; last?: boolean }) {
   const theme = useTheme({ elevated: true });
   return (
-    <View style={[styles.row, !last && { borderBottomWidth: 1, borderBottomColor: theme.colors.listSeparator }]}>
+    <View
+      style={[
+        styles.row,
+        !last && { borderBottomWidth: 1, borderBottomColor: theme.colors.listSeparator },
+        // Android: the group's 1px separator colour.
+        !last && isAndroid() && { borderBottomColor: theme.colors.fieldBorder },
+      ]}
+    >
       {children}
     </View>
   );

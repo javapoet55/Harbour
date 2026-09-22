@@ -2,7 +2,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { randomUUID } from 'expo-crypto';
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { ActivityIndicator, Alert, Modal, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, Modal, Pressable, ScrollView, StyleSheet, TextInput, View, type StyleProp, type ViewStyle } from 'react-native';
 
 import { KeyboardAvoidingView, KeyboardAwareScrollView, NexdoTaskBackdrop, StickyFooter, TaskSymbol, Text } from '../../../src/components';
 import { MonthCalendar } from '../../../src/components/MonthCalendar';
@@ -12,7 +12,7 @@ import { startOfDay } from '../../../src/lib/taskQuery';
 import { useCreateCalendarEvent } from '../../../src/query/useCalendar';
 import { type ScheduleConflict } from '../../../src/query/useTasks';
 import { useSession } from '../../../src/store/session';
-import { inputText, textStyles, useTheme } from '../../../src/theme';
+import { androidField, inputText, textStyles, useTheme } from '../../../src/theme';
 
 /**
  * Port of `CalendarEventEditor` (ios/App/CalendarView.swift), built from `body` at `:518-588`.
@@ -52,6 +52,11 @@ export default function NewCalendarEvent() {
   const [conflict, setConflict] = useState<ScheduleConflict | null>(null);
   const [picking, setPicking] = useState<'start' | 'end' | 'until' | null>(null);
   const [repeatOpen, setRepeatOpen] = useState(false);
+  // Which input has focus, for the Android field's accent border (docs/android-polish.md §3).
+  const [focused, setFocused] = useState<'title' | 'location' | 'notes' | null>(null);
+  /** Android: every field here sits on the card, so it takes the raised field surface. */
+  const field = (name: typeof focused) => androidField(theme, name !== null && focused === name, { raised: true });
+  const capsule = androidField(theme, false, { raised: true, padded: false });
   // One id per submission, reused across a schedule-warning retry so a repeat series is not doubled.
   const [requestId] = useState(() => randomUUID());
 
@@ -139,16 +144,18 @@ export default function NewCalendarEvent() {
             placeholderTextColor={theme.colors.placeholder}
             value={title}
             onChangeText={setTitle}
+            onFocus={() => setFocused('title')}
+            onBlur={() => setFocused(null)}
             multiline
-            style={[styles.input, styles.titleInput, { color: theme.colors.ink, backgroundColor: inputFill }]}
+            style={[styles.input, styles.titleInput, { color: theme.colors.ink, backgroundColor: inputFill }, field('title')]}
             testID="event-title"
           />
           <Text style={[styles.caption, { color: theme.colors.secondary }]}>Create a calendar event or appointment.</Text>
 
           <Divider />
           <EditorLabel title="SCHEDULE" icon="clock" accent={accent} />
-          <FieldRow label="Starts" value={dateTimeLabel(start)} fill={inputFill} onPress={() => setPicking('start')} testID="event-start" />
-          <FieldRow label="Ends" value={dateTimeLabel(end)} fill={inputFill} onPress={() => setPicking('end')} testID="event-end" />
+          <FieldRow label="Starts" value={dateTimeLabel(start)} fill={inputFill} capsule={capsule} onPress={() => setPicking('start')} testID="event-start" />
+          <FieldRow label="Ends" value={dateTimeLabel(end)} fill={inputFill} capsule={capsule} onPress={() => setPicking('end')} testID="event-end" />
           <Text style={[styles.caption, { color: theme.colors.secondary }]}>{zone}</Text>
 
           <Divider />
@@ -167,7 +174,7 @@ export default function NewCalendarEvent() {
             <TaskSymbol name="chevron.down" size={13} color={accent} />
           </Pressable>
           {repeatOpen ? (
-            <View style={[styles.menu, { backgroundColor: inputFill }]}>
+            <View style={[styles.menu, { backgroundColor: inputFill }, capsule]} testID="event-repeat-menu">
               {Object.entries(REPEAT_LABELS).map(([value, name]) => (
                 <Pressable
                   key={value}
@@ -204,6 +211,7 @@ export default function NewCalendarEvent() {
                     style={[
                       styles.weekday,
                       { backgroundColor: on ? accent : inputFill },
+                      on ? null : capsule,
                     ]}
                   >
                     <Text style={[styles.weekdayLabel, { color: on ? '#FFFFFF' : accent }]}>{WEEKDAY_NAMES[day]}</Text>
@@ -219,6 +227,7 @@ export default function NewCalendarEvent() {
                 label="Repeat until"
                 value={new Intl.DateTimeFormat('en-US', { timeZone: zone, month: 'short', day: 'numeric', year: 'numeric' }).format(new Date(repeatUntil))}
                 fill={inputFill}
+                capsule={capsule}
                 onPress={() => setPicking('until')}
                 testID="event-repeat-until"
               />
@@ -238,7 +247,9 @@ export default function NewCalendarEvent() {
             placeholderTextColor={theme.colors.placeholder}
             value={location}
             onChangeText={setLocation}
-            style={[styles.input, styles.bodyInput, { color: theme.colors.ink, backgroundColor: inputFill }]}
+            onFocus={() => setFocused('location')}
+            onBlur={() => setFocused(null)}
+            style={[styles.input, styles.bodyInput, { color: theme.colors.ink, backgroundColor: inputFill }, field('location')]}
             testID="event-location"
           />
 
@@ -250,8 +261,10 @@ export default function NewCalendarEvent() {
             placeholderTextColor={theme.colors.placeholder}
             value={notes}
             onChangeText={setNotes}
+            onFocus={() => setFocused('notes')}
+            onBlur={() => setFocused(null)}
             multiline
-            style={[styles.input, styles.bodyInput, styles.notesInput, { color: theme.colors.ink, backgroundColor: inputFill }]}
+            style={[styles.input, styles.bodyInput, styles.notesInput, { color: theme.colors.ink, backgroundColor: inputFill }, field('notes')]}
             testID="event-notes"
           />
 
@@ -391,12 +404,15 @@ function FieldRow({
   label,
   value,
   fill,
+  capsule,
   onPress,
   testID,
 }: {
   label: string;
   value: string;
   fill: string;
+  /** Android: the field surface and hairline on the value capsule (`androidField`, unpadded). */
+  capsule?: StyleProp<ViewStyle>;
   onPress: () => void;
   testID: string;
 }) {
@@ -411,7 +427,7 @@ function FieldRow({
       testID={testID}
     >
       <Text style={[theme.typography.body, styles.grow, { color: theme.colors.ink }]}>{label}</Text>
-      <View style={[styles.fieldValue, { backgroundColor: fill }]}>
+      <View style={[styles.fieldValue, { backgroundColor: fill }, capsule]} testID={`${testID}-value`}>
         <Text style={[theme.typography.body, { color: theme.colors.ink }]}>{value}</Text>
       </View>
     </Pressable>

@@ -158,7 +158,7 @@ Through shared components, so no change was needed in the screen:
 | `TaskActionCard` | Task Details |
 | `ProjectAssignmentField` | Task Details, **New Task** (the PROJECT field) |
 | `StickyFooter` | **New Task** (Create Task bar), **New Calendar Event** (its save bar) |
-| `FormSection` (`src/features/moments/form.tsx`): a 1px `fieldBorder` round each section card | **Moments**: Moment editor (new and edit), Manage Moment (contacts, Shared message, per-recipient sections, manual recipient sheet), Moment settings, Festivals, Calendar import, Wish. **Shopping**: item editor, List settings, Share list. Also Reset password, which is built on the same `Form` pieces |
+| `FormSection` (`src/features/moments/form.tsx`): a 1px `fieldBorder` round each section card | **Moments**: Moment editor (new and edit), Manage Moment (contacts, Shared message, per-recipient sections, manual recipient sheet), Moment settings, Festivals, Calendar import, Wish. **Shopping**: item editor, List settings, Share list. (This entry first listed Reset password here too. That was wrong: Reset password has its own local `FormSection`. It is covered in §3.) |
 
 **Not picked up yet:** the text inputs and choice buttons on New Task and New Event have their own
 styles in the screen files and do not use `TaskDetailParts`. The Moments/Shopping `Form` rows are
@@ -181,3 +181,95 @@ Android, in dark mode first and then in light:
 7. New Task: the PROJECT field and the Create Task bar match. Moments / Shopping forms: each section
    card has a thin outline.
 8. iOS: Tasks and Task Details look exactly as before.
+
+---
+
+## 3. Field style on the remaining forms (2026-09-22)
+
+JavaScript only; no new build needed. Follows §2. All changes are Android only. iOS is unchanged,
+and so are the text, order and behaviour. Colours come from the §2 tokens.
+
+### What was wrong
+
+§2 left three kinds of input on the Swift look:
+- New Task's and New Event's own inputs and choice buttons.
+- The Moments/Shopping `Form` rows.
+- Reset password's form. §2 wrongly said it was covered.
+
+There was also a problem with §2 itself. In dark mode, New Task's PROJECT field was `fieldSurface`
+(#1C1C1E) on a card that is also #1C1C1E, so only its hairline separated it from the card.
+
+### The grouped-form choice
+
+For inputs inside a grouped card, the options were a border on every row or a styled group. This
+entry **keeps the group card**: `fieldSurface` fill and a 1px `fieldBorder` round the group, with a
+1px `fieldBorder` separator between rows (the 16pt leading inset is kept). Rows carry no border.
+- A bordered field inside a bordered card doubles every line.
+- These groups also hold toggles, links, pickers and read-only values. A field border round a toggle
+  row would suggest the row itself can be typed into.
+
+Every grouped form uses this. Standalone fields (Task Details, New Task, New Event) keep the §2
+field. There is one trade-off: a row inside a group shows focus by its caret and the keyboard only,
+with no accent border.
+
+### What changed
+
+**Helpers** (`src/theme/androidForm.ts`):
+- `androidField(theme, focused, { raised, padded })` takes two new options:
+  - `raised`: for a field on a card, not on the page. It uses `fieldSurfaceElevated` (#2C2C2E dark),
+    one step above the card's `surface`.
+  - `padded: false`: for choice buttons, value capsules and control groups that keep their own
+    padding and take only the surface, hairline and 12pt radius.
+- New `androidGroup(theme)` (the group card) and `androidSeparator(theme)` (1px `fieldBorder`).
+- No new tokens.
+
+| Where | Android change |
+|---|---|
+| **New Task** (`app/task/new.tsx`) | TASK NAME and Notes: raised field, 14/16 padding, accent border while focused. Date and time-estimate choice buttons: raised surface, hairline and 12 radius when unselected; the selected gradient takes the same 12 radius. The Custom estimate stepper: raised surface and hairline. The PROJECT field: raised (the new `raised` prop on `ProjectAssignmentField`) |
+| **New Event** (`app/calendar/event/new.tsx`) | Title, Location and Notes: raised field, accent while focused. The Starts / Ends / Repeat until value capsules, the open Repeat list and unselected weekday chips: raised surface and hairline, keeping their own padding. A chosen weekday keeps its solid accent fill |
+| `FormSection` / `FormRow` (`src/features/moments/form.tsx`) | The group card and separators described above. This replaces §2's border-only change |
+| `MomentSheet` (`src/features/moments/components.tsx`) | The sheet body is wrapped in `ElevatedSurface`, so a form inside takes `fieldSurfaceElevated` and sits a step above the sheet's elevated background. Before this, a section and its sheet were the same #1C1C1E in dark mode |
+| `MomentCard grouped` | New prop. On Android the card drops the glass for `androidGroup`, keeping its 22 radius and 18 padding |
+| Manage Moment (`ManageMomentView.tsx`) | The six cards that hold form rows are `grouped`: Moment Details, Reminder & Repeat, Recipients, Send time, Delivery, Notify. Their dividers use `androidSeparator` |
+| Reset password (`app/(auth)/reset-password.tsx`) | Its local `FormSection` gets `androidGroup`, which already resolves elevated here (#2C2C2E on the #1C1C1E sheet). Its `FormRow` separators use `fieldBorder` |
+
+### Screens
+
+| Screen | How |
+|---|---|
+| New Task, New Event | screen changes above |
+| Moment editor, Moment settings, Festivals, Calendar import, Wish | `FormSection` / `FormRow` |
+| Manage Moment | `grouped` cards and separators; the Personalize, address and manual-recipient sheets through `FormSection` inside `MomentSheet` |
+| Shopping item editor, List settings, Share list | `FormSection` / `FormRow` inside `MomentSheet` |
+| Reset password | its own section and row |
+
+**Side effect of the `MomentSheet` change.** On Android, everything inside any `MomentSheet` now
+resolves the elevated palette, not only forms. That means `background`, `groupedBackground`,
+`surface` and `fieldSurface` are one level up. iOS already treats these as sheets, so this matches
+it. The sheets affected: the greeting card editor, Manage Moment's sheets, the wish email
+confirmation, the Wish sheet, and Shopping's New List, List settings, Share list, item editor and
+Voice sheets.
+
+**Left on the Swift look:**
+- New Event's Repeat picker: accent text and chevron on the card, which is Swift's `.menu` picker style.
+- The value capsules on Moments' `DateField` and `MenuPicker`.
+- Manage Moment's wish-message card: a gradient card, already stroked.
+- The New List sheet's name field: its own `TextInput` and dividers, not a `Form` row.
+
+### Check it on a phone
+
+Android, dark mode first, then light:
+
+1. New Task: TASK NAME and Notes are lighter than the card, with a thin outline that turns indigo
+   while typing. Unselected date and estimate buttons, the Custom estimate row and PROJECT match
+   them. The selected button keeps its gradient.
+2. New Event: Title, Location and Notes are the same. The Starts / Ends values, the Repeat list and
+   (under "Particular days of the week") the weekday chips have the outline.
+3. Moment settings, Festivals, a Moment editor, Wish: each section is a lighter card with a thin
+   outline and a line between rows.
+4. Manage Moment → Details, Contacts and Schedule: the form cards match. The summary and greeting
+   cards keep their glass.
+5. Shopping → an item, then List settings and Share list: each section sits a shade above the sheet.
+6. Reset password: both sections are outlined cards above the sheet.
+7. iOS: all of the above look as before.
+
