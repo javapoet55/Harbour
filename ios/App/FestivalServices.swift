@@ -100,6 +100,45 @@ struct FestivalGreetingCard: View {
             .accessibilityIdentifier("greeting-card-preview")
     }
 }
+/// The finished card as displayed, as a JPEG for scheduled emails (PUT /api/moments/{id}/card).
+enum GreetingCardRenderer {
+    static let width:CGFloat=380
+    @MainActor static func jpeg(artwork:UIImage,title:String,message:String,signature:String,encoding:GreetingCardEncoding) throws -> Data {
+        // JPEG has no transparency: the rounded corners sit on white rather than black.
+        let renderer=ImageRenderer(content:FestivalGreetingCard(artwork:artwork,title:title,message:message,signature:signature).frame(width:width).background(Color.white).environment(\.colorScheme,.light))
+        renderer.isOpaque=true
+        renderer.scale=1
+        guard let measured=renderer.uiImage else {throw GreetingCardUploadError.renderFailed}
+        renderer.scale=min(3,encoding.longestSide/max(measured.size.width,measured.size.height))
+        guard let image=renderer.uiImage,let data=image.jpegData(compressionQuality:encoding.quality) else {throw GreetingCardUploadError.renderFailed}
+        return data
+    }
+}
+/// A card saved on another device: the finished image only, since its artwork is not on this one.
+struct StoredGreetingCard:View {
+    let image:UIImage
+    var body:some View {
+        VStack(alignment:.leading,spacing:6) {
+            Image(uiImage:image).resizable().scaledToFit().clipShape(RoundedRectangle(cornerRadius:20)).accessibilityLabel("Saved greeting card").accessibilityIdentifier("stored-greeting-card")
+            Text("Your saved card. Create new artwork to change it.").font(.caption).foregroundStyle(.secondary)
+        }
+    }
+}
+/// Shown after a card save when the card could not be attached to scheduled emails, with Retry.
+struct GreetingCardUploadStatus:View {
+    @ObservedObject var model:ManageFestivalModel
+    var body:some View {
+        if model.uploadingCard {
+            ProgressView("Attaching card to scheduled emails…").font(.caption)
+        } else if model.cardUploadFailed {
+            HStack(alignment:.firstTextBaseline) {
+                Label(ManageFestivalModel.cardUploadFailedNote,systemImage:"exclamationmark.triangle.fill").font(.caption).foregroundStyle(.orange)
+                Spacer()
+                Button("Retry"){Task{await model.uploadCard()}}.font(.caption.bold()).accessibilityIdentifier("card-upload-retry")
+            }.accessibilityIdentifier("card-upload-failed")
+        }
+    }
+}
 struct FestivalGreetingCardEditor:View {
     @ObservedObject var model:ManageFestivalModel
     @EnvironmentObject private var appModel: AppModel
@@ -119,6 +158,8 @@ struct FestivalGreetingCardEditor:View {
                     Text("Create artwork for your occasion, then finish your card with a greeting and signature.").foregroundStyle(.secondary)
                     if let artwork {
                         FestivalGreetingCard(artwork:artwork,title:model.title,message:greeting.wrappedValue,signature:signature.wrappedValue)
+                    } else if let data=model.storedCardImage,let stored=UIImage(data:data) {
+                        StoredGreetingCard(image:stored)
                     } else {
                         VStack(spacing:16){Image(systemName:"envelope.open.fill").font(.system(size:54)).foregroundStyle(Color.nexdoIndigo);Text(model.title).font(.title2.bold());Text("Your greeting card will appear here").foregroundStyle(.secondary)}.frame(maxWidth:.infinity,minHeight:240).background(.ultraThinMaterial,in:RoundedRectangle(cornerRadius:22))
                     }
@@ -164,6 +205,11 @@ struct FestivalGreetingCardEditor:View {
                         Button("Share Card",systemImage:"square.and.arrow.up") {share()}.frame(maxWidth:.infinity,minHeight:44).buttonStyle(.bordered)
                         Text(saveOnUse ? "Use This Card saves the greeting and signature to this moment. Artwork is stored on this device." : "Use This Card applies it to this moment. Tap Save Message on the next screen to save your changes.").font(.caption).foregroundStyle(.secondary)
                     }
+                    GreetingCardUploadStatus(model:model)
+                    if artwork != nil || model.storedCardImage != nil {
+                        Button("Remove card",systemImage:"trash",role:.destructive){Task{await model.removeCard(saveSettings:saveOnUse);if model.error == nil {dismiss()}}}
+                            .frame(maxWidth:.infinity,minHeight:44).disabled(model.busy).accessibilityIdentifier("remove-greeting-card")
+                    }
                 }.padding(18)
             }.scrollDismissesKeyboard(.interactively)}
             .navigationTitle("Greeting Card").navigationBarTitleDisplayMode(.inline)
@@ -173,6 +219,7 @@ struct FestivalGreetingCardEditor:View {
                     model.settings.cardSignature = GreetingCardSignature.defaultValue(profileName: appModel.profile?.name ?? "")
                 }
             }
+            .task{await model.loadStoredCard()}
             .onChange(of:model.images.map(\.id)){_,_ in selected=model.images.first}
             .onDisappear{model.cancelImage()}
             .sheet(item:$shared){CardActivitySheet(image:$0.image)}
@@ -206,13 +253,20 @@ struct MomentGreetingCardSection:View {
         VStack(alignment:.leading,spacing:14) {
             if let data=model.imageData,let artwork=UIImage(data:data) {
                 FestivalGreetingCard(artwork:artwork,title:model.title,message:model.settings.cardGreeting ?? model.settings.baseMessage,signature:model.settings.cardSignature ?? "")
+            } else if let data=model.storedCardImage,let stored=UIImage(data:data) {
+                StoredGreetingCard(image:stored)
             }
             Button(model.imageData == nil ? "Create AI Greeting Card":"Edit Greeting Card",systemImage:"sparkles") {
                 if let greeting,!greeting.isEmpty {model.settings.baseMessage=greeting}
                 showingEditor=true
             }.buttonStyle(.borderedProminent).accessibilityIdentifier("moment-greeting-card")
-            Text("Create and share a card with your greeting and signature. Scheduled wishes send text only.").font(.caption).foregroundStyle(.secondary)
+            Text("Create and share a card with your greeting and signature. Scheduled emails include your saved card; Messages send the text only.").font(.caption).foregroundStyle(.secondary)
+            GreetingCardUploadStatus(model:model)
+            if model.imageData != nil || model.storedCardImage != nil {
+                Button("Remove card",role:.destructive){Task{await model.removeCard(saveSettings:true)}}.disabled(model.busy).accessibilityIdentifier("remove-greeting-card")
+            }
             if let notice=model.notice {Text(notice).font(.caption)}
         }.sheet(isPresented:$showingEditor){FestivalGreetingCardEditor(model:model,saveOnUse:true)}
+            .task{await model.loadStoredCard()}
     }
 }

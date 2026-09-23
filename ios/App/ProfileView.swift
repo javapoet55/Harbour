@@ -207,7 +207,7 @@ struct ProfileSettingsView: View {
                             Text(choice.title).tag(choice)
                         }
                     }.pickerStyle(.segmented)
-                    Text("Day uses a light view. Night uses a dark view. System follows your iPhone. Changes apply immediately and are saved on this device.")
+                    Text("Day uses a light view. Night uses a dark view. System follows your phone. Changes apply immediately and are saved on this device.")
                         .font(.caption).foregroundStyle(Color.nexdoSecondary)
                 }
                 card("App Voice") {

@@ -85,7 +85,7 @@ struct ManageFestivalView: View {
             ToolbarItemGroup(placement:.keyboard){Spacer();Button("Done"){focusedField=nil}.accessibilityIdentifier("festival-keyboard-done")}
         }
         .disabled(model.busy)
-        .task {await model.loadCatalog()}
+        .task {await model.loadCatalog();await model.loadStoredCard()}
         .onDisappear {model.cancelImage()}
         .alert("Discard unsaved changes?",isPresented:$discard){Button("Discard changes",role:.destructive){model.discardImageEdits();dismiss()};Button("Keep editing",role:.cancel){}}
         .confirmationDialog("Disable this moment? Pending wishes will be cancelled. Contacts and messages are preserved.",isPresented:$disableConfirm,titleVisibility:.visible){Button("Disable and cancel wishes",role:.destructive){Task{await model.setActive(false,cancelSchedules:true)}}}
@@ -173,12 +173,15 @@ struct ManageFestivalView: View {
         Text("Greeting Card").font(.title2.bold())
         if let data=model.imageData,let image=UIImage(data:data) {
             FestivalGreetingCard(artwork:image,title:model.title,message:model.settings.cardGreeting ?? model.settings.baseMessage,signature:model.settings.cardSignature ?? "")
+        } else if let data=model.storedCardImage,let image=UIImage(data:data) {
+            StoredGreetingCard(image:image)
         } else {
             MomentCard {Label("Create a personal greeting card",systemImage:"rectangle.portrait.on.rectangle.portrait").font(.headline);Text("AI artwork, your greeting, and your signature in one beautiful card.").foregroundStyle(.secondary)}
         }
         Button(model.imageData == nil ? "Create AI Greeting Card":"Edit Greeting Card",systemImage:"sparkles"){imageSheet=true}.buttonStyle(.borderedProminent)
-        Text("Share your finished card from the editor. Scheduled wishes currently send the text message only.").font(.caption).foregroundStyle(.secondary)
-        if model.imageData != nil {Button("Remove greeting card",role:.destructive){model.removeImage()}}
+        Text("Share your finished card from the editor. Scheduled emails include your saved card; Messages send the text only.").font(.caption).foregroundStyle(.secondary)
+        GreetingCardUploadStatus(model:model)
+        if model.imageData != nil || model.storedCardImage != nil {Button("Remove card",role:.destructive){Task{await model.removeCard()}}.disabled(model.busy).accessibilityIdentifier("remove-greeting-card")}
         MomentPrimary(title:"Save Message"){save(approve:true)}.disabled(model.settings.baseMessage.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty || model.settings.baseMessage.count > 500)
     }}
     private var schedule:some View {Group{

@@ -36,6 +36,13 @@ import CryptoKit
     @Published var savedPlans:[WishDeliveryPlan]=[]
     @Published var scheduleCompleted=false
     @Published var imageData:Data?
+    /// The card saved on the server, shown when this device has no artwork (e.g. saved on another device).
+    @Published var storedCardImage:Data?
+    @Published var uploadingCard=false
+    @Published var cardUploadFailed=false
+    static let cardUploadFailedNote="Card saved, but it couldn't be attached to scheduled emails"
+    /// The card inputs last uploaded, so a save that leaves the card unchanged does not upload it again.
+    private var uploadedCardKey:String?
     private(set) var originals:[ImportantMoment]
     let store:ImportantMomentsStore
     private let imageService:(any FestivalImageGenerationService)?
@@ -76,6 +83,46 @@ import CryptoKit
         notify=saved.draftNotify ?? true
         if let plan=group.moments.compactMap(\.upcomingDelivery).first {sendDate=plan.date;zone=plan.timeZoneID}
         savedImageID=saved.imageID;imageData=imageStorage.load(saved.imageID);notice=saved.catalogNotice;baseline=fingerprint;analytics.record(.opened)
+        if group.moments.contains(where:{$0.card != nil}) {uploadedCardKey=cardKey}
+    }
+    var cardMessage:String {settings.cardGreeting ?? settings.baseMessage}
+    private var cardKey:String {[settings.imageID,title,cardMessage,settings.cardSignature ?? ""].joined(separator:"\u{1F}")}
+    private var cardMomentIDs:[String] {originals.filter(\.supportsGreetingCard).map(\.id)}
+    /// Renders the finished card and attaches it to scheduled emails. A failure leaves the card saved.
+    func uploadCard() async {
+        guard !uploadingCard,let data=imageData,let artwork=UIImage(data:data),!cardMomentIDs.isEmpty else{return}
+        uploadingCard=true;defer{uploadingCard=false}
+        let title=title,message=cardMessage,signature=settings.cardSignature ?? "",key=cardKey
+        do {
+            try await store.uploadCard(momentIDs:cardMomentIDs){encoding in try await GreetingCardRenderer.jpeg(artwork:artwork,title:title,message:message,signature:signature,encoding:encoding)}
+            uploadedCardKey=key;cardUploadFailed=false;storedCardImage=nil
+            await store.refresh()
+            originals=originals.map{original in store.moments.first(where:{$0.id==original.id}) ?? original}
+        } catch {cardUploadFailed=true}
+    }
+    /// A saved moment whose card inputs changed, or a recipient without the card yet, needs the card uploaded.
+    private var cardNeedsUpload:Bool {imageData != nil && (cardKey != uploadedCardKey || originals.contains{$0.supportsGreetingCard && $0.card == nil})}
+    /// Shows the server's saved card when this device has no artwork for it.
+    func loadStoredCard() async {
+        guard imageData == nil,storedCardImage == nil,let moment=originals.first(where:{$0.card != nil}) else{return}
+        storedCardImage=await store.storedCard(for:moment)
+    }
+    /// Removes the card from scheduled emails and from this moment.
+    func removeCard(saveSettings:Bool=false) async {
+        guard !busy else{return}
+        busy=true;error=nil;defer{busy=false}
+        do {
+            try await store.deleteCard(momentIDs:cardMomentIDs)
+            storedCardImage=nil;cardUploadFailed=false;uploadedCardKey=nil;removeImage()
+            if saveSettings, let moment=originals.first {
+                struct Input:Encodable {let momentID:String;let settings:FestivalSettings}
+                let _:MomentOK=try await store.request("greetingCardSave",Input(momentID:moment.id,settings:settings))
+                imageStorage.delete(savedImageID);savedImageID=""
+            }
+            await store.refresh()
+            originals=originals.map{original in store.moments.first(where:{$0.id==original.id}) ?? original}
+            notice="Greeting card removed. Scheduled emails will send the text only."
+        } catch {self.error="The card couldn't be removed from scheduled emails. \(error.localizedDescription)"}
     }
     func loadCatalog() async {
         guard occasionType == "festival" else{return}
@@ -135,6 +182,7 @@ import CryptoKit
         for id in stagedImages where id != settings.imageID {imageStorage.delete(id)}
         stagedImages=[];savedImageID=settings.imageID
         baseline=fingerprint; keys=[:]; draftIDs=[:]; savedPlans=[]
+        if cardNeedsUpload {await uploadCard()}
     }
     func generate(aiConsent:Bool) async {
         guard !busy else{return};busy=true;error=nil;defer{busy=false}
@@ -182,6 +230,8 @@ import CryptoKit
             if savedImageID != settings.imageID {imageStorage.delete(savedImageID)}
             for id in stagedImages where id != settings.imageID {imageStorage.delete(id)}
             stagedImages=[];savedImageID=settings.imageID
+            // Every card save re-attaches the card to scheduled emails; a failure keeps the card saved.
+            await uploadCard()
             await store.refresh()
             notice="Greeting card saved."
             return true
