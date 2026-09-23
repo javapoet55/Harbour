@@ -800,6 +800,9 @@ final class AppModel: ObservableObject {
         await perform {
             let _: Ignore = try await api.request("/api/account", method: "DELETE")
             await reset()
+            // A deleted account should not be greeted by name on the sign-in screen.
+            lastSignedInFirstName = nil
+            UserDefaults.standard.removeObject(forKey: "nexdo.lastSignedInFirstName")
         }
     }
 }
