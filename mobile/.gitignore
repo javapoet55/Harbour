@@ -51,3 +51,5 @@ __pycache__/
 # (Captures tracked before pass 2 are left as they were.)
 docs/reference/android/
 docs/reference/diff/
+
+google-play-key.json
