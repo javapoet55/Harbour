@@ -16,21 +16,44 @@ function heading(type: string, firstName: string) {
   return type === 'birthday' ? `Happy Birthday, ${name}!` : type === 'anniversary' ? `Happy Anniversary, ${name}!` : type === 'getWellSoon' ? `Get well soon, ${name}!` : null;
 }
 
-/** Mirrors NexdoCore MomentGreeting.message: leads with the recipient's greeting unless the wish already names them. */
+/**
+ * Every opening the product itself writes, longest first so one can never shadow another. `fallback`
+ * (./domain.ts) produces all four: "Happy Birthday" and "Happy Anniversary", "Get well soon" for
+ * getWellSoon, and "Best wishes" for a festival or custom wish. A festival draft opens with the
+ * festival's own title instead (service.ts generateDraft), which is free text and cannot be listed.
+ */
+const openings = ['Happy Anniversary', 'Happy Birthday', 'Get well soon', 'Best wishes'];
+
+/**
+ * The opening `text` already starts with, in its canonical spelling, or null. The match ignores case,
+ * and the opening has to end the word: "Happy Birthdays all round" is prose, not a greeting.
+ */
+function openingOf(text: string) {
+  const lower = text.toLowerCase();
+  return openings.find((opening) => lower.startsWith(opening.toLowerCase()) && (text.length === opening.length || separators.includes(text[opening.length]))) ?? null;
+}
+
+/**
+ * Mirrors NexdoCore MomentGreeting.message: leads with the recipient's greeting unless the wish
+ * already names them.
+ *
+ * A wish that already opens with a greeting keeps that greeting and has the name put into it, rather
+ * than collecting a second one — an anniversary wish saved on a moment typed as a birthday used to
+ * go out as "Happy Birthday, Visakan! Happy anniversary! …". The opening the message actually uses
+ * wins over the moment's type, so the text the person wrote decides the occasion.
+ */
 export function greetingMessage(body: string, type: string, firstName: string) {
   const greeting = heading(type, firstName);
+  // No name, or an occasion with no greeting of its own (festival, custom): the wish goes as written.
   if (!greeting) return body;
   if (new RegExp(`(?<![\\p{L}\\p{N}])${escapeRegExp(firstName.trim())}(?![\\p{L}\\p{N}])`, 'iu').test(body)) return body;
-  const opening = type === 'birthday' ? 'Happy Birthday' : type === 'anniversary' ? 'Happy Anniversary' : 'Get well soon';
   const text = body.trim();
-  if (text.toLowerCase().startsWith(opening.toLowerCase())) {
-    const remainder = text.slice(opening.length);
-    if (!remainder || separators.includes(remainder[0])) {
-      let at = 0;
-      while (at < remainder.length && separators.includes(remainder[at])) at++;
-      const rest = remainder.slice(at);
-      return greeting + (rest ? ' ' + rest : '');
-    }
+  const opening = openingOf(text);
+  if (opening) {
+    let at = opening.length;
+    while (at < text.length && separators.includes(text[at])) at++;
+    const rest = text.slice(at);
+    return `${opening}, ${firstName.trim()}!` + (rest ? ' ' + rest : '');
   }
   return `${greeting} ${text}`;
 }
