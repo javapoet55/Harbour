@@ -25,18 +25,47 @@ public enum WishMessage {
         return body
     }
 
+    /// Default wordings older versions saved as the Wish Message, for any title: the birthday/anniversary/custom
+    /// placeholder, the get-well text, and the festival fallback in each tone.
+    static let oldDefaultPatterns = [
+        "^.+! Sending you warm wishes on your special day\\.$",
+        "^Get well soon\\. Wishing you comfort, rest, and brighter days ahead\\.$",
+        "^.+! Wishing you and your family a joyful celebration filled with happiness and new beginnings! ✨$",
+        "^.+! Wishing you joy and happiness\\.$",
+        "^.+! Here’s to a celebration full of smiles, good company, and wonderful memories! ✨$",
+        "^.+! Thinking of you and your family and sending warm wishes for a joyful celebration\\.$",
+    ]
+    /// True for a Wish Message the user never wrote: blank, or an old default left unedited.
+    public static func isUntouchedDefault(_ settings: FestivalSettings) -> Bool {
+        let base = settings.baseMessage.trimmingCharacters(in: .whitespacesAndNewlines)
+        if base.isEmpty { return true }
+        return !settings.manuallyEdited && oldDefaultPatterns.contains { base.range(of: $0, options: .regularExpression) != nil }
+    }
+
     /// Folds a card-only greeting saved by older versions into the Wish Message. The greeting wins when the
-    /// Wish Message is empty or still the untouched suggestion, and the change needs a fresh Save Message.
-    /// `cardGreeting` is always cleared. Returns true when the Wish Message changed.
+    /// Wish Message is blank or an untouched old default (for any title), and the change needs a fresh Save
+    /// Message. `cardGreeting` is always cleared. Returns true when the Wish Message changed.
     @discardableResult
-    public static func reconcile(_ settings: inout FestivalSettings, suggestion: String) -> Bool {
+    public static func reconcile(_ settings: inout FestivalSettings) -> Bool {
         defer { settings.cardGreeting = nil }
         guard let greeting = settings.cardGreeting, !greeting.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-              greeting != settings.baseMessage else { return false }
-        let base = settings.baseMessage.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard base.isEmpty || (base == suggestion && !settings.manuallyEdited) else { return false }
+              greeting != settings.baseMessage, isUntouchedDefault(settings) else { return false }
         settings.baseMessage = String(greeting.prefix(500)); settings.manuallyEdited = true; settings.approvedAt = nil
         return true
+    }
+
+    /// Settings as Manage Moment opens them. `live` is edited; `baseline` is what is saved, so the two differ only
+    /// when an older card greeting was adopted (an unsaved change to approve). Both get the default channel for
+    /// recipients without one: Messages with a phone, else Email with an address, else Copy / Share.
+    public static func opened(_ saved: FestivalSettings, recipients: [ManagedFestivalRecipient], latestBody: String?, latestStatus: String?)
+        -> (live: FestivalSettings, baseline: FestivalSettings, adoptedCardText: Bool) {
+        var baseline = saved
+        baseline.baseMessage = initial(saved: saved.baseMessage, latestBody: latestBody, latestStatus: latestStatus)
+        for r in recipients where baseline.channels[r.key] == nil { baseline.channels[r.key] = r.phone.isEmpty ? (r.email.isEmpty ? "share" : "email") : "messages" }
+        var live = baseline
+        let adopted = reconcile(&live)
+        baseline.cardGreeting = nil
+        return (live, baseline, adopted)
     }
 
     /// Why the Wish Message can't be approved yet; nil when it can. An empty message never falls back to the suggestion.

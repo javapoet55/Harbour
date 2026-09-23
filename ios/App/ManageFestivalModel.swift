@@ -86,13 +86,11 @@ import CryptoKit
             let key=m.sourceKey.hasPrefix(m.type+":"+saved.groupID+":") ? String(m.sourceKey.dropFirst(m.type.count+1+saved.groupID.count+1)) : m.id
             return ManagedFestivalRecipient(momentID:m.id,key:key,name:m.firstName,phone:m.phone,email:m.email,selected:saved.selected[key] ?? m.enabled,contactIdentifier:saved.contactIDs[key] ?? "")
         }
-        // An empty Wish Message stays empty (the suggestion is only a placeholder); a draft approved in Review Wish is kept.
-        saved.baseMessage=WishMessage.initial(saved:saved.baseMessage,latestBody:first.latest?.body,latestStatus:first.latest?.status)
-        // Older versions kept the card's text separately; it becomes the Wish Message when that was left empty.
-        var reconciled=saved
-        let adoptedCardText=WishMessage.reconcile(&reconciled,suggestion:WishMessage.suggestion(type:first.type,title:first.title))
-        saved.cardGreeting=nil
-        for r in recipients where saved.channels[r.key] == nil {saved.channels[r.key]=r.phone.isEmpty ? (r.email.isEmpty ? "share":"email") : "messages"}
+        // An empty Wish Message stays empty (the suggestion is only a placeholder); an older card greeting is adopted
+        // when the message was blank or an untouched default; channel defaults apply to both live and saved settings.
+        let opened=WishMessage.opened(saved,recipients:recipients,latestBody:first.latest?.body,latestStatus:first.latest?.status)
+        saved=opened.baseline
+        let reconciled=opened.live,adoptedCardText=opened.adoptedCardText
         settings=reconciled;sendDate=FestivalValidation.instant(day:first.nextOccurrence,hour:8,minute:0,zone:first.timeZoneID) ?? date
         if let draft=saved.draftSendDate.flatMap({ISO8601DateFormatter().date(from:$0)}) {sendDate=draft}
         notify=saved.draftNotify ?? true
@@ -217,13 +215,16 @@ import CryptoKit
         baseline=fingerprint; savedState=editState; keys=[:]; draftIDs=[:]; savedPlans=[]
         if cardNeedsUpload {await uploadCard()}
     }
+    /// The name in an offline birthday/anniversary draft: the only selected recipient's. With several, the draft is
+    /// shared and each recipient's name is added when their wish is prepared (MomentGreeting.message).
+    private var fallbackFirstName:String {selected.count == 1 ? selected[0].name : ""}
     func generate(aiConsent:Bool) async {
         guard !busy else{return};busy=true;error=nil;defer{busy=false}
         invalidateApproval()
-        guard aiConsent,let first=originals.first else {settings.baseMessage=FestivalValidation.fallback(name:title,tone:settings.tone,type:occasionType);settings.manuallyEdited=false;notice="Offline draft — review before saving.";return}
+        guard aiConsent,let first=originals.first else {settings.baseMessage=FestivalValidation.fallback(name:title,tone:settings.tone,type:occasionType,firstName:fallbackFirstName);settings.manuallyEdited=false;notice="Offline draft — review before saving.";return}
         struct Input:Encodable {let momentID,tone,personalContext,festivalName:String;let aiConsent=true;let shared=true}
         struct Response:Decodable,Sendable {let draft:WishDraft;let usedAI:Bool}
-        do {let result:Response=try await store.request("generate",Input(momentID:first.id,tone:settings.tone,personalContext:settings.personalContext,festivalName:title));settings.baseMessage=result.draft.body;settings.manuallyEdited=false;notice=result.usedAI ? "AI draft ready for review.":"AI unavailable; an editable fallback draft is ready.";analytics.record(.generated)} catch {settings.baseMessage=FestivalValidation.fallback(name:title,tone:settings.tone,type:occasionType);notice="Offline fallback — review before saving."}
+        do {let result:Response=try await store.request("generate",Input(momentID:first.id,tone:settings.tone,personalContext:settings.personalContext,festivalName:title));settings.baseMessage=result.draft.body;settings.manuallyEdited=false;notice=result.usedAI ? "AI draft ready for review.":"AI unavailable; an editable fallback draft is ready.";analytics.record(.generated)} catch {settings.baseMessage=FestivalValidation.fallback(name:title,tone:settings.tone,type:occasionType,firstName:fallbackFirstName);notice="Offline fallback — review before saving."}
     }
     /// An approved message-only save keeps existing schedules; the server rewrites their text.
     private func keepsSchedules(cancelSchedules:Bool) -> Bool {!cancelSchedules && hasSchedules && pendingChange == .messageOnly && settings.approvedAt != nil}
