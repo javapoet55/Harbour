@@ -67,7 +67,7 @@ struct MomentOK: Decodable, Sendable {}
     } }
     func activate(_ userID: String?) async {
         let key = userID.map(TaskActionCoordinator.ownerKey)
-        if owner != key { owner = key; generation = UUID(); snapshot = nil; route = nil; error = nil; lastSynced = nil; await clearNotifications() }
+        if owner != key { owner = key; generation = UUID(); snapshot = nil; route = nil; error = nil; lastSynced = nil; cardCache.removeAll(); await clearNotifications() }
         if key != nil { await refresh() }
     }
     func refresh() async {
@@ -93,6 +93,27 @@ struct MomentOK: Decodable, Sendable {}
         let result: R = try await api.request("/api/moments", method: "POST", body: JSONEncoder().encode(MomentEnvelope(operation: operation, input: input, id: id)), timeout: operation == "greetingArtwork" ? 150 : 50)
         guard token == generation else { throw APIError.signedOut }
         return result
+    }
+    // The saved greeting card that automatic emails include (PUT/GET/DELETE /api/moments/{id}/card).
+    private let cardCache = GreetingCardCache()
+    func uploadCard(momentIDs: [String], encode: @Sendable (GreetingCardEncoding) async throws -> Data) async throws {
+        guard owner != nil else { throw APIError.signedOut }
+        let token = generation
+        _ = try await GreetingCardClient(api: api).upload(momentIDs: momentIDs, encode: encode)
+        guard token == generation else { throw APIError.signedOut }
+    }
+    func deleteCard(momentIDs: [String]) async throws {
+        guard owner != nil else { throw APIError.signedOut }
+        let token = generation
+        for id in momentIDs { try await GreetingCardClient(api: api).delete(momentID: id) }
+        guard token == generation else { throw APIError.signedOut }
+    }
+    /// The moment's saved card image, from the cache when its sha256 is unchanged.
+    func storedCard(for moment: ImportantMoment) async -> Data? {
+        guard owner != nil, let card = moment.card else { return nil }
+        let token = generation
+        let data = try? await cardCache.image(for: card, momentID: moment.id, client: GreetingCardClient(api: api))
+        return token == generation ? data : nil
     }
     func perform(_ action: () async throws -> Void) async {
         guard !busy else { return }; busy = true; error = nil; defer { busy = false }

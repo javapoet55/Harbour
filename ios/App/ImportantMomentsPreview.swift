@@ -9,6 +9,7 @@ final class MomentsPreviewProtocol: URLProtocol, @unchecked Sendable {
     nonisolated(unsafe) private static var savedPlans: [[String: Any]] = []
     nonisolated(unsafe) private static var festivalSaved: [String: Any]?
     nonisolated(unsafe) private static var cardSettings: [String:Any] = [:]
+    nonisolated(unsafe) private static var cardImages: [String:(info:[String:Any],data:Data)] = [:]
     nonisolated(unsafe) private static var festivalDeleted = false
     nonisolated(unsafe) private static var draftBody = "Happy Birthday, Damien! Wishing you a wonderful day and a fantastic year ahead! 🎉"
     override class func canInit(with request: URLRequest) -> Bool { request.url?.host == "moments-preview.invalid" }
@@ -16,6 +17,7 @@ final class MomentsPreviewProtocol: URLProtocol, @unchecked Sendable {
     override func startLoading() {
         Self.lock.lock(); defer { Self.lock.unlock() }
         let url = request.url!; let now = Date(); let day = MomentDates.day(now, zone: "America/Los_Angeles")
+        if url.path.hasSuffix("/card") { cardResponse(url); return }
         func draft() -> [String: Any] { ["id":"draft","momentID":"moment","tone":"Warm","body":Self.draftBody,"personalContext":"","generationVersion":1,"status":"READY","plans":Self.savedPlans] }
         var result: [String: Any]
         if request.httpMethod == "POST" {
@@ -93,6 +95,7 @@ final class MomentsPreviewProtocol: URLProtocol, @unchecked Sendable {
                     if let settings=saved["settings"],let data=try? JSONSerialization.data(withJSONObject:settings){moments[i]["festivalSettings"]=String(data:data,encoding:.utf8)}
                 }
             }
+            for i in moments.indices {if let id=moments[i]["id"] as? String {moments[i]["card"]=Self.cardImages[id]?.info ?? NSNull()}}
             for i in moments.indices {if let id=moments[i]["id"] as? String,let settings=Self.cardSettings[id],let data=try? JSONSerialization.data(withJSONObject:settings){moments[i]["festivalSettings"]=String(data:data,encoding:.utf8)}}
             result = ["moments":Self.festivalDeleted ? []:moments,"emailAccount":["email":"you@example.com","status":"connected"],"emailConfigured":true,"automaticEmailEnabled":true]
         }
@@ -100,9 +103,30 @@ final class MomentsPreviewProtocol: URLProtocol, @unchecked Sendable {
         client?.urlProtocol(self, didReceive: HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: ["Content-Type":"application/json"])!, cacheStoragePolicy: .notAllowed)
         client?.urlProtocol(self, didLoad: data); client?.urlProtocolDidFinishLoading(self)
     }
+    /// PUT/GET/DELETE /api/moments/{id}/card, kept in memory. Called with the lock held.
+    private func cardResponse(_ url: URL) {
+        let id = url.deletingLastPathComponent().lastPathComponent
+        var status = 200; var type = "application/json"; var body = Data()
+        func json(_ value: [String: Any]) -> Data { (try? JSONSerialization.data(withJSONObject: value)) ?? Data() }
+        switch request.httpMethod {
+        case "PUT":
+            var data = request.httpBody ?? Data()
+            if let stream = request.httpBodyStream { stream.open(); defer { stream.close() }; var buffer = [UInt8](repeating: 0, count: 65_536); while stream.hasBytesAvailable { let count = stream.read(&buffer, maxLength: buffer.count); if count <= 0 { break }; data.append(buffer, count: count) } }
+            let info: [String: Any] = ["id":"card-\(id)-\(Self.cardImages.count)","mime":"image/jpeg","size":data.count,"sha256":String(repeating:"0",count:63)+String(Self.cardImages.count % 10),"createdAt":ISO8601DateFormatter().string(from:Date())]
+            Self.cardImages[id] = (info, data); body = json(["card":info,"plansUpdated":0])
+        case "DELETE":
+            if let removed = Self.cardImages.removeValue(forKey: id) { body = json(["deleted":removed.info["id"] ?? "","plansUpdated":0]) }
+            else { status = 404; body = json(["error":"No greeting card has been saved for this moment."]) }
+        default:
+            if let card = Self.cardImages[id] { type = "image/jpeg"; body = card.data }
+            else { status = 404; body = json(["error":"No greeting card has been saved for this moment."]) }
+        }
+        client?.urlProtocol(self, didReceive: HTTPURLResponse(url: url, statusCode: status, httpVersion: nil, headerFields: ["Content-Type":type])!, cacheStoragePolicy: .notAllowed)
+        client?.urlProtocol(self, didLoad: body); client?.urlProtocolDidFinishLoading(self)
+    }
     override func stopLoading() {}
     @MainActor static func store() -> ImportantMomentsStore {
-        lock.withLock { createdMoments = []; savedPlans = []; cardSettings = [:]; festivalSaved = nil; festivalDeleted = false; draftBody = "Happy Birthday, Damien! Wishing you a wonderful day and a fantastic year ahead! 🎉" }
+        lock.withLock { createdMoments = []; savedPlans = []; cardSettings = [:]; cardImages = [:]; festivalSaved = nil; festivalDeleted = false; draftBody = "Happy Birthday, Damien! Wishing you a wonderful day and a fantastic year ahead! 🎉" }
         if ProcessInfo.processInfo.arguments.contains("-festival-manage-preview") {
             lock.withLock { draftBody = "Happy Diwali! Wishing you and your family joy, light and new beginnings." }
         }
