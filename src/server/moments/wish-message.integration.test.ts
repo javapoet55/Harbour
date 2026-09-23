@@ -67,6 +67,44 @@ describe('the resolved wish text', () => {
     expect(greetingMessage('Happy Birthdays all round', 'birthday', 'Asha')).toBe('Happy Birthday, Asha! Happy Birthdays all round');
     expect(greetingMessage('Joyful Diwali!', 'festival', 'Asha')).toBe('Joyful Diwali!');
   });
+
+  /**
+   * The reported case: an anniversary wish saved on a moment typed as a birthday went out as
+   * "Happy Birthday, Visakan! Happy anniversary! Wishing you…". A wish that already opens with a
+   * greeting keeps that one and has the name put into it.
+   */
+  it('never produces two greetings, whatever the moment’s type says', () => {
+    expect(greetingMessage('Happy anniversary! Wishing you a wonderful year.', 'birthday', 'Visakan')).toBe(
+      'Happy Anniversary, Visakan! Wishing you a wonderful year.',
+    );
+    // Every opening the product writes, each on a moment typed as something else.
+    expect(greetingMessage('Happy Birthday! Enjoy.', 'anniversary', 'Visakan')).toBe('Happy Birthday, Visakan! Enjoy.');
+    expect(greetingMessage('Get well soon. Rest up.', 'birthday', 'Visakan')).toBe('Get well soon, Visakan! Rest up.');
+    expect(greetingMessage('Best wishes! Have a lovely day.', 'birthday', 'Visakan')).toBe('Best wishes, Visakan! Have a lovely day.');
+    // The opening alone, with nothing after it.
+    expect(greetingMessage('Happy anniversary', 'birthday', 'Visakan')).toBe('Happy Anniversary, Visakan!');
+  });
+
+  it('is unchanged when the message opens with the moment’s own greeting', () => {
+    expect(greetingMessage('Happy Anniversary! Here’s to ten years.', 'anniversary', 'Asha')).toBe('Happy Anniversary, Asha! Here’s to ten years.');
+    expect(greetingMessage('get well soon. Thinking of you.', 'getWellSoon', 'Asha')).toBe('Get well soon, Asha! Thinking of you.');
+  });
+
+  it('adds the moment’s own greeting when the message has no opening', () => {
+    expect(greetingMessage('Have a lovely day!', 'birthday', 'Asha')).toBe('Happy Birthday, Asha! Have a lovely day!');
+    expect(greetingMessage('Have a lovely day!', 'anniversary', 'Asha')).toBe('Happy Anniversary, Asha! Have a lovely day!');
+    expect(greetingMessage('Rest up.', 'getWellSoon', 'Asha')).toBe('Get well soon, Asha! Rest up.');
+    // An opening that is really prose still counts as no opening.
+    expect(greetingMessage('Happy anniversaries all round', 'birthday', 'Asha')).toBe('Happy Birthday, Asha! Happy anniversaries all round');
+  });
+
+  it('adds no greeting line without a recipient name, or for an occasion that has none', () => {
+    expect(greetingMessage('Happy anniversary! Wishing you well.', 'birthday', '')).toBe('Happy anniversary! Wishing you well.');
+    expect(greetingMessage('Happy anniversary! Wishing you well.', 'birthday', '   ')).toBe('Happy anniversary! Wishing you well.');
+    // Festival and custom have no greeting of their own, so the wish goes out exactly as written.
+    expect(greetingMessage('Happy Birthday! Enjoy.', 'festival', 'Asha')).toBe('Happy Birthday! Enjoy.');
+    expect(greetingMessage('Best wishes! Enjoy.', 'custom', 'Asha')).toBe('Best wishes! Enjoy.');
+  });
 });
 
 describe('card emails carry the saved wish in both parts', () => {
