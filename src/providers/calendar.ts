@@ -53,6 +53,51 @@ export function oauthAuthorizationUrl(provider: OAuthProvider, state: string) {
   return url.toString();
 }
 
+/** The token endpoint refused the request. `status` and the OAuth `error` code say whether it is the grant or the service. */
+export class OAuthTokenError extends Error {
+  constructor(message: string, readonly status: number, readonly code: string | undefined) { super(message); this.name = 'OAuthTokenError'; }
+}
+/** The stored authorization cannot be used; only reconnecting the calendar fixes it. */
+export class CalendarAuthError extends Error {
+  constructor(message: string) { super(message); this.name = 'CalendarAuthError'; }
+}
+/**
+ * OAuth `error` codes that mean this user's grant is dead, not that the service is having a bad moment.
+ * Google sends `invalid_grant` ("Token has been expired or revoked."). Microsoft sends `invalid_grant`
+ * (AADSTS70008 expired, AADSTS50173 revoked, AADSTS700082 inactive) and `interaction_required` /
+ * `consent_required` / `login_required` (MFA, consent or password changes). `invalid_client` is left out:
+ * that is Nexdo's own OAuth configuration, and would wrongly flag every connection.
+ */
+const REVOKED_GRANT_CODES = new Set(['invalid_grant', 'interaction_required', 'consent_required', 'login_required']);
+
+/**
+ * True when a calendar cannot be used until it is reconnected. Network failures, timeouts, 5xx and 429
+ * are transient and return false.
+ */
+export function isCalendarAuthFailure(error: unknown) {
+  if (error instanceof CalendarAuthError) return true;
+  if (!(error instanceof OAuthTokenError)) return false;
+  return error.status >= 400 && error.status < 500 && error.status !== 429 && !!error.code && REVOKED_GRANT_CODES.has(error.code);
+}
+
+/**
+ * 403 reasons that mean "slow down" or a Nexdo-side setting, not a lost sign-in. Google returns 403 for
+ * its rate and quota limits; `accessNotConfigured` means the Calendar API is off in Nexdo's project.
+ */
+const TRANSIENT_FORBIDDEN_REASONS = new Set(['rateLimitExceeded', 'userRateLimitExceeded', 'quotaExceeded', 'dailyLimitExceeded', 'accessNotConfigured', 'ApplicationThrottled', 'TooManyRequests']);
+
+/**
+ * True when a calendar call (listing events) failed because the sign-in no longer works: any token
+ * failure isCalendarAuthFailure accepts, a 401, or a 403 whose reason is not a rate/quota limit.
+ * Network errors, timeouts, 5xx, 429 and other 4xx return false.
+ */
+export function isCalendarListAuthFailure(error: unknown) {
+  if (isCalendarAuthFailure(error)) return true;
+  const { status, reason } = (error ?? {}) as { status?: unknown; reason?: unknown };
+  if (status === 401) return true;
+  return status === 403 && !(typeof reason === 'string' && TRANSIENT_FORBIDDEN_REASONS.has(reason));
+}
+
 async function tokenRequest(provider: OAuthProvider, params: Record<string, string>) {
   const cfg = oauthConfig(provider);
   const response = await observedFetch(cfg.token, {
@@ -62,7 +107,7 @@ async function tokenRequest(provider: OAuthProvider, params: Record<string, stri
     body: new URLSearchParams({ client_id: cfg.clientId, client_secret: cfg.clientSecret, redirect_uri: cfg.redirectUri, scope: cfg.scope, ...params }),
   });
   const payload = await response.json() as TokenResponse;
-  if (!response.ok || !payload.access_token) throw new Error(payload.error_description || payload.error || 'OAuth token exchange failed');
+  if (!response.ok || !payload.access_token) throw new OAuthTokenError(payload.error_description || payload.error || 'OAuth token exchange failed', response.status, payload.error);
   return payload;
 }
 
@@ -115,7 +160,7 @@ async function accessToken(connection: CalendarConnection) {
   const current = decryptCredential(connection.accessToken);
   if (current && connection.tokenExpiresAt && connection.tokenExpiresAt.getTime() > Date.now() + 60_000) return current;
   const refresh = decryptCredential(connection.refreshToken);
-  if (!refresh) throw new Error('Calendar authorization expired; reconnect the account');
+  if (!refresh) throw new CalendarAuthError('Calendar authorization expired; reconnect the account');
   const tokens = await tokenRequest(connection.provider as OAuthProvider, { grant_type: 'refresh_token', refresh_token: refresh });
   await prisma.calendarConnection.update({
     where: { id: connection.id },
@@ -128,11 +173,23 @@ async function accessToken(connection: CalendarConnection) {
   return tokens.access_token;
 }
 
+/**
+ * The provider's reason code for a failed call, when its body says: Google's `error.errors[0].reason`
+ * (e.g. `rateLimitExceeded`) or `error.status`, Microsoft Graph's `error.code` (e.g. `ErrorAccessDenied`).
+ */
+async function errorReason(response: Response) {
+  try {
+    const body = await response.json() as { error?: { code?: unknown; status?: unknown; errors?: Array<{ reason?: unknown }> } };
+    const candidates = [body?.error?.errors?.[0]?.reason, body?.error?.code, body?.error?.status];
+    return candidates.find((value): value is string => typeof value === 'string');
+  } catch { return undefined; }
+}
+
 async function api(url: string, token: string, init?: RequestInit) {
   const response = await observedFetch(url, { ...init, signal: init?.signal ?? AbortSignal.timeout(15000), headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', ...(init?.headers || {}) } });
   if (!response.ok) {
     const error = new Error(`Calendar provider returned ${response.status}`);
-    Object.assign(error, { status: response.status });
+    Object.assign(error, { status: response.status, reason: await errorReason(response) });
     throw error;
   }
   return response.status === 204 ? null : response.json();
