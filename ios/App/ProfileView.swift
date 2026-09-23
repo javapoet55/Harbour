@@ -350,8 +350,9 @@ struct ProfileSettingsView: View {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(connection.displayName).font(.subheadline).bold()
                                 Text(connection.detail).font(.caption).foregroundStyle(Color.nexdoSecondary)
-                                if let synced = connection.lastSyncedDescription {
-                                    Text(synced).font(.caption2).foregroundStyle(Color.nexdoSecondary)
+                                // Re-rendered every minute, and when Synchronize now reloads the connections.
+                                TimelineView(.everyMinute) { context in
+                                    Text(connection.lastSyncedText(now: context.date)).font(.caption2).foregroundStyle(Color.nexdoSecondary)
                                 }
                             }
                             .accessibilityElement(children: .combine)
