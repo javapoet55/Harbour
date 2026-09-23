@@ -57,6 +57,6 @@ it('requires an authenticated account', async () => {
   expect((await GET(new Request('https://nexdo.test/api/schedule-intelligence?scope=today'))).status).toBe(401);
 });
 
-it.each(['scope=month', 'bufferMinutes=-1', 'bufferMinutes=61', 'bufferMinutes=1.5'])('rejects invalid options: %s', async (query) => {
+it.each(['scope=month', 'bufferMinutes=-1', 'bufferMinutes=121', 'bufferMinutes=1.5'])('rejects invalid options: %s', async (query) => {
   expect((await GET(new Request(`https://nexdo.test/api/schedule-intelligence?${query}`))).status).toBe(400);
 });

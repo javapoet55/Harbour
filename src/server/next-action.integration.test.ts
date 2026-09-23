@@ -171,7 +171,7 @@ describe('authenticated next-action API → SQLite → shared engine → respons
     expect((await loadScheduleContext(userId)).activeFocus).toBeNull();
   });
   it('proactive preference, cooldown, dismissal, and repeated-card refresh prevent notification spam', async () => {
-    const work = await create('A work'); await create('B work');
+    const work = await create('A work'); const other = await create('B work');
     expect((await proactive()).body.recommendation).toBeNull();
     await enable();
     const beforeCount = snapshot().counters.proactive_next_action_generated ?? 0;
@@ -182,11 +182,14 @@ describe('authenticated next-action API → SQLite → shared engine → respons
     expect(snapshot().counters.proactive_next_action_generated).toBe(beforeCount + 1);
     expect((await intelligence(request({ operation: 'dismiss-next-action', contextActionId: first.body.contextActionId }))).status).toBe(200);
     expect((await proactive()).body.recommendation).toBeNull();
+    // Completing the dismissed choice ends its cooldown by design (next-action-config.ts:14): the
+    // dismissal was about that task, so finishing it must not hold back the next useful suggestion.
     await prisma.task.update({ where: { id: work.id }, data: { status: 'COMPLETED' } });
-    expect((await proactive()).body.recommendation).toBeNull(); // new task, still inside cooldown
+    expect((await proactive()).body.recommendation?.priorities[0].taskId).toBe(other.id);
     vi.setSystemTime(at('13:31'));
     const persisted = JSON.parse((await prisma.userMemory.findUniqueOrThrow({ where: { userId_key: { userId, key: 'runtime:next_action' } } })).value);
-    expect(persisted).toMatchObject({ taskId: work.id, shownAt: +at('13:00'), dismissed: true });
+    expect(persisted).toMatchObject({ taskId: other.id, shownAt: +at('13:00') });
+    expect(persisted.dismissed).toBeUndefined();
     expect(buildExecutiveRecommendation(await loadScheduleContext(userId), 'NEXT_ACTION').recommendation.priorities[0]?.title).toBe('B work');
     const afterCooldown = await proactive();
     expect(afterCooldown).toMatchObject({ status: 200, body: { enabled: true, recommendation: { priorities: [{ title: 'B work' }] } } });

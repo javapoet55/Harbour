@@ -164,7 +164,7 @@ describe('task and reminder integration', () => {
     const proposal = await generateReplanProposal(userA, now);
     expect(proposal.actionId).toBeTruthy();
     expect(proposal.moves.some((move) => move.taskId === movable.id)).toBe(true);
-    const applied = await applyReplanProposal(userA, proposal.actionId!);
+    const applied = await applyReplanProposal(userA, proposal.actionId!, now);
     expect(applied.moved).toBeGreaterThan(0);
     const moved = await prisma.task.findUniqueOrThrow({ where: { id: movable.id } });
     expect(moved.startAt!.getTime()).toBeGreaterThan(now.getTime());
@@ -174,7 +174,7 @@ describe('task and reminder integration', () => {
     const staleProposal = await generateReplanProposal(userA, now);
     expect(staleProposal.actionId).toBeTruthy();
     await prisma.task.update({ where: { id: staleTask.id }, data: { title: 'User edited this after planning' } });
-    await expect(applyReplanProposal(userA, staleProposal.actionId!)).rejects.toThrow('STALE_REPLAN');
+    await expect(applyReplanProposal(userA, staleProposal.actionId!, now)).rejects.toThrow('STALE_REPLAN');
   });
 
   it('extracts, previews, and atomically applies a structured multi-action agent plan', async () => {

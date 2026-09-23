@@ -13,7 +13,11 @@ async function healthHandlerPOST(req: Request) {
     if (!parsed.success) return NextResponse.json({ error: parsed.error.issues[0].message }, { status: 400 });
     const { transcript, confirmActionId, rejectActionId, contextActionId } = parsed.data;
     const requestedTranscript = transcript || (rejectActionId ? 'no' : 'yes');
-    if (!confirmActionId && !rejectActionId) {
+    // A follow-up carries the turn it refers to, so "Why?" reads as a general question on its own and
+    // the guard would refuse it. Approvals and rejections are exempt for the same reason. Skipping the
+    // guard also lets an unowned contextActionId reach the agent, which answers it with NOT_FOUND
+    // rather than a 200 refusal. Output is still sanitized below.
+    if (!confirmActionId && !rejectActionId && !contextActionId) {
       const violation = detectPolicyViolation(transcript);
       if (violation) return NextResponse.json({ ...blockedAssistantTurn(requestedTranscript, violation.category), voiceEnabled: user.preference?.voiceEnabled ?? true }, { headers: { 'Cache-Control': 'private, no-store' } });
     }

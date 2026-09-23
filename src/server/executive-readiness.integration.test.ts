@@ -13,6 +13,7 @@ import { PATCH as settings } from '@/app/api/settings/route';
 import { createTask } from './tasks';
 import { buildDailyPlan } from './planner';
 import { loadScheduleContext } from './schedule-intelligence';
+import { scheduleContextVersion } from './replanner';
 import { buildPersonalizedInsights } from './predictions';
 
 const jar = vi.hoisted(() => new Map<string, { value: string; secure?: boolean }>());
@@ -195,12 +196,14 @@ describe('full authenticated API → real SQLite → engines → real provider a
     expect(responses.every((result) => [200, 404, 409].includes(result.status))).toBe(true);
     expect(await prisma.activityLog.count({ where: { userId, taskId: work.id, kind: 'AUTO_REPLAN' } })).toBe(1);
   });
-  it('also claims legacy conversational approvals atomically and rejects their replay', async () => {
+  it('claims a conversational approval atomically and rejects its replay', async () => {
     vi.stubEnv('OPENAI_API_KEY', 'fixture-only-key');
     const work = await task('Legacy task');
     const action = { type: 'UPDATE_TASK', task_ids: [work.id], title: 'Approved title', notes: null, priority: null, status: null, start_at: null, due_at: null, reminder_at: null, duration_min: null, energy_level: null, depends_on_ids: [], project_id: null, rationale: 'User approved the new title' };
     const plan = { interpretation: 'Rename task', response: 'Review this change', response_sections: [], needs_clarification: false, clarification_question: null, actions: [action], memory_updates: [] };
-    const pending = await prisma.assistantAction.create({ data: { userId, intent: 'AGENT_PLAN', confirmation: 'REQUIRED', payloadJson: JSON.stringify({ agentVersion: 1, plan, taskVersions: { [work.id]: work.updatedAt.toISOString() } }) } });
+    // Approval requires the schedule version the plan was built against (conversational-agent.ts:336);
+    // a payload without one is refused as stale rather than applied.
+    const pending = await prisma.assistantAction.create({ data: { userId, intent: 'AGENT_PLAN', confirmation: 'REQUIRED', payloadJson: JSON.stringify({ agentVersion: 1, scheduleVersion: await scheduleContextVersion(userId), plan, taskVersions: { [work.id]: work.updatedAt.toISOString() } }) } });
     const responses = await Promise.all([1, 2].map(() => ask('yes', { confirmActionId: pending.id })));
     expect(responses.filter((result) => result.status === 200)).toHaveLength(1);
     expect(responses.every((result) => [200, 404, 409].includes(result.status))).toBe(true);
