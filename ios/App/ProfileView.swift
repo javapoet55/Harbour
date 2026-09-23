@@ -31,7 +31,7 @@ private final class CalendarOAuthCoordinator: NSObject, ObservableObject, ASWebA
 
     private static func describe(_ error: Error) -> String {
         if let sessionError = error as? ASWebAuthenticationSessionError, sessionError.code == .canceledLogin {
-            return "Google Calendar connection failed: sign-in was cancelled or blocked. If Google showed “OAuth client was disabled”, enable that Web client in Google Cloud Console → APIs & Services → Credentials, and keep the redirect URI https://harbour-production-f8a0.up.railway.app/api/calendar/oauth/google/callback."
+            return "Google Calendar connection failed: sign-in was cancelled or blocked. If Google showed “OAuth client was disabled”, enable that Web client in Google Cloud Console → APIs & Services → Credentials, and keep the redirect URI \(AppEnvironment.web("/api/calendar/oauth/google/callback").absoluteString)."
         }
         return "Google Calendar connection failed: \(error.localizedDescription)"
     }
@@ -156,7 +156,7 @@ struct AccountView: View {
         }.padding(.horizontal, 12).frame(minHeight: 50).contentShape(Rectangle())
     }
     private func webRow(_ title: String, _ icon: String, _ path: String) -> some View {
-        Button { openURL(URL(string: "https://harbour-production-f8a0.up.railway.app" + path)!) } label: { menuRow(title, icon, web: true) }
+        Button { openURL(AppEnvironment.web(path)) } label: { menuRow(title, icon, web: true) }
             .accessibilityHint("Opens Nexdo in your browser")
     }
 }
@@ -414,7 +414,7 @@ struct ProfileSettingsView: View {
     private func hours(_ title: String, start: Binding<String>, end: Binding<String>) -> some View {
         VStack(alignment: .leading, spacing: 8) { Text(title).font(.subheadline); HStack { DatePicker("Start", selection: clock(start), displayedComponents: .hourAndMinute); DatePicker("End", selection: clock(end), displayedComponents: .hourAndMinute) }.font(.caption) }
     }
-    private func website(_ path: String) { openURL(URL(string: "https://harbour-production-f8a0.up.railway.app" + path)!) }
+    private func website(_ path: String) { openURL(AppEnvironment.web(path)) }
     private func load() async {
         loading = true; failure = nil
         defer { loading = false }
