@@ -34,7 +34,7 @@ struct TaskAgentCard: View {
                     Text("\(run.service) · \(run.slots.location.isEmpty ? "Location needed" : run.slots.location)").font(.subheadline)
                     if run.urgency == "urgent" { Text("Urgent — prioritizing availability").font(.caption.bold()) }
                     Text("Search uses your city and service with Google Places (and Yelp when connected). NexDo never calls, messages, or shares your contact details with businesses. You review and send drafts yourself.").font(.caption).foregroundStyle(.secondary)
-                    Link("Search terms and privacy", destination: URL(string: "https://harbour-production-f8a0.up.railway.app/places-policy")!).font(.caption)
+                    Link("Search terms and privacy", destination: AppEnvironment.web("/places-policy")).font(.caption)
                     if let question = run.question {
                         Text(question.text).font(.subheadline.bold())
                         if question.key == "urgency" {

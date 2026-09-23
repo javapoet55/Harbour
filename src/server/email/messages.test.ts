@@ -80,8 +80,8 @@ describe('transactional email template', () => {
 
   it('falls back to the production origin when APP_URL is missing or invalid', () => {
     vi.stubEnv('APP_URL', '');
-    expect(emailAppUrl()).toBe('https://harbour-production-f8a0.up.railway.app');
+    expect(emailAppUrl()).toBe('https://app.nexdoapp.com');
     vi.stubEnv('APP_URL', 'javascript:alert(1)');
-    expect(emailAppUrl()).toBe('https://harbour-production-f8a0.up.railway.app');
+    expect(emailAppUrl()).toBe('https://app.nexdoapp.com');
   });
 });

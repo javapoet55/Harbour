@@ -1,7 +1,7 @@
 // Shared branded layout for every Nexdo transactional email.
 // Table-based with inline styles only, so it renders in Gmail, Outlook desktop and Apple Mail.
 
-const PRODUCTION_APP_URL = 'https://harbour-production-f8a0.up.railway.app';
+const PRODUCTION_APP_URL = 'https://app.nexdoapp.com';
 export const EMAIL_LOGO_PATH = '/email/nexdo-logo-email.png';
 
 export const colors = {
