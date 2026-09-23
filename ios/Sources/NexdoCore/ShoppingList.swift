@@ -90,6 +90,20 @@ public struct GroceryList: Codable, Identifiable, Equatable, Sendable {
 }
 /// Each completed utterance is keyed by the provider's item ID, so duplicate events
 /// and partial transcription updates never add the same groceries twice.
+/// Scene states that matter to a live shopping voice session.
+public enum ShoppingVoiceScene: Sendable {
+    case active, inactive, background
+    /// The microphone permission alert makes the scene inactive, so only close on inactive
+    /// when no permission request is in flight. Leaving for the background always closes.
+    public static func shouldClose(_ scene:ShoppingVoiceScene,requestingPermission:Bool)->Bool {
+        switch scene {
+        case .active:false
+        case .inactive:!requestingPermission
+        case .background:true
+        }
+    }
+}
+
 public struct ShoppingTranscript: Sendable {
     private var order:[String]=[]
     private var final:[String:String]=[:]

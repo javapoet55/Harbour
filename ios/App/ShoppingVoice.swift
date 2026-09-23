@@ -8,6 +8,8 @@ import AVFoundation
     @Published var finishing=false
     @Published var text=""
     @Published var error:String?
+    /// True while iOS shows the microphone permission alert, which makes the scene inactive.
+    @Published private(set) var requestingPermission=false
     private var transcript=ShoppingTranscript()
     private var connection:(any VoiceRealtimeTransport)?
     private var run=UUID()
@@ -19,8 +21,11 @@ import AVFoundation
         transcript=ShoppingTranscript()
         if !text.isEmpty{transcript.append(id:UUID().uuidString,text:text,completed:true)}
         connecting=true;error=nil;let generation=UUID();run=generation
-        guard await AVAudioApplication.requestRecordPermission() else{connecting=false;error="Allow microphone access in your phone’s Settings, or type your items.";return}
-        guard run==generation else{return}
+        requestingPermission=true
+        let granted=await AVAudioApplication.requestRecordPermission()
+        requestingPermission=false
+        guard granted else{connecting=false;error="Allow microphone access in your phone’s Settings, or type your items.";return}
+        guard run==generation else{if error==nil{error="Listening stopped before it started. Tap the mic to try again."};return}
         do {
             let credential=try await store.credential()
             guard run==generation else{return}
@@ -72,6 +77,10 @@ import AVFoundation
         if !waiting.isEmpty || transcript.hasPending {error="Some speech is unfinished. Check the transcript before adding items."}
         close();finishing=false
     }
+    func sceneChanged(to phase:ScenePhase) {
+        let scene:ShoppingVoiceScene = switch phase{case .active:.active;case .background:.background;default:.inactive}
+        if ShoppingVoiceScene.shouldClose(scene,requestingPermission:requestingPermission){close()}
+    }
     func close(){run=UUID();timer?.cancel();timer=nil;connection?.onEvent=nil;connection?.onFailure=nil;connection?.close();connection=nil;listening=false;connecting=false;speaking=false;waiting=[]}
 }
 struct ShoppingVoiceView:View {
@@ -96,17 +105,18 @@ struct ShoppingVoiceView:View {
                     Image(systemName:voice.listening ? "pause.fill":"mic.fill").font(.system(size:48)).foregroundStyle(.white).frame(width:140,height:140).background(NexdoTheme.gradient,in:Circle()).shadow(color:.nexdoIndigo.opacity(0.2),radius:24)
                 }.disabled(!consent || voice.connecting || voice.finishing).accessibilityLabel(voice.listening ? "Pause listening":"Start listening")
                 Text(!consent ? "Enable live transcription below to start":voice.finishing ? "Finishing transcription…":voice.connecting ? "Connecting…":voice.listening ? "Listening — keep going":"Tap Mic and Talk").font(.headline)
+                if let message=voice.error {Text(message).font(.callout).foregroundStyle(.red).multilineTextAlignment(.center)}
                 Toggle("Allow live voice transcription",isOn:$consent).onChange(of:consent){_,value in if !value{voice.close()}}
                 Text("Tap the mic to transcribe in English. Audio is sent only while listening. Nexdo organizes your words into grocery items before adding them.").font(.caption).foregroundStyle(.secondary)
                 TextEditor(text:$voice.text).frame(minHeight:120).padding(10).background(.ultraThinMaterial,in:RoundedRectangle(cornerRadius:16)).accessibilityLabel("Shopping transcript")
                 MomentPrimary(title:parsing ? "Adding…":"Add to List"){Task{await addItems()}}
                     .disabled(parsing || voice.text.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty)
-                if let message=error ?? voice.error {Text(message).foregroundStyle(.red)}
+                if let message=error {Text(message).foregroundStyle(.red)}
             }.padding(20)}}
             .navigationTitle("Add by Voice").navigationBarTitleDisplayMode(.inline)
             .toolbar{ToolbarItem(placement:.cancellationAction){Button("Close"){voice.close();dismiss()}}}
             .onDisappear{voice.close()}
-            .onChange(of:phase){_,value in if value != .active{voice.close()}}
+            .onChange(of:phase){_,value in voice.sceneChanged(to:value)}
         }
     }
     @MainActor private func addItems() async {
