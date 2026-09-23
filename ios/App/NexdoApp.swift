@@ -321,7 +321,7 @@ final class AppModel: ObservableObject {
         struct Input: Encodable, Sendable { let id: String; let writeEnabled: Bool }
         let _: Ignore = try await api.request("/api/calendar/connections", method: "PATCH", body: JSONEncoder().encode(Input(id: id, writeEnabled: enabled)))
         await loadCalendarConnections()
-        return enabled ? "Nexdo can now add your scheduled tasks to this calendar." : "Nexdo will no longer add events to this calendar."
+        return enabled ? "Nexdo can now add your scheduled tasks and events to this calendar." : "Nexdo will no longer add events to this calendar."
     }
     func disconnectCalendar(id: String) async throws -> String {
         guard let encoded = id.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) else { throw CalendarConnectError.unavailable }
