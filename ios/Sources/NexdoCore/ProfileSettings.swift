@@ -57,11 +57,9 @@ public struct CalendarConnection: Decodable, Sendable, Identifiable, Equatable {
         if !isHealthy { parts.append(status.capitalized) }
         return parts.joined(separator: " · ")
     }
-    public var lastSyncedDescription: String? {
-        guard let lastSyncedAt, let date = CalendarConnection.parseTimestamp(lastSyncedAt) else { return nil }
-        let formatter = RelativeDateTimeFormatter()
-        formatter.unitsStyle = .full
-        return "Synchronized \(formatter.localizedString(for: date, relativeTo: Date()))"
+    /// The line under "Synchronize now": when this calendar last synced, from `status` and `lastSyncedAt`.
+    public func lastSyncedText(now: Date = Date(), timeZone: TimeZone = .current) -> String {
+        CalendarSyncStatus.text(status: status, lastSyncedAt: lastSyncedAt.flatMap(Self.parseTimestamp), now: now, timeZone: timeZone)
     }
     // Prisma emits fractional seconds; tolerate either form.
     static func parseTimestamp(_ value: String) -> Date? {
@@ -71,5 +69,27 @@ public struct CalendarConnection: Decodable, Sendable, Identifiable, Equatable {
             if let date = formatter.date(from: value) { return date }
         }
         return nil
+    }
+}
+
+public enum CalendarSyncStatus {
+    /// "Needs reconnecting" unless status is "connected"; "Not synced yet" without a sync; otherwise
+    /// "Last synced just now" (<1 min), "N min ago" (<60 min), "today/yesterday at h:mm AM/PM", or "MMM d at h:mm AM/PM".
+    public static func text(status: String, lastSyncedAt: Date?, now: Date, timeZone: TimeZone = .current) -> String {
+        guard status.lowercased() == "connected" else { return "Needs reconnecting" }
+        guard let synced = lastSyncedAt else { return "Not synced yet" }
+        let seconds = now.timeIntervalSince(synced)
+        if seconds < 60 { return "Last synced just now" }
+        if seconds < 3600 { return "Last synced \(Int(seconds / 60)) min ago" }
+        var calendar = Calendar(identifier: .gregorian); calendar.timeZone = timeZone
+        let time = formatter("h:mm a", timeZone).string(from: synced)
+        if calendar.isDate(synced, inSameDayAs: now) { return "Last synced today at \(time)" }
+        if let yesterday = calendar.date(byAdding: .day, value: -1, to: now), calendar.isDate(synced, inSameDayAs: yesterday) { return "Last synced yesterday at \(time)" }
+        return "Last synced \(formatter("MMM d", timeZone).string(from: synced)) at \(time)"
+    }
+    private static func formatter(_ format: String, _ timeZone: TimeZone) -> DateFormatter {
+        let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX"); f.calendar = Calendar(identifier: .gregorian)
+        f.timeZone = timeZone; f.dateFormat = format; f.amSymbol = "AM"; f.pmSymbol = "PM"
+        return f
     }
 }
