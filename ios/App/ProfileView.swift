@@ -362,12 +362,12 @@ struct ProfileSettingsView: View {
                         Divider()
                         // Writes default to off on the server, so without this toggle the
                         // app only ever reads: scheduled tasks never reach the calendar.
-                        Toggle("Add my scheduled tasks here", isOn: Binding(
+                        Toggle("Add my scheduled tasks and events here", isOn: Binding(
                             get: { connection.writeEnabled },
                             set: { enabled in run { message = try await model.setCalendarWrites(id: connection.id, enabled: enabled) } }
                         )).font(.subheadline)
                         if !connection.writeEnabled {
-                            Text("Read-only: events come into Nexdo, but tasks you schedule are not added to this calendar.")
+                            Text("Read-only: events come into Nexdo, but tasks and events you create in Nexdo are not added to this calendar.")
                                 .font(.caption2).foregroundStyle(Color.nexdoSecondary)
                         }
                     }
