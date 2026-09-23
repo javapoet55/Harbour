@@ -1,6 +1,6 @@
 import { measuredJob, recordEvent } from '@/server/health/telemetry';
 import { prisma } from './db';
-import { nextEscalationChannel } from '@/lib/escalation';
+import { anyDelivered, escalationExhausted, isPermanentFailure, nextEscalationChannel, SMS_NO_PHONE_NUMBER, type Attempt, type Channel, type EscalationPrefs } from '@/lib/escalation';
 import { emailProvider, pushProvider, smsProvider } from '@/providers';
 import { reminderMessage } from './email/messages';
 import { taskDueLabel } from '@/lib/task-timeline';
@@ -65,54 +65,74 @@ async function tickRemindersImpl(now = new Date()) {
   for (const reminder of due) {
     const prefs = reminder.user.preference;
     if (!prefs) continue;
-    const channel = nextEscalationChannel(
-      {
-        pushEnabled: prefs.pushEnabled,
-        emailEnabled: prefs.emailEnabled,
-        smsEnabled: prefs.smsEnabled,
-        escalateToEmailMinutes: prefs.escalateToEmailMinutes,
-        escalateToSmsMinutes: prefs.escalateToSmsMinutes,
-        critical: reminder.critical,
-      },
-      reminder.attempts.map((a) => ({
-        channel: a.channel as 'push' | 'email' | 'sms',
-        status: a.status as 'SENT',
-        createdAt: a.createdAt,
-        sentAt: a.sentAt,
-      })),
-      now,
-    );
-    if (!channel) continue;
+    const escalation: EscalationPrefs = {
+      pushEnabled: prefs.pushEnabled,
+      emailEnabled: prefs.emailEnabled,
+      smsEnabled: prefs.smsEnabled,
+      escalateToEmailMinutes: prefs.escalateToEmailMinutes,
+      escalateToSmsMinutes: prefs.escalateToSmsMinutes,
+      critical: reminder.critical,
+    };
+    // `failureReason` is what tells a channel that can never work for this account from one that is
+    // merely down, so it decides whether to move on or to retry.
+    let history: Attempt[] = reminder.attempts.map((a) => ({
+      channel: a.channel as Channel,
+      status: a.status as Attempt['status'],
+      createdAt: a.createdAt,
+      sentAt: a.sentAt,
+      failureReason: a.failureReason,
+    }));
+    // A channel that can never work for this account is given up without waiting for the next tick, so
+    // an account with no push subscription still gets its email on this one. One hop per channel at
+    // most, so a tick stays bounded however badly delivery is going.
+    for (let hop = 0; hop < 3; hop += 1) {
+      const channel = nextEscalationChannel(escalation, history, now);
+      if (!channel) break;
 
-    const healthStarted=performance.now();
-    const title = reminder.task?.title ?? 'Harbor reminder';
-    const body = reminder.offsetLabel;
-    let result: { id: string; status: 'SENT' | 'FAILED'; reason?: string } = { id: '', status: 'FAILED', reason: 'unknown' };
-    if (channel === 'push') result = await pushProvider.send({ userId: reminder.userId, title, body });
-    if (channel === 'email') result = await emailProvider.send({ to: reminder.user.email, ...reminderMessage(title, body, reminderDueLabel(reminder.task, reminder.user.timeZone, now)) });
-    if (channel === 'sms') result = prefs.phoneNumber
-      ? await smsProvider.send({ to: prefs.phoneNumber, text: `${title}: ${body}` })
-      : { id: '', status: 'FAILED', reason: 'No SMS phone number configured' };
+      const healthStarted = performance.now();
+      const title = reminder.task?.title ?? 'Harbor reminder';
+      const body = reminder.offsetLabel;
+      let result: { id: string; status: 'SENT' | 'FAILED'; reason?: string } = { id: '', status: 'FAILED', reason: 'unknown' };
+      if (channel === 'push') result = await pushProvider.send({ userId: reminder.userId, title, body });
+      if (channel === 'email') result = await emailProvider.send({ to: reminder.user.email, ...reminderMessage(title, body, reminderDueLabel(reminder.task, reminder.user.timeZone, now)) });
+      if (channel === 'sms') result = prefs.phoneNumber
+        ? await smsProvider.send({ to: prefs.phoneNumber, text: `${title}: ${body}` })
+        : { id: '', status: 'FAILED', reason: SMS_NO_PHONE_NUMBER };
 
-    await prisma.notificationAttempt.create({
-      data: {
-        reminderId: reminder.id,
-        channel,
-        status: result.status,
-        failureReason: result.reason,
-        providerId: result.id,
-        sentAt: result.status === 'SENT' ? now : null,
-      },
-    });
-    await prisma.reminder.update({
-      where: { id: reminder.id },
-      data: { status: result.status === 'SENT' ? 'QUEUED' : 'RETRYING' },
-    });
-    await recordEvent({kind:'job',service:'Task reminder',operation:reminder.id,status:result.status==='SENT'?200:500,durationMs:performance.now()-healthStarted,errorCode:result.status==='SENT'?undefined:'DELIVERY_FAILED'});
-    inc(result.status === 'SENT' ? 'notifications.sent' : 'notifications.failed');
-    inc(`notifications.${channel}`);
-    log('info', 'reminder.attempt', { channel, status: result.status, retry: reminder.status === 'RETRYING' });
-    processed += 1;
+      // Stamped from the tick's own clock so the backoff reads the same timeline the scheduler runs
+      // on, rather than the database's separate `now()`.
+      const attempt: Attempt = { channel, status: result.status, createdAt: now, sentAt: result.status === 'SENT' ? now : null, failureReason: result.reason ?? null };
+      await prisma.notificationAttempt.create({
+        data: {
+          reminderId: reminder.id,
+          channel,
+          status: result.status,
+          failureReason: result.reason,
+          providerId: result.id,
+          retryCount: history.filter((item) => item.channel === channel && item.status === 'FAILED').length,
+          createdAt: now,
+          sentAt: result.status === 'SENT' ? now : null,
+        },
+      });
+      history = [...history, attempt];
+      await recordEvent({kind:'job',service:'Task reminder',operation:reminder.id,status:result.status==='SENT'?200:500,durationMs:performance.now()-healthStarted,errorCode:result.status==='SENT'?undefined:'DELIVERY_FAILED'});
+      inc(result.status === 'SENT' ? 'notifications.sent' : 'notifications.failed');
+      inc(`notifications.${channel}`);
+      log('info', 'reminder.attempt', { channel, status: result.status, retry: reminder.status === 'RETRYING' });
+      processed += 1;
+      // Only a dead channel hands over inside this tick; a transient failure waits out its backoff.
+      if (result.status === 'SENT' || !isPermanentFailure(result.reason)) break;
+    }
+
+    // FAILED is reserved for a reminder that never reached the user at all; one that did keeps the
+    // status its successful send gave it, even once the remaining channels are spent.
+    const status = anyDelivered(history) ? 'QUEUED'
+      : escalationExhausted(escalation, history) ? 'FAILED'
+      : 'RETRYING';
+    if (status !== reminder.status) {
+      await prisma.reminder.update({ where: { id: reminder.id }, data: { status } });
+      if (status === 'FAILED') { log('info', 'reminder.exhausted', { attempts: history.length }); inc('reminders.exhausted'); }
+    }
   }
   inc('reminders.ticked', processed);
   return { processed, scanned: due.length };
