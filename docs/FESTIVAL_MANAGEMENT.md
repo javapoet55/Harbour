@@ -37,13 +37,13 @@ Settings persist base message, overrides, tone, context, manual-edit flag, appro
 
 Deletion cancels pending plans and removes unsent drafts and composition/contact metadata. A disabled tombstone retains immutable sent/copied/shared/uncertain delivery history. “Delete all Important Moments data” remains the existing separate privacy action.
 
-Editing with active schedules requires confirmation to cancel them. Disabling preserves contacts and composition. Re-enabling does not silently reinstate cancelled schedules. A send already claimed by the provider blocks mutation.
+Editing with active schedules requires confirmation to cancel them, except an approved change to the wish text alone (base message, overrides, card fields): that keeps the schedules and updates the text of deliveries that have not started sending, the way saving the card again repoints them. Disabling preserves contacts and composition. Re-enabling does not silently reinstate cancelled schedules. A send already claimed by the provider blocks mutation.
 
 ## API contract
 
 All operations use authenticated `POST /api/moments`, JSON `{operation,input}`.
 
-- `festivalSave`: IDs belonging to the authenticated user; festival title/date/IANA zone/yearly/active; recipient IDs/keys/names/selected addresses/selection; validated settings; explicit `cancelSchedules`. Atomic database transaction updates group and cancels pending plans after confirmation.
+- `festivalSave`: IDs belonging to the authenticated user; festival title/date/IANA zone/yearly/active; recipient IDs/keys/names/selected addresses/selection; validated settings; explicit `cancelSchedules`. Atomic database transaction updates group and cancels pending plans after confirmation; an approved message-only save (`approvedAt` set, recipients, dates and delivery settings unchanged) instead rewrites unclaimed plans' `body` to the resolved wish (override, then base message with the recipient greeting).
 - `festivalDelete`: `{ids:[...]}`. Festival-only, ownership checked; pending jobs cancelled; sent history retained.
 - `festivalCatalog`: returns `{entries:[{id,name,dates:[YYYY-MM-DD],sourceURL}]}`.
 - `generate`: reuses text generation; optional `festivalName` and `shared` minimize personal data in shared greetings.
