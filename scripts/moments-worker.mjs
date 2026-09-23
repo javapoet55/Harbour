@@ -9,11 +9,11 @@ if (url.protocol !== 'https:') throw new Error('MOMENTS_API_BASE_URL must use HT
 
 // Calendar sync runs on its own timer (CALENDAR_SYNC_INTERVAL_MS, default 10 minutes, 0 = off). It never
 // awaits or blocks the Moments loop below, and a bad setting turns it off rather than stopping the worker.
-let calendarInterval = 0;
+let calendarInterval = null;
 try { calendarInterval = calendarSyncIntervalMs(process.env.CALENDAR_SYNC_INTERVAL_MS); }
 catch (error) { console.error(`Calendar sync: off (${error.message})`); }
 const calendarUrl = new URL('/api/calendar/sync', base);
-const calendarTimer = startCalendarSyncTimer({
+const calendarTimer = calendarInterval === null ? null : startCalendarSyncTimer({
   intervalMs: calendarInterval,
   run: () => runCalendarSync({ url: calendarUrl, secret, timeoutMs: Math.min(calendarInterval, MAX_CALENDAR_SYNC_TIMEOUT_MS) }),
 });
