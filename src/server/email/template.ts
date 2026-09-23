@@ -26,6 +26,10 @@ export type EmailTemplateInput = {
   footerNote: string;
   /** Shown only where the recipient may not have asked for the email. */
   ignoreNote?: string;
+  /** An image under the heading, e.g. `cid:` for an inline MIME part. Omitted from the text version. */
+  image?: { src: string; alt: string; width: number; height?: number };
+  /** Hide the "Questions?" support line, for mail a Nexdo user sends to someone else. Default true. */
+  showSupport?: boolean;
 };
 
 export type RenderedEmail = { html: string; text: string };
@@ -60,7 +64,7 @@ function paragraph(text: string, style: string) {
 
 function renderHtml(input: EmailTemplateInput) {
   const logoUrl = `${emailAppUrl()}${EMAIL_LOGO_PATH}`;
-  const support = emailSupportAddress();
+  const support = input.showSupport === false ? undefined : emailSupportAddress();
   const bodyText = `font-family:${fontStack};font-size:15px;line-height:24px;color:${colors.body};`;
   const footerText = `font-family:${fontStack};font-size:12px;line-height:18px;color:${colors.muted};`;
   // Zero-width padding keeps body copy from leaking into the inbox preview after the preheader.
@@ -77,6 +81,9 @@ function renderHtml(input: EmailTemplateInput) {
 </td></tr>` : '';
 
   const body = (input.body ?? []).map((line) => paragraph(line, bodyText)).join('');
+  // Scales down to the 496px content column; the height follows the width on narrow screens.
+  const image = input.image ? `
+<tr><td align="center" style="padding:8px 0 20px;"><img src="${escapeHtml(input.image.src)}" width="${Math.min(input.image.width, 496)}" alt="${escapeHtml(input.image.alt)}" style="display:block;width:100%;max-width:${Math.min(input.image.width, 496)}px;height:auto;border:0;outline:none;text-decoration:none;border-radius:8px;font-family:${fontStack};font-size:15px;color:${colors.body};"></td></tr>` : '';
 
   return `<!DOCTYPE html>
 <html lang="en" xmlns="http://www.w3.org/1999/xhtml" xmlns:o="urn:schemas-microsoft-com:office:office">
@@ -105,7 +112,7 @@ function renderHtml(input: EmailTemplateInput) {
 <tr><td height="4" bgcolor="${colors.primary}" style="height:4px;line-height:4px;font-size:0;background-color:${colors.primary};background-image:linear-gradient(90deg,${colors.primary},${colors.violet},${colors.pink});border-radius:12px 12px 0 0;">&nbsp;</td></tr>
 <tr><td style="padding:32px;">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
-<tr><td style="padding:0 0 12px;"><h1 style="margin:0;font-family:${fontStack};font-size:24px;line-height:32px;font-weight:700;color:${colors.heading};">${escapeHtml(input.heading)}</h1>${input.subheading ? `<p style="margin:4px 0 0;font-family:${fontStack};font-size:15px;line-height:22px;font-weight:600;color:${colors.primary};">${escapeHtml(input.subheading)}</p>` : ''}</td></tr>
+<tr><td style="padding:0 0 12px;"><h1 style="margin:0;font-family:${fontStack};font-size:24px;line-height:32px;font-weight:700;color:${colors.heading};">${escapeHtml(input.heading)}</h1>${input.subheading ? `<p style="margin:4px 0 0;font-family:${fontStack};font-size:15px;line-height:22px;font-weight:600;color:${colors.primary};">${escapeHtml(input.subheading)}</p>` : ''}</td></tr>${image}
 <tr><td>${paragraph(input.intro, bodyText)}</td></tr>${code}
 ${body ? `<tr><td style="padding-top:24px;">${body}</td></tr>` : ''}
 </table>
@@ -127,7 +134,7 @@ ${support ? `<p style="margin:0;${footerText}">Questions? <a href="mailto:${esca
 }
 
 function renderText(input: EmailTemplateInput) {
-  const support = emailSupportAddress();
+  const support = input.showSupport === false ? undefined : emailSupportAddress();
   const sections = [
     'Nexdo',
     input.subheading ? `${input.heading}

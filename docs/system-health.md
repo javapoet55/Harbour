@@ -137,6 +137,7 @@ Modified:
 - `src/app/api/import/route.ts`
 - `src/app/api/insights/route.ts`
 - `src/app/api/me/route.ts`
+- `src/app/api/moments/[id]/card/route.ts`
 - `src/app/api/moments/email/callback/route.ts`
 - `src/app/api/moments/route.ts`
 - `src/app/api/moments/tick/route.ts`

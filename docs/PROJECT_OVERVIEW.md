@@ -161,6 +161,7 @@ Tables, grouped by area:
 | Calendar | `CalendarConnection`, `CalendarEvent` |
 | Reminders | `Reminder`, `NotificationAttempt`, `PushSubscription` |
 | AI and voice | `AssistantAction`, `VoiceSession`, `VoiceTranscript`, `UserMemory` |
+| Important Moments | `ImportantMoment`, `WishDraft`, `DeliveryPlan`, `MomentEmailAccount`, `GreetingCardImage` (finished card images, `bytea`) |
 | Audit | `ActivityLog` |
 
 Every query is scoped by `userId`. Deleted tasks and events are soft-deleted (`deletedAt`). `UserMemory` also stores small per-user settings such as the selected billing plan and focus state.
@@ -193,6 +194,7 @@ All routes require the session cookie except the auth routes, the OAuth callback
 | Planning | `GET /api/planner`, `GET/POST /api/planner/replan`, `GET/DELETE /api/insights` |
 | Assistant and voice | `POST /api/assistant`, `/api/speech`, `/api/transcribe`, `/api/realtime/task-session`, `/api/realtime/transcription-session`, `/api/realtime/tool` |
 | Calendar | `GET/PATCH/DELETE /api/calendar/connections`, `POST /api/calendar/events`, `PATCH/DELETE /api/calendar/events/[id]`, `POST /api/calendar/sync`, `GET /api/calendar/oauth/[provider]/start`, `GET /api/calendar/oauth/[provider]/callback` |
+| Important Moments | `GET/POST/DELETE /api/moments` (operations such as `save`, `generate`, `approve`, `schedule`, `greetingArtwork`, `greetingCardSave`), `GET/PUT /api/moments/[id]/card`, `GET /api/moments/email/callback`, `POST /api/moments/tick` |
 | Notifications | `GET/POST /api/notifications` (`tick`, `ack`, `test`), `GET/POST/DELETE /api/push-subscriptions` |
 | Billing | `GET/POST /api/billing` |
 
@@ -239,6 +241,11 @@ Errors are returned as `{ "error": "<message>" }`, sometimes with a `code` such 
 - Reminders escalate from push to email to SMS and record every attempt.
 - Notification Center has buttons to enable push and test push, email, and SMS.
 - Morning and evening summary preferences.
+
+### Important Moments
+- Birthdays, anniversaries, festivals and get-well wishes with AI-drafted messages that the user approves before anything is sent. Email goes out from the user's connected Gmail; Messages, copy and share stay manual.
+- Greeting cards: the app composes the card (AI artwork plus greeting and signature) and uploads the finished JPEG or PNG with `PUT /api/moments/[id]/card` (raw image body, or JSON `{ "data": "<base64>" }`; 1.5 MB at most). `GET` on the same path returns the latest card, and the moments list carries each moment's `card` metadata. Cards are stored in the database because Railway's filesystem is not persistent.
+- An email delivery references the card saved when it was scheduled (`DeliveryPlan.cardId`). Saving the card again repoints deliveries that have not started sending. The automatic email is then `multipart/related`: a text and a branded HTML alternative with the card shown inline, plus the image. Without a card the email stays plain text. Messages, copy and share never include the card.
 
 ### Other
 - Weekly summary of completed and planned work.

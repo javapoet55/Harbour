@@ -6,13 +6,15 @@ import { prisma } from '@/server/db';
 import { z } from 'zod';
 import { MomentError, momentInput, toneSchema, fallback, zone, occurrence, nextAnnual, editableStatuses, mayTransition } from './domain';
 import { gmail, emailConfigured, type WishEmailProvider } from './email';
+import { cardSummaries, latestCardId } from './card-image';
 import { formatInTimeZone } from 'date-fns-tz';
 const include = {drafts:{orderBy:{createdAt:'desc' as const},include:{plans:true}}};
 export async function listMoments(userId:string) {
  await expireUnconfirmed(new Date(), userId);
  await refreshFestivalCatalog(userId);
  const [moments,account]=await Promise.all([prisma.importantMoment.findMany({where:{userId},include,orderBy:{occurrenceDate:'asc'}}),prisma.momentEmailAccount.findUnique({where:{userId},select:{email:true,status:true}})]);
- return {moments:moments.map(m=>({...m,nextOccurrence:occurrence(m.occurrenceDate,m.yearly,m.timeZoneID)})),emailAccount:account,emailConfigured:emailConfigured(),automaticEmailEnabled:emailConfigured()&&process.env.MOMENTS_SCHEDULER_ENABLED==='true'};
+ const cards=await cardSummaries(userId,moments.map(m=>m.id));
+ return {moments:moments.map(m=>({...m,nextOccurrence:occurrence(m.occurrenceDate,m.yearly,m.timeZoneID),card:cards.get(m.id)??null})),emailAccount:account,emailConfigured:emailConfigured(),automaticEmailEnabled:emailConfigured()&&process.env.MOMENTS_SCHEDULER_ENABLED==='true'};
 }
 export async function saveMoment(userId:string,input:unknown,id?:string) {
  const saved=await persistMoment(userId,input,id);
@@ -99,7 +101,9 @@ export async function schedule(userId:string,input:unknown) {
   // Optimistic claim of the approved draft prevents double-tap with different request IDs.
   const claimed=await tx.wishDraft.updateMany({where:{id:draft.id,status:'READY'},data:{status:'PLANNED'}});
   if(!claimed.count) throw new MomentError('This draft already has a delivery. Refresh to see it.',409);
-  return tx.deliveryPlan.create({data:{draftID:draft.id,channel:p.channel,recipient:p.recipient,subject:draft.moment.title,body:draft.body,scheduledAtUTC:p.sendNow?new Date():when,nextAttemptAt:p.sendNow?new Date():when,timeZoneID:p.timeZoneID,automaticDelivery:p.channel==='email'&&(p.sendNow||p.automaticDelivery),reminderOffset:p.reminderOffset,annualMonthDay:formatInTimeZone(p.sendNow?new Date():when,p.timeZoneID,'MM-dd'),repeatYearly:p.repeatYearly,idempotencyKey:p.idempotencyKey,approvedAt:new Date(),status:p.channel==='email'&&(p.sendNow||p.automaticDelivery)?'SCHEDULED':'AWAITING_CONFIRMATION'}});
+  // An email carries the card as saved now; saving the card again before it sends repoints it.
+  const cardId=p.channel==='email' ? await latestCardId(draft.momentID,tx) : null;
+  return tx.deliveryPlan.create({data:{draftID:draft.id,cardId,channel:p.channel,recipient:p.recipient,subject:draft.moment.title,body:draft.body,scheduledAtUTC:p.sendNow?new Date():when,nextAttemptAt:p.sendNow?new Date():when,timeZoneID:p.timeZoneID,automaticDelivery:p.channel==='email'&&(p.sendNow||p.automaticDelivery),reminderOffset:p.reminderOffset,annualMonthDay:formatInTimeZone(p.sendNow?new Date():when,p.timeZoneID,'MM-dd'),repeatYearly:p.repeatYearly,idempotencyKey:p.idempotencyKey,approvedAt:new Date(),status:p.channel==='email'&&(p.sendNow||p.automaticDelivery)?'SCHEDULED':'AWAITING_CONFIRMATION'}});
  });
 }
 export async function changePlan(userId:string,input:unknown) {
@@ -130,12 +134,13 @@ async function createAnnual(id:string) {
  const job=await prisma.deliveryPlan.findUniqueOrThrow({where:{id},include:{draft:{include:{moment:true}}}});
  if(!job.draft.moment.enabled||readFestivalSettings(job.draft.moment.festivalSettings).archived) return;
  let next:Date;try { next=nextAnnual(job.scheduledAtUTC,job.timeZoneID,job.annualMonthDay||undefined); }catch { await prisma.deliveryPlan.update({where:{id},data:{lastError:'Choose next year’s time: this local time falls in a daylight-saving gap.'}});return; }
- await prisma.deliveryPlan.upsert({where:{idempotencyKey:`${job.id}:annual`},update:{},create:{draftID:job.draftID,channel:job.channel,recipient:job.recipient,subject:job.subject,body:job.body,scheduledAtUTC:next,nextAttemptAt:next,timeZoneID:job.timeZoneID,automaticDelivery:job.automaticDelivery,annualMonthDay:job.annualMonthDay,repeatYearly:true,reminderOffset:job.reminderOffset,status:job.automaticDelivery?'SCHEDULED':'AWAITING_CONFIRMATION',idempotencyKey:`${job.id}:annual`,approvedAt:job.approvedAt}});
+ await prisma.deliveryPlan.upsert({where:{idempotencyKey:`${job.id}:annual`},update:{},create:{draftID:job.draftID,cardId:job.channel==='email'?await latestCardId(job.draft.momentID):null,channel:job.channel,recipient:job.recipient,subject:job.subject,body:job.body,scheduledAtUTC:next,nextAttemptAt:next,timeZoneID:job.timeZoneID,automaticDelivery:job.automaticDelivery,annualMonthDay:job.annualMonthDay,repeatYearly:true,reminderOffset:job.reminderOffset,status:job.automaticDelivery?'SCHEDULED':'AWAITING_CONFIRMATION',idempotencyKey:`${job.id}:annual`,approvedAt:job.approvedAt}});
 }
 // Manual deliveries remain available for one day after their due time, then leave the active queue.
 async function expireUnconfirmed(now:Date, userId?:string) {
  return prisma.deliveryPlan.updateMany({where:{status:'AWAITING_CONFIRMATION',scheduledAtUTC:{lt:new Date(+now-86400000)},...(userId?{draft:{moment:{userId}}}:{})},data:{status:'EXPIRED',lastError:'Delivery was not confirmed within one day. Create a new wish to send it.'}});
 }
+function signatureOf(settings:string) { const value=readFestivalSettings(settings).cardSignature; return typeof value==='string' ? value : null; }
 async function runJobsImpl(provider:WishEmailProvider=gmail, onlyID?:string, now=new Date()) {
  if(!onlyID) {
  await expireUnconfirmed(now);
@@ -153,7 +158,11 @@ async function runJobsImpl(provider:WishEmailProvider=gmail, onlyID?:string, now
   const healthStarted=performance.now();
   if(!job.draft.moment.enabled||+now-+job.scheduledAtUTC>86400000) { await prisma.deliveryPlan.update({where:{id:job.id},data:{status:'FAILED',lastError:'Moment disabled or delivery more than one day late. Review before retrying.'}});continue; }
   let result: Awaited<ReturnType<WishEmailProvider['send']>>;
-  try { result=await provider.send(job.draft.moment.userId,job.recipient,job.subject,job.body,job.idempotencyKey); }
+  try {
+   // A card is included only when the delivery references one; otherwise the email is text only.
+   const card=job.cardId ? await prisma.greetingCardImage.findUnique({where:{id:job.cardId},select:{id:true,mime:true,bytes:true}}) : null;
+   result=await provider.send(job.draft.moment.userId,job.recipient,job.subject,job.body,job.idempotencyKey,{card,signature:signatureOf(job.draft.moment.festivalSettings)});
+  }
   catch { result={kind:'uncertain',error:'Delivery could not be verified. Check Sent mail.'}; }
   log(result.kind==='sent'?'info':'warn',result.kind==='sent'?'automatic_email_sent':'automatic_email_failed');
   const retry=result.kind==='retry'&&job.attempts<3;
