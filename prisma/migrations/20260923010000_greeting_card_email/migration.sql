@@ -11,6 +11,7 @@ CREATE TABLE "GreetingCardImage" (
     "size" INTEGER NOT NULL,
     "sha256" TEXT NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "retiredAt" TIMESTAMP(3),
 
     CONSTRAINT "GreetingCardImage_pkey" PRIMARY KEY ("id")
 );

@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server';
 import { requireUser } from '@/server/auth';
 import { jsonError } from '@/lib/http';
 import { MomentError } from '@/server/moments/domain';
-import { CARD_MAX_BYTES, readCardImage, saveCardImage } from '@/server/moments/card-image';
+import { CARD_MAX_BYTES, deleteCardImage, readCardImage, saveCardImage } from '@/server/moments/card-image';
 
 type Context = { params: Promise<{ id: string }> };
 function failure(e: unknown) { return e instanceof MomentError ? NextResponse.json({ error: e.message }, { status: e.status }) : jsonError(e); }
@@ -46,8 +46,18 @@ async function healthHandlerGET(req: Request, ctx: Context) {
   } catch (e) { return failure(e); }
 }
 
+async function healthHandlerDELETE(_req: Request, ctx: Context) {
+  try {
+    const user = await requireUser();
+    const { id } = await ctx.params;
+    return NextResponse.json(await deleteCardImage(user.id, id));
+  } catch (e) { return failure(e); }
+}
+
 export const PUT = healthRoute('PUT /api/moments/[id]/card', healthHandlerPUT);
 
 export const POST = healthRoute('POST /api/moments/[id]/card', healthHandlerPUT);
 
 export const GET = healthRoute('GET /api/moments/[id]/card', healthHandlerGET);
+
+export const DELETE = healthRoute('DELETE /api/moments/[id]/card', healthHandlerDELETE);

@@ -7,7 +7,7 @@ import { CARD_MAX_BYTES } from './card-image';
 
 const mocks = vi.hoisted(() => ({ requireUser: vi.fn() }));
 vi.mock('@/server/auth', () => ({ requireUser: mocks.requireUser }));
-import { GET, PUT } from '@/app/api/moments/[id]/card/route';
+import { DELETE, GET, PUT } from '@/app/api/moments/[id]/card/route';
 
 let userId = '';
 const jpeg = (fill: number, size = 2048) => { const bytes = new Uint8Array(size).fill(fill); bytes.set([0xff, 0xd8, 0xff, 0xe0]); return bytes; };
@@ -15,6 +15,7 @@ const png = () => { const bytes = new Uint8Array(512).fill(7); bytes.set([0x89, 
 const ctx = (id: string) => ({ params: Promise.resolve({ id }) });
 const put = (id: string, body: BodyInit, type = 'image/jpeg') => PUT(new Request(`https://nexdo.test/api/moments/${id}/card`, { method: 'PUT', headers: { 'Content-Type': type }, body }), ctx(id));
 const get = (id: string, headers: HeadersInit = {}) => GET(new Request(`https://nexdo.test/api/moments/${id}/card`, { headers }), ctx(id));
+const remove = (id: string) => DELETE(new Request(`https://nexdo.test/api/moments/${id}/card`, { method: 'DELETE' }), ctx(id));
 
 async function birthday(type = 'birthday') {
   return saveMoment(userId, { type, title: 'Asha’s birthday', firstName: 'Asha', email: `${randomUUID()}@example.com`, phone: '+15555550123', occurrenceDate: '2000-06-01', yearly: true, timeZoneID: 'America/Los_Angeles', sourceKey: randomUUID() });
@@ -113,6 +114,51 @@ describe('delivery plans and the card', () => {
   });
 });
 
+describe('deleting the card', () => {
+  it('removes the card and takes it off deliveries that have not started sending', async () => {
+    const moment = await birthday();
+    const card = (await (await put(moment.id, jpeg(1))).json()).card.id;
+    const plan = await emailPlan(moment.id);
+    expect(plan.cardId).toBe(card);
+
+    const response = await remove(moment.id);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ deleted: card, plansUpdated: 1 });
+    expect((await prisma.deliveryPlan.findUniqueOrThrow({ where: { id: plan.id } })).cardId).toBeNull();
+    expect(await prisma.greetingCardImage.findUnique({ where: { id: card } })).toBeNull();
+    expect((await get(moment.id)).status).toBe(404);
+    expect((await listMoments(userId)).moments.find((m) => m.id === moment.id)?.card).toBeNull();
+    expect((await remove(moment.id)).status).toBe(404);
+  });
+
+  it('keeps the image a send in progress uses, without bringing an older card back', async () => {
+    const moment = await birthday();
+    const first = (await (await put(moment.id, jpeg(1))).json()).card.id;
+    const sending = await emailPlan(moment.id);
+    await prisma.deliveryPlan.update({ where: { id: sending.id }, data: { status: 'SENDING', claimedAt: new Date() } });
+    const second = (await (await put(moment.id, jpeg(2))).json()).card.id;
+    await prisma.deliveryPlan.update({ where: { id: sending.id }, data: { status: 'SENT' } });
+
+    expect(await (await remove(moment.id)).json()).toEqual({ deleted: second, plansUpdated: 0 });
+    // The sent delivery keeps its card, but it is history, not the moment's card.
+    expect((await prisma.deliveryPlan.findUniqueOrThrow({ where: { id: sending.id } })).cardId).toBe(first);
+    expect((await get(moment.id)).status).toBe(404);
+    expect((await remove(moment.id)).status).toBe(404);
+    // A new email for the moment goes without a card; the retired one is not picked up.
+    expect((await emailPlan(moment.id)).cardId).toBeNull();
+  });
+
+  it('returns 404 when there is no card or the moment belongs to someone else', async () => {
+    const moment = await birthday();
+    expect((await remove(moment.id)).status).toBe(404);
+    await put(moment.id, jpeg(1));
+    mocks.requireUser.mockResolvedValue({ id: 'someone-else' });
+    expect((await remove(moment.id)).status).toBe(404);
+    mocks.requireUser.mockResolvedValue({ id: userId });
+    expect((await get(moment.id)).status).toBe(200);
+  });
+});
+
 describe('sending', () => {
   it('passes the referenced card and signature to the provider, and none without a card', async () => {
     const moment = await birthday();
@@ -162,7 +208,7 @@ describe('buildWishMessage', () => {
 
   it('builds multipart/related with text and HTML alternatives and the card inline', () => {
     const card = jpeg(6, 4000);
-    const raw = buildWishMessage({ ...base, sender: 'sri@example.com', signature: 'Love, Sri', card: { id: 'card1', mime: 'image/jpeg', bytes: card } });
+    const raw = buildWishMessage({ ...base, signature: 'Love, Sri', card: { id: 'card1', mime: 'image/jpeg', bytes: card } });
     const [headers] = raw.split('\r\n\r\n');
     expect(headers).toContain('To: asha@example.com');
     expect(headers).toContain(`Subject: =?UTF-8?B?${Buffer.from('Asha’s birthday').toString('base64')}?=`);
@@ -176,11 +222,11 @@ describe('buildWishMessage', () => {
     expect(decode(text.body).toString()).toBe('Happy birthday, Asha!\n\nHave a <wonderful> day.\n\nLove, Sri');
     expect(html.head).toContain('Content-Type: text/html; charset=UTF-8');
     const htmlText = decode(html.body).toString();
-    expect(htmlText).toContain('src="cid:card-card1@nexdo.local"');
-    expect(htmlText).toContain('Asha’s birthday');
-    expect(htmlText).toContain('Have a &lt;wonderful&gt; day.');
-    expect(htmlText).toContain('Love, Sri');
-    expect(htmlText).toContain('Sent by sri@example.com with Nexdo.');
+    // The friend-to-friend layout: card first, then the wish, the signature and one footer line.
+    const order = ['src="cid:card-card1@nexdo.local"', 'Happy birthday, Asha!', 'Have a &lt;wonderful&gt; day.', 'Love, Sri', 'Sent with Nexdo'].map((part) => htmlText.indexOf(part));
+    expect(order.every((at) => at >= 0)).toBe(true);
+    expect([...order].sort((a, b) => a - b)).toEqual(order);
+    expect(htmlText).not.toContain('nexdo-logo-email');
     expect(htmlText).not.toContain('Questions?');
 
     expect(imagePart.head).toContain('Content-Type: image/jpeg; name="greeting-card.jpg"');

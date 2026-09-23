@@ -5,7 +5,7 @@ import { SignJWT, jwtVerify } from 'jose';
 import { sessionSigningKey } from '@/server/session-key';
 import { MomentError } from './domain';
 import { randomUUID } from 'node:crypto';
-import { renderEmail } from '@/server/email/template';
+import { renderWishEmail } from '@/server/email/wish-template';
 export function emailConfigured() { return !!(process.env.MOMENTS_GOOGLE_CLIENT_ID && process.env.MOMENTS_GOOGLE_CLIENT_SECRET && process.env.MOMENTS_GOOGLE_REDIRECT_URI); }
 export async function connectURL(userID: string) {
   if (!emailConfigured()) throw new MomentError('Connected email is not configured on this server.',503);
@@ -41,21 +41,16 @@ const base64Lines = (data:Uint8Array|string) => (Buffer.from(data).toString('bas
  *   multipart/related (type multipart/alternative)
  *   ├─ multipart/alternative
  *   │  ├─ text/plain  the wish text and signature
- *   │  └─ text/html   the branded template: subject, card via cid:, wish text, signature
+ *   │  └─ text/html   the wish template: card via cid:, wish text, signature, "Sent with Nexdo"
  *   └─ image/jpeg|png Content-ID <card-…>, inline
  */
-export function buildWishMessage(input:{recipient:string; subject:string; body:string; key:string; sender?:string; card?:WishCard|null; signature?:string|null}) {
+export function buildWishMessage(input:{recipient:string; subject:string; body:string; key:string; card?:WishCard|null; signature?:string|null}) {
  const headers=[`To: ${input.recipient}`,`Subject: ${encodedWord(input.subject)}`,`Message-ID: <${input.key}@nexdo.local>`,'MIME-Version: 1.0'];
  if(!input.card) return [...headers,'Content-Type: text/plain; charset=UTF-8','Content-Transfer-Encoding: base64','',Buffer.from(input.body).toString('base64')].join('\r\n');
  const signature=input.signature?.trim();
  const text=signature ? `${input.body}\n\n${signature}` : input.body;
  const cid=`card-${input.card.id}@nexdo.local`;
- const paragraphs=input.body.split(/\n\s*\n/).map(part=>part.trim()).filter(Boolean);
- const {html}=renderEmail({
-  preheader:paragraphs[0] ?? input.subject, heading:input.subject, intro:paragraphs[0] ?? '', body:[...paragraphs.slice(1),...(signature?[signature]:[])],
-  image:{src:`cid:${cid}`,alt:'Greeting card',width:496}, showSupport:false,
-  footerNote:input.sender ? `Sent by ${input.sender} with Nexdo.` : 'Sent with Nexdo.',
- });
+ const html=renderWishEmail({subject:input.subject,body:input.body,signature,card:{src:`cid:${cid}`,alt:'Greeting card',width:520}});
  const id=randomUUID().replace(/-/g,'');
  const related=`nexdo-related-${id}`, alternative=`nexdo-alternative-${id}`;
  const extension=input.card.mime==='image/png'?'png':'jpg';
@@ -76,7 +71,7 @@ export const gmail: WishEmailProvider = {
   catch { await prisma.momentEmailAccount.update({where:{userId},data:{status:'reconnect'}}); return {kind:'reconnect',error:'Reconnect your email account.'}; }
   // Never retry an ambiguous submission: Gmail send has no idempotency-key guarantee.
   try {
-    const raw=buildWishMessage({recipient,subject,body,key,sender:account.email,card:extras?.card,signature:extras?.signature});
+    const raw=buildWishMessage({recipient,subject,body,key,card:extras?.card,signature:extras?.signature});
     const res=await observedFetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send',{method:'POST',signal:AbortSignal.timeout(20000),headers:{Authorization:`Bearer ${access}`,'Content-Type':'application/json'},body:JSON.stringify({raw:Buffer.from(raw).toString('base64url')})});
     if(res.status===429) return {kind:'retry',error:'Email provider rate limit. Will retry.'};
     if(res.status===401||res.status===403) return {kind:'reconnect',error:'Reconnect and approve email sending.'};

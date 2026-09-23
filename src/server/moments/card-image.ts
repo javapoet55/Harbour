@@ -15,9 +15,9 @@ export function cardMime(bytes: Uint8Array) {
   return null;
 }
 
-/** The card a new email delivery should carry: the latest one saved for the moment. */
+/** The card a new email delivery should carry: the moment's current (latest, not deleted) card. */
 export async function latestCardId(momentId: string, db: Prisma.TransactionClient = prisma) {
-  return (await db.greetingCardImage.findFirst({ where: { momentId }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], select: { id: true } }))?.id ?? null;
+  return (await db.greetingCardImage.findFirst({ where: { momentId, retiredAt: null }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], select: { id: true } }))?.id ?? null;
 }
 
 /**
@@ -34,21 +34,41 @@ export async function saveCardImage(userId: string, momentId: string, bytes: Uin
   const sha256 = createHash('sha256').update(bytes).digest('hex');
   return prisma.$transaction(async (tx) => {
     const card = await tx.greetingCardImage.create({ data: { momentId, userId, mime, bytes, size: bytes.length, sha256 }, select: metadata });
+    await tx.greetingCardImage.updateMany({ where: { momentId, id: { not: card.id }, retiredAt: null }, data: { retiredAt: new Date() } });
     const plans = await tx.deliveryPlan.updateMany({ where: { draft: { momentID: momentId }, channel: 'email', status: { in: editableStatuses } }, data: { cardId: card.id } });
-    await tx.greetingCardImage.deleteMany({ where: { momentId, id: { not: card.id }, plans: { none: {} } } });
+    await removeUnreferenced(tx, momentId);
     return { card, plansUpdated: plans.count };
   });
 }
 
+/**
+ * Removes the moment's card: deliveries that have not started sending go out without it, and the image
+ * is deleted unless a sent or in-flight delivery still refers to it (that row is only retired).
+ */
+export async function deleteCardImage(userId: string, momentId: string) {
+  const card = await prisma.greetingCardImage.findFirst({ where: { momentId, userId, retiredAt: null, moment: { userId } }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], select: { id: true } });
+  if (!card) throw new MomentError('No greeting card has been saved for this moment.', 404);
+  return prisma.$transaction(async (tx) => {
+    const plans = await tx.deliveryPlan.updateMany({ where: { draft: { momentID: momentId }, cardId: { not: null }, status: { in: editableStatuses } }, data: { cardId: null } });
+    await tx.greetingCardImage.updateMany({ where: { momentId, retiredAt: null }, data: { retiredAt: new Date() } });
+    await removeUnreferenced(tx, momentId);
+    return { deleted: card.id, plansUpdated: plans.count };
+  });
+}
+
+function removeUnreferenced(tx: Prisma.TransactionClient, momentId: string) {
+  return tx.greetingCardImage.deleteMany({ where: { momentId, retiredAt: { not: null }, plans: { none: {} } } });
+}
+
 export async function readCardImage(userId: string, momentId: string) {
-  const card = await prisma.greetingCardImage.findFirst({ where: { momentId, userId, moment: { userId } }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }] });
+  const card = await prisma.greetingCardImage.findFirst({ where: { momentId, userId, retiredAt: null, moment: { userId } }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }] });
   if (!card) throw new MomentError('No greeting card has been saved for this moment.', 404);
   return card;
 }
 
 /** The latest card per moment, without its bytes, for the moments list. */
 export async function cardSummaries(userId: string, momentIds: string[]) {
-  const cards = momentIds.length ? await prisma.greetingCardImage.findMany({ where: { userId, momentId: { in: momentIds } }, select: { ...metadata, momentId: true }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }] }) : [];
+  const cards = momentIds.length ? await prisma.greetingCardImage.findMany({ where: { userId, momentId: { in: momentIds }, retiredAt: null }, select: { ...metadata, momentId: true }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }] }) : [];
   const latest = new Map<string, Omit<(typeof cards)[number], 'momentId'>>();
   for (const { momentId, ...card } of cards) if (!latest.has(momentId)) latest.set(momentId, card);
   return latest;

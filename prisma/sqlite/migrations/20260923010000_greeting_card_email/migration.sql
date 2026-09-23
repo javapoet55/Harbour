@@ -8,6 +8,7 @@ CREATE TABLE "GreetingCardImage" (
     "size" INTEGER NOT NULL,
     "sha256" TEXT NOT NULL,
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "retiredAt" DATETIME,
     CONSTRAINT "GreetingCardImage_momentId_fkey" FOREIGN KEY ("momentId") REFERENCES "ImportantMoment" ("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
 

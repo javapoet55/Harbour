@@ -490,7 +490,8 @@ model DeliveryPlan {
   @@index([status, nextAttemptAt])
 }
 // The finished greeting card (artwork, greeting and signature) as the user saved it. Rows are immutable:
-// saving again adds a row, so a send in progress keeps the image it started with.
+// saving again adds a row, so a send in progress keeps the image it started with. The moment's card is
+// its one row with no retiredAt; retired rows stay only while a sent or in-flight delivery refers to them.
 model GreetingCardImage {
   id String @id @default(cuid())
   momentId String
@@ -501,6 +502,7 @@ model GreetingCardImage {
   size Int
   sha256 String
   createdAt DateTime @default(now())
+  retiredAt DateTime?
   plans DeliveryPlan[]
   @@index([momentId, createdAt])
 }
