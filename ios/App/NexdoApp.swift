@@ -1,5 +1,17 @@
 import SwiftUI
 
+/// This build's Nexdo server, from the API_BASE_URL build setting (Info.plist `NexdoAPIBaseURL`):
+/// Debug → https://app-dev.nexdoapp.com, Release → https://app.nexdoapp.com. There is deliberately no
+/// fallback server: a build without a valid value stops here with the reason.
+enum AppEnvironment {
+    static let apiBaseURL: URL = {
+        do { return try APIEnvironment.baseURL(from: Bundle.main.infoDictionary ?? [:]) }
+        catch { fatalError("Nexdo server address: \(error)") }
+    }()
+    /// A page on the same server, e.g. `/notifications`.
+    static func web(_ path: String) -> URL { APIEnvironment.webURL(path, base: apiBaseURL) }
+}
+
 @main
 struct NexdoApp: App {
     init() { NexdoAnalytics.configureIfAvailable() }
@@ -143,7 +155,7 @@ final class AppModel: ObservableObject {
     private var intelligenceRefresh: Task<Void, Never>?
     private var intelligenceID: UUID?
 
-    init(api: APIClient = try! APIClient(baseURL: URL(string: "https://harbour-production-f8a0.up.railway.app")!)) {
+    init(api: APIClient = try! APIClient(baseURL: AppEnvironment.apiBaseURL)) {
         self.api = api
     }
     private struct Ignore: Decodable, Sendable {}
