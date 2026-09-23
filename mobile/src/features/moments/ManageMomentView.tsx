@@ -6,6 +6,7 @@ import { ActivityIndicator, Alert, Keyboard, Pressable, ScrollView, StyleSheet, 
 import { useStore } from 'zustand';
 
 import { ownerKeyFor } from '../../actions/persistence';
+import { momentsApi } from '../../api/moments';
 import { KeyboardAwareScrollView } from '../../components/keyboard';
 import { Text } from '../../components/Text';
 import { TodayBackdrop } from '../../components/TodayShell';
@@ -33,6 +34,8 @@ import {
   systemColors,
   title1,
 } from './components';
+import { captureCard, GreetingCardCapture } from './cardCapture';
+import { CARD_NOT_ATTACHED, cardEncoder, encodeCard, encodeSmallerCard } from './cardImage';
 import { momentLabel, sendDayLabel } from './dates';
 import { contactChoice, imageStorage, pickContact, validatePickedContacts, type ContactChoice } from './device';
 import {
@@ -69,14 +72,27 @@ import { momentsStore, useMoments } from './store';
 
 /** The model's device dependencies, shared with Review Wish's greeting-card section. */
 export function newManageModel(group: MomentDisplayGroup): ManageModel {
-  return createManageModel(group, {
+  const model: ManageModel = createManageModel(group, {
     store: momentsStore,
     images: imageStorage,
     validateContacts: (recipients) => validatePickedContacts(recipients, normalizedPhone),
     sha256Hex: (value) => ownerKeyFor(value),
     uuid: () => Crypto.randomUUID().toUpperCase(),
     now: () => Date.now(),
+    cards: {
+      // The captor is registered by the off-screen `GreetingCardCapture` this screen mounts, so the
+      // model is handed its own store to look itself up by once that view exists.
+      capture: () => captureCard(model),
+      encode: (uri) => encodeCard(uri, cardEncoder),
+      encodeSmaller: (uri) => encodeSmallerCard(uri, cardEncoder),
+      upload: async (momentID, data) => (await momentsApi.uploadCard(momentID, data)).card,
+      remove: async (momentID) => {
+        await momentsApi.deleteCard(momentID);
+      },
+      fetch: (momentID) => momentsApi.card(momentID),
+    },
   });
+  return model;
 }
 
 const TONES = ['Warm', 'Personal', 'Short', 'Fun'] as const;
@@ -140,6 +156,8 @@ export function ManageMomentView({ group, onDone }: { group: MomentDisplayGroup;
   // `.task { await model.loadCatalog() }`, `.onDisappear { model.cancelImage() }`
   useEffect(() => {
     void model.getState().loadCatalog();
+    // A card made on another device has no local artwork, so fetch the stored image to show it.
+    void model.getState().loadStoredCard();
     return () => model.getState().cancelImage();
   }, [model]);
 
@@ -607,10 +625,30 @@ export function ManageMomentView({ group, onDone }: { group: MomentDisplayGroup;
                 </MomentCard>
               )}
               <BorderedButton prominent icon="sparkles" title={state.imageUri ? 'Edit Greeting Card' : 'Create AI Greeting Card'} onPress={() => setImageSheet(true)} testID="festival-card" />
-              <Text style={[caption, { color: theme.colors.secondaryLabel }]}>Share your finished card from the editor. Scheduled wishes currently send the text message only.</Text>
+              <Text style={[caption, { color: theme.colors.secondaryLabel }]}>Share your finished card from the editor. Scheduled emails include your saved card; Messages send the text only.</Text>
+              {/*
+                The card is saved either way — this note is only about its image not reaching the
+                server, so it is a note with a Retry rather than the screen's error.
+              */}
+              {state.cardFailed ? (
+                <View style={styles.cardNote}>
+                  <Text style={[caption, styles.grow, { color: theme.colors.secondaryLabel }]} testID="festival-card-upload-note">
+                    {CARD_NOT_ATTACHED}
+                  </Text>
+                  <Pressable accessibilityRole="button" accessibilityLabel="Retry attaching the card" disabled={state.cardUploading} onPress={() => void model.getState().retryCardUpload()} testID="festival-card-retry">
+                    <Text style={[textStyles.body, { color: theme.colors.link }]}>Retry</Text>
+                  </Pressable>
+                </View>
+              ) : null}
               {state.imageUri ? (
                 <Pressable accessibilityRole="button" onPress={() => model.getState().removeImage()} testID="festival-remove-card">
                   <Text style={[textStyles.body, { color: theme.colors.danger }]}>Remove greeting card</Text>
+                </Pressable>
+              ) : null}
+              {/* Only when the server actually holds a card: this is what detaches it from scheduled emails. */}
+              {state.card ? (
+                <Pressable accessibilityRole="button" disabled={state.cardUploading} onPress={() => void model.getState().removeCard()} testID="festival-remove-stored-card">
+                  <Text style={[textStyles.body, { color: theme.colors.danger }]}>Remove card</Text>
                 </Pressable>
               ) : null}
               {/* ManageFestivalView.swift:168: nothing to approve while the message is blank,
@@ -836,6 +874,7 @@ export function ManageMomentView({ group, onDone }: { group: MomentDisplayGroup;
       </MomentSheet>
 
       <GreetingCardEditor model={model} visible={imageSheet} onClose={() => setImageSheet(false)} />
+      <GreetingCardCapture model={model} />
 
       {/* `confirmation` (:183-215) */}
       <MomentSheet plain visible={scheduleConfirm} title="" onRequestClose={() => setScheduleConfirm(false)} right={{ title: 'Cancel', onPress: () => setScheduleConfirm(false), testID: 'confirm-cancel' }} testID="schedule-confirm-sheet">
@@ -1097,6 +1136,8 @@ const styles = StyleSheet.create({
   select: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   recipient: { gap: 10 },
   info: { flexDirection: 'row', gap: 8, padding: 16, borderRadius: 14 },
+  // The note and its Retry read as one line; the note wraps and Retry stays beside it.
+  cardNote: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 44 },
   progress: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   // Just under the sheet's bar (FormScroll's top padding is 3 since UI-parity pass 2).
   sheetTitle: { marginHorizontal: 16, marginTop: 4 },

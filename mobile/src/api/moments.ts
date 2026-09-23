@@ -58,6 +58,22 @@ export type ImportantMoment = {
   snoozedUntil?: string | null;
   nextOccurrence: string;
   drafts: WishDraft[];
+  /**
+   * The finished card stored for scheduled emails, without its bytes (`cardSummaries`,
+   * src/server/moments/card-image.ts:69-75). `null` when none is saved. `sha256` is the same digest
+   * the image's ETag carries, so a client can tell a stored card from the one it just uploaded
+   * without fetching the bytes.
+   */
+  card?: MomentCard | null;
+};
+
+/** The card metadata `GET /api/moments` and `PUT /api/moments/{id}/card` both return. */
+export type MomentCard = {
+  id: string;
+  mime: string;
+  size: number;
+  sha256: string;
+  createdAt: string;
 };
 
 /** `MomentsSnapshot` (ImportantMomentsStore.swift:5-10); `listMoments` in service.ts. */
@@ -163,4 +179,23 @@ export const momentsApi = {
 
   /** `deleteData()` (ImportantMomentsStore.swift:121): every moment, draft, plan and the email account. */
   deleteAll: (client: ApiClient = getApi()) => client.del<MomentOK>('/api/moments'),
+
+  /**
+   * The finished card image, on its own route rather than the `/api/moments` envelope every other
+   * operation uses — `src/app/api/moments/[id]/card/route.ts`.
+   *
+   * The body is `{ data: <base64> }`. The route accepts raw image bytes too, but the client only
+   * sends JSON, and its base64 must be standard and bare: the server rejects a `data:` prefix,
+   * base64url or embedded newlines with a 400 (`route.ts:26`).
+   */
+  uploadCard: (momentID: string, data: string, client: ApiClient = getApi()) =>
+    client.put<UploadCardResponse>(`/api/moments/${momentID}/card`, { data }, { timeoutMs: 50_000 }),
+
+  /** The stored card's bytes, or `null` when the moment has none. */
+  card: (momentID: string, client: ApiClient = getApi()) => client.requestBytes(`/api/moments/${momentID}/card`, { timeoutMs: 50_000 }),
+
+  deleteCard: (momentID: string, client: ApiClient = getApi()) => client.del<DeleteCardResponse>(`/api/moments/${momentID}/card`),
 };
+
+export type UploadCardResponse = { card: MomentCard; plansUpdated: number };
+export type DeleteCardResponse = { deleted: string; plansUpdated: number };

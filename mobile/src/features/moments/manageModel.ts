@@ -8,6 +8,7 @@ import type {
   FestivalCatalogEntry,
   GenerateResponse,
   ImportantMoment,
+  MomentCard,
   MomentOK,
   PlanResponse,
   WishDeliveryPlan,
@@ -61,6 +62,21 @@ export type ManageDeps = {
   sha256Hex: (value: string) => Promise<string>;
   uuid: () => string;
   now: () => number;
+  /** The finished card's image: captured from the mounted view, encoded, and sent to its own route. */
+  cards: CardDeps;
+};
+
+export type CardDeps = {
+  /** The mounted off-screen card as a temporary file URI, or `null` when none is mounted. */
+  capture: () => Promise<string | null>;
+  /** Base64 JPEG at quality 0.85, longest side at most 1600 px. */
+  encode: (uri: string) => Promise<string>;
+  /** The one retry after a 413: the same capture at a smaller size. */
+  encodeSmaller: (uri: string) => Promise<string>;
+  upload: (momentID: string, data: string) => Promise<MomentCard>;
+  remove: (momentID: string) => Promise<void>;
+  /** The stored card's bytes, for opening a moment whose card was made on another device. */
+  fetch: (momentID: string) => Promise<{ base64: string; mime: string } | null>;
 };
 
 export type ManageState = {
@@ -93,6 +109,14 @@ export type ManageState = {
   keys: Record<string, string>;
   draftIDs: Record<string, string>;
   imageGeneration: number;
+  /** The card the server has for this moment, from `moment.card` in the snapshot. */
+  card: MomentCard | null;
+  /** True while the finished card is being captured, encoded and uploaded. */
+  cardUploading: boolean;
+  /** Set when the card saved but its image did not reach the server; drives the inline note and Retry. */
+  cardFailed: boolean;
+  /** `cardFingerprint` of the last successful upload, so an unrelated save does not re-send the image. */
+  uploadedCardKey: string;
 
   setTitle(value: string): void;
   setDate(value: number): void;
@@ -119,6 +143,14 @@ export type ManageState = {
   approve(cancelSchedules?: boolean): Promise<void>;
   generateImage(): void;
   saveGreetingCard(): Promise<boolean>;
+  /** Captures, encodes and uploads the finished card. Safe to call when there is nothing to send. */
+  uploadCard(): Promise<void>;
+  /** "Retry" on the inline note. */
+  retryCardUpload(): Promise<void>;
+  /** "Remove card": drops the stored image so scheduled emails go back to text only. */
+  removeCard(): Promise<void>;
+  /** Shows a card saved on another device, when this one has no local artwork. */
+  loadStoredCard(): Promise<void>;
   cancelImage(): void;
   chooseImage(image: ImageVariation): void;
   discardImageEdits(): void;
@@ -192,6 +224,15 @@ export function hasSchedules(state: Pick<ManageState, 'originals' | 'savedPlans'
 }
 
 class ManageError extends Error {}
+
+/**
+ * Everything the rendered card shows. An ordinary moment save — a new title, a moved date, a changed
+ * recipient — runs through the same `save()` as a card edit, so this is what tells the two apart and
+ * keeps a rename from re-uploading a megabyte of unchanged image.
+ */
+export function cardFingerprint(state: Pick<ManageState, 'settings' | 'title'>): string {
+  return [state.settings.imageID, state.title, state.settings.cardGreeting ?? state.settings.baseMessage, state.settings.cardSignature ?? ''].join('|');
+}
 
 function bytesToUuid(hex: string): string {
   const bytes = hex
@@ -343,6 +384,10 @@ export function createManageModel(group: MomentDisplayGroup, deps: ManageDeps): 
       keys: {},
       draftIDs: {},
       imageGeneration: 0,
+      card: first.card ?? null,
+      cardUploading: false,
+      cardFailed: false,
+      uploadedCardKey: '',
 
       setTitle: (title) => set({ title }),
       setDate(value) {
@@ -423,6 +468,9 @@ export function createManageModel(group: MomentDisplayGroup, deps: ManageDeps): 
           const target = get().pendingTab;
           if (target) set({ tab: target, pendingTab: null });
           set({ notice: cancelSchedules ? 'Changes saved. Review and schedule your updated wish again.' : 'Moment changes saved.' });
+          // Manage Moment saves the card through this path, not `greetingCardSave`, so the upload
+          // has to hang off it too. `uploadCard` no-ops when the card has not changed.
+          await get().uploadCard();
         } catch (error) {
           if (isApiError(error) && error.status === 409 && error.message.includes('Existing schedules')) set({ needsScheduleConfirmation: true });
           else {
@@ -536,12 +584,91 @@ export function createManageModel(group: MomentDisplayGroup, deps: ManageDeps): 
           set({ stagedImages: [], savedImageID: state.settings.imageID });
           await store.getState().refresh();
           set({ notice: 'Greeting card saved.' });
+          await get().uploadCard();
           return true;
         } catch (error) {
           set({ error: errorMessage(error) });
           return false;
         } finally {
           set({ busy: false });
+        }
+      },
+
+      /**
+       * The finished card, rendered and sent to `PUT /api/moments/{id}/card` so scheduled emails can
+       * embed it. Runs after the card is saved by either route — `greetingCardSave` from the card
+       * editor, and the ordinary `festivalSave` that Manage Moment's "Save Message" uses — because a
+       * card edited on that screen is never sent through `greetingCardSave`.
+       *
+       * The card itself is already saved by the time this runs, so a failure here never surfaces as
+       * the screen's error: it sets `cardFailed`, which draws the inline note and its Retry.
+       */
+      async uploadCard() {
+        const state = get();
+        const firstMoment = state.originals[0];
+        // No artwork means no card to attach; a moment that never had one is not a failure.
+        if (!firstMoment || state.imageUri === null || state.cardUploading) return;
+        // Unchanged since the last successful upload: the stored image is already the finished card.
+        const key = cardFingerprint(state);
+        if (key === state.uploadedCardKey && state.card !== null && !state.cardFailed) return;
+        set({ cardUploading: true });
+        try {
+          const captured = await deps.cards.capture();
+          if (captured === null) return;
+          const data = await deps.cards.encode(captured);
+          let card: MomentCard;
+          try {
+            card = await deps.cards.upload(firstMoment.id, data);
+          } catch (error) {
+            // 413 is the server saying the bytes are over its 1.5 MB limit. Re-encode the same
+            // capture smaller and send it once more; a second failure is a failure.
+            if (!isApiError(error) || error.status !== 413) throw error;
+            card = await deps.cards.upload(firstMoment.id, await deps.cards.encodeSmaller(captured));
+          }
+          set({ card, cardFailed: false, uploadedCardKey: key });
+        } catch {
+          set({ cardFailed: true });
+        } finally {
+          set({ cardUploading: false });
+        }
+      },
+
+      async retryCardUpload() {
+        // Clearing the key is what makes the retry actually re-send rather than see "unchanged".
+        set({ cardFailed: false, uploadedCardKey: '' });
+        await get().uploadCard();
+      },
+
+      async removeCard() {
+        const firstMoment = get().originals[0];
+        if (!firstMoment || get().cardUploading) return;
+        set({ cardUploading: true, error: null });
+        try {
+          await deps.cards.remove(firstMoment.id);
+          set({ card: null, cardFailed: false, notice: 'Card removed. Scheduled emails will send the text only.' });
+        } catch (error) {
+          set({ error: errorMessage(error) });
+        } finally {
+          set({ cardUploading: false });
+        }
+      },
+
+      /**
+       * The stored card, for opening the editor on a device that never held the artwork. The bytes
+       * become a local image exactly as generated artwork does, so the preview, the capture and a
+       * re-save all work afterwards without a special case.
+       */
+      async loadStoredCard() {
+        const state = get();
+        const firstMoment = state.originals[0];
+        if (!firstMoment || state.imageUri !== null || state.card === null) return;
+        try {
+          const stored = await deps.cards.fetch(firstMoment.id);
+          if (stored === null || get().imageUri !== null) return;
+          const id = deps.images.store(stored.base64);
+          set((current) => ({ settings: { ...current.settings, imageID: id }, savedImageID: id, imageUri: deps.images.load(id) }));
+        } catch {
+          // A card that will not download is not worth an error on a screen that otherwise works.
         }
       },
 

@@ -141,6 +141,11 @@ jest.mock('expo-sharing', () => ({
   shareAsync: jest.fn(async () => undefined),
 }));
 
+// Native view capture: the real module needs a mounted host view and a native bridge.
+jest.mock('react-native-view-shot', () => ({
+  captureRef: jest.fn(async () => 'file:///card-capture.jpg'),
+}));
+
 jest.mock('expo-sms', () => ({
   isAvailableAsync: jest.fn(async () => true),
   sendSMSAsync: jest.fn(async () => ({ result: 'sent' })),

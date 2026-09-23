@@ -43,7 +43,7 @@ export const messages = {
       : `The request could not be completed (${status}). Refresh to check the current state before retrying.`,
 };
 
-export type HttpMethod = 'GET' | 'POST' | 'PATCH' | 'DELETE';
+export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 
 export type RequestOptions = {
   method?: HttpMethod;
@@ -187,11 +187,49 @@ export function createApiClient(options: ApiClientOptions) {
     return data;
   }
 
+  /**
+   * A GET whose body is bytes rather than JSON, for `GET /api/moments/{id}/card` — the one route that
+   * answers with the image itself. Resolves to base64 and the served type, or `null` for the 404 the
+   * route uses to mean "no card saved". Errors travel as JSON there, so they still go through the
+   * shared decoding below.
+   */
+  async function requestBytes(path: string, { timeoutMs = 60_000 }: { timeoutMs?: number } = {}): Promise<{ base64: string; mime: string } | null> {
+    if (!path.startsWith('/api/') || /[\\\s]/.test(path)) {
+      throw new ApiError({ status: 0, code: 'INSECURE_URL', message: messages.insecureUrl });
+    }
+    const url = baseUrl + path;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    const started = Date.now();
+    let response: Response;
+    let bytes: ArrayBuffer;
+    try {
+      response = await doFetch(url, { method: 'GET', headers: { Accept: 'image/jpeg, image/png' }, credentials: 'include', redirect: 'manual', signal: controller.signal });
+      // A 404 is "no card", not a failure, and its body is JSON — read it as text either way.
+      bytes = response.ok ? await response.arrayBuffer() : new ArrayBuffer(0);
+    } catch (cause) {
+      options.onExchange?.({ method: 'GET', path, status: null, setCookieVisible: false, bodyText: '', durationMs: Date.now() - started, error: String(cause) });
+      throw new ApiError({ status: 0, code: 'NETWORK', message: messages.network });
+    } finally {
+      clearTimeout(timer);
+    }
+    options.onExchange?.({ method: 'GET', path, status: response.status, setCookieVisible: false, bodyText: '', durationMs: Date.now() - started });
+    if (response.status === 401 || isLoginRedirect(response, baseUrl)) {
+      options.onSignedOut?.();
+      throw new ApiError({ status: 401, code: 'SIGNED_OUT', message: messages.signedOut });
+    }
+    if (response.status === 404) return null;
+    if (!response.ok) throw new ApiError({ status: response.status, message: messages.response(response.status) });
+    return { base64: bytesToBase64(new Uint8Array(bytes)), mime: response.headers.get('content-type') ?? 'image/jpeg' };
+  }
+
   return {
     baseUrl,
     request,
+    requestBytes,
     get: <T>(path: string, options?: Omit<RequestOptions, 'method' | 'body'>) => request<T>(path, { ...options, method: 'GET' }),
     post: <T>(path: string, body?: unknown, options?: Omit<RequestOptions, 'method' | 'body'>) => request<T>(path, { ...options, method: 'POST', body }),
+    put: <T>(path: string, body?: unknown, options?: Omit<RequestOptions, 'method' | 'body'>) => request<T>(path, { ...options, method: 'PUT', body }),
     patch: <T>(path: string, body?: unknown, options?: Omit<RequestOptions, 'method' | 'body'>) => request<T>(path, { ...options, method: 'PATCH', body }),
     del: <T>(path: string, options?: Omit<RequestOptions, 'method' | 'body'>) => request<T>(path, { ...options, method: 'DELETE' }),
   };
@@ -230,6 +268,15 @@ const SECRET_VALUE = /"(password|newPassword|code|token|authorizationCode|rawNon
 /** Replace the value of any secret-bearing key in a serialised JSON body with `"***"`. */
 export function redactSecrets(serialized: string): string {
   return serialized.replace(SECRET_VALUE, '"$1":"***"');
+}
+
+/** Standard base64, in 8 KB chunks so a megabyte-sized card does not blow the argument limit. */
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = '';
+  for (let index = 0; index < bytes.length; index += 8192) {
+    binary += String.fromCharCode(...bytes.subarray(index, index + 8192));
+  }
+  return btoa(binary);
 }
 
 function parseJson<T>(text: string): T | undefined {

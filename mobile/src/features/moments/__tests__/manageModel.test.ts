@@ -25,6 +25,14 @@ function harness(moments: ImportantMoment[], snapshotOverrides: Partial<MomentsS
   };
   const store = createMomentsStore(storeDeps);
   const images = { store: jest.fn(() => 'IMG.png'), load: jest.fn((id: string) => (id ? `file:///${id}` : null)), delete: jest.fn() };
+  const cards = {
+    capture: jest.fn(async () => 'file:///capture.jpg' as string | null),
+    encode: jest.fn(async () => 'CARD-1600'),
+    encodeSmaller: jest.fn(async () => 'CARD-1120'),
+    upload: jest.fn(async () => ({ id: 'card-1', mime: 'image/jpeg', size: 2048, sha256: 'a'.repeat(64), createdAt: '2030-09-01T12:00:00.000Z' })),
+    remove: jest.fn(async () => undefined),
+    fetch: jest.fn(async (): Promise<{ base64: string; mime: string } | null> => null),
+  };
   const deps: ManageDeps = {
     store,
     images,
@@ -32,12 +40,14 @@ function harness(moments: ImportantMoment[], snapshotOverrides: Partial<MomentsS
     sha256Hex: async (value) => Array.from({ length: 64 }, (_, index) => ((value.length + index) % 16).toString(16)).join(''),
     uuid: () => 'UUID',
     now: () => NOW,
+    cards,
   };
   return {
     store,
     post,
     deps,
     images,
+    cards,
     setSnapshot(next: ImportantMoment[]) {
       current = { ...current, moments: next };
     },
@@ -312,5 +322,127 @@ describe('greeting card', () => {
     expect(fingerprint(model.getState())).toBe(model.getState().baseline);
     expect(readFestivalSettings(groupSettings())).not.toBeNull();
     expect(displayGroups(festivalGroup())).toHaveLength(1);
+  });
+});
+
+/**
+ * The finished card's image, on its own route (`PUT/GET/DELETE /api/moments/{id}/card`) rather than
+ * the `/api/moments` envelope. Saving the card is what triggers the upload; the card stays saved
+ * whatever the upload does.
+ */
+describe('greeting card image', () => {
+  async function withCard() {
+    const h = harness(festivalGroup());
+    await h.store.getState().activate('u');
+    const model = createManageModel({ id: 'g', moments: festivalGroup() }, h.deps);
+    model.getState().chooseImage({ id: 'v', base64: 'AAAA' });
+    return { h, model };
+  }
+
+  it('renders and uploads the card after the card is saved', async () => {
+    const { h, model } = await withCard();
+    await model.getState().saveGreetingCard();
+    expect(h.cards.capture).toHaveBeenCalledTimes(1);
+    expect(h.cards.encode).toHaveBeenCalledWith('file:///capture.jpg');
+    expect(h.cards.upload).toHaveBeenCalledWith('a', 'CARD-1600');
+    expect(model.getState().card).toMatchObject({ id: 'card-1', mime: 'image/jpeg' });
+    expect(model.getState().cardFailed).toBe(false);
+  });
+
+  it('uploads on the ordinary save too, because Manage Moment never sends greetingCardSave', async () => {
+    const { h, model } = await withCard();
+    model.getState().setTitle('Diwali at home');
+    await model.getState().save();
+    expect(h.cards.upload).toHaveBeenCalledWith('a', 'CARD-1600');
+  });
+
+  it('does not re-upload an unchanged card on an unrelated save', async () => {
+    const { h, model } = await withCard();
+    await model.getState().saveGreetingCard();
+    expect(h.cards.upload).toHaveBeenCalledTimes(1);
+    model.getState().setZone('America/New_York');
+    await model.getState().save();
+    expect(h.cards.upload).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the card saved and shows the inline note when the upload fails', async () => {
+    const { h, model } = await withCard();
+    h.cards.upload.mockRejectedValueOnce(new ApiError({ status: 500, message: 'Request failed.' }));
+    const ok = await model.getState().saveGreetingCard();
+    // The card itself saved: only its image did not reach the server.
+    expect(ok).toBe(true);
+    expect(model.getState().notice).toBe('Greeting card saved.');
+    expect(model.getState().error).toBeNull();
+    expect(model.getState().cardFailed).toBe(true);
+    expect(model.getState().card).toBeNull();
+  });
+
+  it('retries the upload and clears the note on success', async () => {
+    const { h, model } = await withCard();
+    h.cards.upload.mockRejectedValueOnce(new ApiError({ status: 500, message: 'Request failed.' }));
+    await model.getState().saveGreetingCard();
+    expect(model.getState().cardFailed).toBe(true);
+    await model.getState().retryCardUpload();
+    expect(h.cards.upload).toHaveBeenCalledTimes(2);
+    expect(model.getState().cardFailed).toBe(false);
+    expect(model.getState().card).toMatchObject({ id: 'card-1' });
+  });
+
+  it('re-encodes smaller and retries once on a 413', async () => {
+    const { h, model } = await withCard();
+    h.cards.upload.mockRejectedValueOnce(new ApiError({ status: 413, message: 'The card image is too large.' }));
+    await model.getState().saveGreetingCard();
+    expect(h.cards.encodeSmaller).toHaveBeenCalledWith('file:///capture.jpg');
+    expect(h.cards.upload.mock.calls.map(([, data]) => data)).toEqual(['CARD-1600', 'CARD-1120']);
+    expect(model.getState().cardFailed).toBe(false);
+    expect(model.getState().card).toMatchObject({ id: 'card-1' });
+  });
+
+  it('gives up after one smaller retry when the 413 repeats', async () => {
+    const { h, model } = await withCard();
+    h.cards.upload.mockRejectedValue(new ApiError({ status: 413, message: 'The card image is too large.' }));
+    await model.getState().saveGreetingCard();
+    expect(h.cards.upload).toHaveBeenCalledTimes(2);
+    expect(model.getState().cardFailed).toBe(true);
+  });
+
+  it('removes the stored card', async () => {
+    const { h, model } = await withCard();
+    await model.getState().saveGreetingCard();
+    expect(model.getState().card).not.toBeNull();
+    await model.getState().removeCard();
+    expect(h.cards.remove).toHaveBeenCalledWith('a');
+    expect(model.getState().card).toBeNull();
+    expect(model.getState().notice).toBe('Card removed. Scheduled emails will send the text only.');
+  });
+
+  it('surfaces a failed removal as the screen error and keeps the card', async () => {
+    const { h, model } = await withCard();
+    await model.getState().saveGreetingCard();
+    h.cards.remove.mockRejectedValueOnce(new ApiError({ status: 404, message: 'No greeting card has been saved for this moment.' }));
+    await model.getState().removeCard();
+    expect(model.getState().error).toBe('No greeting card has been saved for this moment.');
+    expect(model.getState().card).not.toBeNull();
+  });
+
+  it('shows a card saved on another device, where there is no local artwork', async () => {
+    const stored = festivalGroup().map((item) => ({ ...item, card: { id: 'card-9', mime: 'image/jpeg', size: 4096, sha256: 'b'.repeat(64), createdAt: '2030-08-01T00:00:00.000Z' } }));
+    const h = harness(stored);
+    await h.store.getState().activate('u');
+    const model = createManageModel({ id: 'g', moments: stored }, h.deps);
+    // Nothing local: the artwork was generated on the other device.
+    expect(model.getState().imageUri).toBeNull();
+    expect(model.getState().card).toMatchObject({ id: 'card-9' });
+    h.cards.fetch.mockResolvedValueOnce({ base64: 'STORED', mime: 'image/jpeg' });
+    await model.getState().loadStoredCard();
+    expect(h.cards.fetch).toHaveBeenCalledWith('a');
+    expect(h.images.store).toHaveBeenCalledWith('STORED');
+    expect(model.getState().imageUri).toBe('file:///IMG.png');
+  });
+
+  it('leaves local artwork alone when one is already on this device', async () => {
+    const { h, model } = await withCard();
+    await model.getState().loadStoredCard();
+    expect(h.cards.fetch).not.toHaveBeenCalled();
   });
 });

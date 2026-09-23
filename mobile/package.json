@@ -48,6 +48,7 @@
     "react-native-reanimated": "4.5.1",
     "react-native-safe-area-context": "~5.7.0",
     "react-native-screens": "~4.26.0",
+    "react-native-view-shot": "5.1.0",
     "react-native-webrtc": "^124.0.8",
     "upng-js": "^2.1.0",
     "zod": "^4.6.5",
