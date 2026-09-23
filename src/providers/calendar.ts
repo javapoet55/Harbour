@@ -53,6 +53,33 @@ export function oauthAuthorizationUrl(provider: OAuthProvider, state: string) {
   return url.toString();
 }
 
+/** The token endpoint refused the request. `status` and the OAuth `error` code say whether it is the grant or the service. */
+export class OAuthTokenError extends Error {
+  constructor(message: string, readonly status: number, readonly code: string | undefined) { super(message); this.name = 'OAuthTokenError'; }
+}
+/** The stored authorization cannot be used; only reconnecting the calendar fixes it. */
+export class CalendarAuthError extends Error {
+  constructor(message: string) { super(message); this.name = 'CalendarAuthError'; }
+}
+/**
+ * OAuth `error` codes that mean this user's grant is dead, not that the service is having a bad moment.
+ * Google sends `invalid_grant` ("Token has been expired or revoked."). Microsoft sends `invalid_grant`
+ * (AADSTS70008 expired, AADSTS50173 revoked, AADSTS700082 inactive) and `interaction_required` /
+ * `consent_required` / `login_required` (MFA, consent or password changes). `invalid_client` is left out:
+ * that is Nexdo's own OAuth configuration, and would wrongly flag every connection.
+ */
+const REVOKED_GRANT_CODES = new Set(['invalid_grant', 'interaction_required', 'consent_required', 'login_required']);
+
+/**
+ * True when a calendar cannot be used until it is reconnected. Network failures, timeouts, 5xx and 429
+ * are transient and return false.
+ */
+export function isCalendarAuthFailure(error: unknown) {
+  if (error instanceof CalendarAuthError) return true;
+  if (!(error instanceof OAuthTokenError)) return false;
+  return error.status >= 400 && error.status < 500 && error.status !== 429 && !!error.code && REVOKED_GRANT_CODES.has(error.code);
+}
+
 async function tokenRequest(provider: OAuthProvider, params: Record<string, string>) {
   const cfg = oauthConfig(provider);
   const response = await observedFetch(cfg.token, {
@@ -62,7 +89,7 @@ async function tokenRequest(provider: OAuthProvider, params: Record<string, stri
     body: new URLSearchParams({ client_id: cfg.clientId, client_secret: cfg.clientSecret, redirect_uri: cfg.redirectUri, scope: cfg.scope, ...params }),
   });
   const payload = await response.json() as TokenResponse;
-  if (!response.ok || !payload.access_token) throw new Error(payload.error_description || payload.error || 'OAuth token exchange failed');
+  if (!response.ok || !payload.access_token) throw new OAuthTokenError(payload.error_description || payload.error || 'OAuth token exchange failed', response.status, payload.error);
   return payload;
 }
 
@@ -115,7 +142,7 @@ async function accessToken(connection: CalendarConnection) {
   const current = decryptCredential(connection.accessToken);
   if (current && connection.tokenExpiresAt && connection.tokenExpiresAt.getTime() > Date.now() + 60_000) return current;
   const refresh = decryptCredential(connection.refreshToken);
-  if (!refresh) throw new Error('Calendar authorization expired; reconnect the account');
+  if (!refresh) throw new CalendarAuthError('Calendar authorization expired; reconnect the account');
   const tokens = await tokenRequest(connection.provider as OAuthProvider, { grant_type: 'refresh_token', refresh_token: refresh });
   await prisma.calendarConnection.update({
     where: { id: connection.id },

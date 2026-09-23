@@ -1,5 +1,5 @@
 import { prisma } from './db';
-import { calendarProviderFor } from '@/providers/calendar';
+import { calendarProviderFor, isCalendarAuthFailure } from '@/providers/calendar';
 import type { CalendarConnection } from '@/generated/prisma';
 import type { CalendarPushResult } from '@/lib/calendar-push';
 import { log } from '@/lib/logger';
@@ -7,7 +7,14 @@ import { log } from '@/lib/logger';
 export async function syncConnection(userId: string, connectionId: string) {
   const connection = await prisma.calendarConnection.findFirst({ where: { id: connectionId, userId } });
   if (!connection) throw new Error('NOT_FOUND');
-  const provider = await calendarProviderFor(connection);
+  let provider;
+  try { provider = await calendarProviderFor(connection); }
+  catch (error) {
+    // A revoked or missing grant needs reconnecting, so the app shows "Needs reconnecting". Transient
+    // failures (network, timeout, 5xx, rate limit) leave the status alone and are retried next sync.
+    if (isCalendarAuthFailure(error)) await prisma.calendarConnection.update({ where: { id: connection.id }, data: { status: 'error' } });
+    throw error;
+  }
   // Obtaining the adapter can refresh credentials and advance updatedAt.
   const syncVersion = await prisma.calendarConnection.findUniqueOrThrow({ where: { id: connection.id } });
   const from = new Date(Date.now() - 30 * 86400000);
