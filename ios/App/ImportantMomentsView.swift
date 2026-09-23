@@ -347,7 +347,7 @@ struct ReviewWishView: View {
                 Text("\(bodyText.count)/500").frame(maxWidth: .infinity, alignment: .trailing).foregroundStyle(bodyText.count > 500 ? .red : .secondary)
                 HStack { Button("Try another", systemImage: "sparkles") { generate() }; Spacer(); Button("Edit", systemImage: "pencil") { editing = true } }.buttonStyle(.bordered)
             }
-            if moment.supportsGreetingCard {MomentGreetingCardSection(moment:moment,store:store,greeting:bodyText)}
+            if moment.supportsGreetingCard {MomentGreetingCardSection(moment:moment,store:store,greeting:bodyText){bodyText=$0}}
             Label("Nothing is sent without your approval.", systemImage: "checkmark.shield").font(.caption).foregroundStyle(.secondary)
             if let error = store.error { Text(error).foregroundStyle(.red) }
             MomentPrimary(title: "Approve & Continue") {

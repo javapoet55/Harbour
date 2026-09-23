@@ -66,14 +66,15 @@ struct ManageFestivalView: View {
     @State private var choiceEmail=""
     private enum Field:Hashable { case name, message, recipientName(String), recipientPhone(String), recipientEmail(String) }
     @FocusState private var focusedField:Field?
-    init(group:MomentDisplayGroup,store:ImportantMomentsStore,onDone:(() -> Void)?=nil){self.onDone=onDone;_model=StateObject(wrappedValue:ManageFestivalModel(group:group,store:store))}
+    init(group:MomentDisplayGroup,store:ImportantMomentsStore,onDone:(() -> Void)?=nil){self.onDone=onDone;_model=StateObject(wrappedValue:store.festivalModel(for:group))}
     var body:some View {
         ZStack {TodayBackdrop();ScrollView{VStack(alignment:.leading,spacing:20){
             identity
             tabs
             Group {switch model.tab {case .details:details;case .contacts:recipients;case .message:message;case .schedule:schedule}}
             if model.busy {ProgressView("Saving…")}
-            if let error=model.error {Text(error).foregroundStyle(.red).accessibilityIdentifier("festival-error")}
+            // The Wish Message tab shows its errors next to Save Message.
+            if model.tab != .message, let error=model.error {Text(error).foregroundStyle(.red).accessibilityIdentifier("festival-error")}
             if let notice=model.notice {Text(notice).font(.subheadline).foregroundStyle(.secondary).accessibilityIdentifier("festival-notice")}
         }.padding(18)}}
         .navigationTitle("Manage Moment").navigationBarTitleDisplayMode(.inline).navigationBarBackButtonHidden()
@@ -163,16 +164,17 @@ struct ManageFestivalView: View {
         saveButtons
     }}
     private var saveButtons:some View {Group{MomentPrimary(title:"Save Changes"){save()};Button(role:.destructive){deleteConfirm=true}label:{Label("Delete Moment",systemImage:"trash").foregroundStyle(.red).frame(maxWidth:.infinity,minHeight:48).background(.red.opacity(0.08),in:RoundedRectangle(cornerRadius:18))}.buttonStyle(.plain)}}
-    private func save(approve:Bool=false){approveAfterCancel=approve;if model.dirty && model.hasSchedules || approve && model.hasSchedules{model.needsScheduleConfirmation=true}else{Task{if approve{await model.approve()}else{await model.save()}}}}
+    /// Asks to cancel schedules only for delivery changes or an unapproved message; an approved message-only save keeps them.
+    private func save(approve:Bool=false){approveAfterCancel=approve;if model.pendingChange.needsCancelPrompt(approve:approve,hasSchedules:model.hasSchedules){model.needsScheduleConfirmation=true}else{Task{if approve{await model.approve()}else{await model.save()}}}}
     private var message:some View {Group{
         Text("Wish Message").font(.largeTitle.bold());HStack{Label("For \(model.selected.count) selected contact\(model.selected.count == 1 ? "":"s")",systemImage:"person.2.fill").font(.subheadline);Spacer();Button("Personalize"){personalize=true}.frame(minHeight:44)}
         MomentSegments(options:["Warm","Personal","Short","Fun"],selection:$model.settings.tone)
-        MomentCard(fill:LinearGradient(colors:[Color.blue.opacity(0.22),Color.cyan.opacity(0.10)],startPoint:.topLeading,endPoint:.bottomTrailing)){TextEditor(text:Binding(get:{model.settings.baseMessage},set:{model.settings.baseMessage=$0;model.settings.manuallyEdited=true;model.invalidateApproval()})).frame(minHeight:130).focused($focusedField,equals:.message).scrollContentBackground(.hidden).accessibilityLabel("\(model.occasionLabel) wish message");Text("\(model.settings.baseMessage.count)/500").font(.caption).frame(maxWidth:.infinity,alignment:.trailing).foregroundStyle(model.settings.baseMessage.count>500 ? .red:.secondary)}
+        MomentCard(fill:LinearGradient(colors:[Color.blue.opacity(0.22),Color.cyan.opacity(0.10)],startPoint:.topLeading,endPoint:.bottomTrailing)){TextEditor(text:Binding(get:{model.settings.baseMessage},set:{model.setMessage($0)})).frame(minHeight:130).overlay(alignment:.topLeading){if model.settings.baseMessage.isEmpty {Text(model.suggestion).foregroundStyle(.tertiary).padding(.top,8).padding(.leading,5).allowsHitTesting(false).accessibilityHidden(true)}}.focused($focusedField,equals:.message).scrollContentBackground(.hidden).accessibilityLabel("\(model.occasionLabel) wish message");Text("\(model.settings.baseMessage.count)/500").font(.caption).frame(maxWidth:.infinity,alignment:.trailing).foregroundStyle(model.settings.baseMessage.count>500 ? .red:.secondary);if model.settings.baseMessage.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty {Button("Use suggestion",systemImage:"text.badge.plus"){model.useSuggestion()}.font(.subheadline).frame(minHeight:44).accessibilityIdentifier("wish-use-suggestion")}}
         HStack{Button("Regenerate",systemImage:"sparkles"){if model.settings.manuallyEdited{regenerateConfirm=true}else{Task{await model.generate(aiConsent:aiConsent)}}};Spacer();Button("Edit",systemImage:"pencil"){focusedField = .message}}.buttonStyle(.bordered).frame(minHeight:44)
         Toggle("Use AI for this draft",isOn:$aiConsent);Text("Shares only occasion, tone and your optional context. Generated text is a draft for your review.").font(.caption).foregroundStyle(.secondary)
         Text("Greeting Card").font(.title2.bold())
         if let data=model.imageData,let image=UIImage(data:data) {
-            FestivalGreetingCard(artwork:image,title:model.title,message:model.settings.cardGreeting ?? model.settings.baseMessage,signature:model.settings.cardSignature ?? "")
+            FestivalGreetingCard(artwork:image,title:model.title,message:model.cardMessage,signature:model.settings.cardSignature ?? "")
         } else if let data=model.storedCardImage,let image=UIImage(data:data) {
             StoredGreetingCard(image:image)
         } else {
@@ -182,6 +184,7 @@ struct ManageFestivalView: View {
         Text("Share your finished card from the editor. Scheduled emails include your saved card; Messages send the text only.").font(.caption).foregroundStyle(.secondary)
         GreetingCardUploadStatus(model:model)
         if model.imageData != nil || model.storedCardImage != nil {Button("Remove card",role:.destructive){Task{await model.removeCard()}}.disabled(model.busy).accessibilityIdentifier("remove-greeting-card")}
+        if let error=model.error {Text(error).foregroundStyle(.red).accessibilityIdentifier("wish-message-error")}
         MomentPrimary(title:"Save Message"){save(approve:true)}.disabled(model.settings.baseMessage.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty || model.settings.baseMessage.count > 500)
     }}
     private var schedule:some View {Group{

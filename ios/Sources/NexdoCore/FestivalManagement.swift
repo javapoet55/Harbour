@@ -17,7 +17,36 @@ public struct FestivalSettings: Codable, Equatable, Sendable {
     public var catalogNotice:String?
     public var archived = false
     public init() {}
-    public static func read(_ raw: String?) -> Self? { raw.flatMap { $0.data(using: .utf8) }.flatMap { try? JSONDecoder().decode(Self.self, from: $0) } }
+    /// Settings saved by Manage Moment. Nil when the JSON is not an object or has no `groupID` (never saved
+    /// there, e.g. a fresh moment's `{}`), so group identity stays stable. Any other missing or mistyped key
+    /// keeps its default instead of discarding everything that was saved.
+    public static func read(_ raw: String?) -> Self? {
+        guard let data = raw?.data(using: .utf8), let settings = try? JSONDecoder().decode(Self.self, from: data),
+              settings.hasGroup else { return nil }
+        return settings
+    }
+    private var hasGroup = true
+    private enum CodingKeys: String, CodingKey {
+        case groupID, prepareDays, catalogID, catalogManaged, baseMessage, tone, personalContext, manuallyEdited, approvedAt
+        case includeImage, imageID, imageStyle, imageAspect, imagePrompt, draftSendDate, draftNotify, cardSignature, cardGreeting
+        case overrides, channels, contactIDs, automatic, selected, catalogNotice, archived
+    }
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        func value<T: Decodable>(_ key: CodingKeys, _ fallback: T) -> T { ((try? c.decodeIfPresent(T.self, forKey: key)) ?? nil) ?? fallback }
+        func optional<T: Decodable>(_ key: CodingKeys) -> T? { (try? c.decodeIfPresent(T.self, forKey: key)) ?? nil }
+        let group: String? = optional(.groupID)
+        hasGroup = !(group ?? "").isEmpty
+        groupID = hasGroup ? group! : groupID
+        prepareDays = value(.prepareDays, prepareDays); catalogID = value(.catalogID, catalogID); catalogManaged = value(.catalogManaged, catalogManaged)
+        baseMessage = value(.baseMessage, baseMessage); tone = value(.tone, tone); personalContext = value(.personalContext, personalContext)
+        manuallyEdited = value(.manuallyEdited, manuallyEdited); approvedAt = optional(.approvedAt)
+        includeImage = value(.includeImage, includeImage); imageID = value(.imageID, imageID); imageStyle = value(.imageStyle, imageStyle)
+        imageAspect = value(.imageAspect, imageAspect); imagePrompt = value(.imagePrompt, imagePrompt)
+        draftSendDate = optional(.draftSendDate); draftNotify = optional(.draftNotify); cardSignature = optional(.cardSignature); cardGreeting = optional(.cardGreeting)
+        overrides = value(.overrides, overrides); channels = value(.channels, channels); contactIDs = value(.contactIDs, contactIDs)
+        automatic = value(.automatic, automatic); selected = value(.selected, selected); catalogNotice = optional(.catalogNotice); archived = value(.archived, archived)
+    }
 }
 public struct ManagedFestivalRecipient: Identifiable, Codable, Equatable, Sendable {
     public var id: String { key }
