@@ -411,29 +411,30 @@ export function validateSchedule({
 export { zonedInstant };
 
 /**
- * The offline draft for an occasion.
+ * The offline draft for an occasion. `FestivalValidation.fallback(name:tone:type:firstName:version:)`
+ * (ios/Sources/NexdoCore/FestivalManagement.swift:105-125).
  *
- * `name` is the festival's title for a festival, and the recipient's first name for a birthday or an
- * anniversary — those two used to fall through to the festival wording, so a birthday draft read
- * "<title>! Wishing you and your family a joyful celebration…", which is festival copy addressed to a
- * family rather than to the person whose birthday it is. Their wording now comes from `fallback`
- * (src/server/moments/domain.ts), so the offline draft and the server's draft agree.
+ * `name` is the festival's title; `firstName` is the recipient a birthday or an anniversary is
+ * addressed to. Those two used to fall through to the festival wording keyed on the title, so a
+ * birthday draft read "<title>! Wishing you and your family a joyful celebration…", which is festival
+ * copy aimed at a family. Their wording is now `fallback`'s (src/server/moments/domain.ts:26-40),
+ * character for character, so the offline draft and the server's draft agree.
  *
- * Swift's `FestivalValidation.fallback(name:tone:type:)` still has the old behaviour for both.
+ * `version` is the draft number the server alternates its Warm wording by; an offline draft is
+ * always the first.
  */
-export function fallbackWish(name: string, tone: string, type = 'festival'): string {
+export function fallbackWish(name: string, tone: string, type = 'festival', firstName = '', version = 1): string {
   if (type === 'getWellSoon') {
     return tone === 'Short' ? 'Get well soon. Thinking of you.' : 'Get well soon. Sending care, comfort, and warm wishes for brighter days ahead.';
   }
   if (type === 'birthday' || type === 'anniversary') {
     const greeting = type === 'birthday' ? 'Happy Birthday' : 'Happy Anniversary';
-    const named = name.trim() === '' ? '' : `, ${name.trim()}`;
-    if (tone === 'Short') return `${greeting}${named}! Wishing you a wonderful day.`;
-    if (tone === 'Fun') return `${greeting}${named}! Here’s to smiles, good company, and a day worth celebrating! 🎉`;
-    if (tone === 'Personal') return `${greeting}${named}! Thinking of you and sending my warmest wishes on this special day.`;
-    // The server alternates this line by draft version; an offline draft has none, so it is the
-    // wording `fallback`'s default version (1) produces.
-    return `${greeting}${named}! Wishing you a wonderful day and a fantastic year ahead! 🎉`;
+    // Not trimmed, as neither the server nor Swift trims it.
+    const who = firstName === '' ? '' : `, ${firstName}`;
+    if (tone === 'Short') return `${greeting}${who}! Wishing you a wonderful day.`;
+    if (tone === 'Fun') return `${greeting}${who}! Here’s to smiles, good company, and a day worth celebrating! 🎉`;
+    if (tone === 'Personal') return `${greeting}${who}! Thinking of you and sending my warmest wishes on this special day.`;
+    return `${greeting}${who}! ${version % 2 !== 0 ? 'Wishing you a wonderful day and a fantastic year ahead!' : 'Hope your day is filled with happiness and lovely moments!'} 🎉`;
   }
   switch (tone) {
     case 'Short':

@@ -61,7 +61,7 @@ describe('the card prints the Wish Message', () => {
     const suggestion = wishSuggestion('birthday', 'Asha’s birthday');
 
     // The reported case: the default was stored as the message and the user's text lived only on the card.
-    let result = reconcileCardGreeting(base({ baseMessage: suggestion, approvedAt: 'then', cardGreeting: 'Asha, thirty looks great on you.' }), suggestion);
+    let result = reconcileCardGreeting(base({ baseMessage: suggestion, approvedAt: 'then', cardGreeting: 'Asha, thirty looks great on you.' }));
     expect(result.adopted).toBe(true);
     expect(result.settings.baseMessage).toBe('Asha, thirty looks great on you.');
     expect(result.settings.approvedAt).toBeNull();
@@ -69,27 +69,27 @@ describe('the card prints the Wish Message', () => {
     expect(result.settings.cardGreeting).toBeNull();
 
     // Empty message: the card text is adopted.
-    result = reconcileCardGreeting(base({ cardGreeting: 'Card only' }), suggestion);
+    result = reconcileCardGreeting(base({ cardGreeting: 'Card only' }));
     expect(result.adopted).toBe(true);
     expect(result.settings.baseMessage).toBe('Card only');
 
     // A message the user wrote wins; the card text is dropped.
-    result = reconcileCardGreeting(base({ baseMessage: 'Typed wish', manuallyEdited: true, approvedAt: 'then', cardGreeting: 'Old card' }), suggestion);
+    result = reconcileCardGreeting(base({ baseMessage: 'Typed wish', manuallyEdited: true, approvedAt: 'then', cardGreeting: 'Old card' }));
     expect(result.adopted).toBe(false);
     expect(result.settings.baseMessage).toBe('Typed wish');
     expect(result.settings.approvedAt).toBe('then');
     expect(result.settings.cardGreeting).toBeNull();
 
     // The suggestion kept on purpose (manually edited) is not replaced.
-    result = reconcileCardGreeting(base({ baseMessage: suggestion, manuallyEdited: true, cardGreeting: 'Card' }), suggestion);
+    result = reconcileCardGreeting(base({ baseMessage: suggestion, manuallyEdited: true, cardGreeting: 'Card' }));
     expect(result.adopted).toBe(false);
     expect(result.settings.baseMessage).toBe(suggestion);
 
     // Same text, or a blank card text: nothing to adopt, and cardGreeting is cleared either way.
-    result = reconcileCardGreeting(base({ baseMessage: 'Same', cardGreeting: 'Same' }), suggestion);
+    result = reconcileCardGreeting(base({ baseMessage: 'Same', cardGreeting: 'Same' }));
     expect(result.adopted).toBe(false);
     expect(result.settings.cardGreeting).toBeNull();
-    result = reconcileCardGreeting(base({ cardGreeting: '  ' }), suggestion);
+    result = reconcileCardGreeting(base({ cardGreeting: '  ' }));
     expect(result.adopted).toBe(false);
     expect(result.settings.baseMessage).toBe('');
   });
@@ -100,11 +100,9 @@ describe('the card prints the Wish Message', () => {
    * moment carries now, so the card greeting was dropped instead of adopted.
    */
   describe('an untouched default is recognised whatever the title was', () => {
-    const suggestion = wishSuggestion('birthday', 'Visakan’s Anniversary');
-
     it('adopts the card greeting when the message is a default built from an older title', () => {
       const stale = base({ baseMessage: 'Visakan’s Birthday! Sending you warm wishes on your special day.', approvedAt: 'then', cardGreeting: 'Visakan, see you at seven!' });
-      const result = reconcileCardGreeting(stale, suggestion);
+      const result = reconcileCardGreeting(stale);
       expect(result.adopted).toBe(true);
       expect(result.settings.baseMessage).toBe('Visakan, see you at seven!');
       // Adopting is an unsaved change that needs a fresh Save Message.
@@ -126,7 +124,7 @@ describe('the card prints the Wish Message', () => {
       ];
       for (const baseMessage of defaults) {
         expect(isGeneratedDefault(baseMessage)).toBe(true);
-        const result = reconcileCardGreeting(base({ baseMessage, cardGreeting: 'My own card words' }), suggestion);
+        const result = reconcileCardGreeting(base({ baseMessage, cardGreeting: 'My own card words' }));
         expect(result.adopted).toBe(true);
         expect(result.settings.baseMessage).toBe('My own card words');
       }
@@ -136,7 +134,7 @@ describe('the card prints the Wish Message', () => {
       const written = ['Many happy returns, Visakan.', 'Sending you warm wishes on your special day.', '! Wishing you joy and happiness.', 'Get well soon.'];
       for (const baseMessage of written) {
         expect(isGeneratedDefault(baseMessage)).toBe(false);
-        const result = reconcileCardGreeting(base({ baseMessage, cardGreeting: 'My own card words' }), suggestion);
+        const result = reconcileCardGreeting(base({ baseMessage, cardGreeting: 'My own card words' }));
         expect(result.adopted).toBe(false);
         expect(result.settings.baseMessage).toBe(baseMessage);
       }
@@ -144,7 +142,7 @@ describe('the card prints the Wish Message', () => {
 
     it('keeps a default the person went on to edit', () => {
       const edited = base({ baseMessage: 'Diwali! Wishing you joy and happiness.', manuallyEdited: true, approvedAt: 'then', cardGreeting: 'Card words' });
-      const result = reconcileCardGreeting(edited, suggestion);
+      const result = reconcileCardGreeting(edited);
       expect(result.adopted).toBe(false);
       expect(result.settings.baseMessage).toBe('Diwali! Wishing you joy and happiness.');
       expect(result.settings.approvedAt).toBe('then');
@@ -152,7 +150,7 @@ describe('the card prints the Wish Message', () => {
 
     it('still adopts into a blank message, edited or not', () => {
       for (const manuallyEdited of [false, true]) {
-        const result = reconcileCardGreeting(base({ baseMessage: '', manuallyEdited, cardGreeting: 'Card words' }), suggestion);
+        const result = reconcileCardGreeting(base({ baseMessage: '', manuallyEdited, cardGreeting: 'Card words' }));
         expect(result.adopted).toBe(true);
         expect(result.settings.baseMessage).toBe('Card words');
       }
@@ -161,7 +159,7 @@ describe('the card prints the Wish Message', () => {
     it('needs a card greeting that is present and different', () => {
       const shared = 'Diwali! Wishing you joy and happiness.';
       for (const cardGreeting of [null, '', '   ', shared]) {
-        const result = reconcileCardGreeting(base({ baseMessage: shared, cardGreeting }), suggestion);
+        const result = reconcileCardGreeting(base({ baseMessage: shared, cardGreeting }));
         expect(result.adopted).toBe(false);
         expect(result.settings.baseMessage).toBe(shared);
         expect(result.settings.cardGreeting).toBeNull();

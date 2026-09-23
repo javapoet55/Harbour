@@ -369,7 +369,7 @@ export function createManageModel(group: MomentDisplayGroup, deps: ManageDeps): 
   // while the baseline keeps them — which opens every moment dirty and shows the wrong channel for a
   // phone-less recipient. The defaults are applied to both here, which is what the surrounding code
   // and the baseline comment intend, and what Swift did before this commit.
-  const folded = reconcileCardGreeting(settings, wishSuggestion(first.type, first.title));
+  const folded = reconcileCardGreeting(settings);
   const date = momentDate(first.nextOccurrence, first.timeZoneID, deps.now());
   let zone = first.timeZoneID;
   let sendDate = zonedInstant(first.nextOccurrence, 8, 0, first.timeZoneID) ?? date;
@@ -611,13 +611,11 @@ export function createManageModel(group: MomentDisplayGroup, deps: ManageDeps): 
           get().invalidateApproval();
           const state = get();
           const firstMoment = state.originals[0];
-          // A birthday or an anniversary is addressed to the person, as the server's `fallback` does
-          // with `moment.firstName`; a festival is addressed by its title.
-          const offline = () => {
-            const type = occasionType(state);
-            const named = type === 'birthday' || type === 'anniversary';
-            return fallbackWish(named ? (state.recipients[0]?.name ?? '') : state.title, state.settings.tone, type);
-          };
+          // `fallbackFirstName` (ManageFestivalModel.swift:218-220): the name in an offline
+          // birthday/anniversary draft is the only selected recipient's. With several the draft is
+          // shared, so it carries no name and `greetingMessage` adds each recipient's own.
+          const chosen = selectedRecipients(state);
+          const offline = () => fallbackWish(state.title, state.settings.tone, occasionType(state), chosen.length === 1 ? chosen[0].name : '');
           if (!aiConsent || !firstMoment) {
             set({ settings: { ...get().settings, baseMessage: offline(), manuallyEdited: false }, notice: 'Offline draft — review before saving.' });
             return;

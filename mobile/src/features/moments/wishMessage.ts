@@ -51,39 +51,43 @@ export function initialWish(saved: string, latestBody: string | null | undefined
  * Swift's `@discardableResult` "the Wish Message changed".
  */
 /**
- * What every default the app has ever generated ends with, after the title it was built from. A
- * default is recognised by its tail rather than by the current title, because the title may have been
- * renamed since the message was saved — which used to make an untouched default look like the
- * person's own writing and silently drop their card greeting.
+ * `WishMessage.oldDefaultPatterns` (ios/Sources/NexdoCore/WishMessage.swift:30-37): the wordings older
+ * versions saved as the Wish Message, for any title — the birthday/anniversary/custom placeholder, the
+ * get-well text, and the festival fallback in each tone.
  *
- * In order: the old birthday/anniversary/custom suggestion, then the four festival tones of
- * `fallbackWish`.
+ * Whole-string patterns rather than suffixes, so `.` stops at a newline exactly as Swift's
+ * `NSRegularExpression` does and a hand-written message whose last line happens to end this way is not
+ * mistaken for a default.
+ *
+ * The last two are NOT in Swift's list, and are kept because both platforms have saved them: they are
+ * `fallbackWish(…, 'getWellSoon')`, which `generate()` writes for an offline Get Well Soon draft with
+ * `manuallyEdited: false`. Swift's `FestivalValidation.fallback` produces the same two strings, so its
+ * list misses a default it writes itself.
  */
-const DEFAULT_TAILS = [
-  '! Sending you warm wishes on your special day.',
-  '! Wishing you joy and happiness.',
-  '! Here’s to a celebration full of smiles, good company, and wonderful memories! ✨',
-  '! Thinking of you and your family and sending warm wishes for a joyful celebration.',
-  '! Wishing you and your family a joyful celebration filled with happiness and new beginnings! ✨',
+const OLD_DEFAULT_PATTERNS = [
+  /^.+! Sending you warm wishes on your special day\.$/,
+  /^Get well soon\. Wishing you comfort, rest, and brighter days ahead\.$/,
+  /^.+! Wishing you and your family a joyful celebration filled with happiness and new beginnings! ✨$/,
+  /^.+! Wishing you joy and happiness\.$/,
+  /^.+! Here’s to a celebration full of smiles, good company, and wonderful memories! ✨$/,
+  /^.+! Thinking of you and your family and sending warm wishes for a joyful celebration\.$/,
+  /^Get well soon\. Thinking of you\.$/,
+  /^Get well soon\. Sending care, comfort, and warm wishes for brighter days ahead\.$/,
 ];
-
-/** The Get Well Soon defaults, which carry no title and so are matched whole. */
-const GET_WELL_DEFAULTS = ['Get well soon. Thinking of you.', 'Get well soon. Sending care, comfort, and warm wishes for brighter days ahead.', 'Get well soon. Wishing you comfort, rest, and brighter days ahead.'];
 
 /** True when `base` is a default this app generated for some title, rather than something written. */
 export function isGeneratedDefault(base: string): boolean {
-  if (GET_WELL_DEFAULTS.includes(base)) return true;
-  // `length >` and not `>=`: there has to be a title in front of the tail.
-  return DEFAULT_TAILS.some((tail) => base.length > tail.length && base.endsWith(tail));
+  return OLD_DEFAULT_PATTERNS.some((pattern) => pattern.test(base));
 }
 
-export function reconcileCardGreeting(settings: FestivalSettings, suggestion: string): { settings: FestivalSettings; adopted: boolean } {
+export function reconcileCardGreeting(settings: FestivalSettings): { settings: FestivalSettings; adopted: boolean } {
   const greeting = settings.cardGreeting;
   const cleared: FestivalSettings = { ...settings, cardGreeting: null };
   if (greeting == null || greeting.trim() === '' || greeting === settings.baseMessage) return { settings: cleared, adopted: false };
+  // `isUntouchedDefault` (WishMessage.swift:38-43). The suggestion for the moment's current title is
+  // one of the patterns, so it no longer has to be passed in.
   const base = settings.baseMessage.trim();
-  const untouched = !settings.manuallyEdited && (base === suggestion || isGeneratedDefault(base));
-  if (!(base === '' || untouched)) return { settings: cleared, adopted: false };
+  if (!(base === '' || (!settings.manuallyEdited && isGeneratedDefault(base)))) return { settings: cleared, adopted: false };
   return {
     settings: { ...cleared, baseMessage: [...greeting].slice(0, 500).join(''), manuallyEdited: true, approvedAt: null },
     adopted: true,

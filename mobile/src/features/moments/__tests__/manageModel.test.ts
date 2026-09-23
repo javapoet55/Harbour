@@ -13,6 +13,7 @@ import {
   messageSuggestion,
   pendingChange,
   reviewHeading,
+  selectedRecipients,
   type ManageDeps,
 } from '../manageModel';
 import { SENDING_NOW } from '../wishMessage';
@@ -150,6 +151,67 @@ describe('dirty state and messages', () => {
     expect(deliveryMessage(model.getState(), recipient)).toBe('Happy Birthday, Sam! Have a great day!');
     model.getState().updateSettings({ overrides: { [recipient.key]: 'Custom' } });
     expect(deliveryMessage(model.getState(), recipient)).toBe('Custom');
+  });
+});
+
+/**
+ * `fallbackFirstName` (ManageFestivalModel.swift:218-220). An offline birthday or anniversary draft is
+ * addressed to the only selected recipient. With several the draft is shared, so it carries no name
+ * and `greetingMessage` adds each recipient's own when their wish is prepared.
+ */
+describe('the offline draft names the recipient only when there is one', () => {
+  const pair = (type: string) => [
+    moment({ id: 'a', type, title: 'The Big Day', firstName: 'Asha', email: 'asha@example.com', sourceKey: `${type}:g:ka`, festivalSettings: settings({ groupID: 'g', baseMessage: '' }) }),
+    moment({ id: 'b', type, title: 'The Big Day', firstName: 'Ravi', email: 'ravi@example.com', sourceKey: `${type}:g:kb`, festivalSettings: settings({ groupID: 'g', baseMessage: '' }) }),
+  ];
+
+  it('uses the name when exactly one recipient is selected', async () => {
+    const group = pair('birthday');
+    const h = harness(group);
+    await h.store.getState().activate('u');
+    const model = createManageModel({ id: 'g', moments: group }, h.deps);
+    model.getState().updateRecipient('kb', { selected: false });
+    await model.getState().generate(false);
+    expect(model.getState().settings.baseMessage).toBe('Happy Birthday, Asha! Wishing you a wonderful day and a fantastic year ahead! 🎉');
+  });
+
+  it('leaves the name out with several, so each wish carries its own', async () => {
+    const group = pair('anniversary');
+    const h = harness(group);
+    await h.store.getState().activate('u');
+    const model = createManageModel({ id: 'g', moments: group }, h.deps);
+    expect(selectedRecipients(model.getState())).toHaveLength(2);
+    await model.getState().generate(false);
+    const shared = model.getState().settings.baseMessage;
+    expect(shared).toBe('Happy Anniversary! Wishing you a wonderful day and a fantastic year ahead! 🎉');
+
+    // Each recipient's delivered body: exactly one greeting, naming that person and no one else.
+    const [asha, ravi] = model.getState().recipients;
+    expect(deliveryMessage(model.getState(), asha)).toBe('Happy Anniversary, Asha! Wishing you a wonderful day and a fantastic year ahead! 🎉');
+    expect(deliveryMessage(model.getState(), ravi)).toBe('Happy Anniversary, Ravi! Wishing you a wonderful day and a fantastic year ahead! 🎉');
+    for (const recipient of model.getState().recipients) {
+      const body = deliveryMessage(model.getState(), recipient);
+      expect(body.match(/Happy Anniversary/g)).toHaveLength(1);
+      expect(body).not.toContain(recipient.key === 'ka' ? 'Ravi' : 'Asha');
+    }
+  });
+
+  it('leaves the name out when none is selected yet', async () => {
+    const group = pair('birthday');
+    const h = harness(group);
+    await h.store.getState().activate('u');
+    const model = createManageModel({ id: 'g', moments: group }, h.deps);
+    for (const key of ['ka', 'kb']) model.getState().updateRecipient(key, { selected: false });
+    await model.getState().generate(false);
+    expect(model.getState().settings.baseMessage).toBe('Happy Birthday! Wishing you a wonderful day and a fantastic year ahead! 🎉');
+  });
+
+  it('still addresses a festival by its title', async () => {
+    const h = harness(festivalGroup());
+    await h.store.getState().activate('u');
+    const model = createManageModel({ id: 'g', moments: festivalGroup() }, h.deps);
+    await model.getState().generate(false);
+    expect(model.getState().settings.baseMessage).toBe('Diwali! Wishing you and your family a joyful celebration filled with happiness and new beginnings! ✨');
   });
 });
 

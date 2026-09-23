@@ -468,15 +468,24 @@ describe('titles, greetings and signatures', () => {
    */
   describe('fallbackWish', () => {
     it('addresses a birthday and an anniversary to the person, in every tone', () => {
-      expect(fallbackWish('Asha', 'Warm', 'birthday')).toBe('Happy Birthday, Asha! Wishing you a wonderful day and a fantastic year ahead! 🎉');
-      expect(fallbackWish('Asha', 'Short', 'birthday')).toBe('Happy Birthday, Asha! Wishing you a wonderful day.');
-      expect(fallbackWish('Asha', 'Fun', 'birthday')).toBe('Happy Birthday, Asha! Here’s to smiles, good company, and a day worth celebrating! 🎉');
-      expect(fallbackWish('Asha', 'Personal', 'birthday')).toBe('Happy Birthday, Asha! Thinking of you and sending my warmest wishes on this special day.');
-      expect(fallbackWish('Visakan', 'Warm', 'anniversary')).toBe('Happy Anniversary, Visakan! Wishing you a wonderful day and a fantastic year ahead! 🎉');
-      expect(fallbackWish('Visakan', 'Short', 'anniversary')).toBe('Happy Anniversary, Visakan! Wishing you a wonderful day.');
-      // No recipient yet: the greeting stands on its own, as the server's does.
-      expect(fallbackWish('', 'Warm', 'birthday')).toBe('Happy Birthday! Wishing you a wonderful day and a fantastic year ahead! 🎉');
-      expect(fallbackWish('  ', 'Short', 'anniversary')).toBe('Happy Anniversary! Wishing you a wonderful day.');
+      expect(fallbackWish('Title', 'Warm', 'birthday', 'Asha')).toBe('Happy Birthday, Asha! Wishing you a wonderful day and a fantastic year ahead! 🎉');
+      expect(fallbackWish('Title', 'Short', 'birthday', 'Asha')).toBe('Happy Birthday, Asha! Wishing you a wonderful day.');
+      expect(fallbackWish('Title', 'Fun', 'birthday', 'Asha')).toBe('Happy Birthday, Asha! Here’s to smiles, good company, and a day worth celebrating! 🎉');
+      expect(fallbackWish('Title', 'Personal', 'birthday', 'Asha')).toBe('Happy Birthday, Asha! Thinking of you and sending my warmest wishes on this special day.');
+      expect(fallbackWish('Title', 'Warm', 'anniversary', 'Visakan')).toBe('Happy Anniversary, Visakan! Wishing you a wonderful day and a fantastic year ahead! 🎉');
+      expect(fallbackWish('Title', 'Short', 'anniversary', 'Visakan')).toBe('Happy Anniversary, Visakan! Wishing you a wonderful day.');
+      // The title never appears in these two: only `firstName` does.
+      expect(fallbackWish('Visakan’s Anniversary', 'Short', 'anniversary')).toBe('Happy Anniversary! Wishing you a wonderful day.');
+    });
+
+    /** `fallback` alternates its Warm line by draft version; an offline draft is always the first. */
+    it('alternates the Warm wording by version, as the server does', () => {
+      expect(fallbackWish('Title', 'Warm', 'birthday', 'Asha', 1)).toBe('Happy Birthday, Asha! Wishing you a wonderful day and a fantastic year ahead! 🎉');
+      expect(fallbackWish('Title', 'Warm', 'birthday', 'Asha', 2)).toBe('Happy Birthday, Asha! Hope your day is filled with happiness and lovely moments! 🎉');
+      expect(fallbackWish('Title', 'Warm', 'anniversary', 'Visakan', 3)).toBe('Happy Anniversary, Visakan! Wishing you a wonderful day and a fantastic year ahead! 🎉');
+      expect(fallbackWish('Title', 'Warm', 'anniversary', 'Visakan', 4)).toBe('Happy Anniversary, Visakan! Hope your day is filled with happiness and lovely moments! 🎉');
+      // The default is version 1.
+      expect(fallbackWish('Title', 'Warm', 'birthday', 'Asha')).toBe(fallbackWish('Title', 'Warm', 'birthday', 'Asha', 1));
     });
 
     it('leaves Get Well Soon and the festival tones as they were', () => {
@@ -490,10 +499,12 @@ describe('titles, greetings and signatures', () => {
 
     /** The greeting rule absorbs the draft's own opening rather than adding a second one. */
     it('produces a draft the greeting rule leaves with one greeting', () => {
-      expect(greetingMessage(fallbackWish('Asha', 'Warm', 'birthday'), 'birthday', 'Asha')).toBe(fallbackWish('Asha', 'Warm', 'birthday'));
-      expect(greetingMessage(fallbackWish('', 'Warm', 'anniversary'), 'anniversary', 'Visakan')).toBe(
-        'Happy Anniversary, Visakan! Wishing you a wonderful day and a fantastic year ahead! 🎉',
-      );
+      const named = fallbackWish('Title', 'Warm', 'birthday', 'Asha');
+      expect(greetingMessage(named, 'birthday', 'Asha')).toBe(named);
+      // A shared draft carries no name, so each recipient's own is added.
+      const shared = fallbackWish('Title', 'Warm', 'anniversary');
+      expect(greetingMessage(shared, 'anniversary', 'Visakan')).toBe('Happy Anniversary, Visakan! Wishing you a wonderful day and a fantastic year ahead! 🎉');
+      expect(greetingMessage(shared, 'anniversary', 'Asha')).toBe('Happy Anniversary, Asha! Wishing you a wonderful day and a fantastic year ahead! 🎉');
     });
   });
 
