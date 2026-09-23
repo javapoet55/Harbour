@@ -47,6 +47,44 @@ it('blocks unsafe policy input before running the assistant', async () => {
   expect(body.spoken).toMatch(/Ask me about your tasks|I can’t help with that request/i);
 });
 
+it('lets a follow-up reach the assistant instead of refusing it as a general question', async () => {
+  vi.mocked(requireUser).mockResolvedValue({ id: 'owner', preference: { voiceEnabled: true } } as Awaited<ReturnType<typeof requireUser>>);
+  vi.mocked(runConversationalAgent).mockResolvedValue({
+    spoken: 'A critical task was recommended because it is due today.',
+    visual: { summary: 'Because it is due today.', tasks: [], appointments: [], overdue: [], next: '', rangeLabel: 'Answer' },
+    transcript: 'Why?',
+    intent: { intent: 'UNKNOWN', confidence: 1, confirmationRequired: false, raw: 'Why?' },
+  } as unknown as Awaited<ReturnType<typeof runConversationalAgent>>);
+
+  const response = await POST(request({ transcript: 'Why?', contextActionId: 'prior-turn' }));
+  const body = await response.json();
+
+  expect(response.status).toBe(200);
+  expect(runConversationalAgent).toHaveBeenCalledWith('owner', 'Why?', undefined, undefined, 'prior-turn');
+  expect(body.spoken).toContain('A critical task');
+});
+
+it('still refuses a general question when no follow-up context is given', async () => {
+  vi.mocked(requireUser).mockResolvedValue({ id: 'owner', preference: { voiceEnabled: true } } as Awaited<ReturnType<typeof requireUser>>);
+
+  const response = await POST(request({ transcript: 'Why?' }));
+
+  expect(response.status).toBe(200);
+  expect(runConversationalAgent).not.toHaveBeenCalled();
+  expect((await response.json()).spoken).toMatch(/Ask me about your tasks|I can’t help with that request/i);
+});
+
+it('reports another account’s follow-up as not found rather than refusing it', async () => {
+  vi.mocked(requireUser).mockResolvedValue({ id: 'owner', preference: { voiceEnabled: true } } as Awaited<ReturnType<typeof requireUser>>);
+  vi.mocked(runConversationalAgent).mockRejectedValue(new Error('NOT_FOUND'));
+
+  const response = await POST(request({ transcript: 'Why?', contextActionId: 'someone-elses-turn' }));
+
+  // The guard used to answer 200 here, hiding the ownership check behind a policy refusal.
+  expect(response.status).toBe(404);
+  expect(runConversationalAgent).toHaveBeenCalledWith('owner', 'Why?', undefined, undefined, 'someone-elses-turn');
+});
+
 it('sanitizes unsafe assistant output after model run', async () => {
   vi.mocked(requireUser).mockResolvedValue({ id: 'owner', preference: { voiceEnabled: true } } as Awaited<ReturnType<typeof requireUser>>);
   vi.mocked(runConversationalAgent).mockResolvedValue({
