@@ -49,6 +49,8 @@ import CryptoKit
     private let imageStorage:any FestivalImageStorageService
     private var imageTask:Task<Void,Never>?
     private var baseline=""
+    /// The state as last saved, to tell a message-only save from one that changes delivery.
+    private var savedState:FestivalEditState?
     private var savedImageID=""
     private var stagedImages=Set<String>()
     private var keys:[String:String]=[:]
@@ -66,6 +68,14 @@ import CryptoKit
     var selected:[ManagedFestivalRecipient] { recipients.filter(\.selected) }
     var emailReady:Bool { store.snapshot?.automaticEmailEnabled == true && store.snapshot?.emailAccount?.status == "connected" }
     var dirty:Bool { fingerprint != baseline }
+    var editState:FestivalEditState {FestivalEditState(title:title,day:MomentDates.day(date,zone:zone),zone:zone,yearly:yearly,active:active,recipients:recipients,settings:settings)}
+    /// What saving now would change. Message-only approved saves keep existing schedules (the server rewrites their text).
+    var pendingChange:FestivalChange {savedState.map{editState.change(from:$0)} ?? .delivery}
+    /// Placeholder wording while the Wish Message is empty; saved only through useSuggestion().
+    var suggestion:String {WishMessage.suggestion(type:occasionType,title:title)}
+    func useSuggestion() {settings.baseMessage=suggestion;settings.manuallyEdited=false;invalidateApproval()}
+    /// Every edit of the wish (Wish Message tab or card editor) goes through here.
+    func setMessage(_ text:String) {settings.baseMessage=String(text.prefix(500));settings.manuallyEdited=true;invalidateApproval()}
     private func encoded<T:Encodable>(_ value:T) -> String {let encoder=JSONEncoder();encoder.outputFormatting = [.sortedKeys];return String(data:(try? encoder.encode(value)) ?? Data(),encoding:.utf8) ?? ""}
     private var fingerprint:String { let state=[title,MomentDates.day(date,zone:zone),zone,String(yearly),String(active),encoded(recipients),encoded(settings)];return state.joined(separator:"|") }
     init(group:MomentDisplayGroup,store:ImportantMomentsStore,imageService:(any FestivalImageGenerationService)?=nil,imageStorage:any FestivalImageStorageService=ProtectedFestivalImageStorage()) {
@@ -76,25 +86,45 @@ import CryptoKit
             let key=m.sourceKey.hasPrefix(m.type+":"+saved.groupID+":") ? String(m.sourceKey.dropFirst(m.type.count+1+saved.groupID.count+1)) : m.id
             return ManagedFestivalRecipient(momentID:m.id,key:key,name:m.firstName,phone:m.phone,email:m.email,selected:saved.selected[key] ?? m.enabled,contactIdentifier:saved.contactIDs[key] ?? "")
         }
-        if saved.baseMessage.isEmpty {saved.baseMessage=first.latest?.body ?? (first.type == "getWellSoon" ? "Get well soon. Wishing you comfort, rest, and brighter days ahead." : first.type == "festival" ? FestivalValidation.fallback(name:first.title,tone:"Warm") : "\(first.title)! Sending you warm wishes on your special day.")}
+        // An empty Wish Message stays empty (the suggestion is only a placeholder); a draft approved in Review Wish is kept.
+        saved.baseMessage=WishMessage.initial(saved:saved.baseMessage,latestBody:first.latest?.body,latestStatus:first.latest?.status)
+        // Older versions kept the card's text separately; it becomes the Wish Message when that was left empty.
+        var reconciled=saved
+        let adoptedCardText=WishMessage.reconcile(&reconciled,suggestion:WishMessage.suggestion(type:first.type,title:first.title))
+        saved.cardGreeting=nil
         for r in recipients where saved.channels[r.key] == nil {saved.channels[r.key]=r.phone.isEmpty ? (r.email.isEmpty ? "share":"email") : "messages"}
-        settings=saved;sendDate=FestivalValidation.instant(day:first.nextOccurrence,hour:8,minute:0,zone:first.timeZoneID) ?? date
+        settings=reconciled;sendDate=FestivalValidation.instant(day:first.nextOccurrence,hour:8,minute:0,zone:first.timeZoneID) ?? date
         if let draft=saved.draftSendDate.flatMap({ISO8601DateFormatter().date(from:$0)}) {sendDate=draft}
         notify=saved.draftNotify ?? true
         if let plan=group.moments.compactMap(\.upcomingDelivery).first {sendDate=plan.date;zone=plan.timeZoneID}
-        savedImageID=saved.imageID;imageData=imageStorage.load(saved.imageID);notice=saved.catalogNotice;baseline=fingerprint;analytics.record(.opened)
+        savedImageID=saved.imageID;imageData=imageStorage.load(saved.imageID);notice=saved.catalogNotice
+        // The baseline is the saved Wish Message, so adopted card text shows as an unsaved change to approve.
+        let current=settings;settings=saved;baseline=fingerprint;savedState=editState;settings=current
+        if adoptedCardText {notice="Your card’s greeting is now your Wish Message. Tap Save Message to use it for scheduled wishes."}
+        analytics.record(.opened)
         if group.moments.contains(where:{$0.card != nil}) {uploadedCardKey=cardKey}
     }
-    var cardMessage:String {settings.cardGreeting ?? settings.baseMessage}
-    private var cardKey:String {[settings.imageID,title,cardMessage,settings.cardSignature ?? ""].joined(separator:"\u{1F}")}
+    /// The shared card preview: the Wish Message.
+    var cardMessage:String {WishMessage.card(settings)}
+    /// The card a recipient's email carries: their personalized message, else the Wish Message.
+    func cardMessage(for recipient:ManagedFestivalRecipient?) -> String {WishMessage.card(settings,recipientKey:recipient?.key)}
+    /// Card text per moment. Recipients with the same text share one rendered card.
+    private var cardTexts:[String:String] {
+        var texts:[String:String]=[:]
+        for moment in originals where moment.supportsGreetingCard {texts[moment.id]=cardMessage(for:recipients.first{$0.momentID==moment.id})}
+        return texts
+    }
+    private var cardKey:String {[settings.imageID,title,settings.cardSignature ?? ""].joined(separator:"\u{1F}")+cardTexts.sorted{$0.key<$1.key}.map{"\u{1F}\($0.key)=\($0.value)"}.joined()}
     private var cardMomentIDs:[String] {originals.filter(\.supportsGreetingCard).map(\.id)}
-    /// Renders the finished card and attaches it to scheduled emails. A failure leaves the card saved.
+    /// Renders the finished card with the current wish and attaches it to scheduled emails. A failure leaves the card saved.
     func uploadCard() async {
         guard !uploadingCard,let data=imageData,let artwork=UIImage(data:data),!cardMomentIDs.isEmpty else{return}
         uploadingCard=true;defer{uploadingCard=false}
-        let title=title,message=cardMessage,signature=settings.cardSignature ?? "",key=cardKey
+        let title=title,signature=settings.cardSignature ?? "",key=cardKey
         do {
-            try await store.uploadCard(momentIDs:cardMomentIDs){encoding in try await GreetingCardRenderer.jpeg(artwork:artwork,title:title,message:message,signature:signature,encoding:encoding)}
+            for (message,ids) in Dictionary(grouping:cardTexts,by:\.value).mapValues({$0.map(\.key).sorted()}) {
+                try await store.uploadCard(momentIDs:ids){encoding in try await GreetingCardRenderer.jpeg(artwork:artwork,title:title,message:message,signature:signature,encoding:encoding)}
+            }
             uploadedCardKey=key;cardUploadFailed=false;storedCardImage=nil
             await store.refresh()
             originals=originals.map{original in store.moments.first(where:{$0.id==original.id}) ?? original}
@@ -158,9 +188,12 @@ import CryptoKit
         guard !busy else{return}
         guard dirty else {error=nil;notice="No changes to save. Your existing schedule is unchanged.";return}
         busy=true;error=nil;notice=nil;defer{busy=false}
-        do {try await persist(cancelSchedules:cancelSchedules);if let target=pendingTab {tab=target;pendingTab=nil};notice=cancelSchedules ? "Changes saved. Review and schedule your updated wish again.":"Moment changes saved.";analytics.record(.saved)} catch {
+        let keptSchedules=keepsSchedules(cancelSchedules:cancelSchedules)
+        do {try await persist(cancelSchedules:cancelSchedules);if let target=pendingTab {tab=target;pendingTab=nil};notice=cancelSchedules ? "Changes saved. Review and schedule your updated wish again.":keptSchedules ? "Message saved. Scheduled wishes will send the updated message.":"Moment changes saved.";analytics.record(.saved)} catch {
             if case APIError.server(409,let message)=error, message.contains("Existing schedules") {
                 needsScheduleConfirmation=true
+            } else if case APIError.server(let status,let message)=error, let sending=WishMessage.saveError(status:status,message:message) {
+                self.error=sending;pendingTab=nil
             } else {self.error=error.localizedDescription;if let target=pendingTab {tab=target};pendingTab=nil}
         }
     }
@@ -181,7 +214,7 @@ import CryptoKit
         if savedImageID != settings.imageID {imageStorage.delete(savedImageID)}
         for id in stagedImages where id != settings.imageID {imageStorage.delete(id)}
         stagedImages=[];savedImageID=settings.imageID
-        baseline=fingerprint; keys=[:]; draftIDs=[:]; savedPlans=[]
+        baseline=fingerprint; savedState=editState; keys=[:]; draftIDs=[:]; savedPlans=[]
         if cardNeedsUpload {await uploadCard()}
     }
     func generate(aiConsent:Bool) async {
@@ -192,12 +225,15 @@ import CryptoKit
         struct Response:Decodable,Sendable {let draft:WishDraft;let usedAI:Bool}
         do {let result:Response=try await store.request("generate",Input(momentID:first.id,tone:settings.tone,personalContext:settings.personalContext,festivalName:title));settings.baseMessage=result.draft.body;settings.manuallyEdited=false;notice=result.usedAI ? "AI draft ready for review.":"AI unavailable; an editable fallback draft is ready.";analytics.record(.generated)} catch {settings.baseMessage=FestivalValidation.fallback(name:title,tone:settings.tone,type:occasionType);notice="Offline fallback — review before saving."}
     }
+    /// An approved message-only save keeps existing schedules; the server rewrites their text.
+    private func keepsSchedules(cancelSchedules:Bool) -> Bool {!cancelSchedules && hasSchedules && pendingChange == .messageOnly && settings.approvedAt != nil}
     func approve(cancelSchedules:Bool=false) async {
         guard !busy else{return}
-        guard !settings.baseMessage.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty,settings.baseMessage.count<=500,settings.overrides.values.allSatisfy({!$0.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty && $0.count<=500}) else {error="Each message must contain 1–500 characters.";return}
+        if let issue=WishMessage.approvalError(settings) {error=issue;return}
         settings.approvedAt=ISO8601DateFormatter().string(from:Date())
+        let kept=keepsSchedules(cancelSchedules:cancelSchedules)
         await save(cancelSchedules:cancelSchedules)
-        if error != nil || needsScheduleConfirmation {settings.approvedAt=nil}else{analytics.record(.approved);notice="Message approved and saved. Nothing has been sent."}
+        if error != nil || needsScheduleConfirmation {settings.approvedAt=nil}else{analytics.record(.approved);notice=kept ? "Message saved. Scheduled wishes will send the updated message.":"Message approved and saved. Nothing has been sent."}
     }
     var isDesignPreview:Bool { ProcessInfo.processInfo.arguments.contains("-moments-design-preview") }
     func generateImage() {
@@ -221,8 +257,27 @@ import CryptoKit
             } catch is CancellationError {} catch {if !Task.isCancelled {self.error=error.localizedDescription;analytics.record(.imageFailed)}}
         }
     }
+    static let cardMessageNeedsReview="Your card is ready, but its message changes this moment’s scheduled wishes. Open Manage Moment to review and save the message."
     func saveGreetingCard() async -> Bool {
         guard !busy,let moment=originals.first else{return false}
+        // The card prints the Wish Message, so a message edited in the card editor is saved (and approved) as the wish.
+        if let saved=savedState, settings.baseMessage != saved.settings.baseMessage {
+            if let issue=WishMessage.approvalError(settings) {error=issue;return false}
+            busy=true;error=nil;defer{busy=false}
+            settings.approvedAt=ISO8601DateFormatter().string(from:Date())
+            let kept=keepsSchedules(cancelSchedules:false)
+            do {
+                try await persist(cancelSchedules:false)
+                notice=kept ? "Greeting card saved. Scheduled wishes will send the updated message.":"Greeting card saved."
+                return true
+            } catch {
+                settings.approvedAt=nil
+                if case APIError.server(409,let message)=error, message.contains("Existing schedules") {self.error=Self.cardMessageNeedsReview}
+                else if case APIError.server(let status,let message)=error, let sending=WishMessage.saveError(status:status,message:message) {self.error=sending}
+                else {self.error=error.localizedDescription}
+                return false
+            }
+        }
         busy=true;error=nil;defer{busy=false}
         do {
             struct Input:Encodable {let momentID:String;let settings:FestivalSettings}

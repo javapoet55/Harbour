@@ -94,6 +94,19 @@ struct MomentOK: Decodable, Sendable {}
         guard token == generation else { throw APIError.signedOut }
         return result
     }
+    /// One live Manage Moment model per moment, so Manage Moment and every greeting card section edit the same
+    /// wish instead of separate snapshots. Held weakly: once no screen shows it, the next one starts from fresh data.
+    private final class WeakFestivalModel { weak var value: ManageFestivalModel?; init(_ value: ManageFestivalModel) { self.value = value } }
+    private var festivalModels: [String: WeakFestivalModel] = [:]
+    func festivalModel(for group: MomentDisplayGroup) -> ManageFestivalModel {
+        if let live = group.moments.lazy.compactMap({ self.festivalModels[$0.id]?.value }).first { return live }
+        let fresh = group.moments.map { moment in moments.first { $0.id == moment.id } ?? moment }
+        let current = MomentDisplayGroup.groups(fresh).first { $0.moments.contains { $0.id == group.moments[0].id } } ?? group
+        let model = ManageFestivalModel(group: current, store: self)
+        festivalModels = festivalModels.filter { $0.value.value != nil }
+        for moment in group.moments { festivalModels[moment.id] = WeakFestivalModel(model) }
+        return model
+    }
     // The saved greeting card that automatic emails include (PUT/GET/DELETE /api/moments/{id}/card).
     private let cardCache = GreetingCardCache()
     func uploadCard(momentIDs: [String], encode: @Sendable (GreetingCardEncoding) async throws -> Data) async throws {

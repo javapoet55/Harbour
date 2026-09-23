@@ -148,7 +148,8 @@ struct FestivalGreetingCardEditor:View {
     @State private var shared:CardShareItem?
     @FocusState private var editing:Bool
     private var artwork:UIImage? { (selected?.data ?? model.imageData).flatMap(UIImage.init(data:)) }
-    private var greeting:Binding<String> {Binding(get:{model.settings.cardGreeting ?? model.settings.baseMessage},set:{model.settings.cardGreeting=String($0.prefix(500))})}
+    /// The card's text is the Wish Message: editing it here edits the wish that is scheduled.
+    private var greeting:Binding<String> {Binding(get:{model.settings.baseMessage},set:{model.setMessage($0)})}
     private var signature:Binding<String> {Binding(get:{model.settings.cardSignature ?? ""},set:{model.settings.cardSignature=String($0.prefix(80))})}
     var body:some View {
         NavigationStack {
@@ -166,7 +167,8 @@ struct FestivalGreetingCardEditor:View {
                     MomentCard {
                         Label("Make it yours",systemImage:"pencil.and.outline").font(.headline)
                         Text("Greeting").font(.subheadline.bold())
-                        TextField("Your greeting",text:greeting,axis:.vertical).lineLimit(3...8).focused($editing).accessibilityIdentifier("card-greeting")
+                        Text("This is your wish message. Scheduled wishes send the same text.").font(.caption).foregroundStyle(.secondary)
+                        TextField("Your greeting",text:greeting,prompt:Text(model.suggestion),axis:.vertical).lineLimit(3...8).focused($editing).accessibilityIdentifier("card-greeting")
                         Divider()
                         Text("Your signature").font(.subheadline.bold())
                         TextField("Your signature",text:signature,axis:.vertical).lineLimit(1...3).focused($editing).accessibilityIdentifier("card-signature")
@@ -193,7 +195,6 @@ struct FestivalGreetingCardEditor:View {
                     if let error=model.error {Text(error).foregroundStyle(.red)}
                     if artwork != nil {
                         MomentPrimary(title:"Use This Card") {
-                            model.settings.cardGreeting=greeting.wrappedValue
                             if let selected {model.chooseImage(selected)}
                             if model.error == nil {
                                 if saveOnUse {Task{if await model.saveGreetingCard(){dismiss()}}}
@@ -203,7 +204,7 @@ struct FestivalGreetingCardEditor:View {
                         .disabled(model.busy || model.generatingImage)
                         if model.busy {ProgressView("Saving card…")}
                         Button("Share Card",systemImage:"square.and.arrow.up") {share()}.frame(maxWidth:.infinity,minHeight:44).buttonStyle(.bordered)
-                        Text(saveOnUse ? "Use This Card saves the greeting and signature to this moment. Artwork is stored on this device." : "Use This Card applies it to this moment. Tap Save Message on the next screen to save your changes.").font(.caption).foregroundStyle(.secondary)
+                        Text(saveOnUse ? "Use This Card saves the greeting as your wish message, with your signature. Artwork is stored on this device." : "Use This Card applies it to this moment. Tap Save Message on the next screen to save your wish message.").font(.caption).foregroundStyle(.secondary)
                     }
                     GreetingCardUploadStatus(model:model)
                     if artwork != nil || model.storedCardImage != nil {
@@ -239,25 +240,30 @@ private struct CardActivitySheet:UIViewControllerRepresentable {
     func updateUIViewController(_ controller:UIActivityViewController,context:Context){}
 }
 
-/// Reuses the festival card editor without changing a moment's recipients or scheduled text.
+/// The moment's greeting card, on the same model as Manage Moment. The card prints the Wish Message, so a
+/// message edited in the card editor is the wish that is scheduled.
 struct MomentGreetingCardSection:View {
-    @StateObject private var model:ManageFestivalModel
+    @ObservedObject private var model:ManageFestivalModel
     @State private var showingEditor=false
+    private let momentID:String
     var greeting:String?
-    init(moment:ImportantMoment,store:ImportantMomentsStore,greeting:String?=nil) {
+    var onMessageChange:((String)->Void)?
+    init(moment:ImportantMoment,store:ImportantMomentsStore,greeting:String?=nil,onMessageChange:((String)->Void)?=nil) {
         let current=store.moments.first(where:{$0.id==moment.id}) ?? moment
-        _model=StateObject(wrappedValue:ManageFestivalModel(group:MomentDisplayGroup.groups([current])[0],store:store))
-        self.greeting=greeting
+        let group=MomentDisplayGroup.editableGroups(store.moments).first{$0.moments.contains{$0.id==current.id}} ?? MomentDisplayGroup.groups([current])[0]
+        model=store.festivalModel(for:group)
+        momentID=current.id;self.greeting=greeting;self.onMessageChange=onMessageChange
     }
     var body:some View {
         VStack(alignment:.leading,spacing:14) {
             if let data=model.imageData,let artwork=UIImage(data:data) {
-                FestivalGreetingCard(artwork:artwork,title:model.title,message:model.settings.cardGreeting ?? model.settings.baseMessage,signature:model.settings.cardSignature ?? "")
+                FestivalGreetingCard(artwork:artwork,title:model.title,message:model.cardMessage(for:model.recipients.first{$0.momentID==momentID}),signature:model.settings.cardSignature ?? "")
             } else if let data=model.storedCardImage,let stored=UIImage(data:data) {
                 StoredGreetingCard(image:stored)
             }
             Button(model.imageData == nil ? "Create AI Greeting Card":"Edit Greeting Card",systemImage:"sparkles") {
-                if let greeting,!greeting.isEmpty {model.settings.baseMessage=greeting}
+                // The message being reviewed on this screen is the wish the card prints.
+                if let greeting,!greeting.isEmpty,greeting != model.settings.baseMessage {model.setMessage(greeting)}
                 showingEditor=true
             }.buttonStyle(.borderedProminent).accessibilityIdentifier("moment-greeting-card")
             Text("Create and share a card with your greeting and signature. Scheduled emails include your saved card; Messages send the text only.").font(.caption).foregroundStyle(.secondary)
@@ -268,5 +274,6 @@ struct MomentGreetingCardSection:View {
             if let notice=model.notice {Text(notice).font(.caption)}
         }.sheet(isPresented:$showingEditor){FestivalGreetingCardEditor(model:model,saveOnUse:true)}
             .task{await model.loadStoredCard()}
+            .onChange(of:model.settings.baseMessage){_,message in onMessageChange?(message)}
     }
 }
