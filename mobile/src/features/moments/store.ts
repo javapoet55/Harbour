@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 import { createStore, useStore } from 'zustand';
 
 import { ApiError, messages } from '../../api/client';
@@ -14,6 +15,7 @@ import {
 } from '../../api/moments';
 import { ownerKeyFor } from '../../actions/persistence';
 import { TaskActionError } from '../../actions/errors';
+import { alertNotificationsOff } from '../../lib/notificationPermission';
 import { isoString } from './dates';
 import { planEditable, sortedPlans } from './domain';
 import {
@@ -235,13 +237,25 @@ export function createMomentsStore(deps: MomentsDeps) {
           await get().updateReminderStatus();
         }
         if (!['authorized', 'provisional', 'ephemeral'].includes(get().reminderAuthorization)) {
-          throw new TaskActionError('notificationsDenied');
+          // Denied or blocked: the system will not prompt again, so point at Settings instead.
+          const denial = new TaskActionError('notificationsDenied');
+          alertNotificationsOff(denial.message);
+          throw denial;
         }
       },
 
-      /** Request once, contextually on the Moments screen; never override a denial. */
+      /**
+       * Request once, contextually on the Moments screen; never override a denial.
+       *
+       * ANDROID NEVER PROMPTS HERE. Swift may, because `.task` on the Moments list is also the first
+       * screen that wants a reminder; Android 13+ gets one POST_NOTIFICATIONS prompt per install in
+       * practice, and spending it on a list the person is only browsing means the prompt is gone by
+       * the time they schedule a wish. There it waits for the three places that need it: scheduling a
+       * wish with a reminder, "Enable wish reminders" in Moment settings, and a task reminder.
+       */
       async prepareDefaultReminders() {
         await get().updateReminderStatus();
+        if (Platform.OS === 'android') return;
         if (get().reminderAuthorization === 'notDetermined') await get().enableWishReminders();
       },
 

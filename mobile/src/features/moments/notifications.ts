@@ -1,6 +1,13 @@
 import * as Notifications from 'expo-notifications';
 
 import type { ImportantMoment } from '../../api/moments';
+import {
+  ensureReminderChannel,
+  notificationPermission,
+  reminderChannel,
+  requestNotificationPermission,
+  type ReminderAuthorization,
+} from '../../lib/notificationPermission';
 import { addDays, momentDate, momentDay, zonedInstant } from './dates';
 import { planDate, planEditable, readFestivalSettings, sortedPlans } from './domain';
 
@@ -23,7 +30,7 @@ export type MomentNotificationPayload = { momentID: string; momentOwner: string 
 export type MomentReminder = { id: string; at: number; body: string };
 
 /** `UNAuthorizationStatus`, as far as the Moments settings screen distinguishes it. */
-export type ReminderAuthorization = 'notDetermined' | 'denied' | 'authorized' | 'provisional' | 'ephemeral';
+export type { ReminderAuthorization };
 
 /**
  * Every reminder the current snapshot wants, soonest first (`:147-163`):
@@ -72,18 +79,12 @@ export function buildMomentReminders(moments: ImportantMoment[], now: number = D
 }
 
 export async function reminderAuthorization(): Promise<ReminderAuthorization> {
-  const settings = await Notifications.getPermissionsAsync();
-  const ios = settings.ios?.status;
-  if (ios !== undefined && ios === Notifications.IosAuthorizationStatus.PROVISIONAL) return 'provisional';
-  if (ios !== undefined && ios === Notifications.IosAuthorizationStatus.EPHEMERAL) return 'ephemeral';
-  if (settings.granted) return 'authorized';
-  if (settings.status === 'undetermined' || (settings.status !== 'denied' && settings.canAskAgain)) return 'notDetermined';
-  return 'denied';
+  return notificationPermission();
 }
 
-/** `requestAuthorization(options: [.alert, .sound])` (`:131`). */
+/** `requestAuthorization(options: [.alert, .sound])` (`:131`); POST_NOTIFICATIONS on Android 13+. */
 export async function requestReminderAuthorization(): Promise<void> {
-  await Notifications.requestPermissionsAsync({ ios: { allowAlert: true, allowSound: true } });
+  await requestNotificationPermission({ ios: { allowAlert: true, allowSound: true } });
 }
 
 /** `clearNotifications()` (`:138-142`): pending AND delivered, prefix only. */
@@ -121,6 +122,7 @@ export async function replaceMomentNotifications({
   await clearMomentNotifications();
   const authorization = await reminderAuthorization();
   if (authorization !== 'authorized' && authorization !== 'provisional') return null;
+  await ensureReminderChannel();
   const pending = (await Notifications.getAllScheduledNotificationsAsync()).length;
   const available = Math.max(0, MOMENT_NOTIFICATION_CAP - pending);
   const requests = buildMomentReminders(moments, now);
@@ -137,7 +139,7 @@ export async function replaceMomentNotifications({
           data: { momentID: item.id, momentOwner: owner } satisfies MomentNotificationPayload,
         },
         // `UNTimeIntervalNotificationTrigger(timeInterval: max(1, …))`.
-        trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: new Date(Math.max(now + 1000, item.at)) },
+        trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: new Date(Math.max(now + 1000, item.at)), ...reminderChannel() },
       });
     } catch {
       error = MOMENT_NOTIFICATION_ERRORS.failed;

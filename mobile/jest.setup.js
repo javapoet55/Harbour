@@ -48,10 +48,12 @@ jest.mock('expo-crypto', () => ({
 // exercise them mock them again with their own answers.
 jest.mock('expo-notifications', () => ({
   DEFAULT_ACTION_IDENTIFIER: 'expo.modules.notifications.actions.DEFAULT',
-  IosAuthorizationStatus: { PROVISIONAL: 3 },
+  IosAuthorizationStatus: { PROVISIONAL: 3, EPHEMERAL: 4 },
+  AndroidImportance: { HIGH: 4 },
   SchedulableTriggerInputTypes: { DATE: 'date' },
   setNotificationHandler: jest.fn(),
   setNotificationCategoryAsync: jest.fn(async () => undefined),
+  setNotificationChannelAsync: jest.fn(async () => null),
   getPermissionsAsync: jest.fn(async () => ({ granted: true, canAskAgain: true })),
   requestPermissionsAsync: jest.fn(async () => ({ granted: true })),
   getAllScheduledNotificationsAsync: jest.fn(async () => []),

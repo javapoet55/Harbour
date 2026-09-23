@@ -830,3 +830,73 @@ button.
    valid, then full strength. "Send a new code" is a centred link under it.
 3. The code field opens the number pad and stops at six digits.
 4. iOS: the screen looks as before.
+
+---
+
+## 13. Notification permission is requested, not assumed (2026-09-23)
+
+JavaScript only; no new build needed. POST_NOTIFICATIONS is already in the merged manifest —
+expo-notifications declares it. iOS behaviour is unchanged except that the denial now comes with a
+dialog offering Settings, which it did not have on either platform before.
+
+### What was wrong
+
+On a fresh install, scheduling a wish with "Notify me 1 hour before" went straight to the
+"notifications are off, enable them in Settings" error. The system prompt never appeared, so there
+was no way to turn reminders on from inside the app.
+
+Android 13+ guards notifications with the POST_NOTIFICATIONS runtime permission, and
+`expo-notifications`' `getPermissionsAsync` has no `undetermined` to report it with:
+`NotificationPermissionsModule` resolves `status: 'denied'` whenever
+`NotificationManagerCompat.areNotificationsEnabled()` is false, which it is until the permission is
+granted. `reminderAuthorization()` mapped that `denied` to `denied`, so
+`ImportantMomentsStore.authorizeNotifications`' `notDetermined` branch — the one that asks — was
+unreachable on Android and every path fell through to the denial.
+
+`canAskAgain` is the field that separates the states: it is `true` while Android will still show the
+prompt (never asked, or refused once) and `false` once the person has blocked it or switched
+Nexdo's notifications off in Settings.
+
+Two smaller things went with it: nothing created a notification channel, so a scheduled reminder
+would have been dropped by Android 8+ even after the permission was granted; and the Moments list's
+`prepareDefaultReminders` would have spent the install's one prompt on a screen the person was only
+browsing.
+
+### What changed
+
+`src/lib/notificationPermission.ts` is new and is now the only place either reminder path reads,
+requests or explains notification permission.
+
+| Piece | What it does |
+|---|---|
+| `classifyNotificationPermission` | Android decides on `status === 'granted'` for authorized and on `canAskAgain` for undetermined vs denied; iOS keeps `UNAuthorizationStatus`, provisional and ephemeral included |
+| `requestNotificationPermission` | Creates the channel, then shows the system prompt. Called only from the three places below |
+| `ensureReminderChannel` / `reminderChannel()` | The `reminders` channel at `AndroidImportance.HIGH`, created before any `scheduleNotificationAsync` and named on every `DATE` trigger. No-ops on iOS |
+| `alertNotificationsOff` | The "Scheduled notifications are off" dialog, with **Open Settings** (`Linking.openSettings()`) and **Not now**. Shown only for denied or blocked |
+
+Where the prompt now comes up, all three at the moment the person asks for a reminder:
+
+1. **Scheduling a wish** with "Notify me 1 hour before" or a manual send —
+   `schedule-wish.tsx` already called `authorizeNotifications()` there, and Manage Moment does the
+   same through `manageModel.ts`.
+2. **"Enable wish reminders"** in Moment settings (`enableWishReminders`).
+3. **A task reminder** — `ensureNotificationPermission()` inside `replaceScheduledNotifications`,
+   which Swift also runs there rather than at launch.
+
+`prepareDefaultReminders` still refreshes the status on both platforms, but on Android it stops
+there and does not prompt. Nothing at launch asks, and a rebuild of the reminder set
+(`replaceMomentNotifications`) never asks either — it schedules only when already authorized.
+
+### Check it on a phone
+
+1. Fresh install, Android 13+. Open Moments: no prompt.
+2. Schedule a wish with "Notify me 1 hour before" → Android's notification prompt appears. Allow it:
+   the wish is scheduled and the reminder shows up under Settings → Notifications → Nexdo →
+   Reminders.
+3. Repeat with Don't allow: the "Scheduled notifications are off" dialog appears; **Open Settings**
+   goes to Nexdo's settings page.
+4. Turn notifications off in Settings, come back and schedule again: the dialog appears with no
+   system prompt in front of it.
+5. Moment settings shows "Allow notifications to enable wish reminders" with the **Enable wish
+   reminders** button before the answer, and "off in your phone's Settings" after a block.
+6. iOS: the prompt appears when it always did; a denial now also opens the dialog.

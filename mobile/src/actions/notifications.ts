@@ -1,6 +1,13 @@
 import * as Notifications from 'expo-notifications';
 
 import type { StoredTaskAction, TaskActionNotification } from '../lib/taskAction';
+import {
+  alertNotificationsOff,
+  ensureReminderChannel,
+  notificationPermission,
+  reminderChannel,
+  requestNotificationPermission,
+} from '../lib/notificationPermission';
 import { NOTIFICATION_ID_PREFIX } from '../lib/taskAction';
 import { TaskActionError } from './errors';
 
@@ -78,18 +85,18 @@ export async function registerActionCategory(): Promise<void> {
  * (TaskActionNotifications.swift:20-25), not at launch.
  *
  * Swift asks for permission only when there is at least one reminder to schedule, and only if the
- * status is still `notDetermined`. An already-denied app is never re-prompted; it throws instead.
+ * status is still `notDetermined`. An already-denied app is never re-prompted; it shows the Settings
+ * dialog and throws instead. On Android 13+ the prompt this raises is POST_NOTIFICATIONS.
  */
 export async function ensureNotificationPermission(): Promise<void> {
-  const settings = await Notifications.getPermissionsAsync();
-  if (settings.granted || settings.ios?.status === Notifications.IosAuthorizationStatus.PROVISIONAL) return;
-  if (settings.canAskAgain) {
-    const asked = await Notifications.requestPermissionsAsync({
-      ios: { allowAlert: true, allowSound: true, allowBadge: true },
-    });
-    if (asked.granted) return;
+  let status = await notificationPermission();
+  if (status === 'notDetermined') {
+    status = await requestNotificationPermission({ ios: { allowAlert: true, allowSound: true, allowBadge: true } });
   }
-  throw new TaskActionError('notificationsDenied');
+  if (status === 'authorized' || status === 'provisional' || status === 'ephemeral') return;
+  const denial = new TaskActionError('notificationsDenied');
+  alertNotificationsOff(denial.message);
+  throw denial;
 }
 
 /**
@@ -128,6 +135,7 @@ export async function replaceScheduledNotifications({
   // `guard !notifications.isEmpty else { return }` — an empty plan never asks for permission.
   if (notifications.length === 0) return;
   await ensureNotificationPermission();
+  await ensureReminderChannel();
 
   for (const notification of notifications) {
     const action = actions.find((item) => item.id === notification.actionId);
@@ -142,7 +150,7 @@ export async function replaceScheduledNotifications({
         data: { actionID: action.id, owner } satisfies ActionNotificationPayload,
       },
       // `UNCalendarNotificationTrigger(dateMatching:repeats: false)` on the DEVICE calendar.
-      trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: new Date(notification.fireAt) },
+      trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: new Date(notification.fireAt), ...reminderChannel() },
     });
   }
 }
