@@ -14,9 +14,17 @@ export default defineConfig({
     environment: 'node',
     setupFiles: ['./vitest.setup.ts'],
     globalSetup: ['./vitest.global-setup.ts'],
-    // Vitest loads .env into process.env. Real VAPID keys would switch the push provider off its mock
-    // and fail every send for want of a browser subscription, so the suite pins them empty.
-    env: { HARBOR_DATABASE_URL: process.env.HARBOR_DATABASE_URL, VAPID_PUBLIC_KEY: '', VAPID_PRIVATE_KEY: '' },
+    // Vitest loads .env into process.env, which would hand the tests a developer's real provider
+    // credentials: web-push failing for want of a browser subscription, and SendGrid and Twilio
+    // actually posting to the network from a test run. Every outbound key is pinned empty so each
+    // provider takes its mock branch. A test that needs a configured provider stubs it for itself.
+    env: {
+      HARBOR_DATABASE_URL: process.env.HARBOR_DATABASE_URL,
+      VAPID_PUBLIC_KEY: '',
+      VAPID_PRIVATE_KEY: '',
+      SENDGRID_API_KEY: '',
+      TWILIO_ACCOUNT_SID: '',
+    },
     testTimeout: 20000,
   },
   resolve: {

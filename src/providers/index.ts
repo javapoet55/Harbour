@@ -2,6 +2,7 @@ import { observedFetch } from '@/server/health/telemetry';
 import type { EmailProvider, PushProvider, SmsProvider } from './types';
 import webpush from 'web-push';
 import { prisma } from '@/server/db';
+import { PUSH_NOT_REGISTERED } from '@/lib/escalation';
 
 const configured = (value?: string) => Boolean(value && value.trim());
 
@@ -65,7 +66,8 @@ export const pushProvider: PushProvider = {
     }
     webpush.setVapidDetails(process.env.VAPID_SUBJECT || 'mailto:admin@example.com', publicKey, privateKey);
     const subscriptions = await prisma.pushSubscription.findMany({ where: { userId: message.userId } });
-    if (!subscriptions.length) return { id: '', status: 'FAILED', reason: 'No browser push subscription is registered' };
+    // PERMANENT_FAILURE_REASONS matches on this exact wording, so the two read it from one place.
+    if (!subscriptions.length) return { id: '', status: 'FAILED', reason: PUSH_NOT_REGISTERED };
     const ids: string[] = [];
     const failures: string[] = [];
     for (const subscription of subscriptions) {
