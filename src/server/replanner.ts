@@ -44,7 +44,10 @@ export async function storeExecutiveProposal(userId: string, plan: { generatedAt
   const payload: ReplanPayload = { version: 1, kind: INTENT, ...plan, contextVersion, executive: true };
   const action = await prisma.$transaction(async (tx) => {
     await tx.assistantAction.updateMany({ where: { userId, intent: 'EXECUTIVE_REPLAN', executed: false }, data: { executed: true, confirmation: 'SUPERSEDED' } });
-    return plan.moves.length ? tx.assistantAction.create({ data: { userId, intent: 'EXECUTIVE_REPLAN', payloadJson: JSON.stringify(payload), confirmation: 'REQUIRED' } }) : null;
+    // Stamped from the same clock as the EXECUTIVE_READ that follows it (executive-companion.ts:140).
+    // A database default would come from the engine's own clock, which orders the pair by two different
+    // clocks and can hide the read from `lastExecutiveTurn`.
+    return plan.moves.length ? tx.assistantAction.create({ data: { userId, intent: 'EXECUTIVE_REPLAN', payloadJson: JSON.stringify(payload), confirmation: 'REQUIRED', createdAt: new Date() } }) : null;
   });
   if (!action) return null;
   inc('schedule_change_proposed');
