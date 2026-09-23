@@ -66,3 +66,11 @@ import Testing
     #expect(GroceryList.itemCount(1)=="1 item")
     #expect(GroceryList.itemCount(2)=="2 items")
 }
+
+@Test func shoppingVoiceIgnoresInactiveWhileMicrophonePermissionIsRequested(){
+    #expect(!ShoppingVoiceScene.shouldClose(.inactive,requestingPermission:true))
+    #expect(ShoppingVoiceScene.shouldClose(.inactive,requestingPermission:false))
+    #expect(ShoppingVoiceScene.shouldClose(.background,requestingPermission:true))
+    #expect(ShoppingVoiceScene.shouldClose(.background,requestingPermission:false))
+    #expect(!ShoppingVoiceScene.shouldClose(.active,requestingPermission:false))
+}
