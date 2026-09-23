@@ -4,12 +4,12 @@
 const PRODUCTION_APP_URL = 'https://app.nexdoapp.com';
 export const EMAIL_LOGO_PATH = '/email/nexdo-logo-email.png';
 
-const colors = {
+export const colors = {
   primary: '#2F6BFF', violet: '#7B4DFF', pink: '#E84CA8',
   heading: '#0B0B2E', body: '#3C3C50', muted: '#6B6B80',
   background: '#F5F6FA', card: '#FFFFFF', codeCard: '#F0F3FF', codeBorder: '#DCE3FF',
 };
-const fontStack = "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif";
+export const fontStack = "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif";
 const monoStack = "ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono','Courier New',monospace";
 
 export type EmailTemplateInput = {
