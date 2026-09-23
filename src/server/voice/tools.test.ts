@@ -7,7 +7,7 @@ vi.mock('@/server/tasks', () => mocks);
 vi.mock('@/server/schedule-intelligence', () => ({ loadScheduleContext: mocks.context }));
 vi.mock('@/lib/executive-recommendations', () => ({ buildExecutiveRecommendation: mocks.recommend }));
 vi.mock('@/server/reminders', () => ({ scheduleDefaultReminders: mocks.reminders, scheduleRequestedReminder: mocks.requestedReminder }));
-vi.mock('@/server/calendar-sync', () => ({ pushTaskToExternal: vi.fn() }));
+vi.mock('@/server/calendar-sync', () => ({ pushTaskToExternal: vi.fn(), pushEventToExternal: vi.fn(async () => ({ status: 'not_connected', total: 0, succeeded: 0 })) }));
 vi.mock('@/server/replanner', () => ({ generateReplanProposal: vi.fn() }));
 vi.mock('@/server/agenda', () => ({ listEventsInRange: mocks.events }));
 vi.mock('@/server/db', () => ({ prisma: { task: { findMany: mocks.tasks, findFirst: mocks.owned, update: mocks.taskUpdate }, category: { findMany: mocks.categories, create: mocks.categoryCreate }, user: { findUniqueOrThrow: mocks.user }, calendarEvent: { upsert: mocks.eventSave }, reminder: { deleteMany: vi.fn(), upsert: mocks.reminderSave }, recurrenceRule: { deleteMany: vi.fn(), upsert: mocks.recurrenceSave } } }));
@@ -75,7 +75,7 @@ it('creates a calendar event in the owned timezone with a stable key and no invi
   const input = { title: 'Dentist', startAt: '2099-01-01T10:00:00-08:00', endAt: '2099-01-01T11:00:00-08:00' };
   const result = await executeVoiceTool('u', 's', 'event-call', 'create_calendar_event', input);
   await executeVoiceTool('u', 's', 'event-call', 'create_calendar_event', input);
-  expect(result).toMatchObject({ success: true, savedAs: 'NexDo calendar event' });
+  expect(result).toMatchObject({ success: true, savedAs: 'NexDo calendar event', calendarPush: { status: 'not_connected' }, message: 'Saved in Nexdo only. No connected calendar is set to receive Nexdo events. No invitations were sent.' });
   expect(mocks.eventSave.mock.calls[0][0].create).toMatchObject({ userId: 'u', timeZone: 'America/Los_Angeles', source: 'harbor' });
   expect(mocks.eventSave.mock.calls[0][0].where).toEqual(mocks.eventSave.mock.calls[1][0].where);
   await expect(executeVoiceTool('u', 's', 'bad', 'create_calendar_event', { ...input, endAt: input.startAt })).rejects.toThrow();

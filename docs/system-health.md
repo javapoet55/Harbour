@@ -128,6 +128,7 @@ Modified:
 - `src/app/api/billing/route.ts`
 - `src/app/api/calendar/connections/route.ts`
 - `src/app/api/calendar/events/route.ts`
+- `src/app/api/calendar/events/[id]/route.ts`
 - `src/app/api/calendar/oauth/[provider]/callback/route.ts`
 - `src/app/api/calendar/oauth/[provider]/connect-token/route.ts`
 - `src/app/api/calendar/oauth/[provider]/start/route.ts`

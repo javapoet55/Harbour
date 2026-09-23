@@ -1,5 +1,8 @@
 import { prisma } from './db';
 import { calendarProviderFor } from '@/providers/calendar';
+import type { CalendarConnection } from '@/generated/prisma';
+import type { CalendarPushResult } from '@/lib/calendar-push';
+import { log } from '@/lib/logger';
 
 export async function syncConnection(userId: string, connectionId: string) {
   const connection = await prisma.calendarConnection.findFirst({ where: { id: connectionId, userId } });
@@ -39,12 +42,19 @@ export async function syncConnection(userId: string, connectionId: string) {
     if (claimed.count !== 1) throw new Error('CALENDAR_SYNC_STALE');
     const previous = await tx.calendarEvent.findMany({ where: { userId, connectionId: connection.id } });
     const byKey = new Map(previous.map((event) => [event.syncKey, event]));
+    // Nexdo events written to this calendar come back in the listing; the Nexdo row is the original.
+    const pushed = new Set((await tx.calendarEvent.findMany({ where: { userId, pushedConnectionId: connection.id, pushedExternalId: { not: null } }, select: { pushedExternalId: true } })).map((event) => event.pushedExternalId));
     let created = 0; let updated = 0; let deleted = 0;
     const seen = new Set<string>();
     for (const event of result.events) {
     const syncKey = `${connection.id}:${event.externalId}`;
-    seen.add(syncKey);
     const existing = byKey.get(syncKey);
+    if (pushed.has(event.externalId!)) {
+      // A sync that ran between the provider write and storing its id imported a copy; retire it.
+      if (existing && !existing.deletedAt) await tx.calendarEvent.update({ where: { id: existing.id }, data: { deletedAt: lastSyncedAt } });
+      continue;
+    }
+    seen.add(syncKey);
     if (event.deleted) {
       if (existing && !existing.deletedAt) {
         await tx.calendarEvent.update({ where: { id: existing.id }, data: { deletedAt: lastSyncedAt } });
@@ -99,4 +109,87 @@ export async function pushTaskToExternal(userId: string, taskId: string) {
   });
   await prisma.task.update({ where: { id: task.id }, data: { externalEventId: written.externalId, calendarEventId: mirror.id } });
   return written;
+}
+
+// A daily repeat can hold a year of occurrences: bound the parallel writes and the time spent,
+// and stop after the first failure so an unavailable provider does not hold the request open.
+const EVENT_PUSH_CONCURRENCY = 5;
+const EVENT_PUSH_BUDGET_MS = 40_000;
+const gone = (error: unknown) => [404, 410].includes(Number((error as { status?: number }).status));
+
+/**
+ * Writes Nexdo-created events (source 'harbor') to the user's writable calendar, the one tasks use.
+ * Each local event is one occurrence, so a repeating series is written as separate provider events.
+ * A deleted event is removed from the calendar it was written to. Never throws: a provider failure
+ * is logged and reported in the result, and the local events are left as saved.
+ */
+export async function pushEventToExternal(userId: string, eventIds: string | string[], options: { skipPushed?: boolean } = {}): Promise<CalendarPushResult> {
+  const ids = Array.isArray(eventIds) ? eventIds : [eventIds];
+  let events;
+  let fallback: CalendarConnection | null = null;
+  try {
+    events = await prisma.calendarEvent.findMany({ where: { userId, id: { in: ids }, source: 'harbor', connectionId: null }, include: { pushedConnection: true }, orderBy: { startAt: 'asc' } });
+    if (events.some((event) => !event.pushedConnection && !event.deletedAt)) fallback = await writableConnection(userId);
+  } catch (error) {
+    log('error', 'calendar.event_push_failed', { stage: 'load', message: error instanceof Error ? error.message : 'unknown' });
+    return { status: 'failed', total: ids.length, succeeded: 0 };
+  }
+  const groups = new Map<string, { connection: CalendarConnection; events: typeof events }>();
+  let succeeded = 0; let removed = 0; let failed = 0; let attempted = 0;
+  for (const event of events) {
+    // An id from a since-disconnected calendar (pushedConnectionId set null) is not reused elsewhere.
+    const connection = event.pushedConnection ?? (event.deletedAt ? null : fallback);
+    if (!connection) continue;
+    attempted += 1;
+    if (options.skipPushed && event.pushedConnection && event.pushedExternalId && !event.deletedAt) { succeeded += 1; continue; }
+    const group = groups.get(connection.id) ?? { connection, events: [] };
+    group.events.push(event);
+    groups.set(connection.id, group);
+  }
+  const deadline = Date.now() + EVENT_PUSH_BUDGET_MS;
+  let calendarName = fallback?.calendarName;
+  for (const { connection, events: batch } of groups.values()) {
+    calendarName ??= connection.calendarName;
+    let provider;
+    try {
+      if (!connection.writeEnabled || connection.status !== 'connected') throw new Error('CALENDAR_WRITE_DISABLED');
+      provider = await calendarProviderFor(connection);
+    } catch (error) {
+      log('warn', 'calendar.event_push_failed', { stage: 'connect', provider: connection.provider, message: error instanceof Error ? error.message : 'unknown' });
+      failed += batch.length;
+      continue;
+    }
+    let stopped = false;
+    const queue = [...batch];
+    const worker = async () => {
+      for (let event = queue.shift(); event; event = queue.shift()) {
+        if (stopped || Date.now() > deadline) { failed += 1; continue; }
+        const externalId = event.pushedConnectionId === connection.id ? event.pushedExternalId ?? undefined : undefined;
+        try {
+          if (event.deletedAt) {
+            try { if (externalId) await provider.remove(externalId); } catch (error) { if (!gone(error)) throw error; }
+            await prisma.calendarEvent.updateMany({ where: { id: event.id, userId }, data: { pushedConnectionId: null, pushedExternalId: null } });
+            removed += 1;
+          } else {
+            const write = { title: event.title, notes: event.notes, location: event.location, startAt: event.startAt, endAt: event.endAt };
+            let written;
+            // Deleted directly in the provider: write it again rather than leave the edit unsynchronized.
+            try { written = await provider.upsert({ ...write, externalId }); }
+            catch (error) { if (!externalId || !gone(error)) throw error; written = await provider.upsert(write); }
+            await prisma.calendarEvent.updateMany({ where: { id: event.id, userId }, data: { pushedConnectionId: connection.id, pushedExternalId: written.externalId } });
+          }
+          succeeded += 1;
+        } catch (error) {
+          stopped = true;
+          failed += 1;
+          log('warn', 'calendar.event_push_failed', { stage: event.deletedAt ? 'remove' : 'upsert', provider: connection.provider, status: (error as { status?: number }).status, message: error instanceof Error ? error.message : 'unknown' });
+        }
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(EVENT_PUSH_CONCURRENCY, batch.length) }, worker));
+  }
+  const status = attempted === 0 ? 'not_connected'
+    : failed === 0 ? (removed > 0 && removed === succeeded ? 'removed' : 'pushed')
+    : succeeded === 0 ? 'failed' : 'partial';
+  return { status, total: attempted, succeeded, ...(calendarName ? { calendarName } : {}) };
 }

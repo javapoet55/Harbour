@@ -192,7 +192,7 @@ All routes require the session cookie except the auth routes, the OAuth callback
 | Day and schedule | `GET /api/agenda`, `POST /api/availability`, `GET/POST /api/schedule-intelligence`, `GET/POST /api/protected-time`, `GET /api/weekly-summary`, `GET /api/weather` |
 | Planning | `GET /api/planner`, `GET/POST /api/planner/replan`, `GET/DELETE /api/insights` |
 | Assistant and voice | `POST /api/assistant`, `/api/speech`, `/api/transcribe`, `/api/realtime/task-session`, `/api/realtime/transcription-session`, `/api/realtime/tool` |
-| Calendar | `GET/PATCH/DELETE /api/calendar/connections`, `POST /api/calendar/events`, `POST /api/calendar/sync`, `GET /api/calendar/oauth/[provider]/start`, `GET /api/calendar/oauth/[provider]/callback` |
+| Calendar | `GET/PATCH/DELETE /api/calendar/connections`, `POST /api/calendar/events`, `PATCH/DELETE /api/calendar/events/[id]`, `POST /api/calendar/sync`, `GET /api/calendar/oauth/[provider]/start`, `GET /api/calendar/oauth/[provider]/callback` |
 | Notifications | `GET/POST /api/notifications` (`tick`, `ack`, `test`), `GET/POST/DELETE /api/push-subscriptions` |
 | Billing | `GET/POST /api/billing` |
 
@@ -219,7 +219,9 @@ Errors are returned as `{ "error": "<message>" }`, sometimes with a `code` such 
 - Google Calendar and Outlook connections through OAuth. Tokens are stored encrypted and refreshed automatically.
 - Sync imports the primary calendar from 30 days back to a year ahead, including edits, deletions, and all-day events.
 - Scheduled tasks are written to the connected calendar when "Allow Nexdo writes" is on. Deleted or cancelled tasks remove their event.
-- Events added in Nexdo's own calendar screen stay in Nexdo and are not sent to Google.
+- Events created in Nexdo (the calendar screen, repeating events, and voice) are written to the same calendar tasks use: the default calendar if it accepts writes, otherwise the first connected calendar that does. Each repeat occurrence becomes its own provider event. `PATCH /api/calendar/events/[id]` and `DELETE /api/calendar/events/[id]` send edits and deletions to the stored provider event (`CalendarEvent.pushedConnectionId` / `pushedExternalId`). Sync skips these events when they come back from the provider, so they are not imported twice.
+- A calendar write never blocks the save. Every event response carries `calendarPush` (`status`: `pushed`, `removed`, `not_connected`, `failed` or `partial`, plus `total`, `succeeded`, `calendarName`), a `message` to show, and a `warnings` entry when the write failed. Retrying a repeating event with the same `requestId` writes only the occurrences still missing. No invitations are sent.
+- Client captions that still describe the old read-only behaviour must change: `ios/App/ProfileView.swift:370` and `mobile/src/lib/calendarConnections.ts` (`READ_ONLY_CAPTION`, on the React Native branch). The toggle label and its confirmation (`NexdoApp.swift:324`, `writesMessage`) mention only tasks and should name events as well.
 
 ### AI assistant and voice
 - Ask Nexdo answers questions about tasks and schedule, and proposes changes (create, complete, reschedule, delete) that need approval before anything is saved. Without OpenAI it falls back to a built-in parser.
@@ -278,6 +280,9 @@ A React Native (Expo) replacement is planned. See [IOS_TO_REACT_NATIVE.md](IOS_T
 | Calendar | A failed token refresh does not mark the connection `status = error`. |
 | Calendar | Disconnecting does not revoke Nexdo's access at Google. |
 | Calendar | Only the primary calendar syncs. Microsoft Outlook is untested against the live service. |
+| Calendar | Changes made in Google or Outlook to an event created in Nexdo are not pulled back; the next Nexdo edit overwrites them. An event deleted in the provider is written again on the next Nexdo edit. |
+| Calendar | Neither app has event edit or delete screens yet; `PATCH/DELETE /api/calendar/events/[id]` are server-only so far. Event edits skip the schedule-conflict check. |
+| Calendar | A repeating event is written as individual provider events, not a provider recurring series, so it cannot be edited as a series in Google. |
 | Google OAuth | The Google Cloud app is in Testing mode: listed test users only, and connections expire after 7 days. Public launch needs Google verification (own domain, privacy policy, demo video). |
 | Accounts | New web accounts default to `America/Los_Angeles` instead of the browser's time zone. The iOS app syncs the device time zone on sign-in. |
 | Accounts | Failed email sends still count toward the 3-codes-per-15-minutes limit, and a blocked resend looks like a success. |
