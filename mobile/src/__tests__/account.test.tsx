@@ -4,6 +4,8 @@ import { Alert, Linking, Platform, StyleSheet } from 'react-native';
 
 import type { Profile } from '../api';
 import { deliverOAuthCallback, redirectOAuthCallback, resetOAuthCallbacks } from '../lib/oauthCallbacks';
+import { deviceTimeZone } from '../lib/profileSettings';
+import { addDays, startOfDay } from '../lib/taskQuery';
 import { queryKeys } from '../query/keys';
 import { useAppearance } from '../store/appearance';
 import { useConsent } from '../store/consent';
@@ -811,7 +813,7 @@ describe('calendar connections', () => {
     await waitFor(() => expect(screen.getByTestId('settings-connection-c1')).toBeTruthy());
     expect(screen.getByText('Work')).toBeTruthy();
     expect(screen.getByText('Google Calendar · ada@example.com')).toBeTruthy();
-    expect(screen.getByText('Synchronized 5 minutes ago')).toBeTruthy();
+    expect(screen.getByTestId('settings-last-synced-c1')).toHaveTextContent('Last synced 5 min ago');
     expect(screen.getByTestId('settings-connect-label')).toHaveTextContent('Connect another calendar');
     expect(screen.queryByTestId('settings-no-calendars')).toBeNull();
   });
@@ -833,6 +835,99 @@ describe('calendar connections', () => {
       'Read-only: events come into Nexdo, but tasks and events you create in Nexdo are not added to this calendar.',
     );
     expect(screen.queryByTestId('settings-read-only-c2')).toBeNull();
+  });
+
+  /**
+   * The last-sync line under each connection (`lastSyncedDescription`,
+   * src/lib/calendarConnections.ts:54). Every exact string is asserted against a fixed clock and an
+   * explicit zone in calendarConnections.test.ts; these check that each case reaches the screen, one
+   * line per calendar, and that the line follows the data.
+   */
+  describe('last synced', () => {
+    const ZONE = deviceTimeZone();
+    const ago = (ms: number) => new Date(Date.now() - ms).toISOString();
+    /** A local wall-clock instant, so "today" and "yesterday" hold in whatever zone the suite runs in. */
+    const localAt = (dayOffset: number, hour: number) =>
+      new Date(addDays(startOfDay(Date.now(), ZONE), dayOffset, ZONE) + hour * 3_600_000).toISOString();
+    const clock = (at: string) =>
+      new Intl.DateTimeFormat('en-US', { timeZone: ZONE, hour: 'numeric', minute: '2-digit' }).format(new Date(at));
+
+    it('says "Last synced just now" under a minute', async () => {
+      mockConnections.mockResolvedValue({ connections: [{ ...GOOGLE, lastSyncedAt: ago(30_000) }] });
+      await show(<Settings />);
+      await waitFor(() => expect(screen.getByTestId('settings-last-synced-c1')).toHaveTextContent('Last synced just now'));
+    });
+
+    it('counts whole minutes under an hour', async () => {
+      mockConnections.mockResolvedValue({ connections: [{ ...GOOGLE, lastSyncedAt: ago(42 * 60_000) }] });
+      await show(<Settings />);
+      await waitFor(() => expect(screen.getByTestId('settings-last-synced-c1')).toHaveTextContent('Last synced 42 min ago'));
+    });
+
+    it('gives the clock time for earlier today', async () => {
+      const at = localAt(0, 2);
+      mockConnections.mockResolvedValue({ connections: [{ ...GOOGLE, lastSyncedAt: at }] });
+      await show(<Settings />);
+      await waitFor(() => expect(screen.getByTestId('settings-last-synced-c1')).toHaveTextContent(`Last synced today at ${clock(at)}`));
+    });
+
+    it('names yesterday', async () => {
+      const at = localAt(-1, 15);
+      mockConnections.mockResolvedValue({ connections: [{ ...GOOGLE, lastSyncedAt: at }] });
+      await show(<Settings />);
+      await waitFor(() => expect(screen.getByTestId('settings-last-synced-c1')).toHaveTextContent(`Last synced yesterday at ${clock(at)}`));
+    });
+
+    it('dates anything older as "MMM d"', async () => {
+      const at = localAt(-4, 15);
+      const date = new Intl.DateTimeFormat('en-US', { timeZone: ZONE, month: 'short', day: 'numeric' }).format(new Date(at));
+      mockConnections.mockResolvedValue({ connections: [{ ...GOOGLE, lastSyncedAt: at }] });
+      await show(<Settings />);
+      await waitFor(() => expect(screen.getByTestId('settings-last-synced-c1')).toHaveTextContent(`Last synced ${date} at ${clock(at)}`));
+    });
+
+    it('says "Not synced yet" when the calendar has never synced', async () => {
+      mockConnections.mockResolvedValue({ connections: [{ ...GOOGLE, lastSyncedAt: null }] });
+      await show(<Settings />);
+      await waitFor(() => expect(screen.getByTestId('settings-last-synced-c1')).toHaveTextContent('Not synced yet'));
+    });
+
+    it('says "Needs reconnecting" when the status is not connected', async () => {
+      mockConnections.mockResolvedValue({ connections: [{ ...GOOGLE, status: 'error', lastSyncedAt: ago(30_000) }] });
+      await show(<Settings />);
+      await waitFor(() => expect(screen.getByTestId('settings-last-synced-c1')).toHaveTextContent('Needs reconnecting'));
+    });
+
+    it('draws one line per calendar', async () => {
+      mockConnections.mockResolvedValue({
+        connections: [
+          { ...GOOGLE, lastSyncedAt: ago(30_000) },
+          { ...GOOGLE, id: 'c2', calendarName: 'Personal', lastSyncedAt: null },
+          { ...GOOGLE, id: 'c3', calendarName: 'Shared', status: 'error' },
+        ],
+      });
+      await show(<Settings />);
+
+      await waitFor(() => expect(screen.getByTestId('settings-last-synced-c1')).toHaveTextContent('Last synced just now'));
+      expect(screen.getByTestId('settings-last-synced-c2')).toHaveTextContent('Not synced yet');
+      expect(screen.getByTestId('settings-last-synced-c3')).toHaveTextContent('Needs reconnecting');
+    });
+
+    it('refreshes from the refetched connection once Synchronize now finishes', async () => {
+      mockConnections.mockResolvedValue({ connections: [{ ...GOOGLE, lastSyncedAt: ago(42 * 60_000) }] });
+      mockSync.mockImplementation(async () => {
+        // The server has synced by the time it answers, so the reload sees a fresh timestamp.
+        mockConnections.mockResolvedValue({ connections: [{ ...GOOGLE, lastSyncedAt: ago(0) }] });
+        return { results: [{ error: null }] };
+      });
+      await show(<Settings />);
+      await waitFor(() => expect(screen.getByTestId('settings-last-synced-c1')).toHaveTextContent('Last synced 42 min ago'));
+
+      fireEvent.press(screen.getByTestId('settings-sync-now'));
+
+      await waitFor(() => expect(screen.getByTestId('settings-last-synced-c1')).toHaveTextContent('Last synced just now'));
+    });
+
   });
 
   it('turns writes on with PATCH { id, writeEnabled }, reloads the list and says so', async () => {

@@ -1,4 +1,5 @@
 import type { CalendarConnection } from '../api/types';
+import { addDays, dayKey, parseServerDate, startOfDay } from './taskQuery';
 
 /**
  * Port of `CalendarConnection`'s presentation (ios/Sources/NexdoCore/ProfileSettings.swift:41-74) and
@@ -40,17 +41,42 @@ export function connectionDetail(connection: CalendarConnection): string {
 }
 
 /**
- * `lastSyncedDescription` (`:60-65`): "Synchronized " + `RelativeDateTimeFormatter` with
- * `unitsStyle = .full` and the default `dateTimeStyle = .numeric`, which names the largest non-zero
- * unit — "30 seconds ago", "1 minute ago", "3 hours ago", "2 days ago" — and, being numeric, says
- * "in 0 seconds" (not "now") for the present and "in 5 minutes" for a timestamp slightly ahead of the
- * phone's clock.
+ * The last-sync line under each connection, from `lastSyncedAt` and `status`. Ports
+ * `lastSyncedDescription` (ios/Sources/NexdoCore/ProfileSettings.swift:75-88, commit 165e66c), which
+ * replaced the old `RelativeDateTimeFormatter` "Synchronized 5 minutes ago" wording on both platforms.
+ *
+ * The checks are ordered as Swift orders them, and the first that matches wins. Status comes before the
+ * timestamp: a calendar that needs reauthorizing is not syncing at all, so how long ago it last managed
+ * to is not the useful fact. `relativeTime` below keeps the superseded Swift behaviour and stays
+ * exported for the other ports that still read it.
+ *
+ * `timeZone` is the DEVICE zone (`deviceTimeZone()`), not the account's: "today" means the day the
+ * phone is showing.
  */
-export function lastSyncedDescription(connection: CalendarConnection, now: number = Date.now()): string | null {
-  if (!connection.lastSyncedAt) return null;
-  const at = Date.parse(connection.lastSyncedAt);
-  if (Number.isNaN(at)) return null;
-  return `Synchronized ${relativeTime(at, now)}`;
+export function lastSyncedDescription(connection: CalendarConnection, now: number, timeZone: string): string {
+  // Swift compares `status.lowercased() != "connected"`, so ACTIVE is NOT connected here, unlike
+  // `isHealthy` above, which the row's health icon still uses (ProfileSettings.swift:53).
+  if (connection.status.toLowerCase() !== 'connected') return 'Needs reconnecting';
+  const at = parseServerDate(connection.lastSyncedAt);
+  if (at === null) return 'Not synced yet';
+  // A server clock slightly ahead of the phone's reads as the present, never as a negative count.
+  const elapsed = Math.max(0, now - at);
+  if (elapsed < 60_000) return 'Last synced just now';
+  if (elapsed < 3_600_000) return `Last synced ${Math.floor(elapsed / 60_000)} min ago`;
+  const day = dayKey(at, timeZone);
+  if (day === dayKey(now, timeZone)) return `Last synced today at ${clockTime(at, timeZone)}`;
+  if (day === dayKey(addDays(startOfDay(now, timeZone), -1, timeZone), timeZone)) return `Last synced yesterday at ${clockTime(at, timeZone)}`;
+  return `Last synced ${shortDate(at, timeZone)} at ${clockTime(at, timeZone)}`;
+}
+
+/** `serverTime`'s format (taskLabels.ts:10), the screen's clock style: "3:05 PM". */
+function clockTime(at: number, timeZone: string): string {
+  return new Intl.DateTimeFormat('en-US', { timeZone, hour: 'numeric', minute: '2-digit' }).format(new Date(at));
+}
+
+/** Swift's "MMM d": "Sep 21", which is also en-US's own order for this pair. */
+function shortDate(at: number, timeZone: string): string {
+  return new Intl.DateTimeFormat('en-US', { timeZone, month: 'short', day: 'numeric' }).format(new Date(at));
 }
 
 /**

@@ -45,6 +45,7 @@ import {
 import { useOAuthCallback } from '../../src/lib/oauthCallbacks';
 import { closePresentedScreens, replaceWithSignIn } from '../../src/lib/sessionNavigation';
 import { useBlockDismiss } from '../../src/lib/useBlockDismiss';
+import { useMinuteTick } from '../../src/lib/useMinuteTick';
 import { encodeProfilePhoto } from '../../src/photo/encodePhoto';
 import { completeGoogleConnect, useCalendarConnections, useConnectGoogleCalendar, useDisconnectCalendar, useSetCalendarWrites } from '../../src/query/useCalendar';
 import { useMe } from '../../src/query/useMe';
@@ -525,6 +526,7 @@ function SettingsScreen({
                 loaded={!connections.isPending}
                 onDisconnect={confirmDisconnect}
                 onWrites={(connection, enabled) => void run(() => setWrites.mutateAsync({ id: connection.id, enabled }))}
+                timeZone={zone}
               />
               <Pressable
                 accessibilityLabel={connectButtonTitle(connecting, connections.data?.length ?? 0)}
@@ -642,13 +644,16 @@ function ConnectionList({
   loaded,
   onDisconnect,
   onWrites,
+  timeZone,
 }: {
   connections: CalendarConnection[];
   loaded: boolean;
   onDisconnect: (connection: CalendarConnection) => void;
   onWrites: (connection: CalendarConnection, enabled: boolean) => void;
+  timeZone: string;
 }) {
   const theme = useTheme({ elevated: true });
+  const now = useMinuteTick();
   if (connections.length === 0) {
     // `else if model.calendarConnectionsLoaded` — nothing at all while the first load is in flight.
     return loaded ? (
@@ -662,7 +667,7 @@ function ConnectionList({
     <View style={styles.connections} testID="settings-connections">
       {connections.map((connection) => {
         const healthy = isHealthy(connection);
-        const synced = lastSyncedDescription(connection);
+        const synced = lastSyncedDescription(connection, now, timeZone);
         return (
           <View
             key={connection.id}
@@ -678,7 +683,9 @@ function ConnectionList({
               <View accessible style={styles.connectionText}>
                 <Text style={[styles.subheadline, styles.bold, { color: theme.colors.label }]}>{displayName(connection)}</Text>
                 <Text style={[styles.caption, { color: theme.colors.secondary }]}>{connectionDetail(connection)}</Text>
-                {synced ? <Text style={[styles.caption2, { color: theme.colors.secondary }]}>{synced}</Text> : null}
+                <Text style={[styles.caption2, { color: theme.colors.secondary }]} testID={`settings-last-synced-${connection.id}`}>
+                  {synced}
+                </Text>
               </View>
               <Pressable
                 accessibilityRole="button"

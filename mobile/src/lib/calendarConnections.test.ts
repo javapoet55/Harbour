@@ -27,15 +27,61 @@ describe('calendar connection presentation', () => {
   });
 
   it.each([
-    [null, null],
-    ['2026-09-19T11:59:30.000Z', 'Synchronized 30 seconds ago'],
-    ['2026-09-19T11:55:00.000Z', 'Synchronized 5 minutes ago'],
-    ['2026-09-19T09:00:00.000Z', 'Synchronized 3 hours ago'],
-    ['2026-09-17T12:00:00.000Z', 'Synchronized 2 days ago'],
-    ['2026-09-05T12:00:00.000Z', 'Synchronized 2 weeks ago'],
-    ['2026-06-19T12:00:00.000Z', 'Synchronized 3 months ago'],
+    ['2026-09-19T11:59:30.000Z', 'Last synced just now'],
+    ['2026-09-19T11:59:01.000Z', 'Last synced just now'],
+    ['2026-09-19T11:59:00.000Z', 'Last synced 1 min ago'],
+    ['2026-09-19T11:55:00.000Z', 'Last synced 5 min ago'],
+    ['2026-09-19T11:01:00.000Z', 'Last synced 59 min ago'],
+    ['2026-09-19T11:00:00.000Z', 'Last synced today at 11:00 AM'],
+    ['2026-09-19T00:05:00.000Z', 'Last synced today at 12:05 AM'],
+    ['2026-09-18T15:05:00.000Z', 'Last synced yesterday at 3:05 PM'],
+    ['2026-09-17T15:05:00.000Z', 'Last synced Sep 17 at 3:05 PM'],
+    ['2025-12-31T23:30:00.000Z', 'Last synced Dec 31 at 11:30 PM'],
   ])('describes a sync at %s as %s', (at, expected) => {
-    expect(lastSyncedDescription({ ...base, lastSyncedAt: at }, NOW)).toBe(expected);
+    expect(lastSyncedDescription({ ...base, lastSyncedAt: at }, NOW, 'UTC')).toBe(expected);
+  });
+
+  it('says "Not synced yet" for a connection that has never synced', () => {
+    expect(lastSyncedDescription({ ...base, lastSyncedAt: null }, NOW, 'UTC')).toBe('Not synced yet');
+    expect(lastSyncedDescription({ ...base, lastSyncedAt: undefined }, NOW, 'UTC')).toBe('Not synced yet');
+    expect(lastSyncedDescription({ ...base, lastSyncedAt: '' }, NOW, 'UTC')).toBe('Not synced yet');
+    expect(lastSyncedDescription({ ...base, lastSyncedAt: 'not a date' }, NOW, 'UTC')).toBe('Not synced yet');
+  });
+
+  it('parses a server timestamp with and without fractional seconds', () => {
+    expect(lastSyncedDescription({ ...base, lastSyncedAt: '2026-09-19T11:55:00.000Z' }, NOW, 'UTC')).toBe('Last synced 5 min ago');
+    expect(lastSyncedDescription({ ...base, lastSyncedAt: '2026-09-19T11:55:00Z' }, NOW, 'UTC')).toBe('Last synced 5 min ago');
+    // Fractional seconds count: these are 5m00.877s and 4m59.877s ago, and minutes are floored.
+    expect(lastSyncedDescription({ ...base, lastSyncedAt: '2026-09-19T11:54:59.123456Z' }, NOW, 'UTC')).toBe('Last synced 5 min ago');
+    expect(lastSyncedDescription({ ...base, lastSyncedAt: '2026-09-19T11:55:00.123456Z' }, NOW, 'UTC')).toBe('Last synced 4 min ago');
+    expect(lastSyncedDescription({ ...base, lastSyncedAt: '2026-09-19T17:25:00.000+05:30' }, NOW, 'UTC')).toBe('Last synced 5 min ago');
+  });
+
+  it('says "Needs reconnecting" for any status but connected, ahead of the timestamp', () => {
+    const at = '2026-09-19T11:55:00.000Z';
+    expect(lastSyncedDescription({ ...base, status: 'error', lastSyncedAt: at }, NOW, 'UTC')).toBe('Needs reconnecting');
+    expect(lastSyncedDescription({ ...base, status: 'needs reauth', lastSyncedAt: null }, NOW, 'UTC')).toBe('Needs reconnecting');
+    // Swift compares `status.lowercased() != "connected"`, so ACTIVE needs reconnecting here even
+    // though `isHealthy`, which draws the row's icon, still counts it as healthy.
+    expect(lastSyncedDescription({ ...base, status: 'ACTIVE', lastSyncedAt: at }, NOW, 'UTC')).toBe('Needs reconnecting');
+    expect(isHealthy({ ...base, status: 'ACTIVE' })).toBe(true);
+  });
+
+  it('accepts "connected" in any case', () => {
+    const at = '2026-09-19T11:55:00.000Z';
+    expect(lastSyncedDescription({ ...base, status: 'CONNECTED', lastSyncedAt: at }, NOW, 'UTC')).toBe('Last synced 5 min ago');
+    expect(lastSyncedDescription({ ...base, status: 'Connected', lastSyncedAt: at }, NOW, 'UTC')).toBe('Last synced 5 min ago');
+  });
+
+  it('reads the clock in the account zone, not UTC', () => {
+    const at = '2026-09-19T11:00:00.000Z';
+    expect(lastSyncedDescription({ ...base, lastSyncedAt: at }, NOW, 'Asia/Kolkata')).toBe('Last synced today at 4:30 PM');
+    // 11:00Z on the 19th is still the 18th in Los Angeles, where "now" is also the 19th’s small hours.
+    expect(lastSyncedDescription({ ...base, lastSyncedAt: at }, NOW, 'America/Los_Angeles')).toBe('Last synced today at 4:00 AM');
+  });
+
+  it('treats a server clock ahead of the phone as the present', () => {
+    expect(lastSyncedDescription({ ...base, lastSyncedAt: '2026-09-19T12:05:00.000Z' }, NOW, 'UTC')).toBe('Last synced just now');
   });
 
   it('labels the connect button and the disconnect dialog', () => {
@@ -56,7 +102,7 @@ describe('relativeTime without Intl.RelativeTimeFormat (Hermes has none)', () =>
     // Simulate Hermes: the constructor does not exist.
     (Intl as { RelativeTimeFormat?: unknown }).RelativeTimeFormat = undefined;
     try {
-      expect(lastSyncedDescription({ ...base, lastSyncedAt: '2026-09-19T11:55:00.000Z' }, now)).toBe('Synchronized 5 minutes ago');
+      expect(lastSyncedDescription({ ...base, lastSyncedAt: '2026-09-19T11:55:00.000Z' }, now, 'UTC')).toBe('Last synced 5 min ago');
     } finally {
       (Intl as { RelativeTimeFormat?: unknown }).RelativeTimeFormat = original;
     }
