@@ -135,7 +135,8 @@ export async function replaceMomentNotifications({
         content: {
           title: 'Important Moment',
           body: item.body,
-          sound: 'default',
+          // The system default sound; on iOS identical to the old `'default'`. See actions/notifications.ts.
+          sound: true,
           data: { momentID: item.id, momentOwner: owner } satisfies MomentNotificationPayload,
         },
         // `UNTimeIntervalNotificationTrigger(timeInterval: max(1, …))`.

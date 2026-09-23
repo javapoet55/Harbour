@@ -54,13 +54,23 @@ export async function requestNotificationPermission(request: Notifications.Notif
   return classifyNotificationPermission(await Notifications.requestPermissionsAsync(request));
 }
 
-/** No-op on iOS, which has no channels. Creating the same channel twice only updates its settings. */
+/**
+ * No-op on iOS, which has no channels. Creating the same channel twice only updates the few settings
+ * Android still lets an app change; sound is not one of them, so it is fixed at first creation.
+ *
+ * `sound` is deliberately absent rather than `'default'`. expo-notifications treats a channel's
+ * `sound` as the basename of a raw resource, so `'default'` sent it looking for `res/raw/default`,
+ * found nothing, and logged "Custom sound 'default' not found in native app" on every call — which is
+ * what showed in LogBox at launch. Omitting the key asks for `Settings.System.DEFAULT_NOTIFICATION_URI`
+ * outright (AndroidXNotificationsChannelManager.createSoundUriFromArguments), which is the system
+ * default sound and the same URI the unresolved name already fell back to. Passing `null` would mean
+ * a silent channel, which is not the same thing.
+ */
 export async function ensureReminderChannel(): Promise<void> {
   if (Platform.OS !== 'android') return;
   await Notifications.setNotificationChannelAsync(ANDROID_REMINDER_CHANNEL_ID, {
     name: 'Reminders',
     importance: Notifications.AndroidImportance.HIGH,
-    sound: 'default',
     enableVibrate: true,
   });
 }

@@ -163,7 +163,9 @@ describe('replacing the scheduled set', () => {
         title: 'Time to contact Damien',
         body: 'Choose Call, Message, Email, or remind me later.',
         categoryIdentifier: 'CONTACT_TASK',
-        sound: 'default',
+        // `true`, not `'default'`: the system default on both platforms, and on iOS the very same
+        // `UNNotificationSound.default` the string mapped to. Android takes its sound from the channel.
+        sound: true,
         data: { actionID: 'a1', owner: 'owner-1' },
       },
       trigger: { type: 'date', date: new Date(fireAt) },

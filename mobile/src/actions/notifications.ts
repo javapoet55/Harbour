@@ -146,7 +146,10 @@ export async function replaceScheduledNotifications({
         title: `Time to contact ${action.contactName}`,
         body: 'Choose Call, Message, Email, or remind me later.',
         categoryIdentifier: ACTION_CATEGORY,
-        sound: 'default',
+        // `true` is the system default sound on both platforms, and on iOS is exactly what the old
+        // `'default'` mapped to (`UNNotificationSound.default`). Android takes its sound from the
+        // channel; this only matters there for pre-Oreo devices.
+        sound: true,
         data: { actionID: action.id, owner } satisfies ActionNotificationPayload,
       },
       // `UNCalendarNotificationTrigger(dateMatching:repeats: false)` on the DEVICE calendar.

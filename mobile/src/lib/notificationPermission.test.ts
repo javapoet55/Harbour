@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
 import * as Notifications from 'expo-notifications';
 import { Alert, Linking, Platform } from 'react-native';
 
@@ -60,10 +63,23 @@ describe('the reminder channel', () => {
     expect(mocked.setNotificationChannelAsync).toHaveBeenCalledWith(ANDROID_REMINDER_CHANNEL_ID, {
       name: 'Reminders',
       importance: 4,
-      sound: 'default',
       enableVibrate: true,
     });
     expect(reminderChannel()).toEqual({ channelId: ANDROID_REMINDER_CHANNEL_ID });
+  });
+
+  /**
+   * expo-notifications resolves a channel's `sound` as a raw-resource basename, so `'default'` made
+   * it log "Custom sound 'default' not found in native app" on every call — the LogBox error at
+   * launch, from `replaceMomentNotifications` → `ensureReminderChannel`. Omitting the key asks for
+   * the system default outright; `null` would mean silent, which is not what is wanted.
+   */
+  it('asks for the system default sound by omitting the key, never the name "default"', async () => {
+    onPlatform('android');
+    await ensureReminderChannel();
+    const [, options] = mocked.setNotificationChannelAsync.mock.calls[0];
+    expect(options).not.toHaveProperty('sound');
+    expect(Object.values(options as Record<string, unknown>)).not.toContain('default');
   });
 
   it('does not exist on iOS', async () => {
@@ -86,6 +102,25 @@ describe('the reminder channel', () => {
     });
     await expect(requestNotificationPermission({ ios: { allowAlert: true, allowSound: true } })).resolves.toBe('authorized');
     expect(order).toEqual(['channel', 'request']);
+  });
+});
+
+/**
+ * The failure this guards against is a runtime log, not a type error: `sound` accepts any string, so
+ * `'default'` type-checks everywhere and only Android says anything, once, at launch.
+ */
+describe('no notification asks for a sound file named "default"', () => {
+  const sources = ['lib/notificationPermission.ts', 'actions/notifications.ts', 'features/moments/notifications.ts'];
+
+  it.each(sources)('src/%s uses the system default rather than the name', (file) => {
+    const source = readFileSync(join(__dirname, '..', file), 'utf8');
+    // Comments explain the history, so only real code is checked.
+    const code = source
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .split(/\r?\n/)
+      .filter((line) => !line.trim().startsWith('//'))
+      .join('\n');
+    expect(code).not.toMatch(/sound:\s*'default'/);
   });
 });
 

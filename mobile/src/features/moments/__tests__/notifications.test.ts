@@ -76,7 +76,7 @@ describe('replaceMomentNotifications', () => {
     expect(mocked.scheduleNotificationAsync).toHaveBeenCalledTimes(2);
     expect(mocked.scheduleNotificationAsync).toHaveBeenNthCalledWith(1, {
       identifier: `${MOMENT_NOTIFICATION_PREFIX}0`,
-      content: { title: 'Important Moment', body: 'Your scheduled wish is due in one hour.', sound: 'default', data: { momentID: 'p1', momentOwner: 'owner-hash' } },
+      content: { title: 'Important Moment', body: 'Your scheduled wish is due in one hour.', sound: true, data: { momentID: 'p1', momentOwner: 'owner-hash' } },
       trigger: { type: 'date', date: new Date('2030-09-20T07:00:00Z') },
     });
   });
