@@ -26,7 +26,9 @@ public enum WishMessage {
     }
 
     /// Default wordings older versions saved as the Wish Message, for any title: the birthday/anniversary/custom
-    /// placeholder, the get-well text, and the festival fallback in each tone.
+    /// placeholder, the get-well text, the festival fallback in each tone, and the two get-well drafts
+    /// `FestivalValidation.fallback` writes offline (saved with manuallyEdited false). Same list as Android's
+    /// OLD_DEFAULT_PATTERNS (mobile/src/features/moments/wishMessage.ts).
     static let oldDefaultPatterns = [
         "^.+! Sending you warm wishes on your special day\\.$",
         "^Get well soon\\. Wishing you comfort, rest, and brighter days ahead\\.$",
@@ -34,6 +36,8 @@ public enum WishMessage {
         "^.+! Wishing you joy and happiness\\.$",
         "^.+! Here’s to a celebration full of smiles, good company, and wonderful memories! ✨$",
         "^.+! Thinking of you and your family and sending warm wishes for a joyful celebration\\.$",
+        "^Get well soon\\. Thinking of you\\.$",
+        "^Get well soon\\. Sending care, comfort, and warm wishes for brighter days ahead\\.$",
     ]
     /// True for a Wish Message the user never wrote: blank, or an old default left unedited.
     public static func isUntouchedDefault(_ settings: FestivalSettings) -> Bool {
