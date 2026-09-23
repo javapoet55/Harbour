@@ -130,3 +130,24 @@ import Testing
     input.choose(type: "getWellSoon"); #expect(input.title == "Get Well Soon" && !input.yearly)
     input.title = "Custom title"; input.choose(type: "birthday"); #expect(input.title == "Custom title" && input.type == "birthday")
 }
+
+// The offline Get Well Soon drafts FestivalValidation.fallback writes are defaults too.
+@Test func offlineGetWellDraftsAreDefaults() {
+    for tone in ["Short", "Warm", "Personal", "Fun"] {
+        let draft = FestivalValidation.fallback(name: "Sam", tone: tone, type: "getWellSoon")
+        var s = FestivalSettings(); s.baseMessage = draft; s.manuallyEdited = false; s.approvedAt = "then"; s.cardGreeting = "Sam, rest up. We miss you!"
+        #expect(WishMessage.isUntouchedDefault(s), "\(tone)")
+        #expect(WishMessage.reconcile(&s), "\(tone)")
+        #expect(s.baseMessage == "Sam, rest up. We miss you!" && s.approvedAt == nil && s.manuallyEdited && s.cardGreeting == nil)
+    }
+    #expect(WishMessage.isUntouchedDefault({ var s = FestivalSettings(); s.baseMessage = "Get well soon. Thinking of you."; return s }()))
+    #expect(WishMessage.isUntouchedDefault({ var s = FestivalSettings(); s.baseMessage = "Get well soon. Sending care, comfort, and warm wishes for brighter days ahead."; return s }()))
+    // Edited, extended, or on a later line: kept.
+    for (base, edited) in [("Get well soon. Thinking of you.", true),
+                           ("Get well soon. Thinking of you. Love, Sri", false),
+                           ("Sam,\nGet well soon. Thinking of you.", false)] {
+        var s = FestivalSettings(); s.baseMessage = base; s.manuallyEdited = edited; s.cardGreeting = "Card text"
+        #expect(!WishMessage.reconcile(&s), "\(base)")
+        #expect(s.baseMessage == base)
+    }
+}
