@@ -29,9 +29,19 @@ function harness(moments: ImportantMoment[], snapshotOverrides: Partial<MomentsS
     capture: jest.fn(async () => 'file:///capture.jpg' as string | null),
     encode: jest.fn(async () => 'CARD-1600'),
     encodeSmaller: jest.fn(async () => 'CARD-1120'),
-    upload: jest.fn(async () => ({ id: 'card-1', mime: 'image/jpeg', size: 2048, sha256: 'a'.repeat(64), createdAt: '2030-09-01T12:00:00.000Z' })),
-    remove: jest.fn(async () => undefined),
-    fetch: jest.fn(async (): Promise<{ base64: string; mime: string } | null> => null),
+    // Typed parameters, so `mock.calls` stays a tuple the assertions below can destructure.
+    upload: jest.fn(async (momentID: string, data: string) => {
+      void momentID;
+      void data;
+      return { id: 'card-1', mime: 'image/jpeg', size: 2048, sha256: 'a'.repeat(64), createdAt: '2030-09-01T12:00:00.000Z' };
+    }),
+    remove: jest.fn(async (momentID: string) => {
+      void momentID;
+    }),
+    fetch: jest.fn(async (momentID: string): Promise<{ base64: string; mime: string } | null> => {
+      void momentID;
+      return null;
+    }),
   };
   const deps: ManageDeps = {
     store,
@@ -406,23 +416,58 @@ describe('greeting card image', () => {
     expect(model.getState().cardFailed).toBe(true);
   });
 
-  it('removes the stored card', async () => {
+  it('removes the local artwork and the stored card in one action', async () => {
     const { h, model } = await withCard();
     await model.getState().saveGreetingCard();
     expect(model.getState().card).not.toBeNull();
     await model.getState().removeCard();
     expect(h.cards.remove).toHaveBeenCalledWith('a');
+    // Both halves: nothing left on the device, and nothing left for scheduled emails.
     expect(model.getState().card).toBeNull();
+    expect(model.getState().imageUri).toBeNull();
+    expect(model.getState().settings.imageID).toBe('');
+    expect(model.getState().settings.includeImage).toBe(false);
     expect(model.getState().notice).toBe('Card removed. Scheduled emails will send the text only.');
   });
 
-  it('surfaces a failed removal as the screen error and keeps the card', async () => {
+  it('clears the artwork without a request when the server holds no card', async () => {
+    const { h, model } = await withCard();
+    expect(model.getState().card).toBeNull();
+    await model.getState().removeCard();
+    expect(h.cards.remove).not.toHaveBeenCalled();
+    expect(model.getState().imageUri).toBeNull();
+    expect(model.getState().settings.imageID).toBe('');
+  });
+
+  it('treats a 404 as already removed, not as a failure', async () => {
     const { h, model } = await withCard();
     await model.getState().saveGreetingCard();
     h.cards.remove.mockRejectedValueOnce(new ApiError({ status: 404, message: 'No greeting card has been saved for this moment.' }));
     await model.getState().removeCard();
-    expect(model.getState().error).toBe('No greeting card has been saved for this moment.');
+    expect(model.getState().error).toBeNull();
+    expect(model.getState().card).toBeNull();
+    expect(model.getState().imageUri).toBeNull();
+    expect(model.getState().notice).toBe('Card removed. Scheduled emails will send the text only.');
+  });
+
+  it('keeps the card on both sides when the delete genuinely fails', async () => {
+    const { h, model } = await withCard();
+    await model.getState().saveGreetingCard();
+    h.cards.remove.mockRejectedValueOnce(new ApiError({ status: 500, message: 'Request failed.' }));
+    await model.getState().removeCard();
+    expect(model.getState().error).toBe('Request failed.');
+    // The artwork stays too: a cleared preview over a card the server still attaches would lie.
     expect(model.getState().card).not.toBeNull();
+    expect(model.getState().imageUri).toBe('file:///IMG.png');
+  });
+
+  it('uploads again after a removed card is replaced', async () => {
+    const { h, model } = await withCard();
+    await model.getState().saveGreetingCard();
+    await model.getState().removeCard();
+    model.getState().chooseImage({ id: 'v2', base64: 'BBBB' });
+    await model.getState().saveGreetingCard();
+    expect(h.cards.upload).toHaveBeenCalledTimes(2);
   });
 
   it('shows a card saved on another device, where there is no local artwork', async () => {

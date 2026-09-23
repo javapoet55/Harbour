@@ -60,8 +60,8 @@ export function MomentGreetingCardSection({ moment, greeting }: { moment: Import
           </Pressable>
         </View>
       ) : null}
-      {card ? (
-        <Pressable accessibilityRole="button" disabled={cardUploading} onPress={() => void model.getState().removeCard()} testID="moment-remove-stored-card">
+      {imageUri || card ? (
+        <Pressable accessibilityRole="button" disabled={cardUploading} onPress={() => void model.getState().removeCard()} testID="moment-remove-card">
           <Text style={[textStyles.body, { color: theme.colors.danger }]}>Remove card</Text>
         </Pressable>
       ) : null}

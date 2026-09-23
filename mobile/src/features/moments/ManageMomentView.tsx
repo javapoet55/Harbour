@@ -640,14 +640,9 @@ export function ManageMomentView({ group, onDone }: { group: MomentDisplayGroup;
                   </Pressable>
                 </View>
               ) : null}
-              {state.imageUri ? (
-                <Pressable accessibilityRole="button" onPress={() => model.getState().removeImage()} testID="festival-remove-card">
-                  <Text style={[textStyles.body, { color: theme.colors.danger }]}>Remove greeting card</Text>
-                </Pressable>
-              ) : null}
-              {/* Only when the server actually holds a card: this is what detaches it from scheduled emails. */}
-              {state.card ? (
-                <Pressable accessibilityRole="button" disabled={state.cardUploading} onPress={() => void model.getState().removeCard()} testID="festival-remove-stored-card">
+              {/* One action for both halves: the artwork here and the image scheduled emails use. */}
+              {state.imageUri || state.card ? (
+                <Pressable accessibilityRole="button" disabled={state.cardUploading} onPress={() => void model.getState().removeCard()} testID="festival-remove-card">
                   <Text style={[textStyles.body, { color: theme.colors.danger }]}>Remove card</Text>
                 </Pressable>
               ) : null}

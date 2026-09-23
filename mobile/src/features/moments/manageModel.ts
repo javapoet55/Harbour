@@ -147,7 +147,7 @@ export type ManageState = {
   uploadCard(): Promise<void>;
   /** "Retry" on the inline note. */
   retryCardUpload(): Promise<void>;
-  /** "Remove card": drops the stored image so scheduled emails go back to text only. */
+  /** "Remove card": clears the artwork here and drops the image scheduled emails would have used. */
   removeCard(): Promise<void>;
   /** Shows a card saved on another device, when this one has no local artwork. */
   loadStoredCard(): Promise<void>;
@@ -639,13 +639,31 @@ export function createManageModel(group: MomentDisplayGroup, deps: ManageDeps): 
         await get().uploadCard();
       },
 
+      /**
+       * "Remove card": the one action behind the card, local and stored together. It clears the
+       * artwork and its settings on this device, and drops the image the server keeps for scheduled
+       * emails when there is one.
+       *
+       * The stored image goes first. A local clear followed by a failed delete would show a moment
+       * with no card while its scheduled emails still carried one, so a delete that genuinely fails
+       * leaves everything as it was and shows the error, which is a state the person can retry from.
+       * A 404 is not a failure: the server simply has no card, which is the outcome being asked for.
+       */
       async removeCard() {
-        const firstMoment = get().originals[0];
-        if (!firstMoment || get().cardUploading) return;
+        const state = get();
+        const firstMoment = state.originals[0];
+        if (state.cardUploading) return;
         set({ cardUploading: true, error: null });
         try {
-          await deps.cards.remove(firstMoment.id);
-          set({ card: null, cardFailed: false, notice: 'Card removed. Scheduled emails will send the text only.' });
+          if (state.card !== null && firstMoment) {
+            try {
+              await deps.cards.remove(firstMoment.id);
+            } catch (error) {
+              if (!isApiError(error) || error.status !== 404) throw error;
+            }
+          }
+          get().removeImage();
+          set({ card: null, cardFailed: false, uploadedCardKey: '', notice: 'Card removed. Scheduled emails will send the text only.' });
         } catch (error) {
           set({ error: errorMessage(error) });
         } finally {
@@ -699,6 +717,7 @@ export function createManageModel(group: MomentDisplayGroup, deps: ManageDeps): 
         set({ stagedImages: [] });
       },
 
+      /** The local half of `removeCard`, and the clear `delete()` does on its way out. */
       removeImage() {
         set((state) => ({ settings: { ...state.settings, imageID: '', includeImage: false }, imageUri: null }));
         get().invalidateApproval();
