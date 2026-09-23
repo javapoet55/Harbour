@@ -69,6 +69,10 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       //   which alone counts as granted). expo-location's config plugin is deliberately NOT listed: its
       //   only job would be iOS usage strings, and iOS weather keeps Swift's fixed coordinates.
       'android.permission.ACCESS_FINE_LOCATION',
+      // - AD_ID: added by @react-native-firebase/analytics. Nexdo never reads the advertising ID, and
+      //   declaring it would make Play ask us to disclose ad-ID use in Data safety. Analytics keeps
+      //   working without it — it just falls back to an app-scoped identifier.
+      'com.google.android.gms.permission.AD_ID',
     ],
     adaptiveIcon: {
       // The mark is drawn on white, exactly as the Swift app's AppIcon is
