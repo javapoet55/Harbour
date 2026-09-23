@@ -1,5 +1,5 @@
 import { prisma } from './db';
-import { calendarProviderFor, isCalendarAuthFailure } from '@/providers/calendar';
+import { calendarProviderFor, isCalendarAuthFailure, isCalendarListAuthFailure } from '@/providers/calendar';
 import type { CalendarConnection } from '@/generated/prisma';
 import type { CalendarPushResult } from '@/lib/calendar-push';
 import { log } from '@/lib/logger';
@@ -21,19 +21,19 @@ export async function syncConnection(userId: string, connectionId: string) {
   const to = new Date(Date.now() + 365 * 86400000);
   let result;
   let fullSnapshot = !syncVersion.syncToken;
+  // Only a lost sign-in marks the connection for reconnecting; anything else (network, timeout, 5xx, 429,
+  // a rate-limit 403) leaves status and lastSyncedAt as they were and is retried on the next sync.
+  const failed = async (error: unknown) => {
+    if (isCalendarListAuthFailure(error)) await prisma.calendarConnection.update({ where: { id: connection.id }, data: { status: 'error' } });
+    return error;
+  };
   try {
     result = await provider.list(from, to, syncVersion.syncToken);
   } catch (error) {
-    if ((error as { status?: number }).status !== 410) {
-      await prisma.calendarConnection.update({ where: { id: connection.id }, data: { status: 'error' } });
-      throw error;
-    }
+    if ((error as { status?: number }).status !== 410) throw await failed(error);
     fullSnapshot = true;
     try { result = await provider.list(from, to, null); }
-    catch (retryError) {
-      await prisma.calendarConnection.update({ where: { id: connection.id }, data: { status: 'error' } });
-      throw retryError;
-    }
+    catch (retryError) { throw await failed(retryError); }
   }
   if (result.events.some((event) => !event.externalId || (!event.deleted && (!Number.isFinite(+event.startAt) || !Number.isFinite(+event.endAt) || event.endAt <= event.startAt)))) {
     await prisma.calendarConnection.update({ where: { id: connection.id }, data: { status: 'error' } });
