@@ -3,6 +3,7 @@ import { QueryClient } from '@tanstack/react-query';
 import type { NexdoTask } from '../api';
 import { queryKeys } from '../query/keys';
 import { resetRevisions } from '../query/taskRevision';
+import { useCalendarNotice } from '../store/calendarNotice';
 import { VoiceToolExecutor } from './toolExecutor';
 
 const mockRequest = jest.fn();
@@ -46,6 +47,7 @@ function build({
 beforeEach(() => {
   mockRequest.mockReset();
   resetRevisions();
+  useCalendarNotice.setState({ notice: null });
 });
 
 describe('the server round trip', () => {
@@ -92,6 +94,41 @@ describe('the server round trip', () => {
     expect(invalidate.mock.calls.map(([options]) => options?.queryKey)).toEqual(
       expect.arrayContaining([queryKeys.agenda.all(), queryKeys.calendar.all()]),
     );
+  });
+
+  it('publishes where a voice-created event went, for this account', async () => {
+    mockRequest.mockResolvedValue({
+      success: true,
+      calendarPush: { status: 'failed', total: 1, succeeded: 0, calendarName: 'Work' },
+      message: 'Saved in Nexdo, but it could not be added to your connected calendar. No invitations were sent.',
+      warnings: ['Saved in Nexdo, but it could not be added to your connected calendar.'],
+    });
+    const { executor } = build({ scope: 'calendar' });
+
+    await executor.execute({ name: 'create_calendar_event', args: {}, sessionId: 's1', callId: 'c1' });
+
+    expect(useCalendarNotice.getState().notice).toEqual({
+      ownerId: OWNER,
+      message: 'Saved in Nexdo, but it could not be added to your connected calendar. No invitations were sent.',
+      calendarName: 'Work',
+      warnings: ['Saved in Nexdo, but it could not be added to your connected calendar.'],
+      tone: 'warning',
+    });
+  });
+
+  it('publishes no note for another tool, or when the account changed mid-call', async () => {
+    const push = { success: true, calendarPush: { status: 'pushed', total: 1, succeeded: 1 }, message: 'Saved in Nexdo and added it to your connected calendar.' };
+    mockRequest.mockResolvedValue(push);
+    await build().executor.execute({ name: 'create_task', args: {}, sessionId: 's1', callId: 'c1' });
+    expect(useCalendarNotice.getState().notice).toBeNull();
+
+    let owner: string | undefined = OWNER;
+    mockRequest.mockImplementation(async () => {
+      owner = 'someone-else';
+      return push;
+    });
+    await build({ currentOwnerId: () => owner }).executor.execute({ name: 'create_calendar_event', args: {}, sessionId: 's1', callId: 'c2' });
+    expect(useCalendarNotice.getState().notice).toBeNull();
   });
 
   /** "Only reconcile this account." (NexdoApp.swift:486) */

@@ -475,5 +475,25 @@ export type CalendarEventInput = {
   allowScheduleConflict?: boolean;
 };
 
-/** The success body: `VoiceToolResponse` in Swift, `{ success, occurrenceCount? }` on the wire. */
-export type CalendarEventResponse = { success: boolean; occurrenceCount?: number };
+/**
+ * The outcome of writing Nexdo-created events to the connected calendar (`calendarPush` in the server's
+ * `src/lib/calendar-push.ts`). A failed write never fails the save; it is reported here instead.
+ */
+export type CalendarPush = {
+  status: 'pushed' | 'removed' | 'not_connected' | 'failed' | 'partial';
+  total: number;
+  succeeded: number;
+  calendarName?: string;
+};
+
+/**
+ * The success body: `VoiceToolResponse` in Swift. `calendarPush`, `message` and `warnings` are absent
+ * from servers older than the event write-back, so all three are optional.
+ */
+export type CalendarEventResponse = {
+  success: boolean;
+  occurrenceCount?: number;
+  calendarPush?: CalendarPush;
+  message?: string;
+  warnings?: string[];
+};

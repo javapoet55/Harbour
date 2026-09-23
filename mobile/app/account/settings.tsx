@@ -634,7 +634,7 @@ function SettingsScreen({
 
 /**
  * `connectionList` (ProfileView.swift:290-331, commit 3ef906d): one bordered block per connection with
- * its health icon, name, detail, last sync, Disconnect, and the "Add my scheduled tasks here" toggle.
+ * its health icon, name, detail, last sync, Disconnect, and the "Add my scheduled tasks and events here" toggle.
  * The demo account has no connected calendar, so this is ported from source, not from a capture.
  */
 function ConnectionList({
@@ -691,9 +691,9 @@ function ConnectionList({
             </View>
             <View style={[styles.connectionDivider, { backgroundColor: theme.colors.separator }]} />
             <View style={styles.row}>
-              <Text style={[styles.subheadline, styles.grow, { color: theme.colors.label }]}>Add my scheduled tasks here</Text>
+              <Text style={[styles.subheadline, styles.grow, { color: theme.colors.label }]}>Add my scheduled tasks and events here</Text>
               <Switch
-                accessibilityLabel="Add my scheduled tasks here"
+                accessibilityLabel="Add my scheduled tasks and events here"
                 onValueChange={(enabled) => onWrites(connection, enabled)}
                 testID={`settings-writes-${connection.id}`}
                 thumbColor="#FFFFFF"

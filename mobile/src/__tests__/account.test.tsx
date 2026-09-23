@@ -830,7 +830,7 @@ describe('calendar connections', () => {
 
     await waitFor(() => expect(screen.getByTestId('settings-read-only-c1')).toBeTruthy());
     expect(screen.getByTestId('settings-read-only-c1')).toHaveTextContent(
-      'Read-only: events come into Nexdo, but tasks you schedule are not added to this calendar.',
+      'Read-only: events come into Nexdo, but tasks and events you create in Nexdo are not added to this calendar.',
     );
     expect(screen.queryByTestId('settings-read-only-c2')).toBeNull();
   });
@@ -846,7 +846,7 @@ describe('calendar connections', () => {
 
     await waitFor(() => expect(mockSetWrites).toHaveBeenCalledWith('c1', true));
     await waitFor(() =>
-      expect(screen.getByTestId('settings-message')).toHaveTextContent('Nexdo can now add your scheduled tasks to this calendar.'),
+      expect(screen.getByTestId('settings-message')).toHaveTextContent('Nexdo can now add your scheduled tasks and events to this calendar.'),
     );
     expect(mockConnections.mock.calls.length).toBeGreaterThan(loads);
   });

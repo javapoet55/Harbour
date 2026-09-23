@@ -2,8 +2,10 @@ import type { QueryClient } from '@tanstack/react-query';
 
 import { getApi, type NexdoTask } from '../api';
 import { resolveContacts, type ActionContact } from '../actions/contacts';
+import { calendarPushNotice } from '../lib/calendarPush';
 import { queryKeys } from '../query/keys';
 import { replaceTask } from '../query/useTasks';
+import { useCalendarNotice } from '../store/calendarNotice';
 import type { VoiceToolExecuting } from './conversation';
 import type { VoiceScope } from './protocol';
 import { TOOL_PATH } from './protocol';
@@ -94,6 +96,7 @@ export class VoiceToolExecutor implements VoiceToolExecuting {
         else replaceTask(this.options.queryClient, task);
       }
       if (name === 'create_calendar_event') {
+        useCalendarNotice.getState().show(calendarPushNotice(response), this.options.ownerId);
         void this.options.queryClient.invalidateQueries({ queryKey: queryKeys.agenda.all() });
         void this.options.queryClient.invalidateQueries({ queryKey: queryKeys.calendar.all() });
       }

@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { CalendarEvent } from '../../src/api';
 import { TaskSymbol, Text } from '../../src/components';
 import { CalendarSegments, CalendarSummaryCard, CalendarTimelineRow, withAlpha } from '../../src/components/CalendarParts';
+import { CalendarPushNote } from '../../src/components/CalendarPushNote';
 import { TodayBackdrop } from '../../src/components/TodayShell';
 import {
   CALENDAR_MODES,
@@ -280,6 +281,8 @@ export default function Calendar() {
             </Text>
           </View>
         ) : null}
+
+        <CalendarPushNote />
 
         <CalendarSegments options={CALENDAR_MODES} value={mode} onChange={setMode} testIDPrefix="calendar-mode" />
 

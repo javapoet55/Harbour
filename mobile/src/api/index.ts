@@ -247,7 +247,7 @@ export const endpoints = {
   /** `loadCalendarConnections()` (NexdoApp.swift:309-318). */
   calendarConnections: (client: ApiClient = getApi()) => client.get<CalendarConnectionsResponse>('/api/calendar/connections'),
 
-  /** `setCalendarWrites(id:enabled:)` (NexdoApp.swift:319-324): the "Add my scheduled tasks here" toggle. */
+  /** `setCalendarWrites(id:enabled:)` (NexdoApp.swift:319-324): the "Add my scheduled tasks and events here" toggle. */
   setCalendarWrites: (id: string, writeEnabled: boolean, client: ApiClient = getApi()) =>
     client.patch<{ ok: boolean }>('/api/calendar/connections', { id, writeEnabled }),
 

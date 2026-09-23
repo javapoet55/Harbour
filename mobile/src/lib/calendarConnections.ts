@@ -104,11 +104,11 @@ export const DISCONNECT_MESSAGE = 'Events imported from this calendar are remove
 
 /** `setCalendarWrites` (NexdoApp.swift:323). */
 export function writesMessage(enabled: boolean): string {
-  return enabled ? 'Nexdo can now add your scheduled tasks to this calendar.' : 'Nexdo will no longer add events to this calendar.';
+  return enabled ? 'Nexdo can now add your scheduled tasks and events to this calendar.' : 'Nexdo will no longer add events to this calendar.';
 }
 
 /** `disconnectCalendar` (NexdoApp.swift:330). */
 export const DISCONNECTED_MESSAGE = 'Calendar disconnected. Imported events were removed with the connection.';
 
 /** The caption under the toggle while writes are off (ProfileView.swift:319). */
-export const READ_ONLY_CAPTION = 'Read-only: events come into Nexdo, but tasks you schedule are not added to this calendar.';
+export const READ_ONLY_CAPTION = 'Read-only: events come into Nexdo, but tasks and events you create in Nexdo are not added to this calendar.';

@@ -1,11 +1,12 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { Alert, Platform, StyleSheet } from 'react-native';
 
 import { ApiError } from '../api/client';
 import type { Agenda, NexdoTask } from '../api/types';
 import { resetRevisions } from '../query/taskRevision';
 import { googleConnectStartUrl, parseGoogleCallback, CONNECT_CALLBACK_SCHEME } from '../query/useCalendar';
+import { useCalendarNotice } from '../store/calendarNotice';
 import { useSession } from '../store/session';
 import { palettes } from '../theme';
 
@@ -81,6 +82,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   jest.useFakeTimers({ now: NOW, doNotFake: ['nextTick', 'setImmediate'] });
   resetRevisions();
+  useCalendarNotice.setState({ notice: null });
   useSession.setState({ status: 'signedIn', profile: { id: 'u1', name: 'Sri Ram', email: 'a@b.com', timeZone: ZONE } });
   mockTasks.mockResolvedValue({ tasks: AGENDA.tasks, timeZone: ZONE });
   mockAgenda.mockResolvedValue(AGENDA);
@@ -451,6 +453,67 @@ describe('Calendar event editor', () => {
 
     await waitFor(() => expect(screen.getByTestId('event-failure')).toBeTruthy());
     expect(mockBack).not.toHaveBeenCalled();
+  });
+});
+
+/** The server writes Nexdo events to the connected calendar and reports it as `calendarPush`. */
+describe('Calendar write-back note', () => {
+  async function saveEvent(response: Record<string, unknown>) {
+    mockCreateEvent.mockResolvedValue(response);
+    await wrap(<NewCalendarEvent />);
+    await fireEvent.changeText(screen.getByTestId('event-title'), 'Dentist');
+    await fireEvent.press(screen.getByTestId('event-create'));
+    await waitFor(() => expect(mockBack).toHaveBeenCalled());
+  }
+
+  it('shows where a New Event went, with the calendar name, then clears itself', async () => {
+    await saveEvent({
+      success: true,
+      calendarPush: { status: 'pushed', total: 1, succeeded: 1, calendarName: 'sri@example.com' },
+      message: 'Saved in Nexdo and added it to your connected calendar. No invitations were sent.',
+    });
+    await renderCalendar();
+
+    expect(screen.getByTestId('calendar-push-message')).toHaveTextContent('Saved in Nexdo and added it to your connected calendar. No invitations were sent.');
+    expect(screen.getByTestId('calendar-push-calendar')).toHaveTextContent('sri@example.com');
+    expect(screen.queryByTestId('calendar-push-warning')).toBeNull();
+
+    await act(() => jest.advanceTimersByTime(6000));
+    expect(screen.queryByTestId('calendar-push-note')).toBeNull();
+  });
+
+  it('keeps a failed write on screen with its warnings until dismissed', async () => {
+    const message = 'Saved 2 events in Nexdo; 1 reached your connected calendar and 1 did not.';
+    await saveEvent({
+      success: true,
+      occurrenceCount: 2,
+      calendarPush: { status: 'partial', total: 2, succeeded: 1, calendarName: 'Work' },
+      message,
+      warnings: [message, 'Calendar authorization expired; reconnect the account.'],
+    });
+    await renderCalendar();
+
+    expect(screen.getByTestId('calendar-push-message')).toHaveTextContent(message);
+    // The repeated message is not listed twice; the other warning is.
+    expect(screen.getAllByTestId('calendar-push-warning').map((node) => node.props.children)).toEqual(['Calendar authorization expired; reconnect the account.']);
+    await act(() => jest.advanceTimersByTime(60_000));
+    expect(screen.getByTestId('calendar-push-note')).toBeTruthy();
+
+    await fireEvent.press(screen.getByTestId('calendar-push-dismiss'));
+    await waitFor(() => expect(screen.queryByTestId('calendar-push-note')).toBeNull());
+  });
+
+  it('shows nothing for a server without write-back', async () => {
+    await saveEvent({ success: true });
+    await renderCalendar();
+    expect(screen.queryByTestId('calendar-push-note')).toBeNull();
+  });
+
+  it('does not show one account’s note to another', async () => {
+    await saveEvent({ success: true, calendarPush: { status: 'not_connected', total: 0, succeeded: 0 }, message: 'Saved in Nexdo only. No connected calendar is set to receive Nexdo events.' });
+    useSession.setState({ status: 'signedIn', profile: { id: 'u2', name: 'Other', email: 'o@b.com', timeZone: ZONE } });
+    await renderCalendar();
+    expect(screen.queryByTestId('calendar-push-note')).toBeNull();
   });
 });
 

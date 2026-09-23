@@ -6,6 +6,7 @@ import type { DoNowRecommendation, NexdoTask, ProtectedTimeProposal } from '../a
 import { queryKeys } from '../query/keys';
 import { useAppearance } from '../store/appearance';
 import { useConsent } from '../store/consent';
+import { useCalendarNotice } from '../store/calendarNotice';
 import { useSession } from '../store/session';
 
 const mockPush = jest.fn();
@@ -80,6 +81,7 @@ beforeEach(() => {
   mockProtectedTime.mockResolvedValue({ proposal: null });
   mockUseVoiceSession.mockReturnValue(voiceSession());
   useSession.setState({ status: 'signedIn', profile: PROFILE });
+  useCalendarNotice.setState({ notice: null });
   useConsent.setState({ ai: true, voice: true });
   useAppearance.setState({ appearance: 'system', voiceVolume: 1 });
   jest.spyOn(Alert, 'alert').mockImplementation(() => undefined).mockClear();
@@ -100,6 +102,17 @@ describe('the voice screen', () => {
     expect(screen.getByTestId('voice-mute')).toBeTruthy();
     expect(screen.getByTestId('voice-done')).toBeTruthy();
     expect(screen.getByText('“Call Damien tomorrow at 11 AM”')).toBeTruthy();
+  });
+
+  it('shows where a voice-created event went', async () => {
+    useCalendarNotice.getState().show(
+      { message: 'Saved in Nexdo and added it to your connected calendar. No invitations were sent.', calendarName: 'a@b.c', warnings: [], tone: 'info' },
+      PROFILE.id,
+    );
+    await show(<AddTaskByVoiceView calendarOnly />);
+
+    expect(screen.getByTestId('calendar-push-message')).toHaveTextContent('Saved in Nexdo and added it to your connected calendar. No invitations were sent.');
+    expect(screen.getByTestId('calendar-push-calendar')).toHaveTextContent('a@b.c');
   });
 
   it('renders the ask-mode copy', async () => {

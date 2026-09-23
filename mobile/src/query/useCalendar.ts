@@ -2,8 +2,11 @@ import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tansta
 import { randomUUID } from 'expo-crypto';
 import * as WebBrowser from 'expo-web-browser';
 
-import { endpoints, type Agenda, type CalendarConnection, type CalendarEventInput } from '../api';
+import { endpoints, type Agenda, type CalendarConnection, type CalendarEventInput, type CalendarEventResponse } from '../api';
 import { DISCONNECTED_MESSAGE, writesMessage } from '../lib/calendarConnections';
+import { calendarPushNotice } from '../lib/calendarPush';
+import { useCalendarNotice } from '../store/calendarNotice';
+import { useSession } from '../store/session';
 import { getApiUrl } from '../config';
 import { beginOAuthSession, LATE_CALLBACK_MS, takeOAuthCallback, waitForOAuthCallback } from '../lib/oauthCallbacks';
 import { queryKeys } from './keys';
@@ -56,7 +59,7 @@ export function useCalendarAgenda(from: string, days: number) {
  */
 export function useCreateCalendarEvent({ onConflict }: { onConflict: (conflict: ScheduleConflict) => void }) {
   const queryClient = useQueryClient();
-  return useMutation<void, Error, Omit<CalendarEventInput, 'requestId'> & { requestId?: string }>({
+  return useMutation<CalendarEventResponse, Error, Omit<CalendarEventInput, 'requestId'> & { requestId?: string }>({
     mutationFn: async (input) => {
       const requestId = input.requestId ?? randomUUID();
       const response = await scheduleRequest(
@@ -66,8 +69,11 @@ export function useCreateCalendarEvent({ onConflict }: { onConflict: (conflict: 
       );
       // `guard result.success else { throw APIError.invalidResponse }`
       if (!response.success) throw new Error('The server returned an unexpected response. Please try again later.');
+      return response;
     },
-    onSuccess: () => {
+    onSuccess: (response) => {
+      // Where the event went: New Event closes on success, so the Calendar tab shows this.
+      useCalendarNotice.getState().show(calendarPushNotice(response), useSession.getState().profile?.id);
       // `await refresh()` — a new event changes the agenda, and the day view merges tasks into it.
       bumpRevision();
       void queryClient.invalidateQueries({ queryKey: queryKeys.agenda.all() });

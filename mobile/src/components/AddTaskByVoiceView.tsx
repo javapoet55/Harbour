@@ -10,6 +10,7 @@ import { voiceStatus } from '../voice/conversation';
 import { useVoiceSession } from '../voice/useVoiceSession';
 import type { VoiceScope } from '../voice/protocol';
 import { brand, useTheme } from '../theme';
+import { CalendarPushNote } from './CalendarPushNote';
 import { withAlpha } from './SignInBackdrop';
 import { TaskSymbol } from './TaskSymbol';
 import { Text } from './Text';
@@ -149,6 +150,9 @@ export function AddTaskByVoiceView({ askMode = false, calendarOnly = false }: Ad
             {error}
           </Text>
         ) : null}
+
+        {/* Where a voice-created event went (the server's `calendarPush`), and any warnings. */}
+        <CalendarPushNote />
 
         {voice.state.transcript.length > 0 ? (
           <View style={[styles.transcript, { backgroundColor: theme.colors.surface }]}>
