@@ -7,6 +7,8 @@ public struct ImportantMoment: Codable, Identifiable, Sendable {
     public var snoozedUntil: String?
     public var nextOccurrence: String
     public var drafts: [WishDraft]
+    /// The saved greeting card automatic emails include, or nil. Absent from servers before the card feature.
+    public var card: GreetingCardInfo?
     public var typeLabel: String { Self.label(for:type) }
     public static func label(for type:String) -> String { type == "getWellSoon" ? "Get Well Soon" : type.capitalized }
     public var supportsGreetingCard: Bool { ["birthday","anniversary","festival","getWellSoon"].contains(type) }
