@@ -4,6 +4,7 @@ import {
   cardWish,
   changeFrom,
   initialWish,
+  isGeneratedDefault,
   needsCancelPrompt,
   reconcileCardGreeting,
   SENDING_NOW,
@@ -91,6 +92,81 @@ describe('the card prints the Wish Message', () => {
     result = reconcileCardGreeting(base({ cardGreeting: '  ' }), suggestion);
     expect(result.adopted).toBe(false);
     expect(result.settings.baseMessage).toBe('');
+  });
+
+  /**
+   * The reported loss: a moment whose title had changed since its message was saved. The saved
+   * message was still an untouched default, but it no longer matched the suggestion for the title the
+   * moment carries now, so the card greeting was dropped instead of adopted.
+   */
+  describe('an untouched default is recognised whatever the title was', () => {
+    const suggestion = wishSuggestion('birthday', 'Visakan’s Anniversary');
+
+    it('adopts the card greeting when the message is a default built from an older title', () => {
+      const stale = base({ baseMessage: 'Visakan’s Birthday! Sending you warm wishes on your special day.', approvedAt: 'then', cardGreeting: 'Visakan, see you at seven!' });
+      const result = reconcileCardGreeting(stale, suggestion);
+      expect(result.adopted).toBe(true);
+      expect(result.settings.baseMessage).toBe('Visakan, see you at seven!');
+      // Adopting is an unsaved change that needs a fresh Save Message.
+      expect(result.settings.approvedAt).toBeNull();
+      expect(result.settings.manuallyEdited).toBe(true);
+      expect(result.settings.cardGreeting).toBeNull();
+    });
+
+    it('recognises every default shape the app has generated', () => {
+      const defaults = [
+        'Anything at all! Sending you warm wishes on your special day.',
+        'Diwali! Wishing you joy and happiness.',
+        'Diwali! Here’s to a celebration full of smiles, good company, and wonderful memories! ✨',
+        'Diwali! Thinking of you and your family and sending warm wishes for a joyful celebration.',
+        'Diwali! Wishing you and your family a joyful celebration filled with happiness and new beginnings! ✨',
+        'Get well soon. Thinking of you.',
+        'Get well soon. Wishing you comfort, rest, and brighter days ahead.',
+        'Get well soon. Sending care, comfort, and warm wishes for brighter days ahead.',
+      ];
+      for (const baseMessage of defaults) {
+        expect(isGeneratedDefault(baseMessage)).toBe(true);
+        const result = reconcileCardGreeting(base({ baseMessage, cardGreeting: 'My own card words' }), suggestion);
+        expect(result.adopted).toBe(true);
+        expect(result.settings.baseMessage).toBe('My own card words');
+      }
+    });
+
+    it('does not mistake something written for a default', () => {
+      const written = ['Many happy returns, Visakan.', 'Sending you warm wishes on your special day.', '! Wishing you joy and happiness.', 'Get well soon.'];
+      for (const baseMessage of written) {
+        expect(isGeneratedDefault(baseMessage)).toBe(false);
+        const result = reconcileCardGreeting(base({ baseMessage, cardGreeting: 'My own card words' }), suggestion);
+        expect(result.adopted).toBe(false);
+        expect(result.settings.baseMessage).toBe(baseMessage);
+      }
+    });
+
+    it('keeps a default the person went on to edit', () => {
+      const edited = base({ baseMessage: 'Diwali! Wishing you joy and happiness.', manuallyEdited: true, approvedAt: 'then', cardGreeting: 'Card words' });
+      const result = reconcileCardGreeting(edited, suggestion);
+      expect(result.adopted).toBe(false);
+      expect(result.settings.baseMessage).toBe('Diwali! Wishing you joy and happiness.');
+      expect(result.settings.approvedAt).toBe('then');
+    });
+
+    it('still adopts into a blank message, edited or not', () => {
+      for (const manuallyEdited of [false, true]) {
+        const result = reconcileCardGreeting(base({ baseMessage: '', manuallyEdited, cardGreeting: 'Card words' }), suggestion);
+        expect(result.adopted).toBe(true);
+        expect(result.settings.baseMessage).toBe('Card words');
+      }
+    });
+
+    it('needs a card greeting that is present and different', () => {
+      const shared = 'Diwali! Wishing you joy and happiness.';
+      for (const cardGreeting of [null, '', '   ', shared]) {
+        const result = reconcileCardGreeting(base({ baseMessage: shared, cardGreeting }), suggestion);
+        expect(result.adopted).toBe(false);
+        expect(result.settings.baseMessage).toBe(shared);
+        expect(result.settings.cardGreeting).toBeNull();
+      }
+    });
   });
 });
 

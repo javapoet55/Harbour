@@ -19,6 +19,7 @@ import {
   displayGroups,
   editableGroups,
   greetingHeading,
+  fallbackWish,
   greetingMessage,
   isArchived,
   maskedAddress,
@@ -417,6 +418,83 @@ describe('titles, greetings and signatures', () => {
     expect(greetingMessage('Have a great day, sam.', 'birthday', 'Sam')).toBe('Have a great day, sam.');
     expect(greetingMessage('Samantha, have fun.', 'birthday', 'Sam')).toBe('Happy Birthday, Sam! Samantha, have fun.');
     expect(greetingMessage('Rest up.', 'getWellSoon', 'Sam')).toBe('Get well soon, Sam! Rest up.');
+  });
+
+  /**
+   * Copied from `the resolved wish text` in src/server/moments/wish-message.integration.test.ts. The
+   * server rewrites pending plans with its own `greetingMessage`, so the two must agree byte for byte.
+   */
+  describe('greetingMessage matches the server', () => {
+    it('matches the app’s greeting rules', () => {
+      expect(greetingMessage('Happy birthday! Enjoy.', 'birthday', 'Asha')).toBe('Happy Birthday, Asha! Enjoy.');
+      expect(greetingMessage('Happy Birthday', 'birthday', 'Asha')).toBe('Happy Birthday, Asha!');
+      expect(greetingMessage('Dear asha, enjoy.', 'birthday', 'Asha')).toBe('Dear asha, enjoy.');
+      expect(greetingMessage('Happy Birthdays all round', 'birthday', 'Asha')).toBe('Happy Birthday, Asha! Happy Birthdays all round');
+      expect(greetingMessage('Joyful Diwali!', 'festival', 'Asha')).toBe('Joyful Diwali!');
+    });
+
+    it('never produces two greetings, whatever the moment’s type says', () => {
+      expect(greetingMessage('Happy anniversary! Wishing you a wonderful year.', 'birthday', 'Visakan')).toBe('Happy Anniversary, Visakan! Wishing you a wonderful year.');
+      expect(greetingMessage('Happy Birthday! Enjoy.', 'anniversary', 'Visakan')).toBe('Happy Birthday, Visakan! Enjoy.');
+      expect(greetingMessage('Get well soon. Rest up.', 'birthday', 'Visakan')).toBe('Get well soon, Visakan! Rest up.');
+      expect(greetingMessage('Best wishes! Have a lovely day.', 'birthday', 'Visakan')).toBe('Best wishes, Visakan! Have a lovely day.');
+      expect(greetingMessage('Happy anniversary', 'birthday', 'Visakan')).toBe('Happy Anniversary, Visakan!');
+    });
+
+    it('is unchanged when the message opens with the moment’s own greeting', () => {
+      expect(greetingMessage('Happy Anniversary! Here’s to ten years.', 'anniversary', 'Asha')).toBe('Happy Anniversary, Asha! Here’s to ten years.');
+      expect(greetingMessage('get well soon. Thinking of you.', 'getWellSoon', 'Asha')).toBe('Get well soon, Asha! Thinking of you.');
+    });
+
+    it('adds the moment’s own greeting when the message has no opening', () => {
+      expect(greetingMessage('Have a lovely day!', 'birthday', 'Asha')).toBe('Happy Birthday, Asha! Have a lovely day!');
+      expect(greetingMessage('Have a lovely day!', 'anniversary', 'Asha')).toBe('Happy Anniversary, Asha! Have a lovely day!');
+      expect(greetingMessage('Rest up.', 'getWellSoon', 'Asha')).toBe('Get well soon, Asha! Rest up.');
+      expect(greetingMessage('Happy anniversaries all round', 'birthday', 'Asha')).toBe('Happy Birthday, Asha! Happy anniversaries all round');
+    });
+
+    it('adds no greeting line without a recipient name, or for an occasion that has none', () => {
+      expect(greetingMessage('Happy anniversary! Wishing you well.', 'birthday', '')).toBe('Happy anniversary! Wishing you well.');
+      expect(greetingMessage('Happy anniversary! Wishing you well.', 'birthday', '   ')).toBe('Happy anniversary! Wishing you well.');
+      expect(greetingMessage('Happy Birthday! Enjoy.', 'festival', 'Asha')).toBe('Happy Birthday! Enjoy.');
+      expect(greetingMessage('Best wishes! Enjoy.', 'custom', 'Asha')).toBe('Best wishes! Enjoy.');
+    });
+  });
+
+  /**
+   * Birthday and anniversary used to fall through to the festival wording keyed on the title, so a
+   * birthday draft read "<title>! Wishing you and your family a joyful celebration…". Their wording is
+   * `fallback` in src/server/moments/domain.ts:26-40, addressed to the recipient.
+   */
+  describe('fallbackWish', () => {
+    it('addresses a birthday and an anniversary to the person, in every tone', () => {
+      expect(fallbackWish('Asha', 'Warm', 'birthday')).toBe('Happy Birthday, Asha! Wishing you a wonderful day and a fantastic year ahead! 🎉');
+      expect(fallbackWish('Asha', 'Short', 'birthday')).toBe('Happy Birthday, Asha! Wishing you a wonderful day.');
+      expect(fallbackWish('Asha', 'Fun', 'birthday')).toBe('Happy Birthday, Asha! Here’s to smiles, good company, and a day worth celebrating! 🎉');
+      expect(fallbackWish('Asha', 'Personal', 'birthday')).toBe('Happy Birthday, Asha! Thinking of you and sending my warmest wishes on this special day.');
+      expect(fallbackWish('Visakan', 'Warm', 'anniversary')).toBe('Happy Anniversary, Visakan! Wishing you a wonderful day and a fantastic year ahead! 🎉');
+      expect(fallbackWish('Visakan', 'Short', 'anniversary')).toBe('Happy Anniversary, Visakan! Wishing you a wonderful day.');
+      // No recipient yet: the greeting stands on its own, as the server's does.
+      expect(fallbackWish('', 'Warm', 'birthday')).toBe('Happy Birthday! Wishing you a wonderful day and a fantastic year ahead! 🎉');
+      expect(fallbackWish('  ', 'Short', 'anniversary')).toBe('Happy Anniversary! Wishing you a wonderful day.');
+    });
+
+    it('leaves Get Well Soon and the festival tones as they were', () => {
+      expect(fallbackWish('Sam', 'Short', 'getWellSoon')).toBe('Get well soon. Thinking of you.');
+      expect(fallbackWish('Sam', 'Warm', 'getWellSoon')).toBe('Get well soon. Sending care, comfort, and warm wishes for brighter days ahead.');
+      expect(fallbackWish('Diwali', 'Warm')).toBe('Diwali! Wishing you and your family a joyful celebration filled with happiness and new beginnings! ✨');
+      expect(fallbackWish('Diwali', 'Short')).toBe('Diwali! Wishing you joy and happiness.');
+      expect(fallbackWish('Diwali', 'Personal', 'festival')).toBe('Diwali! Thinking of you and your family and sending warm wishes for a joyful celebration.');
+      expect(fallbackWish('Diwali', 'Fun', 'festival')).toBe('Diwali! Here’s to a celebration full of smiles, good company, and wonderful memories! ✨');
+    });
+
+    /** The greeting rule absorbs the draft's own opening rather than adding a second one. */
+    it('produces a draft the greeting rule leaves with one greeting', () => {
+      expect(greetingMessage(fallbackWish('Asha', 'Warm', 'birthday'), 'birthday', 'Asha')).toBe(fallbackWish('Asha', 'Warm', 'birthday'));
+      expect(greetingMessage(fallbackWish('', 'Warm', 'anniversary'), 'anniversary', 'Visakan')).toBe(
+        'Happy Anniversary, Visakan! Wishing you a wonderful day and a fantastic year ahead! 🎉',
+      );
+    });
   });
 
   it('defaults the card signature from the profile name', () => {

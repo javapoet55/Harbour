@@ -39,18 +39,51 @@ export function initialWish(saved: string, latestBody: string | null | undefined
 
 /**
  * `WishMessage.reconcile(_:suggestion:)`. Folds a card-only greeting saved by older versions into the
- * Wish Message. The greeting wins when the Wish Message is empty or still the untouched suggestion,
- * and the change needs a fresh Save Message. `cardGreeting` is always cleared.
+ * Wish Message. The greeting wins when the Wish Message is empty or still an untouched default, and
+ * the change needs a fresh Save Message. `cardGreeting` is always cleared.
+ *
+ * "An untouched default" is any wording this app generates, for any title — not only the suggestion
+ * for the title the moment carries now. Matching the current title alone meant that renaming a moment
+ * (or changing its type, which rewrites an automatic title) turned its unedited default into
+ * something that looked hand-written, and the card greeting was dropped instead of adopted.
  *
  * Swift mutates `inout`; here the reconciled settings come back alongside the flag, and `adopted` is
  * Swift's `@discardableResult` "the Wish Message changed".
  */
+/**
+ * What every default the app has ever generated ends with, after the title it was built from. A
+ * default is recognised by its tail rather than by the current title, because the title may have been
+ * renamed since the message was saved — which used to make an untouched default look like the
+ * person's own writing and silently drop their card greeting.
+ *
+ * In order: the old birthday/anniversary/custom suggestion, then the four festival tones of
+ * `fallbackWish`.
+ */
+const DEFAULT_TAILS = [
+  '! Sending you warm wishes on your special day.',
+  '! Wishing you joy and happiness.',
+  '! Here’s to a celebration full of smiles, good company, and wonderful memories! ✨',
+  '! Thinking of you and your family and sending warm wishes for a joyful celebration.',
+  '! Wishing you and your family a joyful celebration filled with happiness and new beginnings! ✨',
+];
+
+/** The Get Well Soon defaults, which carry no title and so are matched whole. */
+const GET_WELL_DEFAULTS = ['Get well soon. Thinking of you.', 'Get well soon. Sending care, comfort, and warm wishes for brighter days ahead.', 'Get well soon. Wishing you comfort, rest, and brighter days ahead.'];
+
+/** True when `base` is a default this app generated for some title, rather than something written. */
+export function isGeneratedDefault(base: string): boolean {
+  if (GET_WELL_DEFAULTS.includes(base)) return true;
+  // `length >` and not `>=`: there has to be a title in front of the tail.
+  return DEFAULT_TAILS.some((tail) => base.length > tail.length && base.endsWith(tail));
+}
+
 export function reconcileCardGreeting(settings: FestivalSettings, suggestion: string): { settings: FestivalSettings; adopted: boolean } {
   const greeting = settings.cardGreeting;
   const cleared: FestivalSettings = { ...settings, cardGreeting: null };
   if (greeting == null || greeting.trim() === '' || greeting === settings.baseMessage) return { settings: cleared, adopted: false };
   const base = settings.baseMessage.trim();
-  if (!(base === '' || (base === suggestion && !settings.manuallyEdited))) return { settings: cleared, adopted: false };
+  const untouched = !settings.manuallyEdited && (base === suggestion || isGeneratedDefault(base));
+  if (!(base === '' || untouched)) return { settings: cleared, adopted: false };
   return {
     settings: { ...cleared, baseMessage: [...greeting].slice(0, 500).join(''), manuallyEdited: true, approvedAt: null },
     adopted: true,

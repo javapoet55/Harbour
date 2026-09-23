@@ -611,7 +611,13 @@ export function createManageModel(group: MomentDisplayGroup, deps: ManageDeps): 
           get().invalidateApproval();
           const state = get();
           const firstMoment = state.originals[0];
-          const offline = () => fallbackWish(state.title, state.settings.tone, occasionType(state));
+          // A birthday or an anniversary is addressed to the person, as the server's `fallback` does
+          // with `moment.firstName`; a festival is addressed by its title.
+          const offline = () => {
+            const type = occasionType(state);
+            const named = type === 'birthday' || type === 'anniversary';
+            return fallbackWish(named ? (state.recipients[0]?.name ?? '') : state.title, state.settings.tone, type);
+          };
           if (!aiConsent || !firstMoment) {
             set({ settings: { ...get().settings, baseMessage: offline(), manuallyEdited: false }, notice: 'Offline draft — review before saving.' });
             return;

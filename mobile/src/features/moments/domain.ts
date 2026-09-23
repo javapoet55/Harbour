@@ -410,9 +410,30 @@ export function validateSchedule({
 
 export { zonedInstant };
 
+/**
+ * The offline draft for an occasion.
+ *
+ * `name` is the festival's title for a festival, and the recipient's first name for a birthday or an
+ * anniversary — those two used to fall through to the festival wording, so a birthday draft read
+ * "<title>! Wishing you and your family a joyful celebration…", which is festival copy addressed to a
+ * family rather than to the person whose birthday it is. Their wording now comes from `fallback`
+ * (src/server/moments/domain.ts), so the offline draft and the server's draft agree.
+ *
+ * Swift's `FestivalValidation.fallback(name:tone:type:)` still has the old behaviour for both.
+ */
 export function fallbackWish(name: string, tone: string, type = 'festival'): string {
   if (type === 'getWellSoon') {
     return tone === 'Short' ? 'Get well soon. Thinking of you.' : 'Get well soon. Sending care, comfort, and warm wishes for brighter days ahead.';
+  }
+  if (type === 'birthday' || type === 'anniversary') {
+    const greeting = type === 'birthday' ? 'Happy Birthday' : 'Happy Anniversary';
+    const named = name.trim() === '' ? '' : `, ${name.trim()}`;
+    if (tone === 'Short') return `${greeting}${named}! Wishing you a wonderful day.`;
+    if (tone === 'Fun') return `${greeting}${named}! Here’s to smiles, good company, and a day worth celebrating! 🎉`;
+    if (tone === 'Personal') return `${greeting}${named}! Thinking of you and sending my warmest wishes on this special day.`;
+    // The server alternates this line by draft version; an offline draft has none, so it is the
+    // wording `fallback`'s default version (1) produces.
+    return `${greeting}${named}! Wishing you a wonderful day and a fantastic year ahead! 🎉`;
   }
   switch (tone) {
     case 'Short':
@@ -494,19 +515,49 @@ function containsName(body: string, name: string): boolean {
   return false;
 }
 
-/** `MomentGreeting.message(_:type:firstName:)`: each recipient's wish names them once. */
+/**
+ * Every opening the product itself writes, longest first so one can never shadow another. `fallback`
+ * (src/server/moments/domain.ts) produces all four: "Happy Birthday" and "Happy Anniversary",
+ * "Get well soon" for getWellSoon, and "Best wishes" for a festival or custom wish. A festival draft
+ * opens with the festival's own title instead (service.ts generateDraft), which is free text and
+ * cannot be listed.
+ */
+const OPENINGS = ['Happy Anniversary', 'Happy Birthday', 'Get well soon', 'Best wishes'];
+
+/** The separators an opening may end on, shared with the server. */
+const SEPARATORS = '!. \n';
+
+/**
+ * The opening `text` already starts with, in its canonical spelling, or null. The match ignores case,
+ * and the opening has to end the word: "Happy Birthdays all round" is prose, not a greeting.
+ */
+function openingOf(text: string): string | null {
+  const lower = text.toLowerCase();
+  return OPENINGS.find((opening) => lower.startsWith(opening.toLowerCase()) && (text.length === opening.length || SEPARATORS.includes(text[opening.length]))) ?? null;
+}
+
+/**
+ * `MomentGreeting.message(_:type:firstName:)`: each recipient's wish names them once. Ported byte for
+ * byte from `greetingMessage` in src/server/moments/wish-message.ts, which rewrites pending plans, so
+ * the two must agree exactly.
+ *
+ * A wish that already opens with a greeting keeps that greeting and has the name put into it, rather
+ * than collecting a second one — an anniversary wish saved on a moment typed as a birthday used to
+ * go out as "Happy Birthday, Visakan! Happy anniversary! …". The opening the message actually uses
+ * wins over the moment's type, so the text the person wrote decides the occasion.
+ */
 export function greetingMessage(body: string, type: string, firstName: string): string {
   const greeting = greetingHeading(type, firstName);
-  if (!greeting) return body;
+  // No name, or an occasion with no greeting of its own (festival, custom): the wish goes as written.
+  if (greeting === null) return body;
   if (containsName(body, firstName.trim())) return body;
-  const opening = type === 'birthday' ? 'Happy Birthday' : type === 'anniversary' ? 'Happy Anniversary' : 'Get well soon';
   const text = body.trim();
-  if (text.toLowerCase().startsWith(opening.toLowerCase())) {
-    const remainder = text.slice(opening.length);
-    if (remainder === '' || '!. \n'.includes(remainder[0])) {
-      const rest = remainder.replace(/^[!. \n]+/, '');
-      return greeting + (rest === '' ? '' : ` ${rest}`);
-    }
+  const opening = openingOf(text);
+  if (opening !== null) {
+    let at = opening.length;
+    while (at < text.length && SEPARATORS.includes(text[at])) at++;
+    const rest = text.slice(at);
+    return `${opening}, ${firstName.trim()}!` + (rest === '' ? '' : ` ${rest}`);
   }
   return `${greeting} ${text}`;
 }

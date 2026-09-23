@@ -463,6 +463,64 @@ describe('Create Moment', () => {
     expect(mockPost).toHaveBeenCalledWith('save', expect.objectContaining({ type: 'birthday', title: 'Kate’s Birthday', firstName: 'Kate', source: 'manual' }), undefined);
   });
 
+  /**
+   * The occasion chosen here decides the greeting every scheduled wish carries
+   * (`greetingMessage`), so a type that reaches the payload as the `newMomentInput` default would
+   * send "Happy Birthday, …" on an anniversary. Nothing covered this picker before.
+   *
+   * Both buttons are exercised: the one in the form and the one in the header, which lives inside
+   * `Stack.Screen` options (MomentEditorView.tsx:178-180) and so captures `save` separately.
+   */
+  describe('sends the chosen type in the payload', () => {
+    const types = [
+      ['birthday', 'Birthday'],
+      ['anniversary', 'Anniversary'],
+      ['festival', 'Festival'],
+      ['getWellSoon', 'Get Well Soon'],
+      ['custom', 'Custom'],
+    ] as const;
+
+    const saveWith = async (type: string, button: string, label?: string) => {
+      load([]);
+      const saved = moment({ id: 'new', type, title: 'Chosen', firstName: 'Kate', occurrenceDate: future(30), nextOccurrence: future(30) });
+      mockPost.mockResolvedValueOnce({ moment: saved });
+      mockSnapshot.mockResolvedValue({ moments: [saved], emailAccount: null, emailConfigured: false, automaticEmailEnabled: false });
+      await render(<MomentEditor />);
+      await fireEvent.press(screen.getByTestId('moment-type'));
+      await fireEvent.press(screen.getByTestId(`moment-type-${type}`));
+      await fireEvent.changeText(screen.getByTestId('moment-title'), 'Chosen');
+      // Read the picker before saving: every type but custom replaces this screen with Manage Moment.
+      if (label !== undefined) expect(within(screen.getByTestId('moment-type')).queryByText(label)).toBeTruthy();
+      await fireEvent.press(screen.getByTestId(button));
+      await waitFor(() => expect(mockPost).toHaveBeenCalled());
+    };
+
+    it.each(types)('%s, saved from the form', async (type, label) => {
+      // The picker shows the choice, and the payload carries the same value.
+      await saveWith(type, 'moment-save', label);
+      expect(mockPost).toHaveBeenCalledWith('save', expect.objectContaining({ type, title: 'Chosen' }), undefined);
+    });
+
+    it.each(types)('%s, saved from the header button', async (type) => {
+      await saveWith(type, 'moment-save-top');
+      expect(mockPost).toHaveBeenCalledWith('save', expect.objectContaining({ type, title: 'Chosen' }), undefined);
+    });
+
+    it('keeps the chosen type when a contact is picked afterwards', async () => {
+      load([]);
+      const saved = moment({ id: 'new', type: 'anniversary', title: 'Chosen', occurrenceDate: future(30), nextOccurrence: future(30) });
+      mockPost.mockResolvedValueOnce({ moment: saved });
+      mockSnapshot.mockResolvedValue({ moments: [saved], emailAccount: null, emailConfigured: false, automaticEmailEnabled: false });
+      await render(<MomentEditor />);
+      await fireEvent.press(screen.getByTestId('moment-type'));
+      await fireEvent.press(screen.getByTestId('moment-type-anniversary'));
+      await fireEvent.changeText(screen.getByTestId('moment-first-name'), 'Visakan');
+      await fireEvent.press(screen.getByTestId('moment-save'));
+      await waitFor(() => expect(mockPost).toHaveBeenCalled());
+      expect(mockPost).toHaveBeenCalledWith('save', expect.objectContaining({ type: 'anniversary', firstName: 'Visakan', title: 'Visakan’s Anniversary' }), undefined);
+    });
+  });
+
   it('asks to confirm an imported date that is missing', async () => {
     load([]);
     mockParams = { imported: JSON.stringify({ type: 'festival', title: 'Diwali Wishes', firstName: '', phone: '', email: '', occurrenceDate: '', timeZoneID: 'UTC', yearly: false, source: 'festivalCatalog', sourceKey: 'k' }) };
