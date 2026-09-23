@@ -9,7 +9,8 @@ import { prisma } from '@/server/db';
 import { createTask, updateTask, scheduleTask, completeTask, deleteTask } from '@/server/tasks';
 import { scheduleDefaultReminders, scheduleRequestedReminder } from '@/server/reminders';
 import { listEventsInRange } from '@/server/agenda';
-import { pushTaskToExternal } from '@/server/calendar-sync';
+import { pushEventToExternal, pushTaskToExternal } from '@/server/calendar-sync';
+import { calendarPushMessage, calendarPushWarning } from '@/lib/calendar-push';
 import { generateReplanProposal } from '@/server/replanner';
 import { LIFE_REMINDER_TYPES, parseLifeReminder } from '@/lib/life-reminders';
 import { inc } from '@/lib/metrics';
@@ -72,7 +73,10 @@ export async function executeVoiceTool(userId: string, sessionId: string, callId
       userId, title: String(args.title), notes: String(args.notes ?? ''), startAt, endAt,
       location: String(args.location ?? ''), timeZone: user.timeZone, source: 'harbor', syncKey,
     }, select: { id: true, title: true, startAt: true, endAt: true, timeZone: true } });
-    return { success: true, event, savedAs: 'NexDo calendar event', message: 'Saved in NexDo Calendar. No invitations or external bookings were sent.' };
+    // The event is saved; a calendar write failure is reported, never allowed to undo or repeat the save.
+    const calendarPush = await pushEventToExternal(userId, event.id);
+    const warning = calendarPushWarning(calendarPush);
+    return { success: true, event, savedAs: 'NexDo calendar event', calendarPush, ...(warning ? { warnings: [warning] } : {}), message: `${calendarPushMessage(calendarPush)} No invitations were sent.` };
   }
   if (name === 'find_tasks') {
     const tasks = await prisma.task.findMany({ where: { userId, deletedAt: null, title: { contains: String(args.query) } }, select: selection, take: 21, orderBy: { updatedAt: 'desc' } });

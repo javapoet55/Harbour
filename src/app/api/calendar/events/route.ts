@@ -6,6 +6,8 @@ import { eventRepeatSchema, eventOccurrences } from '@/server/voice/event-repeat
 import { createHash } from 'node:crypto';
 import { requireUser } from '@/server/auth';
 import { executeVoiceTool, validateVoiceTool } from '@/server/voice/tools';
+import { pushEventToExternal } from '@/server/calendar-sync';
+import { calendarPushMessage, calendarPushWarning } from '@/lib/calendar-push';
 import { z } from 'zod';
 const input = z.object({ allowScheduleConflict: z.boolean().optional(), repeat: eventRepeatSchema.optional(), requestId: z.string().uuid(), title: z.string(), notes: z.string(), startAt: z.string(), endAt: z.string(), location: z.string() }).strict();
 async function healthHandlerPOST(req: Request) {
@@ -27,13 +29,18 @@ async function healthHandlerPOST(req: Request) {
       }
       const { prisma } = await import('@/server/db');
       const seriesKey = createHash('sha256').update(`${user.id}:${requestId}`).digest('hex');
-      await prisma.$transaction(async tx => {
+      const saved = await prisma.$transaction(async tx => {
+        const ids: string[] = [];
         for (const occurrence of occurrences) {
           const syncKey = `manual-repeat:${seriesKey}:${occurrence.startAt.toISOString()}`;
-          await tx.calendarEvent.upsert({ where: { syncKey }, update: {}, create: { userId: user.id, title: event.title, notes: event.notes, location: event.location, ...occurrence, timeZone: user.timeZone, source: 'harbor', syncKey } });
+          ids.push((await tx.calendarEvent.upsert({ where: { syncKey }, update: {}, create: { userId: user.id, title: event.title, notes: event.notes, location: event.location, ...occurrence, timeZone: user.timeZone, source: 'harbor', syncKey }, select: { id: true } })).id);
         }
+        return ids;
       }, { timeout: 20000 });
-      return Response.json({ success: true, occurrenceCount: occurrences.length }, { headers: { 'Cache-Control': 'private, no-store' } });
+      // Each occurrence is its own calendar event. A retry with the same requestId writes only what is still missing.
+      const calendarPush = await pushEventToExternal(user.id, saved, { skipPushed: true });
+      const warning = calendarPushWarning(calendarPush);
+      return Response.json({ success: true, occurrenceCount: occurrences.length, calendarPush, ...(warning ? { warnings: [warning] } : {}), message: calendarPushMessage(calendarPush) }, { headers: { 'Cache-Control': 'private, no-store' } });
     }
     const result = await executeVoiceTool(user.id, requestId, 'manual-calendar-event', 'create_calendar_event', { ...event, ...(allowScheduleConflict === true ? { allowScheduleConflict: true } : {}) });
     if ('requiresConfirmation' in result && result.requiresConfirmation) throw new ScheduleWarning(result.warnings ?? []);

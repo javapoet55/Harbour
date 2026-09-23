@@ -284,7 +284,8 @@ model CalendarConnection {
   tokenExpiresAt DateTime?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
-  events        CalendarEvent[]
+  events        CalendarEvent[] @relation("ImportedEvents")
+  pushedEvents  CalendarEvent[] @relation("PushedEvents")
 
   @@unique([userId, provider, calendarId])
 }
@@ -321,7 +322,7 @@ model CalendarEvent {
   userId        String
   user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   connectionId  String?
-  connection    CalendarConnection? @relation(fields: [connectionId], references: [id])
+  connection    CalendarConnection? @relation("ImportedEvents", fields: [connectionId], references: [id])
   title         String
   notes         String    @default("")
   startAt       DateTime
@@ -332,9 +333,15 @@ model CalendarEvent {
   externalId    String?
   syncKey       String?   @unique
   timeZone      String    @default("America/Los_Angeles")
+  // A Nexdo-created event written back to a connected calendar (see pushEventToExternal).
+  pushedConnectionId String?
+  pushedConnection   CalendarConnection? @relation("PushedEvents", fields: [pushedConnectionId], references: [id], onDelete: SetNull)
+  pushedExternalId   String?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
   deletedAt     DateTime?
+
+  @@index([pushedConnectionId, pushedExternalId])
 }
 
 model Reminder {
