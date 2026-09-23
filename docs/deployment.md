@@ -56,6 +56,22 @@ concurrent requests. Enable `MOMENTS_SCHEDULER_ENABLED=true` on the API only aft
 this worker is deployed and its cadence is verified. Keep it false otherwise.
 This repository change alone does not provision or activate that service.
 
+The same worker also synchronizes connected calendars on its own timer:
+`POST /api/calendar/sync` with the shared `HARBOR_CRON_SECRET`, once at start and
+then `CALENDAR_SYNC_INTERVAL_MS` after each run finishes. Runs never overlap, a
+slow or failed sync does not delay the Moments tick, and a sync that has not
+answered after min(interval, 5 minutes) is abandoned until the next run. Each run
+logs one line: `Calendar sync: ok, N connections, N errors, N ms` or
+`Calendar sync: failed (<reason>), …`; no ids, tokens, emails or provider messages.
+
+Worker service variables:
+
+| Variable | Required | Value |
+| --- | --- | --- |
+| `MOMENTS_API_BASE_URL` | yes | API HTTPS origin, e.g. `https://harbour-production-f8a0.up.railway.app` |
+| `HARBOR_CRON_SECRET` | yes | Same value as on the API service |
+| `CALENDAR_SYNC_INTERVAL_MS` | no | Default `600000` (10 minutes). `0` turns calendar sync off. Otherwise at least `60000`; an invalid value turns calendar sync off and is logged, the Moments tick keeps running. |
+
 Manual deliveries expire 24 hours after their scheduled time if not confirmed.
 Expiration is applied during the worker sweep and the owner's Moments refresh,
 so it does not depend on automatic email being enabled. Expired wishes remain
