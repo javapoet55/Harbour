@@ -1,6 +1,7 @@
 import { createApiClient } from '../../../api/client';
 import { momentsApi, operationTimeout, type MomentsSnapshot } from '../../../api/moments';
-import { createMomentsStore, reminderStatusText, type MomentsDeps } from '../store';
+import { createMomentsStore, festivalModelFor, releaseFestivalModel, reminderStatusText, retainFestivalModel, type MomentsDeps } from '../store';
+import type { ManageModel } from '../manageModel';
 import type { ReminderAuthorization } from '../notifications';
 import { draft, moment, plan } from '../testFixtures';
 
@@ -211,5 +212,47 @@ describe('ImportantMomentsStore', () => {
     await store.getState().refresh();
     expect(store.getState().route).toBeNull();
     expect(store.getState().pendingRoute).toBeNull();
+  });
+});
+
+/**
+ * ITEM 3/4. `ImportantMomentsStore.festivalModel(for:)`: Manage Moment and every greeting-card
+ * section share one model, so a wish edited in either is the same wish rather than a stale copy.
+ */
+describe('the live Manage Moment model per group', () => {
+  const group = (ids: string[]) => ({ id: ids[0], moments: ids.map((id) => moment({ id })) });
+  const fake = (name: string) => ({ name }) as unknown as ManageModel;
+
+  it('hands the same model to every screen showing one of the group’s moments', () => {
+    const create = jest.fn(() => fake('one'));
+    const first = festivalModelFor(group(['a', 'b']), create);
+    retainFestivalModel(first);
+    // A section opened on just one moment of the group joins the model already live.
+    const second = festivalModelFor(group(['b']), create);
+    retainFestivalModel(second);
+    expect(second).toBe(first);
+    expect(create).toHaveBeenCalledTimes(1);
+    releaseFestivalModel(second);
+    releaseFestivalModel(first);
+  });
+
+  it('starts fresh once the last screen lets go', () => {
+    const create = jest.fn(() => fake('two'));
+    const first = festivalModelFor(group(['c']), create);
+    retainFestivalModel(first);
+    releaseFestivalModel(first);
+    festivalModelFor(group(['c']), create);
+    expect(create).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not count a model that was created but never mounted', () => {
+    const create = jest.fn(() => fake('three'));
+    // React may run a `useState` initializer twice; only the effect retains.
+    const model = festivalModelFor(group(['d']), create);
+    expect(festivalModelFor(group(['d']), create)).toBe(model);
+    retainFestivalModel(model);
+    releaseFestivalModel(model);
+    festivalModelFor(group(['d']), create);
+    expect(create).toHaveBeenCalledTimes(2);
   });
 });

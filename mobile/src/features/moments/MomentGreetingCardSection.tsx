@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { useStore } from 'zustand';
 
@@ -8,25 +8,40 @@ import { textStyles, useTheme } from '../../theme';
 import { GreetingCardCapture } from './cardCapture';
 import { CARD_NOT_ATTACHED } from './cardImage';
 import { BorderedButton, caption } from './components';
-import { displayGroups } from './domain';
+import { displayGroups, editableGroups } from './domain';
 import { FestivalGreetingCard, GreetingCardEditor } from './GreetingCard';
-import { newManageModel } from './ManageMomentView';
+import { useManageModel } from './ManageMomentView';
+import { cardMessageFor } from './manageModel';
 import { momentsStore } from './store';
 
 /**
- * `MomentGreetingCardSection` (ios/App/FestivalServices.swift:195-218): the greeting-card editor
- * without the rest of Manage Moment, on Review Wish and the editor. It saves the card on "Use This
- * Card" and never touches the recipients or the scheduled text.
+ * `MomentGreetingCardSection` (ios/App/FestivalServices.swift:243-279): the moment's greeting card, on
+ * the same model as Manage Moment. The card prints the Wish Message, so a message edited in the card
+ * editor is the wish that is scheduled, and "Use This Card" saves and approves it.
+ *
+ * `greeting` is the text the surrounding screen is reviewing, and `onMessageChange` reports an edit
+ * back to it, so the two never drift apart.
  */
-export function MomentGreetingCardSection({ moment, greeting }: { moment: ImportantMoment; greeting?: string }) {
+export function MomentGreetingCardSection({
+  moment,
+  greeting,
+  onMessageChange,
+}: {
+  moment: ImportantMoment;
+  greeting?: string;
+  onMessageChange?: (message: string) => void;
+}) {
   const theme = useTheme();
-  const [model] = useState(() => {
-    const current = momentsStore.getState().snapshot?.moments.find((item) => item.id === moment.id) ?? moment;
-    return newManageModel(displayGroups([current])[0]);
-  });
+  const current = momentsStore.getState().snapshot?.moments.find((item) => item.id === moment.id) ?? moment;
+  const [group] = useState(
+    () => editableGroups(momentsStore.getState().snapshot?.moments ?? []).find((item) => item.moments.some((entry) => entry.id === current.id)) ?? displayGroups([current])[0],
+  );
+  const model = useManageModel(group);
   const imageUri = useStore(model, (state) => state.imageUri);
   const title = useStore(model, (state) => state.title);
   const settings = useStore(model, (state) => state.settings);
+  const recipients = useStore(model, (state) => state.recipients);
+  const baseMessage = settings.baseMessage;
   const notice = useStore(model, (state) => state.notice);
   const card = useStore(model, (state) => state.card);
   const cardFailed = useStore(model, (state) => state.cardFailed);
@@ -36,15 +51,30 @@ export function MomentGreetingCardSection({ moment, greeting }: { moment: Import
   useEffect(() => {
     void model.getState().loadStoredCard();
   }, [model]);
+  // `.onChange(of: model.settings.baseMessage)`: the screen above follows the wish edited here.
+  const reported = useRef(baseMessage);
+  useEffect(() => {
+    if (reported.current === baseMessage) return;
+    reported.current = baseMessage;
+    onMessageChange?.(baseMessage);
+  }, [baseMessage, onMessageChange]);
   return (
     <View style={styles.section}>
-      {imageUri ? <FestivalGreetingCard artwork={imageUri} title={title} message={settings.cardGreeting ?? settings.baseMessage} signature={settings.cardSignature ?? ''} /> : null}
+      {imageUri ? (
+        <FestivalGreetingCard
+          artwork={imageUri}
+          title={title}
+          message={cardMessageFor({ settings }, recipients.find((recipient) => recipient.momentID === current.id))}
+          signature={settings.cardSignature ?? ''}
+        />
+      ) : null}
       <BorderedButton
         prominent
         icon="sparkles"
         title={imageUri ? 'Edit Greeting Card' : 'Create AI Greeting Card'}
         onPress={() => {
-          if (greeting) model.getState().updateSettings({ baseMessage: greeting });
+          // The message being reviewed on this screen is the wish the card prints.
+          if (greeting && greeting !== model.getState().settings.baseMessage) model.getState().setMessage(greeting);
           setEditing(true);
         }}
         testID="moment-greeting-card"

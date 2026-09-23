@@ -54,21 +54,25 @@ import {
 import { DateField, Disclosure, FormField, FormScroll, FormSection, FormRow, FormToggle, FormButton, LabeledValue, MenuPicker, PopoverMenu, usePopoverMenu, ZonePicker, genericZoneName } from './form';
 import { FestivalGreetingCard, GreetingCardEditor } from './GreetingCard';
 import {
+  cardMessage,
   createManageModel,
   deliveryMessage,
   emailReady as isEmailReady,
   hasSchedules,
   isDirty,
   MANAGE_TABS,
+  messageSuggestion,
   occasionLabel,
   occasionSource,
   occasionType,
+  pendingChange,
   recipientChannel,
   reviewHeading,
   selectedRecipients,
   type ManageModel,
 } from './manageModel';
-import { momentsStore, useMoments } from './store';
+import { festivalModelFor, momentsStore, releaseFestivalModel, retainFestivalModel, useMoments } from './store';
+import { needsCancelPrompt } from './wishMessage';
 
 /** The model's device dependencies, shared with Review Wish's greeting-card section. */
 export function newManageModel(group: MomentDisplayGroup): ManageModel {
@@ -82,7 +86,7 @@ export function newManageModel(group: MomentDisplayGroup): ManageModel {
     cards: {
       // The captor is registered by the off-screen `GreetingCardCapture` this screen mounts, so the
       // model is handed its own store to look itself up by once that view exists.
-      capture: () => captureCard(model),
+      capture: (message) => captureCard(model, message),
       encode: (uri) => encodeCard(uri, cardEncoder),
       encodeSmaller: (uri) => encodeSmallerCard(uri, cardEncoder),
       upload: async (momentID, data) => (await momentsApi.uploadCard(momentID, data)).card,
@@ -92,6 +96,19 @@ export function newManageModel(group: MomentDisplayGroup): ManageModel {
       fetch: (momentID) => momentsApi.card(momentID),
     },
   });
+  return model;
+}
+
+/**
+ * The one live model for a moment's group, retained while this screen shows it. Manage Moment and the
+ * greeting-card section on the moment editor share it, so a wish edited in either is the same wish.
+ */
+export function useManageModel(group: MomentDisplayGroup): ManageModel {
+  const [model] = useState(() => festivalModelFor(group, newManageModel));
+  useEffect(() => {
+    retainFestivalModel(model);
+    return () => releaseFestivalModel(model);
+  }, [model]);
   return model;
 }
 
@@ -130,7 +147,7 @@ function CardHeading({ title, children }: { title: string; children: ReactNode }
 
 export function ManageMomentView({ group, onDone }: { group: MomentDisplayGroup; onDone: () => void }) {
   const theme = useTheme();
-  const [model] = useState(() => newManageModel(group));
+  const model = useManageModel(group);
   const state = useStore(model);
   const snapshot = useMoments((store) => store.snapshot);
   const ready = isEmailReady({ snapshot });
@@ -232,11 +249,17 @@ export function ManageMomentView({ group, onDone }: { group: MomentDisplayGroup;
   };
 
   /** `save(approve:)` (ManageFestivalView.swift:152). */
+  /**
+   * `save(approve:)` (ManageFestivalView.swift:167). Asks to cancel schedules only for a change to who,
+   * when or how a wish is delivered, or a message saved without approving it. An approved message-only
+   * save goes straight through with `cancelSchedules:false` — the server rewrites the pending wishes'
+   * text rather than cancelling them.
+   */
   const save = (approve = false) => {
     approveAfterCancel.current = approve;
     const current = model.getState();
     const scheduled = hasSchedules(current, momentsStore.getState());
-    if ((isDirty(current) && scheduled) || (approve && scheduled)) current.setNeedsScheduleConfirmation(true);
+    if (needsCancelPrompt(pendingChange(current), approve, scheduled)) current.setNeedsScheduleConfirmation(true);
     else if (approve) void current.approve();
     else void current.save();
   };
@@ -583,10 +606,9 @@ export function ManageMomentView({ group, onDone }: { group: MomentDisplayGroup;
                   ref={messageRef}
                   accessibilityLabel={`${occasionLabel(state)} wish message`}
                   multiline
-                  onChangeText={(value) => {
-                    model.getState().updateSettings({ baseMessage: value, manuallyEdited: true });
-                    model.getState().invalidateApproval();
-                  }}
+                  onChangeText={(value) => model.getState().setMessage(value)}
+                  placeholder={messageSuggestion(state)}
+                  placeholderTextColor={theme.colors.placeholder}
                   style={[styles.editor, { color: theme.colors.label }]}
                   testID="festival-message"
                   textAlignVertical="top"
@@ -595,6 +617,10 @@ export function ManageMomentView({ group, onDone }: { group: MomentDisplayGroup;
                 <Text style={[caption, styles.counter, { color: characterCount(state.settings.baseMessage) > 500 ? theme.colors.danger : theme.colors.secondaryLabel }]}>
                   {`${characterCount(state.settings.baseMessage)}/500`}
                 </Text>
+                {/* The suggestion is placeholder wording; this is the only thing that saves it. */}
+                {state.settings.baseMessage.trim() === '' ? (
+                  <BorderedButton icon="add-circle-outline" title="Use suggestion" onPress={() => model.getState().useSuggestion()} testID="wish-use-suggestion" />
+                ) : null}
               </MomentCard>
               <View style={styles.inline}>
                 <BorderedButton
@@ -617,7 +643,7 @@ export function ManageMomentView({ group, onDone }: { group: MomentDisplayGroup;
               <Text style={[caption, { color: theme.colors.secondaryLabel }]}>Shares only occasion, tone and your optional context. Generated text is a draft for your review.</Text>
               <Text style={[textStyles.title2, styles.bold, { color: theme.colors.label }]}>Greeting Card</Text>
               {state.imageUri ? (
-                <FestivalGreetingCard artwork={state.imageUri} title={state.title} message={state.settings.cardGreeting ?? state.settings.baseMessage} signature={state.settings.cardSignature ?? ''} />
+                <FestivalGreetingCard artwork={state.imageUri} title={state.title} message={cardMessage(state)} signature={state.settings.cardSignature ?? ''} />
               ) : (
                 <MomentCard>
                   <IconLabel icon="albums-outline" title="Create a personal greeting card" style={headline} />
@@ -648,6 +674,7 @@ export function ManageMomentView({ group, onDone }: { group: MomentDisplayGroup;
               ) : null}
               {/* ManageFestivalView.swift:168: nothing to approve while the message is blank,
                   and the server rejects one over 500 characters. */}
+              {state.error ? <ErrorText testID="wish-message-error">{state.error}</ErrorText> : null}
               <MomentPrimary
                 title="Save Message"
                 onPress={() => save(true)}
@@ -749,7 +776,8 @@ export function ManageMomentView({ group, onDone }: { group: MomentDisplayGroup;
               <Secondary>Saving…</Secondary>
             </View>
           ) : null}
-          {state.error ? <ErrorText testID="festival-error">{state.error}</ErrorText> : null}
+          {/* The Wish Message tab shows its errors next to Save Message. */}
+          {state.tab !== 'Wish Message' && state.error ? <ErrorText testID="festival-error">{state.error}</ErrorText> : null}
           {state.notice ? (
             <Text style={[textStyles.subheadline, { color: theme.colors.secondaryLabel }]} testID="festival-notice">
               {state.notice}

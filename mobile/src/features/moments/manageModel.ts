@@ -23,6 +23,7 @@ import {
   greetingMessage,
   hasRecipient,
   isArchived,
+  supportsGreetingCard,
   newFestivalSettings,
   normalizedPhone,
   planEditable,
@@ -36,6 +37,17 @@ import {
   type MomentDisplayGroup,
 } from './domain';
 import { errorMessage, type MomentsState } from './store';
+import {
+  approvalError,
+  cardWish,
+  changeFrom,
+  initialWish,
+  reconcileCardGreeting,
+  wishSaveError,
+  wishSuggestion,
+  type FestivalChange,
+  type FestivalEditState,
+} from './wishMessage';
 
 /**
  * `ManageFestivalModel` (ios/App/ManageFestivalModel.swift:4-233): the four-step manager behind
@@ -67,8 +79,12 @@ export type ManageDeps = {
 };
 
 export type CardDeps = {
-  /** The mounted off-screen card as a temporary file URI, or `null` when none is mounted. */
-  capture: () => Promise<string | null>;
+  /**
+   * The mounted off-screen card, rendered with `message`, as a temporary file URI — or `null` when no
+   * card is mounted. The text is passed in so each recipient's card carries their own wish, and so the
+   * capture waits for that text to be on screen instead of shooting the frame before the edit.
+   */
+  capture: (message: string) => Promise<string | null>;
   /** Base64 JPEG at quality 0.85, longest side at most 1600 px. */
   encode: (uri: string) => Promise<string>;
   /** The one retry after a 413: the same capture at a smaller size. */
@@ -117,6 +133,8 @@ export type ManageState = {
   cardFailed: boolean;
   /** `cardFingerprint` of the last successful upload, so an unrelated save does not re-send the image. */
   uploadedCardKey: string;
+  /** `savedState` (`:52`): the state as last saved, to tell a message-only save from one that changes delivery. */
+  savedState: FestivalEditState | null;
 
   setTitle(value: string): void;
   setDate(value: number): void;
@@ -125,6 +143,10 @@ export type ManageState = {
   setSendDate(value: number): void;
   setNotify(value: boolean): void;
   updateSettings(patch: Partial<FestivalSettings>): void;
+  /** `setMessage(_:)` (`:76`): every edit of the wish — Wish Message tab or card editor — goes through here. */
+  setMessage(text: string): void;
+  /** `useSuggestion()` (`:74`): the only way the suggestion becomes the saved message. */
+  useSuggestion(): void;
   setRecipients(recipients: ManagedRecipient[]): void;
   updateRecipient(key: string, patch: Partial<ManagedRecipient>): void;
   setError(value: string | null): void;
@@ -225,13 +247,77 @@ export function hasSchedules(state: Pick<ManageState, 'originals' | 'savedPlans'
 
 class ManageError extends Error {}
 
+/** `ManageFestivalModel.cardMessageNeedsReview` (`:260`). */
+export const CARD_MESSAGE_NEEDS_REVIEW =
+  'Your card is ready, but its message changes this moment’s scheduled wishes. Open Manage Moment to review and save the message.';
+
+/** `editState` (`:71`): what `FestivalChange` compares. */
+export function editState(state: Pick<ManageState, 'title' | 'date' | 'zone' | 'yearly' | 'active' | 'recipients' | 'settings'>): FestivalEditState {
+  return {
+    title: state.title,
+    day: momentDay(state.date, state.zone),
+    zone: state.zone,
+    yearly: state.yearly,
+    active: state.active,
+    recipients: state.recipients,
+    settings: state.settings,
+  };
+}
+
 /**
- * Everything the rendered card shows. An ordinary moment save — a new title, a moved date, a changed
- * recipient — runs through the same `save()` as a card edit, so this is what tells the two apart and
- * keeps a rename from re-uploading a megabyte of unchanged image.
+ * `pendingChange` (`:73`): what saving now would change. An approved message-only save keeps existing
+ * schedules — the server rewrites their text (src/server/moments/festival.ts `onlyMessageChanged`).
+ * Without a saved state to compare against, a save is treated as changing delivery.
  */
-export function cardFingerprint(state: Pick<ManageState, 'settings' | 'title'>): string {
-  return [state.settings.imageID, state.title, state.settings.cardGreeting ?? state.settings.baseMessage, state.settings.cardSignature ?? ''].join('|');
+export function pendingChange(state: ManageState): FestivalChange {
+  return state.savedState ? changeFrom(editState(state), state.savedState) : 'delivery';
+}
+
+/** `suggestion` (`:75`): placeholder wording while the Wish Message is empty. */
+export function messageSuggestion(state: Pick<ManageState, 'originals' | 'title'>): string {
+  return wishSuggestion(occasionType(state), state.title);
+}
+
+/** `cardMessage` (`:107`): the shared card preview shows the Wish Message. */
+export function cardMessage(state: Pick<ManageState, 'settings'>): string {
+  return cardWish(state.settings);
+}
+
+/** `cardMessage(for:)` (`:109`): the card a recipient's email carries — their own message, else the wish. */
+export function cardMessageFor(state: Pick<ManageState, 'settings'>, recipient: Pick<ManagedRecipient, 'key'> | undefined): string {
+  return cardWish(state.settings, recipient?.key ?? null);
+}
+
+/**
+ * `cardTexts` (`:111-115`): the card text per moment. Recipients with the same text share one
+ * rendered card, so a group with no personalized messages still uploads a single image.
+ */
+export function cardTexts(state: Pick<ManageState, 'settings' | 'originals' | 'recipients'>): Record<string, string> {
+  const texts: Record<string, string> = {};
+  for (const moment of state.originals) {
+    if (!supportsGreetingCard(moment)) continue;
+    texts[moment.id] = cardMessageFor(state, state.recipients.find((recipient) => recipient.momentID === moment.id));
+  }
+  return texts;
+}
+
+/**
+ * `cardKey` (`:116`): everything the rendered cards show. An ordinary moment save — a new title, a
+ * moved date, a changed recipient — runs through the same `save()` as a card edit, so this is what
+ * tells the two apart and keeps a rename from re-uploading a megabyte of unchanged image.
+ *
+ * The per-moment texts are part of it, so editing the Wish Message (or one recipient's override)
+ * re-renders and re-uploads, which the old `cardGreeting ?? baseMessage` fingerprint did not.
+ */
+export function cardFingerprint(state: Pick<ManageState, 'settings' | 'title' | 'originals' | 'recipients'>): string {
+  const texts = cardTexts(state);
+  return (
+    [state.settings.imageID, state.title, state.settings.cardSignature ?? ''].join('') +
+    Object.keys(texts)
+      .sort()
+      .map((id) => `${id}=${texts[id]}`)
+      .join('')
+  );
 }
 
 function bytesToUuid(hex: string): string {
@@ -263,21 +349,27 @@ export function createManageModel(group: MomentDisplayGroup, deps: ManageDeps): 
       contactIdentifier: saved.contactIDs[key] ?? '',
     };
   });
-  const settings: FestivalSettings = { ...saved, channels: { ...saved.channels } };
-  if (settings.baseMessage === '') {
-    settings.baseMessage =
-      first.drafts[0]?.body ??
-      (first.type === 'getWellSoon'
-        ? 'Get well soon. Wishing you comfort, rest, and brighter days ahead.'
-        : first.type === 'festival'
-          ? fallbackWish(first.title, 'Warm')
-          : `${first.title}! Sending you warm wishes on your special day.`);
-  }
+  // An empty Wish Message stays empty — the suggestion is only a placeholder — while a draft the
+  // person approved in Review Wish is still the text they start editing.
+  const settings: FestivalSettings = {
+    ...saved,
+    channels: { ...saved.channels },
+    baseMessage: initialWish(saved.baseMessage, first.drafts[0]?.body, first.drafts[0]?.status),
+  };
   for (const recipient of recipients) {
     if (settings.channels[recipient.key] === undefined) {
       settings.channels[recipient.key] = recipient.phone === '' ? (recipient.email === '' ? 'share' : 'email') : 'messages';
     }
   }
+  // Older versions kept the card's text separately; it becomes the Wish Message when that was left
+  // empty or still held the untouched suggestion, and then needs a fresh Save Message.
+  //
+  // DELIBERATE DEVIATION from ManageFestivalModel.swift:90-93, reported with this port: Swift takes
+  // its `reconciled` copy *before* filling in the default channels, so the live settings lose them
+  // while the baseline keeps them — which opens every moment dirty and shows the wrong channel for a
+  // phone-less recipient. The defaults are applied to both here, which is what the surrounding code
+  // and the baseline comment intend, and what Swift did before this commit.
+  const folded = reconcileCardGreeting(settings, wishSuggestion(first.type, first.title));
   const date = momentDate(first.nextOccurrence, first.timeZoneID, deps.now());
   let zone = first.timeZoneID;
   let sendDate = zonedInstant(first.nextOccurrence, 8, 0, first.timeZoneID) ?? date;
@@ -352,7 +444,16 @@ export function createManageModel(group: MomentDisplayGroup, deps: ManageDeps): 
       if (current.savedImageID !== current.settings.imageID) deps.images.delete(current.savedImageID);
       for (const id of current.stagedImages) if (id !== current.settings.imageID) deps.images.delete(id);
       set({ originals: updated, recipients: nextRecipients, stagedImages: [], savedImageID: current.settings.imageID });
-      set({ baseline: fingerprint(get()), keys: {}, draftIDs: {}, savedPlans: [] });
+      set({ baseline: fingerprint(get()), savedState: editState(get()), keys: {}, draftIDs: {}, savedPlans: [] });
+    }
+
+    /**
+     * `keepsSchedules(cancelSchedules:)` (`:228`). An approved message-only save keeps existing
+     * schedules; the server rewrites their text rather than cancelling them.
+     */
+    function keepsSchedules(cancelSchedules: boolean): boolean {
+      const state = get();
+      return !cancelSchedules && hasSchedules(state, store.getState()) && pendingChange(state) === 'messageOnly' && state.settings.approvedAt != null;
     }
 
     return {
@@ -364,7 +465,7 @@ export function createManageModel(group: MomentDisplayGroup, deps: ManageDeps): 
       yearly: first.yearly,
       active: group.moments.some((moment) => moment.enabled),
       recipients,
-      settings,
+      settings: folded.settings,
       sendDate,
       notify: settings.draftNotify ?? true,
       needsScheduleConfirmation: false,
@@ -388,6 +489,7 @@ export function createManageModel(group: MomentDisplayGroup, deps: ManageDeps): 
       cardUploading: false,
       cardFailed: false,
       uploadedCardKey: '',
+      savedState: null,
 
       setTitle: (title) => set({ title }),
       setDate(value) {
@@ -406,6 +508,14 @@ export function createManageModel(group: MomentDisplayGroup, deps: ManageDeps): 
       setSendDate: (value) => set((state) => ({ sendDate: value, settings: { ...state.settings, draftSendDate: isoString(value) } })),
       setNotify: (value) => set((state) => ({ notify: value, settings: { ...state.settings, draftNotify: value } })),
       updateSettings: (patch) => set((state) => ({ settings: { ...state.settings, ...patch } })),
+      setMessage(text) {
+        set((state) => ({ settings: { ...state.settings, baseMessage: [...text].slice(0, 500).join(''), manuallyEdited: true } }));
+        get().invalidateApproval();
+      },
+      useSuggestion() {
+        set((state) => ({ settings: { ...state.settings, baseMessage: messageSuggestion(state), manuallyEdited: false } }));
+        get().invalidateApproval();
+      },
       setRecipients: (next) => set({ recipients: next }),
       updateRecipient: (key, patch) => set((state) => ({ recipients: state.recipients.map((recipient) => (recipient.key === key ? { ...recipient, ...patch } : recipient)) })),
       setError: (error) => set({ error }),
@@ -463,17 +573,27 @@ export function createManageModel(group: MomentDisplayGroup, deps: ManageDeps): 
           return;
         }
         set({ busy: true, error: null, notice: null });
+        const keptSchedules = keepsSchedules(cancelSchedules);
         try {
           await persist(cancelSchedules);
           const target = get().pendingTab;
           if (target) set({ tab: target, pendingTab: null });
-          set({ notice: cancelSchedules ? 'Changes saved. Review and schedule your updated wish again.' : 'Moment changes saved.' });
+          set({
+            notice: cancelSchedules
+              ? 'Changes saved. Review and schedule your updated wish again.'
+              : keptSchedules
+                ? 'Message saved. Scheduled wishes will send the updated message.'
+                : 'Moment changes saved.',
+          });
           // Manage Moment saves the card through this path, not `greetingCardSave`, so the upload
           // has to hang off it too. `uploadCard` no-ops when the card has not changed.
           await get().uploadCard();
         } catch (error) {
           if (isApiError(error) && error.status === 409 && error.message.includes('Existing schedules')) set({ needsScheduleConfirmation: true });
-          else {
+          else if (isApiError(error) && wishSaveError(error.status, error.message) !== null) {
+            // A send already under way: nothing to confirm, so this is an inline message, not a prompt.
+            set({ error: wishSaveError(error.status, error.message), pendingTab: null });
+          } else {
             // A failed ordinary save keeps the edits and shows the error, but still lets the
             // person move between steps (ManageFestivalModel.swift:117).
             const target = get().pendingTab;
@@ -520,15 +640,17 @@ export function createManageModel(group: MomentDisplayGroup, deps: ManageDeps): 
       async approve(cancelSchedules = false) {
         if (isBusy()) return;
         const { settings: current } = get();
-        const valid = (text: string) => text.trim() !== '' && characterCount(text) <= 500;
-        if (!valid(current.baseMessage) || !Object.values(current.overrides).every(valid)) {
-          set({ error: 'Each message must contain 1–500 characters.' });
+        // An empty message never falls back to the suggestion: the placeholder is not a saved wish.
+        const issue = approvalError(current);
+        if (issue !== null) {
+          set({ error: issue });
           return;
         }
         set({ settings: { ...current, approvedAt: isoString(deps.now()) } });
+        const kept = keepsSchedules(cancelSchedules);
         await get().save(cancelSchedules);
         if (get().error !== null || get().needsScheduleConfirmation) set((state) => ({ settings: { ...state.settings, approvedAt: null } }));
-        else set({ notice: 'Message approved and saved. Nothing has been sent.' });
+        else set({ notice: kept ? 'Message saved. Scheduled wishes will send the updated message.' : 'Message approved and saved. Nothing has been sent.' });
       },
 
       generateImage() {
@@ -563,6 +685,32 @@ export function createManageModel(group: MomentDisplayGroup, deps: ManageDeps): 
       async saveGreetingCard() {
         const firstMoment = get().originals[0];
         if (isBusy() || !firstMoment) return false;
+        // The card prints the Wish Message, so a message edited in the card editor is saved — and
+        // approved — as the wish itself, through the ordinary festival save rather than the card route.
+        const saved = get().savedState;
+        if (saved && get().settings.baseMessage !== saved.settings.baseMessage) {
+          const issue = approvalError(get().settings);
+          if (issue !== null) {
+            set({ error: issue });
+            return false;
+          }
+          set({ busy: true, error: null, settings: { ...get().settings, approvedAt: isoString(deps.now()) } });
+          const kept = keepsSchedules(false);
+          try {
+            await persist(false);
+            set({ notice: kept ? 'Greeting card saved. Scheduled wishes will send the updated message.' : 'Greeting card saved.' });
+            await get().uploadCard();
+            return true;
+          } catch (error) {
+            set((state) => ({ settings: { ...state.settings, approvedAt: null } }));
+            if (isApiError(error) && error.status === 409 && error.message.includes('Existing schedules')) set({ error: CARD_MESSAGE_NEEDS_REVIEW });
+            else if (isApiError(error) && wishSaveError(error.status, error.message) !== null) set({ error: wishSaveError(error.status, error.message) });
+            else set({ error: errorMessage(error) });
+            return false;
+          } finally {
+            set({ busy: false });
+          }
+        }
         set({ busy: true, error: null });
         try {
           const { settings: current } = get();
@@ -595,37 +743,57 @@ export function createManageModel(group: MomentDisplayGroup, deps: ManageDeps): 
       },
 
       /**
-       * The finished card, rendered and sent to `PUT /api/moments/{id}/card` so scheduled emails can
-       * embed it. Runs after the card is saved by either route — `greetingCardSave` from the card
-       * editor, and the ordinary `festivalSave` that Manage Moment's "Save Message" uses — because a
-       * card edited on that screen is never sent through `greetingCardSave`.
+       * The finished cards, rendered with the current wish and sent to `PUT /api/moments/{id}/card` so
+       * scheduled emails can embed them. Runs after the card is saved by either route —
+       * `greetingCardSave` from the card editor, and the ordinary `festivalSave` that Manage Moment's
+       * "Save Message" uses — because a card edited on that screen is never sent through
+       * `greetingCardSave`.
+       *
+       * One card per distinct text (`uploadCard`, ManageFestivalModel.swift:121-133): recipients who
+       * share the shared Wish Message share one render, and a recipient with their own message gets
+       * their own. Every moment in the group is sent its card, not just the first.
        *
        * The card itself is already saved by the time this runs, so a failure here never surfaces as
        * the screen's error: it sets `cardFailed`, which draws the inline note and its Retry.
        */
       async uploadCard() {
         const state = get();
-        const firstMoment = state.originals[0];
         // No artwork means no card to attach; a moment that never had one is not a failure.
-        if (!firstMoment || state.imageUri === null || state.cardUploading) return;
-        // Unchanged since the last successful upload: the stored image is already the finished card.
+        if (state.imageUri === null || state.cardUploading) return;
+        const texts = cardTexts(state);
+        const momentIDs = Object.keys(texts);
+        if (momentIDs.length === 0) return;
+        // Unchanged since the last successful upload: the stored images are already the finished cards.
         const key = cardFingerprint(state);
         if (key === state.uploadedCardKey && state.card !== null && !state.cardFailed) return;
         set({ cardUploading: true });
         try {
-          const captured = await deps.cards.capture();
-          if (captured === null) return;
-          const data = await deps.cards.encode(captured);
-          let card: MomentCard;
-          try {
-            card = await deps.cards.upload(firstMoment.id, data);
-          } catch (error) {
-            // 413 is the server saying the bytes are over its 1.5 MB limit. Re-encode the same
-            // capture smaller and send it once more; a second failure is a failure.
-            if (!isApiError(error) || error.status !== 413) throw error;
-            card = await deps.cards.upload(firstMoment.id, await deps.cards.encodeSmaller(captured));
+          const groups = new Map<string, string[]>();
+          for (const id of momentIDs.sort()) groups.set(texts[id], [...(groups.get(texts[id]) ?? []), id]);
+          let first: MomentCard | null = null;
+          for (const [message, ids] of groups) {
+            // Rendered here, with this group's text, rather than from whatever the preview last showed.
+            const captured = await deps.cards.capture(message);
+            if (captured === null) return;
+            let data = await deps.cards.encode(captured);
+            let smaller = false;
+            for (const id of ids) {
+              let card: MomentCard;
+              try {
+                card = await deps.cards.upload(id, data);
+              } catch (error) {
+                // 413 is the server saying the bytes are over its 1.5 MB limit. Re-encode the same
+                // capture smaller and send it once more; a second failure is a failure. The smaller
+                // encoding is then reused for the rest of the group.
+                if (!isApiError(error) || error.status !== 413 || smaller) throw error;
+                data = await deps.cards.encodeSmaller(captured);
+                smaller = true;
+                card = await deps.cards.upload(id, data);
+              }
+              if (id === state.originals[0]?.id || first === null) first = card;
+            }
           }
-          set({ card, cardFailed: false, uploadedCardKey: key });
+          set({ card: first, cardFailed: false, uploadedCardKey: key });
         } catch {
           set({ cardFailed: true });
         } finally {
@@ -814,6 +982,15 @@ export function createManageModel(group: MomentDisplayGroup, deps: ManageDeps): 
     };
   });
 
-  model.setState({ baseline: fingerprint(model.getState()) });
+  // `baseline=fingerprint` / `savedState=editState` taken with the *saved* settings (`:96`): text
+  // adopted from an older card shows up as an unsaved change the person still has to approve.
+  const live = model.getState().settings;
+  model.setState({ settings });
+  model.setState({ baseline: fingerprint(model.getState()), savedState: editState(model.getState()) });
+  model.setState({ settings: live });
+  if (folded.adopted) model.setState({ notice: 'Your card’s greeting is now your Wish Message. Tap Save Message to use it for scheduled wishes.' });
+  // Swift also seeds `uploadedCardKey` from an existing `moment.card` (`:99`). It is left empty here,
+  // as it already was: a stored card was rendered from whatever text that version held, so the first
+  // save of a session re-renders it rather than trusting a fingerprint it never computed.
   return model;
 }

@@ -1,10 +1,10 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { captureRef } from 'react-native-view-shot';
 import { useStore } from 'zustand';
 
 import { FestivalGreetingCard } from './GreetingCard';
-import type { ManageModel } from './manageModel';
+import { cardMessage, type ManageModel } from './manageModel';
 
 /**
  * The finished card, rendered off-screen so it can be captured to an image.
@@ -27,20 +27,45 @@ export const CARD_CAPTURE_WIDTH = 380;
  * lets the model — a plain zustand store with no React tree of its own — reach the view: the model
  * owns the upload, and only the view can hold the ref that `captureRef` needs.
  */
-const captors = new Map<ManageModel, () => Promise<string>>();
+const captors = new Map<ManageModel, (message: string) => Promise<string>>();
 
-/** Captures the mounted card to a temporary JPEG file and resolves to its URI. */
-export async function captureCard(model: ManageModel): Promise<string | null> {
+/**
+ * Renders the card with `message` and captures it to a temporary JPEG file, resolving to its URI.
+ *
+ * The message is an argument rather than whatever the card happens to be showing, for two reasons.
+ * Recipients with their own message each need their own card, so one upload renders several texts in
+ * turn; and a capture taken in the same tick as the edit that changed the message would shoot the
+ * previous frame, which is how an edited wish used to reach the server on a stale card.
+ */
+export async function captureCard(model: ManageModel, message: string): Promise<string | null> {
   const capture = captors.get(model);
   if (!capture) return null;
-  return capture();
+  return capture(message);
 }
+
+/** Resolves once the next frame has been drawn, so the re-rendered text is really on screen. */
+const nextFrame = () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
 
 export function GreetingCardCapture({ model }: { model: ManageModel }) {
   const view = useRef<View>(null);
   const imageUri = useStore(model, (state) => state.imageUri);
   const title = useStore(model, (state) => state.title);
   const settings = useStore(model, (state) => state.settings);
+  const shared = cardMessage({ settings });
+  // The text this capture wants, which is not always the shared preview's.
+  const [message, setMessage] = useState<string | null>(null);
+  const shown = message ?? shared;
+  const rendered = useRef(shown);
+  const waiting = useRef<(() => void) | null>(null);
+
+  // No dependency list: every commit reports the text that is now mounted and releases a capture
+  // waiting for it, so a requested text that React batched away can never strand the upload.
+  useEffect(() => {
+    rendered.current = shown;
+    const release = waiting.current;
+    waiting.current = null;
+    release?.();
+  });
 
   useEffect(() => {
     // Registered only while there is artwork: without it there is no card worth uploading, and the
@@ -49,7 +74,16 @@ export function GreetingCardCapture({ model }: { model: ManageModel }) {
       captors.delete(model);
       return;
     }
-    captors.set(model, () => captureRef(view, { result: 'tmpfile', format: 'jpg', quality: 1 }));
+    captors.set(model, async (text) => {
+      if (rendered.current !== text) {
+        await new Promise<void>((resolve) => {
+          waiting.current = resolve;
+          setMessage(text);
+        });
+      }
+      await nextFrame();
+      return captureRef(view, { result: 'tmpfile', format: 'jpg', quality: 1 });
+    });
     return () => {
       captors.delete(model);
     };
@@ -66,12 +100,7 @@ export function GreetingCardCapture({ model }: { model: ManageModel }) {
       style={styles.offscreen}
       testID="greeting-card-capture"
     >
-      <FestivalGreetingCard
-        artwork={imageUri}
-        title={title}
-        message={settings.cardGreeting ?? settings.baseMessage}
-        signature={settings.cardSignature ?? ''}
-      />
+      <FestivalGreetingCard artwork={imageUri} title={title} message={shown} signature={settings.cardSignature ?? ''} />
     </View>
   );
 }

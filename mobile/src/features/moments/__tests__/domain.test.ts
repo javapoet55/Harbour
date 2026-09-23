@@ -183,12 +183,37 @@ describe('review state', () => {
 });
 
 describe('FestivalSettings.read', () => {
-  it('needs every non-optional key, as Swift’s synthesised Decodable does', () => {
+  // WishMessageTests.swift: festivalSettingsDecodeFieldByField
+  it('reads settings never saved by Manage Moment as nil, so group identity stays stable', () => {
     expect(readFestivalSettings('{}')).toBeNull();
     expect(readFestivalSettings('{"archived":true}')).toBeNull();
+    expect(readFestivalSettings('{"groupID":""}')).toBeNull();
     expect(readFestivalSettings('not json')).toBeNull();
+    expect(readFestivalSettings('[]')).toBeNull();
+    expect(readFestivalSettings(null)).toBeNull();
     expect(readFestivalSettings(settings())?.groupID).toBe('shared');
     expect(readFestivalSettings(settings({ approvedAt: null }))?.approvedAt).toBeNull();
+  });
+
+  // ITEM 2. One missing or mistyped key used to discard every other saved field.
+  it('decodes field by field with defaults, keeping the rest of what was saved', () => {
+    const partial = '{"groupID":"g1","baseMessage":"Asha, cake at seven!","approvedAt":"2026-09-23T10:00:00Z","overrides":{"a":"Just for you"},"imageAspect":5,"channels":{"a":"email"}}';
+    const read = readFestivalSettings(partial);
+    expect(read).not.toBeNull();
+    expect(read?.groupID).toBe('g1');
+    expect(read?.baseMessage).toBe('Asha, cake at seven!');
+    expect(read?.approvedAt).toBe('2026-09-23T10:00:00Z');
+    expect(read?.overrides).toEqual({ a: 'Just for you' });
+    expect(read?.channels).toEqual({ a: 'email' });
+    // Mistyped falls back to its default rather than taking the whole object down.
+    expect(read?.imageAspect).toBe('Portrait');
+    expect(read?.tone).toBe('Warm');
+    expect(read?.prepareDays).toBe(7);
+    expect(read?.includeImage).toBe(false);
+    expect(read?.cardGreeting).toBeNull();
+    // A fresh moment's settings still round-trip unchanged.
+    const full = readFestivalSettings(settings({ baseMessage: 'Hello', cardSignature: 'Sri' }));
+    expect(readFestivalSettings(JSON.stringify(full))).toEqual(full);
   });
 
   it('reads archived from the raw JSON, not through the settings decoder', () => {

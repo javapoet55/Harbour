@@ -1,7 +1,21 @@
 import { ApiError } from '../../../api/client';
 import type { ImportantMoment, MomentsSnapshot } from '../../../api/moments';
-import { displayGroups, readFestivalSettings } from '../domain';
-import { createManageModel, deliveryMessage, fingerprint, hasSchedules, isDirty, reviewHeading, type ManageDeps } from '../manageModel';
+import { displayGroups, fallbackWish, readFestivalSettings } from '../domain';
+import {
+  CARD_MESSAGE_NEEDS_REVIEW,
+  cardMessage,
+  cardMessageFor,
+  createManageModel,
+  deliveryMessage,
+  fingerprint,
+  hasSchedules,
+  isDirty,
+  messageSuggestion,
+  pendingChange,
+  reviewHeading,
+  type ManageDeps,
+} from '../manageModel';
+import { SENDING_NOW } from '../wishMessage';
 import { createMomentsStore, type MomentsDeps } from '../store';
 import { draft, moment, plan, settings } from '../testFixtures';
 
@@ -26,7 +40,10 @@ function harness(moments: ImportantMoment[], snapshotOverrides: Partial<MomentsS
   const store = createMomentsStore(storeDeps);
   const images = { store: jest.fn(() => 'IMG.png'), load: jest.fn((id: string) => (id ? `file:///${id}` : null)), delete: jest.fn() };
   const cards = {
-    capture: jest.fn(async () => 'file:///capture.jpg' as string | null),
+    capture: jest.fn(async (message: string) => {
+      void message;
+      return 'file:///capture.jpg' as string | null;
+    }),
     encode: jest.fn(async () => 'CARD-1600'),
     encodeSmaller: jest.fn(async () => 'CARD-1120'),
     // Typed parameters, so `mock.calls` stays a tuple the assertions below can destructure.
@@ -90,11 +107,13 @@ describe('ManageFestivalModel init', () => {
     expect(isDirty(state)).toBe(false);
   });
 
-  it('starts a new moment with no recipients and a type-specific base message', () => {
+  it('starts a new moment with no recipients and no saved message, only a suggestion', () => {
     const h = harness([]);
     const model = createManageModel({ id: 'x', moments: [moment({ id: 'x', title: 'Get Well Soon', type: 'getWellSoon' })] }, h.deps);
     expect(model.getState().recipients).toEqual([]);
-    expect(model.getState().settings.baseMessage).toBe('Get well soon. Wishing you comfort, rest, and brighter days ahead.');
+    // The type-specific wording is a placeholder now; nothing is saved until the person writes or taps.
+    expect(model.getState().settings.baseMessage).toBe('');
+    expect(messageSuggestion(model.getState())).toBe('Get well soon. Wishing you comfort, rest, and brighter days ahead.');
     expect(model.getState().settings.groupID).toBe('UUID');
   });
 
@@ -259,6 +278,98 @@ describe('approve and schedule', () => {
     expect(model.getState().error).toBe('Each message must contain 1–500 characters.');
   });
 
+  /**
+   * ITEM 5. A message-only save used to go out with `cancelSchedules:true` behind the cancel prompt,
+   * throwing away the pending wishes to change their text. The server now rewrites them in place
+   * (src/server/moments/festival.ts `onlyMessageChanged`), so the client asks for that instead.
+   */
+  describe('a message-only save keeps the schedules', () => {
+    /** A group with a pending delivery, so `hasSchedules` is true. */
+    function scheduled() {
+      const approved = groupSettings({ approvedAt: '2030-08-30T00:00:00Z', baseMessage: 'Happy Diwali' });
+      return festivalGroup().map((item) => ({
+        ...item,
+        festivalSettings: approved,
+        drafts: [draft({ momentID: item.id, plans: [plan({ status: 'SCHEDULED' })] })],
+      }));
+    }
+
+    it('sends cancelSchedules:false and says the pending wishes follow the new text', async () => {
+      const h = harness(scheduled());
+      await h.store.getState().activate('u');
+      const model = createManageModel({ id: 'g', moments: scheduled() }, h.deps);
+      expect(hasSchedules(model.getState(), h.store.getState())).toBe(true);
+
+      model.getState().setMessage('Diwali at ours this year — do come.');
+      expect(pendingChange(model.getState())).toBe('messageOnly');
+      await model.getState().approve();
+
+      const sent = h.post.mock.calls.find(([operation]) => operation === 'festivalSave')?.[1] as { cancelSchedules: boolean };
+      expect(sent.cancelSchedules).toBe(false);
+      expect(model.getState().needsScheduleConfirmation).toBe(false);
+      expect(model.getState().notice).toBe('Message saved. Scheduled wishes will send the updated message.');
+      expect(model.getState().error).toBeNull();
+    });
+
+    it('still counts a recipient, date or channel edit as a delivery change', async () => {
+      const h = harness(scheduled());
+      await h.store.getState().activate('u');
+      const model = createManageModel({ id: 'g', moments: scheduled() }, h.deps);
+
+      model.getState().setMessage('Edited');
+      expect(pendingChange(model.getState())).toBe('messageOnly');
+      model.getState().updateRecipient('ka', { email: 'asha@example.com' });
+      expect(pendingChange(model.getState())).toBe('delivery');
+      model.getState().updateSettings({ channels: { ...model.getState().settings.channels, ka: 'share' } });
+      expect(pendingChange(model.getState())).toBe('delivery');
+      model.getState().setDate(Date.parse('2030-10-01T00:00:00Z'));
+      expect(pendingChange(model.getState())).toBe('delivery');
+    });
+
+    it('shows a clear inline message when the wish is already being sent', async () => {
+      const h = harness(scheduled());
+      await h.store.getState().activate('u');
+      const model = createManageModel({ id: 'g', moments: scheduled() }, h.deps);
+      model.getState().setMessage('Too late');
+      h.post.mockRejectedValueOnce(new ApiError({ status: 409, message: 'A delivery is in progress. Refresh before editing.' }));
+      await model.getState().approve();
+      // Nothing to confirm, so this is an inline message rather than the cancel prompt.
+      expect(model.getState().needsScheduleConfirmation).toBe(false);
+      expect(model.getState().error).toBe(SENDING_NOW);
+      expect(model.getState().settings.approvedAt).toBeNull();
+    });
+
+    it('saves and approves a message edited in the card editor', async () => {
+      const h = harness(scheduled());
+      await h.store.getState().activate('u');
+      const model = createManageModel({ id: 'g', moments: scheduled() }, h.deps);
+      model.getState().chooseImage({ id: 'v', base64: 'AAAA' });
+      model.getState().setMessage('Written on the card itself');
+
+      expect(await model.getState().saveGreetingCard()).toBe(true);
+      // The card's text is the wish, so it goes through festivalSave, not greetingCardSave.
+      const operations = h.post.mock.calls.map(([operation]) => operation);
+      expect(operations).toContain('festivalSave');
+      expect(operations).not.toContain('greetingCardSave');
+      expect(model.getState().settings.approvedAt).not.toBeNull();
+      expect(model.getState().notice).toBe('Greeting card saved. Scheduled wishes will send the updated message.');
+      expect(h.cards.capture).toHaveBeenLastCalledWith('Written on the card itself');
+    });
+
+    it('asks the person to review in Manage Moment when the card’s message needs the cancel prompt', async () => {
+      const h = harness(scheduled());
+      await h.store.getState().activate('u');
+      const model = createManageModel({ id: 'g', moments: scheduled() }, h.deps);
+      model.getState().chooseImage({ id: 'v', base64: 'AAAA' });
+      model.getState().setMessage('Card text the server will not take');
+      h.post.mockRejectedValueOnce(new ApiError({ status: 409, message: 'Existing schedules must be cancelled before saving changes. Review and schedule again.' }));
+
+      expect(await model.getState().saveGreetingCard()).toBe(false);
+      expect(model.getState().error).toBe(CARD_MESSAGE_NEEDS_REVIEW);
+      expect(model.getState().settings.approvedAt).toBeNull();
+    });
+  });
+
   it('schedules each selected recipient once, with a deterministic idempotency key', async () => {
     const approved = groupSettings({ approvedAt: '2030-08-30T00:00:00Z', selected: { ka: true, kb: false } });
     const group = festivalGroup().map((item) => ({ ...item, festivalSettings: approved }));
@@ -326,6 +437,56 @@ describe('greeting card', () => {
     expect(model.getState().notice).toBe('Greeting card saved.');
   });
 
+  // ITEM 1. The suggestion used to be written into the saved settings the moment the screen opened.
+  it('never saves the suggestion as the wish message', async () => {
+    const h = harness(festivalGroup().map((item) => ({ ...item, festivalSettings: groupSettings({ baseMessage: '' }) })));
+    await h.store.getState().activate('u');
+    const model = createManageModel({ id: 'g', moments: h.store.getState().snapshot?.moments ?? [] }, h.deps);
+    expect(model.getState().settings.baseMessage).toBe('');
+    expect(messageSuggestion(model.getState())).toBe(fallbackWish('Diwali', 'Warm'));
+    // Opening and saving something unrelated leaves the wish empty rather than shipping the placeholder.
+    model.getState().setTitle('Diwali at home');
+    await model.getState().save();
+    const sent = h.post.mock.calls.find(([operation]) => operation === 'festivalSave')?.[1] as { settings: { baseMessage: string } };
+    expect(sent.settings.baseMessage).toBe('');
+    // And it cannot be approved until there is real text.
+    await model.getState().approve();
+    expect(model.getState().error).toBe('Each message must contain 1–500 characters.');
+    // "Use suggestion" is what saves it.
+    model.getState().useSuggestion();
+    expect(model.getState().settings.baseMessage).toBe(fallbackWish('Diwali at home', 'Warm'));
+    expect(model.getState().settings.manuallyEdited).toBe(false);
+  });
+
+  // ITEM 1/3. A card greeting saved by an older version becomes the wish, pending a fresh approval.
+  it('adopts an older card greeting as the wish message and asks for a save', () => {
+    const h = harness([]);
+    const stale = festivalGroup().map((item) => ({
+      ...item,
+      festivalSettings: groupSettings({ baseMessage: fallbackWish('Diwali', 'Warm'), approvedAt: 'then', cardGreeting: 'Asha, come early!' }),
+    }));
+    const model = createManageModel({ id: 'g', moments: stale }, h.deps);
+    expect(model.getState().settings.baseMessage).toBe('Asha, come early!');
+    expect(model.getState().settings.cardGreeting).toBeNull();
+    expect(model.getState().settings.approvedAt).toBeNull();
+    expect(model.getState().notice).toBe('Your card’s greeting is now your Wish Message. Tap Save Message to use it for scheduled wishes.');
+    // It reads as an unsaved change, so Save Message is what commits it.
+    expect(isDirty(model.getState())).toBe(true);
+  });
+
+  // ITEM 3. One string: the card shows the wish, and a recipient's own message on their card.
+  it('prints the wish message on the card, and an override on that recipient’s card', () => {
+    const h = harness([]);
+    const model = createManageModel({ id: 'g', moments: festivalGroup() }, h.deps);
+    model.getState().setMessage('Wishing you light and sweets.');
+    expect(cardMessage(model.getState())).toBe('Wishing you light and sweets.');
+    const [asha, ben] = model.getState().recipients;
+    expect(cardMessageFor(model.getState(), asha)).toBe('Wishing you light and sweets.');
+    model.getState().updateSettings({ overrides: { kb: 'Ben, save me a laddu.' } });
+    expect(cardMessageFor(model.getState(), ben)).toBe('Ben, save me a laddu.');
+    expect(cardMessage(model.getState())).toBe('Wishing you light and sweets.');
+  });
+
   it('keeps the fingerprint stable for identical state', () => {
     const h = harness([]);
     const model = createManageModel({ id: 'g', moments: festivalGroup() }, h.deps);
@@ -369,10 +530,12 @@ describe('greeting card image', () => {
   it('does not re-upload an unchanged card on an unrelated save', async () => {
     const { h, model } = await withCard();
     await model.getState().saveGreetingCard();
-    expect(h.cards.upload).toHaveBeenCalledTimes(1);
+    // One render for the shared wish, sent to both moments in the group.
+    expect(h.cards.capture).toHaveBeenCalledTimes(1);
+    expect(h.cards.upload.mock.calls.map(([id]) => id)).toEqual(['a', 'b']);
     model.getState().setZone('America/New_York');
     await model.getState().save();
-    expect(h.cards.upload).toHaveBeenCalledTimes(1);
+    expect(h.cards.upload).toHaveBeenCalledTimes(2);
   });
 
   it('keeps the card saved and shows the inline note when the upload fails', async () => {
@@ -393,7 +556,8 @@ describe('greeting card image', () => {
     await model.getState().saveGreetingCard();
     expect(model.getState().cardFailed).toBe(true);
     await model.getState().retryCardUpload();
-    expect(h.cards.upload).toHaveBeenCalledTimes(2);
+    // The failed attempt, then both moments on the retry.
+    expect(h.cards.upload).toHaveBeenCalledTimes(3);
     expect(model.getState().cardFailed).toBe(false);
     expect(model.getState().card).toMatchObject({ id: 'card-1' });
   });
@@ -403,7 +567,9 @@ describe('greeting card image', () => {
     h.cards.upload.mockRejectedValueOnce(new ApiError({ status: 413, message: 'The card image is too large.' }));
     await model.getState().saveGreetingCard();
     expect(h.cards.encodeSmaller).toHaveBeenCalledWith('file:///capture.jpg');
-    expect(h.cards.upload.mock.calls.map(([, data]) => data)).toEqual(['CARD-1600', 'CARD-1120']);
+    // The smaller encoding is reused for the rest of the group rather than re-encoded per moment.
+    expect(h.cards.upload.mock.calls.map(([, data]) => data)).toEqual(['CARD-1600', 'CARD-1120', 'CARD-1120']);
+    expect(h.cards.encodeSmaller).toHaveBeenCalledTimes(1);
     expect(model.getState().cardFailed).toBe(false);
     expect(model.getState().card).toMatchObject({ id: 'card-1' });
   });
@@ -467,7 +633,34 @@ describe('greeting card image', () => {
     await model.getState().removeCard();
     model.getState().chooseImage({ id: 'v2', base64: 'BBBB' });
     await model.getState().saveGreetingCard();
+    expect(h.cards.upload).toHaveBeenCalledTimes(4);
+  });
+
+  // ITEM 4. The upload used to send whatever the preview last rendered, from a fingerprint that did
+  // not include the message at all.
+  it('re-renders and re-uploads the card after the wish message changes', async () => {
+    const { h, model } = await withCard();
+    model.getState().setMessage('First wish');
+    await model.getState().saveGreetingCard();
+    expect(h.cards.capture).toHaveBeenLastCalledWith('First wish');
     expect(h.cards.upload).toHaveBeenCalledTimes(2);
+
+    // A message-only edit is enough to re-render: the fingerprint carries each moment's text.
+    model.getState().setMessage('Second wish');
+    await model.getState().save();
+    expect(h.cards.capture).toHaveBeenLastCalledWith('Second wish');
+    expect(h.cards.upload).toHaveBeenCalledTimes(4);
+    expect(model.getState().cardFailed).toBe(false);
+  });
+
+  it('renders one card per distinct recipient text', async () => {
+    const { h, model } = await withCard();
+    model.getState().setMessage('Shared wish');
+    model.getState().updateSettings({ overrides: { kb: 'Ben, save me a laddu.' } });
+    await model.getState().saveGreetingCard();
+    // Two texts, two renders — and each moment gets the card its own recipient will see.
+    expect(h.cards.capture.mock.calls.map(([message]) => message)).toEqual(['Shared wish', 'Ben, save me a laddu.']);
+    expect(h.cards.upload.mock.calls.map(([id]) => id)).toEqual(['a', 'b']);
   });
 
   it('shows a card saved on another device, where there is no local artwork', async () => {

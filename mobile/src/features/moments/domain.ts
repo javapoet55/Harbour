@@ -204,32 +204,14 @@ export function newFestivalSettings(groupID: string): FestivalSettings {
   };
 }
 
-const REQUIRED: Record<string, 'string' | 'number' | 'boolean' | 'object'> = {
-  groupID: 'string',
-  prepareDays: 'number',
-  catalogID: 'string',
-  catalogManaged: 'boolean',
-  baseMessage: 'string',
-  tone: 'string',
-  personalContext: 'string',
-  manuallyEdited: 'boolean',
-  includeImage: 'boolean',
-  imageID: 'string',
-  imageStyle: 'string',
-  imageAspect: 'string',
-  imagePrompt: 'string',
-  overrides: 'object',
-  channels: 'object',
-  contactIDs: 'object',
-  automatic: 'object',
-  selected: 'object',
-  archived: 'boolean',
-};
-
 /**
- * `FestivalSettings.read(_:)`. Swift's synthesised `Decodable` needs EVERY non-optional key present,
- * default value or not, so the `"{}"` a plain `save` leaves and the `{"archived":true}` a delete leaves
- * both read as `nil`. That decides which moments group together, so it is reproduced exactly.
+ * `FestivalSettings.read(_:)` (FestivalManagement.swift). Settings saved by Manage Moment. Null when
+ * the JSON is not an object or has no `groupID` — never saved there, e.g. a fresh moment's `{}` or the
+ * `{"archived":true}` a delete leaves — so group identity stays stable across reads.
+ *
+ * Every other key is decoded on its own with its default, so one missing or mistyped field keeps the
+ * rest of what was saved instead of discarding all of it (Swift's hand-written `init(from:)`, which
+ * replaced the synthesised `Decodable` that needed every non-optional key present).
  */
 export function readFestivalSettings(raw: string | null | undefined): FestivalSettings | null {
   if (!raw) return null;
@@ -241,11 +223,44 @@ export function readFestivalSettings(raw: string | null | undefined): FestivalSe
   }
   if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return null;
   const record = parsed as Record<string, unknown>;
-  for (const [key, kind] of Object.entries(REQUIRED)) {
+  // `decodeIfPresent` returning nil — absent or the wrong type both fall back.
+  const of = <T>(key: string, kind: 'string' | 'number' | 'boolean' | 'object'): T | undefined => {
     const value = record[key];
-    if (kind === 'object' ? typeof value !== 'object' || value === null || Array.isArray(value) : typeof value !== kind) return null;
-  }
-  return parsed as FestivalSettings;
+    if (value === undefined || value === null) return undefined;
+    const ok = kind === 'object' ? typeof value === 'object' && !Array.isArray(value) : typeof value === kind;
+    return ok ? (value as T) : undefined;
+  };
+  const groupID = of<string>('groupID', 'string');
+  if (groupID === undefined || groupID === '') return null;
+  const defaults = newFestivalSettings(groupID);
+  const value = <T>(key: keyof FestivalSettings, kind: 'string' | 'number' | 'boolean' | 'object', fallback: T): T => of<T>(key, kind) ?? fallback;
+  return {
+    groupID,
+    prepareDays: value('prepareDays', 'number', defaults.prepareDays),
+    catalogID: value('catalogID', 'string', defaults.catalogID),
+    catalogManaged: value('catalogManaged', 'boolean', defaults.catalogManaged),
+    baseMessage: value('baseMessage', 'string', defaults.baseMessage),
+    tone: value('tone', 'string', defaults.tone),
+    personalContext: value('personalContext', 'string', defaults.personalContext),
+    manuallyEdited: value('manuallyEdited', 'boolean', defaults.manuallyEdited),
+    approvedAt: of<string>('approvedAt', 'string') ?? null,
+    includeImage: value('includeImage', 'boolean', defaults.includeImage),
+    imageID: value('imageID', 'string', defaults.imageID),
+    imageStyle: value('imageStyle', 'string', defaults.imageStyle),
+    imageAspect: value('imageAspect', 'string', defaults.imageAspect),
+    imagePrompt: value('imagePrompt', 'string', defaults.imagePrompt),
+    draftSendDate: of<string>('draftSendDate', 'string') ?? null,
+    draftNotify: of<boolean>('draftNotify', 'boolean') ?? null,
+    cardSignature: of<string>('cardSignature', 'string') ?? null,
+    cardGreeting: of<string>('cardGreeting', 'string') ?? null,
+    overrides: value('overrides', 'object', defaults.overrides),
+    channels: value('channels', 'object', defaults.channels),
+    contactIDs: value('contactIDs', 'object', defaults.contactIDs),
+    automatic: value('automatic', 'object', defaults.automatic),
+    selected: value('selected', 'object', defaults.selected),
+    catalogNotice: of<string>('catalogNotice', 'string') ?? null,
+    archived: value('archived', 'boolean', defaults.archived),
+  };
 }
 
 /** `JSONEncoder` with `.sortedKeys`: the dirty-check fingerprint and the payload share one encoding. */

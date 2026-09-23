@@ -231,8 +231,18 @@ describe('Moments list after an automatic send', () => {
 
 describe('Manage Moment', () => {
   const day = future(20);
-  const group = () => [
-    moment({ id: 'a', type: 'birthday', title: 'Sam’s Birthday', firstName: 'Sam', phone: '+15555550100', occurrenceDate: day, nextOccurrence: day, sourceKey: 'birthday:g:k1', festivalSettings: settings({ groupID: 'g' }) }),
+  const group = (settingsOverrides: Record<string, unknown> = {}) => [
+    moment({
+      id: 'a',
+      type: 'birthday',
+      title: 'Sam’s Birthday',
+      firstName: 'Sam',
+      phone: '+15555550100',
+      occurrenceDate: day,
+      nextOccurrence: day,
+      sourceKey: 'birthday:g:k1',
+      festivalSettings: settings({ groupID: 'g', ...settingsOverrides }),
+    }),
   ];
 
   /** docs/android-polish.md §9: the four steps share one size, each as wide as its label. */
@@ -307,7 +317,8 @@ describe('Manage Moment', () => {
   });
 
   it('shows the Schedule Wish validation inline, under the button', async () => {
-    load(group());
+    // A saved but unapproved message, so the block is the approval and not the empty wish.
+    load(group({ baseMessage: 'Happy Diwali' }));
     mockParams = { ids: 'a' };
     await render(<ManageMoment />);
     await fireEvent.press(screen.getByTestId('festival-tab-Schedule'));
@@ -348,8 +359,63 @@ describe('Manage Moment', () => {
     await fireEvent.changeText(screen.getByTestId('festival-message'), 'x'.repeat(500));
     expect(save()).toBe(false);
 
+    // `setMessage` takes the first 500 characters, as Swift's `String(text.prefix(500))` does, so a
+    // longer paste is trimmed rather than left over the limit for the server to reject.
     await fireEvent.changeText(screen.getByTestId('festival-message'), 'x'.repeat(501));
-    expect(save()).toBe(true);
+    expect(save()).toBe(false);
+    expect(screen.getByText('500/500')).toBeTruthy();
+  });
+
+  // ITEM 1. The suggestion is placeholder text; only "Use suggestion" saves it.
+  it('shows the suggestion as a placeholder and saves it only when asked', async () => {
+    load(group({ baseMessage: '' }));
+    mockParams = { ids: 'a' };
+    await render(<ManageMoment />);
+    await fireEvent.press(screen.getByTestId('festival-tab-Wish Message'));
+    const editor = screen.getByTestId('festival-message');
+    expect(editor.props.value).toBe('');
+    expect(editor.props.placeholder).toBe('Sam’s Birthday! Sending you warm wishes on your special day.');
+
+    await fireEvent.press(screen.getByTestId('wish-use-suggestion'));
+    expect(screen.getByTestId('festival-message').props.value).toBe('Sam’s Birthday! Sending you warm wishes on your special day.');
+    // Once there is text, there is nothing to suggest.
+    expect(screen.queryByTestId('wish-use-suggestion')).toBeNull();
+  });
+
+  /**
+   * ITEM 5. Save Message on an unchanged-delivery edit used to raise "Save changes to scheduled
+   * wishes?" and then save with `cancelSchedules:true`.
+   */
+  it('saves an approved message-only edit without the cancel prompt', async () => {
+    const scheduled = group({ baseMessage: 'Happy birthday, Sam!', approvedAt: '2030-08-30T00:00:00Z' }).map((item) => ({
+      ...item,
+      drafts: [draft({ momentID: item.id, plans: [plan({ status: 'SCHEDULED' })] })],
+    }));
+    load(scheduled);
+    mockParams = { ids: 'a' };
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    await render(<ManageMoment />);
+    await fireEvent.press(screen.getByTestId('festival-tab-Wish Message'));
+    await fireEvent.changeText(screen.getByTestId('festival-message'), 'Sam, many happy returns!');
+    await fireEvent.press(screen.getByTestId('festival-save-message'));
+
+    expect(alert).not.toHaveBeenCalledWith('Save changes to scheduled wishes?', expect.anything(), expect.anything());
+    await waitFor(() => expect(mockPost).toHaveBeenCalledWith('festivalSave', expect.objectContaining({ cancelSchedules: false }), undefined));
+  });
+
+  it('still asks before a delivery change cancels the schedules', async () => {
+    const scheduled = group({ baseMessage: 'Happy birthday, Sam!', approvedAt: '2030-08-30T00:00:00Z' }).map((item) => ({
+      ...item,
+      drafts: [draft({ momentID: item.id, plans: [plan({ status: 'SCHEDULED' })] })],
+    }));
+    load(scheduled);
+    mockParams = { ids: 'a' };
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    await render(<ManageMoment />);
+    await fireEvent.changeText(screen.getByTestId('festival-name'), 'Sam’s 30th');
+    await fireEvent.press(screen.getByTestId('festival-save'));
+
+    expect(alert).toHaveBeenCalledWith('Save changes to scheduled wishes?', expect.any(String), expect.any(Array), expect.anything());
   });
 
   it('asks before discarding unsaved changes', async () => {

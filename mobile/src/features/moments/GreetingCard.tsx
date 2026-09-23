@@ -13,7 +13,7 @@ import { BorderedButton, caption, ErrorText, headline, IconLabel, KEYBOARD_DONE_
 import { shareImage } from './device';
 import { characterCount, defaultSignature } from './domain';
 import { MenuPicker } from './form';
-import type { ImageVariation, ManageModel } from './manageModel';
+import { cardMessage, messageSuggestion, type ImageVariation, type ManageModel } from './manageModel';
 
 const SERIF = Platform.select({ ios: 'Georgia', default: 'serif' });
 
@@ -71,9 +71,10 @@ export function GreetingCardEditor({ model, visible, onClose, saveOnUse = false 
   }
 
   const artwork = selected ? variationUri(selected) : imageUri;
-  const greeting = settings.cardGreeting ?? settings.baseMessage;
+  // The card's text is the Wish Message: editing it here edits the wish that is scheduled.
+  const greeting = cardMessage({ settings });
   const signature = settings.cardSignature ?? '';
-  const setGreeting = (value: string) => model.getState().updateSettings({ cardGreeting: [...value].slice(0, 500).join('') });
+  const setGreeting = (value: string) => model.getState().setMessage(value);
   const setSignature = (value: string) => model.getState().updateSettings({ cardSignature: [...value].slice(0, 80).join('') });
 
   const close = () => {
@@ -91,7 +92,6 @@ export function GreetingCardEditor({ model, visible, onClose, saveOnUse = false 
   };
 
   const use = async () => {
-    model.getState().updateSettings({ cardGreeting: greeting });
     if (selected) model.getState().chooseImage(selected);
     if (model.getState().error === null) {
       if (saveOnUse) {
@@ -119,11 +119,12 @@ export function GreetingCardEditor({ model, visible, onClose, saveOnUse = false 
           <MomentCard>
             <IconLabel icon="create-outline" title="Make it yours" style={headline} />
             <Text style={[textStyles.subheadline, styles.bold, { color: theme.colors.label }]}>Greeting</Text>
+            <Text style={[caption, { color: theme.colors.secondaryLabel }]}>This is your wish message. Scheduled wishes send the same text.</Text>
             <TextInput
               accessibilityLabel="Your greeting"
               multiline
               onChangeText={setGreeting}
-              placeholder="Your greeting"
+              placeholder={messageSuggestion(model.getState())}
               placeholderTextColor={theme.colors.placeholder}
               style={[styles.field, { color: theme.colors.label, minHeight: 66 }]}
               testID="card-greeting"
@@ -218,8 +219,8 @@ export function GreetingCardEditor({ model, visible, onClose, saveOnUse = false 
               <BorderedButton full icon="share-outline" title="Share Card" onPress={() => void share()} testID="card-share" />
               <Text style={[caption, { color: theme.colors.secondaryLabel }]}>
                 {saveOnUse
-                  ? 'Use This Card saves the greeting and signature to this moment. Artwork is stored on this device.'
-                  : 'Use This Card applies it to this moment. Tap Save Message on the next screen to save your changes.'}
+                  ? 'Use This Card saves the greeting as your wish message, with your signature. Artwork is stored on this device.'
+                  : 'Use This Card applies it to this moment. Tap Save Message on the next screen to save your wish message.'}
               </Text>
             </>
           ) : null}

@@ -17,7 +17,8 @@ import { ownerKeyFor } from '../../actions/persistence';
 import { TaskActionError } from '../../actions/errors';
 import { alertNotificationsOff } from '../../lib/notificationPermission';
 import { isoString } from './dates';
-import { planEditable, sortedPlans } from './domain';
+import { displayGroups, planEditable, sortedPlans, type MomentDisplayGroup } from './domain';
+import type { ManageModel } from './manageModel';
 import {
   clearMomentNotifications,
   reminderAuthorization,
@@ -312,6 +313,60 @@ export const momentsStore = createMomentsStore({
   clearNotifications: clearMomentNotifications,
   now: () => Date.now(),
 });
+
+/**
+ * `festivalModel(for:)` (ios/App/ImportantMomentsStore.swift:97-107): one live Manage Moment model per
+ * moment, so Manage Moment and every greeting-card section edit the same wish instead of separate
+ * snapshots of it — the card editor's "Use This Card" and the screen behind it are then one edit.
+ *
+ * Swift holds the model weakly, so it lives exactly as long as some screen shows it. There is no
+ * reliable weak reference to a JS object on Hermes, so the screens retain and release it instead and
+ * the entry is dropped on the last release, which is the same lifetime made explicit.
+ *
+ * `create` is passed in because building a model needs the device dependencies that live with the
+ * screen, and this module must not import them back.
+ */
+const festivalModels = new Map<string, { model: ManageModel; ids: string[]; retained: number }>();
+
+/**
+ * The live model for this group, creating it when no screen holds one. Creating does not retain, so
+ * React invoking a `useState` initializer twice cannot leave a count that no unmount ever balances;
+ * `retainFestivalModel` and `releaseFestivalModel` are called from an effect, in pairs.
+ */
+export function festivalModelFor(group: MomentDisplayGroup, create: (group: MomentDisplayGroup) => ManageModel): ManageModel {
+  for (const moment of group.moments) {
+    const live = festivalModels.get(moment.id);
+    if (live) return live.model;
+  }
+  // Built from the snapshot's moments rather than the caller's copy, which may be several refreshes old.
+  const moments = momentsStore.getState().snapshot?.moments ?? [];
+  const fresh = group.moments.map((moment) => moments.find((item) => item.id === moment.id) ?? moment);
+  const current = displayGroups(fresh).find((candidate) => candidate.moments.some((moment) => moment.id === group.moments[0]?.id)) ?? group;
+  const model = create(current);
+  const ids = group.moments.map((moment) => moment.id);
+  const entry = { model, ids, retained: 0 };
+  for (const id of ids) festivalModels.set(id, entry);
+  return model;
+}
+
+export function retainFestivalModel(model: ManageModel): void {
+  for (const entry of new Set(festivalModels.values())) {
+    if (entry.model === model) {
+      entry.retained += 1;
+      return;
+    }
+  }
+}
+
+/** Dropped on the last release, so the next screen for this moment starts from fresh data. */
+export function releaseFestivalModel(model: ManageModel): void {
+  for (const entry of new Set(festivalModels.values())) {
+    if (entry.model !== model) continue;
+    entry.retained -= 1;
+    if (entry.retained <= 0) for (const id of entry.ids) festivalModels.delete(id);
+    return;
+  }
+}
 
 export function useMoments<T>(selector: (state: MomentsState) => T): T {
   return useStore(momentsStore, selector);
