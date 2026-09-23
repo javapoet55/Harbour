@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { prisma } from '@/server/db';
 import { day, zone, MomentError } from './domain';
 import { log } from '@/lib/logger';
+import { repointWishText, savedWishMessage } from './wish-message';
 
 export const festivalSettings = z.object({
  groupID:z.string().min(1).max(200), prepareDays:z.union([z.literal(0),z.literal(1),z.literal(3),z.literal(7),z.literal(14)]).default(1),
@@ -48,8 +49,10 @@ export async function saveFestival(userId:string,input:unknown) {
   }
   const active=await tx.deliveryPlan.count({where:{draft:{momentID:{in:p.ids}},status:{in:['SENDING','SCHEDULED','AWAITING_CONFIRMATION']}}});
   if(await tx.deliveryPlan.count({where:{draft:{momentID:{in:p.ids}},status:'SENDING'}})) throw new MomentError('A delivery is in progress. Refresh before editing.',409);
-  if(active&&!p.cancelSchedules) throw new MomentError('Existing schedules must be cancelled before saving changes. Review and schedule again.',409);
-  await tx.deliveryPlan.updateMany({where:{draft:{momentID:{in:p.ids}},status:{in:['SCHEDULED','AWAITING_CONFIRMATION','FAILED']}},data:{status:'CANCELLED'}});
+  // An approved change to the wish text alone keeps the schedules and updates their text below.
+  const messageOnly=!!active&&!p.cancelSchedules&&!!p.settings.approvedAt&&onlyMessageChanged(moments,p);
+  if(active&&!p.cancelSchedules&&!messageOnly) throw new MomentError('Existing schedules must be cancelled before saving changes. Review and schedule again.',409);
+  if(!messageOnly) await tx.deliveryPlan.updateMany({where:{draft:{momentID:{in:p.ids}},status:{in:['SCHEDULED','AWAITING_CONFIRMATION','FAILED']}},data:{status:'CANCELLED'}});
   if(await tx.deliveryPlan.count({where:{draft:{momentID:{in:p.ids}},status:'SENDING'}})) throw new MomentError('A delivery started. Refresh before editing.',409);
   // A moment can be saved before anyone is selected. Keep an empty anchor,
   // without manufacturing a recipient or losing the moment's identity.
@@ -62,12 +65,34 @@ export async function saveFestival(userId:string,input:unknown) {
   const kept:string[]=[];
   for(const r of p.recipients) {
    const data={title:p.title,occurrenceDate:p.date,timeZoneID:p.timeZoneID,yearly:p.settings.catalogManaged?false:p.yearly,enabled:p.active&&r.selected,firstName:r.name,phone:r.phone,email:r.email,festivalSettings:settings};
-   if(r.id) {await tx.importantMoment.update({where:{id:r.id},data});kept.push(r.id);}
-   else {const m=await tx.importantMoment.upsert({where:{userId_sourceKey:{userId,sourceKey:anchor.type+':'+p.settings.groupID+':'+r.key}},update:data,create:{...data,userId,type:anchor.type,source:anchor.source,sourceKey:anchor.type+':'+p.settings.groupID+':'+r.key}});kept.push(m.id);}
+   let id=r.id;
+   if(id) await tx.importantMoment.update({where:{id},data});
+   else id=(await tx.importantMoment.upsert({where:{userId_sourceKey:{userId,sourceKey:anchor.type+':'+p.settings.groupID+':'+r.key}},update:data,create:{...data,userId,type:anchor.type,source:anchor.source,sourceKey:anchor.type+':'+p.settings.groupID+':'+r.key}})).id;
+   kept.push(id);
+   const text=messageOnly ? savedWishMessage(p.settings,{key:r.key,type:anchor.type,firstName:r.name}) : null;
+   if(text) await repointWishText(tx,id,text);
   }
   await tx.importantMoment.updateMany({where:{id:{in:p.ids.filter(id=>!kept.includes(id))}},data:{enabled:false,festivalSettings:JSON.stringify({...p.settings,archived:true})}});
   log('info','festival_details_saved');
   return {ok:true};
+ });
+}
+// Settings that only shape the wish text or the card; everything else changes who, when or how a wish is delivered.
+const messageKeys=new Set(['baseMessage','tone','personalContext','manuallyEdited','approvedAt','overrides','cardGreeting','cardSignature','imageID','imageStyle','imageAspect','imagePrompt','draftSendDate','draftNotify']);
+function deliverySettings(value:unknown) {
+ const parsed=festivalSettings.safeParse(value);
+ if(!parsed.success) return null;
+ const kept=Object.entries({...parsed.data,archived:false}).filter(([key])=>!messageKeys.has(key));
+ return JSON.stringify(kept.sort(([a],[b])=>a<b?-1:1).map(([key,v])=>[key,v&&typeof v==='object'?Object.entries(v).sort(([a],[b])=>a<b?-1:1):v]));
+}
+/** True when the save keeps every recipient, date and delivery setting and changes only the message or card. */
+function onlyMessageChanged(moments:{id:string;title:string;occurrenceDate:string;timeZoneID:string;yearly:boolean;enabled:boolean;firstName:string;phone:string;email:string;festivalSettings:string}[],p:z.infer<typeof festivalSaveInput>) {
+ if(!p.recipients.length||p.recipients.length!==moments.length) return false;
+ const next=deliverySettings(p.settings);
+ return !!next&&p.recipients.every(r=>{
+  const m=moments.find(m=>m.id===r.id);
+  return !!m&&m.title===p.title&&m.occurrenceDate===p.date&&m.timeZoneID===p.timeZoneID&&m.yearly===(p.settings.catalogManaged?false:p.yearly)&&m.enabled===(p.active&&r.selected)
+   &&m.firstName===r.name&&m.phone===r.phone&&m.email===r.email&&deliverySettings(readFestivalSettings(m.festivalSettings))===next;
  });
 }
 export async function deleteFestival(userId:string,input:unknown) {
