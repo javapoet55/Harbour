@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { summarize,state,overall,breached } from './metrics';
+import { summarize,coverage,state,overall,breached } from './metrics';
 import { redactStructured } from './redaction';
 import { safeError, healthRoute, observedFetch } from './telemetry';
 import { canOperate } from './access';
@@ -15,4 +15,15 @@ describe('health calculations',()=>{
  it('returns route responses unchanged except safe correlation header',async()=>{const wrapped=healthRoute('GET /api/tasks/[id]',async()=>Response.json({ok:true},{status:201}));const r=await wrapped();expect(r.status).toBe(201);expect(r.headers.get('x-request-id')).toMatch(/^[a-f0-9]{32}$/);expect(await r.json()).toEqual({ok:true});});
  it('propagates handler failures without leaking error details into telemetry',async()=>{const wrapped=healthRoute('GET /api/tasks',async()=>{throw new Error('private')});await expect(wrapped()).rejects.toThrow('private');});
  it('preserves provider request behavior when disabled',async()=>{vi.stubEnv('NEXDO_HEALTH_ENABLED','false');const fetch=vi.fn().mockResolvedValue(Response.json({ok:true}));vi.stubGlobal('fetch',fetch);await observedFetch('https://api.openai.com/v1/responses',{method:'POST',body:'{}'});expect(fetch).toHaveBeenCalledOnce();});
+});
+
+it('distinguishes absent, stale, low-traffic and sufficient monitoring coverage',()=>{
+ const now=Date.now();
+ expect(coverage([],now).reason).toBe('no-activity');
+ const old={...sample(),createdAt:new Date(now-16*60000)};
+ expect(coverage([old],now)).toMatchObject({reason:'inactive',requests:1,recentRequests:0,lastObserved:old.createdAt.toISOString()});
+ const recent={...sample(),createdAt:new Date(now-1000)};
+ expect(coverage([old,recent],now)).toMatchObject({reason:'low-traffic',requests:2,recentRequests:1});
+ expect(coverage(Array(5).fill(recent),now).reason).toBe('measured');
+ expect(state([recent],now)).toBe('Unknown');
 });

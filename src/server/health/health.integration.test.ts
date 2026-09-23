@@ -32,3 +32,13 @@ it('creates one incident per rule breach and audits rule edits',async()=>{
  expect(await prisma.healthIncident.count({where:{activeKey:'api-errors'}})).toBe(1);
  expect(await prisma.healthAudit.count({where:{action:'RULE_UPDATED',targetId:'api-errors'}})).toBeGreaterThan(0);
 });
+
+it('derives Voice, Jobs and Security summaries from recent measurements', async () => {
+ const traceId=randomUUID().replaceAll('-','');
+ try {
+  await prisma.healthEvent.createMany({data:['Voice','Authentication','Jobs'].flatMap(feature=>Array.from({length:5},()=>({kind:feature==='Jobs'?'scheduler':'api',service:feature==='Jobs'?'test-worker':'API',operation:'test-summary',feature,traceId,status:200,durationMs:10}))) });
+  const data=await getHealth('1H');
+  for(const name of ['Voice','Jobs','Security']) expect(data.sections.find(s=>s.name===name)?.status).toBe('Healthy');
+  expect(data.sections.find(s=>s.name==='iOS')?.status).toBe('Unknown');
+ } finally {await prisma.healthEvent.deleteMany({where:{traceId}});}
+});

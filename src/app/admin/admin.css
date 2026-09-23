@@ -114,3 +114,13 @@
 .health-table { overflow:auto; margin-top:16px; }.health-table table { width:100%; border-collapse:collapse; font-size:12px; }.health-table th,.health-table td { padding:12px; text-align:left; border-bottom:1px solid #e7edf4; min-width:95px; }.health-table th:first-child,.health-table td:first-child { min-width:210px; }
 .health-trend { display:flex; align-items:flex-end; height:190px; gap:5px; border-bottom:1px solid #cad5e4; margin:20px 0; }.health-trend>div { flex:1; height:170px; display:flex; align-items:flex-end; }.health-trend span { display:block; background:#3d29f0; width:100%; border-radius:4px 4px 0 0; }.health-trend .health-no-data { background:#cbd2dc; }
 .health-rule { display:flex; align-items:center; flex-wrap:wrap; gap:14px; padding:18px 0; border-bottom:1px solid #e7edf4; }.health-rule strong { width:100%; }.health-rule input[type=number] { width:110px; border:1px solid #cad5e4; padding:6px; border-radius:6px; }.health-incident { padding:16px; background:#fff7f2; border:1px solid #f2d4c5; border-radius:10px; margin-top:15px; }.health-section details { padding:8px 0; }.health-dashboard :focus-visible { outline:3px solid #3d29f0; outline-offset:3px; }
+
+.admin-metric-card { position: relative; }
+.admin-metric-card .admin-voice-view { position: absolute; right: 10px; top: 10px; }
+.admin-metric-card:has(.admin-voice-view) { padding-right: 48px; }
+.admin-voice-view { display: inline-flex; align-items: center; justify-content: center; min-width: 36px; min-height: 36px; border: 1px solid #d9def1; border-radius: 9px; color: #5134dc; background: #f6f4ff; cursor: pointer; }
+.admin-voice-view:focus-visible { outline: 2px solid #5134dc; outline-offset: 3px; }
+.admin-voice-details { margin-top: 20px; scroll-margin-top: 24px; }
+.admin-table-scroll { overflow-x: auto; }
+.admin-table-scroll th { text-align: left; padding: 10px 6px; color: #64718d; font-weight: 600; }
+.admin-voice-pagination { display: flex; gap: 16px; align-items: center; margin-top: 16px; }

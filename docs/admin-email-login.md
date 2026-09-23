@@ -1,4 +1,12 @@
-# Admin email login
+# Admin login — password mode
+
+Email OTP is temporarily disabled at `/api/admin/auth`. The admin page accepts an existing Nexdo email and password for an allowlisted, verified, non-deleted account. No email is sent. Ordinary account cookies still do not grant admin access.
+
+Password attempts are limited to five per account in 15 minutes using the database. Successful authentication creates a separate revocable, hashed admin session with an eight-hour lifetime in the existing AdminLoginToken table. Same-origin POST validation and secure HttpOnly cookies remain required. No migration is needed.
+
+The older OTP service remains available internally for a future reviewed reactivation, but its request/verify actions are not exposed by the login route.
+
+# Previous OTP configuration (inactive)
 
 Open `/admin/login`, enter an authorized administrator's existing account email, and enter the six-digit code delivered by Hostinger. Ordinary account/password/Apple sessions cannot authorize admin pages or APIs.
 

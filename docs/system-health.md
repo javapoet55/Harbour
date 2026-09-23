@@ -192,3 +192,14 @@ Final validation results:
 - `npm run lint`: no errors; one existing unused-variable warning in `public/firebase-bridge.js`.
 - `git diff --check`: passed.
 - PostgreSQL Prisma client regenerated after SQLite tests. Production migrations and a live Railway rollout have not been performed.
+
+## AI, Voice and Security coverage (September 23)
+
+These sections now show recorded request counts for the selected window, recent
+15-minute counts and last activity. Coverage distinguishes no activity, inactive
+traffic, low traffic and sufficient measurements; the five-sample health threshold
+is unchanged. Voice and Security detail tables use the same measured status as
+the overview. Security failures include `/api/admin/auth` as well as app auth routes.
+Uninstrumented device session and security metrics are described under coverage
+rather than presented as empty KPI grids. Voice API success is not audio-session
+success. No synthetic requests or credentials are generated to turn badges green.

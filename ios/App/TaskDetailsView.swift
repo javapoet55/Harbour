@@ -9,6 +9,7 @@ struct TaskDetailsView: View {
     @State private var draft: TaskDraft
     @State private var original: TaskDraft
     @State private var newStep = ""
+    @State private var hasBusinessResearch = false
     @State private var working = false
     @State private var message: String?
     @FocusState private var focus: Field?
@@ -31,8 +32,11 @@ struct TaskDetailsView: View {
             ScrollViewReader { proxy in
                 ScrollView {
                     VStack(alignment: .leading, spacing: 24) {
-                        TaskActionCard(task: currentTask)
-                        actions
+                        TaskAgentCard(taskID: task.id) { hasBusinessResearch = $0 }
+                        if !hasBusinessResearch {
+                            TaskActionCard(task: currentTask)
+                            actions
+                        }
                         field("TASK") {
                             TextField("Task title", text: $draft.title)
                                 .focused($focus, equals: .title).submitLabel(.done)

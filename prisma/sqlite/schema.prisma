@@ -161,6 +161,10 @@ model Tag {
 }
 
 model Task {
+  intentCategory String?
+  intentScore Float?
+  intentReason String?
+  agentRun TaskAgentRun?
   id                   String    @id @default(cuid())
   userId               String
   user                 User      @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -613,4 +617,25 @@ model HealthAudit {
   targetId String
   detail String
   @@index([targetId, createdAt])
+}
+
+model TaskAgentRun {
+  id String @id @default(cuid())
+  taskId String @unique
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  status String @default("NEEDS_INPUT")
+  service String
+  urgency String
+  slotsJson String
+  stepsJson String
+  resultsJson String @default("[]")
+  warningsJson String @default("[]")
+  error String?
+  version Int @default(0)
+  attempts Int @default(0)
+  leaseUntil DateTime?
+  targetAt DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([status, leaseUntil])
 }

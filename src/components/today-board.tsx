@@ -1,4 +1,5 @@
 'use client';
+import {TaskAgentCard} from './task-agent-card';
 import { scheduleFetch } from '@/lib/schedule-fetch';
 
 import { useEffect, useMemo, useState } from 'react';
@@ -274,6 +275,7 @@ export function TaskDetailSheet({ task, timeZone, focusControl, onClose, onSaved
 
   return <div className="fixed inset-0 z-50 flex items-end justify-center bg-[#172033]/45 backdrop-blur-[2px] sm:items-center sm:p-6" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
     <section className="max-h-[94dvh] w-full overflow-y-auto rounded-t-[28px] bg-[#fffdf8] shadow-2xl sm:max-w-2xl sm:rounded-[28px]" role="dialog" aria-modal="true" aria-labelledby="task-detail-title">
+      <TaskAgentCard taskId={task.id}/>
       <form onSubmit={save}>
         <header className="sticky top-0 z-10 flex items-center justify-between border-b border-[var(--line)] bg-[#fffdf8]/95 px-5 py-4 backdrop-blur sm:px-7">
           <div><p className="text-xs font-bold uppercase tracking-[0.16em] text-[var(--brand)]">Task details</p><h2 id="task-detail-title" className="text-xl font-semibold">Shape the work</h2></div>

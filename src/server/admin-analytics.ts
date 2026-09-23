@@ -84,9 +84,9 @@ export async function getAdminSnapshot(days = 30, range?: { from: Date; to: Date
     }),
     prisma.userMemory.findMany({ where: { key: 'billing:plan' }, select: { userId: true, value: true, updatedAt: true } }),
     prisma.userMemory.findMany({ where: { key: { in: ['profile:city', 'profile:country'] } }, select: { userId: true, key: true, value: true } }),
-    prisma.userMemory.findMany({ where: { kind: 'voice_usage', updatedAt: { gte: previousSince, lt: until } }, select: { userId: true, value: true, source: true, updatedAt: true } }),
+    prisma.userMemory.findMany({ where: { kind: 'voice_usage', updatedAt: { gte: previousSince, lt: until } }, select: { id: true, userId: true, value: true, source: true, updatedAt: true } }),
     prisma.voiceSession.findMany({ where: { createdAt: { gte: previousSince, lt: until } }, select: { id: true, userId: true, status: true, locale: true, createdAt: true, _count: { select: { transcripts: true } } }, orderBy: { createdAt: 'desc' }, take: 10000 }),
-    prisma.assistantAction.findMany({ where: { createdAt: { gte: previousSince, lt: until } }, select: { userId: true, intent: true, executed: true, createdAt: true }, orderBy: { createdAt: 'desc' }, take: 20000 }),
+    prisma.assistantAction.findMany({ where: { createdAt: { gte: previousSince, lt: until } }, select: { id: true, userId: true, intent: true, executed: true, createdAt: true }, orderBy: { createdAt: 'desc' }, take: 20000 }),
     prisma.activityLog.findMany({ where: { createdAt: { gte: previousSince, lt: until } }, select: { userId: true, kind: true, createdAt: true }, orderBy: { createdAt: 'desc' }, take: 20000 }),
     prisma.task.findMany({ where: { deletedAt: null, createdAt: { gte: previousSince, lt: until } }, select: { userId: true, createdAt: true }, take: 20000 }),
     prisma.shoppingList.findMany({ where: { createdAt: { gte: previousSince, lt: until } }, select: { userId: true, createdAt: true }, take: 10000 }),
@@ -153,7 +153,25 @@ export async function getAdminSnapshot(days = 30, range?: { from: Date; to: Date
     aiActions: actionsByUser.get(user.id) ?? 0,
     voiceMinutes: Math.round((voiceByUser.get(user.id) ?? 0) * 10) / 10,
     verified: Boolean(user.emailVerifiedAt),
+    activeInPeriod: activeUserIds.has(user.id),
+    estimatedMonthlyRevenue: estimateMonthlyRevenue([planByUser.get(user.id) ?? 'FREE']),
   }));
+
+  const voiceRecords = [...currentVoiceRows.map((row) => ({
+      id: `usage-${row.id}`,
+      user: byUserId.get(row.userId)?.email ?? 'Unknown user',
+      date: row.updatedAt.toISOString(),
+      minutes: normalizeVoiceSeconds(row.value) / 60,
+      type: row.source === 'ios-realtime' ? 'Realtime' : 'Voice',
+      status: 'Completed',
+    })), ...voiceSessions.filter((row) => inCurrentPeriod(row.createdAt)).map((row) => ({
+      id: row.id,
+      user: byUserId.get(row.userId)?.email ?? 'Unknown user',
+      date: row.createdAt.toISOString(),
+      minutes: null,
+      type: row._count.transcripts ? 'Transcription' : 'Voice',
+      status: row.status,
+    }))].sort((a, b) => b.date.localeCompare(a.date));
 
   return {
     generatedAt: generatedAt.toISOString(),
@@ -184,20 +202,8 @@ export async function getAdminSnapshot(days = 30, range?: { from: Date; to: Date
       aiActions: trendFromDates(currentActions.map((row) => row.createdAt), days, now),
       voiceMinutes: trendFromValues(currentVoiceRows.map((row) => ({ date: row.updatedAt, value: normalizeVoiceSeconds(row.value) / 60 })), days, now),
     },
-    recentVoice: [...currentVoiceRows.map((row) => ({
-      id: `usage-${row.userId}-${row.updatedAt.toISOString()}`,
-      user: byUserId.get(row.userId)?.email ?? 'Unknown user',
-      date: row.updatedAt.toISOString(),
-      minutes: Math.round((normalizeVoiceSeconds(row.value) / 60) * 10) / 10,
-      type: row.source === 'ios-realtime' ? 'Realtime' : 'Voice',
-      status: 'Completed',
-    })), ...voiceSessions.filter((row) => inCurrentPeriod(row.createdAt)).map((row) => ({
-      id: row.id,
-      user: byUserId.get(row.userId)?.email ?? 'Unknown user',
-      date: row.createdAt.toISOString(),
-      minutes: null,
-      type: row._count.transcripts ? 'Transcription' : 'Voice',
-      status: row.status,
-    }))].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 8),
+    actionRecords: currentActions.map(row=>({id:row.id,user:byUserId.get(row.userId)?.email??'Unknown user',intent:row.intent,executed:row.executed,date:row.createdAt.toISOString()})),
+    voiceRecords,
+    recentVoice: voiceRecords.slice(0, 8).map(row=>({...row,minutes:row.minutes===null?null:Math.round(row.minutes*10)/10})),
   };
 }

@@ -97,6 +97,8 @@ public extension VoiceRealtimeTransport {
     public private(set) var telemetry = VoiceTelemetry()
     public var onClose: (() -> Void)?
     public var onTelemetry: ((VoiceTelemetry) -> Void)?
+    private var usageTranscriptionModel: String?
+    public var onTokenUsage: ((VoiceTokenReceipt) -> Void)?
     public let timeouts: VoiceTimeoutConfiguration
     private let transport: any VoiceRealtimeTransport
     private let executor: any VoiceToolExecuting
@@ -325,6 +327,14 @@ public extension VoiceRealtimeTransport {
     public func receive(_ data: Data) {
         guard !didDisconnect else { return }
         guard ![.disconnected, .connectionLost].contains(phase), let event = try? JSONSerialization.jsonObject(with: data) as? [String: Any], let type = event["type"] as? String else { return }
+        // Usage can arrive for interrupted or earlier responses; do not gate it on activeResponse.
+        if ["session.created", "session.updated"].contains(type), let session = event["session"] as? [String: Any] {
+            let audio = session["audio"] as? [String: Any]
+            let input = audio?["input"] as? [String: Any]
+            let transcription = input?["transcription"] as? [String: Any] ?? session["input_audio_transcription"] as? [String: Any]
+            usageTranscriptionModel = transcription?["model"] as? String
+        }
+        if let receipt = VoiceTokenReceipt.parse(event, responseModel: telemetry.model.isEmpty ? nil : telemetry.model, transcriptionModel: usageTranscriptionModel) { onTokenUsage?(receipt) }
         switch type {
         case "session.created":
             if isReconnecting {

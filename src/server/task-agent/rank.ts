@@ -1,0 +1,17 @@
+import type {AgentSlots,Candidate} from '@/lib/task-agent/types';
+const normalized=(s:string)=>s.toLowerCase().replace(/[^a-z0-9]/g,'');
+export function rankCandidates(rows:Candidate[],slots:AgentSlots):Candidate[]{
+ const unique:Candidate[]=[];
+ for(const row of rows){
+  if(slots.urgency==='urgent'&&row.openNow===false)continue;
+  const same=unique.find(r=>(row.phone&&normalized(row.phone).slice(-10)===normalized(r.phone).slice(-10))||(normalized(row.name)===normalized(r.name)&&!!row.address&&normalized(row.address)===normalized(r.address)));
+  if(same){same.evidence.push(...row.evidence);same.website??=row.website;same.emergencyAdvertised ||=row.emergencyAdvertised;same.openNow??=row.openNow;}
+  else unique.push(structuredClone(row));
+ }
+ const quality=(r:Candidate)=>Math.max(...r.evidence.map(e=>(e.rating??0)*Math.min(1,Math.log10(1+(e.reviews??0))/2)),0);
+ const availability=(r:Candidate)=>(r.emergencyAdvertised?4:0)+(r.openNow===true?2:r.openNow===false?-2:0);
+ return unique.sort((a,b)=>(slots.urgency==='urgent'?availability(b)-availability(a):0)||quality(b)-quality(a)||a.name.localeCompare(b.name)).slice(0,5).map(r=>({...r,reason:[slots.urgency==='urgent'?(r.emergencyAdvertised?'Advertises emergency/24-hour service. ':r.openNow?'Listed open now. ':'Current availability unknown. '):'',...r.evidence.map(e=>`${e.source}: ${e.rating===null?'rating unavailable':`${e.rating}/5`}${e.reviews===null?'':` from ${e.reviews} reviews`}. `),'License, price, requirements and response time need confirmation.'].join('')}));
+}
+export function prepareDraft(candidate:Candidate,service:string,slots:AgentSlots,taskTitle?:string){
+ return `Hello ${candidate.name},\n\nI’m looking for ${service} services in ${slots.location}.${taskTitle?` My request: ${taskTitle}.`:""}${slots.urgency==='urgent'?' This is urgent; please let me know your earliest availability and estimated response time.':' Please let me know your availability.'}\n${slots.budget?`My budget range is ${slots.budget}.\n`:''}${slots.constraints?`My requirements: ${slots.constraints}.\n`:''}Could you provide a quote, any call-out fees, and your licensing/insurance details where applicable?\n\nThank you.`;
+}
