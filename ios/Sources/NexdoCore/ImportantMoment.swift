@@ -79,6 +79,15 @@ public struct MomentInput: Encodable, Sendable {
     public var yearly = true
     public var source = "manual", sourceKey = UUID().uuidString
     public init() {}
+    /// Choosing a type in the editor: the type is what gets saved; an automatic title follows it, and
+    /// get well soon does not repeat.
+    public mutating func choose(type newType: String) {
+        title = MomentTitles.updating(title, from: type, firstName: firstName, to: newType, firstName: firstName)
+        type = newType
+        if newType == "getWellSoon" { yearly = false }
+    }
+    /// The payload both editor Save buttons send: this input with the picked day.
+    public func forSave(day: String) -> MomentInput { var value = self; value.occurrenceDate = day; return value }
 }
 
 public enum MomentUpcomingGroup: String, CaseIterable, Sendable {

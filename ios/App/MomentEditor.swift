@@ -32,12 +32,7 @@ struct MomentEditor: View {
     private var editor: some View {
         Form {
             Section("Important moment") {
-                Picker("Type", selection: Binding(get: { input.type }, set: { type in
-                    let previousType = input.type
-                    input.title = MomentTitles.updating(input.title, from: previousType, firstName: input.firstName, to: type, firstName: input.firstName)
-                    input.type = type
-                    if type == "getWellSoon" { input.yearly = false }
-                })) { ForEach(["birthday","anniversary","festival","getWellSoon","custom"], id: \.self) { Text(ImportantMoment.label(for:$0)).tag($0) } }.accessibilityIdentifier("moment-type")
+                Picker("Type", selection: Binding(get: { input.type }, set: { input.choose(type: $0) })) { ForEach(["birthday","anniversary","festival","getWellSoon","custom"], id: \.self) { Text(ImportantMoment.label(for:$0)).tag($0) } }.accessibilityIdentifier("moment-type")
                 TextField("Title", text: $input.title).focused($focusedField, equals: .title).submitLabel(.done)
                 DatePicker("Date", selection: $date, displayedComponents: .date).environment(\.timeZone, TimeZone(identifier: input.timeZoneID) ?? .current)
                 if MomentDates.day(date,zone:input.timeZoneID) < MomentDates.day(Date(),zone:input.timeZoneID) {
@@ -149,7 +144,8 @@ struct MomentEditor: View {
     private func save() {
         guard !saveDisabled else { return }
         focusedField = nil
-        input.occurrenceDate = MomentDates.day(date, zone: input.timeZoneID)
+        // The toolbar Save and "Save Moment & Continue" both land here and send the chosen type.
+        input = input.forSave(day: MomentDates.day(date, zone: input.timeZoneID))
         Task {
             await store.perform {
                 if !completedSave {

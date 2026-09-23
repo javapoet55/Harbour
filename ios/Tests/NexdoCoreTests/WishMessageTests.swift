@@ -71,24 +71,24 @@ import Testing
     let suggestion = WishMessage.suggestion(type: "birthday", title: "Asha’s birthday")
     // The reported case: the default was stored as the message and the user's text lived only on the card.
     var s = FestivalSettings(); s.baseMessage = suggestion; s.approvedAt = "then"; s.cardGreeting = "Asha, thirty looks great on you."
-    #expect(WishMessage.reconcile(&s, suggestion: suggestion))
+    #expect(WishMessage.reconcile(&s))
     #expect(s.baseMessage == "Asha, thirty looks great on you.")
     #expect(s.approvedAt == nil && s.manuallyEdited && s.cardGreeting == nil)
     // Empty message: the card text is adopted.
     s = FestivalSettings(); s.cardGreeting = "Card only"
-    #expect(WishMessage.reconcile(&s, suggestion: suggestion) && s.baseMessage == "Card only")
+    #expect(WishMessage.reconcile(&s) && s.baseMessage == "Card only")
     // A message the user wrote wins; the card text is dropped.
     s = FestivalSettings(); s.baseMessage = "Typed wish"; s.manuallyEdited = true; s.approvedAt = "then"; s.cardGreeting = "Old card"
-    #expect(!WishMessage.reconcile(&s, suggestion: suggestion))
+    #expect(!WishMessage.reconcile(&s))
     #expect(s.baseMessage == "Typed wish" && s.approvedAt == "then" && s.cardGreeting == nil)
     // The suggestion typed or kept on purpose (manually edited) is not replaced.
     s = FestivalSettings(); s.baseMessage = suggestion; s.manuallyEdited = true; s.cardGreeting = "Card"
-    #expect(!WishMessage.reconcile(&s, suggestion: suggestion) && s.baseMessage == suggestion)
+    #expect(!WishMessage.reconcile(&s) && s.baseMessage == suggestion)
     // Same text, or a blank card text: nothing to adopt.
     s = FestivalSettings(); s.baseMessage = "Same"; s.cardGreeting = "Same"
-    #expect(!WishMessage.reconcile(&s, suggestion: suggestion) && s.cardGreeting == nil)
+    #expect(!WishMessage.reconcile(&s) && s.cardGreeting == nil)
     s = FestivalSettings(); s.cardGreeting = "  "
-    #expect(!WishMessage.reconcile(&s, suggestion: suggestion) && s.baseMessage.isEmpty)
+    #expect(!WishMessage.reconcile(&s) && s.baseMessage.isEmpty)
 }
 
 // 5. Approved message-only saves keep schedules; delivery changes or unapproved messages ask to cancel.

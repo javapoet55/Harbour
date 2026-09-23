@@ -102,9 +102,21 @@ public enum FestivalValidation {
         guard let value=c.nextDate(after:start.addingTimeInterval(-1), matching:DateComponents(hour:hour,minute:minute), matchingPolicy:.strict, repeatedTimePolicy:.first), MomentDates.day(value,zone:zone)==day else { return nil }
         return value
     }
-    public static func fallback(name:String,tone:String,type:String="festival") -> String {
+    /// Offline draft wording. Birthday and anniversary match the server's `fallback` (src/server/moments/domain.ts)
+    /// exactly, with the recipient's first name; getWellSoon and festival keep the app's own wording.
+    public static func fallback(name:String,tone:String,type:String="festival",firstName:String="",version:Int=1) -> String {
         if type == "getWellSoon" {
             return tone == "Short" ? "Get well soon. Thinking of you." : "Get well soon. Sending care, comfort, and warm wishes for brighter days ahead."
+        }
+        if type == "birthday" || type == "anniversary" {
+            let greeting = type == "birthday" ? "Happy Birthday" : "Happy Anniversary"
+            let who = firstName.isEmpty ? "" : ", \(firstName)"
+            switch tone {
+            case "Short": return "\(greeting)\(who)! Wishing you a wonderful day."
+            case "Fun": return "\(greeting)\(who)! Here’s to smiles, good company, and a day worth celebrating! 🎉"
+            case "Personal": return "\(greeting)\(who)! Thinking of you and sending my warmest wishes on this special day."
+            default: return "\(greeting)\(who)! \(version % 2 != 0 ? "Wishing you a wonderful day and a fantastic year ahead!" : "Hope your day is filled with happiness and lovely moments!") 🎉"
+            }
         }
         switch tone {
         case "Short": return "\(name)! Wishing you joy and happiness."
