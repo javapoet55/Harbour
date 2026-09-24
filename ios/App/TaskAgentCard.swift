@@ -37,7 +37,9 @@ struct TaskAgentCard: View {
                     Link("Search terms and privacy", destination: AppEnvironment.web("/places-policy")).font(.caption)
                     if let question = run.question {
                         Text(question.text).font(.subheadline.bold())
-                        if question.key == "urgency" {
+                        if question.key == "discovery" {
+                            HStack { Button("Find a professional") { act("answer", key: "discovery", answer: "yes") }; Spacer(); Button("Keep as a task") { act("cancel") } }
+                        } else if question.key == "urgency" {
                             HStack { Button("Urgent") { act("answer", key: "urgency", answer: "urgent") }; Spacer(); Button("Can wait") { act("answer", key: "urgency", answer: "flexible") } }
                         } else if question.key == "preferences" {
                             TextField("Budget range (optional)", text: $budget).textFieldStyle(.roundedBorder)

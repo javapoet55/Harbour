@@ -17,7 +17,7 @@ export async function classifyNewTask(tx:Prisma.TransactionClient,task:{id:strin
  const memory=await tx.userMemory.findMany({where:{userId:task.userId,key:{in:['profile:city','profile:country']}},select:{key:true,value:true}});
  const city=memory.find(r=>r.key==='profile:city')?.value.trim();
  const country=memory.find(r=>r.key==='profile:country')?.value.trim();
- const slots:AgentSlots={locationConfirmed:false,location:city?[city,country].filter(Boolean).join(', ').slice(0,120):'',urgency:intent.urgency,budget:'',constraints:'',preferencesConfirmed:false};
+ const slots:AgentSlots={discoveryConfirmed:!intent.needsConfirmation,locationConfirmed:false,location:city?[city,country].filter(Boolean).join(', ').slice(0,120):'',urgency:intent.urgency,budget:'',constraints:intent.constraints,preferencesConfirmed:false};
  const data={service:intent.service!,urgency:intent.urgency,slotsJson:JSON.stringify(slots),stepsJson:JSON.stringify(plan()),targetAt:new Date(Date.now()+(intent.urgency==='urgent'?5*60_000:48*3600_000))};
  await tx.taskAgentRun.upsert({where:{taskId:task.id},create:{taskId:task.id,...data},update:preserveExisting?{}:{...data,status:'NEEDS_INPUT',version:{increment:1},attempts:0,leaseUntil:null,resultsJson:'[]',warningsJson:'[]',error:null}});
 }
@@ -51,9 +51,10 @@ export async function controlRun(userId:string,taskId:string,input:{action:strin
   data={...data,status:nextQuestion(slots)?'NEEDS_INPUT':'QUEUED',stepsJson:JSON.stringify(plan()),resultsJson:'[]',warningsJson:'[]'};
  }else if(input.action==='answer'&&run.status==='NEEDS_INPUT'){
   const question=nextQuestion(slots);if(question?.key!==input.key)throw new Error('STALE_AGENT_RUN');
+  if(input.key==='discovery'){if(input.answer!=='yes')throw new Error('INVALID_INPUT');slots.discoveryConfirmed=true;}
   if(input.key==='location'){slots.location=(input.answer??'').trim();if(!slots.location||slots.location.length>120)throw new Error('INVALID_INPUT');slots.locationConfirmed=true;}
   if(input.key==='urgency'){if(!['urgent','flexible'].includes(input.answer??''))throw new Error('INVALID_INPUT');slots.urgency=input.answer as 'urgent'|'flexible';}
-  if(input.key==='preferences'){slots.budget=input.budget?.trim()??'';slots.constraints=input.constraints?.trim()??'';slots.preferencesConfirmed=true;}
+  if(input.key==='preferences'){slots.budget=input.budget?.trim()??'';slots.constraints=[slots.constraints,input.constraints?.trim()].filter(Boolean).join(', ').slice(0,500);slots.preferencesConfirmed=true;}
   data={...data,slotsJson:JSON.stringify(slots),urgency:slots.urgency,status:nextQuestion(slots)?'NEEDS_INPUT':'QUEUED',targetAt:new Date(Date.now()+(slots.urgency==='urgent'?5*60_000:48*3600_000))};
  }else if(input.action==='saveDraft'&&run.status==='READY_FOR_REVIEW'){
   const rows=JSON.parse(run.resultsJson) as Candidate[];const candidate=rows.find(r=>r.id===input.candidateId);if(!candidate)throw new Error('NOT_FOUND');candidate.draft=input.answer??'';data={...data,resultsJson:JSON.stringify(rows)};

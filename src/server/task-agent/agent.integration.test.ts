@@ -65,7 +65,7 @@ it('does not search an unconfirmed profile city, including legacy slots',async()
  expect(search).not.toHaveBeenCalled();expect((await ownedRun(user.id,task.id)).agentRun?.status).toBe('NEEDS_INPUT');
 });
 it('keeps unsupported and uncertain requests as normal tasks with explanations',async()=>{
- for(const title of ['Find a tutor','Maybe find a plumber']){
+ for(const title of ['Find a caterer','Maybe find a plumber']){
   const {user,task}=await setup(title);const saved=await ownedRun(user.id,task.id);
   expect(saved.agentRun).toBeNull();expect(saved.intentReason).toContain('no agent started');
  }
@@ -85,4 +85,19 @@ it('enrolls an existing sprinkler task once without resetting research or bypass
  const answered=await controlRun(user.id,task.id,{action:'answer',version:run.version,key:'location',answer:'San Jose'});
  const again=await prepareExistingTask(user.id,task.id);expect(again.id).toBe(run.id);expect(again.version).toBe(answered.version);expect(again.slots.locationConfirmed).toBe(true);
  await expect(prepareExistingTask('another-user',task.id)).rejects.toThrow('NOT_FOUND');
+});
+
+it('requires explicit discovery confirmation for problem descriptions before collecting search slots',async()=>{
+ const {user,task}=await setup('My sink is leaking');
+ let run=(await ownedRun(user.id,task.id)).agentRun!;
+ expect(runView(run)).toMatchObject({service:'plumber',question:{key:'discovery'}});
+ await expect(controlRun(user.id,task.id,{action:'answer',version:run.version,key:'location',answer:'San Jose'})).rejects.toThrow('STALE_AGENT_RUN');
+ await controlRun(user.id,task.id,{action:'answer',version:run.version,key:'discovery',answer:'yes'});
+ run=(await ownedRun(user.id,task.id)).agentRun!;
+ expect(runView(run).question?.key).toBe('location');
+ const other=await createTask({userId:user.id,title:'Locked out'});
+ const pending=(await ownedRun(user.id,other.id)).agentRun!;
+ await controlRun(user.id,other.id,{action:'cancel',version:pending.version});
+ const search=vi.fn();await processRun(pending.id,search);expect(search).not.toHaveBeenCalled();
+ expect((await ownedRun(user.id,other.id)).status).toBe('PLANNED');
 });

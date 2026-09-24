@@ -23,14 +23,16 @@ const yelpSchema=z.object({businesses:z.array(z.object({id:z.string(),name:z.str
 export function searchConfigured(){return {google:!!process.env.GOOGLE_PLACES_API_KEY,yelp:!!process.env.YELP_API_KEY};}
 export async function searchBusinesses(source:'Google'|'Yelp',service:string,slots:AgentSlots):Promise<Candidate[]> {
  const now=new Date().toISOString();
- // Send only service + coarse location. Never send task notes, contacts, or home address.
+ // Only allow known service preferences into search; never send raw notes or contact details.
+ const preferences=[...new Set(slots.constraints.match(/\b(?:weekends?|licensed|pet-safe|Spanish-speaking|highly rated)\b/gi)??[])].join(' ');
+ const searchTerm=[preferences,service].filter(Boolean).join(' ');
  if(source==='Google'){
-  const data=z.object({places:z.array(placeSchema).optional()}).parse(await placesRequest('places:searchText',placeFields.split(',').map(f=>`places.${f}`).join(','),{textQuery:`${slots.urgency==='urgent'?'emergency ':''}${service} in ${slots.location}`,languageCode:'en',pageSize:20,...(slots.urgency==='urgent'?{openNow:true}:{})}));
+  const data=z.object({places:z.array(placeSchema).optional()}).parse(await placesRequest('places:searchText',placeFields.split(',').map(f=>`places.${f}`).join(','),{textQuery:`${slots.urgency==='urgent'?'emergency ':''}${searchTerm} in ${slots.location}`,languageCode:'en',pageSize:20,...(slots.urgency==='urgent'?{openNow:true}:{})}));
   return (data.places??[]).filter(p=>!p.businessStatus||p.businessStatus==='OPERATIONAL').map(googleCandidate);
  }
 
  if(!process.env.YELP_API_KEY)throw new Error('Yelp Search is not configured.');
- const url=new URL('https://api.yelp.com/v3/businesses/search');url.search=new URLSearchParams({term:service,location:slots.location,limit:'20',sort_by:'best_match',...(slots.urgency==='urgent'?{open_now:'true'}:{})}).toString();
+ const url=new URL('https://api.yelp.com/v3/businesses/search');url.search=new URLSearchParams({term:searchTerm,location:slots.location,limit:'20',sort_by:'best_match',...(slots.urgency==='urgent'?{open_now:'true'}:{})}).toString();
  const response=await fetch(url,{headers:{Authorization:`Bearer ${process.env.YELP_API_KEY}`},signal:AbortSignal.timeout(15000),cache:'no-store'});
  if(!response.ok)throw new Error('Yelp Search is temporarily unavailable.');
  const data=yelpSchema.parse(await response.json());
