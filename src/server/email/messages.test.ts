@@ -14,7 +14,6 @@ describe('transactional email template', () => {
   const codeEmails = [
     ['verify email', () => verifyEmailMessage('042917', '24 hours'), 'Verify your Nexdo email', '24 hours'],
     ['password reset', () => passwordResetMessage('042917', '15 minutes'), 'Your Nexdo password reset code', '15 minutes'],
-    ['admin sign-in', () => adminSignInMessage('042917', '10 minutes'), 'Your NEXDO Admin sign-in code', '10 minutes'],
   ] as const;
 
   it.each(codeEmails)('renders the %s email with code, expiry and logo', (_name, render, subject, expiry) => {
@@ -27,6 +26,23 @@ describe('transactional email template', () => {
     expect(email.text).toContain(`Expires in ${expiry} · single use`);
     expect(email.html).toContain(`<img src="${LOGO}" width="206" height="48" alt="Nexdo"`);
     expect(email.html).toContain('mailto:support@nexdo.test');
+    expect(email.html).toMatchSnapshot('html');
+    expect(email.text).toMatchSnapshot('text');
+  });
+
+  it('renders the admin sign-in email with the code and expiry, and no links', () => {
+    const email = adminSignInMessage('042917', '10 minutes');
+    expect(email.subject).toBe('Your Nexdo admin sign-in code');
+    expect(email.html).toContain('>042917</div>');
+    expect(email.text).toContain('Your code is 042917.');
+    expect(email.text).toContain('It expires in 10 minutes.');
+    expect(email.text).toContain('Expires in 10 minutes · single use');
+    expect(email.text).toContain("If you didn't try to sign in, ignore this email.");
+    expect(email.html).toContain(`<img src="${LOGO}"`);
+    expect(email.html).not.toMatch(/<a\s/i);
+    expect(email.html).not.toContain('mailto:');
+    expect(email.text).not.toContain('support@nexdo.test');
+    expect(email.text).not.toMatch(/https?:\/\//);
     expect(email.html).toMatchSnapshot('html');
     expect(email.text).toMatchSnapshot('text');
   });

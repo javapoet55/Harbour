@@ -7,6 +7,8 @@ export const adminSessionSchema = z.object({
   expiresAt: z.iso.datetime(),
   user: adminUserSchema,
 });
+// { action: 'request' } answer: identical for every address, so it reveals nothing about who is an admin.
+export const adminCodeRequestSchema = z.object({ ok: z.literal(true), message: z.string() });
 export const adminMeSchema = adminUserSchema.extend({ canOperate: z.boolean() });
 export const backendErrorSchema = z.object({ error: z.string() });
 

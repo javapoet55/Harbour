@@ -6,7 +6,7 @@ The application is Next.js 16 / React 19 with Node route handlers and Prisma 6. 
 
 Discovered monitoring: `src/lib/metrics.ts` has process-local counters/timings; `src/lib/logger.ts` emits structured logs; Firebase Analytics/GA4 supplies engagement, not crash data. These remain in place. The logger now recursively redacts private/secret fields. No OpenTelemetry exporter, Sentry, Crashlytics, or external operations stack was found. This change adds a durable Prisma sink for operations measurements, not an additional hosted monitoring service. Existing local counters are shown separately and never presented as cluster totals.
 
-Discovered integrations: OpenAI text/realtime/transcription/speech/image APIs, Google and Microsoft Calendar/OAuth, Gmail send, Hostinger Mail for admin OTP, SendGrid, Twilio, Web Push, Apple authentication, GA4, and device-local Contacts. No grocery commerce connector or standalone Gmail-sync worker was found. Task reminders and Moments/festival/annual-email processing use database rows and callable scheduler functions rather than a general queue broker.
+Discovered integrations: OpenAI text/realtime/transcription/speech/image APIs, Google and Microsoft Calendar/OAuth, Gmail send, SendGrid (including admin sign-in codes), Twilio, Web Push, Apple authentication, GA4, and device-local Contacts. No grocery commerce connector or standalone Gmail-sync worker was found. Task reminders and Moments/festival/annual-email processing use database rows and callable scheduler functions rather than a general queue broker.
 
 ## Implementation
 

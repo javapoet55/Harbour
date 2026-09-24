@@ -9,15 +9,21 @@ afterEach(() => {
 });
 
 describe('admin authorization', () => {
-  it('allows the configured Nexdo administrator case-insensitively', () => {
-    expect(isAdminEmail(' JSRIRAMK@MAIL.COM ')).toBe(true);
-    expect(isAdminEmail('jsriramk@gmail.com')).toBe(true);
-    expect(isAdminEmail('someone@example.com')).toBe(false);
+  it('has no built-in administrators', () => {
+    delete process.env.NEXDO_ADMIN_EMAILS;
+    expect(adminEmails().size).toBe(0);
+    expect(isAdminEmail('jsriramk@gmail.com')).toBe(false);
+    expect(isAdminEmail('jsriramk@mail.com')).toBe(false);
+    process.env.NEXDO_ADMIN_EMAILS = ' , ';
+    expect(adminEmails().size).toBe(0);
   });
 
-  it('supports additional administrators from the environment', () => {
-    process.env.NEXDO_ADMIN_EMAILS = 'ops@nexdoapp.com, owner@nexdoapp.com';
-    expect(adminEmails().has('ops@nexdoapp.com')).toBe(true);
+  it('allows only NEXDO_ADMIN_EMAILS, trimmed and case-insensitively', () => {
+    process.env.NEXDO_ADMIN_EMAILS = ' Ops@NexdoApp.com, owner@nexdoapp.com ';
+    expect([...adminEmails()]).toEqual(['ops@nexdoapp.com', 'owner@nexdoapp.com']);
+    expect(isAdminEmail(' OPS@nexdoapp.com ')).toBe(true);
     expect(isAdminEmail('owner@nexdoapp.com')).toBe(true);
+    expect(isAdminEmail('someone@example.com')).toBe(false);
+    expect(isAdminEmail(null)).toBe(false);
   });
 });
