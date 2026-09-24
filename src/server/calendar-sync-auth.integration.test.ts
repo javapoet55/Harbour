@@ -169,7 +169,6 @@ describe('listing events: transient failures leave status and lastSyncedAt alone
     ['a 403 per-user rate limit', () => googleError(403, 'userRateLimitExceeded')],
     ['a 403 quota', () => googleError(403, 'quotaExceeded')],
     ['a 403 for the Calendar API being off in Nexdo’s project', () => googleError(403, 'accessNotConfigured')],
-    ['a 404', () => googleError(404, 'notFound')],
   ])('%s', async (_label, list) => {
     env();
     network(freshToken, list as () => Response);
@@ -197,6 +196,8 @@ describe('listing events: sign-in failures mark the connection', () => {
     ['a 403 with no body', 'google', () => new Response('', { status: 403 })],
     ['a Microsoft 401', 'microsoft', () => Response.json({ error: { code: 'InvalidAuthenticationToken', message: 'Access token has expired.' } }, { status: 401 })],
     ['a Microsoft 403 access denied', 'microsoft', () => Response.json({ error: { code: 'ErrorAccessDenied', message: 'Access is denied.' } }, { status: 403 })],
+    ['a Google 404 for a deleted or unshared calendar', 'google', () => googleError(404, 'notFound')],
+    ['a Microsoft 404 for a deleted calendar', 'microsoft', () => Response.json({ error: { code: 'ErrorItemNotFound', message: 'The specified object was not found in the store.' } }, { status: 404 })],
   ] as const)('%s', async (_label, provider, list) => {
     env();
     network(freshToken, list);
@@ -253,17 +254,18 @@ describe('listing events: an expired sync token (410) still triggers a full resy
 
 describe('isCalendarListAuthFailure', () => {
   const failure = (status: number, reason?: string) => Object.assign(new Error(`Calendar provider returned ${status}`), { status, reason });
-  it('accepts token failures, 401, and 403s that are not limits', () => {
+  it('accepts token failures, 401, 404, and 403s that are not limits', () => {
     expect(isCalendarListAuthFailure(new OAuthTokenError('revoked', 400, 'invalid_grant'))).toBe(true);
     expect(isCalendarListAuthFailure(new CalendarAuthError('missing'))).toBe(true);
     expect(isCalendarListAuthFailure(failure(401))).toBe(true);
+    expect(isCalendarListAuthFailure(failure(404))).toBe(true);
     expect(isCalendarListAuthFailure(failure(403, 'insufficientPermissions'))).toBe(true);
     expect(isCalendarListAuthFailure(failure(403, 'ErrorAccessDenied'))).toBe(true);
     expect(isCalendarListAuthFailure(failure(403))).toBe(true);
     for (const reason of ['rateLimitExceeded', 'userRateLimitExceeded', 'quotaExceeded', 'dailyLimitExceeded', 'accessNotConfigured', 'ApplicationThrottled', 'TooManyRequests']) {
       expect(isCalendarListAuthFailure(failure(403, reason))).toBe(false);
     }
-    for (const status of [400, 404, 410, 429, 500, 502, 503]) expect(isCalendarListAuthFailure(failure(status))).toBe(false);
+    for (const status of [400, 410, 429, 500, 502, 503]) expect(isCalendarListAuthFailure(failure(status))).toBe(false);
     expect(isCalendarListAuthFailure(new TypeError('fetch failed'))).toBe(false);
     expect(isCalendarListAuthFailure(undefined)).toBe(false);
   });

@@ -50,7 +50,8 @@ async function healthHandlerPOST(req: Request) {
             userId: user.id,
             fireAt: new Date(),
             offsetLabel: 'test',
-            status: 'QUEUED',
+            // Settled at once so the reminder tick never escalates or retries a test notice.
+            status: result.status === 'SENT' ? 'DELIVERED' : 'FAILED',
             idempotencyKey: `test:${user.id}:${Date.now()}`,
           },
         },

@@ -88,13 +88,14 @@ const TRANSIENT_FORBIDDEN_REASONS = new Set(['rateLimitExceeded', 'userRateLimit
 
 /**
  * True when a calendar call (listing events) failed because the sign-in no longer works: any token
- * failure isCalendarAuthFailure accepts, a 401, or a 403 whose reason is not a rate/quota limit.
+ * failure isCalendarAuthFailure accepts, a 401, or a 403 whose reason is not a rate/quota limit. A 404
+ * counts too: the calendar was deleted or unshared, and only reconnecting (picking a calendar) fixes it.
  * Network errors, timeouts, 5xx, 429 and other 4xx return false.
  */
 export function isCalendarListAuthFailure(error: unknown) {
   if (isCalendarAuthFailure(error)) return true;
   const { status, reason } = (error ?? {}) as { status?: unknown; reason?: unknown };
-  if (status === 401) return true;
+  if (status === 401 || status === 404) return true;
   return status === 403 && !(typeof reason === 'string' && TRANSIENT_FORBIDDEN_REASONS.has(reason));
 }
 
