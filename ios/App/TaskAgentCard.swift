@@ -4,12 +4,14 @@ import MessageUI
 struct TaskAgentCard: View {
     @EnvironmentObject private var model: AppModel
     let taskID: String
+    @FocusState.Binding var focusedField: TaskDetailsView.Field?
     var onResearchAvailable: (Bool) -> Void = { _ in }
     @Environment(\.dynamicTypeSize) private var typeSize
     @State private var eligible = false
     @State private var fallbackReason: String?
     @State private var run: TaskAgentRun?
     @State private var answer = ""
+    @State private var expandedReviews: Set<String> = []
     @State private var drafts: [String: String] = [:]
     @State private var busy = false
     @State private var error: String?
@@ -51,6 +53,8 @@ struct TaskAgentCard: View {
                                 Image(systemName: "mappin.circle.fill").font(.title2).foregroundStyle(Color.purple)
                                     .frame(width: 36, height: 36).background(Color.purple.opacity(0.06), in: RoundedRectangle(cornerRadius: 12))
                                 TextField("City or ZIP code", text: $answer).submitLabel(.done)
+                                    .focused($focusedField, equals: .agentLocation)
+                                    .onSubmit { focusedField = nil }
                                     .accessibilityLabel("City or ZIP code")
                             }.padding(8).background(.white.opacity(0.85), in: RoundedRectangle(cornerRadius: 12))
                                 .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.purple.opacity(0.65)))
@@ -80,9 +84,10 @@ struct TaskAgentCard: View {
                                 }
                                 if candidate.googlePlaceId != nil {
                                     Text("Google Maps").font(.system(size: 14)).foregroundStyle(Color(red: 0.37, green: 0.37, blue: 0.37))
-                                    Text("Customer feedback · Limited selection, ordered by Google relevance.").font(.caption)
+                                    Text("Customer feedback · Limited selection, newest first.").font(.caption)
                                     if (candidate.feedback ?? []).isEmpty { Text("No written reviews available.").font(.caption) }
-                                    ForEach(Array((candidate.feedback ?? []).enumerated()), id: \.offset) { _, review in
+                                    ForEach(candidate.feedback ?? [], id: \.url) { review in
+                                        let reviewID = candidate.id + review.url
                                         VStack(alignment: .leading, spacing: 6) {
                                             HStack {
                                                 if let photo = review.photoUrl, let url = URL(string: photo) { AsyncImage(url: url) { image in image.resizable().scaledToFit() } placeholder: { Color.clear }.frame(width: 32, height: 32).clipShape(Circle()) }
@@ -90,6 +95,16 @@ struct TaskAgentCard: View {
                                             }
                                             Text("\(review.rating.map { String(format: "%.0f", $0) } ?? "—")/5 · \(review.published)").font(.caption)
                                             Text(review.text).font(.subheadline)
+                                                .lineLimit(expandedReviews.contains(reviewID) ? nil : 3)
+                                            if !review.text.isEmpty {
+                                                Button(expandedReviews.contains(reviewID) ? "Show less" : "Show more") {
+                                                    if expandedReviews.contains(reviewID) { expandedReviews.remove(reviewID) }
+                                                    else { expandedReviews.insert(reviewID) }
+                                                }
+                                                .font(.subheadline.weight(.semibold))
+                                                .accessibilityLabel("\(expandedReviews.contains(reviewID) ? "Show less" : "Show more") of \(review.author)’s review")
+                                                .accessibilityValue(expandedReviews.contains(reviewID) ? "Expanded" : "Collapsed")
+                                            }
                                             if let url = URL(string: review.url) { Link("Read review on Google Maps", destination: url) }
                                         }.padding(.vertical, 6)
                                     }
@@ -99,6 +114,7 @@ struct TaskAgentCard: View {
                                 }
                                 Text("Your outreach draft").font(.subheadline.bold())
                                 TextEditor(text: Binding(get: { drafts[candidate.id] ?? candidate.draft }, set: { drafts[candidate.id] = String($0.prefix(2000)) })).frame(minHeight: 160).accessibilityLabel("Draft for \(candidate.name)")
+                                    .focused($focusedField, equals: .agentDraft(candidate.id))
                                 Button {
                                     guard MFMessageComposeViewController.canSendText() else {
                                         messageNotice = "Messages is not available on this device. You can copy the draft and phone number instead."

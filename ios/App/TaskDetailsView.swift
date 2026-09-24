@@ -14,7 +14,7 @@ struct TaskDetailsView: View {
     @State private var working = false
     @State private var message: String?
     @FocusState private var focus: Field?
-    private enum Field: Hashable { case title, step, notes }
+    enum Field: Hashable { case title, step, notes, agentLocation, agentDraft(String) }
 
     init(task: NexdoTask) {
         self.task = task
@@ -33,7 +33,7 @@ struct TaskDetailsView: View {
             ScrollViewReader { proxy in
                 ScrollView {
                     VStack(alignment: .leading, spacing: 24) {
-                        TaskAgentCard(taskID: task.id) { hasBusinessResearch = $0 }
+                        TaskAgentCard(taskID: task.id, focusedField: $focus) { hasBusinessResearch = $0 }
                         if !hasBusinessResearch {
                             TaskActionCard(task: currentTask)
                             actions
