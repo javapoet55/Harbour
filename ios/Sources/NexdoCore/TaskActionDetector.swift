@@ -11,7 +11,8 @@ public struct DeterministicTaskActionDetector: TaskActionDetector {
         let verb = text[verbRange].lowercased()
         let tail = String(text[tailRange])
         guard tail.range(of: #"^(?:at|about|regarding|today|tomorrow|tonight|on)\b"#, options: [.regularExpression, .caseInsensitive]) == nil else { return nil }
-        let separators = #"\s+(?:to\s+(?:confirm|discuss|arrange|review)\b|at\b|about\b|regarding\b|on\b|today\b|tomorrow\b|tonight\b|this\b|next\b|monday\b|tuesday\b|wednesday\b|thursday\b|friday\b|saturday\b|sunday\b)"#
+        // A name also ends at "to", "for", "by", "before" or "after", so "Call electrician to fix the wiring" names the electrician.
+        let separators = #"\s+(?:to\b|for\b|by\b|before\b|after\b|at\b|about\b|regarding\b|on\b|today\b|tomorrow\b|tonight\b|this\b|next\b|monday\b|tuesday\b|wednesday\b|thursday\b|friday\b|saturday\b|sunday\b)"#
         let nameEnd = tail.range(of: separators, options: [.regularExpression, .caseInsensitive])?.lowerBound ?? tail.endIndex
         let name = String(tail[..<nameEnd]).trimmingCharacters(in: CharacterSet.whitespacesAndNewlines.union(.punctuationCharacters))
         guard !name.isEmpty, name.count <= 100, name.split(separator: " ").count <= 5,
@@ -20,7 +21,7 @@ public struct DeterministicTaskActionDetector: TaskActionDetector {
         let channel: TaskActionChannel? = intent == .call ? .call : intent == .email ? .email : intent == .message ? .message : nil
         let suffix = String(tail[nameEnd...])
         var context: String?
-        if let about = suffix.range(of: #"\b(?:about|regarding|to(?=\s+(?:confirm|discuss|arrange|review)\b))\s+"#, options: [.regularExpression, .caseInsensitive]) {
+        if let about = suffix.range(of: #"\b(?:about|regarding|to|for)\s+"#, options: [.regularExpression, .caseInsensitive]) {
             var value = String(suffix[about.upperBound...])
             if let time = value.range(of: #"\s+(?:at\s+\d|tomorrow\b|tonight\b|on\s+(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday))"#, options: [.regularExpression, .caseInsensitive]) {
                 value = String(value[..<time.lowerBound])
@@ -30,6 +31,14 @@ public struct DeterministicTaskActionDetector: TaskActionDetector {
         }
         return DetectedTaskAction(intent: intent, contactName: name, preferredAction: channel,
                                   scheduledAt: parseTime(suffix, now: now, timeZone: timeZone), context: context)
+    }
+
+    /// The name to look up in Contacts: a leading "the", "a", "an", "my", "our" or "your" is dropped, so "the plumber"
+    /// finds a contact saved as "Plumber". Cards and notifications keep the name as written ("Contact the plumber").
+    public static func contactSearchName(_ name: String) -> String {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let stripped = trimmed.replacingOccurrences(of: #"^(?:the|a|an|my|our|your)\s+"#, with: "", options: [.regularExpression, .caseInsensitive])
+        return stripped.isEmpty ? trimmed : stripped
     }
 
     private func parseTime(_ value: String, now: Date, timeZone: TimeZone) -> Date? {
