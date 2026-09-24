@@ -8,7 +8,7 @@ import { loadScheduleContext } from './schedule-intelligence';
 import { createHash } from 'node:crypto';
 import { prisma } from './db';
 import { runAssistantTurn, type AssistantTurn } from './assistant';
-import { scheduleDefaultReminders } from './reminders';
+import { scheduleDefaultReminders, upsertReminderOccurrence } from './reminders';
 import { pushTaskToExternal } from './calendar-sync';
 import { parseIntent } from '@/lib/intent';
 import { handleExecutiveTurn } from './executive-companion';
@@ -299,7 +299,7 @@ async function executePlan(userId: string, plan: AgentPlan, actionId: string, ta
         if (action.type === 'UPDATE_TASK' && (action.title || action.notes !== null)) await classifyNewTask(tx, await tx.task.findUniqueOrThrow({where:{id:taskId}}));
         if (action.type === 'SET_REMINDER') {
           const fireAt = validDate(action.reminder_at)!;
-          await tx.reminder.upsert({ where: { idempotencyKey: `agent:${taskId}:${fireAt.toISOString()}` }, update: { fireAt, status: 'SCHEDULED' }, create: { userId, taskId, fireAt, offsetLabel: 'custom reminder', idempotencyKey: `agent:${taskId}:${fireAt.toISOString()}` } });
+          await upsertReminderOccurrence(tx, { userId, taskId, fireAt, offsetLabel: 'custom reminder', idempotencyKey: `agent:${taskId}:${fireAt.toISOString()}` });
         }
         await tx.activityLog.create({ data: { userId, taskId, kind: `AGENT_${action.type}`, summary: action.rationale.slice(0, 300) } });
       }
