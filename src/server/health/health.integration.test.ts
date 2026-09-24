@@ -3,10 +3,12 @@ import { randomUUID } from 'node:crypto';
 import { prisma } from '@/server/db';
 import { getHealth,incidentAction,updateRule,evaluateAlerts } from './service';
 import { healthContext,recordEvent,observedFetch } from './telemetry';
+// recordEvent stops waiting after 200 ms and lets the write finish in the background, so wait for the row itself.
+const written=(where:{traceId?:string;model?:string})=>vi.waitFor(()=>prisma.healthEvent.findFirstOrThrow({where}),{timeout:10_000,interval:20});
 it('persists sanitized correlated measurements and retrieves missing states honestly',async()=>{
  vi.stubEnv('NEXDO_HEALTH_ENABLED','true');const traceId=randomUUID().replaceAll('-','');
  await healthContext.run({traceId,feature:'Ask AI'},()=>recordEvent({kind:'api',service:'API',operation:'GET /api/health-fixture',status:200,durationMs:12}));
- const event=await prisma.healthEvent.findFirstOrThrow({where:{traceId}});expect(event.operation).toBe('GET /api/health-fixture');
+ const event=await written({traceId});expect(event.operation).toBe('GET /api/health-fixture');
  const data=await getHealth('1H');expect(data.available).toBe(true);expect(data.sections.find(s=>s.name==='iOS')?.status).toBe('Unknown');expect(data.metrics.requests).toBeGreaterThan(0);vi.unstubAllEnvs();
 });
 it('extracts numeric AI usage without persisting prompts or output',async()=>{
@@ -14,7 +16,7 @@ it('extracts numeric AI usage without persisting prompts or output',async()=>{
  vi.stubGlobal('fetch',vi.fn().mockResolvedValue(Response.json({usage:{input_tokens:100,output_tokens:20},output:'PRIVATE RESPONSE'})));
  const response=await observedFetch('https://api.openai.com/v1/responses',{body:JSON.stringify({model:'test-model',input:'PRIVATE PROMPT'})});
  expect((await response.json()).output).toBe('PRIVATE RESPONSE');
- const event=await prisma.healthEvent.findFirstOrThrow({where:{model:'test-model'}});expect(event.inputTokens).toBe(100);expect(event.costUsd).toBeCloseTo(.00014);expect(JSON.stringify(event)).not.toContain('PRIVATE');vi.unstubAllEnvs();vi.unstubAllGlobals();
+ const event=await written({model:'test-model'});expect(event.inputTokens).toBe(100);expect(event.costUsd).toBeCloseTo(.00014);expect(JSON.stringify(event)).not.toContain('PRIVATE');vi.unstubAllEnvs();vi.unstubAllGlobals();
 });
 it('audits incident transitions atomically and rejects resolved incidents',async()=>{
  const incident=await prisma.healthIncident.create({data:{service:'fixture',severity:'SEV-2',trigger:'test'}});

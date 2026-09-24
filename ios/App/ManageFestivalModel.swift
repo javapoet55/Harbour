@@ -176,14 +176,15 @@ import CryptoKit
         if error != nil {active=old}else if !value{analytics.record(.disabled)}
     }
     func changeTab(to target: Tab) async {
-        guard target != tab, !busy else { return }
-        pendingTab = target
-        if dirty { await save() }
-        else { tab = target; pendingTab = nil }
+        switch wishGeneration.tabChange(sameTab: target == tab, busy: busy, dirty: dirty) {
+        case .ignore: return
+        case .saveFirst: pendingTab = target; await save()
+        case .switchNow: tab = target; pendingTab = nil
+        }
     }
     func cancelTabChange() { pendingTab = nil }
     func save(cancelSchedules:Bool=false) async {
-        guard !busy,!wishGeneration.isGenerating else{return}
+        guard wishGeneration.allowsSave(busy:busy) else{return}
         guard dirty else {error=nil;notice="No changes to save. Your existing schedule is unchanged.";return}
         busy=true;error=nil;notice=nil;defer{busy=false}
         let keptSchedules=keepsSchedules(cancelSchedules:cancelSchedules)
@@ -234,7 +235,7 @@ import CryptoKit
     /// An approved message-only save keeps existing schedules; the server rewrites their text.
     private func keepsSchedules(cancelSchedules:Bool) -> Bool {!cancelSchedules && hasSchedules && pendingChange == .messageOnly && settings.approvedAt != nil}
     func approve(cancelSchedules:Bool=false) async {
-        guard !busy,!wishGeneration.isGenerating else{return}
+        guard wishGeneration.allowsSave(busy:busy) else{return}
         if let issue=WishMessage.approvalError(settings) {error=issue;return}
         settings.approvedAt=ISO8601DateFormatter().string(from:Date())
         let kept=keepsSchedules(cancelSchedules:cancelSchedules)
@@ -265,7 +266,7 @@ import CryptoKit
     }
     static let cardMessageNeedsReview="Your card is ready, but its message changes this moment’s scheduled wishes. Open Manage Moment to review and save the message."
     func saveGreetingCard() async -> Bool {
-        guard !busy,let moment=originals.first else{return false}
+        guard wishGeneration.allowsSave(busy:busy),let moment=originals.first else{return false}
         // The card prints the Wish Message, so a message edited in the card editor is saved (and approved) as the wish.
         if let saved=savedState, settings.baseMessage != saved.settings.baseMessage {
             if let issue=WishMessage.approvalError(settings) {error=issue;return false}

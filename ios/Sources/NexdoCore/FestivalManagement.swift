@@ -65,6 +65,16 @@ public struct ManagedFestivalRecipient: Identifiable, Codable, Equatable, Sendab
 }
 public enum FestivalValidation {
     public static func phone(_ value: String) -> String { let digits=value.filter(\.isNumber); return value.hasPrefix("+") ? "+"+digits : digits }
+    /// A contact's phone numbers, each once: compared without spaces, dashes and brackets; the first spelling is kept.
+    public static func uniquePhones(_ values: [String]) -> [String] {
+        var seen=Set<String>()
+        return values.filter { seen.insert($0.filter { !$0.isWhitespace && !"-‐‑‒–—()[]{}".contains($0) }).inserted }
+    }
+    /// A contact's email addresses, each once, ignoring case; the first spelling is kept.
+    public static func uniqueEmails(_ values: [String]) -> [String] {
+        var seen=Set<String>()
+        return values.filter { seen.insert($0.lowercased()).inserted }
+    }
     public static func validEmail(_ value: String) -> Bool { value.range(of: #"^[^\s@]+@[^\s@]+\.[^\s@]+$"#, options:.regularExpression) != nil }
     public static func recipients(_ values:[ManagedFestivalRecipient], settings:FestivalSettings) -> String? {
         let selected=values.filter(\.selected)

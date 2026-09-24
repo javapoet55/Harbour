@@ -7,7 +7,10 @@ import { tmpdir } from 'node:os';
 const testDirectory = mkdtempSync(path.join(tmpdir(), 'nexdo-tests-'));
 const databaseFile = path.join(testDirectory, 'test.db');
 closeSync(openSync(databaseFile, 'wx'));
-process.env.HARBOR_DATABASE_URL = `file:${databaseFile}`;
+// Every test worker writes to this one SQLite file, and SQLite lets one writer in at a time. Prisma
+// gives up waiting for that lock after 5 seconds ("Socket timeout"), which a busy suite can exceed;
+// socket_timeout is that wait in seconds. Test database only: production runs on Postgres.
+process.env.HARBOR_DATABASE_URL = `file:${databaseFile}?socket_timeout=60`;
 
 export default defineConfig({
   test: {
