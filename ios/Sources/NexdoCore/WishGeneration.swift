@@ -46,6 +46,18 @@ import Observation
     }
 }
 
+/// While a wish is being written nothing saves, so the text it replaces is never saved over it. Save, approve and
+/// the greeting-card save are refused, and so is a tab change: it auto-saves unsaved edits, and a refused save would
+/// leave it pending. Same rule as Android (24c0eb4).
+public enum WishTabChange: Equatable, Sendable { case ignore, switchNow, saveFirst }
+extension WishGenerationGate {
+    public func allowsSave(busy: Bool) -> Bool { !busy && !isGenerating }
+    public func tabChange(sameTab: Bool, busy: Bool, dirty: Bool) -> WishTabChange {
+        guard !sameTab, allowsSave(busy: busy) else { return .ignore }
+        return dirty ? .saveFirst : .switchNow
+    }
+}
+
 /// Settles `withTimeout` once, whichever of the request and the timer ends first.
 @MainActor private final class WishRequestOnce { var done = false; var tasks: [Task<Void, Never>] = [] }
 

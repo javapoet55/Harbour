@@ -67,3 +67,13 @@ import Testing
     #expect(MomentDates.sendDayLabel(send,zone:"America/Los_Angeles")=="Fri, Sep 18, 2026")
     #expect(MomentDates.sendDayLabel(send,zone:"Asia/Kolkata")=="Sat, Sep 19, 2026")
 }
+@Test func festivalContactChoicesListEachAddressOnce() {
+    // Same number written with spaces, dashes and brackets: the first spelling is kept, in order.
+    #expect(FestivalValidation.uniquePhones(["(925) 555-4821","925 555 4821","925-555-4821","+1 925 555 4821","[925]5554821","650 555 0101"])
+        == ["(925) 555-4821","+1 925 555 4821","650 555 0101"])
+    #expect(FestivalValidation.uniquePhones(["925\u{00A0}555\u{2013}4821","9255554821"]) == ["925\u{00A0}555\u{2013}4821"])
+    #expect(FestivalValidation.uniqueEmails(["Sam@Example.com","sam@example.com","SAM@EXAMPLE.COM","sam.work@example.com"])
+        == ["Sam@Example.com","sam.work@example.com"])
+    #expect(FestivalValidation.uniquePhones([]).isEmpty && FestivalValidation.uniqueEmails([]).isEmpty)
+    #expect(FestivalValidation.uniquePhones(["555 0101"]) == ["555 0101"])
+}

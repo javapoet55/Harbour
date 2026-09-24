@@ -60,7 +60,7 @@ struct ManagedFestivalContactsPicker: UIViewControllerRepresentable {
         let selected:([FestivalContactChoice])->Void
         init(_ selected:@escaping ([FestivalContactChoice])->Void) {self.selected=selected}
         func contactPicker(_ picker:CNContactPickerViewController,didSelect contacts:[CNContact]) {
-            selected(contacts.map { c in FestivalContactChoice(id:c.identifier,name:CNContactFormatter.string(from:c,style:.fullName) ?? c.givenName,phones:c.isKeyAvailable(CNContactPhoneNumbersKey) ? c.phoneNumbers.map(\.value.stringValue):[],emails:c.isKeyAvailable(CNContactEmailAddressesKey) ? c.emailAddresses.map {String($0.value)}:[]) })
+            selected(contacts.map { c in FestivalContactChoice(id:c.identifier,name:CNContactFormatter.string(from:c,style:.fullName) ?? c.givenName,phones:c.isKeyAvailable(CNContactPhoneNumbersKey) ? FestivalValidation.uniquePhones(c.phoneNumbers.map(\.value.stringValue)):[],emails:c.isKeyAvailable(CNContactEmailAddressesKey) ? FestivalValidation.uniqueEmails(c.emailAddresses.map {String($0.value)}):[]) })
         }
     }
 }
@@ -201,7 +201,7 @@ struct FestivalGreetingCardEditor:View {
                                 else {dismiss()}
                             }
                         }
-                        .disabled(model.busy || model.generatingImage)
+                        .disabled(model.busy || model.generatingImage || model.wishGeneration.isGenerating)
                         if model.busy {ProgressView("Saving card…")}
                         Button("Share Card",systemImage:"square.and.arrow.up") {share()}.frame(maxWidth:.infinity,minHeight:44).buttonStyle(.bordered)
                         Text(saveOnUse ? "Use This Card saves the greeting as your wish message, with your signature. Artwork is stored on this device." : "Use This Card applies it to this moment. Tap Save Message on the next screen to save your wish message.").font(.caption).foregroundStyle(.secondary)
