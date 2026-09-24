@@ -8,7 +8,7 @@ import * as Notifications from 'expo-notifications';
  * reference (the first 8 characters of a random action id, or a moment reminder's slot), the reason a
  * reminder was skipped, and the fire time. Release builds log nothing (`__DEV__` is false there).
  */
-export type ReminderKind = 'action' | 'moment';
+export type ReminderKind = 'action' | 'moment' | 'test';
 
 const TAG = '[reminders]';
 const short = (ref: string) => ref.slice(0, 8);

@@ -185,6 +185,17 @@ export function desiredNotifications(actions: StoredTaskAction[], now: number, l
 }
 
 /**
+ * An action left `awaitingApproval` before its reminder time: the Action screen was opened early (from
+ * a card or the queue) and closed without a choice. Nobody is choosing yet, so it goes back to
+ * `scheduled` and its reminder fires as planned. Once the time has arrived, `awaitingApproval` is the
+ * real state — the person is being asked now — and it stays.
+ */
+export function waitingBeforeItsTime(action: StoredTaskAction, now: number): boolean {
+  const at = notificationDate(action);
+  return action.status === 'awaitingApproval' && at !== null && at > now;
+}
+
+/**
  * Why each action is NOT in `desiredNotifications` — for the dev-only reminder log. Never shown to the
  * person, and carries no task or contact detail.
  */

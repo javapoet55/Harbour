@@ -1,3 +1,4 @@
+import { contactSearchName } from '../../src/lib/taskActionDetector';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
@@ -66,15 +67,18 @@ export default function TaskAction() {
   const usable = task ? !isDone(task) && task.status !== 'CANCELLED' : false;
 
   /** `.onDisappear { if isRoutedAction { coordinator.route = nil } }` (`:225-228`). */
+  // Leaving without a choice before the reminder time puts the action back on its schedule (`release`).
   useEffect(
     () => () => {
       if (useCoordinator.getState().route?.id === actionID) useCoordinator.getState().clearRoute();
+      useCoordinator.getState().release(actionID);
     },
     [actionID],
   );
 
   const closeAction = () => {
     if (useCoordinator.getState().route?.id === actionID) useCoordinator.getState().clearRoute();
+    useCoordinator.getState().release(actionID);
     router.back();
   };
 
@@ -91,7 +95,8 @@ export default function TaskAction() {
     useCoordinator.getState().transitionTo(actionID, 'awaitingApproval');
     try {
       const matches = await resolveContacts({
-        name: current.contactName,
+        // "the plumber" is searched as "plumber"; the fallback keeps the name as the task wrote it.
+        name: contactSearchName(current.contactName),
         identifier: current.contactIdentifier,
         fallbackName: current.contactName,
       });

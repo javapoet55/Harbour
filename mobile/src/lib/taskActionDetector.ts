@@ -33,12 +33,17 @@ const VERB = /^(contact|call|email|message|text|follow\s+up\s+with)\s+([\s\S]+)$
 /** A tail that starts with a preposition or a day word has no name in it (`:13`). */
 const TAIL_STARTS_WITH_TIME = /^(?:at|about|regarding|today|tomorrow|tonight|on)\b/i;
 
-/** Where the contact name ends (`:14`). */
+/**
+ * Where the contact name ends (`:14`). Android-port addition: any "to …", "for …", "by …", "before …"
+ * or "after …" also ends it, so "Call electrician to fix the wiring" or "Call the plumber for the leak"
+ * name the person instead of failing the five-word limit (Swift only stops at "to confirm/discuss/
+ * arrange/review").
+ */
 const NAME_END =
-  /\s+(?:to\s+(?:confirm|discuss|arrange|review)\b|at\b|about\b|regarding\b|on\b|today\b|tomorrow\b|tonight\b|this\b|next\b|monday\b|tuesday\b|wednesday\b|thursday\b|friday\b|saturday\b|sunday\b)/i;
+  /\s+(?:to\b|for\b|by\b|before\b|after\b|at\b|about\b|regarding\b|on\b|today\b|tomorrow\b|tonight\b|this\b|next\b|monday\b|tuesday\b|wednesday\b|thursday\b|friday\b|saturday\b|sunday\b)/i;
 
-/** The "about …" / "to discuss …" context (`:26`). */
-const CONTEXT_START = /\b(?:about|regarding|to(?=\s+(?:confirm|discuss|arrange|review)\b))\s+/i;
+/** The "about …" / "to discuss …" context (`:26`); here also any "to …" or "for …". */
+const CONTEXT_START = /\b(?:about|regarding|to|for)\s+/i;
 
 /** Where a context stops, so a trailing time never becomes part of it (`:28`). */
 const CONTEXT_END = /\s+(?:at\s+\d|tomorrow\b|tonight\b|on\s+(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday))/i;
@@ -100,6 +105,16 @@ export function detectTaskAction(title: string, now: number, timeZone: string): 
   }
 
   return { intent, contactName: name, preferredAction: channel, scheduledAt: parseTime(suffix, now, timeZone), context };
+}
+
+/**
+ * The name to look up in Contacts: a leading article or possessive ("the", "a", "an", "my", "our",
+ * "your") is dropped, so "the plumber" finds a contact saved as "Plumber". The action keeps the name as
+ * written for its card and notification ("Time to contact the plumber").
+ */
+export function contactSearchName(name: string): string {
+  const stripped = name.trim().replace(/^(?:the|a|an|my|our|your)\s+/i, '');
+  return stripped.length > 0 ? stripped : name.trim();
 }
 
 /**

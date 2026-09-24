@@ -1,4 +1,4 @@
-import { detectTaskAction, parseTime } from './taskActionDetector';
+import { contactSearchName, detectTaskAction, parseTime } from './taskActionDetector';
 
 /**
  * The cases are Swift's own, from `ios/Tests/NexdoCoreTests/TaskActionTests.swift:9-47`, with the
@@ -101,5 +101,44 @@ describe('parseTime', () => {
   it('is null without an hour', () => {
     expect(parseTime('', NOW, ZONE)).toBeNull();
     expect(parseTime(' about the roof', NOW, ZONE)).toBeNull();
+  });
+});
+
+/** "Call the plumber" and "Call electrician": a person or a service, with or without "the". */
+describe('contact actions for people and services', () => {
+  const NOW = Date.parse('2026-09-24T09:00:00Z');
+  const detect = (title: string) => detectTaskAction(title, NOW, 'Asia/Kolkata');
+
+  it.each([
+    ['Call the plumber', 'call', 'the plumber', 'call'],
+    ['Call electrician', 'call', 'electrician', 'call'],
+    ['call Electrician', 'call', 'Electrician', 'call'],
+    ['Call an electrician', 'call', 'an electrician', 'call'],
+    ['Message the landlord', 'message', 'the landlord', 'message'],
+    ['Text plumber', 'message', 'plumber', 'message'],
+    ['Email the accountant', 'email', 'the accountant', 'email'],
+    ['Email accountant', 'email', 'accountant', 'email'],
+    ['Contact the electrician', 'contact', 'the electrician', null],
+    ['Contact Priya', 'contact', 'Priya', null],
+  ])('%s', (title, intent, name, channel) => {
+    expect(detect(title)).toMatchObject({ intent, contactName: name, preferredAction: channel });
+  });
+
+  it('ends the name at "to", "for", "by", "before" or "after", keeping the rest as the context', () => {
+    expect(detect('Call electrician to fix the kitchen wiring')).toMatchObject({ contactName: 'electrician', context: 'fix the kitchen wiring' });
+    expect(detect('Call the plumber for the leak tomorrow at 5 pm')).toMatchObject({ contactName: 'the plumber', context: 'the leak', scheduledAt: expect.any(Number) });
+    expect(detect('Email the landlord by Friday')).toMatchObject({ contactName: 'the landlord' });
+    expect(detect('Text the vet before 6 pm')).toMatchObject({ contactName: 'the vet' });
+    // Swift's own context words still work as before.
+    expect(detect('Call Damien to confirm the booking')).toMatchObject({ contactName: 'Damien', context: 'confirm the booking' });
+  });
+
+  it('searches Contacts without a leading article, and keeps the name otherwise', () => {
+    expect(contactSearchName('the plumber')).toBe('plumber');
+    expect(contactSearchName('An Electrician')).toBe('Electrician');
+    expect(contactSearchName('my dentist')).toBe('dentist');
+    expect(contactSearchName('electrician')).toBe('electrician');
+    expect(contactSearchName('Theo')).toBe('Theo');
+    expect(contactSearchName('the')).toBe('the');
   });
 });

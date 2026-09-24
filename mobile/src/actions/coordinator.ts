@@ -7,6 +7,7 @@ import {
   NOTIFICATION_LIMIT,
   reconcileActions,
   transition,
+  waitingBeforeItsTime,
   type StoredTaskAction,
   type TaskActionChannel,
   type TaskActionStatus,
@@ -63,6 +64,7 @@ type CoordinatorStore = CoordinatorState & {
   approveExecution: (id: string) => boolean;
   snooze: (id: string, until?: number) => void;
   dismiss: (id: string) => void;
+  release: (id: string) => void;
   clearRoute: () => void;
   retryNotifications: () => void;
   /** Test seam: replaces the whole state without touching disk. */
@@ -118,13 +120,18 @@ export const useCoordinator = create<CoordinatorStore>()((set, get) => ({
     const owner = get().owner;
     if (owner === null) return;
 
+    const now = Date.now();
+    const opened = get().route;
+    // A changed task date rebuilds its action as `pending` at the new time (reconcileActions). An
+    // action opened before its time and left without a choice returns to `scheduled` — unless its
+    // Action screen is open right now — so its reminder is not skipped.
     const actions = reconcileActions({
       previous: get().actions,
       tasks,
-      now: Date.now(),
+      now,
       timeZone,
       newId: () => randomUUID(),
-    });
+    }).map((action) => (opened?.id !== action.id && waitingBeforeItsTime(action, now) ? transition(action, 'scheduled', now).action : action));
     set({ actions });
     await persist(set, get);
     void schedule(set, get);
@@ -214,6 +221,16 @@ export const useCoordinator = create<CoordinatorStore>()((set, get) => ({
   dismiss: (id) => {
     get().transitionTo(id, 'cancelled');
     set({ route: null });
+  },
+
+  /**
+   * The Action screen closed. Android-port addition (Swift keeps the action `awaitingApproval`, which
+   * leaves a reminder that is still ahead unscheduled): if nothing was chosen and the reminder time is
+   * still in the future, the action goes back to `scheduled` and its notification is rescheduled.
+   */
+  release: (id) => {
+    const action = get().actions.find((item) => item.id === id);
+    if (action && waitingBeforeItsTime(action, Date.now())) get().transitionTo(id, 'scheduled');
   },
 
   clearRoute: () => set({ route: null }),

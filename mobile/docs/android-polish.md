@@ -1152,3 +1152,42 @@ contact or address is logged.
    and the pending list with `channel=reminders`.
 2. Android 13+: allow Settings → Apps → Nexdo → Alarms & reminders. Lock the phone; the notification
    arrives at the time logged.
+
+## 20. Reminders proven on device; stuck actions; people and services (2026-09-24)
+
+JavaScript only; no new build needed.
+
+### Test reminder (development builds only)
+
+`nexdo://debug/test-reminder` (also `exp+nexdo://…`) schedules one local notification on the
+`reminders` channel 60 s ahead (`src/lib/debugReminder.ts`, handled in `app/+native-intent.tsx` only when
+`__DEV__`; release builds ignore the link):
+
+    adb shell am start -a android.intent.action.VIEW -d "nexdo://debug/test-reminder" com.pinslots.nexdo
+
+Result on a OnePlus CPH2691, Android 16 (API 36), dev build: `appops SCHEDULE_EXACT_ALARM: allow`,
+POST_NOTIFICATIONS granted. `dumpsys alarm` listed both Nexdo alarms as `RTC_WAKEUP`,
+`exactAllowReason=permission`, allow-while-idle, with an OEM delivery window (+17 s and +45 s). Both
+notifications were posted on channel `reminders`, importance 4 (HIGH): the task reminder 17 s after its
+time, the test reminder 45 s after — inside those windows.
+
+### Stuck `awaitingApproval`
+
+Opening a Nexdo Action (from its card or the queue) moves it to `awaitingApproval`; closing the screen
+without a choice left it there, so its future reminder was skipped. Now the action returns to
+`scheduled` (and is rescheduled) when its Action screen closes before the reminder time, and on the next
+sync unless its screen is open (`waitingBeforeItsTime`, `release`). A changed task date already rebuilds
+the action as `pending` at the new time; that path is now covered by a test. Once the reminder time
+has arrived, `awaitingApproval` stays: the person is being asked.
+
+### People and services
+
+Detection runs in the app (`src/lib/taskActionDetector.ts`, a port of iOS `TaskActionDetector.swift`),
+not on the server. "Call the plumber" and "Call electrician" were both detected. A Today card also
+needs a reminder time, so an action with no schedule or snooze has only its card in Task Details.
+Changes:
+
+- A name also ends at "to", "for", "by", "before" and "after" ("Call electrician to fix the wiring" names
+  "electrician"; before, such titles could pass five words and get no action).
+- Contacts are searched without a leading "the", "a", "an", "my", "our" or "your", so "the plumber"
+  finds "Plumber". Cards and notifications keep the name as written.

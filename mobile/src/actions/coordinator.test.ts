@@ -316,3 +316,77 @@ it('clears everything when the account goes away', async () => {
 
   expect(useCoordinator.getState()).toMatchObject({ owner: null, actions: [], route: null, notice: null });
 });
+
+/**
+ * The stuck reminder: an action left `awaitingApproval` never had its reminder rescheduled
+ * ("[reminders] skipped action …: status is awaitingApproval").
+ */
+describe('an action waiting before its time', () => {
+  const at = (ms: number) => new Date(ms).toISOString();
+  const lastTrigger = () => mockedNotifications.scheduleNotificationAsync.mock.calls.at(-1)?.[0]?.trigger?.date;
+
+  it('resets to scheduled at the new time when the task gets a new future schedule', async () => {
+    const past = Date.now() - 10 * 60_000;
+    await useCoordinator.getState().synchronize([task({ id: 't1', title: 'Call electrician', startAt: at(past) })], OWNER, ZONE);
+    await settle();
+    const stuck = useCoordinator.getState().actions[0];
+    useCoordinator.getState().open(stuck.id);
+    useCoordinator.getState().clearRoute();
+    await settle();
+    expect(useCoordinator.getState().actions[0].status).toBe('awaitingApproval');
+
+    const future = Date.now() + 2 * 3_600_000;
+    mockedNotifications.scheduleNotificationAsync.mockClear();
+    await useCoordinator.getState().synchronize([task({ id: 't1', title: 'Call electrician', startAt: at(future) })], OWNER, ZONE);
+    await settle();
+    const action = useCoordinator.getState().actions[0];
+    expect(action).toMatchObject({ status: 'scheduled', scheduledAt: future });
+    expect(lastTrigger()).toEqual(new Date(future));
+  });
+
+  it('goes back to scheduled when its Action screen closes without a choice before the reminder time', async () => {
+    const future = Date.now() + 3_600_000;
+    await useCoordinator.getState().synchronize([task({ id: 't1', title: 'Call electrician', startAt: at(future) })], OWNER, ZONE);
+    await settle();
+    const id = useCoordinator.getState().actions[0].id;
+    useCoordinator.getState().open(id);
+    await settle();
+    expect(useCoordinator.getState().actions[0].status).toBe('awaitingApproval');
+
+    mockedNotifications.scheduleNotificationAsync.mockClear();
+    useCoordinator.getState().clearRoute();
+    useCoordinator.getState().release(id);
+    await settle();
+    expect(useCoordinator.getState().actions[0].status).toBe('scheduled');
+    expect(lastTrigger()).toEqual(new Date(future));
+  });
+
+  it('is healed by the next sync, but never while its Action screen is open', async () => {
+    const future = Date.now() + 3_600_000;
+    await useCoordinator.getState().synchronize([task({ id: 't1', title: 'Call electrician', startAt: at(future) })], OWNER, ZONE);
+    await settle();
+    const id = useCoordinator.getState().actions[0].id;
+    useCoordinator.getState().open(id);
+    await useCoordinator.getState().synchronize([task({ id: 't1', title: 'Call electrician', startAt: at(future) })], OWNER, ZONE);
+    await settle();
+    expect(useCoordinator.getState().actions[0].status).toBe('awaitingApproval');
+
+    useCoordinator.getState().clearRoute();
+    await useCoordinator.getState().synchronize([task({ id: 't1', title: 'Call electrician', startAt: at(future) })], OWNER, ZONE);
+    await settle();
+    expect(useCoordinator.getState().actions[0].status).toBe('scheduled');
+  });
+
+  it('keeps an action genuinely awaiting the person’s choice at its current time', async () => {
+    const past = Date.now() - 60_000;
+    await useCoordinator.getState().synchronize([task({ id: 't1', title: 'Call electrician', startAt: at(past) })], OWNER, ZONE);
+    await settle();
+    const id = useCoordinator.getState().actions[0].id;
+    useCoordinator.getState().open(id);
+    useCoordinator.getState().clearRoute();
+    useCoordinator.getState().release(id);
+    await useCoordinator.getState().synchronize([task({ id: 't1', title: 'Call electrician', startAt: at(past) })], OWNER, ZONE);
+    await settle();
+    expect(useCoordinator.getState().actions[0].status).toBe('awaitingApproval');
+  });
+});
