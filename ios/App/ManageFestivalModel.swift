@@ -183,7 +183,7 @@ import CryptoKit
     }
     func cancelTabChange() { pendingTab = nil }
     func save(cancelSchedules:Bool=false) async {
-        guard !busy else{return}
+        guard !busy,!wishGeneration.isGenerating else{return}
         guard dirty else {error=nil;notice="No changes to save. Your existing schedule is unchanged.";return}
         busy=true;error=nil;notice=nil;defer{busy=false}
         let keptSchedules=keepsSchedules(cancelSchedules:cancelSchedules)
@@ -218,18 +218,23 @@ import CryptoKit
     /// The name in an offline birthday/anniversary draft: the only selected recipient's. With several, the draft is
     /// shared and each recipient's name is added when their wish is prepared (MomentGreeting.message).
     private var fallbackFirstName:String {selected.count == 1 ? selected[0].name : ""}
+    /// Regenerate's single in-flight request; the current message stays on screen (dimmed) until it ends.
+    let wishGeneration=WishGenerationGate()
     func generate(aiConsent:Bool) async {
-        guard !busy else{return};busy=true;error=nil;defer{busy=false}
+        guard !busy,!wishGeneration.isGenerating else{return};error=nil
         invalidateApproval()
         guard aiConsent,let first=originals.first else {settings.baseMessage=FestivalValidation.fallback(name:title,tone:settings.tone,type:occasionType,firstName:fallbackFirstName);settings.manuallyEdited=false;notice="Offline draft — review before saving.";return}
         struct Input:Encodable {let momentID,tone,personalContext,festivalName:String;let aiConsent=true;let shared=true}
         struct Response:Decodable,Sendable {let draft:WishDraft;let usedAI:Bool}
-        do {let result:Response=try await store.request("generate",Input(momentID:first.id,tone:settings.tone,personalContext:settings.personalContext,festivalName:title));settings.baseMessage=result.draft.body;settings.manuallyEdited=false;notice=result.usedAI ? "AI draft ready for review.":"AI unavailable; an editable fallback draft is ready.";analytics.record(.generated)} catch {settings.baseMessage=FestivalValidation.fallback(name:title,tone:settings.tone,type:occasionType,firstName:fallbackFirstName);notice="Offline fallback — review before saving."}
+        let input=Input(momentID:first.id,tone:settings.tone,personalContext:settings.personalContext,festivalName:title)
+        await wishGeneration.run {
+            do {let result:Response=try await wishGeneration.withTimeout{try await self.store.request("generate",input)};settings.baseMessage=result.draft.body;settings.manuallyEdited=false;notice=result.usedAI ? "AI draft ready for review.":"AI unavailable; an editable fallback draft is ready.";analytics.record(.generated)} catch {settings.baseMessage=FestivalValidation.fallback(name:title,tone:settings.tone,type:occasionType,firstName:fallbackFirstName);notice="Offline fallback — review before saving."}
+        }
     }
     /// An approved message-only save keeps existing schedules; the server rewrites their text.
     private func keepsSchedules(cancelSchedules:Bool) -> Bool {!cancelSchedules && hasSchedules && pendingChange == .messageOnly && settings.approvedAt != nil}
     func approve(cancelSchedules:Bool=false) async {
-        guard !busy else{return}
+        guard !busy,!wishGeneration.isGenerating else{return}
         if let issue=WishMessage.approvalError(settings) {error=issue;return}
         settings.approvedAt=ISO8601DateFormatter().string(from:Date())
         let kept=keepsSchedules(cancelSchedules:cancelSchedules)
