@@ -14,7 +14,7 @@ import { Disclosure, FormToggle } from '../../../../src/features/moments/form';
 import { rememberDraft } from '../../../../src/features/moments/handoff';
 import { MomentGreetingCardSection } from '../../../../src/features/moments/MomentGreetingCardSection';
 import { momentsStore, useMoments } from '../../../../src/features/moments/store';
-import { textStyles, useTheme } from '../../../../src/theme';
+import { isAndroid, textStyles, useTheme } from '../../../../src/theme';
 
 const TONES = ['Warm', 'Personal', 'Short', 'Fun'] as const;
 
@@ -45,14 +45,28 @@ export default function ReviewWishScreen() {
   const [aiConsent, setAiConsent] = useState(false);
   const editor = useRef<TextInput>(null);
   const started = useRef(false);
+  // A ref, not state, so a second tap in the same frame already sees the request running.
+  const generating = useRef(false);
+  const [writing, setWriting] = useState(false);
+  // Android (docs/android-polish.md §14): while a wish is being written the screen holds its controls.
+  const writingWish = isAndroid() && writing;
 
   const generate = () => {
-    if (!moment) return;
-    void momentsStore.getState().perform(async () => {
-      const result = await momentsStore.getState().request<GenerateResponse>('generate', { momentID: moment.id, tone, personalContext, aiConsent });
-      setDraft(result.draft);
-      setBodyText(result.draft.body);
-    });
+    if (!moment || generating.current) return;
+    generating.current = true;
+    setWriting(true);
+    // The request carries the moments timeout (operationTimeout), so this always settles.
+    void momentsStore
+      .getState()
+      .perform(async () => {
+        const result = await momentsStore.getState().request<GenerateResponse>('generate', { momentID: moment.id, tone, personalContext, aiConsent });
+        setDraft(result.draft);
+        setBodyText(result.draft.body);
+      })
+      .finally(() => {
+        generating.current = false;
+        setWriting(false);
+      });
   };
 
   useEffect(() => {
@@ -106,7 +120,7 @@ export default function ReviewWishScreen() {
         <MomentCard>
           <IconLabel icon="sparkles" title="Choose a tone" style={[textStyles.title2, styles.bold]} size={22} />
           <Secondary>Adjust the vibe of your message.</Secondary>
-          <MomentSegments options={TONES} value={tone} onChange={setTone} testIDPrefix="review-tone" />
+          <MomentSegments options={TONES} value={tone} onChange={setTone} testIDPrefix="review-tone" disabled={writingWish} />
           <Disclosure title="Personalize with AI" testID="review-personalize">
             <TextInput
               accessibilityLabel="Personal context (optional)"
@@ -118,7 +132,7 @@ export default function ReviewWishScreen() {
               testID="review-context"
               value={personalContext}
             />
-            <FormToggle label="Use AI to draft my wish" value={aiConsent} onValueChange={setAiConsent} testID="review-ai" />
+            <FormToggle label="Use AI to draft my wish" value={aiConsent} onValueChange={setAiConsent} disabled={writingWish} testID="review-ai" />
             <Text style={[caption, { color: theme.colors.secondaryLabel }]}>
               Only the first name, event type, tone, and context you enter are shared with OpenAI. You review every draft.
             </Text>
@@ -130,16 +144,17 @@ export default function ReviewWishScreen() {
           <TextInput
             ref={editor}
             accessibilityLabel="Wish message"
+            editable={!writingWish}
             multiline
             onChangeText={setBodyText}
-            style={[styles.editor, { color: theme.colors.label, backgroundColor: theme.colors.background + 'A6' }]}
+            style={[styles.editor, { color: theme.colors.label, backgroundColor: theme.colors.background + 'A6' }, writingWish && styles.writing]}
             testID="review-body"
             textAlignVertical="top"
             value={bodyText}
           />
           <Text style={[textStyles.body, styles.counter, { color: count > 500 ? theme.colors.danger : theme.colors.secondaryLabel }]} testID="review-count">{`${count}/500`}</Text>
           <View style={styles.inline}>
-            <BorderedButton icon="sparkles" title="Try another" onPress={generate} testID="review-try-another" />
+            <BorderedButton icon="sparkles" title={writingWish ? 'Writing your wish…' : 'Try another'} loading={writingWish} disabled={writingWish} onPress={generate} testID="review-try-another" />
             <View style={styles.grow} />
             <BorderedButton icon="pencil" title="Edit" onPress={() => editor.current?.focus()} testID="review-edit" />
           </View>
@@ -166,4 +181,6 @@ const styles = StyleSheet.create({
   rounded: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 5, paddingHorizontal: 7, paddingVertical: 5, fontSize: 17 },
   editor: { minHeight: 145, padding: 8, borderRadius: 14, fontSize: 17 },
   counter: { textAlign: 'right' },
+  // The current draft stays readable, dimmed, until the new one replaces it.
+  writing: { opacity: 0.5 },
 });

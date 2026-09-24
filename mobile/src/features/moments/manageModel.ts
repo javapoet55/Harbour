@@ -109,6 +109,8 @@ export type ManageState = {
   notify: boolean;
   needsScheduleConfirmation: boolean;
   busy: boolean;
+  /** A wish draft is being written; the Wish Message tab shows it and holds its controls. */
+  generatingWish: boolean;
   generatingImage: boolean;
   error: string | null;
   notice: string | null;
@@ -470,6 +472,7 @@ export function createManageModel(group: MomentDisplayGroup, deps: ManageDeps): 
       notify: settings.draftNotify ?? true,
       needsScheduleConfirmation: false,
       busy: false,
+      generatingWish: false,
       generatingImage: false,
       error: null,
       notice: settings.catalogNotice ?? null,
@@ -605,8 +608,9 @@ export function createManageModel(group: MomentDisplayGroup, deps: ManageDeps): 
       },
 
       async generate(aiConsent) {
+        // `busy` is set before the first await, so a burst of taps sends one request.
         if (isBusy()) return;
-        set({ busy: true, error: null });
+        set({ busy: true, generatingWish: true, error: null });
         try {
           get().invalidateApproval();
           const state = get();
@@ -637,7 +641,7 @@ export function createManageModel(group: MomentDisplayGroup, deps: ManageDeps): 
             set({ settings: { ...get().settings, baseMessage: offline() }, notice: 'Offline fallback — review before saving.' });
           }
         } finally {
-          set({ busy: false });
+          set({ busy: false, generatingWish: false });
         }
       },
 

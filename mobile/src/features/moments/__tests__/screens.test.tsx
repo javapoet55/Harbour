@@ -68,6 +68,7 @@ import ChooseDelivery from '../../../../app/(tabs)/(today)/moments/delivery';
 import WishDetails from '../../../../app/(tabs)/(today)/moments/wish';
 import ChooseFestivals from '../../../../app/(tabs)/(today)/moments/festivals';
 import ScheduleWish from '../../../../app/(tabs)/(today)/moments/schedule-wish';
+import ReviewWish from '../../../../app/(tabs)/(today)/moments/review';
 
 function load(moments: ImportantMoment[], extra: Partial<MomentsSnapshot> = {}) {
   const snapshot: MomentsSnapshot = { moments, emailAccount: null, emailConfigured: false, automaticEmailEnabled: false, ...extra };
@@ -76,6 +77,26 @@ function load(moments: ImportantMoment[], extra: Partial<MomentsSnapshot> = {}) 
 }
 
 const future = (days: number) => new Date(Date.now() + days * 86_400_000).toISOString().slice(0, 10);
+
+/** `generate` waits until the test settles it; every other operation answers `{ ok: true }` at once. */
+function pendingGenerate() {
+  const settle: { resolve: (value: unknown) => void; reject: (error: unknown) => void } = { resolve: () => undefined, reject: () => undefined };
+  mockPost.mockImplementation((operation: string) =>
+    operation === 'generate'
+      ? new Promise((resolve, reject) => {
+          settle.resolve = resolve;
+          settle.reject = reject;
+        })
+      : Promise.resolve({ ok: true }),
+  );
+  return {
+    resolve: (value: unknown) => act(async () => settle.resolve(value)),
+    reject: (error: unknown) => act(async () => settle.reject(error)),
+  };
+}
+const generateCalls = () => mockPost.mock.calls.filter(([operation]) => operation === 'generate');
+const isDisabled = (testID: string) => Boolean(screen.getByTestId(testID).props.accessibilityState?.disabled);
+const opacity = (testID: string) => StyleSheet.flatten(screen.getByTestId(testID).props.style).opacity;
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -336,6 +357,96 @@ describe('Manage Moment', () => {
     expect(screen.getByText('5/500')).toBeTruthy();
     await fireEvent.press(screen.getByTestId('festival-regenerate'));
     expect(alert).toHaveBeenCalledWith('Replace the edited message with a new draft?', undefined, expect.any(Array));
+  });
+
+  describe('while a wish is being written (android-polish.md §14)', () => {
+    // Puts `Platform.OS` back, so the iOS twin runs as iOS.
+    afterEach(() => jest.restoreAllMocks());
+    const tones = ['Warm', 'Personal', 'Short', 'Fun'];
+    async function openWishMessage() {
+      load(group({ baseMessage: 'Old wish' }));
+      mockParams = { ids: 'a' };
+      await render(<ManageMoment />);
+      await fireEvent.press(screen.getByTestId('festival-tab-Wish Message'));
+      await fireEvent.press(screen.getByTestId('festival-ai'));
+    }
+    const regenerate = () => screen.getByTestId('festival-regenerate');
+    // Three taps before the reply; each waits only for its own render, never for the request.
+    const burst = async () => {
+      for (let tap = 0; tap < 3; tap += 1) await fireEvent.press(regenerate());
+    };
+
+    it('holds the controls on Android, sends one request, and releases them with the new draft', async () => {
+      jest.replaceProperty(Platform, 'OS', 'android');
+      await openWishMessage();
+      const reply = pendingGenerate();
+
+      await burst();
+      expect(generateCalls()).toHaveLength(1);
+      expect(within(regenerate()).getByText('Writing your wish…')).toBeTruthy();
+      expect(screen.getByTestId('festival-regenerate-spinner')).toBeTruthy();
+      expect(isDisabled('festival-regenerate')).toBe(true);
+      for (const tone of tones) expect(isDisabled(`festival-tone-${tone}`)).toBe(true);
+      expect(isDisabled('festival-ai')).toBe(true);
+      // The current draft stays on screen, dimmed and read-only, until the new one arrives.
+      expect(screen.getByTestId('festival-message').props.value).toBe('Old wish');
+      expect(screen.getByTestId('festival-message').props.editable).toBe(false);
+      expect(opacity('festival-message')).toBe(0.5);
+
+      // A tap on the held button still sends nothing.
+      await fireEvent.press(regenerate());
+      expect(generateCalls()).toHaveLength(1);
+
+      await reply.resolve({ draft: draft({ body: 'A brand new wish' }), usedAI: true });
+      await waitFor(() => expect(within(regenerate()).getByText('Regenerate')).toBeTruthy());
+      expect(screen.queryByTestId('festival-regenerate-spinner')).toBeNull();
+      expect(isDisabled('festival-regenerate')).toBe(false);
+      for (const tone of tones) expect(isDisabled(`festival-tone-${tone}`)).toBe(false);
+      expect(isDisabled('festival-ai')).toBe(false);
+      expect(screen.getByTestId('festival-message').props.value).toBe('A brand new wish');
+      expect(screen.getByTestId('festival-message').props.editable).toBe(true);
+      expect(opacity('festival-message')).toBeUndefined();
+      expect(screen.getByTestId('festival-notice').props.children).toBe('AI draft ready for review.');
+    });
+
+    it('releases the controls on Android when the request fails, with the fallback notice', async () => {
+      jest.replaceProperty(Platform, 'OS', 'android');
+      await openWishMessage();
+      const reply = pendingGenerate();
+
+      await burst();
+      expect(isDisabled('festival-regenerate')).toBe(true);
+      await reply.reject(new Error('The request timed out.'));
+
+      await waitFor(() => expect(within(regenerate()).getByText('Regenerate')).toBeTruthy());
+      expect(isDisabled('festival-regenerate')).toBe(false);
+      for (const tone of tones) expect(isDisabled(`festival-tone-${tone}`)).toBe(false);
+      expect(isDisabled('festival-ai')).toBe(false);
+      expect(screen.getByTestId('festival-message').props.editable).toBe(true);
+      expect(screen.getByTestId('festival-notice').props.children).toBe('Offline fallback — review before saving.');
+
+      // Released for real: the next tap writes again.
+      await fireEvent.press(regenerate());
+      expect(generateCalls()).toHaveLength(2);
+    });
+
+    it('keeps the iOS screen unchanged, still with one request per burst', async () => {
+      await openWishMessage();
+      const reply = pendingGenerate();
+
+      await burst();
+      expect(generateCalls()).toHaveLength(1);
+      expect(within(regenerate()).getByText('Regenerate')).toBeTruthy();
+      expect(screen.queryByTestId('festival-regenerate-spinner')).toBeNull();
+      expect(isDisabled('festival-regenerate')).toBe(false);
+      for (const tone of tones) expect(isDisabled(`festival-tone-${tone}`)).toBe(false);
+      expect(isDisabled('festival-ai')).toBe(false);
+      expect(screen.getByTestId('festival-message').props.editable).not.toBe(false);
+      expect(opacity('festival-message')).toBeUndefined();
+
+      await reply.resolve({ draft: draft({ body: 'A brand new wish' }), usedAI: true });
+      await waitFor(() => expect(screen.getByTestId('festival-message').props.value).toBe('A brand new wish'));
+    });
   });
 
   // ManageFestivalView.swift:168
@@ -621,6 +732,86 @@ describe('Moments Settings', () => {
     expect(screen.getByText('Reminders are on by default once you allow notifications. They apply to wishes you schedule; enabling them does not send messages.')).toBeTruthy();
     expect(screen.getByText('Reminders require notifications. Denied or limited Contacts and Calendar access can be changed in your phone’s Settings.')).toBeTruthy();
     expect(screen.queryByText(/iOS/)).toBeNull();
+  });
+});
+
+describe('Review wish while a wish is being written (android-polish.md §14)', () => {
+  afterEach(() => jest.restoreAllMocks());
+  const tones = ['Warm', 'Personal', 'Short', 'Fun'];
+  const tryAnother = () => screen.getByTestId('review-try-another');
+  const burst = async () => {
+    for (let tap = 0; tap < 3; tap += 1) await fireEvent.press(tryAnother());
+  };
+  async function openReview() {
+    const day = future(10);
+    load([moment({ id: 'r', type: 'birthday', title: 'Sam’s Birthday', firstName: 'Sam', occurrenceDate: day, nextOccurrence: day, drafts: [draft({ id: 'old', momentID: 'r', body: 'Old wish' })] })]);
+    mockParams = { id: 'r' };
+    await render(<ReviewWish />);
+    // An existing draft is reused on open, so nothing is being written yet.
+    expect(generateCalls()).toHaveLength(0);
+    // The AI toggle lives in the "Personalize with AI" disclosure.
+    await fireEvent.press(screen.getByTestId('review-personalize'));
+  }
+
+  it('holds Try another, the tones and the AI toggle on Android, and releases them after the reply', async () => {
+    jest.replaceProperty(Platform, 'OS', 'android');
+    await openReview();
+    const reply = pendingGenerate();
+
+    await burst();
+    expect(generateCalls()).toHaveLength(1);
+    expect(within(tryAnother()).getByText('Writing your wish…')).toBeTruthy();
+    expect(screen.getByTestId('review-try-another-spinner')).toBeTruthy();
+    expect(isDisabled('review-try-another')).toBe(true);
+    for (const tone of tones) expect(isDisabled(`review-tone-${tone}`)).toBe(true);
+    expect(isDisabled('review-ai')).toBe(true);
+    expect(screen.getByTestId('review-body').props.value).toBe('Old wish');
+    expect(screen.getByTestId('review-body').props.editable).toBe(false);
+    expect(opacity('review-body')).toBe(0.5);
+
+    await reply.resolve({ draft: draft({ id: 'new', momentID: 'r', body: 'A brand new wish' }), usedAI: true });
+    await waitFor(() => expect(within(tryAnother()).getByText('Try another')).toBeTruthy());
+    expect(isDisabled('review-try-another')).toBe(false);
+    for (const tone of tones) expect(isDisabled(`review-tone-${tone}`)).toBe(false);
+    expect(isDisabled('review-ai')).toBe(false);
+    expect(screen.getByTestId('review-body').props.value).toBe('A brand new wish');
+    expect(screen.getByTestId('review-body').props.editable).toBe(true);
+  });
+
+  it('releases them on Android when the request fails, showing the error', async () => {
+    jest.replaceProperty(Platform, 'OS', 'android');
+    await openReview();
+    const reply = pendingGenerate();
+
+    await burst();
+    expect(isDisabled('review-try-another')).toBe(true);
+    await reply.reject(new Error('The request timed out.'));
+
+    await waitFor(() => expect(within(tryAnother()).getByText('Try another')).toBeTruthy());
+    expect(isDisabled('review-try-another')).toBe(false);
+    for (const tone of tones) expect(isDisabled(`review-tone-${tone}`)).toBe(false);
+    expect(isDisabled('review-ai')).toBe(false);
+    expect(screen.getByTestId('review-body').props.value).toBe('Old wish');
+    expect(screen.getByTestId('review-error')).toBeTruthy();
+
+    await fireEvent.press(tryAnother());
+    expect(generateCalls()).toHaveLength(2);
+  });
+
+  it('keeps the iOS screen unchanged, still with one request per burst', async () => {
+    await openReview();
+    const reply = pendingGenerate();
+
+    await burst();
+    expect(generateCalls()).toHaveLength(1);
+    expect(within(tryAnother()).getByText('Try another')).toBeTruthy();
+    expect(screen.queryByTestId('review-try-another-spinner')).toBeNull();
+    for (const tone of tones) expect(isDisabled(`review-tone-${tone}`)).toBe(false);
+    expect(isDisabled('review-ai')).toBe(false);
+    expect(screen.getByTestId('review-body').props.editable).not.toBe(false);
+
+    await reply.resolve({ draft: draft({ id: 'new', momentID: 'r', body: 'A brand new wish' }), usedAI: true });
+    await waitFor(() => expect(screen.getByTestId('review-body').props.value).toBe('A brand new wish'));
   });
 });
 

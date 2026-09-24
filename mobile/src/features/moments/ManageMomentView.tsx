@@ -149,6 +149,8 @@ export function ManageMomentView({ group, onDone }: { group: MomentDisplayGroup;
   const theme = useTheme();
   const model = useManageModel(group);
   const state = useStore(model);
+  // Android (docs/android-polish.md §14): while a wish is being written the tab holds its controls.
+  const writingWish = isAndroid() && state.generatingWish;
   const snapshot = useMoments((store) => store.snapshot);
   const ready = isEmailReady({ snapshot });
   const dirty = isDirty(state);
@@ -600,16 +602,17 @@ export function ManageMomentView({ group, onDone }: { group: MomentDisplayGroup;
                   <Text style={[textStyles.body, { color: theme.colors.link }]}>Personalize</Text>
                 </Pressable>
               </View>
-              <MomentSegments options={TONES} value={state.settings.tone as (typeof TONES)[number]} onChange={(tone) => model.getState().updateSettings({ tone })} testIDPrefix="festival-tone" />
+              <MomentSegments options={TONES} value={state.settings.tone as (typeof TONES)[number]} onChange={(tone) => model.getState().updateSettings({ tone })} testIDPrefix="festival-tone" disabled={writingWish} />
               <MomentCard fill={{ colors: [withAlpha(systemColors.blue, 0.22), withAlpha(systemColors.cyan, 0.1)], start: { x: 0, y: 0 }, end: { x: 1, y: 1 } }}>
                 <TextInput
                   ref={messageRef}
                   accessibilityLabel={`${occasionLabel(state)} wish message`}
+                  editable={!writingWish}
                   multiline
                   onChangeText={(value) => model.getState().setMessage(value)}
                   placeholder={messageSuggestion(state)}
                   placeholderTextColor={theme.colors.placeholder}
-                  style={[styles.editor, { color: theme.colors.label }]}
+                  style={[styles.editor, { color: theme.colors.label }, writingWish && styles.writing]}
                   testID="festival-message"
                   textAlignVertical="top"
                   value={state.settings.baseMessage}
@@ -625,8 +628,11 @@ export function ManageMomentView({ group, onDone }: { group: MomentDisplayGroup;
               <View style={styles.inline}>
                 <BorderedButton
                   icon="sparkles"
-                  title="Regenerate"
+                  title={writingWish ? 'Writing your wish…' : 'Regenerate'}
+                  loading={writingWish}
+                  disabled={writingWish}
                   onPress={() => {
+                    if (writingWish) return;
                     if (model.getState().settings.manuallyEdited) {
                       Alert.alert('Replace the edited message with a new draft?', undefined, [
                         { text: 'Regenerate', onPress: () => void model.getState().generate(aiConsent) },
@@ -639,7 +645,7 @@ export function ManageMomentView({ group, onDone }: { group: MomentDisplayGroup;
                 <View style={styles.grow} />
                 <BorderedButton icon="pencil" title="Edit" onPress={() => messageRef.current?.focus()} testID="festival-edit-message" />
               </View>
-              <FormToggle label="Use AI for this draft" value={aiConsent} onValueChange={setAiConsent} testID="festival-ai" />
+              <FormToggle label="Use AI for this draft" value={aiConsent} onValueChange={setAiConsent} disabled={writingWish} testID="festival-ai" />
               <Text style={[caption, { color: theme.colors.secondaryLabel }]}>Shares only occasion, tone and your optional context. Generated text is a draft for your review.</Text>
               <Text style={[textStyles.title2, styles.bold, { color: theme.colors.label }]}>Greeting Card</Text>
               {state.imageUri ? (
@@ -1153,6 +1159,8 @@ const styles = StyleSheet.create({
   plainButton: { minHeight: 44, justifyContent: 'center' },
   editor: { minHeight: 130, fontSize: 17, backgroundColor: 'transparent' },
   counter: { textAlign: 'right' },
+  // The current draft stays readable, dimmed, until the new one replaces it.
+  writing: { opacity: 0.5 },
   deliveryRow: { gap: 6 },
   initialsSmall: { padding: 10, borderRadius: 999, minWidth: 40, alignItems: 'center' },
   initials: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },

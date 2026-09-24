@@ -215,6 +215,61 @@ describe('the offline draft names the recipient only when there is one', () => {
   });
 });
 
+describe('writing a wish', () => {
+  /** A `generate` the test settles by hand; every other operation answers at once. */
+  function pending(h: ReturnType<typeof harness>) {
+    let settle: { resolve: (value: unknown) => void; reject: (error: unknown) => void } = { resolve: () => undefined, reject: () => undefined };
+    h.post.mockImplementation(async (operation: string) => {
+      if (operation !== 'generate') return { ok: true } as never;
+      return new Promise<never>((resolve, reject) => {
+        settle = { resolve: resolve as (value: unknown) => void, reject };
+      });
+    });
+    return { resolve: (value: unknown) => settle.resolve(value), reject: (error: unknown) => settle.reject(error) };
+  }
+  const generateCalls = (h: ReturnType<typeof harness>) => h.post.mock.calls.filter(([operation]) => operation === 'generate');
+
+  it('sends one request for a burst of taps and holds generatingWish until the reply', async () => {
+    const h = harness(festivalGroup());
+    await h.store.getState().activate('u');
+    const model = createManageModel({ id: 'g', moments: festivalGroup() }, h.deps);
+    const reply = pending(h);
+
+    const first = model.getState().generate(true);
+    void model.getState().generate(true);
+    void model.getState().generate(true);
+    expect(model.getState().generatingWish).toBe(true);
+    await Promise.resolve();
+    expect(generateCalls(h)).toHaveLength(1);
+
+    reply.resolve({ draft: draft({ body: 'A new wish' }), usedAI: true });
+    await first;
+    expect(model.getState()).toMatchObject({ generatingWish: false, busy: false, notice: 'AI draft ready for review.' });
+    expect(model.getState().settings.baseMessage).toBe('A new wish');
+    expect(generateCalls(h)).toHaveLength(1);
+  });
+
+  it('clears generatingWish when the request fails, with the offline draft and its notice', async () => {
+    const h = harness(festivalGroup());
+    await h.store.getState().activate('u');
+    const model = createManageModel({ id: 'g', moments: festivalGroup() }, h.deps);
+    const reply = pending(h);
+
+    const running = model.getState().generate(true);
+    expect(model.getState().generatingWish).toBe(true);
+    reply.reject(new Error('The request timed out.'));
+    await running;
+    expect(model.getState()).toMatchObject({ generatingWish: false, busy: false, notice: 'Offline fallback — review before saving.' });
+
+    // Nothing is left holding the controls: the next tap sends a new request.
+    const again = model.getState().generate(true);
+    expect(generateCalls(h)).toHaveLength(2);
+    reply.resolve({ draft: draft({ body: 'Second try' }), usedAI: true });
+    await again;
+    expect(model.getState().generatingWish).toBe(false);
+  });
+});
+
 describe('tab changes auto-save', () => {
   it('changes tab straight away when nothing is dirty', async () => {
     const h = harness(festivalGroup());

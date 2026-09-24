@@ -4,6 +4,7 @@ import { HeaderHeightContext } from 'expo-router/build/react-navigation/elements
 import { useEffect, useState, type ComponentProps, type ReactNode } from 'react';
 import {
   AccessibilityInfo,
+  ActivityIndicator,
   Animated,
   Easing,
   Keyboard,
@@ -138,11 +139,14 @@ export function MomentSegments<T extends string>({
   value,
   onChange,
   testIDPrefix,
+  disabled = false,
 }: {
   options: readonly T[];
   value: T;
   onChange: (next: T) => void;
   testIDPrefix: string;
+  /** Held while a wish is being written (android-polish.md §14); every segment is dimmed. */
+  disabled?: boolean;
 }) {
   const theme = useTheme();
   // Android (docs/android-polish.md §9): the shared `SegmentRow` sizes each segment to its label.
@@ -155,7 +159,7 @@ export function MomentSegments<T extends string>({
         labelStyle={styles.segmentLabel}
         gap={4}
         inset={4}
-        style={[styles.segments, { backgroundColor: theme.colors.glassFill }]}
+        style={[styles.segments, { backgroundColor: theme.colors.glassFill }, disabled && styles.disabledSoft]}
         testID={`${testIDPrefix}-row`}
         renderSegment={(index, fit, segmentStyle) => {
           const option = options[index];
@@ -163,8 +167,9 @@ export function MomentSegments<T extends string>({
           return (
             <Pressable
               accessibilityRole="button"
-              accessibilityState={{ selected }}
+              accessibilityState={{ selected, disabled }}
               accessibilityLabel={option}
+              disabled={disabled}
               onPress={() => onChange(option)}
               style={[styles.androidSegment, segmentStyle]}
               testID={`${testIDPrefix}-${option}`}
@@ -180,15 +185,16 @@ export function MomentSegments<T extends string>({
     );
   }
   return (
-    <View style={[styles.segments, { backgroundColor: theme.colors.glassFill }]}>
+    <View style={[styles.segments, { backgroundColor: theme.colors.glassFill }, disabled && styles.disabledSoft]}>
       {options.map((option) => {
         const selected = option === value;
         return (
           <Pressable
             key={option}
             accessibilityRole="button"
-            accessibilityState={{ selected }}
+            accessibilityState={{ selected, disabled }}
             accessibilityLabel={option}
+            disabled={disabled}
             onPress={() => onChange(option)}
             style={styles.segment}
             testID={`${testIDPrefix}-${option}`}
@@ -342,6 +348,7 @@ export function BorderedButton({
   icon,
   prominent = false,
   disabled = false,
+  loading = false,
   full = false,
   centered = false,
   testID,
@@ -352,6 +359,8 @@ export function BorderedButton({
   icon?: IconName;
   prominent?: boolean;
   disabled?: boolean;
+  /** A small spinner in place of the icon while the button's work runs; pair it with `disabled`. */
+  loading?: boolean;
   full?: boolean;
   /** In SwiftUI's default centred `VStack` (Wish details' actions). */
   centered?: boolean;
@@ -364,7 +373,7 @@ export function BorderedButton({
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel ?? title}
-      accessibilityState={{ disabled }}
+      accessibilityState={{ disabled, busy: loading }}
       disabled={disabled}
       onPress={onPress}
       testID={testID}
@@ -376,7 +385,7 @@ export function BorderedButton({
         disabled && styles.disabledSoft,
       ]}
     >
-      {icon ? <Ionicons name={icon} size={16} color={color} /> : null}
+      {loading ? <ActivityIndicator size="small" color={color} testID={testID ? `${testID}-spinner` : undefined} /> : icon ? <Ionicons name={icon} size={16} color={color} /> : null}
       {/* `.borderedProminent` keeps the body weight on iOS 26 (`wish-details-scrolled`). */}
       <Text style={{ fontSize: 17, lineHeight: 22, color }}>{title}</Text>
     </Pressable>

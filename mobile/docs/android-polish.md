@@ -900,3 +900,44 @@ there and does not prompt. Nothing at launch asks, and a rebuild of the reminder
 5. Moment settings shows "Allow notifications to enable wish reminders" with the **Enable wish
    reminders** button before the answer, and "off in your phone's Settings" after a block.
 6. iOS: the prompt appears when it always did; a denial now also opens the dialog.
+
+## 14. Writing a wish holds the Wish Message controls (2026-09-24)
+
+JavaScript only; no new build needed. iOS is unchanged: its screens draw no loading state and, as
+before, a second tap during a request sends nothing (the model's `busy` guard).
+
+### What changed
+
+While a wish draft is being written, on the Manage Moment **Wish Message** tab (Regenerate) and on
+**Review wish** (Try another):
+
+- The button shows a small spinner in place of its sparkles icon and reads **"Writing your wish…"**,
+  and it is disabled.
+- The tone chips (Warm / Personal / Short / Fun) and the AI toggle ("Use AI for this draft", "Use AI
+  to draft my wish") are disabled and dimmed.
+- The current message stays on screen at half opacity and read-only until the new draft replaces it.
+- A burst of taps sends one request.
+
+When the reply arrives, or the request fails, everything re-enables. Manage Moment shows its
+existing notice ("AI draft ready for review.", "AI unavailable; an editable fallback draft is
+ready.", or "Offline fallback — review before saving."); Review wish shows its existing error.
+
+| Where | Change |
+|---|---|
+| `manageModel.ts` | `generatingWish`, set with `busy` before the first await and cleared in `finally` |
+| `ManageMomentView.tsx` | `writingWish = isAndroid() && state.generatingWish` drives the button, chips, toggle and editor |
+| `review.tsx` | a ref guard plus `writing` state around `perform`; the same four controls |
+| `components.tsx` | `BorderedButton` `loading` (spinner, `accessibilityState.busy`); `MomentSegments` `disabled` |
+
+The request can't leave the screen stuck: `generate` goes through `momentsApi.post`, which aborts
+after 50 s (`operationTimeout`, `src/api/moments.ts`), and the failure path releases the controls.
+
+### Check it on a phone
+
+1. Manage Moment → Wish Message, turn on "Use AI for this draft", tap **Regenerate** several times
+   quickly: one spinner, "Writing your wish…", chips and toggle dimmed, the old text faded.
+2. The new draft replaces the text and "AI draft ready for review." appears; the controls work again.
+3. Airplane mode, tap Regenerate: the controls come back with "Offline fallback — review before
+   saving."
+4. Moments → Create wish on a moment → Personalize with AI → tap **Try another**: the same
+   behaviour.
