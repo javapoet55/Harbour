@@ -56,7 +56,7 @@ export function healthRoute<A extends unknown[]>(operation: string, handler: (..
   };
 }
 const hosts: Record<string, string> = {
-  'api.openai.com': 'OpenAI', 'api.mail.hostinger.com': 'Hostinger Mail', 'api.sendgrid.com': 'SendGrid', 'api.twilio.com': 'Twilio',
+  'api.openai.com': 'OpenAI', 'api.sendgrid.com': 'SendGrid', 'api.twilio.com': 'Twilio',
   'www.googleapis.com': 'Google Calendar', 'graph.microsoft.com': 'Microsoft Calendar', 'gmail.googleapis.com': 'Gmail',
   'oauth2.googleapis.com': 'Google OAuth', 'openidconnect.googleapis.com': 'Google OAuth', 'login.microsoftonline.com': 'Microsoft OAuth',
   'appleid.apple.com': 'Apple Authentication', 'analyticsdata.googleapis.com': 'Firebase Analytics',

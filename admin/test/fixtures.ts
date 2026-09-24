@@ -24,7 +24,7 @@ const summary = () => ({
 });
 const coverage = () => ({ requests: 0, recentRequests: 0, minimumSamples: 5, lastObserved: null, reason: 'no-activity' as const });
 const buckets = () => Array.from({ length: 24 }, (_, index) => ({ time: new Date(Date.UTC(2026, 8, 15, index)).toISOString(), ...summary() }));
-const integrations = ['OpenAI', 'Google Calendar', 'Microsoft Calendar', 'Gmail', 'Google OAuth', 'Microsoft OAuth', 'Apple Authentication', 'Hostinger Mail', 'SendGrid', 'Twilio', 'Firebase Analytics', 'Web Push', 'iOS Contacts'];
+const integrations = ['OpenAI', 'Google Calendar', 'Microsoft Calendar', 'Gmail', 'Google OAuth', 'Microsoft OAuth', 'Apple Authentication', 'SendGrid', 'Twilio', 'Firebase Analytics', 'Web Push', 'iOS Contacts'];
 
 export function emptyHealth(): HealthData {
   return {

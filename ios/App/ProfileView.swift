@@ -9,31 +9,18 @@ private final class CalendarOAuthCoordinator: NSObject, ObservableObject, ASWebA
     func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor { UIApplication.shared.connectedScenes.compactMap { ($0 as? UIWindowScene)?.keyWindow }.first ?? ASPresentationAnchor() }
     // The URL already carries a short-lived connect token: the web session
     // cookie is not available to ASWebAuthenticationSession.
-    func connectGoogle(url: URL, model: AppModel, completion: @escaping (String) -> Void) {
+    func connectGoogle(url: URL, completion: @escaping (CalendarOAuthResult) -> Void) {
         session = ASWebAuthenticationSession(url: url, callbackURLScheme: "nexdo") { callback, error in
             Task { @MainActor in
                 defer { self.session = nil }
-                if let error { completion(Self.describe(error)); return }
-                guard let callback else { completion("Google Calendar authorization was cancelled."); return }
-                let query = URLComponents(url: callback, resolvingAgainstBaseURL: false)?.queryItems ?? []
-                if query.first(where: { $0.name == "calendar" })?.value == "error" || query.contains(where: { $0.name == "detail" }) {
-                    let detail = query.first(where: { $0.name == "detail" })?.value ?? "authorization failed"
-                    completion("Google Calendar connection failed: \(detail)"); return
-                }
-                do { try await model.reloadProfile(); completion("Google Calendar connected and synchronized.") }
-                catch { completion("Google Calendar connected, but Nexdo could not refresh it yet.") }
+                // Closing Google's page is not an error; server-side failures come back in the callback.
+                let cancelled = (error as? ASWebAuthenticationSessionError)?.code == .canceledLogin
+                completion(CalendarOAuthResult(callback: callback, cancelled: cancelled, error: cancelled ? nil : error?.localizedDescription))
             }
         }
         session?.presentationContextProvider = self
         session?.prefersEphemeralWebBrowserSession = false
         session?.start()
-    }
-
-    private static func describe(_ error: Error) -> String {
-        if let sessionError = error as? ASWebAuthenticationSessionError, sessionError.code == .canceledLogin {
-            return "Google Calendar connection failed: sign-in was cancelled or blocked. If Google showed “OAuth client was disabled”, enable that Web client in Google Cloud Console → APIs & Services → Credentials, and keep the redirect URI \(AppEnvironment.web("/api/calendar/oauth/google/callback").absoluteString)."
-        }
-        return "Google Calendar connection failed: \(error.localizedDescription)"
     }
 }
 
@@ -283,6 +270,10 @@ struct ProfileSettingsView: View {
                         Divider()
                         Text(model.aiConsent ? "OpenAI sharing is allowed for this session." : "OpenAI sharing is off.").font(.caption)
                         if model.aiConsent { Button("Withdraw AI permission") { model.withdrawConsent() } }
+                        Link(destination: LegalLinks.privacyPolicy) { Label(LegalLinks.privacyPolicyTitle, systemImage: "hand.raised") }
+                            .accessibilityIdentifier("settings-privacy-policy")
+                        Link(destination: LegalLinks.termsOfService) { Label(LegalLinks.termsOfServiceTitle, systemImage: "doc.text") }
+                            .accessibilityIdentifier("settings-terms-of-service")
                         Button("Delete account", role: .destructive) { confirmsDeletion = true }
                     }
                     Button { save() } label: {
@@ -337,7 +328,6 @@ struct ProfileSettingsView: View {
             Button("Delete account", role: .destructive) { Task { await model.deleteAccount() } }
         } message: { Text("This removes your Nexdo data permanently and cannot be undone.") }
     }
-    private enum OAuthError: LocalizedError { case message(String); var errorDescription: String? { if case .message(let value) = self { return value }; return "Calendar connection failed." } }
     @ViewBuilder private var connectionList: some View {
         if !model.calendarConnections.isEmpty {
             VStack(spacing: 10) {
@@ -357,8 +347,16 @@ struct ProfileSettingsView: View {
                             }
                             .accessibilityElement(children: .combine)
                             Spacer(minLength: 8)
-                            Button("Disconnect", role: .destructive) { disconnecting = connection }
-                                .font(.caption).buttonStyle(.borderless)
+                            VStack(alignment: .trailing, spacing: 8) {
+                                if connection.needsReconnect {
+                                    Button("Reconnect") { connect(reconnecting: connection) }
+                                        .font(.caption.bold()).buttonStyle(.borderless)
+                                        .accessibilityLabel("Reconnect \(connection.displayName)")
+                                        .accessibilityIdentifier("calendar-reconnect-\(connection.id)")
+                                }
+                                Button("Disconnect", role: .destructive) { disconnecting = connection }
+                                    .font(.caption).buttonStyle(.borderless)
+                            }
                         }
                         Divider()
                         // Writes default to off on the server, so without this toggle the
@@ -381,20 +379,32 @@ struct ProfileSettingsView: View {
             Text("No calendars connected yet.").font(.caption).foregroundStyle(Color.nexdoSecondary)
         }
     }
-    private func connect() {
+    /// Starts Google sign-in. With `reconnecting`, the same flow renews that row's account:
+    /// the server updates the existing connection when the same Google account signs in.
+    private func connect(reconnecting connection: CalendarConnection? = nil) {
         guard !saving, !connecting else { return }
         connecting = true; failure = nil; message = nil
         Task {
             defer { connecting = false }
             do {
                 let url = try await model.calendarConnectURL()
-                message = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<String, Error>) in
-                    calendarOAuth.connectGoogle(url: url, model: model) { result in
-                        if result.contains("connected") { continuation.resume(returning: result) }
-                        else { continuation.resume(throwing: OAuthError.message(result)) }
-                    }
+                let result = await withCheckedContinuation { (continuation: CheckedContinuation<CalendarOAuthResult, Never>) in
+                    calendarOAuth.connectGoogle(url: url) { continuation.resume(returning: $0) }
                 }
+                switch result {
+                case .cancelled: return
+                case .failed(let detail): failure = detail; return
+                case .connected: break
+                }
+                let refreshed = (try? await model.reloadProfile()) != nil
                 await model.loadCalendarConnections()
+                if let connection, model.calendarConnections.first(where: { $0.id == connection.id })?.needsReconnect ?? false {
+                    failure = "\(connection.displayName) still needs reconnecting. Choose \(connection.accountEmail ?? "the same Google account") on Google’s sign-in page."
+                } else if connection != nil {
+                    message = "Google Calendar reconnected and synchronized."
+                } else {
+                    message = refreshed ? "Google Calendar connected and synchronized." : "Google Calendar connected, but Nexdo could not refresh it yet."
+                }
             } catch { failure = error.localizedDescription }
         }
     }

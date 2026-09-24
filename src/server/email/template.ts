@@ -26,6 +26,8 @@ export type EmailTemplateInput = {
   footerNote: string;
   /** Shown only where the recipient may not have asked for the email. */
   ignoreNote?: string;
+  /** Show the support address in the footer (default true). Off for emails that must contain no links. */
+  supportContact?: boolean;
 };
 
 export type RenderedEmail = { html: string; text: string };
@@ -60,7 +62,7 @@ function paragraph(text: string, style: string) {
 
 function renderHtml(input: EmailTemplateInput) {
   const logoUrl = `${emailAppUrl()}${EMAIL_LOGO_PATH}`;
-  const support = emailSupportAddress();
+  const support = input.supportContact === false ? undefined : emailSupportAddress();
   const bodyText = `font-family:${fontStack};font-size:15px;line-height:24px;color:${colors.body};`;
   const footerText = `font-family:${fontStack};font-size:12px;line-height:18px;color:${colors.muted};`;
   // Zero-width padding keeps body copy from leaking into the inbox preview after the preheader.
@@ -127,7 +129,7 @@ ${support ? `<p style="margin:0;${footerText}">Questions? <a href="mailto:${esca
 }
 
 function renderText(input: EmailTemplateInput) {
-  const support = emailSupportAddress();
+  const support = input.supportContact === false ? undefined : emailSupportAddress();
   const sections = [
     'Nexdo',
     input.subheading ? `${input.heading}

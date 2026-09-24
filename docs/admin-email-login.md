@@ -1,24 +1,64 @@
-# Admin login — password mode
+# Admin login — email code
 
-Email OTP is temporarily disabled at `/api/admin/auth`. The admin page accepts an existing Nexdo email and password for an allowlisted, verified, non-deleted account. No email is sent. Ordinary account cookies still do not grant admin access.
+The admin portal (the `admin/` app) signs administrators in with a six-digit code sent by email. There is no password on the admin app.
 
-Password attempts are limited to five per account in 15 minutes using the database. Successful authentication creates a separate revocable, hashed admin session with an eight-hour lifetime in the existing AdminLoginToken table. Same-origin POST validation and secure HttpOnly cookies remain required. No migration is needed.
+## Who can sign in
 
-The older OTP service remains available internally for a future reviewed reactivation, but its request/verify actions are not exposed by the login route.
+Administrators come **only** from `NEXDO_ADMIN_EMAILS` (required): a comma-separated list, trimmed and compared case-insensitively. There are no built-in admins; if the variable is unset or empty, nobody can sign in. Each address must also belong to an existing, non-deleted Nexdo account. `emailVerifiedAt` is not required: receiving and entering the code proves control of the inbox. Removing an address from the list ends its sessions at the next request.
 
-# Previous OTP configuration (inactive)
+## Flow
 
-Open `/admin/login`, enter an authorized administrator's existing account email, and enter the six-digit code delivered by Hostinger. Ordinary account/password/Apple sessions cannot authorize admin pages or APIs.
+1. The admin enters their email; the admin app calls `POST /api/admin/session` with `{ "action": "request", "email" }`.
+2. The backend always answers `200 { "ok": true, "message": "If this email can sign in to Nexdo Admin, a 6-digit code is on its way." }`, whether or not the address is allowed. A code is emailed only to allowed accounts, and delivery happens after the response so timing does not reveal the difference.
+3. The admin enters the code; the admin app calls `{ "action": "verify", "email", "code" }` and receives `{ token, expiresAt, user }`. The admin app keeps the token only in its `__Host-nexdo_admin` cookie.
 
-Codes expire after 10 minutes, allow five attempts, and can be redeemed once. A resend invalidates older unused codes; requests are limited to one per minute and three per 15 minutes per account, using database-backed limits. Verification is bound to the requesting browser's HttpOnly challenge cookie. Neither codes nor session secrets are stored in plaintext or returned by the API.
+Both actions require the admin app's `X-Admin-Client` secret and forward the browser's IP as `X-Admin-Client-IP`.
 
-The separate HttpOnly, SameSite=Strict admin session cookie has no persistent expiry. Server-side sessions expire absolutely after eight hours. Browser session restore may preserve session cookies; use the portal's Sign out to revoke a session immediately. Every new sign-in requires a new emailed code. Navigating between dashboard pages does not require another code.
+## Codes
 
-## Deployment
+- Six digits, stored only as a bcrypt hash, valid for 10 minutes, single use.
+- Five wrong entries lock the code; request a new one.
+- A new request invalidates every older unused code for that account.
+- If SendGrid is not configured or rejects the message, no usable code exists (fail closed, no development mock).
+- Sessions are revocable and expire after eight hours.
 
-- Apply the included `20260920000000_admin_email_otp` migration. The normal Railway migration deployment command includes it. SQLite has an equivalent migration for local tests.
-- Configure `HOSTINGER_MAIL_API_KEY` and `NEXDO_ADMIN_FROM_EMAIL` in the Harbour service. The key must have access to that Hostinger mailbox and permission to send. The sender is resolved and verified against Hostinger’s authenticated mailbox directory before sending, with display name NEXDO. Admin OTPs never fall back to SendGrid or a mock delivery. Other application email continues using its existing provider. Store the API key only as a server secret; do not commit it.
-- Existing administrator emails in `src/server/admin-allowlist.ts` are preserved. Add existing account emails through comma-separated `NEXDO_ADMIN_EMAILS` if needed. This change does not provision accounts or grant new administrators access.
-- The admin API accepts only same-origin browser POSTs. Deploy behind a proxy that preserves the public request origin.
+## Limits and audit
 
-Validation: `npx vitest run src/server/admin-otp.integration.test.ts src/server/admin-auth.test.ts`, `npm run typecheck`, and targeted ESLint. Tests use an isolated SQLite database and mocked delivery; real email delivery must be checked with the deployed Hostinger configuration.
+Counted in `HealthAudit` over a sliding 15 minutes, for every address whether allowed or not:
+
+| Limit | Value |
+|---|---|
+| Code requests per email | 3 |
+| Code requests per IP | 10 |
+| Code attempts per IP | 20 |
+
+Exceeding one returns `429`. Audit actions: `ADMIN_CODE_REQUESTED`, `ADMIN_LOGIN`, `ADMIN_LOGIN_FAILED`, `ADMIN_RATE_LIMITED` (plus `ADMIN_LOGOUT`). Emails and IPs appear only as HMAC-SHA256 digests keyed with `HARBOR_SESSION_SECRET`. Codes and addresses are never logged.
+
+## Logs
+
+Every code request writes exactly one `admin_code_request` line with its `outcome`, and nothing identifying:
+
+| outcome | Meaning |
+|---|---|
+| `sent` | SendGrid accepted the email. |
+| `not_allowed` | The address is not in `NEXDO_ADMIN_EMAILS`. |
+| `no_account` | Allowed, but no Nexdo account uses the address. |
+| `deleted_account` | Allowed, but the account is deleted. |
+| `rate_limited_email` / `rate_limited_ip` | Blocked by a request limit. |
+| `send_failed` | Not delivered: `providerStatus` is SendGrid's HTTP status, or `errorCode` is `not_configured`, `sender_not_configured`, `TIMEOUT` or a network code such as `ECONNRESET`. Logged as a warning. |
+
+The send runs after the response through Next's `after()`, which keeps it alive on the Node server until it finishes. For `sent` and `send_failed`, the line appears once SendGrid answers. At startup each server logs `admin_allowlist_loaded` with the number of addresses parsed from `NEXDO_ADMIN_EMAILS` (a warning when it is 0).
+
+## Email
+
+Sent through SendGrid with the shared template (`src/server/email/template.ts`, `adminSignInMessage` in `messages.ts`), like verify-email and reset-password. The sender address is `NEXDO_ADMIN_FROM_EMAIL` if set, otherwise `EMAIL_FROM_ADDRESS` (then `SENDGRID_FROM_EMAIL`); the sender name is `EMAIL_FROM_NAME`. The email contains no links, not even the support address.
+
+## Configuration
+
+- Backend: `NEXDO_ADMIN_EMAILS` (required), `SENDGRID_API_KEY`, `EMAIL_FROM_ADDRESS` (or `SENDGRID_FROM_EMAIL`), optional `NEXDO_ADMIN_FROM_EMAIL`, `EMAIL_FROM_NAME`, `ADMIN_API_SECRETS`, `HARBOR_SESSION_SECRET`.
+- Admin app: `BACKEND_URL`, `ADMIN_API_SECRET`.
+- No migration is needed.
+
+## Original cookie portal
+
+The backend's original `/admin` pages and `POST /api/admin/auth` still sign in with email and password until that portal is removed. They use the same `NEXDO_ADMIN_EMAILS` allowlist.

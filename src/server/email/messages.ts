@@ -31,16 +31,18 @@ export function passwordResetMessage(code: string, expiresIn: string): Transacti
   };
 }
 
+// No links at all, including the footer's support address: admins are told codes never arrive with links.
 export function adminSignInMessage(code: string, expiresIn: string): TransactionalEmail {
   return {
-    subject: 'Your NEXDO Admin sign-in code',
+    subject: 'Your Nexdo admin sign-in code',
     ...renderEmail({
-      preheader: `Your Nexdo Admin sign-in code expires in ${expiresIn}.`,
-      heading: 'Sign in to Nexdo Admin',
-      intro: 'Use this code to finish signing in to the Nexdo Admin workspace. Never share this code.',
+      preheader: `Your Nexdo admin sign-in code expires in ${expiresIn}.`,
+      heading: 'Your admin sign-in code',
+      intro: `Use this code to sign in to Nexdo Admin. It expires in ${expiresIn}. Never share it with anyone.`,
       code: { value: code, expiresIn },
-      footerNote: "You're receiving this because an admin sign-in was requested for this address.",
-      ignoreNote: "If you didn't request this, you can ignore this email.",
+      footerNote: "You're receiving this because someone tried to sign in to Nexdo Admin with this address.",
+      ignoreNote: "If you didn't try to sign in, ignore this email.",
+      supportContact: false,
     }),
   };
 }

@@ -1,4 +1,5 @@
-export type EmailMessage = { to: string; subject: string; text: string; html?: string };
+/** `from` overrides the configured sender address for this message only. */
+export type EmailMessage = { to: string; subject: string; text: string; html?: string; from?: string };
 export type SmsMessage = { to: string; text: string };
 export type PushMessage = { userId: string; title: string; body: string; url?: string };
 export type CalendarWrite = {
@@ -12,9 +13,11 @@ export type CalendarWrite = {
   deleted?: boolean;
 };
 
+/** providerStatus: the provider's HTTP status on rejection. errorCode: a short machine code, never a response body. */
+export type EmailSendResult = { id: string; status: 'SENT' | 'FAILED'; reason?: string; providerStatus?: number; errorCode?: string };
 export interface EmailProvider {
   name: string;
-  send(message: EmailMessage): Promise<{ id: string; status: 'SENT' | 'FAILED'; reason?: string }>;
+  send(message: EmailMessage): Promise<EmailSendResult>;
 }
 
 export interface SmsProvider {
