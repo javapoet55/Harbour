@@ -359,6 +359,8 @@ model Reminder {
   channelPlan String    @default("push,email")
   critical    Boolean   @default(false)
   status      String    @default("SCHEDULED")
+  /// Bumped each time the reminder is moved to a new time; only attempts of the current generation count.
+  generation  Int       @default(0)
   idempotencyKey String @unique
   acknowledgedAt DateTime?
   createdAt   DateTime  @default(now())
@@ -370,6 +372,8 @@ model NotificationAttempt {
   id           String    @id @default(cuid())
   reminderId   String
   reminder     Reminder  @relation(fields: [reminderId], references: [id], onDelete: Cascade)
+  /// The reminder generation this attempt was made for; earlier ones are kept as history.
+  generation   Int       @default(0)
   channel      String
   status       String
   failureReason String?

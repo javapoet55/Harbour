@@ -4,7 +4,8 @@ import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import webpush from 'web-push';
 import { prisma } from './db';
-import { tickReminders } from './reminders';
+import { scheduleRequestedReminder, tickReminders } from './reminders';
+import { runAssistantTurn } from './assistant';
 import { emailProvider, pushProvider } from '@/providers';
 import { MAX_CHANNEL_RETRIES, PUSH_NOT_REGISTERED, backoffMs, type Channel } from '@/lib/escalation';
 
@@ -224,5 +225,104 @@ describe('backfill of reminders that already reached the user', () => {
     expect(await statusOf(neverReached)).toBe('RETRYING');
     expect(await statusOf(testSent)).toBe('DELIVERED');
     expect(await statusOf(testFailed)).toBe('FAILED');
+  });
+});
+
+describe('a reminder moved to a new time starts a fresh occurrence', () => {
+  const pushWorks = async () => {
+    await subscribe();
+    sendNotification.mockResolvedValue({ statusCode: 201, headers: {}, body: '' } as Awaited<ReturnType<typeof webpush.sendNotification>>);
+  };
+  /** The task's requested reminder, delivered on every channel at `at(0)`. */
+  async function delivered() {
+    await prisma.reminder.delete({ where: { id: reminderId } });
+    const task = await prisma.task.findFirstOrThrow({ where: { userId } });
+    reminderId = (await scheduleRequestedReminder(userId, task.id, at(0))).id;
+    await tickReminders(at(0));
+    await tickReminders(at(16));
+    expect(await channels()).toEqual(['push:SENT', 'email:SENT']);
+    expect((await reminder()).status).toBe('DELIVERED');
+    return task.id;
+  }
+
+  it('sends again at the new time after the task is rescheduled, keeping the old attempts', async () => {
+    await pushWorks();
+    const taskId = await delivered();
+
+    await scheduleRequestedReminder(userId, taskId, at(120));
+    expect(await reminder()).toMatchObject({ status: 'SCHEDULED', generation: 1, fireAt: at(120) });
+
+    // Not due yet, so nothing goes out early.
+    await tickReminders(at(60));
+    expect(await channels()).toEqual(['push:SENT', 'email:SENT']);
+
+    // Push goes first again, and email escalates on its own delay counted from the new push.
+    await tickReminders(at(120));
+    expect((await reminder()).status).toBe('QUEUED');
+    await tickReminders(at(130));
+    expect(await channels()).toEqual(['push:SENT', 'email:SENT', 'push:SENT']);
+    await tickReminders(at(136));
+    expect(await channels()).toEqual(['push:SENT', 'email:SENT', 'push:SENT', 'email:SENT']);
+    expect((await attempts()).map((a) => a.generation)).toEqual([0, 0, 1, 1]);
+    expect((await reminder()).status).toBe('DELIVERED');
+    expect((await tickReminders(at(24 * 60))).scanned).toBe(0);
+  });
+
+  it('does not re-send when the task is saved again at the same time', async () => {
+    await pushWorks();
+    const taskId = await delivered();
+
+    await scheduleRequestedReminder(userId, taskId, at(0), true);
+
+    expect(await reminder()).toMatchObject({ status: 'DELIVERED', generation: 0, critical: true });
+    await tickReminders(at(30));
+    expect(await channels()).toEqual(['push:SENT', 'email:SENT']);
+  });
+
+  it('sends again two hours after a snooze', async () => {
+    await pushWorks();
+    await delivered();
+
+    await runAssistantTurn(userId, 'snooze that reminder');
+
+    const snoozed = await reminder();
+    expect(snoozed).toMatchObject({ status: 'SCHEDULED', generation: 1 });
+    expect(Math.abs(snoozed.fireAt.getTime() - (Date.now() + 2 * 60 * 60_000))).toBeLessThan(60_000);
+    await tickReminders(snoozed.fireAt);
+    expect(await channels()).toEqual(['push:SENT', 'email:SENT', 'push:SENT']);
+  });
+
+  it('bounds retries and escalation per occurrence', async () => {
+    vi.spyOn(emailProvider, 'send').mockResolvedValue({ id: '', status: 'FAILED', reason: 'SendGrid 500' });
+    const exhaust = async (from: Date) => {
+      let clock = from;
+      await tickReminders(clock);
+      for (let failures = 1; failures <= MAX_CHANNEL_RETRIES; failures += 1) {
+        clock = new Date(clock.getTime() + backoffMs(failures));
+        await tickReminders(clock);
+      }
+      return clock;
+    };
+    const task = await prisma.task.findFirstOrThrow({ where: { userId } });
+    await prisma.reminder.delete({ where: { id: reminderId } });
+    reminderId = (await scheduleRequestedReminder(userId, task.id, at(0))).id;
+
+    // First occurrence: dead push hands over at once, then email burns its retries.
+    let clock = await exhaust(at(0));
+    expect((await reminder()).status).toBe('FAILED');
+    const firstRows = (await attempts()).length;
+    expect(firstRows).toBe(1 + MAX_CHANNEL_RETRIES);
+
+    // The new occurrence gets its own, equally bounded, set of attempts.
+    await scheduleRequestedReminder(userId, task.id, at(24 * 60));
+    clock = await exhaust(at(24 * 60));
+    expect((await reminder()).status).toBe('FAILED');
+    const rows = await attempts();
+    expect(rows).toHaveLength(2 * firstRows);
+    expect(rows.filter((a) => a.generation === 1).map((a) => a.retryCount)).toEqual([0, 0, 1, 2, 3, 4]);
+
+    const later = await tickReminders(new Date(clock.getTime() + 24 * 60 * 60_000));
+    expect(later.scanned).toBe(0);
+    expect(await attempts()).toHaveLength(2 * firstRows);
   });
 });
