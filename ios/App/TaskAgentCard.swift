@@ -13,6 +13,8 @@ struct TaskAgentCard: View {
     @State private var drafts: [String: String] = [:]
     @State private var busy = false
     @State private var error: String?
+    @State private var loading = true
+    @State private var refreshID = 0
     private var label: String {
         switch run?.status {
         case "NEEDS_INPUT": "One detail before I start"
@@ -27,7 +29,8 @@ struct TaskAgentCard: View {
         }
     }
     var body: some View {
-        Group {
+        // Keep a concrete view mounted before the first response so its task always runs.
+        VStack(alignment: .leading, spacing: 12) {
             if let run {
                 VStack(alignment: .leading, spacing: 14) {
                     Label(label, systemImage: "sparkles").font(.headline).foregroundStyle(Color.nexdoIndigo)
@@ -111,13 +114,35 @@ struct TaskAgentCard: View {
                     Button("Find businesses") { act("prepare") }.disabled(busy)
                     if let error { Text(error).font(.caption) }
                 }.padding(16).background(Color.nexdoIndigo.opacity(0.06), in: RoundedRectangle(cornerRadius: 18))
-            } else if let error { Text(error).font(.caption) }
+            } else if loading {
+                ProgressView("Checking business search…").font(.subheadline)
+            } else if let error {
+                Text(error).font(.caption)
+                Button("Retry business search") { refreshID += 1 }
+            }
             else if let fallbackReason { Text(fallbackReason).font(.subheadline).foregroundStyle(.secondary) }
         }
-        .task(id: taskID + (run?.status ?? "")) {
+        .task(id: taskID + (run?.status ?? "") + String(refreshID)) {
+            loading = run == nil && !eligible
             while !Task.isCancelled {
-                do { let response = try await model.loadTaskAgent(taskID: taskID); if !busy { run = response.run; eligible = response.intent?.eligible == true; onResearchAvailable(eligible || run != nil); fallbackReason = ["PROCUREMENT", "RESEARCH", "LOGISTICS"].contains(response.intent?.category ?? "") ? response.intent?.reason : nil } } catch { self.error = "Could not refresh task research." }
-                if let run, !["QUEUED", "RUNNING"].contains(run.status) { return }
+                do {
+                    let response = try await model.loadTaskAgent(taskID: taskID)
+                    guard !Task.isCancelled else { return }
+                    if !busy {
+                        run = response.run
+                        eligible = response.intent?.eligible == true
+                        onResearchAvailable(eligible || run != nil)
+                        fallbackReason = ["PROCUREMENT", "RESEARCH", "LOGISTICS"].contains(response.intent?.category ?? "") ? response.intent?.reason : nil
+                        error = nil
+                    }
+                    loading = false
+                } catch {
+                    guard !Task.isCancelled else { return }
+                    loading = false
+                    self.error = "Could not refresh task research. \(error.localizedDescription)"
+                    return
+                }
+                guard let run, ["QUEUED", "RUNNING"].contains(run.status) else { return }
                 do { try await Task.sleep(for: .seconds(4)) } catch { return }
             }
         }

@@ -25,7 +25,7 @@ it('recognizes sprinkler and irrigation provider discovery without triggering pe
 });
 
 it('offers provider discovery for generic outreach while preserving personal contacts',()=>{
- for(const title of ['Contact plumbers','Call a plumber','Call plumbers to get quotes','Please contact a local plumber','Email an electrician','Find a plumber','Get quotes for a plumber','Hire an electrician']) {
+ for(const title of ['Find a plumbers','Contact plumbers','Call a plumber','Call plumbers to get quotes','Please contact a local plumber','Email an electrician','Find a plumber','Get quotes for a plumber','Hire an electrician']) {
   expect(classifyTask(title),title).toMatchObject({eligible:true,category:'PROCUREMENT'});
  }
  for(const title of ['Contact my plumber','Call the plumber','Contact John the plumber','Call mom about a plumber','Do not contact plumbers','Contact a caterer','Call a plumber or electrician','Maybe contact plumbers']) {
