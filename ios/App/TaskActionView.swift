@@ -225,13 +225,16 @@ private let resolver: any TaskActionContactResolver = AppleTaskActionContacts()
             }
         }
         .presentationDetents([.large]).presentationDragIndicator(.visible)
+        .onAppear { coordinator.screenOpened(actionID) }
         .onDisappear {
             resolution?.cancel()
             if isRoutedAction { coordinator.route = nil }
+            coordinator.screenClosed(actionID)
         }
         .task {
             await model.refreshTasks()
-            guard usable else { return }
+            // Closed while tasks were refreshing: leave the action on its schedule.
+            guard usable, !Task.isCancelled else { return }
             coordinator.update(actionID) { $0.transition(to: .awaitingApproval) }
             if startSelectedAction, let preferred, !Task.isCancelled { resolve(preferred) }
         }
@@ -247,7 +250,8 @@ private let resolver: any TaskActionContactResolver = AppleTaskActionContacts()
         resolution = Task {
             defer { busy = false }
             do {
-                let matches = try await resolver.resolve(name: action.contactName, identifier: action.contactIdentifier)
+                // "the plumber" is looked up as "plumber"; the card and notification keep the name as written.
+                let matches = try await resolver.resolve(name: DeterministicTaskActionDetector.contactSearchName(action.contactName), identifier: action.contactIdentifier)
                 guard !Task.isCancelled, usable, self.action?.id == action.id else { return }
                 if matches.count == 1 { choose(matches[0]) } else { contacts = matches }
             } catch { self.error = error.localizedDescription }
