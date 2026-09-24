@@ -36,15 +36,49 @@ import XCTest
         app.buttons["manage-moment-moment"].tap()
         XCTAssertTrue(app.navigationBars["Manage Moment"].waitForExistence(timeout:5))
     }
+    /// Adds a recipient on Create Moment through "Enter recipient manually" and the Add Recipient sheet.
+    func addRecipient(name: String, phone: String = "", email: String = "") {
+        let manual = app.buttons["Enter recipient manually"]
+        for _ in 0..<4 { if manual.isHittable { break }; app.swipeUp() }
+        manual.tap()
+        XCTAssertTrue(app.navigationBars["Add Recipient"].waitForExistence(timeout: 5))
+        let fields: [(String, String)] = [("recipient-name", name), ("recipient-phone", phone), ("recipient-email", email)]
+        for (id, value) in fields where !value.isEmpty { let field = app.textFields[id]; field.tap(); field.typeText(value) }
+        app.buttons["recipient-confirm"].tap()
+    }
+    func testManageMomentAddsAndEditsRecipientsInTheSheet() {
+        openFestivalManager()
+        app.buttons["festival-tab-Contacts"].tap()
+        XCTAssertTrue(app.staticTexts["1 selected"].waitForExistence(timeout: 5))
+        let manual = app.buttons["Enter recipient manually"]
+        for _ in 0..<4 { if manual.isHittable { break }; app.swipeUp() }
+        manual.tap()
+        XCTAssertTrue(app.navigationBars["Add Recipient"].waitForExistence(timeout: 5))
+        let name = app.textFields["recipient-name"]; name.tap(); name.typeText("Priya")
+        let phone = app.textFields["recipient-phone"]; phone.tap(); phone.typeText("+15555550184")
+        app.buttons["recipient-confirm"].tap()
+        XCTAssertEqual(app.staticTexts["recipient-error"].label, "This person is already a recipient.")
+        phone.tap(); phone.typeText(XCUIKeyboardKey.delete.rawValue + "5")
+        app.buttons["recipient-confirm"].tap()
+        for _ in 0..<4 { if app.staticTexts["2 selected"].isHittable { break }; app.swipeDown() }
+        XCTAssertTrue(app.staticTexts["2 selected"].waitForExistence(timeout: 5))
+        let edit = app.buttons["Edit Priya"]
+        for _ in 0..<4 { if edit.isHittable { break }; app.swipeUp() }
+        edit.tap()
+        XCTAssertTrue(app.navigationBars["Edit Recipient"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.textFields["recipient-phone"].value as? String, "+15555550185")
+        let email = app.textFields["recipient-email"]; email.tap(); email.typeText("priya@example.com")
+        app.buttons["recipient-confirm"].tap()
+        XCTAssertTrue(app.staticTexts["Mobile · ••• ••• 0185"].waitForExistence(timeout: 5))
+    }
     func testCreateMomentOpensEvenWhenListRefreshIsStale() {
         app.terminate()
         app.launchArguments = ["-moments-design-preview", "-stale-moment-list-preview"]
         app.launch()
         XCTAssertTrue(app.buttons["moments-create-new"].waitForExistence(timeout: 15))
         app.buttons["moments-create-new"].tap()
-        let firstName = app.textFields["First name"]
-        for _ in 0..<4 { if firstName.isHittable { break }; app.swipeUp() }
-        firstName.tap(); firstName.typeText("Rahul")
+        addRecipient(name: "Rahul", phone: "+15555550123")
+        XCTAssertFalse(app.navigationBars["Add Recipient"].waitForExistence(timeout: 2))
         app.buttons["moment-save-top"].tap()
         XCTAssertTrue(app.navigationBars["Manage Moment"].waitForExistence(timeout: 10))
         app.buttons["Contacts"].tap()
@@ -52,25 +86,47 @@ import XCTest
         XCTAssertFalse(app.buttons["Save Moment"].exists)
     }
 
-    func testNewMomentHasNoDefaultContacts() {
+    func testNewMomentRequiresARecipient() {
         app.buttons["moments-create-new"].tap()
+        XCTAssertTrue(app.navigationBars["Create Moment"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["moment-save-top"].isEnabled)
+        let required = app.staticTexts["moment-recipients-required"]
+        for _ in 0..<4 { if required.isHittable { break }; app.swipeUp() }
+        XCTAssertEqual(required.label, "Add at least one recipient.")
+        XCTAssertFalse(app.buttons["Select Damien"].exists)
+    }
+    func testCreateMomentSavesEveryRecipientSelected() {
+        app.buttons["moments-create-new"].tap()
+        addRecipient(name: "Rahul", phone: "+15555550123")
+        addRecipient(name: "Priya", email: "priya@example.com")
+        XCTAssertTrue(app.staticTexts["Mobile · ••• ••• 0123"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Email · p••••@example.com"].exists)
         app.buttons["moment-save-top"].tap()
         XCTAssertTrue(app.navigationBars["Manage Moment"].waitForExistence(timeout: 10))
         app.buttons["Contacts"].tap()
-        XCTAssertTrue(app.staticTexts["0 selected"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts["moment-no-recipients"].exists)
-        XCTAssertFalse(app.buttons["Select Damien"].exists)
-        XCTAssertFalse(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Mobile ·")).firstMatch.exists)
-        app.buttons["Wish Message"].tap()
-        XCTAssertTrue(app.buttons["Schedule"].exists)
+        XCTAssertTrue(app.staticTexts["2 selected"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["Select Rahul"].isSelected)
+        XCTAssertTrue(app.buttons["Select Priya"].isSelected)
+    }
+    func testRecipientSheetRejectsDuplicateAndEdits() {
+        app.buttons["moments-create-new"].tap()
+        addRecipient(name: "Rahul", phone: "+15555550123")
+        addRecipient(name: "Someone", phone: "+1 555 555 0123")
+        XCTAssertEqual(app.staticTexts["recipient-error"].label, "This person is already a recipient.")
+        app.buttons["Cancel"].tap()
+        app.buttons["Edit Rahul"].tap()
+        XCTAssertTrue(app.navigationBars["Edit Recipient"].waitForExistence(timeout: 5))
+        let email = app.textFields["recipient-email"]; email.tap(); email.typeText("rahul@example.com")
+        app.buttons["recipient-confirm"].tap()
+        XCTAssertTrue(app.staticTexts["Mobile · ••• ••• 0123 · Email · r••••@example.com"].waitForExistence(timeout: 5))
+        app.buttons["Remove Rahul"].tap()
+        XCTAssertFalse(app.buttons["moment-save-top"].isEnabled)
     }
 
     func testCreateBirthdayOpensPersonalizedManager() {
         app.buttons["moments-create-new"].tap()
         XCTAssertTrue(app.navigationBars["Create Moment"].waitForExistence(timeout: 5))
-        let firstName = app.textFields["First name"]
-        for _ in 0..<4 { if firstName.isHittable { break }; app.swipeUp() }
-        firstName.tap(); firstName.typeText("Rahul")
+        addRecipient(name: "Rahul", phone: "+15555550123")
         app.buttons["moment-save-top"].tap()
         XCTAssertTrue(app.navigationBars["Manage Moment"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.staticTexts["Rahul’s Birthday"].firstMatch.exists)
@@ -380,12 +436,7 @@ import XCTest
         app.launch()
         XCTAssertTrue(app.buttons["moments-create-new"].waitForExistence(timeout: 15))
         app.buttons["moments-create-new"].tap()
-        let name = app.textFields["First name"]
-        for _ in 0..<4 { if name.isHittable { break }; app.swipeUp() }
-        name.tap(); name.typeText("Rahul\n")
-        let phone = app.textFields["Phone (optional)"]
-        for _ in 0..<3 { if phone.isHittable { break }; app.swipeUp() }
-        phone.tap(); phone.typeText("+15555550123")
+        addRecipient(name: "Rahul", phone: "+15555550123")
         app.buttons["moment-save-top"].tap()
         XCTAssertTrue(app.navigationBars["Manage Moment"].waitForExistence(timeout: 10))
         completeScheduleAndReturnHome()
@@ -483,22 +534,31 @@ import XCTest
         XCTAssertTrue(app.buttons["Add Moment"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.navigationBars["Wish details"].exists)
     }
-    func testFestivalOffersMultipleContactPicker() {
+    func testChooseFromContactsAddsEachPickedContact() {
         app.buttons["Add Moment"].tap()
         XCTAssertTrue(app.navigationBars["Create Moment"].waitForExistence(timeout: 5))
         app.buttons["moment-type"].tap()
         app.buttons["Festival"].tap()
         app.swipeUp()
-        let choose = app.buttons["Choose multiple contacts"]
+        let choose = app.buttons["Choose from Contacts"]
         XCTAssertTrue(choose.waitForExistence(timeout: 5))
         choose.tap()
         XCTAssertTrue(app.navigationBars["Contacts"].waitForExistence(timeout: 5))
         app.cells["John Appleseed"].tap()
         app.cells["Kate Bell"].tap()
         app.navigationBars["Contacts"].buttons["Done"].tap()
-        XCTAssertTrue(app.staticTexts["2 contacts selected"].waitForExistence(timeout: 5))
-        app.buttons["Remove John Appleseed"].tap()
-        XCTAssertTrue(app.staticTexts["1 contacts selected"].exists)
+        // One Add Recipient sheet per picked contact, pre-filled from Contacts (in the picker's order).
+        var names = Set<String>()
+        for _ in 0..<2 {
+            XCTAssertTrue(app.navigationBars["Add Recipient"].waitForExistence(timeout: 5))
+            names.insert(app.textFields["recipient-name"].value as? String ?? "")
+            app.buttons["recipient-confirm"].tap()
+        }
+        XCTAssertEqual(names, ["John", "Kate"])
+        XCTAssertTrue(app.buttons["Remove John"].waitForExistence(timeout: 5))
+        app.buttons["Remove John"].tap()
+        XCTAssertFalse(app.buttons["Remove John"].exists)
+        XCTAssertTrue(app.buttons["Remove Kate"].exists)
     }
     func openReview() {
         // Custom moments retain this delivery flow; birthdays use the four-tab manager.

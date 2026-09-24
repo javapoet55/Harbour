@@ -171,6 +171,19 @@ import CryptoKit
         return MomentGreeting.message(settings.baseMessage, type: occasionType, firstName: recipient.name)
     }
     func channel(_ r:ManagedFestivalRecipient)->String {settings.channels[r.key] ?? "messages"}
+    /// Adds a recipient from the recipient sheet, or replaces the one it edited. A new recipient gets the default channel;
+    /// an edited one keeps its channel unless the address that channel uses was removed.
+    func saveRecipient(_ recipient:ManagedFestivalRecipient,replacing previous:ManagedFestivalRecipient?) {
+        if let previous,let index=recipients.firstIndex(where:{$0.key==previous.key}) {
+            recipients[index]=recipient
+            let current=channel(recipient)
+            if current=="messages" && recipient.phone.isEmpty || current=="email" && recipient.email.isEmpty {settings.channels[recipient.key]=FestivalValidation.defaultChannel(phone:recipient.phone)}
+        } else {
+            recipients.append(recipient);settings.channels[recipient.key]=FestivalValidation.defaultChannel(phone:recipient.phone)
+        }
+        invalidateApproval()
+    }
+    func removeRecipient(key:String) {recipients.removeAll{$0.key==key};invalidateApproval()}
     func invalidateApproval() {settings.approvedAt=nil;draftIDs=[:];keys=[:]}
     func setActive(_ value:Bool,cancelSchedules:Bool=false) async {
         let old=active;active=value
@@ -202,10 +215,8 @@ import CryptoKit
         guard !title.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty,title.count<=150 else{throw FestivalError.message("Enter a moment name of 1–150 characters.")}
         if !recipients.isEmpty, let error=FestivalValidation.recipients(recipients,settings:settings){throw FestivalError.message(error)}
         try contactsService.validate(recipients)
-        struct Recipient:Encodable {let id:String?;let key,name,phone,email:String;let selected:Bool}
-        struct Input:Encodable {let ids:[String];let title,date,timeZoneID:String;let yearly,active:Bool;let recipients:[Recipient];let settings:FestivalSettings;let cancelSchedules:Bool}
         for r in recipients {settings.contactIDs[r.key]=r.contactIdentifier;settings.selected[r.key]=r.selected}
-        let input=Input(ids:originals.map(\.id),title:title,date:MomentDates.day(date,zone:zone),timeZoneID:zone,yearly:yearly,active:active,recipients:recipients.map{Recipient(id:$0.momentID,key:$0.key,name:$0.name,phone:FestivalValidation.phone($0.phone),email:$0.email.trimmingCharacters(in:.whitespaces),selected:$0.selected)},settings:settings,cancelSchedules:cancelSchedules)
+        let input=FestivalSaveRequest(ids:originals.map(\.id),title:title,date:MomentDates.day(date,zone:zone),timeZoneID:zone,yearly:yearly,active:active,recipients:recipients,settings:settings,cancelSchedules:cancelSchedules)
         let _:MomentOK=try await store.request("festivalSave",input)
         await store.refresh()
         let updated=store.moments.filter{!$0.isArchived && $0.type==occasionType && FestivalSettings.read($0.festivalSettings)?.groupID==settings.groupID}

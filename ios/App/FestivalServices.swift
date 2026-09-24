@@ -60,21 +60,27 @@ struct ManagedFestivalContactsPicker: UIViewControllerRepresentable {
         let selected:([FestivalContactChoice])->Void
         init(_ selected:@escaping ([FestivalContactChoice])->Void) {self.selected=selected}
         func contactPicker(_ picker:CNContactPickerViewController,didSelect contacts:[CNContact]) {
-            selected(contacts.map { c in FestivalContactChoice(id:c.identifier,name:CNContactFormatter.string(from:c,style:.fullName) ?? c.givenName,phones:c.isKeyAvailable(CNContactPhoneNumbersKey) ? FestivalValidation.uniquePhones(c.phoneNumbers.map(\.value.stringValue)):[],emails:c.isKeyAvailable(CNContactEmailAddressesKey) ? FestivalValidation.uniqueEmails(c.emailAddresses.map {String($0.value)}):[]) })
+            // The name is used as a first name in greetings and titles, so the given name comes first.
+            selected(contacts.map { c in FestivalContactChoice(id:c.identifier,name:(c.isKeyAvailable(CNContactGivenNameKey) && !c.givenName.isEmpty ? c.givenName : nil) ?? CNContactFormatter.string(from:c,style:.fullName) ?? "",phones:c.isKeyAvailable(CNContactPhoneNumbersKey) ? FestivalValidation.uniquePhones(c.phoneNumbers.map(\.value.stringValue)):[],emails:c.isKeyAvailable(CNContactEmailAddressesKey) ? FestivalValidation.uniqueEmails(c.emailAddresses.map {String($0.value)}):[]) })
         }
     }
 }
 @MainActor struct FestivalContactsService {
+    /// Reports a selected contact whose card no longer has an address that was taken from it. Addresses the user typed
+    /// are never compared with the card (ContactAddressLinks).
     func validate(_ recipients:[ManagedFestivalRecipient]) throws {
         let status=CNContactStore.authorizationStatus(for:.contacts)
         // Picker-granted records remain usable without a whole-address-book grant.
         guard status == .authorized else { return }
         let store=CNContactStore()
-        for r in recipients where r.selected && !r.contactIdentifier.isEmpty {
-            guard let c=try? store.unifiedContact(withIdentifier:r.contactIdentifier,keysToFetch:[CNContactPhoneNumbersKey as CNKeyDescriptor,CNContactEmailAddressesKey as CNKeyDescriptor]) else {throw FestivalError.message("A selected contact was deleted. Re-select or enter the recipient manually.")}
-            if !r.phone.isEmpty && !c.phoneNumbers.contains(where:{FestivalValidation.phone($0.value.stringValue)==FestivalValidation.phone(r.phone)}) {throw FestivalError.message("A contact’s phone number changed. Review their delivery address.")}
-            if !r.email.isEmpty && !c.emailAddresses.contains(where:{String($0.value).lowercased()==r.email.lowercased()}) {throw FestivalError.message("A contact’s email changed. Review their delivery address.")}
+        var warning:String?
+        ContactAddressLinkStore.update { links in
+            for r in recipients where r.selected && !r.contactIdentifier.isEmpty && warning == nil {
+                let c=try? store.unifiedContact(withIdentifier:r.contactIdentifier,keysToFetch:[CNContactPhoneNumbersKey as CNKeyDescriptor,CNContactEmailAddressesKey as CNKeyDescriptor])
+                warning=links.review(r,card:c.map{(phones:$0.phoneNumbers.map(\.value.stringValue),emails:$0.emailAddresses.map{String($0.value)})})
+            }
         }
+        if let warning {throw FestivalError.message(warning)}
     }
 }
 enum FestivalError:LocalizedError {case message(String);var errorDescription:String? {if case let .message(value)=self{return value};return nil}}

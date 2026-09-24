@@ -54,17 +54,13 @@ struct ManageFestivalView: View {
     @State private var dateDraft=Date()
     @State private var showingSettings=false
     @State private var showAllContacts=false
-    @State private var contacts=false
-@State private var manual=false
+    @State private var recipientAction:RecipientAction?
 @State private var personalize=false
 @State private var imageSheet=false
 @State private var regenerateConfirm=false
 @State private var aiConsent=false
     @State private var approveAfterCancel=false
-    @State private var contactChoices:[FestivalContactChoice]=[]
-    @State private var choicePhone=""
-    @State private var choiceEmail=""
-    private enum Field:Hashable { case name, message, recipientName(String), recipientPhone(String), recipientEmail(String) }
+    private enum Field:Hashable { case name, message }
     @FocusState private var focusedField:Field?
     init(group:MomentDisplayGroup,store:ImportantMomentsStore,onDone:(() -> Void)?=nil){self.onDone=onDone;_model=StateObject(wrappedValue:store.festivalModel(for:group))}
     var body:some View {
@@ -93,9 +89,7 @@ struct ManageFestivalView: View {
         .alert("Delete Moment?",isPresented:$deleteConfirm){Button("Delete Moment",role:.destructive){Task{if await model.delete(){dismiss()}}};Button("Cancel",role:.cancel){}}message:{Text("Contacts will be disconnected, scheduled wishes cancelled, and saved drafts deleted. Sent history remains.")}
         .alert("Save changes to scheduled wishes?",isPresented:$model.needsScheduleConfirmation){Button("Cancel schedules and save"){Task{if approveAfterCancel{await model.approve(cancelSchedules:true)}else{await model.save(cancelSchedules:true)}}};Button("Keep schedules",role:.cancel){model.cancelTabChange()}}message:{Text("Saving these changes cancels the existing schedules for this moment. After saving, review and schedule your updated wishes again.")}
         .confirmationDialog("Replace the edited message with a new draft?",isPresented:$regenerateConfirm,titleVisibility:.visible){Button("Regenerate"){Task{await model.generate(aiConsent:aiConsent)}}}
-        .sheet(isPresented:$contacts){ManagedFestivalContactsPicker{values in contacts=false;contactChoices=values;if let first=values.first{choicePhone=first.phones.first ?? "";choiceEmail=first.emails.first ?? ""}}}
-        .sheet(isPresented:Binding(get:{!contactChoices.isEmpty && !contacts},set:{if !$0{contactChoices=[]}})){contactSelection}
-        .sheet(isPresented:$manual){NavigationStack{FestivalManualRecipient{r in model.recipients.append(r);model.settings.channels[r.key]=r.phone.isEmpty ? "email":"messages";model.invalidateApproval();manual=false}.toolbar{Button("Cancel"){manual=false}}}}
+        .recipientSheets(action:$recipientAction,recipients:model.recipients){recipient,previous in model.saveRecipient(recipient,replacing:previous)}
         .sheet(isPresented:$personalize){personalization}
         .sheet(isPresented:$imageSheet){imageConfiguration}
         .sheet(isPresented:$scheduleConfirm){confirmation}
@@ -152,14 +146,14 @@ struct ManageFestivalView: View {
             Text("No contacts added yet. Add a contact to choose who receives this wish.").font(.subheadline).foregroundStyle(.secondary).accessibilityIdentifier("moment-no-recipients")
         }
         if !model.recipients.isEmpty {
-        MomentCard{ForEach($model.recipients){$r in if showAllContacts || model.recipients.prefix(3).contains(where:{$0.id==r.id}) {VStack(alignment:.leading,spacing:10){HStack{Text(r.initials).font(.title2.bold()).frame(width:48,height:48).background(Color.nexdoIndigo.opacity(0.12),in:Circle());VStack(alignment:.leading){Text(r.name).font(.headline);Text(r.masked(channel:model.channel(r))).font(.subheadline).foregroundStyle(.secondary)};Spacer();Button{r.selected.toggle()}label:{Image(systemName:r.selected ? "checkmark.circle.fill":"circle").font(.title2).foregroundStyle(Color.nexdoIndigo).frame(width:44,height:44)}.buttonStyle(.plain).accessibilityLabel("Select \(r.name)").accessibilityAddTraits(r.selected ? .isSelected:[])};DisclosureGroup("Edit recipient"){TextField("Name",text:$r.name).focused($focusedField,equals:.recipientName(r.key)).submitLabel(.done).onSubmit{focusedField=nil};TextField("Phone",text:$r.phone).keyboardType(.phonePad).focused($focusedField,equals:.recipientPhone(r.key));TextField("Email",text:$r.email).keyboardType(.emailAddress).textInputAutocapitalization(.never).focused($focusedField,equals:.recipientEmail(r.key)).submitLabel(.done).onSubmit{focusedField=nil};Button("Use as manually entered contact"){r.contactIdentifier=""};Button("Remove contact",role:.destructive){let key=r.id;model.recipients.removeAll{$0.id==key};model.invalidateApproval()}};Divider()}}}}
+        MomentCard{ForEach($model.recipients){$r in if showAllContacts || model.recipients.prefix(3).contains(where:{$0.id==r.id}) {VStack(alignment:.leading,spacing:10){HStack{Text(r.initials).font(.title2.bold()).frame(width:48,height:48).background(Color.nexdoIndigo.opacity(0.12),in:Circle());VStack(alignment:.leading){Text(r.name).font(.headline);Text(r.masked(channel:model.channel(r))).font(.subheadline).foregroundStyle(.secondary)};Spacer();Button{r.selected.toggle()}label:{Image(systemName:r.selected ? "checkmark.circle.fill":"circle").font(.title2).foregroundStyle(Color.nexdoIndigo).frame(width:44,height:44)}.buttonStyle(.plain).accessibilityLabel("Select \(r.name)").accessibilityAddTraits(r.selected ? .isSelected:[])};HStack{Button("Edit recipient"){focusedField=nil;recipientAction = .edit(r.key)}.accessibilityLabel("Edit \(r.name)");Spacer();Button("Remove contact",role:.destructive){model.removeRecipient(key:r.key)}.accessibilityLabel("Remove \(r.name)")}.buttonStyle(.borderless).frame(minHeight:44);Divider()}}}}
         }
         if model.recipients.count > 3 {
             Button(showAllContacts ? "Show less" : "Show more (\(model.recipients.count-3))") {showAllContacts.toggle()}
                 .frame(maxWidth:.infinity,minHeight:44).accessibilityIdentifier("festival-show-contacts")
         }
-        Button{contacts=true}label:{Label("Add Contact",systemImage:"plus").frame(maxWidth:.infinity,minHeight:48)}.buttonStyle(.bordered)
-        Button("Enter recipient manually"){manual=true}.frame(minHeight:44)
+        Button{focusedField=nil;recipientAction = .contacts}label:{Label("Add Contact",systemImage:"plus").frame(maxWidth:.infinity,minHeight:48)}.buttonStyle(.bordered)
+        Button("Enter recipient manually"){focusedField=nil;recipientAction = .manual}.frame(minHeight:44)
         Label("Only selected contacts receive this wish.",systemImage:"lock.fill").font(.subheadline).foregroundStyle(.secondary)
         saveButtons
     }}
@@ -234,16 +228,9 @@ struct ManageFestivalView: View {
         }
     }
     private var personalization:some View {NavigationStack{Form{Section("Shared message"){Text("New recipients inherit the base message.");TextField("Optional personal context",text:$model.settings.personalContext,axis:.vertical)};ForEach(model.selected){r in Section(r.name){Toggle("Personalize this recipient",isOn:Binding(get:{model.settings.overrides[r.key] != nil},set:{if $0{model.settings.overrides[r.key]=model.settings.baseMessage}else{model.settings.overrides.removeValue(forKey:r.key)};model.invalidateApproval()}));if model.settings.overrides[r.key] != nil{TextField("Personal wish",text:Binding(get:{model.settings.overrides[r.key] ?? ""},set:{model.settings.overrides[r.key]=$0;model.invalidateApproval()}),axis:.vertical)}}}}.navigationTitle("Personalize").toolbar{Button("Done"){personalize=false}}}}
-    private var contactSelection:some View {NavigationStack{Form{if let choice=contactChoices.first{Section(choice.name){Text("Choose the address to use.");Picker("Phone",selection:$choicePhone){Text("None").tag("");ForEach(choice.phones,id:\.self){Text($0).tag($0)}};Picker("Email",selection:$choiceEmail){Text("None").tag("");ForEach(choice.emails,id:\.self){Text($0).tag($0)}};Button("Add selected recipient"){let key=TaskActionCoordinator.ownerKey(choice.id);if !model.recipients.contains(where:{$0.key==key || $0.contactIdentifier==choice.id}){model.recipients.append(ManagedFestivalRecipient(key:key,name:choice.name,phone:choicePhone,email:choiceEmail,contactIdentifier:choice.id));model.settings.channels[key]=choicePhone.isEmpty ? "email":"messages";model.invalidateApproval()};contactChoices.removeFirst();if let next=contactChoices.first{choicePhone=next.phones.first ?? "";choiceEmail=next.emails.first ?? ""}}.disabled(choicePhone.isEmpty && choiceEmail.isEmpty)}}}.navigationTitle("Choose delivery address").toolbar{Button("Cancel"){contactChoices=[]}}}}
     private var imageConfiguration:some View { FestivalGreetingCardEditor(model:model) }
 
 }
-private struct FestivalManualRecipient:View {
-    @State private var recipient=ManagedFestivalRecipient()
-    let save:(ManagedFestivalRecipient)->Void
-    var body:some View{Form{TextField("Name",text:$recipient.name);TextField("Phone",text:$recipient.phone).keyboardType(.phonePad);TextField("Email",text:$recipient.email).keyboardType(.emailAddress).textInputAutocapitalization(.never);Button("Add recipient"){save(recipient)}.disabled(recipient.name.isEmpty || recipient.phone.isEmpty && recipient.email.isEmpty)}.navigationTitle("Add Contact")}
-}
-
 private struct FestivalScheduleSuccess:View {
     let title:String
     let occasionType:String
