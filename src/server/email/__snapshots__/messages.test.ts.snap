@@ -1,6 +1,6 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
-exports[`transactional email template > renders the admin sign-in email with code, expiry and logo > html 1`] = `
+exports[`transactional email template > renders the admin sign-in email with the code and expiry, and no links > html 1`] = `
 "<!DOCTYPE html>
 <html lang="en" xmlns="http://www.w3.org/1999/xhtml" xmlns:o="urn:schemas-microsoft-com:office:office">
 <head>
@@ -11,11 +11,11 @@ exports[`transactional email template > renders the admin sign-in email with cod
 <meta name="format-detection" content="telephone=no,date=no,address=no,email=no">
 <meta name="color-scheme" content="light">
 <meta name="supported-color-schemes" content="light">
-<title>Sign in to Nexdo Admin</title>
+<title>Your admin sign-in code</title>
 <!--[if mso]><noscript><xml><o:OfficeDocumentSettings><o:PixelsPerInch>96</o:PixelsPerInch></o:OfficeDocumentSettings></xml></noscript><![endif]-->
 </head>
 <body style="margin:0;padding:0;width:100%;background-color:#F5F6FA;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%;">
-<div style="display:none;font-size:1px;line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden;mso-hide:all;color:#F5F6FA;">Your Nexdo Admin sign-in code expires in 10 minutes.&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;</div>
+<div style="display:none;font-size:1px;line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden;mso-hide:all;color:#F5F6FA;">Your Nexdo admin sign-in code expires in 10 minutes.&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;</div>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#F5F6FA" style="background-color:#F5F6FA;">
 <tr><td align="center" style="padding:32px 16px;">
 <!--[if mso]><table role="presentation" width="560" cellpadding="0" cellspacing="0" border="0" align="center"><tr><td><![endif]-->
@@ -28,8 +28,8 @@ exports[`transactional email template > renders the admin sign-in email with cod
 <tr><td height="4" bgcolor="#2F6BFF" style="height:4px;line-height:4px;font-size:0;background-color:#2F6BFF;background-image:linear-gradient(90deg,#2F6BFF,#7B4DFF,#E84CA8);border-radius:12px 12px 0 0;">&nbsp;</td></tr>
 <tr><td style="padding:32px;">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
-<tr><td style="padding:0 0 12px;"><h1 style="margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;font-size:24px;line-height:32px;font-weight:700;color:#0B0B2E;">Sign in to Nexdo Admin</h1></td></tr>
-<tr><td><p style="margin:0 0 16px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;font-size:15px;line-height:24px;color:#3C3C50;">Use this code to finish signing in to the Nexdo Admin workspace. Never share this code.</p></td></tr>
+<tr><td style="padding:0 0 12px;"><h1 style="margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;font-size:24px;line-height:32px;font-weight:700;color:#0B0B2E;">Your admin sign-in code</h1></td></tr>
+<tr><td><p style="margin:0 0 16px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;font-size:15px;line-height:24px;color:#3C3C50;">Use this code to sign in to Nexdo Admin. It expires in 10 minutes. Never share it with anyone.</p></td></tr>
 <tr><td style="padding:8px 0 0;">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:separate;">
 <tr><td align="center" bgcolor="#F0F3FF" style="background-color:#F0F3FF;border:1px solid #DCE3FF;border-radius:10px;padding:20px 12px;">
@@ -44,9 +44,9 @@ exports[`transactional email template > renders the admin sign-in email with cod
 </table>
 </td></tr>
 <tr><td style="padding:24px 32px 0;">
-<p style="margin:0 0 16px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;font-size:12px;line-height:18px;color:#6B6B80;margin-bottom:8px;">You&#39;re receiving this because an admin sign-in was requested for this address.</p><p style="margin:0 0 16px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;font-size:12px;line-height:18px;color:#6B6B80;margin-bottom:8px;">If you didn&#39;t request this, you can ignore this email.</p>
+<p style="margin:0 0 16px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;font-size:12px;line-height:18px;color:#6B6B80;margin-bottom:8px;">You&#39;re receiving this because someone tried to sign in to Nexdo Admin with this address.</p><p style="margin:0 0 16px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;font-size:12px;line-height:18px;color:#6B6B80;margin-bottom:8px;">If you didn&#39;t try to sign in, ignore this email.</p>
 <p style="margin:16px 0 4px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;font-size:14px;line-height:20px;font-weight:700;color:#0B0B2E;">Nexdo</p>
-<p style="margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;font-size:12px;line-height:18px;color:#6B6B80;">Questions? <a href="mailto:support@nexdo.test" style="color:#2F6BFF;text-decoration:underline;">support@nexdo.test</a></p>
+
 </td></tr>
 </table>
 <!--[if mso]></td></tr></table><![endif]-->
@@ -57,21 +57,20 @@ exports[`transactional email template > renders the admin sign-in email with cod
 "
 `;
 
-exports[`transactional email template > renders the admin sign-in email with code, expiry and logo > text 1`] = `
+exports[`transactional email template > renders the admin sign-in email with the code and expiry, and no links > text 1`] = `
 "Nexdo
 
-Sign in to Nexdo Admin
+Your admin sign-in code
 
-Use this code to finish signing in to the Nexdo Admin workspace. Never share this code.
+Use this code to sign in to Nexdo Admin. It expires in 10 minutes. Never share it with anyone.
 
 Your code is 042917.
 Expires in 10 minutes · single use
 
-You're receiving this because an admin sign-in was requested for this address.
-If you didn't request this, you can ignore this email.
+You're receiving this because someone tried to sign in to Nexdo Admin with this address.
+If you didn't try to sign in, ignore this email.
 
 Nexdo
-Questions? support@nexdo.test
 "
 `;
 

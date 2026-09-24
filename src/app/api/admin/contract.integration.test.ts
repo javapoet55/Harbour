@@ -3,7 +3,7 @@ import { generateKeyPairSync, randomBytes } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { prisma } from '@/server/db';
 // The admin frontend parses every backend response with these schemas. Validate the real handlers against them.
-import { adminMeSchema, adminSessionSchema } from '../../../../admin/src/contract/session';
+import { adminCodeRequestSchema, adminMeSchema, adminSessionSchema } from '../../../../admin/src/contract/session';
 import { adminSnapshotSchema } from '../../../../admin/src/contract/snapshot';
 import { voiceTokensSchema } from '../../../../admin/src/contract/voice-tokens';
 import { adminUserDashboardSchema } from '../../../../admin/src/contract/user-dashboard';
@@ -24,7 +24,8 @@ vi.mock('next/headers', () => ({ cookies: async () => ({ get: () => undefined, s
 
 const secret = randomBytes(24).toString('hex');
 const traceId = randomBytes(16).toString('hex');
-const keys = ['NEXDO_ADMIN_EMAILS', 'ADMIN_API_SECRETS', 'NEXDO_HEALTH_OPERATOR_IDS', 'OPENAI_API_KEY', 'NEXDO_HEALTH_ENABLED', 'GA4_PROPERTY_ID', 'GA4_SERVICE_ACCOUNT_JSON', 'GA4_STREAM_ID'];
+const keys = ['NEXDO_ADMIN_EMAILS', 'ADMIN_API_SECRETS', 'NEXDO_HEALTH_OPERATOR_IDS', 'OPENAI_API_KEY', 'NEXDO_HEALTH_ENABLED', 'GA4_PROPERTY_ID', 'GA4_SERVICE_ACCOUNT_JSON', 'GA4_STREAM_ID', 'SENDGRID_API_KEY', 'EMAIL_FROM_ADDRESS', 'NEXDO_ADMIN_FROM_EMAIL'];
+let emailedText = '';
 const saved = Object.fromEntries(keys.map((key) => [key, process.env[key]]));
 const ids: string[] = [];
 let token = '';
@@ -59,8 +60,9 @@ function report(metrics: string[], dimension?: string) {
     metadata: { timeZone: 'America/Los_Angeles' },
   };
 }
-const outbound = vi.fn(async (input: string | URL | Request) => {
+const outbound = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
   const url = String(input instanceof Request ? input.url : input);
+  if (url === 'https://api.sendgrid.com/v3/mail/send') { emailedText = JSON.parse(String(init?.body)).content[0].value; return new Response(null, { status: 202 }); }
   if (url.startsWith('https://oauth2.googleapis.com/token')) return Response.json({ access_token: 'test-access-token', expires_in: 3600 });
   if (url.includes('analyticsdata.googleapis.com')) return Response.json({ reports: [
     report(['activeUsers', 'newUsers', 'sessions', 'engagedSessions', 'engagementRate', 'userEngagementDuration', 'screenPageViews', 'eventCount']),
@@ -89,10 +91,10 @@ beforeAll(async () => {
 
   const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
   Object.assign(process.env, {
-    NEXDO_ADMIN_EMAILS: email, ADMIN_API_SECRETS: secret, NEXDO_HEALTH_OPERATOR_IDS: userId, OPENAI_API_KEY: 'test-openai-key',
+    NEXDO_ADMIN_EMAILS: email, ADMIN_API_SECRETS: secret, NEXDO_HEALTH_OPERATOR_IDS: userId, OPENAI_API_KEY: 'test-openai-key', SENDGRID_API_KEY: 'test-sendgrid-key', EMAIL_FROM_ADDRESS: 'hello@nexdo.test',
     GA4_PROPERTY_ID: '555023551', GA4_SERVICE_ACCOUNT_JSON: JSON.stringify({ type: 'service_account', client_email: 'reports@nexdo-test.iam.gserviceaccount.com', private_key: privateKey.export({ type: 'pkcs8', format: 'pem' }) }),
   });
-  delete process.env.NEXDO_HEALTH_ENABLED; delete process.env.GA4_STREAM_ID;
+  delete process.env.NEXDO_HEALTH_ENABLED; delete process.env.GA4_STREAM_ID; delete process.env.NEXDO_ADMIN_FROM_EMAIL;
   vi.stubGlobal('fetch', outbound);
 });
 afterAll(async () => {
@@ -105,7 +107,10 @@ afterAll(async () => {
 
 describe('backend responses satisfy the admin frontend contract', () => {
   it('session and me', async () => {
-    const session = await contract(await sessionPOST(request('/api/admin/session', { method: 'POST', bearer: false, body: { email: (await prisma.user.findUniqueOrThrow({ where: { id: userId } })).email, password: 'valid-test-password' } })), adminSessionSchema);
+    const email = (await prisma.user.findUniqueOrThrow({ where: { id: userId } })).email;
+    await contract(await sessionPOST(request('/api/admin/session', { method: 'POST', bearer: false, body: { action: 'request', email } })), adminCodeRequestSchema);
+    const code = await vi.waitFor(() => { const found = emailedText.match(/Your code is (\d{6})\./); if (!found) throw new Error('No email yet'); return found[1]; });
+    const session = await contract(await sessionPOST(request('/api/admin/session', { method: 'POST', bearer: false, body: { action: 'verify', email, code } })), adminSessionSchema);
     token = session.token;
     request('/api/admin/me');
     await contract(await meGET(), adminMeSchema);

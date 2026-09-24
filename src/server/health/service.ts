@@ -4,7 +4,7 @@ import { prisma } from '@/server/db';
 import { breached, coverage, overall, ruleDefinitions, state, summarize, windows, type Status } from './metrics';
 
 // Inventory from implemented adapters; configuration is deliberately not a health signal.
-export const integrations = ['OpenAI','Google Calendar','Microsoft Calendar','Gmail','Google OAuth','Microsoft OAuth','Apple Authentication','Hostinger Mail','SendGrid','Twilio','Firebase Analytics','Web Push','iOS Contacts'];
+export const integrations = ['OpenAI','Google Calendar','Microsoft Calendar','Gmail','Google OAuth','Microsoft OAuth','Apple Authentication','SendGrid','Twilio','Firebase Analytics','Web Push','iOS Contacts'];
 export async function getHealth(range: keyof typeof windows = '24H') {
   const now = new Date(); const since = new Date(+now-windows[range]*3600000);
   const start = performance.now(); let database: Status = 'Unknown'; let databaseLatency: number | null = null;

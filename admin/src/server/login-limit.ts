@@ -1,9 +1,10 @@
 import 'server-only';
 
-// First line of defence in front of the backend's durable limits (5/account, 20/IP per 15 minutes).
+// First line of defence in front of the backend's durable limits (per 15 minutes: 3 code requests per
+// email, 10 per IP, 20 code attempts per IP). Counts code requests and code attempts together.
 // Per instance and in memory only: it resets on restart and is not shared across replicas.
 const WINDOW_MS = 15 * 60_000;
-export const LOGIN_ATTEMPTS_PER_IP = 10;
+export const LOGIN_ATTEMPTS_PER_IP = 20;
 const MAX_TRACKED = 5_000;
 const attempts = new Map<string, number[]>();
 

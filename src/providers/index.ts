@@ -16,7 +16,7 @@ export const emailProvider: EmailProvider = {
       return { id: `mock-email-${Date.now()}`, status: 'SENT' };
     }
     // EMAIL_FROM_* take precedence; the SENDGRID_FROM_* names remain as fallbacks for existing deployments.
-    const from = process.env.EMAIL_FROM_ADDRESS?.trim() || process.env.SENDGRID_FROM_EMAIL?.trim();
+    const from = message.from?.trim() || process.env.EMAIL_FROM_ADDRESS?.trim() || process.env.SENDGRID_FROM_EMAIL?.trim();
     if (!from) return { id: '', status: 'FAILED', reason: 'EMAIL_FROM_ADDRESS is not configured' };
     const fromName = process.env.EMAIL_FROM_NAME?.trim() || process.env.SENDGRID_FROM_NAME?.trim() || 'Nexdo';
     try {
