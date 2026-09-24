@@ -124,10 +124,11 @@ async function tickRemindersImpl(now = new Date()) {
       if (result.status === 'SENT' || !isPermanentFailure(result.reason)) break;
     }
 
-    // FAILED is reserved for a reminder that never reached the user at all; one that did keeps the
-    // status its successful send gave it, even once the remaining channels are spent.
-    const status = anyDelivered(history) ? 'QUEUED'
-      : escalationExhausted(escalation, history) ? 'FAILED'
+    // FAILED is reserved for a reminder that never reached the user at all. One that did stays QUEUED
+    // while a later channel may still escalate, then ends DELIVERED, which leaves the due query.
+    const exhausted = escalationExhausted(escalation, history);
+    const status = anyDelivered(history) ? (exhausted ? 'DELIVERED' : 'QUEUED')
+      : exhausted ? 'FAILED'
       : 'RETRYING';
     if (status !== reminder.status) {
       await prisma.reminder.update({ where: { id: reminder.id }, data: { status } });
