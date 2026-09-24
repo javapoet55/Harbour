@@ -41,15 +41,11 @@ import {
   validateRecipients,
   validateSchedule,
   type ManagedRecipient,
-  contactLinkFor,
   defaultChannel,
-  editedContactLink,
-  firstNameOf,
-  RECIPIENT_ADDRESS_REQUIRED,
-  RECIPIENT_EMAIL_INVALID,
-  RECIPIENT_NAME_REQUIRED,
-  RECIPIENT_PHONE_INVALID,
+  maskedAddresses,
+  RECIPIENT_DUPLICATE,
   recipientProblem,
+  samePhone,
 } from '../domain';
 import { draft, moment, plan, settings } from '../testFixtures';
 
@@ -524,46 +520,36 @@ describe('titles, greetings and signatures', () => {
   });
 });
 
-describe('recipient sheet rules', () => {
-  const cara = { name: 'Cara', phone: '+1 555 010 0200', email: 'cara@example.com' };
+describe('recipient sheet rules (iOS RecipientDraft)', () => {
+  const cara = { phone: '+1 555 010 0200', email: 'cara@example.com' };
 
-  it('requires a name and a valid phone or email', () => {
-    expect(recipientProblem({ name: ' ', phone: '5550100200', email: '' }, [])).toBe(RECIPIENT_NAME_REQUIRED);
-    expect(recipientProblem({ name: 'Cara', phone: ' ', email: '' }, [])).toBe(RECIPIENT_ADDRESS_REQUIRED);
-    expect(recipientProblem({ name: 'Cara', phone: '123456', email: '' }, [])).toBe(RECIPIENT_PHONE_INVALID);
-    expect(recipientProblem({ name: 'Cara', phone: '1234567890123456', email: '' }, [])).toBe(RECIPIENT_PHONE_INVALID);
-    expect(recipientProblem({ name: 'Cara', phone: '', email: 'cara@' }, [])).toBe(RECIPIENT_EMAIL_INVALID);
-    expect(recipientProblem(cara, [])).toBeNull();
-    expect(recipientProblem({ name: 'Cara', phone: '', email: 'cara@example.com' }, [])).toBeNull();
+  it('checks every filled field, in iOS’s order and wording', () => {
+    expect(recipientProblem({ name: ' ', phone: '5550100200', email: '' }, [])).toBe('Enter a name.');
+    expect(recipientProblem({ name: 'é'.repeat(81), phone: '5550100200', email: '' }, [])).toBe('Use a name of 80 characters or fewer.');
+    expect(recipientProblem({ name: 'é'.repeat(80), phone: '5550100200', email: '' }, [])).toBeNull();
+    expect(recipientProblem({ name: 'Cara', phone: ' ', email: '' }, [])).toBe('Enter a phone number or email.');
+    expect(recipientProblem({ name: 'Cara', phone: '123456', email: 'cara@example.com' }, [])).toBe('Enter a valid phone number.');
+    expect(recipientProblem({ name: 'Cara', phone: '1234567890123456', email: '' }, [])).toBe('Enter a valid phone number.');
+    expect(recipientProblem({ name: 'Cara', phone: '5550100200', email: 'cara@' }, [])).toBe('Enter a valid email address.');
+    expect(recipientProblem({ name: 'Cara', ...cara }, [])).toBeNull();
   });
 
-  it('refuses a second person with the same phone or email, however it is written', () => {
-    expect(recipientProblem({ name: 'Dup', phone: '15550100200', email: '' }, [cara])).toBe('Cara already has this phone number.');
-    expect(recipientProblem({ name: 'Dup', phone: '', email: ' CARA@example.com' }, [cara])).toBe('Cara already has this email.');
-    expect(recipientProblem({ name: 'Dup', phone: '5550100999', email: 'dup@example.com' }, [cara])).toBeNull();
+  it('treats an equal phone ignoring formatting, or an equal email ignoring case, as the same person', () => {
+    expect(recipientProblem({ name: 'Dup', phone: '+1-555-010-0200', email: '' }, [cara])).toBe(RECIPIENT_DUPLICATE);
+    expect(recipientProblem({ name: 'Dup', phone: '', email: ' CARA@example.com' }, [cara])).toBe(RECIPIENT_DUPLICATE);
+    // FestivalValidation.phone keeps a leading +, as iOS compares.
+    expect(samePhone('15550100200', '+1 555 010 0200')).toBe(false);
+    expect(recipientProblem({ name: 'Other', phone: '5550100999', email: 'other@example.com' }, [cara])).toBeNull();
   });
 
-  it('chooses Messages when there is a phone and Email when there is only an email', () => {
-    expect(defaultChannel({ phone: '5550100200', email: 'a@b.co' })).toBe('messages');
-    expect(defaultChannel({ phone: ' ', email: 'a@b.co' })).toBe('email');
-    expect(defaultChannel({ phone: '', email: '' })).toBe('share');
+  it('chooses Messages when there is a phone, else Email', () => {
+    expect(defaultChannel({ phone: '5550100200' })).toBe('messages');
+    expect(defaultChannel({ phone: ' ' })).toBe('email');
   });
 
-  it('keeps a contact link only while the addresses are the contact’s own', () => {
-    const contact = { id: 'C1', phones: ['+1 (555) 010-0200', '+1 555 010 0300'], emails: ['Kate@Example.com'] };
-    expect(contactLinkFor({ phone: '15550100300', email: 'kate@example.com' }, contact)).toBe('C1');
-    expect(contactLinkFor({ phone: '', email: 'kate@example.com' }, contact)).toBe('C1');
-    expect(contactLinkFor({ phone: '5550109999', email: 'kate@example.com' }, contact)).toBe('');
-    expect(contactLinkFor({ phone: '15550100200', email: 'kate@other.com' }, contact)).toBe('');
-    expect(contactLinkFor({ phone: '15550100200', email: '' }, null)).toBe('');
-    const saved = { phone: '+15550100200', email: 'kate@example.com', contactIdentifier: 'C1' };
-    expect(editedContactLink(saved, { phone: '+1 555 010 0200', email: 'KATE@example.com' })).toBe('C1');
-    expect(editedContactLink(saved, { phone: '', email: 'kate@example.com' })).toBe('C1');
-    expect(editedContactLink(saved, { phone: '+15550100200', email: 'kate@work.com' })).toBe('');
-  });
-
-  it('names the moment after the first word of a name', () => {
-    expect(firstNameOf('  Kate   Bell ')).toBe('Kate');
-    expect(firstNameOf('')).toBe('');
+  it('joins the masked phone and email on one line, or shows either alone', () => {
+    expect(maskedAddresses({ phone: '+15550101234', email: 'asha@example.com' })).toBe('Mobile · ••• ••• 1234 · Email · a••••@example.com');
+    expect(maskedAddresses({ phone: '+15550101234', email: '' })).toBe('Mobile · ••• ••• 1234');
+    expect(maskedAddresses({ phone: '', email: 'asha@example.com' })).toBe('Email · a••••@example.com');
   });
 });

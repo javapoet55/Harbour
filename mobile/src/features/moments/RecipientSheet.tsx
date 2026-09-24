@@ -23,8 +23,9 @@ export type RecipientSheetRequest = {
  * always editable. Create Moment's Recipients list and Manage Moment's Add Contact, Enter recipient
  * manually and Edit recipient all use it.
  *
- * "Add" / "Save" stays disabled until there is a name and a phone or an email; pressing it with an
- * invalid address, or one already in `others`, shows why under the fields instead of closing.
+ * As on iOS (`RecipientSheet.swift`, 94a2ecd), "Add" / "Save" is always enabled: pressing it with a
+ * missing or invalid field, or a person already in `others`, shows why under the fields instead of
+ * closing, and the message clears as soon as a field changes.
  */
 export function RecipientSheet({
   request,
@@ -52,7 +53,11 @@ function RecipientForm({ request, others, onSubmit }: { request: RecipientSheetR
   const [email, setEmail] = useState(request.draft.email);
   const [problem, setProblem] = useState<string | null>(null);
   const editing = request.mode === 'edit';
-  const incomplete = name.trim() === '' || (phone.trim() === '' && email.trim() === '');
+  // `.onChange(of: [draft.name, draft.phone, draft.email]) { issue = nil }`
+  const edit = (set: (value: string) => void) => (value: string) => {
+    set(value);
+    setProblem(null);
+  };
 
   const submit = () => {
     const next = { ...request.draft, name: name.trim(), phone: phone.trim(), email: email.trim() };
@@ -61,7 +66,7 @@ function RecipientForm({ request, others, onSubmit }: { request: RecipientSheetR
     if (!issue) onSubmit(next);
   };
 
-  const choices = (values: string[], current: string, same: (a: string, b: string) => boolean, pick: (value: string) => void, testID: string) =>
+  const choices = (values: string[], current: string, same: (a: string, b: string) => boolean, pick: (value: string) => void, label: string, testID: string) =>
     values.length > 1 ? (
       <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled" {...androidChipScroll(16)} testID={testID}>
         {values.map((value, index) => {
@@ -70,7 +75,7 @@ function RecipientForm({ request, others, onSubmit }: { request: RecipientSheetR
             <Pressable
               key={`${index}:${value}`}
               accessibilityRole="button"
-              accessibilityLabel={`Use ${value}`}
+              accessibilityLabel={`${label} ${value}`}
               accessibilityState={{ selected }}
               onPress={() => pick(value)}
               style={[
@@ -92,20 +97,20 @@ function RecipientForm({ request, others, onSubmit }: { request: RecipientSheetR
   return (
     <FormScroll>
       <Text style={[textStyles.largeTitle, styles.bold, styles.title, { color: theme.colors.label }]}>{editing ? 'Edit Recipient' : 'Add Recipient'}</Text>
-      <FormSection>
+      <FormSection footer="Add a phone number, an email, or both.">
         <FormRow>
-          <FormField placeholder="Name" value={name} onChangeText={setName} autoCapitalize="words" testID="recipient-sheet-name" />
+          <FormField placeholder="Name" value={name} onChangeText={edit(setName)} autoCapitalize="words" testID="recipient-sheet-name" />
         </FormRow>
         <FormRow>
           <View style={styles.stack}>
-            <FormField placeholder="Phone" keyboardType="phone-pad" value={phone} onChangeText={setPhone} testID="recipient-sheet-phone" />
-            {choices(request.choices?.phones ?? [], phone, samePhone, setPhone, 'recipient-sheet-phone-choice')}
+            <FormField placeholder="Phone" keyboardType="phone-pad" value={phone} onChangeText={edit(setPhone)} testID="recipient-sheet-phone" />
+            {choices(request.choices?.phones ?? [], phone, samePhone, edit(setPhone), 'Use phone', 'recipient-sheet-phone-choice')}
           </View>
         </FormRow>
         <FormRow last>
           <View style={styles.stack}>
-            <FormField placeholder="Email" keyboardType="email-address" autoCapitalize="none" autoCorrect={false} value={email} onChangeText={setEmail} testID="recipient-sheet-email" />
-            {choices(request.choices?.emails ?? [], email, sameEmail, setEmail, 'recipient-sheet-email-choice')}
+            <FormField placeholder="Email" keyboardType="email-address" autoCapitalize="none" autoCorrect={false} value={email} onChangeText={edit(setEmail)} testID="recipient-sheet-email" />
+            {choices(request.choices?.emails ?? [], email, sameEmail, edit(setEmail), 'Use email', 'recipient-sheet-email-choice')}
           </View>
         </FormRow>
       </FormSection>
@@ -118,7 +123,7 @@ function RecipientForm({ request, others, onSubmit }: { request: RecipientSheetR
       ) : null}
       <FormSection>
         <FormRow last>
-          <FormButton title={editing ? 'Save' : 'Add'} onPress={submit} disabled={incomplete} testID="recipient-sheet-submit" />
+          <FormButton title={editing ? 'Save' : 'Add'} onPress={submit} testID="recipient-sheet-submit" />
         </FormRow>
       </FormSection>
     </FormScroll>

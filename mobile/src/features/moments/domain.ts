@@ -361,24 +361,24 @@ export function validEmail(value: string): boolean {
 
 // ---------------------------------------------------------------------------------------------
 // Recipients added or edited in the recipient sheet (RecipientSheet.tsx): Create Moment's Recipients
-// list and Manage Moment's Add Contact / Edit recipient on Android.
+// list and Manage Moment's Add Contact / Edit recipient on Android. Mirrors iOS `RecipientDraft`
+// (ios/Sources/NexdoCore/MomentRecipients.swift, 94a2ecd).
 
 /** A recipient before it is saved: no moment yet, always selected. */
 export type RecipientDraft = Pick<ManagedRecipient, 'key' | 'name' | 'phone' | 'email' | 'contactIdentifier'>;
 
 export const RECIPIENT_NAME_REQUIRED = 'Enter a name.';
-export const RECIPIENT_ADDRESS_REQUIRED = 'Enter a phone number or an email.';
-export const RECIPIENT_PHONE_INVALID = 'Enter a valid phone number, 7 to 15 digits.';
+export const RECIPIENT_NAME_TOO_LONG = 'Use a name of 80 characters or fewer.';
+export const RECIPIENT_ADDRESS_REQUIRED = 'Enter a phone number or email.';
+export const RECIPIENT_PHONE_INVALID = 'Enter a valid phone number.';
 export const RECIPIENT_EMAIL_INVALID = 'Enter a valid email address.';
+export const RECIPIENT_DUPLICATE = 'This person is already a recipient.';
 export const RECIPIENTS_REQUIRED = 'Add at least one recipient.';
 
-/**
- * One phone number however it is written: "+1 (555) 010-0200", "+15550100200" and "1 555 010 0200"
- * are the same digits, so the same number.
- */
+/** One phone number however it is formatted (`FestivalValidation.phone`: digits, keeping a leading +). */
 export function samePhone(a: string, b: string): boolean {
-  const digits = a.replace(/\D/g, '');
-  return digits !== '' && digits === b.replace(/\D/g, '');
+  const phone = normalizedPhone(a);
+  return /\d/.test(phone) && phone === normalizedPhone(b);
 }
 
 /** One email however it is cased or padded. */
@@ -386,58 +386,42 @@ export function sameEmail(a: string, b: string): boolean {
   return a.trim() !== '' && a.trim().toLowerCase() === b.trim().toLowerCase();
 }
 
-/** The server's Messages rule (festival.ts): 7 to 15 digits, with an optional leading +. */
+/** 7–15 digits, optionally with a leading +, as the server accepts for Messages. */
 export function validPhone(value: string): boolean {
-  const digits = value.replace(/\D/g, '').length;
+  const digits = normalizedPhone(value).replace(/\D/g, '').length;
   return digits >= 7 && digits <= 15;
 }
 
-/** Messages when there is a phone, Email when there is only an email. */
-export function defaultChannel(recipient: Pick<ManagedRecipient, 'phone' | 'email'>): 'messages' | 'email' | 'share' {
-  return recipient.phone.trim() !== '' ? 'messages' : recipient.email.trim() !== '' ? 'email' : 'share';
+/** A new recipient's delivery channel: Messages when there is a phone number, else Email. */
+export function defaultChannel(recipient: Pick<ManagedRecipient, 'phone'>): 'messages' | 'email' {
+  return recipient.phone.trim() === '' ? 'email' : 'messages';
 }
 
 /**
- * The first reason the sheet cannot add or save this person, or null. `others` is everyone else in
- * the list (the person being edited is left out): nobody may share a phone number or an email.
+ * Why the sheet can't add or save this person, or null (`RecipientDraft.issue(among:)`). Every filled
+ * field must be valid — a bad phone is refused even when the email is fine. `others` are the list's
+ * other people (not the one being edited); the same person is an equal phone ignoring formatting or an
+ * equal email ignoring case.
  */
-export function recipientProblem(draft: Pick<RecipientDraft, 'name' | 'phone' | 'email'>, others: Pick<RecipientDraft, 'name' | 'phone' | 'email'>[]): string | null {
+export function recipientProblem(draft: Pick<RecipientDraft, 'name' | 'phone' | 'email'>, others: Pick<RecipientDraft, 'phone' | 'email'>[]): string | null {
+  const name = draft.name.trim();
   const phone = draft.phone.trim();
   const email = draft.email.trim();
-  if (draft.name.trim() === '') return RECIPIENT_NAME_REQUIRED;
+  if (name === '') return RECIPIENT_NAME_REQUIRED;
+  if (characterCount(name) > 80) return RECIPIENT_NAME_TOO_LONG;
   if (phone === '' && email === '') return RECIPIENT_ADDRESS_REQUIRED;
   if (phone !== '' && !validPhone(phone)) return RECIPIENT_PHONE_INVALID;
   if (email !== '' && !validEmail(email)) return RECIPIENT_EMAIL_INVALID;
-  for (const other of others) {
-    const who = other.name.trim() || 'Another recipient';
-    if (samePhone(phone, other.phone)) return `${who} already has this phone number.`;
-    if (sameEmail(email, other.email)) return `${who} already has this email.`;
-  }
+  if (others.some((other) => samePhone(phone, other.phone) || sameEmail(email, other.email))) return RECIPIENT_DUPLICATE;
   return null;
 }
 
-/**
- * Whether a recipient stays linked to the picked contact. It does only while its phone and email are
- * still ones that contact has; once either is typed in by hand, it is a manually entered recipient, so
- * a later address check never reports the person's own edit as "the contact's email changed".
- */
-export function contactLinkFor(draft: Pick<RecipientDraft, 'phone' | 'email'>, contact: { id: string; phones: string[]; emails: string[] } | null): string {
-  if (!contact) return '';
-  const phoneKept = draft.phone.trim() === '' || contact.phones.some((phone) => samePhone(phone, draft.phone));
-  const emailKept = draft.email.trim() === '' || contact.emails.some((email) => sameEmail(email, draft.email));
-  return phoneKept && emailKept ? contact.id : '';
-}
-
-/** The same rule for an edit where only the saved addresses are known: an address that changed unlinks. */
-export function editedContactLink(before: Pick<RecipientDraft, 'phone' | 'email' | 'contactIdentifier'>, after: Pick<RecipientDraft, 'phone' | 'email'>): string {
-  const phoneKept = after.phone.trim() === '' || samePhone(before.phone, after.phone);
-  const emailKept = after.email.trim() === '' || sameEmail(before.email, after.email);
-  return phoneKept && emailKept ? before.contactIdentifier : '';
-}
-
-/** The first word of a person's name, for the default title ("Kate’s Birthday"). */
-export function firstNameOf(name: string): string {
-  return name.trim().split(/\s+/)[0] ?? '';
+/** The row's secondary line: the masked phone and/or email, joined by " · ". */
+export function maskedAddresses(recipient: Pick<ManagedRecipient, 'phone' | 'email'>): string {
+  const parts: string[] = [];
+  if (recipient.phone !== '') parts.push(maskedAddress(recipient, 'messages'));
+  if (recipient.email !== '') parts.push(maskedAddress(recipient, 'email'));
+  return parts.join(' · ');
 }
 
 export function validateRecipients(values: ManagedRecipient[], settings: FestivalSettings): string | null {

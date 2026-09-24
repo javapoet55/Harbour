@@ -39,6 +39,7 @@ import { CARD_NOT_ATTACHED, cardEncoder, encodeCard, encodeSmallerCard } from '.
 import { momentLabel, sendDayLabel } from './dates';
 import { contactChoice, contactFullName, imageStorage, pickContact, validatePickedContacts, type ContactChoice } from './device';
 import { RecipientSheet, type RecipientSheetRequest } from './RecipientSheet';
+import { recordRecipient, updateContactLinks } from './contactLinks';
 import {
   capitalized,
   characterCount,
@@ -50,9 +51,7 @@ import {
   validateSchedule,
   type ManagedRecipient,
   type MomentDisplayGroup,
-  contactLinkFor,
   defaultChannel,
-  editedContactLink,
   type RecipientDraft,
 } from './domain';
 import { DateField, Disclosure, FormField, FormScroll, FormSection, FormRow, FormToggle, FormButton, LabeledValue, MenuPicker, PopoverMenu, usePopoverMenu, ZonePicker, genericZoneName } from './form';
@@ -172,7 +171,9 @@ export function ManageMomentView({ group, onDone }: { group: MomentDisplayGroup;
   const approveAfterCancel = useRef(false);
   const [contactChoices, setContactChoices] = useState<ContactChoice[]>([]);
   // Android: Add Contact, Enter recipient manually and Edit recipient share one sheet (RecipientSheet.tsx).
-  const [recipientSheet, setRecipientSheet] = useState<(RecipientSheetRequest & { contact: ContactChoice | null }) | null>(null);
+  const [recipientSheet, setRecipientSheet] = useState<RecipientSheetRequest | null>(null);
+  // The picked contact's numbers and addresses, by recipient key, so Edit offers them again this session.
+  const [addressChoices, setAddressChoices] = useState<Record<string, { phones: string[]; emails: string[] }>>({});
   const [choicePhone, setChoicePhone] = useState('');
   const [choiceEmail, setChoiceEmail] = useState('');
   const optionsAnchor = useRef<View>(null);
@@ -281,19 +282,17 @@ export function ManageMomentView({ group, onDone }: { group: MomentDisplayGroup;
       if (!contact) return;
       const choice = contactChoice(contact);
       if (isAndroid()) {
-        const key = await ownerKeyFor(contact.id);
         setRecipientSheet({
           mode: 'add',
           draft: {
-            // The same person may be added again with other addresses; each row still needs its own key.
-            key: model.getState().recipients.some((recipient) => recipient.key === key) ? Crypto.randomUUID().toUpperCase() : key,
-            name: contactFullName(contact) || choice.name,
+            key: Crypto.randomUUID().toUpperCase(),
+            // The name is used as a first name in greetings, so the given name comes first.
+            name: contact.firstName || contactFullName(contact) || choice.name,
             phone: choice.phones[0] ?? '',
             email: choice.emails[0] ?? '',
             contactIdentifier: contact.id,
           },
           choices: { phones: choice.phones, emails: choice.emails },
-          contact: choice,
         });
         return;
       }
@@ -307,15 +306,19 @@ export function ManageMomentView({ group, onDone }: { group: MomentDisplayGroup;
 
   /**
    * The recipient sheet's Add / Save (Android). A new person joins selected, with the default channel
-   * (Messages when there is a phone, Email when there is only an email). An edit keeps the person's
-   * moment and selection; a channel whose address was removed falls back to the default. A picked
-   * contact stays linked only while its phone and email are ones that contact has.
+   * (Messages when there is a phone, else Email). An edit keeps the person's moment and selection; a
+   * channel whose address was removed falls back to the default (`saveRecipient`, ManageFestivalModel).
+   * Which addresses came from the contact card is recorded on the device (`contactLinks.ts`).
    */
   const submitRecipient = (draft: RecipientDraft) => {
     const request = recipientSheet;
     if (!request) return;
     const current = model.getState();
-    const contactIdentifier = request.contact ? contactLinkFor(draft, request.contact) : editedContactLink(request.draft, draft);
+    const previous = request.mode === 'edit' ? current.recipients.find((recipient) => recipient.key === draft.key) : undefined;
+    const choices = request.choices;
+    void updateContactLinks((links) => recordRecipient(links, { ...draft, phoneChoices: choices?.phones ?? [], emailChoices: choices?.emails ?? [] }, previous)).catch(() => undefined);
+    if (choices && (choices.phones.length > 0 || choices.emails.length > 0)) setAddressChoices((known) => ({ ...known, [draft.key]: choices }));
+    const contactIdentifier = draft.contactIdentifier;
     if (request.mode === 'add') {
       current.setRecipients([...current.recipients, { ...draft, contactIdentifier, selected: true }]);
       current.updateSettings({ channels: { ...current.settings.channels, [draft.key]: defaultChannel(draft) } });
@@ -623,7 +626,7 @@ export function ManageMomentView({ group, onDone }: { group: MomentDisplayGroup;
                           isAndroid()
                             ? () => {
                                 Keyboard.dismiss();
-                                setRecipientSheet({ mode: 'edit', draft: recipient, choices: null, contact: null });
+                                setRecipientSheet({ mode: 'edit', draft: recipient, choices: addressChoices[recipient.key] ?? null });
                               }
                             : undefined
                         }
@@ -645,7 +648,7 @@ export function ManageMomentView({ group, onDone }: { group: MomentDisplayGroup;
                 accessibilityRole="button"
                 onPress={() =>
                   isAndroid()
-                    ? setRecipientSheet({ mode: 'add', draft: { key: Crypto.randomUUID().toUpperCase(), name: '', phone: '', email: '', contactIdentifier: '' }, choices: null, contact: null })
+                    ? setRecipientSheet({ mode: 'add', draft: { key: Crypto.randomUUID().toUpperCase(), name: '', phone: '', email: '', contactIdentifier: '' }, choices: null })
                     : setManual(true)
                 }
                 style={styles.plainButton}

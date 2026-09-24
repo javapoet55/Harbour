@@ -1,7 +1,10 @@
 import * as Calendar from 'expo-calendar';
 import * as Crypto from 'expo-crypto';
 
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Contacts from 'expo-contacts/legacy';
+
+import { CONTACT_DELETED, EMAIL_CHANGED, linkID, PHONE_CHANGED, recordRecipient, reviewRecipient, updateContactLinks, type ContactLinks } from '../contactLinks';
 
 import { calendarCandidates, calendarMomentInput, contactChoice, contactMomentInput, FESTIVAL_REGIONS, festivalMomentInput, festivalRecipient, validatePickedContacts } from '../device';
 import { uniqueKeys } from '../form';
@@ -98,31 +101,69 @@ describe('festival import', () => {
   });
 });
 
+describe('contact address links (iOS ContactAddressLinks)', () => {
+  it('keys each link by a 16-byte SHA-256 of contact, field and normalized address', async () => {
+    digest.mockResolvedValueOnce('a'.repeat(64));
+    expect(await linkID('C1', 'phone', '+1 (555) 010-0200')).toBe('a'.repeat(32));
+    expect(digest).toHaveBeenLastCalledWith(Crypto.CryptoDigestAlgorithm.SHA256, 'C1\u001fphone\u001f+15550100200');
+    await linkID('C1', 'email', ' Kate@Example.COM ');
+    expect(digest).toHaveBeenLastCalledWith(Crypto.CryptoDigestAlgorithm.SHA256, 'C1\u001femail\u001fkate@example.com');
+  });
+
+  it('records an address as taken from the card only when it is one of the contact’s', async () => {
+    const links: ContactLinks = {};
+    await recordRecipient(links, { contactIdentifier: 'C1', phone: '+1 555 010 0200', email: 'kate@typed.com', phoneChoices: ['+1 (555) 010-0200'], emailChoices: ['kate@example.com'] });
+    expect(links[await linkID('C1', 'phone', '+15550100200')]).toBe(true);
+    expect(links[await linkID('C1', 'email', 'kate@typed.com')]).toBe(false);
+    // Edited later without the choices: a changed address was typed, an unchanged one keeps its record.
+    await recordRecipient(links, { contactIdentifier: 'C1', phone: '+15550100200', email: 'kate@new.com', phoneChoices: [], emailChoices: [] }, { phone: '+1 555 010 0200', email: 'kate@typed.com' });
+    expect(links[await linkID('C1', 'phone', '+15550100200')]).toBe(true);
+    expect(links[await linkID('C1', 'email', 'kate@new.com')]).toBe(false);
+    // A manually entered recipient records nothing.
+    const none: ContactLinks = {};
+    await recordRecipient(none, { contactIdentifier: '', phone: '5550100200', email: '', phoneChoices: [], emailChoices: [] });
+    expect(none).toEqual({});
+  });
+
+  it('warns only when a card-sourced address left the card, and never for a typed one', async () => {
+    const links: ContactLinks = {};
+    const kate = { contactIdentifier: 'C1', phone: '+15550100200', email: 'kate@typed.com' };
+    await recordRecipient(links, { ...kate, phoneChoices: ['+1 (555) 010-0200'], emailChoices: ['kate@example.com'] });
+    expect(await reviewRecipient(links, kate, { phones: ['+1 (555) 010-0200'], emails: ['kate@example.com'] })).toBeNull();
+    expect(await reviewRecipient(links, kate, { phones: ['+1 (555) 010-9999'], emails: [] })).toBe(PHONE_CHANGED);
+    expect(await reviewRecipient(links, { ...kate, phone: '' }, { phones: [], emails: [] })).toBeNull();
+    expect(await reviewRecipient(links, kate, null)).toBe(CONTACT_DELETED);
+    expect(await reviewRecipient(links, { ...kate, phone: '' }, null)).toBeNull();
+    expect(await reviewRecipient(links, { ...kate, contactIdentifier: '' }, { phones: [], emails: [] })).toBeNull();
+  });
+
+  it('records an unrecorded address from the card as it is now, without a warning', async () => {
+    const links: ContactLinks = {};
+    const sam = { contactIdentifier: 'C9', phone: '+15555550100', email: 'sam@example.com' };
+    expect(await reviewRecipient(links, sam, { phones: ['+1 (555) 555-0100'], emails: [] })).toBeNull();
+    expect(links[await linkID('C9', 'phone', sam.phone)]).toBe(true);
+    expect(links[await linkID('C9', 'email', sam.email)]).toBe(false);
+    expect(await reviewRecipient(links, sam, { phones: [], emails: [] })).toBe(PHONE_CHANGED);
+    expect(EMAIL_CHANGED).toBe('A contact’s email changed. Review their delivery address.');
+  });
+});
+
 describe('validatePickedContacts', () => {
   const lookup = Contacts.getContactByIdAsync as jest.Mock;
   const permissions = Contacts.getPermissionsAsync as jest.Mock;
-  const kate = { selected: true, contactIdentifier: 'C1', phone: '+15550100200', email: 'kate@example.com' };
-  beforeEach(() => permissions.mockResolvedValue({ granted: true, canAskAgain: true }));
+  beforeEach(() => AsyncStorage.clear());
   afterEach(() => lookup.mockReset().mockResolvedValue(undefined));
 
-  it('accepts the saved address however the contact writes it', async () => {
-    lookup.mockResolvedValue({ id: 'C1', phoneNumbers: [{ number: '1 (555) 010-0200' }], emails: [{ email: ' Kate@Example.COM ' }] });
+  it('checks the device’s record with full access, and trusts the picker without it', async () => {
+    await updateContactLinks((links) => recordRecipient(links, { contactIdentifier: 'C1', phone: '', email: 'kate@example.com', phoneChoices: [], emailChoices: ['kate@example.com'] }));
+    const kate = { selected: true, contactIdentifier: 'C1', phone: '', email: 'kate@example.com' };
+    lookup.mockResolvedValue({ id: 'C1', phoneNumbers: [], emails: [{ email: ' Kate@Example.com ' }] });
     await expect(validatePickedContacts([kate])).resolves.toBeUndefined();
-  });
-
-  it('warns only when an address really changed, or the contact is gone', async () => {
-    lookup.mockResolvedValue({ id: 'C1', phoneNumbers: [{ number: '+15550100200' }], emails: [{ email: 'kate@new.com' }] });
-    await expect(validatePickedContacts([kate])).rejects.toThrow('A contact’s email changed. Review their delivery address.');
-    lookup.mockResolvedValue({ id: 'C1', phoneNumbers: [{ number: '+15550109999' }], emails: [{ email: 'kate@example.com' }] });
-    await expect(validatePickedContacts([kate])).rejects.toThrow('A contact’s phone number changed. Review their delivery address.');
-    lookup.mockResolvedValue(undefined);
-    await expect(validatePickedContacts([kate])).rejects.toThrow('A selected contact was deleted. Re-select or enter the recipient manually.');
-  });
-
-  it('skips manually entered or unselected recipients, and anyone without full Contacts access', async () => {
-    lookup.mockResolvedValue({ id: 'C1', phoneNumbers: [], emails: [] });
-    await expect(validatePickedContacts([{ ...kate, contactIdentifier: '' }, { ...kate, selected: false }])).resolves.toBeUndefined();
+    lookup.mockResolvedValue({ id: 'C1', phoneNumbers: [], emails: [{ email: 'kate@new.com' }] });
+    await expect(validatePickedContacts([kate])).rejects.toThrow(EMAIL_CHANGED);
+    await expect(validatePickedContacts([{ ...kate, selected: false }])).resolves.toBeUndefined();
     permissions.mockResolvedValueOnce({ granted: false, canAskAgain: true });
+    lookup.mockClear();
     await expect(validatePickedContacts([kate])).resolves.toBeUndefined();
     expect(lookup).not.toHaveBeenCalled();
   });

@@ -11,18 +11,17 @@ import { isAndroid, textStyles, useTheme } from '../../theme';
 import { KeyboardDoneBar } from './components';
 import { deviceZone, momentDate, momentDay } from './dates';
 import { contactChoice, contactFullName, festivalRecipient, pickContact, type FestivalRecipient } from './device';
+import { recordRecipient, updateContactLinks } from './contactLinks';
 import {
-  contactLinkFor,
   defaultChannel,
   defaultTitle,
   editableGroups,
-  editedContactLink,
-  firstNameOf,
-  maskedAddress,
+  maskedAddresses,
   MOMENT_TYPES,
   newFestivalSettings,
   newMomentInput,
   normalizedPhone,
+  recipientProblem,
   RECIPIENTS_REQUIRED,
   supportsGreetingCard,
   typeLabel,
@@ -53,8 +52,9 @@ import { momentsStore, useMomentList, useMoments } from './store';
  * and "Enter recipient manually" open the same sheet (RecipientSheet.tsx); at least one person is
  * required. Save creates the moment for the first person, then saves everyone through `festivalSave`
  * — the grouped-recipients model Manage Moment edits — so Contacts opens with all of them selected.
- * A custom moment has no Manage Moment, so it is saved once per person instead. iOS, and editing an
- * existing moment, keep the single-recipient form.
+ * A custom moment has no Manage Moment, so each other person becomes their own custom moment. Aligned
+ * with iOS `MomentEditor.swift` (94a2ecd). iOS in this app, and editing an existing moment, keep the
+ * single-recipient form.
  */
 /**
  * The current time, for the past-date note (MomentEditor.swift:43-45). Reading `Date.now()` in render
@@ -112,8 +112,15 @@ export function MomentEditorView({ moment, imported, onDone, dismiss }: { moment
   const now = useNow();
   // Android, creating: the Recipients list, the sheet, and one group ID kept across a retried Save.
   const multi = isAndroid() && !moment;
-  const [recipients, setRecipients] = useState<RecipientDraft[]>([]);
-  const [sheet, setSheet] = useState<(RecipientSheetRequest & { contact: { id: string; phones: string[]; emails: string[] } | null }) | null>(null);
+  // A contact imported with its birthday starts as the moment's first recipient (MomentEditor.swift `.onAppear`).
+  const [recipients, setRecipients] = useState<RecipientDraft[]>(() => {
+    if (!multi || !imported) return [];
+    const draft = { key: Crypto.randomUUID().toUpperCase(), name: imported.firstName, phone: imported.phone, email: imported.email, contactIdentifier: '' };
+    return recipientProblem(draft, []) === null ? [{ ...draft, name: draft.name.trim(), phone: draft.phone.trim(), email: draft.email.trim() }] : [];
+  });
+  const [sheet, setSheet] = useState<RecipientSheetRequest | null>(null);
+  // The picked contact's numbers and addresses, by recipient key, so Edit offers them again.
+  const [contactChoices, setContactChoices] = useState<Record<string, { phones: string[]; emails: string[] }>>({});
   const [groupID] = useState(() => Crypto.randomUUID().toUpperCase());
 
   const saveDisabled = busy || !dateConfirmed || input.title.trim() === '' || (multi && recipients.length === 0);
@@ -132,18 +139,23 @@ export function MomentEditorView({ moment, imported, onDone, dismiss }: { moment
   const setFirstName = (firstName: string) =>
     setInput((current) => ({ ...current, firstName, title: updatingTitle(current.title, current.type, current.firstName, current.type, firstName) }));
 
-  /** The Recipients list's first person names the moment ("Kate’s Birthday"), as the First name field did. */
+  /** A new moment's name and automatic title follow its first recipient ("Kate’s Birthday"). */
   const changeRecipients = (next: RecipientDraft[]) => {
     setRecipients(next);
-    setFirstName(firstNameOf(next[0]?.name ?? ''));
+    setFirstName(next[0]?.name ?? '');
   };
 
+  /**
+   * The sheet's Add / Save. The contact link is kept as it is; which addresses came from the card is
+   * recorded on the device (`contactLinks.ts`) so a typed one is never reported as changed.
+   */
   const submitRecipient = (draft: RecipientDraft) => {
     if (!sheet) return;
-    // A person picked from Contacts stays linked only while their phone and email are ones that contact
-    // has; an address typed in by hand makes them a manually entered recipient.
-    const linked: RecipientDraft = { ...draft, contactIdentifier: sheet.contact ? contactLinkFor(draft, sheet.contact) : editedContactLink(sheet.draft, draft) };
-    changeRecipients(sheet.mode === 'add' ? [...recipients, linked] : recipients.map((item) => (item.key === draft.key ? linked : item)));
+    const previous = sheet.mode === 'edit' ? recipients.find((item) => item.key === draft.key) : undefined;
+    const choices = sheet.choices;
+    void updateContactLinks((links) => recordRecipient(links, { ...draft, phoneChoices: choices?.phones ?? [], emailChoices: choices?.emails ?? [] }, previous)).catch(() => undefined);
+    if (choices && (choices.phones.length > 0 || choices.emails.length > 0)) setContactChoices((current) => ({ ...current, [draft.key]: choices }));
+    changeRecipients(sheet.mode === 'add' ? [...recipients, draft] : recipients.map((item) => (item.key === draft.key ? draft : item)));
     setSheet(null);
   };
 
@@ -154,19 +166,17 @@ export function MomentEditorView({ moment, imported, onDone, dismiss }: { moment
       if (!contact) return;
       if (multi) {
         const choice = contactChoice(contact);
-        // The same person may be added twice with different addresses; each row still needs its own key.
-        const key = await ownerKeyFor(contact.id);
+        // The name is used as a first name in greetings and titles, so the given name comes first.
         setSheet({
           mode: 'add',
           draft: {
-            key: recipients.some((item) => item.key === key) ? Crypto.randomUUID().toUpperCase() : key,
-            name: contactFullName(contact) || contact.firstName || '',
+            key: Crypto.randomUUID().toUpperCase(),
+            name: contact.firstName || contactFullName(contact) || '',
             phone: choice.phones[0] ?? '',
             email: choice.emails[0] ?? '',
             contactIdentifier: contact.id,
           },
           choices: { phones: choice.phones, emails: choice.emails },
-          contact: { id: contact.id, phones: choice.phones, emails: choice.emails },
         });
         return;
       }
@@ -233,44 +243,38 @@ export function MomentEditorView({ moment, imported, onDone, dismiss }: { moment
   };
 
   /**
-   * Android's Save for the Recipients list. The first person's moment is created with `save`; then one
-   * `festivalSave` stores everyone — each with their own phone, email and default channel (Messages
-   * when there is a phone, Email when there is only an email), their contact link, and selected — so
-   * Manage Moment → Contacts opens with all of them. A retry after a failed `festivalSave` reuses the
-   * moment already created and the same group, so nothing is duplicated.
+   * Android's Save for the Recipients list (`saveNewMoment`, MomentEditor.swift). The moment is created
+   * with the first person; then one `festivalSave` stores everyone — `ids: [newID]`, the first person
+   * with `id` and `key` newID, each other with no id and their own new random key — with a new group,
+   * each key's channel ("messages" with a phone, else "email"), `selected: true` and contact id. A
+   * retry after a failure reuses the created moment and the same group. Custom moments have no group:
+   * each other person becomes their own custom moment.
    */
   const saveRecipients = async (value: MomentInput): Promise<string> => {
     const store = momentsStore.getState();
     const [first] = recipients;
-    const person = (item: RecipientDraft) => ({ firstName: item.name.trim(), phone: item.phone.trim(), email: item.email.trim() });
-    if (value.type === 'custom') {
-      // No Manage Moment for a custom moment: one moment per person, like Swift's festival contacts.
-      let created = createdID;
-      const saved = [...savedRecipientIDs];
-      for (const [index, item] of recipients.entries()) {
-        if (saved.includes(item.key)) continue;
-        const id = await store.save({ ...value, ...person(item), sourceKey: index === 0 ? value.sourceKey : `${value.sourceKey}:${index}` });
-        if (created === null) {
-          created = id;
-          setCreatedID(id);
-        }
-        saved.push(item.key);
-        setSavedRecipientIDs([...saved]);
-      }
-      return created!;
-    }
+    const person = (item: RecipientDraft) => ({ firstName: item.name.trim(), phone: normalizedPhone(item.phone.trim()), email: item.email.trim() });
     let anchor = createdID;
     if (anchor === null) {
       anchor = await store.save({ ...value, ...person(first) });
       setCreatedID(anchor);
     }
-    // The first person is the moment just created, so Manage Moment knows them by its ID.
+    if (value.type === 'custom') {
+      const saved = [...savedRecipientIDs];
+      for (const item of recipients.slice(1)) {
+        if (saved.includes(item.key)) continue;
+        await store.save({ ...value, ...person(item), sourceKey: Crypto.randomUUID().toUpperCase() });
+        saved.push(item.key);
+        setSavedRecipientIDs([...saved]);
+      }
+      return anchor;
+    }
     const keyed = recipients.map((item, index) => ({ ...item, key: index === 0 ? anchor! : item.key }));
     const settings = newFestivalSettings(groupID);
     for (const item of keyed) {
       settings.channels[item.key] = defaultChannel(item);
-      settings.contactIDs[item.key] = item.contactIdentifier;
       settings.selected[item.key] = true;
+      settings.contactIDs[item.key] = item.contactIdentifier;
     }
     await store.request('festivalSave', {
       ids: [anchor],
@@ -355,7 +359,7 @@ export function MomentEditorView({ moment, imported, onDone, dismiss }: { moment
           </FormSection>
 
           {multi ? (
-            <FormSection header="Recipients" disabled={completedSave || savedRecipientIDs.length > 0}>
+            <FormSection header="Recipients" disabled={createdID !== null}>
               <FormRow>
                 <FormButton icon="person-add-outline" title="Choose from Contacts" onPress={() => void chooseRecipient()} testID="moment-choose-contact" />
               </FormRow>
@@ -365,7 +369,7 @@ export function MomentEditorView({ moment, imported, onDone, dismiss }: { moment
                   title="Enter recipient manually"
                   onPress={() => {
                     Keyboard.dismiss();
-                    setSheet({ mode: 'add', draft: { key: Crypto.randomUUID().toUpperCase(), name: '', phone: '', email: '', contactIdentifier: '' }, choices: null, contact: null });
+                    setSheet({ mode: 'add', draft: { key: Crypto.randomUUID().toUpperCase(), name: '', phone: '', email: '', contactIdentifier: '' }, choices: null });
                   }}
                   testID="moment-enter-recipient"
                 />
@@ -375,8 +379,7 @@ export function MomentEditorView({ moment, imported, onDone, dismiss }: { moment
                   <View style={styles.inline} testID={`moment-recipient-${index}`}>
                     <View style={styles.grow}>
                       <Text style={[textStyles.body, styles.bold, { color: theme.colors.label }]}>{item.name}</Text>
-                      {item.phone !== '' ? <Text style={[textStyles.subheadline, { color: theme.colors.secondaryLabel }]}>{maskedAddress(item, 'messages')}</Text> : null}
-                      {item.email !== '' ? <Text style={[textStyles.subheadline, { color: theme.colors.secondaryLabel }]}>{maskedAddress(item, 'email')}</Text> : null}
+                      <Text style={[textStyles.subheadline, { color: theme.colors.secondaryLabel }]}>{maskedAddresses(item)}</Text>
                     </View>
                     <Pressable
                       accessibilityRole="button"
@@ -384,7 +387,7 @@ export function MomentEditorView({ moment, imported, onDone, dismiss }: { moment
                       hitSlop={8}
                       onPress={() => {
                         Keyboard.dismiss();
-                        setSheet({ mode: 'edit', draft: item, choices: null, contact: null });
+                        setSheet({ mode: 'edit', draft: item, choices: contactChoices[item.key] ?? null });
                       }}
                       testID={`moment-recipient-edit-${index}`}
                     >
@@ -402,11 +405,16 @@ export function MomentEditorView({ moment, imported, onDone, dismiss }: { moment
                   </View>
                 </FormRow>
               ))}
+              {recipients.length === 0 ? (
+                <FormRow>
+                  <FormText caption tone="secondary" testID="moment-recipients-required">
+                    {RECIPIENTS_REQUIRED}
+                  </FormText>
+                </FormRow>
+              ) : null}
               <FormRow last>
                 <FormText caption testID="moment-recipients-note">
-                  {recipients.length === 0
-                    ? RECIPIENTS_REQUIRED
-                    : 'Only the recipients and occasion you confirm here are saved to your Nexdo account. Your address book is never uploaded.'}
+                  Only the recipients and occasion you confirm here are saved to your Nexdo account. Your address book is never uploaded.
                 </FormText>
               </FormRow>
             </FormSection>
@@ -479,6 +487,12 @@ export function MomentEditorView({ moment, imported, onDone, dismiss }: { moment
             <View style={styles.note}>
               <FormText caption testID="moment-saved-note">
                 Your moment is saved. Reload to open its details.
+              </FormText>
+            </View>
+          ) : multi && createdID !== null ? (
+            <View style={styles.note}>
+              <FormText caption testID="moment-recipients-retry">
+                Your moment is saved, but not all of its recipients are. Tap Save again to finish.
               </FormText>
             </View>
           ) : savedRecipientIDs.length > 0 ? (

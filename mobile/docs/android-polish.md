@@ -1048,3 +1048,53 @@ contact warns.
 2. Manage Moment → Contacts: both are selected, no red warning. Change a name and Save Changes: still
    no warning.
 3. Edit a row and type a phone already used by the other person: "<Name> already has this phone number."
+
+## 18. Multi-recipient Create Moment aligned with iOS 94a2ecd (2026-09-24)
+
+JavaScript only; no new build needed. Android only. Brings §17 in line with iOS
+`swift-multi-recipient-create` (94a2ecd); §17's strings and rules below are superseded.
+
+### Strings (as iOS)
+
+- Row secondary line on one line: `Mobile · ••• ••• 1234 · Email · a••••@example.com`, or either alone
+  (`maskedAddresses`). Row actions **Edit** / **Remove**, read as "Edit <name>" / "Remove <name>".
+- **Add at least one recipient.** shows while the list is empty, and the privacy note ("Only the
+  recipients and occasion you confirm here are saved to your Nexdo account. Your address book is never
+  uploaded.") always shows under it.
+- Partial save: **Your moment is saved, but not all of its recipients are. Tap Save again to finish.**
+  The Recipients list is locked once the moment exists.
+- Sheet footer **Add a phone number, an email, or both.**; quick choices read "Use phone <number>" /
+  "Use email <address>".
+- Validation: "Enter a name." / "Use a name of 80 characters or fewer." / "Enter a phone number or
+  email." / "Enter a valid phone number." / "Enter a valid email address." / "This person is already a
+  recipient." Add / Save is always enabled and shows the message on press; it clears when a field
+  changes.
+
+### Rules
+
+- Every filled field must be valid: a bad phone is refused even when the email is fine.
+- Duplicates: the same phone ignoring formatting (`FestivalValidation.phone`: digits, keeping a leading
+  +) or the same email ignoring case.
+- A picked contact pre-fills its first name, falling back to the full name. The first recipient's name
+  is the moment's name ("Kate’s Birthday").
+- Phones are saved as digits with an optional leading +, including in the first `save`; emails trimmed.
+- An imported contact starts as the first recipient.
+
+### Save flow
+
+`save` creates the moment with the first recipient, then one `festivalSave` with `ids: [newID]` and
+every recipient: the first with `id` and `key` newID, each other with no id and a new random key (§17
+keyed a picked contact by its hash). Settings get a new `groupID`, each key's channel ("messages" with a
+phone, else "email"), `selected: true` and the contact id. A failed `festivalSave` is retried alone,
+with the same moment and group. A custom moment makes each other recipient its own custom moment, with
+a new source key.
+
+### Contact warning
+
+§17 unlinked a recipient whose address was typed. Now, as iOS does, the contact id is always kept and
+the device records which saved addresses were taken from the card (`contactLinks.ts`, AsyncStorage
+`nexdo.moments.contactAddressLinks`, keys are one-way SHA-256 hashes of contact, field and address, so
+no address or contact id is stored). Save and Schedule warn only when an address taken from the card is
+no longer on it. A typed address is never compared, and an address saved before this existed is
+recorded from the card as it is now, without a warning. A deleted contact warns only if one of its
+addresses came from the card.
