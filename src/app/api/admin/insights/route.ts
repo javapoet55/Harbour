@@ -4,6 +4,7 @@ import { ZodError } from 'zod';
 import { requireAdmin } from '@/server/admin-auth';
 import { adminQuestionSchema, answerAdminAnalyticsQuestion } from '@/server/admin-insights';
 import { parseAdminDateRange } from '@/lib/admin-date-range';
+import { claimAdminInsightsQuestion } from '@/server/admin-audit';
 
 export const runtime = 'nodejs';
 
@@ -12,6 +13,9 @@ async function healthHandlerPOST(request: Request) {
     const admin = await requireAdmin();
     const { question, days, from, to } = adminQuestionSchema.parse(await request.json().catch(() => null));
     const range = from && to ? parseAdminDateRange(from, to) : undefined;
+    if (!await claimAdminInsightsQuestion(admin.id, { days, from, to, questionLength: question.length })) {
+      return NextResponse.json({ error: 'You have asked the maximum number of questions for this hour. Try again later.' }, { status: 429, headers: { 'Cache-Control': 'private, no-store' } });
+    }
     const result = await answerAdminAnalyticsQuestion(admin.id, question, days, range ? { from: range.fromDate, to: range.toDate } : undefined);
     return NextResponse.json(result, { headers: { 'Cache-Control': 'private, no-store' } });
   } catch (error) {

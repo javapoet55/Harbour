@@ -2,7 +2,7 @@ import { healthRoute } from '@/server/health/telemetry';
 import { requireAdmin } from '@/server/admin-auth';
 import { getAdminUserDashboard } from '@/server/admin-user-dashboard';
 import { adminApiFailure, adminJson } from '@/server/admin-api';
-import { adminAudit } from '@/server/admin-api-session';
+import { adminAudit } from '@/server/admin-audit';
 
 export const runtime = 'nodejs';
 

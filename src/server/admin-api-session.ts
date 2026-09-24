@@ -3,15 +3,11 @@ import { isIP } from 'node:net';
 import { prisma } from './db';
 import { normalizeEmail } from './account-auth';
 import { adminTokenHash, signInAdminPassword } from './admin-otp';
+import { adminAudit } from './admin-audit';
 
 const IP_WINDOW_MS = 15 * 60_000;
 export const ADMIN_IP_ATTEMPT_LIMIT = 20;
 const sha256 = (value: string) => createHash('sha256').update(value).digest('hex');
-
-// Admin security events are always recorded, independent of NEXDO_HEALTH_ENABLED.
-export async function adminAudit(actorId: string, action: string, targetId: string, detail: string) {
-  await prisma.healthAudit.create({ data: { actorId, action, targetId, detail } });
-}
 
 /** Rate-limit bucket for the admin frontend's reported client IP. Only a digest is stored. */
 export function adminIpTarget(value: string | null) {

@@ -10,3 +10,15 @@ it('fails closed for unauthorized operators',async()=>{vi.mocked(healthAccess).m
 it('rejects cross-origin mutation',async()=>{vi.mocked(healthAccess).mockResolvedValue({id:'operator'} as Awaited<ReturnType<typeof healthAccess>>);expect((await POST(new Request('https://nexdo.test/api/admin/health',{method:'POST',headers:{origin:'https://evil.test'}}))).status).toBe(403);});
 it('sanitizes internal failures',async()=>{vi.mocked(healthAccess).mockRejectedValue(new Error('secret database url'));const r=await GET(new Request('https://nexdo.test/api/admin/health'));expect(r.status).toBe(503);expect(await r.text()).not.toContain('secret database');});
 it('rejects invalid range and never calls the database',async()=>{vi.mocked(healthAccess).mockResolvedValue({id:'reader'} as Awaited<ReturnType<typeof healthAccess>>);expect((await GET(new Request('https://nexdo.test/api/admin/health?range=bad'))).status).toBe(400);expect(getHealth).not.toHaveBeenCalled();});
+it('skips the Origin check only for bearer requests from the admin frontend',async()=>{
+ const body=JSON.stringify({type:'incident',id:'incident-1',action:'ACKNOWLEDGED'});
+ vi.mocked(healthAccess).mockResolvedValue({id:'operator',viaBearer:true} as Awaited<ReturnType<typeof healthAccess>>);
+ expect((await POST(new Request('https://nexdo.test/api/admin/health',{method:'POST',body}))).status).toBe(200);
+ expect(incidentAction).toHaveBeenCalledWith('operator','incident-1','ACKNOWLEDGED');
+ vi.mocked(incidentAction).mockClear();
+ vi.mocked(healthAccess).mockResolvedValue({id:'operator',viaBearer:false} as Awaited<ReturnType<typeof healthAccess>>);
+ expect((await POST(new Request('https://nexdo.test/api/admin/health',{method:'POST',body}))).status).toBe(403);
+ expect((await POST(new Request('https://nexdo.test/api/admin/health',{method:'POST',body,headers:{origin:'https://evil.test'}}))).status).toBe(403);
+ expect(incidentAction).not.toHaveBeenCalled();
+ expect((await POST(new Request('https://nexdo.test/api/admin/health',{method:'POST',body,headers:{origin:'https://nexdo.test'}}))).status).toBe(200);
+});

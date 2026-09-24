@@ -2,7 +2,8 @@ import { healthRoute } from '@/server/health/telemetry';
 import { z } from 'zod';
 import { adminUserForSession, revokeAdminSession } from '@/server/admin-otp';
 import { adminBearerToken, adminClientAuthorized } from '@/server/admin-session';
-import { adminAudit, adminIpTarget, signInAdminApi } from '@/server/admin-api-session';
+import { adminIpTarget, signInAdminApi } from '@/server/admin-api-session';
+import { adminAudit } from '@/server/admin-audit';
 
 export const runtime = 'nodejs';
 // Bearer-token sessions for the separate admin frontend. Only callers holding an ADMIN_API_SECRETS value may use it.
