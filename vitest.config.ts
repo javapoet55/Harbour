@@ -1,4 +1,4 @@
-import { defineConfig } from 'vitest/config';
+import { configDefaults, defineConfig } from 'vitest/config';
 import path from 'node:path';
 import { mkdtempSync, closeSync, openSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -29,6 +29,8 @@ export default defineConfig({
       TWILIO_ACCOUNT_SID: '',
     },
     testTimeout: 20000,
+    // The admin frontend runs its own Vitest suite (cd admin && npm test).
+    exclude: [...configDefaults.exclude, 'admin/**'],
   },
   resolve: {
     alias: {
