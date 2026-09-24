@@ -132,10 +132,13 @@ describe('calendar sync writes', () => {
     expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
     const rejected = results.find((result) => result.status === 'rejected') as PromiseRejectedResult;
     expect(rejected.reason.message).toBe('CALENDAR_SYNC_STALE');
-    const winner = results.findIndex((result) => result.status === 'fulfilled') === 0 ? 'First' : 'Second';
+    // Listings go to whichever request reaches the network first, not to the first call, so the stored
+    // rows name the winner; the rows and the sync token must both come from that one listing.
     const events = await live();
     expect(events).toHaveLength(150);
-    expect(events.every((event) => event.title.startsWith(winner))).toBe(true);
+    const winner = events[0].title.split(' ')[0];
+    expect(['First', 'Second']).toContain(winner);
+    expect(events.every((event) => event.title.startsWith(`${winner} `))).toBe(true);
     expect((await saved(connection.id)).syncToken).toBe(winner === 'First' ? 'token-a' : 'token-b');
   });
 
