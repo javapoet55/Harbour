@@ -27,20 +27,33 @@ function adminRequest(path: string, init: { method?: string; body?: object; orig
   if (init.forwardedFor) headers['x-forwarded-for'] = init.forwardedFor;
   return new NextRequest(`https://admin.nexdo.test${path}`, { method: init.method ?? 'POST', headers, body: init.body ? JSON.stringify(init.body) : undefined });
 }
-const login = (init: Parameters<typeof adminRequest>[1] = {}) => authPOST(adminRequest('/api/admin/auth', { body: { action: 'login', email: 'admin@nexdo.test', password: 'correct horse' }, forwardedFor: '203.0.113.9, 10.0.0.2', ...init }));
+const auth = (body: object, init: Parameters<typeof adminRequest>[1] = {}) => authPOST(adminRequest('/api/admin/auth', { body, forwardedFor: '203.0.113.9, 10.0.0.2', ...init }));
+const requestCode = (init: Parameters<typeof adminRequest>[1] = {}) => auth({ action: 'request', email: 'admin@nexdo.test' }, init);
+const verify = (init: Parameters<typeof adminRequest>[1] = {}) => auth({ action: 'verify', email: 'admin@nexdo.test', code: '042917' }, init);
 const session = { token: TOKEN, expiresAt: new Date(Date.now() + 8 * 3_600_000).toISOString(), user: { id: 'admin-1', name: 'Admin', email: 'admin@nexdo.test' } };
+const accepted = { ok: true, message: 'If this email can sign in to Nexdo Admin, a 6-digit code is on its way.' };
 
 beforeEach(() => { backend.mockReset(); vi.stubGlobal('fetch', backend); resetLoginAttempts(); mocks.cookie = undefined; });
 afterEach(() => vi.unstubAllGlobals());
 
 describe('admin sign-in', () => {
-  it('signs in through the backend and sets a host-only, httpOnly, Secure, SameSite=Strict cookie', async () => {
-    backend.mockResolvedValue(Response.json(session));
-    const response = await login();
+  it('forwards a code request with the client secret and IP, and passes the uniform answer through', async () => {
+    backend.mockResolvedValue(Response.json({ ...accepted, extra: 'dropped' }));
+    const response = await requestCode();
     expect(response.status).toBe(200);
-    expect(call(0)).toMatchObject({ url: 'http://backend.test/api/admin/session', method: 'POST', body: { email: 'admin@nexdo.test', password: 'correct horse' } });
+    expect(await response.json()).toEqual(accepted);
+    expect(response.headers.get('set-cookie')).toBeNull();
+    expect(call(0)).toMatchObject({ url: 'http://backend.test/api/admin/session', method: 'POST', body: { action: 'request', email: 'admin@nexdo.test' } });
     expect(call(0).headers).toMatchObject({ 'X-Admin-Client': SECRET, 'X-Admin-Client-IP': '203.0.113.9' });
     expect(call(0).headers.Authorization).toBeUndefined();
+  });
+
+  it('verifies the code through the backend and sets a host-only, httpOnly, Secure, SameSite=Strict cookie', async () => {
+    backend.mockResolvedValue(Response.json(session));
+    const response = await verify();
+    expect(response.status).toBe(200);
+    expect(call(0)).toMatchObject({ method: 'POST', body: { action: 'verify', email: 'admin@nexdo.test', code: '042917' } });
+    expect(call(0).headers).toMatchObject({ 'X-Admin-Client': SECRET, 'X-Admin-Client-IP': '203.0.113.9' });
     const cookie = response.headers.get('set-cookie')!;
     expect(cookie).toMatch(new RegExp(`^__Host-nexdo_admin=${TOKEN};`));
     expect(cookie).toMatch(/; Path=\//);
@@ -53,39 +66,53 @@ describe('admin sign-in', () => {
   });
 
   it('rejects cross-origin and origin-less requests before contacting the backend', async () => {
-    expect((await login({ origin: 'https://evil.test' })).status).toBe(403);
-    expect((await login({ origin: null })).status).toBe(403);
-    expect((await login({ origin: 'null' })).status).toBe(403);
+    expect((await requestCode({ origin: 'https://evil.test' })).status).toBe(403);
+    expect((await verify({ origin: null })).status).toBe(403);
+    expect((await verify({ origin: 'null' })).status).toBe(403);
     expect((await insightsPOST(adminRequest('/api/admin/insights', { origin: 'https://evil.test', cookie: TOKEN, body: { question: 'How is usage?', days: 30 } }))).status).toBe(403);
     expect((await healthPOST(adminRequest('/api/admin/health', { origin: null, cookie: TOKEN, body: { type: 'incident', id: 'i', action: 'RESOLVED' } }))).status).toBe(403);
     expect(backend).not.toHaveBeenCalled();
   });
 
-  it('relays rejected credentials without setting a cookie, and hides unexpected backend failures', async () => {
-    backend.mockResolvedValueOnce(Response.json({ error: 'Invalid email or password.' }, { status: 401 }));
-    const rejected = await login();
+  it('rejects passwords, bad emails and malformed codes without contacting the backend', async () => {
+    expect((await auth({ action: 'login', email: 'admin@nexdo.test', password: 'correct horse' })).status).toBe(400);
+    expect(await (await auth({ action: 'request', email: 'not-an-email' })).json()).toEqual({ error: 'Enter a valid email address.' });
+    const shortCode = await auth({ action: 'verify', email: 'admin@nexdo.test', code: '12345' });
+    expect(shortCode.status).toBe(400);
+    expect(await shortCode.json()).toEqual({ error: 'Enter the 6-digit code from the email.' });
+    expect(backend).not.toHaveBeenCalled();
+  });
+
+  it('relays a rejected code or a limit without setting a cookie, and hides unexpected backend failures', async () => {
+    backend.mockResolvedValueOnce(Response.json({ error: 'That code is incorrect or has expired.' }, { status: 401 }));
+    const rejected = await verify();
     expect(rejected.status).toBe(401);
-    expect(await rejected.json()).toEqual({ error: 'Invalid email or password.' });
+    expect(await rejected.json()).toEqual({ error: 'That code is incorrect or has expired.' });
     expect(rejected.headers.get('set-cookie')).toBeNull();
+    backend.mockResolvedValueOnce(Response.json({ error: 'Too many attempts. Please try again in 15 minutes.' }, { status: 429 }));
+    expect((await requestCode()).status).toBe(429);
     backend.mockResolvedValueOnce(Response.json({ error: 'stack trace: secret' }, { status: 500 }));
-    const failed = await login();
+    const failed = await verify();
     expect(failed.status).toBe(503);
     expect(await failed.text()).not.toContain('secret');
     backend.mockResolvedValueOnce(Response.json({ token: 'not-a-token' }));
-    expect((await login()).status).toBe(503);
+    expect((await verify()).status).toBe(503);
+    backend.mockResolvedValueOnce(Response.json({ sent: true }));
+    expect((await requestCode()).status).toBe(503);
   });
 
-  it('limits sign-in attempts per client IP in memory', async () => {
-    backend.mockImplementation(async () => Response.json({ error: 'Invalid email or password.' }, { status: 401 }));
-    for (let i = 0; i < LOGIN_ATTEMPTS_PER_IP; i++) expect((await login()).status).toBe(401);
-    expect((await login()).status).toBe(429);
+  it('limits code requests and attempts together per client IP in memory', async () => {
+    backend.mockImplementation(async () => Response.json({ error: 'That code is incorrect or has expired.' }, { status: 401 }));
+    for (let i = 0; i < LOGIN_ATTEMPTS_PER_IP; i++) expect((await (i % 2 ? requestCode() : verify())).status).toBe(401);
+    expect((await verify()).status).toBe(429);
+    expect((await requestCode()).status).toBe(429);
     expect(backend).toHaveBeenCalledTimes(LOGIN_ATTEMPTS_PER_IP);
-    expect((await login({ forwardedFor: '198.51.100.7' })).status).toBe(401);
+    expect((await verify({ forwardedFor: '198.51.100.7' })).status).toBe(401);
   });
 
   it('revokes the previous session when signing in again', async () => {
     backend.mockResolvedValueOnce(Response.json({ ...session, token: NEXT })).mockResolvedValueOnce(new Response(null, { status: 204 }));
-    const response = await login({ cookie: TOKEN });
+    const response = await verify({ cookie: TOKEN });
     expect(response.headers.get('set-cookie')).toContain(`__Host-nexdo_admin=${NEXT}`);
     expect(call(1)).toMatchObject({ method: 'DELETE', url: 'http://backend.test/api/admin/session' });
     expect(call(1).headers.Authorization).toBe(`Bearer ${TOKEN}`);
