@@ -128,12 +128,12 @@ function AdminInsightChart({ chart }: { chart: AdminAnswerChart }) {
       {[0, .25, .5, .75, 1].map((ratio) => <line key={ratio} x1={left} x2={left + plotWidth} y1={top + ratio * plotHeight} y2={top + ratio * plotHeight} className="admin-insight-grid"/>)}
       {chart.type === 'line' ? chart.series.map((series) => {
         const points = labels.map((label, index) => ({ label, index, value: series.data.find((point) => point.label === label)?.value ?? 0 }));
-        return <g key={series.name}><polyline points={points.map((point) => `${x(point.index)},${y(point.value)}`).join(' ')} fill="none" stroke={series.color} strokeWidth="3" strokeLinejoin="round" strokeLinecap="round"/>{points.map((point) => <circle key={point.label} cx={x(point.index)} cy={y(point.value)} r="4" fill={series.color}><title>{point.label}: {point.value}</title></circle>)}</g>;
+        return <g key={series.name}><polyline points={points.map((point) => `${x(point.index)},${y(point.value)}`).join(' ')} fill="none" stroke={series.color} strokeWidth="3" strokeLinejoin="round" strokeLinecap="round"/>{points.map((point) => <circle key={point.label} cx={x(point.index)} cy={y(point.value)} r="4" fill={series.color}><title>{`${point.label}: ${point.value}`}</title></circle>)}</g>;
       }) : chart.series.flatMap((series, seriesIndex) => labels.map((label, labelIndex) => {
         const value = series.data.find((point) => point.label === label)?.value ?? 0;
         const barHeight = Math.max(1, plotHeight - y(value) + top);
         const groupStart = left + labelIndex * barGroup + (barGroup - barWidth * chart.series.length) / 2;
-        return <rect key={`${series.name}-${label}`} x={groupStart + seriesIndex * barWidth} y={y(value)} width={barWidth} height={barHeight} rx="3" fill={series.color}><title>{series.name} · {label}: {value}</title></rect>;
+        return <rect key={`${series.name}-${label}`} x={groupStart + seriesIndex * barWidth} y={y(value)} width={barWidth} height={barHeight} rx="3" fill={series.color}><title>{`${series.name} · ${label}: ${value}`}</title></rect>;
       }))}
       {labels.map((label, index) => <text key={label} x={chart.type === 'bar' ? left + index * barGroup + barGroup / 2 : x(index)} y={225} textAnchor="middle" className="admin-insight-axis-label">
         <title>{label}</title>

@@ -45,7 +45,7 @@ export function LineChart({ data, color = '#1575f6', valueLabel }: { data: Trend
       <defs><linearGradient id={`fill-${color.replace('#', '')}`} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={color} stopOpacity=".25"/><stop offset="100%" stopColor={color} stopOpacity="0"/></linearGradient></defs>
       {points.length > 1 && <polygon points={`0,190 ${path} 680,190`} fill={`url(#fill-${color.replace('#', '')})`} />}
       <polyline points={path} fill="none" stroke={color} strokeWidth="4" strokeLinejoin="round" strokeLinecap="round" />
-      {points.map((point, index) => <circle key={index} cx={point.x} cy={point.y} r="4" fill={color}><title>{point.label}: {point.value}</title></circle>)}
+      {points.map((point, index) => <circle key={index} cx={point.x} cy={point.y} r="4" fill={color}><title>{`${point.label}: ${point.value}`}</title></circle>)}
     </svg>
     <div className="chart-labels"><span>{first}</span><span>{middle}</span><span>{last}</span></div>
   </div>;
