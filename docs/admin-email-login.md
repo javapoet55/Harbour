@@ -34,6 +34,21 @@ Counted in `HealthAudit` over a sliding 15 minutes, for every address whether al
 
 Exceeding one returns `429`. Audit actions: `ADMIN_CODE_REQUESTED`, `ADMIN_LOGIN`, `ADMIN_LOGIN_FAILED`, `ADMIN_RATE_LIMITED` (plus `ADMIN_LOGOUT`). Emails and IPs appear only as HMAC-SHA256 digests keyed with `HARBOR_SESSION_SECRET`. Codes and addresses are never logged.
 
+## Logs
+
+Every code request writes exactly one `admin_code_request` line with its `outcome`, and nothing identifying:
+
+| outcome | Meaning |
+|---|---|
+| `sent` | SendGrid accepted the email. |
+| `not_allowed` | The address is not in `NEXDO_ADMIN_EMAILS`. |
+| `no_account` | Allowed, but no Nexdo account uses the address. |
+| `deleted_account` | Allowed, but the account is deleted. |
+| `rate_limited_email` / `rate_limited_ip` | Blocked by a request limit. |
+| `send_failed` | Not delivered: `providerStatus` is SendGrid's HTTP status, or `errorCode` is `not_configured`, `sender_not_configured`, `TIMEOUT` or a network code such as `ECONNRESET`. Logged as a warning. |
+
+The send runs after the response through Next's `after()`, which keeps it alive on the Node server until it finishes. For `sent` and `send_failed`, the line appears once SendGrid answers. At startup each server logs `admin_allowlist_loaded` with the number of addresses parsed from `NEXDO_ADMIN_EMAILS` (a warning when it is 0).
+
 ## Email
 
 Sent through SendGrid with the shared template (`src/server/email/template.ts`, `adminSignInMessage` in `messages.ts`), like verify-email and reset-password. The sender address is `NEXDO_ADMIN_FROM_EMAIL` if set, otherwise `EMAIL_FROM_ADDRESS` (then `SENDGRID_FROM_EMAIL`); the sender name is `EMAIL_FROM_NAME`. The email contains no links, not even the support address.

@@ -6,7 +6,6 @@ import { normalizeEmail } from './account-auth';
 import { isAdminEmail } from './admin-allowlist';
 import { adminEmailConfigured, adminEmailProvider } from '@/providers/admin-email';
 import { adminSignInMessage } from './email/messages';
-import { log } from '@/lib/logger';
 
 export const ADMIN_CODE_TTL_MINUTES = 10;
 export const ADMIN_CODE_MAX_ATTEMPTS = 5;
@@ -24,20 +23,20 @@ const unusableHash = () => (placeholderHash ??= bcrypt.hash(opaqueToken(), 10));
  * only as bcrypt hashes, expire after ten minutes, and a new request invalidates every older unused code.
  * Unknown and unauthorized addresses get the same result and nothing is sent. Request rate limits live in
  * the API layer, keyed by email and IP for every address, so they cannot reveal who is an admin.
- * `delivery` resolves to whether the email was accepted and never rejects.
+ * `delivery` resolves to the request's outcome (for logging only; never shown to the requester) and never rejects.
  */
-export async function requestAdminCode(value: string): Promise<{ id: string; delivery: Promise<boolean> }> {
+export async function requestAdminCode(value: string): Promise<{ id: string; delivery: Promise<AdminCodeOutcome> }> {
   const email = normalizeEmail(value);
   const id = opaqueToken();
   const code = String(randomInt(0, 1_000_000)).padStart(6, '0');
   const codeHash = await bcrypt.hash(code, 10);
-  const user = isAdminEmail(email) ? await prisma.user.findFirst({ where: { email, deletedAt: null } }) : null;
-  if (!user) return { id, delivery: Promise.resolve(false) };
+  const done = (outcome: AdminCodeOutcome) => ({ id, delivery: Promise.resolve(outcome) });
+  if (!isAdminEmail(email)) return done({ outcome: 'not_allowed' });
+  const user = await prisma.user.findUnique({ where: { email } });
+  if (!user) return done({ outcome: 'no_account' });
+  if (user.deletedAt) return done({ outcome: 'deleted_account' });
   // Never issue a code that cannot be delivered, and never let a mock delivery grant access.
-  if (!adminEmailConfigured()) {
-    log('warn', 'admin_otp.email_not_configured');
-    return { id, delivery: Promise.resolve(false) };
-  }
+  if (!adminEmailConfigured()) return done({ outcome: 'send_failed', errorCode: 'not_configured' });
   await prisma.$transaction(async (tx) => {
     // Serialize requests for this account across instances, including concurrent resends.
     await tx.user.update({ where: { id: user.id }, data: { updatedAt: new Date() } });
@@ -47,18 +46,22 @@ export async function requestAdminCode(value: string): Promise<{ id: string; del
   return { id, delivery: deliverAdminCode(id, email, code) };
 }
 
-async function deliverAdminCode(id: string, email: string, code: string) {
+export type AdminCodeOutcome =
+  | { outcome: 'sent' | 'not_allowed' | 'no_account' | 'deleted_account' }
+  | { outcome: 'send_failed'; providerStatus?: number; errorCode?: string };
+
+async function deliverAdminCode(id: string, email: string, code: string): Promise<AdminCodeOutcome> {
+  let failure: AdminCodeOutcome;
   try {
     const result = await adminEmailProvider.send({ to: email, ...adminSignInMessage(code, `${ADMIN_CODE_TTL_MINUTES} minutes`) });
-    if (result.status === 'SENT') return true;
-    // Provider reasons never include the recipient or the message.
-    log('warn', 'admin_otp.delivery_failed', { reason: result.reason ?? 'unknown' });
+    if (result.status === 'SENT') return { outcome: 'sent' };
+    failure = { outcome: 'send_failed', providerStatus: result.providerStatus, errorCode: result.errorCode ?? (result.providerStatus ? undefined : 'REQUEST_FAILED') };
   } catch {
-    log('warn', 'admin_otp.delivery_failed', { reason: 'exception' });
+    failure = { outcome: 'send_failed', errorCode: 'EXCEPTION' };
   }
   // An undelivered code must not stay redeemable.
   await prisma.adminLoginToken.update({ where: { id }, data: { usedAt: new Date() } }).catch(() => undefined);
-  return false;
+  return failure;
 }
 
 /** Redeems a code by its challenge id. At most five tries per code; single use; creates an 8-hour session. */

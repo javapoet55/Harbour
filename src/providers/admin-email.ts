@@ -16,7 +16,7 @@ export const adminEmailProvider: EmailProvider = {
   name: 'sendgrid',
   async send(message) {
     const from = adminEmailSender();
-    if (!adminEmailConfigured() || !from) return { id: '', status: 'FAILED', reason: 'Admin email is not configured' };
+    if (!adminEmailConfigured() || !from) return { id: '', status: 'FAILED', reason: 'Admin email is not configured', errorCode: 'not_configured' };
     return emailProvider.send({ ...message, from });
   },
 };

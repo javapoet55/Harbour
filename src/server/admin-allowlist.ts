@@ -8,3 +8,9 @@ export function adminEmails() {
 export function isAdminEmail(email: string | null | undefined) {
   return Boolean(email && adminEmails().has(email.trim().toLowerCase()));
 }
+
+/** Logged once at server start: how many admin addresses were parsed (the count only, never the addresses). */
+export function adminAllowlistSummary() {
+  const count = adminEmails().size;
+  return { level: count ? 'info' as const : 'warn' as const, event: 'admin_allowlist_loaded', fields: { count } };
+}

@@ -1,5 +1,6 @@
 import { prisma } from './db';
-import { adminTokenHash, requestAdminCode, verifyAdminCodeForEmail } from './admin-otp';
+import { adminTokenHash, requestAdminCode, verifyAdminCodeForEmail, type AdminCodeOutcome } from './admin-otp';
+import { log } from '@/lib/logger';
 import { adminAudit, adminEmailTarget, adminIpTarget } from './admin-audit';
 
 // Email-code sign-in for the admin frontend. Limits are counted from HealthAudit rows for every address,
@@ -12,9 +13,17 @@ const windowStart = () => new Date(Date.now() - WINDOW_MS);
 // Short, non-reversible account reference for audit details. Never the address itself.
 const accountRef = (email: string) => adminEmailTarget(email).slice(0, 'email:'.length + 12);
 
+type RequestOutcome = AdminCodeOutcome | { outcome: 'rate_limited_email' | 'rate_limited_ip' };
+
+/** Exactly one line per code request: the outcome, plus the provider's status or error code on a failed send. */
+export function logAdminCodeRequest(result: RequestOutcome) {
+  log(result.outcome === 'send_failed' ? 'warn' : 'info', 'admin_code_request', result);
+}
+
 /**
  * Accepts a code request and starts delivery for allowlisted accounts. The caller answers the same way for
- * every address; `delivery` is returned only so tests can wait for it and never rejects.
+ * every address. `delivery` settles once the outcome is logged, after any email is sent; it never rejects,
+ * and the route keeps the request alive until it settles.
  */
 export async function requestAdminCodeApi(email: string, clientIp: string | null) {
   const emailTarget = adminEmailTarget(email);
@@ -26,12 +35,13 @@ export async function requestAdminCodeApi(email: string, clientIp: string | null
   if (byEmail >= ADMIN_CODE_REQUESTS_PER_EMAIL || byIp >= ADMIN_CODE_REQUESTS_PER_IP) {
     const perEmail = byEmail >= ADMIN_CODE_REQUESTS_PER_EMAIL;
     await adminAudit('anonymous', 'ADMIN_RATE_LIMITED', perEmail ? emailTarget : ipTarget, perEmail ? 'Admin code requests: limit per email reached' : 'Admin code requests: limit per IP reached');
+    logAdminCodeRequest({ outcome: perEmail ? 'rate_limited_email' : 'rate_limited_ip' });
     throw new Error('RATE_LIMITED');
   }
   // targetId is the email bucket and detail the IP bucket, so one row serves both limits.
   await adminAudit('anonymous', 'ADMIN_CODE_REQUESTED', emailTarget, ipTarget);
   const { delivery } = await requestAdminCode(email);
-  return { delivery };
+  return { delivery: delivery.then(logAdminCodeRequest, () => logAdminCodeRequest({ outcome: 'send_failed', errorCode: 'EXCEPTION' })) };
 }
 
 /** Redeems a code for the admin frontend and returns a bearer session. */
