@@ -1,3 +1,4 @@
+import { after } from 'next/server';
 import { healthRoute } from '@/server/health/telemetry';
 import { z } from 'zod';
 import { adminUserForSession, revokeAdminSession } from '@/server/admin-otp';
@@ -27,8 +28,9 @@ async function healthHandlerPOST(request: Request) {
   try {
     if (body.action === 'request') {
       // Delivery continues after the response, so response time does not depend on whether an email is sent.
+      // after() tells Next to keep this request's work alive until the send finishes and is logged.
       const { delivery } = await requestAdminCodeApi(body.email, clientIp);
-      void delivery;
+      afterResponse(delivery);
       return reply(codeRequestAccepted);
     }
     return reply(await verifyAdminCodeApi(body.email, body.code, clientIp));
@@ -38,6 +40,11 @@ async function healthHandlerPOST(request: Request) {
     if (reason === 'RATE_LIMITED') return reply({ error: 'Too many attempts. Please try again in 15 minutes.' }, 429);
     return reply({ error: 'Unable to sign in. Please try again shortly.' }, 503);
   }
+}
+
+function afterResponse(work: Promise<void>) {
+  // Outside a Next request scope (tests, scripts) after() throws; the promise still runs to completion there.
+  try { after(work); } catch { void work; }
 }
 
 async function healthHandlerDELETE(request: Request) {

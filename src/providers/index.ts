@@ -17,7 +17,7 @@ export const emailProvider: EmailProvider = {
     }
     // EMAIL_FROM_* take precedence; the SENDGRID_FROM_* names remain as fallbacks for existing deployments.
     const from = message.from?.trim() || process.env.EMAIL_FROM_ADDRESS?.trim() || process.env.SENDGRID_FROM_EMAIL?.trim();
-    if (!from) return { id: '', status: 'FAILED', reason: 'EMAIL_FROM_ADDRESS is not configured' };
+    if (!from) return { id: '', status: 'FAILED', reason: 'EMAIL_FROM_ADDRESS is not configured', errorCode: 'sender_not_configured' };
     const fromName = process.env.EMAIL_FROM_NAME?.trim() || process.env.SENDGRID_FROM_NAME?.trim() || 'Nexdo';
     try {
       const response = await observedFetch('https://api.sendgrid.com/v3/mail/send', {
@@ -25,11 +25,19 @@ export const emailProvider: EmailProvider = {
         headers: { Authorization: `Bearer ${process.env.SENDGRID_API_KEY}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ personalizations: [{ to: [{ email: message.to }] }], from: { email: from, name: fromName }, subject: message.subject, content: [{ type: 'text/plain', value: message.text }, ...(message.html ? [{ type: 'text/html', value: message.html }] : [])] }),
       });
-      if (!response.ok) return { id: '', status: 'FAILED', reason: `SendGrid ${response.status}` };
+      if (!response.ok) return { id: '', status: 'FAILED', reason: `SendGrid ${response.status}`, providerStatus: response.status };
       return { id: response.headers.get('x-message-id') || `sendgrid-${Date.now()}`, status: 'SENT' };
-    } catch { return { id: '', status: 'FAILED', reason: 'SendGrid request failed' }; }
+    } catch (error) { return { id: '', status: 'FAILED', reason: 'SendGrid request failed', errorCode: requestErrorCode(error) }; }
   },
 };
+
+// A network failure's code (ECONNRESET, ENOTFOUND, TIMEOUT...), never its message.
+export function requestErrorCode(error: unknown) {
+  if (!(error instanceof Error)) return 'REQUEST_FAILED';
+  if (error.name === 'TimeoutError' || error.name === 'AbortError') return 'TIMEOUT';
+  const code = (error.cause as { code?: unknown } | undefined)?.code ?? (error as { code?: unknown }).code;
+  return typeof code === 'string' && /^[A-Z][A-Z0-9_]{1,40}$/.test(code) ? code : 'REQUEST_FAILED';
+}
 
 export const smsProvider: SmsProvider = {
   name: configured(process.env.TWILIO_ACCOUNT_SID) ? 'twilio' : 'mock-sms',

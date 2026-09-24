@@ -40,6 +40,15 @@ describe('admin sign-in email delivery', () => {
 
   it('reports a SendGrid rejection as a failure', async () => {
     fetchMock.mockResolvedValueOnce(new Response('{}', { status: 401 }));
-    expect(await adminEmailProvider.send(message)).toMatchObject({ status: 'FAILED', reason: 'SendGrid 401' });
+    expect(await adminEmailProvider.send(message)).toMatchObject({ status: 'FAILED', reason: 'SendGrid 401', providerStatus: 401 });
+  });
+
+  it('reports a network failure by its error code only, and a missing configuration as not_configured', async () => {
+    fetchMock.mockRejectedValueOnce(new TypeError('fetch failed', { cause: Object.assign(new Error('getaddrinfo ENOTFOUND api.sendgrid.com'), { code: 'ENOTFOUND' }) }));
+    expect(await adminEmailProvider.send(message)).toEqual({ id: '', status: 'FAILED', reason: 'SendGrid request failed', errorCode: 'ENOTFOUND' });
+    fetchMock.mockRejectedValueOnce(new DOMException('The operation timed out.', 'TimeoutError'));
+    expect((await adminEmailProvider.send(message)).errorCode).toBe('TIMEOUT');
+    vi.stubEnv('SENDGRID_API_KEY', '');
+    expect((await adminEmailProvider.send(message)).errorCode).toBe('not_configured');
   });
 });

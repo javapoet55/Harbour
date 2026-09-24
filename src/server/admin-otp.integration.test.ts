@@ -34,7 +34,7 @@ const sentTo = (email: string) => sent.filter((message) => message.to === email)
 /** Requests a code through the service and returns what was emailed. */
 async function emailedCode(email: string) {
   const { id, delivery } = await requestAdminCode(email);
-  expect(await delivery).toBe(true);
+  expect(await delivery).toEqual({ outcome: 'sent' });
   return { id, code: codeIn(sentTo(email.toLowerCase()).at(-1)!) };
 }
 
@@ -118,18 +118,21 @@ describe('admin email codes', () => {
     expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
   });
 
-  it('sends nothing to unknown, non-admin or deleted accounts, with the same result shape', async () => {
+  it('sends nothing to unknown, non-admin, missing or deleted accounts, with the same result shape', async () => {
     const admin = await account();
+    const ghost = `ghost-${crypto.randomUUID()}@nexdo.test`;
     const outsider = await prisma.user.create({ data: { email: `outsider-${crypto.randomUUID()}@nexdo.test`, name: 'Outsider', passwordHash: 'unused' } });
     ids.push(outsider.id);
     for (const email of ['stranger@nexdo.test', outsider.email]) {
       const result = await requestAdminCode(email);
       expect(Object.keys(result).sort()).toEqual(['delivery', 'id']);
       expect(result.id).toMatch(/^[a-f0-9]{64}$/);
-      expect(await result.delivery).toBe(false);
+      expect(await result.delivery).toEqual({ outcome: 'not_allowed' });
     }
+    process.env.NEXDO_ADMIN_EMAILS = `${admin.email},${ghost}`;
+    expect(await (await requestAdminCode(ghost)).delivery).toEqual({ outcome: 'no_account' });
     await prisma.user.update({ where: { id: admin.id }, data: { deletedAt: new Date() } });
-    expect(await (await requestAdminCode(admin.email)).delivery).toBe(false);
+    expect(await (await requestAdminCode(admin.email)).delivery).toEqual({ outcome: 'deleted_account' });
     expect(sent).toHaveLength(0);
     expect(await prisma.adminLoginToken.count({ where: { userId: { in: [admin.id, outsider.id] } } })).toBe(0);
     await expect(verifyAdminCodeForEmail('stranger@nexdo.test', '123456')).rejects.toThrow('INVALID_ADMIN_CODE');
@@ -139,7 +142,7 @@ describe('admin email codes', () => {
     const user = await account(); const { code } = await emailedCode(user.email);
     process.env.NEXDO_ADMIN_EMAILS = '';
     await expect(verifyAdminCodeForEmail(user.email, code)).rejects.toThrow('INVALID_ADMIN_CODE');
-    expect(await (await requestAdminCode('jsriramk@gmail.com')).delivery).toBe(false);
+    expect(await (await requestAdminCode('jsriramk@gmail.com')).delivery).toEqual({ outcome: 'not_allowed' });
     process.env.NEXDO_ADMIN_EMAILS = user.email;
     const session = await verifyAdminCodeForEmail(user.email, code);
     process.env.NEXDO_ADMIN_EMAILS = '';
@@ -152,21 +155,18 @@ describe('admin email codes', () => {
     expect(await adminUserForSession(await verifyAdminCodeForEmail(user.email, code))).toMatchObject({ id: user.id });
   });
 
-  it('fails closed when SendGrid is not configured or rejects the email, without logging the code or address', async () => {
+  it('fails closed when SendGrid is not configured, rejects the email or cannot be reached, and reports why', async () => {
     const user = await account();
-    const logged: string[] = [];
-    for (const method of ['log', 'info', 'warn', 'error'] as const) vi.spyOn(console, method).mockImplementation((...args) => { logged.push(args.map(String).join(' ')); });
     vi.stubEnv('SENDGRID_API_KEY', '');
-    expect(await (await requestAdminCode(user.email)).delivery).toBe(false);
+    expect(await (await requestAdminCode(user.email)).delivery).toEqual({ outcome: 'send_failed', errorCode: 'not_configured' });
     expect(await prisma.adminLoginToken.count({ where: { userId: user.id } })).toBe(0);
     vi.stubEnv('SENDGRID_API_KEY', 'test-sendgrid-key');
-    sendgrid.mockImplementationOnce(async () => new Response('{}', { status: 500 }));
-    const { id, delivery } = await requestAdminCode(user.email);
-    expect(await delivery).toBe(false);
-    expect((await prisma.adminLoginToken.findUniqueOrThrow({ where: { id } })).usedAt).not.toBeNull();
-    expect(logged.length).toBeGreaterThan(0);
-    expect(logged.join('\n')).not.toContain(user.email);
-    expect(logged.join('\n')).not.toMatch(/\b\d{6}\b/);
+    sendgrid.mockImplementationOnce(async () => new Response('{"errors":[{"message":"secret detail"}]}', { status: 403 }));
+    const rejected = await requestAdminCode(user.email);
+    expect(await rejected.delivery).toEqual({ outcome: 'send_failed', providerStatus: 403, errorCode: undefined });
+    expect((await prisma.adminLoginToken.findUniqueOrThrow({ where: { id: rejected.id } })).usedAt).not.toBeNull();
+    sendgrid.mockImplementationOnce(async () => { throw new TypeError('fetch failed', { cause: Object.assign(new Error('socket hang up'), { code: 'ECONNRESET' }) }); });
+    expect(await (await requestAdminCode(user.email)).delivery).toEqual({ outcome: 'send_failed', errorCode: 'ECONNRESET' });
   });
 
   it('requires an admin session even with a normal account cookie', async () => {
@@ -323,6 +323,41 @@ describe('admin frontend code sign-in and bearer sessions', () => {
     const agedIp = ip();
     await prisma.healthAudit.createMany({ data: Array.from({ length: ADMIN_VERIFY_ATTEMPTS_PER_IP + 5 }, () => ({ actorId: 'anonymous', action: 'ADMIN_LOGIN_FAILED', targetId: adminIpTarget(agedIp), detail: 'seeded', createdAt: new Date(Date.now() - 16 * 60_000) })) });
     expect((await post({ action: 'verify', email: user.email, code }, agedIp)).status).toBe(200);
+  });
+
+  it('logs one admin_code_request line per request with the outcome only', async () => {
+    const lines: string[] = [];
+    for (const method of ['log', 'info', 'warn', 'error'] as const) vi.spyOn(console, method).mockImplementation((...args) => { lines.push(args.map(String).join(' ')); });
+    const entries = () => lines.map((line) => JSON.parse(line)).filter((entry) => entry.event === 'admin_code_request');
+    const outcomeFor = async (email: string, clientIp = ip()) => {
+      const before = entries().length;
+      expect((await post({ action: 'request', email }, clientIp)).status).toBe(200);
+      return vi.waitFor(() => { const next = entries().slice(before); expect(next).toHaveLength(1); return next[0]; });
+    };
+    const admin = await account(); const ghost = `ghost-${crypto.randomUUID()}@nexdo.test`;
+    const removed = await prisma.user.create({ data: { email: `removed-${crypto.randomUUID()}@nexdo.test`, name: 'Removed', passwordHash: 'unused', deletedAt: new Date() } });
+    ids.push(removed.id);
+    process.env.NEXDO_ADMIN_EMAILS = [admin.email, ghost, removed.email].join(',');
+    expect(await outcomeFor(admin.email)).toMatchObject({ level: 'info', outcome: 'sent' });
+    expect(await outcomeFor(`nobody-${crypto.randomUUID()}@nexdo.test`)).toMatchObject({ outcome: 'not_allowed' });
+    expect(await outcomeFor(ghost)).toMatchObject({ outcome: 'no_account' });
+    expect(await outcomeFor(removed.email)).toMatchObject({ outcome: 'deleted_account' });
+    sendgrid.mockImplementationOnce(async () => new Response('{"errors":[{"message":"The from address does not match a verified Sender Identity"}]}', { status: 403 }));
+    expect(await outcomeFor(admin.email)).toMatchObject({ level: 'warn', outcome: 'send_failed', providerStatus: 403 });
+    expect(await outcomeFor(admin.email)).toMatchObject({ outcome: 'sent' });
+    expect((await post({ action: 'request', email: admin.email })).status).toBe(429);
+    expect(entries().at(-1)).toMatchObject({ outcome: 'rate_limited_email' });
+    const busyIp = ip();
+    await prisma.healthAudit.createMany({ data: Array.from({ length: ADMIN_CODE_REQUESTS_PER_IP }, () => ({ actorId: 'anonymous', action: 'ADMIN_CODE_REQUESTED', targetId: 'email:seeded', detail: adminIpTarget(busyIp) })) });
+    expect((await post({ action: 'request', email: `nobody-${crypto.randomUUID()}@nexdo.test` }, busyIp)).status).toBe(429);
+    expect(entries().at(-1)).toMatchObject({ outcome: 'rate_limited_ip' });
+    expect(entries()).toHaveLength(8);
+
+    const all = lines.join('\n');
+    for (const email of [admin.email, ghost, removed.email]) expect(all).not.toContain(email);
+    for (const code of sent.map(codeIn)) expect(all).not.toContain(code);
+    expect(all).not.toContain('Sender Identity');
+    for (const entry of entries()) expect(Object.keys(entry).every((key) => ['ts', 'level', 'event', 'outcome', 'providerStatus', 'errorCode'].includes(key))).toBe(true);
   });
 
   it('never logs the email address or the code', async () => {
