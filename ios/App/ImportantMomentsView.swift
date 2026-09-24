@@ -320,6 +320,7 @@ struct ReviewWishView: View {
     @State private var personalContext = ""
     @State private var aiConsent = false
     @State private var next = false
+    @State private var wishGeneration = WishGenerationGate()
     @FocusState private var editing: Bool
     var body: some View {
         ZStack { TodayBackdrop(); ScrollView { VStack(spacing: 16) {
@@ -334,18 +335,18 @@ struct ReviewWishView: View {
             }
             MomentCard {
                 Label("Choose a tone", systemImage: "sparkles").font(.title2.bold()); Text("Adjust the vibe of your message.").foregroundStyle(.secondary)
-                MomentSegments(options: ["Warm", "Personal", "Short", "Fun"], selection: $tone)
+                MomentSegments(options: ["Warm", "Personal", "Short", "Fun"], selection: $tone).disabled(generating)
                 DisclosureGroup("Personalize with AI") {
                 TextField("Personal context (optional)", text: $personalContext, axis: .vertical).textFieldStyle(.roundedBorder)
-                Toggle("Use AI to draft my wish", isOn: $aiConsent)
+                Toggle("Use AI to draft my wish", isOn: $aiConsent).disabled(generating)
                 Text("Only the first name, event type, tone, and context you enter are shared with OpenAI. You review every draft.").font(.caption).foregroundStyle(.secondary)
                 }
             }
             MomentCard {
                 Label("Message preview", systemImage: "doc.text").font(.title2.bold()); Text("Review and make any changes.").foregroundStyle(.secondary)
-                TextEditor(text: $bodyText).frame(minHeight: 145).scrollContentBackground(.hidden).focused($editing).padding(8).background(.background.opacity(0.65), in: RoundedRectangle(cornerRadius: 14)).accessibilityLabel("Wish message")
+                TextEditor(text: $bodyText).frame(minHeight: 145).scrollContentBackground(.hidden).focused($editing).padding(8).background(.background.opacity(0.65), in: RoundedRectangle(cornerRadius: 14)).disabled(generating).opacity(generating ? 0.45 : 1).accessibilityLabel("Wish message")
                 Text("\(bodyText.count)/500").frame(maxWidth: .infinity, alignment: .trailing).foregroundStyle(bodyText.count > 500 ? .red : .secondary)
-                HStack { Button("Try another", systemImage: "sparkles") { generate() }; Spacer(); Button("Edit", systemImage: "pencil") { editing = true } }.buttonStyle(.bordered)
+                HStack { Button { generate() } label: { WishRegenerateLabel(title: "Try another", generating: generating) }.disabled(generating).accessibilityIdentifier("wish-regenerate"); Spacer(); Button("Edit", systemImage: "pencil") { editing = true }.disabled(generating) }.buttonStyle(.bordered)
             }
             if moment.supportsGreetingCard {MomentGreetingCardSection(moment:moment,store:store,greeting:bodyText){bodyText=$0}}
             Label("Nothing is sent without your approval.", systemImage: "checkmark.shield").font(.caption).foregroundStyle(.secondary)
@@ -366,13 +367,16 @@ struct ReviewWishView: View {
         .navigationDestination(isPresented: $next) { if let draft { WishDeliveryView(moment: moment, draft: draft) } }
         .task { if draft == nil { if let latest = moment.latest, latest.status != "PLANNED" { draft = latest; bodyText = latest.body; tone = latest.tone; personalContext = latest.personalContext } else { generate() } } }
     }
+    private var generating: Bool { wishGeneration.isGenerating }
     private func generate() {
-        Task { await store.perform {
+        guard !generating else { return }
+        Task { await wishGeneration.run { await store.perform {
             struct Input: Encodable { let momentID, tone, personalContext: String; let aiConsent: Bool }
             struct Result: Decodable, Sendable { let draft: WishDraft; let usedAI: Bool }
-            let result: Result = try await store.request("generate", Input(momentID: moment.id, tone: tone, personalContext: personalContext, aiConsent: aiConsent))
+            let input = Input(momentID: moment.id, tone: tone, personalContext: personalContext, aiConsent: aiConsent)
+            let result: Result = try await wishGeneration.withTimeout { try await store.request("generate", input) }
             draft = result.draft; bodyText = result.draft.body
-        } }
+        } } }
     }
 }
 struct WishDeliveryView: View {
@@ -619,6 +623,15 @@ struct WishEmailConfirmation: View {
     }
 }
 
+/// Regenerate / Try another; while a wish is being written it shows a spinner and "Writing your wish…".
+struct WishRegenerateLabel: View {
+    let title: String
+    let generating: Bool
+    var body: some View {
+        if generating { HStack(spacing: 8) { ProgressView(); Text(WishGenerationGate.progressLabel) } }
+        else { Label(title, systemImage: "sparkles") }
+    }
+}
 struct MomentSegments: View {
     let options: [String]
     @Binding var selection: String
