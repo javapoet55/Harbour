@@ -41,6 +41,20 @@ final class MomentsPreviewProtocol: URLProtocol, @unchecked Sendable {
             case "festivalCatalog": result = ["entries":[]]
             case "festivalSave":
                 Self.festivalSaved = input
+                // Like the server: a moment created here gets its recipient, and each recipient without an id becomes a moment in the group.
+                if let ids = input["ids"] as? [String], let anchor = Self.createdMoments.first(where: { ids.contains($0["id"] as? String ?? "") }),
+                   let settings = input["settings"] as? [String: Any], let groupID = settings["groupID"] as? String,
+                   let encoded = try? JSONSerialization.data(withJSONObject: settings), let recipients = input["recipients"] as? [[String: Any]] {
+                    for recipient in recipients {
+                        var value = anchor
+                        if let id = recipient["id"] as? String, let index = Self.createdMoments.firstIndex(where: { $0["id"] as? String == id }) { value = Self.createdMoments[index] }
+                        else { value["id"] = "created-" + String(Self.createdMoments.count); value["sourceKey"] = "\(anchor["type"] ?? ""):\(groupID):\(recipient["key"] ?? "")" }
+                        value["firstName"] = recipient["name"]; value["phone"] = recipient["phone"]; value["email"] = recipient["email"]
+                        value["festivalSettings"] = String(data: encoded, encoding: .utf8)
+                        if let index = Self.createdMoments.firstIndex(where: { $0["id"] as? String == value["id"] as? String }) { Self.createdMoments[index] = value }
+                        else { Self.createdMoments.append(value) }
+                    }
+                }
                 if input["cancelSchedules"] as? Bool == true {Self.savedPlans=Self.savedPlans.map{var plan=$0;plan["status"]="CANCELLED";return plan}}
                 result = ["ok":true]
             case "greetingCardSave":
