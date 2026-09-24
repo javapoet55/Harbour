@@ -1,4 +1,5 @@
 import bcrypt from 'bcryptjs';
+import { login } from './auth';
 import { createHash, randomBytes, randomInt } from 'node:crypto';
 import { prisma } from './db';
 import { normalizeEmail } from './account-auth';
@@ -71,4 +72,22 @@ export async function adminUserForSession(session: string) {
 
 export async function revokeAdminSession(session: string) {
   await prisma.adminLoginToken.updateMany({ where: { sessionHash: adminTokenHash(session) }, data: { sessionHash: null, sessionExpiresAt: null } });
+}
+
+// Reuse the revocable admin-session store without creating an email challenge.
+export async function signInAdminPassword(value: string, password: string) {
+  const email = normalizeEmail(value);
+  const user = isAdminEmail(email) ? await prisma.user.findFirst({ where: { email, deletedAt: null } }) : null;
+  if (!user) throw new Error('INVALID_ADMIN_PASSWORD');
+  const attempt = await prisma.$transaction(async tx => {
+    await tx.user.update({ where: { id: user.id }, data: { updatedAt: new Date() } });
+    const recent = await tx.adminLoginToken.count({ where: { userId: user.id, codeHash: 'password-attempt', createdAt: { gte: new Date(Date.now() - 15 * 60_000) } } });
+    if (recent >= 5) throw new Error('RATE_LIMITED');
+    return tx.adminLoginToken.create({ data: { id: opaqueToken(), userId: user.id, codeHash: 'password-attempt', expiresAt: new Date(), usedAt: new Date() } });
+  });
+  const authenticated = await login(email, password);
+  if (!authenticated || !authenticated.emailVerifiedAt) throw new Error('INVALID_ADMIN_PASSWORD');
+  const session = opaqueToken();
+  await prisma.adminLoginToken.update({ where: { id: attempt.id }, data: { sessionHash: adminTokenHash(session), sessionExpiresAt: new Date(Date.now() + 8 * 60 * 60_000) } });
+  return session;
 }

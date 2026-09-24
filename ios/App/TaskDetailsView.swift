@@ -9,10 +9,12 @@ struct TaskDetailsView: View {
     @State private var draft: TaskDraft
     @State private var original: TaskDraft
     @State private var newStep = ""
+    @State private var hasBusinessResearch = false
+    @State private var showMoreDetails = false
     @State private var working = false
     @State private var message: String?
     @FocusState private var focus: Field?
-    private enum Field: Hashable { case title, step, notes }
+    enum Field: Hashable { case title, step, notes, agentLocation, agentDraft(String) }
 
     init(task: NexdoTask) {
         self.task = task
@@ -31,8 +33,14 @@ struct TaskDetailsView: View {
             ScrollViewReader { proxy in
                 ScrollView {
                     VStack(alignment: .leading, spacing: 24) {
-                        TaskActionCard(task: currentTask)
-                        actions
+                        TaskAgentCard(taskID: task.id, focusedField: $focus) { hasBusinessResearch = $0 }
+                        if !hasBusinessResearch {
+                            TaskActionCard(task: currentTask)
+                            actions
+                        }
+                        if hasBusinessResearch {
+                            agentTaskInformation
+                        } else {
                         field("TASK") {
                             TextField("Task title", text: $draft.title)
                                 .focused($focus, equals: .title).submitLabel(.done)
@@ -42,6 +50,8 @@ struct TaskDetailsView: View {
                         }.id(Field.title)
                         metadata
                         field("PROJECT") { ProjectAssignmentField(projectID: $draft.projectId) }
+                        }
+                        if !hasBusinessResearch || showMoreDetails {
                         schedule
                         field("REPEAT") {
                             menu("Repeat", value: $draft.recurrence, options: ["NONE", "DAILY", "WEEKLY", "MONTHLY", "YEARLY"])
@@ -59,6 +69,7 @@ struct TaskDetailsView: View {
                                 .accessibilityLabel("Task notes")
                                 .modifier(DetailInput())
                         }.id(Field.notes)
+                        }
                     }
                     .padding(20)
                     .disabled(blocked)
@@ -91,7 +102,23 @@ struct TaskDetailsView: View {
         } message: { Text(message ?? "") }
     }
 
-    private var header: some View {
+    @ViewBuilder private var header: some View {
+        if hasBusinessResearch {
+            HStack {
+                Button(action: closeTaskDetails) { Image(systemName: "chevron.left").font(.title3).frame(width: 42, height: 42) }
+                    .background(Color.nexdoIndigo.opacity(0.04), in: Circle()).overlay(Circle().stroke(Color.nexdoIndigo.opacity(0.12)))
+                    .accessibilityLabel("Back")
+                Spacer()
+                Text("Task Details").font(.headline)
+                Spacer()
+                Menu {
+                    Button(showMoreDetails ? "Hide additional details" : "Show additional details", systemImage: "slider.horizontal.3") { showMoreDetails.toggle() }
+                    Button("Close", systemImage: "xmark", action: closeTaskDetails)
+                } label: { Image(systemName: "ellipsis").font(.title3.weight(.bold)).frame(width: 42, height: 42) }
+                    .background(Color.nexdoIndigo.opacity(0.04), in: Circle()).overlay(Circle().stroke(Color.nexdoIndigo.opacity(0.12)))
+                    .accessibilityLabel("Task options")
+            }.buttonStyle(.plain).padding(.horizontal, 20).padding(.vertical, 14).disabled(blocked)
+        } else {
         HStack {
             VStack(alignment: .leading, spacing: 5) {
                 Text("TASK DETAILS").font(.caption.weight(.bold)).tracking(1.7).foregroundStyle(Color.nexdoIndigo)
@@ -116,6 +143,8 @@ struct TaskDetailsView: View {
             .overlay(alignment: .bottom) { Divider().overlay(Color.nexdoIndigo.opacity(0.10)) }
     }
 
+    }
+
     private var actions: some View {
         VStack(spacing: 8) {
             if model.focusSession?.taskID == task.id {
@@ -129,6 +158,55 @@ struct TaskDetailsView: View {
                 run { try await model.changeTaskStatus(currentTask, status: "IN_PROGRESS") }
             }.buttonStyle(DetailOutlineButton()).disabled(currentTask.isDone || currentTask.status == "IN_PROGRESS")
         }
+    }
+
+    private var agentTaskInformation: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("TASK INFORMATION").font(.caption.weight(.bold)).tracking(1.8).foregroundStyle(Color.nexdoSecondary)
+            VStack(spacing: 18) {
+                HStack(spacing: 10) {
+                    taskIcon("doc.text", color: .nexdoBlue)
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text("Task").font(.caption).foregroundStyle(Color.nexdoSecondary)
+                        TextField("Task", text: $draft.title).focused($focus, equals: .title).submitLabel(.done).onSubmit { focus = nil }.modifier(DetailInput()).accessibilityLabel("Task title")
+                    }
+                }
+                let layout = typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(spacing: 14)) : AnyLayout(HStackLayout(alignment: .top, spacing: 12))
+                layout {
+                    HStack(spacing: 8) {
+                        taskIcon("flag", color: .purple)
+                        VStack(alignment: .leading, spacing: 5) {
+                            Text("Priority").font(.caption).foregroundStyle(Color.nexdoSecondary)
+                            menu("Priority", value: $draft.priority, options: ["LOW", "NORMAL", "HIGH", "CRITICAL"])
+                        }
+                    }
+                    HStack(spacing: 8) {
+                        taskIcon("clock", color: .green)
+                        VStack(alignment: .leading, spacing: 5) {
+                            Text("Estimate").font(.caption).foregroundStyle(Color.nexdoSecondary)
+                            Menu {
+                                ForEach(Array(Set([15, 30, 45, 60, 90, 120, draft.duration])).sorted(), id: \.self) { minutes in
+                                    Button("\(minutes) min") { draft.duration = minutes }
+                                }
+                            } label: { menuLabel("\(draft.duration) min") }.accessibilityLabel("Estimate")
+                        }
+                    }
+                }
+                HStack(spacing: 10) {
+                    taskIcon("folder", color: .orange)
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text("Project").font(.caption).foregroundStyle(Color.nexdoSecondary)
+                        ProjectAssignmentField(projectID: $draft.projectId)
+                    }
+                }
+            }.font(.subheadline).padding(14).background(.white, in: RoundedRectangle(cornerRadius: 18))
+                .overlay(RoundedRectangle(cornerRadius: 18).stroke(Color.nexdoIndigo.opacity(0.05)))
+                .shadow(color: Color.nexdoIndigo.opacity(0.04), radius: 10, y: 4)
+        }
+    }
+    private func taskIcon(_ name: String, color: Color) -> some View {
+        Image(systemName: name).font(.title3).foregroundStyle(color).frame(width: 36, height: 42)
+            .background(color.opacity(0.09), in: RoundedRectangle(cornerRadius: 12)).accessibilityHidden(true)
     }
 
     private var metadata: some View {
@@ -209,6 +287,11 @@ struct TaskDetailsView: View {
     private var footer: some View {
         let layout = typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(spacing: 8)) : AnyLayout(HStackLayout(spacing: 12))
         return layout {
+            if hasBusinessResearch {
+                Button("Save changes") { run { try await persist(); dismiss() } }
+                    .buttonStyle(DetailOutlineButton()).disabled(!draft.isValid || !dirty)
+                    .accessibilityLabel("Save task changes")
+            }
             Button(currentTask.isDone ? "Mark incomplete" : "Mark complete") {
                 run {
                     // Save the edit buffer before the status branch, which ignores form fields.
@@ -219,6 +302,7 @@ struct TaskDetailsView: View {
             }.buttonStyle(DetailOutlineButton(greenBackground: true))
                 .accessibilityLabel(currentTask.isDone ? "Mark task incomplete" : "Mark task complete")
                 .disabled(!draft.isValid)
+            if !hasBusinessResearch {
             Button {
                 run { try await persist(); dismiss() }
             } label: {
@@ -231,6 +315,7 @@ struct TaskDetailsView: View {
             }.buttonStyle(.plain).accessibilityLabel("Save task changes")
                 .disabled(!draft.isValid || !dirty)
                 .opacity(draft.isValid && dirty ? 1 : 0.55)
+            }
         }.disabled(blocked).padding(.horizontal, 16).padding(.vertical, 12)
             .background(.regularMaterial)
             .overlay(alignment: .top) { Divider().overlay(Color.nexdoIndigo.opacity(0.1)) }

@@ -1,5 +1,6 @@
 import { measuredJob, recordEvent } from '@/server/health/telemetry';
 import { prisma } from './db';
+import type { Prisma } from '@/generated/prisma';
 import { anyDelivered, escalationExhausted, isPermanentFailure, nextEscalationChannel, SMS_NO_PHONE_NUMBER, type Attempt, type Channel, type EscalationPrefs } from '@/lib/escalation';
 import { emailProvider, pushProvider, smsProvider } from '@/providers';
 import { reminderMessage } from './email/messages';
@@ -23,29 +24,44 @@ export async function scheduleDefaultReminders(userId: string, taskId: string, d
   for (const offset of offsets) {
     const fireAt = new Date(dueAt.getTime() - offset.ms);
     const key = `${taskId}:${offset.label}`;
-    await prisma.reminder.upsert({
-      where: { idempotencyKey: key },
-      update: { fireAt, status: 'SCHEDULED' },
-      create: {
-        userId,
-        taskId,
-        fireAt,
-        offsetLabel: offset.label,
-        critical,
-        idempotencyKey: key,
-        channelPlan: critical ? 'push,email,sms' : 'push,email',
-      },
+    await upsertReminderOccurrence(prisma, {
+      userId,
+      taskId,
+      fireAt,
+      offsetLabel: offset.label,
+      critical,
+      idempotencyKey: key,
+      channelPlan: critical ? 'push,email,sms' : 'push,email',
     });
   }
 }
 
 export async function scheduleRequestedReminder(userId: string, taskId: string, fireAt: Date, critical = false) {
   const idempotencyKey = `${taskId}:requested`;
-  return prisma.reminder.upsert({
-    where: { idempotencyKey },
-    update: { fireAt, critical, status: 'SCHEDULED' },
-    create: { userId, taskId, fireAt, offsetLabel: 'requested reminder', critical, idempotencyKey, channelPlan: critical ? 'push,email,sms' : 'push,email' },
-  });
+  return upsertReminderOccurrence(
+    prisma,
+    { userId, taskId, fireAt, offsetLabel: 'requested reminder', critical, idempotencyKey, channelPlan: critical ? 'push,email,sms' : 'push,email' },
+    { critical },
+  );
+}
+
+type ReminderDb = Pick<Prisma.TransactionClient, 'reminder'>;
+
+/**
+ * Opens a reminder's next occurrence. Moving it to a different time bumps its generation, so the attempts
+ * made for the old time (kept as history) no longer count for escalation, retries or DELIVERED, and it
+ * fires again. Saving the same time again leaves it exactly as it is, so editing a task's details does
+ * not re-send a reminder that already went out.
+ */
+export async function upsertReminderOccurrence(db: ReminderDb, create: Prisma.ReminderUncheckedCreateInput, update: Prisma.ReminderUncheckedUpdateInput = {}) {
+  const { idempotencyKey, fireAt } = create;
+  await db.reminder.updateMany({ where: { idempotencyKey, NOT: { fireAt } }, data: { ...update, fireAt, status: 'SCHEDULED', generation: { increment: 1 } } });
+  return db.reminder.upsert({ where: { idempotencyKey }, update, create });
+}
+
+/** Moves an existing reminder to `fireAt` as a new occurrence, as a snooze does. */
+export function reopenReminder(db: ReminderDb, id: string, fireAt: Date) {
+  return db.reminder.update({ where: { id }, data: { fireAt, status: 'SCHEDULED', generation: { increment: 1 } } });
 }
 
 async function tickRemindersImpl(now = new Date()) {
@@ -75,7 +91,8 @@ async function tickRemindersImpl(now = new Date()) {
     };
     // `failureReason` is what tells a channel that can never work for this account from one that is
     // merely down, so it decides whether to move on or to retry.
-    let history: Attempt[] = reminder.attempts.map((a) => ({
+    // Only this occurrence's attempts count; those made before the reminder was moved are history.
+    let history: Attempt[] = reminder.attempts.filter((a) => a.generation === reminder.generation).map((a) => ({
       channel: a.channel as Channel,
       status: a.status as Attempt['status'],
       createdAt: a.createdAt,
@@ -105,6 +122,7 @@ async function tickRemindersImpl(now = new Date()) {
       await prisma.notificationAttempt.create({
         data: {
           reminderId: reminder.id,
+          generation: reminder.generation,
           channel,
           status: result.status,
           failureReason: result.reason,
@@ -124,15 +142,16 @@ async function tickRemindersImpl(now = new Date()) {
       if (result.status === 'SENT' || !isPermanentFailure(result.reason)) break;
     }
 
-    // FAILED is reserved for a reminder that never reached the user at all; one that did keeps the
-    // status its successful send gave it, even once the remaining channels are spent.
-    const status = anyDelivered(history) ? 'QUEUED'
-      : escalationExhausted(escalation, history) ? 'FAILED'
+    // FAILED is reserved for a reminder that never reached the user at all. One that did stays QUEUED
+    // while a later channel may still escalate, then ends DELIVERED, which leaves the due query.
+    const exhausted = escalationExhausted(escalation, history);
+    const status = anyDelivered(history) ? (exhausted ? 'DELIVERED' : 'QUEUED')
+      : exhausted ? 'FAILED'
       : 'RETRYING';
-    if (status !== reminder.status) {
-      await prisma.reminder.update({ where: { id: reminder.id }, data: { status } });
-      if (status === 'FAILED') { log('info', 'reminder.exhausted', { attempts: history.length }); inc('reminders.exhausted'); }
-    }
+    // Scoped to the generation read above: a reminder moved while this tick was sending keeps the new
+    // occurrence's SCHEDULED status rather than taking the old one's outcome.
+    const settled = status !== reminder.status && (await prisma.reminder.updateMany({ where: { id: reminder.id, generation: reminder.generation }, data: { status } })).count > 0;
+    if (settled && status === 'FAILED') { log('info', 'reminder.exhausted', { attempts: history.length }); inc('reminders.exhausted'); }
   }
   inc('reminders.ticked', processed);
   return { processed, scanned: due.length };
@@ -146,7 +165,7 @@ export async function acknowledgeReminder(userId: string, reminderId: string) {
     data: { status: 'CANCELLED', acknowledgedAt: new Date() },
   });
   await prisma.notificationAttempt.create({
-    data: { reminderId, channel: 'push', status: 'OPENED', openedAt: new Date() },
+    data: { reminderId, generation: reminder.generation, channel: 'push', status: 'OPENED', openedAt: new Date() },
   });
   if (reminder.task?.lifeReminderType) inc('life_reminder_notification_opened');
 }

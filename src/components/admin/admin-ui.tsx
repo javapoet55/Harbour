@@ -9,9 +9,10 @@ export function DatePill({ days }: { days: number }) {
   return <span className="admin-date-pill">Last {days} days</span>;
 }
 
-export function MetricCard({ icon, value, label, change, note }: { icon: ReactNode; value: string; label: string; change?: number; note?: string }) {
+export function MetricCard({ icon, value, label, change, note, action }: { icon: ReactNode; value: string; label: string; change?: number; note?: string; action?: ReactNode }) {
   return <article className="admin-metric-card">
     <div className="admin-metric-icon">{icon}</div>
+    {action}
     <div className="admin-metric-copy"><strong>{value}</strong><span>{label}</span>{change !== undefined && <small className={change >= 0 ? 'positive' : 'negative'}>{change >= 0 ? '↑' : '↓'} {Math.abs(change)}% <em>vs. previous period</em></small>}{note && <small>{note}</small>}</div>
   </article>;
 }

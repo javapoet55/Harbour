@@ -161,6 +161,10 @@ model Tag {
 }
 
 model Task {
+  intentCategory String?
+  intentScore Float?
+  intentReason String?
+  agentRun TaskAgentRun?
   id                   String    @id @default(cuid())
   userId               String
   user                 User      @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -355,6 +359,8 @@ model Reminder {
   channelPlan String    @default("push,email")
   critical    Boolean   @default(false)
   status      String    @default("SCHEDULED")
+  /// Bumped each time the reminder is moved to a new time; only attempts of the current generation count.
+  generation  Int       @default(0)
   idempotencyKey String @unique
   acknowledgedAt DateTime?
   createdAt   DateTime  @default(now())
@@ -366,6 +372,8 @@ model NotificationAttempt {
   id           String    @id @default(cuid())
   reminderId   String
   reminder     Reminder  @relation(fields: [reminderId], references: [id], onDelete: Cascade)
+  /// The reminder generation this attempt was made for; earlier ones are kept as history.
+  generation   Int       @default(0)
   channel      String
   status       String
   failureReason String?
@@ -613,4 +621,25 @@ model HealthAudit {
   targetId String
   detail String
   @@index([targetId, createdAt])
+}
+
+model TaskAgentRun {
+  id String @id @default(cuid())
+  taskId String @unique
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  status String @default("NEEDS_INPUT")
+  service String
+  urgency String
+  slotsJson String
+  stepsJson String
+  resultsJson String @default("[]")
+  warningsJson String @default("[]")
+  error String?
+  version Int @default(0)
+  attempts Int @default(0)
+  leaseUntil DateTime?
+  targetAt DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([status, leaseUntil])
 }

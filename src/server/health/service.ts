@@ -1,7 +1,7 @@
 import { snapshot } from '@/lib/metrics';
 import { AIModelConfiguration } from '@/server/voice/configuration';
 import { prisma } from '@/server/db';
-import { breached, overall, ruleDefinitions, state, summarize, windows, type Status } from './metrics';
+import { breached, coverage, overall, ruleDefinitions, state, summarize, windows, type Status } from './metrics';
 
 // Inventory from implemented adapters; configuration is deliberately not a health signal.
 export const integrations = ['OpenAI','Google Calendar','Microsoft Calendar','Gmail','Google OAuth','Microsoft OAuth','Apple Authentication','Hostinger Mail','SendGrid','Twilio','Firebase Analytics','Web Push','iOS Contacts'];
@@ -36,7 +36,12 @@ export async function getHealth(range: keyof typeof windows = '24H') {
   const providers=events.filter(e=>e.kind==='provider');
   const metrics=summarize(api,windows[range]*60);
   const group=(rows: typeof events, key: (row: typeof events[number])=>string)=>Array.from(new Set(rows.map(key))).map(name=>({name,status:state(rows.filter(r=>key(r)===name)),...summarize(rows.filter(r=>key(r)===name),windows[range]*60)}));
-  const sections: {name:string;status:Status}[]=[{name:'API',status:state(api)},{name:'Database',status:database},{name:'AI',status:state(providers.filter(e=>e.service==='OpenAI'))},{name:'Voice',status:'Unknown'},{name:'Integrations',status:overall(integrations.map(s=>state(providers.filter(e=>e.service===s))))},{name:'Jobs',status:'Unknown'},{name:'iOS',status:'Unknown'},{name:'Security',status:'Unknown'}];
+  const monitoring = {
+    AI: coverage(providers.filter(e=>e.service==='OpenAI'), +now),
+    Voice: coverage(api.filter(e=>e.feature==='Voice'), +now),
+    Security: coverage(api.filter(e=>e.feature==='Authentication'), +now),
+  };
+  const sections: {name:string;status:Status}[]=[{name:'API',status:state(api)},{name:'Database',status:database},{name:'AI',status:state(providers.filter(e=>e.service==='OpenAI'))},{name:'Voice',status:state(api.filter(e=>e.feature==='Voice'))},{name:'Integrations',status:overall(integrations.map(s=>state(providers.filter(e=>e.service===s))))},{name:'Jobs',status:state(events.filter(e=>e.kind==='job'||e.kind==='scheduler'))},{name:'iOS',status:'Unknown'},{name:'Security',status:state(api.filter(e=>e.feature==='Authentication'))}];
   const buckets=Array.from({length:24},(_,i)=>{ const from=+since+i*(+now-+since)/24; const to=+since+(i+1)*(+now-+since)/24; const rows=api.filter(e=>+e.createdAt>=from&&+e.createdAt<to); return {time:new Date(from).toISOString(),...summarize(rows,(to-from)/60000)}; });
   const aiRows=providers.filter(e=>e.service==='OpenAI');
   const usageRows=aiRows.filter(e=>e.inputTokens!==null&&e.outputTokens!==null);
@@ -45,7 +50,7 @@ export async function getHealth(range: keyof typeof windows = '24H') {
   const costTrend=Array.from({length:24},(_,i)=>{const from=+since+i*(+now-+since)/24;const to=+since+(i+1)*(+now-+since)/24;const rows=pricedRows.filter(e=>+e.createdAt>=from&&+e.createdAt<to);return {time:new Date(from).toISOString(),cost:rows.length?rows.reduce((n,e)=>n+e.costUsd!,0):null};});
   const rules=ruleDefinitions.map(def=>({...def,...(rulesR.status==='fulfilled'?rulesR.value.find(r=>r.id===def.id):undefined),enabled:rulesR.status==='fulfilled'?(rulesR.value.find(r=>r.id===def.id)?.enabled??true):false}));
   const heartbeats=heartbeatR.status==='fulfilled'?heartbeatR.value:[];
-  return {asOf:now.toISOString(),range,available,enabled:process.env.NEXDO_HEALTH_ENABLED==='true',truncated,usage,costTrend,processMetrics:snapshot(),modelInventory:Array.from(new Set([process.env.OPENAI_MODEL||'gpt-5.4-mini',process.env.MOMENTS_DRAFT_MODEL||'gpt-4o-mini',process.env.OPENAI_IMAGE_MODEL||'gpt-image-1.5',AIModelConfiguration.quickVoiceTask,'gpt-4o-transcribe','gpt-live-transcribe','gpt-4o-mini-transcribe','gpt-4o-mini-tts'])).filter(m=>/^[a-z0-9][a-z0-9._-]{0,79}$/.test(m)),voiceBuckets:buckets.map((b,i)=>{const from=+since+i*(+now-+since)/24;const to=+since+(i+1)*(+now-+since)/24;return {time:b.time,...summarize(api.filter(e=>e.feature==='Voice'&&+e.createdAt>=from&&+e.createdAt<to),(to-from)/60000)};}),overall:overall(sections.map(s=>s.status)),sections,metrics,buckets,database:{status:database,latency:databaseLatency,stats:databaseStats},
+  return {asOf:now.toISOString(),monitoring,range,available,enabled:process.env.NEXDO_HEALTH_ENABLED==='true',truncated,usage,costTrend,processMetrics:snapshot(),modelInventory:Array.from(new Set([process.env.OPENAI_MODEL||'gpt-5.4-mini',process.env.MOMENTS_DRAFT_MODEL||'gpt-4o-mini',process.env.OPENAI_IMAGE_MODEL||'gpt-image-1.5',AIModelConfiguration.quickVoiceTask,'gpt-4o-transcribe','gpt-live-transcribe','gpt-4o-mini-transcribe','gpt-4o-mini-tts'])).filter(m=>/^[a-z0-9][a-z0-9._-]{0,79}$/.test(m)),voiceBuckets:buckets.map((b,i)=>{const from=+since+i*(+now-+since)/24;const to=+since+(i+1)*(+now-+since)/24;return {time:b.time,...summarize(api.filter(e=>e.feature==='Voice'&&+e.createdAt>=from&&+e.createdAt<to),(to-from)/60000)};}),overall:overall(sections.map(s=>s.status)),sections,metrics,buckets,database:{status:database,latency:databaseLatency,stats:databaseStats},
     endpoints:group(api,e=>e.operation).sort((a,b)=>b.errors-a.errors),
     ai:group(providers.filter(e=>e.service==='OpenAI'),e=>`${e.model??'Model not reported'} · ${e.feature} · ${e.operation}`),
     integrations:integrations.map(name=>({name,status:state(providers.filter(e=>e.service===name)),...summarize(providers.filter(e=>e.service===name),windows[range]*60)})),

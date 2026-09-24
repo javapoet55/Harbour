@@ -82,3 +82,39 @@ it('uses the dedicated wish model independently of the assistant model',async()=
  const fetcher=vi.fn().mockResolvedValue(Response.json({choices:[{message:{content:'Happy birthday!'}}]}));vi.stubGlobal('fetch',fetcher);
  try {await generateDraft(userId,{momentID:m.id,tone:'Warm',aiConsent:true});expect(JSON.parse(fetcher.mock.calls[0][1].body).model).toBe('wish-model');}finally{vi.unstubAllEnvs();vi.unstubAllGlobals();}
 });
+it('logs only the reason when a requested AI wish falls back',async()=>{
+ const m=await saveMoment(userId,{...input,firstName:'Priyanka',sourceKey:randomUUID()});
+ const warn=vi.spyOn(console,'warn').mockImplementation(()=>{});
+ const reply=(content:string,finish_reason='stop')=>Response.json({choices:[{message:{content},finish_reason}]});
+ const timeout=()=>Promise.reject(new DOMException('The operation was aborted due to timeout','TimeoutError'));
+ const cases:[string,(()=>Promise<Response>)|null][]=[
+  ['no_key',null],
+  ['http_429',async()=>Response.json({error:{message:'slow down'}},{status:429})],
+  ['timeout',timeout],
+  ['network',()=>Promise.reject(new TypeError('fetch failed'))],
+  ['empty',async()=>reply('  ')],
+  ['too_long',async()=>reply('Happy birthday! '.repeat(40))],
+  ['too_long',async()=>reply('Happy birthday, Priyanka! Wishing you a','length')],
+  ['bad_json',async()=>new Response('<html>oops</html>',{status:200})],
+ ];
+ try {
+  for(const [reason,respond] of cases) {
+   warn.mockClear();
+   vi.stubEnv('OPENAI_API_KEY',respond?'sk-secret-fixture':'');vi.stubGlobal('fetch',vi.fn(respond??(async()=>reply('unused'))));
+   const result=await generateDraft(userId,{momentID:m.id,tone:'Warm',aiConsent:true,personalContext:'loves hiking'});
+   expect(result.usedAI).toBe(false);
+   expect(warn).toHaveBeenCalledTimes(1);
+   const line=String(warn.mock.calls[0][0]);
+   expect(JSON.parse(line)).toMatchObject({level:'warn',event:'wish_ai_fallback',reason});
+   for(const secret of ['Priyanka','hiking','sk-secret-fixture','Happy birthday','Warm']) expect(line).not.toContain(secret);
+  }
+  // No log when AI was not requested, or when the AI wish is used.
+  warn.mockClear();
+  await generateDraft(userId,{momentID:m.id,tone:'Warm',aiConsent:false});
+  vi.stubEnv('OPENAI_API_KEY','sk-secret-fixture');const fetcher=vi.fn(async()=>reply('Happy birthday, Priyanka!'));vi.stubGlobal('fetch',fetcher);
+  expect((await generateDraft(userId,{momentID:m.id,tone:'Warm',aiConsent:true})).usedAI).toBe(true);
+  expect(warn).not.toHaveBeenCalled();
+  // The model is asked for a reply that fits the 500-character wish, not one it would have to discard.
+  expect(JSON.parse((fetcher.mock.calls[0] as unknown as [string,{body:string}])[1].body).max_tokens).toBeLessThanOrEqual(150);
+ } finally {warn.mockRestore();vi.unstubAllEnvs();vi.unstubAllGlobals();}
+});

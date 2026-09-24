@@ -1,3 +1,4 @@
+import { classifyNewTask } from './task-agent/service';
 import { observedFetch } from '@/server/health/telemetry';
 import { withNexdoPersonality } from "./assistant-personality";
 import { moduleConversation } from './module-conversation';
@@ -7,7 +8,7 @@ import { loadScheduleContext } from './schedule-intelligence';
 import { createHash } from 'node:crypto';
 import { prisma } from './db';
 import { runAssistantTurn, type AssistantTurn } from './assistant';
-import { scheduleDefaultReminders } from './reminders';
+import { scheduleDefaultReminders, upsertReminderOccurrence } from './reminders';
 import { pushTaskToExternal } from './calendar-sync';
 import { parseIntent } from '@/lib/intent';
 import { handleExecutiveTurn } from './executive-companion';
@@ -125,7 +126,7 @@ async function contextFor(userId: string) {
     prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { name: true, timeZone: true, preference: { select: { workStart: true, workEnd: true, workingDays: true, defaultDurationMin: true } } } }),
     prisma.task.findMany({ where: { userId, deletedAt: null }, select: { id: true, title: true, notes: true, status: true, priority: true, startAt: true, dueAt: true, durationMin: true, energyLevel: true, waitingOn: true, projectId: true, dependencies: { select: { dependsOnId: true } } }, orderBy: { updatedAt: 'desc' }, take: 100 }),
     prisma.project.findMany({ where: { userId, deletedAt: null }, select: { id: true, name: true } }),
-    prisma.userMemory.findMany({ where: { userId, kind: { not: 'runtime' } }, select: { key: true, value: true, kind: true }, orderBy: { updatedAt: 'desc' }, take: 50 }),
+    prisma.userMemory.findMany({ where: { userId, kind: { notIn: ['runtime', 'voice_tokens'] } }, select: { key: true, value: true, kind: true }, orderBy: { updatedAt: 'desc' }, take: 50 }),
     prisma.voiceTranscript.findMany({ where: { session: { userId } }, select: { text: true, corrected: true, createdAt: true }, orderBy: { createdAt: 'desc' }, take: 8 }),
     prisma.assistantAction.findMany({ where: { userId }, select: { intent: true, payloadJson: true, confirmation: true, executed: true, createdAt: true }, orderBy: { createdAt: 'desc' }, take: 8 }),
   ]);
@@ -276,6 +277,7 @@ async function executePlan(userId: string, plan: AgentPlan, actionId: string, ta
       if (action.type === 'NOOP') continue;
       if (action.type === 'CREATE_TASK') {
         const created = await tx.task.create({ data: { userId, timeZone: owner.timeZone, title: action.title!.trim(), notes: action.notes || '', priority: action.priority || 'NORMAL', status: action.status || 'PLANNED', startAt: validDate(action.start_at), dueAt: validDate(action.due_at), durationMin: action.duration_min || 30, energyLevel: action.energy_level || 'MEDIUM', projectId: action.project_id, dependencies: { create: action.depends_on_ids.map((dependsOnId) => ({ dependsOnId })) } } });
+        await classifyNewTask(tx, created);
         affected.add(created.id);
         if (action.reminder_at) {
           const fireAt = validDate(action.reminder_at)!;
@@ -294,9 +296,10 @@ async function executePlan(userId: string, plan: AgentPlan, actionId: string, ta
           await tx.task.update({ where: { id: taskId }, data: { startAt: nextStart, durationMin: action.duration_min || undefined, postponeCount: postponed ? { increment: 1 } : undefined, lastRescheduledAt: postponed ? new Date() : undefined } });
         }
         if (action.type === 'UPDATE_TASK') await tx.task.update({ where: { id: taskId }, data: { title: action.title || undefined, notes: action.notes ?? undefined, priority: action.priority || undefined, status: action.status || undefined, startAt: action.start_at ? validDate(action.start_at) : undefined, dueAt: action.due_at ? validDate(action.due_at) : undefined, durationMin: action.duration_min || undefined, energyLevel: action.energy_level || undefined, projectId: action.project_id || undefined, dependencies: action.depends_on_ids.length ? { deleteMany: {}, create: action.depends_on_ids.map((dependsOnId) => ({ dependsOnId })) } : undefined } });
+        if (action.type === 'UPDATE_TASK' && (action.title || action.notes !== null)) await classifyNewTask(tx, await tx.task.findUniqueOrThrow({where:{id:taskId}}));
         if (action.type === 'SET_REMINDER') {
           const fireAt = validDate(action.reminder_at)!;
-          await tx.reminder.upsert({ where: { idempotencyKey: `agent:${taskId}:${fireAt.toISOString()}` }, update: { fireAt, status: 'SCHEDULED' }, create: { userId, taskId, fireAt, offsetLabel: 'custom reminder', idempotencyKey: `agent:${taskId}:${fireAt.toISOString()}` } });
+          await upsertReminderOccurrence(tx, { userId, taskId, fireAt, offsetLabel: 'custom reminder', idempotencyKey: `agent:${taskId}:${fireAt.toISOString()}` });
         }
         await tx.activityLog.create({ data: { userId, taskId, kind: `AGENT_${action.type}`, summary: action.rationale.slice(0, 300) } });
       }

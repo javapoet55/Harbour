@@ -14,6 +14,7 @@ final class VoiceWebRTCTransport: NSObject, VoiceRealtimeTransport {
     private var run = UUID()
     private var network: URLSession?
     private let audioQueue = DispatchQueue(label: "com.nexdo.voice.audio-session")
+    private var prefersDeviceSpeaker = false
     private var outputMuted = false
     private var responseID: String?
     private var interruptedResponseID: String?
@@ -109,6 +110,19 @@ final class VoiceWebRTCTransport: NSObject, VoiceRealtimeTransport {
     func resumeAudio() async throws {
         try await activateAudioSession()
     }
+    func useDeviceSpeaker() async throws {
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            audioQueue.async {
+                do {
+                    let audio = RTCAudioSession.sharedInstance()
+                    audio.lockForConfiguration(); defer { audio.unlockForConfiguration() }
+                    try audio.overrideOutputAudioPort(.speaker)
+                    continuation.resume()
+                } catch { continuation.resume(throwing: error) }
+            }
+        }
+        prefersDeviceSpeaker = true
+    }
     func silencePlayback() { interruptedResponseID = responseID; outputMuted = true; remoteAudio?.isEnabled = false }
     func close() {
         run = UUID(); iceDisconnectTask?.cancel(); iceDisconnectTask = nil
@@ -141,6 +155,7 @@ final class VoiceWebRTCTransport: NSObject, VoiceRealtimeTransport {
     }
 
     private func activateAudioSession() async throws {
+        let speaker = prefersDeviceSpeaker
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
             audioQueue.async {
                 do {
@@ -149,6 +164,7 @@ final class VoiceWebRTCTransport: NSObject, VoiceRealtimeTransport {
                     try audio.setCategory(.playAndRecord, with: [.defaultToSpeaker, .allowBluetoothHFP])
                     try audio.setMode(.voiceChat)
                     try audio.setActive(true)
+                    if speaker { try audio.overrideOutputAudioPort(.speaker) }
                     continuation.resume()
                 } catch { continuation.resume(throwing: error) }
             }

@@ -1,0 +1,20 @@
+import {it,expect,afterAll} from 'vitest';
+import {prisma} from '@/server/db';
+import {recordVoiceTokens,getVoiceTokens} from './tokens';
+const users:string[]=[];
+afterAll(async()=>{await prisma.user.deleteMany({where:{id:{in:users}}});});
+it('deduplicates retries, isolates users and filters by original receipt date',async()=>{
+ const a=await prisma.user.create({data:{email:`token-a-${crypto.randomUUID()}@test.invalid`,name:'A',passwordHash:'unused'}});
+ const b=await prisma.user.create({data:{email:`token-b-${crypto.randomUUID()}@test.invalid`,name:'B',passwordHash:'unused'}});
+ users.push(a.id,b.id);
+ const receipt={id:'resp_same',source:'response' as const,inputTokens:10,outputTokens:5,totalTokens:15};
+ await recordVoiceTokens(a.id,receipt);
+ const original=await prisma.userMemory.findFirstOrThrow({where:{userId:a.id,kind:'voice_tokens'}});
+ await recordVoiceTokens(a.id,{...receipt,inputTokens:20,totalTokens:25});
+ await recordVoiceTokens(b.id,receipt);
+ const retry=await prisma.userMemory.findUniqueOrThrow({where:{id:original.id}});
+ expect(retry.value).toBe(original.value);expect(retry.createdAt).toEqual(original.createdAt);
+ const rows=await getVoiceTokens(new Date(Date.now()-60_000),new Date(Date.now()+60_000));
+ expect(rows.filter(r=>users.includes(r.userId)).map(r=>r.totalTokens)).toEqual([15,15]);
+ expect(await getVoiceTokens(new Date('2000-01-01'),new Date('2000-01-02'))).toEqual([]);
+});

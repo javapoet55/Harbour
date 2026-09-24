@@ -8,7 +8,7 @@ import { needsConfirmation, parseIntent, type ParsedIntent } from '@/lib/intent'
 import { prisma } from './db';
 import { highPriority, overdueTasks, snapshotForRange, waitingTasks } from './agenda';
 import { completeTask, createTask, deleteTask, localWhen, scheduleTask } from './tasks';
-import { scheduleDefaultReminders } from './reminders';
+import { reopenReminder, scheduleDefaultReminders } from './reminders';
 import { buildDailyPlan } from './planner';
 import { buildCompleteBriefing } from './briefing';
 import { buildTodayBriefing, getScheduleIntelligence } from './schedule-intelligence';
@@ -266,14 +266,18 @@ async function executeIntent(userId: string, timeZone: string, intent: ParsedInt
     return { spoken, visual: { summary: spoken, appointments: [], tasks: [], overdue: [], next: '', rangeLabel: 'Update' } };
   }
   if (intent.intent === 'SNOOZE_TASK' && executeWrites) {
+    // "Snooze that reminder" means the one that just went off, which may already be DELIVERED; with none
+    // due, the next upcoming active reminder is pushed back instead.
+    const now = new Date();
     const due = await prisma.reminder.findFirst({
+      where: { userId, fireAt: { lte: now }, status: { in: ['SCHEDULED', 'QUEUED', 'RETRYING', 'DELIVERED'] } },
+      orderBy: { fireAt: 'desc' },
+    }) ?? await prisma.reminder.findFirst({
       where: { userId, status: { in: ['SCHEDULED', 'QUEUED', 'RETRYING'] } },
       orderBy: { fireAt: 'asc' },
     });
-    if (due) {
-      const fireAt = new Date(Date.now() + 2 * 60 * 60 * 1000);
-      await prisma.reminder.update({ where: { id: due.id }, data: { fireAt, status: 'SCHEDULED' } });
-    }
+    // A new occurrence, so it notifies again in two hours rather than counting the earlier sends.
+    if (due) await reopenReminder(prisma, due.id, new Date(now.getTime() + 2 * 60 * 60 * 1000));
     const spoken = due ? 'Snoozed that reminder for two hours.' : 'There is no active reminder to snooze.';
     return { spoken, visual: { summary: spoken, appointments: [], tasks: [], overdue: [], next: '', rangeLabel: 'Update' } };
   }

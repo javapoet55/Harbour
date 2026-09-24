@@ -17,7 +17,9 @@ struct RootView: View {
     var body: some View {
         Group {
             #if DEBUG
-            if ProcessInfo.processInfo.arguments.contains("-shopping-design-preview") {
+            if ProcessInfo.processInfo.arguments.contains("-agent-design-preview") {
+                TaskDetailsView(task: NexdoTask(id: "agent-preview", title: "Contact Plumbers", status: "PLANNED", priority: "NORMAL", durationMin: 30, notes: nil, startAt: nil, dueAt: nil))
+            } else if ProcessInfo.processInfo.arguments.contains("-shopping-design-preview") {
                 ShoppingDesignPreview()
             } else if ProcessInfo.processInfo.arguments.contains("-moments-design-preview") {
                 MomentsDesignPreview()

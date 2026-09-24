@@ -543,6 +543,30 @@ final class AppModel: ObservableObject {
         if let usage:VoiceUsage=try? await api.request("/api/voice/usage",timeout:15),profile?.id==owner {voiceUsage=usage}
     }
 
+    func loadTaskAgent(taskID: String) async throws -> TaskAgentEnvelope {
+        try await api.request("/api/tasks/\(taskID)/agent")
+    }
+    func updateTaskAgent(taskID: String, action: String, version: Int, key: String?, answer: String?, budget: String, constraints: String, candidateID: String?) async throws -> TaskAgentEnvelope {
+        struct Input: Encodable { let action: String; let version: Int; let key: String?; let answer: String?; let budget: String; let constraints: String; let candidateId: String? }
+        return try await api.request("/api/tasks/\(taskID)/agent", method: "POST", body: JSONEncoder().encode(Input(action: action, version: version, key: key, answer: answer, budget: budget, constraints: constraints, candidateId: candidateID)))
+    }
+
+    func recordVoiceTokens(_ receipt: VoiceTokenReceipt) async {
+        let owner = profile?.id
+        guard owner != nil, let body = try? JSONEncoder().encode(receipt) else { return }
+        struct Receipt: Decodable { let recorded: Bool }
+        // Retry the same provider ID; the server stores it only once.
+        for attempt in 0..<3 {
+            guard profile?.id == owner else { return }
+            do {
+                let _: Receipt = try await api.request("/api/voice/tokens", method: "POST", body: body, timeout: 15)
+                return
+            } catch {
+                if attempt < 2 { try? await Task.sleep(for: .seconds(attempt + 1)) }
+            }
+        }
+    }
+
     func recordVoiceUsage(sessionID:UUID,duration:TimeInterval) async {
         guard duration>0 else{return}
         struct Input:Encodable {let sessionId:String;let durationSeconds:Double}

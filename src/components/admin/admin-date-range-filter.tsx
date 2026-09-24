@@ -28,7 +28,11 @@ export function AdminDateRangeFilter({ from: initialFrom, to: initialTo, label, 
     router.push(`${pathname}?from=${encodeURIComponent(nextFrom)}&to=${encodeURIComponent(nextTo)}`);
   }
 
-  function apply(event: FormEvent) { event.preventDefault(); navigate(from, to); }
+  function apply(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const values = new FormData(event.currentTarget);
+    navigate(String(values.get('from') ?? ''), String(values.get('to') ?? ''));
+  }
 
   return <details ref={details} className="admin-range-filter">
     <summary><CalendarDays size={16}/><span>{label}</span><ChevronDown size={15}/></summary>
@@ -38,8 +42,8 @@ export function AdminDateRangeFilter({ from: initialFrom, to: initialTo, label, 
         {[1, 7, 15, 30, 90].map((days) => <button type="button" key={days} onClick={() => navigate(shifted(today, days), today)}>{days === 1 ? 'Today' : `Last ${days} days`}</button>)}
       </div>
       <form onSubmit={apply}>
-        <label>From<input type="date" value={from} max={today} onChange={(event) => setFrom(event.target.value)}/></label>
-        <label>To<input type="date" value={to} min={from} max={today} onChange={(event) => setTo(event.target.value)}/></label>
+        <label>From<input name="from" type="date" value={from} max={today} onChange={(event) => setFrom(event.target.value)}/></label>
+        <label>To<input name="to" type="date" value={to} min={from} max={today} onChange={(event) => setTo(event.target.value)}/></label>
         {error && <p role="alert">{error}</p>}
         <button type="submit">Apply range</button>
       </form>

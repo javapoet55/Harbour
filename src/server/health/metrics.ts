@@ -19,6 +19,13 @@ export function state(rows: Sample[], now = Date.now()): Status {
   const ratio = recent.filter(r=>r.status===0||r.status>=400).length/recent.length;
   return ratio>=.5 ? 'Down' : ratio>=.05 || recent.some(r=>r.status===429) ? 'Degraded' : 'Healthy';
 }
+// Coverage explains an unknown status without weakening the health sample minimum.
+export function coverage(rows: Sample[], now = Date.now()) {
+  const recent = rows.filter(r => +r.createdAt >= now - 15 * 60000 && +r.createdAt <= now);
+  const lastObserved = rows.map(r => r.createdAt.toISOString()).sort().at(-1) ?? null;
+  return { requests: rows.length, recentRequests: recent.length, minimumSamples: 5, lastObserved,
+    reason: recent.length >= 5 ? 'measured' : recent.length ? 'low-traffic' : rows.length ? 'inactive' : 'no-activity' };
+}
 export function overall(states: Status[]): Status {
   if (states.includes('Down')) return 'Down';
   if (states.includes('Degraded')) return 'Degraded';

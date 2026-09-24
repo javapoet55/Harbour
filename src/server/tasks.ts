@@ -1,3 +1,4 @@
+import { classifyNewTask } from './task-agent/service';
 import { requireAvailableSchedule } from './availability';
 import { nextTaskStart } from '@/lib/task-next-occurrence';
 import type { Prisma } from '@/generated/prisma';
@@ -42,7 +43,7 @@ export async function createTask(input: {
   const user = await prisma.user.findUniqueOrThrow({ where: { id: input.userId }, select: { timeZone: true } });
   return prisma.$transaction(async tx => {
     await validateProjectAssignment(tx, input.userId, input.projectId ?? null);
-    return tx.task.create({
+    const task = await tx.task.create({
       data: {
         userId: input.userId,
         timeZone: user.timeZone,
@@ -66,6 +67,8 @@ export async function createTask(input: {
         idempotencyKey: input.idempotencyKey,
       },
     });
+    await classifyNewTask(tx, task);
+    return task;
   });
 }
 
@@ -74,7 +77,9 @@ export async function updateTask(userId: string, id: string, data: Prisma.TaskUp
     const existing = await tx.task.findFirst({ where: { id, userId, deletedAt: null } });
     if (!existing) throw new Error('NOT_FOUND');
     if (data.project?.connect?.id) await validateProjectAssignment(tx, userId, data.project.connect.id);
-    return tx.task.update({ where: { id }, data });
+    const updated = await tx.task.update({ where: { id }, data });
+    if (updated.title !== existing.title || updated.notes !== existing.notes) await classifyNewTask(tx, updated);
+    return updated;
   });
 }
 
@@ -115,6 +120,7 @@ export async function completeTask(userId: string, id: string, allowScheduleConf
           notifySms: task.notifySms, critical: task.critical, dependencies: { create: task.dependencies.map((dependency) => ({ dependsOnId: dependency.dependsOnId })) },
           recurrence: { create: { frequency: task.recurrence.frequency, interval: task.recurrence.interval, byWeekday: task.recurrence.byWeekday, until: task.recurrence.until, count: task.recurrence.count ? task.recurrence.count - 1 : null } },
         } });
+        await classifyNewTask(tx, nextTask);
         if (nextReminderAt) await tx.reminder.create({ data: {
           userId, taskId: nextTask.id, fireAt: nextReminderAt, offsetLabel: 'requested reminder', critical: task.critical,
           idempotencyKey: `${nextTask.id}:requested`, channelPlan: task.critical ? 'push,email,sms' : 'push,email',

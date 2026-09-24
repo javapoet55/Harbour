@@ -21,8 +21,9 @@ export async function syncConnection(userId: string, connectionId: string) {
   const to = new Date(Date.now() + 365 * 86400000);
   let result;
   let fullSnapshot = !syncVersion.syncToken;
-  // Only a lost sign-in marks the connection for reconnecting; anything else (network, timeout, 5xx, 429,
-  // a rate-limit 403) leaves status and lastSyncedAt as they were and is retried on the next sync.
+  // Only a lost sign-in or a missing calendar (404: deleted or unshared) marks the connection for
+  // reconnecting; anything else (network, timeout, 5xx, 429, a rate-limit 403) leaves status and
+  // lastSyncedAt as they were and is retried on the next sync.
   const failed = async (error: unknown) => {
     if (isCalendarListAuthFailure(error)) await prisma.calendarConnection.update({ where: { id: connection.id }, data: { status: 'error' } });
     return error;

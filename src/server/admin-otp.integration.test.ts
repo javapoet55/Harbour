@@ -1,6 +1,7 @@
+import bcrypt from 'bcryptjs';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { prisma } from './db';
-import { adminTokenHash, adminUserForSession, requestAdminCode, revokeAdminSession, verifyAdminCode } from './admin-otp';
+import { adminTokenHash, adminUserForSession, requestAdminCode, signInAdminPassword, revokeAdminSession, verifyAdminCode } from './admin-otp';
 import { requireAdmin } from './admin-auth';
 import { POST } from '@/app/api/admin/auth/route';
 import { middleware } from '@/middleware';
@@ -105,22 +106,30 @@ describe('admin email OTP', () => {
     mocks.jar.set('nexdo_admin_session', await verifyAdminCode(id, sentCode()));
     expect(await requireAdmin()).toMatchObject({ id: user.id });
   });
-  it('binds verification to a challenge cookie and signs out server-side', async () => {
+  it('uses password authentication, rejects OTP and preserves the origin guard and logout', async () => {
     const user = await account();
+    await prisma.user.update({ where: { id: user.id }, data: { passwordHash: await bcrypt.hash('valid-test-password', 4), emailVerifiedAt: new Date() } });
     const request = (body: object, origin = 'http://localhost') => POST(new Request('http://localhost/api/admin/auth', { method: 'POST', headers: { origin, 'Content-Type': 'application/json' }, body: JSON.stringify(body) }));
-    expect((await request({ action: 'request', email: user.email }, 'https://other.test')).status).toBe(403);
-    const proxied = new Request('http://localhost/api/admin/auth', { method: 'POST', headers: { origin: 'https://admin.example.test', host: 'admin.example.test', 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'request', email: 'unknown@example.invalid' }) });
-    expect((await POST(proxied)).status).toBe(200);
-    expect((await request({ action: 'request', email: user.email })).status).toBe(200);
-    const code = sentCode(); const challenge = mocks.jar.get('nexdo_admin_challenge')!;
-    mocks.jar.delete('nexdo_admin_challenge');
-    expect((await request({ action: 'verify', code })).status).toBe(401);
-    mocks.jar.set('nexdo_admin_challenge', challenge);
-    expect((await request({ action: 'verify', code })).status).toBe(200);
+    const body = { action: 'login', email: user.email, password: 'valid-test-password' };
+    expect((await request(body, 'https://other.test')).status).toBe(403);
+    expect((await request({ action: 'request', email: user.email })).status).toBe(400);
+    expect((await request({ ...body, password: 'wrong' })).status).toBe(401);
+    expect((await request(body)).status).toBe(200);
+    expect(mocks.send).not.toHaveBeenCalled();
     const session = mocks.jar.get('nexdo_admin_session')!;
-    expect(mocks.jar.has('nexdo_admin_challenge')).toBe(false);
+    expect(await adminUserForSession(session)).toMatchObject({ id: user.id });
     expect((await request({ action: 'logout' })).status).toBe(200);
     expect(await adminUserForSession(session)).toBeNull();
+  });
+  it('rate limits password attempts and rejects non-admin or unverified accounts', async () => {
+    const user = await account();
+    await prisma.user.update({ where: { id: user.id }, data: { passwordHash: await bcrypt.hash('valid-test-password', 4) } });
+    await expect(signInAdminPassword(user.email, 'valid-test-password')).rejects.toThrow('INVALID_ADMIN_PASSWORD');
+    process.env.NEXDO_ADMIN_EMAILS = '';
+    await expect(signInAdminPassword(user.email, 'valid-test-password')).rejects.toThrow('INVALID_ADMIN_PASSWORD');
+    process.env.NEXDO_ADMIN_EMAILS = user.email;
+    for (let i = 0; i < 4; i++) await expect(signInAdminPassword(user.email, 'wrong')).rejects.toThrow('INVALID_ADMIN_PASSWORD');
+    await expect(signInAdminPassword(user.email, 'wrong')).rejects.toThrow('RATE_LIMITED');
   });
   it('lets admin pages reach their own OTP gate without an ordinary account cookie', () => {
     for (const path of ['/admin/login', '/admin', '/admin/users']) {

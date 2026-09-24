@@ -2,6 +2,7 @@ import SwiftUI
 import AVFoundation
 import Network
 import Combine
+import MediaPlayer
 
 @MainActor
 private final class VoiceNetworkMonitor: ObservableObject {
@@ -26,6 +27,12 @@ struct AddTaskByVoiceView: View {
     @StateObject private var voice: VoiceConversationSession
     @StateObject private var connectivity = VoiceNetworkMonitor()
     @State private var executor: VoiceToolExecutor
+    @State private var transport: VoiceWebRTCTransport
+    @AppStorage(AppVoice.volumeStorageKey) private var voiceLevel = AppVoice.defaultVolume
+    @State private var showingSpeaker = false
+    @State private var routingSpeaker = false
+    @State private var speakerError: String?
+    @State private var audioOutput = "Device audio"
     @State private var consent = false
     @State private var starting = false
     @State private var readyBell: AVAudioPlayer?
@@ -45,7 +52,9 @@ struct AddTaskByVoiceView: View {
         self.askMode = askMode
         self.calendarOnly = calendarOnly
         let executor = VoiceToolExecutor(); executor.calendarOnly = calendarOnly; _executor = State(initialValue: executor)
-        _voice = StateObject(wrappedValue: VoiceConversationSession(transport: VoiceWebRTCTransport(), executor: executor))
+        let transport = VoiceWebRTCTransport()
+        _transport = State(initialValue: transport)
+        _voice = StateObject(wrappedValue: VoiceConversationSession(transport: transport, executor: executor))
     }
     var body: some View {
         ZStack {
@@ -108,11 +117,47 @@ struct AddTaskByVoiceView: View {
                     Button { voice.toggleMute() } label: { Label(voice.muted ? "Unmute" : "Mute", systemImage: voice.muted ? "mic.slash.fill" : "mic.fill") }
                         .disabled(starting || recovering || [.idle, .connecting, .reconnecting, .paused, .closing, .disconnected, .connectionLost].contains(voice.phase))
                     Spacer()
+                    Button { updateAudioOutput(); showingSpeaker = true } label: {
+                        Label("Speaker", systemImage: "speaker.wave.2.fill")
+                    }.accessibilityIdentifier("voice-speaker")
+                    Spacer()
                     Button { voice.finish(); if voice.phase == .idle { dismiss() } } label: { Text("Done").foregroundStyle(.white) }
                         .buttonStyle(.borderedProminent).disabled(voice.phase == .closing)
                 }.padding(24)
             }.foregroundStyle(Color.nexdoInk)
         }.tint(.nexdoIndigo)
+        .sheet(isPresented: $showingSpeaker) {
+            VStack(alignment: .leading, spacing: 20) {
+                HStack {
+                    Text("Voice audio").font(.title2.bold())
+                    Spacer()
+                    Button("Done") { showingSpeaker = false }
+                }
+                Label(audioOutput, systemImage: "speaker.wave.2.fill")
+                Button("Use device speaker") {
+                    routingSpeaker = true; speakerError = nil
+                    Task {
+                        defer { routingSpeaker = false }
+                        do { try await transport.useDeviceSpeaker(); updateAudioOutput() }
+                        catch { speakerError = "Couldn’t switch to the speaker. Try again while voice is connected." }
+                    }
+                }.buttonStyle(.borderedProminent)
+                    .disabled(routingSpeaker || starting || recovering || [.idle, .connecting, .reconnecting, .paused, .closing, .disconnected, .connectionLost].contains(voice.phase))
+                HStack {
+                    Text("Nexdo voice level").font(.headline)
+                    Spacer()
+                    Text(voiceLevel, format: .percent.precision(.fractionLength(0)))
+                }
+                Slider(value: $voiceLevel, in: 0...1)
+                    .accessibilityLabel("Nexdo voice level")
+                    .onChange(of: voiceLevel) { _, _ in AppVoice.notifyVolumeChanged() }
+                Text("Device volume").font(.headline)
+                VoiceDeviceVolumeControl().frame(height: 44)
+                Text("Adjust the slider or use your phone’s volume buttons. Switching to speaker uses the built-in microphone too.")
+                    .font(.footnote).foregroundStyle(.secondary)
+                if let speakerError { Text(speakerError).foregroundStyle(.red) }
+            }.padding(24).presentationDetents([.medium, .large])
+        }
         .alert(calendarOnly ? "Use voice to add calendar events?" : "Use voice to manage tasks?", isPresented: $consent) {
             Button("Allow and start") { model.aiConsent = true; model.voiceConsent = true; Task { await start() } }
             Button("Not now", role: .cancel) { dismiss() }
@@ -122,6 +167,7 @@ struct AddTaskByVoiceView: View {
             if ProcessInfo.processInfo.arguments.contains("-ask-voice-design-preview") || ProcessInfo.processInfo.arguments.contains("-calendar-voice-preview") { return }
             #endif
             voice.onClose = { dismiss() }
+            voice.onTokenUsage = { receipt in Task { await model.recordVoiceTokens(receipt) } }
             voice.onTelemetry = { _ in Task{await model.recordVoiceUsage(sessionID:usageSessionID,duration:activeVoiceSeconds)} }
             if model.aiConsent && model.voiceConsent { await start() } else { consent = true }
         }
@@ -168,6 +214,7 @@ struct AddTaskByVoiceView: View {
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: AVAudioSession.routeChangeNotification)) { event in
+            updateAudioOutput()
             if (event.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt) == AVAudioSession.RouteChangeReason.oldDeviceUnavailable.rawValue {
                 Task { await voice.recoverAudioRoute() }
             }
@@ -175,6 +222,11 @@ struct AddTaskByVoiceView: View {
         .onChange(of: model.profile?.id) { _, _ in voice.close() }
         .onChange(of: model.aiConsent) { _, allowed in if !allowed { voice.close() } }
         .onChange(of: model.voiceConsent) { _, allowed in if !allowed { voice.close() } }
+    }
+    private func updateAudioOutput() {
+        let outputs = AVAudioSession.sharedInstance().currentRoute.outputs
+        audioOutput = outputs.map { $0.portType == .builtInSpeaker ? "Device speaker" : $0.portName }.joined(separator: ", ")
+        if audioOutput.isEmpty { audioOutput = "Device audio" }
     }
     private func start() async {
         guard !starting, voice.phase == .idle else { return }
@@ -251,4 +303,15 @@ struct AddTaskByVoiceView: View {
             }.frame(maxWidth: .infinity).frame(height: 260)
         }.accessibilityHidden(true)
     }
+}
+
+/// Apple's user-controlled system volume slider; never programmatically changes device volume.
+private struct VoiceDeviceVolumeControl: UIViewRepresentable {
+    func makeUIView(context: Context) -> MPVolumeView {
+        let view = MPVolumeView(frame: .zero)
+        view.showsRouteButton = true
+        view.showsVolumeSlider = true
+        return view
+    }
+    func updateUIView(_ uiView: MPVolumeView, context: Context) {}
 }

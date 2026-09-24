@@ -350,3 +350,13 @@ import Testing
     h.transport.released?()
     #expect(dismissed && h.session.phase == .disconnected)
 }
+
+@Test @MainActor func voiceReportsUsageForOutOfOrderResponses() async {
+    let h = VoiceHarness(); await h.ready()
+    var receipts: [VoiceTokenReceipt] = []
+    h.session.onTokenUsage = { receipts.append($0) }
+    h.send(["type":"response.created","response":["id":"new-response"]])
+    h.send(["type":"response.done","response":["id":"old-response","status":"cancelled","usage":["input_tokens":10,"output_tokens":2,"total_tokens":12]]])
+    #expect(receipts.count == 1)
+    #expect(receipts.first?.totalTokens == 12)
+}
