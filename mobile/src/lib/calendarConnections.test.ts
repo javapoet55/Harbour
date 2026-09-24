@@ -1,5 +1,16 @@
 import type { CalendarConnection } from '../api/types';
-import { connectButtonTitle, connectionDetail, disconnectTitle, displayName, isHealthy, lastSyncedDescription, providerLabel, relativeTime } from './calendarConnections';
+import {
+  connectButtonTitle,
+  connectionDetail,
+  connectOutcome,
+  disconnectTitle,
+  displayName,
+  isHealthy,
+  lastSyncedDescription,
+  needsReconnect,
+  providerLabel,
+  relativeTime,
+} from './calendarConnections';
 
 /** `CalendarConnection` presentation (ios/Sources/NexdoCore/ProfileSettings.swift:41-74). */
 const NOW = Date.parse('2026-09-19T12:00:00.000Z');
@@ -133,5 +144,48 @@ describe('relativeTime without Intl.RelativeTimeFormat (Hermes has none)', () =>
     expect(ago(5 * 3_600)).toBe(format.format(-5, 'hour'));
     expect(ago(2 * 86_400)).toBe(format.format(-2, 'day'));
     expect(relativeTime(now, now)).toBe(format.format(0, 'second'));
+  });
+});
+
+describe('Reconnect (commit 27798c5)', () => {
+  const row = (status: string, overrides: Partial<CalendarConnection> = {}): CalendarConnection => ({
+    id: 'c1',
+    provider: 'google',
+    accountEmail: 'ada@example.com',
+    calendarName: 'Work',
+    status,
+    lastSyncedAt: null,
+    writeEnabled: false,
+    ...overrides,
+  });
+
+  it('is offered exactly where the row reads "Needs reconnecting"', () => {
+    for (const status of ['connected', 'CONNECTED', 'error', 'revoked', 'ACTIVE', '']) {
+      const connection = row(status);
+      expect(needsReconnect(connection)).toBe(lastSyncedDescription(connection, Date.now(), 'UTC') === 'Needs reconnecting');
+    }
+    expect(needsReconnect(row('error'))).toBe(true);
+    expect(needsReconnect(row('connected'))).toBe(false);
+  });
+
+  it('says a new connection was made, softer when the profile could not refresh', () => {
+    expect(connectOutcome(null, true, [])).toEqual({ kind: 'connected', message: 'Google Calendar connected and synchronized.' });
+    expect(connectOutcome(null, false, [])).toEqual({ kind: 'connected', message: 'Google Calendar connected, but Nexdo could not refresh it yet.' });
+  });
+
+  it('says reconnected when the row is connected again, or gone', () => {
+    const stale = row('error');
+    expect(connectOutcome(stale, true, [row('connected')])).toEqual({ kind: 'connected', message: 'Google Calendar reconnected and synchronized.' });
+    expect(connectOutcome(stale, false, [])).toEqual({ kind: 'connected', message: 'Google Calendar reconnected and synchronized.' });
+  });
+
+  it('fails when the row still needs reconnecting, naming the account to choose', () => {
+    const stale = row('error');
+    expect(connectOutcome(stale, true, [stale])).toEqual({
+      kind: 'failed',
+      message: 'Work still needs reconnecting. Choose ada@example.com on Google’s sign-in page.',
+    });
+    const noEmail = row('error', { accountEmail: null });
+    expect(connectOutcome(noEmail, true, [noEmail]).message).toBe('Work still needs reconnecting. Choose the same Google account on Google’s sign-in page.');
   });
 });

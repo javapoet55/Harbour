@@ -54,9 +54,7 @@ export function connectionDetail(connection: CalendarConnection): string {
  * phone is showing.
  */
 export function lastSyncedDescription(connection: CalendarConnection, now: number, timeZone: string): string {
-  // Swift compares `status.lowercased() != "connected"`, so ACTIVE is NOT connected here, unlike
-  // `isHealthy` above, which the row's health icon still uses (ProfileSettings.swift:53).
-  if (connection.status.toLowerCase() !== 'connected') return 'Needs reconnecting';
+  if (needsReconnect(connection)) return 'Needs reconnecting';
   const at = parseServerDate(connection.lastSyncedAt);
   if (at === null) return 'Not synced yet';
   // A server clock slightly ahead of the phone's reads as the present, never as a negative count.
@@ -67,6 +65,15 @@ export function lastSyncedDescription(connection: CalendarConnection, now: numbe
   if (day === dayKey(now, timeZone)) return `Last synced today at ${clockTime(at, timeZone)}`;
   if (day === dayKey(addDays(startOfDay(now, timeZone), -1, timeZone), timeZone)) return `Last synced yesterday at ${clockTime(at, timeZone)}`;
   return `Last synced ${shortDate(at, timeZone)} at ${clockTime(at, timeZone)}`;
+}
+
+/**
+ * `needsReconnect` (ProfileSettings.swift, commit 27798c5): true exactly when the row reads "Needs
+ * reconnecting", and the row then offers Reconnect. Swift compares `status.lowercased() != "connected"`,
+ * so ACTIVE is NOT connected here, unlike `isHealthy` above, which the row's health icon still uses.
+ */
+export function needsReconnect(connection: Pick<CalendarConnection, 'status'>): boolean {
+  return connection.status.toLowerCase() !== 'connected';
 }
 
 /** `serverTime`'s format (taskLabels.ts:10), the screen's clock style: "3:05 PM". */
@@ -138,3 +145,30 @@ export const DISCONNECTED_MESSAGE = 'Calendar disconnected. Imported events were
 
 /** The caption under the toggle while writes are off (ProfileView.swift:319). */
 export const READ_ONLY_CAPTION = 'Read-only: events come into Nexdo, but tasks and events you create in Nexdo are not added to this calendar.';
+
+/**
+ * What Settings says once a Google sign-in comes back connected and the list has reloaded
+ * (`connect(reconnecting:)`, ProfileView.swift, commit 27798c5). `reconnecting` is the row whose
+ * Reconnect started the flow; `connections` is the reloaded list. If that row still needs
+ * reconnecting (a different Google account was chosen), it is a failure.
+ */
+export function connectOutcome(
+  reconnecting: CalendarConnection | null,
+  refreshed: boolean,
+  connections: CalendarConnection[],
+): { kind: 'connected' | 'failed'; message: string } {
+  if (reconnecting) {
+    const row = connections.find((connection) => connection.id === reconnecting.id);
+    if (row && needsReconnect(row)) {
+      return {
+        kind: 'failed',
+        message: `${displayName(reconnecting)} still needs reconnecting. Choose ${reconnecting.accountEmail ?? 'the same Google account'} on Google’s sign-in page.`,
+      };
+    }
+    return { kind: 'connected', message: 'Google Calendar reconnected and synchronized.' };
+  }
+  return {
+    kind: 'connected',
+    message: refreshed ? 'Google Calendar connected and synchronized.' : 'Google Calendar connected, but Nexdo could not refresh it yet.',
+  };
+}

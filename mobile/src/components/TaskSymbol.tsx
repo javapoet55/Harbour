@@ -54,6 +54,7 @@ export const taskIcons = {
   'checkmark.circle': 'checkmark-circle-outline',
   'checkmark.square': 'checkbox-outline',
   'doc.text': 'document-text-outline',
+  'hand.raised': 'hand-left-outline',
   repeat: 'repeat',
   'mappin.and.ellipse': 'location-outline',
   'chevron.left': 'chevron-back',

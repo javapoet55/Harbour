@@ -28,6 +28,7 @@ import {
   APPEARANCES,
   CONFIRMATION_LEVELS,
   deviceTimeZone,
+  LEGAL_LINKS,
   SWITCHING_THRESHOLDS,
   timeZoneLabel,
   validateSettings,
@@ -40,6 +41,7 @@ import {
   displayName,
   isHealthy,
   lastSyncedDescription,
+  needsReconnect,
   READ_ONLY_CAPTION,
 } from '../../src/lib/calendarConnections';
 import { useOAuthCallback } from '../../src/lib/oauthCallbacks';
@@ -47,7 +49,7 @@ import { closePresentedScreens, replaceWithSignIn } from '../../src/lib/sessionN
 import { useBlockDismiss } from '../../src/lib/useBlockDismiss';
 import { useMinuteTick } from '../../src/lib/useMinuteTick';
 import { encodeProfilePhoto } from '../../src/photo/encodePhoto';
-import { completeGoogleConnect, useCalendarConnections, useConnectGoogleCalendar, useDisconnectCalendar, useSetCalendarWrites } from '../../src/query/useCalendar';
+import { completeGoogleConnect, type GoogleConnectResult, useCalendarConnections, useConnectGoogleCalendar, useDisconnectCalendar, useSetCalendarWrites } from '../../src/query/useCalendar';
 import { useMe } from '../../src/query/useMe';
 import { useDeleteAccount, useSyncNow, useUpdateProfile, useUploadPhoto } from '../../src/query/useProfile';
 import { useAppearance } from '../../src/store/appearance';
@@ -256,18 +258,22 @@ function SettingsScreen({
       ],
     );
 
+  const showConnectResult = (result: GoogleConnectResult) => {
+    // Closing Google's page without signing in says nothing (commit 27798c5).
+    if (result.kind === 'connected') setMessage(result.message);
+    else if (result.kind === 'failed') setFailure(result.message);
+  };
+
   /**
-   * `connect()` (ProfileView.swift:332-348). Not through `run`: it has its own `connecting` flag, and
-   * anything that is not a connection resumes the continuation with a throw, which lands in `failure`.
+   * `connect(reconnecting:)` (ProfileView.swift, commit 27798c5). Not through `run`: it has its own
+   * `connecting` flag. With a connection, the same Google sign-in renews that row's account.
    */
-  const connectCalendar = async () => {
+  const connectCalendar = async (reconnecting: CalendarConnection | null = null) => {
     if (saving || connecting) return;
     setFailure(null);
     setMessage(null);
     try {
-      const result = await connect.mutateAsync();
-      if (!result.ok) throw new Error(result.message);
-      setMessage(result.message);
+      showConnectResult(await connect.mutateAsync(reconnecting));
     } catch (cause) {
       setFailure(cause instanceof Error ? cause.message : String(cause));
     }
@@ -278,7 +284,7 @@ function SettingsScreen({
   useOAuthCallback('calendar', (url) => {
     setFailure(null);
     setMessage(null);
-    void completeGoogleConnect(queryClient, url).then((result) => (result.ok ? setMessage(result.message) : setFailure(result.message)));
+    void completeGoogleConnect(queryClient, url).then(showConnectResult);
   });
 
   /** The Disconnect `confirmationDialog` (ProfileView.swift:273-284). */
@@ -525,6 +531,7 @@ function SettingsScreen({
                 connections={connections.data ?? []}
                 loaded={!connections.isPending}
                 onDisconnect={confirmDisconnect}
+                onReconnect={(connection) => void connectCalendar(connection)}
                 onWrites={(connection, enabled) => void run(() => setWrites.mutateAsync({ id: connection.id, enabled }))}
                 timeZone={zone}
               />
@@ -569,6 +576,26 @@ function SettingsScreen({
                   <Text style={[theme.typography.body, { color: theme.colors.link }]}>Withdraw AI permission</Text>
                 </Pressable>
               ) : null}
+              <Pressable
+                accessibilityLabel={LEGAL_LINKS.privacyPolicyTitle}
+                accessibilityRole="link"
+                onPress={() => void Linking.openURL(LEGAL_LINKS.privacyPolicy)}
+                style={styles.linkRow}
+                testID="settings-privacy-policy"
+              >
+                <TaskSymbol color={theme.colors.link} name="hand.raised" size={17} />
+                <Text style={[theme.typography.body, { color: theme.colors.link }]}>{LEGAL_LINKS.privacyPolicyTitle}</Text>
+              </Pressable>
+              <Pressable
+                accessibilityLabel={LEGAL_LINKS.termsOfServiceTitle}
+                accessibilityRole="link"
+                onPress={() => void Linking.openURL(LEGAL_LINKS.termsOfService)}
+                style={styles.linkRow}
+                testID="settings-terms-of-service"
+              >
+                <TaskSymbol color={theme.colors.link} name="doc.text" size={17} />
+                <Text style={[theme.typography.body, { color: theme.colors.link }]}>{LEGAL_LINKS.termsOfServiceTitle}</Text>
+              </Pressable>
               <Pressable
                 accessibilityLabel="Delete account"
                 accessibilityRole="button"
@@ -643,12 +670,14 @@ function ConnectionList({
   connections,
   loaded,
   onDisconnect,
+  onReconnect,
   onWrites,
   timeZone,
 }: {
   connections: CalendarConnection[];
   loaded: boolean;
   onDisconnect: (connection: CalendarConnection) => void;
+  onReconnect: (connection: CalendarConnection) => void;
   onWrites: (connection: CalendarConnection, enabled: boolean) => void;
   timeZone: string;
 }) {
@@ -687,14 +716,28 @@ function ConnectionList({
                   {synced}
                 </Text>
               </View>
-              <Pressable
-                accessibilityRole="button"
-                hitSlop={8}
-                onPress={() => onDisconnect(connection)}
-                testID={`settings-disconnect-${connection.id}`}
-              >
-                <Text style={[styles.caption, { color: theme.colors.danger }]}>Disconnect</Text>
-              </Pressable>
+              {/* Reconnect above Disconnect on a row that reads "Needs reconnecting" (commit 27798c5). */}
+              <View style={styles.connectionActions}>
+                {needsReconnect(connection) ? (
+                  <Pressable
+                    accessibilityLabel={`Reconnect ${displayName(connection)}`}
+                    accessibilityRole="button"
+                    hitSlop={8}
+                    onPress={() => onReconnect(connection)}
+                    testID={`settings-reconnect-${connection.id}`}
+                  >
+                    <Text style={[styles.caption, styles.bold, { color: theme.colors.link }]}>Reconnect</Text>
+                  </Pressable>
+                ) : null}
+                <Pressable
+                  accessibilityRole="button"
+                  hitSlop={8}
+                  onPress={() => onDisconnect(connection)}
+                  testID={`settings-disconnect-${connection.id}`}
+                >
+                  <Text style={[styles.caption, { color: theme.colors.danger }]}>Disconnect</Text>
+                </Pressable>
+              </View>
             </View>
             <View style={[styles.connectionDivider, { backgroundColor: theme.colors.separator }]} />
             <View style={styles.row}>
@@ -747,6 +790,7 @@ const styles = StyleSheet.create({
   // `VStack(alignment: .leading, spacing: 2)` around the name, detail and last sync.
   connectionText: { flex: 1, gap: 2 },
   connectionHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
+  connectionActions: { alignItems: 'flex-end', gap: 8 },
   connectionDivider: { height: StyleSheet.hairlineWidth },
   row: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   centred: { alignItems: 'center', gap: 8, paddingVertical: 12 },

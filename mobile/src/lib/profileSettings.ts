@@ -128,3 +128,15 @@ export const APPEARANCES = [
   { value: 'day', title: 'Day' },
   { value: 'night', title: 'Night' },
 ] as const;
+
+/**
+ * `LegalLinks` (ios/Sources/NexdoCore/ProfileSettings.swift, commit 27798c5): Nexdo's public legal
+ * pages on the marketing site. App routes such as /privacy on the API host redirect to sign-in, so
+ * Settings links here instead.
+ */
+export const LEGAL_LINKS = {
+  privacyPolicyTitle: 'Privacy policy',
+  privacyPolicy: 'https://nexdoapp.com/privacy',
+  termsOfServiceTitle: 'Terms of service',
+  termsOfService: 'https://nexdoapp.com/terms',
+} as const;

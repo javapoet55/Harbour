@@ -3,7 +3,7 @@ import { randomUUID } from 'expo-crypto';
 import * as WebBrowser from 'expo-web-browser';
 
 import { endpoints, type Agenda, type CalendarConnection, type CalendarEventInput, type CalendarEventResponse } from '../api';
-import { DISCONNECTED_MESSAGE, writesMessage } from '../lib/calendarConnections';
+import { connectOutcome, DISCONNECTED_MESSAGE, writesMessage } from '../lib/calendarConnections';
 import { calendarPushNotice } from '../lib/calendarPush';
 import { useCalendarNotice } from '../store/calendarNotice';
 import { useSession } from '../store/session';
@@ -107,62 +107,51 @@ export function googleConnectStartUrl(baseUrl: string, connectToken: string): st
 /** `CalendarConnectError.unavailable` (NexdoApp.swift:305-308): the server issued no usable token. */
 export const CONNECT_UNAVAILABLE = 'Nexdo could not start the calendar connection. Please try again.';
 
-/**
- * `describe(_:)` for `ASWebAuthenticationSessionError.canceledLogin` (ProfileView.swift:32-35): what
- * the person sees when they close the browser — the `account-settings-calendar-error-cancelled`
- * capture. The redirect URI names the production origin, app.nexdoapp.com, not the raw Railway host.
- */
-export const CONNECT_CANCELLED =
-  'Google Calendar connection failed: sign-in was cancelled or blocked. If Google showed “OAuth client was disabled”, enable that Web client in Google Cloud Console → APIs & Services → Credentials, and keep the redirect URI https://app.nexdoapp.com/api/calendar/oauth/google/callback.';
-
 /** The callback scheme `ASWebAuthenticationSession` is started with (ProfileView.swift:13). */
 export const CONNECT_CALLBACK_SCHEME = 'nexdo';
 
-export type GoogleConnectResult =
-  | { ok: true; message: string }
-  | { ok: false; message: string };
+/**
+ * `CalendarOAuthResult` (ios/Sources/NexdoCore/ProfileSettings.swift, commit 27798c5): how a finished
+ * Google sign-in ended. Closing Google's page is `cancelled`, and Settings then says nothing.
+ */
+export type CalendarOAuthResult = { kind: 'connected' } | { kind: 'cancelled' } | { kind: 'failed'; message: string };
+
+/** What Settings shows: nothing when cancelled, else a message or a failure. */
+export type GoogleConnectResult = { kind: 'cancelled' } | { kind: 'connected' | 'failed'; message: string };
 
 /**
- * The callback handler (ProfileView.swift:16-24).
- *
- * A callback carrying `calendar=error`, or ANY `detail` parameter, is a failure — Swift checks for
- * the presence of `detail`, not its value. Otherwise the profile is reloaded and the connection is
- * reported as made.
+ * `CalendarOAuthResult.init(callback:cancelled:error:)` for the callback URL. No callback means the
+ * browser closed without signing in. A callback carrying `calendar=error`, or ANY `detail` parameter,
+ * is a failure — Swift checks for the presence of `detail`, not its value.
  */
-export function parseGoogleCallback(callbackUrl: string | null | undefined): GoogleConnectResult {
-  if (!callbackUrl) return { ok: false, message: 'Google Calendar authorization was cancelled.' };
-
-  let params: URLSearchParams;
-  try {
-    params = new URLSearchParams(callbackUrl.split('?')[1] ?? '');
-  } catch {
-    return { ok: false, message: 'Google Calendar connection failed: authorization failed.' };
-  }
-
+export function parseGoogleCallback(callbackUrl: string | null | undefined): CalendarOAuthResult {
+  if (!callbackUrl) return { kind: 'cancelled' };
+  const params = new URLSearchParams(callbackUrl.split('?')[1] ?? '');
   if (params.get('calendar') === 'error' || params.has('detail')) {
     const detail = params.get('detail') ?? 'authorization failed';
-    return { ok: false, message: `Google Calendar connection failed: ${detail}` };
+    return { kind: 'failed', message: `Google Calendar connection failed: ${detail}` };
   }
-  return { ok: true, message: 'Google Calendar connected and synchronized.' };
+  return { kind: 'connected' };
 }
 
 /**
- * `ProfileSettingsView.connect()` (ProfileView.swift:332-348) with `CalendarOAuthCoordinator`
- * (`:6-38`) and `calendarConnectURL` (NexdoApp.swift:293-304).
+ * `ProfileSettingsView.connect(reconnecting:)` (ProfileView.swift, commit 27798c5) with
+ * `CalendarOAuthCoordinator` and `calendarConnectURL` (NexdoApp.swift:293-304). The variable is the
+ * row whose Reconnect started it, or `null` for a new connection: the same flow, since the server
+ * updates the existing connection when the same Google account signs in.
  *
  * 1. `POST /api/calendar/oauth/google/connect-token` over the authenticated API session. An error
  *    here propagates with the API's own message; an empty token is `CONNECT_UNAVAILABLE`.
  * 2. `openAuthSessionAsync` on `/start?native=1&connect_token=…` — `ASWebAuthenticationSession`'s
  *    equivalent, with `prefersEphemeralWebBrowserSession = false`, so an existing Google sign-in in the
  *    system browser is reused. The server redirects back to `nexdo://calendar-connected?…`.
- * 3. Closing the browser is `.canceledLogin`, reported as `CONNECT_CANCELLED`.
- * 4. On success (`completeGoogleConnect`) the profile is reloaded ("connected and synchronized"; a failed reload is still
- *    connected, with a softer message), and then the connection list (`:345`).
+ * 3. Closing the browser is `cancelled`: no message. Any other browser error is a failure.
+ * 4. Otherwise `completeGoogleConnect`.
  */
 export function useConnectGoogleCalendar() {
   const queryClient = useQueryClient();
-  return useMutation<GoogleConnectResult, Error, void>({
-    mutationFn: async () => {
+  return useMutation<GoogleConnectResult, Error, CalendarConnection | null>({
+    mutationFn: async (reconnecting) => {
       const issued = await endpoints.calendarConnectToken('google');
       if (!issued?.token) throw new Error(CONNECT_UNAVAILABLE);
 
@@ -179,33 +168,40 @@ export function useConnectGoogleCalendar() {
         // redirect's deep link lands. iOS reports a real cancel as `cancel`.
         callback = result.type === 'success' ? result.url : result.type === 'dismiss' ? await waitForOAuthCallback('calendar', LATE_CALLBACK_MS) : null;
         takeOAuthCallback('calendar');
+      } catch (cause) {
+        return { kind: 'failed', message: `Google Calendar connection failed: ${cause instanceof Error ? cause.message : String(cause)}` };
       } finally {
         end();
       }
 
-      if (!callback) return { ok: false, message: CONNECT_CANCELLED };
-      return completeGoogleConnect(queryClient, callback);
+      return completeGoogleConnect(queryClient, callback, reconnecting);
     },
   });
 }
 
 /**
- * Step 4 of `connectGoogle` (ProfileView.swift:16-24) for a callback URL, whichever way it arrived:
- * from the session, or as a deep link after Android dropped the session (src/lib/oauthCallbacks.ts).
+ * Everything after the browser in `connect(reconnecting:)`, for a callback URL whichever way it
+ * arrived: from the session, or as a deep link after Android dropped the session
+ * (src/lib/oauthCallbacks.ts). Reloads the profile, then the connection list, then says which.
  */
-export async function completeGoogleConnect(queryClient: QueryClient, callbackUrl: string): Promise<GoogleConnectResult> {
+export async function completeGoogleConnect(
+  queryClient: QueryClient,
+  callbackUrl: string | null,
+  reconnecting: CalendarConnection | null = null,
+): Promise<GoogleConnectResult> {
   const parsed = parseGoogleCallback(callbackUrl);
-  if (!parsed.ok) return parsed;
+  if (parsed.kind !== 'connected') return parsed;
 
-  let message = parsed.message;
+  let refreshed = true;
   try {
     await reloadProfile(queryClient);
   } catch {
-    message = 'Google Calendar connected, but Nexdo could not refresh it yet.';
+    refreshed = false;
   }
+  const connections = await queryClient.fetchQuery({ queryKey: queryKeys.calendar.connections(), queryFn: loadCalendarConnections, staleTime: 0 });
   void queryClient.invalidateQueries({ queryKey: queryKeys.calendar.all() });
   void queryClient.invalidateQueries({ queryKey: queryKeys.agenda.all() });
-  return { ok: true, message };
+  return connectOutcome(reconnecting, refreshed, connections);
 }
 
 /**
@@ -213,17 +209,16 @@ export async function completeGoogleConnect(queryClient: QueryClient, callbackUr
  * Swift catches, clears the list and still marks it loaded, so the card reads "No calendars connected
  * yet." rather than showing a failure.
  */
+async function loadCalendarConnections(): Promise<CalendarConnection[]> {
+  try {
+    return (await endpoints.calendarConnections()).connections;
+  } catch {
+    return [];
+  }
+}
+
 export function useCalendarConnections() {
-  return useQuery({
-    queryKey: queryKeys.calendar.connections(),
-    queryFn: async (): Promise<CalendarConnection[]> => {
-      try {
-        return (await endpoints.calendarConnections()).connections;
-      } catch {
-        return [];
-      }
-    },
-  });
+  return useQuery({ queryKey: queryKeys.calendar.connections(), queryFn: loadCalendarConnections });
 }
 
 /** `setCalendarWrites(id:enabled:)` (NexdoApp.swift:319-324). Resolves to the message Swift shows. */

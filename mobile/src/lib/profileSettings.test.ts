@@ -1,6 +1,7 @@
 import type { ProfilePreferences } from '../api';
 import {
   formatClock,
+  LEGAL_LINKS,
   NAME_ERROR,
   normalizePhone,
   parseClock,
@@ -159,4 +160,15 @@ describe('clock helpers', () => {
 it('shows a time zone identifier with spaces instead of underscores', () => {
   expect(timeZoneLabel('America/Los_Angeles')).toBe('America/Los Angeles');
   expect(timeZoneLabel('Asia/Kolkata')).toBe('Asia/Kolkata');
+});
+
+describe('LEGAL_LINKS (commit 27798c5)', () => {
+  it('points at the public site with Swift’s titles', () => {
+    expect(LEGAL_LINKS).toEqual({
+      privacyPolicyTitle: 'Privacy policy',
+      privacyPolicy: 'https://nexdoapp.com/privacy',
+      termsOfServiceTitle: 'Terms of service',
+      termsOfService: 'https://nexdoapp.com/terms',
+    });
+  });
 });

@@ -534,30 +534,32 @@ describe('Google connect helpers', () => {
     expect(CONNECT_CALLBACK_SCHEME).toBe('nexdo');
   });
 
-  it('treats a cancelled callback as a failure', () => {
-    expect(parseGoogleCallback(null)).toEqual({ ok: false, message: 'Google Calendar authorization was cancelled.' });
+  it('treats no callback as a quiet cancel (27798c5)', () => {
+    expect(parseGoogleCallback(null)).toEqual({ kind: 'cancelled' });
+    expect(parseGoogleCallback('')).toEqual({ kind: 'cancelled' });
   });
 
   it('treats calendar=error as a failure', () => {
     expect(parseGoogleCallback('nexdo://calendar?calendar=error')).toEqual({
-      ok: false,
+      kind: 'failed',
       // Swift's fallback is `?? "authorization failed"`, with no trailing period.
       message: 'Google Calendar connection failed: authorization failed',
     });
   });
 
   it('treats ANY detail parameter as a failure, quoting it', () => {
+    expect(parseGoogleCallback('nexdo://calendar-connected?calendar=error&detail=Unable%20to%20read%20Google%20account%20calendar')).toEqual({
+      kind: 'failed',
+      message: 'Google Calendar connection failed: Unable to read Google account calendar',
+    });
     expect(parseGoogleCallback('nexdo://calendar?detail=access_denied')).toEqual({
-      ok: false,
+      kind: 'failed',
       message: 'Google Calendar connection failed: access_denied',
     });
   });
 
-  it('treats a clean callback as success', () => {
-    expect(parseGoogleCallback('nexdo://calendar?calendar=connected')).toEqual({
-      ok: true,
-      message: 'Google Calendar connected and synchronized.',
-    });
+  it('treats a clean callback as connected', () => {
+    expect(parseGoogleCallback('nexdo://calendar-connected?calendar=google-connected')).toEqual({ kind: 'connected' });
   });
 });
 

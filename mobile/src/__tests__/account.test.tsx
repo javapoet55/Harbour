@@ -554,19 +554,85 @@ describe('the Settings screen', () => {
       );
     });
 
-    it('reports a closed browser with Swift’s cancelled-login message (the error-cancelled capture)', async () => {
+    it('says nothing when Google’s page is closed without signing in (27798c5)', async () => {
       mockOpenAuthSession.mockResolvedValue({ type: 'cancel' });
       await show(<Settings />);
       await waitFor(() => expect(screen.getByTestId('settings-connect-google')).toBeTruthy());
 
       fireEvent.press(screen.getByTestId('settings-connect-google'));
 
+      await waitFor(() => expect(screen.getByTestId('settings-connect-label')).toHaveTextContent('Connect Google Calendar'));
+      expect(mockOpenAuthSession).toHaveBeenCalled();
+      expect(screen.queryByTestId('settings-failure')).toBeNull();
+      expect(screen.queryByTestId('settings-message')).toBeNull();
+      expect(Alert.alert).not.toHaveBeenCalled();
+    });
+
+    it('also says nothing when the Android session is dismissed and no callback follows', async () => {
+      resetOAuthCallbacks();
+      mockOpenAuthSession.mockResolvedValue({ type: 'dismiss' });
+      await show(<Settings />);
+      await waitFor(() => expect(screen.getByTestId('settings-connect-google')).toBeTruthy());
+
+      fireEvent.press(screen.getByTestId('settings-connect-google'));
+
+      await waitFor(() => expect(screen.getByTestId('settings-connect-label')).toHaveTextContent('Connect Google Calendar'), { timeout: 3000 });
+      expect(screen.queryByTestId('settings-failure')).toBeNull();
+      expect(Alert.alert).not.toHaveBeenCalled();
+    });
+
+    it('still reports a server failure under "Could not update profile", with the fallback detail', async () => {
+      mockOpenAuthSession.mockResolvedValue({ type: 'success', url: 'nexdo://calendar-connected?calendar=error' });
+      await show(<Settings />);
+      await waitFor(() => expect(screen.getByTestId('settings-connect-google')).toBeTruthy());
+
+      fireEvent.press(screen.getByTestId('settings-connect-google'));
+
       await waitFor(() =>
-        expect(screen.getByTestId('settings-failure')).toHaveTextContent(
-          'Google Calendar connection failed: sign-in was cancelled or blocked. If Google showed “OAuth client was disabled”, enable that Web client in Google Cloud Console → APIs & Services → Credentials, and keep the redirect URI https://app.nexdoapp.com/api/calendar/oauth/google/callback.',
-        ),
+        expect(screen.getByTestId('settings-failure')).toHaveTextContent('Google Calendar connection failed: authorization failed'),
       );
-      expect(Alert.alert).toHaveBeenCalledWith('Could not update profile', expect.stringContaining('sign-in was cancelled or blocked'), expect.any(Array));
+      expect(Alert.alert).toHaveBeenCalledWith('Could not update profile', 'Google Calendar connection failed: authorization failed', expect.any(Array));
+    });
+
+    it('reports a browser error as a connection failure', async () => {
+      mockOpenAuthSession.mockRejectedValue(new Error('No browser available'));
+      await show(<Settings />);
+      await waitFor(() => expect(screen.getByTestId('settings-connect-google')).toBeTruthy());
+
+      fireEvent.press(screen.getByTestId('settings-connect-google'));
+
+      await waitFor(() =>
+        expect(screen.getByTestId('settings-failure')).toHaveTextContent('Google Calendar connection failed: No browser available'),
+      );
+    });
+
+    it('says a new connection could not refresh yet when the profile reload fails', async () => {
+      mockOpenAuthSession.mockResolvedValue({ type: 'success', url: 'nexdo://calendar-connected?calendar=google-connected' });
+      await show(<Settings />);
+      await waitFor(() => expect(screen.getByTestId('settings-connect-google')).toBeTruthy());
+      mockMe.mockRejectedValue(new Error('offline'));
+
+      fireEvent.press(screen.getByTestId('settings-connect-google'));
+
+      await waitFor(() =>
+        expect(screen.getByTestId('settings-message')).toHaveTextContent('Google Calendar connected, but Nexdo could not refresh it yet.'),
+      );
+    });
+
+    it('opens the privacy policy and terms of service in the browser, above Delete account', async () => {
+      await show(<Settings />);
+      await waitFor(() => expect(screen.getByTestId('settings-privacy-policy')).toBeTruthy());
+
+      expect(screen.getByTestId('settings-privacy-policy')).toHaveTextContent('Privacy policy');
+      expect(screen.getByTestId('settings-terms-of-service')).toHaveTextContent('Terms of service');
+      // Matches come back in render order.
+      const order = screen.getAllByTestId(/^settings-(withdraw-consent|privacy-policy|terms-of-service|delete-account)$/).map((node) => node.props.testID);
+      expect(order).toEqual(['settings-privacy-policy', 'settings-terms-of-service', 'settings-delete-account']);
+
+      await fireEvent.press(screen.getByTestId('settings-privacy-policy'));
+      expect(Linking.openURL).toHaveBeenLastCalledWith('https://nexdoapp.com/privacy');
+      await fireEvent.press(screen.getByTestId('settings-terms-of-service'));
+      expect(Linking.openURL).toHaveBeenLastCalledWith('https://nexdoapp.com/terms');
     });
 
     // Android's `openAuthSessionAsync` polyfill reports `dismiss` as the app turns active, which can
@@ -928,6 +994,70 @@ describe('calendar connections', () => {
       await waitFor(() => expect(screen.getByTestId('settings-last-synced-c1')).toHaveTextContent('Last synced just now'));
     });
 
+  });
+
+  describe('Reconnect (27798c5)', () => {
+    const STALE = { ...GOOGLE, status: 'error' };
+
+    it('appears above Disconnect only on a row that needs reconnecting', async () => {
+      mockConnections.mockResolvedValue({ connections: [GOOGLE, { ...STALE, id: 'c2', calendarName: 'Personal' }] });
+      await show(<Settings />);
+      await waitFor(() => expect(screen.getByTestId('settings-reconnect-c2')).toBeTruthy());
+
+      expect(screen.queryByTestId('settings-reconnect-c1')).toBeNull();
+      expect(screen.getByTestId('settings-reconnect-c2')).toHaveTextContent('Reconnect');
+      expect(screen.getByTestId('settings-reconnect-c2').props.accessibilityLabel).toBe('Reconnect Personal');
+      const order = screen.getAllByTestId(/^settings-(reconnect|disconnect)-c2$/).map((node) => node.props.testID);
+      expect(order).toEqual(['settings-reconnect-c2', 'settings-disconnect-c2']);
+    });
+
+    it('starts the same Google sign-in, reloads the list and says reconnected', async () => {
+      mockConnections.mockResolvedValue({ connections: [STALE] });
+      mockOpenAuthSession.mockImplementation(async () => {
+        mockConnections.mockResolvedValue({ connections: [GOOGLE] });
+        return { type: 'success', url: 'nexdo://calendar-connected?calendar=google-connected' };
+      });
+      await show(<Settings />);
+      await waitFor(() => expect(screen.getByTestId('settings-reconnect-c1')).toBeTruthy());
+
+      fireEvent.press(screen.getByTestId('settings-reconnect-c1'));
+
+      await waitFor(() => expect(screen.getByTestId('settings-message')).toHaveTextContent('Google Calendar reconnected and synchronized.'));
+      expect(mockConnectToken).toHaveBeenCalledWith('google');
+      expect(mockOpenAuthSession.mock.calls[0][0]).toBe('https://api.example.com/api/calendar/oauth/google/start?native=1&connect_token=one-time-token');
+      await waitFor(() => expect(screen.queryByTestId('settings-reconnect-c1')).toBeNull());
+      expect(screen.getByTestId('settings-last-synced-c1')).toHaveTextContent('Last synced 5 min ago');
+    });
+
+    it('says which account to choose when the row still needs reconnecting', async () => {
+      mockConnections.mockResolvedValue({ connections: [STALE] });
+      mockOpenAuthSession.mockResolvedValue({ type: 'success', url: 'nexdo://calendar-connected?calendar=google-connected' });
+      await show(<Settings />);
+      await waitFor(() => expect(screen.getByTestId('settings-reconnect-c1')).toBeTruthy());
+      const loads = mockConnections.mock.calls.length;
+
+      fireEvent.press(screen.getByTestId('settings-reconnect-c1'));
+
+      await waitFor(() =>
+        expect(screen.getByTestId('settings-failure')).toHaveTextContent('Work still needs reconnecting. Choose ada@example.com on Google’s sign-in page.'),
+      );
+      expect(mockConnections.mock.calls.length).toBeGreaterThan(loads);
+      expect(screen.queryByTestId('settings-message')).toBeNull();
+    });
+
+    it('stays quiet when Google’s page is closed', async () => {
+      mockConnections.mockResolvedValue({ connections: [STALE] });
+      mockOpenAuthSession.mockResolvedValue({ type: 'cancel' });
+      await show(<Settings />);
+      await waitFor(() => expect(screen.getByTestId('settings-reconnect-c1')).toBeTruthy());
+
+      fireEvent.press(screen.getByTestId('settings-reconnect-c1'));
+
+      await waitFor(() => expect(mockOpenAuthSession).toHaveBeenCalled());
+      await waitFor(() => expect(screen.getByTestId('settings-connect-label')).toHaveTextContent('Connect another calendar'));
+      expect(screen.queryByTestId('settings-failure')).toBeNull();
+      expect(screen.queryByTestId('settings-message')).toBeNull();
+    });
   });
 
   it('turns writes on with PATCH { id, writeEnabled }, reloads the list and says so', async () => {
