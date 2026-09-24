@@ -48,3 +48,7 @@ it('blocks search until problem-only discovery is confirmed, including with fill
  expect(nextQuestion(slots)?.key).toBe('discovery');
  expect(nextQuestion({...slots,discoveryConfirmed:true})).toBeNull();
 });
+
+it('does not ask an urgency question for older unknown-urgency runs',()=>{
+ expect(nextQuestion({location:'94582',locationConfirmed:true,urgency:'unknown',budget:'',constraints:'',preferencesConfirmed:false})?.key).toBe('preferences');
+});

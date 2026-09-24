@@ -101,3 +101,28 @@ it('requires explicit discovery confirmation for problem descriptions before col
  const search=vi.fn();await processRun(pending.id,search);expect(search).not.toHaveBeenCalled();
  expect((await ownedRun(user.id,other.id)).status).toBe('PLANNED');
 });
+
+it('starts search directly from location without optional questions',async()=>{
+ const {user,task}=await setup('Find a weekend handyman');
+ const run=(await ownedRun(user.id,task.id)).agentRun!;
+ await expect(controlRun(user.id,task.id,{action:'search',version:run.version,answer:'  '})).rejects.toThrow('INVALID_INPUT');
+ const queued=await controlRun(user.id,task.id,{action:'search',version:run.version,answer:'94582'});
+ expect(queued).toMatchObject({status:'QUEUED',question:null,slots:{location:'94582',locationConfirmed:true,urgency:'flexible',constraints:'weekend',preferencesConfirmed:true}});
+ await expect(controlRun(user.id,task.id,{action:'search',version:run.version,answer:'94582'})).rejects.toThrow('STALE_AGENT_RUN');
+ const urgent=await createTask({userId:user.id,title:'Find an emergency plumber'});
+ const urgentRun=(await ownedRun(user.id,urgent.id)).agentRun!;
+ expect(await controlRun(user.id,urgent.id,{action:'search',version:urgentRun.version,answer:'94582'})).toMatchObject({status:'QUEUED',urgency:'urgent'});
+ const problem=await createTask({userId:user.id,title:'My sink is leaking'});
+ const pending=(await ownedRun(user.id,problem.id)).agentRun!;
+ await expect(controlRun(user.id,problem.id,{action:'search',version:pending.version,answer:'94582'})).rejects.toThrow('INVALID_AGENT_TRANSITION');
+});
+
+it('resumes a legacy preferences prompt directly without losing saved requirements',async()=>{
+ const {user,task}=await setup('Find a handyman');
+ const initial=(await ownedRun(user.id,task.id)).agentRun!;
+ await controlRun(user.id,task.id,{action:'answer',version:initial.version,key:'location',answer:'San Ramon'});
+ const pending=(await ownedRun(user.id,task.id)).agentRun!;
+ expect(runView(pending).question?.key).toBe('preferences');
+ const result=await controlRun(user.id,task.id,{action:'search',version:pending.version,answer:'San Ramon'});
+ expect(result).toMatchObject({status:'QUEUED',question:null,slots:{urgency:'flexible',preferencesConfirmed:true}});
+});

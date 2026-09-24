@@ -6,13 +6,10 @@ struct TaskAgentCard: View {
     let taskID: String
     var onResearchAvailable: (Bool) -> Void = { _ in }
     @Environment(\.dynamicTypeSize) private var typeSize
-    @State private var showPlan = false
     @State private var eligible = false
     @State private var fallbackReason: String?
     @State private var run: TaskAgentRun?
     @State private var answer = ""
-    @State private var budget = ""
-    @State private var constraints = ""
     @State private var drafts: [String: String] = [:]
     @State private var busy = false
     @State private var error: String?
@@ -45,16 +42,10 @@ struct TaskAgentCard: View {
                 VStack(alignment: .leading, spacing: 12) {
                     assistantHeader(run)
                     Divider().overlay(Color.nexdoIndigo.opacity(0.08))
-                    if let question = run.question {
-                        Text(question.text).font(.system(size: 16, weight: .semibold)).fixedSize(horizontal: false, vertical: true)
+                    if let question = run.question, !["urgency", "preferences"].contains(question.key) {
+                        Text(question.key == "urgency" ? "Ready to search nearby businesses" : question.text).font(.system(size: 16, weight: .semibold)).fixedSize(horizontal: false, vertical: true)
                         if question.key == "discovery" {
                             HStack { Button("Find a professional") { act("answer", key: "discovery", answer: "yes") }; Spacer(); Button("Keep as a task") { act("cancel") } }
-                        } else if question.key == "urgency" {
-                            HStack { Button("Urgent") { act("answer", key: "urgency", answer: "urgent") }; Spacer(); Button("Can wait") { act("answer", key: "urgency", answer: "flexible") } }
-                        } else if question.key == "preferences" {
-                            TextField("Budget range (optional)", text: $budget).textFieldStyle(.roundedBorder)
-                            TextField("Requirements (optional)", text: $constraints, axis: .vertical).textFieldStyle(.roundedBorder)
-                            Button(budget.isEmpty && constraints.isEmpty ? "No preference — start research" : "Start research") { act("answer", key: "preferences") }.buttonStyle(AgentSearchButton())
                         } else {
                             HStack(spacing: 12) {
                                 Image(systemName: "mappin.circle.fill").font(.title2).foregroundStyle(Color.purple)
@@ -63,29 +54,18 @@ struct TaskAgentCard: View {
                                     .accessibilityLabel("City or ZIP code")
                             }.padding(8).background(.white.opacity(0.85), in: RoundedRectangle(cornerRadius: 12))
                                 .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.purple.opacity(0.65)))
-                            Button { act("answer", key: "location", answer: answer) } label: {
+                            Button { act("search", key: "location", answer: answer) } label: {
                                 HStack(spacing: 12) { Image(systemName: "magnifyingglass"); Text(run.service == "plumber" ? "Search Plumbers" : "Search businesses"); Image(systemName: "arrow.right") }
                             }.buttonStyle(AgentSearchButton()).disabled(answer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                            HStack { Rectangle().frame(height: 1); Text("OR").font(.caption.weight(.semibold)); Rectangle().frame(height: 1) }.foregroundStyle(Color.nexdoSecondary.opacity(0.4)).padding(.vertical, 5)
                         }
-                        if question.key == "location", !run.slots.location.isEmpty { Button("Use \(run.slots.location)") { act("answer", key: "location", answer: run.slots.location) } }
+                        if question.key == "location", !run.slots.location.isEmpty { Button("Use \(run.slots.location)") { act("search", key: "location", answer: run.slots.location) } }
                     }
-                    let controls = typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(spacing: 10)) : AnyLayout(HStackLayout(spacing: 10))
-                    controls {
-                        if run.question?.key == "location" {
-                            Button { act("answer", key: "location", answer: answer) } label: {
-                                Label("Confirm location", systemImage: "doc.text").frame(maxWidth: .infinity, minHeight: 44)
-                            }.disabled(answer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                        }
-                        Button { showPlan.toggle() } label: {
-                            HStack { Image(systemName: "list.bullet.rectangle.portrait"); Text("View plan and search details"); Image(systemName: showPlan ? "chevron.down" : "chevron.right") }.frame(maxWidth: .infinity, minHeight: 44)
-                        }.accessibilityValue(showPlan ? "Expanded" : "Collapsed")
-                    }.font(.system(size: 11, weight: .semibold)).buttonStyle(AgentSecondaryButton())
-                    if showPlan {
-                        ForEach(run.steps) { step in VStack(alignment: .leading) { Label(step.title, systemImage: step.status == "done" ? "checkmark.circle" : step.status == "running" ? "clock" : "circle"); Text("\(step.status) · \(step.detail)").font(.caption).foregroundStyle(.secondary) }.padding(.vertical, 4) }
+                    if let question = run.question, ["urgency", "preferences"].contains(question.key) {
+                        if error == nil { ProgressView("Starting business search…") }
+                        else { Button("Retry search") { act("search", answer: run.slots.location) }.buttonStyle(AgentSearchButton()) }
                     }
                     if let message = run.error { Text(message).font(.caption) }
-                    ForEach(run.warnings, id: \.self) { Text($0).font(.caption).foregroundStyle(.secondary) }
+                    ForEach(run.warnings.filter { !$0.hasPrefix("Yelp is not connected.") }, id: \.self) { Text($0).font(.caption).foregroundStyle(.secondary) }
                     ForEach(Array(run.candidates.enumerated()), id: \.element.id) { index, candidate in
                         DisclosureGroup("\(index + 1). \(candidate.name)") {
                             VStack(alignment: .leading, spacing: 10) {
@@ -142,7 +122,7 @@ struct TaskAgentCard: View {
                     HStack {
                         if ["QUEUED", "RUNNING"].contains(run.status) { Button("Pause") { act("pause") } }
                         if ["PAUSED", "FAILED", "BLOCKED"].contains(run.status) { Button(run.status == "PAUSED" ? "Resume" : "Retry") { act(run.status == "PAUSED" ? "resume" : "retry") } }
-                        if !["CANCELLED", "READY_FOR_REVIEW", "NO_RESULTS"].contains(run.status) { Button { act("cancel") } label: { Label("Cancel research", systemImage: "xmark").foregroundStyle(Color.nexdoSecondary) } }
+                        if !["CANCELLED", "READY_FOR_REVIEW", "NO_RESULTS"].contains(run.status) { Button { act("cancel") } label: { Label("Cancel search", systemImage: "xmark").foregroundStyle(Color.nexdoSecondary) } }
                     }
                     if let error { Text(error).font(.caption).accessibilityAddTraits(.updatesFrequently) }
                 }.padding(18).background(LinearGradient(colors: [Color(red: 0.95, green: 0.92, blue: 1), Color(red: 0.92, green: 0.94, blue: 1), Color(red: 0.97, green: 0.98, blue: 1)], startPoint: .topLeading, endPoint: .bottomTrailing), in: RoundedRectangle(cornerRadius: 20))
@@ -189,7 +169,13 @@ struct TaskAgentCard: View {
             loading = run == nil && !eligible
             while !Task.isCancelled {
                 do {
-                    let response = try await model.loadTaskAgent(taskID: taskID)
+                    var response = try await model.loadTaskAgent(taskID: taskID)
+                    // Resume tasks left at the retired optional-question step.
+                    if !busy, let pending = response.run, pending.status == "NEEDS_INPUT",
+                       let question = pending.question, ["urgency", "preferences"].contains(question.key),
+                       !pending.slots.location.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        response = try await model.updateTaskAgent(taskID: taskID, action: "search", version: pending.version, key: nil, answer: pending.slots.location, budget: "", constraints: "", candidateID: nil)
+                    }
                     guard !Task.isCancelled else { return }
                     if !busy {
                         run = response.run
@@ -242,7 +228,7 @@ struct TaskAgentCard: View {
         guard run != nil || action == "prepare" else { return }; busy = true
         Task {
             defer { busy = false }
-            do { self.run = try await model.updateTaskAgent(taskID: taskID, action: action, version: run?.version ?? 0, key: key, answer: answer, budget: budget, constraints: constraints, candidateID: candidateID).run; self.answer = ""; error = nil }
+            do { self.run = try await model.updateTaskAgent(taskID: taskID, action: action, version: run?.version ?? 0, key: key, answer: answer, budget: "", constraints: "", candidateID: candidateID).run; self.answer = ""; error = nil }
             catch { self.error = error.localizedDescription }
         }
     }
@@ -255,15 +241,5 @@ private struct AgentSearchButton: ButtonStyle {
             .frame(maxWidth: .infinity, minHeight: 50)
             .background(LinearGradient(colors: [Color(red: 0.20, green: 0.28, blue: 1), Color(red: 0.36, green: 0.16, blue: 1), Color(red: 0.72, green: 0.25, blue: 0.97)], startPoint: .leading, endPoint: .trailing), in: RoundedRectangle(cornerRadius: 15))
             .opacity(enabled ? (configuration.isPressed ? 0.75 : 1) : 0.45)
-    }
-}
-
-private struct AgentSecondaryButton: ButtonStyle {
-    @Environment(\.isEnabled) private var enabled
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label.foregroundStyle(Color.nexdoInk).padding(.horizontal, 8)
-            .background(.white.opacity(0.7), in: RoundedRectangle(cornerRadius: 11))
-            .overlay(RoundedRectangle(cornerRadius: 11).stroke(Color.nexdoIndigo.opacity(0.15)))
-            .opacity(configuration.isPressed ? 0.7 : (enabled ? 1 : 0.5))
     }
 }

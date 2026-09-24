@@ -17,8 +17,8 @@ export async function classifyNewTask(tx:Prisma.TransactionClient,task:{id:strin
  const memory=await tx.userMemory.findMany({where:{userId:task.userId,key:{in:['profile:city','profile:country']}},select:{key:true,value:true}});
  const city=memory.find(r=>r.key==='profile:city')?.value.trim();
  const country=memory.find(r=>r.key==='profile:country')?.value.trim();
- const slots:AgentSlots={discoveryConfirmed:!intent.needsConfirmation,locationConfirmed:false,location:city?[city,country].filter(Boolean).join(', ').slice(0,120):'',urgency:intent.urgency,budget:'',constraints:intent.constraints,preferencesConfirmed:false};
- const data={service:intent.service!,urgency:intent.urgency,slotsJson:JSON.stringify(slots),stepsJson:JSON.stringify(plan()),targetAt:new Date(Date.now()+(intent.urgency==='urgent'?5*60_000:48*3600_000))};
+ const slots:AgentSlots={discoveryConfirmed:!intent.needsConfirmation,locationConfirmed:false,location:city?[city,country].filter(Boolean).join(', ').slice(0,120):'',urgency:intent.urgency==='urgent'?'urgent':'flexible',budget:'',constraints:intent.constraints,preferencesConfirmed:false};
+ const data={service:intent.service!,urgency:slots.urgency,slotsJson:JSON.stringify(slots),stepsJson:JSON.stringify(plan()),targetAt:new Date(Date.now()+(intent.urgency==='urgent'?5*60_000:48*3600_000))};
  await tx.taskAgentRun.upsert({where:{taskId:task.id},create:{taskId:task.id,...data},update:preserveExisting?{}:{...data,status:'NEEDS_INPUT',version:{increment:1},attempts:0,leaseUntil:null,resultsJson:'[]',warningsJson:'[]',error:null}});
 }
 export async function prepareExistingTask(userId:string,taskId:string){
@@ -33,7 +33,8 @@ export async function prepareExistingTask(userId:string,taskId:string){
 }
 export function runView(run:TaskAgentRun):RunView{
  const slots=JSON.parse(run.slotsJson) as AgentSlots;
- return {id:run.id,status:run.status,version:run.version,service:run.service,urgency:run.urgency,targetAt:run.targetAt.toISOString(),slots,steps:JSON.parse(run.stepsJson),candidates:JSON.parse(run.resultsJson),warnings:JSON.parse(run.warningsJson),question:run.status==='NEEDS_INPUT'?nextQuestion(slots):null,error:run.error};
+ if(slots.urgency==='unknown')slots.urgency='flexible';
+ return {id:run.id,status:run.status,version:run.version,service:run.service,urgency:slots.urgency,targetAt:run.targetAt.toISOString(),slots,steps:JSON.parse(run.stepsJson),candidates:JSON.parse(run.resultsJson),warnings:JSON.parse(run.warningsJson),question:run.status==='NEEDS_INPUT'?nextQuestion(slots):null,error:run.error};
 }
 export async function ownedRun(userId:string,taskId:string){
  const task=await prisma.task.findFirst({where:{id:taskId,userId,deletedAt:null},include:{agentRun:true}});
@@ -43,12 +44,21 @@ export async function controlRun(userId:string,taskId:string,input:{action:strin
  const task=await ownedRun(userId,taskId);const run=task.agentRun;if(!run)throw new Error('NOT_FOUND');
  if(run.version!==input.version)throw new Error('STALE_AGENT_RUN');
  const slots=JSON.parse(run.slotsJson) as AgentSlots;
+ if(slots.urgency==='unknown')slots.urgency='flexible';
  let data:Prisma.TaskAgentRunUpdateManyMutationInput={version:{increment:1},leaseUntil:null,error:null};
  if(input.action==='cancel')data={...data,status:'CANCELLED'};
  else if(input.action==='pause'&&['QUEUED','RUNNING'].includes(run.status))data={...data,status:'PAUSED'};
  else if(['resume','retry'].includes(input.action)&&['PAUSED','FAILED','BLOCKED'].includes(run.status)){
   if(run.attempts>=3)throw new Error('AGENT_RETRY_LIMIT');
   data={...data,status:nextQuestion(slots)?'NEEDS_INPUT':'QUEUED',stepsJson:JSON.stringify(plan()),resultsJson:'[]',warningsJson:'[]'};
+ }else if(input.action==='search'&&run.status==='NEEDS_INPUT'){
+  // Search confirms the supplied area and skips optional questions, but not discovery consent.
+  if(slots.discoveryConfirmed===false)throw new Error('INVALID_AGENT_TRANSITION');
+  const location=(input.answer??'').trim();
+  if(!location||location.length>120)throw new Error('INVALID_INPUT');
+  slots.location=location;slots.locationConfirmed=true;
+  slots.preferencesConfirmed=true;
+  data={...data,slotsJson:JSON.stringify(slots),urgency:slots.urgency,status:'QUEUED',targetAt:new Date(Date.now()+(slots.urgency==='urgent'?5*60_000:48*3600_000))};
  }else if(input.action==='answer'&&run.status==='NEEDS_INPUT'){
   const question=nextQuestion(slots);if(question?.key!==input.key)throw new Error('STALE_AGENT_RUN');
   if(input.key==='discovery'){if(input.answer!=='yes')throw new Error('INVALID_INPUT');slots.discoveryConfirmed=true;}
@@ -73,7 +83,8 @@ export async function processRun(id:string,search=searchBusinesses){
  const claimed=await prisma.taskAgentRun.updateMany({where:{id,version:run.version,status:{in:['QUEUED','RUNNING']},OR:[{leaseUntil:null},{leaseUntil:{lt:now}}]},data:{status:'RUNNING',leaseUntil:new Date(+now+90_000),version:{increment:1},attempts:{increment:1}}});
  if(!claimed.count)return;
  run=await prisma.taskAgentRun.findUniqueOrThrow({where:{id},include:{task:true}});const version=run.version;
- const slots=JSON.parse(run.slotsJson) as AgentSlots;const steps=plan();let candidates:Candidate[]=[];const warnings:string[]=[];
+ const slots=JSON.parse(run.slotsJson) as AgentSlots;
+ if(slots.urgency==='unknown')slots.urgency='flexible';const steps=plan();let candidates:Candidate[]=[];const warnings:string[]=[];
  const save=async(data:Prisma.TaskAgentRunUpdateManyMutationInput)=>{
   const task=await prisma.task.findUnique({where:{id:run!.taskId},select:{status:true,deletedAt:true}});
   if(!task||task.deletedAt||['COMPLETED','CANCELLED'].includes(task.status)) {await prisma.taskAgentRun.updateMany({where:{id,version,status:'RUNNING'},data:{status:'CANCELLED',leaseUntil:null,version:{increment:1}}});return false;}

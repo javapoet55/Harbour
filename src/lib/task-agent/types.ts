@@ -7,7 +7,6 @@ export type RunView={id:string;status:string;version:number;service:string;urgen
 export function nextQuestion(slots:AgentSlots):RunView['question'] {
  if(slots.discoveryConfirmed===false)return {key:'discovery',text:'Would you like me to find a local professional for this?'};
  if(!slots.location.trim()||!slots.locationConfirmed)return {key:'location',text:slots.location.trim()?`Confirm the search area: ${slots.location}. Use this city or enter another city or ZIP code.`:'Which city or ZIP code should I search?'};
- if(slots.urgency==='unknown')return {key:'urgency',text:'Is this urgent, or can it wait a day or two?'};
  if(!slots.preferencesConfirmed)return {key:'preferences',text:'Any budget or requirements, such as licensed only, pet-safe, or weekends? You can skip this.'};
  return null;
 }
