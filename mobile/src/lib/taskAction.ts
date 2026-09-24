@@ -184,6 +184,28 @@ export function desiredNotifications(actions: StoredTaskAction[], now: number, l
     }));
 }
 
+/**
+ * Why each action is NOT in `desiredNotifications` — for the dev-only reminder log. Never shown to the
+ * person, and carries no task or contact detail.
+ */
+export function unplannedReasons(actions: StoredTaskAction[], plan: TaskActionNotification[], now: number): { actionId: string; reason: string; fireAt: number | null }[] {
+  const planned = new Set(plan.map((item) => item.actionId));
+  return actions
+    .filter((action) => !planned.has(action.id))
+    .map((action) => {
+      const at = notificationDate(action);
+      const reason =
+        action.status !== 'pending' && action.status !== 'scheduled'
+          ? `status is ${action.status}`
+          : at === null
+            ? 'no schedule and no snooze'
+            : at <= now
+              ? 'reminder time has passed'
+              : `beyond the ${NOTIFICATION_LIMIT}-reminder limit`;
+      return { actionId: action.id, reason, fireAt: at };
+    });
+}
+
 /** `TaskActionCoordinator.ownerKey(_:)` (TaskActionCoordinator.swift:43-45): SHA-256, lowercase hex. */
 export async function ownerKey(userId: string, digest: (value: string) => Promise<string>): Promise<string> {
   return digest(userId);

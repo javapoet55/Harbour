@@ -1098,3 +1098,57 @@ no address or contact id is stored). Save and Schedule warn only when an address
 no longer on it. A typed address is never compared, and an address saved before this existed is
 recorded from the card as it is now, without a warning. A deleted contact warns only if one of its
 addresses came from the card.
+
+## 19. Reminders fire on time on Android 12+; dev reminder log (2026-09-24)
+
+**Needs a native rebuild** (`app.config.ts` manifest change). The logs are JavaScript.
+
+Report: on a Redmi Note 9 Pro dev build, "Remind me in 15 minutes" on the Nexdo Action screen for
+"Call the plumber" (no schedule) showed no notification after 20 minutes.
+
+### What the code does
+
+- "Remind me in 15 minutes" (`app/action/[id].tsx`) calls `useCoordinator.snooze(actionID)`: the action
+  gets `snoozedUntil = now + 15 min` and moves to `scheduled` (`src/actions/coordinator.ts` `snooze`),
+  then `update` persists it and queues `schedule()`.
+- `schedule()` builds the plan with `desiredNotifications` (`src/lib/taskAction.ts`), which uses
+  `notificationDate = snoozedUntil ?? scheduledAt` (`src/lib/todayActionQueue.ts`), so a task with no
+  schedule still gets a reminder once snoozed. `replaceScheduledNotifications`
+  (`src/actions/notifications.ts`) then asks for permission if needed, creates the `reminders` channel
+  (importance HIGH, `src/lib/notificationPermission.ts`) and calls `scheduleNotificationAsync` with a
+  DATE trigger on that channel.
+- Setting a task's Schedule gives the action a `scheduledAt` through `reconcileActions` (task
+  `startAt ?? dueAt`); with neither, the card says "Set a schedule to receive an action reminder.",
+  which it also says once a snooze time has passed.
+- POST_NOTIFICATIONS comes from expo-notifications' own manifest and is requested (Android 13+) the
+  first time a reminder is scheduled; below Android 13 it is not a runtime permission.
+
+### The gap
+
+expo-notifications fires a DATE trigger with `setExactAndAllowWhileIdle` only when
+`AlarmManager.canScheduleExactAlarms()` is true; otherwise (Android 12+ without the permission) it uses
+the inexact `setAndAllowWhileIdle` (`ExpoSchedulingDelegate.setupAlarm`). The app declared neither
+SCHEDULE_EXACT_ALARM nor USE_EXACT_ALARM, so every reminder on Android 12+ was inexact and could be
+deferred — MIUI defers aggressively. `app.config.ts` now declares SCHEDULE_EXACT_ALARM: granted at
+install on Android 12/12L; on 13+ it starts off and can be allowed under Settings → Apps → Nexdo →
+Alarms & reminders. USE_EXACT_ALARM is not declared (Play limits it to alarm-clock and calendar apps).
+
+MIUI can also cancel an app's alarms when it is swiped away with its "clean" behaviour, or block them
+without Autostart; no app change avoids that.
+
+### Dev-only log (Metro)
+
+`src/lib/reminderLog.ts`, silent in release builds. For every reminder:
+`[reminders] scheduled action abcdef12 at 2026-09-24T10:15:00.000Z (in 15 min)` or
+`[reminders] skipped action abcdef12: no schedule and no snooze` (also "reminder time has passed",
+"status is …", "notifications are not allowed", "beyond the 48-reminder limit"), the same for wish
+reminders, then `[reminders] after task-action scheduling: N pending` with each pending identifier
+(shortened), trigger time and channel from `getAllScheduledNotificationsAsync`. No title, task,
+contact or address is logged.
+
+### Check it on a phone (after a rebuild)
+
+1. Open a contact task's Nexdo Action, tap "Remind me in 15 minutes": Metro shows the "scheduled" line
+   and the pending list with `channel=reminders`.
+2. Android 13+: allow Settings → Apps → Nexdo → Alarms & reminders. Lock the phone; the notification
+   arrives at the time logged.

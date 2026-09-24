@@ -44,6 +44,15 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     // Firebase Analytics, the Android side of ios/App/FirebaseAnalyticsBridge.swift. Downloaded from
     // the Nexdoapp Firebase project; it holds client identifiers only, no secrets.
     googleServicesFile: './google-services.json',
+    // Exact reminder times on Android 12+ (API 31+). expo-notifications schedules a DATE trigger with
+    // `setExactAndAllowWhileIdle` only when `AlarmManager.canScheduleExactAlarms()` is true, and falls
+    // back to the INEXACT `setAndAllowWhileIdle` otherwise (ExpoSchedulingDelegate.setupAlarm). Without
+    // this permission every task-action and wish reminder on Android 12+ was inexact, which the system
+    // (and battery managers such as MIUI's) can defer well past "Remind me in 15 minutes". Android 12
+    // and 12L grant it at install; on Android 13+ it starts denied and the person can allow it under
+    // Settings → Apps → Nexdo → Alarms & reminders. USE_EXACT_ALARM (auto-granted on 13+) is limited by
+    // Play policy to alarm-clock and calendar apps, so it is not declared. Needs a native rebuild.
+    permissions: ['android.permission.SCHEDULE_EXACT_ALARM'],
     // Permissions the Swift app has no equivalent for, removed from the merged manifest.
     // - SYSTEM_ALERT_WINDOW: added by the WebRTC plugin for video calling; voice never uses it.
     //   (CAMERA was blocked here until Phase 11 Run C: the Shopping item editor's "Take a Picture"

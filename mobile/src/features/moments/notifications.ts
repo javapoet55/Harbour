@@ -1,5 +1,6 @@
 import * as Notifications from 'expo-notifications';
 
+import { logPendingReminders, logReminderScheduled, logReminderSkipped } from '../../lib/reminderLog';
 import type { ImportantMoment } from '../../api/moments';
 import {
   ensureReminderChannel,
@@ -121,7 +122,10 @@ export async function replaceMomentNotifications({
 }): Promise<string | null> {
   await clearMomentNotifications();
   const authorization = await reminderAuthorization();
-  if (authorization !== 'authorized' && authorization !== 'provisional') return null;
+  if (authorization !== 'authorized' && authorization !== 'provisional') {
+    logReminderSkipped('moment', null, `every wish reminder: notifications are ${authorization}`);
+    return null;
+  }
   await ensureReminderChannel();
   const pending = (await Notifications.getAllScheduledNotificationsAsync()).length;
   const available = Math.max(0, MOMENT_NOTIFICATION_CAP - pending);
@@ -142,11 +146,17 @@ export async function replaceMomentNotifications({
         // `UNTimeIntervalNotificationTrigger(timeInterval: max(1, …))`.
         trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: new Date(Math.max(now + 1000, item.at)), ...reminderChannel() },
       });
-    } catch {
+      logReminderScheduled('moment', String(index), Math.max(now + 1000, item.at), now);
+    } catch (failure) {
+      logReminderSkipped('moment', String(index), `scheduling failed (${failure instanceof Error ? failure.name : 'error'})`, item.at, now);
       error = MOMENT_NOTIFICATION_ERRORS.failed;
     }
   }
-  if (requests.length > available) error = MOMENT_NOTIFICATION_ERRORS.limited(available);
+  if (requests.length > available) {
+    logReminderSkipped('moment', null, `${requests.length - available} wish reminders over the device limit`);
+    error = MOMENT_NOTIFICATION_ERRORS.limited(available);
+  }
+  await logPendingReminders('wish reminder scheduling');
   return error;
 }
 

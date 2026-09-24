@@ -5,6 +5,7 @@ import {
   NOTIFICATION_ID_PREFIX,
   reconcileActions,
   transition,
+  unplannedReasons,
   type StoredTaskAction,
 } from './taskAction';
 import { detectTaskAction } from './taskActionDetector';
@@ -203,5 +204,26 @@ describe('the notification plan', () => {
   it('a zero or negative limit schedules nothing', () => {
     expect(desiredNotifications([action({ scheduledAt: NOW + 60_000 })], NOW, 0)).toEqual([]);
     expect(desiredNotifications([action({ scheduledAt: NOW + 60_000 })], NOW, -5)).toEqual([]);
+  });
+});
+
+describe('unplannedReasons (dev reminder log)', () => {
+  it('names why each action has no reminder', () => {
+    const now = Date.parse('2026-09-24T10:00:00Z');
+    const base = { taskId: 't', type: 'contact', contactName: 'X', preferredAction: null, contactIdentifier: null, context: null, sourceTitle: 's', executedAt: null } as const;
+    const actions: StoredTaskAction[] = [
+      { ...base, id: 'none', status: 'pending', scheduledAt: null, snoozedUntil: null },
+      { ...base, id: 'past', status: 'scheduled', scheduledAt: now - 1, snoozedUntil: null },
+      { ...base, id: 'open', status: 'awaitingApproval', scheduledAt: now + 60_000, snoozedUntil: null },
+      { ...base, id: 'snoozed', status: 'scheduled', scheduledAt: null, snoozedUntil: now + 15 * 60_000 },
+    ];
+    const plan = desiredNotifications(actions, now);
+    expect(plan.map((item) => item.actionId)).toEqual(['snoozed']);
+    expect(unplannedReasons(actions, plan, now)).toEqual([
+      { actionId: 'none', reason: 'no schedule and no snooze', fireAt: null },
+      { actionId: 'past', reason: 'reminder time has passed', fireAt: now - 1 },
+      { actionId: 'open', reason: 'status is awaitingApproval', fireAt: now + 60_000 },
+    ]);
+    expect(unplannedReasons(actions, [], now).find((item) => item.actionId === 'snoozed')?.reason).toBe('beyond the 48-reminder limit');
   });
 });

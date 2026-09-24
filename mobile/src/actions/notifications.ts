@@ -8,7 +8,8 @@ import {
   reminderChannel,
   requestNotificationPermission,
 } from '../lib/notificationPermission';
-import { NOTIFICATION_ID_PREFIX } from '../lib/taskAction';
+import { logPendingReminders, logReminderScheduled, logReminderSkipped } from '../lib/reminderLog';
+import { NOTIFICATION_ID_PREFIX, unplannedReasons } from '../lib/taskAction';
 import { TaskActionError } from './errors';
 
 /**
@@ -132,14 +133,29 @@ export async function replaceScheduledNotifications({
     if (id.startsWith(NOTIFICATION_ID_PREFIX) && !valid.has(id)) await Notifications.dismissNotificationAsync(id);
   }
 
+  // Dev-only: why every other action has no reminder (no schedule, time passed, status…).
+  const now = Date.now();
+  for (const skipped of unplannedReasons(actions, notifications, now)) logReminderSkipped('action', skipped.actionId, skipped.reason, skipped.fireAt, now);
+
   // `guard !notifications.isEmpty else { return }` — an empty plan never asks for permission.
-  if (notifications.length === 0) return;
-  await ensureNotificationPermission();
+  if (notifications.length === 0) {
+    await logPendingReminders('task-action scheduling');
+    return;
+  }
+  try {
+    await ensureNotificationPermission();
+  } catch (denied) {
+    for (const notification of notifications) logReminderSkipped('action', notification.actionId, 'notifications are not allowed', notification.fireAt, now);
+    throw denied;
+  }
   await ensureReminderChannel();
 
   for (const notification of notifications) {
     const action = actions.find((item) => item.id === notification.actionId);
-    if (!action) continue;
+    if (!action) {
+      logReminderSkipped('action', notification.actionId, 'action no longer exists', notification.fireAt, now);
+      continue;
+    }
     await Notifications.scheduleNotificationAsync({
       identifier: notification.id,
       content: {
@@ -155,7 +171,9 @@ export async function replaceScheduledNotifications({
       // `UNCalendarNotificationTrigger(dateMatching:repeats: false)` on the DEVICE calendar.
       trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: new Date(notification.fireAt), ...reminderChannel() },
     });
+    logReminderScheduled('action', action.id, notification.fireAt, now);
   }
+  await logPendingReminders('task-action scheduling');
 }
 
 /** Reads the payload Swift puts in `content.userInfo` (TaskActionNotifications.swift:32). */

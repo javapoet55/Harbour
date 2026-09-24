@@ -1,6 +1,8 @@
 import * as Notifications from 'expo-notifications';
 
-import { NOTIFICATION_ID_PREFIX, type StoredTaskAction } from '../lib/taskAction';
+import { Alert, Platform } from 'react-native';
+
+import { desiredNotifications, NOTIFICATION_ID_PREFIX, type StoredTaskAction } from '../lib/taskAction';
 import {
   ACTION_BUTTONS,
   ACTION_CATEGORY,
@@ -195,4 +197,73 @@ describe('reading the payload back', () => {
       expect(readActionPayload(data)).toBeNull();
     },
   );
+});
+
+/**
+ * "Remind me in 15 minutes" on a task with no schedule (the Redmi report): the snooze is the only date,
+ * and it must still become a DATE trigger on the reminders channel. The dev-only Metro log says what
+ * was scheduled or skipped and why, with no task or contact detail.
+ */
+describe('reminder scheduling log (dev only)', () => {
+  let lines: string[] = [];
+  beforeEach(() => {
+    lines = [];
+    jest.spyOn(console, 'log').mockImplementation((...args: unknown[]) => {
+      lines.push(args.map(String).join(' '));
+    });
+    jest.replaceProperty(Platform, 'OS', 'android');
+    // Android reads `status`, not `granted` (notificationPermission.ts).
+    mocked.getPermissionsAsync.mockResolvedValue({ granted: true, status: 'granted', canAskAgain: true });
+  });
+  afterEach(() => jest.restoreAllMocks());
+
+  it('schedules a snoozed action that has no schedule, and logs it and what the system holds', async () => {
+    const fireAt = Date.now() + 15 * 60_000;
+    const snoozed = action({ id: 'abcdef12-3456', scheduledAt: null, snoozedUntil: fireAt, status: 'scheduled', contactName: 'the plumber' });
+    mocked.getAllScheduledNotificationsAsync
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{ identifier: `${NOTIFICATION_ID_PREFIX}abcdef12-3456`, content: {}, trigger: { type: 'date', value: fireAt, channelId: 'reminders' } }]);
+    await replaceScheduledNotifications({ notifications: desiredNotifications([snoozed], Date.now()), actions: [snoozed], owner: 'o' });
+
+    expect(mocked.scheduleNotificationAsync).toHaveBeenCalledWith(
+      expect.objectContaining({ identifier: `${NOTIFICATION_ID_PREFIX}abcdef12-3456`, trigger: expect.objectContaining({ type: 'date', date: new Date(fireAt), channelId: 'reminders' }) }),
+    );
+    expect(lines[0]).toBe(`[reminders] scheduled action abcdef12 at ${new Date(fireAt).toISOString()} (in 15 min)`);
+    expect(lines[1]).toBe(`[reminders] after task-action scheduling: 1 pending\n  nexdo.action.abcdef12… → date ${new Date(fireAt).toISOString()} channel=reminders`);
+    expect(lines.join('\n')).not.toMatch(/plumber|Contact|Damien/);
+  });
+
+  it('logs why an action gets no reminder, and asks for nothing', async () => {
+    const unscheduled = action({ id: 'noplan00-1', scheduledAt: null, snoozedUntil: null });
+    const past = action({ id: 'passed00-1', scheduledAt: Date.now() - 60_000 });
+    await replaceScheduledNotifications({ notifications: [], actions: [unscheduled, past], owner: 'o' });
+    expect(mocked.scheduleNotificationAsync).not.toHaveBeenCalled();
+    expect(mocked.requestPermissionsAsync).not.toHaveBeenCalled();
+    expect(lines[0]).toBe('[reminders] skipped action noplan00: no schedule and no snooze');
+    expect(lines[1]).toMatch(/^\[reminders\] skipped action passed00: reminder time has passed at .+ \(1 min ago\)$/);
+    expect(lines[2]).toBe('[reminders] after task-action scheduling: 0 pending');
+  });
+
+  it('logs each reminder skipped when notifications are not allowed', async () => {
+    mocked.getPermissionsAsync.mockResolvedValue({ granted: false, status: 'denied', canAskAgain: false });
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    const pending = action({ id: 'denied00-1' });
+    await expect(replaceScheduledNotifications({ notifications: desiredNotifications([pending], Date.now()), actions: [pending], owner: 'o' })).rejects.toThrow();
+    expect(alert).toHaveBeenCalled();
+    expect(lines.some((line) => line.startsWith('[reminders] skipped action denied00: notifications are not allowed at '))).toBe(true);
+    expect(mocked.scheduleNotificationAsync).not.toHaveBeenCalled();
+  });
+
+  it('logs nothing outside development builds', async () => {
+    const dev = (globalThis as { __DEV__?: boolean }).__DEV__;
+    (globalThis as { __DEV__?: boolean }).__DEV__ = false;
+    try {
+      const pending = action({ id: 'release0-1' });
+      await replaceScheduledNotifications({ notifications: desiredNotifications([pending], Date.now()), actions: [pending], owner: 'o' });
+      expect(mocked.scheduleNotificationAsync).toHaveBeenCalled();
+      expect(lines).toEqual([]);
+    } finally {
+      (globalThis as { __DEV__?: boolean }).__DEV__ = dev;
+    }
+  });
 });
