@@ -29,6 +29,10 @@ import XCTest
         XCTAssertTrue(summary.waitForExistence(timeout: 5))
     }
 
+    func waitUntilSelected(_ element:XCUIElement,timeout:TimeInterval=8) -> Bool {
+        let selected=expectation(for:NSPredicate(format:"isSelected == true"),evaluatedWith:element)
+        return XCTWaiter().wait(for:[selected],timeout:timeout) == .completed
+    }
     func openFestivalManager() {
         app.terminate(); app.launchArguments.append("-festival-manage-preview"); app.launch()
         let manage=app.buttons["moments-manage"].firstMatch
@@ -216,7 +220,10 @@ import XCTest
         let editedName=name.value as? String
         app.buttons["festival-keyboard-done"].tap()
         for tab in ["Details","Contacts"] {
-            app.buttons["festival-tab-"+tab].tap()
+            let button=app.buttons["festival-tab-"+tab]
+            button.tap()
+            // Unsaved edits are saved before the tab switches; the screen ignores taps while that save runs.
+            XCTAssertTrue(waitUntilSelected(button))
             app.buttons["Moment options"].tap()
             app.buttons["Festival settings"].tap()
             XCTAssertTrue(app.navigationBars["Moments Settings"].waitForExistence(timeout:5))
@@ -247,10 +254,15 @@ import XCTest
     func testFestivalTabsAutosaveEdits() {
         openFestivalManager()
         let name=app.textFields["festival-name"];name.tap();name.typeText(" Edited")
+        // Close the keyboard first: a tap while the scroll view is still settling after typing only stops the scroll.
+        app.buttons["festival-keyboard-done"].tap()
+        // A tab change with unsaved edits saves them first, then switches once the save finishes.
         app.buttons["festival-tab-Contacts"].tap()
-        XCTAssertTrue(app.staticTexts["Recipients"].exists)
+        XCTAssertTrue(app.staticTexts["Recipients"].waitForExistence(timeout:8))
+        XCTAssertTrue(app.buttons["festival-tab-Contacts"].isSelected)
+        XCTAssertEqual(app.staticTexts["festival-notice"].label,"Moment changes saved.")
         app.buttons["festival-tab-Wish Message"].tap()
-        XCTAssertTrue(app.textViews["Festival wish message"].exists)
+        XCTAssertTrue(app.textViews["Festival wish message"].waitForExistence(timeout:8))
         app.buttons["festival-tab-Details"].tap()
         XCTAssertTrue((name.value as? String)?.contains("Edited") == true)
         app.navigationBars.buttons["Back"].tap()
@@ -301,7 +313,11 @@ import XCTest
         let savedGreeting=greeting.value as? String
         let signature=app.textFields["card-signature"]
         for _ in 0..<5 {if signature.isHittable{break};app.swipeUp()}
-        signature.tap(withNumberOfTaps:3,numberOfTouches:1);signature.typeText("With love, Sam")
+        // Replace the default signature: put the cursor after it, delete it in full (a triple-tap can select only one
+        // word), then type.
+        signature.coordinate(withNormalizedOffset:CGVector(dx:0.98,dy:0.5)).tap()
+        signature.typeText(String(repeating:XCUIKeyboardKey.delete.rawValue,count:(signature.value as? String ?? "").count))
+        signature.typeText("With love, Sam")
         app.toolbars.buttons["Done"].tap()
         let generate=app.buttons["Generate AI Greeting Card"]
         for _ in 0..<5 {if generate.isHittable{break};app.swipeUp()};generate.tap()
@@ -346,9 +362,11 @@ import XCTest
         let original=Date().addingTimeInterval(30*86400)
         let changed=calendar.date(byAdding:.day,value:calendar.component(.day,from:original)==1 ? 1 : -1,to:original)!
         let formatter=DateFormatter()
-        formatter.locale=Locale(identifier:"en_US_POSIX");formatter.timeZone=calendar.timeZone
-        formatter.dateFormat="EEEE, MMMM d"
+        // The graphical picker labels days in the device's locale ("Friday, October 23" or "Friday, 23 October").
+        formatter.locale = .current;formatter.timeZone=calendar.timeZone
+        formatter.setLocalizedDateFormatFromTemplate("EEEEMMMMd")
         app.buttons[formatter.string(from:changed)].tap()
+        formatter.locale=Locale(identifier:"en_US_POSIX")
         app.navigationBars["Select Date"].buttons["Done"].tap()
         formatter.dateFormat="EEE, MMM d, yyyy"
         let expected="Moment date · " + formatter.string(from:changed)
@@ -439,7 +457,7 @@ import XCTest
         addRecipient(name: "Rahul", phone: "+15555550123")
         app.buttons["moment-save-top"].tap()
         XCTAssertTrue(app.navigationBars["Manage Moment"].waitForExistence(timeout: 10))
-        completeScheduleAndReturnHome()
+        completeScheduleAndReturnHome(emptyMessage:true)
     }
 
     private func verifyFestivalDoneReturnsToImportantMoments(direct:Bool) {
@@ -453,9 +471,20 @@ import XCTest
         }
         completeScheduleAndReturnHome()
     }
-    private func completeScheduleAndReturnHome() {
+    /// `emptyMessage`: a newly created moment has no Wish Message yet (the suggestion is only a placeholder), so Save
+    /// Message stays disabled until "Use suggestion" fills it.
+    private func completeScheduleAndReturnHome(emptyMessage:Bool=false) {
         app.buttons["festival-tab-Wish Message"].tap()
         let save=app.buttons.matching(identifier:"wish-primary").matching(NSPredicate(format:"label == %@","Save Message")).firstMatch
+        if emptyMessage {
+            let use=app.buttons["wish-use-suggestion"]
+            XCTAssertTrue(use.waitForExistence(timeout:5))
+            for _ in 0..<6 {if save.isHittable{break};app.swipeUp()}
+            XCTAssertFalse(save.isEnabled)
+            for _ in 0..<6 {if use.isHittable{break};app.swipeDown()}
+            use.tap()
+            XCTAssertTrue(save.isEnabled)
+        }
         for _ in 0..<6 {if save.isHittable{break};app.swipeUp()};save.tap()
         XCTAssertTrue(app.staticTexts["Message approved and saved. Nothing has been sent."].waitForExistence(timeout:8))
         for _ in 0..<6 {if app.buttons["festival-tab-Schedule"].isHittable{break};app.swipeDown()}
@@ -593,7 +622,7 @@ import XCTest
         app.buttons["Important Moments settings"].tap()
         XCTAssertTrue(app.buttons["Choose a contact birthday"].waitForExistence(timeout: 5)); app.buttons["Choose a contact birthday"].tap()
         XCTAssertTrue(app.alerts["Select one contact"].waitForExistence(timeout: 5)); app.alerts.buttons["Cancel"].tap()
-        app.swipeUp(); XCTAssertTrue(app.buttons["Open iOS Settings"].exists)
+        app.swipeUp(); XCTAssertTrue(app.buttons["Open Settings"].exists)
     }
     func testReviewIsEditableAndRequiresApproval() {
         openReview()
