@@ -161,10 +161,11 @@ struct MomentsDesignPreview: View {
         NavigationStack { ImportantMomentsView() }.environmentObject(store)
             .background { MomentSheetHost().environmentObject(store) }
             .task {
-                await store.activate("local-fixture")
+                // Route like a notification tap, so the wish opens once the list has loaded, whichever refresh loads it.
                 if ProcessInfo.processInfo.arguments.contains("-moments-route-preview") {
-                    store.route = store.moments.first
+                    MomentNotificationRoute.shared.receive("moment", owner: TaskActionCoordinator.ownerKey("local-fixture"))
                 }
+                await store.activate("local-fixture")
             }
     }
 }
