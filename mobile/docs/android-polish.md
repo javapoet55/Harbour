@@ -969,3 +969,22 @@ written (`screenBusy = busy || (!isAndroid() && generatingWish)`), exactly as be
 2. Tap another step tab while it writes: nothing happens until the draft lands.
 3. Moments → Create wish on a moment with no draft: Try another reads "Writing your wish…" until the
    first draft appears.
+
+## 16. A contact with a repeated number or email no longer crashes the address menus (2026-09-24)
+
+JavaScript only; no new build needed. A crash fix, so it applies on iOS as well.
+
+Picking a contact whose number or email is saved twice filled "Choose delivery address" with two
+menu rows sharing one React key ("Encountered two children with the same key"), and the list broke.
+
+- `contactChoice` (`src/features/moments/device.ts`) now offers each address once, keeping the first
+  as written: phone numbers compare with spaces, dashes and brackets removed, so "+1 (555) 010-0200"
+  and "+1 555-010-0200" are one number; emails compare trimmed and case-insensitively.
+- `PopoverMenu` (`form.tsx`) keys its rows through `uniqueKeys`, so any two items that still share a
+  value render as `value` and `value#row` instead of colliding.
+
+### Check it on a phone
+
+1. Give a contact the same number twice (once with brackets and dashes) and the same email in two
+   cases.
+2. Manage Moment → Contacts → Add Contact, pick them: the Phone and Email menus list each once.

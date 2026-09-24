@@ -51,6 +51,7 @@ jest.mock('../../../api/moments', () => ({
 }));
 
 import * as SMS from 'expo-sms';
+import * as Contacts from 'expo-contacts/legacy';
 
 import type { ImportantMoment, MomentsSnapshot } from '../../../api/moments';
 import { momentDate, sendDayLabel } from '../dates';
@@ -478,6 +479,53 @@ describe('Manage Moment', () => {
       await waitFor(() => expect(screen.getByTestId('festival-message').props.value).toBe('A brand new wish'));
       expect(screen.queryByText('Saving…')).toBeNull();
       expect(screen.getByTestId('festival-screen').props.pointerEvents).toBe('auto');
+    });
+  });
+
+  // A contact with one number and one address each saved twice used to crash the address menus
+  // ("Encountered two children with the same key").
+  describe('a contact with a repeated number and email', () => {
+    afterEach(() => jest.restoreAllMocks());
+
+    it.each(['android', 'ios'] as const)('offers each address once on %s, with no key warning', async (os) => {
+      jest.replaceProperty(Platform, 'OS', os);
+      const errors = jest.spyOn(console, 'error');
+      (Contacts.presentContactPickerAsync as jest.Mock).mockResolvedValueOnce({
+        id: 'dup',
+        contactType: 'person',
+        name: 'Priya Raman',
+        firstName: 'Priya',
+        lastName: 'Raman',
+        phoneNumbers: [{ number: '+1 (555) 010-0200' }, { number: '+1 555-010-0200' }, { number: '+15550100300' }],
+        emails: [{ email: 'Priya@example.com' }, { email: 'priya@EXAMPLE.com' }, { email: 'priya@work.com' }],
+      });
+      load(group());
+      mockParams = { ids: 'a' };
+      await render(<ManageMoment />);
+      await fireEvent.press(screen.getByTestId('festival-tab-Contacts'));
+      await fireEvent.press(screen.getByTestId('festival-add-contact'));
+      // The menu's rows, not the picker's own pill or dismiss layer.
+      const rows = (picker: string) =>
+        screen
+          .getAllByTestId(new RegExp(`^${picker}-`))
+          .map((row) => row.props.testID as string)
+          .filter((id) => id !== `${picker}-pill` && id !== `${picker}-dismiss`);
+
+      // The first of each repeat is shown, as written, and chosen.
+      expect(screen.getByLabelText('Phone, +1 (555) 010-0200')).toBeTruthy();
+      expect(screen.getByLabelText('Email, Priya@example.com')).toBeTruthy();
+
+      await fireEvent.press(screen.getByTestId('address-phone'));
+      expect(rows('address-phone')).toEqual(['address-phone-', 'address-phone-+1 (555) 010-0200', 'address-phone-+15550100300']);
+      await fireEvent.press(screen.getByTestId('address-phone-+15550100300'));
+
+      await fireEvent.press(screen.getByTestId('address-email'));
+      expect(rows('address-email')).toEqual(['address-email-', 'address-email-Priya@example.com', 'address-email-priya@work.com']);
+      await fireEvent.press(screen.getByTestId('address-email-priya@work.com'));
+
+      expect(screen.getByLabelText('Phone, +15550100300')).toBeTruthy();
+      expect(screen.getByLabelText('Email, priya@work.com')).toBeTruthy();
+      expect(errors.mock.calls.filter(([message]) => String(message).includes('same key'))).toEqual([]);
     });
   });
 

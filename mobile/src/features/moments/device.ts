@@ -190,9 +190,28 @@ export function contactChoice(contact: Contacts.ExistingContact): ContactChoice 
   return {
     id: contact.id,
     name: contactFullName(contact) || contact.firstName || '',
-    phones: (contact.phoneNumbers ?? []).map((phone) => phone.number ?? '').filter((value) => value !== ''),
-    emails: (contact.emails ?? []).map((email) => email.email ?? '').filter((value) => value !== ''),
+    // A number or address saved twice on one contact is offered once, as first written; a repeat
+    // would also give the delivery-address menu two rows with the same key.
+    phones: uniqueBy(
+      (contact.phoneNumbers ?? []).map((phone) => phone.number ?? '').filter((value) => value !== ''),
+      (phone) => phone.replace(/[\s()-]/g, ''),
+    ),
+    emails: uniqueBy(
+      (contact.emails ?? []).map((email) => email.email ?? '').filter((value) => value !== ''),
+      (email) => email.trim().toLowerCase(),
+    ),
   };
+}
+
+/** The first of each group of values that share `identity`, in order. */
+function uniqueBy(values: string[], identity: (value: string) => string): string[] {
+  const seen = new Set<string>();
+  return values.filter((value) => {
+    const id = identity(value);
+    if (seen.has(id)) return false;
+    seen.add(id);
+    return true;
+  });
 }
 
 /**

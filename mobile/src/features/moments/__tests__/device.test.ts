@@ -2,6 +2,7 @@ import * as Calendar from 'expo-calendar';
 import * as Crypto from 'expo-crypto';
 
 import { calendarCandidates, calendarMomentInput, contactChoice, contactMomentInput, FESTIVAL_REGIONS, festivalMomentInput, festivalRecipient } from '../device';
+import { uniqueKeys } from '../form';
 
 const digest = Crypto.digestStringAsync as jest.Mock;
 
@@ -46,6 +47,21 @@ describe('contact import', () => {
   it('keeps every address for the delivery-address sheet, and one for a festival recipient', async () => {
     expect(contactChoice(contact)).toEqual({ id: 'C1', name: 'Kate Bell', phones: ['(555) 564-8583', '(415) 555-3695'], emails: ['kate-bell@mac.com', 'www.icloud.com'] });
     expect(await festivalRecipient(contact)).toEqual({ id: 'sha(C1)', displayName: 'Kate Bell', firstName: 'Kate', phone: '(555) 564-8583', email: 'kate-bell@mac.com' });
+  });
+
+  it('offers a number or address saved twice once, as first written', () => {
+    const repeated = {
+      ...(contact as object),
+      phoneNumbers: [{ number: '(555) 564-8583' }, { number: '555-564 8583' }, { number: '5555648583' }, { number: '(415) 555-3695' }],
+      emails: [{ email: 'Kate-Bell@mac.com' }, { email: 'kate-bell@MAC.com' }, { email: ' kate-bell@mac.com ' }, { email: 'kate@work.com' }],
+    } as never;
+    expect(contactChoice(repeated)).toMatchObject({ phones: ['(555) 564-8583', '(415) 555-3695'], emails: ['Kate-Bell@mac.com', 'kate@work.com'] });
+  });
+});
+
+describe('uniqueKeys', () => {
+  it('keeps each key and suffixes a repeat with its row', () => {
+    expect(uniqueKeys(['', 'a', 'b', 'a', 'a'])).toEqual(['', 'a', 'b', 'a#3', 'a#4']);
   });
 });
 

@@ -303,6 +303,16 @@ export function usePopoverMenu(anchor: { current: View | null }): MenuState {
 
 export type PopoverItem = { key: string; title: string; onPress: () => void; destructive?: boolean; checked?: boolean; testID?: string };
 
+/** Each key as given, with a repeat suffixed by its row (`#2`), so two items with one value still render. */
+export function uniqueKeys(keys: string[]): string[] {
+  const seen = new Set<string>();
+  return keys.map((key, index) => {
+    const unique = seen.has(key) ? `${key}#${index}` : key;
+    seen.add(unique);
+    return unique;
+  });
+}
+
 /**
  * SwiftUI's `Menu` on iOS 26 (UI-parity pass 2): a translucent popover grown out of the button that
  * opened it, with NO dimming behind it — measured on `moments-filter-menu` and
@@ -310,6 +320,7 @@ export type PopoverItem = { key: string; title: string; onPress: () => void; des
  */
 export function PopoverMenu({ items, menu, showsChecks = false, testID }: { items: PopoverItem[]; menu: MenuState; showsChecks?: boolean; testID?: string }) {
   const theme = useTheme();
+  const keys = uniqueKeys(items.map((item) => item.key));
   const window = useWindowDimensions();
   const placement = menu.frame
     ? menuPlacement(menu.frame, items.length, window.width, window.height)
@@ -326,11 +337,11 @@ export function PopoverMenu({ items, menu, showsChecks = false, testID }: { item
             ]}
           >
             <ScrollView bounces={false}>
-              {items.map((item) => (
+              {items.map((item, index) => (
                 <Pressable
                   accessibilityRole="button"
                   accessibilityState={item.checked === undefined ? undefined : { selected: item.checked }}
-                  key={item.key}
+                  key={keys[index]}
                   onPress={() => {
                     menu.close();
                     item.onPress();
