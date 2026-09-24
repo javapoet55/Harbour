@@ -69,3 +69,26 @@ import Testing
     #expect(try await gate.withTimeout { "draft" } == "draft")
     await #expect(throws: Failed.self) { try await gate.withTimeout { () async throws -> String in throw Failed() } }
 }
+
+@MainActor @Test func savesAndTabChangesWaitForTheDraft() async {
+    let gate = WishGenerationGate()
+    // Not writing: the usual rules.
+    #expect(gate.allowsSave(busy: false))
+    #expect(!gate.allowsSave(busy: true))
+    #expect(gate.tabChange(sameTab: false, busy: false, dirty: false) == .switchNow)
+    #expect(gate.tabChange(sameTab: false, busy: false, dirty: true) == .saveFirst)
+    #expect(gate.tabChange(sameTab: true, busy: false, dirty: true) == .ignore)
+    #expect(gate.tabChange(sameTab: false, busy: true, dirty: false) == .ignore)
+    var release: CheckedContinuation<Void, Never>?
+    let writing = Task { @MainActor in await gate.run { await withCheckedContinuation { release = $0 } } }
+    while release == nil { await Task.yield() }
+    // Writing: save, approve and the card save are refused, and a tab change does nothing, with or
+    // without unsaved edits, so no auto-save is left waiting.
+    #expect(!gate.allowsSave(busy: false))
+    #expect(gate.tabChange(sameTab: false, busy: false, dirty: true) == .ignore)
+    #expect(gate.tabChange(sameTab: false, busy: false, dirty: false) == .ignore)
+    release?.resume()
+    await writing.value
+    #expect(gate.allowsSave(busy: false))
+    #expect(gate.tabChange(sameTab: false, busy: false, dirty: true) == .saveFirst)
+}
