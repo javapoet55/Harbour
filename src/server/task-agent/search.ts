@@ -3,6 +3,8 @@ import {createHash} from 'node:crypto';
 import type {AgentSlots,Candidate} from '@/lib/task-agent/types';
 const safeUrl=(s:unknown)=>{try{const u=new URL(String(s));return u.protocol==='https:'&&!u.username&&!u.password?u.href:null;}catch{return null;}};
 const id=(source:string,value:string)=>createHash('sha256').update(`${source}:${value}`).digest('hex').slice(0,24);
+export const MIN_GOOGLE_REVIEWS=20;
+export const hasEnoughGoogleReviews=(candidate:Candidate)=>candidate.evidence.some(e=>e.source==='Google'&&(e.reviews??0)>=MIN_GOOGLE_REVIEWS);
 const num=z.number().nullable().optional();
 const placeSchema=z.object({id:z.string(),displayName:z.object({text:z.string()}).optional(),formattedAddress:z.string().optional(),nationalPhoneNumber:z.string().optional(),websiteUri:z.string().optional(),googleMapsUri:z.string().optional(),rating:num,userRatingCount:num,businessStatus:z.string().optional(),currentOpeningHours:z.object({openNow:z.boolean().optional()}).optional(),location:z.object({latitude:z.number(),longitude:z.number()}).optional(),attributions:z.array(z.object({provider:z.string().optional(),providerUri:z.string().optional()})).optional(),reviews:z.array(z.object({rating:num,text:z.object({text:z.string()}).optional(),authorAttribution:z.object({displayName:z.string(),uri:z.string().optional(),photoUri:z.string().optional()}),googleMapsUri:z.string().optional(),publishTime:z.string().optional(),relativePublishTimeDescription:z.string().optional()})).optional()});
 const placeFields='id,displayName,formattedAddress,nationalPhoneNumber,websiteUri,googleMapsUri,rating,userRatingCount,businessStatus,currentOpeningHours,location,attributions';
@@ -33,7 +35,7 @@ export async function searchBusinesses(source:'Google'|'Yelp',service:string,slo
  const searchTerm=[preferences,service].filter(Boolean).join(' ');
  if(source==='Google'){
   const data=z.object({places:z.array(placeSchema).optional()}).parse(await placesRequest('places:searchText',placeFields.split(',').map(f=>`places.${f}`).join(','),{textQuery:`${slots.urgency==='urgent'?'emergency ':''}${searchTerm} in ${slots.location}`,languageCode:'en',pageSize:20,...(slots.urgency==='urgent'?{openNow:true}:{})}));
-  return (data.places??[]).filter(p=>!p.businessStatus||p.businessStatus==='OPERATIONAL').map(googleCandidate);
+  return (data.places??[]).filter(p=>(p.userRatingCount??0)>=MIN_GOOGLE_REVIEWS&&(!p.businessStatus||p.businessStatus==='OPERATIONAL')).map(googleCandidate);
  }
 
  if(!process.env.YELP_API_KEY)throw new Error('Yelp Search is not configured.');

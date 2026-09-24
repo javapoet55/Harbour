@@ -11,9 +11,12 @@ struct TaskAgentCard: View {
     @State private var fallbackReason: String?
     @State private var run: TaskAgentRun?
     @State private var answer = ""
+    @State private var selectedBusiness: String?
+    @State private var businessTabs: [String: Int] = [:]
     @State private var expandedReviews: Set<String> = []
     @State private var drafts: [String: String] = [:]
     @State private var busy = false
+    @State private var searchRequestPending = false
     @State private var error: String?
     @State private var loading = true
     @State private var refreshID = 0
@@ -37,6 +40,19 @@ struct TaskAgentCard: View {
         default: "Research needs a retry"
         }
     }
+    private var findingBusinesses: Bool {
+        searchRequestPending || (error == nil && ["QUEUED", "RUNNING"].contains(run?.status ?? ""))
+    }
+    private var searchProgress: some View {
+        VStack(spacing: 14) {
+            ProgressView().controlSize(.large).tint(Color.nexdoIndigo)
+            Text("Finding the best business near your place…")
+                .font(.subheadline.weight(.semibold)).multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity).padding(.vertical, 24)
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.updatesFrequently)
+    }
     var body: some View {
         // Keep a concrete view mounted before the first response so its task always runs.
         VStack(alignment: .leading, spacing: 12) {
@@ -44,7 +60,8 @@ struct TaskAgentCard: View {
                 VStack(alignment: .leading, spacing: 12) {
                     assistantHeader(run)
                     Divider().overlay(Color.nexdoIndigo.opacity(0.08))
-                    if let question = run.question, !["urgency", "preferences"].contains(question.key) {
+                    if findingBusinesses { searchProgress }
+                    if !findingBusinesses, let question = run.question, !["urgency", "preferences"].contains(question.key) {
                         Text(question.key == "urgency" ? "Ready to search nearby businesses" : question.text).font(.system(size: 16, weight: .semibold)).fixedSize(horizontal: false, vertical: true)
                         if question.key == "discovery" {
                             HStack { Button("Find a professional") { act("answer", key: "discovery", answer: "yes") }; Spacer(); Button("Keep as a task") { act("cancel") } }
@@ -64,76 +81,28 @@ struct TaskAgentCard: View {
                         }
                         if question.key == "location", !run.slots.location.isEmpty { Button("Use \(run.slots.location)") { act("search", key: "location", answer: run.slots.location) } }
                     }
-                    if let question = run.question, ["urgency", "preferences"].contains(question.key) {
-                        if error == nil { ProgressView("Starting business search…") }
+                    if !findingBusinesses, let question = run.question, ["urgency", "preferences"].contains(question.key) {
+                        if error == nil { searchProgress }
                         else { Button("Retry search") { act("search", answer: run.slots.location) }.buttonStyle(AgentSearchButton()) }
                     }
                     if let message = run.error { Text(message).font(.caption) }
                     ForEach(run.warnings.filter { !$0.hasPrefix("Yelp is not connected.") }, id: \.self) { Text($0).font(.caption).foregroundStyle(.secondary) }
                     ForEach(Array(run.candidates.enumerated()), id: \.element.id) { index, candidate in
-                        DisclosureGroup("\(index + 1). \(candidate.name)") {
-                            VStack(alignment: .leading, spacing: 10) {
-                                Text(candidate.address).font(.caption)
-                                Text(candidate.phone.isEmpty ? "Phone number unavailable" : candidate.phone).font(.subheadline)
-                                Text("Email unavailable from Google Places. Check the business website.").font(.caption).foregroundStyle(.secondary)
-                                if !candidate.phone.isEmpty { Button("Copy phone number") { UIPasteboard.general.string = candidate.phone; error = "Phone number copied." } }
-                                if let website = candidate.website, let url = URL(string: website), url.scheme == "https" { Link("Business website", destination: url) }
-                                Text(candidate.reason).font(.subheadline)
-                                ForEach(candidate.evidence, id: \.url) { evidence in
-                                    if let url = URL(string: evidence.url), url.scheme == "https" { Link("View on \(evidence.source)", destination: url) }
+                        DisclosureGroup(isExpanded: Binding(get: { selectedBusiness == candidate.id }, set: { expanded in
+                            focusedField = nil
+                            selectedBusiness = expanded ? candidate.id : nil
+                        })) {
+                            businessDetails(candidate)
+                        } label: {
+                            VStack(alignment: .leading, spacing: 5) {
+                                Text("\(index + 1). \(candidate.name)").font(.headline)
+                                if let evidence = candidate.evidence.first {
+                                    Text("\(evidence.source) · \(evidence.rating.map { String(format: "%.1f ★", $0) } ?? "Not rated") · \(evidence.reviews ?? 0) reviews")
+                                        .font(.caption).foregroundStyle(Color.nexdoSecondary)
                                 }
-                                if candidate.googlePlaceId != nil {
-                                    Text("Google Maps").font(.system(size: 14)).foregroundStyle(Color(red: 0.37, green: 0.37, blue: 0.37))
-                                    Text("Customer feedback · Limited selection, newest first.").font(.caption)
-                                    if (candidate.feedback ?? []).isEmpty { Text("No written reviews available.").font(.caption) }
-                                    ForEach(candidate.feedback ?? [], id: \.url) { review in
-                                        let reviewID = candidate.id + review.url
-                                        VStack(alignment: .leading, spacing: 6) {
-                                            HStack {
-                                                if let photo = review.photoUrl, let url = URL(string: photo) { AsyncImage(url: url) { image in image.resizable().scaledToFit() } placeholder: { Color.clear }.frame(width: 32, height: 32).clipShape(Circle()) }
-                                                if let profile = review.authorUrl, let url = URL(string: profile) { Link(review.author, destination: url) } else { Text(review.author) }
-                                            }
-                                            Text("\(review.rating.map { String(format: "%.0f", $0) } ?? "—")/5 · \(review.published)").font(.caption)
-                                            Text(review.text).font(.subheadline)
-                                                .lineLimit(expandedReviews.contains(reviewID) ? nil : 3)
-                                            if !review.text.isEmpty {
-                                                Button(expandedReviews.contains(reviewID) ? "Show less" : "Show more") {
-                                                    if expandedReviews.contains(reviewID) { expandedReviews.remove(reviewID) }
-                                                    else { expandedReviews.insert(reviewID) }
-                                                }
-                                                .font(.subheadline.weight(.semibold))
-                                                .accessibilityLabel("\(expandedReviews.contains(reviewID) ? "Show less" : "Show more") of \(review.author)’s review")
-                                                .accessibilityValue(expandedReviews.contains(reviewID) ? "Expanded" : "Collapsed")
-                                            }
-                                            if let url = URL(string: review.url) { Link("Read review on Google Maps", destination: url) }
-                                        }.padding(.vertical, 6)
-                                    }
-                                    ForEach(Array((candidate.attributions ?? []).enumerated()), id: \.offset) { _, attribution in
-                                        if let link = attribution.url, let url = URL(string: link) { Link(attribution.provider, destination: url) } else { Text(attribution.provider) }
-                                    }
-                                }
-                                Text("Your outreach draft").font(.subheadline.bold())
-                                TextEditor(text: Binding(get: { drafts[candidate.id] ?? candidate.draft }, set: { drafts[candidate.id] = String($0.prefix(2000)) })).frame(minHeight: 160).accessibilityLabel("Draft for \(candidate.name)")
-                                    .focused($focusedField, equals: .agentDraft(candidate.id))
-                                Button {
-                                    guard MFMessageComposeViewController.canSendText() else {
-                                        messageNotice = "Messages is not available on this device. You can copy the draft and phone number instead."
-                                        return
-                                    }
-                                    messageDraft = BusinessMessageDraft(phone: candidate.phone, body: drafts[candidate.id] ?? candidate.draft)
-                                } label: {
-                                    Label("Open in Messages", systemImage: "message.fill").frame(maxWidth: .infinity)
-                                }
-                                .buttonStyle(.borderedProminent).tint(Color.nexdoIndigo)
-                                .disabled(candidate.phone.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || (drafts[candidate.id] ?? candidate.draft).trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                                Text("Review the number and message, then tap Send. Some business numbers cannot receive texts.").font(.caption).foregroundStyle(.secondary)
-                                HStack {
-                                    Button("Save draft") { act("saveDraft", answer: drafts[candidate.id] ?? candidate.draft, candidateID: candidate.id) }
-                                    Spacer()
-                                    Button("Copy draft") { UIPasteboard.general.string = drafts[candidate.id] ?? candidate.draft; error = "Copied. Paste into your messaging app to send." }
-                                }
-                            }.padding(.vertical, 10)
+                            }
                         }
+                        .padding(14).background(.white.opacity(0.85), in: RoundedRectangle(cornerRadius: 16))
                     }
                     HStack {
                         if ["QUEUED", "RUNNING"].contains(run.status) { Button("Pause") { act("pause") } }
@@ -151,7 +120,7 @@ struct TaskAgentCard: View {
                     if let error { Text(error).font(.caption) }
                 }.padding(16).background(Color.nexdoIndigo.opacity(0.06), in: RoundedRectangle(cornerRadius: 18))
             } else if loading {
-                ProgressView("Checking business search…").font(.subheadline)
+                searchProgress
             } else if let error {
                 Text(error).font(.caption)
                 Button("Retry business search") { refreshID += 1 }
@@ -212,11 +181,89 @@ struct TaskAgentCard: View {
             }
         }
     }
+    private func businessDetails(_ candidate: TaskAgentRun.Candidate) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Picker("Business details", selection: Binding(get: { businessTabs[candidate.id] ?? 0 }, set: { focusedField = nil; businessTabs[candidate.id] = $0 })) {
+                Text("Business info").tag(0)
+                Text("Feedback").tag(1)
+            }.pickerStyle(.segmented).padding(.bottom, 6)
+            if (businessTabs[candidate.id] ?? 0) == 0 {
+            Label(candidate.address, systemImage: "mappin.and.ellipse").font(.subheadline)
+            Label(candidate.phone.isEmpty ? "Phone number unavailable" : candidate.phone, systemImage: "phone").font(.subheadline.weight(.medium))
+            Text("For email, check the business website.").font(.caption).foregroundStyle(.secondary)
+            if !candidate.phone.isEmpty { Button("Copy phone number") { UIPasteboard.general.string = candidate.phone; error = "Phone number copied." } }
+            if let website = candidate.website, let url = URL(string: website), url.scheme == "https" { Link("Business website", destination: url) }
+            Text(candidate.reason).font(.subheadline)
+            ForEach(candidate.evidence, id: \.url) { evidence in
+                if let url = URL(string: evidence.url), url.scheme == "https" { Link("View on \(evidence.source)", destination: url) }
+            }
+            DisclosureGroup("Review or edit outreach draft") {
+            TextEditor(text: Binding(get: { drafts[candidate.id] ?? candidate.draft }, set: { drafts[candidate.id] = String($0.prefix(2000)) })).frame(minHeight: 160).accessibilityLabel("Draft for \(candidate.name)")
+                .focused($focusedField, equals: .agentDraft(candidate.id))
+            HStack {
+                Button("Save draft") { act("saveDraft", answer: drafts[candidate.id] ?? candidate.draft, candidateID: candidate.id) }
+                Spacer()
+                Button("Copy draft") { UIPasteboard.general.string = drafts[candidate.id] ?? candidate.draft; error = "Copied. Paste into your messaging app to send." }
+            }
+            }.font(.subheadline)
+            Button {
+                guard MFMessageComposeViewController.canSendText() else {
+                    messageNotice = "Messages is not available on this device. You can copy the draft and phone number instead."
+                    return
+                }
+                messageDraft = BusinessMessageDraft(phone: candidate.phone, body: drafts[candidate.id] ?? candidate.draft)
+            } label: {
+                Label("Open in Messages", systemImage: "message.fill").foregroundStyle(.black).frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent).tint(.yellow)
+            .disabled(candidate.phone.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || (drafts[candidate.id] ?? candidate.draft).trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            Text("Review the number and message, then tap Send. Some business numbers cannot receive texts.").font(.caption).foregroundStyle(.secondary)
+
+            } else {
+            if candidate.googlePlaceId != nil {
+                Text("Google Maps").font(.system(size: 14)).foregroundStyle(Color(red: 0.37, green: 0.37, blue: 0.37))
+                Text("Customer feedback · Limited selection, newest first.").font(.caption)
+                if (candidate.feedback ?? []).isEmpty { Text("No written reviews available.").font(.caption) }
+                ForEach(candidate.feedback ?? [], id: \.url) { review in
+                    let reviewID = candidate.id + review.url
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack {
+                            if let photo = review.photoUrl, let url = URL(string: photo) { AsyncImage(url: url) { image in image.resizable().scaledToFit() } placeholder: { Color.clear }.frame(width: 32, height: 32).clipShape(Circle()) }
+                            if let profile = review.authorUrl, let url = URL(string: profile) { Link(review.author, destination: url) } else { Text(review.author) }
+                        }
+                        Text("\(review.rating.map { String(format: "%.0f", $0) } ?? "—")/5 · \(review.published)").font(.caption)
+                        Text(review.text).font(.subheadline)
+                            .lineLimit(expandedReviews.contains(reviewID) ? nil : 3)
+                        if !review.text.isEmpty {
+                            Button(expandedReviews.contains(reviewID) ? "Show less" : "Show more") {
+                                if expandedReviews.contains(reviewID) { expandedReviews.remove(reviewID) }
+                                else { expandedReviews.insert(reviewID) }
+                            }
+                            .font(.subheadline.weight(.semibold))
+                            .accessibilityLabel("\(expandedReviews.contains(reviewID) ? "Show less" : "Show more") of \(review.author)’s review")
+                            .accessibilityValue(expandedReviews.contains(reviewID) ? "Expanded" : "Collapsed")
+                        }
+                        if let url = URL(string: review.url) { Link("Read review on Google Maps", destination: url) }
+                    }.padding(.vertical, 6)
+                }
+                ForEach(Array((candidate.attributions ?? []).enumerated()), id: \.offset) { _, attribution in
+                    if let link = attribution.url, let url = URL(string: link) { Link(attribution.provider, destination: url) } else { Text(attribution.provider) }
+                }
+            }
+                if candidate.googlePlaceId == nil { Text("No written reviews available.").font(.subheadline).foregroundStyle(.secondary) }
+            }
+        }.padding(.vertical, 10)
+    }
+
     private func assistantHeader(_ run: TaskAgentRun) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             Label("AI ASSISTANT", systemImage: "sparkles").font(.caption.weight(.bold)).tracking(2).foregroundStyle(Color.nexdoIndigo)
             Text(label).font(.system(size: 20, weight: .bold)).tracking(-0.6).fixedSize(horizontal: false, vertical: true)
             Text("\(run.service) · \(run.slots.location.isEmpty ? "Location needed" : run.slots.location)").font(.subheadline)
+            if !run.candidates.isEmpty {
+                Text("Compare businesses, read feedback, and review a message before sending.").font(.subheadline).foregroundStyle(Color.nexdoSecondary)
+                Link("Search terms and privacy", destination: AppEnvironment.web("/places-policy")).font(.caption)
+            } else {
             HStack(alignment: .top, spacing: 8) {
                 VStack(alignment: .leading, spacing: 10) {
                     Text("Search uses your city and service with Google Places (and Yelp when connected). NexDo never calls, messages, or shares your contact details with businesses. You review and send drafts yourself.")
@@ -234,6 +281,7 @@ struct TaskAgentCard: View {
                     }.frame(width: 94)
                 }
             }
+            }
         }
     }
 
@@ -242,8 +290,10 @@ struct TaskAgentCard: View {
         if ProcessInfo.processInfo.arguments.contains("-agent-design-preview") { return }
         #endif
         guard run != nil || action == "prepare" else { return }; busy = true
+        searchRequestPending = ["search", "resume", "retry"].contains(action)
+        if searchRequestPending { focusedField = nil; error = nil }
         Task {
-            defer { busy = false }
+            defer { busy = false; searchRequestPending = false }
             do { self.run = try await model.updateTaskAgent(taskID: taskID, action: action, version: run?.version ?? 0, key: key, answer: answer, budget: "", constraints: "", candidateID: candidateID).run; self.answer = ""; error = nil }
             catch { self.error = error.localizedDescription }
         }

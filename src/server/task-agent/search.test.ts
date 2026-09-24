@@ -8,6 +8,21 @@ it('uses Places with header credentials, explicit fields and no raw task data',a
  const result=await searchBusinesses('Google','plumber',slots);expect(result).toHaveLength(1);expect(result[0].website).toBeNull();expect(result[0].googlePlaceId).toBe('123');expect(result[0].openNow).toBe(true);
  expect(String(request.mock.calls[0][0])).toBe('https://places.googleapis.com/v1/places:searchText');expect(JSON.parse(request.mock.calls[0][1]!.body as string)).toMatchObject({openNow:true,pageSize:20,textQuery:'emergency plumber in San Jose, CA'});
 });
+it('excludes Google businesses below 20 reviews before shortlisting',async()=>{
+ vi.stubEnv('GOOGLE_PLACES_API_KEY','test');
+ vi.stubGlobal('fetch',vi.fn(async()=>Response.json({places:[
+  {id:'missing'},{id:'null',userRatingCount:null},{id:'zero',userRatingCount:0},
+  {id:'nineteen',userRatingCount:19},{id:'twenty',userRatingCount:20},
+  {id:'popular',userRatingCount:200},{id:'closed',userRatingCount:100,businessStatus:'CLOSED_PERMANENTLY'}
+ ]})));
+ const result=await searchBusinesses('Google','plumber',slots);
+ expect(result.map(c=>c.googlePlaceId)).toEqual(['twenty','popular']);
+ const {hasEnoughGoogleReviews,placeDetails}=await import('./search');
+ for(const count of [undefined,null,0,19,20,200]){
+  vi.stubGlobal('fetch',vi.fn(async()=>Response.json({id:'saved',userRatingCount:count})));
+  expect(hasEnoughGoogleReviews(await placeDetails('saved'))).toBe((count??0)>=20);
+ }
+});
 it('returns attributed reviews and location from fresh place details',async()=>{
  vi.stubEnv('GOOGLE_PLACES_API_KEY','test');vi.stubGlobal('fetch',vi.fn(async()=>Response.json({id:'one',location:{latitude:37,longitude:-122},reviews:[{rating:5,text:{text:'Helpful'},authorAttribution:{displayName:'Reviewer',uri:'https://maps.google.com/user',photoUri:'https://example.com/avatar'},googleMapsUri:'https://maps.google.com/review',relativePublishTimeDescription:'a week ago'}]})));
  const {placeDetails}=await import('./search');const result=await placeDetails('one');expect(result.feedback?.[0]).toMatchObject({author:'Reviewer',text:'Helpful',rating:5});expect(result.coordinates?.latitude).toBe(37);
