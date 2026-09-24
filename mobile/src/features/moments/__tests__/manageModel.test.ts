@@ -128,6 +128,23 @@ describe('ManageFestivalModel init', () => {
 });
 
 describe('dirty state and messages', () => {
+  // iOS opened every moment dirty (5d49047): its init wrote the send time and notify choice into the
+  // live settings but not into the saved baseline. Android assigns them without touching the settings.
+  it('opening a moment with a saved send time, notify choice and upcoming delivery is not an unsaved change', () => {
+    const saved = groupSettings({ draftSendDate: '2030-09-19T09:00:00Z', draftNotify: false });
+    const opened = [
+      moment({ id: 'a', type: 'festival', title: 'Diwali', firstName: 'Asha', phone: '+15555550100', sourceKey: 'festival:g:ka', festivalSettings: saved, drafts: [draft({ plans: [plan({ scheduledAtUTC: '2030-09-20T17:30:00Z', timeZoneID: 'Asia/Tokyo' })] })] }),
+    ];
+    const h = harness(opened);
+    const model = createManageModel({ id: 'g', moments: opened }, h.deps);
+    expect(model.getState().sendDate).toBe(Date.parse('2030-09-20T17:30:00Z'));
+    expect(model.getState().notify).toBe(false);
+    expect(isDirty(model.getState())).toBe(false);
+    expect(pendingChange(model.getState())).toBe('none');
+    model.getState().setNotify(true);
+    expect(isDirty(model.getState())).toBe(true);
+  });
+
   it('touching the send time or the reminder makes the moment dirty, as Swift’s didSet does', () => {
     const h = harness([]);
     const model = createManageModel({ id: 'g', moments: festivalGroup() }, h.deps);
@@ -820,6 +837,34 @@ describe('greeting card image', () => {
     expect(h.cards.fetch).toHaveBeenCalledWith('a');
     expect(h.images.store).toHaveBeenCalledWith('STORED');
     expect(model.getState().imageUri).toBe('file:///IMG.png');
+  });
+
+  it('opening a moment whose card is downloaded from another device is not an unsaved change', async () => {
+    const stored = festivalGroup().map((item) => ({ ...item, card: { id: 'card-9', mime: 'image/jpeg', size: 4096, sha256: 'b'.repeat(64), createdAt: '2030-08-01T00:00:00.000Z' } }));
+    const h = harness(stored);
+    await h.store.getState().activate('u');
+    const model = createManageModel({ id: 'g', moments: stored }, h.deps);
+    h.cards.fetch.mockResolvedValueOnce({ base64: 'STORED', mime: 'image/jpeg' });
+    await model.getState().loadStoredCard();
+    expect(model.getState().settings.imageID).toBe('IMG.png');
+    expect(isDirty(model.getState())).toBe(false);
+    expect(pendingChange(model.getState())).toBe('none');
+    model.getState().setTitle('Deepavali');
+    expect(isDirty(model.getState())).toBe(true);
+  });
+
+  it('keeps an edit made while the stored card downloads', async () => {
+    const stored = festivalGroup().map((item) => ({ ...item, card: { id: 'card-9', mime: 'image/jpeg', size: 4096, sha256: 'b'.repeat(64), createdAt: '2030-08-01T00:00:00.000Z' } }));
+    const h = harness(stored);
+    await h.store.getState().activate('u');
+    const model = createManageModel({ id: 'g', moments: stored }, h.deps);
+    h.cards.fetch.mockResolvedValueOnce({ base64: 'STORED', mime: 'image/jpeg' });
+    const loading = model.getState().loadStoredCard();
+    model.getState().setTitle('Deepavali');
+    await loading;
+    expect(isDirty(model.getState())).toBe(true);
+    model.getState().setTitle('Diwali');
+    expect(isDirty(model.getState())).toBe(false);
   });
 
   it('leaves local artwork alone when one is already on this device', async () => {

@@ -208,15 +208,11 @@ export function recipientChannel(state: Pick<ManageState, 'settings'>, recipient
 
 /** `fingerprint` (`:63`) and `dirty` (`:61`). */
 export function fingerprint(state: Pick<ManageState, 'title' | 'date' | 'zone' | 'yearly' | 'active' | 'recipients' | 'settings'>): string {
-  return [
-    state.title,
-    momentDay(state.date, state.zone),
-    state.zone,
-    String(state.yearly),
-    String(state.active),
-    stableStringify(state.recipients),
-    stableStringify(state.settings),
-  ].join('|');
+  return editFingerprint(editState(state));
+}
+/** The same fingerprint, taken from a saved `FestivalEditState` rather than the live screen. */
+function editFingerprint(state: FestivalEditState): string {
+  return [state.title, state.day, state.zone, String(state.yearly), String(state.active), stableStringify(state.recipients), stableStringify(state.settings)].join('|');
 }
 export function isDirty(state: ManageState): boolean {
   return fingerprint(state) !== state.baseline;
@@ -865,7 +861,17 @@ export function createManageModel(group: MomentDisplayGroup, deps: ManageDeps): 
           const stored = await deps.cards.fetch(firstMoment.id);
           if (stored === null || get().imageUri !== null) return;
           const id = deps.images.store(stored.base64);
-          set((current) => ({ settings: { ...current.settings, imageID: id }, savedImageID: id, imageUri: deps.images.load(id) }));
+          // Opening is not an edit: the saved state takes the downloaded artwork too, so the moment is
+          // not dirty ("Discard unsaved changes?") for a card that was already saved. Other changes still count.
+          set((current) => {
+            const savedState = current.savedState && { ...current.savedState, settings: { ...current.savedState.settings, imageID: id } };
+            return {
+              settings: { ...current.settings, imageID: id },
+              savedImageID: id,
+              imageUri: deps.images.load(id),
+              ...(savedState ? { savedState, baseline: editFingerprint(savedState) } : {}),
+            };
+          });
         } catch {
           // A card that will not download is not worth an error on a screen that otherwise works.
         }
