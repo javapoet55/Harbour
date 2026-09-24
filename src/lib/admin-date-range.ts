@@ -39,3 +39,17 @@ export function adminDateRangeLabel(range: Pick<AdminDateRange, 'from' | 'to' | 
   if (range.from === range.to) return new Date(`${range.from}T12:00:00.000Z`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
   return `${new Date(`${range.from}T12:00:00.000Z`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })} – ${new Date(`${range.to}T12:00:00.000Z`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })}`;
 }
+
+/** Exact range for API callers: both days must be given and must survive parsing unchanged. */
+export function strictAdminDateRange(from: string | null | undefined, to: string | null | undefined, now = new Date()) {
+  if (!from || !to) return null;
+  const range = parseAdminDateRange(from, to, now);
+  return range.from === from && range.to === to ? range : null;
+}
+
+/** The last millisecond of the range's final UTC day. */
+export function adminRangeEnd(range: Pick<AdminDateRange, 'toDate'>) {
+  const end = new Date(range.toDate);
+  end.setUTCHours(23, 59, 59, 999);
+  return end;
+}
