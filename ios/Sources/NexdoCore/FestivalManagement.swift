@@ -47,6 +47,13 @@ public struct FestivalSettings: Codable, Equatable, Sendable {
         overrides = value(.overrides, overrides); channels = value(.channels, channels); contactIDs = value(.contactIDs, contactIDs)
         automatic = value(.automatic, automatic); selected = value(.selected, selected); catalogNotice = optional(.catalogNotice); archived = value(.archived, archived)
     }
+    /// How `draftSendDate` stores a send time.
+    public static func draftDate(_ date: Date) -> String { ISO8601DateFormatter().string(from: date) }
+    /// Records the send time and notify choice Manage Moment opens with. Applied to both the live and the saved
+    /// settings, so opening a moment is never an unsaved change; changing either afterwards still is.
+    public mutating func recordOpenedDraft(sendDate: Date, notify: Bool) {
+        draftSendDate = Self.draftDate(sendDate); draftNotify = notify
+    }
 }
 public struct ManagedFestivalRecipient: Identifiable, Codable, Equatable, Sendable {
     public var id: String { key }

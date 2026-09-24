@@ -24,7 +24,7 @@ import CryptoKit
     @Published var active:Bool
     @Published var recipients:[ManagedFestivalRecipient]
     @Published var settings=FestivalSettings()
-    @Published var sendDate=Date() { didSet { settings.draftSendDate = ISO8601DateFormatter().string(from: sendDate) } }
+    @Published var sendDate=Date() { didSet { settings.draftSendDate = FestivalSettings.draftDate(sendDate) } }
     @Published var notify=true { didSet { settings.draftNotify = notify } }
     @Published var needsScheduleConfirmation=false
     @Published var busy=false
@@ -95,6 +95,8 @@ import CryptoKit
         if let draft=saved.draftSendDate.flatMap({ISO8601DateFormatter().date(from:$0)}) {sendDate=draft}
         notify=saved.draftNotify ?? true
         if let plan=group.moments.compactMap(\.upcomingDelivery).first {sendDate=plan.date;zone=plan.timeZoneID}
+        // Opening is not an edit: the saved baseline gets the same send time and notify choice as the live settings.
+        saved.recordOpenedDraft(sendDate:sendDate,notify:notify);settings.recordOpenedDraft(sendDate:sendDate,notify:notify)
         savedImageID=saved.imageID;imageData=imageStorage.load(saved.imageID);notice=saved.catalogNotice
         // The baseline is the saved Wish Message, so adopted card text shows as an unsaved change to approve.
         let current=settings;settings=saved;baseline=fingerprint;savedState=editState;settings=current

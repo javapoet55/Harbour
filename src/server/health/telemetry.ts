@@ -34,7 +34,7 @@ export function featureFor(route: string) {
   if (route.includes('tasks')) return 'Task creation';
   if (route.includes('brief')) return 'Daily Brief';
   if (route.includes('assistant') || route.includes('insights')) return 'Ask AI';
-  if (route.includes('auth')) return 'Authentication';
+  if (route.includes('auth') || route.includes('/admin/session')) return 'Authentication';
   return 'Other';
 }
 export function healthRoute<A extends unknown[]>(operation: string, handler: (...args: A) => Promise<Response>) {

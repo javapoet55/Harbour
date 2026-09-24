@@ -15,8 +15,8 @@ process.env.HARBOR_DATABASE_URL = `file:${databaseFile}?socket_timeout=60`;
 export default defineConfig({
   test: {
     environment: 'node',
-    // mobile/ has its own Jest tests.
-    exclude: [...configDefaults.exclude, 'mobile/**'],
+    // mobile/ has its own Jest tests. The admin frontend runs its own Vitest suite (cd admin && npm test).
+    exclude: [...configDefaults.exclude, 'mobile/**', 'admin/**'],
     setupFiles: ['./vitest.setup.ts'],
     globalSetup: ['./vitest.global-setup.ts'],
     // Vitest loads .env into process.env, which would hand the tests a developer's real provider

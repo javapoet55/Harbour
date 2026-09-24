@@ -96,6 +96,11 @@ it('logs only the reason when a requested AI wish falls back',async()=>{
   ['too_long',async()=>reply('Happy birthday! '.repeat(40))],
   ['too_long',async()=>reply('Happy birthday, Priyanka! Wishing you a','length')],
   ['bad_json',async()=>new Response('<html>oops</html>',{status:200})],
+  ['placeholder',async()=>reply('Dear [First Name], Wishing you a warm and joyful anniversary celebration!')],
+  ['placeholder',async()=>reply('Happy birthday, [Name]!')],
+  ['placeholder',async()=>reply('Happy birthday, {name}! Have a great year.')],
+  ['placeholder',async()=>reply('Happy birthday, {{first_name}}!')],
+  ['placeholder',async()=>reply('Happy birthday, <name>!')],
  ];
  try {
   for(const [reason,respond] of cases) {
@@ -103,6 +108,7 @@ it('logs only the reason when a requested AI wish falls back',async()=>{
    vi.stubEnv('OPENAI_API_KEY',respond?'sk-secret-fixture':'');vi.stubGlobal('fetch',vi.fn(respond??(async()=>reply('unused'))));
    const result=await generateDraft(userId,{momentID:m.id,tone:'Warm',aiConsent:true,personalContext:'loves hiking'});
    expect(result.usedAI).toBe(false);
+   expect(result.draft.body).toBe(fallback('Priyanka','birthday','Warm',result.draft.generationVersion));
    expect(warn).toHaveBeenCalledTimes(1);
    const line=String(warn.mock.calls[0][0]);
    expect(JSON.parse(line)).toMatchObject({level:'warn',event:'wish_ai_fallback',reason});
@@ -117,4 +123,25 @@ it('logs only the reason when a requested AI wish falls back',async()=>{
   // The model is asked for a reply that fits the 500-character wish, not one it would have to discard.
   expect(JSON.parse((fetcher.mock.calls[0] as unknown as [string,{body:string}])[1].body).max_tokens).toBeLessThanOrEqual(150);
  } finally {warn.mockRestore();vi.unstubAllEnvs();vi.unstubAllGlobals();}
+});
+it('asks for the first name or no name, never placeholders, and keeps ordinary replies',async()=>{
+ const named=await saveMoment(userId,{...input,firstName:'Priyanka',sourceKey:randomUUID()});
+ const reply=(content:string)=>Response.json({choices:[{message:{content},finish_reason:'stop'}]});
+ vi.stubEnv('OPENAI_API_KEY','fixture');
+ try {
+  const fetcher=vi.fn(async()=>reply('Happy birthday, Priyanka! <3 Have a wonderful year.'));vi.stubGlobal('fetch',fetcher);
+  const result=await generateDraft(userId,{momentID:named.id,tone:'Warm',aiConsent:true});
+  expect(result.usedAI).toBe(true);
+  expect(result.draft.body).toBe('Happy birthday, Priyanka! <3 Have a wonderful year.');
+  const body=JSON.parse((fetcher.mock.calls[0] as unknown as [string,{body:string}])[1].body);
+  const system=body.messages[0].content as string;
+  expect(system).toContain('address the recipient by that first name');
+  expect(system).toContain('if it is missing or empty, use no name at all');
+  expect(system).toContain('Never write placeholders such as [Name], [First Name], {name} or <name>');
+  expect(JSON.parse(body.messages[1].content)).toMatchObject({firstName:'Priyanka'});
+  // A wish shared by several recipients is written without anyone's name.
+  const shared=vi.fn(async()=>reply('Happy birthday! Wishing you a wonderful year.'));vi.stubGlobal('fetch',shared);
+  await generateDraft(userId,{momentID:named.id,tone:'Warm',aiConsent:true,shared:true});
+  expect(JSON.parse(JSON.parse((shared.mock.calls[0] as unknown as [string,{body:string}])[1].body).messages[1].content)).not.toHaveProperty('firstName');
+ } finally {vi.unstubAllEnvs();vi.unstubAllGlobals();}
 });

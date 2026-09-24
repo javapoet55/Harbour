@@ -14,6 +14,8 @@ const eslintConfig = defineConfig([
     "src/generated/**",
     // React Native app: its own ESLint config and dependencies.
     "mobile/**",
+    // The admin frontend is a separate app with its own ESLint config.
+    "admin/**",
   ]),
 ]);
 

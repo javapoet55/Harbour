@@ -17,8 +17,9 @@ const input=z.discriminatedUnion('type',[
 export async function POST(request:Request) {
   try {
     const user=await healthAccess(true);
+    // Browser (cookie) requests must be same-origin. The admin frontend's server calls with bearer + client secret instead.
     const origin=request.headers.get('origin');
-    if(!origin || !['https:','http:'].includes(new URL(origin).protocol) || new URL(origin).host!==(request.headers.get('host')??new URL(request.url).host)) return Response.json({error:'Request not allowed'},{status:403,headers});
+    if(!user.viaBearer && (!origin || !['https:','http:'].includes(new URL(origin).protocol) || new URL(origin).host!==(request.headers.get('host')??new URL(request.url).host))) return Response.json({error:'Request not allowed'},{status:403,headers});
     const parsed=input.safeParse(await request.json().catch(()=>null));
     if(!parsed.success) return Response.json({error:'Invalid action'},{status:400,headers});
     const body=parsed.data;

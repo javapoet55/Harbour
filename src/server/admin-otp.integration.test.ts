@@ -4,16 +4,20 @@ import { prisma } from './db';
 import { adminTokenHash, adminUserForSession, requestAdminCode, signInAdminPassword, revokeAdminSession, verifyAdminCode } from './admin-otp';
 import { requireAdmin } from './admin-auth';
 import { POST } from '@/app/api/admin/auth/route';
+import { DELETE as sessionDELETE, POST as sessionPOST } from '@/app/api/admin/session/route';
+import { GET as meGET } from '@/app/api/admin/me/route';
+import { adminIpTarget, ADMIN_IP_ATTEMPT_LIMIT } from './admin-api-session';
+import { randomBytes } from 'node:crypto';
 import { middleware } from '@/middleware';
 import { NextRequest } from 'next/server';
 
-const mocks = vi.hoisted(() => ({ send: vi.fn(), mocked: vi.fn(() => false), jar: new Map<string, string>() }));
+const mocks = vi.hoisted(() => ({ send: vi.fn(), mocked: vi.fn(() => false), jar: new Map<string, string>(), headers: new Headers() }));
 vi.mock('@/providers/admin-email', () => ({ adminEmailProvider: { send: mocks.send }, adminEmailConfigured: () => !mocks.mocked() }));
 vi.mock('next/headers', () => ({ cookies: async () => ({
   get: (key: string) => mocks.jar.has(key) ? { value: mocks.jar.get(key) } : undefined,
   set: (key: string, value: string) => { mocks.jar.set(key, value); },
   delete: (key: string) => { mocks.jar.delete(key); },
-}) }));
+}), headers: async () => mocks.headers }));
 
 const ids: string[] = [];
 async function account() {
@@ -25,9 +29,11 @@ async function account() {
 }
 function sentCode() { return (mocks.send.mock.calls.at(-1)![0].text as string).match(/code is (\d{6})/)![1]; }
 const original = process.env.NEXDO_ADMIN_EMAILS;
-beforeEach(() => { mocks.send.mockReset().mockResolvedValue({ status: 'SENT', id: 'mock' }); mocks.mocked.mockReturnValue(false); mocks.jar.clear(); });
+const originalSecrets = process.env.ADMIN_API_SECRETS;
+beforeEach(() => { mocks.send.mockReset().mockResolvedValue({ status: 'SENT', id: 'mock' }); mocks.mocked.mockReturnValue(false); mocks.jar.clear(); mocks.headers = new Headers(); });
 afterAll(async () => {
   if (original === undefined) delete process.env.NEXDO_ADMIN_EMAILS; else process.env.NEXDO_ADMIN_EMAILS = original;
+  if (originalSecrets === undefined) delete process.env.ADMIN_API_SECRETS; else process.env.ADMIN_API_SECRETS = originalSecrets;
   await prisma.user.deleteMany({ where: { id: { in: ids } } });
   await prisma.$disconnect();
 });
@@ -137,5 +143,115 @@ describe('admin email OTP', () => {
       expect(result.headers.get('location')).toBeNull();
     }
     expect(middleware(new NextRequest('http://localhost/tasks')).headers.get('location')).toContain('/login');
+  });
+});
+
+describe('admin frontend bearer sessions', () => {
+  const secret = randomBytes(24).toString('hex');
+  const ip = () => `10.${[0, 0, 0].map(() => Math.floor(Math.random() * 250)).join('.')}`;
+  // Route handlers read the bearer through next/headers, so each request also becomes the mocked header set.
+  function request(path: string, init: { method?: string; headers?: Record<string, string>; body?: object } = {}) {
+    const value = new Request(`http://backend.test${path}`, { method: init.method ?? 'GET', headers: { 'Content-Type': 'application/json', ...init.headers }, body: init.body ? JSON.stringify(init.body) : undefined });
+    mocks.headers = value.headers;
+    return value;
+  }
+  const client = (extra: Record<string, string> = {}, clientSecret: string | null = secret) => ({ ...(clientSecret ? { 'X-Admin-Client': clientSecret } : {}), ...extra });
+  const bearer = (token: string, clientSecret: string | null = secret) => client({ Authorization: `Bearer ${token}` }, clientSecret);
+  async function passwordAdmin() {
+    const user = await account();
+    await prisma.user.update({ where: { id: user.id }, data: { passwordHash: await bcrypt.hash('valid-test-password', 4), emailVerifiedAt: new Date() } });
+    return user;
+  }
+  async function signIn(email: string, clientIp = ip(), password = 'valid-test-password') {
+    return sessionPOST(request('/api/admin/session', { method: 'POST', headers: client({ 'X-Admin-Client-IP': clientIp }), body: { email, password } }));
+  }
+  const me = (headers?: Record<string, string>) => { request('/api/admin/me', { headers }); return meGET(); };
+  const audits = (targetId: string) => prisma.healthAudit.findMany({ where: { targetId }, orderBy: { createdAt: 'asc' } });
+  beforeEach(() => { process.env.ADMIN_API_SECRETS = `unused-rotated-secret-value-000000000000,${secret}`; delete process.env.NEXDO_HEALTH_ENABLED; });
+
+  it('issues a bearer session only to the admin client and audits it', async () => {
+    const user = await passwordAdmin(); const clientIp = ip();
+    const body = { email: user.email, password: 'valid-test-password' };
+    expect((await sessionPOST(request('/api/admin/session', { method: 'POST', body }))).status).toBe(401);
+    expect((await sessionPOST(request('/api/admin/session', { method: 'POST', headers: client({}, 'wrong-secret-of-sufficient-length-0000000'), body }))).status).toBe(401);
+    process.env.ADMIN_API_SECRETS = 'short';
+    expect((await sessionPOST(request('/api/admin/session', { method: 'POST', headers: client({}, 'short'), body }))).status).toBe(401);
+    process.env.ADMIN_API_SECRETS = secret;
+    const response = await signIn(user.email, clientIp);
+    expect(response.status).toBe(200);
+    expect(response.headers.get('cache-control')).toContain('no-store');
+    const session = await response.json();
+    expect(session).toMatchObject({ token: expect.stringMatching(/^[a-f0-9]{64}$/), user: { id: user.id, name: user.name, email: user.email } });
+    expect(Object.keys(session.user).sort()).toEqual(['email', 'id', 'name']);
+    expect(Date.parse(session.expiresAt) - Date.now()).toBeGreaterThan(7.9 * 60 * 60_000);
+    expect(mocks.jar.size).toBe(0);
+    const current = await me(bearer(session.token));
+    expect(current.status).toBe(200);
+    expect(await current.json()).toEqual({ id: user.id, name: user.name, email: user.email, canOperate: false });
+    expect((await audits(adminIpTarget(clientIp))).map((row) => [row.action, row.actorId])).toEqual([['ADMIN_LOGIN', user.id]]);
+  });
+
+  it('rejects a bearer without the client secret, with a wrong secret, or in a malformed header', async () => {
+    const user = await passwordAdmin();
+    const { token } = await (await signIn(user.email)).json();
+    expect((await me(bearer(token, null))).status).toBe(401);
+    expect((await me(bearer(token, `${secret}x`))).status).toBe(401);
+    expect((await me(client({ Authorization: `bearer ${token}` }))).status).toBe(401);
+    expect((await me(client({ Authorization: token }))).status).toBe(401);
+    process.env.ADMIN_API_SECRETS = '';
+    expect((await me(bearer(token))).status).toBe(401);
+    await expect(requireAdmin()).rejects.toThrow('UNAUTHENTICATED');
+  });
+
+  it('rejects a bearer once the email leaves the allowlist, or the session is revoked or expired', async () => {
+    const user = await passwordAdmin();
+    const first = (await (await signIn(user.email)).json()).token;
+    process.env.NEXDO_ADMIN_EMAILS = '';
+    expect((await me(bearer(first))).status).toBe(401);
+    process.env.NEXDO_ADMIN_EMAILS = user.email;
+    expect((await me(bearer(first))).status).toBe(200);
+    await prisma.adminLoginToken.update({ where: { sessionHash: adminTokenHash(first) }, data: { sessionExpiresAt: new Date(Date.now() - 1000) } });
+    expect((await me(bearer(first))).status).toBe(401);
+
+    const clientIp = ip();
+    const second = (await (await signIn(user.email, clientIp)).json()).token;
+    expect((await sessionDELETE(request('/api/admin/session', { method: 'DELETE', headers: bearer(second, null) }))).status).toBe(401);
+    expect((await me(bearer(second))).status).toBe(200);
+    const deleted = await sessionDELETE(request('/api/admin/session', { method: 'DELETE', headers: { ...bearer(second), 'X-Admin-Client-IP': clientIp } }));
+    expect(deleted.status).toBe(204);
+    expect((await me(bearer(second))).status).toBe(401);
+    expect((await sessionDELETE(request('/api/admin/session', { method: 'DELETE', headers: bearer(second) }))).status).toBe(204);
+    expect((await audits(adminIpTarget(clientIp))).map((row) => row.action)).toEqual(['ADMIN_LOGIN', 'ADMIN_LOGOUT']);
+  });
+
+  it('keeps the cookie flow unchanged alongside bearer sessions', async () => {
+    const user = await passwordAdmin();
+    const cookieLogin = await POST(new Request('http://localhost/api/admin/auth', { method: 'POST', headers: { origin: 'http://localhost', 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'login', email: user.email, password: 'valid-test-password' }) }));
+    expect(cookieLogin.status).toBe(200);
+    expect((await me()).status).toBe(200);
+    // A bad bearer falls back to the valid cookie rather than locking the browser session out.
+    expect(await (await me(bearer('0'.repeat(64)))).json()).toMatchObject({ id: user.id });
+    mocks.jar.clear();
+    expect((await me()).status).toBe(401);
+  });
+
+  it('limits attempts per account and per client IP, auditing failures and blocks', async () => {
+    const user = await passwordAdmin(); const clientIp = ip();
+    for (let i = 0; i < 5; i++) expect((await signIn(user.email, clientIp, 'wrong')).status).toBe(401);
+    expect((await signIn(user.email, clientIp)).status).toBe(429);
+    const accountRows = await audits(adminIpTarget(clientIp));
+    expect(accountRows.map((row) => row.action)).toEqual([...Array(5).fill('ADMIN_LOGIN_FAILED'), 'ADMIN_RATE_LIMITED']);
+    expect(accountRows.map((row) => row.detail).join(' ')).not.toContain(user.email);
+
+    const other = await passwordAdmin(); const busyIp = ip(); const target = adminIpTarget(busyIp);
+    await prisma.healthAudit.createMany({ data: Array.from({ length: ADMIN_IP_ATTEMPT_LIMIT - 1 }, () => ({ actorId: 'anonymous', action: 'ADMIN_LOGIN_FAILED', targetId: target, detail: 'seeded' })) });
+    expect((await signIn(other.email, busyIp, 'wrong')).status).toBe(401);
+    expect((await signIn(other.email, busyIp)).status).toBe(429);
+    expect((await audits(target)).at(-1)).toMatchObject({ action: 'ADMIN_RATE_LIMITED', actorId: 'anonymous' });
+    expect((await signIn(other.email, ip())).status).toBe(200);
+    // Attempts older than the 15-minute window no longer count. HealthAudit is append-only, so seed aged rows.
+    const agedIp = ip();
+    await prisma.healthAudit.createMany({ data: Array.from({ length: ADMIN_IP_ATTEMPT_LIMIT + 5 }, () => ({ actorId: 'anonymous', action: 'ADMIN_LOGIN_FAILED', targetId: adminIpTarget(agedIp), detail: 'seeded', createdAt: new Date(Date.now() - 16 * 60_000) })) });
+    expect((await signIn(other.email, agedIp)).status).toBe(200);
   });
 });
