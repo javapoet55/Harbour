@@ -941,3 +941,31 @@ after 50 s (`operationTimeout`, `src/api/moments.ts`), and the failure path rele
    saving."
 4. Moments → Create wish on a moment → Personalize with AI → tap **Try another**: the same
    behaviour.
+
+## 15. Writing a wish holds only the wish controls; parity with iOS c86e8c0 (2026-09-24)
+
+JavaScript only; no new build needed. Follows iOS `c86e8c0` (`WishGenerationGate`).
+
+### What changed
+
+- **Regenerate is no longer a save.** `generate()` sets `generatingWish` only, not `busy`, so on
+  Android the Wish Message tab no longer shows "Saving…" or blocks the whole screen while a draft is
+  written. Only the wish controls are held (§14), now including **Edit** and **Save Message**.
+- **Nothing saves while a draft is being written.** In `manageModel.ts`, `save`, `approve`,
+  `saveGreetingCard` and `changeTab` (which auto-saves) return without a request while
+  `generatingWish` is set, so the old text is never saved over the incoming draft and no tab change is
+  left pending.
+- **Review wish, first draft.** When the screen opens without a reusable draft, the draft it writes
+  shows the same state: "Writing your wish…" with a spinner on Try another, and the tone chips, AI
+  toggle, Edit and the message held. Edit is now held on every Try another too.
+
+iOS (React Native) is unchanged: the view still holds the screen behind "Saving…" while a draft is
+written (`screenBusy = busy || (!isAndroid() && generatingWish)`), exactly as before.
+
+### Check it on a phone
+
+1. Manage Moment → Wish Message, AI on, tap **Regenerate**: no "Saving…"; Edit and Save Message are
+   dimmed with the other wish controls; the header and the rest of the screen still respond.
+2. Tap another step tab while it writes: nothing happens until the draft lands.
+3. Moments → Create wish on a moment with no draft: Try another reads "Writing your wish…" until the
+   first draft appears.

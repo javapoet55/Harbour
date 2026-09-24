@@ -149,8 +149,10 @@ export function ManageMomentView({ group, onDone }: { group: MomentDisplayGroup;
   const theme = useTheme();
   const model = useManageModel(group);
   const state = useStore(model);
-  // Android (docs/android-polish.md §14): while a wish is being written the tab holds its controls.
+  // Android (docs/android-polish.md §14-15): while a wish is being written the tab holds its wish
+  // controls only. iOS keeps its screen-wide "Saving…" hold for the draft, as before.
   const writingWish = isAndroid() && state.generatingWish;
+  const screenBusy = state.busy || (!isAndroid() && state.generatingWish);
   const snapshot = useMoments((store) => store.snapshot);
   const ready = isEmailReady({ snapshot });
   const dirty = isDirty(state);
@@ -367,7 +369,7 @@ export function ManageMomentView({ group, onDone }: { group: MomentDisplayGroup;
         }}
       />
       <TodayBackdrop />
-      <View style={styles.fill} pointerEvents={state.busy ? 'none' : 'auto'}>
+      <View style={styles.fill} pointerEvents={screenBusy ? 'none' : 'auto'} testID="festival-screen">
         <KeyboardAwareScrollView bottomOffset={KEYBOARD_DONE_BAR_HEIGHT} keyboardShouldPersistTaps="handled" contentContainerStyle={styles.content} testID="festival-scroll">
           {/* identity (:100-118) */}
           <MomentCard testID="festival-identity">
@@ -643,7 +645,7 @@ export function ManageMomentView({ group, onDone }: { group: MomentDisplayGroup;
                   testID="festival-regenerate"
                 />
                 <View style={styles.grow} />
-                <BorderedButton icon="pencil" title="Edit" onPress={() => messageRef.current?.focus()} testID="festival-edit-message" />
+                <BorderedButton icon="pencil" title="Edit" onPress={() => messageRef.current?.focus()} disabled={writingWish} testID="festival-edit-message" />
               </View>
               <FormToggle label="Use AI for this draft" value={aiConsent} onValueChange={setAiConsent} disabled={writingWish} testID="festival-ai" />
               <Text style={[caption, { color: theme.colors.secondaryLabel }]}>Shares only occasion, tone and your optional context. Generated text is a draft for your review.</Text>
@@ -684,7 +686,7 @@ export function ManageMomentView({ group, onDone }: { group: MomentDisplayGroup;
               <MomentPrimary
                 title="Save Message"
                 onPress={() => save(true)}
-                disabled={state.settings.baseMessage.trim() === '' || characterCount(state.settings.baseMessage) > 500}
+                disabled={writingWish || state.settings.baseMessage.trim() === '' || characterCount(state.settings.baseMessage) > 500}
                 testID="festival-save-message"
               />
             </>
@@ -776,7 +778,7 @@ export function ManageMomentView({ group, onDone }: { group: MomentDisplayGroup;
             </>
           ) : null}
 
-          {state.busy ? (
+          {screenBusy ? (
             <View style={styles.progress}>
               <ActivityIndicator />
               <Secondary>Saving…</Secondary>

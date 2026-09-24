@@ -156,7 +156,7 @@ export default function ReviewWishScreen() {
           <View style={styles.inline}>
             <BorderedButton icon="sparkles" title={writingWish ? 'Writing your wish…' : 'Try another'} loading={writingWish} disabled={writingWish} onPress={generate} testID="review-try-another" />
             <View style={styles.grow} />
-            <BorderedButton icon="pencil" title="Edit" onPress={() => editor.current?.focus()} testID="review-edit" />
+            <BorderedButton icon="pencil" title="Edit" onPress={() => editor.current?.focus()} disabled={writingWish} testID="review-edit" />
           </View>
         </MomentCard>
         {supportsGreetingCard(moment) ? <MomentGreetingCardSection moment={moment} greeting={bodyText} /> : null}

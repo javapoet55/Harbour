@@ -392,6 +392,11 @@ describe('Manage Moment', () => {
       expect(screen.getByTestId('festival-message').props.value).toBe('Old wish');
       expect(screen.getByTestId('festival-message').props.editable).toBe(false);
       expect(opacity('festival-message')).toBe(0.5);
+      expect(isDisabled('festival-edit-message')).toBe(true);
+      expect(isDisabled('festival-save-message')).toBe(true);
+      // Only the wish controls are held: no "Saving…", and the rest of the screen still takes touches.
+      expect(screen.queryByText('Saving…')).toBeNull();
+      expect(screen.getByTestId('festival-screen').props.pointerEvents).toBe('auto');
 
       // A tap on the held button still sends nothing.
       await fireEvent.press(regenerate());
@@ -406,7 +411,27 @@ describe('Manage Moment', () => {
       expect(screen.getByTestId('festival-message').props.value).toBe('A brand new wish');
       expect(screen.getByTestId('festival-message').props.editable).toBe(true);
       expect(opacity('festival-message')).toBeUndefined();
+      expect(isDisabled('festival-edit-message')).toBe(false);
+      expect(isDisabled('festival-save-message')).toBe(false);
       expect(screen.getByTestId('festival-notice').props.children).toBe('AI draft ready for review.');
+    });
+
+    it('does not save on Android while the draft is being written', async () => {
+      jest.replaceProperty(Platform, 'OS', 'android');
+      await openWishMessage();
+      const reply = pendingGenerate();
+      const saves = () => mockPost.mock.calls.filter(([operation]) => operation !== 'generate');
+
+      await fireEvent.press(regenerate());
+      await fireEvent.press(screen.getByTestId('festival-save-message'));
+      await fireEvent.press(screen.getByTestId('festival-tab-Schedule'));
+      expect(saves()).toHaveLength(0);
+      expect(screen.getByTestId('festival-message')).toBeTruthy();
+
+      await reply.resolve({ draft: draft({ body: 'A brand new wish' }), usedAI: true });
+      await waitFor(() => expect(isDisabled('festival-save-message')).toBe(false));
+      await fireEvent.press(screen.getByTestId('festival-save-message'));
+      await waitFor(() => expect(saves().length).toBeGreaterThan(0));
     });
 
     it('releases the controls on Android when the request fails, with the fallback notice', async () => {
@@ -422,6 +447,8 @@ describe('Manage Moment', () => {
       expect(isDisabled('festival-regenerate')).toBe(false);
       for (const tone of tones) expect(isDisabled(`festival-tone-${tone}`)).toBe(false);
       expect(isDisabled('festival-ai')).toBe(false);
+      expect(isDisabled('festival-edit-message')).toBe(false);
+      expect(isDisabled('festival-save-message')).toBe(false);
       expect(screen.getByTestId('festival-message').props.editable).toBe(true);
       expect(screen.getByTestId('festival-notice').props.children).toBe('Offline fallback — review before saving.');
 
@@ -443,9 +470,14 @@ describe('Manage Moment', () => {
       expect(isDisabled('festival-ai')).toBe(false);
       expect(screen.getByTestId('festival-message').props.editable).not.toBe(false);
       expect(opacity('festival-message')).toBeUndefined();
+      // As before on iOS: the draft holds the whole screen behind "Saving…".
+      expect(screen.getByText('Saving…')).toBeTruthy();
+      expect(screen.getByTestId('festival-screen').props.pointerEvents).toBe('none');
 
       await reply.resolve({ draft: draft({ body: 'A brand new wish' }), usedAI: true });
       await waitFor(() => expect(screen.getByTestId('festival-message').props.value).toBe('A brand new wish'));
+      expect(screen.queryByText('Saving…')).toBeNull();
+      expect(screen.getByTestId('festival-screen').props.pointerEvents).toBe('auto');
     });
   });
 
@@ -768,12 +800,14 @@ describe('Review wish while a wish is being written (android-polish.md §14)', (
     expect(screen.getByTestId('review-body').props.value).toBe('Old wish');
     expect(screen.getByTestId('review-body').props.editable).toBe(false);
     expect(opacity('review-body')).toBe(0.5);
+    expect(isDisabled('review-edit')).toBe(true);
 
     await reply.resolve({ draft: draft({ id: 'new', momentID: 'r', body: 'A brand new wish' }), usedAI: true });
     await waitFor(() => expect(within(tryAnother()).getByText('Try another')).toBeTruthy());
     expect(isDisabled('review-try-another')).toBe(false);
     for (const tone of tones) expect(isDisabled(`review-tone-${tone}`)).toBe(false);
     expect(isDisabled('review-ai')).toBe(false);
+    expect(isDisabled('review-edit')).toBe(false);
     expect(screen.getByTestId('review-body').props.value).toBe('A brand new wish');
     expect(screen.getByTestId('review-body').props.editable).toBe(true);
   });
@@ -796,6 +830,66 @@ describe('Review wish while a wish is being written (android-polish.md §14)', (
 
     await fireEvent.press(tryAnother());
     expect(generateCalls()).toHaveLength(2);
+  });
+
+  describe('the first draft, written when the screen opens', () => {
+    async function openWithoutDraft() {
+      const reply = pendingGenerate();
+      const day = future(10);
+      load([moment({ id: 'n', type: 'birthday', title: 'Sam’s Birthday', firstName: 'Sam', occurrenceDate: day, nextOccurrence: day })]);
+      mockParams = { id: 'n' };
+      await render(<ReviewWish />);
+      return reply;
+    }
+
+    it('shows the same loading state on Android until it arrives', async () => {
+      jest.replaceProperty(Platform, 'OS', 'android');
+      const reply = await openWithoutDraft();
+
+      expect(generateCalls()).toHaveLength(1);
+      expect(within(tryAnother()).getByText('Writing your wish…')).toBeTruthy();
+      expect(screen.getByTestId('review-try-another-spinner')).toBeTruthy();
+      expect(isDisabled('review-try-another')).toBe(true);
+      expect(isDisabled('review-edit')).toBe(true);
+      for (const tone of tones) expect(isDisabled(`review-tone-${tone}`)).toBe(true);
+      expect(isDisabled('review-approve')).toBe(true);
+      expect(screen.getByTestId('review-body').props.editable).toBe(false);
+      await fireEvent.press(tryAnother());
+      expect(generateCalls()).toHaveLength(1);
+
+      await reply.resolve({ draft: draft({ id: 'first', momentID: 'n', body: 'A first wish' }), usedAI: false });
+      await waitFor(() => expect(within(tryAnother()).getByText('Try another')).toBeTruthy());
+      expect(screen.getByTestId('review-body').props.value).toBe('A first wish');
+      expect(isDisabled('review-try-another')).toBe(false);
+      expect(isDisabled('review-edit')).toBe(false);
+      for (const tone of tones) expect(isDisabled(`review-tone-${tone}`)).toBe(false);
+      expect(isDisabled('review-approve')).toBe(false);
+    });
+
+    it('releases the controls on Android when the first draft fails', async () => {
+      jest.replaceProperty(Platform, 'OS', 'android');
+      const reply = await openWithoutDraft();
+      expect(isDisabled('review-try-another')).toBe(true);
+
+      await reply.reject(new Error('The request timed out.'));
+      await waitFor(() => expect(within(tryAnother()).getByText('Try another')).toBeTruthy());
+      expect(isDisabled('review-try-another')).toBe(false);
+      expect(isDisabled('review-edit')).toBe(false);
+      expect(screen.getByTestId('review-error')).toBeTruthy();
+    });
+
+    it('keeps the iOS screen unchanged', async () => {
+      const reply = await openWithoutDraft();
+
+      expect(generateCalls()).toHaveLength(1);
+      expect(within(tryAnother()).getByText('Try another')).toBeTruthy();
+      expect(screen.queryByTestId('review-try-another-spinner')).toBeNull();
+      expect(isDisabled('review-edit')).toBe(false);
+      for (const tone of tones) expect(isDisabled(`review-tone-${tone}`)).toBe(false);
+
+      await reply.resolve({ draft: draft({ id: 'first', momentID: 'n', body: 'A first wish' }), usedAI: false });
+      await waitFor(() => expect(screen.getByTestId('review-body').props.value).toBe('A first wish'));
+    });
   });
 
   it('keeps the iOS screen unchanged, still with one request per burst', async () => {

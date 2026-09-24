@@ -394,6 +394,8 @@ export function createManageModel(group: MomentDisplayGroup, deps: ManageDeps): 
 
   const model = createStore<ManageState>()((set, get) => {
     const isBusy = () => get().busy;
+    /** A wish draft is being written: nothing saves until it lands, so the old text is never saved over it. */
+    const isWriting = () => get().generatingWish;
 
     async function persist(cancelSchedules: boolean): Promise<void> {
       const state = get();
@@ -561,7 +563,8 @@ export function createManageModel(group: MomentDisplayGroup, deps: ManageDeps): 
 
       async changeTab(target) {
         const state = get();
-        if (target === state.tab || state.busy) return;
+        // A tab change auto-saves, so it waits for the draft too (and leaves no pending tab behind).
+        if (target === state.tab || state.busy || state.generatingWish) return;
         set({ pendingTab: target });
         if (isDirty(get())) await get().save();
         else set({ tab: target, pendingTab: null });
@@ -570,7 +573,7 @@ export function createManageModel(group: MomentDisplayGroup, deps: ManageDeps): 
       cancelTabChange: () => set({ pendingTab: null }),
 
       async save(cancelSchedules = false) {
-        if (isBusy()) return;
+        if (isBusy() || isWriting()) return;
         if (!isDirty(get())) {
           set({ error: null, notice: 'No changes to save. Your existing schedule is unchanged.' });
           return;
@@ -608,9 +611,11 @@ export function createManageModel(group: MomentDisplayGroup, deps: ManageDeps): 
       },
 
       async generate(aiConsent) {
-        // `busy` is set before the first await, so a burst of taps sends one request.
-        if (isBusy()) return;
-        set({ busy: true, generatingWish: true, error: null });
+        // `generatingWish` is set before the first await, so a burst of taps sends one request. It is
+        // not `busy`: that is a save, and would show "Saving…" and hold the whole screen
+        // (ManageFestivalModel.swift `wishGeneration`, c86e8c0).
+        if (isBusy() || isWriting()) return;
+        set({ generatingWish: true, error: null });
         try {
           get().invalidateApproval();
           const state = get();
@@ -641,12 +646,12 @@ export function createManageModel(group: MomentDisplayGroup, deps: ManageDeps): 
             set({ settings: { ...get().settings, baseMessage: offline() }, notice: 'Offline fallback — review before saving.' });
           }
         } finally {
-          set({ busy: false, generatingWish: false });
+          set({ generatingWish: false });
         }
       },
 
       async approve(cancelSchedules = false) {
-        if (isBusy()) return;
+        if (isBusy() || isWriting()) return;
         const { settings: current } = get();
         // An empty message never falls back to the suggestion: the placeholder is not a saved wish.
         const issue = approvalError(current);
@@ -692,7 +697,7 @@ export function createManageModel(group: MomentDisplayGroup, deps: ManageDeps): 
 
       async saveGreetingCard() {
         const firstMoment = get().originals[0];
-        if (isBusy() || !firstMoment) return false;
+        if (isBusy() || isWriting() || !firstMoment) return false;
         // The card prints the Wish Message, so a message edited in the card editor is saved — and
         // approved — as the wish itself, through the ordinary festival save rather than the card route.
         const saved = get().savedState;

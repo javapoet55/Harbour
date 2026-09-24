@@ -239,6 +239,8 @@ describe('writing a wish', () => {
     void model.getState().generate(true);
     void model.getState().generate(true);
     expect(model.getState().generatingWish).toBe(true);
+    // Writing a draft is not a save: `busy` (the "Saving…" hold) stays off.
+    expect(model.getState().busy).toBe(false);
     await Promise.resolve();
     expect(generateCalls(h)).toHaveLength(1);
 
@@ -247,6 +249,31 @@ describe('writing a wish', () => {
     expect(model.getState()).toMatchObject({ generatingWish: false, busy: false, notice: 'AI draft ready for review.' });
     expect(model.getState().settings.baseMessage).toBe('A new wish');
     expect(generateCalls(h)).toHaveLength(1);
+  });
+
+  it('blocks every save while the draft is being written, then saves normally', async () => {
+    const h = harness(festivalGroup());
+    await h.store.getState().activate('u');
+    const model = createManageModel({ id: 'g', moments: festivalGroup() }, h.deps);
+    const reply = pending(h);
+    const saves = () => h.post.mock.calls.filter(([operation]) => operation !== 'generate');
+
+    const running = model.getState().generate(true);
+    model.getState().setMessage('Edited while writing');
+    await model.getState().save();
+    await model.getState().approve();
+    expect(await model.getState().saveGreetingCard()).toBe(false);
+    // A tab change auto-saves, so it waits too, and leaves no pending tab behind.
+    await model.getState().changeTab('Schedule');
+    expect(saves()).toHaveLength(0);
+    expect(model.getState()).toMatchObject({ tab: 'Details', pendingTab: null, busy: false });
+    expect(model.getState().settings.approvedAt).toBeNull();
+
+    reply.resolve({ draft: draft({ body: 'A new wish' }), usedAI: true });
+    await running;
+    await model.getState().approve();
+    expect(saves().length).toBeGreaterThan(0);
+    expect(model.getState().notice).toBe('Message approved and saved. Nothing has been sent.');
   });
 
   it('clears generatingWish when the request fails, with the offline draft and its notice', async () => {
