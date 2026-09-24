@@ -37,12 +37,12 @@ import {
 import { captureCard, GreetingCardCapture } from './cardCapture';
 import { CARD_NOT_ATTACHED, cardEncoder, encodeCard, encodeSmallerCard } from './cardImage';
 import { momentLabel, sendDayLabel } from './dates';
-import { contactChoice, imageStorage, pickContact, validatePickedContacts, type ContactChoice } from './device';
+import { contactChoice, contactFullName, imageStorage, pickContact, validatePickedContacts, type ContactChoice } from './device';
+import { RecipientSheet, type RecipientSheetRequest } from './RecipientSheet';
 import {
   capitalized,
   characterCount,
   maskedAddress,
-  normalizedPhone,
   planDate,
   planStatusLabel,
   recipientInitials,
@@ -50,6 +50,10 @@ import {
   validateSchedule,
   type ManagedRecipient,
   type MomentDisplayGroup,
+  contactLinkFor,
+  defaultChannel,
+  editedContactLink,
+  type RecipientDraft,
 } from './domain';
 import { DateField, Disclosure, FormField, FormScroll, FormSection, FormRow, FormToggle, FormButton, LabeledValue, MenuPicker, PopoverMenu, usePopoverMenu, ZonePicker, genericZoneName } from './form';
 import { FestivalGreetingCard, GreetingCardEditor } from './GreetingCard';
@@ -79,7 +83,7 @@ export function newManageModel(group: MomentDisplayGroup): ManageModel {
   const model: ManageModel = createManageModel(group, {
     store: momentsStore,
     images: imageStorage,
-    validateContacts: (recipients) => validatePickedContacts(recipients, normalizedPhone),
+    validateContacts: (recipients) => validatePickedContacts(recipients),
     sha256Hex: (value) => ownerKeyFor(value),
     uuid: () => Crypto.randomUUID().toUpperCase(),
     now: () => Date.now(),
@@ -167,6 +171,8 @@ export function ManageMomentView({ group, onDone }: { group: MomentDisplayGroup;
   const [aiConsent, setAiConsent] = useState(false);
   const approveAfterCancel = useRef(false);
   const [contactChoices, setContactChoices] = useState<ContactChoice[]>([]);
+  // Android: Add Contact, Enter recipient manually and Edit recipient share one sheet (RecipientSheet.tsx).
+  const [recipientSheet, setRecipientSheet] = useState<(RecipientSheetRequest & { contact: ContactChoice | null }) | null>(null);
   const [choicePhone, setChoicePhone] = useState('');
   const [choiceEmail, setChoiceEmail] = useState('');
   const optionsAnchor = useRef<View>(null);
@@ -274,12 +280,54 @@ export function ManageMomentView({ group, onDone }: { group: MomentDisplayGroup;
       const contact = await pickContact();
       if (!contact) return;
       const choice = contactChoice(contact);
+      if (isAndroid()) {
+        const key = await ownerKeyFor(contact.id);
+        setRecipientSheet({
+          mode: 'add',
+          draft: {
+            // The same person may be added again with other addresses; each row still needs its own key.
+            key: model.getState().recipients.some((recipient) => recipient.key === key) ? Crypto.randomUUID().toUpperCase() : key,
+            name: contactFullName(contact) || choice.name,
+            phone: choice.phones[0] ?? '',
+            email: choice.emails[0] ?? '',
+            contactIdentifier: contact.id,
+          },
+          choices: { phones: choice.phones, emails: choice.emails },
+          contact: choice,
+        });
+        return;
+      }
       setChoicePhone(choice.phones[0] ?? '');
       setChoiceEmail(choice.emails[0] ?? '');
       setContactChoices([choice]);
     } catch (error) {
       model.getState().setError(error instanceof Error ? error.message : String(error));
     }
+  };
+
+  /**
+   * The recipient sheet's Add / Save (Android). A new person joins selected, with the default channel
+   * (Messages when there is a phone, Email when there is only an email). An edit keeps the person's
+   * moment and selection; a channel whose address was removed falls back to the default. A picked
+   * contact stays linked only while its phone and email are ones that contact has.
+   */
+  const submitRecipient = (draft: RecipientDraft) => {
+    const request = recipientSheet;
+    if (!request) return;
+    const current = model.getState();
+    const contactIdentifier = request.contact ? contactLinkFor(draft, request.contact) : editedContactLink(request.draft, draft);
+    if (request.mode === 'add') {
+      current.setRecipients([...current.recipients, { ...draft, contactIdentifier, selected: true }]);
+      current.updateSettings({ channels: { ...current.settings.channels, [draft.key]: defaultChannel(draft) } });
+    } else {
+      current.updateRecipient(draft.key, { name: draft.name, phone: draft.phone, email: draft.email, contactIdentifier });
+      const channel = current.settings.channels[draft.key];
+      if ((channel === 'messages' && draft.phone === '') || (channel === 'email' && draft.email === '')) {
+        current.updateSettings({ channels: { ...current.settings.channels, [draft.key]: defaultChannel(draft) } });
+      }
+    }
+    current.invalidateApproval();
+    setRecipientSheet(null);
   };
 
   const addSelectedRecipient = async () => {
@@ -571,6 +619,14 @@ export function ManageMomentView({ group, onDone }: { group: MomentDisplayGroup;
                         recipient={recipient}
                         channel={recipientChannel(state, recipient)}
                         onChange={(patch) => model.getState().updateRecipient(recipient.key, patch)}
+                        onEdit={
+                          isAndroid()
+                            ? () => {
+                                Keyboard.dismiss();
+                                setRecipientSheet({ mode: 'edit', draft: recipient, choices: null, contact: null });
+                              }
+                            : undefined
+                        }
                         onRemove={() => {
                           model.getState().setRecipients(model.getState().recipients.filter((item) => item.key !== recipient.key));
                           model.getState().invalidateApproval();
@@ -585,7 +641,16 @@ export function ManageMomentView({ group, onDone }: { group: MomentDisplayGroup;
                 </Pressable>
               ) : null}
               <BorderedButton full icon="add" title="Add Contact" onPress={() => void addContact()} testID="festival-add-contact" />
-              <Pressable accessibilityRole="button" onPress={() => setManual(true)} style={styles.plainButton} testID="festival-manual">
+              <Pressable
+                accessibilityRole="button"
+                onPress={() =>
+                  isAndroid()
+                    ? setRecipientSheet({ mode: 'add', draft: { key: Crypto.randomUUID().toUpperCase(), name: '', phone: '', email: '', contactIdentifier: '' }, choices: null, contact: null })
+                    : setManual(true)
+                }
+                style={styles.plainButton}
+                testID="festival-manual"
+              >
                 <Text style={[textStyles.body, { color: theme.colors.link }]}>Enter recipient manually</Text>
               </Pressable>
               <IconLabel icon="lock-closed" title="Only selected contacts receive this wish." color={theme.colors.secondaryLabel} style={textStyles.subheadline} size={15} />
@@ -841,6 +906,13 @@ export function ManageMomentView({ group, onDone }: { group: MomentDisplayGroup;
         </FormScroll>
       </MomentSheet>
 
+      <RecipientSheet
+        request={recipientSheet}
+        others={recipientSheet ? state.recipients.filter((recipient) => !(recipientSheet.mode === 'edit' && recipient.key === recipientSheet.draft.key)) : []}
+        onCancel={() => setRecipientSheet(null)}
+        onSubmit={submitRecipient}
+      />
+
       <ManualRecipientSheet
         visible={manual}
         onCancel={() => setManual(false)}
@@ -964,11 +1036,14 @@ function RecipientEditor({
   channel,
   onChange,
   onRemove,
+  onEdit,
 }: {
   recipient: ManagedRecipient;
   channel: string;
   onChange: (patch: Partial<ManagedRecipient>) => void;
   onRemove: () => void;
+  /** Android: "Edit recipient" opens the recipient sheet instead of the inline fields. */
+  onEdit?: () => void;
 }) {
   const theme = useTheme();
   return (
@@ -992,6 +1067,16 @@ function RecipientEditor({
           <Ionicons name={recipient.selected ? 'checkmark-circle' : 'ellipse-outline'} size={26} color={theme.colors.link} />
         </Pressable>
       </View>
+      {onEdit ? (
+        <View style={styles.recipientActions}>
+          <Pressable accessibilityRole="button" onPress={onEdit} hitSlop={6} testID={`recipient-edit-${recipient.key}`}>
+            <Text style={[textStyles.body, { color: theme.colors.link }]}>Edit recipient</Text>
+          </Pressable>
+          <Pressable accessibilityRole="button" onPress={onRemove} hitSlop={6} testID={`recipient-remove-${recipient.key}`}>
+            <Text style={[textStyles.body, { color: theme.colors.danger }]}>Remove contact</Text>
+          </Pressable>
+        </View>
+      ) : (
       <Disclosure title="Edit recipient" testID={`recipient-edit-${recipient.key}`}>
         <FormField placeholder="Name" value={recipient.name} onChangeText={(name) => onChange({ name })} testID={`recipient-name-${recipient.key}`} />
         <FormField placeholder="Phone" keyboardType="phone-pad" value={recipient.phone} onChangeText={(phone) => onChange({ phone })} testID={`recipient-phone-${recipient.key}`} />
@@ -1003,6 +1088,7 @@ function RecipientEditor({
           <Text style={[textStyles.body, { color: theme.colors.danger }]}>Remove contact</Text>
         </Pressable>
       </Disclosure>
+      )}
       <View style={[styles.divider, { backgroundColor: theme.colors.separator }, androidSeparator(theme)]} />
     </View>
   );
@@ -1174,6 +1260,7 @@ const styles = StyleSheet.create({
   progress: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   // Just under the sheet's bar (FormScroll's top padding is 3 since UI-parity pass 2).
   sheetTitle: { marginHorizontal: 16, marginTop: 4 },
+  recipientActions: { flexDirection: 'row', justifyContent: 'space-between', paddingTop: 8 },
   confirm: { padding: 16, gap: 18, paddingBottom: 60 },
 });
 

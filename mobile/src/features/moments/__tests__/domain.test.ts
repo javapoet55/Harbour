@@ -41,6 +41,15 @@ import {
   validateRecipients,
   validateSchedule,
   type ManagedRecipient,
+  contactLinkFor,
+  defaultChannel,
+  editedContactLink,
+  firstNameOf,
+  RECIPIENT_ADDRESS_REQUIRED,
+  RECIPIENT_EMAIL_INVALID,
+  RECIPIENT_NAME_REQUIRED,
+  RECIPIENT_PHONE_INVALID,
+  recipientProblem,
 } from '../domain';
 import { draft, moment, plan, settings } from '../testFixtures';
 
@@ -512,5 +521,49 @@ describe('titles, greetings and signatures', () => {
     expect(defaultSignature(' Sri Kumar ')).toBe('With love, Sri & family');
     expect(defaultSignature('Rahul')).toBe('With love, Rahul & family');
     expect(defaultSignature('  ')).toBe('With love, your family');
+  });
+});
+
+describe('recipient sheet rules', () => {
+  const cara = { name: 'Cara', phone: '+1 555 010 0200', email: 'cara@example.com' };
+
+  it('requires a name and a valid phone or email', () => {
+    expect(recipientProblem({ name: ' ', phone: '5550100200', email: '' }, [])).toBe(RECIPIENT_NAME_REQUIRED);
+    expect(recipientProblem({ name: 'Cara', phone: ' ', email: '' }, [])).toBe(RECIPIENT_ADDRESS_REQUIRED);
+    expect(recipientProblem({ name: 'Cara', phone: '123456', email: '' }, [])).toBe(RECIPIENT_PHONE_INVALID);
+    expect(recipientProblem({ name: 'Cara', phone: '1234567890123456', email: '' }, [])).toBe(RECIPIENT_PHONE_INVALID);
+    expect(recipientProblem({ name: 'Cara', phone: '', email: 'cara@' }, [])).toBe(RECIPIENT_EMAIL_INVALID);
+    expect(recipientProblem(cara, [])).toBeNull();
+    expect(recipientProblem({ name: 'Cara', phone: '', email: 'cara@example.com' }, [])).toBeNull();
+  });
+
+  it('refuses a second person with the same phone or email, however it is written', () => {
+    expect(recipientProblem({ name: 'Dup', phone: '15550100200', email: '' }, [cara])).toBe('Cara already has this phone number.');
+    expect(recipientProblem({ name: 'Dup', phone: '', email: ' CARA@example.com' }, [cara])).toBe('Cara already has this email.');
+    expect(recipientProblem({ name: 'Dup', phone: '5550100999', email: 'dup@example.com' }, [cara])).toBeNull();
+  });
+
+  it('chooses Messages when there is a phone and Email when there is only an email', () => {
+    expect(defaultChannel({ phone: '5550100200', email: 'a@b.co' })).toBe('messages');
+    expect(defaultChannel({ phone: ' ', email: 'a@b.co' })).toBe('email');
+    expect(defaultChannel({ phone: '', email: '' })).toBe('share');
+  });
+
+  it('keeps a contact link only while the addresses are the contact’s own', () => {
+    const contact = { id: 'C1', phones: ['+1 (555) 010-0200', '+1 555 010 0300'], emails: ['Kate@Example.com'] };
+    expect(contactLinkFor({ phone: '15550100300', email: 'kate@example.com' }, contact)).toBe('C1');
+    expect(contactLinkFor({ phone: '', email: 'kate@example.com' }, contact)).toBe('C1');
+    expect(contactLinkFor({ phone: '5550109999', email: 'kate@example.com' }, contact)).toBe('');
+    expect(contactLinkFor({ phone: '15550100200', email: 'kate@other.com' }, contact)).toBe('');
+    expect(contactLinkFor({ phone: '15550100200', email: '' }, null)).toBe('');
+    const saved = { phone: '+15550100200', email: 'kate@example.com', contactIdentifier: 'C1' };
+    expect(editedContactLink(saved, { phone: '+1 555 010 0200', email: 'KATE@example.com' })).toBe('C1');
+    expect(editedContactLink(saved, { phone: '', email: 'kate@example.com' })).toBe('C1');
+    expect(editedContactLink(saved, { phone: '+15550100200', email: 'kate@work.com' })).toBe('');
+  });
+
+  it('names the moment after the first word of a name', () => {
+    expect(firstNameOf('  Kate   Bell ')).toBe('Kate');
+    expect(firstNameOf('')).toBe('');
   });
 });

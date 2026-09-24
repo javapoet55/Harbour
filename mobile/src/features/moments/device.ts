@@ -13,7 +13,7 @@ import { TaskActionError } from '../../actions/errors';
 import { ownerKeyFor } from '../../actions/persistence';
 import { beginOAuthSession, LATE_CALLBACK_MS, takeOAuthCallback, waitForOAuthCallback } from '../../lib/oauthCallbacks';
 import { deviceZone, momentDay } from './dates';
-import { newMomentInput } from './domain';
+import { newMomentInput, sameEmail, samePhone } from './domain';
 
 /**
  * Everything the Moments screens do on the PHONE rather than the server: the Messages composer, the
@@ -217,10 +217,15 @@ function uniqueBy(values: string[], identity: (value: string) => string): string
 /**
  * `FestivalContactsService.validate` (FestivalServices.swift:67-79): with FULL Contacts access, check a
  * picked person still exists and still has the saved address. Without it, trust the picker.
+ *
+ * On Android this always runs — `pickContact` needs READ_CONTACTS — while iOS normally has picker-only
+ * access and skips it, so a false alarm here is Android's alone. Both sides are compared the way the
+ * address is saved (`samePhone`, `sameEmail`): the stored email is trimmed (manageModel `persist`), so
+ * an untrimmed comparison reported a contact whose email is stored with surrounding spaces as changed.
+ * A recipient whose address was typed in by hand is unlinked (`contactLinkFor`), so it is not checked.
  */
 export async function validatePickedContacts(
   recipients: { selected: boolean; contactIdentifier: string; phone: string; email: string }[],
-  normalize: (phone: string) => string,
 ): Promise<void> {
   const permission = await Contacts.getPermissionsAsync();
   if (!permission.granted) return;
@@ -230,10 +235,10 @@ export async function validatePickedContacts(
       () => undefined,
     );
     if (!contact) throw new Error('A selected contact was deleted. Re-select or enter the recipient manually.');
-    if (recipient.phone !== '' && !(contact.phoneNumbers ?? []).some((phone) => normalize(phone.number ?? '') === normalize(recipient.phone))) {
+    if (recipient.phone.trim() !== '' && !(contact.phoneNumbers ?? []).some((phone) => samePhone(phone.number ?? '', recipient.phone))) {
       throw new Error('A contact’s phone number changed. Review their delivery address.');
     }
-    if (recipient.email !== '' && !(contact.emails ?? []).some((email) => (email.email ?? '').toLowerCase() === recipient.email.toLowerCase())) {
+    if (recipient.email.trim() !== '' && !(contact.emails ?? []).some((email) => sameEmail(email.email ?? '', recipient.email))) {
       throw new Error('A contact’s email changed. Review their delivery address.');
     }
   }

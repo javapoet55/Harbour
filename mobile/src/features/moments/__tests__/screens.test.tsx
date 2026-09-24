@@ -52,6 +52,7 @@ jest.mock('../../../api/moments', () => ({
 
 import * as SMS from 'expo-sms';
 import * as Contacts from 'expo-contacts/legacy';
+import * as Crypto from 'expo-crypto';
 
 import type { ImportantMoment, MomentsSnapshot } from '../../../api/moments';
 import { momentDate, sendDayLabel } from '../dates';
@@ -487,7 +488,8 @@ describe('Manage Moment', () => {
   describe('a contact with a repeated number and email', () => {
     afterEach(() => jest.restoreAllMocks());
 
-    it.each(['android', 'ios'] as const)('offers each address once on %s, with no key warning', async (os) => {
+    // Android shows the addresses as quick choices in the recipient sheet (tested below); iOS keeps the menus.
+    it.each(['ios'] as const)('offers each address once on %s, with no key warning', async (os) => {
       jest.replaceProperty(Platform, 'OS', os);
       const errors = jest.spyOn(console, 'error');
       (Contacts.presentContactPickerAsync as jest.Mock).mockResolvedValueOnce({
@@ -525,6 +527,32 @@ describe('Manage Moment', () => {
 
       expect(screen.getByLabelText('Phone, +15550100300')).toBeTruthy();
       expect(screen.getByLabelText('Email, priya@work.com')).toBeTruthy();
+      expect(errors.mock.calls.filter(([message]) => String(message).includes('same key'))).toEqual([]);
+    });
+
+    it('offers each address once as a quick choice on android, with no key warning', async () => {
+      jest.replaceProperty(Platform, 'OS', 'android');
+      const errors = jest.spyOn(console, 'error');
+      (Contacts.presentContactPickerAsync as jest.Mock).mockResolvedValueOnce({
+        id: 'dup',
+        contactType: 'person',
+        name: 'Priya Raman',
+        firstName: 'Priya',
+        lastName: 'Raman',
+        phoneNumbers: [{ number: '+1 (555) 010-0200' }, { number: '+1 555-010-0200' }, { number: '+15550100300' }],
+        emails: [{ email: 'Priya@example.com' }, { email: 'priya@EXAMPLE.com' }, { email: 'priya@work.com' }],
+      });
+      load(group());
+      mockParams = { ids: 'a' };
+      await render(<ManageMoment />);
+      await fireEvent.press(screen.getByTestId('festival-tab-Contacts'));
+      await fireEvent.press(screen.getByTestId('festival-add-contact'));
+      const labels = (field: string) => screen.getAllByTestId(new RegExp(`^recipient-sheet-${field}-choice-\\d+$`)).map((chip) => chip.props.accessibilityLabel);
+      expect(labels('phone')).toEqual(['Use +1 (555) 010-0200', 'Use +15550100300']);
+      expect(labels('email')).toEqual(['Use Priya@example.com', 'Use priya@work.com']);
+      expect(screen.getByTestId('recipient-sheet-phone').props.value).toBe('+1 (555) 010-0200');
+      await fireEvent.press(screen.getByTestId('recipient-sheet-email-choice-1'));
+      expect(screen.getByTestId('recipient-sheet-email').props.value).toBe('priya@work.com');
       expect(errors.mock.calls.filter(([message]) => String(message).includes('same key'))).toEqual([]);
     });
   });
@@ -1097,5 +1125,304 @@ describe('Schedule Wish', () => {
     });
     expect(screen.getByTestId('schedule-wish-error').props.children).toBe('Choose a future time.');
     expect(mockPost).not.toHaveBeenCalledWith('schedule', expect.anything(), undefined);
+  });
+});
+
+/**
+ * Android: Create Moment's Recipients list, the shared recipient sheet, the one-go save through
+ * `festivalSave`, and Manage Moment's Add Contact / Edit recipient. iOS keeps the single recipient.
+ */
+describe('Recipients on Android', () => {
+  // Every manually entered person gets its own key, as a real UUID would give it.
+  let uuid = 0;
+  beforeEach(() => (Crypto.randomUUID as jest.Mock).mockImplementation(() => `uuid-${++uuid}`));
+  afterEach(() => {
+    jest.restoreAllMocks();
+    (Crypto.randomUUID as jest.Mock).mockImplementation(() => 'test-nonce');
+  });
+
+  const KATE = {
+    id: 'C1',
+    contactType: 'person',
+    name: 'Kate Bell',
+    firstName: 'Kate',
+    lastName: 'Bell',
+    phoneNumbers: [{ number: '+1 (555) 010-0200' }, { number: '+1 555 010 0300' }],
+    emails: [{ email: 'kate@example.com' }],
+  };
+
+  /** The snapshot the server would return after `festivalSave`: one moment per saved recipient. */
+  function serveSaves(anchor: ImportantMoment) {
+    mockPost.mockImplementation(async (operation: string) => (operation === 'save' ? { moment: anchor } : { ok: true }));
+    mockSnapshot.mockImplementation(async () => {
+      const call = [...mockPost.mock.calls].reverse().find(([operation]) => operation === 'festivalSave');
+      if (!call) return { moments: [anchor], emailAccount: null, emailConfigured: false, automaticEmailEnabled: false };
+      const input = call[1] as { title: string; recipients: { id?: string; key: string; name: string; phone: string; email: string; selected: boolean }[]; settings: { groupID: string } };
+      const moments = input.recipients.map((recipient) =>
+        moment({
+          ...anchor,
+          id: recipient.id ?? `m-${recipient.key}`,
+          title: input.title,
+          firstName: recipient.name,
+          phone: recipient.phone,
+          email: recipient.email,
+          enabled: recipient.selected,
+          sourceKey: recipient.id ? anchor.sourceKey : `${anchor.type}:${input.settings.groupID}:${recipient.key}`,
+          festivalSettings: JSON.stringify(input.settings),
+        }),
+      );
+      return { moments, emailAccount: null, emailConfigured: false, automaticEmailEnabled: false };
+    });
+  }
+
+  const fill = async (fields: { name?: string; phone?: string; email?: string }) => {
+    if (fields.name !== undefined) await fireEvent.changeText(screen.getByTestId('recipient-sheet-name'), fields.name);
+    if (fields.phone !== undefined) await fireEvent.changeText(screen.getByTestId('recipient-sheet-phone'), fields.phone);
+    if (fields.email !== undefined) await fireEvent.changeText(screen.getByTestId('recipient-sheet-email'), fields.email);
+  };
+  const addManually = async (fields: { name?: string; phone?: string; email?: string }) => {
+    await fireEvent.press(screen.getByTestId('moment-enter-recipient'));
+    await fill(fields);
+    await fireEvent.press(screen.getByTestId('recipient-sheet-submit'));
+  };
+  const rowText = (index: number) => within(screen.getByTestId(`moment-recipient-${index}`)).getAllByText(/./).map((node) => node.props.children);
+
+  it('adds two people on create, one from Contacts and one by hand, and saves them all in one go', async () => {
+    jest.replaceProperty(Platform, 'OS', 'android');
+    load([]);
+    const day = future(30);
+    const anchor = moment({ id: 'new', type: 'birthday', title: 'Kate’s Birthday', firstName: 'Kate Bell', occurrenceDate: day, nextOccurrence: day, sourceKey: 'manual-anchor' });
+    serveSaves(anchor);
+    (Contacts.presentContactPickerAsync as jest.Mock).mockResolvedValueOnce(KATE);
+    await render(<MomentEditor />);
+
+    // At least one recipient is required; there is no single First name field any more.
+    expect(screen.queryByTestId('moment-first-name')).toBeNull();
+    expect(isDisabled('moment-save')).toBe(true);
+    expect(screen.getByTestId('moment-recipients-note').props.children).toBe('Add at least one recipient.');
+
+    // Choose from Contacts: the sheet is pre-filled, and the contact's two numbers are quick choices.
+    await fireEvent.press(screen.getByTestId('moment-choose-contact'));
+    expect(screen.getByText('Add Recipient')).toBeTruthy();
+    expect(screen.getByTestId('recipient-sheet-name').props.value).toBe('Kate Bell');
+    expect(screen.getByTestId('recipient-sheet-phone').props.value).toBe('+1 (555) 010-0200');
+    expect(screen.getByTestId('recipient-sheet-email').props.value).toBe('kate@example.com');
+    expect(within(screen.getByTestId('recipient-sheet-submit')).getByText('Add')).toBeTruthy();
+    await fireEvent.press(screen.getByTestId('recipient-sheet-phone-choice-1'));
+    expect(screen.getByTestId('recipient-sheet-phone').props.value).toBe('+1 555 010 0300');
+    await fireEvent.press(screen.getByTestId('recipient-sheet-submit'));
+    expect(rowText(0)).toEqual(['Kate Bell', 'Mobile · ••• ••• 0300', 'Email · k••••@example.com', 'Edit', 'Remove']);
+    expect(screen.getByTestId('moment-title').props.value).toBe('Kate’s Birthday');
+
+    // Enter recipient manually opens the same sheet, empty.
+    await fireEvent.press(screen.getByTestId('moment-enter-recipient'));
+    expect(screen.getByTestId('recipient-sheet-name').props.value).toBe('');
+    expect(screen.queryByTestId('recipient-sheet-phone-choice')).toBeNull();
+    await fill({ name: 'Ravi Kumar', email: 'ravi@example.com' });
+    await fireEvent.press(screen.getByTestId('recipient-sheet-submit'));
+    expect(rowText(1)).toEqual(['Ravi Kumar', 'Email · r••••@example.com', 'Edit', 'Remove']);
+    expect(isDisabled('moment-save')).toBe(false);
+
+    await fireEvent.press(screen.getByTestId('moment-save'));
+    await waitFor(() => expect(screen.getByText('Moment Details')).toBeTruthy());
+
+    // The moment is created for the first person, then everyone is saved in one festivalSave.
+    const operations = mockPost.mock.calls.map(([operation]) => operation);
+    expect(operations.filter((operation) => operation === 'save' || operation === 'festivalSave')).toEqual(['save', 'festivalSave']);
+    expect(mockPost).toHaveBeenCalledWith('save', expect.objectContaining({ type: 'birthday', title: 'Kate’s Birthday', firstName: 'Kate Bell', phone: '+1 555 010 0300', email: 'kate@example.com' }), undefined);
+    const input = mockPost.mock.calls.find(([operation]) => operation === 'festivalSave')![1];
+    const raviKey = input.recipients[1].key;
+    expect(input).toMatchObject({ ids: ['new'], title: 'Kate’s Birthday', date: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/), active: true, cancelSchedules: false });
+    expect(input.recipients).toEqual([
+      { id: 'new', key: 'new', name: 'Kate Bell', phone: '+15550100300', email: 'kate@example.com', selected: true },
+      { key: raviKey, name: 'Ravi Kumar', phone: '', email: 'ravi@example.com', selected: true },
+    ]);
+    expect(input.settings).toMatchObject({
+      channels: { new: 'messages', [raviKey]: 'email' },
+      contactIDs: { new: 'C1', [raviKey]: '' },
+      selected: { new: true, [raviKey]: true },
+    });
+
+    // Manage Moment → Contacts shows both, selected.
+    await fireEvent.press(screen.getByTestId('festival-tab-Contacts'));
+    expect(screen.getByTestId('recipient-select-new').props.accessibilityState).toEqual({ selected: true });
+    expect(screen.getByTestId(`recipient-select-${raviKey}`).props.accessibilityState).toEqual({ selected: true });
+    expect(screen.queryByTestId('festival-error')).toBeNull();
+  });
+
+  it('edits and removes a row, and the first person names the moment', async () => {
+    jest.replaceProperty(Platform, 'OS', 'android');
+    load([]);
+    await render(<MomentEditor />);
+    await addManually({ name: 'Asha Rao', phone: '5550100200' });
+    await addManually({ name: 'Ben Ito', email: 'ben@example.com' });
+    expect(screen.getByTestId('moment-title').props.value).toBe('Asha’s Birthday');
+
+    await fireEvent.press(screen.getByTestId('moment-recipient-edit-0'));
+    expect(screen.getByText('Edit Recipient')).toBeTruthy();
+    expect(within(screen.getByTestId('recipient-sheet-submit')).getByText('Save')).toBeTruthy();
+    expect(screen.getByTestId('recipient-sheet-phone').props.value).toBe('5550100200');
+    await fill({ phone: '5550109999', email: 'asha@example.com' });
+    await fireEvent.press(screen.getByTestId('recipient-sheet-submit'));
+    expect(rowText(0)).toEqual(['Asha Rao', 'Mobile · ••• ••• 9999', 'Email · a••••@example.com', 'Edit', 'Remove']);
+
+    await fireEvent.press(screen.getByTestId('moment-recipient-remove-0'));
+    expect(screen.queryByTestId('moment-recipient-1')).toBeNull();
+    expect(rowText(0)[0]).toBe('Ben Ito');
+    expect(screen.getByTestId('moment-title').props.value).toBe('Ben’s Birthday');
+    await fireEvent.press(screen.getByTestId('moment-recipient-remove-0'));
+    expect(isDisabled('moment-save')).toBe(true);
+  });
+
+  it('validates the sheet and refuses a person already in the list', async () => {
+    jest.replaceProperty(Platform, 'OS', 'android');
+    load([]);
+    await render(<MomentEditor />);
+    await fireEvent.press(screen.getByTestId('moment-enter-recipient'));
+    const submit = () => fireEvent.press(screen.getByTestId('recipient-sheet-submit'));
+    const problem = () => screen.getByTestId('recipient-sheet-error').props.children;
+
+    // A name and a phone or an email are needed before Add is enabled.
+    expect(isDisabled('recipient-sheet-submit')).toBe(true);
+    await fill({ name: 'Cara' });
+    expect(isDisabled('recipient-sheet-submit')).toBe(true);
+    await fill({ email: 'cara@' });
+    expect(isDisabled('recipient-sheet-submit')).toBe(false);
+    await submit();
+    expect(problem()).toBe('Enter a valid email address.');
+    await fill({ email: '', phone: '12345' });
+    await submit();
+    expect(problem()).toBe('Enter a valid phone number, 7 to 15 digits.');
+    await fill({ phone: '+1 555 010 0200', email: 'Cara@Example.com' });
+    await submit();
+    expect(screen.queryByTestId('recipient-sheet')).toBeNull();
+
+    // The same phone written differently, or the same email in another case, is the same person.
+    await fireEvent.press(screen.getByTestId('moment-enter-recipient'));
+    await fill({ name: 'Dup', phone: '15550100200' });
+    await submit();
+    expect(problem()).toBe('Cara already has this phone number.');
+    await fill({ phone: '', email: ' cara@example.COM ' });
+    await submit();
+    expect(problem()).toBe('Cara already has this email.');
+    await fireEvent.press(screen.getByTestId('recipient-sheet-cancel'));
+    expect(screen.queryByTestId('moment-recipient-1')).toBeNull();
+
+    // Editing a person may keep their own address.
+    await fireEvent.press(screen.getByTestId('moment-recipient-edit-0'));
+    await fill({ name: 'Cara Diaz' });
+    await submit();
+    expect(rowText(0)[0]).toBe('Cara Diaz');
+  });
+
+  describe('Manage Moment', () => {
+    const day = future(20);
+    const saved = () => [
+      moment({ id: 'a', title: 'Sam’s Birthday', firstName: 'Sam', phone: '+15555550100', email: 'sam@example.com', occurrenceDate: day, nextOccurrence: day, sourceKey: 'birthday:g:k1', festivalSettings: settings({ groupID: 'g', contactIDs: { k1: 'C9' }, channels: { k1: 'messages' } }) }),
+    ];
+
+    it('edits a recipient in the sheet, and adds from Contacts and by hand with the same sheet', async () => {
+      jest.replaceProperty(Platform, 'OS', 'android');
+      load(saved());
+      mockParams = { ids: 'a' };
+      await render(<ManageMoment />);
+      await fireEvent.press(screen.getByTestId('festival-tab-Contacts'));
+
+      await fireEvent.press(screen.getByTestId('recipient-edit-k1'));
+      expect(screen.getByText('Edit Recipient')).toBeTruthy();
+      expect(screen.getByTestId('recipient-sheet-name').props.value).toBe('Sam');
+      expect(screen.getByTestId('recipient-sheet-email').props.value).toBe('sam@example.com');
+      await fill({ name: 'Sam Lee', phone: '' });
+      await fireEvent.press(screen.getByTestId('recipient-sheet-submit'));
+      const row = within(screen.getByTestId('recipient-k1'));
+      expect(row.getByText('Sam Lee')).toBeTruthy();
+      // With the phone gone, the Messages channel falls back to Email.
+      expect(row.getByText('Email · s••••@example.com')).toBeTruthy();
+
+      (Contacts.presentContactPickerAsync as jest.Mock).mockResolvedValueOnce(KATE);
+      await fireEvent.press(screen.getByTestId('festival-add-contact'));
+      expect(screen.getByText('Add Recipient')).toBeTruthy();
+      expect(screen.queryByTestId('address-sheet')).toBeNull();
+      await fireEvent.press(screen.getByTestId('recipient-sheet-submit'));
+      expect(screen.getByText('Kate Bell')).toBeTruthy();
+
+      await fireEvent.press(screen.getByTestId('festival-manual'));
+      await fill({ name: 'Ravi', email: 'SAM@example.com' });
+      await fireEvent.press(screen.getByTestId('recipient-sheet-submit'));
+      expect(screen.getByTestId('recipient-sheet-error').props.children).toBe('Sam Lee already has this email.');
+    });
+
+    it('iOS keeps the inline Edit recipient fields and the delivery-address menus', async () => {
+      jest.replaceProperty(Platform, 'OS', 'ios');
+      load(saved());
+      mockParams = { ids: 'a' };
+      await render(<ManageMoment />);
+      await fireEvent.press(screen.getByTestId('festival-tab-Contacts'));
+      await fireEvent.press(screen.getByTestId('recipient-edit-k1'));
+      expect(screen.getByTestId('recipient-name-k1').props.value).toBe('Sam');
+      (Contacts.presentContactPickerAsync as jest.Mock).mockResolvedValueOnce(KATE);
+      await fireEvent.press(screen.getByTestId('festival-add-contact'));
+      expect(screen.getByText('Choose delivery address')).toBeTruthy();
+      expect(screen.queryByTestId('recipient-sheet-name')).toBeNull();
+    });
+
+    it('shows no "email changed" warning when the contact still has the saved address, however it is written', async () => {
+      jest.replaceProperty(Platform, 'OS', 'android');
+      load(saved());
+      mockParams = { ids: 'a' };
+      (Contacts.getContactByIdAsync as jest.Mock).mockResolvedValue({ id: 'C9', phoneNumbers: [{ number: '+1 (555) 555-0100' }], emails: [{ email: ' Sam@Example.com ' }] });
+      await render(<ManageMoment />);
+      await fireEvent.press(screen.getByTestId('festival-tab-Contacts'));
+      // Any change, so Save checks the contact.
+      await fireEvent.press(screen.getByTestId('recipient-edit-k1'));
+      await fill({ name: 'Sam Lee' });
+      await fireEvent.press(screen.getByTestId('recipient-sheet-submit'));
+      await fireEvent.press(screen.getByTestId('festival-save'));
+      await waitFor(() => expect(mockPost).toHaveBeenCalledWith('festivalSave', expect.anything(), undefined));
+      expect(Contacts.getContactByIdAsync).toHaveBeenCalledWith('C9', expect.any(Array));
+      expect(screen.queryByText('A contact’s email changed. Review their delivery address.')).toBeNull();
+      expect(screen.queryByTestId('festival-error')).toBeNull();
+    });
+
+    it('still warns when the contact’s email really changed', async () => {
+      jest.replaceProperty(Platform, 'OS', 'android');
+      load(saved());
+      mockParams = { ids: 'a' };
+      (Contacts.getContactByIdAsync as jest.Mock).mockResolvedValue({ id: 'C9', phoneNumbers: [{ number: '+15555550100' }], emails: [{ email: 'sam@new-domain.com' }] });
+      await render(<ManageMoment />);
+      await fireEvent.press(screen.getByTestId('festival-tab-Contacts'));
+      await fireEvent.press(screen.getByTestId('recipient-edit-k1'));
+      await fill({ name: 'Sam Lee' });
+      await fireEvent.press(screen.getByTestId('recipient-sheet-submit'));
+      await fireEvent.press(screen.getByTestId('festival-save'));
+      await waitFor(() => expect(screen.getByTestId('festival-error').props.children).toBe('A contact’s email changed. Review their delivery address.'));
+      expect(mockPost).not.toHaveBeenCalledWith('festivalSave', expect.anything(), undefined);
+    });
+
+    it('treats an address typed over the contact’s as manually entered, so it is not reported as changed', async () => {
+      jest.replaceProperty(Platform, 'OS', 'android');
+      load(saved());
+      mockParams = { ids: 'a' };
+      (Contacts.getContactByIdAsync as jest.Mock).mockResolvedValue({ id: 'C9', phoneNumbers: [{ number: '+15555550100' }], emails: [{ email: 'sam@example.com' }] });
+      await render(<ManageMoment />);
+      await fireEvent.press(screen.getByTestId('festival-tab-Contacts'));
+      await fireEvent.press(screen.getByTestId('recipient-edit-k1'));
+      await fill({ email: 'sam@personal.com' });
+      await fireEvent.press(screen.getByTestId('recipient-sheet-submit'));
+      await fireEvent.press(screen.getByTestId('festival-save'));
+      await waitFor(() => expect(mockPost).toHaveBeenCalledWith('festivalSave', expect.anything(), undefined));
+      const input = mockPost.mock.calls.find(([operation]) => operation === 'festivalSave')![1];
+      expect(input.settings.contactIDs).toEqual({ k1: '' });
+      expect(screen.queryByTestId('festival-error')).toBeNull();
+    });
+  });
+
+  it('iOS Create Moment keeps the single recipient fields', async () => {
+    jest.replaceProperty(Platform, 'OS', 'ios');
+    load([]);
+    await render(<MomentEditor />);
+    expect(screen.getByTestId('moment-first-name')).toBeTruthy();
+    expect(screen.queryByTestId('moment-enter-recipient')).toBeNull();
+    expect(isDisabled('moment-save')).toBe(false);
   });
 });

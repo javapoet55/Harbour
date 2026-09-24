@@ -359,6 +359,87 @@ export function validEmail(value: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 }
 
+// ---------------------------------------------------------------------------------------------
+// Recipients added or edited in the recipient sheet (RecipientSheet.tsx): Create Moment's Recipients
+// list and Manage Moment's Add Contact / Edit recipient on Android.
+
+/** A recipient before it is saved: no moment yet, always selected. */
+export type RecipientDraft = Pick<ManagedRecipient, 'key' | 'name' | 'phone' | 'email' | 'contactIdentifier'>;
+
+export const RECIPIENT_NAME_REQUIRED = 'Enter a name.';
+export const RECIPIENT_ADDRESS_REQUIRED = 'Enter a phone number or an email.';
+export const RECIPIENT_PHONE_INVALID = 'Enter a valid phone number, 7 to 15 digits.';
+export const RECIPIENT_EMAIL_INVALID = 'Enter a valid email address.';
+export const RECIPIENTS_REQUIRED = 'Add at least one recipient.';
+
+/**
+ * One phone number however it is written: "+1 (555) 010-0200", "+15550100200" and "1 555 010 0200"
+ * are the same digits, so the same number.
+ */
+export function samePhone(a: string, b: string): boolean {
+  const digits = a.replace(/\D/g, '');
+  return digits !== '' && digits === b.replace(/\D/g, '');
+}
+
+/** One email however it is cased or padded. */
+export function sameEmail(a: string, b: string): boolean {
+  return a.trim() !== '' && a.trim().toLowerCase() === b.trim().toLowerCase();
+}
+
+/** The server's Messages rule (festival.ts): 7 to 15 digits, with an optional leading +. */
+export function validPhone(value: string): boolean {
+  const digits = value.replace(/\D/g, '').length;
+  return digits >= 7 && digits <= 15;
+}
+
+/** Messages when there is a phone, Email when there is only an email. */
+export function defaultChannel(recipient: Pick<ManagedRecipient, 'phone' | 'email'>): 'messages' | 'email' | 'share' {
+  return recipient.phone.trim() !== '' ? 'messages' : recipient.email.trim() !== '' ? 'email' : 'share';
+}
+
+/**
+ * The first reason the sheet cannot add or save this person, or null. `others` is everyone else in
+ * the list (the person being edited is left out): nobody may share a phone number or an email.
+ */
+export function recipientProblem(draft: Pick<RecipientDraft, 'name' | 'phone' | 'email'>, others: Pick<RecipientDraft, 'name' | 'phone' | 'email'>[]): string | null {
+  const phone = draft.phone.trim();
+  const email = draft.email.trim();
+  if (draft.name.trim() === '') return RECIPIENT_NAME_REQUIRED;
+  if (phone === '' && email === '') return RECIPIENT_ADDRESS_REQUIRED;
+  if (phone !== '' && !validPhone(phone)) return RECIPIENT_PHONE_INVALID;
+  if (email !== '' && !validEmail(email)) return RECIPIENT_EMAIL_INVALID;
+  for (const other of others) {
+    const who = other.name.trim() || 'Another recipient';
+    if (samePhone(phone, other.phone)) return `${who} already has this phone number.`;
+    if (sameEmail(email, other.email)) return `${who} already has this email.`;
+  }
+  return null;
+}
+
+/**
+ * Whether a recipient stays linked to the picked contact. It does only while its phone and email are
+ * still ones that contact has; once either is typed in by hand, it is a manually entered recipient, so
+ * a later address check never reports the person's own edit as "the contact's email changed".
+ */
+export function contactLinkFor(draft: Pick<RecipientDraft, 'phone' | 'email'>, contact: { id: string; phones: string[]; emails: string[] } | null): string {
+  if (!contact) return '';
+  const phoneKept = draft.phone.trim() === '' || contact.phones.some((phone) => samePhone(phone, draft.phone));
+  const emailKept = draft.email.trim() === '' || contact.emails.some((email) => sameEmail(email, draft.email));
+  return phoneKept && emailKept ? contact.id : '';
+}
+
+/** The same rule for an edit where only the saved addresses are known: an address that changed unlinks. */
+export function editedContactLink(before: Pick<RecipientDraft, 'phone' | 'email' | 'contactIdentifier'>, after: Pick<RecipientDraft, 'phone' | 'email'>): string {
+  const phoneKept = after.phone.trim() === '' || samePhone(before.phone, after.phone);
+  const emailKept = after.email.trim() === '' || sameEmail(before.email, after.email);
+  return phoneKept && emailKept ? before.contactIdentifier : '';
+}
+
+/** The first word of a person's name, for the default title ("Kate’s Birthday"). */
+export function firstNameOf(name: string): string {
+  return name.trim().split(/\s+/)[0] ?? '';
+}
+
 export function validateRecipients(values: ManagedRecipient[], settings: FestivalSettings): string | null {
   const selected = values.filter((value) => value.selected);
   if (selected.length === 0) return 'Select at least one recipient.';

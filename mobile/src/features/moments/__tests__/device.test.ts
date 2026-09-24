@@ -1,7 +1,9 @@
 import * as Calendar from 'expo-calendar';
 import * as Crypto from 'expo-crypto';
 
-import { calendarCandidates, calendarMomentInput, contactChoice, contactMomentInput, FESTIVAL_REGIONS, festivalMomentInput, festivalRecipient } from '../device';
+import * as Contacts from 'expo-contacts/legacy';
+
+import { calendarCandidates, calendarMomentInput, contactChoice, contactMomentInput, FESTIVAL_REGIONS, festivalMomentInput, festivalRecipient, validatePickedContacts } from '../device';
 import { uniqueKeys } from '../form';
 
 const digest = Crypto.digestStringAsync as jest.Mock;
@@ -93,5 +95,35 @@ describe('festival import', () => {
 
   it('opens a "<name> Wishes" festival with no date and no yearly repeat', () => {
     expect(festivalMomentInput('Diwali', 'Asia/Kolkata')).toMatchObject({ type: 'festival', title: 'Diwali Wishes', yearly: false, source: 'festivalCatalog', occurrenceDate: '' });
+  });
+});
+
+describe('validatePickedContacts', () => {
+  const lookup = Contacts.getContactByIdAsync as jest.Mock;
+  const permissions = Contacts.getPermissionsAsync as jest.Mock;
+  const kate = { selected: true, contactIdentifier: 'C1', phone: '+15550100200', email: 'kate@example.com' };
+  beforeEach(() => permissions.mockResolvedValue({ granted: true, canAskAgain: true }));
+  afterEach(() => lookup.mockReset().mockResolvedValue(undefined));
+
+  it('accepts the saved address however the contact writes it', async () => {
+    lookup.mockResolvedValue({ id: 'C1', phoneNumbers: [{ number: '1 (555) 010-0200' }], emails: [{ email: ' Kate@Example.COM ' }] });
+    await expect(validatePickedContacts([kate])).resolves.toBeUndefined();
+  });
+
+  it('warns only when an address really changed, or the contact is gone', async () => {
+    lookup.mockResolvedValue({ id: 'C1', phoneNumbers: [{ number: '+15550100200' }], emails: [{ email: 'kate@new.com' }] });
+    await expect(validatePickedContacts([kate])).rejects.toThrow('A contact’s email changed. Review their delivery address.');
+    lookup.mockResolvedValue({ id: 'C1', phoneNumbers: [{ number: '+15550109999' }], emails: [{ email: 'kate@example.com' }] });
+    await expect(validatePickedContacts([kate])).rejects.toThrow('A contact’s phone number changed. Review their delivery address.');
+    lookup.mockResolvedValue(undefined);
+    await expect(validatePickedContacts([kate])).rejects.toThrow('A selected contact was deleted. Re-select or enter the recipient manually.');
+  });
+
+  it('skips manually entered or unselected recipients, and anyone without full Contacts access', async () => {
+    lookup.mockResolvedValue({ id: 'C1', phoneNumbers: [], emails: [] });
+    await expect(validatePickedContacts([{ ...kate, contactIdentifier: '' }, { ...kate, selected: false }])).resolves.toBeUndefined();
+    permissions.mockResolvedValueOnce({ granted: false, canAskAgain: true });
+    await expect(validatePickedContacts([kate])).resolves.toBeUndefined();
+    expect(lookup).not.toHaveBeenCalled();
   });
 });

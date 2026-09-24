@@ -988,3 +988,63 @@ menu rows sharing one React key ("Encountered two children with the same key"), 
 1. Give a contact the same number twice (once with brackets and dashes) and the same email in two
    cases.
 2. Manage Moment → Contacts → Add Contact, pick them: the Phone and Email menus list each once.
+
+## 17. Moments: several recipients on create, one editable recipient sheet (2026-09-24)
+
+JavaScript only; no new build needed. Android only for the screens: iOS keeps the single recipient on
+Create Moment and the inline Edit recipient and address menus in Manage Moment. The address-check fix
+in `validatePickedContacts` is shared.
+
+### Create Moment (`MomentEditorView.tsx`, new moments only)
+
+- **Recipients** section replaces First name / Phone / Email: **Choose from Contacts** and **Enter
+  recipient manually** both open the recipient sheet. Each person is a row: name, then
+  `Mobile · ••• ••• 0300` and/or `Email · k••••@example.com`, with **Edit** and **Remove**.
+- With nobody added, the caption reads **Add at least one recipient.** and Save is disabled.
+- The first person's first name still sets the default title ("Kate’s Birthday").
+
+### Recipient sheet (`RecipientSheet.tsx`)
+
+Title **Add Recipient** / **Edit Recipient**, **Cancel** in the bar, fields **Name**, **Phone**,
+**Email**, button **Add** / **Save** (disabled until there is a name and a phone or an email). A picked
+contact pre-fills the fields; when it has several numbers or emails they appear as chips under the
+field (each once, as `contactChoice` dedupes them), and anything can be typed. Errors show under the
+fields:
+
+- `Enter a valid phone number, 7 to 15 digits.`
+- `Enter a valid email address.`
+- `<Name> already has this phone number.` / `<Name> already has this email.` (same digits, or the
+  same email ignoring case and spaces)
+
+Manage Moment → Contacts uses the same sheet for **Add Contact** (after the picker), **Enter recipient
+manually** and **Edit recipient** (now a link next to **Remove contact** instead of inline fields).
+
+### Save flow
+
+1. `save` creates the moment for the first person (name, phone, email).
+2. One `festivalSave` stores everyone: `ids: [moment]`, each recipient with its own name, phone
+   (digits, optional +) and email, all `selected`; `settings.channels` is `messages` when there is a
+   phone and `email` when there is only an email; `settings.contactIDs` holds the picked contact's id
+   (empty for a manual entry). The first person's key is the moment's id.
+3. The list is refreshed and Manage Moment opens; Contacts shows everyone selected. A failed
+   `festivalSave` keeps the created moment, and Save retries only step 2.
+4. A **Custom** moment has no Manage Moment: one moment is saved per person.
+
+### "A contact’s email changed" on a new moment
+
+The warning comes from `validatePickedContacts` (`device.ts`), which runs on Save and Schedule for every
+recipient with a stored contact id. On Android it always runs (the picker needs READ_CONTACTS); iOS
+normally has picker-only access and skips it. It compared the contact's email untrimmed with the saved
+address, which `persist` trims, and it also checked addresses the person had typed over the contact's
+in Edit recipient, which keep the contact link. Now both sides are compared the same way (`samePhone`:
+same digits; `sameEmail`: trimmed, case-insensitive), and a recipient whose phone or email is no longer
+one the contact has is unlinked (`contactLinkFor`, `editedContactLink`), so only a real change to the
+contact warns.
+
+### Check it on a phone
+
+1. Create Moment → Choose from Contacts → pick someone with two numbers: tap the second chip, Add.
+   Enter recipient manually: a name and an email, Add. Both rows show; Save.
+2. Manage Moment → Contacts: both are selected, no red warning. Change a name and Save Changes: still
+   no warning.
+3. Edit a row and type a phone already used by the other person: "<Name> already has this phone number."
