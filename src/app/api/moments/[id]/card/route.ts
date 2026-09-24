@@ -2,11 +2,18 @@ import { healthRoute } from '@/server/health/telemetry';
 import { NextResponse } from 'next/server';
 import { requireUser } from '@/server/auth';
 import { jsonError } from '@/lib/http';
+import { log } from '@/lib/logger';
 import { MomentError } from '@/server/moments/domain';
 import { CARD_MAX_BYTES, deleteCardImage, readCardImage, saveCardImage } from '@/server/moments/card-image';
 
 type Context = { params: Promise<{ id: string }> };
-function failure(e: unknown) { return e instanceof MomentError ? NextResponse.json({ error: e.message }, { status: e.status }) : jsonError(e); }
+function failure(e: unknown) {
+  if (e instanceof MomentError) return NextResponse.json({ error: e.message }, { status: e.status });
+  // The Prisma error code only (e.g. P1008): never the message, which can quote row data.
+  const code = e && typeof e === 'object' && 'code' in e ? String(e.code) : '';
+  if (/^P\d{4}$/.test(code)) log('error', 'card.database_error', { code });
+  return jsonError(e);
+}
 const tooLarge = () => new MomentError('The card image is too large. Save it at a smaller size (1.5 MB at most).', 413);
 
 /**

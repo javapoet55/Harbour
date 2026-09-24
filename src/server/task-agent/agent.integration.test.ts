@@ -47,9 +47,11 @@ describe('durable task agent',()=>{
 it('claims a run once and resumes after an expired worker lease',async()=>{
  const {user,task}=await setup();const r=await ready(user.id,task.id);
  let release!:()=>void;const gate=new Promise<void>(resolve=>release=resolve);let first=true;
- const search=vi.fn(async()=>{if(first){first=false;await gate;}return [business(1)];});
+ // Wait until the first worker holds the lease and is inside search, however slow the DB is.
+ let entered!:()=>void;const searching=new Promise<void>(resolve=>entered=resolve);
+ const search=vi.fn(async()=>{if(first){first=false;entered();await gate;}return [business(1)];});
  const worker=processRun(r.id,search);
- for(let n=0;n<50&&!search.mock.calls.length;n++)await new Promise(resolve=>setTimeout(resolve,5));
+ await searching;
  await processRun(r.id,search);expect(search).toHaveBeenCalledTimes(1);release();await worker;
  expect((await ownedRun(user.id,task.id)).agentRun?.status).toBe('READY_FOR_REVIEW');
  const second=await createTask({userId:user.id,title:'Find plumber today'});const queued=await ready(user.id,second.id);
