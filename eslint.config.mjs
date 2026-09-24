@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "build/**",
     "next-env.d.ts",
     "src/generated/**",
+    // The admin frontend is a separate app with its own ESLint config.
+    "admin/**",
   ]),
 ]);
 
