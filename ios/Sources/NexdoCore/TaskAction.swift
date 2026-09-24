@@ -63,7 +63,28 @@ public struct TaskAction: Codable, Equatable, Identifiable, Sendable {
     }
 }
 
+public extension TaskAction {
+    /// Opened before its reminder time (from a card or Today) and left without a choice. Nobody is choosing yet, so it
+    /// goes back to `scheduled` and its reminder fires as planned. Once the time has arrived, `awaitingApproval` is the
+    /// real state (the person is being asked now) and it stays.
+    func isWaitingBeforeItsTime(now: Date) -> Bool {
+        status == .awaitingApproval && (notificationDate.map { $0 > now } ?? false)
+    }
+    /// Returns an action waiting before its time to `scheduled`. True when it changed.
+    @discardableResult mutating func releaseIfWaitingBeforeItsTime(now: Date) -> Bool {
+        isWaitingBeforeItsTime(now: now) && transition(to: .scheduled, now: now)
+    }
+}
+
 public enum TaskActionReconciler {
+    /// Actions stuck waiting before their time go back to `scheduled`, except those whose Action screen is open.
+    public static func release(_ actions: [TaskAction], except open: Set<String>, now: Date) -> [TaskAction] {
+        actions.map { action in
+            var value = action
+            if !open.contains(action.id) { value.releaseIfWaitingBeforeItsTime(now: now) }
+            return value
+        }
+    }
     /// The saved task date wins over wording in an old title after rescheduling.
     public static func reconcile(previous: [TaskAction], tasks: [NexdoTask], detector: any TaskActionDetector,
                                  now: Date, timeZone: TimeZone) -> [TaskAction] {
