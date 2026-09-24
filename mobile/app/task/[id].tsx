@@ -1,3 +1,4 @@
+import { useQueryClient } from '@tanstack/react-query';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useMemo, useState } from 'react';
@@ -6,6 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { KeyboardAvoidingView, KeyboardAwareScrollView, NexdoLogoMark, TaskSymbol, Text } from '../../src/components';
 import { useCoordinator } from '../../src/actions/coordinator';
+import type { TasksResponse } from '../../src/api/types';
 import { ClarifyTaskActionCard } from '../../src/components/ClarifyTaskActionCard';
 import { TaskActionCard } from '../../src/components/TaskActionCard';
 import { MonthCalendar } from '../../src/components/MonthCalendar';
@@ -23,6 +25,7 @@ import {
 import { detailsBody, draftFrom, draftsEqual, isDraftValid, scheduleBody, type TaskDraft } from '../../src/lib/taskDraft';
 import { lifeReminderLabel } from '../../src/lib/taskLabels';
 import { dayKey, isDone, startOfDay } from '../../src/lib/taskQuery';
+import { queryKeys } from '../../src/query/keys';
 import {
   useCompleteTask,
   useSaveClarifiedStep,
@@ -57,6 +60,7 @@ export default function TaskDetail() {
   const android = isAndroid();
   const { id } = useLocalSearchParams<{ id: string }>();
   const profile = useSession((state) => state.profile);
+  const queryClient = useQueryClient();
   const task = useTask(id);
   const contactAction = useCoordinator((state) => state.actions.find((item) => item.taskId === id));
 
@@ -212,13 +216,20 @@ export default function TaskDetail() {
                  * The "Contact someone" follow-through (TaskActionView.swift:90-93): once the title
                  * is saved, the coordinator reconciles it into an action and OPENS that action.
                  * This closed the Phase 3 follow-through marker.
+                 *
+                 * `synchronize` rebuilds the WHOLE action set from the tasks it is given, so it gets
+                 * the full cached list (`useUpdateTask` has already merged `saved` into it), never
+                 * `[saved]` alone, which would drop every other task's action and reminder. Swift
+                 * passes the full `model.tasks` too (TaskActionView.swift:92).
                  */
                 onSuccess: (saved) => {
                   const owner = profile?.id;
                   if (!owner || !saved) return;
+                  const cached = queryClient.getQueryData<TasksResponse>(queryKeys.tasks.all())?.tasks ?? [];
+                  const tasks = [...cached.filter((item) => item.id !== saved.id), saved];
                   void useCoordinator
                     .getState()
-                    .synchronize([saved], owner, zone)
+                    .synchronize(tasks, owner, zone)
                     .then(() => {
                       const created = useCoordinator.getState().actionForTask(saved.id);
                       if (created) useCoordinator.getState().open(created.id);

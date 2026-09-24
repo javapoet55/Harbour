@@ -1,7 +1,10 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { randomUUID } from 'expo-crypto';
+import * as Notifications from 'expo-notifications';
 import { Alert, Platform, StyleSheet } from 'react-native';
 
+import { scheduledWork, useCoordinator } from '../actions/coordinator';
 import type { NexdoProject, NexdoTask } from '../api/types';
 import { resetRevisions } from '../query/taskRevision';
 import { useFocus } from '../store/focus';
@@ -14,6 +17,9 @@ jest.mock('expo-router', () => ({
   router: { push: jest.fn(), replace: jest.fn(), back: (...args: unknown[]) => mockBack(...args) },
   useLocalSearchParams: () => mockParams(),
 }));
+
+const mockedNotifications = Notifications as unknown as Record<string, jest.Mock>;
+const fileStore = (jest.requireMock('expo-file-system') as { __store: Map<string, string> }).__store;
 
 const mockTasks = jest.fn();
 const mockProjects = jest.fn();
@@ -73,7 +79,10 @@ beforeEach(() => {
   jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
 });
 
-afterEach(() => jest.useRealTimers());
+afterEach(() => {
+  jest.useRealTimers();
+  jest.mocked(randomUUID).mockImplementation(() => 'test-nonce');
+});
 
 /**
  * Every section of `TaskDetailsView`'s body (ios/App/TaskDetailsView.swift:28-90), top to bottom.
@@ -252,6 +261,56 @@ describe('Save next step', () => {
     await fireEvent.press(screen.getByTestId('clarify-call'));
 
     await waitFor(() => expect(mockUpdateTask).toHaveBeenCalledWith('t1', { title: 'Call Damien' }));
+  });
+
+  /**
+   * `synchronize` rebuilds the whole action set from the tasks it is given. The follow-through used
+   * to pass `[saved]` alone, which dropped every OTHER task's action and cancelled its reminder until
+   * the next full sync.
+   */
+  it('keeps every other task’s action and reminder after the "Contact someone" flow', async () => {
+    const later = '2026-09-16T08:30:00.000Z';
+    const vague = task({ startAt: later });
+    const other = task({ id: 't2', title: 'Call Priya', startAt: '2026-09-16T10:30:00.000Z' });
+    // The global mock answers every `randomUUID` with one nonce; two actions need two ids.
+    let next = 0;
+    jest.mocked(randomUUID).mockImplementation(() => `action-${(next += 1)}`);
+    fileStore.clear();
+    useCoordinator.getState().reset();
+    await useCoordinator.getState().synchronize([vague, other], 'u1', ZONE);
+    await scheduledWork();
+    const kept = useCoordinator.getState().actionForTask('t2');
+    expect(kept).toBeDefined();
+
+    mockTasks.mockResolvedValue({ tasks: [vague, other], timeZone: ZONE });
+    mockUpdateTask.mockResolvedValue({ task: task({ title: 'Call Damien', startAt: later }) });
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 }, mutations: { retry: false, gcTime: 0 } } });
+    await render(
+      <QueryClientProvider client={queryClient}>
+        <TaskDetail />
+      </QueryClientProvider>,
+    );
+    await waitFor(() => expect(screen.getByTestId('clarify-mode-contact')).toBeTruthy());
+    mockedNotifications.scheduleNotificationAsync.mockClear();
+
+    await fireEvent.press(screen.getByTestId('clarify-mode-contact'));
+    await fireEvent.changeText(screen.getByLabelText('Person or business to contact'), 'Damien');
+    await fireEvent.press(screen.getByTestId('clarify-call'));
+
+    // The follow-through opens the new action for t1 once it is reconciled.
+    await waitFor(() => expect(useCoordinator.getState().route).not.toBeNull());
+    await scheduledWork();
+
+    const { actions, route } = useCoordinator.getState();
+    const created = actions.find((action) => action.taskId === 't1');
+    expect(created).toBeDefined();
+    expect(route?.id).toBe(created?.id);
+    // t2's action survives untouched, and its reminder is still in the scheduled set.
+    expect(actions.find((action) => action.taskId === 't2')).toEqual(kept);
+    const scheduled = mockedNotifications.scheduleNotificationAsync.mock.calls.map(
+      ([request]) => (request as { identifier: string }).identifier,
+    );
+    expect(scheduled).toContain(`nexdo.action.${kept?.id}`);
   });
 });
 
