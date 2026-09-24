@@ -1,8 +1,13 @@
 import { prisma } from './db';
 import { calendarProviderFor, isCalendarAuthFailure, isCalendarListAuthFailure } from '@/providers/calendar';
-import type { CalendarConnection } from '@/generated/prisma';
+import type { CalendarConnection, Prisma } from '@/generated/prisma';
 import type { CalendarPushResult } from '@/lib/calendar-push';
 import { log } from '@/lib/logger';
+
+// Calendar rows are written this many at a time, each batch in its own short transaction.
+export const SYNC_WRITE_BATCH = 100;
+// Headroom for a slow database; a batch normally takes well under a second.
+const SYNC_TRANSACTION_TIMEOUT_MS = 30_000;
 
 export async function syncConnection(userId: string, connectionId: string) {
   const connection = await prisma.calendarConnection.findFirst({ where: { id: connectionId, userId } });
@@ -41,49 +46,67 @@ export async function syncConnection(userId: string, connectionId: string) {
     throw new Error('INVALID_CALENDAR_DATA');
   }
   const lastSyncedAt = new Date();
-  return prisma.$transaction(async (tx) => {
-    // Claim this snapshot before changing rows. A slower request cannot overwrite a newer sync.
-    const claimed = await tx.calendarConnection.updateMany({ where: { id: connection.id, userId, updatedAt: syncVersion.updatedAt }, data: {
-      lastSyncedAt, status: 'connected', syncToken: result.syncToken,
-      updatedAt: new Date(Math.max(+lastSyncedAt, +syncVersion.updatedAt + 1)),
-    } });
-    if (claimed.count !== 1) throw new Error('CALENDAR_SYNC_STALE');
-    const previous = await tx.calendarEvent.findMany({ where: { userId, connectionId: connection.id } });
-    const byKey = new Map(previous.map((event) => [event.syncKey, event]));
-    // Nexdo events written to this calendar come back in the listing; the Nexdo row is the original.
-    const pushed = new Set((await tx.calendarEvent.findMany({ where: { userId, pushedConnectionId: connection.id, pushedExternalId: { not: null } }, select: { pushedExternalId: true } })).map((event) => event.pushedExternalId));
-    let created = 0; let updated = 0; let deleted = 0;
-    const seen = new Set<string>();
-    for (const event of result.events) {
+  // Claim this snapshot before changing rows. A slower request cannot overwrite a newer sync. The claim
+  // moves only updatedAt: the sync token and lastSyncedAt are saved after every row is written, so a
+  // sync that fails part way is listed again from the same token next time.
+  const version = new Date(Math.max(+lastSyncedAt, +syncVersion.updatedAt + 1));
+  const claimed = await prisma.calendarConnection.updateMany({ where: { id: connection.id, userId, updatedAt: syncVersion.updatedAt }, data: { updatedAt: version } });
+  if (claimed.count !== 1) throw new Error('CALENDAR_SYNC_STALE');
+  const previous = await prisma.calendarEvent.findMany({ where: { userId, connectionId: connection.id } });
+  const byKey = new Map(previous.map((event) => [event.syncKey, event]));
+  // Nexdo events written to this calendar come back in the listing; the Nexdo row is the original.
+  const pushed = new Set((await prisma.calendarEvent.findMany({ where: { userId, pushedConnectionId: connection.id, pushedExternalId: { not: null } }, select: { pushedExternalId: true } })).map((event) => event.pushedExternalId));
+  const writes: Array<(tx: Prisma.TransactionClient) => Promise<unknown>> = [];
+  let created = 0; let updated = 0; let deleted = 0;
+  const seen = new Set<string>();
+  for (const event of result.events) {
     const syncKey = `${connection.id}:${event.externalId}`;
     const existing = byKey.get(syncKey);
     if (pushed.has(event.externalId!)) {
       // A sync that ran between the provider write and storing its id imported a copy; retire it.
-      if (existing && !existing.deletedAt) await tx.calendarEvent.update({ where: { id: existing.id }, data: { deletedAt: lastSyncedAt } });
+      if (existing && !existing.deletedAt) writes.push((tx) => tx.calendarEvent.update({ where: { id: existing.id }, data: { deletedAt: lastSyncedAt } }));
       continue;
     }
     seen.add(syncKey);
     if (event.deleted) {
       if (existing && !existing.deletedAt) {
-        await tx.calendarEvent.update({ where: { id: existing.id }, data: { deletedAt: lastSyncedAt } });
+        writes.push((tx) => tx.calendarEvent.update({ where: { id: existing.id }, data: { deletedAt: lastSyncedAt } }));
         deleted += 1;
       }
       continue;
     }
-    await tx.calendarEvent.upsert({
+    writes.push((tx) => tx.calendarEvent.upsert({
       where: { syncKey },
       update: { title: event.title, notes: event.notes ?? '', startAt: event.startAt, endAt: event.endAt, allDay: event.allDay ?? false, location: event.location ?? '', deletedAt: null },
       create: { userId, connectionId: connection.id, title: event.title, notes: event.notes ?? '', startAt: event.startAt, endAt: event.endAt, allDay: event.allDay ?? false, location: event.location ?? '', source: connection.provider, externalId: event.externalId, syncKey, timeZone: 'UTC' },
-    });
+    }));
     if (existing) updated += 1; else created += 1;
+  }
+  // A replacement snapshot has no tombstones for events no longer in the result.
+  if (fullSnapshot) {
+    const missing = previous.filter((event) => !event.deletedAt && event.endAt > from && event.startAt < to && !seen.has(event.syncKey ?? ''));
+    for (let i = 0; i < missing.length; i += SYNC_WRITE_BATCH) {
+      const ids = missing.slice(i, i + SYNC_WRITE_BATCH).map((event) => event.id);
+      writes.push(async (tx) => { deleted += (await tx.calendarEvent.updateMany({ where: { userId, id: { in: ids } }, data: { deletedAt: lastSyncedAt } })).count; });
     }
-    // A replacement snapshot has no tombstones for events no longer in the result.
-    if (fullSnapshot) {
-      const missing = previous.filter((event) => !event.deletedAt && event.endAt > from && event.startAt < to && !seen.has(event.syncKey ?? ''));
-      if (missing.length) deleted += (await tx.calendarEvent.updateMany({ where: { userId, id: { in: missing.map((event) => event.id) } }, data: { deletedAt: lastSyncedAt } })).count;
-    }
-    return { created, updated, deleted, lastSyncedAt };
-  });
+  }
+  // One transaction per batch keeps each well inside the transaction timeout however large the calendar.
+  // Each batch first re-checks the claim under the connection's row lock, so once a newer sync claims
+  // the connection this one stops writing.
+  for (let i = 0; i < writes.length; i += SYNC_WRITE_BATCH) {
+    const batch = writes.slice(i, i + SYNC_WRITE_BATCH);
+    await prisma.$transaction(async (tx) => {
+      const owned = await tx.calendarConnection.updateMany({ where: { id: connection.id, userId, updatedAt: version }, data: { updatedAt: version } });
+      if (owned.count !== 1) throw new Error('CALENDAR_SYNC_STALE');
+      for (const write of batch) await write(tx);
+    }, { timeout: SYNC_TRANSACTION_TIMEOUT_MS });
+  }
+  const saved = await prisma.calendarConnection.updateMany({ where: { id: connection.id, userId, updatedAt: version }, data: {
+    lastSyncedAt, status: 'connected', syncToken: result.syncToken,
+    updatedAt: new Date(Math.max(Date.now(), +version + 1)),
+  } });
+  if (saved.count !== 1) throw new Error('CALENDAR_SYNC_STALE');
+  return { created, updated, deleted, lastSyncedAt };
 }
 
 async function writableConnection(userId: string) {
