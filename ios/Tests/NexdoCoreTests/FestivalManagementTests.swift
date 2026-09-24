@@ -77,3 +77,50 @@ import Testing
     #expect(FestivalValidation.uniquePhones([]).isEmpty && FestivalValidation.uniqueEmails([]).isEmpty)
     #expect(FestivalValidation.uniquePhones(["555 0101"]) == ["555 0101"])
 }
+
+/// Mirrors ManageFestivalModel.init: the live settings pick up the opening send time and notify choice
+/// (sendDate/notify didSet), then both live and saved record them, so a freshly opened moment is not dirty.
+private func openedDrafts(saved: FestivalSettings, sendDate: Date, notify: Bool) -> (live: FestivalSettings, saved: FestivalSettings) {
+    var live = saved, saved = saved
+    live.draftSendDate = FestivalSettings.draftDate(sendDate); live.draftNotify = notify
+    saved.recordOpenedDraft(sendDate: sendDate, notify: notify); live.recordOpenedDraft(sendDate: sendDate, notify: notify)
+    return (live, saved)
+}
+private func editState(_ settings: FestivalSettings) -> FestivalEditState {
+    FestivalEditState(title: "Asha’s birthday", day: "2030-06-01", zone: "America/Los_Angeles", yearly: true, active: true,
+                      recipients: [ManagedFestivalRecipient(key: "a", name: "Asha", email: "asha@example.com")], settings: settings)
+}
+
+@Test func openingAMomentWithoutSavedDraftsIsNotAnEdit() {
+    // Moments saved before draft fields existed, or never scheduled, have no draftSendDate/draftNotify.
+    let saved = FestivalSettings()
+    let opened = openedDrafts(saved: saved, sendDate: Date(timeIntervalSince1970: 1_900_000_000), notify: true)
+    #expect(opened.live == opened.saved)
+    #expect(editState(opened.live).change(from: editState(opened.saved)) == .none)
+}
+
+@Test func openingWithAnUpcomingPlanTimeIsNotAnEdit() {
+    // The saved draft says 8:00, but an upcoming delivery's time wins on open; that is still not an edit.
+    var saved = FestivalSettings()
+    saved.draftSendDate = "2030-06-01T15:00:00Z"; saved.draftNotify = false
+    let planTime = ISO8601DateFormatter().date(from: "2030-06-01T17:30:00Z")!
+    let opened = openedDrafts(saved: saved, sendDate: planTime, notify: false)
+    #expect(opened.live == opened.saved)
+    #expect(opened.saved.draftSendDate == "2030-06-01T17:30:00Z")
+}
+
+@Test func changingSendTimeOrNotifyAfterOpeningIsStillAnEdit() {
+    let opened = openedDrafts(saved: FestivalSettings(), sendDate: Date(timeIntervalSince1970: 1_900_000_000), notify: true)
+    var laterTime = opened.live
+    laterTime.draftSendDate = FestivalSettings.draftDate(Date(timeIntervalSince1970: 1_900_000_300))
+    #expect(laterTime != opened.saved)
+    // A send-time change alone keeps existing schedules (it is not a delivery change).
+    #expect(editState(laterTime).change(from: editState(opened.saved)) == .messageOnly)
+    var noNotify = opened.live
+    noNotify.draftNotify = false
+    #expect(noNotify != opened.saved)
+}
+
+@Test func draftDateIsISO8601() {
+    #expect(FestivalSettings.draftDate(Date(timeIntervalSince1970: 0)) == "1970-01-01T00:00:00Z")
+}
