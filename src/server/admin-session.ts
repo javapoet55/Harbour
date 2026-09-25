@@ -1,10 +1,6 @@
-import { cookies, headers } from 'next/headers';
+import { headers } from 'next/headers';
 import { createHash, timingSafeEqual } from 'node:crypto';
-import { adminUserForSession, revokeAdminSession } from './admin-otp';
-
-export const ADMIN_COOKIE = 'nexdo_admin_session';
-export const ADMIN_CHALLENGE = 'nexdo_admin_challenge';
-export const adminCookieOptions = { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'strict' as const, path: '/' };
+import { adminUserForSession } from './admin-otp';
 
 // Shared secrets identifying the separate admin frontend. Comma-separated so a secret can be rotated
 // without downtime. Short values are ignored so a placeholder can never enable bearer access.
@@ -30,27 +26,9 @@ async function requestHeaders() {
   try { return await headers(); } catch { return null; } // Outside a request scope there is no bearer to read.
 }
 
-/** A bearer counts only when the admin frontend's client secret accompanies it; otherwise the cookie applies. */
-export async function readAdminAuth() {
+/** The admin behind this request. A bearer counts only when the admin frontend's client secret accompanies it. */
+export async function readAdminSession() {
   const incoming = await requestHeaders();
   const bearer = incoming && adminClientAuthorized(incoming) ? adminBearerToken(incoming) : null;
-  if (bearer) {
-    const user = await adminUserForSession(bearer);
-    if (user) return { user, viaBearer: true };
-  }
-  const token = (await cookies()).get(ADMIN_COOKIE)?.value;
-  const user = token ? await adminUserForSession(token) : null;
-  return user ? { user, viaBearer: false } : null;
-}
-
-export async function readAdminSession() {
-  return (await readAdminAuth())?.user ?? null;
-}
-
-export async function clearAdminSession() {
-  const jar = await cookies();
-  const token = jar.get(ADMIN_COOKIE)?.value;
-  if (token) await revokeAdminSession(token);
-  jar.delete(ADMIN_COOKIE);
-  jar.delete(ADMIN_CHALLENGE);
+  return bearer ? adminUserForSession(bearer) : null;
 }

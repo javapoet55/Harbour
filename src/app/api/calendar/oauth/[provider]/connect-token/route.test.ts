@@ -6,7 +6,7 @@ vi.mock('@/server/oauth-state', () => ({ createConnectToken: mocks.createConnect
 
 import { POST } from './route';
 
-const origin = 'https://harbour-production-f8a0.up.railway.app';
+const origin = 'https://app.nexdoapp.com';
 
 function issue(provider = 'google') {
   return POST(new Request(`${origin}/api/calendar/oauth/${provider}/connect-token`, { method: 'POST' }), {

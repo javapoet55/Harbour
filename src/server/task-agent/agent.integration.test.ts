@@ -24,7 +24,7 @@ describe('durable task agent',()=>{
   const {user,task}=await setup();const r=await ready(user.id,task.id);const search=vi.fn(async()=>Array.from({length:7},(_,i)=>business(i)));
   await processRun(r.id,search);await processRun(r.id,search);
   const saved=await ownedRun(user.id,task.id);const result=runView(saved.agentRun!);
-  expect(search).toHaveBeenCalledTimes(2);expect(result.status).toBe('READY_FOR_REVIEW');expect(result.candidates).toHaveLength(5);expect(result.candidates[0].emergencyAdvertised).toBe(true);expect(result.candidates[0].draft).toContain('pet-safe');expect(result.candidates[0].reason).toContain('need confirmation');expect(saved.status).toBe('PLANNED');
+  expect(search).toHaveBeenCalledTimes(2);expect(result.status).toBe('READY_FOR_REVIEW');expect(result.candidates).toHaveLength(5);expect(result.candidates[0].emergencyAdvertised).toBe(true);expect(result.candidates[0].draft).toContain('Hi, I’m looking for a plumber in San Jose.');expect(result.candidates[0].reason).toContain('need confirmation');expect(saved.status).toBe('PLANNED');
  });
  it('does not publish a late search after cancel and refuses another user',async()=>{
   const {user,task}=await setup();const r=await ready(user.id,task.id);

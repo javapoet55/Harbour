@@ -2,7 +2,7 @@ import bcrypt from 'bcryptjs';
 import { randomBytes } from 'node:crypto';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { prisma } from '@/server/db';
-import { signInAdminPassword } from '@/server/admin-otp';
+import { adminTokenHash } from '@/server/admin-otp';
 import { getAdminSnapshot } from '@/server/admin-analytics';
 import { GET as snapshotGET } from './snapshot/route';
 import { GET as voiceTokensGET } from './voice-tokens/route';
@@ -38,7 +38,9 @@ beforeAll(async () => {
   ids.push(admin.id); adminId = admin.id;
   process.env.NEXDO_ADMIN_EMAILS = email;
   process.env.ADMIN_API_SECRETS = secret;
-  token = await signInAdminPassword(email, 'valid-test-password');
+  token = randomBytes(32).toString('hex');
+  // A live session, stored the way a verified sign-in code stores it.
+  await prisma.adminLoginToken.create({ data: { id: randomBytes(32).toString('hex'), userId: admin.id, codeHash: 'test-session', expiresAt: new Date(), usedAt: new Date(), sessionHash: adminTokenHash(token), sessionExpiresAt: new Date(Date.now() + 60 * 60_000) } });
 });
 beforeEach(() => { vi.mocked(getAdminSnapshot).mockClear(); });
 afterAll(async () => {

@@ -12,7 +12,7 @@ vi.mock('@/providers/calendar', () => ({ oauthAuthorizationUrl: mocks.oauthAutho
 
 import { GET } from './route';
 
-const origin = 'https://harbour-production-f8a0.up.railway.app';
+const origin = 'https://app.nexdoapp.com';
 
 function start(query = '', provider = 'google') {
   return GET(new Request(`${origin}/api/calendar/oauth/${provider}/start${query}`), {
