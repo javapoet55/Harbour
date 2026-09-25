@@ -109,7 +109,7 @@ Notes:
 ## 4. Production and deployment
 
 - **Host:** Railway, deploying the `user-auth-flow` branch.
-- **Public URL:** `https://harbour-production-f8a0.up.railway.app`
+- **Public URL:** `https://app.nexdoapp.com` (custom domain; the Railway hostname `https://harbour-production-f8a0.up.railway.app` still serves the same deployment)
 - **Build:** `npm run build`
 - **Pre-deploy:** `npm run db:migrate:deploy` applies pending migrations. The first time it finds a database created without migration history, it records the `20260914000000_init` baseline as already applied. A failed migration stops the deploy and keeps the previous version running.
 - **Start:** `npm run start:railway`

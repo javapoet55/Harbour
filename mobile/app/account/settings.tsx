@@ -1,0 +1,808 @@
+import { useQueryClient } from '@tanstack/react-query';
+import * as ImagePicker from 'expo-image-picker';
+import { LinearGradient } from 'expo-linear-gradient';
+import { router } from 'expo-router';
+import { useEffect, useState } from 'react';
+import { ActivityIndicator, Alert, Linking, Platform, Pressable, StyleSheet, Switch, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+
+import type { CalendarConnection, NextActionPreference, Profile, ProfilePreferences } from '../../src/api';
+import { KeyboardAwareScrollView } from '../../src/components/keyboard';
+import { AccountAvatar, ProfileBackground } from '../../src/components/ProfileParts';
+import {
+  SettingsCaption,
+  SettingsCard,
+  SettingsDivider,
+  SettingsField,
+  SettingsHours,
+  SettingsLabeledValue,
+  SettingsPicker,
+  SettingsSegments,
+  SettingsSlider,
+  SettingsToggle,
+} from '../../src/components/SettingsControls';
+import { TaskSymbol } from '../../src/components/TaskSymbol';
+import { Text } from '../../src/components/Text';
+import { PHOTO_INVALID } from '../../src/lib/profilePhoto';
+import {
+  APPEARANCES,
+  CONFIRMATION_LEVELS,
+  deviceTimeZone,
+  LEGAL_LINKS,
+  SWITCHING_THRESHOLDS,
+  timeZoneLabel,
+  validateSettings,
+} from '../../src/lib/profileSettings';
+import {
+  connectButtonTitle,
+  connectionDetail,
+  DISCONNECT_MESSAGE,
+  disconnectTitle,
+  displayName,
+  isHealthy,
+  lastSyncedDescription,
+  needsReconnect,
+  READ_ONLY_CAPTION,
+} from '../../src/lib/calendarConnections';
+import { useOAuthCallback } from '../../src/lib/oauthCallbacks';
+import { closePresentedScreens, replaceWithSignIn } from '../../src/lib/sessionNavigation';
+import { useBlockDismiss } from '../../src/lib/useBlockDismiss';
+import { useMinuteTick } from '../../src/lib/useMinuteTick';
+import { encodeProfilePhoto } from '../../src/photo/encodePhoto';
+import { completeGoogleConnect, type GoogleConnectResult, useCalendarConnections, useConnectGoogleCalendar, useDisconnectCalendar, useSetCalendarWrites } from '../../src/query/useCalendar';
+import { useMe } from '../../src/query/useMe';
+import { useDeleteAccount, useSyncNow, useUpdateProfile, useUploadPhoto } from '../../src/query/useProfile';
+import { useAppearance } from '../../src/store/appearance';
+import { useConsent } from '../../src/store/consent';
+import { brand, ElevatedSurface, useTheme } from '../../src/theme';
+
+/**
+ * `ProfileSettingsView` (ios/App/ProfileView.swift:126), **body `:146-270`**, read top to bottom.
+ *
+ * Children followed: `ProfileAvatar` (`:39`) and `ProfileBackground` (`:116`) in
+ * `src/components/ProfileParts.tsx`; the private `card(_:content:)` (`:274`), `field(_:text:)`
+ * (`:277`), `hours(_:start:end:)` (`:293`) and the SwiftUI `Picker`/`Toggle`/`Slider` in
+ * `src/components/SettingsControls.tsx`; `CalendarOAuthCoordinator` (`:6-38`) and the connection
+ * list (`connectionList`, `:290-331`, Phase 11) in `src/query/useCalendar.ts` and
+ * `src/lib/calendarConnections.ts`; `ProfilePhotoEncoder` (ios/App/ProfilePhotoEncoder.swift) in
+ * `src/lib/profilePhoto.ts` and `src/photo/encodePhoto.ts`.
+ *
+ * NOT IN `body`, and so not built — the brief asked after each of these:
+ * - no email field. Only `name` is editable (`:194`).
+ * - no default duration and no default reminder minutes. Both exist in the server's preference
+ *   schema, but no control in `body` touches them and `ProfilePreferences`
+ *   (ios/Sources/NexdoCore/ProfileSettings.swift:3-17) does not even decode them.
+ * - no SMS toggle and no phone-number field, although `smsEnabled` and `phoneNumber` are decoded.
+ *   `settingsInput()` still normalises the stored phone number on every save (`:343-350`), which is
+ *   ported in `validateSettings`.
+ * - no app version, no legal links, no photo crop, and no working-hours sheet.
+ *
+ * SAVING IS NOT PER CONTROL. Every control edits local state; only "Save settings" and the back
+ * chevron PATCH, both through `settingsInput()`. Appearance and App Voice volume are the exceptions —
+ * they are `@AppStorage` (`:127-128`), device-local, and apply the moment they change.
+ */
+/**
+ * `ProfileSettingsView` is pushed inside the account `.sheet`, so it is elevated too, so everything below resolves the *elevated* system backgrounds.
+ *
+ * The provider has to sit above the body rather than inside it: `useTheme({ elevated: true })`
+ * only colours the screen's own styles, and a shared component further down — `ProfileCard`,
+ * `AccountAvatar`, the settings controls — has no way to know it is in a sheet. In dark mode
+ * that painted the card `#1C1C1E` on a `#1C1C1E` sheet, so it stopped reading as a card.
+ */
+export default function Settings() {
+  return (
+    <ElevatedSurface>
+      <SettingsBody />
+    </ElevatedSurface>
+  );
+}
+
+function SettingsBody() {
+  const me = useMe();
+  // `load()` (ProfileView.swift:297-309) seeds `name`, `preferences` and `next` from the profile
+  // BEFORE the editable screen appears. Remounting on the profile's id does the same without a
+  // seeding effect, which is the fix Phase 3 used for the project editor: an effect that writes state
+  // on its first run is both a cascading render and a window where the form is blank.
+  return <SettingsScreen key={me.data?.id ?? 'loading'} loading={me.isLoading} onRetry={() => void me.refetch()} profile={me.data ?? null} />;
+}
+
+function SettingsScreen({
+  profile,
+  loading,
+  onRetry,
+}: {
+  profile: Profile | null;
+  loading: boolean;
+  onRetry: () => void;
+}) {
+  // Pushed inside the account `.sheet`, so it takes the elevated palette too (style map section 3).
+  const theme = useTheme({ elevated: true });
+  const consent = useConsent();
+  const appearance = useAppearance();
+
+  const update = useUpdateProfile();
+  const uploadPhoto = useUploadPhoto();
+  const syncNow = useSyncNow();
+  const queryClient = useQueryClient();
+  const connect = useConnectGoogleCalendar();
+  const connections = useCalendarConnections();
+  const setWrites = useSetCalendarWrites();
+  const disconnect = useDisconnectCalendar();
+  const deleteAccount = useDeleteAccount({ beforeSessionEnds: closePresentedScreens });
+
+  // `@State private var name/preferences/next` (ProfileView.swift:132-134).
+  const [name, setName] = useState(() => profile?.name ?? '');
+  const [preferences, setPreferences] = useState<ProfilePreferences | null>(() => profile?.preference ?? null);
+  const [next, setNext] = useState<NextActionPreference>(() => profile?.nextAction ?? { enabled: false, switchingThreshold: 10 });
+  const [message, setMessage] = useState<string | null>(null);
+  const [failure, setFailure] = useState<string | null>(null);
+  const [photoMessage, setPhotoMessage] = useState<string | null>(null);
+
+  const saving =
+    update.isPending || uploadPhoto.isPending || syncNow.isPending || setWrites.isPending || disconnect.isPending || deleteAccount.isPending;
+  // `@State private var connecting` (ProfileView.swift:141-142) is kept apart from `saving` "so the
+  // OAuth sheet never leaves Save stuck on Saving…". Both block the screen (`:243`, `:256`).
+  const connecting = connect.isPending;
+  const blocked = saving || connecting;
+  // `.interactiveDismissDisabled(saving || connecting)` (`:256`): settings is pushed inside the
+  // Account sheet, so the sheet itself must not be dismissed either.
+  useBlockDismiss(blocked, { parent: true });
+  const savingPhoto = uploadPhoto.isPending;
+  const zone = deviceTimeZone();
+
+  // `.alert("Could not update profile", isPresented:)` (`:257-259`).
+  useEffect(() => {
+    if (failure === null) return;
+    Alert.alert('Could not update profile', failure, [{ text: 'OK', style: 'cancel', onPress: () => setFailure(null) }]);
+  }, [failure]);
+
+  const patch = (changes: Partial<ProfilePreferences>) =>
+    setPreferences((current) => (current ? { ...current, ...changes } : current));
+
+  /** `run(_:)` (ProfileView.swift:310-313): clear both banners, run, report a failure. */
+  const run = async (operation: () => Promise<string | null>) => {
+    if (saving) return;
+    setFailure(null);
+    setMessage(null);
+    try {
+      const result = await operation();
+      if (result !== null) setMessage(result);
+    } catch (cause) {
+      setFailure(cause instanceof Error ? cause.message : String(cause));
+    }
+  };
+
+  /** `settingsInput()` + `save()` (`:314-320`, `:339-356`). */
+  const buildInput = () => {
+    if (!preferences) return null;
+    const result = validateSettings({ name, preferences, nextAction: next, deviceTimeZone: zone });
+    if (!result.ok) {
+      setFailure(result.failure);
+      return null;
+    }
+    // Swift writes the normalised phone number back into its own state (`:349`).
+    setPreferences(result.input.preference);
+    return result.input;
+  };
+
+  const save = async () => {
+    const input = buildInput();
+    if (input === null) return;
+    await run(async () => {
+      await update.mutateAsync(input);
+      return 'Settings saved.';
+    });
+  };
+
+  /** `saveAndDismiss()` (`:322-337`): the back chevron saves first, and only then goes back. */
+  const saveAndDismiss = async () => {
+    const input = buildInput();
+    if (input === null) return;
+    setFailure(null);
+    try {
+      await update.mutateAsync(input);
+      router.back();
+    } catch (cause) {
+      setFailure(cause instanceof Error ? cause.message : String(cause));
+    }
+  };
+
+  /** `.onChange(of: selectedPhoto)` (`:261-271`) behind `PhotosPicker(matching: .images)` (`:181`). */
+  const changePhoto = async () => {
+    const picked = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 1 });
+    if (picked.canceled || !picked.assets[0]) return;
+    const asset = picked.assets[0];
+    setPhotoMessage(null);
+    await run(async () => {
+      const encoded = await encodeProfilePhoto(asset.uri, asset.width, asset.height).catch(() => {
+        throw new Error(PHOTO_INVALID);
+      });
+      await uploadPhoto.mutateAsync(encoded);
+      setPhotoMessage('Profile picture saved.');
+      return null;
+    });
+  };
+
+  /** `Button("Remove photo", role: .destructive)` (`:183`). */
+  const removePhoto = () =>
+    run(async () => {
+      await uploadPhoto.mutateAsync(null);
+      return 'Profile picture removed.';
+    });
+
+  /** `.confirmationDialog("Permanently delete this account?", …)` (`:267-269`). */
+  /**
+   * `deleteAccount()` (NexdoApp.swift:799-803). On success the session is gone and Swift's `RootView`
+   * shows `SignInView`. Here the hook closes the Account screens WHILE they exist, only if there is
+   * something to close, then ends the session; this then REPLACES the stack with Sign in. No
+   * navigation action reaches a stack the session gate has already removed (src/lib/sessionNavigation.ts). A failure shows the server's reason in Swift's
+   * `model.error` alert (RootView.swift:76-78) and navigates nowhere: the account still exists.
+   */
+  const removeAccount = async () => {
+    try {
+      await deleteAccount.mutateAsync();
+    } catch (cause) {
+      Alert.alert('Unable to complete request', cause instanceof Error ? cause.message : String(cause), [{ text: 'OK' }]);
+      return;
+    }
+    replaceWithSignIn();
+  };
+
+  const confirmDelete = () =>
+    Alert.alert(
+      'Permanently delete this account?',
+      'This removes your Nexdo data permanently and cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Delete account', style: 'destructive', onPress: () => void removeAccount() },
+      ],
+    );
+
+  const showConnectResult = (result: GoogleConnectResult) => {
+    // Closing Google's page without signing in says nothing (commit 27798c5).
+    if (result.kind === 'connected') setMessage(result.message);
+    else if (result.kind === 'failed') setFailure(result.message);
+  };
+
+  /**
+   * `connect(reconnecting:)` (ProfileView.swift, commit 27798c5). Not through `run`: it has its own
+   * `connecting` flag. With a connection, the same Google sign-in renews that row's account.
+   */
+  const connectCalendar = async (reconnecting: CalendarConnection | null = null) => {
+    if (saving || connecting) return;
+    setFailure(null);
+    setMessage(null);
+    try {
+      showConnectResult(await connect.mutateAsync(reconnecting));
+    } catch (cause) {
+      setFailure(cause instanceof Error ? cause.message : String(cause));
+    }
+  };
+
+  // A calendar callback that arrived as a deep link after Android dropped the session: the same
+  // completion `connectCalendar` runs, with the same messages (ProfileView.swift:16-24, 339-346).
+  useOAuthCallback('calendar', (url) => {
+    setFailure(null);
+    setMessage(null);
+    void completeGoogleConnect(queryClient, url).then(showConnectResult);
+  });
+
+  /** The Disconnect `confirmationDialog` (ProfileView.swift:273-284). */
+  const confirmDisconnect = (connection: CalendarConnection) =>
+    Alert.alert(disconnectTitle(connection), DISCONNECT_MESSAGE, [
+      { text: 'Disconnect', style: 'destructive', onPress: () => void run(() => disconnect.mutateAsync(connection.id)) },
+      { text: 'Keep it', style: 'cancel' },
+    ]);
+
+  const openWeb = (path: string) => void Linking.openURL('https://app.nexdoapp.com' + path);
+
+  return (
+    <SafeAreaView edges={['top', 'left', 'right', 'bottom']} style={styles.fill}>
+      <ProfileBackground />
+
+      {/* `.navigationTitle("Settings").navigationBarTitleDisplayMode(.large)` with a leading chevron
+          that SAVES first (`:248-256`), and `.navigationBarBackButtonHidden(true)`. */}
+      <View style={styles.navBar}>
+        <Pressable
+          accessibilityLabel="Save settings and go back"
+          accessibilityRole="button"
+          accessibilityState={{ disabled: loading || blocked }}
+          disabled={loading || blocked}
+          hitSlop={8}
+          onPress={() => void saveAndDismiss()}
+          style={{ opacity: loading || blocked ? 0.25 : 1 }}
+          testID="settings-back"
+        >
+          {/* `Image(systemName: "chevron.backward")` with no `.font` is `.body` (ProfileView.swift:251). */}
+          <TaskSymbol color={theme.colors.link} name="chevron.backward" size={17} />
+        </Pressable>
+      </View>
+
+      <KeyboardAwareScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+        {/* `.disabled(saving || connecting)` on the whole column (`:243`). */}
+        <View pointerEvents={blocked ? 'none' : 'auto'} style={styles.column} testID="settings-column">
+        <Text accessibilityRole="header" style={[styles.largeTitle, { color: theme.colors.ink }]}>
+          Settings
+        </Text>
+
+        {/* 1. Appearance (ProfileView.swift:148-157). */}
+        <SettingsCard testID="settings-appearance" title="Appearance">
+          <SettingsSegments
+            label="Appearance"
+            onChange={(value) => void appearance.setAppearance(value)}
+            options={APPEARANCES}
+            testIDPrefix="appearance"
+            value={appearance.appearance}
+          />
+          <SettingsCaption>
+            Day uses a light view. Night uses a dark view. System follows your iPhone. Changes apply immediately and are
+            saved on this device.
+          </SettingsCaption>
+        </SettingsCard>
+
+        {/* 2. App Voice (`:158-175`). */}
+        <SettingsCard testID="settings-app-voice" title="App Voice">
+          <View style={styles.row}>
+            {/* A `Label` with no `.foregroundStyle` is `Color.primary` — `.label`, not nexdoInk. */}
+            <TaskSymbol color={theme.colors.label} name="speaker.wave.2" size={17} />
+            <Text style={[theme.typography.body, styles.grow, { color: theme.colors.label }]}>AI speaking volume</Text>
+            {/* `.monospacedDigit()` (ProfileView.swift:163) so the percentage does not jitter. */}
+            <Text style={[theme.typography.body, styles.tabular, { color: theme.colors.secondary }]} testID="voice-volume-value">
+              {`${Math.round(appearance.voiceVolume * 100)}%`}
+            </Text>
+          </View>
+          <SettingsSlider
+            label="AI speaking volume"
+            onChange={(value) => void appearance.setVoiceVolume(value)}
+            step={0.05}
+            testID="voice-volume"
+            value={appearance.voiceVolume}
+          />
+          <SettingsCaption>
+            Adjusts Nexdo’s spoken responses immediately. This setting is saved on this device.
+          </SettingsCaption>
+        </SettingsCard>
+
+        {/* 3. Profile picture (`:176-190`). */}
+        <SettingsCard testID="settings-photo" title="Profile picture">
+          <View style={styles.photoRow}>
+            <AccountAvatar name={name} photo={profile?.photo} size={76} />
+            <View style={styles.photoActions}>
+              <Pressable
+                accessibilityLabel="Change photo"
+                accessibilityRole="button"
+                accessibilityState={{ disabled: loading || saving }}
+                disabled={loading || saving}
+                onPress={() => void changePhoto()}
+                style={styles.photoButton}
+                testID="settings-change-photo"
+              >
+                <TaskSymbol color={theme.colors.link} name="photo" size={17} />
+                <Text style={[theme.typography.body, { color: theme.colors.link }]}>Change photo</Text>
+              </Pressable>
+              {profile?.photo ? (
+                <Pressable
+                  accessibilityLabel="Remove photo"
+                  accessibilityRole="button"
+                  onPress={() => void removePhoto()}
+                  style={styles.photoButton}
+                  testID="settings-remove-photo"
+                >
+                  <Text style={[theme.typography.body, { color: theme.colors.danger }]}>Remove photo</Text>
+                </Pressable>
+              ) : null}
+            </View>
+          </View>
+          <SettingsCaption>Choose a photo from your library. Your picture is saved to your Nexdo account.</SettingsCaption>
+          {savingPhoto ? (
+            // `ProgressView("Saving profile photo…")` puts its label under the spinner.
+            <View style={styles.centred}>
+              <ActivityIndicator color={theme.colors.link} size="small" />
+              <Text style={[theme.typography.body, { color: theme.colors.secondary }]}>Saving profile photo…</Text>
+            </View>
+          ) : null}
+          {photoMessage !== null ? (
+            <Text style={[styles.caption, { color: theme.colors.link }]} testID="settings-photo-message">
+              {photoMessage}
+            </Text>
+          ) : null}
+        </SettingsCard>
+
+        {/* 4. `if loading … else if preferences != nil … else` (`:191`, `:245`). */}
+        {loading ? (
+          <View style={styles.centred}>
+            <ActivityIndicator color={theme.colors.link} size="small" />
+            <Text style={[theme.typography.body, { color: theme.colors.secondary }]} testID="settings-loading">
+              Loading settings…
+            </Text>
+          </View>
+        ) : preferences !== null ? (
+          <>
+            {/* 5. Profile and time (`:193-199`). */}
+            <SettingsCard testID="settings-profile-time" title="Profile and time">
+              <SettingsField onChangeText={setName} testID="settings-name" title="Display name" value={name} />
+              <SettingsLabeledValue
+                label="Time zone (Automatic)"
+                testID="settings-time-zone"
+                value={timeZoneLabel(zone)}
+              />
+              <SettingsHours
+                end={preferences.workEnd}
+                onChangeEnd={(value) => patch({ workEnd: value })}
+                onChangeStart={(value) => patch({ workStart: value })}
+                start={preferences.workStart}
+                testIDPrefix="working-hours"
+                title="Working hours"
+              />
+              <SettingsHours
+                end={preferences.quietEnd}
+                onChangeEnd={(value) => patch({ quietEnd: value })}
+                onChangeStart={(value) => patch({ quietStart: value })}
+                start={preferences.quietStart}
+                testIDPrefix="quiet-hours"
+                title="Quiet hours"
+              />
+            </SettingsCard>
+
+            {/* 6. Voice and confirmation (`:200-208`). */}
+            <SettingsCard testID="settings-voice" title="Voice and confirmation">
+              <SettingsPicker
+                label="AI confirmation"
+                onChange={(value) => patch({ confirmationLevel: value })}
+                options={CONFIRMATION_LEVELS}
+                testID="settings-confirmation"
+                value={preferences.confirmationLevel as (typeof CONFIRMATION_LEVELS)[number]['value']}
+              />
+              <SettingsToggle
+                label="Enable spoken replies"
+                onValueChange={(value) => patch({ voiceEnabled: value })}
+                testID="settings-voice-enabled"
+                value={preferences.voiceEnabled}
+              />
+              <SettingsDivider />
+              <SettingsToggle
+                label="Personalized predictions"
+                onValueChange={(value) => patch({ personalizationEnabled: value })}
+                testID="settings-personalization"
+                value={preferences.personalizationEnabled}
+              />
+              <SettingsCaption>
+                Learn from task timing, completion, postponements, and reminder outcomes. Off by default.
+              </SettingsCaption>
+            </SettingsCard>
+
+            {/* 7. Notifications and focus (`:209-222`). */}
+            <SettingsCard testID="settings-notifications" title="Notifications and focus">
+              <SettingsToggle
+                label="Suggest my next action"
+                onValueChange={(value) => setNext((current) => ({ ...current, enabled: value }))}
+                testID="settings-next-action"
+                value={next.enabled}
+              />
+              <SettingsPicker
+                label="Protect my current focus"
+                onChange={(value) => setNext((current) => ({ ...current, switchingThreshold: value }))}
+                options={SWITCHING_THRESHOLDS}
+                testID="settings-switching-threshold"
+                value={next.switchingThreshold as (typeof SWITCHING_THRESHOLDS)[number]['value']}
+              />
+              <SettingsCaption>Suggestions respect your working hours, quiet hours, and active focus.</SettingsCaption>
+              <SettingsToggle
+                label="Push notifications"
+                onValueChange={(value) => patch({ pushEnabled: value })}
+                testID="settings-push"
+                value={preferences.pushEnabled}
+              />
+              <SettingsToggle
+                label="Email notifications"
+                onValueChange={(value) => patch({ emailEnabled: value })}
+                testID="settings-email"
+                value={preferences.emailEnabled}
+              />
+              <SettingsToggle
+                label="Morning summary"
+                onValueChange={(value) => patch({ morningSummary: value })}
+                testID="settings-morning"
+                value={preferences.morningSummary}
+              />
+              <SettingsToggle
+                label="Evening summary"
+                onValueChange={(value) => patch({ eveningSummary: value })}
+                testID="settings-evening"
+                value={preferences.eveningSummary}
+              />
+              <SettingsCaption>Manage delivery permissions and send tests in Notification Center.</SettingsCaption>
+              <Pressable
+                accessibilityLabel="Open Notification Center"
+                accessibilityRole="button"
+                onPress={() => openWeb('/notifications')}
+                testID="settings-notification-center"
+              >
+                <Text style={[theme.typography.body, { color: theme.colors.link }]}>Open Notification Center</Text>
+              </Pressable>
+            </SettingsCard>
+
+            {/* 8. Calendars and privacy (`:223-244`). */}
+            <SettingsCard testID="settings-calendars" title="Calendars and privacy">
+              <Text style={[styles.subheadline, { color: theme.colors.secondary }]}>
+                Connect Google Calendar securely. You may need to sign in with Google.
+              </Text>
+              <ConnectionList
+                connections={connections.data ?? []}
+                loaded={!connections.isPending}
+                onDisconnect={confirmDisconnect}
+                onReconnect={(connection) => void connectCalendar(connection)}
+                onWrites={(connection, enabled) => void run(() => setWrites.mutateAsync({ id: connection.id, enabled }))}
+                timeZone={zone}
+              />
+              <Pressable
+                accessibilityLabel={connectButtonTitle(connecting, connections.data?.length ?? 0)}
+                accessibilityRole="button"
+                accessibilityState={{ disabled: blocked }}
+                disabled={blocked}
+                onPress={() => void connectCalendar()}
+                style={styles.linkRow}
+                testID="settings-connect-google"
+              >
+                <TaskSymbol color={theme.colors.link} name="calendar.badge.plus" size={17} />
+                <Text style={[theme.typography.body, { color: theme.colors.link }]} testID="settings-connect-label">
+                  {connectButtonTitle(connecting, connections.data?.length ?? 0)}
+                </Text>
+              </Pressable>
+              <Pressable
+                accessibilityLabel="Synchronize now"
+                accessibilityRole="button"
+                accessibilityState={{ disabled: saving }}
+                disabled={saving}
+                onPress={() => void run(() => syncNow.mutateAsync())}
+                style={styles.linkRow}
+                testID="settings-sync-now"
+              >
+                <TaskSymbol color={theme.colors.link} name="arrow.triangle.2.circlepath" size={17} />
+                <Text style={[theme.typography.body, { color: theme.colors.link }]}>Synchronize now</Text>
+              </Pressable>
+              <SettingsDivider />
+              {/* `.font(.caption)` with no `.foregroundStyle` (ProfileView.swift:235). */}
+              <Text style={[styles.caption, { color: theme.colors.label }]} testID="settings-consent-state">
+                {consent.ai ? 'OpenAI sharing is allowed for this session.' : 'OpenAI sharing is off.'}
+              </Text>
+              {consent.ai ? (
+                <Pressable
+                  accessibilityLabel="Withdraw AI permission"
+                  accessibilityRole="button"
+                  onPress={() => consent.withdraw()}
+                  testID="settings-withdraw-consent"
+                >
+                  <Text style={[theme.typography.body, { color: theme.colors.link }]}>Withdraw AI permission</Text>
+                </Pressable>
+              ) : null}
+              <Pressable
+                accessibilityLabel={LEGAL_LINKS.privacyPolicyTitle}
+                accessibilityRole="link"
+                onPress={() => void Linking.openURL(LEGAL_LINKS.privacyPolicy)}
+                style={styles.linkRow}
+                testID="settings-privacy-policy"
+              >
+                <TaskSymbol color={theme.colors.link} name="hand.raised" size={17} />
+                <Text style={[theme.typography.body, { color: theme.colors.link }]}>{LEGAL_LINKS.privacyPolicyTitle}</Text>
+              </Pressable>
+              <Pressable
+                accessibilityLabel={LEGAL_LINKS.termsOfServiceTitle}
+                accessibilityRole="link"
+                onPress={() => void Linking.openURL(LEGAL_LINKS.termsOfService)}
+                style={styles.linkRow}
+                testID="settings-terms-of-service"
+              >
+                <TaskSymbol color={theme.colors.link} name="doc.text" size={17} />
+                <Text style={[theme.typography.body, { color: theme.colors.link }]}>{LEGAL_LINKS.termsOfServiceTitle}</Text>
+              </Pressable>
+              <Pressable
+                accessibilityLabel="Delete account"
+                accessibilityRole="button"
+                onPress={confirmDelete}
+                testID="settings-delete-account"
+              >
+                <Text style={[theme.typography.body, { color: theme.colors.danger }]}>Delete account</Text>
+              </Pressable>
+            </SettingsCard>
+
+            {/* 9. Save settings (`:239-241`): a capsule filled with `NexdoTheme.saveGradient`. */}
+            <Pressable
+              accessibilityLabel="Save settings"
+              accessibilityRole="button"
+              accessibilityState={{ disabled: saving }}
+              disabled={saving}
+              onPress={() => void save()}
+              testID="settings-save"
+            >
+              <LinearGradient
+                colors={[brand.nexdoBlue, brand.nexdoIndigo, brand.nexdoMagenta]}
+                end={{ x: 1, y: 0.5 }}
+                start={{ x: 0, y: 0.5 }}
+                style={[styles.save, { opacity: saving ? 0.55 : 1 }]}
+              >
+                {/* Swift reads the shared `saving` flag (ProfileView.swift:240), which a photo
+                    upload, a sync and a calendar connection all set, not the save request alone. */}
+                {saving ? <ActivityIndicator color="#FFFFFF" size="small" /> : null}
+                <Text style={[theme.typography.body, styles.bold, { color: '#FFFFFF' }]}>
+                  {saving ? 'Saving…' : 'Save settings'}
+                </Text>
+              </LinearGradient>
+            </Pressable>
+          </>
+        ) : (
+          <Pressable
+            accessibilityLabel="Retry loading settings"
+            accessibilityRole="button"
+            onPress={onRetry}
+            testID="settings-retry"
+          >
+            <Text style={[theme.typography.body, { color: theme.colors.link }]}>Retry loading settings</Text>
+          </Pressable>
+        )}
+
+        {/* 10 and 11: the failure line and the confirmation label (`:246-247`). */}
+        {failure !== null ? (
+          <Text style={[theme.typography.body, { color: theme.colors.danger }]} testID="settings-failure">
+            {failure}
+          </Text>
+        ) : null}
+        {message !== null ? (
+          <View style={styles.row}>
+            <TaskSymbol color={theme.colors.link} name="checkmark.circle" size={17} />
+            <Text style={[theme.typography.body, { color: theme.colors.link }]} testID="settings-message">
+              {message}
+            </Text>
+          </View>
+        ) : null}
+        </View>
+      </KeyboardAwareScrollView>
+    </SafeAreaView>
+  );
+}
+
+/**
+ * `connectionList` (ProfileView.swift:290-331, commit 3ef906d): one bordered block per connection with
+ * its health icon, name, detail, last sync, Disconnect, and the "Add my scheduled tasks and events here" toggle.
+ * The demo account has no connected calendar, so this is ported from source, not from a capture.
+ */
+function ConnectionList({
+  connections,
+  loaded,
+  onDisconnect,
+  onReconnect,
+  onWrites,
+  timeZone,
+}: {
+  connections: CalendarConnection[];
+  loaded: boolean;
+  onDisconnect: (connection: CalendarConnection) => void;
+  onReconnect: (connection: CalendarConnection) => void;
+  onWrites: (connection: CalendarConnection, enabled: boolean) => void;
+  timeZone: string;
+}) {
+  const theme = useTheme({ elevated: true });
+  const now = useMinuteTick();
+  if (connections.length === 0) {
+    // `else if model.calendarConnectionsLoaded` — nothing at all while the first load is in flight.
+    return loaded ? (
+      <Text style={[styles.caption, { color: theme.colors.secondary }]} testID="settings-no-calendars">
+        No calendars connected yet.
+      </Text>
+    ) : null;
+  }
+  const orange = theme.scheme === 'dark' ? '#FF9F0A' : '#FF9500';
+  return (
+    <View style={styles.connections} testID="settings-connections">
+      {connections.map((connection) => {
+        const healthy = isHealthy(connection);
+        const synced = lastSyncedDescription(connection, now, timeZone);
+        return (
+          <View
+            key={connection.id}
+            style={[styles.connection, { backgroundColor: withAlpha(brand.nexdoIndigo, 0.035), borderColor: withAlpha(brand.nexdoIndigo, 0.16) }]}
+            testID={`settings-connection-${connection.id}`}
+          >
+            <View style={styles.connectionHeader}>
+              <TaskSymbol
+                color={healthy ? theme.colors.link : orange}
+                name={healthy ? 'checkmark.circle.fill' : 'exclamationmark.triangle.fill'}
+                size={17}
+              />
+              <View accessible style={styles.connectionText}>
+                <Text style={[styles.subheadline, styles.bold, { color: theme.colors.label }]}>{displayName(connection)}</Text>
+                <Text style={[styles.caption, { color: theme.colors.secondary }]}>{connectionDetail(connection)}</Text>
+                <Text style={[styles.caption2, { color: theme.colors.secondary }]} testID={`settings-last-synced-${connection.id}`}>
+                  {synced}
+                </Text>
+              </View>
+              {/* Reconnect above Disconnect on a row that reads "Needs reconnecting" (commit 27798c5). */}
+              <View style={styles.connectionActions}>
+                {needsReconnect(connection) ? (
+                  <Pressable
+                    accessibilityLabel={`Reconnect ${displayName(connection)}`}
+                    accessibilityRole="button"
+                    hitSlop={8}
+                    onPress={() => onReconnect(connection)}
+                    testID={`settings-reconnect-${connection.id}`}
+                  >
+                    <Text style={[styles.caption, styles.bold, { color: theme.colors.link }]}>Reconnect</Text>
+                  </Pressable>
+                ) : null}
+                <Pressable
+                  accessibilityRole="button"
+                  hitSlop={8}
+                  onPress={() => onDisconnect(connection)}
+                  testID={`settings-disconnect-${connection.id}`}
+                >
+                  <Text style={[styles.caption, { color: theme.colors.danger }]}>Disconnect</Text>
+                </Pressable>
+              </View>
+            </View>
+            <View style={[styles.connectionDivider, { backgroundColor: theme.colors.separator }]} />
+            <View style={styles.row}>
+              <Text style={[styles.subheadline, styles.grow, { color: theme.colors.label }]}>Add my scheduled tasks and events here</Text>
+              <Switch
+                accessibilityLabel="Add my scheduled tasks and events here"
+                onValueChange={(enabled) => onWrites(connection, enabled)}
+                testID={`settings-writes-${connection.id}`}
+                thumbColor="#FFFFFF"
+                trackColor={Platform.OS === 'android' ? { false: theme.colors.switchOff, true: theme.colors.switchOn } : { false: theme.colors.separator, true: theme.colors.tint }}
+                value={connection.writeEnabled}
+              />
+            </View>
+            {!connection.writeEnabled ? (
+              <Text style={[styles.caption2, { color: theme.colors.secondary }]} testID={`settings-read-only-${connection.id}`}>
+                {READ_ONLY_CAPTION}
+              </Text>
+            ) : null}
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
+function withAlpha(color: string, alpha: number): string {
+  const hex = color.replace('#', '');
+  const int = parseInt(hex.length === 3 ? hex.split('').map((part) => part + part).join('') : hex, 16);
+  return `rgba(${(int >> 16) & 255}, ${(int >> 8) & 255}, ${int & 255}, ${alpha})`;
+}
+
+const styles = StyleSheet.create({
+  fill: { flex: 1 },
+  grow: { flex: 1 },
+  // `.subheadline` carries its own 21pt leading (style map section 2).
+  subheadline: { fontSize: 15, lineHeight: 21 },
+  caption: { fontSize: 12, lineHeight: 16 },
+  largeTitle: { fontSize: 34, lineHeight: 41, fontWeight: '700' },
+  tabular: { fontVariant: ['tabular-nums'] },
+
+  navBar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 14 },
+  // `VStack(alignment: .leading, spacing: 18).padding(20)`
+  scroll: { padding: 20 },
+  column: { gap: 18 },
+  caption2: { fontSize: 11, lineHeight: 13 },
+  // `VStack(spacing: 10)` of `.padding(12)` blocks, radius 12.
+  connections: { gap: 10 },
+  // `.stroke(...)` with no `lineWidth` is 1pt, not a hairline.
+  connection: { gap: 10, padding: 12, borderRadius: 12, borderWidth: 1 },
+  // `VStack(alignment: .leading, spacing: 2)` around the name, detail and last sync.
+  connectionText: { flex: 1, gap: 2 },
+  connectionHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
+  connectionActions: { alignItems: 'flex-end', gap: 8 },
+  connectionDivider: { height: StyleSheet.hairlineWidth },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  centred: { alignItems: 'center', gap: 8, paddingVertical: 12 },
+
+  // `HStack(spacing: 18)` with a 12pt-spaced column of actions.
+  photoRow: { flexDirection: 'row', alignItems: 'center', gap: 18 },
+  photoActions: { flex: 1, gap: 12 },
+  photoButton: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 32 },
+
+  linkRow: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 32 },
+  bold: { fontWeight: '700' },
+  // `.frame(maxWidth: .infinity, minHeight: 50)` in a Capsule.
+  // A bare `HStack` spaces by 8 (ProfileView.swift:240).
+  save: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 50, borderRadius: 25 },
+});

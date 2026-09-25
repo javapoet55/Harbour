@@ -13,7 +13,7 @@
      - `EMAIL_FROM_ADDRESS`: sender address. Falls back to `SENDGRID_FROM_EMAIL`.
      - `EMAIL_FROM_NAME`: sender name, e.g. `Nexdo`. Falls back to `SENDGRID_FROM_NAME`, then `Nexdo`.
      - `EMAIL_SUPPORT_ADDRESS`: support address in the footer. Falls back to the sender address.
-     - `APP_URL`: public HTTPS origin that serves `public/email/nexdo-logo-email.png`. Falls back to `https://harbour-production-f8a0.up.railway.app`. Set it when the app moves to its own domain.
+     - `APP_URL`: public HTTPS origin that serves `public/email/nexdo-logo-email.png`. Falls back to `https://app.nexdoapp.com`.
    - The sender is currently the single-sender-verified `support@pgrentalapp.com`. Once SendGrid domain authentication (SPF/DKIM) is done for nexdoai.com, move `EMAIL_FROM_ADDRESS` to a nexdoai.com address.
    - Admin sign-in codes use the same template and the same SendGrid setup. `NEXDO_ADMIN_FROM_EMAIL` optionally sets their sender address; otherwise they use `EMAIL_FROM_ADDRESS`. Admins come only from the required `NEXDO_ADMIN_EMAILS`; see `docs/admin-email-login.md`.
    - Preview every email with `npx tsx scripts/render-email-previews.ts`, which writes HTML and text to `output/email-previews/`. It never sends email.
