@@ -1,16 +1,12 @@
-import bcrypt from 'bcryptjs';
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { prisma } from './db';
-import { adminTokenHash, adminUserForSession, requestAdminCode, signInAdminPassword, revokeAdminSession, verifyAdminCode, verifyAdminCodeForEmail } from './admin-otp';
+import { adminTokenHash, adminUserForSession, requestAdminCode, revokeAdminSession, verifyAdminCode, verifyAdminCodeForEmail } from './admin-otp';
 import { requireAdmin } from './admin-auth';
-import { POST } from '@/app/api/admin/auth/route';
 import { DELETE as sessionDELETE, POST as sessionPOST } from '@/app/api/admin/session/route';
 import { GET as meGET } from '@/app/api/admin/me/route';
 import { ADMIN_CODE_REQUESTS_PER_EMAIL, ADMIN_CODE_REQUESTS_PER_IP, ADMIN_VERIFY_ATTEMPTS_PER_IP } from './admin-api-session';
 import { adminEmailTarget, adminIpTarget } from './admin-audit';
 import { randomBytes } from 'node:crypto';
-import { middleware } from '@/middleware';
-import { NextRequest } from 'next/server';
 
 const mocks = vi.hoisted(() => ({ jar: new Map<string, string>(), headers: new Headers() }));
 vi.mock('next/headers', () => ({ cookies: async () => ({
@@ -169,47 +165,17 @@ describe('admin email codes', () => {
     expect(await (await requestAdminCode(user.email)).delivery).toEqual({ outcome: 'send_failed', errorCode: 'ECONNRESET' });
   });
 
-  it('requires an admin session even with a normal account cookie', async () => {
+  it('requires an admin bearer from the admin frontend: neither app nor legacy admin cookies count', async () => {
     mocks.jar.set('harbor_session', 'normal-account-session');
     await expect(requireAdmin()).rejects.toThrow('UNAUTHENTICATED');
     const user = await account(); const { code } = await emailedCode(user.email);
-    mocks.jar.set('nexdo_admin_session', await verifyAdminCodeForEmail(user.email, code));
+    const session = await verifyAdminCodeForEmail(user.email, code);
+    mocks.jar.set('nexdo_admin_session', session);
+    await expect(requireAdmin()).rejects.toThrow('UNAUTHENTICATED');
+    const secret = randomBytes(24).toString('hex');
+    process.env.ADMIN_API_SECRETS = secret;
+    mocks.headers = new Headers({ Authorization: `Bearer ${session}`, 'X-Admin-Client': secret });
     expect(await requireAdmin()).toMatchObject({ id: user.id });
-  });
-
-  it('keeps password sign-in on the original cookie route until its cleanup', async () => {
-    const user = await account();
-    await prisma.user.update({ where: { id: user.id }, data: { passwordHash: await bcrypt.hash('valid-test-password', 4) } });
-    const request = (body: object, origin = 'http://localhost') => POST(new Request('http://localhost/api/admin/auth', { method: 'POST', headers: { origin, 'Content-Type': 'application/json' }, body: JSON.stringify(body) }));
-    const body = { action: 'login', email: user.email, password: 'valid-test-password' };
-    expect((await request(body, 'https://other.test')).status).toBe(403);
-    expect((await request({ action: 'request', email: user.email })).status).toBe(400);
-    expect((await request({ ...body, password: 'wrong' })).status).toBe(401);
-    expect((await request(body)).status).toBe(200);
-    expect(sent).toHaveLength(0);
-    const session = mocks.jar.get('nexdo_admin_session')!;
-    expect(await adminUserForSession(session)).toMatchObject({ id: user.id });
-    expect((await request({ action: 'logout' })).status).toBe(200);
-    expect(await adminUserForSession(session)).toBeNull();
-  });
-
-  it('rate limits password attempts on the cookie route and rejects non-admin or unverified accounts', async () => {
-    const user = await account({ verified: false });
-    await prisma.user.update({ where: { id: user.id }, data: { passwordHash: await bcrypt.hash('valid-test-password', 4) } });
-    await expect(signInAdminPassword(user.email, 'valid-test-password')).rejects.toThrow('INVALID_ADMIN_PASSWORD');
-    process.env.NEXDO_ADMIN_EMAILS = '';
-    await expect(signInAdminPassword(user.email, 'valid-test-password')).rejects.toThrow('INVALID_ADMIN_PASSWORD');
-    process.env.NEXDO_ADMIN_EMAILS = user.email;
-    for (let i = 0; i < 4; i++) await expect(signInAdminPassword(user.email, 'wrong')).rejects.toThrow('INVALID_ADMIN_PASSWORD');
-    await expect(signInAdminPassword(user.email, 'wrong')).rejects.toThrow('RATE_LIMITED');
-  });
-
-  it('lets admin pages reach their own sign-in gate without an ordinary account cookie', () => {
-    for (const path of ['/admin/login', '/admin', '/admin/users']) {
-      const result = middleware(new NextRequest(`http://localhost${path}`));
-      expect(result.headers.get('location')).toBeNull();
-    }
-    expect(middleware(new NextRequest('http://localhost/tasks')).headers.get('location')).toContain('/login');
   });
 });
 
@@ -405,15 +371,12 @@ describe('admin frontend code sign-in and bearer sessions', () => {
     expect((await audits({ targetId: adminIpTarget(clientIp) })).map((row) => row.action)).toEqual(['ADMIN_LOGIN', 'ADMIN_LOGOUT']);
   });
 
-  it('keeps the cookie flow working alongside bearer sessions', async () => {
+  it('ignores the retired nexdo_admin_session cookie, even holding a live session', async () => {
     const user = await account();
-    await prisma.user.update({ where: { id: user.id }, data: { passwordHash: await bcrypt.hash('valid-test-password', 4) } });
-    const cookieLogin = await POST(new Request('http://localhost/api/admin/auth', { method: 'POST', headers: { origin: 'http://localhost', 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'login', email: user.email, password: 'valid-test-password' }) }));
-    expect(cookieLogin.status).toBe(200);
-    expect((await me()).status).toBe(200);
-    // A bad bearer falls back to the valid cookie rather than locking the browser session out.
-    expect(await (await me(bearer('0'.repeat(64)))).json()).toMatchObject({ id: user.id });
-    mocks.jar.clear();
+    const token = (await (await signIn(user.email)).json()).token;
+    mocks.jar.set('nexdo_admin_session', token);
     expect((await me()).status).toBe(401);
+    expect((await me(bearer('0'.repeat(64)))).status).toBe(401);
+    expect(await (await me(bearer(token))).json()).toMatchObject({ id: user.id });
   });
 });

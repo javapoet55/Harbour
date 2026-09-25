@@ -30,7 +30,11 @@ export default function LoginPage() {
       return;
     }
     const body = await res.json().catch(() => ({}));
-    router.push(body.admin ? '/admin' : '/');
+    if (typeof body.adminAppUrl === 'string') {
+      window.location.assign(body.adminAppUrl);
+      return;
+    }
+    router.push('/');
     router.refresh();
   }
 
