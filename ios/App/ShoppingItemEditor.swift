@@ -6,13 +6,21 @@ struct ShoppingItemEditor:View {
     @ObservedObject var store:ShoppingStore
     @Environment(\.dismiss) private var dismiss
     @State var initial:GroceryItem
+    var launchCamera=false
     let onSave:(GroceryItem)->Void
     @State private var selectedPhoto:PhotosPickerItem?
     @State private var camera=false
+    @State private var didLaunchCamera=false
+    @State private var cameraDenied=false
     @State private var busy=false
     @State private var error:String?
     @State private var aiConsent=false
     @State private var imageDetails=""
+    @State private var recognitionConsent=false
+    @State private var showingRecognitionConsent=false
+    @State private var recognizing=false
+    @State private var pendingPhotoRecognition=false
+    @State private var recognitionNotice:String?
     @State private var imageExpanded=false
     @State private var generation=UUID()
     private var photo:UIImage? {
@@ -27,14 +35,18 @@ struct ShoppingItemEditor:View {
                     Picker("Category",selection:$initial.category){ForEach(GroceryItem.categories,id:\.self){Text($0)}}
                     HStack{Text("Quantity");TextField("1",text:$initial.quantity).multilineTextAlignment(.trailing).keyboardType(.decimalPad)}
                     TextField("Size, e.g. 1 gallon or 500 g",text:$initial.size)
-                    TextField("Brand or notes",text:$initial.notes,axis:.vertical)
+                    TextField("Brand",text:Binding(get:{initial.brand ?? ""},set:{initial.brand=$0.isEmpty ? nil : $0}))
+                        .accessibilityIdentifier("shopping.item.brand")
+                    TextField("Notes",text:$initial.notes,axis:.vertical)
                 }
                 Section {
                     DisclosureGroup("Item Image",isExpanded:$imageExpanded) {
                         if let photo {
                             Image(uiImage:photo).resizable().scaledToFit().frame(maxWidth:.infinity,maxHeight:200)
                                 .accessibilityLabel("Attached item image")
-                            Button("Remove Image",role:.destructive){initial.imageData=nil}
+                            Button("Remove Image",role:.destructive){initial.imageData=nil;recognitionNotice=nil}
+                            Button("Fill details from photo with AI"){requestRecognition()}
+                                .accessibilityIdentifier("shopping.photo.identify")
                         }else {
                             Label("Attach a photo or create an illustration",systemImage:"photo.badge.plus")
                                 .foregroundStyle(.secondary)
@@ -45,30 +57,57 @@ struct ShoppingItemEditor:View {
                         if !UIImagePickerController.isSourceTypeAvailable(.camera){Text("Camera is available on a supported device.").font(.caption).foregroundStyle(.secondary)}
                         TextField("Describe the image (optional)",text:$imageDetails,axis:.vertical)
                         Toggle("Allow AI image generation",isOn:$aiConsent)
-                        Text("AI receives the item name and image description. Photos you attach are not sent to AI. The image is saved with the item when you tap Save.").font(.caption).foregroundStyle(.secondary)
+                        Text("AI receives the item name and image description. Photo identification sends the attached photo to OpenAI only with your permission. The image is saved with the item when you tap Save.").font(.caption).foregroundStyle(.secondary)
                         Button{Task{await generate()}}label:{Label("Generate with AI",systemImage:"sparkles")}
                             .disabled(!aiConsent || initial.name.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty)
                     }
                 }.disabled(busy)
-                if busy {ProgressView("Preparing image…")}
+                if busy {ProgressView(recognizing ? "Identifying item…" : "Preparing image…")}
+                if let recognitionNotice {Text(recognitionNotice).font(.caption).foregroundStyle(.secondary)}
                 if let error {Text(error).foregroundStyle(.red)}
             }
-            .navigationTitle("Edit Item")
+            .disabled(busy)
+            .navigationTitle(launchCamera ? "Add Item" : "Edit Item")
             .toolbar {
                 ToolbarItem(placement:.cancellationAction){Button("Cancel"){generation=UUID();dismiss()}}
                 ToolbarItem(placement:.confirmationAction){Button("Save"){onSave(initial);dismiss()}.disabled(busy || initial.name.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty)}
             }
-            .sheet(isPresented:$camera){ShoppingCamera{image in camera=false;if let image{attach(image)}}}
+            .fullScreenCover(isPresented:$camera,onDismiss:{
+                if pendingPhotoRecognition{pendingPhotoRecognition=false;requestRecognition()}
+            }){ShoppingCamera{image in
+                camera=false
+                if let image{pendingPhotoRecognition=attach(image);imageExpanded=true}
+                else if launchCamera && initial.imageData == nil{dismiss()}
+            }.ignoresSafeArea()}
+            .task {
+                guard launchCamera && !didLaunchCamera else{return}
+                didLaunchCamera=true;imageExpanded=true
+                await openCamera()
+            }
+            .alert("Identify this photo with AI?",isPresented:$showingRecognitionConsent){
+                Button("Fill Details"){recognitionConsent=true;Task{await identify()}}
+                Button("Enter Manually",role:.cancel){}
+            }message:{Text("Send this photo to OpenAI to suggest the item name and visible brand. Review the details before saving.")}
+            .alert("Camera access is off",isPresented:$cameraDenied){
+                Button("Open Settings"){if let url=URL(string:UIApplication.openSettingsURLString){UIApplication.shared.open(url)}}
+                Button("Cancel",role:.cancel){}
+            }message:{Text("Allow camera access in Settings to take an item photo. You can also choose a photo from your library.")}
             .onChange(of:selectedPhoto){_,value in Task{
                 guard let value else{return};busy=true;error=nil
-                defer{busy=false}
-                do{guard let data=try await value.loadTransferable(type:Data.self),let image=UIImage(data:data) else{throw APIError.invalidResponse};attach(image)}
-                catch{self.error="Could not open that photo. Choose another image."}
+                let run=UUID();generation=run
+                defer{if generation==run{busy=false}}
+                do{
+                    guard let data=try await value.loadTransferable(type:Data.self),let image=UIImage(data:data) else{throw APIError.invalidResponse}
+                    guard generation==run else{return}
+                    if attach(image){requestRecognition()}
+                }
+                catch{if generation==run{self.error="Could not open that photo. Choose another image."}}
             }}
             .onDisappear{generation=UUID()}
         }.tint(.nexdoIndigo)
     }
-    private func attach(_ image:UIImage){
+    @discardableResult private func attach(_ image:UIImage)->Bool{
+        recognitionNotice=nil
         // Redraw to normalize orientation and strip camera location/EXIF metadata.
         let ratio=min(1,480/max(image.size.width,image.size.height))
         let size=CGSize(width:max(1,image.size.width*ratio),height:max(1,image.size.height*ratio))
@@ -77,12 +116,37 @@ struct ShoppingItemEditor:View {
             UIColor.white.setFill();context.fill(CGRect(origin:.zero,size:size));image.draw(in:CGRect(origin:.zero,size:size))
         }
         for quality in [0.8,0.6,0.4,0.2] {
-            if let data=rendered.jpegData(compressionQuality:quality),data.count<=67000 {initial.imageData=data.base64EncodedString();error=nil;return}
+            if let data=rendered.jpegData(compressionQuality:quality),data.count<=67000 {initial.imageData=data.base64EncodedString();error=nil;return true}
         }
         error="This image is too detailed. Choose a simpler or cropped photo."
+        return false
+    }
+    private func requestRecognition(){
+        guard initial.imageData != nil else{return}
+        if recognitionConsent {Task{await identify()}} else {showingRecognitionConsent=true}
+    }
+    @MainActor private func identify() async {
+        guard let imageData=initial.imageData,recognitionConsent else{return}
+        busy=true;recognizing=true;error=nil;recognitionNotice=nil
+        let run=UUID();generation=run
+        let originalName=initial.name,originalBrand=initial.brand,originalCategory=initial.category
+        defer{if generation==run{busy=false;recognizing=false}}
+        do {
+            struct Input:Encodable{let imageData:String;let consent:Bool}
+            struct Result:Decodable,Sendable{let name:String;let brand:String;let category:String;let confidence:String}
+            let result:Result=try await store.api.request("/api/shopping/recognize",method:"POST",body:JSONEncoder().encode(Input(imageData:imageData,consent:true)),timeout:40)
+            guard generation==run,initial.imageData==imageData else{return}
+            if initial.name==originalName{initial.name=result.name}
+            if initial.brand==originalBrand{initial.brand=result.brand.isEmpty ? nil : result.brand}
+            if initial.category==originalCategory{initial.category=result.category}
+            recognitionNotice="AI suggested these details. Check the name and brand before saving."
+        }catch{if generation==run{self.error=error.localizedDescription}}
     }
     private func openCamera() async {
-        guard await AVCaptureDevice.requestAccess(for:.video) else{error="Camera access is off. Enable it for Nexdo in Settings, or choose a photo.";return}
+        guard UIImagePickerController.isSourceTypeAvailable(.camera) else{
+            error="Camera is unavailable on this device. Choose a photo from your library instead.";return
+        }
+        guard await AVCaptureDevice.requestAccess(for:.video) else{cameraDenied=true;return}
         camera=true
     }
     private func generate() async {

@@ -51,10 +51,24 @@ import XCTest
         let nutrition = app.buttons["alternatives.details.2% Milk"]
         for _ in 0..<5 { if nutrition.isHittable { break }; app.swipeUp() }
         XCTAssertTrue(nutrition.isHittable); nutrition.tap()
-        XCTAssertTrue(app.staticTexts["Nutrition Score"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts["Not rated"].exists)
+        XCTAssertTrue(app.navigationBars["Item Details"].waitForExistence(timeout: 5))
+        let originalName = app.staticTexts["alternative.originalName"]
+        XCTAssertTrue(originalName.exists)
+        XCTAssertGreaterThan(originalName.frame.minX, app.frame.width * 0.25)
+        XCTAssertLessThan(originalName.frame.minY, app.frame.height * 0.45)
+        XCTAssertFalse(app.staticTexts["Nutrition Score"].exists)
+        XCTAssertFalse(app.staticTexts["Not rated"].exists)
+        XCTAssertFalse(app.staticTexts["At a glance"].exists)
         reveal(app.staticTexts["Nutrition Facts"])
         XCTAssertTrue(app.staticTexts["Nutrition Facts"].waitForExistence(timeout: 5))
+        let note = "Values are based on available food-provider data. Actual products may vary. Always check the product label."
+        XCTAssertFalse(app.staticTexts[note].exists)
+        let info = app.buttons["alternative.nutritionInfo"]
+        reveal(info); info.tap()
+        XCTAssertTrue(app.alerts["About Nutrition Facts"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.alerts.staticTexts[note].exists)
+        app.alerts.buttons["Got it"].tap()
+        XCTAssertFalse(app.alerts["About Nutrition Facts"].exists)
         let screenshot = XCTAttachment(screenshot: app.screenshot()); screenshot.name = "Alternative nutrition comparison"; screenshot.lifetime = .keepAlways; add(screenshot)
         reveal(app.buttons["alternative.tab.Allergens"]); app.buttons["alternative.tab.Allergens"].tap()
         XCTAssertTrue(app.staticTexts["Contains Milk"].waitForExistence(timeout: 5))
@@ -165,6 +179,29 @@ import XCTest
         XCTAssertFalse(app.textViews["Shopping transcript"].exists)
         app.buttons["Add groceries by voice"].tap()
         XCTAssertTrue(app.navigationBars["Add by Voice"].waitForExistence(timeout:5))
+    }
+    func testCameraAddUnavailableFallbackAndCancel() {
+        openList()
+        app.buttons["shopping-camera-add"].tap()
+        XCTAssertTrue(app.navigationBars["Add Item"].waitForExistence(timeout:5))
+        XCTAssertTrue(app.buttons["Choose from Photos"].exists)
+        XCTAssertFalse(app.buttons["Take a Picture"].isEnabled)
+        XCTAssertFalse(app.navigationBars["Add Item"].buttons["Save"].isEnabled)
+        app.navigationBars["Add Item"].buttons["Cancel"].tap()
+        XCTAssertTrue(app.navigationBars["Shopping List"].waitForExistence(timeout:5))
+        let field=app.textFields["shopping-quick-add"]
+        field.tap();field.typeText("Camera item")
+        app.buttons["shopping-camera-add"].tap()
+        XCTAssertTrue(app.navigationBars["Add Item"].waitForExistence(timeout:5))
+        XCTAssertEqual(app.textFields["Item name"].value as? String,"Camera item")
+        app.navigationBars["Add Item"].buttons["Save"].tap()
+        XCTAssertTrue(app.navigationBars["Shopping List"].waitForExistence(timeout:5))
+        let added=app.buttons["Edit Camera item"]
+        reveal(added)
+        XCTAssertTrue(added.exists)
+        added.tap()
+        XCTAssertTrue(app.navigationBars["Edit Item"].waitForExistence(timeout:5))
+        XCTAssertEqual(app.textFields["Item name"].value as? String,"Camera item")
     }
     func testCheckOffAndEditQuantity(){
         openList()

@@ -37,7 +37,7 @@ Three quick goal chips and More open a two-column goal picker with a full-list e
 
 ## Item Details comparison design
 
-Item Details uses the supplied September 25 13:12 asset pack for mango illustration, a white/blue card layout, and a four-column nutrient comparison table. Values render as rounded whole numbers; stored values and serving normalization retain full precision. The original item and proposed replacement are labeled separately. A nutrition-score ring displays Not rated because existing provider contracts do not supply a validated 0–100 score. Comparison highlights come only from sourced nutrient differences, without a blanket healthier-choice or no-added-sugar claim. The raw provider metadata footer is removed. Replace still opens confirmation and Add Instead preserves the original.
+Item Details uses the supplied September 25 13:12 asset pack for mango illustration, a white/blue card layout, and a four-column nutrient comparison table. Values render as rounded whole numbers; stored values and serving normalization retain full precision. The original item and proposed replacement are labeled separately, with the item text wrapping beside the illustration. An info button next to Nutrition Facts opens the food-provider data note on demand. The entire Nutrition Score card is omitted because existing provider contracts do not supply a validated 0–100 score. No placeholder score, empty ring, or supporting At a glance section is displayed. The raw provider metadata footer is removed. Replace still opens confirmation and Add Instead preserves the original.
 
 ## Item Details food voice
 

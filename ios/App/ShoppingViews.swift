@@ -211,6 +211,7 @@ struct ShoppingDetail:View {
     @State private var quick=""
     @State private var item:GroceryItem?
     @State private var voice=false
+    @State private var cameraAdd=false
     @State private var copy=false
     @State private var settings=false
     @State private var sharing=false
@@ -244,6 +245,11 @@ struct ShoppingDetail:View {
                             .focused($quickAddFocused).submitLabel(.done).onSubmit{quickAdd()}
                             .font(.subheadline).foregroundStyle(Color.nexdoInk)
                             .accessibilityIdentifier("shopping-quick-add")
+                        Button{quickAddFocused=false;cameraAdd=true}label:{
+                            Image(systemName:"camera.fill").font(.headline).foregroundStyle(Color.nexdoBlue)
+                                .frame(width:44,height:44)
+                        }.buttonStyle(.borderless).disabled(readOnly || parseBusy)
+                            .accessibilityLabel("Add item with camera").accessibilityIdentifier("shopping-camera-add")
                         Button{voice=true}label:{
                             Image(systemName:"mic.fill").font(.headline).foregroundStyle(Color.nexdoSecondary)
                                 .frame(width:40,height:40)
@@ -292,6 +298,11 @@ struct ShoppingDetail:View {
                 }label:{Image(systemName:"ellipsis")}.accessibilityLabel("List options")}
             }
             .sheet(item:$item){value in ShoppingItemEditor(store:store,initial:value){updated in var next=list;if let index=next.items.firstIndex(where:{$0.id==updated.id}){next.items[index]=updated}else{next.items.append(updated)};save(next)}}
+            .sheet(isPresented:$cameraAdd){
+                ShoppingItemEditor(store:store,initial:GroceryItem(name:quick.trimmingCharacters(in:.whitespacesAndNewlines)),launchCamera:true){updated in
+                    var next=list;next.items.append(updated);selectedCategory="All";quick="";save(next)
+                }
+            }
             .sheet(isPresented:$voice){ShoppingVoiceView(store:store){items in var next=list;next.items.append(contentsOf:items);save(next)}}
             .sheet(isPresented:$copy){NewShoppingList(store:store,source:list){list=$0}}
             .sheet(isPresented:$settings){ShoppingSettings(initial:list){save($0)}}
