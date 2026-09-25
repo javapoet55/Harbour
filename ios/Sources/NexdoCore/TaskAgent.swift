@@ -23,5 +23,5 @@ public struct TaskAgentRun: Decodable, Sendable, Identifiable {
     }
     public struct Attribution: Decodable, Sendable { public let provider: String; public let url: String? }
     public struct Feedback: Decodable, Sendable { public let author: String; public let authorUrl: String?; public let photoUrl: String?; public let url: String; public let rating: Double?; public let text: String; public let published: String }
-    public struct Evidence: Decodable, Sendable { public let source: String; public let url: String }
+    public struct Evidence: Decodable, Sendable { public let source: String; public let url: String; public let rating: Double?; public let reviews: Int? }
 }

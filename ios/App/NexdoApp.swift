@@ -86,30 +86,16 @@ final class AppModel: ObservableObject {
             } catch { /* Card remains hidden locally. */ }
         }
     }
-    /// Every interactive schedule write uses the same explicit warning/retry flow.
+    /// A user-requested schedule change automatically accepts advisory conflicts once.
     private func scheduleRequest<T: Decodable & Sendable>(_ path: String, method: String, body: Data?) async throws -> T {
         let owner = profile?.id
         do { return try await api.request(path, method: method, body: body) }
-        catch APIError.scheduleWarning(let warnings) {
+        catch APIError.scheduleWarning {
+            try Task.checkCancellation()
             guard let owner, profile?.id == owner else { throw APIError.signedOut }
-            let approved = await confirmScheduleWarnings(warnings)
-            guard approved else { throw CancellationError() }
-            guard profile?.id == owner else { throw APIError.signedOut }
             var payload = (try body.map { try JSONSerialization.jsonObject(with: $0) } as? [String: Any]) ?? [:]
             payload["allowScheduleConflict"] = true
             return try await api.request(path, method: method, body: JSONSerialization.data(withJSONObject: payload))
-        }
-    }
-    private func confirmScheduleWarnings(_ warnings: [String]) async -> Bool {
-        guard let scene = UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }).first(where: { $0.activationState == .foregroundActive }),
-              var presenter = scene.windows.first(where: { $0.isKeyWindow })?.rootViewController else { return false }
-        while let presented = presenter.presentedViewController { presenter = presented }
-        guard !(presenter is UIAlertController) else { return false }
-        return await withCheckedContinuation { continuation in
-            let alert = UIAlertController(title: "Review this time", message: warnings.joined(separator: "\n\n"), preferredStyle: .alert)
-            alert.addAction(UIAlertAction(title: "Keep previous schedule", style: .cancel) { _ in continuation.resume(returning: false) })
-            alert.addAction(UIAlertAction(title: "Save anyway", style: .default) { _ in continuation.resume(returning: true) })
-            presenter.present(alert, animated: true)
         }
     }
 

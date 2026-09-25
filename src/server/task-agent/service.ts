@@ -2,8 +2,8 @@ import {prisma} from '@/server/db';
 import type {Prisma,TaskAgentRun} from '@/generated/prisma';
 import {classifyTask} from '@/lib/task-agent/intent';
 import {nextQuestion,type AgentSlots,type AgentStep,type Candidate,type RunView} from '@/lib/task-agent/types';
-import {searchBusinesses,searchConfigured,placeDetails} from './search';
-import {rankCandidates,prepareDraft} from './rank';
+import {searchBusinesses,searchConfigured,placeDetails,hasEnoughGoogleReviews} from './search';
+import {compareReviewCounts,rankCandidates,prepareDraft} from './rank';
 export const plan=():AgentStep[]=>[
  {id:'google',title:'Search Google Places for local providers',status:'pending',detail:''},
  {id:'yelp',title:'Compare Yelp listings and ratings',status:'pending',detail:''},
@@ -124,7 +124,10 @@ export function persistCandidate(c:Candidate):Candidate{
 export async function hydrateRun(view:RunView):Promise<RunView>{
  const candidates=await Promise.all(view.candidates.map(async c=>{
   if(!c.googlePlaceId)return c;
-  try{const fresh=await placeDetails(c.googlePlaceId);const ranked=rankCandidates([fresh],{...view.slots,urgency:'flexible'})[0];return {...ranked,id:c.id,draft:c.draft};}
-  catch{return {...c,reason:'Google Places details could not be loaded. Reopen this task to retry.'};}
- }));return {...view,candidates};
+  try{const fresh=await placeDetails(c.googlePlaceId);if(!hasEnoughGoogleReviews(fresh))return null;const ranked=rankCandidates([fresh],{...view.slots,urgency:'flexible'})[0];return {...ranked,id:c.id,draft:c.draft};}
+  catch{return null;} // Do not show a business whose review count cannot be verified.
+ }));
+ const eligible=candidates.filter((c):c is Candidate=>c!==null);
+ const filtered=eligible.length<candidates.length;
+ return {...view,status:filtered&&!eligible.length&&view.status==='READY_FOR_REVIEW'?'NO_RESULTS':view.status,candidates:eligible.sort(compareReviewCounts),warnings:filtered?[...view.warnings,'Some businesses were hidden because at least 20 Google reviews could not be verified. Try a new search for more options.']:view.warnings};
 }
