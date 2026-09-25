@@ -295,6 +295,7 @@ struct ProjectDetailView: View {
 struct ProjectAssignmentField: View {
     @EnvironmentObject private var model: AppModel
     @Binding var projectID: String?
+    var disclosureIcon = "chevron.down"
     private var selected: NexdoProject? { model.projects.first { $0.id == projectID } }
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -304,8 +305,9 @@ struct ProjectAssignmentField: View {
                     Button { projectID = project.id } label: { Label(project.name, systemImage: project.id == projectID ? "checkmark" : "folder").tint(ProjectStyle.color(project.color)) }
                 }
             } label: {
-                HStack { Image(systemName: "folder.fill").foregroundStyle(selected.map { ProjectStyle.color($0.color) } ?? .secondary); Text(selected?.name ?? (projectID == nil ? "No Named Project" : "Assigned project")); Spacer(); Image(systemName: "chevron.down").font(.caption) }
+                HStack { Image(systemName: "folder.fill").foregroundStyle(selected.map { ProjectStyle.color($0.color) } ?? .secondary); Text(selected?.name ?? (projectID == nil ? "No Named Project" : "Assigned project")); Spacer(); Image(systemName: disclosureIcon).font(.caption) }
                     .padding(.horizontal, 14).frame(minHeight: 48).projectCardSurface()
+                    .contentShape(Rectangle())
             }.accessibilityLabel("Project").accessibilityValue(selected?.name ?? (projectID == nil ? "No Named Project" : "Assigned project"))
             if let error = model.projectsError { Text(error).font(.caption).foregroundStyle(.secondary); Button("Retry projects") { Task { await model.refreshProjects() } }.frame(minHeight: 44) }
             if model.projectsLoading && !model.projectsLoaded { ProgressView("Loading projects…").font(.caption) }

@@ -177,7 +177,7 @@ private struct NexdoTabShell: View {
             .background { Color(uiColor: .systemBackground).ignoresSafeArea(edges: .bottom) }
         }
         .sheet(isPresented: $addingTask) { NavigationStack { TaskEditor(task: nil) } }
-        .fullScreenCover(isPresented: $addingVoice) { AddTaskByVoiceView() }
+        .fullScreenCover(isPresented: $addingVoice) { AddTaskByVoiceView(calendarOnly: selection == .calendar) }
     }
 }
 
@@ -1965,7 +1965,7 @@ struct TaskEditor: View {
 
                     Divider().opacity(0.45)
                     TaskEditorLabel(title: "PROJECT", icon: "folder")
-                    ProjectAssignmentField(projectID: $projectID)
+                    ProjectAssignmentField(projectID: $projectID, disclosureIcon: "chevron.right")
 
                     Divider().opacity(0.45)
                     TaskEditorLabel(title: "DATE", icon: "calendar")
@@ -2016,7 +2016,7 @@ struct TaskEditor: View {
         .foregroundStyle(Color.primary)
         .tint(TaskCreationStyle.accent)
         .onAppear { if !projectInitialized { projectID = initialProjectID; projectInitialized = true } }
-        .navigationTitle("New Task")
+        .navigationTitle("Create New Task")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .cancellationAction) { Button("Close") { closeTaskEditor() }.tint(TaskCreationStyle.accent).foregroundStyle(TaskCreationStyle.accent).disabled(model.busy) }

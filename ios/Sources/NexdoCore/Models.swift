@@ -27,6 +27,17 @@ public struct VoiceUsage: Codable, Equatable, Sendable {
     public let remainingSeconds:Int
     public let asOf:String
     public var progress:Double {min(1,max(0,Double(usedSeconds)/Double(max(1,limitMinutes*60))))}
+    /// A billing month is a calendar label, not an instant to convert to device time.
+    public static func monthName(_ value: String, locale: Locale = .current) -> String? {
+        let parts = value.split(separator: "-", omittingEmptySubsequences: false)
+        guard parts.count == 2, parts[0].count == 4, parts[1].count == 2,
+              let year = Int(parts[0]), year > 0,
+              let month = Int(parts[1]), (1...12).contains(month) else { return nil }
+        let formatter = DateFormatter()
+        formatter.locale = locale
+        formatter.calendar = Calendar(identifier: .gregorian)
+        return formatter.monthSymbols[month - 1]
+    }
 }
 public struct PasswordResetResponse: Decodable, Sendable {
     public let message: String
