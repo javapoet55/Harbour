@@ -9,6 +9,8 @@ const curated: Array<[RegExp, Omit<ShoppingAlternatives, 'usedAI'>]> = [
   [/bread/i, { alternatives: [
     { name: 'Whole wheat bread', category: 'Bakery', quantity: '1', size: 'loaf', reason: 'Suggested alternative', detail: 'Compare product nutrition and labels' },
     { name: 'Multigrain bread', category: 'Bakery', quantity: '1', size: 'loaf', reason: 'Suggested alternative', detail: 'Compare product nutrition and labels' },
+    { name: 'Sourdough bread', category: 'Bakery', quantity: '1', size: 'loaf', reason: 'Suggested alternative', detail: 'Compare product nutrition and labels' },
+    { name: 'Low-carb bread', category: 'Bakery', quantity: '1', size: 'loaf', reason: 'Suggested alternative', detail: 'Check the product label for carbohydrate content' },
     { name: 'Rye bread', category: 'Bakery', quantity: '1', size: 'loaf', reason: 'Suggested alternative', detail: 'Compare product nutrition and labels' },
   ], tip: 'Compare nutrition for the same serving size and check the product label.' }],
   [/chicken(?: breast)?/i, { alternatives: [

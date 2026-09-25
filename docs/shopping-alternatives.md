@@ -1,6 +1,6 @@
 # Native shopping alternatives
 
-The existing Shopping List blue-star entry opens `ShoppingAlternativesView`. Goal chips filter alternatives using optional structured facts, with a match count or explicit no-match state and a Show all action, while the existing alternatives endpoint supplies practical suggestions. All detail buttons push one details screen inside the existing navigation stack with Nutrition, Allergens, Why this?, and Best For tabs.
+The existing Shopping List blue-star entry opens `ShoppingAlternativesView`. Goal chips filter alternatives using optional structured facts, with a match count or explicit no-match state and a Show all action, while the existing alternatives endpoint supplies practical suggestions. Compact rows push one details screen inside the existing navigation stack with Nutrition, Allergens, Why this?, and Best For tabs.
 
 ## Facts and sources
 
@@ -16,12 +16,12 @@ Numeric sample values exist only in the DEBUG `ShoppingPreview` mock transport a
 - Add Instead appends a new item and keeps the original. Matching names/package sizes are rejected as duplicates.
 - Favorites use optional fields on the existing shopping item JSON, accepted by the backend item save schema and persisted in the additive shopping item migration. Deploy the corresponding backend schema change before relying on favorites in a device build against production.
 - Completed-list changes create an active copy, matching existing shopping edit behavior.
-- Save failures leave the detail screen open with an error; success closes it after persistence. Existing revision checks and analytics are reused.
+- Replace opens a before/after confirmation. Successful persistence opens Item replaced with Done and View in Cart; Cancel never mutates the list. Save failures stay in the confirmation with a retryable error. Existing revision checks and analytics are reused.
 - Alternatives are cached per store for five minutes, capped at 30 entries. Scrolling and switching tabs make no recommendation calls.
 
 ## Artwork
 
-The five `swap-*.imageset` cartons were extracted from the user-supplied `ChatGPT Image Sep 25, 2026, 08_59_25 AM.png` asset sheet. They are generic category illustrations, not evidence of a particular manufacturer/product. Other products retain the existing grocery placeholder. Native SF Symbols and existing NexDo color/gradient tokens keep controls accessible and scalable.
+The five `swap-*.imageset` cartons were extracted from the user-supplied `ChatGPT Image Sep 25, 2026, 08_59_25 AM.png` asset sheet. They are generic category illustrations, not evidence of a particular manufacturer/product. Bread uses the six illustrations and whole-wheat hero region from the supplied September 25 12:15 design pack, rendered as a sprite sheet. The supplied pack is a flattened image, so these are illustrative assets, not exact product photos. Other products retain the existing grocery placeholder. Native SF Symbols and existing NexDo color/gradient tokens keep controls accessible and scalable.
 
 ## Validation
 
@@ -30,3 +30,7 @@ Core tests cover numeric differences, serving normalization, missing/invalid fac
 For manual testing, launch the DEBUG app with `-shopping-design-preview`, open Weekly Shopping List, and tap the blue star beside Milk. For normal server-backed testing, launch without preview arguments; unverified product facts should remain unavailable.
 
 Request failures are displayed with Retry instead of silently substituting unverified local alternatives. Xcode Debug uses app-dev.nexdoapp.com; its backend needs the same food-data migration and server-only provider configuration as production.
+
+## Compact design (September 25)
+
+Three quick goal chips and More open a two-column goal picker with a full-list expansion. Draft selections apply only on Apply; Cancel leaves the active goal unchanged. Why these explains source limitations without promising allergen safety. Missing-data and no-match states offer clear next actions. Details retain Nutrition and Allergens tabs, source attribution, favorites, and Add Instead. Tests cover confirmation/success, cancellation, empty results, goal application, detail navigation, and persisted replacement.

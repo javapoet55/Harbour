@@ -51,15 +51,15 @@ public struct ShoppingNutrition: Codable, Equatable, Sendable {
     /// g or ml. Values use kcal, g for macros, and mg for sodium/calcium.
     public var servingUnit: String?
     public var calories: Double?, protein: Double?, totalFat: Double?, saturatedFat: Double?
-    public var carbohydrates: Double?, sugar: Double?, sodium: Double?, calcium: Double?
-    public init(servingSize: String, servingAmount: Double?, servingUnit: String?, calories: Double? = nil, protein: Double? = nil, totalFat: Double? = nil, saturatedFat: Double? = nil, carbohydrates: Double? = nil, sugar: Double? = nil, sodium: Double? = nil, calcium: Double? = nil) {
+    public var carbohydrates: Double?, sugar: Double?, sodium: Double?, calcium: Double?, fiber: Double?
+    public init(servingSize: String, servingAmount: Double?, servingUnit: String?, calories: Double? = nil, protein: Double? = nil, totalFat: Double? = nil, saturatedFat: Double? = nil, carbohydrates: Double? = nil, sugar: Double? = nil, sodium: Double? = nil, calcium: Double? = nil, fiber: Double? = nil) {
         self.servingSize = servingSize; self.servingAmount = servingAmount; self.servingUnit = servingUnit
         self.calories = calories; self.protein = protein; self.totalFat = totalFat; self.saturatedFat = saturatedFat
-        self.carbohydrates = carbohydrates; self.sugar = sugar; self.sodium = sodium; self.calcium = calcium
+        self.carbohydrates = carbohydrates; self.sugar = sugar; self.sodium = sodium; self.calcium = calcium; self.fiber = fiber
     }
 }
 public enum ShoppingNutrient: String, CaseIterable, Identifiable, Sendable {
-    case calories = "Calories", protein = "Protein", totalFat = "Total Fat", saturatedFat = "Saturated Fat", carbohydrates = "Carbohydrates", sugar = "Sugar", sodium = "Sodium", calcium = "Calcium"
+    case calories = "Calories", protein = "Protein", totalFat = "Total Fat", saturatedFat = "Saturated Fat", carbohydrates = "Carbohydrates", sugar = "Sugar", sodium = "Sodium", calcium = "Calcium", fiber = "Fiber"
     public var id: String { rawValue }
     public var unit: String { self == .calories ? "" : (self == .sodium || self == .calcium ? "mg" : "g") }
     public func value(_ facts: ShoppingNutrition?) -> Double? {
@@ -68,7 +68,7 @@ public enum ShoppingNutrient: String, CaseIterable, Identifiable, Sendable {
         case .calories: value = facts?.calories; case .protein: value = facts?.protein
         case .totalFat: value = facts?.totalFat; case .saturatedFat: value = facts?.saturatedFat
         case .carbohydrates: value = facts?.carbohydrates; case .sugar: value = facts?.sugar
-        case .sodium: value = facts?.sodium; case .calcium: value = facts?.calcium
+        case .sodium: value = facts?.sodium; case .calcium: value = facts?.calcium; case .fiber: value = facts?.fiber
         }
         return value.flatMap { $0.isFinite && $0 >= 0 ? $0 : nil }
     }
@@ -101,7 +101,7 @@ public struct ShoppingComparison: Sendable {
     }
 }
 public enum ShoppingGoal: String, CaseIterable, Identifiable, Sendable {
-    case lowerFat = "Lower fat", lowerSugar = "Lower sugar", lowerCalorie = "Lower calorie", higherProtein = "Higher protein", lactoseFree = "Lactose-free", plantBased = "Plant-based", lowerPrice = "Lower price"
+    case lowerFat = "Lower fat", lowerSugar = "Lower sugar", lowerCalorie = "Lower calorie", higherProtein = "Higher protein", lactoseFree = "Lactose-free", plantBased = "Plant-based", lowerPrice = "Lower price", glutenFree = "Gluten-free", highFiber = "High fiber", lowSodium = "Low sodium", noArtificial = "No artificial ingredients"
     public var id: String { rawValue }
     public func supported(by item: ShoppingAlternative, original: ShoppingProductFacts?) -> Bool {
         let comparison = ShoppingComparison(original: original, alternative: item.facts)
@@ -112,6 +112,10 @@ public enum ShoppingGoal: String, CaseIterable, Identifiable, Sendable {
         case .higherProtein: if case .higher = comparison.difference(.protein) { return true }
         case .lactoseFree: return item.facts?.hasSource == true && (item.facts?.dietary ?? []).contains("Lactose-free")
         case .plantBased: return item.facts?.hasSource == true && (item.facts?.dietary ?? []).contains("Plant-based")
+        case .glutenFree: return item.facts?.hasSource == true && (item.facts?.dietary ?? []).contains("Gluten-free")
+        case .highFiber: if case .higher = comparison.difference(.fiber) { return true }
+        case .lowSodium: if case .lower = comparison.difference(.sodium) { return true }
+        case .noArtificial: return item.facts?.hasSource == true && (item.facts?.dietary ?? []).contains("No artificial ingredients")
         case .lowerPrice:
             if let a = original, let b = item.facts, a.hasSource, b.hasSource, a.priceLabel != nil, b.priceLabel != nil,
                a.currency == b.currency, let pack = a.pricePackage, !pack.isEmpty, pack == b.pricePackage,

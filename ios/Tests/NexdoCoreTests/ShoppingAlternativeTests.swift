@@ -103,3 +103,13 @@ private func alternative(_ metadata: ShoppingProductFacts? = nil) -> ShoppingAlt
     #expect(swapped.items[0].brand == "Example")
     #expect(swapped.items[0].barcode == metadata.barcode)
 }
+
+@Test func extendedShoppingGoalsRequireVerifiedData() {
+    var source = facts(); source.nutrition?.fiber = 1; source.nutrition?.sodium = 100
+    var changed = facts(); changed.nutrition?.fiber = 4; changed.nutrition?.sodium = 50
+    changed.dietary = ["Gluten-free", "No artificial ingredients"]
+    for goal in [ShoppingGoal.highFiber, .lowSodium, .glutenFree, .noArtificial] {
+        #expect(goal.supported(by: alternative(changed), original: source))
+        #expect(!goal.supported(by: alternative(), original: source))
+    }
+}

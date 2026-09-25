@@ -1,5 +1,5 @@
-export type Nutrient = 'calories' | 'protein' | 'totalFat' | 'saturatedFat' | 'carbohydrates' | 'sugar' | 'sodium' | 'calcium';
-export const nutrients: Nutrient[] = ['calories','protein','totalFat','saturatedFat','carbohydrates','sugar','sodium','calcium'];
+export type Nutrient = 'calories' | 'protein' | 'totalFat' | 'saturatedFat' | 'carbohydrates' | 'sugar' | 'sodium' | 'calcium' | 'fiber';
+export const nutrients: Nutrient[] = ['calories','protein','totalFat','saturatedFat','carbohydrates','sugar','sodium','calcium','fiber'];
 export type Nutrition = Partial<Record<Nutrient, number>> & { servingSize: string; servingAmount: number; servingUnit: 'g' | 'ml' };
 export type MatchQuality = 'exact_barcode' | 'branded_match' | 'representative_generic';
 /** The iOS facts contract, extended rather than a second shopping domain object. */

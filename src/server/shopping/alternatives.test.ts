@@ -27,7 +27,7 @@ describe('shopping alternatives', () => {
   it('does not fail the feature when the AI request fails', async () => {
     vi.stubEnv('OPENAI_API_KEY', 'test');
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline')));
-    expect((await recommendShoppingAlternatives('user', { name: 'Bread', category: 'Bakery' })).alternatives).toHaveLength(3);
+    expect((await recommendShoppingAlternatives('user', { name: 'Bread', category: 'Bakery' })).alternatives).toHaveLength(5);
     vi.unstubAllGlobals();
   });
 });

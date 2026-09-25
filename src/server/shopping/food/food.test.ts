@@ -15,7 +15,8 @@ describe('food normalization and matching',()=>{
   it('maps USDA full-detail nutrient IDs and units without label-serving confusion',()=>{
     const result=normalizeUSDA({...usda(),labelNutrients:{fat:{value:8}}},'representative_generic')!;
     expect(result.nutrition).toMatchObject({servingAmount:100,servingUnit:'g',calories:61,totalFat:3.25,sodium:43,calcium:113});
-    expect(result.nutrition?.sugar).toBeUndefined();expect(result.matchQuality).toBe('representative_generic');expect(result.allergenStatus).toBe('unknown');
+    expect(result.nutrition?.sugar).toBeUndefined();
+    expect(normalizeUSDA({...usda(),foodNutrients:[{nutrient:{id:1079,unitName:'g'},amount:6}]},'representative_generic')?.nutrition?.fiber).toBe(6);expect(result.matchQuality).toBe('representative_generic');expect(result.allergenStatus).toBe('unknown');
   });
   it('maps OFF declared allergens and traces separately and converts g to mg',()=>{
     const result=normalizeOFF(off(),'exact_barcode')!;

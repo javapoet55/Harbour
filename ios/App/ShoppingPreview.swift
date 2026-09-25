@@ -9,13 +9,14 @@ final class ShoppingPreviewProtocol:URLProtocol,@unchecked Sendable {
     override class func canonicalRequest(for request:URLRequest)->URLRequest{request}
     static func reset(){
         lock.lock();defer{lock.unlock()}
-        let items:[GroceryItem]=[
+        var items:[GroceryItem]=[
             .init(name:"Bananas",category:"Produce",quantity:"6"),
             .init(name:"Tomatoes",category:"Produce",quantity:"4",notes:"Organic"),
             .init(name:"Spinach",category:"Produce",size:"1 bag"),
             .init(name:"Milk",category:"Dairy & Eggs",size:"1 gallon"),
             .init(name:"Eggs",category:"Dairy & Eggs",size:"1 dozen"),
             .init(name:"Rice",category:"Pantry",size:"5 kg")]
+        if ProcessInfo.processInfo.arguments.contains("-shopping-bread-preview") { items[3] = .init(name: "Bread", category: "Bakery", quantity: "1", size: "packet") }
         let encoded=(try! JSONSerialization.jsonObject(with:JSONEncoder().encode(items))) as! [[String:Any]]
         lists=[["id":"preview-list","title":"Weekly Shopping List","date":MomentDates.day(Date().addingTimeInterval(2*86400),zone:"America/Los_Angeles"),"timeZone":"America/Los_Angeles","weekly":true,"revision":0,"items":encoded]]
     }
@@ -45,6 +46,14 @@ final class ShoppingPreviewProtocol:URLProtocol,@unchecked Sendable {
                 var one = milk; one.name = "1% Milk"; one.facts?.nutrition?.totalFat = 2.5
                 var unknown = milk; unknown.name = "Lactose-free whole milk"; unknown.facts = nil
                 var result = ShoppingAlternativesResponse(alternatives: [milk,one,unknown], tip: "Preview only", usedAI: false); result.originalFacts = original
+                if ProcessInfo.processInfo.arguments.contains("-shopping-bread-preview") {
+                    result.alternatives = ["Whole wheat bread", "Multigrain bread", "Sourdough bread", "Low-carb bread", "Rye bread"].enumerated().map { index, name in
+                        var item = milk; item.name = name; item.category = "Bakery"; item.size = "packet"
+                        item.facts?.nutrition?.servingSize = "test serving"; item.facts?.nutrition?.calories = Double(100 + index * 10)
+                        return item
+                    }
+                }
+                if ProcessInfo.processInfo.arguments.contains("-shopping-empty-alternatives") { result.alternatives = [] }
                 response = (try! JSONSerialization.jsonObject(with: JSONEncoder().encode(result))) as! [String:Any]
             }else if operation=="parse"{
                 let item=GroceryItem(name:"Apples",category:"Produce",quantity:"3")

@@ -8,179 +8,193 @@ struct ShoppingAlternativesView: View {
     let onAdd: (ShoppingAlternative) async -> Bool
     let onFavorite: (String?) async -> Bool
     @State private var result: ShoppingAlternativesResponse?
-    @State private var selectedID: String?
-    @State private var goal: ShoppingGoal = .lowerFat
-    @State private var filterByGoal = false
+    @State private var goal: ShoppingGoal?
     @State private var loading = true
     @State private var saving = false
     @State private var error: String?
     @State private var retry = 0
     @State private var detail: AlternativePresentation?
-    private var selected: ShoppingAlternative? { result?.alternatives.first { $0.id == selectedID } }
+    @State private var panel: AlternativesPanel?
+    @State private var pending: ShoppingAlternative?
+    @State private var completed: ShoppingAlternative?
+    @State private var savedReplacement: ShoppingAlternative?
     private var savedOriginal: GroceryItem { store.lists.flatMap(\.items).first { $0.id == original.id } ?? original }
-    private var ranked: [ShoppingAlternative] {
+    private var cartCount: Int { store.lists.first { $0.items.contains { $0.id == original.id } }?.items.count ?? 0 }
+    private var visibleItems: [ShoppingAlternative] {
         let items = result?.alternatives ?? []
-        return filterByGoal ? items.filter { goal.supported(by: $0, original: result?.originalFacts) } : items
+        return goal.map { value in items.filter { value.supported(by: $0, original: result?.originalFacts) } } ?? items
     }
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
+                VStack(alignment: .leading, spacing: 10) {
                     originalCard
-                    Text("AI Recommended Alternatives").font(.title2.bold())
-                    Text("Practical swaps based on the item in your list.").font(.subheadline).foregroundStyle(Color.nexdoSecondary)
+                    HStack(alignment: .firstTextBaseline) {
+                        Text("AI Recommended Alternatives").font(.subheadline.bold())
+                        Spacer(minLength: 4)
+                        Button { panel = .why } label: { Label("Why these?", systemImage: "lightbulb").font(.caption).fixedSize().frame(minHeight: 44).contentShape(Rectangle()) }
+                            .buttonStyle(.plain).accessibilityIdentifier("alternatives.whyThese")
+                    }
+                    Text("Practical swaps based on the item in your list.").font(.caption).foregroundStyle(Color.nexdoSecondary).padding(.top, -4)
                     if loading { ProgressView("Finding useful alternatives…").frame(maxWidth: .infinity).padding() }
                     if let result {
-                        goalPicker
-                        if filterByGoal {
-                            Text(ranked.isEmpty ? "No verified matches for \(goal.rawValue.lowercased()). Product data may not support this comparison yet." : "\(ranked.count) matching alternatives for \(goal.rawValue.lowercased())")
-                                .font(.subheadline).foregroundStyle(Color.nexdoSecondary).accessibilityIdentifier("alternatives.goalStatus")
-                            Button("Show all alternatives") { filterByGoal = false; selectedID = nil }
-                                .frame(minHeight: 44).accessibilityIdentifier("alternatives.showAll")
+                        goalChips
+                        if let goal {
+                            HStack {
+                                Text(visibleItems.isEmpty ? "No verified matches for \(goal.rawValue.lowercased())." : "\(visibleItems.count) matches · \(goal.rawValue)")
+                                    .font(.caption).accessibilityIdentifier("alternatives.goalStatus")
+                                Spacer()
+                                Button("Show all") { self.goal = nil }.font(.caption).frame(minHeight: 44).accessibilityIdentifier("alternatives.showAll")
+                            }.foregroundStyle(Color.nexdoSecondary)
                         }
-                        if result.originalFacts == nil || result.alternatives.allSatisfy({ $0.facts == nil }) {
-                            Text("Nutrition comparisons are unavailable for some items. Open Nutrition or Allergens to see the available source information.").font(.caption).foregroundStyle(Color.nexdoSecondary)
-                            Button("Retry product data") { retry += 1 }.frame(minHeight: 44)
-                        }
-                        ForEach(ranked) { alternative in alternativeCard(alternative) }
-                        if result.alternatives.isEmpty { Text("No alternatives available for this item yet.") }
+                        if visibleItems.isEmpty { emptyState(filtered: !result.alternatives.isEmpty) }
+                        ForEach(visibleItems) { alternative in compactRow(alternative) }
+                        Label("Always check the product label for the most current nutrition and allergen information.", systemImage: "lightbulb")
+                            .font(.caption).foregroundStyle(Color.nexdoSecondary).padding(12)
+                            .frame(maxWidth: .infinity, alignment: .leading).background(Color.nexdoBlue.opacity(0.06), in: RoundedRectangle(cornerRadius: 14))
                     }
                     if let error {
-                        Text(error).foregroundStyle(.red).accessibilityIdentifier("alternatives.error")
-                        if result == nil { Button("Try again") { retry += 1 } }
+                        Text(error).font(.subheadline).foregroundStyle(.red).accessibilityIdentifier("alternatives.error")
+                        Button("Try again") { retry += 1 }.frame(minHeight: 44)
                     }
-                }.padding(18)
-            }.background { TodayBackdrop() }
-                .safeAreaInset(edge: .bottom) { actionBar }
+                }.padding(16)
+            }.background { AlternativesBackdrop() }
+                .safeAreaInset(edge: .bottom) {
+                    Button { dismiss() } label: { Label("View in Cart (\(cartCount))", systemImage: "cart").frame(maxWidth: .infinity) }
+                        .buttonStyle(NexdoGradientButtonStyle()).accessibilityIdentifier("alternatives.cart")
+                        .padding(16).background(.ultraThinMaterial)
+                }
                 .navigationTitle("Item Alternatives").navigationBarTitleDisplayMode(.inline)
                 .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Close", systemImage: "xmark") { dismiss() }.labelStyle(.iconOnly).accessibilityLabel("Close alternatives") } }
                 .foregroundStyle(Color.nexdoInk)
-                .disabled(saving)
                 .navigationDestination(isPresented: Binding(get: { detail != nil }, set: { if !$0 { detail = nil } })) {
-                    if let presentation = detail { ShoppingAlternativeDetails(original: original, originalFacts: result?.originalFacts, alternative: presentation.alternative, initialTab: presentation.tab, onView: { tab in track(tab.event, alternative: presentation.alternative) }, onReplace: { await apply(presentation.alternative, add: false) }, onAdd: { await apply(presentation.alternative, add: true) }, failure: { error }) }
+                    if let presentation = detail {
+                        ShoppingAlternativeDetails(original: original, originalFacts: result?.originalFacts, alternative: presentation.alternative, initialTab: presentation.tab,
+                            onView: { track($0.event) }, onReplace: { pending = presentation.alternative; panel = .confirm },
+                            onAdd: { await apply(presentation.alternative, add: true) }, failure: { error },
+                            favorite: savedOriginal.favoriteAlternatives?.contains(presentation.alternative.id) == true,
+                            onFavorite: { favorite(presentation.alternative.id) })
+                    }
                 }
-        }.task(id: retry) { await load() }
+        }
+        .sheet(item: $panel, onDismiss: { if let savedReplacement { completed = savedReplacement; self.savedReplacement = nil } }) { value in
+            switch value {
+            case .goals: AlternativesGoalPicker(original: original, selected: goal) { goal = $0; track("alternative_goal_selected") }
+            case .why: AlternativesWhyView()
+            case .confirm:
+                if let pending { replacementPanel(pending) }
+            }
+        }
+        .fullScreenCover(item: $completed) { alternative in
+            AlternativesSuccess(original: original.name, replacement: alternative.name) { completed = nil; dismiss() }
+        }
+        .task(id: retry) { await load() }
     }
     private var originalCard: some View {
-        HStack(spacing: 14) {
-            AlternativeArtwork(item: original).frame(width: 58, height: 80)
-            VStack(alignment: .leading, spacing: 6) {
+        HStack(spacing: 12) {
+            AlternativeArtwork(item: original).frame(width: 46, height: 50)
+            VStack(alignment: .leading, spacing: 4) {
                 Text(original.name).font(.headline)
-                Text(original.amountLabel).font(.subheadline).foregroundStyle(Color.nexdoSecondary)
-                Text("Original Item").font(.caption.bold()).foregroundStyle(Color.nexdoBlue).padding(6).background(Color.nexdoBlue.opacity(0.1), in: Capsule())
+                Text(original.amountLabel).font(.caption).foregroundStyle(Color.nexdoSecondary)
+                Text("Original Item").font(.caption2.weight(.semibold)).foregroundStyle(Color.nexdoBlue).padding(.horizontal, 7).padding(.vertical, 3).background(Color.nexdoBlue.opacity(0.1), in: Capsule())
             }
-            Spacer()
-            favoriteButton(nil, active: savedOriginal.favorite == true)
-        }.modifier(AlternativeCardSurface())
+            Spacer(); favoriteButton(nil, active: savedOriginal.favorite == true)
+        }.padding(12).background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 18))
     }
-    private var goalPicker: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Label("What are you looking for?", systemImage: "sparkles").font(.headline)
-            ViewThatFits(in: .horizontal) {
-                goalGrid(minimum: 118)
-                goalGrid(minimum: 150)
-            }
-        }.modifier(AlternativeCardSurface())
-    }
-    private func goalGrid(minimum: CGFloat) -> some View {
-        LazyVGrid(columns: [GridItem(.adaptive(minimum: minimum))], spacing: 8) {
-            ForEach(ShoppingGoal.allCases) { value in
-                Button { goal = value; filterByGoal = true; selectedID = nil; track("alternative_goal_selected") } label: {
-                    Text(value.rawValue).font(.subheadline.weight(.semibold)).fixedSize(horizontal: false, vertical: true)
-                        .frame(maxWidth: .infinity, minHeight: 44)
-                        .foregroundStyle(filterByGoal && goal == value ? Color.white : Color.nexdoInk)
-                        .background(filterByGoal && goal == value ? Color.nexdoBlue : Color.nexdoBlue.opacity(0.05), in: Capsule())
-                        .overlay(Capsule().stroke(Color.nexdoIndigo.opacity(0.18)))
-                }.buttonStyle(.plain).accessibilityAddTraits(filterByGoal && goal == value ? .isSelected : [])
-                    .accessibilityIdentifier("alternatives.goal.\(value.rawValue)")
-            }
-        }
-    }
-    private func alternativeCard(_ alternative: ShoppingAlternative) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .top, spacing: 12) {
-                Button { show(alternative, tab: .nutrition) } label: { AlternativeArtwork(item: alternative.groceryItem, productImageURL: alternative.facts?.imageURL).frame(width: 48, height: 60) }.buttonStyle(.plain).accessibilityLabel("View \(alternative.name)")
-                VStack(alignment: .leading, spacing: 6) {
-                    Button { show(alternative, tab: .nutrition) } label: { Text(alternative.name).font(.headline).frame(minHeight: 44, alignment: .leading) }.buttonStyle(.plain)
-                    Label(goal.supported(by: alternative, original: result?.originalFacts) ? goal.rawValue : "Suggested alternative", systemImage: "leaf.fill").font(.caption).foregroundStyle(Color.green)
-                    if let facts = alternative.facts, facts.hasSource, let nutrition = facts.nutrition {
-                        Text(nutritionSummary(nutrition)).font(.caption)
-                        Text("Per \(nutrition.servingSize)").font(.caption2).foregroundStyle(Color.nexdoSecondary)
-                        if let label = facts.matchLabel { Text(label).font(.caption2).foregroundStyle(Color.nexdoSecondary) }
-                    }
-                    if !alternative.usages.isEmpty { Text("Best for: " + alternative.usages.joined(separator: " · ")).font(.caption).foregroundStyle(Color.nexdoIndigo) }
+    private var goalChips: some View {
+        HStack(spacing: 4) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                ForEach([ShoppingGoal.lowerFat, .lowerSugar, .lowerCalorie]) { value in
+                    Button { goal = goal == value ? nil : value; track("alternative_goal_selected") } label: {
+                        Label(value.rawValue, systemImage: value.icon).font(.caption.weight(.medium)).padding(.horizontal, 10).frame(minHeight: 44)
+                            .foregroundStyle(goal == value ? Color.white : Color.nexdoInk)
+                            .background(goal == value ? Color.nexdoBlue : Color(uiColor: .secondarySystemGroupedBackground), in: Capsule())
+                            .overlay(Capsule().stroke(Color.nexdoBlue.opacity(0.12)))
+                    }.buttonStyle(.plain).accessibilityAddTraits(goal == value ? .isSelected : []).accessibilityIdentifier("alternatives.goal.\(value.rawValue)")
                 }
-                Spacer(minLength: 0)
-                VStack(spacing: 0) {
-                    favoriteButton(alternative.id, active: savedOriginal.favoriteAlternatives?.contains(alternative.id) == true)
-                    Button { show(alternative, tab: .why) } label: {
-                        Image(systemName: "lightbulb").frame(width: 44, height: 44)
-                    }.buttonStyle(.plain).foregroundStyle(Color.nexdoBlue)
-                        .accessibilityLabel("Why this alternative?").accessibilityIdentifier("alternatives.Why this?.\(alternative.name)")
                 }
             }
-            HStack(spacing: 8) {
-                if let price = alternative.facts?.priceLabel { Text(price).font(.subheadline.bold()) }
-                Text(alternative.groceryItem.amountLabel).font(.caption).foregroundStyle(Color.nexdoSecondary)
-            }
-            ViewThatFits(in: .horizontal) {
-                HStack(spacing: 6) { detailButtons(alternative); replaceButton(alternative) }
-                VStack(alignment: .leading, spacing: 6) { detailButtons(alternative); replaceButton(alternative) }
-            }
-        }.modifier(AlternativeCardSurface())
-            .overlay(RoundedRectangle(cornerRadius: 22).stroke(selectedID == alternative.id ? Color.nexdoBlue : .clear, lineWidth: 1.5))
-    }
-    @ViewBuilder private func detailButtons(_ item: ShoppingAlternative) -> some View {
-        ForEach([AlternativeTab.nutrition, .allergens]) { tab in
-            Button { show(item, tab: tab) } label: { Label(tab.rawValue, systemImage: tab.icon).font(.caption).frame(minHeight: 44) }
-                .buttonStyle(.bordered).tint(.nexdoBlue).accessibilityIdentifier("alternatives.\(tab.id).\(item.name)")
+                Button { panel = .goals } label: { Label("More", systemImage: "ellipsis").font(.caption).padding(.horizontal, 10).frame(minHeight: 44).background(.thinMaterial, in: Capsule()) }
+                    .buttonStyle(.plain).accessibilityIdentifier("alternatives.moreGoals")
         }
     }
-    private func replaceButton(_ alternative: ShoppingAlternative) -> some View {
-        Button {
-            selectedID = alternative.id; track("alternative_selected", alternative: alternative)
-        } label: {
-            Label(selectedID == alternative.id ? "Selected" : "Replace", systemImage: selectedID == alternative.id ? "checkmark" : "arrow.left.arrow.right")
-                .font(.caption.bold()).frame(minHeight: 44)
-        }.buttonStyle(.bordered).tint(.nexdoBlue).accessibilityIdentifier("alternatives.select.\(alternative.name)")
+    private func compactRow(_ item: ShoppingAlternative) -> some View {
+        HStack(spacing: 10) {
+            Button { show(item) } label: { AlternativeArtwork(item: item.groceryItem, productImageURL: item.facts?.imageURL).frame(width: 56, height: 68) }
+                .buttonStyle(.plain).accessibilityLabel("View \(item.name)")
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(alignment: .top, spacing: 0) {
+                    Button { show(item) } label: { Text(item.name).font(.subheadline.weight(.semibold)).frame(maxWidth: .infinity, minHeight: 44, alignment: .leading).multilineTextAlignment(.leading) }
+                        .buttonStyle(.plain).accessibilityIdentifier("alternatives.details.\(item.name)")
+                    favoriteButton(item.id, active: savedOriginal.favoriteAlternatives?.contains(item.id) == true)
+                    Button { pending = item; panel = .confirm } label: { Label("Replace", systemImage: "arrow.left.arrow.right").font(.caption2.weight(.semibold)).padding(.horizontal, 7).frame(minHeight: 44).background(Color.nexdoBlue.opacity(0.09), in: Capsule()) }
+                        .buttonStyle(.plain).accessibilityIdentifier("alternatives.select.\(item.name)")
+                }
+                let labels = ShoppingGoal.allCases.filter { $0.supported(by: item, original: result?.originalFacts) }.prefix(2).map(\.rawValue)
+                Label(labels.isEmpty ? "Suggested alternative" : labels.joined(separator: " · "), systemImage: "leaf.fill").font(.caption2).foregroundStyle(.green)
+                HStack(alignment: .bottom) {
+                    if let facts = item.facts, facts.hasSource, let nutrition = facts.nutrition {
+                        Text(nutritionSummary(nutrition) + " · per " + nutrition.servingSize).font(.caption2).foregroundStyle(Color.nexdoSecondary)
+                    } else { Text("Nutrition details unavailable").font(.caption2).foregroundStyle(Color.nexdoSecondary) }
+                    Spacer(minLength: 0)
+                    Button { show(item) } label: { Image(systemName: "chevron.right").font(.caption).frame(width: 32, height: 44) }.buttonStyle(.plain).accessibilityLabel("Details for \(item.name)")
+                }
+            }
+        }.padding(10).background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 18))
+            .overlay(RoundedRectangle(cornerRadius: 18).stroke(Color.nexdoBlue.opacity(0.06)))
     }
     private func favoriteButton(_ id: String?, active: Bool) -> some View {
-        Button { Task { saving = true; defer { saving = false }; if !(await onFavorite(id)) { error = store.error ?? "Couldn’t save favorite. Please try again." } } } label: {
-            Image(systemName: active ? "star.fill" : "star").font(.title3).foregroundStyle(Color.nexdoBlue).frame(width: 44, height: 44)
-        }.buttonStyle(.plain).accessibilityLabel(active ? "Remove favorite" : "Add favorite")
-            .accessibilityIdentifier("alternatives.favorite.\(id ?? "original")")
+        Button { favorite(id) } label: { Image(systemName: active ? "star.fill" : "star").font(.body).foregroundStyle(Color.nexdoBlue).frame(width: 44, height: 44) }
+            .buttonStyle(.plain).disabled(saving).accessibilityLabel(active ? "Remove favorite" : "Add favorite").accessibilityIdentifier("alternatives.favorite.\(id ?? "original")")
     }
-    private var actionBar: some View {
-        VStack(spacing: 4) {
-            if let selected {
-                Button { Task { await apply(selected, add: false) } } label: { Text("Replace with \(selected.name)").font(.headline).frame(maxWidth: .infinity) }.buttonStyle(NexdoGradientButtonStyle()).accessibilityIdentifier("alternatives.confirm")
-                Button("Add to Cart Instead") { Task { await apply(selected, add: true) } }.frame(minHeight: 44).accessibilityIdentifier("alternatives.add")
-            } else {
-                Button { dismiss() } label: { Label("View in Cart", systemImage: "cart").frame(maxWidth: .infinity) }.buttonStyle(NexdoGradientButtonStyle())
-            }
-            if saving { ProgressView("Saving…") }
-        }.padding(.horizontal, 18).padding(.vertical, 8).background(.ultraThinMaterial)
+    private func favorite(_ id: String?) {
+        Task { saving = true; defer { saving = false }; if !(await onFavorite(id)) { error = store.error ?? "Couldn’t save favorite. Please try again." } }
     }
-    private func show(_ alternative: ShoppingAlternative, tab: AlternativeTab) {
-        track("alternative_viewed", alternative: alternative)
-        detail = .init(alternative: alternative, tab: tab)
+    private func show(_ item: ShoppingAlternative) { detail = .init(alternative: item, tab: .why); track("alternative_viewed") }
+    private func emptyState(filtered: Bool) -> some View {
+        VStack(spacing: 16) {
+            ZStack { Circle().fill(Color.nexdoBlue.opacity(0.08)).frame(width: 140, height: 140); Image(systemName: "magnifyingglass").font(.system(size: 72)).foregroundStyle(Color.nexdoBlue.opacity(0.25)); AlternativeArtwork(item: original).frame(width: 75, height: 85).offset(x: 30, y: 15) }.padding(.top, 20)
+            Text(filtered ? "No matching alternatives yet" : "No alternatives found yet").font(.title3.bold())
+            Text(filtered ? "Try another goal or view all suggestions. We only show matches supported by available product data." : "We’re working on finding the best alternatives for this item. Please check back later.").font(.subheadline).foregroundStyle(Color.nexdoSecondary).multilineTextAlignment(.center)
+            Button(filtered ? "Show all alternatives" : "OK") { if filtered { goal = nil } else { dismiss() } }.buttonStyle(.bordered).frame(minHeight: 44)
+        }.frame(maxWidth: .infinity).padding(20).accessibilityIdentifier("alternatives.empty")
     }
-    @MainActor private func apply(_ alternative: ShoppingAlternative, add: Bool) async {
+    private func replacementPanel(_ item: ShoppingAlternative) -> some View {
+        VStack(spacing: 18) {
+            Spacer(minLength: 12)
+            Image(systemName: "arrow.left.arrow.right").font(.largeTitle).foregroundStyle(Color.nexdoBlue).frame(width: 78, height: 78).background(Color.nexdoBlue.opacity(0.08), in: Circle())
+            Text("Replace item?").font(.title2.bold())
+            Text("Replace “\(original.name)” with “\(item.name)”? ").foregroundStyle(Color.nexdoSecondary).multilineTextAlignment(.center)
+            VStack(spacing: 10) {
+                replacementItem(original)
+                Image(systemName: "arrow.down").foregroundStyle(Color.nexdoBlue)
+                replacementItem(item.groceryItem)
+            }.modifier(AlternativeCardSurface())
+            if let error { Text(error).foregroundStyle(.red).accessibilityIdentifier("alternative.saveError") }
+            Button { Task { await apply(item, add: false) } } label: { Text(saving ? "Replacing…" : "Replace").frame(maxWidth: .infinity) }.buttonStyle(AlternativeBlueButtonStyle()).disabled(saving).accessibilityIdentifier("alternatives.confirm")
+            Button("Cancel") { panel = nil; error = nil }.frame(minHeight: 44).disabled(saving)
+            Spacer(minLength: 12)
+        }.padding(24).background { AlternativesBackdrop() }.foregroundStyle(Color.nexdoInk).interactiveDismissDisabled(saving)
+    }
+    private func replacementItem(_ item: GroceryItem) -> some View {
+        HStack(spacing: 14) { AlternativeArtwork(item: item).frame(width: 58, height: 62); VStack(alignment: .leading) { Text(item.name).font(.headline); Text(original.amountLabel).font(.caption).foregroundStyle(Color.nexdoSecondary) }; Spacer() }
+    }
+    @MainActor private func apply(_ item: ShoppingAlternative, add: Bool) async {
         guard !saving else { return }; saving = true; error = nil; defer { saving = false }
-        let success = add ? await onAdd(alternative) : await onReplace(alternative)
-        if success { track(add ? "alternative_added_instead" : "alternative_replaced", alternative: alternative); detail = nil; dismiss() }
-        else { error = store.error ?? "Couldn’t save this change. Please try again." }
+        if await (add ? onAdd(item) : onReplace(item)) {
+            track(add ? "alternative_added_instead" : "alternative_replaced")
+            if add { panel = nil; dismiss() } else { savedReplacement = item; panel = nil }
+        } else { error = store.error ?? "Couldn’t save this change. Please try again." }
     }
-    private func track(_ event: String, alternative: ShoppingAlternative? = nil) {
-        NexdoAnalytics.logEvent(event, parameters: ["original_category": original.category, "alternative_category": alternative?.category ?? "", "goal": goal.rawValue, "source": result?.usedAI == true ? "ai_suggestion" : "curated_suggestion"])
-    }
+    private func track(_ event: String) { NexdoAnalytics.logEvent(event, parameters: ["original_category": original.category, "goal": goal?.rawValue ?? "All"]) }
     @MainActor private func load() async {
         loading = true; error = nil; defer { loading = false }
-        do { let response = try await store.alternatives(for: original, refresh: retry > 0); try Task.checkCancellation(); result = response; track("shopping_alternatives_opened") }
+        do { result = try await store.alternatives(for: original, refresh: retry > 0); try Task.checkCancellation(); track("shopping_alternatives_opened") }
         catch { if !Task.isCancelled { self.error = error.localizedDescription } }
     }
 }
-
+private enum AlternativesPanel: String, Identifiable { case goals, why, confirm; var id: String { rawValue } }
 struct AlternativeCardSurface: ViewModifier {
     func body(content: Content) -> some View {
         content.padding(16).frame(maxWidth: .infinity, alignment: .leading)
@@ -190,7 +204,7 @@ struct AlternativeCardSurface: ViewModifier {
     }
 }
 private func nutritionSummary(_ facts: ShoppingNutrition) -> String {
-    [ShoppingNutrient.calories, .protein, .totalFat].compactMap { nutrient in nutrient.value(facts).map { "\($0.formatted())\(nutrient.unit) \(nutrient == .calories ? "cal" : nutrient.rawValue.lowercased())" } }.joined(separator: " · ")
+    [ShoppingNutrient.calories, .protein, .totalFat, .carbohydrates].compactMap { nutrient in nutrient.value(facts).map { "\($0.formatted())\(nutrient.unit) \(nutrient == .calories ? "cal" : nutrient == .totalFat ? "fat" : nutrient == .carbohydrates ? "carbs" : "protein")" } }.joined(separator: " · ")
 }
 struct AlternativePresentation: Identifiable {
     let id = UUID()
@@ -230,6 +244,7 @@ struct AlternativeArtwork: View {
     private var illustration: some View {
         Group {
             if let asset, item.imageData == nil { Image(asset).resizable().scaledToFit() }
+            else if item.imageData == nil, item.name.lowercased().contains("bread") { BreadPackArtwork(name: item.name) }
             else { GroceryArtwork(item: item) }
         }.accessibilityHidden(true)
     }
@@ -246,6 +261,8 @@ struct ShoppingAlternativeDetails: View {
     let onReplace: () async -> Void
     let onAdd: () async -> Void
     let failure: () -> String?
+    var favorite = false
+    var onFavorite: () -> Void = {}
     @State private var tab: AlternativeTab = .nutrition
     @State private var saving = false
     @State private var error: String?
@@ -253,6 +270,7 @@ struct ShoppingAlternativeDetails: View {
     var body: some View {
         ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
+                    if alternative.name.lowercased().contains("whole wheat") { BreadPackArtwork(name: alternative.name, hero: true).frame(height: 185) }
                     HStack(spacing: 18) {
                         AlternativeArtwork(item: alternative.groceryItem, productImageURL: alternative.facts?.imageURL).frame(width: 76, height: 114)
                         VStack(alignment: .leading, spacing: 8) {
@@ -261,6 +279,14 @@ struct ShoppingAlternativeDetails: View {
                             Label("Recommended Alternative", systemImage: "sparkles").font(.caption).foregroundStyle(Color.nexdoBlue)
                             if let price = alternative.facts?.priceLabel { Text(price).font(.headline) }
                         }
+                    }
+                    if let facts = alternative.facts, facts.hasSource, let nutrition = facts.nutrition {
+                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 65))], spacing: 12) {
+                            ForEach([ShoppingNutrient.calories, .protein, .totalFat, .carbohydrates]) { nutrient in
+                                VStack(spacing: 4) { Text(value(nutrient.value(nutrition), nutrient: nutrient)).font(.headline); Text(nutrient.rawValue).font(.caption2).foregroundStyle(Color.nexdoSecondary) }
+                            }
+                        }
+                        Text("Per \(nutrition.servingSize)").font(.caption).foregroundStyle(Color.nexdoSecondary)
                     }
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 8) {
@@ -276,7 +302,7 @@ struct ShoppingAlternativeDetails: View {
                     switch tab {
                     case .nutrition: nutrition; reasonCard
                     case .allergens: allergens
-                    case .why: reasonCard
+                    case .why: reasonCard; nutrition
                     case .bestFor: bestFor
                     }
                     if let facts = alternative.facts, facts.hasSource {
@@ -294,13 +320,13 @@ struct ShoppingAlternativeDetails: View {
             }.background { TodayBackdrop(subtle: true) }
                 .safeAreaInset(edge: .bottom) {
                     VStack(spacing: 4) {
-                        Button { perform(add: false) } label: { Text("Replace with \(alternative.name)").font(.headline).frame(maxWidth: .infinity) }.buttonStyle(NexdoGradientButtonStyle()).accessibilityIdentifier("alternative.detail.replace")
+                        Button { perform(add: false) } label: { Text("Replace with this item").font(.headline).frame(maxWidth: .infinity) }.buttonStyle(AlternativeBlueButtonStyle()).accessibilityIdentifier("alternative.detail.replace")
                         Button("Add to Cart Instead") { perform(add: true) }.frame(minHeight: 44).accessibilityIdentifier("alternative.detail.add")
                         if saving { ProgressView("Saving…") }
                     }.padding(16).background(.ultraThinMaterial).disabled(saving)
                 }
-                .navigationTitle("Alternative Details").navigationBarTitleDisplayMode(.inline)
-                .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() } } }
+                .navigationTitle("Item Details").navigationBarTitleDisplayMode(.inline)
+                .toolbar { ToolbarItem(placement: .topBarTrailing) { Button(action: onFavorite) { Image(systemName: favorite ? "star.fill" : "star") }.accessibilityLabel(favorite ? "Remove favorite" : "Add favorite") } }
                 .foregroundStyle(Color.nexdoInk)
         .onAppear { tab = initialTab; onView(tab) }
     }
@@ -345,6 +371,8 @@ struct ShoppingAlternativeDetails: View {
     private var reasonCard: some View {
         VStack(alignment: .leading, spacing: 10) {
             Label("Why NexDo suggested this", systemImage: "leaf.fill").font(.headline)
+            let supported = ShoppingGoal.allCases.filter { $0.supported(by: alternative, original: originalFacts) }
+            ForEach(supported) { value in Label(value.rawValue, systemImage: "checkmark").font(.subheadline).foregroundStyle(.green) }
             Text(alternative.whyThisSwap ?? alternative.explanation(comparedTo: originalFacts)).font(.subheadline)
         }.padding(16).frame(maxWidth: .infinity, alignment: .leading)
             .background(Color.green.opacity(0.09), in: RoundedRectangle(cornerRadius: 20))
