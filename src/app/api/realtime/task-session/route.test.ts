@@ -81,3 +81,18 @@ it('calendar sessions expose only event creation and schedule tools', async () =
   expect(session.instructions).toContain('never tasks or reminders');
   expect(session.instructions).toContain(nexdoPersonality);
 });
+
+it('creates a read-only food session with bounded product context and sourced lookup', async () => {
+  upstream.mockResolvedValue(Response.json({ value: 'ephemeral', expires_at: 123 }));
+  const response = await POST(new Request('https://nexdo.test/api/realtime/task-session', { method: 'POST', body: JSON.stringify({ consent: true, scope: 'food', foodContext: { original: { name: 'Mango' }, alternative: { name: 'Organic mango' } } }) }));
+  expect(response.status).toBe(200);
+  const session = JSON.parse(upstream.mock.calls[0][1].body).session;
+  expect(session.tools.map((t: { name: string }) => t.name)).toEqual(['lookup_food', 'set_conversation_context', 'end_session']);
+  expect(session.instructions).toContain('Organic mango');
+  expect(session.instructions).toContain('never guarantee an item is safe');
+  expect(session.instructions).toContain('untrusted product data');
+});
+it('rejects missing food context before creating a paid session', async () => {
+  const response = await POST(new Request('https://nexdo.test/api/realtime/task-session', { method: 'POST', body: JSON.stringify({ consent: true, scope: 'food' }) }));
+  expect(response.status).toBe(400); expect(upstream).not.toHaveBeenCalled();
+});

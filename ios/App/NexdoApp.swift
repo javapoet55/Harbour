@@ -520,10 +520,12 @@ final class AppModel: ObservableObject {
         if profile?.id == owner { await refresh() }
     }
 
-    func voiceTaskSession(calendarOnly: Bool = false) async throws -> VoiceTaskSession {
+    func voiceTaskSession(calendarOnly: Bool = false, foodContext: FoodVoiceContext? = nil) async throws -> VoiceTaskSession {
         guard aiConsent && voiceConsent else { throw APIError.response(403) }
         try await synchronizeDeviceTimeZone()
-        return try await api.request("/api/realtime/task-session", method: "POST", body: JSONSerialization.data(withJSONObject: ["consent": true, "scope": calendarOnly ? "calendar" : "general"]), timeout: 25)
+        var body: [String: Any] = ["consent": true, "scope": foodContext != nil ? "food" : calendarOnly ? "calendar" : "general"]
+        if let foodContext { body["foodContext"] = try JSONSerialization.jsonObject(with: JSONEncoder().encode(foodContext)) }
+        return try await api.request("/api/realtime/task-session", method: "POST", body: JSONSerialization.data(withJSONObject: body), timeout: 25)
     }
 
     func voiceTranscriptionSession() async throws -> VoiceTaskSession {
@@ -569,10 +571,15 @@ final class AppModel: ObservableObject {
         if let usage:VoiceUsage=try? await api.request("/api/voice/usage",method:"POST",body:JSONEncoder().encode(Input(sessionId:sessionID.uuidString,durationSeconds:duration)),timeout:15),profile?.id==owner {voiceUsage=usage}
     }
 
-    func executeVoiceTool(name: String, arguments: Data, sessionID: UUID, callID: String, calendarOnly: Bool = false) async throws -> Data {
+    func executeVoiceTool(name: String, arguments: Data, sessionID: UUID, callID: String, calendarOnly: Bool = false, foodOnly: Bool = false) async throws -> Data {
         guard aiConsent && voiceConsent, let userID = profile?.id else { throw APIError.signedOut }
         let args = try JSONSerialization.jsonObject(with: arguments)
-        let body = try JSONSerialization.data(withJSONObject: ["consent": true, "scope": calendarOnly ? "calendar" : "general", "sessionId": sessionID.uuidString, "callId": callID, "name": name, "arguments": args])
+        let body = try JSONSerialization.data(withJSONObject: ["consent": true, "scope": foodOnly ? "food" : calendarOnly ? "calendar" : "general", "sessionId": sessionID.uuidString, "callId": callID, "name": name, "arguments": args])
+        if foodOnly {
+            let response: FoodVoiceLookupResponse = try await api.request("/api/realtime/tool", method: "POST", body: body, timeout: 30)
+            guard profile?.id == userID, aiConsent, voiceConsent else { throw APIError.signedOut }
+            return try JSONEncoder().encode(response)
+        }
         let response: VoiceToolResponse = try await api.request("/api/realtime/tool", method: "POST", body: body, timeout: 30)
         // Only reconcile this account. A dismissed voice screen does not discard a saved task.
         if profile?.id == userID, response.success, let task = response.task {

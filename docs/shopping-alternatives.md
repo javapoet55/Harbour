@@ -1,6 +1,6 @@
 # Native shopping alternatives
 
-The existing Shopping List blue-star entry opens `ShoppingAlternativesView`. Goal chips filter alternatives using optional structured facts, with a match count or explicit no-match state and a Show all action, while the existing alternatives endpoint supplies practical suggestions. Compact rows push one details screen inside the existing navigation stack with Nutrition, Allergens, Why this?, and Best For tabs.
+The existing Shopping List blue-star entry opens `ShoppingAlternativesView`. Goal chips filter alternatives using optional structured facts, with a match count or explicit no-match state and a Show all action, while the existing alternatives endpoint supplies practical suggestions. Compact rows push one details screen inside the existing navigation stack with an original-item header, nutrition comparison card/table, and expandable Allergens and Best For sections.
 
 ## Facts and sources
 
@@ -33,4 +33,12 @@ Request failures are displayed with Retry instead of silently substituting unver
 
 ## Compact design (September 25)
 
-Three quick goal chips and More open a two-column goal picker with a full-list expansion. Draft selections apply only on Apply; Cancel leaves the active goal unchanged. Why these explains source limitations without promising allergen safety. Missing-data and no-match states offer clear next actions. Details retain Nutrition and Allergens tabs, source attribution, favorites, and Add Instead. Tests cover confirmation/success, cancellation, empty results, goal application, detail navigation, and persisted replacement.
+Three quick goal chips and More open a two-column goal picker with a full-list expansion. Draft selections apply only on Apply; Cancel leaves the active goal unchanged. Why these explains source limitations without promising allergen safety. Missing-data and no-match states offer clear next actions. Details retain nutrition and allergen information, favorites, and Add Instead. Tests cover confirmation/success, cancellation, empty results, goal application, detail navigation, and persisted replacement.
+
+## Item Details comparison design
+
+Item Details uses the supplied September 25 13:12 asset pack for mango illustration, a white/blue card layout, and a four-column nutrient comparison table. Values render as rounded whole numbers; stored values and serving normalization retain full precision. The original item and proposed replacement are labeled separately. A nutrition-score ring displays Not rated because existing provider contracts do not supply a validated 0–100 score. Comparison highlights come only from sourced nutrient differences, without a blanket healthier-choice or no-added-sugar claim. The raw provider metadata footer is removed. Replace still opens confirmation and Add Instead preserves the original.
+
+## Item Details food voice
+
+The Ask AI button opens the existing Realtime voice screen in a read-only food mode, with the same microphone consent, mute, speaker routing/volume, transcript, reconnect and usage tracking. Only the two food queries (name, optional brand/barcode) are sent as initial context. The `food` session scope exposes `lookup_food` and local conversation/end controls, not task or shopping mutations. Lookups reuse ProductDataService and its PostgreSQL cache for USDA/Open Food Facts. Product facts retain provenance and missing-allergen fields through the native tool response. The model must distinguish general knowledge from sourced product facts and must not guarantee allergy safety. No provider secrets are shipped in the app. Backend support must be deployed before the native food voice entry is used.

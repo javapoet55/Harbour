@@ -4,6 +4,7 @@ import Foundation
 final class VoiceToolExecutor: VoiceToolExecuting {
     weak var model: AppModel?
     var calendarOnly = false
+    var foodOnly = false
     private let contacts = AppleTaskActionContacts()
     private var candidates: [String: ActionContact] = [:]
     private var ownerID: String?
@@ -11,6 +12,7 @@ final class VoiceToolExecutor: VoiceToolExecuting {
     func clear() { candidates.removeAll() }
     func execute(name: String, arguments: Data, sessionID: UUID, callID: String) async throws -> Data {
         guard let model, ownerID != nil, model.profile?.id == ownerID, model.aiConsent, model.voiceConsent else { throw APIError.signedOut }
+        if foodOnly && name != "lookup_food" { return Data("{\"success\":false,\"error\":\"This conversation only looks up food information.\"}".utf8) }
         if calendarOnly && !["get_current_time", "create_calendar_event", "get_schedule", "find_free_time"].contains(name) {
             return Data("{\"success\":false,\"error\":\"This screen creates appointments and events only.\"}".utf8)
         }
@@ -29,6 +31,10 @@ final class VoiceToolExecutor: VoiceToolExecuting {
             }
             return try JSONSerialization.data(withJSONObject: ["success": true, "candidates": minimal, "moreMatches": relevant.count > 5, "requiresUserApproval": true, "message": "Ask the user to select a candidate. Phone numbers and email addresses remain on device. No action executed."])
         }
-        return try await model.executeVoiceTool(name: name, arguments: arguments, sessionID: sessionID, callID: callID, calendarOnly: calendarOnly)
+        if foodOnly {
+            do { return try await model.executeVoiceTool(name: name, arguments: arguments, sessionID: sessionID, callID: callID, foodOnly: true) }
+            catch { return Data("{\"success\":false,\"error\":\"Food lookup unavailable. Explain the missing information; do not invent product facts.\"}".utf8) }
+        }
+        return try await model.executeVoiceTool(name: name, arguments: arguments, sessionID: sessionID, callID: callID, calendarOnly: calendarOnly, foodOnly: foodOnly)
     }
 }

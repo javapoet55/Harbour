@@ -24,6 +24,25 @@ import XCTest
         XCTAssertTrue(app.buttons["Edit Bananas"].exists)
         let shot = XCTAttachment(screenshot: app.screenshot()); shot.name = "Replacement preserves other items"; shot.lifetime = .keepAlways; add(shot)
     }
+    private func reveal(_ element: XCUIElement) {
+        for _ in 0..<10 {
+            if element.isHittable && element.frame.midY < app.frame.height - 65 { return }
+            app.swipeUp()
+        }
+    }
+    func testItemDetailsOpensFoodVoiceWithSpeakerControls() {
+        app.terminate(); app.launchArguments.append("-ask-voice-design-preview"); app.launch()
+        XCTAssertTrue(app.navigationBars["My Lists"].waitForExistence(timeout: 15)); openList()
+        app.buttons["Show alternatives for Milk"].tap()
+        let details = app.buttons["alternatives.details.2% Milk"]
+        XCTAssertTrue(details.waitForExistence(timeout: 8)); reveal(details); details.tap()
+        app.buttons["alternative.askAI"].tap()
+        XCTAssertTrue(app.staticTexts["Ask about your food"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Compare Milk and 2% Milk. Ask about nutrition, ingredients, or allergies."].exists)
+        XCTAssertTrue(app.buttons["Speaker"].exists)
+        app.buttons["Close"].tap()
+        XCTAssertTrue(app.navigationBars["Item Details"].waitForExistence(timeout: 5))
+    }
     func testAlternativeDetailsAndPersistedReplacement() {
         openList()
         app.buttons["Show alternatives for Milk"].tap()
@@ -31,19 +50,20 @@ import XCTest
         XCTAssertTrue(goal.waitForExistence(timeout: 8)); goal.tap()
         let nutrition = app.buttons["alternatives.details.2% Milk"]
         for _ in 0..<5 { if nutrition.isHittable { break }; app.swipeUp() }
-        XCTAssertTrue(nutrition.isHittable); nutrition.tap(); app.buttons["alternative.tab.Nutrition"].tap()
-        XCTAssertTrue(app.staticTexts["Nutrition Comparison"].waitForExistence(timeout: 5))
+        XCTAssertTrue(nutrition.isHittable); nutrition.tap()
+        XCTAssertTrue(app.staticTexts["Nutrition Score"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Not rated"].exists)
+        reveal(app.staticTexts["Nutrition Facts"])
+        XCTAssertTrue(app.staticTexts["Nutrition Facts"].waitForExistence(timeout: 5))
         let screenshot = XCTAttachment(screenshot: app.screenshot()); screenshot.name = "Alternative nutrition comparison"; screenshot.lifetime = .keepAlways; add(screenshot)
-        app.buttons["alternative.tab.Allergens"].tap()
+        reveal(app.buttons["alternative.tab.Allergens"]); app.buttons["alternative.tab.Allergens"].tap()
         XCTAssertTrue(app.staticTexts["Contains Milk"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.staticTexts["No Nuts"].exists)
-        app.buttons["alternative.tab.Why this?"].tap()
-        XCTAssertTrue(app.staticTexts["Why NexDo suggested this"].waitForExistence(timeout: 5))
         let best = app.buttons["alternative.tab.Best For"]
-        if !best.isHittable { app.scrollViews.firstMatch.swipeLeft() }
+        reveal(best)
         best.tap()
         XCTAssertTrue(app.staticTexts["Cereal"].waitForExistence(timeout: 5))
-        app.buttons["alternative.detail.replace"].tap()
+        reveal(app.buttons["alternative.detail.replace"]); app.buttons["alternative.detail.replace"].tap()
         app.buttons["alternatives.confirm"].tap()
         XCTAssertTrue(app.staticTexts["alternatives.success"].waitForExistence(timeout: 8)); app.buttons["Done"].tap()
         XCTAssertTrue(app.buttons["Edit 2% Milk"].waitForExistence(timeout: 8))
@@ -68,12 +88,11 @@ import XCTest
         app.swipeUp()
         let allergens = app.buttons["alternatives.details.Lactose-free whole milk"]
         for _ in 0..<8 { if allergens.isHittable { break }; app.swipeUp() }
-        XCTAssertTrue(allergens.isHittable); allergens.tap(); app.buttons["alternative.tab.Allergens"].tap()
+        XCTAssertTrue(allergens.isHittable); allergens.tap()
+        XCTAssertTrue(app.staticTexts["Nutrition details unavailable"].waitForExistence(timeout: 5))
+        reveal(app.buttons["alternative.tab.Allergens"]); app.buttons["alternative.tab.Allergens"].tap()
         XCTAssertTrue(app.staticTexts["Allergen & Dietary Info"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["Allergen information unavailable — check product label."].exists)
-        app.buttons["alternative.tab.Nutrition"].tap()
-        XCTAssertTrue(app.staticTexts["Nutrition Comparison"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts["Nutrition details unavailable"].exists)
     }
     func testAlternativeFavoriteSurvivesReopening() {
         openList(); app.buttons["Show alternatives for Milk"].tap()
@@ -91,7 +110,7 @@ import XCTest
         let choice = app.buttons["alternatives.select.2% Milk"]
         XCTAssertTrue(choice.waitForExistence(timeout: 8))
         for _ in 0..<5 { if choice.isHittable { break }; app.swipeUp() }
-        app.buttons["alternatives.details.2% Milk"].tap(); app.buttons["alternative.detail.add"].tap()
+        app.buttons["alternatives.details.2% Milk"].tap(); reveal(app.buttons["alternative.detail.add"]); app.buttons["alternative.detail.add"].tap()
         XCTAssertTrue(app.buttons["Edit Milk"].waitForExistence(timeout: 8))
         for _ in 0..<5 { if app.buttons["Edit 2% Milk"].exists { break }; app.swipeUp() }
         XCTAssertTrue(app.buttons["Edit 2% Milk"].exists)

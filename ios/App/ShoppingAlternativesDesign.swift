@@ -143,3 +143,17 @@ struct BreadPackArtwork: View {
         }.contentShape(Rectangle()).accessibilityHidden(true)
     }
 }
+
+/// Mango illustration from the supplied flattened Item Details asset sheet.
+struct NutritionPackArtwork: View {
+    var body: some View {
+        GeometryReader { geometry in
+            let scale = min(geometry.size.width / 160, geometry.size.height / 160)
+            Image("nutrition-detail-pack").resizable()
+                .frame(width: 1024 * scale, height: 1536 * scale)
+                .offset(x: -26 * scale, y: -1253 * scale)
+                .frame(width: 160 * scale, height: 160 * scale, alignment: .topLeading)
+                .clipped().frame(width: geometry.size.width, height: geometry.size.height)
+        }.contentShape(Rectangle()).accessibilityHidden(true)
+    }
+}
