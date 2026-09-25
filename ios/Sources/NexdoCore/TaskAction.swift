@@ -22,6 +22,8 @@ public struct TaskAction: Codable, Equatable, Identifiable, Sendable {
     public var id: String
     public var taskId: String
     public var type: TaskActionIntent
+    public var businessCandidateID: String?
+    public var manualRecipient: TaskActionRecipient?
     public var contactIdentifier: String?
     public var contactName: String
     public var preferredAction: TaskActionChannel?
@@ -98,8 +100,12 @@ public enum TaskActionReconciler {
             }
             if old.scheduledAt != schedule || old.sourceTitle != task.title {
                 let identifier = old.contactIdentifier
+                let businessID = old.businessCandidateID
+                let recipient = old.manualRecipient
                 old = TaskAction(taskId: task.id, title: task.title, detection: detected, scheduledAt: schedule)
                 old.contactIdentifier = identifier
+                old.businessCandidateID = businessID
+                old.manualRecipient = recipient
             }
             return old
         }

@@ -13,7 +13,7 @@ struct WeatherForecastView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
                     VStack(alignment: .leading, spacing: 6) {
-                        Text("San Ramon").font(.largeTitle.bold())
+                        Text("Current location").font(.largeTitle.bold())
                         Text("5-day forecast · °F").font(.subheadline).foregroundStyle(Color.nexdoSecondary)
                     }
                     if let forecast {
@@ -49,6 +49,9 @@ struct WeatherForecastView: View {
                     if loading { ProgressView("Loading forecast…").frame(maxWidth: .infinity).padding() }
                     if let failure {
                         Text(failure).foregroundStyle(Color.nexdoSecondary)
+                        if let url = URL(string: UIApplication.openSettingsURLString) {
+                            Link("Location settings", destination: url)
+                        }
                         Button("Retry") { Task { await load() } }.buttonStyle(.borderedProminent).disabled(loading)
                     }
                     Link("Weather by Open-Meteo", destination: URL(string: "https://open-meteo.com/")!).font(.footnote)
@@ -64,7 +67,6 @@ struct WeatherForecastView: View {
             }
             .tint(.nexdoIndigo)
             .task {
-                if model.weather?.daily?.days.count == 5 { forecast = model.weather }
                 await load()
             }
             .refreshable { await load() }
@@ -99,7 +101,8 @@ struct WeatherForecastView: View {
         do { forecast = try await model.loadWeatherForecast() }
         catch {
             guard !Task.isCancelled else { return }
-            failure = forecast == nil ? "Couldn’t load the forecast. Please try again." : "Couldn’t refresh. Showing the previous forecast."
+            forecast = nil
+            failure = (error as? WeatherLocationError)?.errorDescription ?? "Couldn’t load local weather. Please try again."
         }
     }
 }

@@ -127,3 +127,15 @@ private func reconcile(_ previous: [TaskAction], _ tasks: [NexdoTask]) -> [TaskA
     #expect(TaskActionClarification.nextStepTitle(" ") == nil)
     #expect(TaskActionClarification.nextStepTitle("Presentation") == nil)
 }
+
+@Test func reschedulingPreservesSelectedRecipientButChangingPersonClearsIt() {
+    var actions = reconcile([], [actionTask()])
+    actions[0].businessCandidateID = "chosen-place"
+    let changed = reconcile(actions, [actionTask(start: "2026-09-10T18:00:00Z")])
+    #expect(changed[0].businessCandidateID == "chosen-place")
+    #expect(reconcile(actions, [actionTask("Contact John at 10 AM")])[0].businessCandidateID == nil)
+    actions[0].businessCandidateID = nil
+    actions[0].manualRecipient = .init(name: "Damien", phone: "9255550100", email: "")
+    #expect(reconcile(actions, [actionTask(start: "2026-09-10T18:00:00Z")])[0].manualRecipient == actions[0].manualRecipient)
+    #expect(reconcile(actions, [actionTask("Contact John at 10 AM")])[0].manualRecipient == nil)
+}

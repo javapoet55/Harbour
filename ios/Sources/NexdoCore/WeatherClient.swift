@@ -12,11 +12,12 @@ public actor WeatherClient {
         session = URLSession(configuration: configuration)
     }
 
-    public func forecast() async throws -> WeatherResponse {
+    public func forecast(latitude: Double, longitude: Double) async throws -> WeatherResponse {
+        guard latitude.isFinite, longitude.isFinite, (-90...90).contains(latitude), (-180...180).contains(longitude) else { throw APIError.invalidResponse }
         var url = URLComponents(string: "https://api.open-meteo.com/v1/forecast")!
         url.queryItems = [
-            URLQueryItem(name: "latitude", value: "37.7547"),
-            URLQueryItem(name: "longitude", value: "-121.8997"),
+            URLQueryItem(name: "latitude", value: String(latitude)),
+            URLQueryItem(name: "longitude", value: String(longitude)),
             URLQueryItem(name: "current", value: "temperature_2m,weather_code"),
             URLQueryItem(name: "daily", value: "weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max"),
             URLQueryItem(name: "forecast_days", value: "5"),

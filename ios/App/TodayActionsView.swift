@@ -1,4 +1,5 @@
 import SwiftUI
+import Contacts
 
 struct TodayActionSelection: Identifiable {
     let id = UUID()
@@ -13,22 +14,58 @@ struct TodayActionsView: View {
     let onTask: (String) -> Void
     @State private var selection: TodayActionSelection?
     @State private var showingAll = false
+    @State private var refresh = UUID()
+    @State private var selectedActionID: String?
+    private var selectedIndex: Int {
+        queue.dueActions.firstIndex { $0.id == selectedActionID } ?? 0
+    }
+    private func moveAction(by offset: Int) {
+        let index = selectedIndex + offset
+        guard queue.dueActions.indices.contains(index) else { return }
+        selectedActionID = queue.dueActions[index].id
+    }
     var body: some View {
         VStack(spacing: 16) {
-            if let action = queue.primaryAction {
+            if !queue.dueActions.isEmpty {
+                if queue.dueActions.count > 1 {
+                    VStack(spacing: 10) {
+                        HStack {
+                            Text("\(queue.dueActions.count) actions need attention").font(.headline)
+                            Spacer()
+                            Button("View all") { showingAll = true }
+                                .accessibilityIdentifier("today.actions.viewAllDue")
+                        }
+                        HStack {
+                            Button { moveAction(by: -1) } label: {
+                                Label("Previous", systemImage: "chevron.left")
+                            }.disabled(selectedIndex == 0)
+                                .accessibilityIdentifier("today.actions.previous")
+                            Spacer()
+                            Text("\(selectedIndex + 1) of \(queue.dueActions.count)")
+                                .monospacedDigit().accessibilityAddTraits(.updatesFrequently)
+                            Spacer()
+                            Button { moveAction(by: 1) } label: {
+                                HStack { Text("Next"); Image(systemName: "chevron.right") }
+                            }.disabled(selectedIndex == queue.dueActions.count - 1)
+                                .accessibilityIdentifier("today.actions.next")
+                        }.font(.subheadline).buttonStyle(.bordered)
+                    }.padding(14).modifier(ActionGlass())
+                }
+                let action = queue.dueActions[selectedIndex]
                 ActionNeededCard(action: action, now: now, overdueCount: queue.overdueCount,
-                    onExecute: { selection = TodayActionSelection(action: action, channel: $0) }, onTask: { onTask(action.taskId) })
+                    onChoose: { selection = TodayActionSelection(action: action) }, onExecute: { selection = TodayActionSelection(action: action, channel: $0) }, onTask: { onTask(action.taskId) })
+                    .id(action.id + refresh.uuidString)
             }
-            if !queue.nextActions.isEmpty {
+            if !queue.upcomingActions.isEmpty {
                 VStack(alignment: .leading, spacing: 12) {
                     HStack {
                         Label("Next up", systemImage: "clock").font(.headline)
-                        Text("\(queue.nextActions.count) actions").font(.caption).foregroundStyle(.secondary)
+                        Text("\(queue.upcomingActions.count) actions").font(.caption).foregroundStyle(.secondary)
                         Spacer()
                         Button("View all") { showingAll = true }.font(.subheadline)
                             .accessibilityIdentifier("today.actions.viewAll")
                     }
-                    ForEach(queue.nextActions.prefix(3)) { action in
+                    ForEach(queue.upcomingActions.prefix(3)) { action in
                         Divider()
                         Button { selection = TodayActionSelection(action: action) } label: {
                             NextActionRow(action: action, now: now)
@@ -37,7 +74,10 @@ struct TodayActionsView: View {
                 }.padding(16).modifier(ActionGlass())
             }
         }
-        .sheet(item: $selection) { value in
+        .onChange(of: queue.dueActions.map(\.id)) { _, ids in
+            if let selectedActionID, !ids.contains(selectedActionID) { self.selectedActionID = nil }
+        }
+        .sheet(item: $selection, onDismiss: { refresh = UUID() }) { value in
             TaskActionView(actionID: value.action.id, preferred: value.channel ?? value.action.preferredAction,
                            startSelectedAction: value.channel != nil)
         }
@@ -54,18 +94,37 @@ private struct ActionGlass: ViewModifier {
 }
 
 struct ActionNeededCard: View {
+    @EnvironmentObject private var model: AppModel
+    @State private var envelope: TaskAgentEnvelope?
+    @State private var loaded = false
+    @State private var failed = false
+    @State private var refreshID = 0
     @ObservedObject private var coordinator = TaskActionCoordinator.shared
     @Environment(\.dynamicTypeSize) private var typeSize
     let action: TaskAction
     let now: Date
     let overdueCount: Int
+    let onChoose: () -> Void
     let onExecute: (TaskActionChannel) -> Void
     let onTask: () -> Void
-    private var contact: ActionContact? { action.contactIdentifier.flatMap { coordinator.resolvedContacts[$0] } }
-    private var channels: [TaskActionChannel] {
-        guard let contact else { return TaskActionChannel.allCases }
-        return TaskActionChannel.allCases.filter { $0 == .email ? !contact.emails.isEmpty : !contact.phones.isEmpty }
+    private var canReadContacts: Bool {
+        let status = CNContactStore.authorizationStatus(for: .contacts)
+        if #available(iOS 18, *), status == .limited { return true }
+        return status == .authorized
     }
+    private var business: TaskAgentRun.Candidate? {
+        envelope?.run?.candidates.first { $0.id == action.businessCandidateID }
+    }
+    private var contact: ActionContact? {
+        if let business { return .business(business) }
+        if let manual = action.manualRecipient { return .manual(manual) }
+        return action.contactIdentifier.flatMap { coordinator.resolvedContacts[$0] }
+    }
+    private var isBusiness: Bool { if action.manualRecipient != nil || action.contactIdentifier != nil { return false }; return action.businessCandidateID != nil || envelope?.intent?.eligible == true || envelope?.run != nil }
+    private var state: ActionNeededState {
+        .resolve(loaded: loaded, failed: failed, business: isBusiness, hasResults: !(envelope?.run?.candidates.isEmpty ?? true), hasRecipient: contact != nil, hasPhone: !(contact?.phones.isEmpty ?? true), hasEmail: !(contact?.emails.isEmpty ?? true))
+    }
+    private var channels: [TaskActionChannel] { if case .ready(let value) = state { return value }; return [] }
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .top) {
@@ -79,13 +138,13 @@ struct ActionNeededCard: View {
             if overdueCount > 1 {
                 Text("\(overdueCount) actions need your attention").font(.caption).foregroundStyle(.orange)
             }
-            Text("Time to contact \(action.contactName)").font(.title2.bold())
+            Text(isBusiness && contact == nil ? "Find a business to contact" : "Time to contact \(contact?.name ?? action.contactName)").font(.title2.bold())
             if let context = action.context { Text(context).foregroundStyle(Color.nexdoSecondary) }
             HStack(spacing: 12) {
                 Image(systemName: "person.crop.circle.fill").font(.largeTitle).foregroundStyle(Color.nexdoBlue)
                 VStack(alignment: .leading, spacing: 3) {
                     Text(contact?.name ?? action.contactName).font(.headline)
-                    Text(contact.map { $0.phones.first?.value ?? $0.emails.first?.value ?? "No contact details" } ?? "Choose an action to find this contact")
+                    Text(contact.map { $0.phones.first?.value ?? $0.emails.first?.value ?? "No contact details" } ?? (isBusiness ? "Choose a nearby business for this task" : "Choose a contact or enter their details"))
                         .font(.caption).foregroundStyle(Color.nexdoSecondary)
                 }
             }
@@ -105,7 +164,7 @@ struct ActionNeededCard: View {
                     Button { onExecute(channel) } label: {
                         VStack(spacing: 8) {
                             Image(systemName: actionIcon(channel)).font(.title2)
-                            Text(channel == .message ? "iMessage" : channel.rawValue.capitalized).font(.subheadline.weight(.semibold))
+                            Text(channel.rawValue.capitalized).font(.subheadline.weight(.semibold))
                         }.frame(maxWidth: .infinity, minHeight: 76)
                             .foregroundStyle(channel == .call ? Color.green : channel == .message ? Color.nexdoBlue : Color.purple)
                             .background((channel == .call ? Color.green : channel == .message ? Color.nexdoBlue : Color.purple).opacity(0.13), in: RoundedRectangle(cornerRadius: 16))
@@ -113,7 +172,23 @@ struct ActionNeededCard: View {
                         .accessibilityIdentifier("today.actions.\(channel.rawValue)")
                 }
             }
-            if channels.isEmpty { Button("Choose contact") { onExecute(action.preferredAction ?? .call) } }
+            switch state {
+            case .loading: ProgressView("Checking next action…")
+            case .retry:
+                Text("Couldn’t check this task. Retry or open task details.").font(.caption)
+                Button("Retry") { refreshID += 1 }
+            case .findBusiness, .chooseBusiness:
+                Button { onTask() } label: {
+                    Label(state == .chooseBusiness ? "Choose a business" : "Find businesses", systemImage: "magnifyingglass")
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                }.buttonStyle(NexdoGradientButtonStyle())
+            case .chooseContact:
+                Button("Choose contact or enter details") { onChoose() }
+                    .buttonStyle(.borderedProminent)
+            case .ready:
+                if isBusiness { Button("Change business", action: onTask).font(.subheadline) }
+            }
+
             layout {
                 SnoozeMenu(action: action)
                 Button { coordinator.dismiss(action.id) } label: {
@@ -124,6 +199,26 @@ struct ActionNeededCard: View {
         }.padding(18).modifier(ActionGlass())
             .overlay(RoundedRectangle(cornerRadius: 22).stroke(NexdoTheme.gradient, lineWidth: 1.5))
             .accessibilityIdentifier("today.actions.primary")
+            .onReceive(NotificationCenter.default.publisher(for: .taskAgentChanged)) { note in
+                if note.object as? String == action.taskId { refreshID += 1 }
+            }
+            .task(id: action.id + (action.businessCandidateID ?? "") + String(refreshID)) {
+                loaded = false; failed = false; envelope = nil
+                do {
+                    let response = try await model.loadTaskAgent(taskID: action.taskId)
+                    guard !Task.isCancelled else { return }
+                    envelope = response; loaded = true
+                    // Today never prompts for Contacts permission. The picker handles missing access.
+                    if !isBusiness, action.manualRecipient == nil, canReadContacts {
+                        let matches = try? await AppleTaskActionContacts().resolve(name: DeterministicTaskActionDetector.contactSearchName(action.contactName), identifier: action.contactIdentifier)
+                        guard !Task.isCancelled else { return }
+                        if let matches, matches.count == 1 {
+                            coordinator.remember(matches[0])
+                            coordinator.update(action.id) { $0.contactIdentifier = matches[0].id }
+                        }
+                    }
+                } catch { if !Task.isCancelled { failed = true } }
+            }
     }
 }
 
@@ -140,13 +235,13 @@ struct SnoozeMenu: View {
             }
             Button("Choose time…") { date = Date().addingTimeInterval(900); choosing = true }
         } label: {
-            Label("Remind me later", systemImage: "clock").frame(maxWidth: .infinity, minHeight: 44)
+            Label("Remind later", systemImage: "clock").frame(maxWidth: .infinity, minHeight: 44)
         }.buttonStyle(.bordered).accessibilityLabel("Remind \(action.contactName) task later")
             .accessibilityIdentifier("today.actions.snooze")
             .sheet(isPresented: $choosing) {
                 NavigationStack {
                     DatePicker("Remind me at", selection: $date, in: Date()...).padding()
-                        .navigationTitle("Remind me later")
+                        .navigationTitle("Remind later")
                         .toolbar {
                             ToolbarItem(placement: .cancellationAction) { Button("Cancel") { closeSnoozePicker() } }
                             ToolbarItem(placement: .confirmationAction) {

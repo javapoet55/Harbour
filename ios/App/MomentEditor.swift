@@ -297,16 +297,231 @@ struct MomentCalendarImportView: View {
     }
 }
 struct MomentFestivalView: View {
-    @State private var region = "Choose region"
-    private let festivals = ["Global": ["New Year", "International Friendship Day"], "India": ["Diwali", "Holi", "Eid", "Pongal"], "United States": ["Thanksgiving", "Christmas"], "East Asia": ["Lunar New Year", "Mid-Autumn Festival"]]
-    var body: some View {
-        List {
-            Text("Choose the region and celebrations you observe. Confirm the festival date and recipient yourself. Moving festival dates are not automatically guessed.")
-            Picker("Region", selection: $region) { Text("Choose region"); ForEach(festivals.keys.sorted(), id: \.self) { Text($0) } }
-            ForEach(festivals[region] ?? [], id: \.self) { name in NavigationLink(name) { MomentEditor(imported: input(name)) } }
-        }.navigationTitle("Choose Festivals")
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(\.colorScheme) private var colorScheme
+    @State private var region: String?
+
+    private let regions = ["Global", "India", "United States", "East Asia"]
+    private let festivals = [
+        "Global": ["New Year", "International Friendship Day"],
+        "India": ["Diwali", "Holi", "Eid", "Pongal"],
+        "United States": ["Thanksgiving", "Christmas"],
+        "East Asia": ["Lunar New Year", "Mid-Autumn Festival"]
+    ]
+    private var visibleFestivals: [String] {
+        if let region { return festivals[region] ?? [] }
+        return regions.flatMap { festivals[$0] ?? [] }
     }
-    private func input(_ name: String) -> MomentInput { var input = MomentInput(); input.type = "festival"; input.title = name + " Wishes"; input.yearly = false; input.source = "festivalCatalog"; return input }
+    private var columns: [GridItem] {
+        dynamicTypeSize.isAccessibilitySize
+            ? [GridItem(.flexible())]
+            : [GridItem(.flexible()), GridItem(.flexible())]
+    }
+    private var surface: Color { Color(uiColor: .secondarySystemGroupedBackground) }
+    private var accent: Color { colorScheme == .dark ? Color(red: 0.73, green: 0.67, blue: 1) : .nexdoIndigo }
+
+    var body: some View {
+        ZStack {
+            TodayBackdrop(subtle: true)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 26) {
+                    hero
+                    regionPicker
+                    celebrationList
+                    Label("You’ll review the date and recipients before saving. Festival dates can vary each year.", systemImage: "calendar.badge.clock")
+                        .font(.footnote)
+                        .foregroundStyle(Color.nexdoSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(16)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(accent.opacity(0.06), in: RoundedRectangle(cornerRadius: 18))
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 16)
+                .padding(.bottom, 28)
+                .frame(maxWidth: 680)
+                .frame(maxWidth: .infinity)
+            }
+        }
+        .foregroundStyle(Color.nexdoInk)
+        .navigationTitle("Choose Festivals")
+        .navigationBarTitleDisplayMode(.inline)
+        .tint(accent)
+    }
+
+    private var hero: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack {
+                Label("MOMENTS THAT MATTER", systemImage: "sparkles")
+                    .font(.caption2.weight(.bold))
+                    .tracking(1.5)
+                Spacer(minLength: 0)
+                Image(systemName: "gift.fill")
+                    .font(.title2)
+                    .padding(12)
+                    .background(.white.opacity(0.16), in: RoundedRectangle(cornerRadius: 16))
+                    .accessibilityHidden(true)
+            }
+            Text("Make every\ncelebration count.")
+                .font(.system(.largeTitle, design: .rounded, weight: .bold))
+                .fixedSize(horizontal: false, vertical: true)
+            Text("A thoughtful wish. A closer connection.\nFind the festivals you love to celebrate.")
+                .font(.subheadline)
+                .lineSpacing(4)
+                .fixedSize(horizontal: false, vertical: true)
+                .foregroundStyle(.white.opacity(0.92))
+        }
+        .foregroundStyle(.white)
+        .padding(24)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background {
+            RoundedRectangle(cornerRadius: 28)
+                .fill(LinearGradient(colors: [Color(red: 0.15, green: 0.12, blue: 0.60), .nexdoIndigo, Color(red: 0.52, green: 0.08, blue: 0.70)], startPoint: .topLeading, endPoint: .bottomTrailing))
+                .overlay(alignment: .bottomTrailing) {
+                    Circle().stroke(.white.opacity(0.10), lineWidth: 30)
+                        .frame(width: 190, height: 190)
+                        .offset(x: 65, y: 85)
+                }
+                .clipShape(RoundedRectangle(cornerRadius: 28))
+        }
+        .shadow(color: Color.nexdoIndigo.opacity(colorScheme == .dark ? 0.10 : 0.18), radius: 18, x: 0, y: 8)
+    }
+
+    private var regionPicker: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: 5) {
+                Text("Explore by region").font(.title3.bold())
+                Text("Discover celebrations close to home and around the world.")
+                    .font(.subheadline).foregroundStyle(Color.nexdoSecondary)
+            }
+            LazyVGrid(columns: columns, spacing: 12) {
+                ForEach(regions, id: \.self) { name in
+                    Button { region = region == name ? nil : name } label: {
+                        HStack(alignment: .top, spacing: 10) {
+                            Image(systemName: regionSymbol(name))
+                                .font(.title3.weight(.semibold))
+                                .foregroundStyle(accent)
+                                .frame(width: 30, height: 32)
+                                .accessibilityHidden(true)
+                            VStack(alignment: .leading, spacing: 5) {
+                                Text(name).font(.subheadline.weight(.semibold))
+                                Text("\(festivals[name]?.count ?? 0) celebrations")
+                                    .font(.caption).foregroundStyle(Color.nexdoSecondary)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .fixedSize(horizontal: false, vertical: true)
+                            Image(systemName: region == name ? "checkmark.circle.fill" : "circle")
+                                .font(.caption)
+                                .foregroundStyle(region == name ? accent : Color.nexdoSecondary.opacity(0.5))
+                                .accessibilityHidden(true)
+                        }
+                        .padding(14)
+                        .frame(maxWidth: .infinity, minHeight: 84, alignment: .leading)
+                        .background(region == name ? accent.opacity(0.10) : surface, in: RoundedRectangle(cornerRadius: 20))
+                        .overlay(RoundedRectangle(cornerRadius: 20).stroke(region == name ? accent : accent.opacity(0.12), lineWidth: region == name ? 1.5 : 1))
+                        .contentShape(RoundedRectangle(cornerRadius: 20))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("\(name), \(festivals[name]?.count ?? 0) celebrations")
+                    .accessibilityAddTraits(region == name ? [.isSelected] : [])
+                    .accessibilityHint("Filters the festival list. Tap again to show all regions.")
+                    .accessibilityIdentifier("festival-region-\(name)")
+                }
+            }
+        }
+    }
+
+    private var celebrationList: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            ViewThatFits(in: .horizontal) {
+                HStack {
+                    festivalHeading
+                    Spacer()
+                    if region != nil { allRegionsButton }
+                }
+                VStack(alignment: .leading, spacing: 8) {
+                    festivalHeading
+                    if region != nil { allRegionsButton }
+                }
+            }
+            VStack(spacing: 0) {
+                ForEach(Array(visibleFestivals.enumerated()), id: \.element) { index, name in
+                    NavigationLink { MomentEditor(imported: input(name)) } label: {
+                        HStack(spacing: 14) {
+                            Image(systemName: festivalSymbol(name))
+                                .font(.title3.weight(.medium))
+                                .foregroundStyle(accent)
+                                .frame(width: 48, height: 48)
+                                .background(LinearGradient(colors: [Color.nexdoBlue.opacity(0.12), Color.nexdoMagenta.opacity(0.10)], startPoint: .topLeading, endPoint: .bottomTrailing), in: RoundedRectangle(cornerRadius: 15))
+                                .accessibilityHidden(true)
+                            VStack(alignment: .leading, spacing: 5) {
+                                Text(name).font(.body.weight(.semibold))
+                                Text("Create a thoughtful wish")
+                                    .font(.caption).foregroundStyle(Color.nexdoSecondary)
+                            }
+                            .fixedSize(horizontal: false, vertical: true)
+                            Spacer(minLength: 0)
+                            Image(systemName: "chevron.right")
+                                .font(.caption.weight(.bold)).foregroundStyle(accent.opacity(0.65))
+                                .accessibilityHidden(true)
+                        }
+                        .padding(16)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("festival-choice-\(name)")
+                    if index < visibleFestivals.count - 1 {
+                        Divider().padding(.leading, 78).padding(.trailing, 16)
+                    }
+                }
+            }
+            .background(surface, in: RoundedRectangle(cornerRadius: 22))
+            .overlay(RoundedRectangle(cornerRadius: 22).stroke(accent.opacity(0.10)))
+        }
+    }
+
+    private var festivalHeading: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(region.map { "Celebrate in \($0)" } ?? "Find your next celebration")
+                .font(.title3.bold())
+            Text("\(visibleFestivals.count) festivals to make your own")
+                .font(.caption).foregroundStyle(Color.nexdoSecondary)
+        }
+    }
+    private var allRegionsButton: some View {
+        Button("All regions") { region = nil }
+            .font(.subheadline.weight(.semibold))
+            .padding(.vertical, 12)
+            .accessibilityIdentifier("festival-all-regions")
+    }
+    private func regionSymbol(_ name: String) -> String {
+        switch name {
+        case "India": "sun.max"
+        case "United States": "star"
+        case "East Asia": "moon.stars"
+        default: "globe"
+        }
+    }
+    private func festivalSymbol(_ name: String) -> String {
+        switch name {
+        case "New Year", "Lunar New Year": "sparkles"
+        case "International Friendship Day": "heart"
+        case "Diwali": "flame"
+        case "Holi": "paintpalette"
+        case "Eid", "Mid-Autumn Festival": "moon.stars"
+        case "Pongal", "Thanksgiving": "leaf"
+        default: "gift"
+        }
+    }
+    private func input(_ name: String) -> MomentInput {
+        var input = MomentInput()
+        input.type = "festival"
+        input.title = name + " Wishes"
+        input.yearly = false
+        input.source = "festivalCatalog"
+        return input
+    }
 }
 
 actor SelectedMomentContacts {

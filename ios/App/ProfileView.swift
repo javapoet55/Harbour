@@ -126,8 +126,8 @@ struct AccountView: View {
     }
 
     private func monthLabel(_ month:String?)->String {
-        guard let month,let date=DateFormatter.voiceMonth.date(from:month) else{return "This month · updated today"}
-        return date.formatted(.dateTime.month(.wide))+" · updated today"
+        guard let month, let name = VoiceUsage.monthName(month) else { return "This month · updated today" }
+        return name + " · updated today"
     }
 
     private func closeAccount() {
@@ -158,9 +158,6 @@ private extension View {
     }
 }
 
-private extension DateFormatter {
-    static let voiceMonth:DateFormatter={let value=DateFormatter();value.locale=Locale(identifier:"en_US_POSIX");value.timeZone=TimeZone(secondsFromGMT:0);value.dateFormat="yyyy-MM";return value}()
-}
 
 struct ProfileSettingsView: View {
     @AppStorage(AppAppearance.storageKey) private var appearance: AppAppearance = .system

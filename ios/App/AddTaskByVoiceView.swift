@@ -117,7 +117,7 @@ struct AddTaskByVoiceView: View {
                     Button { voice.toggleMute() } label: { Label(voice.muted ? "Unmute" : "Mute", systemImage: voice.muted ? "mic.slash.fill" : "mic.fill") }
                         .disabled(starting || recovering || [.idle, .connecting, .reconnecting, .paused, .closing, .disconnected, .connectionLost].contains(voice.phase))
                     Spacer()
-                    Button { updateAudioOutput(); showingSpeaker = true } label: {
+                    Button { updateAudioOutput(); showingSpeaker = true; activateDeviceSpeaker() } label: {
                         Label("Speaker", systemImage: "speaker.wave.2.fill")
                     }.accessibilityIdentifier("voice-speaker")
                     Spacer()
@@ -134,15 +134,9 @@ struct AddTaskByVoiceView: View {
                     Button("Done") { showingSpeaker = false }
                 }
                 Label(audioOutput, systemImage: "speaker.wave.2.fill")
-                Button("Use device speaker") {
-                    routingSpeaker = true; speakerError = nil
-                    Task {
-                        defer { routingSpeaker = false }
-                        do { try await transport.useDeviceSpeaker(); updateAudioOutput() }
-                        catch { speakerError = "Couldn’t switch to the speaker. Try again while voice is connected." }
-                    }
-                }.buttonStyle(.borderedProminent)
-                    .disabled(routingSpeaker || starting || recovering || [.idle, .connecting, .reconnecting, .paused, .closing, .disconnected, .connectionLost].contains(voice.phase))
+                Button("Use device speaker", action: activateDeviceSpeaker)
+                    .buttonStyle(.borderedProminent)
+                    .disabled(!canRouteSpeaker)
                 HStack {
                     Text("Nexdo voice level").font(.headline)
                     Spacer()
@@ -222,6 +216,22 @@ struct AddTaskByVoiceView: View {
         .onChange(of: model.profile?.id) { _, _ in voice.close() }
         .onChange(of: model.aiConsent) { _, allowed in if !allowed { voice.close() } }
         .onChange(of: model.voiceConsent) { _, allowed in if !allowed { voice.close() } }
+    }
+    private var canRouteSpeaker: Bool {
+        !routingSpeaker && !starting && !recovering && ![.idle, .connecting, .reconnecting, .paused, .closing, .disconnected, .connectionLost].contains(voice.phase)
+    }
+    private func activateDeviceSpeaker() {
+        guard canRouteSpeaker else {
+            if !routingSpeaker { speakerError = "Speaker is available when voice is connected. Try again once connected." }
+            return
+        }
+        routingSpeaker = true
+        speakerError = nil
+        Task {
+            defer { routingSpeaker = false }
+            do { try await transport.useDeviceSpeaker(); updateAudioOutput() }
+            catch { speakerError = "Couldn’t switch to the speaker. Try again while voice is connected." }
+        }
     }
     private func updateAudioOutput() {
         let outputs = AVAudioSession.sharedInstance().currentRoute.outputs
@@ -309,7 +319,6 @@ struct AddTaskByVoiceView: View {
 private struct VoiceDeviceVolumeControl: UIViewRepresentable {
     func makeUIView(context: Context) -> MPVolumeView {
         let view = MPVolumeView(frame: .zero)
-        view.showsRouteButton = true
         view.showsVolumeSlider = true
         return view
     }
