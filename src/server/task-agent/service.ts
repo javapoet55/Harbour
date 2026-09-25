@@ -106,7 +106,7 @@ export async function processRun(id:string,search=searchBusinesses){
   if(candidates.length<5)warnings.push(`Only ${candidates.length} candidates found; no extra listings were invented.`);
   warnings.push('Listings are not a license check or a guarantee of availability. Confirm service area, budget and requirements before choosing.');
   steps[3].status='running';if(!await save({stepsJson:JSON.stringify(steps)}))return;
-  candidates=candidates.map(c=>({...c,draft:prepareDraft(c.googlePlaceId?{...c,name:'there'}:c,run!.service,slots,run!.task.title)}));steps[3].status='done';steps[3].detail='Drafts only. You choose who to contact and send them yourself.';
+  candidates=candidates.map(c=>({...c,draft:prepareDraft(run!.service,slots)}));steps[3].status='done';steps[3].detail='Drafts only. You choose who to contact and send them yourself.';
   await save({status:candidates.length?'READY_FOR_REVIEW':'NO_RESULTS',stepsJson:JSON.stringify(steps),resultsJson:JSON.stringify(candidates.map(persistCandidate)),warningsJson:JSON.stringify(warnings),leaseUntil:null});
  }catch{await save({status:'FAILED',error:'Research paused after an unexpected error. Your task is saved.',leaseUntil:null});}
 }

@@ -77,12 +77,14 @@ struct TaskAgentCard: View {
                                     .accessibilityLabel("City or ZIP code")
                             }.padding(8).background(.white.opacity(0.85), in: RoundedRectangle(cornerRadius: 12))
                                 .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.purple.opacity(0.65)))
+                                .id(TaskDetailsView.Field.agentLocation)
                             Button { act("search", key: "location", answer: answer) } label: {
                                 HStack(spacing: 12) { Image(systemName: "magnifyingglass"); Text(run.service == "plumber" ? "Search Plumbers" : "Search businesses"); Image(systemName: "arrow.right") }
                             }.buttonStyle(AgentSearchButton()).disabled(answer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                         }
                         if question.key == "location", !run.slots.location.isEmpty { Button("Use \(run.slots.location)") { act("search", key: "location", answer: run.slots.location) } }
                     }
+                    if run.candidates.isEmpty && !findingBusinesses { searchIntroduction(run) }
                     if !findingBusinesses, let question = run.question, ["urgency", "preferences"].contains(question.key) {
                         if error == nil { searchProgress }
                         else { Button("Retry search") { act("search", answer: run.slots.location) }.buttonStyle(AgentSearchButton()) }
@@ -303,7 +305,6 @@ struct TaskAgentCard: View {
                     Link(destination: url) { Label("Open", systemImage: "arrow.up.right.square") }.buttonStyle(BusinessCompactButton())
                 }
             }
-            Text("Google Maps").font(.caption).foregroundStyle(Color.nexdoSecondary)
         }.padding(.top, 4)
     }
 
@@ -313,13 +314,19 @@ struct TaskAgentCard: View {
                 focusedField = nil
                 if expanded { draftExpanded.insert(candidate.id) } else { draftExpanded.remove(candidate.id) }
             })) {
-                TextEditor(text: Binding(get: { drafts[candidate.id] ?? candidate.draft }, set: { drafts[candidate.id] = String($0.prefix(2000)) }))
-                    .frame(minHeight: 160).focused($focusedField, equals: .agentDraft(candidate.id))
+                TextField("Write your message", text: Binding(get: { drafts[candidate.id] ?? candidate.draft }, set: { drafts[candidate.id] = String($0.prefix(2000)) }), axis: .vertical)
+                    .font(.body)
+                    .lineLimit(5...)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(12)
+                    .background(.white, in: RoundedRectangle(cornerRadius: 12))
+                    .focused($focusedField, equals: .agentDraft(candidate.id))
+                    .id(TaskDetailsView.Field.agentDraft(candidate.id))
                     .accessibilityLabel("Draft for \(candidate.name)")
                 HStack {
-                    Button("Save draft") { act("saveDraft", answer: drafts[candidate.id] ?? candidate.draft, candidateID: candidate.id) }
+                    Button("Save draft") { focusedField = nil; act("saveDraft", answer: drafts[candidate.id] ?? candidate.draft, candidateID: candidate.id) }
                     Spacer()
-                    Button("Copy draft") { UIPasteboard.general.string = drafts[candidate.id] ?? candidate.draft; error = "Draft copied." }
+                    Button("Copy draft") { focusedField = nil; UIPasteboard.general.string = drafts[candidate.id] ?? candidate.draft; error = "Draft copied." }
                 }.font(.subheadline)
             } label: {
                 HStack(spacing: 10) {
@@ -440,10 +447,11 @@ struct TaskAgentCard: View {
             Label("AI ASSISTANT", systemImage: "sparkles").font(.caption.weight(.bold)).tracking(2).foregroundStyle(Color.nexdoIndigo)
             Text(label).font(.system(size: 20, weight: .bold)).tracking(-0.6).fixedSize(horizontal: false, vertical: true)
             Text("\(run.service.prefix(1).uppercased() + run.service.dropFirst()) · \(run.slots.location.isEmpty ? "Location needed" : run.slots.location)").font(.subheadline)
-            if !run.candidates.isEmpty {
-                Text("Compare businesses, read feedback, and review a message before sending.").font(.subheadline).foregroundStyle(Color.nexdoSecondary)
-                searchTerms(run)
-            } else {
+        }
+        }
+    }
+
+    private func searchIntroduction(_ run: TaskAgentRun) -> some View {
             HStack(alignment: .top, spacing: 8) {
                 VStack(alignment: .leading, spacing: 10) {
                     Text("Search uses your city and service with Google Places (and Yelp when connected). NexDo never calls, messages, or shares your contact details with businesses. You review and send drafts yourself.")
@@ -459,9 +467,6 @@ struct TaskAgentCard: View {
                     }.frame(width: 94)
                 }
             }
-            }
-        }
-    }
     }
 
     #if DEBUG

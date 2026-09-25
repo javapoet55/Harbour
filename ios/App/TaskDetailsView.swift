@@ -82,7 +82,9 @@ struct TaskDetailsView: View {
         }
         .foregroundStyle(Color.nexdoInk)
         .background(Color(uiColor: .systemBackground))
-        .safeAreaInset(edge: .bottom, spacing: 0) { footer }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if focus == nil { footer }
+        }
         .environment(\.timeZone, zone)
         .interactiveDismissDisabled(blocked)
         .toolbar {
