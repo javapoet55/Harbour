@@ -1,6 +1,6 @@
 # Native shopping alternatives
 
-The existing Shopping List blue-star entry opens `ShoppingAlternativesView`. Goal chips rank alternatives using optional structured facts, while the existing alternatives endpoint supplies practical suggestions. All detail buttons open one sheet with Nutrition, Allergens, Why this?, and Best For tabs.
+The existing Shopping List blue-star entry opens `ShoppingAlternativesView`. Goal chips filter alternatives using optional structured facts, with a match count or explicit no-match state and a Show all action, while the existing alternatives endpoint supplies practical suggestions. All detail buttons push one details screen inside the existing navigation stack with Nutrition, Allergens, Why this?, and Best For tabs.
 
 ## Facts and sources
 
@@ -16,7 +16,7 @@ Numeric sample values exist only in the DEBUG `ShoppingPreview` mock transport a
 - Add Instead appends a new item and keeps the original. Matching names/package sizes are rejected as duplicates.
 - Favorites use optional fields on the existing shopping item JSON, accepted by the backend item save schema and persisted in the additive shopping item migration. Deploy the corresponding backend schema change before relying on favorites in a device build against production.
 - Completed-list changes create an active copy, matching existing shopping edit behavior.
-- Save failures leave the sheet open with an error; success closes it after persistence. Existing revision checks and analytics are reused.
+- Save failures leave the detail screen open with an error; success closes it after persistence. Existing revision checks and analytics are reused.
 - Alternatives are cached per store for five minutes, capped at 30 entries. Scrolling and switching tabs make no recommendation calls.
 
 ## Artwork
@@ -28,3 +28,5 @@ The five `swap-*.imageset` cartons were extracted from the user-supplied `ChatGP
 Core tests cover numeric differences, serving normalization, missing/invalid facts, goal ranking, price comparability, explicit allergen declarations, replacement metadata, duplicate additions, legacy decoding, and favorites. Backend tests verify favorite schema compatibility and reject model-generated factual metadata. Native UI tests exercise the blue-star entry, detail tabs, Replace, Add Instead, closing without replacement, and saved favorites using the existing offline shopping preview.
 
 For manual testing, launch the DEBUG app with `-shopping-design-preview`, open Weekly Shopping List, and tap the blue star beside Milk. For normal server-backed testing, launch without preview arguments; unverified product facts should remain unavailable.
+
+Request failures are displayed with Retry instead of silently substituting unverified local alternatives. Xcode Debug uses app-dev.nexdoapp.com; its backend needs the same food-data migration and server-only provider configuration as production.

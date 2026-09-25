@@ -34,9 +34,9 @@ private struct ShoppingAlternativeInput:Encodable {let name:String;let category:
         let result:ShoppingResult=try await api.request("/api/shopping",method:"POST",body:JSONEncoder().encode(body))
         return result.items ?? []
     }
-    func alternatives(for item:GroceryItem) async throws -> ShoppingAlternativesResponse {
+    func alternatives(for item:GroceryItem, refresh:Bool = false) async throws -> ShoppingAlternativesResponse {
         let cacheKey = [item.name,item.category,item.quantity,item.size,item.brand ?? "",item.barcode ?? ""].joined(separator:"|")
-        if let cached = alternativeCache[cacheKey], Date().timeIntervalSince(cached.0) < 300 { return cached.1 }
+        if !refresh, let cached = alternativeCache[cacheKey], Date().timeIntervalSince(cached.0) < 300 { return cached.1 }
         let input=ShoppingAlternativeInput(name:item.name,category:item.category,quantity:item.quantity,size:item.size,brand:item.brand,barcode:item.barcode)
         let body=ShoppingEnvelope(operation:"alternatives",id:nil,revision:nil,input:input)
         do {
@@ -47,7 +47,7 @@ private struct ShoppingAlternativeInput:Encodable {let name:String;let category:
             return result
         }
         catch APIError.signedOut { throw APIError.signedOut }
-        catch { try Task.checkCancellation(); return .local(for:item) }
+        catch { try Task.checkCancellation(); throw error }
     }
     func credential() async throws -> VoiceTaskSession {
         try await api.request("/api/realtime/transcription-session",method:"POST",body:JSONSerialization.data(withJSONObject:["consent":true,"scope":"shopping"]),timeout:25)

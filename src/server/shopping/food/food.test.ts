@@ -37,6 +37,12 @@ describe('food normalization and matching',()=>{
     expect(matchUSDA({name:'whole milk'},foods.slice(0,3),false)).toBeUndefined();
     expect(matchUSDA({name:'Milk'},foods,false)?.fdcId).toBe(4);
   });
+  it('matches representative loaf bread rather than pita or unrelated foods',()=>{
+    const foods=[{description:'Bread, pita, whole-wheat',fdcId:1,dataType:'SR Legacy'},{description:'Bread, whole-wheat, commercially prepared',fdcId:2,dataType:'SR Legacy'},{description:'Bread, multi-grain (includes whole-grain)',fdcId:3,dataType:'SR Legacy'},{description:'Bread, white, commercially prepared',fdcId:4,dataType:'SR Legacy'}];
+    expect(matchUSDA({name:'Whole wheat bread'},foods,false)?.fdcId).toBe(2);
+    expect(matchUSDA({name:'Multigrain bread'},foods,false)?.fdcId).toBe(3);
+    expect(matchUSDA({name:'Bread'},foods,false)?.fdcId).toBe(4);
+  });
   it('requires exact barcode or product/brand match for branded claims',()=>{
     const foods=[{description:'Whole Milk',brandOwner:'Example',dataType:'Branded',gtinUpc:'0123456789012'}];
     expect(matchUSDA({name:'Milk',barcode:'123456789012'},foods,true)).toBeDefined();

@@ -10,6 +10,7 @@ struct ShoppingAlternativesView: View {
     @State private var result: ShoppingAlternativesResponse?
     @State private var selectedID: String?
     @State private var goal: ShoppingGoal = .lowerFat
+    @State private var filterByGoal = false
     @State private var loading = true
     @State private var saving = false
     @State private var error: String?
@@ -17,7 +18,10 @@ struct ShoppingAlternativesView: View {
     @State private var detail: AlternativePresentation?
     private var selected: ShoppingAlternative? { result?.alternatives.first { $0.id == selectedID } }
     private var savedOriginal: GroceryItem { store.lists.flatMap(\.items).first { $0.id == original.id } ?? original }
-    private var ranked: [ShoppingAlternative] { goal.ranked(result?.alternatives ?? [], original: result?.originalFacts) }
+    private var ranked: [ShoppingAlternative] {
+        let items = result?.alternatives ?? []
+        return filterByGoal ? items.filter { goal.supported(by: $0, original: result?.originalFacts) } : items
+    }
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -28,11 +32,18 @@ struct ShoppingAlternativesView: View {
                     if loading { ProgressView("Finding useful alternatives…").frame(maxWidth: .infinity).padding() }
                     if let result {
                         goalPicker
-                        if !result.alternatives.contains(where: { goal.supported(by: $0, original: result.originalFacts) }) {
-                            Text("No verified matches for this goal yet. Showing other suggested swaps; check product labels.").font(.caption).foregroundStyle(Color.nexdoSecondary)
+                        if filterByGoal {
+                            Text(ranked.isEmpty ? "No verified matches for \(goal.rawValue.lowercased()). Product data may not support this comparison yet." : "\(ranked.count) matching alternatives for \(goal.rawValue.lowercased())")
+                                .font(.subheadline).foregroundStyle(Color.nexdoSecondary).accessibilityIdentifier("alternatives.goalStatus")
+                            Button("Show all alternatives") { filterByGoal = false; selectedID = nil }
+                                .frame(minHeight: 44).accessibilityIdentifier("alternatives.showAll")
+                        }
+                        if result.originalFacts == nil || result.alternatives.allSatisfy({ $0.facts == nil }) {
+                            Text("Nutrition comparisons are unavailable for some items. Open Nutrition or Allergens to see the available source information.").font(.caption).foregroundStyle(Color.nexdoSecondary)
+                            Button("Retry product data") { retry += 1 }.frame(minHeight: 44)
                         }
                         ForEach(ranked) { alternative in alternativeCard(alternative) }
-                        if ranked.isEmpty { Text("No alternatives available for this item yet.") }
+                        if result.alternatives.isEmpty { Text("No alternatives available for this item yet.") }
                     }
                     if let error {
                         Text(error).foregroundStyle(.red).accessibilityIdentifier("alternatives.error")
@@ -45,8 +56,8 @@ struct ShoppingAlternativesView: View {
                 .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Close", systemImage: "xmark") { dismiss() }.labelStyle(.iconOnly).accessibilityLabel("Close alternatives") } }
                 .foregroundStyle(Color.nexdoInk)
                 .disabled(saving)
-                .sheet(item: $detail) { presentation in
-                    ShoppingAlternativeDetails(original: original, originalFacts: result?.originalFacts, alternative: presentation.alternative, initialTab: presentation.tab, onView: { tab in track(tab.event, alternative: presentation.alternative) }, onReplace: { await apply(presentation.alternative, add: false) }, onAdd: { await apply(presentation.alternative, add: true) }, failure: { error })
+                .navigationDestination(isPresented: Binding(get: { detail != nil }, set: { if !$0 { detail = nil } })) {
+                    if let presentation = detail { ShoppingAlternativeDetails(original: original, originalFacts: result?.originalFacts, alternative: presentation.alternative, initialTab: presentation.tab, onView: { tab in track(tab.event, alternative: presentation.alternative) }, onReplace: { await apply(presentation.alternative, add: false) }, onAdd: { await apply(presentation.alternative, add: true) }, failure: { error }) }
                 }
         }.task(id: retry) { await load() }
     }
@@ -74,21 +85,21 @@ struct ShoppingAlternativesView: View {
     private func goalGrid(minimum: CGFloat) -> some View {
         LazyVGrid(columns: [GridItem(.adaptive(minimum: minimum))], spacing: 8) {
             ForEach(ShoppingGoal.allCases) { value in
-                Button { goal = value; track("alternative_goal_selected") } label: {
+                Button { goal = value; filterByGoal = true; selectedID = nil; track("alternative_goal_selected") } label: {
                     Text(value.rawValue).font(.subheadline.weight(.semibold)).fixedSize(horizontal: false, vertical: true)
                         .frame(maxWidth: .infinity, minHeight: 44)
-                        .foregroundStyle(goal == value ? Color.white : Color.nexdoInk)
-                        .background(goal == value ? Color.nexdoBlue : Color.nexdoBlue.opacity(0.05), in: Capsule())
+                        .foregroundStyle(filterByGoal && goal == value ? Color.white : Color.nexdoInk)
+                        .background(filterByGoal && goal == value ? Color.nexdoBlue : Color.nexdoBlue.opacity(0.05), in: Capsule())
                         .overlay(Capsule().stroke(Color.nexdoIndigo.opacity(0.18)))
-                }.buttonStyle(.plain).accessibilityAddTraits(goal == value ? .isSelected : [])
+                }.buttonStyle(.plain).accessibilityAddTraits(filterByGoal && goal == value ? .isSelected : [])
                     .accessibilityIdentifier("alternatives.goal.\(value.rawValue)")
             }
         }
     }
     private func alternativeCard(_ alternative: ShoppingAlternative) -> some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .top, spacing: 12) {
-                Button { show(alternative, tab: .nutrition) } label: { AlternativeArtwork(item: alternative.groceryItem, productImageURL: alternative.facts?.imageURL).frame(width: 58, height: 88) }.buttonStyle(.plain).accessibilityLabel("View \(alternative.name)")
+                Button { show(alternative, tab: .nutrition) } label: { AlternativeArtwork(item: alternative.groceryItem, productImageURL: alternative.facts?.imageURL).frame(width: 48, height: 60) }.buttonStyle(.plain).accessibilityLabel("View \(alternative.name)")
                 VStack(alignment: .leading, spacing: 6) {
                     Button { show(alternative, tab: .nutrition) } label: { Text(alternative.name).font(.headline).frame(minHeight: 44, alignment: .leading) }.buttonStyle(.plain)
                     Label(goal.supported(by: alternative, original: result?.originalFacts) ? goal.rawValue : "Suggested alternative", systemImage: "leaf.fill").font(.caption).foregroundStyle(Color.green)
@@ -100,31 +111,38 @@ struct ShoppingAlternativesView: View {
                     if !alternative.usages.isEmpty { Text("Best for: " + alternative.usages.joined(separator: " · ")).font(.caption).foregroundStyle(Color.nexdoIndigo) }
                 }
                 Spacer(minLength: 0)
-                favoriteButton(alternative.id, active: savedOriginal.favoriteAlternatives?.contains(alternative.id) == true)
-            }
-            HStack {
-                VStack(alignment: .leading) {
-                    if let price = alternative.facts?.priceLabel { Text(price).font(.subheadline.bold()) }
-                    Text(alternative.groceryItem.amountLabel).font(.caption).foregroundStyle(Color.nexdoSecondary)
+                VStack(spacing: 0) {
+                    favoriteButton(alternative.id, active: savedOriginal.favoriteAlternatives?.contains(alternative.id) == true)
+                    Button { show(alternative, tab: .why) } label: {
+                        Image(systemName: "lightbulb").frame(width: 44, height: 44)
+                    }.buttonStyle(.plain).foregroundStyle(Color.nexdoBlue)
+                        .accessibilityLabel("Why this alternative?").accessibilityIdentifier("alternatives.Why this?.\(alternative.name)")
                 }
-                Spacer()
-                Button {
-                    selectedID = alternative.id; track("alternative_selected", alternative: alternative)
-                } label: { Label(selectedID == alternative.id ? "Selected" : "Replace", systemImage: selectedID == alternative.id ? "checkmark" : "arrow.left.arrow.right").font(.subheadline.bold()).padding(.horizontal, 12).frame(minHeight: 44) }
-                    .buttonStyle(.bordered).tint(.nexdoBlue).accessibilityIdentifier("alternatives.select.\(alternative.name)")
+            }
+            HStack(spacing: 8) {
+                if let price = alternative.facts?.priceLabel { Text(price).font(.subheadline.bold()) }
+                Text(alternative.groceryItem.amountLabel).font(.caption).foregroundStyle(Color.nexdoSecondary)
             }
             ViewThatFits(in: .horizontal) {
-                HStack(spacing: 8) { detailButtons(alternative) }
-                VStack(alignment: .leading, spacing: 8) { detailButtons(alternative) }
+                HStack(spacing: 6) { detailButtons(alternative); replaceButton(alternative) }
+                VStack(alignment: .leading, spacing: 6) { detailButtons(alternative); replaceButton(alternative) }
             }
         }.modifier(AlternativeCardSurface())
             .overlay(RoundedRectangle(cornerRadius: 22).stroke(selectedID == alternative.id ? Color.nexdoBlue : .clear, lineWidth: 1.5))
     }
     @ViewBuilder private func detailButtons(_ item: ShoppingAlternative) -> some View {
-        ForEach([AlternativeTab.nutrition, .allergens, .why]) { tab in
+        ForEach([AlternativeTab.nutrition, .allergens]) { tab in
             Button { show(item, tab: tab) } label: { Label(tab.rawValue, systemImage: tab.icon).font(.caption).frame(minHeight: 44) }
                 .buttonStyle(.bordered).tint(.nexdoBlue).accessibilityIdentifier("alternatives.\(tab.id).\(item.name)")
         }
+    }
+    private func replaceButton(_ alternative: ShoppingAlternative) -> some View {
+        Button {
+            selectedID = alternative.id; track("alternative_selected", alternative: alternative)
+        } label: {
+            Label(selectedID == alternative.id ? "Selected" : "Replace", systemImage: selectedID == alternative.id ? "checkmark" : "arrow.left.arrow.right")
+                .font(.caption.bold()).frame(minHeight: 44)
+        }.buttonStyle(.bordered).tint(.nexdoBlue).accessibilityIdentifier("alternatives.select.\(alternative.name)")
     }
     private func favoriteButton(_ id: String?, active: Bool) -> some View {
         Button { Task { saving = true; defer { saving = false }; if !(await onFavorite(id)) { error = store.error ?? "Couldn’t save favorite. Please try again." } } } label: {
@@ -158,7 +176,7 @@ struct ShoppingAlternativesView: View {
     }
     @MainActor private func load() async {
         loading = true; error = nil; defer { loading = false }
-        do { let response = try await store.alternatives(for: original); try Task.checkCancellation(); result = response; track("shopping_alternatives_opened") }
+        do { let response = try await store.alternatives(for: original, refresh: retry > 0); try Task.checkCancellation(); result = response; track("shopping_alternatives_opened") }
         catch { if !Task.isCancelled { self.error = error.localizedDescription } }
     }
 }
@@ -233,8 +251,7 @@ struct ShoppingAlternativeDetails: View {
     @State private var error: String?
     private var comparison: ShoppingComparison { .init(original: originalFacts, alternative: alternative.facts) }
     var body: some View {
-        NavigationStack {
-            ScrollView {
+        ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
                     HStack(spacing: 18) {
                         AlternativeArtwork(item: alternative.groceryItem, productImageURL: alternative.facts?.imageURL).frame(width: 76, height: 114)
@@ -285,7 +302,7 @@ struct ShoppingAlternativeDetails: View {
                 .navigationTitle("Alternative Details").navigationBarTitleDisplayMode(.inline)
                 .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() } } }
                 .foregroundStyle(Color.nexdoInk)
-        }.onAppear { tab = initialTab; onView(tab) }.interactiveDismissDisabled(saving)
+        .onAppear { tab = initialTab; onView(tab) }
     }
     private var nutrition: some View {
         VStack(alignment: .leading, spacing: 12) {

@@ -46,6 +46,32 @@ import XCTest
         XCTAssertTrue(app.buttons["Edit 2% Milk"].waitForExistence(timeout: 8))
         XCTAssertFalse(app.buttons["Edit Milk"].exists)
     }
+    func testAlternativesRequestFailureShowsRetryInsteadOfSilentSuggestions() {
+        app.terminate(); app.launchArguments.append("-shopping-alternatives-failure"); app.launch()
+        XCTAssertTrue(app.navigationBars["My Lists"].waitForExistence(timeout: 15))
+        openList(); app.buttons["Show alternatives for Milk"].tap()
+        XCTAssertTrue(app.staticTexts["alternatives.error"].waitForExistence(timeout: 8))
+        XCTAssertTrue(app.buttons["Try again"].exists)
+        XCTAssertFalse(app.buttons["alternatives.select.2% Milk"].exists)
+    }
+    func testGoalsFilterAndMissingFactsButtonsOpen() {
+        openList(); app.buttons["Show alternatives for Milk"].tap()
+        let goal = app.buttons["alternatives.goal.Lactose-free"]
+        XCTAssertTrue(goal.waitForExistence(timeout: 8)); goal.tap()
+        XCTAssertTrue(app.staticTexts["alternatives.goalStatus"].label.contains("No verified matches"))
+        XCTAssertFalse(app.buttons["alternatives.select.2% Milk"].exists)
+        app.buttons["alternatives.showAll"].tap()
+        let allergens = app.buttons["alternatives.Allergens.Lactose-free whole milk"]
+        for _ in 0..<8 { if allergens.isHittable { break }; app.swipeUp() }
+        XCTAssertTrue(allergens.isHittable); allergens.tap()
+        XCTAssertTrue(app.staticTexts["Allergen & Dietary Info"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Allergen information unavailable — check product label."].exists)
+        app.buttons["Done"].tap()
+        let nutrition = app.buttons["alternatives.Nutrition.Lactose-free whole milk"]
+        XCTAssertTrue(nutrition.waitForExistence(timeout: 5)); nutrition.tap()
+        XCTAssertTrue(app.staticTexts["Nutrition Comparison"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Nutrition details unavailable"].exists)
+    }
     func testAlternativeFavoriteSurvivesReopening() {
         openList(); app.buttons["Show alternatives for Milk"].tap()
         let favorite = app.buttons["alternatives.favorite.original"]

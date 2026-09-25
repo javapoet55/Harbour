@@ -22,6 +22,7 @@ final class ShoppingPreviewProtocol:URLProtocol,@unchecked Sendable {
     override func startLoading(){
         Self.lock.lock();defer{Self.lock.unlock()}
         var response:[String:Any]=["lists":Self.lists]
+        var status = 200
         if request.httpMethod=="POST"{
             var data=request.httpBody
             if data==nil,let stream=request.httpBodyStream{
@@ -33,6 +34,8 @@ final class ShoppingPreviewProtocol:URLProtocol,@unchecked Sendable {
             let operation=json["operation"] as? String ?? ""
             if operation=="create"{
                 var list=input;list["id"]=UUID().uuidString;list["revision"]=0;Self.lists.insert(list,at:0);response=["list":list]
+            }else if operation=="alternatives", ProcessInfo.processInfo.arguments.contains("-shopping-alternatives-failure") {
+                status = 503; response = ["error":"Product data is temporarily unavailable. Please try again."]
             }else if operation=="alternatives" {
                 var original = ShoppingProductFacts(source: "UI test fixture — not product data", nutrition: .init(servingSize: "1 cup (240 ml)", servingAmount: 240, servingUnit: "ml", calories: 150, protein: 8, totalFat: 8, saturatedFat: 5, carbohydrates: 12, sugar: 12, sodium: 105, calcium: 300), contains: ["Milk"], bestFor: ["Cereal", "Coffee", "Cooking", "Smoothies"])
                 original.price = 4.99; original.currency = "USD"; original.pricePackage = "1 gallon"
@@ -56,7 +59,7 @@ final class ShoppingPreviewProtocol:URLProtocol,@unchecked Sendable {
             }
         }
         let data=try! JSONSerialization.data(withJSONObject:response)
-        client?.urlProtocol(self,didReceive:HTTPURLResponse(url:request.url!,statusCode:200,httpVersion:nil,headerFields:["Content-Type":"application/json"])!,cacheStoragePolicy:.notAllowed)
+        client?.urlProtocol(self,didReceive:HTTPURLResponse(url:request.url!,statusCode:status,httpVersion:nil,headerFields:["Content-Type":"application/json"])!,cacheStoragePolicy:.notAllowed)
         client?.urlProtocol(self,didLoad:data);client?.urlProtocolDidFinishLoading(self)
     }
     override func stopLoading(){}

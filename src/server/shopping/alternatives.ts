@@ -6,6 +6,11 @@ export type ShoppingAlternative = { name: string; category: typeof categories[nu
 export type ShoppingAlternatives = { alternatives: ShoppingAlternative[]; tip: string; usedAI: boolean; originalFacts?: FoodFacts };
 
 const curated: Array<[RegExp, Omit<ShoppingAlternatives, 'usedAI'>]> = [
+  [/bread/i, { alternatives: [
+    { name: 'Whole wheat bread', category: 'Bakery', quantity: '1', size: 'loaf', reason: 'Suggested alternative', detail: 'Compare product nutrition and labels' },
+    { name: 'Multigrain bread', category: 'Bakery', quantity: '1', size: 'loaf', reason: 'Suggested alternative', detail: 'Compare product nutrition and labels' },
+    { name: 'Rye bread', category: 'Bakery', quantity: '1', size: 'loaf', reason: 'Suggested alternative', detail: 'Compare product nutrition and labels' },
+  ], tip: 'Compare nutrition for the same serving size and check the product label.' }],
   [/chicken(?: breast)?/i, { alternatives: [
     { name: 'Chicken breast (skinless)', category: 'Meat & Seafood', quantity: '1', size: 'lb', reason: 'Lower in calories', detail: 'Lean cut with less saturated fat' },
     { name: 'Turkey breast', category: 'Meat & Seafood', quantity: '1', size: 'lb', reason: 'Lean protein', detail: 'Mild flavor and lower in fat' },

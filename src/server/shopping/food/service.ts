@@ -11,7 +11,7 @@ export class ProductDataService {
   async lookup(input:FoodQuery):Promise<FoodFacts|null>{
     const query={name:normalizeQuery(input.name),...(input.brand?{brand:normalizeQuery(input.brand)}:{}),...(input.barcode?{barcode:canonicalBarcode(input.barcode)}:{})};
     if(!query.name || input.barcode&&!query.barcode)return null;
-    const cfg=foodConfig(),key=foodKey(query.barcode?'barcode':'search',query.barcode||query);
+    const cfg=foodConfig(),key=foodKey(query.barcode?'barcode':'search-v2',query.barcode||query);
     const result=await this.cache.get<FoodFacts>(key,query.barcode?cfg.exactTTL:cfg.searchTTL,async()=>{
       let failed=false;
       const safely=async(fn:()=>Promise<FoodFacts|null>)=>{try{return await fn();}catch{failed=true;return null;}};
