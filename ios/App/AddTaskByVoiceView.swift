@@ -319,7 +319,6 @@ struct AddTaskByVoiceView: View {
 private struct VoiceDeviceVolumeControl: UIViewRepresentable {
     func makeUIView(context: Context) -> MPVolumeView {
         let view = MPVolumeView(frame: .zero)
-        view.showsRouteButton = true
         view.showsVolumeSlider = true
         return view
     }

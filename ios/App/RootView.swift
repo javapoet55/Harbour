@@ -1156,7 +1156,7 @@ private struct TodayView: View {
                                     }
                                 } else {
                                     Text("Find a task for the time you have.").font(.subheadline).foregroundStyle(Color.nexdoSecondary)
-                                    Button("Find my next task") { showingDoNow = true }.buttonStyle(.borderedProminent).frame(minHeight: 44)
+                                    Button("Find my next task") { showingDoNow = true }.buttonStyle(NexdoGradientButtonStyle())
                                 }
                             }
                             .padding(.horizontal, 18).padding(.bottom, 16).padding(.top, 4)
@@ -1359,7 +1359,7 @@ struct TodayTopBar: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityElement(children: .ignore)
-                .accessibilityLabel(temperature.map { "San Ramon weather, \($0) degrees Fahrenheit" } ?? "Weather temporarily unavailable")
+                .accessibilityLabel(temperature.map { "Current location weather, \($0) degrees Fahrenheit" } ?? "Weather temporarily unavailable")
                 .accessibilityHint("Opens the five-day forecast")
             }
             if let add { TodayHeaderButton(icon: "plus", label: "Add a task", action: add) }
@@ -2108,6 +2108,20 @@ private enum TaskFilter: String, CaseIterable, Identifiable {
 enum NexdoTheme {
     static let gradient = LinearGradient(colors: [.nexdoMagenta, .nexdoIndigo, .nexdoBlue], startPoint: .leading, endPoint: .trailing)
     static let saveGradient = LinearGradient(colors: [.nexdoBlue, .nexdoIndigo, .nexdoMagenta], startPoint: .leading, endPoint: .trailing)
+}
+
+struct NexdoGradientButtonStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var isEnabled
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .foregroundStyle(.white)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+            .frame(minHeight: 44)
+            .background(NexdoTheme.saveGradient, in: Capsule())
+            .opacity(isEnabled ? (configuration.isPressed ? 0.8 : 1) : 0.45)
+    }
 }
 
 private struct TasksHero: View {

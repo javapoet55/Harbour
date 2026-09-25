@@ -3,6 +3,7 @@ import MessageUI
 
 struct TaskAgentCard: View {
     @EnvironmentObject private var model: AppModel
+    @ObservedObject private var actionCoordinator = TaskActionCoordinator.shared
     let taskID: String
     @FocusState.Binding var focusedField: TaskDetailsView.Field?
     var onResearchAvailable: (Bool) -> Void = { _ in }
@@ -119,6 +120,7 @@ struct TaskAgentCard: View {
             else if let fallbackReason { Text(fallbackReason).font(.subheadline).foregroundStyle(.secondary) }
         }
         .tint(Color.nexdoIndigo)
+        .onDisappear { NotificationCenter.default.post(name: .taskAgentChanged, object: taskID) }
         .sheet(item: $messageDraft) { draft in
             ActionMessageComposer(recipient: draft.phone, body: draft.body) { result in
                 messageDraft = nil
@@ -157,7 +159,7 @@ struct TaskAgentCard: View {
                     }
                     guard !Task.isCancelled else { return }
                     if !busy {
-                        if (run?.candidates ?? []).isEmpty, let first = response.run?.candidates.first { selectedBusiness = first.id }
+                        if (run?.candidates ?? []).isEmpty, let first = response.run?.candidates.first { selectedBusiness = response.run?.candidates.first(where: { $0.id == actionCoordinator.action(for: taskID)?.businessCandidateID })?.id ?? first.id }
                         run = response.run
                         eligible = response.intent?.eligible == true
                         onResearchAvailable(eligible || run != nil)
@@ -266,6 +268,18 @@ struct TaskAgentCard: View {
             ForEach(Array((candidate.attributions ?? []).enumerated()), id: \.offset) { _, attribution in
                 if let link = attribution.url, let url = URL(string: link) { Link(attribution.provider, destination: url).font(.caption) }
                 else { Text(attribution.provider).font(.caption) }
+            }
+            if let action = actionCoordinator.action(for: taskID) {
+                Button {
+                    actionCoordinator.update(action.id) {
+                        $0.businessCandidateID = candidate.id
+                        $0.contactIdentifier = nil
+                        $0.manualRecipient = nil
+                    }
+                } label: {
+                    Label(action.businessCandidateID == candidate.id ? "Selected for this task" : "Choose this business", systemImage: action.businessCandidateID == candidate.id ? "checkmark.circle.fill" : "checkmark.circle")
+                }.buttonStyle(.borderedProminent)
+                    .accessibilityIdentifier("business.select.\(candidate.id)")
             }
             Divider().overlay(businessPurple.opacity(0.06))
             outreachSection(candidate)

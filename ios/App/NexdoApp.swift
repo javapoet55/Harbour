@@ -134,6 +134,7 @@ final class AppModel: ObservableObject {
     var momentAPI: APIClient { api }
     private let api: APIClient
     private let weatherClient = WeatherClient()
+    private let weatherLocation = WeatherLocationProvider()
     private var taskLoadID: UUID?
     private var taskRevision = 0
     private var supplementaryRefresh: Task<Void, Never>?
@@ -463,16 +464,22 @@ final class AppModel: ObservableObject {
     }
 
     private func refreshWeather(userID: String) async {
-        if let value = try? await weatherClient.forecast(),
-           !Task.isCancelled, profile?.id == userID { weather = value }
+        do { _ = try await loadWeatherForecast(requestPermission: false) }
+        catch { if profile?.id == userID { weather = nil } }
     }
-    func loadWeatherForecast() async throws -> WeatherResponse {
+    func loadWeatherForecast(requestPermission: Bool = true) async throws -> WeatherResponse {
         let userID = profile?.id
-        let value = try await weatherClient.forecast()
-        try Task.checkCancellation()
-        guard value.daily?.days.count == 5 else { throw APIError.invalidResponse }
-        if profile?.id == userID { weather = value }
-        return value
+        do {
+            let coordinate = try await weatherLocation.locate(requestPermission: requestPermission)
+            let value = try await weatherClient.forecast(latitude: coordinate.latitude, longitude: coordinate.longitude)
+            try Task.checkCancellation()
+            guard profile?.id == userID else { throw CancellationError() }
+            weather = value
+            return value
+        } catch {
+            if profile?.id == userID { weather = nil }
+            throw error
+        }
     }
     func calendarAgenda(from: String, days: Int) async throws -> Agenda {
         do { return try await api.request("/api/agenda?from=\(from)&days=\(days)") }
@@ -534,7 +541,9 @@ final class AppModel: ObservableObject {
     }
     func updateTaskAgent(taskID: String, action: String, version: Int, key: String?, answer: String?, budget: String, constraints: String, candidateID: String?) async throws -> TaskAgentEnvelope {
         struct Input: Encodable { let action: String; let version: Int; let key: String?; let answer: String?; let budget: String; let constraints: String; let candidateId: String? }
-        return try await api.request("/api/tasks/\(taskID)/agent", method: "POST", body: JSONEncoder().encode(Input(action: action, version: version, key: key, answer: answer, budget: budget, constraints: constraints, candidateId: candidateID)))
+        let response: TaskAgentEnvelope = try await api.request("/api/tasks/\(taskID)/agent", method: "POST", body: JSONEncoder().encode(Input(action: action, version: version, key: key, answer: answer, budget: budget, constraints: constraints, candidateId: candidateID)))
+        NotificationCenter.default.post(name: .taskAgentChanged, object: taskID)
+        return response
     }
 
     func recordVoiceTokens(_ receipt: VoiceTokenReceipt) async {
@@ -890,4 +899,8 @@ extension AppModel {
         apply(new, delta: 1)
         Task { await refreshProjects() }
     }
+}
+
+extension Notification.Name {
+    static let taskAgentChanged = Notification.Name("nexdo.taskAgentChanged")
 }
