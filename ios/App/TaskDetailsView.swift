@@ -111,12 +111,11 @@ struct TaskDetailsView: View {
                 Spacer()
                 Text("Task Details").font(.headline)
                 Spacer()
-                Menu {
-                    Button(showMoreDetails ? "Hide additional details" : "Show additional details", systemImage: "slider.horizontal.3") { showMoreDetails.toggle() }
-                    Button("Close", systemImage: "xmark", action: closeTaskDetails)
-                } label: { Image(systemName: "ellipsis").font(.title3.weight(.bold)).frame(width: 42, height: 42) }
+                Button(action: closeTaskDetails) {
+                    Image(systemName: "xmark").font(.title3).frame(width: 42, height: 42)
+                }
                     .background(Color.nexdoIndigo.opacity(0.04), in: Circle()).overlay(Circle().stroke(Color.nexdoIndigo.opacity(0.12)))
-                    .accessibilityLabel("Task options")
+                    .accessibilityLabel("Close task details")
             }.buttonStyle(.plain).padding(.horizontal, 20).padding(.vertical, 14).disabled(blocked)
         } else {
         HStack {
@@ -162,7 +161,23 @@ struct TaskDetailsView: View {
 
     private var agentTaskInformation: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("TASK INFORMATION").font(.caption.weight(.bold)).tracking(1.8).foregroundStyle(Color.nexdoSecondary)
+            HStack {
+                Text("TASK INFORMATION").font(.caption.weight(.bold)).tracking(1.8).foregroundStyle(Color.nexdoSecondary)
+                Spacer()
+                Menu {
+                    Button(showMoreDetails ? "Hide additional details" : "Show additional details", systemImage: "slider.horizontal.3") {
+                        focus = nil
+                        showMoreDetails.toggle()
+                    }
+                } label: {
+                    Image(systemName: "slider.horizontal.3")
+                        .font(.title3).foregroundStyle(Color.nexdoIndigo)
+                        .frame(width: 44, height: 44)
+                        .background(Color.nexdoIndigo.opacity(0.06), in: Circle())
+                }
+                .accessibilityLabel("Additional task details")
+                .accessibilityValue(showMoreDetails ? "Shown" : "Hidden")
+            }
             VStack(spacing: 18) {
                 HStack(spacing: 10) {
                     taskIcon("doc.text", color: .nexdoBlue)
@@ -288,18 +303,19 @@ struct TaskDetailsView: View {
         let layout = typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(spacing: 8)) : AnyLayout(HStackLayout(spacing: 12))
         return layout {
             if hasBusinessResearch {
-                Button("Save changes") { run { try await persist(); dismiss() } }
+                Button { run { try await persist(); dismiss() } } label: { Label("Save changes", systemImage: "doc.text").foregroundStyle(Color.nexdoIndigo) }
                     .buttonStyle(DetailOutlineButton()).disabled(!draft.isValid || !dirty)
                     .accessibilityLabel("Save task changes")
             }
-            Button(currentTask.isDone ? "Mark incomplete" : "Mark complete") {
+            Button {
                 run {
                     // Save the edit buffer before the status branch, which ignores form fields.
                     if dirty { try await persist() }
                     try await model.changeTaskStatus(currentTask, status: currentTask.isDone ? "PLANNED" : "COMPLETED")
                     dismiss()
                 }
-            }.buttonStyle(DetailOutlineButton(greenBackground: true))
+            } label: { Label(currentTask.isDone ? "Mark incomplete" : "Mark complete", systemImage: "checkmark") }
+            .buttonStyle(DetailOutlineButton(greenBackground: true))
                 .accessibilityLabel(currentTask.isDone ? "Mark task incomplete" : "Mark task complete")
                 .disabled(!draft.isValid)
             if !hasBusinessResearch {
@@ -396,7 +412,7 @@ private struct DetailOutlineButton: ButtonStyle {
             .background {
                 if greenBackground {
                     RoundedRectangle(cornerRadius: 13).fill(LinearGradient(
-                        colors: [Color(red: 0.04, green: 0.43, blue: 0.26), Color(red: 0.02, green: 0.32, blue: 0.23)],
+                        colors: [Color(red: 0, green: 0.68, blue: 0.39), Color(red: 0, green: 0.49, blue: 0.46)],
                         startPoint: .leading, endPoint: .trailing))
                 } else {
                     RoundedRectangle(cornerRadius: 13).fill(Color(uiColor: .systemBackground))

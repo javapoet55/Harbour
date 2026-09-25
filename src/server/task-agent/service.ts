@@ -3,7 +3,7 @@ import type {Prisma,TaskAgentRun} from '@/generated/prisma';
 import {classifyTask} from '@/lib/task-agent/intent';
 import {nextQuestion,type AgentSlots,type AgentStep,type Candidate,type RunView} from '@/lib/task-agent/types';
 import {searchBusinesses,searchConfigured,placeDetails,hasEnoughGoogleReviews} from './search';
-import {rankCandidates,prepareDraft} from './rank';
+import {compareReviewCounts,rankCandidates,prepareDraft} from './rank';
 export const plan=():AgentStep[]=>[
  {id:'google',title:'Search Google Places for local providers',status:'pending',detail:''},
  {id:'yelp',title:'Compare Yelp listings and ratings',status:'pending',detail:''},
@@ -129,5 +129,5 @@ export async function hydrateRun(view:RunView):Promise<RunView>{
  }));
  const eligible=candidates.filter((c):c is Candidate=>c!==null);
  const filtered=eligible.length<candidates.length;
- return {...view,status:filtered&&!eligible.length&&view.status==='READY_FOR_REVIEW'?'NO_RESULTS':view.status,candidates:eligible,warnings:filtered?[...view.warnings,'Some businesses were hidden because at least 20 Google reviews could not be verified. Try a new search for more options.']:view.warnings};
+ return {...view,status:filtered&&!eligible.length&&view.status==='READY_FOR_REVIEW'?'NO_RESULTS':view.status,candidates:eligible.sort(compareReviewCounts),warnings:filtered?[...view.warnings,'Some businesses were hidden because at least 20 Google reviews could not be verified. Try a new search for more options.']:view.warnings};
 }

@@ -51,3 +51,14 @@ it('excludes known-closed providers from urgent shortlists',async()=>{
  expect(rankCandidates([row],slots)).toHaveLength(0);
  expect(rankCandidates([row],{...slots,urgency:'flexible'})).toHaveLength(1);
 });
+
+it('prioritizes review count over star rating for new and refreshed shortlists',async()=>{
+ const {rankCandidates,compareReviewCounts}=await import('./rank');
+ const rows=[169,2309,1403,361,25,20].map((reviews,i)=>({
+  id:String(i),googlePlaceId:String(i),name:`Business ${i}`,address:'',phone:'',website:null,
+  evidence:[{source:'Google' as const,url:'https://maps.google.com',rating:i===0?5:4.9,reviews,observedAt:new Date().toISOString()}],
+  openNow:true,emergencyAdvertised:i===0,reason:'',draft:''
+ }));
+ expect(rankCandidates(rows,slots).map(r=>r.evidence[0].reviews)).toEqual([2309,1403,361,169,25]);
+ expect([...rows].sort(compareReviewCounts).map(r=>r.evidence[0].reviews)).toEqual([2309,1403,361,169,25,20]);
+});

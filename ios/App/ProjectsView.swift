@@ -42,7 +42,7 @@ struct ProjectsView: View {
                             Button("Retry") { Task { await model.refreshProjects() } }.frame(minHeight: 44)
                         }.accessibilityElement(children: .contain)
                     }
-                    if model.projectsLoaded && visible.isEmpty && (search.isEmpty || !CalendarSearch.matches("No project", query: search)) {
+                    if model.projectsLoaded && visible.isEmpty && (search.isEmpty || !CalendarSearch.matches("No Named Project", query: search)) {
                         ContentUnavailableView(search.isEmpty ? "Organize your tasks" : "No matching projects", systemImage: "folder", description: Text(search.isEmpty ? "Create a project to keep related tasks together." : "Try a different project name."))
                     }
                     LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: typeSize.isAccessibilitySize || geometry.size.width < 340 ? 1 : 2), alignment: .leading, spacing: 12) {
@@ -50,13 +50,13 @@ struct ProjectsView: View {
                             NavigationLink { ProjectDetailView(projectID: project.id) } label: { ProjectCard(project: project) }.buttonStyle(.plain)
                         }
                     }
-                    if model.projectsLoaded && CalendarSearch.matches("No project", query: search) {
+                    if model.projectsLoaded && CalendarSearch.matches("No Named Project", query: search) {
                         NavigationLink { ProjectDetailView(projectID: nil) } label: {
                             HStack(spacing: 16) {
                                 ProjectFolder(color: .secondary)
                                 let unassigned = model.tasks.filter { $0.projectId == nil && $0.status != "CANCELLED" }
                                 VStack(alignment: .leading, spacing: 5) {
-                                    Text("No project").font(.headline)
+                                    Text("No Named Project").font(.headline)
                                     Text("Open: \(unassigned.filter { !$0.isDone }.count)   Done: \(unassigned.filter(\.isDone).count)")
                                         .font(.subheadline).foregroundStyle(.secondary)
                                 }
@@ -198,9 +198,9 @@ struct ProjectDetailView: View {
                 VStack(alignment: .leading, spacing: 16) {
                     HStack(spacing: 12) {
                         ProjectFolder(color: project.map { ProjectStyle.color($0.color) } ?? .secondary)
-                        Text(project?.name ?? "No project").font(.title2.bold())
+                        Text(project?.name ?? "No Named Project").font(.title2.bold())
                         Spacer()
-                        TodayHeaderButton(icon: "plus", label: "Add task to \(project?.name ?? "No project")") {
+                        TodayHeaderButton(icon: "plus", label: "Add task to \(project?.name ?? "No Named Project")") {
                             adding = true
                         }
                         .disabled(deleting || missing)
@@ -255,7 +255,7 @@ struct ProjectDetailView: View {
             }.scrollDismissesKeyboard(.interactively).refreshable { await model.refreshTasks(); await model.refreshProjects() }
         }
         .foregroundStyle(Color.nexdoInk).tint(ProjectStyle.accent)
-        .navigationTitle(project?.name ?? "No project").navigationBarTitleDisplayMode(.inline).toolbar(.visible, for: .navigationBar)
+        .navigationTitle(project?.name ?? "No Named Project").navigationBarTitleDisplayMode(.inline).toolbar(.visible, for: .navigationBar)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
@@ -270,7 +270,7 @@ struct ProjectDetailView: View {
         .confirmationDialog("Delete this project?", isPresented: $confirmingDelete, titleVisibility: .visible) {
             Button("Delete project", role: .destructive) { remove() }
             Button("Cancel", role: .cancel) {}
-        } message: { Text("Its tasks will move to No project. No tasks will be deleted.") }
+        } message: { Text("Its tasks will move to No Named Project. No tasks will be deleted.") }
         .overlay { if deleting { ProgressView("Deleting project…").padding().background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14)) } }
         .sheet(isPresented: $adding) { NavigationStack { TaskEditor(task: nil, initialProjectID: projectID) } }
         .sheet(isPresented: $editing) { if let project { ProjectEditorView(project: project) } }
@@ -299,14 +299,14 @@ struct ProjectAssignmentField: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             Menu {
-                Button("No project") { projectID = nil }
+                Button("No Named Project") { projectID = nil }
                 ForEach(ProjectQuery.results(model.projects, search: "", sort: .name)) { project in
                     Button { projectID = project.id } label: { Label(project.name, systemImage: project.id == projectID ? "checkmark" : "folder").tint(ProjectStyle.color(project.color)) }
                 }
             } label: {
-                HStack { Image(systemName: "folder.fill").foregroundStyle(selected.map { ProjectStyle.color($0.color) } ?? .secondary); Text(selected?.name ?? (projectID == nil ? "No project" : "Assigned project")); Spacer(); Image(systemName: "chevron.down").font(.caption) }
+                HStack { Image(systemName: "folder.fill").foregroundStyle(selected.map { ProjectStyle.color($0.color) } ?? .secondary); Text(selected?.name ?? (projectID == nil ? "No Named Project" : "Assigned project")); Spacer(); Image(systemName: "chevron.down").font(.caption) }
                     .padding(.horizontal, 14).frame(minHeight: 48).projectCardSurface()
-            }.accessibilityLabel("Project").accessibilityValue(selected?.name ?? (projectID == nil ? "No project" : "Assigned project"))
+            }.accessibilityLabel("Project").accessibilityValue(selected?.name ?? (projectID == nil ? "No Named Project" : "Assigned project"))
             if let error = model.projectsError { Text(error).font(.caption).foregroundStyle(.secondary); Button("Retry projects") { Task { await model.refreshProjects() } }.frame(minHeight: 44) }
             if model.projectsLoading && !model.projectsLoaded { ProgressView("Loading projects…").font(.caption) }
         }.tint(ProjectStyle.accent).task { await model.refreshProjects() }

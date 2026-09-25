@@ -189,7 +189,7 @@ struct ActionQueueSheet: View {
     @EnvironmentObject private var model: AppModel
     @ObservedObject private var coordinator = TaskActionCoordinator.shared
     @Environment(\.dismiss) private var dismiss
-    @State private var selection: TodayActionSelection?
+    @State private var selectedTask: NexdoTask?
     var body: some View {
         NavigationStack {
             TimelineView(.periodic(from: .now, by: 60)) { context in
@@ -197,22 +197,24 @@ struct ActionQueueSheet: View {
                 let all = [queue.primaryAction].compactMap { $0 } + queue.nextActions + queue.laterActions
                 List {
                     ForEach([true, false], id: \.self) { due in
-                        Section(due ? "Due now" : "Upcoming") {
-                            ForEach(all.filter { (($0.notificationDate ?? .distantFuture) <= context.date) == due }) { action in
-                                Button { selection = TodayActionSelection(action: action) } label: {
-                                    VStack(alignment: .leading, spacing: 4) {
+                        let actions = all.filter { (($0.notificationDate ?? .distantFuture) <= context.date) == due }
+                        if !actions.isEmpty {
+                            Section(due ? "Due now" : "Upcoming") {
+                                ForEach(actions) { action in
+                                    Button { selectedTask = model.tasks.first { $0.id == action.taskId } } label: {
                                         NextActionRow(action: action, now: context.date)
-                                        Text(action.preferredAction?.rawValue.capitalized ?? "Call • Message • Email").font(.caption).foregroundStyle(Color.nexdoSecondary)
-                                    }
-                                }.buttonStyle(.plain)
+                                            .frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
+                                    }.buttonStyle(.plain)
+                                        .accessibilityHint("Open task details")
+                                }
                             }
                         }
                     }
                 }.overlay { if all.isEmpty { ContentUnavailableView("No actions today", systemImage: "checkmark.circle") } }
             }.navigationTitle("Nexdo Actions").navigationBarTitleDisplayMode(.inline)
                 .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { closeActionQueue() } } }
-        }.sheet(item: $selection) { value in
-            TaskActionView(actionID: value.action.id, preferred: value.action.preferredAction)
+        }.sheet(item: $selectedTask) { task in
+            TaskDetailsView(task: task)
         }
     }
 
@@ -226,7 +228,14 @@ private func actionIcon(_ channel: TaskActionChannel) -> String {
 }
 private func actionTimeLabel(_ action: TaskAction, now: Date) -> String {
     let seconds = (action.notificationDate ?? now).timeIntervalSince(now)
-    if seconds > 0 { return "in \(max(1, Int(ceil(seconds / 60)))) min" }
+    if seconds > 0 { return "in \(actionDurationLabel(minutes: max(1, Int(ceil(seconds / 60)))))" }
     if seconds > -60 { return "Due now" }
-    return "\(Int(-seconds / 60)) min overdue"
+    return "\(actionDurationLabel(minutes: Int(-seconds / 60))) overdue"
+}
+
+private func actionDurationLabel(minutes: Int) -> String {
+    let hours = minutes / 60
+    let remainder = minutes % 60
+    guard hours > 0 else { return "\(minutes) min" }
+    return remainder == 0 ? "\(hours) hr" : "\(hours) hr \(remainder) min"
 }
