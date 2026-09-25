@@ -1,6 +1,6 @@
 # Firebase engagement in ADMIN
 
-The `/admin/engagement` report reads aggregate Google Analytics for Firebase data through the Google Analytics Data API. It requires an authenticated ADMIN session before accessing configuration, cache, or Google.
+The admin app's Engagement report (`/engagement` in the `admin/` app, served by `GET /api/admin/engagement`) reads aggregate Google Analytics for Firebase data through the Google Analytics Data API. It requires an authenticated ADMIN session before accessing configuration, cache, or Google.
 
 ## Verified account mapping
 

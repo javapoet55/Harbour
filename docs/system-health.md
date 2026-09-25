@@ -10,8 +10,8 @@ Discovered integrations: OpenAI text/realtime/transcription/speech/image APIs, G
 
 ## Implementation
 
-- `/admin/health`: overview, incidents, KPI cards, API/voice trends and expandable sections for AI, voice, integrations, jobs, database, iOS, security, errors/traces, rules, and audit history.
-- `/api/admin/health`: authenticated, uncached reads and same-origin operator-only mutations.
+- Admin app `/health` page (the separate `admin/` app; the main app's old `/admin/health` redirects there): overview, incidents, KPI cards, API/voice trends and expandable sections for AI, voice, integrations, jobs, database, iOS, security, errors/traces, rules, and audit history.
+- `/api/admin/health`: uncached reads and operator-only mutations, for the admin app's bearer session plus `X-Admin-Client` secret only.
 - `/api/internal/health-tick`: cron-secret-protected alert evaluation and event retention. No third-party notification service is activated.
 - `HealthEvent`: route-template/provider/job measurements. Query/header/body/user-content fields deliberately do not exist.
 - `HealthIncident`: one active incident per breached rule, with acknowledge/investigate/resolve transitions and owner ID.
@@ -81,6 +81,8 @@ New unit/API/integration tests exercise missing/stale telemetry, state/percentil
 The full existing suite has 10 pre-existing failures across executive-companion, executive-readiness, next-action, harbor and schedule-intelligence tests. These same 10 failures were reproduced using an isolated clean `git archive HEAD` checkout. No unrelated scheduling/conversation behavior was changed to hide them. See the final task report for current totals and build checks.
 
 ## File inventory
+
+The `src/app/admin/**`, `src/components/admin/**` and `src/app/api/admin/auth/route.ts` files listed here were later removed from the main app; the dashboard now lives in the `admin/` app.
 
 Added:
 
@@ -199,7 +201,7 @@ These sections now show recorded request counts for the selected window, recent
 15-minute counts and last activity. Coverage distinguishes no activity, inactive
 traffic, low traffic and sufficient measurements; the five-sample health threshold
 is unchanged. Voice and Security detail tables use the same measured status as
-the overview. Security failures include `/api/admin/auth` as well as app auth routes.
+the overview. Security failures include admin sign-in (`/api/admin/session`) as well as app auth routes.
 Uninstrumented device session and security metrics are described under coverage
 rather than presented as empty KPI grids. Voice API success is not audio-session
 success. No synthetic requests or credentials are generated to turn badges green.

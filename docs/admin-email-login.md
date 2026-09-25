@@ -55,10 +55,13 @@ Sent through SendGrid with the shared template (`src/server/email/template.ts`, 
 
 ## Configuration
 
-- Backend: `NEXDO_ADMIN_EMAILS` (required), `SENDGRID_API_KEY`, `EMAIL_FROM_ADDRESS` (or `SENDGRID_FROM_EMAIL`), optional `NEXDO_ADMIN_FROM_EMAIL`, `EMAIL_FROM_NAME`, `ADMIN_API_SECRETS`, `HARBOR_SESSION_SECRET`.
+- Backend: `NEXDO_ADMIN_EMAILS` (required), `SENDGRID_API_KEY`, `EMAIL_FROM_ADDRESS` (or `SENDGRID_FROM_EMAIL`), optional `NEXDO_ADMIN_FROM_EMAIL`, `EMAIL_FROM_NAME`, `ADMIN_API_SECRETS`, `HARBOR_SESSION_SECRET`, `ADMIN_APP_URL` (the admin app's public origin; see below).
 - Admin app: `BACKEND_URL`, `ADMIN_API_SECRET`.
 - No migration is needed.
 
-## Original cookie portal
+## Retired `/admin` pages
 
-The backend's original `/admin` pages and `POST /api/admin/auth` still sign in with email and password until that portal is removed. They use the same `NEXDO_ADMIN_EMAILS` allowlist.
+The main app no longer serves an admin portal. Its old `/admin` pages, the `POST /api/admin/auth` password sign-in and the `nexdo_admin_session` cookie are gone; the admin API accepts only a bearer session sent with the `X-Admin-Client` secret.
+
+- `/admin` and `/admin/*` on the main app answer `308` to the same page in the admin app: `ADMIN_APP_URL` + the path without `/admin` + the query string (`/admin/users?from=…` → `<ADMIN_APP_URL>/users?from=…`). Without `ADMIN_APP_URL` (or with a value that is not an http(s) URL) they answer `404`. `/api/admin/*` is unaffected.
+- An administrator who signs in to the main app goes to `ADMIN_APP_URL` when it is set, and otherwise stays in the app as a normal user.

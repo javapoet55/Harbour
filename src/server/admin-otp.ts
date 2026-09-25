@@ -1,5 +1,4 @@
 import bcrypt from 'bcryptjs';
-import { login } from './auth';
 import { createHash, randomBytes, randomInt } from 'node:crypto';
 import { prisma } from './db';
 import { normalizeEmail } from './account-auth';
@@ -10,7 +9,6 @@ import { adminSignInMessage } from './email/messages';
 export const ADMIN_CODE_TTL_MINUTES = 10;
 export const ADMIN_CODE_MAX_ATTEMPTS = 5;
 const ADMIN_SESSION_HOURS = 8;
-const PASSWORD_ATTEMPT = 'password-attempt';
 
 export const adminTokenHash = (token: string) => createHash('sha256').update(token).digest('hex');
 const opaqueToken = () => randomBytes(32).toString('hex');
@@ -69,7 +67,7 @@ export async function verifyAdminCode(id: string, code: string) {
   const invalid = () => new Error('INVALID_ADMIN_CODE');
   if (!/^[a-f0-9]{64}$/.test(id) || !/^\d{6}$/.test(code)) throw invalid();
   const token = await prisma.adminLoginToken.findUnique({ where: { id }, include: { user: true } });
-  if (!token || token.usedAt || token.codeHash === PASSWORD_ATTEMPT || token.expiresAt <= new Date() || token.user.deletedAt || !isAdminEmail(token.user.email)) throw invalid();
+  if (!token || token.usedAt || token.expiresAt <= new Date() || token.user.deletedAt || !isAdminEmail(token.user.email)) throw invalid();
   const counted = await prisma.adminLoginToken.updateMany({
     where: { id, usedAt: null, expiresAt: { gt: new Date() }, attempts: { lt: ADMIN_CODE_MAX_ATTEMPTS } },
     data: { attempts: { increment: 1 } },
@@ -90,7 +88,7 @@ export async function verifyAdminCodeForEmail(value: string, code: string) {
   if (!/^\d{6}$/.test(code)) throw new Error('INVALID_ADMIN_CODE');
   const user = isAdminEmail(email) ? await prisma.user.findFirst({ where: { email, deletedAt: null }, select: { id: true } }) : null;
   const token = user ? await prisma.adminLoginToken.findFirst({
-    where: { userId: user.id, usedAt: null, expiresAt: { gt: new Date() }, codeHash: { not: PASSWORD_ATTEMPT } },
+    where: { userId: user.id, usedAt: null, expiresAt: { gt: new Date() } },
     orderBy: { createdAt: 'desc' }, select: { id: true },
   }) : null;
   if (!token) {
@@ -109,23 +107,4 @@ export async function adminUserForSession(session: string) {
 
 export async function revokeAdminSession(session: string) {
   await prisma.adminLoginToken.updateMany({ where: { sessionHash: adminTokenHash(session) }, data: { sessionHash: null, sessionExpiresAt: null } });
-}
-
-// Password sign-in for the original cookie portal (/api/admin/auth) only, until that route is removed.
-// Reuses the revocable admin-session store without creating an email challenge.
-export async function signInAdminPassword(value: string, password: string) {
-  const email = normalizeEmail(value);
-  const user = isAdminEmail(email) ? await prisma.user.findFirst({ where: { email, deletedAt: null } }) : null;
-  if (!user) throw new Error('INVALID_ADMIN_PASSWORD');
-  const attempt = await prisma.$transaction(async tx => {
-    await tx.user.update({ where: { id: user.id }, data: { updatedAt: new Date() } });
-    const recent = await tx.adminLoginToken.count({ where: { userId: user.id, codeHash: PASSWORD_ATTEMPT, createdAt: { gte: new Date(Date.now() - 15 * 60_000) } } });
-    if (recent >= 5) throw new Error('RATE_LIMITED');
-    return tx.adminLoginToken.create({ data: { id: opaqueToken(), userId: user.id, codeHash: PASSWORD_ATTEMPT, expiresAt: new Date(), usedAt: new Date() } });
-  });
-  const authenticated = await login(email, password);
-  if (!authenticated || !authenticated.emailVerifiedAt) throw new Error('INVALID_ADMIN_PASSWORD');
-  const session = opaqueToken();
-  await prisma.adminLoginToken.update({ where: { id: attempt.id }, data: { sessionHash: adminTokenHash(session), sessionExpiresAt: new Date(Date.now() + ADMIN_SESSION_HOURS * 60 * 60_000) } });
-  return session;
 }
