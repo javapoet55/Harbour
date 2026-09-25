@@ -1,18 +1,9 @@
-import { observedFetch } from '@/server/health/telemetry';
-import { createHash } from 'node:crypto';
-import { z } from 'zod';
 import { categories, categoryFor } from './domain';
-
-export type ShoppingAlternative = { name: string; category: typeof categories[number]; quantity: string; size: string; reason: string; detail: string };
-export type ShoppingAlternatives = { alternatives: ShoppingAlternative[]; tip: string; usedAI: boolean };
-
-const resultSchema = z.object({
-  alternatives: z.array(z.object({
-    name: z.string().trim().min(1).max(120), category: z.enum(categories), quantity: z.string().trim().min(1).max(40),
-    size: z.string().trim().max(80), reason: z.string().trim().min(1).max(80), detail: z.string().trim().min(1).max(140),
-  })).min(3).max(5),
-  tip: z.string().trim().min(1).max(220),
-});
+import { FoodFacts, FoodQuery, compare } from './food/model';
+import { productData } from './food/service';
+import { explain } from './food/explanation';
+export type ShoppingAlternative = { name: string; category: typeof categories[number]; quantity: string; size: string; reason: string; detail: string; facts?: FoodFacts; whyThisSwap?: string };
+export type ShoppingAlternatives = { alternatives: ShoppingAlternative[]; tip: string; usedAI: boolean; originalFacts?: FoodFacts };
 
 const curated: Array<[RegExp, Omit<ShoppingAlternatives, 'usedAI'>]> = [
   [/chicken(?: breast)?/i, { alternatives: [
@@ -23,7 +14,7 @@ const curated: Array<[RegExp, Omit<ShoppingAlternatives, 'usedAI'>]> = [
     { name: 'Chickpeas', category: 'Pantry', quantity: '2', size: 'cans', reason: 'High fiber option', detail: 'Plant-based protein with fiber' },
   ], tip: 'Try turkey breast for a lean swap with a similar mild flavor.' }],
   [/whole milk|milk 2%|milk/i, { alternatives: [
-    { name: 'Low-fat milk', category: 'Dairy & Eggs', quantity: '1', size: 'gallon', reason: 'Lower fat option', detail: 'Similar dairy taste with less fat' },
+    { name: '2% milk', category: 'Dairy & Eggs', quantity: '1', size: 'gallon', reason: 'Lower fat option', detail: 'Similar dairy taste with less fat' },
     { name: 'Lactose-free milk', category: 'Dairy & Eggs', quantity: '1', size: 'gallon', reason: 'Lactose-free', detail: 'Dairy milk without lactose' },
     { name: 'Unsweetened oat milk', category: 'Dairy & Eggs', quantity: '1', size: 'carton', reason: 'Plant-based option', detail: 'Creamy texture without dairy' },
     { name: 'Unsweetened soy milk', category: 'Dairy & Eggs', quantity: '1', size: 'carton', reason: 'More plant protein', detail: 'Neutral flavor with protein' },
@@ -47,32 +38,16 @@ function fallback(name: string, category: typeof categories[number], quantity: s
   return { alternatives, tip: `Compare unit prices and package sizes before replacing ${base}.`, usedAI: false };
 }
 
-function outputText(payload: { output_text?: string; output?: Array<{ content?: Array<{ text?: string }> }> }) {
-  return payload.output_text || payload.output?.flatMap(item => item.content ?? []).map(item => item.text ?? '').join('') || '';
-}
-
-export async function recommendShoppingAlternatives(userId: string, input: { name: string; category?: string; quantity?: string; size?: string }): Promise<ShoppingAlternatives> {
+export async function recommendShoppingAlternatives(_userId: string, input: FoodQuery & { category?: string; quantity?: string; goal?: string }): Promise<ShoppingAlternatives> {
   const category = categories.includes(input.category as typeof categories[number]) ? input.category as typeof categories[number] : categoryFor(input.name);
-  const quantity = input.quantity?.trim() || '1';
-  const size = input.size?.trim() || '';
-  const local = fallback(input.name, category, quantity, size);
-  if (!process.env.OPENAI_API_KEY) return local;
-  try {
-    const schema = { type: 'object', additionalProperties: false, required: ['alternatives', 'tip'], properties: {
-      alternatives: { type: 'array', minItems: 3, maxItems: 5, items: { type: 'object', additionalProperties: false, required: ['name', 'category', 'quantity', 'size', 'reason', 'detail'], properties: {
-        name: { type: 'string' }, category: { type: 'string', enum: categories }, quantity: { type: 'string' }, size: { type: 'string' }, reason: { type: 'string' }, detail: { type: 'string' },
-      } } }, tip: { type: 'string' },
-    } };
-    const response = await observedFetch('https://api.openai.com/v1/responses', { method: 'POST', signal: AbortSignal.timeout(12000), headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}`, 'Content-Type': 'application/json' }, body: JSON.stringify({
-      model: process.env.OPENAI_MODEL || 'gpt-5.4-mini', store: false, max_output_tokens: 900,
-      instructions: 'Suggest 3 to 5 practical grocery alternatives. Keep claims general and avoid medical advice. Preserve useful quantity or package context. Return only the requested JSON.',
-      input: JSON.stringify({ item: { name: input.name, category, quantity, size } }),
-      text: { format: { type: 'json_schema', name: 'shopping_alternatives', strict: true, schema } },
-      safety_identifier: `shopping_${createHash('sha256').update(userId).digest('hex').slice(0, 24)}`,
-    }) });
-    if (!response.ok) return local;
-    const payload = await response.json() as { output_text?: string; output?: Array<{ content?: Array<{ text?: string }> }> };
-    const parsed = resultSchema.safeParse(JSON.parse(outputText(payload)));
-    return parsed.success ? { ...parsed.data, usedAI: true } : local;
-  } catch { return local; }
+  const local = fallback(input.name, category, input.quantity?.trim() || '1', input.size?.trim() || '');
+  const [original, ...facts] = category==='Household' ? [null,...local.alternatives.map(()=>null)] : await Promise.all([productData.lookup(input), ...local.alternatives.map(item=>productData.lookup({name:item.name}))]);
+  let usedAI = false;
+  const alternatives = await Promise.all(local.alternatives.map(async (item,index)=>{
+    const fact = facts[index];
+    const explanation = await explain(original,fact,input.goal||'Lower fat');
+    usedAI ||= explanation.usedAI;
+    return {...item, reason: 'Suggested alternative', detail: explanation.text, whyThisSwap: explanation.text, ...(fact?{facts:fact}:{}), nutritionUnavailable: !fact?.nutrition, nutritionComparison:compare(original,fact)};
+  }));
+  return {...local, alternatives, tip:'Compare source information and product labels before replacing an item.', usedAI, ...(original?{originalFacts:original}:{})};
 }

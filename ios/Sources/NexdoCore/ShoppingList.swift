@@ -8,13 +8,19 @@ public struct GroceryItem: Codable, Identifiable, Equatable, Sendable {
     public var size:String = ""
     public var notes:String = ""
     public var imageData:String?
+    public var brand:String?
+    public var barcode:String?
     public var checked:Bool = false
+    public var favorite:Bool?
+    public var favoriteAlternatives:[String]?
     public init(name:String = "",category:String = "Other",quantity:String = "1",size:String = "",notes:String = "") {
         self.name=name;self.category=category;self.quantity=quantity;self.size=size;self.notes=notes
     }
-    enum CodingKeys:String,CodingKey {case id,name,category,quantity,size,notes,checked,imageData}
+    enum CodingKeys:String,CodingKey {case id,name,category,quantity,size,notes,checked,imageData,favorite,favoriteAlternatives,brand,barcode}
     public func encode(to encoder:Encoder) throws {
         var c=encoder.container(keyedBy:CodingKeys.self)
+        try c.encodeIfPresent(brand,forKey:.brand);try c.encodeIfPresent(barcode,forKey:.barcode)
+        try c.encodeIfPresent(favorite,forKey:.favorite);try c.encodeIfPresent(favoriteAlternatives,forKey:.favoriteAlternatives)
         try c.encode(id,forKey:.id);try c.encode(name,forKey:.name)
         try c.encode(category,forKey:.category);try c.encode(quantity,forKey:.quantity)
         try c.encode(size,forKey:.size);try c.encode(notes,forKey:.notes)
@@ -35,6 +41,8 @@ public struct ShoppingAlternative: Codable, Identifiable, Equatable, Sendable {
     public var category:String
     public var quantity:String
     public var size:String
+    public var facts:ShoppingProductFacts?
+    public var whyThisSwap:String?
     public var reason:String
     public var detail:String
     public var id:String { [name,category,quantity,size].joined(separator:"|") }
@@ -42,10 +50,13 @@ public struct ShoppingAlternative: Codable, Identifiable, Equatable, Sendable {
         self.name=name;self.category=category;self.quantity=quantity;self.size=size;self.reason=reason;self.detail=detail
     }
     public var groceryItem:GroceryItem {
-        GroceryItem(name:name,category:category,quantity:quantity,size:size,notes:detail)
+        var item = GroceryItem(name:name,category:category,quantity:quantity,size:size,notes:detail)
+        item.brand = facts?.brand; item.barcode = facts?.barcode
+        return item
     }
 }
 public struct ShoppingAlternativesResponse: Codable, Equatable, Sendable {
+    public var originalFacts:ShoppingProductFacts?
     public var alternatives:[ShoppingAlternative]
     public var tip:String
     public var usedAI:Bool

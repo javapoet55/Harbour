@@ -33,6 +33,16 @@ final class ShoppingPreviewProtocol:URLProtocol,@unchecked Sendable {
             let operation=json["operation"] as? String ?? ""
             if operation=="create"{
                 var list=input;list["id"]=UUID().uuidString;list["revision"]=0;Self.lists.insert(list,at:0);response=["list":list]
+            }else if operation=="alternatives" {
+                var original = ShoppingProductFacts(source: "UI test fixture — not product data", nutrition: .init(servingSize: "1 cup (240 ml)", servingAmount: 240, servingUnit: "ml", calories: 150, protein: 8, totalFat: 8, saturatedFat: 5, carbohydrates: 12, sugar: 12, sodium: 105, calcium: 300), contains: ["Milk"], bestFor: ["Cereal", "Coffee", "Cooking", "Smoothies"])
+                original.price = 4.99; original.currency = "USD"; original.pricePackage = "1 gallon"
+                var milk = ShoppingAlternative(name: "2% Milk", category: "Dairy & Eggs", quantity: "1", size: "1 gallon", reason: "Test suggestion", detail: "Test fixture only")
+                var metadata = original; metadata.nutrition?.calories = 120; metadata.nutrition?.totalFat = 5; metadata.nutrition?.saturatedFat = 3; metadata.price = 4.29
+                milk.facts = metadata
+                var one = milk; one.name = "1% Milk"; one.facts?.nutrition?.totalFat = 2.5
+                var unknown = milk; unknown.name = "Lactose-free whole milk"; unknown.facts = nil
+                var result = ShoppingAlternativesResponse(alternatives: [milk,one,unknown], tip: "Preview only", usedAI: false); result.originalFacts = original
+                response = (try! JSONSerialization.jsonObject(with: JSONEncoder().encode(result))) as! [String:Any]
             }else if operation=="parse"{
                 let item=GroceryItem(name:"Apples",category:"Produce",quantity:"3")
                 response=["items":[try! JSONSerialization.jsonObject(with:JSONEncoder().encode(item))]]

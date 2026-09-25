@@ -11,13 +11,61 @@ import XCTest
         app.buttons["Close alternatives"].tap()
         XCTAssertTrue(app.buttons["Edit Milk"].waitForExistence(timeout: 5))
         app.buttons["Show alternatives for Milk"].tap()
-        let replace = app.buttons["Replace with Selected Item"]
+        let choice = app.buttons["alternatives.select.2% Milk"]
+        XCTAssertTrue(choice.waitForExistence(timeout: 8))
+        for _ in 0..<5 { if choice.isHittable { break }; app.swipeUp() }
+        choice.tap()
+        let replace = app.buttons["alternatives.confirm"]
         XCTAssertTrue(replace.waitForExistence(timeout: 8))
         replace.tap()
         XCTAssertTrue(app.navigationBars["Shopping List"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.buttons["Edit Milk"].exists)
         XCTAssertTrue(app.buttons["Edit Bananas"].exists)
         let shot = XCTAttachment(screenshot: app.screenshot()); shot.name = "Replacement preserves other items"; shot.lifetime = .keepAlways; add(shot)
+    }
+    func testAlternativeDetailsAndPersistedReplacement() {
+        openList()
+        app.buttons["Show alternatives for Milk"].tap()
+        let goal = app.buttons["alternatives.goal.Lower fat"]
+        XCTAssertTrue(goal.waitForExistence(timeout: 8)); goal.tap()
+        let nutrition = app.buttons["alternatives.Nutrition.2% Milk"]
+        for _ in 0..<5 { if nutrition.isHittable { break }; app.swipeUp() }
+        XCTAssertTrue(nutrition.isHittable); nutrition.tap()
+        XCTAssertTrue(app.staticTexts["Nutrition Comparison"].waitForExistence(timeout: 5))
+        let screenshot = XCTAttachment(screenshot: app.screenshot()); screenshot.name = "Alternative nutrition comparison"; screenshot.lifetime = .keepAlways; add(screenshot)
+        app.buttons["alternative.tab.Allergens"].tap()
+        XCTAssertTrue(app.staticTexts["Contains Milk"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.staticTexts["No Nuts"].exists)
+        app.buttons["alternative.tab.Why this?"].tap()
+        XCTAssertTrue(app.staticTexts["Why NexDo suggested this"].waitForExistence(timeout: 5))
+        let best = app.buttons["alternative.tab.Best For"]
+        if !best.isHittable { app.scrollViews.firstMatch.swipeLeft() }
+        best.tap()
+        XCTAssertTrue(app.staticTexts["Cereal"].waitForExistence(timeout: 5))
+        app.buttons["alternative.detail.replace"].tap()
+        XCTAssertTrue(app.buttons["Edit 2% Milk"].waitForExistence(timeout: 8))
+        XCTAssertFalse(app.buttons["Edit Milk"].exists)
+    }
+    func testAlternativeFavoriteSurvivesReopening() {
+        openList(); app.buttons["Show alternatives for Milk"].tap()
+        let favorite = app.buttons["alternatives.favorite.original"]
+        XCTAssertTrue(favorite.waitForExistence(timeout: 8)); favorite.tap()
+        let saved = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label == %@", "Remove favorite"), object: favorite)
+        XCTAssertEqual(XCTWaiter.wait(for: [saved], timeout: 8), .completed)
+        app.buttons["Close alternatives"].tap()
+        app.buttons["Show alternatives for Milk"].tap()
+        XCTAssertTrue(favorite.waitForExistence(timeout: 8))
+        XCTAssertEqual(favorite.label, "Remove favorite")
+    }
+    func testAlternativeAddInsteadKeepsOriginal() {
+        openList(); app.buttons["Show alternatives for Milk"].tap()
+        let choice = app.buttons["alternatives.select.2% Milk"]
+        XCTAssertTrue(choice.waitForExistence(timeout: 8))
+        for _ in 0..<5 { if choice.isHittable { break }; app.swipeUp() }
+        choice.tap(); app.buttons["alternatives.add"].tap()
+        XCTAssertTrue(app.buttons["Edit Milk"].waitForExistence(timeout: 8))
+        for _ in 0..<5 { if app.buttons["Edit 2% Milk"].exists { break }; app.swipeUp() }
+        XCTAssertTrue(app.buttons["Edit 2% Milk"].exists)
     }
     func testShareLinkCreateRevokeAndDismiss() {
         openList()

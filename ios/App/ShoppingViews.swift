@@ -298,7 +298,7 @@ struct ShoppingDetail:View {
             .sheet(isPresented:$sharing){ShoppingShare(store:store,list:list){list=$0}}
             .sheet(isPresented:$recommendations){AskNexdoView(textPage:true,shoppingContext:ShoppingRecommendationContext(listName:list.title,itemNames:list.items.map(\.name)))}
             .sheet(item:$alternativesFor){original in
-                ShoppingAlternativesView(store:store,original:original,onReplace:{alternative in replace(original,with:alternative)},onAdd:{alternative in add(alternative)})
+                ShoppingAlternativesView(store:store,original:original,onReplace:{alternative in await replace(original,with:alternative)},onAdd:{alternative in await add(alternative)},onFavorite:{id in await favorite(original,alternativeID:id)})
                     .presentationDetents([.large]).presentationDragIndicator(.visible)
             }
             .fullScreenCover(item:$completion){summary in
@@ -341,15 +341,42 @@ struct ShoppingDetail:View {
         save(next)
     }
     private func delete(_ row:GroceryItem){var next=list;next.items.removeAll{$0.id==row.id};if selectedCategory != "All" && !next.items.contains(where:{$0.category==selectedCategory}){selectedCategory="All"};save(next)}
-    private func replace(_ original:GroceryItem,with alternative:ShoppingAlternative){
-        var next=list
-        guard let index=next.items.firstIndex(where:{$0.id==original.id}) else{return}
-        var replacement=alternative.groceryItem
-        replacement.id=original.id;replacement.checked=original.checked
-        next.items[index]=replacement
-        save(next)
+    private func persistAlternative(_ next: GroceryList) async -> Bool {
+        let saved: GroceryList?
+        if list.completedAt != nil {
+            var working = next
+            working.id = UUID().uuidString; working.completedAt = nil; working.revision = 0
+            saved = await store.action("create", input: ShoppingInput(working), idempotencyKey: working.id)
+        } else {
+            saved = await store.action("save", list: list, input: ShoppingInput(next))
+        }
+        guard let saved else { return false }
+        list = saved; error = nil
+        return true
     }
-    private func add(_ alternative:ShoppingAlternative){var next=list;next.items.append(alternative.groceryItem);save(next)}
+    private func replace(_ original: GroceryItem, with alternative: ShoppingAlternative) async -> Bool {
+        guard let next = ShoppingSwap.replacing(original, with: alternative, in: list) else {
+            store.error = "This item is no longer in your list."; return false
+        }
+        return await persistAlternative(next)
+    }
+    private func add(_ alternative: ShoppingAlternative) async -> Bool {
+        guard let next = ShoppingSwap.adding(alternative, to: list) else {
+            store.error = "This alternative is already in your cart."; return false
+        }
+        return await persistAlternative(next)
+    }
+    private func favorite(_ original: GroceryItem, alternativeID: String?) async -> Bool {
+        var next = list
+        guard let index = next.items.firstIndex(where: { $0.id == original.id }) else { return false }
+        if let alternativeID {
+            var favorites = next.items[index].favoriteAlternatives ?? []
+            if favorites.contains(alternativeID) { favorites.removeAll { $0 == alternativeID } }
+            else { favorites.append(alternativeID) }
+            next.items[index].favoriteAlternatives = favorites
+        } else { next.items[index].favorite = !(next.items[index].favorite ?? false) }
+        return await persistAlternative(next)
+    }
     @MainActor private func completeTrip() async {
         let finished=list
         guard let next=await store.action("complete",list:finished,input:[String:String]()) else{return}
@@ -508,107 +535,6 @@ private struct ShoppingShare:View {
     private func updateURL(){if let token=list.shareToken{url=store.api.baseURL.appendingPathComponent("shared/shopping/"+token)}}
 }
 
-private struct ShoppingAlternativesView:View {
-    @Environment(\.dismiss) private var dismiss
-    @ObservedObject var store:ShoppingStore
-    let original:GroceryItem
-    let onReplace:(ShoppingAlternative)->Void
-    let onAdd:(ShoppingAlternative)->Void
-    @State private var result:ShoppingAlternativesResponse?
-    @State private var selectedID:String?
-    @State private var loading=true
-    @State private var error:String?
-    private var selected:ShoppingAlternative? {result?.alternatives.first{$0.id==selectedID}}
-    var body:some View {
-        NavigationStack {
-            Group {
-                if loading {ProgressView("Finding useful alternatives…").frame(maxWidth:.infinity,maxHeight:.infinity)}
-                else if let error {
-                    ContentUnavailableView("Couldn’t load alternatives",systemImage:"wifi.exclamationmark",description:Text(error))
-                        .overlay(alignment:.bottom){Button("Try Again"){Task{await load()}}.buttonStyle(.borderedProminent).tint(.nexdoBlue).padding(.bottom,34)}
-                } else if let result {
-                    ScrollView {
-                        VStack(alignment:.leading,spacing:18){
-                            originalCard
-                            VStack(alignment:.leading,spacing:3){
-                                Text("AI Recommended Alternatives").font(.title3.bold()).foregroundStyle(Color.nexdoInk)
-                                Text("Practical swaps based on the item in your list.").font(.subheadline).foregroundStyle(Color.nexdoSecondary)
-                            }
-                            VStack(spacing:0){
-                                ForEach(Array(result.alternatives.enumerated()),id:\.element.id){index,alternative in
-                                    alternativeRow(alternative)
-                                    if index < result.alternatives.count-1 {Divider().padding(.leading,70)}
-                                }
-                            }
-                            .background(Color(uiColor:.secondarySystemGroupedBackground),in:RoundedRectangle(cornerRadius:20,style:.continuous))
-                            .overlay(RoundedRectangle(cornerRadius:20,style:.continuous).stroke(Color.nexdoIndigo.opacity(0.10),lineWidth:1))
-                            HStack(alignment:.top,spacing:10){
-                                Image(systemName:"sparkles").font(.title2).foregroundStyle(Color.nexdoBlue)
-                                VStack(alignment:.leading,spacing:3){Text("Nexdo Tip").font(.subheadline.bold()).foregroundStyle(Color.nexdoBlue);Text(result.tip).font(.subheadline).foregroundStyle(Color.nexdoSecondary)}
-                            }.padding(16).frame(maxWidth:.infinity,alignment:.leading)
-                                .background(Color.nexdoBlue.opacity(0.08),in:RoundedRectangle(cornerRadius:18,style:.continuous))
-                        }.padding(.horizontal,18).padding(.top,12).padding(.bottom,116)
-                    }.background{TodayBackdrop()}
-                        .safeAreaInset(edge:.bottom,spacing:0){actionBar}
-                }
-            }
-            .navigationTitle("Item Alternatives").navigationBarTitleDisplayMode(.inline)
-            .toolbar{ToolbarItem(placement:.topBarTrailing){Button{dismiss()}label:{Image(systemName:"xmark").font(.headline)}.accessibilityLabel("Close alternatives")}}
-        }.task{if result==nil{await load()}}
-    }
-    private var originalCard:some View {
-        HStack(spacing:13){
-            GroceryArtwork(item:original).frame(width:56,height:58)
-            VStack(alignment:.leading,spacing:4){
-                Text(original.name).font(.headline).foregroundStyle(Color.nexdoInk)
-                Text(original.amountLabel).font(.subheadline).foregroundStyle(Color.nexdoSecondary)
-                Text("Original Item").font(.caption.weight(.semibold)).foregroundStyle(Color.nexdoBlue).padding(.horizontal,10).padding(.vertical,5).background(Color.nexdoBlue.opacity(0.09),in:Capsule())
-            }
-            Spacer()
-            Image(systemName:"star.fill").font(.title2).foregroundStyle(Color.nexdoBlue).accessibilityHidden(true)
-        }.padding(15).background(Color(uiColor:.secondarySystemGroupedBackground),in:RoundedRectangle(cornerRadius:20,style:.continuous))
-            .overlay(RoundedRectangle(cornerRadius:20,style:.continuous).stroke(Color.nexdoIndigo.opacity(0.10),lineWidth:1))
-    }
-    private func alternativeRow(_ alternative:ShoppingAlternative)->some View {
-        let isSelected=selectedID==alternative.id
-        return Button{selectedID=alternative.id}label:{
-            HStack(spacing:11){
-                GroceryArtwork(item:alternative.groceryItem)
-                VStack(alignment:.leading,spacing:3){
-                    Text(alternative.name).font(.subheadline.weight(.semibold)).foregroundStyle(Color.nexdoInk)
-                    Label(alternative.reason,systemImage:"leaf.fill").font(.caption).foregroundStyle(Color.green)
-                    Text(alternative.detail).font(.caption).foregroundStyle(Color.nexdoSecondary).lineLimit(2)
-                }
-                Spacer(minLength:4)
-                Text(isSelected ? "Selected":"Replace").font(.caption.weight(.bold)).foregroundStyle(isSelected ? Color.white:Color.nexdoBlue)
-                    .padding(.horizontal,12).padding(.vertical,8).background(isSelected ? Color.nexdoBlue:Color.clear,in:Capsule())
-                    .overlay(Capsule().stroke(Color.nexdoBlue.opacity(isSelected ? 0:0.28),lineWidth:1))
-            }.padding(.horizontal,14).padding(.vertical,11).contentShape(Rectangle())
-        }.buttonStyle(.plain).accessibilityLabel("Select \(alternative.name) as replacement").accessibilityAddTraits(isSelected ? .isSelected:[])
-    }
-    private var actionBar:some View {
-        VStack(spacing:7){
-            Button{
-                guard let selected else{return};onReplace(selected);dismiss()
-            }label:{Text("Replace with Selected Item").font(.headline).foregroundStyle(.white).frame(maxWidth:.infinity,minHeight:50).background(NexdoTheme.gradient,in:RoundedRectangle(cornerRadius:16,style:.continuous))}
-                .buttonStyle(.plain).disabled(selected==nil).opacity(selected==nil ? 0.5:1)
-            Button{
-                guard let selected else{return};onAdd(selected);dismiss()
-            }label:{Text("Add to Cart Instead").font(.subheadline.weight(.semibold)).foregroundStyle(Color.nexdoBlue).frame(maxWidth:.infinity,minHeight:34)}
-                .buttonStyle(.plain).disabled(selected==nil)
-        }.padding(.horizontal,18).padding(.top,10).padding(.bottom,8).background(.ultraThinMaterial).overlay(alignment:.top){Divider().opacity(0.45)}
-    }
-    @MainActor private func load() async {
-        loading=true;error=nil
-        do {
-            let response=try await store.alternatives(for:original)
-            result=response;selectedID=response.alternatives.first?.id
-        } catch {self.error=error.localizedDescription}
-        loading=false
-    }
-}
-
-
 private struct GroceryRow:View {
     let row:GroceryItem
     let readOnly:Bool
@@ -642,7 +568,7 @@ private struct GroceryRow:View {
 }
 
 /// Keep grocery artwork in its original colors, independent of button tint.
-private struct GroceryArtwork:View {
+struct GroceryArtwork:View {
     let item:GroceryItem
     private var words:Set<String> {Set(item.name.lowercased().split{!$0.isLetter}.map(String.init))}
     private var asset:String? {

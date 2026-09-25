@@ -553,6 +553,10 @@ model ShoppingItem {
   size String @default("")
   notes String @default("")
   checked Boolean @default(false)
+  barcode String?
+  brand String?
+  favorite Boolean?
+  favoriteAlternatives Json?
   sortOrder Int @default(0)
   @@index([listId, sortOrder])
 }
@@ -642,4 +646,21 @@ model TaskAgentRun {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   @@index([status, leaseUntil])
+}
+
+// Shared, versioned factual food-data and explanation cache. No user identifiers.
+model FoodDataCache {
+  key String @id
+  schemaVersion Int @default(1)
+  payload String?
+  expiresAt DateTime
+  staleUntil DateTime
+  leaseUntil DateTime
+  @@index([staleUntil])
+}
+
+model FoodProviderBudget {
+  key String @id
+  count Int @default(0)
+  resetAt DateTime
 }
