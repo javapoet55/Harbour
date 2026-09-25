@@ -310,7 +310,7 @@
 				CODE_SIGN_ENTITLEMENTS = App/Nexdo.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 4;
+				CURRENT_PROJECT_VERSION = 6;
 				DEVELOPMENT_ASSET_PATHS = "";
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Nexdo-Info.plist";
@@ -328,7 +328,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.0.1;
 				PRODUCT_BUNDLE_IDENTIFIER = com.pinslots.nexdo;
 				PRODUCT_NAME = "Nexdo: AI Daily Planner";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -352,7 +352,7 @@
 				CODE_SIGN_ENTITLEMENTS = App/Nexdo.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 4;
+				CURRENT_PROJECT_VERSION = 6;
 				DEVELOPMENT_ASSET_PATHS = "";
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Nexdo-Info.plist";
@@ -370,7 +370,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.0.1;
 				PRODUCT_BUNDLE_IDENTIFIER = com.pinslots.nexdo;
 				PRODUCT_NAME = "Nexdo: AI Daily Planner";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
