@@ -510,8 +510,9 @@ import XCTest
         app.buttons["festival-tab-Schedule"].tap()
         let schedule=app.buttons.matching(identifier:"wish-primary").matching(NSPredicate(format:"label == %@","Schedule Wish")).firstMatch
         for _ in 0..<6 {if schedule.isHittable{break};app.swipeUp()};schedule.tap()
-        app.buttons.matching(identifier:"wish-primary").matching(NSPredicate(format:"label == %@","Confirm Schedule")).firstMatch.tap()
-        XCTAssertTrue(app.staticTexts["Wishes scheduled"].waitForExistence(timeout:8))
+        let confirm=app.buttons.matching(identifier:"wish-primary").matching(NSPredicate(format:"label == %@","Confirm Schedule")).firstMatch
+        for _ in 0..<6 {if confirm.isHittable{break};app.swipeUp()};confirm.tap()
+        XCTAssertTrue(app.staticTexts["Schedule confirmed!"].waitForExistence(timeout:8))
         let done=app.buttons.matching(identifier:"wish-primary").matching(NSPredicate(format:"label == %@","Done")).firstMatch
         for _ in 0..<4 {if done.isHittable{break};app.swipeUp()};done.tap()
         XCTAssertTrue(app.navigationBars["Important Moments"].waitForExistence(timeout:5))
@@ -529,20 +530,37 @@ import XCTest
         app.buttons["festival-tab-Schedule"].tap()
         let schedule=app.buttons.matching(identifier:"wish-primary").matching(NSPredicate(format:"label == %@", "Schedule Wish")).firstMatch
         for _ in 0..<5 {if schedule.isHittable{break};app.swipeUp()};schedule.tap()
-        XCTAssertTrue(app.navigationBars["Review schedule"].waitForExistence(timeout:5))
+        XCTAssertTrue(app.staticTexts["Review schedule"].waitForExistence(timeout:5))
         XCTAssertTrue(app.staticTexts["You are confirming this schedule for all selected contacts. Recipients do not need to confirm."].exists)
         XCTAssertEqual(app.staticTexts.matching(identifier:"Messages · Will be sent by you").count,2)
         XCTAssertFalse(app.staticTexts["We’ll remind you to confirm in Messages"].exists)
-        app.buttons.matching(identifier:"wish-primary").matching(NSPredicate(format:"label == %@", "Confirm Schedule")).firstMatch.tap()
-        XCTAssertTrue(app.staticTexts["Wishes scheduled"].waitForExistence(timeout:8))
+        let editDate=app.buttons["review-edit-date"]
+        for _ in 0..<5 { if editDate.isHittable {break};app.swipeUp() }
+        editDate.tap()
+        XCTAssertTrue(app.staticTexts["Edit date & time"].waitForExistence(timeout:5))
+        app.buttons["Close editor"].tap()
+        let editRecipient=app.buttons.matching(NSPredicate(format:"identifier BEGINSWITH %@", "review-edit-recipient-")).firstMatch
+        for _ in 0..<5 { if editRecipient.isHittable {break};app.swipeUp() }
+        editRecipient.tap()
+        XCTAssertTrue(app.textFields["review-recipient-name"].waitForExistence(timeout:5))
+        app.buttons["Close editor"].tap()
+        let confirm=app.buttons.matching(identifier:"wish-primary").matching(NSPredicate(format:"label == %@", "Confirm Schedule")).firstMatch
+        for _ in 0..<6 { if confirm.isHittable {break};app.swipeUp() }
+        confirm.tap()
+        XCTAssertTrue(app.staticTexts["Schedule confirmed!"].waitForExistence(timeout:8))
         XCTAssertEqual(app.staticTexts.matching(identifier:"We’ll remind you, the sender, to tap Send in Messages").count,1)
         XCTAssertTrue(app.staticTexts["For all 2 selected contacts"].exists)
         XCTAssertEqual(app.buttons.matching(identifier:"festival-manage-schedule").count,1)
+        for _ in 0..<5 {if app.buttons["festival-manage-schedule"].isHittable{break};app.swipeUp()}
         app.buttons["festival-manage-schedule"].tap()
         XCTAssertTrue(app.navigationBars["Manage Moment"].waitForExistence(timeout:5))
         XCTAssertTrue(app.buttons["festival-tab-Schedule"].isSelected)
         app.buttons["festival-tab-Details"].tap()
-        app.switches["Repeat every year"].tap()
+        let repeatSwitch=app.switches["Repeat every year"]
+        for _ in 0..<5 {if repeatSwitch.isHittable{break};app.swipeUp()}
+        let previousRepeat=repeatSwitch.value as? String
+        repeatSwitch.coordinate(withNormalizedOffset:CGVector(dx:0.92,dy:0.5)).tap()
+        XCTAssertNotEqual(repeatSwitch.value as? String,previousRepeat)
         let saveDetails=app.buttons.matching(identifier:"wish-primary").matching(NSPredicate(format:"label == %@","Save Changes")).firstMatch
         for _ in 0..<7 {if saveDetails.isHittable{break};app.swipeUp()}
         saveDetails.tap()

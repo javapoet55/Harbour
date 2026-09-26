@@ -74,7 +74,7 @@ struct ManageFestivalView: View {
             if let notice=model.notice {Text(notice).font(.subheadline).foregroundStyle(.secondary).accessibilityIdentifier("festival-notice")}
         }.padding(18)}.id(model.tab)}
         .navigationTitle("Manage Moment").navigationBarTitleDisplayMode(.inline).navigationBarBackButtonHidden()
-        .navigationDestination(isPresented:$model.scheduleCompleted){FestivalScheduleSuccess(title:model.title,occasionType:model.occasionType,plans:model.savedPlans,manage:{model.tab = .schedule;model.scheduleCompleted=false},done:{if let onDone{onDone()}else{dismiss()}})}
+        .navigationDestination(isPresented:$model.scheduleCompleted){FestivalScheduleSuccess(title:model.title,occasionType:model.occasionType,plans:model.savedPlans,wishes:model.selected.map { ScheduleWishPreview(heading:model.reviewHeading(for:$0),message:model.deliveryMessage(for:$0)) },manage:{model.tab = .schedule;model.scheduleCompleted=false},done:{if let onDone{onDone()}else{dismiss()}})}
         .navigationDestination(isPresented:$showingSettings){MomentSettingsView().environmentObject(model.store)}
         .toolbar {
             ToolbarItem(placement:.topBarLeading){Button {if model.dirty{discard=true}else{dismiss()}}label:{Image(systemName:"chevron.left").frame(width:44,height:44)}.accessibilityLabel("Back")}
@@ -195,37 +195,7 @@ struct ManageFestivalView: View {
     }}
     private var automaticCount:Int{model.selected.filter{model.channel($0)=="email" && model.settings.automatic[$0.key]==true}.count}
     private var confirmation:some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment:.leading,spacing:18) {
-                    if let recipient=model.selected.first, model.selected.count == 1 {
-                        Text(model.reviewHeading(for:recipient)).font(.title.bold())
-                        Text(model.deliveryMessage(for:recipient))
-                    } else {
-                        Text(model.title).font(.title.bold())
-                    }
-                    Text(MomentDates.label(model.sendDate,zone:model.zone))
-                    ForEach(model.selected) { r in
-                        VStack(alignment:.leading) {
-                            Text(r.name).font(.headline)
-                            if model.selected.count > 1 {
-                                Text(model.reviewHeading(for:r)).font(.headline)
-                                Text(model.deliveryMessage(for:r))
-                            }
-                            Text(model.channel(r)=="email" && model.settings.automatic[r.key]==true
-                                 ? "Email · Automatic send" : model.channel(r)=="messages" ? "Messages · Will be sent by you" : "Manual delivery · Will be sent by you")
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                    Text("You are confirming this schedule for all selected contacts. Recipients do not need to confirm.")
-                    if model.selected.contains(where:{model.channel($0)=="messages"}) {
-                        Text("At the scheduled time, we’ll remind you to open the prepared wish and tap Send in Messages. Nexdo does not send Messages automatically.")
-                            .font(.subheadline).foregroundStyle(.secondary)
-                    }
-                    MomentPrimary(title:"Confirm Schedule"){scheduleConfirm=false;Task{await model.schedule()}}
-                }.padding()
-            }.navigationTitle("Review schedule").toolbar{Button("Cancel"){scheduleConfirm=false}}
-        }
+        FestivalScheduleReview(model:model) { scheduleConfirm=false }
     }
     private var personalization:some View {NavigationStack{Form{Section("Shared message"){Text("New recipients inherit the base message.");TextField("Optional personal context",text:$model.settings.personalContext,axis:.vertical)};ForEach(model.selected){r in Section(r.name){Toggle("Personalize this recipient",isOn:Binding(get:{model.settings.overrides[r.key] != nil},set:{if $0{model.settings.overrides[r.key]=model.settings.baseMessage}else{model.settings.overrides.removeValue(forKey:r.key)};model.invalidateApproval()}));if model.settings.overrides[r.key] != nil{TextField("Personal wish",text:Binding(get:{model.settings.overrides[r.key] ?? ""},set:{model.settings.overrides[r.key]=$0;model.invalidateApproval()}),axis:.vertical)}}}}.navigationTitle("Personalize").toolbar{Button("Done"){personalize=false}}}}
     private var imageConfiguration:some View { FestivalGreetingCardEditor(model:model) }
@@ -235,6 +205,7 @@ private struct FestivalScheduleSuccess:View {
     let title:String
     let occasionType:String
     let plans:[WishDeliveryPlan]
+    let wishes:[ScheduleWishPreview]
     let manage:()->Void
     let done:()->Void
     private var deliverySummary:[String] {
@@ -246,23 +217,191 @@ private struct FestivalScheduleSuccess:View {
         Array(Set(plans.map { MomentDates.label($0.date,zone:$0.timeZoneID) })).sorted()
     }
     var body:some View {
-        ZStack {TodayBackdrop();ScrollView{VStack(spacing:20){
-            Image(systemName:"calendar.badge.checkmark").font(.system(size:68)).foregroundStyle(Color.nexdoIndigo)
-            Text(occasionType == "getWellSoon" ? "Get Well Scheduled" : "Wishes scheduled").font(.largeTitle.bold()).multilineTextAlignment(.center)
-            Text(title).font(.title2)
-            MomentCard {
-                Text("For all \(plans.count) selected contact\(plans.count == 1 ? "":"s")").font(.headline)
-                    .accessibilityIdentifier("festival-confirmation-recipients")
-                ForEach(deliverySummary,id:\.self) { summary in
-                    Label(summary,systemImage:summary.hasPrefix("Will send") ? "envelope.fill":"bell.fill")
-                }
-                ForEach(sendTimes,id:\.self) { Text($0).fontWeight(.bold).multilineTextAlignment(.center).frame(maxWidth:.infinity).accessibilityIdentifier("schedule-confirmed-date") }
-                Button("Manage scheduled wish",action:manage).frame(minHeight:44)
-                    .accessibilityIdentifier("festival-manage-schedule")
+        ZStack {
+            ScheduleDesign.background.ignoresSafeArea()
+            ScrollView {
+                VStack(spacing:24) {
+                    ZStack {
+                        Circle().fill(.green.opacity(0.08)).frame(width:132,height:132)
+                        Image(systemName:"checkmark.circle.fill").font(.system(size:92)).foregroundStyle(.green)
+                    }.padding(.top,32)
+                    Text("Schedule confirmed!").font(.title.bold()).foregroundStyle(ScheduleDesign.ink)
+                    VStack(spacing:8) {
+                        ForEach(deliverySummary,id:\.self) { Text($0).foregroundStyle(ScheduleDesign.secondary).multilineTextAlignment(.center) }
+                        ForEach(sendTimes,id:\.self) { Text($0).bold().multilineTextAlignment(.center).accessibilityIdentifier("schedule-confirmed-date") }
+                        Text("For all \(plans.count) selected contact\(plans.count == 1 ? "":"s")")
+                            .font(.subheadline).foregroundStyle(ScheduleDesign.secondary).accessibilityIdentifier("festival-confirmation-recipients")
+                    }
+                    ForEach(wishes.indices,id:\.self) { index in ScheduleWishCard(wish:wishes[index],occasion:occasionType) }
+                    Button("Done",action:done).buttonStyle(ScheduleActionStyle()).accessibilityIdentifier("wish-primary")
+                    Button("View Scheduled Items",action:manage).buttonStyle(ScheduleActionStyle(secondary:true))
+                        .accessibilityIdentifier("festival-manage-schedule")
+                }.padding(24)
             }
-            MomentPrimary(title:"Done",action:done)
-        }.padding(18)}}
-        .overlay { if ["birthday","anniversary","festival"].contains(occasionType) { MomentConfetti() } }
+        }
+        .overlay { if ["birthday","anniversary","festival"].contains(occasionType) { MomentConfetti().allowsHitTesting(false) } }
         .navigationTitle("Schedule confirmed").navigationBarTitleDisplayMode(.inline)
+        .navigationBarBackButtonHidden()
+    }
+}
+
+private enum ScheduleDesign {
+    static let ink=Color(red:0.06,green:0.09,blue:0.16)
+    static let secondary=Color(red:0.39,green:0.45,blue:0.55)
+    static let background=Color(red:0.97,green:0.98,blue:1)
+}
+private struct ScheduleWishPreview {
+    let heading:String
+    let message:String
+}
+private struct ScheduleWishCard:View {
+    let wish:ScheduleWishPreview
+    let occasion:String
+    var body:some View {
+        HStack(alignment:.center,spacing:16) {
+            Text(occasion == "birthday" ? "🎂" : occasion == "anniversary" ? "💐" : occasion == "getWellSoon" ? "🌷" : "🎉")
+                .font(.system(size:48)).frame(width:64,height:80).background(.purple.opacity(0.05),in:RoundedRectangle(cornerRadius:18))
+                .accessibilityHidden(true)
+            VStack(alignment:.leading,spacing:8) {
+                Text(wish.heading).font(.headline).foregroundStyle(ScheduleDesign.ink)
+                Text(wish.message).font(.subheadline).foregroundStyle(ScheduleDesign.secondary)
+            }.frame(maxWidth:.infinity,alignment:.leading)
+        }.padding(16)
+        .background(LinearGradient(colors:[.purple.opacity(0.06),.pink.opacity(0.04)],startPoint:.bottomLeading,endPoint:.topTrailing),in:RoundedRectangle(cornerRadius:20))
+        .overlay(RoundedRectangle(cornerRadius:20).stroke(.purple.opacity(0.08)))
+    }
+}
+private struct ScheduleActionStyle:ButtonStyle {
+    var secondary=false
+    var gradient=false
+    func makeBody(configuration:Configuration)->some View {
+        configuration.label.font(.headline).frame(maxWidth:.infinity).padding(.vertical,16)
+            .foregroundStyle(secondary ? Color.blue:.white)
+            .background {
+                RoundedRectangle(cornerRadius:18).fill(LinearGradient(colors:secondary ? [.blue.opacity(0.04),.blue.opacity(0.06)] : gradient ? [.cyan,.blue,.purple,.pink]:[.blue,.blue],startPoint:.leading,endPoint:.trailing))
+            }
+            .overlay(RoundedRectangle(cornerRadius:18).stroke(secondary ? .blue.opacity(0.25):.clear))
+            .opacity(configuration.isPressed ? 0.7:1)
+    }
+}
+private struct FestivalScheduleReview:View {
+    @ObservedObject var model:ManageFestivalModel
+    let close:()->Void
+    @State private var date:Date
+    @State private var recipients:[ManagedFestivalRecipient]
+    @State private var editingDate=false
+    @State private var dateDraft=Date()
+    @State private var recipientDraft:ManagedFestivalRecipient?
+    @State private var submitting=false
+    init(model:ManageFestivalModel,close:@escaping ()->Void) {
+        self.model=model;self.close=close
+        _date=State(initialValue:model.sendDate)
+        _recipients=State(initialValue:model.selected)
+    }
+    var body:some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment:.leading,spacing:18) {
+                    Text("Review schedule").font(.largeTitle.bold()).foregroundStyle(ScheduleDesign.ink)
+                    Text("Let’s make sure everything looks good.").foregroundStyle(ScheduleDesign.secondary)
+                    ForEach(recipients) { recipient in
+                        ScheduleWishCard(wish:ScheduleWishPreview(heading:model.reviewHeading(for:recipient),message:model.deliveryMessage(for:recipient)),occasion:model.occasionType)
+                    }
+                    reviewRow(symbol:"calendar",color:.purple,label:"Scheduled for",value:MomentDates.label(date,zone:model.zone),detail:model.zone,identifier:"review-edit-date") {
+                        dateDraft=date;editingDate=true
+                    }
+                    ForEach(recipients) { recipient in
+                        reviewRow(symbol:"person",color:.blue,label:"Recipient",value:recipient.name,detail:delivery(recipient),identifier:"review-edit-recipient-"+recipient.key) { recipientDraft=recipient }
+                    }
+                    info("You are confirming this schedule for all selected contacts. Recipients do not need to confirm.",symbol:"info.circle.fill",color:.blue)
+                    if recipients.contains(where:{model.channel($0)=="messages"}) {
+                        info("At the scheduled time, we’ll remind you to open the prepared wish and tap Send in Messages. Nexdo does not send Messages automatically.",symbol:"bell",color:.purple)
+                    }
+                    if let error=model.error { Text(error).foregroundStyle(.red).accessibilityIdentifier("review-schedule-error") }
+                    Button(submitting ? "Confirming…":"Confirm Schedule") { Task { await confirm() } }
+                        .buttonStyle(ScheduleActionStyle(gradient:true)).accessibilityIdentifier("wish-primary").disabled(submitting)
+                }.padding(20).disabled(submitting)
+            }.background(ScheduleDesign.background)
+            .navigationTitle("").navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement:.topBarTrailing) { Button("Cancel",action:close).disabled(submitting) } }
+            .sheet(isPresented:$editingDate) {
+                editor(title:"Edit date & time",done:{date=dateDraft;editingDate=false},cancel:{editingDate=false}) {
+                    DatePicker("Date and time",selection:$dateDraft,in:Date()...).datePickerStyle(.wheel).labelsHidden()
+                        .environment(\.timeZone,TimeZone(identifier:model.zone) ?? .current)
+                }.presentationDetents([.height(480),.large]).presentationDragIndicator(.visible).presentationBackground(.white)
+            }
+            .sheet(item:$recipientDraft) { recipient in
+                ScheduleRecipientEditor(recipient:recipient,delivery:delivery(recipient)) { updated in
+                    if let index=recipients.firstIndex(where:{$0.key==updated.key}) { recipients[index]=updated }
+                    recipientDraft=nil
+                } cancel:{recipientDraft=nil}
+            }
+        }.tint(.blue).interactiveDismissDisabled(submitting)
+    }
+    private func delivery(_ recipient:ManagedFestivalRecipient)->String {
+        model.channel(recipient)=="email" ? (model.settings.automatic[recipient.key]==true ? "Email · Automatic send":"Email · Will be sent by you") : model.channel(recipient)=="messages" ? "Messages · Will be sent by you":"Copy / Share · Will be sent by you"
+    }
+    private func reviewRow(symbol:String,color:Color,label:String,value:String,detail:String,identifier:String,edit:@escaping ()->Void)->some View {
+        HStack(spacing:12) {
+            Image(systemName:symbol).font(.title2).foregroundStyle(color).frame(width:44,height:48).background(color.opacity(0.08),in:RoundedRectangle(cornerRadius:14))
+            VStack(alignment:.leading,spacing:4) {
+                Text(label).font(.caption).foregroundStyle(ScheduleDesign.secondary)
+                Text(value).font(.subheadline.bold()).foregroundStyle(ScheduleDesign.ink)
+                Text(detail).font(.caption).foregroundStyle(ScheduleDesign.secondary)
+            }.frame(maxWidth:.infinity,alignment:.leading)
+            Button("Edit",action:edit).font(.subheadline.bold()).padding(12).background(.blue.opacity(0.07),in:RoundedRectangle(cornerRadius:12)).accessibilityIdentifier(identifier)
+        }.padding(14).background(.white,in:RoundedRectangle(cornerRadius:18))
+    }
+    private func info(_ text:String,symbol:String,color:Color)->some View {
+        HStack(alignment:.top,spacing:12) {
+            Image(systemName:symbol).font(.title2).foregroundStyle(color).accessibilityHidden(true)
+            Text(text).font(.footnote).foregroundStyle(ScheduleDesign.secondary)
+        }.padding(14).frame(maxWidth:.infinity,alignment:.leading).background(color.opacity(0.05),in:RoundedRectangle(cornerRadius:16))
+    }
+    private func editor<Content:View>(title:String,done:@escaping ()->Void,cancel:@escaping ()->Void,@ViewBuilder content:()->Content)->some View {
+        VStack(spacing:18) {
+            HStack { Spacer();Text(title).font(.headline);Spacer();Button(action:cancel){Image(systemName:"xmark.circle.fill")}.accessibilityLabel("Close editor") }
+            content()
+            Button("Done",action:done).buttonStyle(ScheduleActionStyle())
+            Button("Cancel",action:cancel).buttonStyle(ScheduleActionStyle(secondary:true))
+        }.padding(20)
+    }
+    @MainActor private func confirm() async {
+        submitting=true;defer{submitting=false}
+        model.error=nil
+        model.sendDate=date
+        for recipient in recipients {
+            if let old=model.recipients.first(where:{$0.key==recipient.key}),old != recipient { model.saveRecipient(recipient,replacing:old) }
+        }
+        if model.settings.approvedAt == nil { await model.approve() }
+        else if model.dirty { await model.save() }
+        if model.needsScheduleConfirmation { close();return }
+        guard model.error == nil else {return}
+        await model.schedule()
+        if model.scheduleCompleted { close() }
+    }
+}
+private struct ScheduleRecipientEditor:View {
+    @State var recipient:ManagedFestivalRecipient
+    let delivery:String
+    let done:(ManagedFestivalRecipient)->Void
+    let cancel:()->Void
+    var body:some View {
+        NavigationStack {
+            ScrollView {
+                VStack(spacing:24) {
+                    HStack {
+                        Image(systemName:"person").font(.largeTitle).foregroundStyle(.blue)
+                        TextField("Recipient name",text:$recipient.name).textFieldStyle(.roundedBorder).accessibilityIdentifier("review-recipient-name")
+                    }
+                    if delivery.hasPrefix("Messages") { TextField("Phone number",text:$recipient.phone).keyboardType(.phonePad).textFieldStyle(.roundedBorder) }
+                    if delivery.hasPrefix("Email") { TextField("Email address",text:$recipient.email).keyboardType(.emailAddress).textInputAutocapitalization(.never).textFieldStyle(.roundedBorder) }
+                    Label(delivery,systemImage:delivery.hasPrefix("Messages") ? "message.fill":delivery.hasPrefix("Email") ? "envelope.fill":"square.and.arrow.up").foregroundStyle(ScheduleDesign.secondary).frame(maxWidth:.infinity,alignment:.leading)
+                    Button("Done"){done(recipient)}.buttonStyle(ScheduleActionStyle()).disabled(recipient.name.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty)
+                    Button("Cancel",action:cancel).buttonStyle(ScheduleActionStyle(secondary:true))
+                }.padding(24)
+            }.navigationTitle("Edit recipient").navigationBarTitleDisplayMode(.inline)
+                .toolbar { Button(action:cancel){Image(systemName:"xmark.circle.fill")}.accessibilityLabel("Close editor") }
+        }.presentationDetents([.height(480),.large]).presentationDragIndicator(.visible).presentationBackground(.white)
     }
 }
