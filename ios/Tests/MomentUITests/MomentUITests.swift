@@ -37,6 +37,7 @@ import XCTest
         app.terminate(); app.launchArguments.append("-festival-manage-preview"); app.launch()
         let manage=app.buttons["moments-manage"].firstMatch
         XCTAssertTrue(manage.waitForExistence(timeout:15));manage.tap()
+        app.buttons["manage-filter-Ready to Schedule"].tap()
         app.buttons["manage-moment-moment"].tap()
         XCTAssertTrue(app.navigationBars["Manage Moment"].waitForExistence(timeout:5))
     }
@@ -155,6 +156,17 @@ import XCTest
         app.terminate();app.launchArguments.append("-all-moment-categories");app.launch()
         app.buttons["moments-manage"].firstMatch.tap()
         XCTAssertTrue(app.navigationBars["Manage Moments"].waitForExistence(timeout:5))
+        let scheduled = app.buttons["manage-filter-Scheduled"]
+        XCTAssertTrue(scheduled.isSelected)
+        XCTAssertEqual(scheduled.label, "Scheduled (0)")
+        XCTAssertFalse(app.buttons["manage-moment-moment"].exists)
+        app.buttons["manage-filter-Need Review"].tap()
+        XCTAssertTrue(app.buttons["manage-filter-Need Review"].isSelected)
+        XCTAssertFalse(app.buttons["manage-moment-moment"].exists)
+        let ready = app.buttons["manage-filter-Ready to Schedule"]
+        app.scrollViews.firstMatch.swipeLeft()
+        ready.tap()
+        XCTAssertEqual(ready.label, "Ready to Schedule (5)")
         for id in ["moment","anniversary","festival","custom"] {
             XCTAssertTrue(app.buttons["manage-moment-"+id].exists)
         }

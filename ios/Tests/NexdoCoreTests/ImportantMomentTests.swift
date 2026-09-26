@@ -54,6 +54,7 @@ import Testing
     let raw:[String:Any] = ["id":"m","type":"festival","title":"Diwali","firstName":"Sam","phone":"","email":"","occurrenceDate":"2026-09-20","nextOccurrence":"2026-09-20","timeZoneID":"UTC","source":"manual","sourceKey":"test","yearly":false,"enabled":true,"drafts":[]]
     var moment=try JSONDecoder().decode(ImportantMoment.self,from:JSONSerialization.data(withJSONObject:raw))
     #expect(moment.needsWishReview)
+    #expect(MomentManagementFilter.needReview.includes(MomentDisplayGroup.groups([moment])[0]))
     var settings=FestivalSettings();settings.baseMessage="Happy Diwali";settings.approvedAt="2026-09-17T00:00:00Z"
     moment.festivalSettings=String(data:try JSONEncoder().encode(settings),encoding:.utf8)
     #expect(moment.readyToSchedule)
@@ -62,9 +63,15 @@ import Testing
     var plan=try JSONDecoder().decode(WishDeliveryPlan.self,from:JSONSerialization.data(withJSONObject:planRaw))
     moment.drafts=[WishDraft(id:"d",momentID:"m",tone:"Warm",body:"Hi",personalContext:"",status:"PLANNED",generationVersion:1,plans:[plan])]
     #expect(moment.upcomingDelivery != nil)
+    let group = MomentDisplayGroup.groups([moment])[0]
+    #expect(MomentManagementFilter.scheduled.includes(group))
+    #expect(!MomentManagementFilter.ready.includes(group))
+    #expect(!MomentManagementFilter.needReview.includes(group))
     #expect(!moment.needsWishReview)
     #expect(!moment.readyToSchedule)
     plan.status="CANCELLED";moment.drafts[0].plans=[plan]
+    #expect(MomentManagementFilter.ready.includes(MomentDisplayGroup.groups([moment])[0]))
+    #expect(!MomentManagementFilter.scheduled.includes(MomentDisplayGroup.groups([moment])[0]))
     #expect(moment.readyToSchedule)
     settings.approvedAt=nil
     moment.festivalSettings=String(data:try JSONEncoder().encode(settings),encoding:.utf8)

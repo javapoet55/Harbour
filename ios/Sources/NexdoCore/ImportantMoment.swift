@@ -192,3 +192,18 @@ public struct MomentDisplayGroup: Identifiable, Sendable {
         return order.map { Self(id: $0, moments: entries[$0]!) }
     }
 }
+
+/// A multi-recipient moment can have recipients at different stages.
+public enum MomentManagementFilter: String, CaseIterable, Identifiable, Sendable {
+    case scheduled = "Scheduled", needReview = "Need Review", ready = "Ready to Schedule"
+    public var id: String { rawValue }
+    public func includes(_ group: MomentDisplayGroup) -> Bool {
+        group.moments.contains { moment in
+            switch self {
+            case .scheduled: return moment.upcomingDelivery != nil
+            case .needReview: return moment.needsWishReview || !moment.enabled
+            case .ready: return moment.readyToSchedule
+            }
+        }
+    }
+}

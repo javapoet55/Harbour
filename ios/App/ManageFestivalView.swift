@@ -4,6 +4,8 @@ import MessageUI
 struct MomentsManagementEntry: View {
     let onDone: () -> Void
     @EnvironmentObject private var store:ImportantMomentsStore
+    @State private var filter: MomentManagementFilter = .scheduled
+    private var filteredGroups: [MomentDisplayGroup] { groups.filter { filter.includes($0) } }
     private var groups:[MomentDisplayGroup] {
         MomentDisplayGroup.groups(store.moments.filter {
             !$0.isArchived
@@ -14,10 +16,28 @@ struct MomentsManagementEntry: View {
             TodayBackdrop()
             ScrollView {
                 VStack(spacing:16) {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            ForEach(MomentManagementFilter.allCases) { tab in
+                                Button { filter = tab } label: {
+                                    Text("\(tab.rawValue) (\(groups.filter { tab.includes($0) }.count))")
+                                        .font(.subheadline.weight(.semibold))
+                                        .padding(.horizontal, 16).padding(.vertical, 12)
+                                        .foregroundStyle(filter == tab ? Color.white : Color.nexdoIndigo)
+                                        .background(filter == tab ? AnyShapeStyle(NexdoTheme.gradient) : AnyShapeStyle(Color.nexdoIndigo.opacity(0.08)), in: Capsule())
+                                }.buttonStyle(.plain)
+                                    .accessibilityIdentifier("manage-filter-\(tab.id)")
+                                    .accessibilityAddTraits(filter == tab ? .isSelected : [])
+                            }
+                        }
+                    }
                     if groups.isEmpty {
                         ContentUnavailableView("No moments yet",systemImage:"gift",description:Text("Add a birthday, anniversary, festival, Get Well Soon, or custom moment to manage it here."))
                     }
-                    ForEach(groups) { group in
+                    if !groups.isEmpty && filteredGroups.isEmpty {
+                        ContentUnavailableView("No moments in \(filter.rawValue)", systemImage: "calendar", description: Text("Choose another tab to manage your moments."))
+                    }
+                    ForEach(filteredGroups) { group in
                         if let moment=group.moments.first {
                             NavigationLink {
                                 if moment.supportsGreetingCard {ManageFestivalView(group:group,store:store,onDone:onDone)}
@@ -29,6 +49,16 @@ struct MomentsManagementEntry: View {
                                         VStack(alignment:.leading,spacing:6) {
                                             Text(moment.title).font(.headline)
                                             Text(moment.typeLabel).font(.subheadline).foregroundStyle(.secondary)
+                                            if filter == .scheduled {
+                                                let plans = group.moments.compactMap(\.upcomingDelivery).sorted { $0.date < $1.date }
+                                                let dates = plans.reduce(into: [String]()) { labels, plan in
+                                                    let label = MomentDates.label(plan.date, zone: plan.timeZoneID)
+                                                    if !labels.contains(label) { labels.append(label) }
+                                                }
+                                                ForEach(dates, id: \.self) { date in
+                                                    Label(date, systemImage: "calendar").font(.subheadline).foregroundStyle(Color.nexdoIndigo)
+                                                }
+                                            }
                                             if !moment.enabled {Text("Inactive").font(.caption).foregroundStyle(.secondary)}
                                         }
                                         Spacer()
