@@ -19,6 +19,14 @@ export function prepareDraft(service:string,slots:AgentSlots){
  const provider=/^(plumber|electrician|painter|dentist|tutor|handyman|landscaper|roofer|locksmith|veterinarian|insurance broker|moving company|cleaning service)$/i.test(name);
  const servicePhrase=provider?`${/^[aeiou]/i.test(name)?'an':'a'} ${name}`:name;
  const location=slots.location.trim();
- const locationPhrase=/^\d{5}(?:-\d{4})?$/.test(location)?`zip code: ${location}`:location;
- return `Hi, I’m looking for ${servicePhrase} in ${locationPhrase}.\n\nCould you please share your next available appointment, an estimated quote, and any diagnostic or service-call fee?\n\nPlease let me know if you need any additional details from me. Thank you!`;
+ const locationPhrase=/^\d{5}(?:-\d{4})?$/.test(location)?`Zip: ${location}`:location;
+ return `Hello there,\n\nI’m looking for ${servicePhrase} in ${locationPhrase}. Please let me know your availability.\n\nThank you.`;
+}
+
+/** Refresh only recognizable old generated copy; preserve personalized drafts. */
+export function refreshGeneratedDraft(candidate: Candidate, service: string, slots: AgentSlots): Candidate {
+ if(candidate.draftEdited)return candidate;
+ const oldCurrent= /^Hi, I’m looking for .+\.\n\nCould you please share your next available appointment, an estimated quote, and any diagnostic or service-call fee\?\n\nPlease let me know if you need any additional details from me\. Thank you!$/;
+ const oldScreenshot=/^Hello [^\n]+,\n\nI’m looking for .+ services in .+\. My request: [^\n]+\. Please let me know your availability\.\nCould you provide a quote, any call-out fees,? and your licensing\/insurance details where applicable\?\n\nThank you\.$/;
+ return oldCurrent.test(candidate.draft)||oldScreenshot.test(candidate.draft) ? {...candidate,draft:prepareDraft(service,slots)} : candidate;
 }

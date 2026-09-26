@@ -21,13 +21,15 @@ public enum TaskDateFilter: String, CaseIterable, Identifiable {
 }
 
 public enum TaskHistoryRange: String, CaseIterable, Identifiable {
-    case lastTwoWeeks = "Last 2 weeks", thisMonth = "This Month", lastMonth = "Last Month"
+    case allTime = "All time", lastTwoWeeks = "Last 2 weeks", thisMonth = "This Month", lastMonth = "Last Month"
     public var id: String { rawValue }
 
     public func interval(now: Date, calendar: Calendar) -> DateInterval {
         let today = calendar.startOfDay(for: now)
         let end = calendar.date(byAdding: .day, value: 1, to: today)!
         switch self {
+        case .allTime:
+            return DateInterval(start: .distantPast, end: .distantFuture)
         case .lastTwoWeeks:
             return DateInterval(start: calendar.date(byAdding: .day, value: -13, to: today)!, end: end)
         case .thisMonth:
@@ -47,6 +49,15 @@ public struct TaskQuery {
     public var earliestFirst = true
     public var historyRange: TaskHistoryRange = .thisMonth
     public init() {}
+
+    /// Start a keyword search across all dates, priorities, and completion states.
+    public mutating func beginSearch() {
+        date = .all
+        historyRange = .allTime
+        status = "All"
+        priority = "All"
+        search = ""
+    }
 
     /// Creation schedules a task for today. Reveal it without stale search filters.
     public mutating func revealCreatedTask(scheduledAt: Date? = nil, timeZone: String = TimeZone.current.identifier, now: Date = Date()) {
@@ -96,7 +107,8 @@ public struct TaskQuery {
             for (filter, interval) in intervals {
                 let inHistory = scheduled >= interval.start && scheduled < interval.end
                 let upcomingOpen = filter == .all && historyRange != .thisMonth && !task.isDone && scheduled >= tomorrow
-                guard inHistory || upcomingOpen else { continue }
+                let allDateSearch = filter == .all && (historyRange == .allTime || !term.isEmpty)
+                guard inHistory || upcomingOpen || allDateSearch else { continue }
                 counts[filter, default: 0] += 1
                 if filter == date { selected.append((task, scheduled)) }
             }

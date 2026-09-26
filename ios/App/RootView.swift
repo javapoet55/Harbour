@@ -1622,7 +1622,7 @@ struct TasksView: View {
                                     datePills(snapshot)
                                     ScrollView(.horizontal) { datePills(snapshot) }.scrollIndicators(.hidden)
                                 }
-                                if model.taskQuery.date == .all {
+                                if model.taskQuery.date == .all && model.taskQuery.search.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                                     VStack(alignment: .leading, spacing: 6) {
                                         HStack {
                                             Text("History range").font(.subheadline.bold())
@@ -1631,7 +1631,7 @@ struct TasksView: View {
                                                 ForEach(TaskHistoryRange.allCases) { Text($0.rawValue).tag($0) }
                                             }.pickerStyle(.menu).labelsHidden().tint(.nexdoIndigo)
                                         }
-                                        Text(model.taskQuery.historyRange == .thisMonth ? "Tasks scheduled within this calendar month." : model.taskQuery.historyRange == .lastMonth ? "Previous calendar month, plus upcoming open tasks." : "History through today, plus upcoming open tasks.")
+                                        Text(model.taskQuery.historyRange == .allTime ? "All open and completed tasks, with open tasks first." : model.taskQuery.historyRange == .thisMonth ? "Tasks scheduled within this calendar month." : model.taskQuery.historyRange == .lastMonth ? "Previous calendar month, plus upcoming open tasks." : "History through today, plus upcoming open tasks.")
                                             .font(.caption).foregroundStyle(Color.nexdoSecondary)
                                     }
                                 }
@@ -1702,6 +1702,8 @@ struct TasksView: View {
                 headerButton("slider.horizontal.3", label: "Task filters") { filters = true }
                 headerButton("magnifyingglass", label: "Search tasks") {
                     searching.toggle()
+                    if searching { model.taskQuery.beginSearch() }
+                    else { model.taskQuery.search = "" }
                     searchFocused = searching
                 }
             }

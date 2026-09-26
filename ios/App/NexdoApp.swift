@@ -789,6 +789,17 @@ final class AppModel: ObservableObject {
     }
 
     @discardableResult
+    func askShopping(_ text:String, context:ShoppingRecommendationContext) async -> Bool {
+        guard aiConsent,!busy,!text.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty else{return false}
+        var succeeded=false
+        await perform(errorMessage:"Shopping recommendations are unavailable. Please try again.") {
+            struct Input:Encodable{let prompt:String;let listName:String;let itemNames:[String]}
+            let input=Input(prompt:text,listName:context.listName,itemNames:context.itemNames)
+            let result:AssistantTurn=try await api.request("/api/shopping/recommendations",method:"POST",body:JSONEncoder().encode(input),timeout:40)
+            turn=result;lastAssistantPrompt=text;contextID=nil;succeeded=true
+        }
+        return succeeded
+    }
     func ask(_ text: String, accept: Bool? = nil) async -> Bool {
         guard aiConsent, !busy, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, text.count <= 4000 else { return false }
         let proposal = turn?.confirmation?.actionId

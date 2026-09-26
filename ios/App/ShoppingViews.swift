@@ -126,7 +126,6 @@ struct ShoppingHome: View {
                 }.padding(18)
             }
         }.navigationTitle("My Lists").tint(.nexdoIndigo)
-            .toolbar { Button { create = true } label: { Image(systemName: "plus.circle.fill").font(.title2) }.accessibilityLabel("Create shopping list") }
             .sheet(isPresented: $create) {
                 NewShoppingList(store: store) { created = $0 }
             }

@@ -278,7 +278,7 @@ struct TaskAgentCard: View {
                     }
                 } label: {
                     Label(action.businessCandidateID == candidate.id ? "Selected for this task" : "Choose this business", systemImage: action.businessCandidateID == candidate.id ? "checkmark.circle.fill" : "checkmark.circle")
-                }.buttonStyle(.borderedProminent)
+                }.buttonStyle(.borderedProminent).foregroundStyle(.white)
                     .accessibilityIdentifier("business.select.\(candidate.id)")
             }
             Divider().overlay(businessPurple.opacity(0.06))
@@ -295,8 +295,7 @@ struct TaskAgentCard: View {
                 if let evidence = candidate.evidence.first(where: { $0.source == "Google" }), let url = URL(string: evidence.url) {
                     Link(destination: url) {
                         VStack(spacing: 5) {
-                            Image(systemName: "map.fill").font(.system(size: 30)).foregroundStyle(Color.mint.opacity(0.7))
-                                .overlay { Image(systemName: "mappin.circle.fill").font(.title2).foregroundStyle(businessPurple).offset(y: -6) }
+                            Image(systemName: "map.fill").font(.system(size: 32, weight: .medium)).foregroundStyle(businessPurple)
                             Label("Open in Maps", systemImage: "arrow.up.right.square").font(.system(size: 10, weight: .semibold))
                         }.frame(width: 112, height: 82)
                             .background(LinearGradient(colors: [Color.mint.opacity(0.12), businessWash], startPoint: .topLeading, endPoint: .bottomTrailing), in: RoundedRectangle(cornerRadius: 14))
@@ -433,7 +432,7 @@ struct TaskAgentCard: View {
         VStack(alignment: .leading, spacing: 12) {
             Label("AI ASSISTANT", systemImage: "sparkles")
                 .font(.caption.weight(.bold)).tracking(1.2).foregroundStyle(businessPurple)
-            (Text(run.service == "plumber" ? "I found some plumbers " : "I found some businesses ") + Text("near you").foregroundColor(businessPurple))
+            (Text(run.service == "plumber" ? "I found the best plumbers " : "I found the best businesses ") + Text("near you").foregroundColor(businessPurple))
                 .font(.title3.bold()).foregroundStyle(Color.nexdoInk).fixedSize(horizontal: false, vertical: true)
             HStack(alignment: .top, spacing: 8) {
                 VStack(alignment: .leading, spacing: 10) {

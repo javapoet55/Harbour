@@ -249,7 +249,8 @@ import XCTest
         XCTAssertFalse(app.buttons["Uncheck Bananas"].exists)
     }
     func testCreateFromLastList(){
-        app.buttons["Create shopping list"].tap()
+        XCTAssertFalse(app.navigationBars["My Lists"].buttons["Create shopping list"].exists)
+        app.buttons["shopping-create-list"].tap()
         XCTAssertTrue(app.navigationBars["New List"].waitForExistence(timeout:5))
         app.buttons["shopping-use-last"].tap()
         app.buttons["Create List"].tap()

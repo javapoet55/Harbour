@@ -86,7 +86,7 @@ struct NexdoAISuggestionCard: View {
     }
 }
 
-struct ShoppingRecommendationContext:Sendable {
+struct ShoppingRecommendationContext:Encodable,Sendable {
     let listName:String
     let itemNames:[String]
     var assistantContext:String {
@@ -164,6 +164,8 @@ struct AskNexdoView: View {
         if violentPatterns.contains(where: { containsPattern($0, in: query) }) { return policyRefusal }
         if sexualPatterns.contains(where: { containsPattern($0, in: query) }) { return policyRefusal }
         if politicalPatterns.contains(where: { containsPattern($0, in: query) }) { return policyRefusal }
+
+        if shoppingContext != nil { return nil }
 
         if commonPatterns.contains(where: { containsPattern($0, in: query) }) && !containsPattern(taskIntentHints, in: query) {
             return policyCommonQuestionRefusal
@@ -466,8 +468,9 @@ struct AskNexdoView: View {
         submitting = true
         failedQuery = nil
         requestTask = Task {
-            let submitted=shoppingContext.map{$0.assistantContext+"\n\nCustomer request: "+query} ?? query
-            let succeeded = await model.ask(submitted)
+            let succeeded:Bool
+            if let shoppingContext { succeeded = await model.askShopping(query, context:shoppingContext) }
+            else { succeeded = await model.ask(query) }
             guard !Task.isCancelled else { submitting = false; return }
             if succeeded {
                 if shoppingContext != nil {model.lastAssistantPrompt=query}
