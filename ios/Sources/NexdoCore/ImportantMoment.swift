@@ -94,6 +94,40 @@ public struct MomentInput: Encodable, Sendable {
     public func forSave(day: String) -> MomentInput { var value = self; value.occurrenceDate = day; return value }
 }
 
+/// Date filters use each moment's local calendar, including across midnight and DST.
+public enum MomentUpcomingFilter: String, CaseIterable, Sendable {
+    case today = "Today", tomorrow = "Tomorrow", thisWeek = "This Week", later = "Later"
+    public func includes(day: String, zone: String, now: Date = Date(), calendar input: Calendar = .current) -> Bool {
+        var calendar=input
+        calendar.timeZone=TimeZone(identifier:zone) ?? .current
+        let today=calendar.startOfDay(for:now)
+        let tomorrow=calendar.date(byAdding:.day,value:1,to:today)!
+        let afterTomorrow=calendar.date(byAdding:.day,value:2,to:today)!
+        let date=MomentDates.date(day,zone:zone)
+        let weekEnd=calendar.dateInterval(of:.weekOfYear,for:now)?.end ?? afterTomorrow
+        switch self {
+        case .today: return date >= today && date < tomorrow
+        case .tomorrow: return date >= tomorrow && date < afterTomorrow
+        case .thisWeek: return date >= today && date < weekEnd
+        case .later: return date >= max(weekEnd,afterTomorrow)
+        }
+    }
+}
+public enum MomentScheduleSummary {
+    public static func labels(plans: [WishDeliveryPlan], locale: Locale = .current) -> [String] {
+        let multipleZones=Set(plans.map(\.timeZoneID)).count > 1
+        let labels=plans.sorted { $0.date < $1.date }.map { plan in
+            let formatter=DateFormatter()
+            formatter.locale=locale;formatter.timeZone=TimeZone(identifier:plan.timeZoneID) ?? .current
+            formatter.dateStyle = .none;formatter.timeStyle = .short
+            return formatter.string(from:plan.date) + (multipleZones ? " \(formatter.timeZone.abbreviation(for:plan.date) ?? plan.timeZoneID)" : "")
+        }
+        var ordered:[String]=[]
+        for label in labels where !ordered.contains(label) { ordered.append(label) }
+        return ordered.map { label in "\(labels.filter { $0 == label }.count) scheduled @ \(label)" }
+    }
+}
+
 public enum MomentUpcomingGroup: String, CaseIterable, Sendable {
     case thisWeek = "This Week", nextWeek = "Next Week", thisMonth = "This Month", nextMonth = "Next Month", later = "Later"
 }

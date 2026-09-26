@@ -484,6 +484,7 @@ import XCTest
         if direct {
             app.navigationBars["Manage Moment"].buttons["Back"].tap()
             app.navigationBars["Manage Moments"].buttons.firstMatch.tap()
+            app.buttons["moments-period-Later"].tap()
             let card=app.buttons["festival-manage-moment"]
             for _ in 0..<5 {if card.isHittable{break};app.swipeUp()}
             card.tap()
@@ -520,6 +521,22 @@ import XCTest
         XCTAssertFalse(app.navigationBars["Schedule confirmed"].exists)
         XCTAssertTrue(app.buttons["moments-manage"].firstMatch.exists)
     }
+    func testUpcomingMomentDateFilters() {
+        app.terminate();app.launchArguments.append("-festival-manage-preview");app.launch()
+        let today=app.buttons["moments-period-Today"]
+        XCTAssertTrue(today.waitForExistence(timeout:15))
+        XCTAssertTrue(today.isSelected)
+        XCTAssertFalse(app.buttons["festival-manage-moment"].exists)
+        let later=app.buttons["moments-period-Later"]
+        for _ in 0..<4 {if later.isHittable{break};app.swipeUp()}
+        if !later.isHittable {app.swipeLeft()}
+        later.tap()
+        XCTAssertTrue(later.isSelected)
+        XCTAssertTrue(app.buttons["festival-manage-moment"].exists)
+        today.tap()
+        XCTAssertFalse(app.buttons["festival-manage-moment"].exists)
+    }
+
     func testFestivalApprovalAndSchedule() {
         app.launchArguments.append("-festival-five-recipients")
         openFestivalManager();app.buttons["festival-tab-Wish Message"].tap()

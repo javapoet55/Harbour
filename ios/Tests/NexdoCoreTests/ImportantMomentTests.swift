@@ -141,3 +141,35 @@ import Testing
     plan.status="SCHEDULED";plan.channel="email";plan.automaticDelivery=true
     #expect(plan.statusLabel(now:plan.date) == "Auto-send scheduled")
 }
+
+@Test func momentDateFiltersRespectLocalDaysAndWeekBoundaries() {
+    var calendar=Calendar(identifier:.gregorian);calendar.firstWeekday=1
+    let now=ISO8601DateFormatter().date(from:"2026-09-27T02:00:00Z")!
+    func matches(_ filter:MomentUpcomingFilter,_ day:String,_ zone:String="America/Los_Angeles") -> Bool {
+        filter.includes(day:day,zone:zone,now:now,calendar:calendar)
+    }
+    #expect(matches(.today,"2026-09-26"))
+    #expect(!matches(.today,"2026-09-27"))
+    #expect(matches(.today,"2026-09-27","Asia/Tokyo"))
+    #expect(matches(.tomorrow,"2026-09-27"))
+    #expect(matches(.thisWeek,"2026-09-26"))
+    #expect(!matches(.thisWeek,"2026-09-27"))
+    #expect(!matches(.later,"2026-09-27"))
+    #expect(matches(.later,"2026-09-28"))
+    #expect(!matches(.thisWeek,"2026-09-25"))
+    let dst=ISO8601DateFormatter().date(from:"2026-03-08T09:00:00Z")!
+    #expect(MomentUpcomingFilter.tomorrow.includes(day:"2026-03-09",zone:"America/Los_Angeles",now:dst,calendar:calendar))
+}
+
+@Test func momentScheduleBadgesGroupMatchingTimes() throws {
+    func plan(_ id:String,_ time:String) throws -> WishDeliveryPlan {
+        let raw:[String:Any] = ["id":id,"draftID":id,"channel":"messages","recipient":"123","subject":"Wish","body":"Hello","scheduledAtUTC":time,"timeZoneID":"America/Los_Angeles","status":"AWAITING_CONFIRMATION","idempotencyKey":id,"automaticDelivery":false,"repeatYearly":false,"reminderOffset":0]
+        return try JSONDecoder().decode(WishDeliveryPlan.self,from:JSONSerialization.data(withJSONObject:raw))
+    }
+    let plans=try [plan("a","2026-09-26T15:00:00Z"),plan("b","2026-09-26T15:00:00Z"),plan("c","2026-09-26T17:00:00Z")]
+    let labels=MomentScheduleSummary.labels(plans:plans,locale:Locale(identifier:"en_US"))
+    #expect(labels.count == 2)
+    #expect(labels[0].hasPrefix("2 scheduled @ 8:00"))
+    #expect(labels[1].hasPrefix("1 scheduled @ 10:00"))
+    #expect(MomentScheduleSummary.labels(plans:[]).isEmpty)
+}

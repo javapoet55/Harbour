@@ -141,7 +141,7 @@ private struct FestivalGroupCard: View {
                             .font(.subheadline).foregroundStyle(.secondary)
                             .fixedSize(horizontal:false,vertical:true)
                             .accessibilityIdentifier("festival-date-\(moment.id)")
-                        let scheduled = group.moments.filter { $0.enabled && $0.upcomingDelivery != nil }.count
+                        let scheduledPlans = group.moments.filter(\.enabled).compactMap(\.upcomingDelivery)
                         let review = group.moments.filter(\.needsWishReview).count
                         let ready = group.moments.filter(\.readyToSchedule).count
                         let active = group.moments.filter(\.enabled).count
@@ -151,8 +151,8 @@ private struct FestivalGroupCard: View {
                         if ready > 0 {
                             MomentStatusBadge(title: ready == active ? "Ready to schedule" : "\(ready) ready to schedule",color:.blue,icon:"clock")
                         }
-                        if scheduled > 0 {
-                            MomentStatusBadge(title: "\(scheduled) scheduled", color: .blue, icon: "clock")
+                        ForEach(MomentScheduleSummary.labels(plans:scheduledPlans),id:\.self) { label in
+                            MomentStatusBadge(title:label,color:.blue,icon:"clock")
                         }
                     }.frame(maxWidth: .infinity, alignment: .leading)
                 }
@@ -212,6 +212,7 @@ struct ImportantMomentsView: View {
     @State private var search = ""
     @State private var filter = "All"
     @State private var deliveryFilter = "All"
+    @State private var upcomingFilter:MomentUpcomingFilter = .today
     @State private var managingMoments = false
     @State private var creatingMoment = false
     @State private var managingFestival: MomentDisplayGroup?
@@ -251,19 +252,31 @@ struct ImportantMomentsView: View {
                         Spacer(minLength: 0)
                     }
                 }
-                ForEach(MomentUpcomingGroup.allCases, id: \.self) { group in
-                    let items = displayed.filter { $0.upcomingGroup() == group }
-                    if !items.isEmpty {
-                        Text(group.rawValue).font(.title.bold())
-                            .frame(maxWidth: .infinity, alignment: .leading).padding(.top, 8)
-                        ForEach(MomentDisplayGroup.groups(items)) { entry in
-                            if entry.moments.first?.supportsGreetingCard == true {
-                                FestivalGroupCard(onManage:{managingFestival=entry},group: entry)
-                            } else if let moment = entry.moments.first {
-                                UpcomingMomentRow(moment: moment)
-                            }
+                ScrollView(.horizontal,showsIndicators:false) {
+                    HStack(spacing:8) {
+                        ForEach(MomentUpcomingFilter.allCases,id:\.self) { period in
+                            Button { upcomingFilter=period } label: {
+                                Text(period.rawValue).font(.subheadline.bold()).padding(.horizontal,16).frame(minHeight:44)
+                                    .foregroundStyle(upcomingFilter == period ? .white : Color.nexdoIndigo)
+                                    .background {
+                                        Capsule().fill(upcomingFilter == period ? Color.nexdoIndigo : Color.nexdoIndigo.opacity(0.08))
+                                    }
+                            }.buttonStyle(.plain)
+                                .accessibilityAddTraits(upcomingFilter == period ? .isSelected : [])
+                                .accessibilityIdentifier("moments-period-"+period.rawValue)
                         }
                     }
+                }
+                let items=displayed.filter { upcomingFilter.includes(day:$0.nextOccurrence,zone:$0.timeZoneID) }
+                ForEach(MomentDisplayGroup.groups(items)) { entry in
+                    if entry.moments.first?.supportsGreetingCard == true {
+                        FestivalGroupCard(onManage:{managingFestival=entry},group:entry)
+                    } else if let moment=entry.moments.first {
+                        UpcomingMomentRow(moment:moment)
+                    }
+                }
+                if items.isEmpty {
+                    ContentUnavailableView("No moments \(upcomingFilter == .later ? "later" : upcomingFilter.rawValue.lowercased())",systemImage:"gift",description:Text("Choose another date filter or add a moment."))
                 }
             } else {
                 if tab == "Scheduled" { Picker("Delivery", selection: $deliveryFilter) { ForEach(["All","Automatic","Confirmation","Action needed"], id: \.self) { Text($0) } } }
@@ -290,7 +303,6 @@ struct ImportantMomentsView: View {
                     }
                 }.buttonStyle(.plain) }
             }
-            if tab == "Upcoming" && displayed.isEmpty { ContentUnavailableView("No moments yet", systemImage: "gift", description: Text("Add a moment manually, or select contacts and calendars in Settings.")) }
             if let error = store.error { Text(error).foregroundStyle(.red); Button("Retry") { Task { await store.refresh() } } }
             if store.loading { ProgressView() }
             if let synced = store.lastSynced { Text("Updated \(synced.formatted(date: .omitted, time: .shortened))").font(.caption).foregroundStyle(.secondary) }
