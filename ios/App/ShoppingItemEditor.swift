@@ -33,6 +33,7 @@ struct ShoppingItemEditor:View {
             Form {
                 Section {
                     TextField("Item name",text:$initial.name)
+                        .textInputAutocapitalization(.sentences)
                         .foregroundStyle(Color.nexdoBlue)
                     Picker("Category",selection:$initial.category){ForEach(GroceryItem.categories,id:\.self){Text($0)}}
                     HStack{Text("Quantity");TextField("1",text:$initial.quantity).multilineTextAlignment(.trailing).keyboardType(.decimalPad)}
@@ -40,7 +41,8 @@ struct ShoppingItemEditor:View {
                     TextField("Brand",text:Binding(get:{initial.brand ?? ""},set:{initial.brand=$0.isEmpty ? nil : $0}))
                         .foregroundStyle(Color.nexdoBlue)
                         .accessibilityIdentifier("shopping.item.brand")
-                    TextField("Notes",text:$initial.notes,axis:.vertical)
+                    TextField("+ Add Notes",text:$initial.notes,axis:.vertical)
+                        .accessibilityLabel("Notes")
                 }
                 Section {
                     DisclosureGroup("Item Image",isExpanded:$imageExpanded) {
@@ -88,6 +90,8 @@ struct ShoppingItemEditor:View {
                 else if launchCamera && initial.imageData == nil{dismiss()}
             }.ignoresSafeArea()}
             .fullScreenCover(item:$previewPhoto) { ShoppingPhotoPreview(image:$0.image) }
+            .onAppear { capitalizeItemName() }
+            .onChange(of:initial.name) { _,_ in capitalizeItemName() }
             .task {
                 guard launchCamera && !didLaunchCamera else{return}
                 didLaunchCamera=true;imageExpanded=true
@@ -114,6 +118,12 @@ struct ShoppingItemEditor:View {
             }}
             .onDisappear{generation=UUID()}
         }.tint(.nexdoIndigo)
+    }
+    private func capitalizeItemName() {
+        guard let index=initial.name.firstIndex(where: { $0.isLetter }) else { return }
+        let next=initial.name.index(after:index)
+        let capitalized=String(initial.name[..<index])+String(initial.name[index]).uppercased()+String(initial.name[next...])
+        if initial.name != capitalized { initial.name=capitalized }
     }
     @discardableResult private func attach(_ image:UIImage)->Bool{
         recognitionNotice=nil
