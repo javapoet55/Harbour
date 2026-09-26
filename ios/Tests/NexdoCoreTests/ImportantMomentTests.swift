@@ -180,3 +180,20 @@ import Testing
     #expect(labels[1].hasPrefix("1 scheduled @ 10:00"))
     #expect(MomentScheduleSummary.labels(plans:[]).isEmpty)
 }
+
+@Test func preparationRemindersSupportHoursAndLegacyDays() throws {
+    var settings = try JSONDecoder().decode(FestivalSettings.self, from: Data(#"{"groupID":"test","prepareDays":3}"#.utf8))
+    #expect(settings.preparationMinutes == 4320)
+    let instant = ISO8601DateFormatter().date(from: "2026-11-01T12:00:00Z")!
+    for hours in [1,4,8] {
+        settings.preparationMinutes = hours * 60
+        #expect(settings.prepareDays == 0)
+        let restored = try JSONDecoder().decode(FestivalSettings.self, from: JSONEncoder().encode(settings))
+        #expect(restored.preparationDate(occurrence: instant, zone: "America/Los_Angeles") == instant.addingTimeInterval(-Double(hours)*3600))
+    }
+    settings.preparationMinutes = 0
+    #expect(settings.preparationDate(occurrence: instant, zone: "UTC") == nil)
+    settings.preparationMinutes = 1440
+    #expect(settings.prepareHours == 0)
+    #expect(settings.prepareDays == 1)
+}

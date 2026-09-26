@@ -195,12 +195,13 @@ struct MomentOK: Decodable, Sendable {}
         var requests: [(String,Date,String)] = []
         let enabledDrafts = Set(moments.filter(\.enabled).flatMap { $0.drafts.map(\.id) })
         var preparedGroups = Set<String>()
-        for moment in moments where moment.enabled && moment.type == "festival" {
-            if let settings = FestivalSettings.read(moment.festivalSettings), settings.prepareDays > 0, preparedGroups.insert(settings.groupID).inserted {
-                var calendar = Calendar(identifier: .gregorian); calendar.timeZone = TimeZone(identifier: moment.timeZoneID) ?? .current
-                if let occurrenceTime = FestivalValidation.instant(day: moment.nextOccurrence, hour: 8, minute: 0, zone: moment.timeZoneID),
-                   let when = calendar.date(byAdding: .day, value: -settings.prepareDays, to: occurrenceTime), when > Date() {
-                    requests.append((moment.id, when, "Review your festival wish."))
+        for moment in moments where moment.enabled {
+            if let settings = FestivalSettings.read(moment.festivalSettings), settings.preparationMinutes > 0, preparedGroups.insert(settings.groupID).inserted {
+                let draftTime = settings.draftSendDate.flatMap { ISO8601DateFormatter().date(from: $0) }
+                let sameDayDraft = draftTime.flatMap { MomentDates.day($0, zone: moment.timeZoneID) == moment.nextOccurrence ? $0 : nil }
+                if let occurrenceTime = moment.upcomingDelivery?.date ?? sameDayDraft ?? FestivalValidation.instant(day: moment.nextOccurrence, hour: 8, minute: 0, zone: moment.timeZoneID),
+                   let when = settings.preparationDate(occurrence: occurrenceTime, zone: moment.timeZoneID), when > Date() {
+                    requests.append((moment.id, when, "Review your upcoming wish."))
                 }
             }
         }

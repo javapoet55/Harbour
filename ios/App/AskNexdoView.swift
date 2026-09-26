@@ -264,9 +264,7 @@ struct AskNexdoView: View {
                         }.disabled(blocked)
                         Button("Show suggestions") { stopSpeech(); model.turn = nil }.padding(.vertical, 12).disabled(blocked)
                     }
-                    if submitting {
-                        ProgressView("Asking Nexdo…").padding(.vertical, 16).accessibilityAddTraits(.updatesFrequently)
-                    }
+
                     if let query = failedQuery {
                         VStack(alignment: .leading, spacing: 8) {
                             Text("Nexdo couldn’t complete that request. Please try again.")
@@ -277,6 +275,14 @@ struct AskNexdoView: View {
             }.scrollDismissesKeyboard(.interactively)
         }
         .background(AskStyle.background)
+        .overlay {
+            if submitting {
+                ProgressView("Working on it…")
+                    .padding(24).background(.regularMaterial, in: RoundedRectangle(cornerRadius: 20))
+                    .accessibilityAddTraits(.updatesFrequently)
+                    .accessibilityIdentifier("ask-working")
+            }
+        }
         .tint(.nexdoIndigo)
         .safeAreaInset(edge: .bottom, spacing: 0) {
             VStack(spacing: 0) {

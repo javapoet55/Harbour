@@ -5,6 +5,7 @@ import { log } from '@/lib/logger';
 import { repointWishText, savedWishMessage } from './wish-message';
 
 export const festivalSettings = z.object({
+ prepareHours:z.union([z.literal(0),z.literal(1),z.literal(4),z.literal(8)]).default(0),
  groupID:z.string().min(1).max(200), prepareDays:z.union([z.literal(0),z.literal(1),z.literal(3),z.literal(7),z.literal(14)]).default(1),
  catalogID:z.string().max(80).default(''), catalogManaged:z.boolean().default(false), baseMessage:z.string().max(500).default(''),
  tone:z.enum(['Warm','Personal','Short','Fun']).default('Warm'), personalContext:z.string().max(500).default(''),

@@ -151,7 +151,7 @@ struct ManageFestivalView: View {
                     Text(model.active ? "Active":"Inactive").font(.caption)
                 }
             }
-            Label("Date · \(MomentDates.sendDayLabel(model.date,zone:model.zone))",systemImage:"calendar")
+            Label(MomentDates.sendDayLabel(model.date,zone:model.zone),systemImage:"calendar")
                 .font(.subheadline).foregroundStyle(.secondary)
                 .accessibilityIdentifier("festival-send-date")
         }
@@ -164,7 +164,7 @@ struct ManageFestivalView: View {
         Text("Reminder & Repeat").font(.title2.bold())
         MomentCard{
             if model.source=="festivalCatalog" {Toggle("Update festival date automatically",isOn:$model.settings.catalogManaged).onChange(of:model.settings.catalogManaged){_,value in if value{model.useCatalog()}};Picker("Catalog festival",selection:$model.settings.catalogID){Text("Select festival").tag("");ForEach(model.catalog){Text($0.name).tag($0.id)}};Text("Only verified catalog dates are used. If no date is available, confirm it manually.").font(.caption)}else{Toggle("Repeat every year",isOn:$model.yearly);Text(model.occasionType == "festival" ? "Dates repeat yearly; festivals may move.\nConfirm the date and schedule each year." : "Repeats on this date each year.\nReview and schedule each wish separately.").font(.caption).foregroundStyle(.secondary)}
-            Divider();HStack{Text("Prepare reminder");Spacer();Picker("Prepare reminder",selection:$model.settings.prepareDays){Text("None").tag(0);ForEach([1,3,7,14],id:\.self){Text("\($0) day\($0==1 ? "":"s") before").tag($0)}}.labelsHidden()}
+            Divider();HStack{Text("Prepare reminder");Spacer();Picker("Prepare reminder",selection:$model.settings.preparationMinutes){Text("None").tag(0);ForEach([1,4,8],id:\.self){Text("\($0) hour\($0==1 ? "":"s") before").tag($0*60)};ForEach([1,3,7,14],id:\.self){Text("\($0) day\($0==1 ? "":"s") before").tag($0*1440)}}.labelsHidden()}
             Text("Review only. Nothing is sent.").font(.caption).foregroundStyle(.secondary)
             Divider();zonePicker
         }

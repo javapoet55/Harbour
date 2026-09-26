@@ -42,3 +42,13 @@ it('saves an empty recipient list without deleting the moment or inheriting cont
  await saveFestival(userId,{...input,recipients:[],title:'Still empty'});
  expect((await prisma.importantMoment.findUniqueOrThrow({where:{id:m.id}})).title).toBe('Still empty');
 });
+it('persists hourly preparation reminders and preserves legacy day defaults',async()=>{
+ const {m,input}=await fixture();
+ expect(input.settings.prepareHours).toBe(0);
+ for(const hours of [1,4,8]){
+  await saveFestival(userId,{...input,settings:{...input.settings,prepareDays:0,prepareHours:hours}});
+  const stored=JSON.parse((await prisma.importantMoment.findUniqueOrThrow({where:{id:m.id}})).festivalSettings);
+  expect(stored.prepareHours).toBe(hours);expect(stored.prepareDays).toBe(0);
+ }
+ expect(festivalSettings.safeParse({...input.settings,prepareHours:2}).success).toBe(false);
+});
