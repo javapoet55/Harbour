@@ -156,3 +156,29 @@ public enum ShoppingSwap {
         var next = list; next.items.append(alternative.groceryItem); return next
     }
 }
+
+public enum ShoppingNutritionSortColumn: String, Sendable {
+    case original = "Your item", alternative = "Alternative", difference = "Difference"
+}
+public extension ShoppingComparison {
+    func sortedNutrients(by column: ShoppingNutritionSortColumn?, ascending: Bool) -> [ShoppingNutrient] {
+        let rows = ShoppingNutrient.allCases.filter { $0.value(original) != nil || $0.value(alternative) != nil }
+        guard let column else { return rows }
+        func number(_ nutrient: ShoppingNutrient) -> Double? {
+            switch column {
+            case .original: return nutrient.value(original)?.rounded()
+            case .alternative: return alternativeValue(nutrient)?.rounded()
+            case .difference:
+                guard let a = nutrient.value(original), let b = alternativeValue(nutrient) else { return nil }
+                return (b - a).rounded()
+            }
+        }
+        return rows.enumerated().sorted { left, right in
+            let a = number(left.element), b = number(right.element)
+            if a == b { return left.offset < right.offset }
+            guard let a else { return false }
+            guard let b else { return true }
+            return ascending ? a < b : a > b
+        }.map(\.element)
+    }
+}

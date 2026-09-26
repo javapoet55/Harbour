@@ -224,6 +224,7 @@ final class AppModel: ObservableObject {
         let response: ProfileResponse = try await api.request("/api/me", timeout: 15)
         guard profileRevision == revision, profile?.id == userID, !photoSaveInProgress else { return }
         profile = response.user
+        rememberProfileName()
     }
     // Follow the device's location-based system zone, including daylight saving time.
     func synchronizeDeviceTimeZone() async throws {
@@ -238,8 +239,6 @@ final class AppModel: ObservableObject {
     func saveProfileSettings(_ input: ProfileSettingsInput) async throws {
         let _: Ignore = try await api.request("/api/settings", method: "PATCH", body: JSONEncoder().encode(input), timeout: 15)
         try await reloadProfile()
-        lastSignedInFirstName = ProfileName.firstName(from: profile?.name ?? "")
-        UserDefaults.standard.set(lastSignedInFirstName, forKey: "nexdo.lastSignedInFirstName")
         refreshSupplementaryData()
     }
     func saveProfilePhoto(_ photo: String?) async throws {
@@ -345,13 +344,16 @@ final class AppModel: ObservableObject {
         let response: ProfileResponse = try await api.request("/api/me")
         profile = response.user
         try await synchronizeDeviceTimeZone()
-        lastSignedInFirstName = ProfileName.firstName(from: response.user.name)
+        rememberProfileName()
+        try await load()
+    }
+    private func rememberProfileName() {
+        lastSignedInFirstName = ProfileName.firstName(from: profile?.name ?? "")
         if let lastSignedInFirstName {
             UserDefaults.standard.set(lastSignedInFirstName, forKey: "nexdo.lastSignedInFirstName")
         } else {
             UserDefaults.standard.removeObject(forKey: "nexdo.lastSignedInFirstName")
         }
-        try await load()
     }
     func load() async throws {
         // Non-task services must not hold the task spinner or fail a task refresh.

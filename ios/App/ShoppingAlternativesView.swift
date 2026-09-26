@@ -15,7 +15,6 @@ struct ShoppingAlternativesView: View {
     @State private var retry = 0
     @State private var detail: AlternativePresentation?
     @State private var panel: AlternativesPanel?
-    @State private var pending: ShoppingAlternative?
     @State private var completed: ShoppingAlternative?
     @State private var savedReplacement: ShoppingAlternative?
     private var savedOriginal: GroceryItem { store.lists.flatMap(\.items).first { $0.id == original.id } ?? original }
@@ -70,7 +69,7 @@ struct ShoppingAlternativesView: View {
                 .navigationDestination(isPresented: Binding(get: { detail != nil }, set: { if !$0 { detail = nil } })) {
                     if let presentation = detail {
                         ShoppingAlternativeDetails(original: original, originalFacts: result?.originalFacts, alternative: presentation.alternative, initialTab: presentation.tab,
-                            onView: { track($0.event) }, onReplace: { pending = presentation.alternative; panel = .confirm },
+                            onView: { track($0.event) }, onReplace: { panel = .confirm(presentation.alternative) },
                             onAdd: { await apply(presentation.alternative, add: true) }, failure: { error },
                             favorite: savedOriginal.favoriteAlternatives?.contains(presentation.alternative.id) == true,
                             onFavorite: { favorite(presentation.alternative.id) })
@@ -81,8 +80,8 @@ struct ShoppingAlternativesView: View {
             switch value {
             case .goals: AlternativesGoalPicker(original: original, selected: goal) { goal = $0; track("alternative_goal_selected") }
             case .why: AlternativesWhyView()
-            case .confirm:
-                if let pending { replacementPanel(pending) }
+            case .confirm(let item):
+                replacementPanel(item)
             }
         }
         .fullScreenCover(item: $completed) { alternative in
@@ -128,7 +127,7 @@ struct ShoppingAlternativesView: View {
                     Button { show(item) } label: { Text(item.name).font(.subheadline.weight(.semibold)).frame(maxWidth: .infinity, minHeight: 44, alignment: .leading).multilineTextAlignment(.leading) }
                         .buttonStyle(.plain).accessibilityIdentifier("alternatives.details.\(item.name)")
                     favoriteButton(item.id, active: savedOriginal.favoriteAlternatives?.contains(item.id) == true)
-                    Button { pending = item; panel = .confirm } label: { Label("Replace", systemImage: "arrow.left.arrow.right").font(.caption2.weight(.semibold)).padding(.horizontal, 7).frame(minHeight: 44).background(Color.nexdoBlue.opacity(0.09), in: Capsule()) }
+                    Button { panel = .confirm(item) } label: { Label("Replace", systemImage: "arrow.left.arrow.right").font(.caption2.weight(.semibold)).padding(.horizontal, 7).frame(minHeight: 44).background(Color.nexdoBlue.opacity(0.09), in: Capsule()) }
                         .buttonStyle(.plain).accessibilityIdentifier("alternatives.select.\(item.name)")
                 }
                 let labels = ShoppingGoal.allCases.filter { $0.supported(by: item, original: result?.originalFacts) }.prefix(2).map(\.rawValue)
@@ -194,7 +193,16 @@ struct ShoppingAlternativesView: View {
         catch { if !Task.isCancelled { self.error = error.localizedDescription } }
     }
 }
-private enum AlternativesPanel: String, Identifiable { case goals, why, confirm; var id: String { rawValue } }
+private enum AlternativesPanel: Identifiable {
+    case goals, why, confirm(ShoppingAlternative)
+    var id: String {
+        switch self {
+        case .goals: "goals"
+        case .why: "why"
+        case .confirm(let item): "confirm-" + item.id
+        }
+    }
+}
 struct AlternativeCardSurface: ViewModifier {
     func body(content: Content) -> some View {
         content.padding(16).frame(maxWidth: .infinity, alignment: .leading)
@@ -266,6 +274,8 @@ struct ShoppingAlternativeDetails: View {
     @State private var tab: AlternativeTab = .nutrition
     @State private var showingFoodVoice = false
     @State private var showingNutritionInfo = false
+    @State private var sortColumn: ShoppingNutritionSortColumn?
+    @State private var sortAscending = false
     @ScaledMetric(relativeTo: .caption) private var nutritionTableFontSize: CGFloat = 13.2
     private let nutritionInfo = "Values are based on available food-provider data. Actual products may vary. Always check the product label."
     @State private var saving = false
@@ -309,27 +319,58 @@ struct ShoppingAlternativeDetails: View {
         .onAppear { onView(.nutrition) }
     }
     private var itemHeader: some View {
-        HStack(alignment: .center, spacing: 14) {
-            headerArtwork.frame(width: typeSize.isAccessibilitySize ? 72 : 100, height: 120)
-            headerText.fixedSize(horizontal: false, vertical: true)
-        }.frame(maxWidth: .infinity, alignment: .leading)
-    }
-    @ViewBuilder private var headerArtwork: some View {
-        if original.imageData == nil, original.name.lowercased().contains("mango") {
-            NutritionPackArtwork()
-        } else { AlternativeArtwork(item: original, productImageURL: originalFacts?.imageURL) }
-    }
-    private var headerText: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(original.name).font(.title3.bold()).accessibilityIdentifier("alternative.originalName")
-            Text("Original item").font(.subheadline.weight(.semibold)).foregroundStyle(Color.nexdoBlue)
-                .padding(.horizontal, 10).padding(.vertical, 5).background(Color.nexdoBlue.opacity(0.1), in: Capsule())
-            if let serving = comparison.original?.servingSize { Text("Per \(serving)").font(.subheadline).foregroundStyle(Color.nexdoSecondary) }
-            Text("Comparing with \(alternative.name)").font(.caption).foregroundStyle(Color.nexdoSecondary)
+        VStack(spacing: 12) {
+            let layout = typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(spacing: 12)) : AnyLayout(HStackLayout(alignment: .top, spacing: 12))
+            layout {
+                comparisonCard(item: original, facts: originalFacts, source: true)
+                comparisonCard(item: alternative.groceryItem, facts: alternative.facts, source: false)
+            }
+            .overlay {
+                Text("VS").font(.caption.bold()).foregroundStyle(Color.nexdoIndigo)
+                    .frame(width: 34, height: 34).background(Color(uiColor: .systemBackground), in: Circle())
+                    .overlay(Circle().stroke(Color.nexdoIndigo.opacity(0.12)))
+                    .accessibilityHidden(true)
+            }
             if originalFacts?.matchQuality == "representative_generic" || alternative.facts?.matchQuality == "representative_generic" {
                 Text("Representative food — not an exact product.").font(.caption).foregroundStyle(Color.nexdoSecondary)
             }
-        }.frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+    private func comparisonCard(item: GroceryItem, facts: ShoppingProductFacts?, source: Bool) -> some View {
+        VStack(spacing: 10) {
+            Text(source ? "Your item" : "Alternative").font(.caption.weight(.semibold))
+                .foregroundStyle(source ? Color.nexdoBlue : Color.nexdoIndigo)
+            AlternativeArtwork(item: item, productImageURL: facts?.imageURL)
+                .frame(height: 100).accessibilityHidden(true)
+            Text(item.name).font(.subheadline.bold()).multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(minHeight: typeSize.isAccessibilitySize ? 0 : 44)
+                .accessibilityIdentifier(source ? "alternative.originalName" : "alternative.targetName")
+            let calories = source ? ShoppingNutrient.calories.value(comparison.original) : comparison.alternativeValue(.calories)
+            Text(calories.map { value($0, nutrient: .calories) + " cal" } ?? "Calories unavailable")
+                .font(.headline).multilineTextAlignment(.center)
+            if let serving = comparison.original?.servingSize {
+                Text("Per \(serving)").font(.caption).foregroundStyle(Color.nexdoSecondary)
+            }
+        }.padding(14).frame(maxWidth: .infinity)
+            .background(Color.nexdoBlue.opacity(0.025), in: RoundedRectangle(cornerRadius: 18))
+            .overlay(RoundedRectangle(cornerRadius: 18).stroke(Color.nexdoIndigo.opacity(0.12)))
+    }
+    private func sortHeader(_ column: ShoppingNutritionSortColumn, width: CGFloat) -> some View {
+        Button {
+            if sortColumn == column { sortAscending.toggle() }
+            else { sortColumn = column; sortAscending = false }
+        } label: {
+            VStack(spacing: 2) {
+                Text(column.rawValue).lineLimit(1).fixedSize()
+                Image(systemName: sortColumn == column ? (sortAscending ? "arrow.up" : "arrow.down") : "arrow.up.arrow.down")
+                    .font(.caption2).foregroundStyle(Color.nexdoBlue)
+            }.font(.system(size: nutritionTableFontSize, weight: .semibold))
+                .padding(.horizontal, 6).frame(minWidth: width, minHeight: 48, alignment: .leading)
+        }.buttonStyle(.plain)
+            .accessibilityLabel("Sort by " + column.rawValue)
+            .accessibilityValue(sortColumn == column ? (sortAscending ? "Low to high" : "High to low") : "Not sorted")
+            .accessibilityIdentifier("alternative.sort." + column.rawValue)
     }
     private var nutrition: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -346,15 +387,23 @@ struct ShoppingAlternativeDetails: View {
             if comparison.factor == nil, comparison.original != nil, comparison.alternative != nil {
                 Text("Serving sizes cannot be matched. Differences are unavailable.").font(.caption)
             }
+            if let sortColumn {
+                HStack {
+                    Text("\(sortColumn.rawValue): \(sortAscending ? "low to high" : "high to low")")
+                    Spacer()
+                    Button("Reset") { self.sortColumn = nil }
+                }.font(.caption).foregroundStyle(Color.nexdoSecondary)
+                Text("Sorted by displayed numbers; units vary by nutrient.").font(.caption2).foregroundStyle(Color.nexdoSecondary)
+            }
             ScrollView(.horizontal, showsIndicators: true) {
                 Grid(alignment: .leading, horizontalSpacing: 0, verticalSpacing: 0) {
                     GridRow {
                         tableCell("Nutrient", width: 100, header: true)
-                        tableCell("Your item", width: 76, header: true)
-                        tableCell("Alternative", width: 82, header: true)
-                        tableCell("Difference", width: 82, header: true)
+                        sortHeader(.original, width: 76)
+                        sortHeader(.alternative, width: 82)
+                        sortHeader(.difference, width: 82)
                     }.background(Color.nexdoBlue.opacity(0.06))
-                    ForEach(ShoppingNutrient.allCases.filter { $0.value(comparison.original) != nil || $0.value(comparison.alternative) != nil }) { nutrient in
+                    ForEach(comparison.sortedNutrients(by: sortColumn, ascending: sortAscending)) { nutrient in
                         GridRow {
                             tableCell(nutrient.rawValue, width: 100)
                             tableCell(value(nutrient.value(comparison.original), nutrient: nutrient), width: 76)
@@ -367,7 +416,7 @@ struct ShoppingAlternativeDetails: View {
                         }.overlay(alignment: .bottom) { Rectangle().fill(Color.nexdoBlue.opacity(0.1)).frame(height: 0.5) }
                         .accessibilityElement(children: .combine)
                     }
-                }.accessibilityIdentifier("alternative.nutritionTable")
+                }
             }
         }
     }

@@ -316,7 +316,7 @@ private struct SignInView: View {
                         .frame(width: 116, height: 84)
                         .accessibilityHidden(true)
 
-                    Text("Welcome back, Sri")
+                    Text(model.lastSignedInFirstName.map { "Welcome back, \($0)" } ?? "Welcome back")
                         .font(.system(size: 42, weight: .bold, design: .rounded))
                         .foregroundStyle(
                             LinearGradient(
@@ -1062,8 +1062,9 @@ private struct TodayView: View {
                     LazyVStack(spacing: 16) {
                         TodayTopBar(
                             name: model.profile?.name ?? "",
-                            temperature: model.weather.map { Int($0.current.temperature.rounded()) },
-                            add: { adding = true },
+                            temperature: nil,
+                            showsWeather: false,
+                            add: nil,
                             account: { showingAccount = true }
                         )
 

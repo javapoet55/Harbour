@@ -140,7 +140,14 @@ struct ShoppingItemEditor:View {
             if initial.brand==originalBrand{initial.brand=result.brand.isEmpty ? nil : result.brand}
             if initial.category==originalCategory{initial.category=result.category}
             recognitionNotice="AI suggested these details. Check the name and brand before saving."
-        }catch{if generation==run{self.error=error.localizedDescription}}
+        }catch{
+            guard generation==run else{return}
+            switch error {
+            case APIError.response(404), APIError.server(404, _):
+                self.error="Photo identification is temporarily unavailable. Your photo is still attached. Enter the item name and brand manually, or try again later."
+            default: self.error=error.localizedDescription
+            }
+        }
     }
     private func openCamera() async {
         guard UIImagePickerController.isSourceTypeAvailable(.camera) else{

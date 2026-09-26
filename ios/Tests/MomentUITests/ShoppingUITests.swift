@@ -54,13 +54,19 @@ import XCTest
         XCTAssertTrue(app.navigationBars["Item Details"].waitForExistence(timeout: 5))
         let originalName = app.staticTexts["alternative.originalName"]
         XCTAssertTrue(originalName.exists)
-        XCTAssertGreaterThan(originalName.frame.minX, app.frame.width * 0.25)
+        XCTAssertTrue(app.staticTexts["alternative.targetName"].exists)
+        XCTAssertLessThan(originalName.frame.midX, app.staticTexts["alternative.targetName"].frame.midX)
         XCTAssertLessThan(originalName.frame.minY, app.frame.height * 0.45)
         XCTAssertFalse(app.staticTexts["Nutrition Score"].exists)
         XCTAssertFalse(app.staticTexts["Not rated"].exists)
         XCTAssertFalse(app.staticTexts["At a glance"].exists)
         reveal(app.staticTexts["Nutrition Facts"])
         XCTAssertTrue(app.staticTexts["Nutrition Facts"].waitForExistence(timeout: 5))
+        let sort = app.buttons["alternative.sort.Your item"]
+        reveal(sort); sort.tap()
+        XCTAssertEqual(sort.value as? String, "High to low")
+        sort.tap()
+        XCTAssertEqual(sort.value as? String, "Low to high")
         let note = "Values are based on available food-provider data. Actual products may vary. Always check the product label."
         XCTAssertFalse(app.staticTexts[note].exists)
         let info = app.buttons["alternative.nutritionInfo"]
@@ -78,6 +84,12 @@ import XCTest
         best.tap()
         XCTAssertTrue(app.staticTexts["Cereal"].waitForExistence(timeout: 5))
         reveal(app.buttons["alternative.detail.replace"]); app.buttons["alternative.detail.replace"].tap()
+        XCTAssertTrue(app.staticTexts["Replace item?"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["alternatives.confirm"].exists)
+        app.buttons["Cancel"].tap()
+        XCTAssertTrue(app.navigationBars["Item Details"].waitForExistence(timeout: 5))
+        app.buttons["alternative.detail.replace"].tap()
+        XCTAssertTrue(app.staticTexts["Replace item?"].waitForExistence(timeout: 5))
         app.buttons["alternatives.confirm"].tap()
         XCTAssertTrue(app.staticTexts["alternatives.success"].waitForExistence(timeout: 8)); app.buttons["Done"].tap()
         XCTAssertTrue(app.buttons["Edit 2% Milk"].waitForExistence(timeout: 8))

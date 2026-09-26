@@ -26,6 +26,18 @@ public struct GroceryItem: Codable, Identifiable, Equatable, Sendable {
         try c.encode(size,forKey:.size);try c.encode(notes,forKey:.notes)
         try c.encode(checked,forKey:.checked);try c.encode(imageData,forKey:.imageData)
     }
+    /// Nutrition alternatives apply to food, not every item stored in a shopping list.
+    public var supportsFoodAlternatives: Bool {
+        let words = Set(name.lowercased().split(whereSeparator: { !$0.isLetter }).map(String.init))
+        // Check the name first: older parsers can classify “Apple mouse” as produce.
+        let nonFood: Set<String> = ["pump", "parts", "accessories", "graphics", "ssd", "motherboard", "processor", "mouse", "mice", "keyboard", "computer", "laptop", "desktop", "monitor", "charger", "charging", "cable", "adapter", "usb", "headphones", "earbuds", "speaker", "speakers", "phone", "iphone", "ipad", "macbook", "watch", "tv", "television", "camera", "printer", "electronics", "battery", "batteries", "car", "cars", "automotive", "motor", "engine", "brake", "brakes", "tire", "tires", "tyre", "tyres", "gear", "gears", "bearing", "bearings", "spark", "coolant", "wiper", "mechanical", "screw", "screws", "bolt", "bolts", "wrench", "detergent", "soap", "shampoo", "cleaner", "tissue", "tissues", "towel", "towels"]
+        guard words.isDisjoint(with: nonFood) else { return false }
+        if ["Produce", "Dairy & Eggs", "Meat & Seafood", "Bakery", "Pantry", "Frozen", "Drinks"].contains(category) { return true }
+        guard category == "Other" else { return false }
+        // Keep common manually entered groceries eligible even before a category is chosen.
+        let foods: Set<String> = ["mango", "mangoes", "tofu", "snack", "snacks", "fruit", "vegetable", "vegetables", "apple", "apples", "banana", "bananas", "orange", "oranges", "tomato", "tomatoes", "potato", "potatoes", "onion", "onions", "carrot", "carrots", "avocado", "avocados", "spinach", "lettuce", "broccoli", "berry", "berries", "strawberries", "grapes", "lemon", "lime", "pepper", "peppers", "milk", "egg", "eggs", "cheese", "yogurt", "butter", "bread", "bagel", "bagels", "tortilla", "rice", "pasta", "flour", "sugar", "salt", "olive", "canola", "sauce", "beans", "lentils", "cereal", "oats", "honey", "chicken", "beef", "pork", "salmon", "fish", "shrimp", "turkey", "coffee", "tea", "juice", "soda", "water", "nuts", "almonds", "chocolate", "chips", "crackers", "cookies", "soup"]
+        return !words.isDisjoint(with: foods)
+    }
     public var amountLabel:String {
         guard !size.isEmpty else{return quantity}
         if size.first?.isNumber == true{return quantity == "1" ? size:quantity+" × "+size}

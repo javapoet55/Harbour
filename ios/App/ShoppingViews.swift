@@ -546,6 +546,9 @@ private struct ShoppingShare:View {
 }
 
 private struct GroceryRow:View {
+    @ScaledMetric(relativeTo: .subheadline) private var nameFontSize: CGFloat = 16.5
+    @ScaledMetric(relativeTo: .caption) private var amountFontSize: CGFloat = 13.2
+    @ScaledMetric(relativeTo: .caption2) private var notesFontSize: CGFloat = 12.1
     let row:GroceryItem
     let readOnly:Bool
     let onToggle:()->Void
@@ -562,17 +565,19 @@ private struct GroceryRow:View {
                 HStack(spacing:11) {
                     GroceryArtwork(item:row)
                     VStack(alignment:.leading,spacing:3){
-                        Text(row.name).font(.subheadline.weight(.semibold)).foregroundStyle(Color.nexdoInk).strikethrough(row.checked)
-                        Text(row.amountLabel).font(.caption).foregroundStyle(Color.nexdoSecondary)
-                        if !row.notes.isEmpty{Text(row.notes).font(.caption2).foregroundStyle(.secondary).lineLimit(1)}
+                        Text(row.name).font(.system(size:nameFontSize,weight:.semibold)).foregroundStyle(Color.nexdoInk).strikethrough(row.checked)
+                        Text(row.amountLabel).font(.system(size:amountFontSize)).foregroundStyle(Color.nexdoSecondary)
+                        if !row.notes.isEmpty{Text(row.notes).font(.system(size:notesFontSize)).foregroundStyle(.secondary).lineLimit(1)}
                     }
                     Spacer(minLength:4)
                 }
                 .frame(maxWidth:.infinity,alignment:.leading)
                 .contentShape(Rectangle())
             }.buttonStyle(.plain).disabled(readOnly).accessibilityLabel("Edit "+row.name)
-            Button(action:onAlternatives){Image(systemName:"star.fill").font(.body.weight(.semibold)).foregroundStyle(Color.nexdoBlue).frame(width:38,height:38)}
-                .buttonStyle(.plain).disabled(readOnly).accessibilityLabel("Show alternatives for \(row.name)")
+            if row.supportsFoodAlternatives {
+                Button(action:onAlternatives){Image(systemName:"star.fill").font(.body.weight(.semibold)).foregroundStyle(Color.nexdoBlue).frame(width:38,height:38)}
+                    .buttonStyle(.plain).disabled(readOnly).accessibilityLabel("Show alternatives for \(row.name)")
+            }
         }.padding(.vertical,5)
     }
 }
