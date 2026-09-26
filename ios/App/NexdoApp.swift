@@ -830,6 +830,7 @@ final class AppModel: ObservableObject {
     }
     func withdrawConsent() { voiceConsent = false; aiConsent = false; turn = nil; lastAssistantPrompt = nil; contextID = nil }
     func reset() async {
+        if let owner = profile?.id { await PomodoroStore.cancelAlerts(owner: owner) }
         profileRevision += 1
         projectRevision += 1; projectLoadID = nil; projects = []; projectsLoaded = false; projectsLoading = false; projectsError = nil; unassignedTaskCount = 0
         invalidateScheduleIntelligence()

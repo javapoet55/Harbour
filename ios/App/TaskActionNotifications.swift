@@ -64,6 +64,7 @@ final class TaskActionAppDelegate: NSObject, UIApplicationDelegate, UNUserNotifi
     }
     nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
         let info = response.notification.request.content.userInfo
+        let pomodoroOwner = info["pomodoroOwner"] as? String
         let momentID = info["momentID"] as? String
         let momentOwner = info["momentOwner"] as? String
         let actionID = info["actionID"] as? String
@@ -72,6 +73,7 @@ final class TaskActionAppDelegate: NSObject, UIApplicationDelegate, UNUserNotifi
         guard choice != UNNotificationDismissActionIdentifier else { return }
         // Retain the cold-launch tap before iOS considers the response handled.
         await MainActor.run {
+            if let pomodoroOwner { PomodoroNotificationRoute.shared.owner = pomodoroOwner }
             if let momentID, let momentOwner {
                 MomentNotificationRoute.shared.receive(momentID, owner: momentOwner)
             }

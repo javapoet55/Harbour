@@ -17,7 +17,9 @@ struct RootView: View {
     var body: some View {
         Group {
             #if DEBUG
-            if ProcessInfo.processInfo.arguments.contains("-agent-design-preview") {
+            if ProcessInfo.processInfo.arguments.contains("-pomodoro-design-preview") {
+                PomodoroView(api: model.momentAPI, owner: "preview", preview: true)
+            } else if ProcessInfo.processInfo.arguments.contains("-agent-design-preview") {
                 TaskDetailsView(task: NexdoTask(id: "agent-preview", title: "Contact Plumbers", status: "PLANNED", priority: "NORMAL", durationMin: 30, notes: nil, startAt: nil, dueAt: nil))
             } else if ProcessInfo.processInfo.arguments.contains("-shopping-design-preview") {
                 ShoppingDesignPreview()
@@ -123,8 +125,8 @@ private struct NexdoTabShell: View {
     @EnvironmentObject private var model: AppModel
     @State private var showingAsk = false
     @State private var askPrompt = ""
-    @State private var addingTask = false
-    @State private var addingVoice = false
+    @State private var showingPomodoro = false
+    @ObservedObject private var pomodoroRoute = PomodoroNotificationRoute.shared
     private var activeTab: NexdoTab { showingAsk ? .askAI : selection }
 
     var body: some View {
@@ -147,7 +149,7 @@ private struct NexdoTabShell: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .clipped()
         .blur(radius: showingAsk ? 2 : 0)
-        .fullScreenCover(isPresented: $showingAsk) {
+        .fullScreenCover(isPresented: $showingAsk, onDismiss: { openPomodoroNotification() }) {
             AskNexdoView(initialPrompt: askPrompt)
                 .presentationDetents([.fraction(0.84)])
                 .presentationDragIndicator(.visible)
@@ -160,15 +162,11 @@ private struct NexdoTabShell: View {
                 HStack(spacing: 4) {
                     ForEach(NexdoTab.allCases) { tab in
                         if tab == .askAI {
-                            Menu {
-                                Button("Add by Voice", systemImage: "mic") { addingVoice = true }
-                                Button("Add Manually", systemImage: "plus") { addingTask = true }
-                            } label: {
-                                Image(systemName: "plus").font(.system(size: 30, weight: .medium))
-                                    .foregroundStyle(.white).frame(width: 58, height: 58)
-                                    .background(LinearGradient(colors: [.nexdoBlue, .nexdoIndigo, .purple], startPoint: .topLeading, endPoint: .bottomTrailing), in: Circle())
-                                    .shadow(color: Color.nexdoIndigo.opacity(0.25), radius: 8, y: 4)
-                            }.accessibilityLabel("Add a task")
+                            Button { showingPomodoro = true } label: {
+                                Image("pomodoro-tomato").resizable().scaledToFit()
+                                    .frame(width: 62, height: 58).blendMode(.multiply)
+                                    .shadow(color: .pink.opacity(0.22), radius: 8, y: 4)
+                            }.accessibilityLabel("Pomodoro")
                         }
                         Button { if tab == .askAI { showingAsk = true } else {
                             if tab == .tasks && selection != .tasks { model.taskQuery.date = .today }
@@ -197,8 +195,20 @@ private struct NexdoTabShell: View {
             .fixedSize(horizontal: false, vertical: true)
             .background { Color(uiColor: .systemBackground).ignoresSafeArea(edges: .bottom) }
         }
-        .sheet(isPresented: $addingTask) { NavigationStack { TaskEditor(task: nil) } }
-        .fullScreenCover(isPresented: $addingVoice) { AddTaskByVoiceView(calendarOnly: selection == .calendar) }
+        .onAppear { openPomodoroNotification() }
+        .onChange(of: pomodoroRoute.owner) { _, _ in openPomodoroNotification() }
+        .fullScreenCover(isPresented: $showingPomodoro) {
+            if let owner = model.profile?.id {
+                PomodoroView(api: model.momentAPI, owner: owner, onTasks: { selection = .tasks })
+            }
+        }
+    }
+    private func openPomodoroNotification() {
+        guard let pending = pomodoroRoute.owner, let owner = model.profile?.id else { return }
+        guard pending == TaskActionCoordinator.ownerKey(owner) else { pomodoroRoute.owner = nil; return }
+        if showingAsk { showingAsk = false; return }
+        pomodoroRoute.owner = nil
+        showingPomodoro = true
     }
 }
 

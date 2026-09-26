@@ -7,6 +7,42 @@ import XCTest
         app = XCUIApplication(); app.launchArguments = ["-moments-design-preview"]; app.launch()
         XCTAssertTrue(app.navigationBars["Important Moments"].waitForExistence(timeout: 15))
     }
+    func testPomodoroSetupPauseStopAndHistory() {
+        app.terminate(); app.launchArguments = ["-pomodoro-design-preview"]; app.launch()
+        XCTAssertTrue(app.buttons["Start Focus Session"].waitForExistence(timeout: 10))
+        let setupShot = XCTAttachment(screenshot: app.screenshot()); setupShot.name = "Pomodoro setup"; setupShot.lifetime = .keepAlways; add(setupShot)
+        app.buttons["pomodoro-category-coding"].tap()
+        XCTAssertTrue(app.buttons["pomodoro-category-coding"].isSelected)
+        app.buttons["Start Focus Session"].tap()
+        XCTAssertTrue(app.buttons["Pause"].waitForExistence(timeout: 5))
+        let timerShot = XCTAttachment(screenshot: app.screenshot()); timerShot.name = "Pomodoro focus"; timerShot.lifetime = .keepAlways; add(timerShot)
+        app.buttons["Pause"].tap()
+        XCTAssertTrue(app.staticTexts["Paused"].exists)
+        app.buttons["Resume"].tap()
+        XCTAssertTrue(app.buttons["Pause"].exists)
+        app.buttons["Stop"].tap()
+        app.buttons["Stop session"].tap()
+        XCTAssertTrue(app.staticTexts["Session stopped"].waitForExistence(timeout: 5))
+        app.buttons["Session history"].tap()
+        XCTAssertTrue(app.navigationBars["Session history"].waitForExistence(timeout: 5))
+        let entry = app.descendants(matching: .any).matching(identifier: "pomodoro-history-entry").firstMatch
+        XCTAssertTrue(entry.waitForExistence(timeout: 5))
+        XCTAssertTrue(entry.label.contains("Coding"))
+        app.buttons["Done"].tap()
+        app.buttons["Start Another Session"].tap()
+        XCTAssertTrue(app.buttons["Start Focus Session"].waitForExistence(timeout: 5))
+    }
+
+    func testPomodoroBreakAndCompletion() {
+        app.terminate(); app.launchArguments = ["-pomodoro-design-preview", "-pomodoro-break-preview"]; app.launch()
+        XCTAssertTrue(app.staticTexts["Time for a short break!"].waitForExistence(timeout: 10))
+        let breakShot = XCTAttachment(screenshot: app.screenshot()); breakShot.name = "Pomodoro break"; breakShot.lifetime = .keepAlways; add(breakShot)
+        app.buttons["End Break"].tap()
+        XCTAssertTrue(app.staticTexts["Great job!"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["25 min"].exists)
+        let completeShot = XCTAttachment(screenshot: app.screenshot()); completeShot.name = "Pomodoro complete"; completeShot.lifetime = .keepAlways; add(completeShot)
+    }
+
     func testDailyBriefArrowsOpenDetailPages() {
         app.terminate(); app.launchArguments = ["-daily-brief-design-preview"]; app.launch()
         let priorities = app.buttons["brief-section-0"]

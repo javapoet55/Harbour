@@ -9,6 +9,7 @@ datasource db {
 }
 
 model User {
+  pomodoroSessions PomodoroSession[]
   adminLoginTokens AdminLoginToken[]
   shoppingLists ShoppingList[]
   id           String   @id @default(cuid())
@@ -663,4 +664,17 @@ model FoodProviderBudget {
   key String @id
   count Int @default(0)
   resetAt DateTime
+}
+
+model PomodoroSession {
+  id        String
+  userId    String
+  user      User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  revision  Int
+  status    String
+  stateJson String
+  startedAt DateTime
+  updatedAt DateTime @updatedAt
+  @@id([userId, id])
+  @@index([userId, startedAt])
 }
