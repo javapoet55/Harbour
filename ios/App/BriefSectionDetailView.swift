@@ -122,6 +122,7 @@ struct BriefSectionDetailView: View {
                 VStack(alignment: .leading, spacing: 8) { taskActions(task, action: action) }
             }
         }.padding(16).background(.white.opacity(0.95), in: RoundedRectangle(cornerRadius: 24))
+            .shadow(color: .indigo.opacity(0.10), radius: 10, x: 0, y: 5)
     }
     @ViewBuilder private func taskActions(_ task: NexdoTask, action: TaskAction?) -> some View {
         if let action, !task.isDone {
@@ -145,8 +146,8 @@ struct BriefSectionDetailView: View {
                 DetailArtwork(part: .star).frame(width: 44, height: 44).accessibilityHidden(true)
                 Text(item).font(.headline).fixedSize(horizontal: false, vertical: true)
             }
-            pill("Ask Nexdo", icon: "sparkles", color: .purple) { requestHelp("Help me with this item from my daily briefing: \(item)") }
         }.padding(16).frame(maxWidth: .infinity, alignment: .leading).background(.white.opacity(0.95), in: RoundedRectangle(cornerRadius: 24))
+            .shadow(color: .indigo.opacity(0.10), radius: 10, x: 0, y: 5)
     }
 }
 
