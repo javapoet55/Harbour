@@ -55,6 +55,8 @@ struct MomentOK: Decodable, Sendable {}
         } catch { self.error = error.localizedDescription }
     }
     @Published var route: ImportantMoment?
+    @Published var showingNotificationInbox = false
+    var routedPlanID: String?
     private let notificationAuthorization: (@Sendable () async throws -> Void)?
     private let api: APIClient
     private var owner: String?
@@ -67,7 +69,7 @@ struct MomentOK: Decodable, Sendable {}
     } }
     func activate(_ userID: String?) async {
         let key = userID.map(TaskActionCoordinator.ownerKey)
-        if owner != key { owner = key; generation = UUID(); snapshot = nil; route = nil; error = nil; lastSynced = nil; cardCache.removeAll(); await clearNotifications() }
+        if owner != key { owner = key; generation = UUID(); snapshot = nil; route = nil; showingNotificationInbox = false; routedPlanID = nil; error = nil; lastSynced = nil; cardCache.removeAll(); await clearNotifications() }
         if key != nil { await refresh() }
     }
     func refresh() async {
@@ -83,9 +85,16 @@ struct MomentOK: Decodable, Sendable {}
     }
     func resolveRoute() {
         let pending = MomentNotificationRoute.shared
-        guard let id = pending.pending, pending.owner == owner else { return }
+        guard let id = pending.pending, let owner, pending.owner == owner else { return }
+        // A foreground refresh or cold launch may still be loading. Never consume the tap early.
+        guard snapshot != nil else { return }
         pending.pending = nil
-        if let moment = moments.first(where: { $0.enabled && ($0.id == id || $0.drafts.contains { $0.plans?.contains { $0.id == id && $0.editable } == true }) }) { route = moment }
+        routedPlanID = id
+        if let moment = moments.first(where: { $0.id == id || $0.drafts.contains { $0.plans?.contains { $0.id == id } == true } }) {
+            route = moment
+        } else {
+            showingNotificationInbox = true
+        }
     }
     func request<T: Encodable, R: Decodable & Sendable>(_ operation: String, _ input: T, id: String? = nil) async throws -> R {
         guard owner != nil else { throw APIError.signedOut }

@@ -146,7 +146,7 @@ final class MomentsPreviewProtocol: URLProtocol, @unchecked Sendable {
         }
         if ProcessInfo.processInfo.arguments.contains("-moments-route-preview") {
             lock.withLock {
-                savedPlans = [["id":"plan","draftID":"draft","channel":"messages","recipient":"+15555550184","subject":"Damien’s Birthday","body":draftBody,"scheduledAtUTC":ISO8601DateFormatter().string(from: Date().addingTimeInterval(3600)),"timeZoneID":"America/Los_Angeles","status":"AWAITING_CONFIRMATION","idempotencyKey":UUID().uuidString,"automaticDelivery":false,"repeatYearly":false,"reminderOffset":0]]
+                savedPlans = [["id":"plan","draftID":"draft","channel":"messages","recipient":"+15555550184","subject":"Damien’s Birthday","body":draftBody,"scheduledAtUTC":ISO8601DateFormatter().string(from: Date().addingTimeInterval(3600)),"timeZoneID":"America/Los_Angeles","status":ProcessInfo.processInfo.arguments.contains("-expired-route-preview") ? "EXPIRED" : "AWAITING_CONFIRMATION","idempotencyKey":UUID().uuidString,"automaticDelivery":false,"repeatYearly":false,"reminderOffset":0]]
             }
         }
         let config = URLSessionConfiguration.ephemeral; config.protocolClasses = [MomentsPreviewProtocol.self]
@@ -163,7 +163,7 @@ struct MomentsDesignPreview: View {
             .task {
                 // Route like a notification tap, so the wish opens once the list has loaded, whichever refresh loads it.
                 if ProcessInfo.processInfo.arguments.contains("-moments-route-preview") {
-                    MomentNotificationRoute.shared.receive("moment", owner: TaskActionCoordinator.ownerKey("local-fixture"))
+                    MomentNotificationRoute.shared.receive("plan", owner: TaskActionCoordinator.ownerKey("local-fixture"))
                 }
                 await store.activate("local-fixture")
             }

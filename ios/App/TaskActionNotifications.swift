@@ -62,16 +62,22 @@ final class TaskActionAppDelegate: NSObject, UIApplicationDelegate, UNUserNotifi
                                             withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
         completionHandler([.banner, .list, .sound])
     }
-    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse,
-                                            withCompletionHandler completionHandler: @escaping () -> Void) {
+    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
         let info = response.notification.request.content.userInfo
-        if let id = info["momentID"] as? String, let owner = info["momentOwner"] as? String, response.actionIdentifier != UNNotificationDismissActionIdentifier {
-            Task { @MainActor in MomentNotificationRoute.shared.receive(id, owner: owner) }
+        let momentID = info["momentID"] as? String
+        let momentOwner = info["momentOwner"] as? String
+        let actionID = info["actionID"] as? String
+        let actionOwner = info["owner"] as? String
+        let choice = response.actionIdentifier
+        guard choice != UNNotificationDismissActionIdentifier else { return }
+        // Retain the cold-launch tap before iOS considers the response handled.
+        await MainActor.run {
+            if let momentID, let momentOwner {
+                MomentNotificationRoute.shared.receive(momentID, owner: momentOwner)
+            }
+            if let actionID, let actionOwner {
+                TaskActionCoordinator.shared.receive(actionID: actionID, owner: actionOwner, choice: choice)
+            }
         }
-        if let id = info["actionID"] as? String, let owner = info["owner"] as? String {
-            let choice = response.actionIdentifier
-            Task { @MainActor in TaskActionCoordinator.shared.receive(actionID: id, owner: owner, choice: choice) }
-        }
-        completionHandler()
     }
 }

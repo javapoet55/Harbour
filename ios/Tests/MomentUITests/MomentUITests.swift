@@ -627,6 +627,11 @@ import XCTest
         app.buttons["Close"].tap()
         XCTAssertTrue(app.navigationBars["Important Moments"].waitForExistence(timeout: 5))
     }
+    func testExpiredNotificationStillOpensWish() {
+        app.launchArguments.append("-expired-route-preview")
+        openRoutedWish()
+        XCTAssertTrue(app.staticTexts["Expired"].waitForExistence(timeout: 5))
+    }
     func testRoutedWishBackReturnsToList() {
         openRoutedWish()
         app.navigationBars["Wish details"].buttons.firstMatch.tap()

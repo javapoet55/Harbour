@@ -590,8 +590,14 @@ struct MomentSheetHost: View {
     @EnvironmentObject private var store: ImportantMomentsStore
     var body: some View {
         Color.clear.frame(width: 0, height: 0).sheet(item: $store.route) { moment in
-            MomentRoutedView(moment: moment) { store.route = nil }
+            MomentRoutedView(moment: moment, planID: store.routedPlanID) { store.route = nil }
                 .environmentObject(store)
+        }
+        .sheet(isPresented: $store.showingNotificationInbox) {
+            NavigationStack {
+                ImportantMomentsView()
+                    .toolbar { ToolbarItem(placement: .topBarLeading) { Button("Close") { store.showingNotificationInbox = false } } }
+            }.environmentObject(store)
         }
     }
 }
@@ -600,13 +606,14 @@ struct MomentSheetHost: View {
 private struct MomentRoutedView: View {
     @EnvironmentObject private var store: ImportantMomentsStore
     let moment: ImportantMoment
+    let planID: String?
     let close: () -> Void
     @State private var showingDetail = true
     var body: some View {
         NavigationStack {
             ImportantMomentsView()
                 .navigationDestination(isPresented: $showingDetail) {
-                    if let plan = moment.drafts.flatMap({ $0.plans ?? [] }).first(where: { $0.editable }) {
+                    if let plan = moment.drafts.flatMap({ $0.plans ?? [] }).first(where: { $0.id == planID }) ?? moment.drafts.flatMap({ $0.plans ?? [] }).first(where: { $0.editable }) {
                         WishPlanView(plan: plan)
                     } else if moment.supportsGreetingCard, let group = MomentDisplayGroup.editableGroups(store.moments.filter { $0.type == moment.type }).first(where: { $0.moments.contains { $0.id == moment.id } }) {
                         ManageFestivalView(group: group, store: store,onDone:{showingDetail=false})
