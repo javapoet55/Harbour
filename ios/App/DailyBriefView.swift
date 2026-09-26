@@ -13,7 +13,8 @@ struct DailyBriefView: View {
     let read: (Int, String) -> Void
     let readingSection: Int?
     @Environment(\.dynamicTypeSize) private var typeSize
-    @State private var expanded: Set<Int> = []
+    @State private var selectedSection: SectionRoute?
+    private struct SectionRoute: Identifiable { let id: Int }
 
     private let ink = Color(red: 0.04, green: 0.05, blue: 0.22)
     private let secondary = Color(red: 0.30, green: 0.34, blue: 0.53)
@@ -76,6 +77,18 @@ struct DailyBriefView: View {
                 }
             }
         }.foregroundStyle(ink).buttonStyle(.plain).padding(.top, 18)
+            .onAppear {
+                #if DEBUG
+                if ProcessInfo.processInfo.arguments.contains("-open-brief-detail"), !sections.isEmpty { selectedSection = SectionRoute(id: 0) }
+                #endif
+            }
+            .fullScreenCover(item: $selectedSection) { route in
+                if sections.indices.contains(route.id) {
+                    BriefSectionDetailView(title: style(sections[route.id].title).0,
+                        items: sections[route.id].items, ask: ask,
+                        read: { read(route.id, sections[route.id].items.joined(separator: "\n\n")) })
+                }
+            }
     }
 
     private func suggestion(_ title: String, query: String) -> some View {
@@ -95,40 +108,23 @@ struct DailyBriefView: View {
 
     private func sectionCard(_ index: Int, _ section: AssistantTurn.Section) -> some View {
         let (title, artwork, color) = style(section.title)
-        let isExpanded = expanded.contains(index)
-        return VStack(alignment: .leading, spacing: 12) {
-            Button {
-                if isExpanded { expanded.remove(index) } else { expanded.insert(index) }
-            } label: {
-                HStack(spacing: 14) {
-                    BriefArtwork(part: artwork).frame(width: 52, height: 52).accessibilityHidden(true)
-                    VStack(alignment: .leading, spacing: 6) {
-                        HStack(spacing: 8) {
-                            Text(title).font(.headline).fixedSize(horizontal: false, vertical: true)
-                            Text("\(section.items.count)").font(.subheadline.bold()).foregroundStyle(color)
-                                .padding(6).background(color.opacity(0.12), in: Circle())
-                        }
-                        Text(section.items.first ?? "Nothing to report.").font(.subheadline).foregroundStyle(secondary)
-                            .lineLimit(isExpanded ? nil : 2)
-                    }.frame(maxWidth: .infinity, alignment: .leading)
-                    Image(systemName: isExpanded ? "chevron.down" : "chevron.right").font(.caption)
-                }.contentShape(Rectangle())
-            }.accessibilityIdentifier("brief-section-\(index)")
-                .accessibilityValue(isExpanded ? "Expanded" : "Collapsed")
-            if isExpanded {
-                ForEach(Array(section.items.dropFirst().enumerated()), id: \.offset) { _, item in
-                    Divider()
-                    Text(item).font(.subheadline).foregroundStyle(secondary).textSelection(.enabled)
-                }
-                if !section.items.isEmpty {
-                    Button { read(index, section.items.joined(separator: "\n\n")) } label: {
-                        Label(readingSection == index ? "Stop reading" : "Read aloud", systemImage: readingSection == index ? "stop.fill" : "speaker.wave.2")
-                            .font(.subheadline).foregroundStyle(.blue).frame(minHeight: 44)
-                    }.disabled(busy)
-                }
-            }
-        }.padding(14).frame(maxWidth: .infinity, alignment: .leading)
-            .background(.white.opacity(0.9), in: RoundedRectangle(cornerRadius: 22))
+        return Button { selectedSection = SectionRoute(id: index) } label: {
+            HStack(spacing: 14) {
+                BriefArtwork(part: artwork).frame(width: 52, height: 52).accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(spacing: 8) {
+                        Text(title).font(.headline).fixedSize(horizontal: false, vertical: true)
+                        Text("\(section.items.count)").font(.subheadline.bold()).foregroundStyle(color)
+                            .padding(6).background(color.opacity(0.12), in: Circle())
+                    }
+                    Text(section.items.first ?? "Nothing to report.").font(.subheadline).foregroundStyle(secondary).lineLimit(2)
+                }.frame(maxWidth: .infinity, alignment: .leading)
+                Image(systemName: "chevron.right").font(.caption)
+            }.padding(14).frame(maxWidth: .infinity, alignment: .leading)
+                .background(.white.opacity(0.9), in: RoundedRectangle(cornerRadius: 22))
+                .contentShape(RoundedRectangle(cornerRadius: 22))
+        }.accessibilityIdentifier("brief-section-\(index)")
+            .accessibilityHint("Opens \(title)")
     }
 }
 

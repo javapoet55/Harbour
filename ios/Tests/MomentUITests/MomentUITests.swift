@@ -7,19 +7,24 @@ import XCTest
         app = XCUIApplication(); app.launchArguments = ["-moments-design-preview"]; app.launch()
         XCTAssertTrue(app.navigationBars["Important Moments"].waitForExistence(timeout: 15))
     }
-    func testDailyBriefCardsExpandLiveContent() {
+    func testDailyBriefArrowsOpenDetailPages() {
         app.terminate(); app.launchArguments = ["-daily-brief-design-preview"]; app.launch()
         let priorities = app.buttons["brief-section-0"]
         XCTAssertTrue(priorities.waitForExistence(timeout: 10))
-        XCTAssertTrue(app.staticTexts["Top Priorities"].exists)
-        XCTAssertTrue(app.staticTexts["Upcoming Deadlines"].exists)
-        XCTAssertFalse(app.staticTexts["Review the plumbing quote."].exists)
         priorities.tap()
-        XCTAssertTrue(app.staticTexts["Review the plumbing quote."].exists)
-        XCTAssertTrue(app.buttons["Read aloud"].exists)
-        priorities.tap()
-        XCTAssertFalse(app.staticTexts["Review the plumbing quote."].exists)
-        XCTAssertTrue(app.textFields["Ask anything"].exists || app.textViews["Ask anything"].exists)
+        XCTAssertTrue(app.buttons["Back to daily brief"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["3 items to focus on"].exists)
+        XCTAssertTrue(app.buttons["Complete Contact gutter technician"].exists)
+        XCTAssertTrue(app.staticTexts["Discuss gutter repair and get an estimate."].exists)
+        XCTAssertTrue(app.buttons["Add Note"].exists)
+        app.buttons["Back to daily brief"].tap()
+        XCTAssertTrue(priorities.waitForExistence(timeout: 5))
+        app.buttons["brief-section-1"].tap()
+        XCTAssertTrue(app.staticTexts["1 item to review"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Send the report by 4 PM."].exists)
+        XCTAssertFalse(app.buttons["Complete Contact gutter technician"].exists)
+        app.buttons["Back to daily brief"].tap()
+        XCTAssertTrue(priorities.waitForExistence(timeout: 5))
     }
 
     func testAskLandingShowsFourLargerCards() {
