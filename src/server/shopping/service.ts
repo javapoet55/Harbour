@@ -10,7 +10,7 @@ export async function shoppingAction(userId:string,raw:unknown,idempotencyKey?:s
  const p=z.object({operation:z.enum(['create','save','delete','complete','share','revoke','parse','alternatives']),id:z.string().optional(),revision:z.number().int().nonnegative().optional(),input:z.unknown().optional()}).parse(raw);
  if(p.operation==='parse'){const {text}=z.object({text:z.string().min(1).max(12000)}).parse(p.input);return {items:parseShopping(text).map(i=>({...i,id:randomUUID()}))};}
  if(p.operation==='alternatives'){
-  const input=z.object({name:z.string().trim().min(1).max(120),category:z.string().max(80).optional(),quantity:z.string().max(40).optional(),size:z.string().max(80).optional()}).parse(p.input);
+  const input=z.object({name:z.string().trim().min(1).max(120),category:z.string().max(80).optional(),quantity:z.string().max(40).optional(),size:z.string().max(80).optional(),brand:z.string().trim().max(120).optional(),barcode:z.string().regex(/^\d{8,14}$/).optional(),goal:z.enum(['Lower fat','Lower sugar','Lower calorie','Higher protein','Lactose-free','Plant-based','Lower price']).optional()}).parse(p.input);
   return recommendShoppingAlternatives(userId,input);
  }
  if(p.operation==='create'){
@@ -35,12 +35,12 @@ export async function shoppingAction(userId:string,raw:unknown,idempotencyKey?:s
    await tx.shoppingList.update({where:{id:list.id},data:{completedAt:new Date()}});
    if(!list.weekly)return {list:await tx.shoppingList.findUnique({where:{id:list.id},include})};
    const today=new Intl.DateTimeFormat('en-CA',{timeZone:list.timeZone,year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
-   return {list:await tx.shoppingList.create({data:{userId,title:list.title,date:nextShoppingDate(list.date,today),timeZone:list.timeZone,weekly:true,generatedFrom:list.id,items:{create:list.items.map((i,sortOrder)=>({id:randomUUID(),name:i.name,category:i.category,quantity:i.quantity,size:i.size,notes:i.notes,imageData:i.imageData,checked:false,sortOrder}))}},include})};
+   return {list:await tx.shoppingList.create({data:{userId,title:list.title,date:nextShoppingDate(list.date,today),timeZone:list.timeZone,weekly:true,generatedFrom:list.id,items:{create:list.items.map((i,sortOrder)=>({id:randomUUID(),name:i.name,category:i.category,quantity:i.quantity,size:i.size,notes:i.notes,imageData:i.imageData,brand:i.brand,barcode:i.barcode,favorite:i.favorite,favoriteAlternatives:i.favoriteAlternatives??undefined,checked:false,sortOrder}))}},include})};
   }
   if(list.completedAt)throw new MomentError('Copy this completed list to make changes.');
   const {items,...data}=listInput.parse(p.input);
   await tx.shoppingItem.deleteMany({where:{listId:list.id}});
-  // Always allocate server IDs so a client cannot move another list's items.
-  return {list:await tx.shoppingList.update({where:{id:list.id},data:{...data,items:{create:items.map((i,sortOrder)=>({...i,imageData:i.imageData === undefined ? list.items.find(old=>old.id===i.id)?.imageData ?? null : i.imageData,id:randomUUID(),sortOrder}))}},include})};
+  // Preserve IDs already owned by this list; never accept IDs from another list.
+  return {list:await tx.shoppingList.update({where:{id:list.id},data:{...data,items:{create:items.map((i,sortOrder)=>({...i,imageData:i.imageData === undefined ? list.items.find(old=>old.id===i.id)?.imageData ?? null : i.imageData,id:list.items.some(old=>old.id===i.id)?i.id:randomUUID(),sortOrder}))}},include})};
  });
 }
