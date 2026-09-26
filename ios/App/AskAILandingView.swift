@@ -17,8 +17,8 @@ struct AskAILandingView: View {
 
     private let cards: [(String, String, String, Color)] = [
         ("My Daily Brief", "Priorities and\nyour next move", "calendar", .blue),
-        ("Top 3 Focus Tasks", "Urgency, effort\nand impact", "scope", .green),
-        ("Deadlines & Risks", "Due in the\nnext 5 days", "exclamationmark.triangle", .orange),
+        ("Top 3 Tasks", "Urgency, effort\nand impact", "scope", .green),
+        ("Due & Risks", "Due in the\nnext 5 days", "exclamationmark.triangle", .orange),
         ("Find Time", "Free time around\nyour plans", "clock", .purple)
     ]
     var body: some View {
@@ -91,6 +91,7 @@ struct AskAILandingView: View {
             Image(systemName: item.2).font(.system(size: 20)).foregroundStyle(item.3).frame(width: 34, height: 36).background(item.3.opacity(0.18), in: RoundedRectangle(cornerRadius: 13))
             VStack(alignment: .leading, spacing: 5) {
                 Text(item.0).font(typeSize.isAccessibilitySize ? .headline : .system(size: 15, weight: .bold))
+                    .fixedSize(horizontal: false, vertical: true)
                 Text(item.1).font(typeSize.isAccessibilitySize ? .body : .system(size: 13))
                     .lineLimit(typeSize.isAccessibilitySize ? nil : 2)
                     .minimumScaleFactor(0.85)
