@@ -17,6 +17,9 @@ final class ShoppingPreviewProtocol:URLProtocol,@unchecked Sendable {
             .init(name:"Eggs",category:"Dairy & Eggs",size:"1 dozen"),
             .init(name:"Rice",category:"Pantry",size:"5 kg")]
         if ProcessInfo.processInfo.arguments.contains("-shopping-bread-preview") { items[3] = .init(name: "Bread", category: "Bakery", quantity: "1", size: "packet") }
+        if ProcessInfo.processInfo.arguments.contains("-shopping-photo-preview") {
+            items[0].imageData=UIImage(named:"grocery-banana")?.pngData()?.base64EncodedString()
+        }
         let encoded=(try! JSONSerialization.jsonObject(with:JSONEncoder().encode(items))) as! [[String:Any]]
         lists=[["id":"preview-list","title":"Weekly Shopping List","date":MomentDates.day(Date().addingTimeInterval(2*86400),zone:"America/Los_Angeles"),"timeZone":"America/Los_Angeles","weekly":true,"revision":0,"items":encoded]]
     }

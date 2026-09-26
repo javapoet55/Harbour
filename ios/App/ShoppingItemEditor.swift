@@ -22,6 +22,7 @@ struct ShoppingItemEditor:View {
     @State private var pendingPhotoRecognition=false
     @State private var recognitionNotice:String?
     @State private var imageExpanded=false
+    @State private var previewPhoto:ShoppingPhotoPreviewImage?
     @State private var generation=UUID()
     private var photo:UIImage? {
         guard let value=initial.imageData,let data=Data(base64Encoded:value) else{return nil}
@@ -32,18 +33,25 @@ struct ShoppingItemEditor:View {
             Form {
                 Section {
                     TextField("Item name",text:$initial.name)
+                        .foregroundStyle(Color.nexdoBlue)
                     Picker("Category",selection:$initial.category){ForEach(GroceryItem.categories,id:\.self){Text($0)}}
                     HStack{Text("Quantity");TextField("1",text:$initial.quantity).multilineTextAlignment(.trailing).keyboardType(.decimalPad)}
                     TextField("Size, e.g. 1 gallon or 500 g",text:$initial.size)
                     TextField("Brand",text:Binding(get:{initial.brand ?? ""},set:{initial.brand=$0.isEmpty ? nil : $0}))
+                        .foregroundStyle(Color.nexdoBlue)
                         .accessibilityIdentifier("shopping.item.brand")
                     TextField("Notes",text:$initial.notes,axis:.vertical)
                 }
                 Section {
                     DisclosureGroup("Item Image",isExpanded:$imageExpanded) {
                         if let photo {
-                            Image(uiImage:photo).resizable().scaledToFit().frame(maxWidth:.infinity,maxHeight:200)
-                                .accessibilityLabel("Attached item image")
+                            Button { previewPhoto=ShoppingPhotoPreviewImage(image:photo) } label: {
+                                Image(uiImage:photo).resizable().scaledToFit().frame(maxWidth:.infinity,maxHeight:200)
+                                    .contentShape(Rectangle())
+                            }.buttonStyle(.plain)
+                                .accessibilityLabel("Enlarge item image")
+                                .accessibilityHint("Opens a full-screen photo with zoom controls")
+                                .accessibilityIdentifier("shopping.photo.preview")
                             Button("Remove Image",role:.destructive){initial.imageData=nil;recognitionNotice=nil}
                             Button("Fill details from photo with AI"){requestRecognition()}
                                 .accessibilityIdentifier("shopping.photo.identify")
@@ -79,6 +87,7 @@ struct ShoppingItemEditor:View {
                 if let image{pendingPhotoRecognition=attach(image);imageExpanded=true}
                 else if launchCamera && initial.imageData == nil{dismiss()}
             }.ignoresSafeArea()}
+            .fullScreenCover(item:$previewPhoto) { ShoppingPhotoPreview(image:$0.image) }
             .task {
                 guard launchCamera && !didLaunchCamera else{return}
                 didLaunchCamera=true;imageExpanded=true
@@ -182,4 +191,44 @@ private struct ShoppingCamera:UIViewControllerRepresentable {
         func imagePickerControllerDidCancel(_ picker:UIImagePickerController){onFinish(nil)}
         func imagePickerController(_ picker:UIImagePickerController,didFinishPickingMediaWithInfo info:[UIImagePickerController.InfoKey:Any]){onFinish(info[.originalImage] as? UIImage)}
     }
+}
+
+private struct ShoppingPhotoPreviewImage:Identifiable {
+    let id=UUID()
+    let image:UIImage
+}
+
+private struct ShoppingPhotoPreview:View {
+    let image:UIImage
+    @Environment(\.dismiss) private var dismiss
+    @State private var scale:CGFloat=1
+    @State private var gestureStartScale:CGFloat=1
+    var body:some View {
+        NavigationStack {
+            GeometryReader { geometry in
+                ScrollView([.horizontal,.vertical]) {
+                    Image(uiImage:image).resizable().scaledToFit()
+                        .frame(width:geometry.size.width*scale,height:geometry.size.height*scale)
+                        .accessibilityLabel("Item photo")
+                        .gesture(MagnifyGesture()
+                            .onChanged { scale=min(5,max(1,gestureStartScale*$0.magnification)) }
+                            .onEnded { _ in gestureStartScale=scale })
+                        .onTapGesture(count:2) { setZoom(scale>1 ? 1 : 2.5) }
+                }.scrollIndicators(.hidden)
+            }.background(Color.black)
+                .navigationTitle("Item Image").navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement:.cancellationAction) {
+                        Button("Done") { dismiss() }.accessibilityIdentifier("shopping.photo.preview.done")
+                    }
+                    ToolbarItemGroup(placement:.primaryAction) {
+                        Button { setZoom(scale-1) } label: { Image(systemName:"minus.magnifyingglass") }
+                            .accessibilityLabel("Zoom out").disabled(scale<=1)
+                        Button { setZoom(scale+1) } label: { Image(systemName:"plus.magnifyingglass") }
+                            .accessibilityLabel("Zoom in").disabled(scale>=5)
+                    }
+                }
+        }.tint(.nexdoBlue)
+    }
+    private func setZoom(_ value:CGFloat) { scale=min(5,max(1,value));gestureStartScale=scale }
 }

@@ -4,6 +4,34 @@ import XCTest
     var app:XCUIApplication!
     override func setUp(){super.setUp();continueAfterFailure=false;app=XCUIApplication();app.launchArguments=["-shopping-design-preview"];app.launch();XCTAssertTrue(app.navigationBars["My Lists"].waitForExistence(timeout:15))}
     func openList(){app.buttons.matching(NSPredicate(format:"label CONTAINS %@", "Weekly Shopping List")).firstMatch.tap();XCTAssertTrue(app.navigationBars["Shopping List"].waitForExistence(timeout:5))}
+    func testItemPhotoPreviewZoomAndReturnToEditor() {
+        app.terminate(); app.launchArguments.append("-shopping-photo-preview"); app.launch()
+        XCTAssertTrue(app.navigationBars["My Lists"].waitForExistence(timeout:15)); openList()
+        XCTAssertTrue(app.buttons["shopping-ai-recommendations"].label.contains("Recommendations"))
+        XCTAssertFalse(app.buttons["shopping-ai-recommendations"].label.contains("AI Powered"))
+        app.buttons["Edit Bananas"].tap()
+        XCTAssertTrue(app.navigationBars["Edit Item"].waitForExistence(timeout:5))
+        let imageSection=app.buttons["Item Image"]
+        reveal(imageSection); imageSection.tap()
+        let preview=app.buttons["shopping.photo.preview"]
+        reveal(preview)
+        if preview.frame.minY < 110 {
+            app.coordinate(withNormalizedOffset:CGVector(dx:0.5,dy:0.35)).press(forDuration:0.1,thenDragTo:app.coordinate(withNormalizedOffset:CGVector(dx:0.5,dy:0.7)))
+        }
+        preview.tap()
+        let done=app.buttons["shopping.photo.preview.done"]
+        XCTAssertTrue(done.waitForExistence(timeout:5), app.debugDescription)
+        XCTAssertFalse(app.buttons["Zoom out"].isEnabled)
+        app.buttons["Zoom in"].tap()
+        XCTAssertTrue(app.buttons["Zoom out"].isEnabled)
+        app.buttons["Zoom out"].tap()
+        XCTAssertFalse(app.buttons["Zoom out"].isEnabled)
+        let shot=XCTAttachment(screenshot:app.screenshot());shot.name="Full-screen item photo";shot.lifetime = .keepAlways;add(shot)
+        done.tap()
+        XCTAssertTrue(app.navigationBars["Edit Item"].waitForExistence(timeout:5))
+        app.swipeDown()
+        XCTAssertEqual(app.textFields["Item name"].value as? String,"Bananas")
+    }
     func testAlternativesKeepAndReplaceOnlyOriginal() {
         openList()
         app.buttons["Show alternatives for Milk"].tap()

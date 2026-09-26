@@ -329,7 +329,7 @@ struct ShoppingDetail:View {
             }.buttonStyle(.plain).disabled(store.busy)
                 .accessibilityIdentifier("shopping-complete-trip")
             Button{recommendations=true}label:{
-                Label("AI Powered Recommendations",systemImage:"sparkles")
+                Label("Recommendations",systemImage:"sparkles")
                     .font(.subheadline.weight(.semibold)).lineLimit(2).minimumScaleFactor(0.78)
                     .foregroundStyle(Color.nexdoIndigo).frame(maxWidth:.infinity,minHeight:52)
                     .background(Color(uiColor:.secondarySystemGroupedBackground),in:RoundedRectangle(cornerRadius:17,style:.continuous))
@@ -589,6 +589,7 @@ struct GroceryArtwork:View {
     private var asset:String? {
         if !words.isDisjoint(with:["onion","onions"]){return "grocery-onion"}
         if words.contains("milk"){return "grocery-milk"}
+        if !words.isDisjoint(with:["mango","mangoes","mangos"]){return "grocery-mango"}
         if !words.isDisjoint(with:["banana","bananas"]){return "grocery-banana"}
         if !words.isDisjoint(with:["tomato","tomatoes"]){return "grocery-tomato"}
         if !words.isDisjoint(with:["egg","eggs"]){return "grocery-eggs"}
