@@ -2,7 +2,7 @@ import SwiftUI
 import CryptoKit
 
 @MainActor final class ManageFestivalModel: ObservableObject {
-    enum Tab:String,CaseIterable {case details="Details",contacts="Contacts",message="Wish Message",schedule="Schedule"}
+    enum Tab:String,CaseIterable {case details="Details",contacts="Contacts",message="Message",schedule="Schedule"}
     @Published var tab:Tab = .details
     private var pendingTab: Tab?
     @Published var title:String

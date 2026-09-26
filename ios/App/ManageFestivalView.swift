@@ -102,7 +102,7 @@ struct ManageFestivalView: View {
             if model.busy {ProgressView("Saving…")}
             // The Wish Message tab shows its errors next to Save Message.
             if model.tab != .message, let error=model.error {Text(error).foregroundStyle(.red).accessibilityIdentifier("festival-error")}
-            if let notice=model.notice {Text(notice).font(.subheadline).foregroundStyle(.secondary).accessibilityIdentifier("festival-notice")}
+            if model.tab != .schedule, let notice=model.notice {Text(notice).font(.subheadline).foregroundStyle(.secondary).accessibilityIdentifier("festival-notice")}
         }.padding(18)}.id(model.tab)}
         .navigationTitle("Manage Moment").navigationBarTitleDisplayMode(.inline).navigationBarBackButtonHidden()
         .navigationDestination(isPresented:$model.scheduleCompleted){FestivalScheduleSuccess(title:model.title,occasionType:model.occasionType,plans:model.savedPlans,wishes:model.selected.map { ScheduleWishPreview(heading:model.reviewHeading(for:$0),message:model.deliveryMessage(for:$0)) },done:onDone)}
@@ -123,7 +123,7 @@ struct ManageFestivalView: View {
         .recipientSheets(action:$recipientAction,recipients:model.recipients){recipient,previous in model.saveRecipient(recipient,replacing:previous)}
         .sheet(isPresented:$personalize){personalization}
         .sheet(isPresented:$imageSheet){imageConfiguration}
-        .sheet(isPresented:$scheduleConfirm){confirmation}
+        .sheet(isPresented:$scheduleConfirm,onDismiss:{model.error=nil}){confirmation}
         .sheet(isPresented:$dateEditor){
             NavigationStack {
                 DatePicker("Moment date",selection:$dateDraft,displayedComponents:.date)
@@ -151,7 +151,7 @@ struct ManageFestivalView: View {
                     Text(model.active ? "Active":"Inactive").font(.caption)
                 }
             }
-            Label("Moment date · \(MomentDates.sendDayLabel(model.date,zone:model.zone))",systemImage:"calendar")
+            Label("Date · \(MomentDates.sendDayLabel(model.date,zone:model.zone))",systemImage:"calendar")
                 .font(.subheadline).foregroundStyle(.secondary)
                 .accessibilityIdentifier("festival-send-date")
         }
@@ -355,7 +355,6 @@ private struct FestivalScheduleReview:View {
                         .accessibilityIdentifier("review-show-recipients")
                         .accessibilityValue(showAllRecipients ? "Expanded" : "Collapsed")
                     }
-                    info("You are confirming this schedule for all selected contacts. Recipients do not need to confirm.",symbol:"info.circle.fill",color:.blue)
                     if recipients.contains(where:{model.channel($0)=="messages"}) {
                         info("At the scheduled time, we’ll remind you to open the prepared wish and tap Send in Messages. Nexdo does not send Messages automatically.",symbol:"bell",color:.purple)
                     }
@@ -363,7 +362,7 @@ private struct FestivalScheduleReview:View {
                     if let immediateNotice { Text(immediateNotice).foregroundStyle(ScheduleDesign.secondary) }
                     if sendNowStarted {
                         Button("Continue Send Now") { sendNowConfirmation=true }.buttonStyle(ScheduleActionStyle())
-                        Button("Done",action:close).buttonStyle(ScheduleActionStyle(secondary:true))
+                        Button("Done") { model.error=nil; close() }.buttonStyle(ScheduleActionStyle(secondary:true))
                     } else {
                         ViewThatFits(in:.horizontal) {
                             HStack(spacing:12) { deliveryButtons }
@@ -373,7 +372,7 @@ private struct FestivalScheduleReview:View {
                 }.padding(20).disabled(submitting)
             }.background(ScheduleDesign.background)
             .navigationTitle("").navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement:.topBarTrailing) { Button("Cancel",action:close).disabled(submitting) } }
+            .toolbar { ToolbarItem(placement:.topBarTrailing) { Button("Cancel") { model.error=nil; close() }.disabled(submitting) } }
             .sheet(isPresented:$editingDate) {
                 editor(title:"Edit date & time",done:{date=dateDraft;editingDate=false},cancel:{editingDate=false}) {
                     DatePicker("Date and time",selection:$dateDraft,in:Date()...).datePickerStyle(.wheel).labelsHidden()

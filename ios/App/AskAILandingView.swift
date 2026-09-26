@@ -19,11 +19,7 @@ struct AskAILandingView: View {
         ("My Daily Brief", "Priorities and\nyour next move", "calendar", .blue),
         ("Top 3 Focus Tasks", "Urgency, effort\nand impact", "scope", .green),
         ("Deadlines & Risks", "Due in the\nnext 5 days", "exclamationmark.triangle", .orange),
-        ("Find Time", "Free time around\nyour plans", "clock", .purple),
-        ("Plan Tomorrow", "Check tomorrow’s\navailable time", "sunrise", .pink),
-        ("Shopping List", "Add items and\nmanage lists", "cart", .teal),
-        ("My Moments", "Birthdays, Festivals,\nand special events", "gift", .orange),
-        ("Ask Anything", "Answers, ideas\nand planning", "lightbulb", .cyan)
+        ("Find Time", "Free time around\nyour plans", "clock", .purple)
     ]
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -74,7 +70,7 @@ struct AskAILandingView: View {
                     }.disabled(!sendEnabled || busy).accessibilityLabel("Send request")
                 }.padding(7).background(.white, in: RoundedRectangle(cornerRadius: 28))
                 if prompt.count > 4000 { Text("Keep your request under 4,000 characters.").font(.caption).foregroundStyle(.red) }
-            }.padding(12).frame(minHeight:240).background(pastel(.purple), in: RoundedRectangle(cornerRadius: 20))
+            }.padding(12).frame(minHeight:300).background(pastel(.purple), in: RoundedRectangle(cornerRadius: 20))
             Label("Powered by Nexdo AI", systemImage: "sparkles").font(.caption).foregroundStyle(Color.nexdoSecondary.opacity(0.65)).frame(maxWidth: .infinity).padding(.vertical, 12)
         }
         .foregroundStyle(Color.nexdoInk)
@@ -94,14 +90,14 @@ struct AskAILandingView: View {
         return HStack(alignment: .top, spacing: 7) {
             Image(systemName: item.2).font(.system(size: 20)).foregroundStyle(item.3).frame(width: 34, height: 36).background(item.3.opacity(0.18), in: RoundedRectangle(cornerRadius: 13))
             VStack(alignment: .leading, spacing: 5) {
-                Text(item.0).font(typeSize.isAccessibilitySize ? .headline : .system(size: 12, weight: .bold))
-                Text(item.1).font(typeSize.isAccessibilitySize ? .body : .system(size: 11))
+                Text(item.0).font(typeSize.isAccessibilitySize ? .headline : .system(size: 15, weight: .bold))
+                Text(item.1).font(typeSize.isAccessibilitySize ? .body : .system(size: 13))
                     .lineLimit(typeSize.isAccessibilitySize ? nil : 2)
                     .minimumScaleFactor(0.85)
                     .foregroundStyle(Color.nexdoSecondary)
             }.frame(maxWidth: .infinity, alignment: .leading)
             Image(systemName: "chevron.right").font(.caption2).foregroundStyle(Color.nexdoSecondary).padding(.top, 24)
-        }.padding(10).frame(maxWidth: .infinity, minHeight: 84, alignment: .topLeading).background(pastel(item.3), in: RoundedRectangle(cornerRadius: 17))
+        }.padding(10).frame(maxWidth: .infinity, minHeight: 120, alignment: .topLeading).background(pastel(item.3), in: RoundedRectangle(cornerRadius: 17))
     }
     private var waveform: some View {
         HStack(spacing: 4) { ForEach(0..<7) { index in Capsule().fill(Color.nexdoIndigo.opacity(0.09)).frame(width: 4, height: CGFloat(12 + (3 - abs(3 - index)) * 9)) } }.accessibilityHidden(true)
