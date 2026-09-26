@@ -23,3 +23,14 @@ it('handles provider failure without leaking diagnostics or making changes',asyn
 it('rejects incomplete results',async()=>{
  fetchMock.mockResolvedValue(Response.json({status:'incomplete',output:[]}));expect((await POST(request())).status).toBe(502);
 });
+
+it('sends the same output limits to the provider that the backend validates',async()=>{
+ const suggestions=Array.from({length:8},(_,i)=>`Budget swap ${i+1}`);
+ fetchMock.mockResolvedValue(Response.json({status:'completed',output:[{content:[{type:'output_text',text:JSON.stringify({summary:'Budget ideas',suggestions})}]}]}));
+ const response=await POST(request({...input,prompt:'Find budget-friendly swaps for items on this list.',itemNames:Array.from({length:11},(_,i)=>`Item ${i+1}`)}));
+ expect(response.status).toBe(200);
+ expect((await response.json()).visual.sections[0].items).toEqual(suggestions);
+ const schema=JSON.parse(fetchMock.mock.calls[0][1].body).text.format.schema;
+ expect(schema.properties.suggestions).toMatchObject({minItems:1,maxItems:8,items:{minLength:1,maxLength:600}});
+ expect(schema.properties.summary).toMatchObject({minLength:1,maxLength:1500});
+});
