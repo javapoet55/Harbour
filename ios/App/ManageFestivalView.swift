@@ -231,7 +231,7 @@ private struct FestivalScheduleSuccess:View {
                         Text("For all \(plans.count) selected contact\(plans.count == 1 ? "":"s")")
                             .font(.subheadline).foregroundStyle(ScheduleDesign.secondary).accessibilityIdentifier("festival-confirmation-recipients")
                     }
-                    ForEach(wishes.indices,id:\.self) { index in ScheduleWishCard(wish:wishes[index],occasion:occasionType) }
+                    if let wish=wishes.first { ScheduleWishCard(wish:wish,occasion:occasionType) }
                     Button("Done",action:done).buttonStyle(ScheduleActionStyle()).accessibilityIdentifier("wish-primary")
                 }.padding(24)
             }
@@ -260,7 +260,7 @@ private struct ScheduleWishCard:View {
                 .font(.system(size:48)).frame(width:64,height:80).background(.purple.opacity(0.05),in:RoundedRectangle(cornerRadius:18))
                 .accessibilityHidden(true)
             VStack(alignment:.leading,spacing:8) {
-                Text(wish.heading).font(.headline).foregroundStyle(ScheduleDesign.ink)
+                Text(wish.heading).font(.headline).foregroundStyle(ScheduleDesign.ink).accessibilityIdentifier("schedule-wish-heading")
                 Text(wish.message).font(.subheadline).foregroundStyle(ScheduleDesign.secondary)
             }.frame(maxWidth:.infinity,alignment:.leading)
         }.padding(16)
@@ -290,6 +290,7 @@ private struct FestivalScheduleReview:View {
     @State private var dateDraft=Date()
     @State private var recipientDraft:ManagedFestivalRecipient?
     @State private var submitting=false
+    @State private var showAllRecipients=false
     init(model:ManageFestivalModel,close:@escaping ()->Void) {
         self.model=model;self.close=close
         _date=State(initialValue:model.sendDate)
@@ -301,14 +302,22 @@ private struct FestivalScheduleReview:View {
                 VStack(alignment:.leading,spacing:18) {
                     Text("Review schedule").font(.largeTitle.bold()).foregroundStyle(ScheduleDesign.ink)
                     Text("Let’s make sure everything looks good.").foregroundStyle(ScheduleDesign.secondary)
-                    ForEach(recipients) { recipient in
+                    if let recipient=recipients.first {
                         ScheduleWishCard(wish:ScheduleWishPreview(heading:model.reviewHeading(for:recipient),message:model.deliveryMessage(for:recipient)),occasion:model.occasionType)
                     }
                     reviewRow(symbol:"calendar",color:.purple,label:"Scheduled for",value:MomentDates.label(date,zone:model.zone),detail:model.zone,identifier:"review-edit-date") {
                         dateDraft=date;editingDate=true
                     }
-                    ForEach(recipients) { recipient in
+                    ForEach(showAllRecipients ? recipients : Array(recipients.prefix(2))) { recipient in
                         reviewRow(symbol:"person",color:.blue,label:"Recipient",value:recipient.name,detail:delivery(recipient),identifier:"review-edit-recipient-"+recipient.key) { recipientDraft=recipient }
+                    }
+                    if recipients.count > 2 {
+                        Button(showAllRecipients ? "Show less" : "Show more…") {
+                            showAllRecipients.toggle()
+                        }
+                        .frame(minHeight:44)
+                        .accessibilityIdentifier("review-show-recipients")
+                        .accessibilityValue(showAllRecipients ? "Expanded" : "Collapsed")
                     }
                     info("You are confirming this schedule for all selected contacts. Recipients do not need to confirm.",symbol:"info.circle.fill",color:.blue)
                     if recipients.contains(where:{model.channel($0)=="messages"}) {

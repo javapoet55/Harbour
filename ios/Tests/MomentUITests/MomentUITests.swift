@@ -521,7 +521,7 @@ import XCTest
         XCTAssertTrue(app.buttons["moments-manage"].firstMatch.exists)
     }
     func testFestivalApprovalAndSchedule() {
-        app.launchArguments.append("-festival-two-recipients")
+        app.launchArguments.append("-festival-five-recipients")
         openFestivalManager();app.buttons["festival-tab-Wish Message"].tap()
         let save=app.buttons.matching(identifier:"wish-primary").matching(NSPredicate(format:"label == %@", "Save Message")).firstMatch
         for _ in 0..<5 {if save.isHittable{break};app.swipeUp()};save.tap()
@@ -534,6 +534,7 @@ import XCTest
         XCTAssertTrue(app.staticTexts["You are confirming this schedule for all selected contacts. Recipients do not need to confirm."].exists)
         XCTAssertEqual(app.staticTexts.matching(identifier:"Messages · Will be sent by you").count,2)
         XCTAssertFalse(app.staticTexts["We’ll remind you to confirm in Messages"].exists)
+        XCTAssertEqual(app.staticTexts.matching(identifier:"schedule-wish-heading").count,1)
         let editDate=app.buttons["review-edit-date"]
         for _ in 0..<5 { if editDate.isHittable {break};app.swipeUp() }
         editDate.tap()
@@ -544,12 +545,19 @@ import XCTest
         editRecipient.tap()
         XCTAssertTrue(app.textFields["review-recipient-name"].waitForExistence(timeout:5))
         app.buttons["Close editor"].tap()
+        let showMore=app.buttons["review-show-recipients"]
+        for _ in 0..<5 {if showMore.isHittable{break};app.swipeUp()}
+        showMore.tap()
+        XCTAssertEqual(app.buttons.matching(NSPredicate(format:"identifier BEGINSWITH %@","review-edit-recipient-")).count,5)
+        for _ in 0..<5 {if showMore.isHittable{break};app.swipeUp()}
+        showMore.tap()
+        XCTAssertEqual(app.buttons.matching(NSPredicate(format:"identifier BEGINSWITH %@","review-edit-recipient-")).count,2)
         let confirm=app.buttons.matching(identifier:"wish-primary").matching(NSPredicate(format:"label == %@", "Confirm Schedule")).firstMatch
         for _ in 0..<6 { if confirm.isHittable {break};app.swipeUp() }
         confirm.tap()
         XCTAssertTrue(app.staticTexts["Schedule confirmed!"].waitForExistence(timeout:8))
         XCTAssertEqual(app.staticTexts.matching(identifier:"We’ll remind you, the sender, to tap Send in Messages").count,1)
-        XCTAssertTrue(app.staticTexts["For all 2 selected contacts"].exists)
+        XCTAssertTrue(app.staticTexts["For all 5 selected contacts"].exists)
         XCTAssertFalse(app.buttons["View Scheduled Items"].exists)
         let done=app.buttons.matching(identifier:"wish-primary").matching(NSPredicate(format:"label == %@","Done")).firstMatch
         for _ in 0..<5 {if done.isHittable{break};app.swipeUp()}
