@@ -87,9 +87,15 @@ function compatibleName(query:FoodQuery,name:string,brand=''):boolean {
   const q=normalizeQuery(query.name),p=normalizeQuery(name),b=normalizeQuery(brand);
   return (q===p || q===`${b} ${p}` || `${normalizeQuery(query.brand||'')} ${q}`.trim()===`${b} ${p}`) && (!query.brand || b===normalizeQuery(query.brand));
 }
+// Variety names use representative raw tomato data, never a branded or cooked match.
+const freshTomatoNames = new Set(['tomato', 'tomatoes', 'roma tomato', 'roma tomatoes', 'vine ripened tomatoes', 'plum tomatoes', 'cherry tomatoes']);
+function genericFoodName(name: string): string {
+  const normalized = normalizeQuery(name);
+  return freshTomatoNames.has(normalized) ? 'tomatoes red ripe raw' : normalized;
+}
 export function matchUSDA(query:FoodQuery,foods:unknown[],branded:boolean):Raw|undefined {
   const aliases:Record<string,string>={'milk':'whole milk','low fat milk':'1% milk','bread':'white bread','multigrain bread':'multi grain bread'};
-  const q=aliases[normalizeQuery(query.name)]||normalizeQuery(query.name);
+  const q=aliases[normalizeQuery(query.name)]||genericFoodName(query.name);
   const tokens=q.split(' ').filter(w=>!['fluid','and','with','the'].includes(w));
   const forbidden=['pita','bagel','bagels','stuffing','crumbs','chocolate','strawberry','powder','dry','yogurt','cheese','infant','condensed','evaporated','buttermilk','goat','sheep','human','solids'];
   return foods.map(obj).sort((a,b)=>text(a.description).length-text(b.description).length).find(food=>{
@@ -106,7 +112,7 @@ export class USDAFoodDataClient {
   async search(query:FoodQuery,branded=false):Promise<FoodFacts|null>{
     const url=new URL('https://api.nal.usda.gov/fdc/v1/foods/search');
     const genericQueries:Record<string,string>={'bread':'Bread white commercially prepared','whole wheat bread':'Bread whole wheat commercially prepared','multigrain bread':'Bread mixed grain','milk':'Milk whole fluid','whole milk':'Milk whole fluid','2% milk':'Milk reduced fat fluid 2% milkfat','1% milk':'Milk lowfat fluid 1% milkfat','low fat milk':'Milk lowfat fluid 1% milkfat'};
-    const search=branded?[query.brand,query.name].filter(Boolean).join(' '):genericQueries[normalizeQuery(query.name)]||query.name;
+    const search=branded?[query.brand,query.name].filter(Boolean).join(' '):genericQueries[normalizeQuery(query.name)]||genericFoodName(query.name);
     const raw=await providerRequest('usda',url,{method:'POST',headers:this.headers(),body:JSON.stringify({query:query.barcode||search,dataType:branded?['Branded']:['Foundation','SR Legacy'],pageSize:100})},this.deps);
     const match=matchUSDA(query,array(raw?.foods),branded);if(!match)return null;
     return this.details(Number(match.fdcId),query.barcode?'exact_barcode':branded?'branded_match':'representative_generic');

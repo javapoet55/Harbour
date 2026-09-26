@@ -36,6 +36,11 @@ export class FoodCache {
           return stale?cached:null;
         }
         try {
+          // A previous owner may have completed between our initial read and claim.
+          const latest=await this.storage.read(key);
+          if(latest?.schemaVersion===1 && latest.payload!==null && +latest.expiresAt>this.now()) {
+            try { return JSON.parse(latest.payload) as T|null; } catch { /* Refresh malformed cache data. */ }
+          }
           const value=await load();const life=value===null?foodConfig().negativeTTL:ttl;
           await this.storage.write(key,JSON.stringify(value),new Date(this.now()+life*1000),new Date(this.now()+(life+(value===null?0:foodConfig().staleTTL))*1000));
           return value;

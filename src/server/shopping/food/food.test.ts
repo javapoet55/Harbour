@@ -11,7 +11,34 @@ function memory(){const rows=new Map<string,NonNullable<Awaited<ReturnType<Cache
 const generic=()=>normalizeUSDA(usda(),'representative_generic')!;
 afterEach(()=>{vi.unstubAllEnvs();vi.unstubAllGlobals();vi.restoreAllMocks();});
 
+it('reuses a cache result completed between reading and acquiring its lease',async()=>{
+  const {storage}=memory();
+  const claim=storage.claim;
+  storage.claim=async(key,now)=>{
+    const acquired=await claim(key,now);
+    await storage.write(key,JSON.stringify({value:42}),new Date(Date.now()+60000),new Date(Date.now()+120000));
+    return acquired;
+  };
+  const load=vi.fn(async()=>({value:99}));
+  expect((await new FoodCache(storage).get('race',60,load)).value).toEqual({value:42});
+  expect(load).not.toHaveBeenCalled();
+});
+
 describe('food normalization and matching',()=>{
+  it('matches fresh tomato varieties to representative raw tomatoes without matching cooked or branded products',async()=>{
+    const raw={fdcId:170457,description:'Tomatoes, red, ripe, raw, year round average',dataType:'SR Legacy'};
+    const foods=[{...raw,fdcId:1,description:'Tomatoes, red, ripe, cooked'}, {...raw,fdcId:2,dataType:'Branded'}, raw];
+    for(const name of ['Roma tomatoes','Vine-ripened tomatoes','Plum tomatoes','Cherry tomatoes']) {
+      expect(matchUSDA({name},foods,false)?.fdcId).toBe(170457);
+      expect(matchUSDA({name},foods.slice(0,2),false)).toBeUndefined();
+      expect(matchUSDA({name},[raw],true)).toBeUndefined();
+    }
+    expect(matchUSDA({name:'Tomato sauce'},[raw],false)).toBeUndefined();
+    vi.stubEnv('USDA_FDC_API_KEY','test');
+    const fetch=vi.fn(async(url:Parameters<typeof globalThis.fetch>[0])=>Response.json(String(url).includes('/foods/search')?{foods}:{...raw,foodNutrients:[{nutrient:{id:1008,unitName:'kcal'},amount:18}]}));
+    const facts=await new USDAFoodDataClient({fetch,permit:async()=>true,sleep:async()=>{}}).search({name:'Roma tomatoes'});
+    expect(facts).toMatchObject({source:'USDA',matchQuality:'representative_generic',nutrition:{calories:18}});
+  });
   it('maps USDA full-detail nutrient IDs and units without label-serving confusion',()=>{
     const result=normalizeUSDA({...usda(),labelNutrients:{fat:{value:8}}},'representative_generic')!;
     expect(result.nutrition).toMatchObject({servingAmount:100,servingUnit:'g',calories:61,totalFat:3.25,sodium:43,calcium:113});

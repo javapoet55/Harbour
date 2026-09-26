@@ -6,6 +6,11 @@ export type ShoppingAlternative = { name: string; category: typeof categories[nu
 export type ShoppingAlternatives = { alternatives: ShoppingAlternative[]; tip: string; usedAI: boolean; originalFacts?: FoodFacts };
 
 const curated: Array<[RegExp, Omit<ShoppingAlternatives, 'usedAI'>]> = [
+  [/^(?:roma |vine[- ]ripened |plum |cherry )?tomatoes?$/i, { alternatives: [
+    { name: 'Vine-ripened tomatoes', category: 'Produce', quantity: '1', size: 'medium', reason: 'Suggested alternative', detail: 'Compare representative raw tomato nutrition' },
+    { name: 'Plum tomatoes', category: 'Produce', quantity: '1', size: 'medium', reason: 'Suggested alternative', detail: 'Compare representative raw tomato nutrition' },
+    { name: 'Cherry tomatoes', category: 'Produce', quantity: '1', size: 'package', reason: 'Suggested alternative', detail: 'Compare representative raw tomato nutrition' },
+  ], tip: 'Nutrition represents generic raw tomatoes, not a measured difference between varieties.' }],
   [/bread/i, { alternatives: [
     { name: 'Whole wheat bread', category: 'Bakery', quantity: '1', size: 'loaf', reason: 'Suggested alternative', detail: 'Compare product nutrition and labels' },
     { name: 'Multigrain bread', category: 'Bakery', quantity: '1', size: 'loaf', reason: 'Suggested alternative', detail: 'Compare product nutrition and labels' },

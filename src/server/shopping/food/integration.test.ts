@@ -22,7 +22,7 @@ it('retrieves facts through the existing shopping API action and persists a targ
   }});
   const facts=await provider.search({name:'whole milk'});expect(facts?.nutrition?.totalFat).toBe(3.25);
   // Prepopulate the same durable contract used by the real provider; API must consume it without an upstream request.
-  await new FoodCache().get(foodKey('search',{name:'whole milk'}),60,async()=>facts);
+  await new FoodCache().get(foodKey('search-v3',{name:'whole milk'}),60,async()=>facts);
   const result=await shoppingAction(owner,{operation:'alternatives',input:{name:'Whole Milk',category:'Dairy & Eggs'}});
   expect(result).toMatchObject({originalFacts:{source:'USDA',matchQuality:'representative_generic'}});
   const item={id:randomUUID(),name:'Whole Milk',category:'Dairy & Eggs',quantity:'2',size:'gallon',notes:'Keep cold',checked:true};
