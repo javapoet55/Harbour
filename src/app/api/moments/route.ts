@@ -6,7 +6,7 @@ import { requireUser } from '@/server/auth';
 import { jsonError } from '@/lib/http';
 import { prisma } from '@/server/db';
 import { MomentError } from '@/server/moments/domain';
-import { listMoments, saveMoment, generateDraft, approveDraft, schedule, changePlan, runJobs } from '@/server/moments/service';
+import { listMoments, saveMoment, generateDraft, approveDraft, schedule, changePlan, runJobs, sendGreetingNow } from '@/server/moments/service';
 import { connectURL, revokeEmail } from '@/server/moments/email';
 import { z } from 'zod';
 function failure(e:unknown) { if(e instanceof SyntaxError) return NextResponse.json({error:"Invalid JSON request."},{status:400}); return e instanceof MomentError ? NextResponse.json({error:e.message},{status:e.status}) : jsonError(e); }
@@ -25,6 +25,11 @@ async function healthHandlerPOST(req:Request) {
    case 'generate': return NextResponse.json(await generateDraft(user.id,p.input));
    case 'approve': return NextResponse.json({draft:await approveDraft(user.id,p.input)});
    case 'schedule': { const plan=await schedule(user.id,p.input); if(plan.automaticDelivery&&plan.scheduledAtUTC<=new Date()) await runJobs(undefined,plan.id);return NextResponse.json({plan:await prisma.deliveryPlan.findUnique({where:{id:plan.id}})}); }
+   case 'sendGreetingNow': {
+    const plans=await sendGreetingNow(user.id,p.input);
+    for(const plan of plans)if(plan.automaticDelivery&&plan.status==='SCHEDULED')await runJobs(undefined,plan.id);
+    return NextResponse.json({plans:await prisma.deliveryPlan.findMany({where:{id:{in:plans.map(plan=>plan.id)}}})});
+   }
    case 'plan': return NextResponse.json(await changePlan(user.id,p.input));
    case 'connectEmail': return NextResponse.json({url:await connectURL(user.id)});
    case 'disconnectEmail': {

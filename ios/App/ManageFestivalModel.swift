@@ -324,6 +324,25 @@ import CryptoKit
         guard !busy else{return false};busy=true;defer{busy=false}
         do {let _:MomentOK=try await store.request("festivalDelete",["ids":originals.map(\.id)]);imageStorage.delete(savedImageID);discardImageEdits();removeImage();await store.refresh();analytics.record(.deleted);return true}catch{self.error=error.localizedDescription;return false}
     }
+    private var immediateOperationIDs:[String:String]=[:]
+    func sendImmediately() async -> [WishDeliveryPlan]? {
+        guard !busy else{return nil}
+        busy=true;error=nil;defer{busy=false}
+        var plans:[WishDeliveryPlan]=[]
+        do {
+            for recipient in selected {
+                guard let momentID=recipient.momentID else{throw FestivalError.message("Save recipients first.")}
+                let operationID=immediateOperationIDs[recipient.key] ?? UUID().uuidString
+                immediateOperationIDs[recipient.key]=operationID
+                struct Input:Encodable {let momentID,body,operationID:String;let approved=true}
+                struct Response:Decodable,Sendable {let plans:[WishDeliveryPlan]}
+                let response:Response=try await store.request("sendGreetingNow",Input(momentID:momentID,body:deliveryMessage(for:recipient),operationID:operationID))
+                plans.append(contentsOf:response.plans)
+            }
+            await store.refresh()
+            return plans
+        } catch {self.error=error.localizedDescription;await store.refresh();return nil}
+    }
     func schedule() async {
         guard !busy else{return};error=nil
         if let issue=FestivalValidation.schedule(settings:settings,date:sendDate,active:active,emailReady:emailReady,recipients:recipients){error=issue;return}

@@ -1,4 +1,5 @@
 import SwiftUI
+import MessageUI
 
 struct MomentsManagementEntry: View {
     let onDone: () -> Void
@@ -291,6 +292,11 @@ private struct FestivalScheduleReview:View {
     @State private var recipientDraft:ManagedFestivalRecipient?
     @State private var submitting=false
     @State private var showAllRecipients=false
+    @State private var sendNowConfirmation=false
+    @State private var sendNowStarted=false
+    @State private var immediateNotice:String?
+    @State private var messagePlan:WishDeliveryPlan?
+    @State private var messageQueue:[WishDeliveryPlan]=[]
     init(model:ManageFestivalModel,close:@escaping ()->Void) {
         self.model=model;self.close=close
         _date=State(initialValue:model.sendDate)
@@ -324,8 +330,16 @@ private struct FestivalScheduleReview:View {
                         info("At the scheduled time, we’ll remind you to open the prepared wish and tap Send in Messages. Nexdo does not send Messages automatically.",symbol:"bell",color:.purple)
                     }
                     if let error=model.error { Text(error).foregroundStyle(.red).accessibilityIdentifier("review-schedule-error") }
-                    Button(submitting ? "Confirming…":"Confirm Schedule") { Task { await confirm() } }
-                        .buttonStyle(ScheduleActionStyle(gradient:true)).accessibilityIdentifier("wish-primary").disabled(submitting)
+                    if let immediateNotice { Text(immediateNotice).foregroundStyle(ScheduleDesign.secondary) }
+                    if sendNowStarted {
+                        Button("Continue Send Now") { sendNowConfirmation=true }.buttonStyle(ScheduleActionStyle())
+                        Button("Done",action:close).buttonStyle(ScheduleActionStyle(secondary:true))
+                    } else {
+                        ViewThatFits(in:.horizontal) {
+                            HStack(spacing:12) { deliveryButtons }
+                            VStack(spacing:12) { deliveryButtons }
+                        }
+                    }
                 }.padding(20).disabled(submitting)
             }.background(ScheduleDesign.background)
             .navigationTitle("").navigationBarTitleDisplayMode(.inline)
@@ -342,7 +356,72 @@ private struct FestivalScheduleReview:View {
                     recipientDraft=nil
                 } cancel:{recipientDraft=nil}
             }
+            .sheet(isPresented:$sendNowConfirmation) {
+                NavigationStack {
+                    ScrollView {
+                        VStack(alignment:.leading,spacing:18) {
+                            Text("Email is sent now where an address is saved. Messages opens for you to tap Send. Missing channels are skipped.").foregroundStyle(ScheduleDesign.secondary)
+                            ForEach(recipients) { recipient in
+                                VStack(alignment:.leading,spacing:8) {
+                                    Text(recipient.name).font(.headline)
+                                    if !recipient.email.isEmpty {Label(recipient.email,systemImage:"envelope")}
+                                    if !recipient.phone.isEmpty {Label(recipient.phone,systemImage:"phone")}
+                                    Text(model.deliveryMessage(for:recipient)).font(.subheadline).foregroundStyle(ScheduleDesign.secondary)
+                                }.frame(maxWidth:.infinity,alignment:.leading).padding().background(.blue.opacity(0.04),in:RoundedRectangle(cornerRadius:16))
+                            }
+                        }.padding(20)
+                    }
+                    .safeAreaInset(edge:.bottom) {
+                        Button("Send email & open Messages") {sendNowConfirmation=false;Task{await sendNow()}}
+                            .buttonStyle(ScheduleActionStyle()).padding().background(.regularMaterial)
+                    }
+                    .navigationTitle("Send now").navigationBarTitleDisplayMode(.inline)
+                    .toolbar {Button("Cancel"){sendNowConfirmation=false}.accessibilityIdentifier("send-now-cancel")}
+                }
+            }
+            .sheet(item:$messagePlan,onDismiss:{
+                if !messageQueue.isEmpty { messagePlan=messageQueue.removeFirst() }
+            }) { plan in
+                ActionMessageComposer(recipient:plan.recipient,body:plan.body) { result in
+                    Task {
+                        do {
+                            if result == .submitted { try await model.store.planAction(plan,action:"sent") }
+                            else if result == .failed { model.error="Messages could not send this greeting. Use Continue Send Now to try again." }
+                            await model.store.refresh()
+                        } catch {model.error=error.localizedDescription}
+                        messagePlan=nil
+                    }
+                }
+            }
         }.tint(.blue).interactiveDismissDisabled(submitting)
+    }
+    @ViewBuilder private var deliveryButtons:some View {
+        Button("Send Now") { sendNowConfirmation=true }.buttonStyle(ScheduleActionStyle(secondary:true)).accessibilityIdentifier("review-send-now")
+        Button(submitting ? "Confirming…":"Confirm Schedule") { Task { await confirm() } }
+            .buttonStyle(ScheduleActionStyle(gradient:true)).accessibilityIdentifier("wish-primary")
+    }
+    @MainActor private func sendNow() async {
+        if recipients.contains(where:{!$0.phone.isEmpty}) && !MFMessageComposeViewController.canSendText() {
+            model.error="Messages is not available on this device. No greeting has been sent.";return
+        }
+        submitting=true;defer{submitting=false}
+        model.error=nil
+        if !sendNowStarted {
+            for recipient in recipients {
+                if let old=model.recipients.first(where:{$0.key==recipient.key}),old != recipient {model.saveRecipient(recipient,replacing:old)}
+            }
+            if model.settings.approvedAt == nil {await model.approve()}
+            else if model.dirty {await model.save()}
+            if model.needsScheduleConfirmation {close();return}
+            guard model.error == nil else{return}
+        }
+        sendNowStarted=true
+        guard let plans=await model.sendImmediately() else{return}
+        let emails=plans.filter{$0.channel == "email"}
+        let sent=emails.filter{$0.status == "SENT"}.count
+        immediateNotice="\(sent) email\(sent == 1 ? "":"s") sent. " + (emails.count > sent ? "Some emails are pending or failed; check Scheduled wishes for their status. " : "") + "Messages still requires you to tap Send."
+        messageQueue=plans.filter{$0.channel == "messages" && $0.status == "AWAITING_CONFIRMATION"}
+        if !messageQueue.isEmpty {messagePlan=messageQueue.removeFirst()}
     }
     private func delivery(_ recipient:ManagedFestivalRecipient)->String {
         model.channel(recipient)=="email" ? (model.settings.automatic[recipient.key]==true ? "Email · Automatic send":"Email · Will be sent by you") : model.channel(recipient)=="messages" ? "Messages · Will be sent by you":"Copy / Share · Will be sent by you"
@@ -355,7 +434,7 @@ private struct FestivalScheduleReview:View {
                 Text(value).font(.subheadline.bold()).foregroundStyle(ScheduleDesign.ink)
                 Text(detail).font(.caption).foregroundStyle(ScheduleDesign.secondary)
             }.frame(maxWidth:.infinity,alignment:.leading)
-            Button("Edit",action:edit).font(.subheadline.bold()).padding(12).background(.blue.opacity(0.07),in:RoundedRectangle(cornerRadius:12)).accessibilityIdentifier(identifier)
+            Button("Edit",action:edit).font(.subheadline.bold()).padding(12).background(.blue.opacity(0.07),in:RoundedRectangle(cornerRadius:12)).accessibilityIdentifier(identifier).disabled(sendNowStarted)
         }.padding(14).background(.white,in:RoundedRectangle(cornerRadius:18))
     }
     private func info(_ text:String,symbol:String,color:Color)->some View {
@@ -400,8 +479,8 @@ private struct ScheduleRecipientEditor:View {
                         Image(systemName:"person").font(.largeTitle).foregroundStyle(.blue)
                         TextField("Recipient name",text:$recipient.name).textFieldStyle(.roundedBorder).accessibilityIdentifier("review-recipient-name")
                     }
-                    if delivery.hasPrefix("Messages") { TextField("Phone number",text:$recipient.phone).keyboardType(.phonePad).textFieldStyle(.roundedBorder) }
-                    if delivery.hasPrefix("Email") { TextField("Email address",text:$recipient.email).keyboardType(.emailAddress).textInputAutocapitalization(.never).textFieldStyle(.roundedBorder) }
+                    TextField("Phone number",text:$recipient.phone).keyboardType(.phonePad).textFieldStyle(.roundedBorder)
+                    TextField("Email address",text:$recipient.email).keyboardType(.emailAddress).textInputAutocapitalization(.never).textFieldStyle(.roundedBorder)
                     Label(delivery,systemImage:delivery.hasPrefix("Messages") ? "message.fill":delivery.hasPrefix("Email") ? "envelope.fill":"square.and.arrow.up").foregroundStyle(ScheduleDesign.secondary).frame(maxWidth:.infinity,alignment:.leading)
                     Button("Done"){done(recipient)}.buttonStyle(ScheduleActionStyle()).disabled(recipient.name.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty)
                     Button("Cancel",action:cancel).buttonStyle(ScheduleActionStyle(secondary:true))

@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { measuredJob, recordEvent } from '@/server/health/telemetry';
 import { observedFetch } from '@/server/health/telemetry';
 import { refreshFestivalCatalog, readFestivalSettings } from './festival';
@@ -91,7 +92,7 @@ export async function approveDraft(userId:string,input:unknown) {
  if(await prisma.deliveryPlan.count({where:{draftID:p.id,status:{in:['SCHEDULED','SENDING','AWAITING_CONFIRMATION']}}})) throw new MomentError('Cancel the active delivery before editing the message.',409);
  return prisma.wishDraft.update({where:{id:p.id},data:{body:p.body,status:'READY'}});
 }
-export async function schedule(userId:string,input:unknown) {
+export async function schedule(userId:string,input:unknown,companionKey?:string) {
  const p=z.object({draftID:z.string(),channel:z.enum(['email','messages','copy','share']),recipient:z.string().max(254),scheduledAtUTC:z.iso.datetime({offset:true}),timeZoneID:zone,automaticDelivery:z.boolean(),reminderOffset:z.union([z.literal(0),z.literal(60)]),repeatYearly:z.boolean(),idempotencyKey:z.uuid(),sendNow:z.boolean().default(false),approved:z.literal(true)}).parse(input);
  const duplicate=await prisma.deliveryPlan.findUnique({where:{idempotencyKey:p.idempotencyKey},include:{draft:{include:{moment:true}}}});
  if(duplicate) { if(duplicate.draft.moment.userId!==userId) throw new MomentError('Invalid request.',409); return duplicate; }
@@ -116,7 +117,7 @@ export async function schedule(userId:string,input:unknown) {
    await tx.importantMoment.update({where:{id:draft.momentID},data:{updatedAt:new Date()}});
    const current=await tx.importantMoment.findUniqueOrThrow({where:{id:draft.momentID}});
    if(!current.enabled||readFestivalSettings(current.festivalSettings).archived) throw new MomentError('This moment is inactive.');
-   if(await tx.deliveryPlan.count({where:{draft:{momentID:draft.momentID},status:{in:['SCHEDULED','AWAITING_CONFIRMATION','SENDING','UNCERTAIN']}}})) throw new MomentError('This recipient already has an active wish. Cancel it before scheduling again.',409);
+   if(await tx.deliveryPlan.count({where:{draft:{momentID:draft.momentID},...(companionKey?{idempotencyKey:{not:companionKey}}:{}),status:{in:['SCHEDULED','AWAITING_CONFIRMATION','SENDING','UNCERTAIN']}}})) throw new MomentError('This recipient already has an active wish. Cancel it before scheduling again.',409);
   }
   // Optimistic claim of the approved draft prevents double-tap with different request IDs.
   const claimed=await tx.wishDraft.updateMany({where:{id:draft.id,status:'READY'},data:{status:'PLANNED'}});
@@ -126,6 +127,35 @@ export async function schedule(userId:string,input:unknown) {
   return tx.deliveryPlan.create({data:{draftID:draft.id,cardId,channel:p.channel,recipient:p.recipient,subject:draft.moment.title,body:draft.body,scheduledAtUTC:p.sendNow?new Date():when,nextAttemptAt:p.sendNow?new Date():when,timeZoneID:p.timeZoneID,automaticDelivery:p.channel==='email'&&(p.sendNow||p.automaticDelivery),reminderOffset:p.reminderOffset,annualMonthDay:formatInTimeZone(p.sendNow?new Date():when,p.timeZoneID,'MM-dd'),repeatYearly:p.repeatYearly,idempotencyKey:p.idempotencyKey,approvedAt:new Date(),status:p.channel==='email'&&(p.sendNow||p.automaticDelivery)?'SCHEDULED':'AWAITING_CONFIRMATION'}});
  });
 }
+// One explicit Send Now operation may deliver through both channels. Stable per-channel
+// keys make retries safe, while unrelated active wishes still block a duplicate delivery.
+export async function sendGreetingNow(userId:string,input:unknown) {
+ const p=z.object({momentID:z.string(),body:z.string().trim().min(1).max(500),operationID:z.uuid(),approved:z.literal(true)}).parse(input);
+ const moment=await prisma.importantMoment.findFirst({where:{id:p.momentID,userId,enabled:true}});
+ if(!moment||readFestivalSettings(moment.festivalSettings).archived)throw new MomentError('Moment not found.',404);
+ if(!moment.phone&&!moment.email)throw new MomentError('Add a phone number or email address first.');
+ if(moment.email){
+  if(!z.email().safeParse(moment.email).success)throw new MomentError('Enter a valid email.');
+  const account=await prisma.momentEmailAccount.findUnique({where:{userId}});
+  if(account?.status!=='connected')throw new MomentError('Connect your email account in Important Moments Settings before sending.',409);
+ }
+ if(moment.phone&&!/^\+?[\d ()-]{7,30}$/.test(moment.phone))throw new MomentError('Enter a valid phone number.');
+ const key=(channel:string)=>{const h=createHash('sha256').update([userId,moment.id,p.operationID,channel].join('|')).digest('hex');return `${h.slice(0,8)}-${h.slice(8,12)}-4${h.slice(13,16)}-8${h.slice(17,20)}-${h.slice(20,32)}`;};
+ const plans:Awaited<ReturnType<typeof schedule>>[]=[];
+ for(const channel of ['email','messages']) {
+  const recipient=channel==='email'?moment.email:moment.phone;if(!recipient)continue;
+  const existing=await prisma.deliveryPlan.findUnique({where:{idempotencyKey:key(channel)}});
+  if(existing){
+   if(existing.body!==p.body||existing.recipient!==recipient)throw new MomentError("This send request already has different content or recipient details. Check delivery history before sending again.",409);
+   plans.push(existing);continue;
+  }
+  const {draft}=await generateDraft(userId,{momentID:moment.id,tone:'Warm',aiConsent:false});
+  await approveDraft(userId,{id:draft.id,body:p.body,approved:true});
+  plans.push(await schedule(userId,{draftID:draft.id,channel,recipient,scheduledAtUTC:new Date().toISOString(),timeZoneID:moment.timeZoneID,automaticDelivery:channel==='email',reminderOffset:0,repeatYearly:false,idempotencyKey:key(channel),sendNow:true,approved:true},key(channel==='email'?'messages':'email')));
+ }
+ return plans;
+}
+
 export async function changePlan(userId:string,input:unknown) {
  const p=z.object({id:z.string(),action:z.enum(['cancel','sent','failed','copied','shared','reschedule','retry','sendNow','opened']),scheduledAtUTC:z.iso.datetime({offset:true}).optional(),timeZoneID:zone.optional()}).parse(input);
  await expireUnconfirmed(new Date(),userId);

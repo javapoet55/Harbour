@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { prisma } from '@/server/db';
-import { saveMoment, generateDraft, approveDraft, schedule, changePlan, runJobs, listMoments } from './service';
+import { saveMoment, generateDraft, approveDraft, schedule, changePlan, runJobs, listMoments, sendGreetingNow } from './service';
 import { fallback, occurrence, nextAnnual, mayTransition } from './domain';
 import { randomUUID } from 'node:crypto';
 let userId='';
@@ -168,4 +168,29 @@ it('rejects actions from stale screens after the 24-hour deadline without requir
  await expect(changePlan(userId,{id:p.id,action:'opened'})).rejects.toThrow();
  await expect(changePlan(userId,{id:p.id,action:'sent'})).rejects.toThrow();
  expect((await prisma.deliveryPlan.findUniqueOrThrow({where:{id:p.id}})).status).toBe('EXPIRED');
+});
+
+it('Send Now prepares separate email and Messages deliveries, preserving emojis and deduplicating retries',async()=>{
+ const d=await ready();const body='Happy Birthday! 🎂🎉';const request={momentID:d.momentID,body,operationID:randomUUID(),approved:true};
+ const plans=await sendGreetingNow(userId,request);
+ expect(plans.map(p=>p.channel)).toEqual(['email','messages']);
+ expect(plans.every(p=>p.body===body)).toBe(true);
+ expect(plans[0].automaticDelivery).toBe(true);expect(plans[1].automaticDelivery).toBe(false);
+ expect(plans[1].status).toBe('AWAITING_CONFIRMATION');
+ let sends=0;const provider={send:async()=>{sends++;return {kind:'sent' as const,id:'test-send-now'};}};
+ await runJobs(provider,plans[0].id);
+ const retry=await sendGreetingNow(userId,request);
+ await runJobs(provider,retry[0].id);
+ expect(retry.map(p=>p.id)).toEqual(plans.map(p=>p.id));expect(sends).toBe(1);
+});
+it('Send Now cannot bypass ownership or an unrelated active schedule',async()=>{
+ const p=await plan();const draft=await prisma.wishDraft.findUniqueOrThrow({where:{id:p.draftID}});
+ const request={momentID:draft.momentID,body:'Hello 🎉',operationID:randomUUID(),approved:true};
+ await expect(sendGreetingNow('other-user',request)).rejects.toThrow('Moment not found');
+ await expect(sendGreetingNow(userId,request)).rejects.toThrow('active wish');
+});
+it('Send Now supports phone-only recipients without inventing an email address',async()=>{
+ const d=await ready();await prisma.importantMoment.update({where:{id:d.momentID},data:{email:''}});
+ const plans=await sendGreetingNow(userId,{momentID:d.momentID,body:'Hello 🎉',operationID:randomUUID(),approved:true});
+ expect(plans).toHaveLength(1);expect(plans[0].channel).toBe('messages');
 });

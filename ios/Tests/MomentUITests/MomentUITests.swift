@@ -571,6 +571,11 @@ import XCTest
         XCTAssertEqual(app.buttons.matching(NSPredicate(format:"identifier BEGINSWITH %@","review-edit-recipient-")).count,2)
         let confirm=app.buttons.matching(identifier:"wish-primary").matching(NSPredicate(format:"label == %@", "Confirm Schedule")).firstMatch
         for _ in 0..<6 { if confirm.isHittable {break};app.swipeUp() }
+        let sendNow=app.buttons["review-send-now"]
+        XCTAssertTrue(sendNow.isHittable)
+        sendNow.tap()
+        XCTAssertTrue(app.buttons["Send email & open Messages"].waitForExistence(timeout:5))
+        app.buttons["send-now-cancel"].tap()
         confirm.tap()
         XCTAssertTrue(app.staticTexts["Schedule confirmed!"].waitForExistence(timeout:8))
         XCTAssertEqual(app.staticTexts.matching(identifier:"We’ll remind you, the sender, to tap Send in Messages").count,1)
