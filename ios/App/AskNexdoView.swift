@@ -191,9 +191,14 @@ struct AskNexdoView: View {
         )
     }
 
+    private var showsDailyBrief: Bool {
+        shoppingContext == nil && model.turn != nil && model.turn?.confirmation == nil
+            && model.lastAssistantPrompt == NexdoAIIntent.dailyBriefing.query
+    }
+
     var body: some View {
         VStack(spacing: 0) {
-            if textPage || model.turn != nil { HStack {
+            if !showsDailyBrief && (textPage || model.turn != nil) { HStack {
                 Text(shoppingContext == nil ? (textPage ? "Free form Text" : "Ask Nexdo") : "Shopping Recommendations").font(.title2.bold()).foregroundStyle(Color.nexdoInk)
                     .accessibilityAddTraits(.isHeader)
                 Spacer()
@@ -247,6 +252,15 @@ struct AskNexdoView: View {
                                 close: { requestTask?.cancel(); stopSpeech(); dismiss() }, typing: $composerFocused)
 
                         }
+                    } else if showsDailyBrief, let turn = model.turn {
+                        DailyBriefView(name: ProfileName.firstName(from: model.profile?.name ?? "") ?? "there",
+                            sections: turn.displaySections, prompt: $prompt, typing: $composerFocused, busy: blocked,
+                            close: { requestTask?.cancel(); stopSpeech(); model.turn = nil; dismiss() },
+                            ask: { request($0) }, voice: { stopSpeech(); showingVoice = true },
+                            read: { index, text in
+                                if readingSection == index { stopSpeech() }
+                                else { speakAnswer(text: text, section: index) }
+                            }, readingSection: readingSection)
                     } else {
                         if let query = model.lastAssistantPrompt {
                             Label {
@@ -274,7 +288,12 @@ struct AskNexdoView: View {
                 }.padding(.horizontal, 20).padding(.bottom, 20)
             }.scrollDismissesKeyboard(.interactively)
         }
-        .background(AskStyle.background)
+        .background {
+            if showsDailyBrief {
+                LinearGradient(colors: [Color.purple.opacity(0.07), Color.blue.opacity(0.04), Color.purple.opacity(0.05)], startPoint: .topLeading, endPoint: .bottomTrailing)
+                    .background(.white).ignoresSafeArea()
+            } else { AskStyle.background }
+        }
         .overlay {
             if submitting {
                 ProgressView("Working on it…")
@@ -297,7 +316,7 @@ struct AskNexdoView: View {
                     .padding(.horizontal, 16)
                     .background(.regularMaterial)
                 }
-                if model.turn != nil && shoppingContext == nil { composer }
+                if model.turn != nil && shoppingContext == nil && !showsDailyBrief { composer }
             }
         }
         .interactiveDismissDisabled(composerFocused || submitting)

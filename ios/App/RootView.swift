@@ -27,6 +27,11 @@ struct RootView: View {
                 NavigationStack { CalendarEventEditor() }
             } else if ProcessInfo.processInfo.arguments.contains("-calendar-voice-preview") {
                 AddTaskByVoiceView(calendarOnly: true)
+            } else if ProcessInfo.processInfo.arguments.contains("-daily-brief-design-preview") {
+                AskNexdoView().onAppear {
+                    model.lastAssistantPrompt = NexdoAIIntent.dailyBriefing.query
+                    model.turn = try? JSONDecoder().decode(AssistantTurn.self, from: Data(#"{"spoken":"Your daily brief","visual":{"summary":"Your daily brief","sections":[{"title":"Top priorities","items":["Contact gutter technician is overdue. Tackle it first.","Review the plumbing quote.","Prepare for your afternoon meeting."]},{"title":"Deadlines","items":["Send the report by 4 PM."]},{"title":"Conflicts and risks","items":["Two afternoon appointments overlap."]},{"title":"Next move","items":["Call the gutter technician now."]}]}}"#.utf8))
+                }
             } else if ProcessInfo.processInfo.arguments.contains("-ask-design-preview") {
                 AskNexdoView()
             } else if ProcessInfo.processInfo.arguments.contains("-ask-text-design-preview") {
