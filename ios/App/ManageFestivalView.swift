@@ -72,7 +72,7 @@ struct ManageFestivalView: View {
             // The Wish Message tab shows its errors next to Save Message.
             if model.tab != .message, let error=model.error {Text(error).foregroundStyle(.red).accessibilityIdentifier("festival-error")}
             if let notice=model.notice {Text(notice).font(.subheadline).foregroundStyle(.secondary).accessibilityIdentifier("festival-notice")}
-        }.padding(18)}}
+        }.padding(18)}.id(model.tab)}
         .navigationTitle("Manage Moment").navigationBarTitleDisplayMode(.inline).navigationBarBackButtonHidden()
         .navigationDestination(isPresented:$model.scheduleCompleted){FestivalScheduleSuccess(title:model.title,occasionType:model.occasionType,plans:model.savedPlans,manage:{model.tab = .schedule;model.scheduleCompleted=false},done:{if let onDone{onDone()}else{dismiss()}})}
         .navigationDestination(isPresented:$showingSettings){MomentSettingsView().environmentObject(model.store)}
@@ -159,7 +159,7 @@ struct ManageFestivalView: View {
     }}
     private var saveButtons:some View {Group{MomentPrimary(title:"Save Changes"){save()};Button(role:.destructive){deleteConfirm=true}label:{Label("Delete Moment",systemImage:"trash").foregroundStyle(.red).frame(maxWidth:.infinity,minHeight:48).background(.red.opacity(0.08),in:RoundedRectangle(cornerRadius:18))}.buttonStyle(.plain)}}
     /// Asks to cancel schedules only for delivery changes or an unapproved message; an approved message-only save keeps them.
-    private func save(approve:Bool=false){approveAfterCancel=approve;if model.pendingChange.needsCancelPrompt(approve:approve,hasSchedules:model.hasSchedules){model.needsScheduleConfirmation=true}else{Task{if approve{await model.approve()}else{await model.save()}}}}
+    private func save(approve:Bool=false){focusedField=nil;model.prepareNextTabAfterSave();approveAfterCancel=approve;if model.pendingChange.needsCancelPrompt(approve:approve,hasSchedules:model.hasSchedules){model.needsScheduleConfirmation=true}else{Task{if approve{await model.approve()}else{await model.save()}}}}
     private var generatingWish:Bool {model.wishGeneration.isGenerating}
     private var message:some View {Group{
         Text("Wish Message").font(.largeTitle.bold());HStack{Label("For \(model.selected.count) selected contact\(model.selected.count == 1 ? "":"s")",systemImage:"person.2.fill").font(.subheadline);Spacer();Button("Personalize"){personalize=true}.frame(minHeight:44)}

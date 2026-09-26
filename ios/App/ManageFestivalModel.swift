@@ -197,10 +197,14 @@ import CryptoKit
         case .switchNow: tab = target; pendingTab = nil
         }
     }
+    func prepareNextTabAfterSave() {
+        guard wishGeneration.allowsSave(busy:busy) else {return}
+        pendingTab = switch tab {case .details: .contacts;case .contacts: .message;case .message: .schedule;case .schedule: nil}
+    }
     func cancelTabChange() { pendingTab = nil }
     func save(cancelSchedules:Bool=false) async {
         guard wishGeneration.allowsSave(busy:busy) else{return}
-        guard dirty else {error=nil;notice="No changes to save. Your existing schedule is unchanged.";return}
+        guard dirty else {error=nil;if let target=pendingTab {tab=target;pendingTab=nil};notice="No changes to save. Your existing schedule is unchanged.";return}
         busy=true;error=nil;notice=nil;defer{busy=false}
         let keptSchedules=keepsSchedules(cancelSchedules:cancelSchedules)
         do {try await persist(cancelSchedules:cancelSchedules);if let target=pendingTab {tab=target;pendingTab=nil};notice=cancelSchedules ? "Changes saved. Review and schedule your updated wish again.":keptSchedules ? "Message saved. Scheduled wishes will send the updated message.":"Moment changes saved.";analytics.record(.saved)} catch {
@@ -208,7 +212,7 @@ import CryptoKit
                 needsScheduleConfirmation=true
             } else if case APIError.server(let status,let message)=error, let sending=WishMessage.saveError(status:status,message:message) {
                 self.error=sending;pendingTab=nil
-            } else {self.error=error.localizedDescription;if let target=pendingTab {tab=target};pendingTab=nil}
+            } else {self.error=error.localizedDescription;pendingTab=nil}
         }
     }
     private func persist(cancelSchedules:Bool) async throws {
@@ -249,7 +253,7 @@ import CryptoKit
     private func keepsSchedules(cancelSchedules:Bool) -> Bool {!cancelSchedules && hasSchedules && pendingChange == .messageOnly && settings.approvedAt != nil}
     func approve(cancelSchedules:Bool=false) async {
         guard wishGeneration.allowsSave(busy:busy) else{return}
-        if let issue=WishMessage.approvalError(settings) {error=issue;return}
+        if let issue=WishMessage.approvalError(settings) {error=issue;pendingTab=nil;return}
         settings.approvedAt=ISO8601DateFormatter().string(from:Date())
         let kept=keepsSchedules(cancelSchedules:cancelSchedules)
         await save(cancelSchedules:cancelSchedules)

@@ -352,6 +352,25 @@ import XCTest
         app.buttons["Cancel"].tap()
         XCTAssertTrue(app.navigationBars["Manage Moment"].exists)
     }
+    func testSavingMomentAdvancesThroughTabs() {
+        openFestivalManager()
+        for target in ["Contacts","Wish Message"] {
+            let save=app.buttons.matching(identifier:"wish-primary").matching(NSPredicate(format:"label == %@","Save Changes")).firstMatch
+            for _ in 0..<8 {if save.isHittable{break};app.swipeUp()}
+            save.tap()
+            let tab=app.buttons["festival-tab-"+target]
+            XCTAssertTrue(tab.waitForExistence(timeout:8))
+            XCTAssertTrue(tab.isSelected)
+            XCTAssertTrue(tab.isHittable)
+        }
+        let saveMessage=app.buttons.matching(identifier:"wish-primary").matching(NSPredicate(format:"label == %@","Save Message")).firstMatch
+        for _ in 0..<8 {if saveMessage.isHittable{break};app.swipeUp()}
+        saveMessage.tap()
+        let schedule=app.buttons["festival-tab-Schedule"]
+        XCTAssertTrue(schedule.waitForExistence(timeout:8))
+        XCTAssertTrue(schedule.isSelected)
+        XCTAssertTrue(schedule.isHittable)
+    }
     func testFestivalDetailsDateUpdatesSendDate() {
         openFestivalManager()
         let picker=app.buttons["festival-details-date"]
