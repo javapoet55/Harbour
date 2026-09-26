@@ -12,6 +12,7 @@ struct PomodoroView: View {
     @State private var sound = true
     @State private var stopping = false
     @State private var history = false
+    @State private var showingDashboard: Bool
     @State private var visible = false
     private let onTasks: () -> Void
     private let clock = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
@@ -21,15 +22,23 @@ struct PomodoroView: View {
     init(api: APIClient, owner: String, preview: Bool = false, onTasks: @escaping () -> Void = {}) {
         _store = StateObject(wrappedValue: PomodoroStore(api: api, owner: owner, preview: preview))
         self.onTasks = onTasks
+        _showingDashboard = State(initialValue: !preview || ProcessInfo.processInfo.arguments.contains("-pomodoro-dashboard-preview"))
     }
     var body: some View {
+        Group {
+        if showingDashboard {
+            PomodoroDashboard(store: store, onClose: { dismiss() }, onStart: {
+                if store.current?.active != true { store.newSession() }
+                showingDashboard = false
+            })
+        } else {
         GeometryReader { geometry in
         ZStack {
             LinearGradient(colors: [Color.purple.opacity(0.05), .white, Color.blue.opacity(0.06)], startPoint: .topLeading, endPoint: .bottomTrailing).ignoresSafeArea()
             ScrollView {
                 VStack(spacing: 14) {
                     HStack {
-                        Button { dismiss() } label: { Image(systemName: "chevron.left").frame(width: 40, height: 40).background(.purple.opacity(0.07), in: Circle()) }.accessibilityLabel("Close Pomodoro")
+                        Button { showingDashboard = true } label: { Image(systemName: "chevron.left").frame(width: 40, height: 40).background(.purple.opacity(0.07), in: Circle()) }.accessibilityLabel("Pomodoro dashboard")
                         Spacer()
                         if store.current == nil { Text("Pomodoro").font(.title2.bold()) }
                         Spacer()
@@ -45,9 +54,13 @@ struct PomodoroView: View {
             }.id(store.current?.phase)
         }
         }
+        }
+        }
         .foregroundStyle(ink).tint(.indigo)
         .task { visible = true; await store.restore(); updateAwake() }
         .onReceive(clock) { _ in store.tick() }
+        .onChange(of: showingDashboard) { _, _ in updateAwake() }
+        .onChange(of: history) { _, _ in updateAwake() }
         .onChange(of: store.current) { _, _ in updateAwake() }
         .onChange(of: scenePhase) { _, value in
             updateAwake()
@@ -60,7 +73,7 @@ struct PomodoroView: View {
         .sheet(isPresented: $history) { historyView }
     }
     private func updateAwake() {
-        UIApplication.shared.isIdleTimerDisabled = visible && scenePhase == .active && store.current?.phase == .focus && store.current?.paused == false && store.current?.keepAwake == true
+        UIApplication.shared.isIdleTimerDisabled = visible && !showingDashboard && !history && scenePhase == .active && store.current?.phase == .focus && store.current?.paused == false && store.current?.keepAwake == true
     }
     private func tint(_ category: PomodoroCategory) -> Color {
         switch category { case .reading: .mint; case .focus: .purple; case .coding: .orange; case .diary: .pink; case .math: .yellow; case .stretching: .cyan }
@@ -159,19 +172,13 @@ struct PomodoroView: View {
     private func primary(_ title: String, action: @escaping () -> Void) -> some View { Button(action: action) { Text(title).font(.headline).foregroundStyle(.white).frame(maxWidth: .infinity).padding(17).background(gradient, in: RoundedRectangle(cornerRadius: 16)) }.buttonStyle(.plain) }
     private func control(_ title: String, icon: String, color: Color, action: @escaping () -> Void) -> some View { Button(action: action) { VStack(spacing: 10) { Image(systemName: icon).font(.title2).frame(width: 66, height: 66).background(color.opacity(0.10), in: Circle()).foregroundStyle(color); Text(title).font(.subheadline) } }.accessibilityLabel(title) }
     private var historyView: some View {
-        NavigationStack {
-            List {
-                if store.sessions.isEmpty { Text("Complete your first focus session to start your history.").foregroundStyle(.secondary) }
-                ForEach(store.sessions) { session in
-                    VStack(alignment: .leading, spacing: 6) {
-                        Label(session.name.isEmpty ? session.category.title : session.name, systemImage: session.category.icon).font(.headline)
-                        Text(Date(timeIntervalSince1970: session.startedAt), style: .date).font(.subheadline)
-                        Text("\(session.phase == .completed ? "Completed" : session.phase == .stopped ? "Stopped" : session.paused ? "Paused" : "In progress") · \(duration(session.focusSeconds)) focused").font(.caption).foregroundStyle(.secondary)
-                    }.padding(.vertical, 4).accessibilityElement(children: .combine).accessibilityIdentifier("pomodoro-history-entry")
-                }
-            }.navigationTitle("Session history").toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { history = false } } }
-        }
+        PomodoroDashboard(store: store, initialTab: .sessions, onClose: { history = false }, onStart: {
+            history = false
+            if store.current?.active != true { store.newSession() }
+            showingDashboard = false
+        })
     }
+
 }
 
 private struct PomodoroConfetti: View {

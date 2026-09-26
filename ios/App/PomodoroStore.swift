@@ -12,6 +12,7 @@ import AudioToolbox
     @Published private(set) var currentID: String?
     @Published var syncMessage: String?
     @Published private(set) var syncing = false
+    @Published private(set) var loadingHistory = false
     private var scheduling = false
     private var reschedule = false
     private var synced: [String: Int] = [:]
@@ -21,7 +22,7 @@ import AudioToolbox
     private var key: String { "nexdo.pomodoro.v1." + owner }
     private struct Cache: Codable { var sessions: [PomodoroSession]; var currentID: String?; var synced: [String: Int] }
     private struct SaveRequest: Encodable { let ownerID: String; let session: PomodoroSession }
-    private struct ListResponse: Decodable, Sendable { let sessions: [PomodoroSession] }
+    private struct ListResponse: Decodable, Sendable { let sessions: [PomodoroSession]; let nextCursor: String? }
     private struct SaveResponse: Decodable, Sendable { let session: PomodoroSession }
     var current: PomodoroSession? { sessions.first { $0.id == currentID } }
     init(api: APIClient, owner: String, preview: Bool = false) {
@@ -31,6 +32,16 @@ import AudioToolbox
             sessions = cache.sessions; currentID = cache.currentID; synced = cache.synced
         }
         #if DEBUG
+        if preview && ProcessInfo.processInfo.arguments.contains("-pomodoro-dashboard-preview") && !ProcessInfo.processInfo.arguments.contains("-pomodoro-empty-preview") {
+            for (index, category) in PomodoroCategory.allCases.enumerated() {
+                let start = Date().addingTimeInterval(-Double(3600 + index * 1800))
+                var session = PomodoroSession(category: category, name: index == 0 ? "Read a chapter" : "", durationMinutes: 25, autoBreak: true, playSound: false, now: start)
+                if index == 5 { session.stop(at: start.addingTimeInterval(600)) } else { session.advance(at: start.addingTimeInterval(1800)) }
+                sessions.append(session)
+            }
+            var older = PomodoroSession(category: .reading, name: "Yesterday’s reading", durationMinutes: 25, autoBreak: false, playSound: false, now: Date().addingTimeInterval(-86400))
+            older.advance(at: Date()); sessions.append(older)
+        }
         if preview && ProcessInfo.processInfo.arguments.contains("-pomodoro-break-preview") {
             var session = PomodoroSession(category: .focus, name: "Work on project proposal", durationMinutes: 25, autoBreak: true, playSound: false, now: Date().addingTimeInterval(-1505))
             session.advance(at: Date()); sessions = [session]; currentID = session.id
@@ -62,16 +73,23 @@ import AudioToolbox
     func newSession() { guard current?.active != true else { return }; currentID = nil; persist() }
     func restore() async {
         tick()
-        guard !preview else { return }
+        guard !preview, !loadingHistory else { return }
+        loadingHistory = true; defer { loadingHistory = false }
         await scheduleAlerts()
         do {
-            let response: ListResponse = try await api.request("/api/pomodoro?owner=" + owner.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed)!)
+            var cursor: String?
+            repeat {
+            let path = "/api/pomodoro?owner=" + owner.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed)! + (cursor.map { "&cursor=" + $0 } ?? "")
+            let response: ListResponse = try await api.request(path)
             for remote in response.sessions {
                 if let index = sessions.firstIndex(where: { $0.id == remote.id }) {
                     if remote.revision >= sessions[index].revision { sessions[index] = remote }
                 } else { sessions.append(remote) }
                 synced[remote.id] = remote.revision
             }
+            cursor = response.nextCursor
+            persist()
+            } while cursor != nil
             sessions.sort { $0.startedAt > $1.startedAt }
             if currentID == nil { currentID = sessions.first(where: { $0.active })?.id }
             persist(); tick(); await scheduleAlerts(); await sync()

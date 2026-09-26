@@ -1,13 +1,15 @@
 import { NextResponse } from 'next/server';
-import { ZodError } from 'zod';
+import { z, ZodError } from 'zod';
 import { requireUser } from '@/server/auth';
 import { jsonError } from '@/lib/http';
-import { listPomodoro, savePomodoro } from '@/server/pomodoro/sessions';
+import { listPomodoroPage, savePomodoro } from '@/server/pomodoro/sessions';
 
 export async function GET(request: Request) {
   try { const user = await requireUser();
     if (new URL(request.url).searchParams.get('owner') !== user.id) return NextResponse.json({ error: 'Account changed.' }, { status: 403 });
-    return NextResponse.json({ sessions: await listPomodoro(user.id) }); }
+    const cursor = new URL(request.url).searchParams.get('cursor');
+    if (cursor && !z.string().uuid().safeParse(cursor).success) return NextResponse.json({ error: 'Invalid history cursor.' }, { status: 400 });
+    return NextResponse.json(await listPomodoroPage(user.id, cursor ?? undefined)); }
   catch (error) { return jsonError(error); }
 }
 export async function PUT(request: Request) {

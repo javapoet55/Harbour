@@ -24,13 +24,43 @@ import XCTest
         app.buttons["Stop session"].tap()
         XCTAssertTrue(app.staticTexts["Session stopped"].waitForExistence(timeout: 5))
         app.buttons["Session history"].tap()
-        XCTAssertTrue(app.navigationBars["Session history"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["pomodoro-tab-sessions"].waitForExistence(timeout: 5))
         let entry = app.descendants(matching: .any).matching(identifier: "pomodoro-history-entry").firstMatch
         XCTAssertTrue(entry.waitForExistence(timeout: 5))
         XCTAssertTrue(entry.label.contains("Coding"))
-        app.buttons["Done"].tap()
+        app.buttons["Back to overview"].tap()
+        app.buttons["Close dashboard"].tap()
         app.buttons["Start Another Session"].tap()
         XCTAssertTrue(app.buttons["Start Focus Session"].waitForExistence(timeout: 5))
+    }
+
+    func testPomodoroDashboardInsightsAndHistory() {
+        app.terminate(); app.launchArguments = ["-pomodoro-design-preview", "-pomodoro-dashboard-preview"]; app.launch()
+        XCTAssertTrue(app.buttons["pomodoro-tab-overview"].waitForExistence(timeout: 10))
+        app.buttons["pomodoro-period-all"].tap()
+        XCTAssertTrue(app.staticTexts["2h 40m"].exists)
+        let overview = XCTAttachment(screenshot: app.screenshot()); overview.name = "Pomodoro dashboard"; overview.lifetime = .keepAlways; add(overview)
+        app.buttons["pomodoro-tab-sessions"].tap()
+        let entry = app.buttons.matching(identifier: "pomodoro-history-entry").firstMatch
+        XCTAssertTrue(entry.waitForExistence(timeout: 5)); entry.tap()
+        XCTAssertTrue(app.navigationBars["Session details"].waitForExistence(timeout: 5))
+        app.buttons["Done"].tap()
+        let history = XCTAttachment(screenshot: app.screenshot()); history.name = "Pomodoro sessions"; history.lifetime = .keepAlways; add(history)
+        app.buttons["pomodoro-tab-insights"].tap()
+        XCTAssertTrue(app.staticTexts["Time by Category"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Focus Trend"].exists)
+        let insights = XCTAttachment(screenshot: app.screenshot()); insights.name = "Pomodoro insights"; insights.lifetime = .keepAlways; add(insights)
+        app.buttons["Back to overview"].tap()
+        app.buttons["pomodoro-dashboard-start"].tap()
+        XCTAssertTrue(app.buttons["Start Focus Session"].waitForExistence(timeout: 5))
+    }
+    func testPomodoroDashboardEmptyState() {
+        app.terminate(); app.launchArguments = ["-pomodoro-design-preview", "-pomodoro-dashboard-preview", "-pomodoro-empty-preview"]; app.launch()
+        XCTAssertTrue(app.staticTexts["No sessions in this period yet."].waitForExistence(timeout: 10))
+        app.buttons["pomodoro-tab-insights"].tap()
+        XCTAssertTrue(app.staticTexts["No focus time in this period yet."].waitForExistence(timeout: 5))
+        app.buttons["pomodoro-tab-sessions"].tap()
+        XCTAssertTrue(app.staticTexts["No sessions yet"].waitForExistence(timeout: 5))
     }
 
     func testPomodoroBreakAndCompletion() {

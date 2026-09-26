@@ -1,7 +1,7 @@
 import { afterAll, describe, expect, it } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import { prisma } from '@/server/db';
-import { listPomodoro, pomodoroSchema, savePomodoro } from './sessions';
+import { listPomodoro, listPomodoroPage, pomodoroSchema, savePomodoro } from './sessions';
 const users: string[] = [];
 async function owner() {
   const user = await prisma.user.create({ data: { name: 'Focus tester', email: `${randomUUID()}@pomodoro.test`, passwordHash: 'unused' } });
@@ -28,6 +28,17 @@ describe('durable Pomodoro sessions', () => {
     await savePomodoro(b, { ...state, name: 'Other owner' });
     expect((await listPomodoro(a))[0].name).toBe('Proposal');
     expect((await listPomodoro(b))[0].name).toBe('Other owner');
+  });
+  it('pages all history with stable ordering and never crosses accounts', async () => {
+    const a = await owner(); const b = await owner();
+    const rows = Array.from({ length: 105 }, () => session());
+    await prisma.pomodoroSession.createMany({ data: rows.map(state => ({ id: state.id, userId: a, revision: 1, status: state.phase, stateJson: JSON.stringify(state), startedAt: new Date(state.startedAt * 1000) })) });
+    const first = await listPomodoroPage(a);
+    expect(first.sessions).toHaveLength(100); expect(first.nextCursor).not.toBeNull();
+    const second = await listPomodoroPage(a, first.nextCursor!);
+    expect(second.sessions).toHaveLength(5); expect(second.nextCursor).toBeNull();
+    expect(new Set([...first.sessions, ...second.sessions].map(s => s.id)).size).toBe(105);
+    expect((await listPomodoroPage(b, first.nextCursor!)).sessions).toEqual([]);
   });
   it('rejects invalid clocks, excessive durations and impossible totals', () => {
     expect(pomodoroSchema.safeParse({ ...session(), paused: true }).success).toBe(false);

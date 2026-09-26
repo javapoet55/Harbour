@@ -36,7 +36,14 @@ export async function savePomodoro(userId: string, input: unknown) {
   const saved = await prisma.pomodoroSession.findUniqueOrThrow({ where: { userId_id: key } });
   return JSON.parse(saved.stateJson);
 }
+export async function listPomodoroPage(userId: string, cursor?: string) {
+  const rows = await prisma.pomodoroSession.findMany({
+    where: { userId }, orderBy: [{ startedAt: 'desc' }, { id: 'desc' }], take: 101,
+    ...(cursor ? { cursor: { userId_id: { userId, id: cursor } }, skip: 1 } : {}),
+  });
+  const page = rows.slice(0, 100);
+  return { sessions: page.map(row => JSON.parse(row.stateJson)), nextCursor: rows.length > 100 ? page[page.length - 1].id : null };
+}
 export async function listPomodoro(userId: string) {
-  const rows = await prisma.pomodoroSession.findMany({ where: { userId }, orderBy: { startedAt: 'desc' }, take: 100 });
-  return rows.map(row => JSON.parse(row.stateJson));
+  return (await listPomodoroPage(userId)).sessions;
 }
