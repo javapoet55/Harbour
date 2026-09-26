@@ -29,13 +29,19 @@ struct DailyBriefView: View {
                         .background(Color.blue.opacity(0.09), in: Circle())
                 }.accessibilityLabel("Close daily brief")
             }
-            HStack(alignment: .center, spacing: 0) {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Hi \(name) 👋").font(.title.bold()).fixedSize(horizontal: false, vertical: true)
-                    Text("Here’s what you need to know today.").font(.subheadline).foregroundStyle(secondary)
-                }.frame(maxWidth: .infinity, alignment: .leading)
-                if !typeSize.isAccessibilitySize {
-                    BriefArtwork(part: .robot).frame(width: 145, height: 110).accessibilityHidden(true)
+            if typeSize.isAccessibilitySize {
+                greeting
+            } else {
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 8) {
+                        greeting.frame(minWidth: 165)
+                        BriefArtwork(part: .robot).frame(width: 210, height: 110).accessibilityHidden(true)
+                    }
+                    VStack(alignment: .leading, spacing: 8) {
+                        greeting
+                        BriefArtwork(part: .robot).frame(width: 270, height: 125)
+                            .frame(maxWidth: .infinity, alignment: .trailing).accessibilityHidden(true)
+                    }
                 }
             }
             HStack(spacing: 14) {
@@ -89,6 +95,13 @@ struct DailyBriefView: View {
                         read: { read(route.id, sections[route.id].items.joined(separator: "\n\n")) })
                 }
             }
+    }
+
+    private var greeting: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Hi \(name) 👋").font(.title.bold()).fixedSize(horizontal: false, vertical: true)
+            Text("Here’s what you need to know today.").font(.subheadline).foregroundStyle(secondary)
+        }.frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func suggestion(_ title: String, query: String) -> some View {
