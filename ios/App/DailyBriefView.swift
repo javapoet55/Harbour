@@ -2,6 +2,7 @@ import SwiftUI
 
 /// A live briefing presented with the supplied Nexdo design pack.
 struct DailyBriefView: View {
+    let intent: NexdoAIIntent
     let name: String
     let sections: [AssistantTurn.Section]
     @Binding var prompt: String
@@ -27,7 +28,7 @@ struct DailyBriefView: View {
                 Button(action: close) {
                     Image(systemName: "xmark").font(.title2).frame(width: 44, height: 44)
                         .background(Color.blue.opacity(0.09), in: Circle())
-                }.accessibilityLabel("Close daily brief")
+                }.accessibilityLabel("Close " + screenTitle)
             }
             if typeSize.isAccessibilitySize {
                 greeting
@@ -47,7 +48,7 @@ struct DailyBriefView: View {
             HStack(spacing: 14) {
                 Image(systemName: "sparkles").font(.title).foregroundStyle(.purple)
                     .frame(width: 48, height: 48).background(.purple.opacity(0.09), in: RoundedRectangle(cornerRadius: 15))
-                Text("Here’s your quick briefing for today, \(name). Focus on what matters most.")
+                Text(introduction)
                     .font(.subheadline).fixedSize(horizontal: false, vertical: true)
             }.padding(14).frame(maxWidth: .infinity, alignment: .leading)
                 .background(.purple.opacity(0.07), in: RoundedRectangle(cornerRadius: 22))
@@ -97,10 +98,35 @@ struct DailyBriefView: View {
             }
     }
 
+    private var screenTitle: String {
+        switch intent {
+        case .topFocusTasks: "Top 3 Tasks"
+        case .deadlinesAndRisks: "Due & Risks"
+        case .findScheduleTime: "Find Time"
+        default: "daily brief"
+        }
+    }
+    private var subtitle: String {
+        switch intent {
+        case .topFocusTasks: "Here’s where to focus your effort."
+        case .deadlinesAndRisks: "Stay ahead of deadlines and risks."
+        case .findScheduleTime: "Find time around your plans."
+        default: "Here’s what you need to know today."
+        }
+    }
+    private var introduction: String {
+        switch intent {
+        case .topFocusTasks: "Your focus recommendations, \(name). Prioritize what matters most."
+        case .deadlinesAndRisks: "Your deadlines and risks, \(name). See what needs attention."
+        case .findScheduleTime: "Your schedule insights, \(name). Make room for your next move."
+        default: "Here’s your quick briefing for today, \(name). Focus on what matters most."
+        }
+    }
+
     private var greeting: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Hi \(name) 👋").font(.title.bold()).fixedSize(horizontal: false, vertical: true)
-            Text("Here’s what you need to know today.").font(.subheadline).foregroundStyle(secondary)
+            Text(subtitle).font(.subheadline).foregroundStyle(secondary)
         }.frame(maxWidth: .infinity, alignment: .leading)
     }
 
@@ -112,10 +138,13 @@ struct DailyBriefView: View {
 
     private func style(_ title: String) -> (String, BriefArtwork.Part, Color) {
         let title = title.lowercased()
-        if title.contains("priorit") { return ("Top Priorities", .priority, .pink) }
+        if title.contains("priorit") || title.contains("focus") { return ("Top Priorities", .priority, .pink) }
         if title.contains("deadline") { return ("Upcoming Deadlines", .calendar, .blue) }
         if title.contains("conflict") || title.contains("risk") { return ("Conflicts & Risks", .warning, .orange) }
         if title.contains("next") { return ("Next Move", .lightbulb, .green) }
+        if title.contains("time") || title.contains("schedule") || title.contains("availability") || title.contains("slot") {
+            return (title.capitalized, .calendar, .blue)
+        }
         return (title.capitalized, .lightbulb, .green)
     }
 

@@ -31,7 +31,7 @@ struct BriefSectionDetailView: View {
             HStack(spacing: 10) {
                 Button { dismiss() } label: {
                     Image(systemName: "chevron.left").font(.title2).frame(width: 44, height: 44).background(.indigo.opacity(0.07), in: Circle())
-                }.accessibilityLabel("Back to daily brief")
+                }.accessibilityLabel("Back to briefing")
                 VStack(spacing: 4) {
                     Text(title).font(.title2.bold()).multilineTextAlignment(.center)
                     Text("\(items.count) \(items.count == 1 ? "item" : "items") to \(isPriority ? "focus on" : "review")")

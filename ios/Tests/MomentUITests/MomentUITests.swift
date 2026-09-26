@@ -12,18 +12,18 @@ import XCTest
         let priorities = app.buttons["brief-section-0"]
         XCTAssertTrue(priorities.waitForExistence(timeout: 10))
         priorities.tap()
-        XCTAssertTrue(app.buttons["Back to daily brief"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["Back to briefing"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["3 items to focus on"].exists)
         XCTAssertTrue(app.buttons["Complete Contact gutter technician"].exists)
         XCTAssertTrue(app.staticTexts["Discuss gutter repair and get an estimate."].exists)
         XCTAssertTrue(app.buttons["Add Note"].exists)
-        app.buttons["Back to daily brief"].tap()
+        app.buttons["Back to briefing"].tap()
         XCTAssertTrue(priorities.waitForExistence(timeout: 5))
         app.buttons["brief-section-1"].tap()
         XCTAssertTrue(app.staticTexts["1 item to review"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["Send the report by 4 PM."].exists)
         XCTAssertFalse(app.buttons["Complete Contact gutter technician"].exists)
-        app.buttons["Back to daily brief"].tap()
+        app.buttons["Back to briefing"].tap()
         XCTAssertTrue(priorities.waitForExistence(timeout: 5))
     }
 
@@ -37,6 +37,30 @@ import XCTest
         XCTAssertTrue(app.buttons["ask-voice"].exists)
         XCTAssertTrue(app.buttons["Close Ask Nexdo"].exists)
         XCTAssertFalse(app.buttons["Close daily brief"].exists)
+    }
+
+    func testRemainingAskCardsUseBriefingFlow() {
+        let cases = [
+            ("topFocusTasks", "Top 3 Tasks", "Here’s where to focus your effort.", "Top Priorities"),
+            ("deadlinesAndRisks", "Due & Risks", "Stay ahead of deadlines and risks.", "Upcoming Deadlines"),
+            ("findScheduleTime", "Find Time", "Find time around your plans.", "Available Time")
+        ]
+        for (intent, title, subtitle, section) in cases {
+            app.terminate(); app.launchArguments = ["-brief-intent-preview", intent]; app.launch()
+            let close = app.buttons["Close " + title]
+            XCTAssertTrue(close.waitForExistence(timeout: 10))
+            XCTAssertTrue(app.staticTexts[subtitle].exists)
+            let first = app.buttons["brief-section-0"]
+            for _ in 0..<3 { if first.isHittable { break }; app.swipeUp() }
+            first.tap()
+            XCTAssertTrue(app.buttons["Back to briefing"].waitForExistence(timeout: 5))
+            XCTAssertTrue(app.staticTexts[section].exists)
+            app.buttons["Back to briefing"].tap()
+            for _ in 0..<3 { if close.isHittable { break }; app.swipeDown() }
+            close.tap()
+            XCTAssertTrue(app.buttons["ask-card-0"].waitForExistence(timeout: 5))
+            XCTAssertTrue(app.buttons["ask-card-3"].exists)
+        }
     }
 
     func testAskLandingShowsFourLargerCards() {

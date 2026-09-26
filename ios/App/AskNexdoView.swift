@@ -191,14 +191,16 @@ struct AskNexdoView: View {
         )
     }
 
-    private var showsDailyBrief: Bool {
-        shoppingContext == nil && model.turn != nil && model.turn?.confirmation == nil
-            && model.lastAssistantPrompt == NexdoAIIntent.dailyBriefing.query
+    private var briefingIntent: NexdoAIIntent? {
+        guard shoppingContext == nil, model.turn != nil, model.turn?.confirmation == nil else { return nil }
+        return [NexdoAIIntent.dailyBriefing, .topFocusTasks, .deadlinesAndRisks, .findScheduleTime]
+            .first { $0.query == model.lastAssistantPrompt }
     }
+    private var showsBriefing: Bool { briefingIntent != nil }
 
     var body: some View {
         VStack(spacing: 0) {
-            if !showsDailyBrief && (textPage || model.turn != nil) { HStack {
+            if !showsBriefing && (textPage || model.turn != nil) { HStack {
                 Text(shoppingContext == nil ? (textPage ? "Free form Text" : "Ask Nexdo") : "Shopping Recommendations").font(.title2.bold()).foregroundStyle(Color.nexdoInk)
                     .accessibilityAddTraits(.isHeader)
                 Spacer()
@@ -252,8 +254,8 @@ struct AskNexdoView: View {
                                 close: { requestTask?.cancel(); stopSpeech(); dismiss() }, typing: $composerFocused)
 
                         }
-                    } else if showsDailyBrief, let turn = model.turn {
-                        DailyBriefView(name: ProfileName.firstName(from: model.profile?.name ?? "") ?? "there",
+                    } else if showsBriefing, let turn = model.turn {
+                        DailyBriefView(intent: briefingIntent ?? .dailyBriefing, name: ProfileName.firstName(from: model.profile?.name ?? "") ?? "there",
                             sections: turn.displaySections, prompt: $prompt, typing: $composerFocused, busy: blocked,
                             close: {
                                 requestTask?.cancel()
@@ -298,7 +300,7 @@ struct AskNexdoView: View {
             }.scrollDismissesKeyboard(.interactively)
         }
         .background {
-            if showsDailyBrief {
+            if showsBriefing {
                 LinearGradient(colors: [Color.purple.opacity(0.07), Color.blue.opacity(0.04), Color.purple.opacity(0.05)], startPoint: .topLeading, endPoint: .bottomTrailing)
                     .background(.white).ignoresSafeArea()
             } else { AskStyle.background }
@@ -325,7 +327,7 @@ struct AskNexdoView: View {
                     .padding(.horizontal, 16)
                     .background(.regularMaterial)
                 }
-                if model.turn != nil && shoppingContext == nil && !showsDailyBrief { composer }
+                if model.turn != nil && shoppingContext == nil && !showsBriefing { composer }
             }
         }
         .interactiveDismissDisabled(composerFocused || submitting)

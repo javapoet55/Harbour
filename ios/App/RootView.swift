@@ -27,11 +27,26 @@ struct RootView: View {
                 NavigationStack { CalendarEventEditor() }
             } else if ProcessInfo.processInfo.arguments.contains("-calendar-voice-preview") {
                 AddTaskByVoiceView(calendarOnly: true)
-            } else if ProcessInfo.processInfo.arguments.contains("-daily-brief-design-preview") {
+            } else if ProcessInfo.processInfo.arguments.contains("-daily-brief-design-preview") || ProcessInfo.processInfo.arguments.contains("-brief-intent-preview") {
                 AskNexdoView().onAppear {
                     model.tasks = [NexdoTask(id: "brief-preview", title: "Contact gutter technician", status: "PLANNED", priority: "HIGH", durationMin: 30, notes: "Discuss gutter repair and get an estimate.", startAt: nil, dueAt: "2026-09-25T18:00:00Z")]
                     model.lastAssistantPrompt = NexdoAIIntent.dailyBriefing.query
                     model.turn = try? JSONDecoder().decode(AssistantTurn.self, from: Data(#"{"spoken":"Your daily brief","visual":{"summary":"Your daily brief","sections":[{"title":"Top priorities","items":["Contact gutter technician is overdue. Tackle it first.","Review the plumbing quote.","Prepare for your afternoon meeting."]},{"title":"Deadlines","items":["Send the report by 4 PM."]},{"title":"Conflicts and risks","items":["Two afternoon appointments overlap."]},{"title":"Next move","items":["Call the gutter technician now."]}]}}"#.utf8))
+                    if ProcessInfo.processInfo.arguments.contains("-brief-intent-preview"),
+                       let intent = NexdoAIIntent.allCases.first(where: { ProcessInfo.processInfo.arguments.contains($0.rawValue) }) {
+                        model.lastAssistantPrompt = intent.query
+                        let heading: String
+                        let detail: String
+                        switch intent {
+                        case .topFocusTasks: heading = "Top priorities"; detail = "Contact gutter technician is overdue. Tackle it first."
+                        case .deadlinesAndRisks: heading = "Deadlines"; detail = "Send the report by 4 PM."
+                        default: heading = "Available time"; detail = "You have 30 minutes free at 2 PM."
+                        }
+                        let fixture: [String: Any] = ["spoken": detail, "visual": ["summary": detail, "sections": [["title": heading, "items": [detail]]]]]
+                        if let data = try? JSONSerialization.data(withJSONObject: fixture) {
+                            model.turn = try? JSONDecoder().decode(AssistantTurn.self, from: data)
+                        }
+                    }
                 }
             } else if ProcessInfo.processInfo.arguments.contains("-ask-design-preview") {
                 AskNexdoView()
