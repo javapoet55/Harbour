@@ -255,7 +255,16 @@ struct AskNexdoView: View {
                     } else if showsDailyBrief, let turn = model.turn {
                         DailyBriefView(name: ProfileName.firstName(from: model.profile?.name ?? "") ?? "there",
                             sections: turn.displaySections, prompt: $prompt, typing: $composerFocused, busy: blocked,
-                            close: { requestTask?.cancel(); stopSpeech(); model.turn = nil; dismiss() },
+                            close: {
+                                requestTask?.cancel()
+                                stopSpeech()
+                                composerFocused = false
+                                prompt = ""
+                                failedQuery = nil
+                                pendingQuery = nil
+                                model.turn = nil
+                                model.lastAssistantPrompt = nil
+                            },
                             ask: { request($0) }, voice: { stopSpeech(); showingVoice = true },
                             read: { index, text in
                                 if readingSection == index { stopSpeech() }

@@ -27,6 +27,18 @@ import XCTest
         XCTAssertTrue(priorities.waitForExistence(timeout: 5))
     }
 
+    func testDailyBriefCloseReturnsToAskLanding() {
+        app.terminate(); app.launchArguments = ["-daily-brief-design-preview"]; app.launch()
+        let close = app.buttons["Close daily brief"]
+        XCTAssertTrue(close.waitForExistence(timeout: 10))
+        close.tap()
+        XCTAssertTrue(app.buttons["ask-card-0"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["ask-card-1"].exists)
+        XCTAssertTrue(app.buttons["ask-voice"].exists)
+        XCTAssertTrue(app.buttons["Close Ask Nexdo"].exists)
+        XCTAssertFalse(app.buttons["Close daily brief"].exists)
+    }
+
     func testAskLandingShowsFourLargerCards() {
         app.terminate(); app.launchArguments = ["-ask-design-preview"]; app.launch()
         XCTAssertTrue(app.buttons["ask-card-0"].waitForExistence(timeout: 10))
