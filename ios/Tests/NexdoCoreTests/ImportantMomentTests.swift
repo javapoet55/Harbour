@@ -126,3 +126,18 @@ import Testing
     plan.status="EXPIRED"
     #expect(!plan.editable)
 }
+
+@Test func approvedManualWishShowsScheduledUntilDueWithoutAskingForApprovalAgain() throws {
+    let raw: [String: Any] = ["id":"plan","draftID":"draft","channel":"messages","recipient":"+15555550123","subject":"Birthday","body":"Happy Birthday!","scheduledAtUTC":"2026-09-26T15:00:00.000Z","timeZoneID":"America/Los_Angeles","status":"AWAITING_CONFIRMATION","idempotencyKey":"key","automaticDelivery":false,"repeatYearly":false,"reminderOffset":0]
+    var plan=try JSONDecoder().decode(WishDeliveryPlan.self,from:JSONSerialization.data(withJSONObject:raw))
+    #expect(plan.statusLabel(now:plan.date.addingTimeInterval(-1)) == "Scheduled — manual send")
+    #expect(plan.statusLabel(now:plan.date) == "Ready to send")
+    #expect(plan.sentAt == nil)
+    #expect(plan.editable)
+    plan.lastError="Messages opened; delivery not confirmed."
+    #expect(plan.statusLabel(now:plan.date.addingTimeInterval(-1)) == "Opened — delivery not confirmed")
+    plan.status="SENT"
+    #expect(plan.statusLabel(now:plan.date) == "Sent")
+    plan.status="SCHEDULED";plan.channel="email";plan.automaticDelivery=true
+    #expect(plan.statusLabel(now:plan.date) == "Auto-send scheduled")
+}

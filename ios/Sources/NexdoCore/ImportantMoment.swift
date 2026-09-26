@@ -33,9 +33,13 @@ public struct WishDeliveryPlan: Codable, Identifiable, Sendable {
     public var sentAt, lastError: String?
     public var date: Date { ISO8601DateFormatter().date(from: scheduledAtUTC) ?? MomentDates.parseInstant(scheduledAtUTC) ?? .distantPast }
     public var editable: Bool { ["SCHEDULED", "AWAITING_CONFIRMATION", "FAILED"].contains(status) }
-    public var statusLabel: String { switch status {
+    public var statusLabel: String { statusLabel(now: Date()) }
+    public func statusLabel(now: Date) -> String { switch status {
     case "SCHEDULED": "Auto-send scheduled"
-    case "AWAITING_CONFIRMATION": lastError == "Messages opened; delivery not confirmed." ? "Opened — delivery not confirmed" : "Confirmation required"
+    case "AWAITING_CONFIRMATION":
+        if lastError == "Messages opened; delivery not confirmed." { "Opened — delivery not confirmed" }
+        else if date > now { "Scheduled — manual send" }
+        else { channel == "copy" ? "Ready to copy" : channel == "share" ? "Ready to share" : "Ready to send" }
     case "SENT": "Sent"
     case "COPIED": "Copied — delivery not confirmed"
     case "SHARED": "Shared — delivery not confirmed"

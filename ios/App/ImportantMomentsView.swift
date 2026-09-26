@@ -518,7 +518,7 @@ struct WishPlanView: View {
         ZStack { TodayBackdrop(); ScrollView { VStack(spacing: 20) {
             Image(systemName: confirmation ? "calendar.badge.checkmark" : "gift.fill").font(.system(size: 76)).foregroundStyle(Color.nexdoIndigo).padding(20)
             Text(confirmation && ["SCHEDULED", "AWAITING_CONFIRMATION"].contains(current.status) ? "Wish scheduled" : current.statusLabel).font(.largeTitle.bold())
-            Text(current.status == "SENT" ? "Your wish was submitted successfully." : current.status == "CANCELLED" ? "This wish will not be sent." : current.automaticDelivery && current.status == "SCHEDULED" ? "Approved email will send automatically at the scheduled time." : "Review the delivery status below.").multilineTextAlignment(.center)
+            Text(current.status == "SENT" ? "Your wish was submitted successfully." : current.status == "CANCELLED" ? "This wish will not be sent." : current.automaticDelivery && current.status == "SCHEDULED" ? "Approved email will send automatically at the scheduled time." : current.status == "AWAITING_CONFIRMATION" && current.channel == "messages" ? "Your wish and schedule are saved. Open Messages and tap Send when you are ready; Messages wishes are not sent automatically." : "Review the delivery status below.").multilineTextAlignment(.center)
             MomentCard {
                 Text(current.subject).font(.title2.bold()); Text(current.recipient)
                 Divider(); LabeledContent("Delivery", value: current.channel.capitalized)
