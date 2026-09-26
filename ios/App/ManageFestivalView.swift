@@ -44,7 +44,7 @@ struct MomentsManagementEntry: View {
 }
 struct ManageFestivalView: View {
     @Environment(\.dismiss) private var dismiss
-    private let onDone: (() -> Void)?
+    private let onDone: () -> Void
     @StateObject private var model:ManageFestivalModel
     @State private var discard=false
 @State private var deleteConfirm=false
@@ -62,7 +62,7 @@ struct ManageFestivalView: View {
     @State private var approveAfterCancel=false
     private enum Field:Hashable { case name, message }
     @FocusState private var focusedField:Field?
-    init(group:MomentDisplayGroup,store:ImportantMomentsStore,onDone:(() -> Void)?=nil){self.onDone=onDone;_model=StateObject(wrappedValue:store.festivalModel(for:group))}
+    init(group:MomentDisplayGroup,store:ImportantMomentsStore,onDone:@escaping () -> Void){self.onDone=onDone;_model=StateObject(wrappedValue:store.festivalModel(for:group))}
     var body:some View {
         ZStack {TodayBackdrop();ScrollView{VStack(alignment:.leading,spacing:20){
             identity
@@ -74,7 +74,7 @@ struct ManageFestivalView: View {
             if let notice=model.notice {Text(notice).font(.subheadline).foregroundStyle(.secondary).accessibilityIdentifier("festival-notice")}
         }.padding(18)}.id(model.tab)}
         .navigationTitle("Manage Moment").navigationBarTitleDisplayMode(.inline).navigationBarBackButtonHidden()
-        .navigationDestination(isPresented:$model.scheduleCompleted){FestivalScheduleSuccess(title:model.title,occasionType:model.occasionType,plans:model.savedPlans,wishes:model.selected.map { ScheduleWishPreview(heading:model.reviewHeading(for:$0),message:model.deliveryMessage(for:$0)) },manage:{model.tab = .schedule;model.scheduleCompleted=false},done:{if let onDone{onDone()}else{dismiss()}})}
+        .navigationDestination(isPresented:$model.scheduleCompleted){FestivalScheduleSuccess(title:model.title,occasionType:model.occasionType,plans:model.savedPlans,wishes:model.selected.map { ScheduleWishPreview(heading:model.reviewHeading(for:$0),message:model.deliveryMessage(for:$0)) },done:onDone)}
         .navigationDestination(isPresented:$showingSettings){MomentSettingsView().environmentObject(model.store)}
         .toolbar {
             ToolbarItem(placement:.topBarLeading){Button {if model.dirty{discard=true}else{dismiss()}}label:{Image(systemName:"chevron.left").frame(width:44,height:44)}.accessibilityLabel("Back")}
@@ -206,7 +206,6 @@ private struct FestivalScheduleSuccess:View {
     let occasionType:String
     let plans:[WishDeliveryPlan]
     let wishes:[ScheduleWishPreview]
-    let manage:()->Void
     let done:()->Void
     private var deliverySummary:[String] {
         Array(Set(plans.map { plan in
@@ -234,8 +233,6 @@ private struct FestivalScheduleSuccess:View {
                     }
                     ForEach(wishes.indices,id:\.self) { index in ScheduleWishCard(wish:wishes[index],occasion:occasionType) }
                     Button("Done",action:done).buttonStyle(ScheduleActionStyle()).accessibilityIdentifier("wish-primary")
-                    Button("View Scheduled Items",action:manage).buttonStyle(ScheduleActionStyle(secondary:true))
-                        .accessibilityIdentifier("festival-manage-schedule")
                 }.padding(24)
             }
         }

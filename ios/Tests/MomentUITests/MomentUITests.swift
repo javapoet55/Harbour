@@ -550,11 +550,14 @@ import XCTest
         XCTAssertTrue(app.staticTexts["Schedule confirmed!"].waitForExistence(timeout:8))
         XCTAssertEqual(app.staticTexts.matching(identifier:"We’ll remind you, the sender, to tap Send in Messages").count,1)
         XCTAssertTrue(app.staticTexts["For all 2 selected contacts"].exists)
-        XCTAssertEqual(app.buttons.matching(identifier:"festival-manage-schedule").count,1)
-        for _ in 0..<5 {if app.buttons["festival-manage-schedule"].isHittable{break};app.swipeUp()}
-        app.buttons["festival-manage-schedule"].tap()
+        XCTAssertFalse(app.buttons["View Scheduled Items"].exists)
+        let done=app.buttons.matching(identifier:"wish-primary").matching(NSPredicate(format:"label == %@","Done")).firstMatch
+        for _ in 0..<5 {if done.isHittable{break};app.swipeUp()}
+        done.tap()
+        XCTAssertTrue(app.navigationBars["Important Moments"].waitForExistence(timeout:5))
+        app.buttons["moments-manage"].firstMatch.tap()
+        app.buttons["manage-moment-moment"].tap()
         XCTAssertTrue(app.navigationBars["Manage Moment"].waitForExistence(timeout:5))
-        XCTAssertTrue(app.buttons["festival-tab-Schedule"].isSelected)
         app.buttons["festival-tab-Details"].tap()
         let repeatSwitch=app.switches["Repeat every year"]
         for _ in 0..<5 {if repeatSwitch.isHittable{break};app.swipeUp()}
