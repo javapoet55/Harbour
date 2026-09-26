@@ -532,14 +532,17 @@ struct WishPlanView: View {
             Text(confirmation && ["SCHEDULED", "AWAITING_CONFIRMATION"].contains(current.status) ? "Wish scheduled" : current.statusLabel).font(.largeTitle.bold())
             Text(current.status == "SENT" ? "Your wish was submitted successfully." : current.status == "CANCELLED" ? "This wish will not be sent." : current.automaticDelivery && current.status == "SCHEDULED" ? "Approved email will send automatically at the scheduled time." : current.status == "AWAITING_CONFIRMATION" && current.channel == "messages" ? "Your wish and schedule are saved. Open Messages and tap Send when you are ready; Messages wishes are not sent automatically." : "Review the delivery status below.").multilineTextAlignment(.center)
             MomentCard {
-                Text(current.subject).font(.title2.bold()); Text(current.recipient)
+                Text(current.subject).font(.title2.bold())
+                Label(current.recipient,systemImage:current.channel == "messages" ? "phone.fill" : current.channel == "email" ? "envelope.fill" : "person.fill")
                 Divider(); LabeledContent("Delivery", value: current.channel.capitalized)
                 LabeledContent("Send time", value: MomentDates.label(current.date, zone: current.timeZoneID))
                 LabeledContent("Time zone", value: current.timeZoneID)
                 LabeledContent("Reminder", value: current.reminderOffset == 60 ? "1 hour before" : "At scheduled time")
                 LabeledContent("Repeat", value: current.repeatYearly ? "Yearly" : "Once")
                 Text(current.body).padding(.top, 8)
-                if let error = current.lastError { Text(error).foregroundStyle(.red) }
+                if current.status == "EXPIRED" {
+                    Text("This wish expired 24 hours after its scheduled send time because delivery was not confirmed. Create a new wish to send it.").foregroundStyle(.red)
+                } else if let error = current.lastError { Text(error).foregroundStyle(.red) }
             }
             if current.editable {
                 Button("Edit Schedule") { date = max(current.date, Date().addingTimeInterval(60)); changing = true }.buttonStyle(.bordered)

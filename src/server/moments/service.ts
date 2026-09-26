@@ -128,6 +128,7 @@ export async function schedule(userId:string,input:unknown) {
 }
 export async function changePlan(userId:string,input:unknown) {
  const p=z.object({id:z.string(),action:z.enum(['cancel','sent','failed','copied','shared','reschedule','retry','sendNow','opened']),scheduledAtUTC:z.iso.datetime({offset:true}).optional(),timeZoneID:zone.optional()}).parse(input);
+ await expireUnconfirmed(new Date(),userId);
  const plan=await prisma.deliveryPlan.findFirst({where:{id:p.id,draft:{moment:{userId}}}}); if(!plan) throw new MomentError('Delivery not found.',404);
  const to={cancel:'CANCELLED',sent:'SENT',failed:'FAILED',copied:'COPIED',shared:'SHARED',reschedule:plan.status,retry:'SCHEDULED',sendNow:'SCHEDULED',opened:plan.status}[p.action];
  if(['sent','copied','shared','failed'].includes(p.action) && (plan.automaticDelivery || plan.channel==='email'&&p.action==='sent')) throw new MomentError('Delivery result must come from the provider.');
@@ -158,7 +159,7 @@ async function createAnnual(id:string) {
 }
 // Manual deliveries remain available for one day after their due time, then leave the active queue.
 async function expireUnconfirmed(now:Date, userId?:string) {
- return prisma.deliveryPlan.updateMany({where:{status:'AWAITING_CONFIRMATION',scheduledAtUTC:{lt:new Date(+now-86400000)},...(userId?{draft:{moment:{userId}}}:{})},data:{status:'EXPIRED',lastError:'Delivery was not confirmed within one day. Create a new wish to send it.'}});
+ return prisma.deliveryPlan.updateMany({where:{status:'AWAITING_CONFIRMATION',scheduledAtUTC:{lte:new Date(+now-86400000)},...(userId?{draft:{moment:{userId}}}:{})},data:{status:'EXPIRED',lastError:'This wish expired 24 hours after its scheduled send time because delivery was not confirmed. Create a new wish to send it.'}});
 }
 function signatureOf(settings:string) { const value=readFestivalSettings(settings).cardSignature; return typeof value==='string' ? value : null; }
 async function runJobsImpl(provider:WishEmailProvider=gmail, onlyID?:string, now=new Date()) {

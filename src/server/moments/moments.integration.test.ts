@@ -145,3 +145,27 @@ it('asks for the first name or no name, never placeholders, and keeps ordinary r
   expect(JSON.parse(JSON.parse((shared.mock.calls[0] as unknown as [string,{body:string}])[1].body).messages[1].content)).not.toHaveProperty('firstName');
  } finally {vi.unstubAllEnvs();vi.unstubAllGlobals();}
 });
+
+it('expires exactly 24 elapsed hours after send time, regardless of approval time or DST',async()=>{
+ const p=await plan();
+ const send=new Date('2026-03-08T09:00:00Z');
+ await prisma.deliveryPlan.update({where:{id:p.id},data:{scheduledAtUTC:send,approvedAt:new Date('2026-03-01T09:00:00Z'),timeZoneID:'America/Los_Angeles'}});
+ vi.useFakeTimers({toFake:['Date']});
+ try {
+  vi.setSystemTime(new Date(+send+86400000-1));
+  await listMoments(userId);
+  expect((await prisma.deliveryPlan.findUniqueOrThrow({where:{id:p.id}})).status).toBe('AWAITING_CONFIRMATION');
+  vi.setSystemTime(new Date(+send+86400000));
+  await listMoments(userId);
+  const expired=await prisma.deliveryPlan.findUniqueOrThrow({where:{id:p.id}});
+  expect(expired.status).toBe('EXPIRED');
+  expect(expired.lastError).toContain('24 hours after its scheduled send time');
+ } finally {vi.useRealTimers();}
+});
+it('rejects actions from stale screens after the 24-hour deadline without requiring a list refresh',async()=>{
+ const p=await plan();
+ await prisma.deliveryPlan.update({where:{id:p.id},data:{scheduledAtUTC:new Date(Date.now()-25*3600000)}});
+ await expect(changePlan(userId,{id:p.id,action:'opened'})).rejects.toThrow();
+ await expect(changePlan(userId,{id:p.id,action:'sent'})).rejects.toThrow();
+ expect((await prisma.deliveryPlan.findUniqueOrThrow({where:{id:p.id}})).status).toBe('EXPIRED');
+});
