@@ -218,7 +218,7 @@ private struct NexdoTabShell: View {
             WellnessChooserView { choice in wellnessChoice = choice; showingWellness = false }
                 .presentationDetents([.large]).presentationDragIndicator(.visible)
         }
-        .fullScreenCover(isPresented: $showingCalories, onDismiss: { openPomodoroNotification() }) { CalorieTrackerView() }
+        .fullScreenCover(isPresented: $showingCalories, onDismiss: { openPomodoroNotification() }) { CalorieTrackerView(api: model.momentAPI) }
         .fullScreenCover(isPresented: $showingPomodoro) {
             if let owner = model.profile?.id {
                 PomodoroView(api: model.momentAPI, owner: owner, onTasks: { selection = .tasks })

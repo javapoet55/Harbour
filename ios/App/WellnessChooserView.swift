@@ -18,19 +18,19 @@ struct WellnessChooserView: View {
         }
     }
     private var calorie: some View {
-        tile("Calorie Tracker", subtitle: "Meals, goals & nutrition", symbol: "flame.fill", tint: .orange, preview: true) { onSelect(true) }
+        tile("Calorie Tracker", subtitle: "Meals, goals & nutrition", symbol: "flame.fill", tint: .orange, action: "Track your meals") { onSelect(true) }
     }
     private var focus: some View {
-        tile("Pomodoro Focus", subtitle: "Make time for deep work", symbol: "timer", tint: .indigo, preview: false) { onSelect(false) }
+        tile("Pomodoro Focus", subtitle: "Make time for deep work", symbol: "timer", tint: .indigo, action: "Start focusing") { onSelect(false) }
     }
-    private func tile(_ title: String, subtitle: String, symbol: String, tint: Color, preview: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
+    private func tile(_ title: String, subtitle: String, symbol: String, tint: Color, action caption: String, perform: @escaping () -> Void) -> some View {
+        Button(action: perform) {
             VStack(alignment: .leading, spacing: 16) {
                 Image(systemName: symbol).font(.system(size: 30)).foregroundStyle(tint)
                     .frame(width: 60, height: 60).background(tint.opacity(0.12), in: RoundedRectangle(cornerRadius: 18))
                 Text(title).font(.title3.bold()).fixedSize(horizontal: false, vertical: true)
                 Text(subtitle).font(.subheadline).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                HStack { Text(preview ? "UI Preview" : "Start focusing").font(.caption.bold()); Spacer(); Image(systemName: "arrow.right") }.foregroundStyle(tint)
+                HStack { Text(caption).font(.caption.bold()); Spacer(); Image(systemName: "arrow.right") }.foregroundStyle(tint)
             }.frame(minWidth: 100, maxWidth: .infinity, minHeight: 210, alignment: .topLeading)
                 .padding(20).background(.white, in: RoundedRectangle(cornerRadius: 24))
                 .overlay(RoundedRectangle(cornerRadius: 24).stroke(tint.opacity(0.15)))
