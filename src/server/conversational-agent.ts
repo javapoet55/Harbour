@@ -3,7 +3,7 @@ import { observedFetch } from '@/server/health/telemetry';
 import { withNexdoPersonality } from "./assistant-personality";
 import { moduleConversation } from './module-conversation';
 import { scheduleContextVersion } from './replanner';
-import { creationWarnings, type AvailabilityContext } from '@/lib/availability';
+import { explicitTimeWarnings, type AvailabilityContext } from '@/lib/availability';
 import { loadScheduleContext } from './schedule-intelligence';
 import { createHash } from 'node:crypto';
 import { prisma } from './db';
@@ -245,7 +245,7 @@ async function planScheduleWarnings(userId: string, plan: AgentPlan) {
       const start = action.start_at ? new Date(action.start_at) : existing?.startAt;
       if (!start) continue;
       const duration = action.duration_min || existing?.durationMin || 30;
-      warnings.push(...creationWarnings(schedule, start, new Date(+start + duration * 60000), 'task', id));
+      warnings.push(...explicitTimeWarnings(schedule, start, new Date(+start + duration * 60000), id));
       // Later actions in this proposal also see the slots already proposed above.
       if (existing) { existing.startAt = start; existing.durationMin = duration; }
       else schedule.tasks.push({ id, startAt: start, durationMin: duration, status: 'PLANNED' });

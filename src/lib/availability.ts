@@ -6,7 +6,7 @@ export const normalizedBuffer = (value: unknown) => {
 };
 export type AvailabilityContext = {
   timeZone: string; workingDays: string; workStart: string; workEnd: string; bufferMinutes: number;
-  tasks: Array<{ id: string; startAt: Date | null; durationMin: number; status: string }>;
+  tasks: Array<{ id: string; startAt: Date | null; durationMin: number; calendarDurationMin?: number; status: string }>;
   events: Array<{ id: string; title: string; startAt: Date; endAt: Date; allDay?: boolean }>;
   contextWarnings?: string[];
   activeFocus?: { taskId: string; startedAt: number; endsAt: number } | null;
@@ -29,4 +29,19 @@ export function creationWarnings(context: AvailabilityContext, start: Date, end:
   if (!windows.some(window => window.start <= +from && window.end >= +to)) warnings.push('This time, including appointment buffers, is outside your saved working hours.');
   if (busy.some(block => block.start < +to && block.end > +from)) warnings.push('This time overlaps existing work or the buffer around an appointment.');
   return [...new Set(warnings)];
+}
+
+/** User-chosen times are constrained by real occupancy, not planning preferences. */
+export function explicitTimeWarnings(context: AvailabilityContext, start: Date, end: Date, excludeTaskId?: string) {
+  const busy = [
+    ...calendarBusy(context.events, 0),
+    ...context.tasks.filter(task => task.id !== excludeTaskId && task.startAt && !['COMPLETED', 'CANCELLED'].includes(task.status))
+      .map(task => ({ start: +task.startAt!, end: +task.startAt! + (task.calendarDurationMin ?? task.durationMin) * 60000 })),
+  ];
+  if (context.activeFocus && context.activeFocus.taskId !== excludeTaskId) {
+    busy.push({ start: context.activeFocus.startedAt, end: context.activeFocus.endsAt });
+  }
+  return busy.some(block => block.start < +end && block.end > +start)
+    ? ['This time overlaps an existing task, calendar event, or active focus session.']
+    : [];
 }
