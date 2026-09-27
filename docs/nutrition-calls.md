@@ -41,7 +41,8 @@ call records which filter was used (`NutritionCall.noiseFilter`).
    - `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_VOICE_NUMBER` (falls back to `TWILIO_FROM_NUMBER`)
    - `APP_URL` must be the exact public origin Twilio calls (e.g. `https://app.nexdoapp.com`);
      Twilio signatures are verified against it.
-   - Optional: `NUTRITION_CALL_MAX_SECONDS` (60–300, default 300), `NUTRITION_OPENAI_NOISE_REDUCTION=off`
+   - Optional: `NUTRITION_CALL_MAX_SECONDS` (60–300, default 300), `NUTRITION_OPENAI_NOISE_REDUCTION=off`,
+     `NUTRITION_PHONE_CODE_CHANNEL` (`voice` default: code read aloud by call; `sms` needs A2P 10DLC approval)
 4. **New Railway service `nutrition-call-worker`** from this repo:
    - Build: `npm ci --ignore-scripts` · Start: `node scripts/nutrition-call-worker.mjs`
    - No pre-deploy migration; public domain on; healthcheck path `/health`; restart always
@@ -59,7 +60,7 @@ All routes use the normal session cookie. Dates are the user's local `YYYY-MM-DD
 |---|---|
 | Load setup & dashboard settings | `GET /api/nutrition/settings` → `{ enabled, phone, phoneVerified, localTime, timeZone, repeatDaily, noAnswer, voice, calorieGoal, goals, voices }` |
 | Save time / time zone / repeat / if-no-answer / voice / goals / on-off | `PUT /api/nutrition/settings` with any of `{ enabled, localTime "20:00", timeZone, repeatDaily, noAnswer "NOTIFY"\|"RETRY_ONCE"\|"SKIP", voice, calorieGoal, goals {label: number} }`. `enabled:true` returns 409 `PHONE_NOT_VERIFIED` until the phone is verified. |
-| Send phone code | `POST /api/nutrition/phone` `{ action: "start", phone: "+14155550123" }` (one per minute) |
+| Send phone code | `POST /api/nutrition/phone` `{ action: "start", phone: "+14155550123" }` (one per minute). The code is read aloud in a short phone call from the voice number; set `NUTRITION_PHONE_CODE_CHANNEL=sms` to text it instead once A2P 10DLC messaging is approved. |
 | Confirm phone code | `POST /api/nutrition/phone` `{ action: "verify", code: "123456" }` (10-minute expiry, 5 attempts) |
 | Try a call now | `POST /api/nutrition/call-now` (10-minute cooldown, calling window applies) |
 | Today / food log | `GET /api/nutrition/log?date=` → `{ totals {kcal, proteinG, carbsG, fatG}, calorieGoal, needsReview, entries[] }` |
