@@ -155,7 +155,7 @@ struct MomentEditor: View {
                     completedSave = true
                 }
                 if moment != nil || input.type == "custom" { dismiss() }
-                // perform refreshes the snapshot; body then shows the saved moment's four-tab manager.
+                // perform refreshes the snapshot; body then shows the saved moment's three-tab manager.
             }
         }
     }

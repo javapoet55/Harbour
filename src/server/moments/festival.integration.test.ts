@@ -52,3 +52,24 @@ it('persists hourly preparation reminders and preserves legacy day defaults',asy
  }
  expect(festivalSettings.safeParse({...input.settings,prepareHours:2}).success).toBe(false);
 });
+it('edits occasion fields while preserving identity, recipients, drafts and reminder settings',async()=>{
+ const {m,input}=await fixture();const plan=await makePlan(m.id);
+ const draft=await prisma.wishDraft.findFirstOrThrow({where:{momentID:m.id}});
+ const settings={...input.settings,baseMessage:draft.body,prepareHours:4,prepareDays:0,draftNotify:false,draftSendDate:'2030-11-10T18:00:00Z'};
+ const edit={...input,type:'birthday',title:'Birthday celebration',date:'2030-11-10',timeZoneID:'America/New_York',yearly:true,settings};
+ await expect(saveFestival(userId,edit)).rejects.toThrow('schedules');
+ expect((await prisma.importantMoment.findUniqueOrThrow({where:{id:m.id}})).type).toBe('festival');
+ await saveFestival(userId,{...edit,cancelSchedules:true});
+ const saved=await prisma.importantMoment.findUniqueOrThrow({where:{id:m.id}});
+ expect(saved).toMatchObject({id:m.id,type:'birthday',title:edit.title,occurrenceDate:edit.date,timeZoneID:edit.timeZoneID,yearly:true,firstName:m.firstName,phone:m.phone,email:m.email,sourceKey:m.sourceKey});
+ expect(JSON.parse(saved.festivalSettings)).toMatchObject(settings);
+ expect((await prisma.wishDraft.findUniqueOrThrow({where:{id:draft.id}})).body).toBe(draft.body);
+ expect((await prisma.deliveryPlan.findUniqueOrThrow({where:{id:plan.id}})).status).toBe('CANCELLED');
+ // A legacy client that omits type must retain the newly saved type.
+ await saveFestival(userId,{...input,title:edit.title,date:edit.date,settings});
+ expect((await prisma.importantMoment.findUniqueOrThrow({where:{id:m.id}})).type).toBe('birthday');
+});
+it('does not treat a type change with approved text as a message-only edit',async()=>{
+ const {m,input}=await fixture();await saveFestival(userId,input);await makePlan(m.id);
+ await expect(saveFestival(userId,{...input,type:'anniversary',settings:{...input.settings,approvedAt:new Date().toISOString()}})).rejects.toThrow('schedules');
+});

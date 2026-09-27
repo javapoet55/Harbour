@@ -81,8 +81,7 @@ struct ManageFestivalView: View {
 @State private var deleteConfirm=false
 @State private var disableConfirm=false
 @State private var scheduleConfirm=false
-    @State private var dateEditor=false
-    @State private var dateDraft=Date()
+    @State private var momentEditor=false
     @State private var showingSettings=false
     @State private var showAllContacts=false
     @State private var recipientAction:RecipientAction?
@@ -98,7 +97,7 @@ struct ManageFestivalView: View {
         ZStack {TodayBackdrop();ScrollView{VStack(alignment:.leading,spacing:20){
             identity
             tabs
-            Group {switch model.tab {case .details:details;case .contacts:recipients;case .message:message;case .schedule:schedule}}
+            Group {switch model.tab {case .contacts:recipients;case .message:message;case .schedule:schedule}}
             if model.busy {ProgressView("Saving…")}
             // The Wish Message tab shows its errors next to Save Message.
             if model.tab != .message, let error=model.error {Text(error).foregroundStyle(.red).accessibilityIdentifier("festival-error")}
@@ -124,18 +123,7 @@ struct ManageFestivalView: View {
         .sheet(isPresented:$personalize){personalization}
         .sheet(isPresented:$imageSheet){imageConfiguration}
         .sheet(isPresented:$scheduleConfirm,onDismiss:{model.error=nil}){confirmation}
-        .sheet(isPresented:$dateEditor){
-            NavigationStack {
-                DatePicker("Moment date",selection:$dateDraft,displayedComponents:.date)
-                    .datePickerStyle(.graphical).padding()
-                    .environment(\.timeZone,TimeZone(identifier:model.zone) ?? .current)
-                    .navigationTitle("Select Date").navigationBarTitleDisplayMode(.inline)
-                    .toolbar {
-                        ToolbarItem(placement:.cancellationAction){Button("Cancel"){dateEditor=false}}
-                        ToolbarItem(placement:.confirmationAction){Button("Done"){model.date=dateDraft;dateEditor=false}}
-                    }
-            }.presentationDetents([.medium])
-        }
+        .sheet(isPresented:$momentEditor){MomentDetailsSheet(model:model)}
     }
     private var identity:some View {
         MomentCard {
@@ -158,19 +146,32 @@ struct ManageFestivalView: View {
     }
 
     private var tabs:some View {HStack(spacing:3){ForEach(ManageFestivalModel.Tab.allCases,id:\.self){tab in Button{focusedField=nil;approveAfterCancel=false;Task{await model.changeTab(to:tab)};FestivalAnalytics().record(.tab)}label:{Text(tab.rawValue).font(.subheadline).lineLimit(1).minimumScaleFactor(0.7).frame(maxWidth:.infinity,minHeight:44).padding(.vertical,5).foregroundStyle(model.tab==tab ? Color.white:Color.nexdoIndigo).background(model.tab==tab ? Color.nexdoIndigo:Color.clear,in:RoundedRectangle(cornerRadius:18))}.buttonStyle(.plain).disabled(generatingWish && model.tab != tab).accessibilityAddTraits(model.tab==tab ? .isSelected:[]).accessibilityIdentifier("festival-tab-\(tab.rawValue)")}}.padding(5).background(.ultraThinMaterial,in:RoundedRectangle(cornerRadius:22))}
-    private var details:some View {Group{
-        Text("Moment Details").font(.largeTitle.bold())
-        MomentCard{HStack{Text("Moment name").foregroundStyle(.primary);TextField("Moment name",text:$model.title).fontWeight(.bold).focused($focusedField,equals:.name).submitLabel(.done).onSubmit{focusedField=nil}.multilineTextAlignment(.trailing).accessibilityIdentifier("festival-name");Image(systemName:"pencil")};Divider();LabeledContent("Type",value:model.occasionLabel);Divider();Button{dateDraft=model.date;dateEditor=true}label:{HStack{Text("Date").foregroundStyle(Color.nexdoInk);Spacer();Text(MomentDates.sendDayLabel(model.date,zone:model.zone)).foregroundStyle(Color.nexdoInk).padding(.horizontal,12).padding(.vertical,7).background(Color.secondary.opacity(0.12),in:Capsule())}}.buttonStyle(.plain).disabled(model.settings.catalogManaged).accessibilityIdentifier("festival-details-date")}
-        Text("Reminder & Repeat").font(.title2.bold())
-        MomentCard{
-            if model.source=="festivalCatalog" {Toggle("Update festival date automatically",isOn:$model.settings.catalogManaged).onChange(of:model.settings.catalogManaged){_,value in if value{model.useCatalog()}};Picker("Catalog festival",selection:$model.settings.catalogID){Text("Select festival").tag("");ForEach(model.catalog){Text($0.name).tag($0.id)}};Text("Only verified catalog dates are used. If no date is available, confirm it manually.").font(.caption)}else{Toggle("Repeat every year",isOn:$model.yearly);Text(model.occasionType == "festival" ? "Dates repeat yearly; festivals may move.\nConfirm the date and schedule each year." : "Repeats on this date each year.\nReview and schedule each wish separately.").font(.caption).foregroundStyle(.secondary)}
-            Divider();HStack{Text("Prepare reminder");Spacer();Picker("Prepare reminder",selection:$model.settings.preparationMinutes){Text("None").tag(0);ForEach([1,4,8],id:\.self){Text("\($0) hour\($0==1 ? "":"s") before").tag($0*60)};ForEach([1,3,7,14],id:\.self){Text("\($0) day\($0==1 ? "":"s") before").tag($0*1440)}}.labelsHidden()}
-            Text("Review only. Nothing is sent.").font(.caption).foregroundStyle(.secondary)
-            Divider();zonePicker
+    private var momentSection:some View {Group {
+        Text("Moment").font(.title2.bold())
+        MomentCard {
+            HStack(alignment:.top) {
+                MomentIconTile(type:model.occasionType,title:model.title)
+                VStack(alignment:.leading,spacing:6) {
+                    Text(model.title).font(.headline)
+                    Text(model.occasionLabel).foregroundStyle(.secondary)
+                    Text(MomentDates.sendDayLabel(model.date,zone:model.zone)).font(.subheadline)
+                }
+                Spacer(minLength:0)
+                Button {momentEditor=true} label:{Label("Edit",systemImage:"pencil")}
+                    .accessibilityLabel("Edit Moment").accessibilityIdentifier("moment-edit")
+            }
+            if model.source=="festivalCatalog" && model.occasionType=="festival" {Toggle("Update festival date automatically",isOn:$model.settings.catalogManaged).onChange(of:model.settings.catalogManaged){_,value in if value{model.useCatalog()}};Picker("Catalog festival",selection:$model.settings.catalogID){Text("Select festival").tag("");ForEach(model.catalog){Text($0.name).tag($0.id)}};Text("Only verified catalog dates are used. If no date is available, confirm it manually.").font(.caption)}else{Toggle("Repeat every year",isOn:$model.yearly).accessibilityIdentifier("moment-repeat-yearly");Text(model.occasionType == "festival" ? "Dates repeat yearly; festivals may move.\nConfirm the date and schedule each year." : "Repeats on this date each year.\nReview and schedule each wish separately.").font(.caption).foregroundStyle(.secondary)}
         }
-        saveButtons
     }}
-    private var zonePicker:some View {HStack{Text("Time zone");Spacer();Picker("Time zone",selection:$model.zone){ForEach(TimeZone.knownTimeZoneIdentifiers,id:\.self){id in Text(TimeZone(identifier:id)?.localizedName(for:.generic,locale:.current) ?? id).tag(id)}}.labelsHidden()}}
+    private var preparationPicker:some View {Group {
+        Picker("Prepare reminder",selection:$model.settings.preparationMinutes) {
+            Text("None").tag(0)
+            ForEach([1,4,8],id:\.self){Text("\($0) hour\($0==1 ? "":"s") before").tag($0*60)}
+            ForEach([1,3,7,14],id:\.self){Text("\($0) day\($0==1 ? "":"s") before").tag($0*1440)}
+        }.accessibilityIdentifier("moment-prepare-reminder")
+        Text("Reminds you to review the wish. Nothing is sent.").font(.caption).foregroundStyle(.secondary)
+    }}
+    private var zonePicker:some View {HStack{Text("Time zone");Spacer();Picker("Time zone",selection:$model.zone){ForEach(TimeZone.knownTimeZoneIdentifiers,id:\.self){id in Text(TimeZone(identifier:id)?.localizedName(for:.generic,locale:.current) ?? id).tag(id)}}.labelsHidden().accessibilityIdentifier("moment-time-zone")}}
     private var recipients:some View {Group{
         Text("Recipients").font(.largeTitle.bold());Text("\(model.selected.count) selected").foregroundStyle(.secondary)
         if model.recipients.isEmpty {
@@ -214,12 +215,13 @@ struct ManageFestivalView: View {
         MomentPrimary(title:"Save Message"){save(approve:true)}.disabled(generatingWish || model.settings.baseMessage.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty || model.settings.baseMessage.count > 500)
     }}
     private var schedule:some View {Group{
-        Text("Send time").font(.title2.bold());MomentCard{DatePicker("Date and time",selection:$model.sendDate,in:Date()...).environment(\.timeZone,TimeZone(identifier:model.zone) ?? .current);zonePicker}
+        momentSection
+        Text("Send time").font(.title2.bold());MomentCard{DatePicker("Date and time",selection:$model.sendDate,in:Date()...).environment(\.timeZone,TimeZone(identifier:model.zone) ?? .current);zonePicker;Divider();preparationPicker}
         Text("Delivery").font(.title2.bold());MomentCard{ForEach(model.selected){r in VStack(alignment:.leading){HStack{Text(r.initials).padding(10).background(Color.nexdoIndigo.opacity(0.12),in:Circle());Text(r.name).font(.headline);Spacer()};Picker("Channel for \(r.name)",selection:Binding(get:{model.channel(r)},set:{model.settings.channels[r.key]=$0})){if !r.phone.isEmpty{Text("Messages").tag("messages")};if !r.email.isEmpty{Text("Email").tag("email")};Text("Copy / Share").tag("share")};if model.channel(r)=="email"{Toggle("Send automatically",isOn:Binding(get:{model.settings.automatic[r.key] ?? false},set:{model.settings.automatic[r.key]=$0})).disabled(!model.emailReady);Text(model.settings.automatic[r.key]==true ? "Auto-send":"You send at the scheduled time").font(.caption)}else{Text(model.channel(r)=="messages" ? "You tap Send at the scheduled time":"Manual share only").font(.caption)};Divider()}}}
         Text("\(automaticCount) automatic · \(model.selected.count-automaticCount) will be sent by you").font(.subheadline)
-        if !model.emailReady{Text("Automatic email needs a connected account and backend scheduler.").font(.caption);NavigationLink("Connect / Reconnect email"){MomentSettingsView()}}
-        MomentCard{Toggle("Notify me 1 hour before",isOn:$model.notify);Divider();LabeledContent("Send if app is closed",value:"Email only")}
-        Label("At the scheduled time, open your reminder to send the prepared wish. You, the sender, must tap Send in Messages. Recipients do not need to confirm.",systemImage:"info.circle.fill").font(.subheadline).padding().background(.blue.opacity(0.08),in:RoundedRectangle(cornerRadius:14))
+        if model.selected.contains(where:{model.channel($0)=="email"}) && model.store.snapshot?.emailAccount?.status != "connected" {NavigationLink("Connect / Reconnect email"){MomentSettingsView().environmentObject(model.store)}}
+        MomentCard{Toggle("Notify me 1 hour before",isOn:$model.notify).accessibilityIdentifier("moment-send-reminder")}
+        Label("At the scheduled time, we’ll remind you to send manual wishes. For Messages, open the prepared wish and tap Send. Only email marked automatic sends for you.",systemImage:"info.circle.fill").font(.subheadline).padding().background(.blue.opacity(0.08),in:RoundedRectangle(cornerRadius:14))
         if model.dirty{MomentPrimary(title:"Save Changes"){save()}}
         MomentPrimary(title:"Schedule Wish"){if let issue=FestivalValidation.schedule(settings:model.settings,date:model.sendDate,active:model.active,emailReady:model.emailReady,recipients:model.recipients){model.error=issue}else if model.dirty{model.error="Save changes first."}else{scheduleConfirm=true}}.disabled(model.generatingImage)
         ForEach(model.store.plans.filter{p in p.status != "CANCELLED" && model.originals.contains{$0.drafts.contains{$0.id==p.draftID}}}){p in NavigationLink("\(p.statusLabel) · \(p.channel.capitalized)"){WishPlanView(plan:p)}}
@@ -231,6 +233,75 @@ struct ManageFestivalView: View {
     private var personalization:some View {NavigationStack{Form{Section("Shared message"){Text("New recipients inherit the base message.");TextField("Optional personal context",text:$model.settings.personalContext,axis:.vertical)};ForEach(model.selected){r in Section(r.name){Toggle("Personalize this recipient",isOn:Binding(get:{model.settings.overrides[r.key] != nil},set:{if $0{model.settings.overrides[r.key]=model.settings.baseMessage}else{model.settings.overrides.removeValue(forKey:r.key)};model.invalidateApproval()}));if model.settings.overrides[r.key] != nil{TextField("Personal wish",text:Binding(get:{model.settings.overrides[r.key] ?? ""},set:{model.settings.overrides[r.key]=$0;model.invalidateApproval()}),axis:.vertical)}}}}.navigationTitle("Personalize").toolbar{Button("Done"){personalize=false}}}}
     private var imageConfiguration:some View { FestivalGreetingCardEditor(model:model) }
 
+}
+/// A temporary edit draft; the manager remains the single source of saved Moment state.
+private struct MomentDetailsSheet:View {
+    @ObservedObject var model:ManageFestivalModel
+    @Environment(\.dismiss) private var dismiss
+    @State private var title:String
+    @State private var type:String
+    @State private var date:Date
+    @State private var yearly:Bool
+    @State private var confirm=false
+    @FocusState private var nameFocused:Bool
+    @State private var error:String?
+    init(model:ManageFestivalModel) {
+        self.model=model
+        _title=State(initialValue:model.title);_type=State(initialValue:model.occasionType)
+        _date=State(initialValue:model.date);_yearly=State(initialValue:model.yearly)
+    }
+    private var changed:Bool {title != model.title || type != model.occasionType || date != model.date || yearly != model.yearly}
+    var body:some View {
+        NavigationStack {
+            Form {
+                Section("Moment") {
+                    TextField("Moment name",text:$title).focused($nameFocused).submitLabel(.done).onSubmit{nameFocused=false}.accessibilityIdentifier("festival-name")
+                    Picker("Type",selection:$type) {
+                        ForEach(["birthday","anniversary","festival","getWellSoon"],id:\.self) {Text(ImportantMoment.label(for:$0)).tag($0)}
+                    }.accessibilityIdentifier("moment-edit-type")
+                    DatePicker("Moment date",selection:$date,displayedComponents:.date)
+                        .environment(\.timeZone,TimeZone(identifier:model.zone) ?? .current)
+                        .disabled(model.settings.catalogManaged && type == "festival")
+                        .accessibilityIdentifier("moment-edit-date")
+                    Toggle("Repeat every year",isOn:$yearly).accessibilityIdentifier("moment-edit-repeat").disabled(model.settings.catalogManaged && type == "festival")
+                    Text("Review and schedule each wish separately. Repeating a moment does not automatically send future wishes.").font(.caption).foregroundStyle(.secondary)
+                }
+                if let error {Text(error).foregroundStyle(.red)}
+            }
+            .scrollDismissesKeyboard(.interactively)
+            .navigationTitle("Edit Moment").navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItemGroup(placement:.keyboard){Spacer();Button("Done"){nameFocused=false}.accessibilityIdentifier("festival-keyboard-done")}
+                ToolbarItem(placement:.cancellationAction){Button("Cancel"){dismiss()}.disabled(model.busy)}
+                ToolbarItem(placement:.confirmationAction){Button("Save") {
+                    if !changed {dismiss()}
+                    else if model.hasSchedules {confirm=true}
+                    else {Task{await save(cancelSchedules:false)}}
+                }.disabled(model.busy || title.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty || title.count>150).accessibilityIdentifier("moment-edit-save")}
+            }
+            .disabled(model.busy)
+            .alert("Save changes to scheduled wishes?",isPresented:$confirm) {
+                Button("Keep schedules",role:.cancel){}
+                Button("Cancel schedules and save"){Task{await save(cancelSchedules:true)}}
+            } message:{Text("Saving these changes cancels existing schedules. Review and schedule the updated wishes again.")}
+        }.interactiveDismissDisabled(model.busy)
+    }
+    @MainActor private func save(cancelSchedules:Bool) async {
+        let oldTitle=model.title,oldType=model.occasionType,oldDate=model.date,oldYearly=model.yearly
+        let oldSendDate=model.sendDate,oldSettings=model.settings
+        model.title=title;model.occasionType=type;model.date=date;model.yearly=yearly
+        if type != "festival" {model.settings.catalogManaged=false}
+        await model.save(cancelSchedules:cancelSchedules)
+        if let issue=model.error {
+            error=issue
+            model.title=oldTitle;model.occasionType=oldType;model.date=oldDate;model.yearly=oldYearly
+            model.sendDate=oldSendDate;model.settings=oldSettings
+        } else if model.needsScheduleConfirmation {
+            model.needsScheduleConfirmation=false;confirm=true
+            model.title=oldTitle;model.occasionType=oldType;model.date=oldDate;model.yearly=oldYearly
+            model.sendDate=oldSendDate;model.settings=oldSettings
+        } else {dismiss()}
+    }
 }
 private struct FestivalScheduleSuccess:View {
     let title:String

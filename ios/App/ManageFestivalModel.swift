@@ -2,13 +2,13 @@ import SwiftUI
 import CryptoKit
 
 @MainActor final class ManageFestivalModel: ObservableObject {
-    enum Tab:String,CaseIterable {case details="Details",contacts="Contacts",message="Message",schedule="Schedule"}
-    @Published var tab:Tab = .details
+    enum Tab:String,CaseIterable {case contacts="Contacts",message="Message",schedule="Schedule"}
+    @Published var tab:Tab = .contacts
     private var pendingTab: Tab?
     @Published var title:String
     @Published var date:Date {
         didSet {
-            guard MomentDates.day(date,zone:zone) != MomentDates.day(oldValue,zone:zone) else {return}
+            guard !changingZone, MomentDates.day(date,zone:zone) != MomentDates.day(oldValue,zone:zone) else {return}
             // Move the proposed delivery to the edited day, preserving its local send time.
             // Existing deliveries still go through the cancel-and-save confirmation.
             var calendar=Calendar(identifier:.gregorian)
@@ -19,7 +19,16 @@ import CryptoKit
             }
         }
     }
-    @Published var zone:String
+    private var changingZone=false
+    @Published var zone:String {
+        didSet {
+            guard zone != oldValue else {return}
+            let day=MomentDates.day(date,zone:oldValue)
+            changingZone=true
+            date=MomentDates.date(day,zone:zone)
+            changingZone=false
+        }
+    }
     @Published var yearly:Bool
     @Published var active:Bool
     @Published var recipients:[ManagedFestivalRecipient]
@@ -57,7 +66,7 @@ import CryptoKit
     private var draftIDs:[String:String]=[:]
     private let analytics=FestivalAnalytics()
     let contactsService=FestivalContactsService()
-    var occasionType:String {originals.first?.type ?? "festival"}
+    @Published var occasionType:String
     var occasionLabel:String {ImportantMoment.label(for:occasionType)}
     var source:String { originals.first?.source ?? "manual" }
     var hasSchedules:Bool {
@@ -70,20 +79,20 @@ import CryptoKit
     var dirty:Bool { fingerprint != baseline }
     var editState:FestivalEditState {FestivalEditState(title:title,day:MomentDates.day(date,zone:zone),zone:zone,yearly:yearly,active:active,recipients:recipients,settings:settings)}
     /// What saving now would change. Message-only approved saves keep existing schedules (the server rewrites their text).
-    var pendingChange:FestivalChange {savedState.map{editState.change(from:$0)} ?? .delivery}
+    var pendingChange:FestivalChange {if occasionType != originals.first?.type {return .delivery};return savedState.map{editState.change(from:$0)} ?? .delivery}
     /// Placeholder wording while the Wish Message is empty; saved only through useSuggestion().
     var suggestion:String {WishMessage.suggestion(type:occasionType,title:title)}
     func useSuggestion() {settings.baseMessage=suggestion;settings.manuallyEdited=false;invalidateApproval()}
     /// Every edit of the wish (Wish Message tab or card editor) goes through here.
     func setMessage(_ text:String) {settings.baseMessage=String(text.prefix(500));settings.manuallyEdited=true;invalidateApproval()}
     private func encoded<T:Encodable>(_ value:T) -> String {let encoder=JSONEncoder();encoder.outputFormatting = [.sortedKeys];return String(data:(try? encoder.encode(value)) ?? Data(),encoding:.utf8) ?? ""}
-    private var fingerprint:String { let state=[title,MomentDates.day(date,zone:zone),zone,String(yearly),String(active),encoded(recipients),encoded(settings)];return state.joined(separator:"|") }
+    private var fingerprint:String { let state=[occasionType,title,MomentDates.day(date,zone:zone),zone,String(yearly),String(active),encoded(recipients),encoded(settings)];return state.joined(separator:"|") }
     init(group:MomentDisplayGroup,store:ImportantMomentsStore,imageService:(any FestivalImageGenerationService)?=nil,imageStorage:any FestivalImageStorageService=ProtectedFestivalImageStorage()) {
         self.store=store;self.originals=group.moments;self.imageService=imageService;self.imageStorage=imageStorage
-        let first=group.moments[0];title=first.title;zone=first.timeZoneID;date=MomentDates.date(first.nextOccurrence,zone:first.timeZoneID);yearly=first.yearly;active=group.moments.contains(where: \.enabled)
+        let first=group.moments[0];occasionType=first.type;title=first.title;zone=first.timeZoneID;date=MomentDates.date(first.occurrenceDate,zone:first.timeZoneID);yearly=first.yearly;active=group.moments.contains(where: \.enabled)
         var saved=FestivalSettings.read(first.festivalSettings) ?? FestivalSettings()
         recipients=group.moments.filter(\.hasRecipient).map { m in
-            let key=m.sourceKey.hasPrefix(m.type+":"+saved.groupID+":") ? String(m.sourceKey.dropFirst(m.type.count+1+saved.groupID.count+1)) : m.id
+            let key=ManagedFestivalRecipient.storedKey(sourceKey:m.sourceKey,groupID:saved.groupID,momentID:m.id)
             return ManagedFestivalRecipient(momentID:m.id,key:key,name:m.firstName,phone:m.phone,email:m.email,selected:saved.selected[key] ?? m.enabled,contactIdentifier:saved.contactIDs[key] ?? "")
         }
         // An empty Wish Message stays empty (the suggestion is only a placeholder); an older card greeting is adopted
@@ -199,7 +208,7 @@ import CryptoKit
     }
     func prepareNextTabAfterSave() {
         guard wishGeneration.allowsSave(busy:busy) else {return}
-        pendingTab = switch tab {case .details: .contacts;case .contacts: .message;case .message: .schedule;case .schedule: nil}
+        pendingTab = switch tab {case .contacts: .message;case .message: .schedule;case .schedule: nil}
     }
     func cancelTabChange() { pendingTab = nil }
     func save(cancelSchedules:Bool=false) async {
@@ -220,7 +229,7 @@ import CryptoKit
         if !recipients.isEmpty, let error=FestivalValidation.recipients(recipients,settings:settings){throw FestivalError.message(error)}
         try contactsService.validate(recipients)
         for r in recipients {settings.contactIDs[r.key]=r.contactIdentifier;settings.selected[r.key]=r.selected}
-        let input=FestivalSaveRequest(ids:originals.map(\.id),title:title,date:MomentDates.day(date,zone:zone),timeZoneID:zone,yearly:yearly,active:active,recipients:recipients,settings:settings,cancelSchedules:cancelSchedules)
+        let input=FestivalSaveRequest(ids:originals.map(\.id),title:title,date:MomentDates.day(date,zone:zone),timeZoneID:zone,yearly:yearly,active:active,recipients:recipients,settings:settings,cancelSchedules:cancelSchedules,type:occasionType)
         let _:MomentOK=try await store.request("festivalSave",input)
         await store.refresh()
         let updated=store.moments.filter{!$0.isArchived && $0.type==occasionType && FestivalSettings.read($0.festivalSettings)?.groupID==settings.groupID}

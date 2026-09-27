@@ -1,3 +1,4 @@
+import { voiceAudioInput } from '@/server/voice/audio-input';
 import { observedFetch } from '@/server/health/telemetry';
 import { healthRoute } from '@/server/health/telemetry';
 import { requireUser } from '@/server/auth';
@@ -17,7 +18,7 @@ async function healthHandlerPOST(req: Request) {
     const transcription = consent.scope === 'shopping'
       ? { model: 'gpt-4o-transcribe', language: 'en', prompt: 'English grocery list dictation. Use English text and Latin-script spellings for grocery names, including regional ingredients such as urad dal, chana dal, curry leaves and chillies. Preserve spoken quantities, units, brands and sizes. Do not invent items or transcribe silence.' }
       : { model: 'gpt-4o-transcribe' };
-    const session = { type: 'transcription', audio: { input: { transcription, ...(consent.scope === 'shopping' ? { noise_reduction: { type: 'near_field' } } : {}), turn_detection: { type: 'server_vad', silence_duration_ms: 1800, prefix_padding_ms: 300 } } } };
+    const session = { type: 'transcription', audio: { input: { transcription, ...voiceAudioInput() } } };
     const model = 'gpt-4o-transcribe';
     const response = await observedFetch('https://api.openai.com/v1/realtime/client_secrets', {
       method: 'POST',

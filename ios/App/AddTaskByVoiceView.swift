@@ -1,18 +1,30 @@
 import SwiftUI
 import AVFoundation
 import Network
+import OSLog
 import Combine
 import MediaPlayer
 
 @MainActor
 private final class VoiceNetworkMonitor: ObservableObject {
     @Published private(set) var isConnected = true
+    @Published private(set) var pathSignature = ""
     private let monitor = NWPathMonitor()
     private let queue = DispatchQueue(label: "com.nexdo.voice.network-monitor")
 
     init() {
         monitor.pathUpdateHandler = { [weak self] path in
-            Task { @MainActor [weak self] in self?.isConnected = path.status == .satisfied }
+            let connected = path.status == .satisfied
+            let interface = path.usesInterfaceType(.wifi) ? "wifi" : path.usesInterfaceType(.cellular) ? "cellular" : path.usesInterfaceType(.wiredEthernet) ? "wired" : "other"
+            let signature = "\(connected)-\(interface)"
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                if self.pathSignature != signature {
+                    Logger(subsystem: "com.nexdo.voice", category: "network").info("Network path: \(signature, privacy: .public)")
+                }
+                self.isConnected = connected
+                self.pathSignature = signature
+            }
         }
         monitor.start(queue: queue)
     }
@@ -189,6 +201,11 @@ struct AddTaskByVoiceView: View {
             if phase == .connectionLost, scenePhase == .active { beginAutomaticRecovery() }
             if phase == .listening {
                 recoveryTask?.cancel(); recoveryTask = nil; recoveryAttempt = 0; recovering = false; startupError = nil
+            }
+        }
+        .onChange(of: connectivity.pathSignature) { _, _ in
+            if connectivity.isConnected, voice.phase == .connectionLost, scenePhase == .active {
+                beginAutomaticRecovery(resetAttempts: true)
             }
         }
         .onDisappear { recoveryTask?.cancel(); readyBell?.stop(); voice.close(); executor.clear(); endBackgroundTask() }

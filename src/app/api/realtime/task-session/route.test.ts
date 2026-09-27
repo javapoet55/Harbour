@@ -34,7 +34,7 @@ it('issues an expiring task-scoped session using the account timezone', async ()
   expect(payload.session.instructions).toContain(nexdoPersonality);
   expect(payload.session.tools.map((tool: { name: string }) => tool.name)).toEqual(expect.arrayContaining(['create_task', 'update_task', 'delete_task', 'complete_task', 'find_tasks', 'get_schedule', 'find_free_time', 'prepare_call', 'prepare_email', 'end_session']));
   expect(payload.session.output_modalities).toEqual(['audio']);
-  expect(payload.session.audio.input.turn_detection).toMatchObject({ type: 'semantic_vad', eagerness: 'high', interrupt_response: true, create_response: false });
+  expect(payload.session.audio.input.turn_detection).toMatchObject({ type: 'server_vad', threshold: 0.65, prefix_padding_ms: 400, silence_duration_ms: 800, interrupt_response: true, create_response: false });
 });
 it('does not leak upstream errors or secrets', async () => {
   upstream.mockResolvedValue(new Response('server-key private diagnostic', { status: 500 }));

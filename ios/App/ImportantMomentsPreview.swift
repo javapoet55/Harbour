@@ -104,14 +104,14 @@ final class MomentsPreviewProtocol: URLProtocol, @unchecked Sendable {
             }
             for i in moments.indices {
                 if let saved=Self.festivalSaved,let ids=saved["ids"] as? [String],let id=moments[i]["id"] as? String,ids.contains(id) {
-                    moments[i]["title"]=saved["title"];moments[i]["occurrenceDate"]=saved["date"];moments[i]["nextOccurrence"]=saved["date"]
+                    moments[i]["type"]=saved["type"] ?? moments[i]["type"];moments[i]["timeZoneID"]=saved["timeZoneID"];moments[i]["title"]=saved["title"];moments[i]["occurrenceDate"]=saved["date"];moments[i]["nextOccurrence"]=saved["date"]
                     moments[i]["enabled"]=saved["active"];moments[i]["yearly"]=saved["yearly"]
                     if let settings=saved["settings"],let data=try? JSONSerialization.data(withJSONObject:settings){moments[i]["festivalSettings"]=String(data:data,encoding:.utf8)}
                 }
             }
             for i in moments.indices {if let id=moments[i]["id"] as? String {moments[i]["card"]=Self.cardImages[id]?.info ?? NSNull()}}
             for i in moments.indices {if let id=moments[i]["id"] as? String,let settings=Self.cardSettings[id],let data=try? JSONSerialization.data(withJSONObject:settings){moments[i]["festivalSettings"]=String(data:data,encoding:.utf8)}}
-            result = ["moments":Self.festivalDeleted ? []:moments,"emailAccount":["email":"you@example.com","status":"connected"],"emailConfigured":true,"automaticEmailEnabled":true]
+            result = ["moments":Self.festivalDeleted ? []:moments,"emailAccount":["email":"you@example.com","status":ProcessInfo.processInfo.arguments.contains("-moment-email-disconnected") ? "disconnected":"connected"],"emailConfigured":true,"automaticEmailEnabled":true]
         }
         let data = try! JSONSerialization.data(withJSONObject: result)
         client?.urlProtocol(self, didReceive: HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: ["Content-Type":"application/json"])!, cacheStoragePolicy: .notAllowed)

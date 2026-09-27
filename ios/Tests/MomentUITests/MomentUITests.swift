@@ -171,6 +171,15 @@ import XCTest
         app.buttons["manage-moment-moment"].tap()
         XCTAssertTrue(app.navigationBars["Manage Moment"].waitForExistence(timeout:5))
     }
+    func openMomentEditor() {
+        let tab=app.buttons["festival-tab-Schedule"]
+        for _ in 0..<6 {if tab.isHittable{break};app.swipeDown()}
+        tab.tap()
+        let edit=app.buttons["moment-edit"]
+        for _ in 0..<5 {if edit.isHittable{break};app.swipeUp()}
+        edit.tap()
+        XCTAssertTrue(app.navigationBars["Edit Moment"].waitForExistence(timeout:5))
+    }
     /// Adds a recipient on Create Moment through "Enter recipient manually" and the Add Recipient sheet.
     func addRecipient(name: String, phone: String = "", email: String = "") {
         let manual = app.buttons["Enter recipient manually"]
@@ -265,7 +274,7 @@ import XCTest
         app.buttons["moment-save-top"].tap()
         XCTAssertTrue(app.navigationBars["Manage Moment"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.staticTexts["Rahul’s Birthday"].firstMatch.exists)
-        for tab in ["Details", "Contacts", "Message", "Schedule"] {
+        for tab in ["Contacts", "Message", "Schedule"] {
             XCTAssertTrue(app.buttons[tab].exists)
         }
     }
@@ -340,8 +349,9 @@ import XCTest
         XCTAssertFalse(app.buttons["Manage recipients"].exists)
         manage.tap()
         XCTAssertTrue(app.navigationBars["Manage Moment"].waitForExistence(timeout: 5))
-        XCTAssertEqual(app.textFields["festival-name"].value as? String, "Happy Diwali")
-        for tab in ["Details", "Contacts", "Message", "Schedule"] {
+        XCTAssertTrue(app.staticTexts["Happy Diwali"].exists)
+        XCTAssertFalse(app.buttons["festival-tab-Details"].exists)
+        for tab in ["Contacts", "Message", "Schedule"] {
             XCTAssertTrue(app.buttons["festival-tab-" + tab].exists)
         }
         app.buttons["festival-tab-Contacts"].tap()
@@ -356,26 +366,15 @@ import XCTest
         XCTAssertTrue(app.buttons["festival-tab-Schedule"].exists)
     }
     func testFestivalSettingsOpensAndPreservesEdits() {
-        openFestivalManager()
-        let name=app.textFields["festival-name"]
-        name.tap();name.typeText(" Edited")
-        let editedName=name.value as? String
-        app.buttons["festival-keyboard-done"].tap()
-        for tab in ["Details","Contacts"] {
-            let button=app.buttons["festival-tab-"+tab]
-            button.tap()
-            // Unsaved edits are saved before the tab switches; the screen ignores taps while that save runs.
-            XCTAssertTrue(waitUntilSelected(button))
-            app.buttons["Moment options"].tap()
-            app.buttons["Festival settings"].tap()
-            XCTAssertTrue(app.navigationBars["Moments Settings"].waitForExistence(timeout:5))
-            XCTAssertTrue(app.buttons["Connect / Reconnect Gmail"].exists)
-            app.navigationBars["Moments Settings"].buttons.firstMatch.tap()
-            XCTAssertTrue(app.navigationBars["Manage Moment"].waitForExistence(timeout:5))
-            XCTAssertTrue(app.buttons["festival-tab-"+tab].isSelected)
-        }
-        app.buttons["festival-tab-Details"].tap()
-        XCTAssertEqual(name.value as? String,editedName)
+        openFestivalManager();openMomentEditor()
+        let name=app.textFields["festival-name"];name.tap();name.typeText(" Edited")
+        app.buttons["moment-edit-save"].tap()
+        XCTAssertTrue(app.buttons["moment-edit"].waitForExistence(timeout:8))
+        app.buttons["Moment options"].tap();app.buttons["Festival settings"].tap()
+        XCTAssertTrue(app.navigationBars["Moments Settings"].waitForExistence(timeout:5))
+        app.navigationBars["Moments Settings"].buttons.firstMatch.tap()
+        app.buttons["moment-edit"].tap()
+        XCTAssertTrue((name.value as? String)?.contains("Edited") == true)
     }
     func testFestivalRegenerateCancellationKeepsEditedWish() {
         openFestivalManager()
@@ -395,23 +394,18 @@ import XCTest
     }
     func testFestivalTabsAutosaveEdits() {
         openFestivalManager()
-        let name=app.textFields["festival-name"];name.tap();name.typeText(" Edited")
-        // Close the keyboard first: a tap while the scroll view is still settling after typing only stops the scroll.
-        app.buttons["festival-keyboard-done"].tap()
-        // A tab change with unsaved edits saves them first, then switches once the save finishes.
-        app.buttons["festival-tab-Contacts"].tap()
-        XCTAssertTrue(app.staticTexts["Recipients"].waitForExistence(timeout:8))
         XCTAssertTrue(app.buttons["festival-tab-Contacts"].isSelected)
-        XCTAssertEqual(app.staticTexts["festival-notice"].label,"Moment changes saved.")
+        XCTAssertFalse(app.buttons["festival-tab-Details"].exists)
+        openMomentEditor()
+        let name=app.textFields["festival-name"];name.tap();name.typeText(" Edited")
+        app.buttons["moment-edit-save"].tap()
+        XCTAssertTrue(app.buttons["moment-edit"].waitForExistence(timeout:8))
+        app.buttons["festival-tab-Contacts"].tap()
+        XCTAssertTrue(app.staticTexts["Damien"].waitForExistence(timeout:5))
         app.buttons["festival-tab-Message"].tap()
-        XCTAssertTrue(app.textViews["Festival wish message"].waitForExistence(timeout:8))
-        app.buttons["festival-tab-Details"].tap()
+        XCTAssertTrue(app.textViews["Festival wish message"].waitForExistence(timeout:5))
+        openMomentEditor()
         XCTAssertTrue((name.value as? String)?.contains("Edited") == true)
-        app.navigationBars.buttons["Back"].tap()
-        XCTAssertTrue(app.navigationBars["Manage Moments"].waitForExistence(timeout:5))
-        app.buttons["manage-moment-moment"].tap()
-        XCTAssertTrue(app.navigationBars["Manage Moment"].waitForExistence(timeout:5))
-        XCTAssertTrue((app.textFields["festival-name"].value as? String)?.contains("Edited") == true)
     }
     func testFestivalImagePreviewAndSelection() {
         openFestivalManager();app.buttons["festival-tab-Message"].tap()
@@ -446,7 +440,7 @@ import XCTest
         let moment=app.buttons["manage-moment-"+id]
         for _ in 0..<5 {if moment.isHittable{break};app.swipeUp()};moment.tap()
         XCTAssertTrue(app.navigationBars["Manage Moment"].waitForExistence(timeout:5))
-        for tab in ["Details","Contacts","Message","Schedule"] {XCTAssertTrue(app.buttons["festival-tab-"+tab].exists)}
+        for tab in ["Contacts","Message","Schedule"] {XCTAssertTrue(app.buttons["festival-tab-"+tab].exists)}
         app.buttons["festival-tab-Message"].tap()
         let create=app.buttons["Create AI Greeting Card"]
         for _ in 0..<7 {if create.isHittable{break};app.swipeUp()};create.tap()
@@ -496,7 +490,7 @@ import XCTest
     }
     func testSavingMomentAdvancesThroughTabs() {
         openFestivalManager()
-        for target in ["Contacts","Message"] {
+        for target in ["Message"] {
             let save=app.buttons.matching(identifier:"wish-primary").matching(NSPredicate(format:"label == %@","Save Changes")).firstMatch
             for _ in 0..<8 {if save.isHittable{break};app.swipeUp()}
             save.tap()
@@ -513,43 +507,20 @@ import XCTest
         XCTAssertTrue(schedule.isSelected)
         XCTAssertTrue(schedule.isHittable)
     }
-    func testFestivalDetailsDateUpdatesSendDate() {
-        openFestivalManager()
-        let picker=app.buttons["festival-details-date"]
-        for _ in 0..<4 {if picker.isHittable{break};app.swipeUp()}
-        picker.tap()
-        var calendar=Calendar(identifier:.gregorian)
-        calendar.timeZone=TimeZone(identifier:"America/Los_Angeles")!
-        let original=Date().addingTimeInterval(30*86400)
-        let changed=calendar.date(byAdding:.day,value:calendar.component(.day,from:original)==1 ? 1 : -1,to:original)!
-        let formatter=DateFormatter()
-        // The graphical picker labels days in the device's locale ("Friday, October 23" or "Friday, 23 October").
-        formatter.locale = .current;formatter.timeZone=calendar.timeZone
-        formatter.setLocalizedDateFormatFromTemplate("EEEEMMMMd")
-        app.buttons[formatter.string(from:changed)].tap()
-        formatter.locale=Locale(identifier:"en_US_POSIX")
-        app.navigationBars["Select Date"].buttons["Done"].tap()
-        formatter.dateFormat="EEE, MMM d, yyyy"
-        let expected="Moment date · " + formatter.string(from:changed)
-        for _ in 0..<4 {if app.staticTexts["festival-send-date"].isHittable{break};app.swipeDown()}
-        XCTAssertEqual(app.staticTexts["festival-send-date"].label,expected)
-        let save=app.buttons.matching(identifier:"wish-primary").matching(NSPredicate(format:"label == %@","Save Changes")).firstMatch
-        for _ in 0..<7 {if save.isHittable{break};app.swipeUp()}
-        save.tap()
-        XCTAssertTrue(app.staticTexts["Moment changes saved."].waitForExistence(timeout:8))
-        app.navigationBars["Manage Moment"].buttons["Back"].tap()
-        app.buttons["manage-moment-moment"].tap()
-        XCTAssertEqual(app.staticTexts["festival-send-date"].label,expected)
-        app.buttons["festival-tab-Schedule"].tap()
-        XCTAssertEqual(app.staticTexts["festival-send-date"].label, expected)
-        XCTAssertTrue(app.datePickers.firstMatch.exists)
-        // This runtime does not expose a value for the compact picker. Keep visual evidence.
-        let screenshot = XCTAttachment(screenshot: app.screenshot())
-        screenshot.name = "Schedule date after saved festival date change"
-        screenshot.lifetime = .keepAlways; add(screenshot)
+    func testMomentEditTypeDateAndRepeat() {
+        openFestivalManager();openMomentEditor()
+        XCTAssertTrue(app.datePickers["moment-edit-date"].exists)
+        app.buttons["moment-edit-type"].tap();app.buttons["Birthday"].tap()
+        let repeatSwitch=app.switches["moment-edit-repeat"]
+        repeatSwitch.coordinate(withNormalizedOffset:CGVector(dx:0.92,dy:0.5)).tap()
+        app.buttons["moment-edit-save"].tap()
+        XCTAssertTrue(app.buttons["moment-edit"].waitForExistence(timeout:8))
+        XCTAssertTrue(app.staticTexts["Birthday"].firstMatch.exists)
+        app.buttons["moment-edit"].tap()
+        XCTAssertEqual(app.switches["moment-edit-repeat"].value as? String,"1")
     }
     func testFestivalNameKeyboardDone() {
-        openFestivalManager()
+        openFestivalManager();openMomentEditor()
         let name=app.textFields["festival-name"]
         name.tap()
         XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout:5))
@@ -574,22 +545,68 @@ import XCTest
     func testFestivalDoneReturnsToImportantMomentsFromCard() {
         verifyFestivalDoneReturnsToImportantMoments(direct:true)
     }
-    func testFailedAutosaveKeepsEditsAndAllowsTabNavigation() {
-        openFestivalManager()
-        let name=app.textFields["festival-name"]
-        name.tap();name.press(forDuration:1.2)
-        if app.menuItems["Select All"].exists {app.menuItems["Select All"].tap()}
-        else if app.buttons["Select All"].exists {app.buttons["Select All"].tap()}
-        name.typeText(XCUIKeyboardKey.delete.rawValue)
-        if app.buttons["festival-keyboard-done"].exists {app.buttons["festival-keyboard-done"].tap()}
-        app.buttons["festival-tab-Contacts"].tap()
-        XCTAssertTrue(app.staticTexts["Recipients"].waitForExistence(timeout:5))
-        app.buttons["festival-tab-Details"].tap()
-        XCTAssertEqual(name.value as? String, "Moment name") // Empty text fields expose their placeholder to XCTest.
-        name.tap();name.typeText("Corrected moment")
-        if app.buttons["festival-keyboard-done"].exists {app.buttons["festival-keyboard-done"].tap()}
-        app.buttons["festival-tab-Contacts"].tap()
-        XCTAssertTrue(app.staticTexts["Recipients"].waitForExistence(timeout:5))
+    func testMomentEditDatePersists() {
+        openFestivalManager();openMomentEditor()
+        app.datePickers["moment-edit-date"].tap()
+        var calendar=Calendar(identifier:.gregorian)
+        calendar.timeZone=TimeZone(identifier:"America/Los_Angeles")!
+        let original=Date().addingTimeInterval(30*86400)
+        let changed=calendar.date(byAdding:.day,value:calendar.component(.day,from:original)==1 ? 1 : -1,to:original)!
+        let formatter=DateFormatter();formatter.locale = .current;formatter.timeZone=calendar.timeZone
+        formatter.setLocalizedDateFormatFromTemplate("EEEEMMMMd")
+        app.buttons[formatter.string(from:changed)].tap()
+        app.navigationBars["Edit Moment"].staticTexts["Edit Moment"].tap()
+        let save=app.buttons["moment-edit-save"]
+        let ready=expectation(for:NSPredicate(format:"hittable == true"),evaluatedWith:save)
+        XCTAssertEqual(XCTWaiter().wait(for:[ready],timeout:5),.completed)
+        save.tap()
+        let closed=expectation(for:NSPredicate(format:"exists == false"),evaluatedWith:app.navigationBars["Edit Moment"])
+        XCTAssertEqual(XCTWaiter().wait(for:[closed],timeout:8),.completed)
+        formatter.locale=Locale(identifier:"en_US_POSIX");formatter.dateFormat="EEE, MMM d, yyyy"
+        XCTAssertEqual(app.staticTexts["festival-send-date"].label,formatter.string(from:changed))
+        app.navigationBars["Manage Moment"].buttons["Back"].tap()
+        app.buttons["manage-filter-Need Review"].tap()
+        app.buttons["manage-moment-moment"].tap()
+        XCTAssertEqual(app.staticTexts["festival-send-date"].label,formatter.string(from:changed))
+    }
+    func testScheduleReminderSettingsPersist() {
+        openFestivalManager();app.buttons["festival-tab-Schedule"].tap()
+        let preparation=app.buttons["moment-prepare-reminder"]
+        for _ in 0..<6 {if preparation.isHittable{break};app.swipeUp()}
+        preparation.tap();app.buttons["4 hours before"].tap()
+        let notify=app.switches["moment-send-reminder"]
+        for _ in 0..<6 {if notify.isHittable{break};app.swipeUp()}
+        notify.coordinate(withNormalizedOffset:CGVector(dx:0.92,dy:0.5)).tap()
+        let expected=notify.value as? String
+        XCTAssertFalse(app.buttons["Connect / Reconnect email"].exists)
+        let save=app.buttons.matching(identifier:"wish-primary").matching(NSPredicate(format:"label == %@","Save Changes")).firstMatch
+        for _ in 0..<6 {if save.isHittable{break};app.swipeUp()};save.tap()
+        app.navigationBars["Manage Moment"].buttons["Back"].tap()
+        app.buttons["manage-filter-Need Review"].tap()
+        app.buttons["manage-moment-moment"].tap();app.buttons["festival-tab-Schedule"].tap()
+        for _ in 0..<6 {if preparation.isHittable{break};app.swipeUp()}
+        XCTAssertTrue(preparation.label.contains("4 hours before"))
+        for _ in 0..<6 {if notify.isHittable{break};app.swipeUp()}
+        XCTAssertEqual(notify.value as? String,expected)
+    }
+    func testEmailConnectionOnlyForEmailRecipients() {
+        app.launchArguments.append("-moment-email-disconnected")
+        openFestivalManager();app.buttons["festival-tab-Schedule"].tap()
+        let channel=app.buttons.matching(NSPredicate(format:"label BEGINSWITH %@","Channel for Damien")).firstMatch
+        for _ in 0..<6 {if channel.isHittable{break};app.swipeUp()}
+        XCTAssertFalse(app.buttons["Connect / Reconnect email"].exists)
+        channel.tap();app.buttons["Email"].tap()
+        let connect=app.buttons["Connect / Reconnect email"]
+        for _ in 0..<5 {if connect.isHittable{break};app.swipeUp()}
+        XCTAssertTrue(connect.exists)
+    }
+    func testMomentEditCancelPreservesDetails() {
+        openFestivalManager();openMomentEditor()
+        let name=app.textFields["festival-name"];let original=name.value as? String
+        name.tap();name.typeText(" Discard this")
+        app.navigationBars["Edit Moment"].buttons["Cancel"].tap()
+        app.buttons["moment-edit"].tap()
+        XCTAssertEqual(name.value as? String,original)
     }
     func testSentTabExplainsEmptyHistory() {
         app.buttons["Sent"].tap()
@@ -730,7 +747,7 @@ import XCTest
         app.buttons["moments-manage"].firstMatch.tap()
         app.buttons["manage-moment-moment"].tap()
         XCTAssertTrue(app.navigationBars["Manage Moment"].waitForExistence(timeout:5))
-        app.buttons["festival-tab-Details"].tap()
+        app.buttons["festival-tab-Schedule"].tap()
         let repeatSwitch=app.switches["Repeat every year"]
         for _ in 0..<5 {if repeatSwitch.isHittable{break};app.swipeUp()}
         let previousRepeat=repeatSwitch.value as? String
@@ -741,14 +758,14 @@ import XCTest
         saveDetails.tap()
         XCTAssertTrue(app.alerts["Save changes to scheduled wishes?"].waitForExistence(timeout:5))
         app.alerts.buttons["Cancel schedules and save"].tap()
-        XCTAssertTrue(app.staticTexts["Changes saved. Review and schedule your updated wish again."].waitForExistence(timeout:8))
+        XCTAssertTrue(app.buttons["Schedule Wish"].waitForExistence(timeout:8))
         for _ in 0..<6 {if app.buttons["festival-tab-Schedule"].isHittable{break};app.swipeDown()}
         app.buttons["festival-tab-Schedule"].tap()
         XCTAssertFalse(app.buttons["Cancelled · Messages"].exists)
     }
     func testFestivalVisualTabs() {
         openFestivalManager()
-        for tab in ["Details","Contacts","Message","Schedule"] {
+        for tab in ["Contacts","Message","Schedule"] {
             let button=app.buttons["festival-tab-"+tab];button.tap()
             XCTAssertTrue(button.isSelected)
             let shot=XCTAttachment(screenshot:app.screenshot());shot.name="Manage Festival - "+tab;shot.lifetime = .keepAlways;add(shot)
