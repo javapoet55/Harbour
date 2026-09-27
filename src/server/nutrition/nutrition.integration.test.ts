@@ -4,7 +4,8 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 vi.mock('node:crypto', async orig => ({ ...(await orig<typeof import('node:crypto')>()), randomInt: () => 123456 }));
 let sidCounter = 0;
 const dialMock = vi.fn(async () => ({ sid: `CA_test_${++sidCounter}` }));
-vi.mock('@/server/nutrition/twilio', async orig => ({ ...(await orig<typeof import('@/server/nutrition/twilio')>()), createTwilioCall: (...a: unknown[]) => dialMock(...(a as [])) }));
+const codeCall = vi.fn(async (req: { to: string; code: string }) => ({ sid: req.to ? 'CA_code' : '' }));
+vi.mock('@/server/nutrition/twilio', async orig => ({ ...(await orig<typeof import('@/server/nutrition/twilio')>()), createTwilioCall: (...a: unknown[]) => dialMock(...(a as [])), placeCodeCall: (req: { to: string; code: string }) => codeCall(req) }));
 const push = vi.fn(async () => ({ status: 'SENT' }));
 const sms = vi.fn(async (message?: { to: string; text: string }) => ({ id: message ? 's' : '', status: 'SENT' }));
 vi.mock('@/providers', async orig => ({ ...(await orig<typeof import('@/providers')>()), pushProvider: { name: 'test', send: (...a: unknown[]) => push(...(a as [])) }, smsProvider: { name: 'test', send: (...a: unknown[]) => sms(...(a as [])) } }));
@@ -42,7 +43,9 @@ describe('settings and phone verification', () => {
     expect(s).toMatchObject({ enabled: true, voice: 'cedar', noAnswer: 'RETRY_ONCE', calorieGoal: 1800, phone: '+14155550123' });
     expect((await prisma.nutritionCallSettings.findUnique({ where: { userId } }))?.consentAt).not.toBeNull();
     await expect(updateSettings(userId, 'x', { voice: 'fable' })).rejects.toBeInstanceOf(ZodError);
-    expect((sms.mock.calls[0][0] as { to: string; text: string })).toEqual({ to: '+14155550123', text: 'Your NexDo check-in code is 123456. It expires in 10 minutes.' });
+    expect(codeCall).toHaveBeenCalledTimes(1);                       // the code is read aloud by phone call, not SMS
+    expect(codeCall.mock.calls[0][0]).toMatchObject({ to: '+14155550123', code: '123456', from: '+15550000000' });
+    expect(sms).not.toHaveBeenCalled();
   });
 });
 

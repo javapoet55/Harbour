@@ -3,7 +3,7 @@ import { calculateCalories, portionGrams } from './calories';
 import { keyWords } from './text';
 import { nutritionCallSession, nutritionCallTools } from './session';
 import { dateRange, dueCall, effectiveCallTime, withinCallWindow } from './time';
-import { callToken, streamTwiml, twilioSignature, validTwilioRequest, verifyCallToken } from './twilio';
+import { callToken, codeTwiml, streamTwiml, twilioSignature, validTwilioRequest, verifyCallToken } from './twilio';
 import type { FoodFacts } from '@/server/shopping/food/model';
 
 const facts = (kcalPer100: number, unit: 'g' | 'ml' = 'g'): FoodFacts => ({
@@ -81,6 +81,11 @@ describe('twilio and worker tokens', () => {
     expect(verifyCallToken('other', token)).toBeNull();
     expect(verifyCallToken('s3cret', token.replace('call_1', 'call_2'))).toBeNull();
     expect(verifyCallToken('', token)).toBeNull();
+  });
+  it('reads the verification code aloud digit by digit, three times', () => {
+    const twiml = codeTwiml('042917');
+    expect(twiml.match(/0, 4, 2, 9, 1, 7/g)).toHaveLength(3);
+    expect(twiml).toContain('<Say voice="Polly.Joanna">');
   });
   it('escapes TwiML attributes', () => {
     expect(streamTwiml('wss://w.example.com/twilio-media', 'a"b<c')).toContain('value="a&quot;b&lt;c"');

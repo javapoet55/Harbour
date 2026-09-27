@@ -2,9 +2,10 @@ import { createHash, randomInt, timingSafeEqual } from 'node:crypto';
 import { z } from 'zod';
 import { prisma } from '@/server/db';
 import { smsProvider } from '@/providers';
-import { DEFAULT_VOICE, isRealtimeVoice, NO_ANSWER_POLICIES, REALTIME_VOICES } from './config';
+import { DEFAULT_VOICE, isRealtimeVoice, NO_ANSWER_POLICIES, nutritionCallConfig, REALTIME_VOICES } from './config';
 import { NutritionError } from './errors';
 import { isLocalTime, isTimeZone } from './time';
+import { placeCodeCall } from './twilio';
 
 const CODE_TTL_MS = 10 * 60_000;
 const RESEND_MS = 60_000;
@@ -67,9 +68,15 @@ export async function updateSettings(userId: string, fallbackTimeZone: string, r
   return publicSettings(row, fallbackTimeZone);
 }
 
+export const codeChannel = () => (process.env.NUTRITION_PHONE_CODE_CHANNEL === 'sms' ? 'sms' : 'voice');
+
 const hashCode = (userId: string, code: string) => createHash('sha256').update(`nutrition-phone:${userId}:${code}`).digest('hex');
 
-/** Sends a 6-digit SMS code. Changing the number turns calls off until the new number is verified. */
+/**
+ * Sends a 6-digit code. By default it is read aloud in a short phone call from the voice number
+ * (NUTRITION_PHONE_CODE_CHANNEL=voice), because the number is not registered for SMS; set it to
+ * "sms" once A2P messaging is approved. Changing the number turns calls off until it is verified.
+ */
 export async function startPhoneVerification(userId: string, fallbackTimeZone: string, phone: unknown, now = new Date()) {
   if (typeof phone !== 'string' || !E164.test(phone.trim())) throw new NutritionError('INVALID_PHONE');
   const phoneE164 = phone.trim();
@@ -81,9 +88,16 @@ export async function startPhoneVerification(userId: string, fallbackTimeZone: s
     phoneCodeHash: hashCode(userId, code), phoneCodeExpiresAt: new Date(now.getTime() + CODE_TTL_MS), phoneCodeAttempts: 0, phoneCodeSentAt: now,
   };
   await prisma.nutritionCallSettings.upsert({ where: { userId }, create: { userId, timeZone: fallbackTimeZone, ...data }, update: data });
+  if (codeChannel() === 'voice') {
+    const { twilio } = nutritionCallConfig();
+    if (!twilio.accountSid || !twilio.authToken || !twilio.from) throw new NutritionError('CODE_UNAVAILABLE');
+    const call = await placeCodeCall({ accountSid: twilio.accountSid, authToken: twilio.authToken, from: twilio.from, to: phoneE164, code });
+    if ('error' in call) throw new NutritionError('CODE_UNAVAILABLE');
+    return { sent: true, channel: 'voice' as const };
+  }
   const sent = await smsProvider.send({ to: phoneE164, text: `Your NexDo check-in code is ${code}. It expires in 10 minutes.` });
-  if (sent.status !== 'SENT') throw new NutritionError('SMS_UNAVAILABLE');
-  return { sent: true };
+  if (sent.status !== 'SENT') throw new NutritionError('CODE_UNAVAILABLE');
+  return { sent: true, channel: 'sms' as const };
 }
 
 export async function verifyPhone(userId: string, fallbackTimeZone: string, code: unknown, now = new Date()) {

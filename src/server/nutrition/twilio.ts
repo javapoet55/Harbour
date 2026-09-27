@@ -72,3 +72,26 @@ export async function createTwilioCall(req: DialRequest, fetchImpl: typeof obser
     return { sid: payload.sid };
   } catch { return { error: 'twilio_request_failed' }; }
 }
+
+/** Reads a verification code aloud (voice-only numbers cannot send SMS). No machine detection: voicemail is acceptable. */
+export function codeTwiml(code: string): string {
+  const spoken = code.split('').join(', ');
+  const say = (text: string) => `<Say voice="Polly.Joanna">${xmlEscape(text)}</Say>`;
+  return `<?xml version="1.0" encoding="UTF-8"?><Response><Pause length="1"/>${say(`Your NexDo verification code is ${spoken}.`)}<Pause length="1"/>${say(`Again, your code is ${spoken}.`)}<Pause length="1"/>${say(`One more time: ${spoken}. Goodbye.`)}</Response>`;
+}
+
+export type CodeCallRequest = { accountSid: string; authToken: string; from: string; to: string; code: string };
+
+export async function placeCodeCall(req: CodeCallRequest, fetchImpl: typeof observedFetch = observedFetch): Promise<{ sid: string } | { error: string }> {
+  const body = new URLSearchParams({ To: req.to, From: req.from, Twiml: codeTwiml(req.code), Timeout: '30', TimeLimit: '60' });
+  try {
+    const response = await fetchImpl(`https://api.twilio.com/2010-04-01/Accounts/${encodeURIComponent(req.accountSid)}/Calls.json`, {
+      method: 'POST',
+      headers: { Authorization: `Basic ${Buffer.from(`${req.accountSid}:${req.authToken}`).toString('base64')}`, 'Content-Type': 'application/x-www-form-urlencoded' },
+      body,
+    });
+    const payload = await response.json().catch(() => ({})) as { sid?: string };
+    if (!response.ok || !payload.sid) return { error: `twilio_${response.status}` };
+    return { sid: payload.sid };
+  } catch { return { error: 'twilio_request_failed' }; }
+}

@@ -13,7 +13,7 @@ const responses = {
   CODE_THROTTLED: [429, 'Please wait a minute before requesting another code.'],
   CALL_COOLDOWN: [429, 'A test call was placed recently. Try again in a few minutes.'],
   OUTSIDE_CALL_WINDOW: [409, 'Calls can only be placed between 8:00 AM and 9:30 PM your time.'],
-  SMS_UNAVAILABLE: [503, 'We couldn’t send the code right now. Please try again shortly.'],
+  CODE_UNAVAILABLE: [503, 'We couldn’t send the code right now. Please try again shortly.'],
   CALLS_UNAVAILABLE: [503, 'Check-in calls are not available yet.'],
   NOT_FOUND: [404, 'Not found.'],
 } as const;
