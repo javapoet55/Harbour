@@ -841,6 +841,17 @@ final class AppModel: ObservableObject {
         focusSession = nil
         taskQuery = TaskQuery(); tasksLoadFailed = false; profile = nil; voiceUsage = nil; tasks = []; agenda = nil; scheduleIntelligence = nil; weather = nil; withdrawConsent()
     }
+    func submitFeedback(id: UUID, title: String, description: String, stars: Int) async throws {
+        struct Input: Encodable { let id: String; let title: String; let description: String; let stars: Int }
+        let _: Ignore = try await api.request("/api/feedback", method: "POST",
+            body: JSONEncoder().encode(Input(id: id.uuidString, title: title, description: description, stars: stars)))
+    }
+    func changePassword(current: String, new: String, confirmation: String) async throws {
+        struct Input: Encodable { let currentPassword: String; let newPassword: String; let confirmPassword: String }
+        let _: Ignore = try await api.request("/api/auth/change-password", method: "POST",
+            body: JSONEncoder().encode(Input(currentPassword: current, newPassword: new, confirmPassword: confirmation)))
+        await reset()
+    }
     func logout() async {
         guard !busy else { return }
         busy = true

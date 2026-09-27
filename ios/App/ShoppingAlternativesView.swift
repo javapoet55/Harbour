@@ -281,6 +281,15 @@ struct ShoppingAlternativeDetails: View {
     @State private var saving = false
     @State private var error: String?
     private var comparison: ShoppingComparison { .init(original: originalFacts, alternative: alternative.facts) }
+    private var hasDietaryInformation: Bool {
+        guard let facts = alternative.facts, facts.hasSource else { return false }
+        let values = (facts.contains ?? []) + (facts.freeFrom ?? []) + (facts.mayContain ?? []) + (facts.dietary ?? []) + [facts.ingredientText ?? ""]
+        return values.contains { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+    }
+    private var supportedUsages: [String] {
+        guard let facts = alternative.facts, facts.hasSource else { return [] }
+        return (facts.bestFor ?? []).filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+    }
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
@@ -290,10 +299,14 @@ struct ShoppingAlternativeDetails: View {
                         .foregroundStyle(.white).background(NexdoTheme.gradient, in: RoundedRectangle(cornerRadius: 16))
                 }.buttonStyle(.plain).accessibilityIdentifier("alternative.askAI")
                 nutrition
-                DisclosureGroup("Allergens & dietary information") { allergens.padding(.top, 12) }
-                    .accessibilityIdentifier("alternative.tab.Allergens")
-                DisclosureGroup("Best for") { bestFor.padding(.top, 12) }
-                    .accessibilityIdentifier("alternative.tab.Best For")
+                if hasDietaryInformation {
+                    DisclosureGroup("Allergens & dietary information") { allergens.padding(.top, 12) }
+                        .accessibilityIdentifier("alternative.tab.Allergens")
+                }
+                if !supportedUsages.isEmpty {
+                    DisclosureGroup("Best for") { bestFor.padding(.top, 12) }
+                        .accessibilityIdentifier("alternative.tab.Best For")
+                }
                 if let error { Text(error).foregroundStyle(.red).accessibilityIdentifier("alternative.saveError") }
                 VStack(spacing: 10) {
                     Button { perform(add: false) } label: { Text("Replace with this item").frame(maxWidth: .infinity) }
@@ -465,11 +478,11 @@ struct ShoppingAlternativeDetails: View {
     }
     private var bestFor: some View {
         VStack(alignment: .leading, spacing: 14) {
-            if alternative.usages.isEmpty { Text("Usage recommendations unavailable") }
+            if supportedUsages.isEmpty { EmptyView() }
             else {
                 Text("Best for").font(.title3.bold())
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 100))], spacing: 16) {
-                    ForEach(alternative.usages, id: \.self) { usage in
+                    ForEach(supportedUsages, id: \.self) { usage in
                         VStack(spacing: 8) {
                             Image(systemName: usageIcon(usage)).font(.title2).foregroundStyle(Color.nexdoBlue).frame(width: 54, height: 54).background(Color.nexdoBlue.opacity(0.1), in: Circle())
                             Text(usage).font(.subheadline)

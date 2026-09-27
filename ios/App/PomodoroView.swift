@@ -8,6 +8,7 @@ struct PomodoroView: View {
     @State private var category: PomodoroCategory = .focus
     @State private var name = ""
     @State private var minutes = 25
+    @ScaledMetric(relativeTo: .body) private var startButtonSpacing = 60
     @State private var autoBreak = true
     @State private var sound = true
     @State private var stopping = false
@@ -94,20 +95,26 @@ struct PomodoroView: View {
                 }
             }.padding(3).background(.white, in: RoundedRectangle(cornerRadius: 18)).shadow(color: .indigo.opacity(0.08), radius: 8, y: 3)
             VStack(alignment: .leading, spacing: 8) {
-                Text("Session name (optional)")
-                TextField("What will you focus on?", text: $name).padding(12).background(.white, in: RoundedRectangle(cornerRadius: 14)).onChange(of: name) { _, value in name = String(value.prefix(120)) }.accessibilityIdentifier("pomodoro-name")
+                Text("+ Session name")
+                TextField("What will you focus on?", text: $name)
+                    .padding(12)
+                    .background(.white, in: RoundedRectangle(cornerRadius: 14))
+                    .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(Color.nexdoIndigo.opacity(0.5), lineWidth: 1.5).allowsHitTesting(false))
+                    .onChange(of: name) { _, value in name = String(value.prefix(120)) }
+                    .accessibilityLabel("Session name (optional)").accessibilityIdentifier("pomodoro-name")
             }
             VStack(alignment: .leading, spacing: 8) {
                 Text("Focus Duration")
                 HStack {
-                    Button { minutes = max(1, minutes - 1) } label: { Image(systemName: "minus.circle").font(.title2).frame(width: 44, height: 44) }.disabled(minutes == 1).accessibilityLabel("Decrease focus duration")
+                    Button { minutes = max(5, minutes - 5) } label: { Image(systemName: "minus.circle").font(.title2).frame(width: 44, height: 44) }.disabled(minutes <= 5).accessibilityLabel("Decrease focus duration by 5 minutes")
                     Spacer(); Text("\(minutes) min").font(.headline).monospacedDigit(); Spacer()
-                    Button { minutes = min(120, minutes + 1) } label: { Image(systemName: "plus.circle").font(.title2).frame(width: 44, height: 44) }.disabled(minutes == 120).accessibilityLabel("Increase focus duration")
+                    Button { minutes = min(120, minutes + 5) } label: { Image(systemName: "plus.circle").font(.title2).frame(width: 44, height: 44) }.disabled(minutes == 120).accessibilityLabel("Increase focus duration by 5 minutes")
                 }.background(.white, in: RoundedRectangle(cornerRadius: 14))
             }
             Toggle(isOn: $autoBreak) { VStack(alignment: .leading, spacing: 4) { Text("Auto Start Break"); Text("Start a 5-minute break automatically after focus.").font(.caption).foregroundStyle(.secondary) } }
             Toggle("Play Sound", isOn: $sound)
             primary("Start Focus Session") { store.start(category: category, name: name, minutes: minutes, autoBreak: autoBreak, sound: sound) }
+                .padding(.top, max(0, startButtonSpacing - 12))
         }
     }
     private func timer(_ session: PomodoroSession, compact: Bool) -> some View {
@@ -125,7 +132,7 @@ struct PomodoroView: View {
                         .stroke(AngularGradient(colors: isBreak ? [.blue, .cyan, .blue.opacity(0.3)] : [.purple, .pink, .pink.opacity(0.3)], center: .center), style: StrokeStyle(lineWidth: 15, lineCap: .round))
                         .rotationEffect(.degrees(-90)).animation(reduceMotion ? nil : .linear(duration: 1), value: seconds)
                     VStack(spacing: 8) {
-                        if isBreak { Text("☕").font(.system(size: compact ? 48 : 65)) } else { Image("pomodoro-tomato").resizable().scaledToFit().frame(width: compact ? 65 : 90, height: compact ? 60 : 82).blendMode(.multiply).accessibilityHidden(true) }
+                        if isBreak { Text("☕").font(.system(size: compact ? 48 : 65)) } else { Image("pomodoro-tomato").resizable().scaledToFit().frame(width: compact ? 65 : 90, height: compact ? 60 : 82).accessibilityHidden(true) }
                         Text(String(format: "%02d:%02d", seconds / 60, seconds % 60)).font(.system(size: compact ? 42 : 54, weight: .bold, design: .rounded)).monospacedDigit().minimumScaleFactor(0.6)
                         Text(session.paused ? "Paused" : (isBreak ? "Short Break" : "Focus Time")).font(.title3)
                     }.padding(compact ? 15 : 30)

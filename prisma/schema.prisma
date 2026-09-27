@@ -9,6 +9,7 @@ datasource db {
 }
 
 model User {
+  feedback Feedback[]
   pomodoroSessions PomodoroSession[]
   adminLoginTokens AdminLoginToken[]
   shoppingLists ShoppingList[]
@@ -43,6 +44,19 @@ model User {
   authIdentities     AuthIdentity[]
   passwordResetTokens PasswordResetToken[]
   emailVerificationTokens EmailVerificationToken[]
+}
+
+model Feedback {
+  id String @id
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  customerName String
+  title String @db.VarChar(160)
+  description String @db.VarChar(5000)
+  stars Int
+  createdAt DateTime @default(now())
+  @@index([createdAt, id])
+  @@index([userId])
 }
 
 model EmailVerificationToken {

@@ -4,9 +4,10 @@ import Link from 'next/link';
 import { NexdoLogo } from '@/components/nexdo-logo';
 import { useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
-import { BarChart3, Bot, CircleDollarSign, Gauge, HeartPulse, LogOut, Mic2, Users } from 'lucide-react';
+import { BarChart3, Bot, CircleDollarSign, Gauge, HeartPulse, LogOut, Mic2, Users, MessageSquare } from 'lucide-react';
 
 const links = [
+  { href: '/feedback', label: 'Feedback', icon: MessageSquare },
   { href: '/', label: 'Overview', icon: Gauge },
   { href: '/ask', label: 'Ask Nexdo', icon: Bot },
   { href: '/users', label: 'Users', icon: Users },

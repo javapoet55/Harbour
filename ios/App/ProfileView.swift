@@ -62,15 +62,10 @@ struct AccountView: View {
                         }
                     }.padding(.vertical, 8)
                     voiceUsageCard
+                    NavigationLink { FeedbackView() } label: { menuRow("Feedback", "bubble.left.and.text.bubble.right") }
                     NavigationLink { ProfileSettingsView() } label: { menuRow("Edit profile and settings", "person.crop.circle") }
-                    VStack(spacing: 0) {
-                        webRow("Inbox", "tray", "/inbox")
-                        webRow("Waiting For", "stopwatch", "/waiting")
-                        webRow("AI Planner", "sparkles", "/planner")
-                        webRow("Insights", "chart.bar", "/insights")
-                        webRow("Notifications", "bell", "/notifications")
-                        NavigationLink { ProfileSettingsView() } label: { menuRow("Settings", "slider.horizontal.3") }
-                    }.padding(8).profileCard()
+                    NavigationLink { ChangePasswordView() } label: { menuRow("Change password", "lock.rotation") }
+                        .padding(8).profileCard()
                     Button("Sign out", role: .destructive) { confirmsSignOut = true }
                         .frame(maxWidth: .infinity, minHeight: 46).background(.background, in: RoundedRectangle(cornerRadius: 14))
                         .disabled(model.busy)
@@ -81,7 +76,10 @@ struct AccountView: View {
             .confirmationDialog("Sign out of Nexdo?", isPresented: $confirmsSignOut) {
                 Button("Sign out", role: .destructive) { Task { await model.logout(); if model.profile == nil { dismiss() } } }
             }
-            .task { await model.refreshVoiceUsage() }
+            .task {
+                try? await model.reloadProfile()
+                await model.refreshVoiceUsage()
+            }
         }.tint(.nexdoIndigo)
     }
 
@@ -145,6 +143,56 @@ struct AccountView: View {
     private func webRow(_ title: String, _ icon: String, _ path: String) -> some View {
         Button { openURL(AppEnvironment.web(path)) } label: { menuRow(title, icon, web: true) }
             .accessibilityHint("Opens Nexdo in your browser")
+    }
+}
+
+private struct ChangePasswordView: View {
+    @EnvironmentObject private var model: AppModel
+    @State private var current = ""
+    @State private var new = ""
+    @State private var confirmation = ""
+    @State private var confirming = false
+    @State private var saving = false
+    @State private var failure: String?
+    private var valid: Bool {
+        !current.isEmpty && new.count >= 12 && new.utf8.count <= 72 && new == confirmation && new != current
+    }
+    var body: some View {
+        Form {
+            Section {
+                SecureField("Current password", text: $current).textContentType(.password)
+                SecureField("New password", text: $new).textContentType(.newPassword)
+                SecureField("Confirm new password", text: $confirmation).textContentType(.newPassword)
+            } footer: {
+                Text("Use at least 12 characters (72 bytes maximum). You’ll need to sign in again after changing your password.")
+            }
+            if !confirmation.isEmpty && new != confirmation {
+                Text("The new passwords do not match.").foregroundStyle(.red)
+            }
+            if let failure { Text(failure).foregroundStyle(.red) }
+            Button { confirming = true } label: {
+                Text(saving ? "Changing password…" : "Change password").frame(maxWidth: .infinity)
+            }.buttonStyle(NexdoGradientButtonStyle()).disabled(!valid || saving)
+        }
+        .disabled(saving)
+        .navigationTitle("Change password").navigationBarTitleDisplayMode(.inline)
+        .navigationBarBackButtonHidden(saving)
+        .interactiveDismissDisabled(saving)
+        .alert("Change password and sign out?", isPresented: $confirming) {
+            Button("Cancel", role: .cancel) {}
+            Button("Change password") { Task { await save() } }
+        } message: {
+            Text("After your password is changed, you’ll be signed out and must sign in again using your new password. Continue?")
+        }
+    }
+    @MainActor private func save() async {
+        guard valid, !saving else { return }
+        saving = true; failure = nil
+        defer { saving = false }
+        do {
+            try await model.changePassword(current: current, new: new, confirmation: confirmation)
+            current = ""; new = ""; confirmation = ""
+        } catch { failure = error.localizedDescription }
     }
 }
 

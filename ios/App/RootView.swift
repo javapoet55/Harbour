@@ -163,10 +163,12 @@ private struct NexdoTabShell: View {
                     ForEach(NexdoTab.allCases) { tab in
                         if tab == .askAI {
                             Button { showingPomodoro = true } label: {
-                                Image("pomodoro-tomato").resizable().scaledToFit()
-                                    .frame(width: 62, height: 58).blendMode(.multiply)
-                                    .shadow(color: .pink.opacity(0.22), radius: 8, y: 4)
-                            }.accessibilityLabel("Pomodoro")
+                                Image("pomodoro-clock").renderingMode(.original).resizable().scaledToFit()
+                                    .frame(width: 62, height: 58)
+                            }
+                            .frame(maxWidth: .infinity)
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("Pomodoro")
                         }
                         Button { if tab == .askAI { showingAsk = true } else {
                             if tab == .tasks && selection != .tasks { model.taskQuery.date = .today }

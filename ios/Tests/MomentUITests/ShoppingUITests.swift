@@ -144,9 +144,9 @@ import XCTest
         for _ in 0..<8 { if allergens.isHittable { break }; app.swipeUp() }
         XCTAssertTrue(allergens.isHittable); allergens.tap()
         XCTAssertTrue(app.staticTexts["Nutrition details unavailable"].waitForExistence(timeout: 5))
-        reveal(app.buttons["alternative.tab.Allergens"]); app.buttons["alternative.tab.Allergens"].tap()
-        XCTAssertTrue(app.staticTexts["Allergen & Dietary Info"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts["Allergen information unavailable — check product label."].exists)
+        reveal(app.buttons["alternative.detail.replace"])
+        XCTAssertFalse(app.buttons["alternative.tab.Allergens"].exists)
+        XCTAssertFalse(app.buttons["alternative.tab.Best For"].exists)
     }
     func testAlternativeFavoriteSurvivesReopening() {
         openList(); app.buttons["Show alternatives for Milk"].tap()

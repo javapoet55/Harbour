@@ -9,6 +9,7 @@ datasource db {
 }
 
 model User {
+  feedback Feedback[]
   pomodoroSessions PomodoroSession[]
   adminLoginTokens AdminLoginToken[]
   shoppingLists ShoppingList[]
@@ -677,4 +678,17 @@ model PomodoroSession {
   updatedAt DateTime @updatedAt
   @@id([userId, id])
   @@index([userId, startedAt])
+}
+
+model Feedback {
+  id String @id
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  customerName String
+  title String
+  description String
+  stars Int
+  createdAt DateTime @default(now())
+  @@index([createdAt, id])
+  @@index([userId])
 }

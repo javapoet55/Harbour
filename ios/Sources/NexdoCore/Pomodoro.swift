@@ -3,7 +3,7 @@ import Foundation
 public enum PomodoroCategory: String, Codable, CaseIterable, Sendable {
     case reading, focus, coding, diary, math, stretching
     public var title: String {
-        switch self { case .reading: "Reading"; case .focus: "Focus time"; case .coding: "Coding"; case .diary: "Write a diary"; case .math: "Math study"; case .stretching: "Stretching" }
+        switch self { case .reading: "Reading"; case .focus: "Focus time"; case .coding: "Coding"; case .diary: "Write a diary"; case .math: "Study"; case .stretching: "Yoga & Stretching" }
     }
     public var icon: String {
         switch self { case .reading: "book.fill"; case .focus: "stopwatch.fill"; case .coding: "chevron.left.forwardslash.chevron.right"; case .diary: "heart.fill"; case .math: "graduationcap.fill"; case .stretching: "figure.flexibility" }

@@ -226,6 +226,7 @@ struct AskNexdoView: View {
                 .accessibilityHint("Closes Ask Nexdo")
             }.padding(.horizontal, 20).padding(.top, 22) }
 
+            GeometryReader { viewport in
             ScrollView {
                 VStack(alignment: .leading, spacing: 10) {
                     if model.turn == nil {
@@ -252,6 +253,7 @@ struct AskNexdoView: View {
                             AskAILandingView(prompt: $prompt, busy: blocked, sendEnabled: validPrompt,
                                 ask: { request($0) }, voice: { stopSpeech(); showingVoice = true },
                                 close: { requestTask?.cancel(); stopSpeech(); dismiss() }, typing: $composerFocused)
+                                .frame(minHeight: max(0, viewport.size.height - 20))
 
                         }
                     } else if showsBriefing, let turn = model.turn {
@@ -298,6 +300,7 @@ struct AskNexdoView: View {
                     }
                 }.padding(.horizontal, 20).padding(.bottom, 20)
             }.scrollDismissesKeyboard(.interactively)
+            }
         }
         .background {
             if showsBriefing {

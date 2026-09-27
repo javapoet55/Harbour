@@ -55,9 +55,16 @@ struct TodayAttentionSheet: View {
                 }
                 Section {
                     Button { start = Date().addingTimeInterval(3600); rescheduling = true } label: {
-                        Label("Reschedule all", systemImage: "calendar").font(.headline)
+                        Label {
+                            Text("Reschedule all")
+                        } icon: {
+                            Image(systemName: "calendar")
+                                .renderingMode(.template)
+                                .foregroundStyle(.white)
+                        }
+                            .font(.headline)
                             .frame(maxWidth: .infinity, minHeight: 44)
-                    }.buttonStyle(.borderedProminent).disabled(model.busy || saving)
+                    }.buttonStyle(NexdoGradientButtonStyle()).disabled(model.busy || saving)
                 } footer: { Text("Complete a task or choose a new date.") }
             }
             if !checks.isEmpty {

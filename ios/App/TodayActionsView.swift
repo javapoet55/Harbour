@@ -30,7 +30,7 @@ struct TodayActionsView: View {
                 if queue.dueActions.count > 1 {
                     VStack(spacing: 10) {
                         HStack {
-                            Text("\(queue.dueActions.count) actions need attention").font(.headline)
+                            Text("\(queue.dueActions.count) Actions need attention").font(.headline)
                             Spacer()
                             Button("View all") { showingAll = true }
                                 .accessibilityIdentifier("today.actions.viewAllDue")
@@ -52,7 +52,7 @@ struct TodayActionsView: View {
                     }.padding(14).modifier(ActionGlass())
                 }
                 let action = queue.dueActions[selectedIndex]
-                ActionNeededCard(action: action, now: now, overdueCount: queue.overdueCount,
+                ActionNeededCard(action: action, now: now,
                     onChoose: { selection = TodayActionSelection(action: action) }, onExecute: { selection = TodayActionSelection(action: action, channel: $0) }, onTask: { onTask(action.taskId) })
                     .id(action.id + refresh.uuidString)
             }
@@ -103,7 +103,6 @@ struct ActionNeededCard: View {
     @Environment(\.dynamicTypeSize) private var typeSize
     let action: TaskAction
     let now: Date
-    let overdueCount: Int
     let onChoose: () -> Void
     let onExecute: (TaskActionChannel) -> Void
     let onTask: () -> Void
@@ -134,9 +133,6 @@ struct ActionNeededCard: View {
                     Text(action.notificationDate ?? now, style: .time)
                     Text(actionTimeLabel(action, now: now)).font(.caption).foregroundStyle(.pink)
                 }.font(.subheadline)
-            }
-            if overdueCount > 1 {
-                Text("\(overdueCount) actions need your attention").font(.caption).foregroundStyle(.orange)
             }
             Text(isBusiness && contact == nil ? "Find a business to contact" : "Time to contact \(contact?.name ?? action.contactName)").font(.title2.bold())
             if let context = action.context { Text(context).foregroundStyle(Color.nexdoSecondary) }

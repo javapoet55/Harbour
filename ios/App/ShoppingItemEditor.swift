@@ -67,16 +67,30 @@ struct ShoppingItemEditor:View {
                         if !UIImagePickerController.isSourceTypeAvailable(.camera){Text("Camera is available on a supported device.").font(.caption).foregroundStyle(.secondary)}
                         TextField("Describe the image (optional)",text:$imageDetails,axis:.vertical)
                         Toggle("Allow AI image generation",isOn:$aiConsent)
-                        Text("AI receives the item name and image description. Photo identification sends the attached photo to OpenAI only with your permission. The image is saved with the item when you tap Save.").font(.caption).foregroundStyle(.secondary)
                         Button{Task{await generate()}}label:{Label("Generate with AI",systemImage:"sparkles")}
                             .disabled(!aiConsent || initial.name.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty)
                     }
                 }.disabled(busy)
-                if busy {ProgressView(recognizing ? "Identifying item…" : "Preparing image…")}
                 if let recognitionNotice {Text(recognitionNotice).font(.caption).foregroundStyle(.secondary)}
                 if let error {Text(error).foregroundStyle(.red)}
             }
             .disabled(busy)
+            .overlay {
+                if busy {
+                    ZStack {
+                        Color.black.opacity(0.08)
+                        VStack(spacing:16) {
+                            ProgressView().controlSize(.large).tint(.nexdoIndigo)
+                            Text("I’m working…").font(.headline).foregroundStyle(Color.nexdoInk)
+                        }
+                        .padding(28)
+                        .background(.regularMaterial,in:RoundedRectangle(cornerRadius:24))
+                        .accessibilityElement(children:.combine)
+                        .accessibilityIdentifier("shopping.item.working")
+                    }
+                    .frame(maxWidth:.infinity,maxHeight:.infinity)
+                }
+            }
             .navigationTitle(launchCamera ? "Add Item" : "Edit Item")
             .toolbar {
                 ToolbarItem(placement:.cancellationAction){Button("Cancel"){generation=UUID();dismiss()}}

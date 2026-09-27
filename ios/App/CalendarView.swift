@@ -17,6 +17,7 @@ struct CalendarView: View {
     @Environment(\.dynamicTypeSize) private var typeSize
     @State private var conflicts = false
     @State private var expanded = false
+    @State private var expandedEmptyDays: Set<String> = []
     @State private var showTasks = true
     @State private var showEvents = true
     @State private var criticalOnly = false
@@ -105,9 +106,21 @@ struct CalendarView: View {
                                                 .font(.subheadline).padding(.vertical, 10)
                                         }
                                     }
-                                } label: { Text("Unscheduled & overdue  \(backlog.count)").font(.subheadline.weight(.semibold)) }
-                                    .padding(16).background(.background.opacity(0.7), in: RoundedRectangle(cornerRadius: 16))
-                                    .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.nexdoBlue.opacity(0.18)))
+                                } label: {
+                                    HStack(spacing: 10) {
+                                        Text("Unscheduled & overdue").font(.subheadline.weight(.semibold))
+                                        Text("\(backlog.count)")
+                                            .font(.subheadline.weight(.bold))
+                                            .foregroundStyle(.white)
+                                            .padding(8)
+                                            .frame(minWidth: 32, minHeight: 32)
+                                            .background(Color.nexdoIndigo, in: Circle())
+                                    }
+                                    .accessibilityElement(children: .ignore)
+                                    .accessibilityLabel("Unscheduled & overdue, \(backlog.count) tasks")
+                                }
+                                    .padding(16).background(Color.nexdoIndigo.opacity(0.10), in: RoundedRectangle(cornerRadius: 16))
+                                    .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.nexdoIndigo.opacity(0.18)))
                                 }
                             } else {
                                 if hasSearch { searchResults }
@@ -248,18 +261,26 @@ struct CalendarView: View {
             }
         }.background(Color.nexdoIndigo.opacity(0.07), in: RoundedRectangle(cornerRadius: 12))
     }
+    private var reviewableConflicts: [ScheduleIntelligenceResponse.Today.AttentionItem] {
+        guard model.intelligenceError == nil,
+              let info = model.scheduleIntelligence?.today,
+              info.day == dates.key(Date()), info.timeZone == zone else { return [] }
+        // Overdue and blocked tasks have their own task review flows.
+        return info.attention.filter { $0.id != "overdue" && !$0.id.hasPrefix("dependency:") }
+    }
     private var intelligence: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Label("Schedule Intelligence", systemImage: "sparkles").font(.subheadline.bold())
                 Spacer(minLength: 4)
-                Button { conflicts = true } label: { Text("Review conflicts").font(.caption.weight(.semibold)).frame(minHeight: 44) }
+                if !reviewableConflicts.isEmpty {
+                    Button { conflicts = true } label: { Text("Review conflicts").font(.caption.weight(.semibold)).frame(minHeight: 44) }
+                }
             }.foregroundStyle(Color.blue)
             if let info = model.scheduleIntelligence?.today, info.day == dates.key(Date()) {
                 Label(info.recommendation.title, systemImage: "exclamationmark.triangle").font(.headline)
                 Text("\(info.appointments) calendar commitments today · \(DurationDisplay.durationLabel(info.availableMinutes)) of usable time remain")
                     .font(.caption).foregroundStyle(Color.nexdoSecondary)
-                Text(info.recommendation.explanation).font(.caption).foregroundStyle(Color.nexdoSecondary)
             } else if !model.intelligenceLoading && model.intelligenceError == nil {
                 Text("Review your schedule").font(.headline)
                 Text("Load today’s conflicts and available time.").font(.caption).foregroundStyle(Color.nexdoSecondary)
@@ -382,15 +403,40 @@ struct CalendarView: View {
         selected = mode == .week ? dates.addingDays(direction * 7, to: selected) : dates.calendar.date(byAdding: .month, value: direction, to: selected)!
     }
     private func daySection(_ day: Date, relative: Bool) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
+        let empty = count(day) == 0
+        let key = "\(zone):\(dates.key(day))"
+        let isExpanded = !relative || !empty || expandedEmptyDays.contains(key)
+        return VStack(alignment: .leading, spacing: 0) {
+            if relative && empty {
+                Button {
+                    withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) {
+                        if expandedEmptyDays.contains(key) { expandedEmptyDays.remove(key) }
+                        else { expandedEmptyDays.insert(key) }
+                    }
+                } label: {
+                    HStack {
+                        Text(dayTitle(day, relative)).font(.headline)
+                        Spacer()
+                        Text(itemCount(0)).font(.subheadline).foregroundStyle(Color.nexdoSecondary)
+                        Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                            .font(.caption.weight(.semibold)).foregroundStyle(Color.nexdoSecondary)
+                    }
+                    .frame(minHeight: 44)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityValue(isExpanded ? "Expanded" : "Collapsed")
+                .accessibilityHint("Double tap to \(isExpanded ? "collapse" : "expand") this day")
+            } else {
             HStack {
                 Text(dayTitle(day, relative)).font(.headline)
                 Spacer()
                 Text(itemCount(count(day))).font(.subheadline).foregroundStyle(Color.nexdoSecondary)
                 if !relative { filters }
             }.padding(.bottom, 16)
+            }
             Divider().overlay(Color.nexdoIndigo.opacity(0.08))
-            if count(day) == 0 {
+            if empty && isExpanded {
                 Text(!showTasks || !showEvents || criticalOnly || completedOnly ? "No items match your filters." : "Nothing scheduled. Room to breathe.")
                     .font(.subheadline).foregroundStyle(Color.nexdoSecondary).padding(.vertical, 26).frame(maxWidth: .infinity, alignment: .leading)
             }
@@ -461,8 +507,8 @@ struct CalendarView: View {
             List {
                 if let info = model.scheduleIntelligence?.today, info.day == dates.key(Date()) {
                     Section("Today’s schedule review") {
-                        if info.attention.isEmpty { Text("No issues reported by schedule intelligence.") }
-                        ForEach(info.attention) { item in
+                        if reviewableConflicts.isEmpty { Text("No conflicts reported by schedule intelligence.") }
+                        ForEach(reviewableConflicts) { item in
                             VStack(alignment: .leading, spacing: 8) {
                                 Text(item.label).font(.caption).foregroundStyle(.secondary)
                                 Text(item.title).font(.headline)

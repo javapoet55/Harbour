@@ -1,0 +1,28 @@
+import { afterAll, expect, it, vi } from 'vitest';
+vi.mock('@/server/auth', () => ({ requireUser: vi.fn() }));
+vi.mock('@/server/admin-auth', () => ({ requireAdmin: vi.fn() }));
+import { randomUUID } from 'node:crypto';
+import { prisma } from '@/server/db';
+import { requireUser } from '@/server/auth';
+import { POST } from './route';
+import { GET } from '../admin/feedback/route';
+const owner = 'feedback-test-' + randomUUID();
+afterAll(async () => { await prisma.user.deleteMany({ where: { id: owner } }); });
+it('persists a submission once, lists newest first, and removes data with the customer', async () => {
+  const user = await prisma.user.create({ data: { id: owner, name: 'Feedback Customer', email: `${owner}@example.test`, passwordHash: 'test' } });
+  vi.mocked(requireUser).mockResolvedValue({ ...user, preference: null });
+  const id = randomUUID();
+  const submit = () => POST(new Request('http://localhost/api/feedback', { method: 'POST', body: JSON.stringify({ id, title: 'Feature idea', description: 'Please add more focus sounds.', stars: 4 }) }));
+  expect((await submit()).status).toBe(200);
+  expect((await submit()).status).toBe(200);
+  expect(await prisma.feedback.count({ where: { userId: owner } })).toBe(1);
+  const saved = await prisma.feedback.findUniqueOrThrow({ where: { id } });
+  expect(saved).toMatchObject({ customerName: 'Feedback Customer', stars: 4, title: 'Feature idea' });
+  await prisma.feedback.create({ data: { id: randomUUID(), userId: owner, customerName: user.name, title: 'Earlier', description: 'Earlier feedback', stars: 2, createdAt: new Date('2020-01-01') } });
+  const list = await (await GET(new Request('http://localhost/api/admin/feedback'))).json();
+  const current = list.feedback.findIndex((item: { id: string }) => item.id === id);
+  const earlier = list.feedback.findIndex((item: { title: string }) => item.title === 'Earlier');
+  expect(current).toBeGreaterThanOrEqual(0); expect(earlier).toBeGreaterThan(current);
+  await prisma.user.delete({ where: { id: owner } });
+  expect(await prisma.feedback.count({ where: { userId: owner } })).toBe(0);
+});
