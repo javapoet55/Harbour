@@ -2,7 +2,8 @@ import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { PrismaClient } from '@/generated/prisma';
 import type { CalendarWrite } from '@/providers/types';
 import { POST } from '@/app/api/calendar/events/route';
-import { PATCH, DELETE } from '@/app/api/calendar/events/[id]/route';
+import { PATCH, DELETE, GET } from '@/app/api/calendar/events/[id]/route';
+import { POST as addEventTask } from '@/app/api/calendar/events/[id]/task/route';
 import { syncConnection } from './calendar-sync';
 
 const mocks = vi.hoisted(() => ({ requireUser: vi.fn(), upsert: vi.fn(), remove: vi.fn(), list: vi.fn() }));
@@ -39,6 +40,46 @@ afterAll(async () => {
 });
 
 describe('Nexdo event write-back to the connected calendar', () => {
+  it('persists and reverses completion without writing to the calendar provider', async () => {
+    await connect();
+    await create({});
+    const [row] = await saved();
+    mocks.upsert.mockClear();
+    const mark = (completed: boolean) => PATCH(new Request('https://nexdo.test', { method: 'PATCH', body: JSON.stringify({ completed }) }), params(row.id));
+    const first = await (await mark(true)).json();
+    expect(first.event.completedAt).toBeTruthy();
+    expect((await (await mark(true)).json()).event.completedAt).toBe(first.event.completedAt);
+    expect((await (await GET(new Request('https://nexdo.test'), params(row.id))).json()).event.completedAt).toBe(first.event.completedAt);
+    expect((await (await mark(false)).json()).event.completedAt).toBeNull();
+    expect(mocks.upsert).not.toHaveBeenCalled();
+  });
+
+  it('allows imported-event completion but protects other users and deleted events', async () => {
+    const connection = await connect();
+    const row = await prisma.calendarEvent.create({ data: { userId, connectionId: connection.id, source: 'google', externalId: 'completion', syncKey: `${connection.id}:completion`, title: 'Standup', startAt: new Date(event.startAt), endAt: new Date(event.endAt) } });
+    const mark = () => PATCH(new Request('https://nexdo.test', { method: 'PATCH', body: JSON.stringify({ completed: true }) }), params(row.id));
+    expect((await mark()).status).toBe(200);
+    expect(mocks.upsert).not.toHaveBeenCalled();
+    mocks.requireUser.mockResolvedValue({ id: 'someone-else', timeZone: 'UTC' });
+    expect((await mark()).status).toBe(404);
+    expect((await GET(new Request('https://nexdo.test'), params(row.id))).status).toBe(404);
+    expect((await addEventTask(new Request('https://nexdo.test', { method: 'POST' }), params(row.id))).status).toBe(404);
+    mocks.requireUser.mockResolvedValue({ id: userId, timeZone: 'UTC' });
+    await prisma.calendarEvent.update({ where: { id: row.id }, data: { deletedAt: new Date() } });
+    expect((await mark()).status).toBe(404);
+  });
+
+  it('adds a task once across repeated requests', async () => {
+    await create({});
+    const [row] = await saved();
+    const add = () => addEventTask(new Request('https://nexdo.test', { method: 'POST' }), params(row.id));
+    const first = await (await add()).json();
+    const second = await (await add()).json();
+    expect(first.taskId).toBeTruthy();
+    expect(second.taskId).toBe(first.taskId);
+    expect(await prisma.task.findUnique({ where: { id: first.taskId } })).toMatchObject({ title: row.title, dueAt: row.startAt, startAt: null });
+  });
+
   it('writes a single event and stores its provider id', async () => {
     const connection = await connect();
     const response = await create({});

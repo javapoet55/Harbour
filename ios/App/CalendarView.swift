@@ -175,17 +175,8 @@ struct CalendarView: View {
             .sheet(isPresented: $addingManually, onDismiss: { Task { await load() } }) { NavigationStack { CalendarEventEditor() } }
             .sheet(isPresented: $conflicts) { conflictSheet }
             .sheet(item: $eventDetail) { event in
-                NavigationStack {
-                    Form {
-                        Section { Text(event.title).font(.headline) }
-                        Section("Calendar commitment") {
-                            if event.allDay == true { Text("All day") }
-                            Text("Starts: \(eventDate(event.startAt))")
-                            Text("Ends: \(eventDate(event.endAt))")
-                            Text(zone).foregroundStyle(.secondary)
-                        }
-                    }.navigationTitle("Event Details").navigationBarTitleDisplayMode(.inline)
-                        .toolbar { Button("Done") { eventDetail = nil } }
+                CalendarEventDetailsView(event: event, fallbackTimeZone: zone) {
+                    await load()
                 }
             }
         }
@@ -357,7 +348,7 @@ struct CalendarView: View {
     private var summary: some View {
         let total = visibleDays.reduce(0) { $0 + count($1) }
         let deadlines = Set(visibleDays.flatMap { day in tasks(day).filter { $0.dueAt.flatMap { ServerDate.day($0, timeZone: zone) } == dates.key(day) }.map(\.id) }).count
-        return summaryCard("\(itemCount(total)) · \(deadlines) \(deadlines == 1 ? "deadline" : "deadlines")", detail: completedOnly ? "Completed tasks and past events in the selected dates" : "\(openTasks.filter { overdue($0) }.count) overdue tasks overall · \(visibleDays.contains { dates.calendar.isDate($0, inSameDayAs: Date()) } ? "Includes today" : label(visibleDays[0], "MMM d"))")
+        return summaryCard("\(itemCount(total)) · \(deadlines) \(deadlines == 1 ? "deadline" : "deadlines")", detail: completedOnly ? "Completed tasks and events in the selected dates" : "\(openTasks.filter { overdue($0) }.count) overdue tasks overall · \(visibleDays.contains { dates.calendar.isDate($0, inSameDayAs: Date()) } ? "Includes today" : label(visibleDays[0], "MMM d"))")
     }
     private func summaryCard(_ title: String, detail: String) -> some View {
         HStack(spacing: 14) {
@@ -492,7 +483,7 @@ struct CalendarView: View {
             VStack(alignment: .leading, spacing: 7) {
                 Text(row.title).font(.body).fixedSize(horizontal: false, vertical: true)
                 Text(row.detail).font(.caption).foregroundStyle(Color.nexdoSecondary)
-                HStack { if completedOnly { badge(row.event != nil ? "Past event" : "Completed", color: .green) }; if late { badge("Overdue", color: .orange) }; if critical { badge("Critical", color: .red) }; if row.deadline { badge("Deadline", color: .nexdoIndigo) } }
+                HStack { if completedOnly || row.event?.completedAt != nil { badge("Completed", color: .green) }; if late { badge("Overdue", color: .orange) }; if critical { badge("Critical", color: .red) }; if row.deadline { badge("Deadline", color: .nexdoIndigo) } }
                 Divider().padding(.top, 10)
             }.padding(.top, 18).padding(.bottom, 4)
             Spacer(minLength: 0)

@@ -94,7 +94,14 @@ public struct CalendarEvent: Decodable, Identifiable, Sendable {
     public let startAt: String
     public let endAt: String
     public let allDay: Bool?
+    public let notes: String?
+    public let location: String?
+    public let timeZone: String?
+    public let source: String?
+    public let connectionId: String?
+    public let completedAt: String?
 }
+
 public struct Agenda: Decodable, Sendable {
     public struct Range: Decodable, Sendable { public let days: [String] }
     public let timeZone: String

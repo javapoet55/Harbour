@@ -64,6 +64,8 @@ struct RootView: View {
                 WeeklySummaryPreview()
             } else if ProcessInfo.processInfo.arguments.contains("-projects-design-preview") {
                 ProjectsDesignPreview()
+            } else if ProcessInfo.processInfo.arguments.contains("-event-details-preview") {
+                CalendarEventDetailsView(event: try! JSONDecoder().decode(CalendarEvent.self, from: Data(#"{"id":"preview","title":"Library books return","notes":"Return library books before the due date.","source":"harbor","startAt":"2026-09-27T17:32:00Z","endAt":"2026-09-27T18:02:00Z","timeZone":"America/Los_Angeles"}"#.utf8)), fallbackTimeZone: "America/Los_Angeles", onChange: {})
             } else if ProcessInfo.processInfo.arguments.contains("-calendar-design-preview") {
                 CalendarDesignPreview()
             } else if ProcessInfo.processInfo.arguments.contains("-today-design-preview") {

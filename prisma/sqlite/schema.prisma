@@ -347,6 +347,8 @@ model CalendarEvent {
   updatedAt     DateTime  @updatedAt
   deletedAt     DateTime?
 
+  completedAt   DateTime?
+
   @@index([pushedConnectionId, pushedExternalId])
 }
 
