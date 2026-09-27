@@ -9,6 +9,9 @@ datasource db {
 }
 
 model User {
+  nutritionCallSettings NutritionCallSettings?
+  nutritionCalls NutritionCall[]
+  foodLogEntries FoodLogEntry[]
   feedback Feedback[]
   pomodoroSessions PomodoroSession[]
   adminLoginTokens AdminLoginToken[]
@@ -691,4 +694,81 @@ model Feedback {
   createdAt DateTime @default(now())
   @@index([createdAt, id])
   @@index([userId])
+}
+
+// Daily food check-in call (Calorie Tracker). One row per user; the phone number is verified by SMS code before calls.
+model NutritionCallSettings {
+  userId            String   @id
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  enabled           Boolean  @default(false)
+  phoneE164         String?
+  phoneVerifiedAt   DateTime?
+  phoneCodeHash     String?
+  phoneCodeExpiresAt DateTime?
+  phoneCodeAttempts Int      @default(0)
+  phoneCodeSentAt   DateTime?
+  consentAt         DateTime?
+  localTime         String   @default("20:00")
+  timeZone          String   @default("America/Los_Angeles")
+  repeatDaily       Boolean  @default(true)
+  noAnswer          String   @default("NOTIFY")
+  voice             String   @default("marin")
+  calorieGoal       Int      @default(2000)
+  goalsJson         String?
+  lastManualCallAt  DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  @@index([enabled])
+}
+
+model NutritionCall {
+  id              String    @id @default(cuid())
+  userId          String
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  localDate       String
+  attempt         Int
+  status          String    @default("QUEUED")
+  scheduledFor    DateTime
+  twilioCallSid   String?   @unique
+  answeredBy      String?
+  startedAt       DateTime?
+  endedAt         DateTime?
+  durationSec     Int?
+  endReason       String?
+  noiseFilter     String?
+  transcriptJson  String?
+  backupTranscriptJson String?
+  error           String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  entries         FoodLogEntry[]
+  @@unique([userId, localDate, attempt])
+  @@index([status, scheduledFor])
+}
+
+model FoodLogEntry {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  localDate    String
+  meal         String
+  description  String
+  foodName     String
+  quantity     Float?
+  unit         String?
+  grams        Float?
+  kcal         Int
+  proteinG     Float?
+  carbsG       Float?
+  fatG         Float?
+  source       String
+  sourceRef    String?
+  status       String   @default("CONFIRMED")
+  reviewReason String?
+  callId       String?
+  call         NutritionCall? @relation(fields: [callId], references: [id], onDelete: SetNull)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  @@index([userId, localDate])
+  @@index([callId])
 }
