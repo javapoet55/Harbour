@@ -17,7 +17,11 @@ struct RootView: View {
     var body: some View {
         Group {
             #if DEBUG
-            if ProcessInfo.processInfo.arguments.contains("-pomodoro-design-preview") {
+            if ProcessInfo.processInfo.arguments.contains("-calorie-design-preview") {
+                CalorieTrackerView()
+            } else if ProcessInfo.processInfo.arguments.contains("-wellness-design-preview") {
+                WellnessChooserView { _ in }
+            } else if ProcessInfo.processInfo.arguments.contains("-pomodoro-design-preview") {
                 PomodoroView(api: model.momentAPI, owner: "preview", preview: true)
             } else if ProcessInfo.processInfo.arguments.contains("-agent-design-preview") {
                 TaskDetailsView(task: NexdoTask(id: "agent-preview", title: "Contact Plumbers", status: "PLANNED", priority: "NORMAL", durationMin: 30, notes: nil, startAt: nil, dueAt: nil))
@@ -126,6 +130,9 @@ private struct NexdoTabShell: View {
     @State private var showingAsk = false
     @State private var askPrompt = ""
     @State private var showingPomodoro = false
+    @State private var showingWellness = false
+    @State private var showingCalories = false
+    @State private var wellnessChoice: Bool?
     @ObservedObject private var pomodoroRoute = PomodoroNotificationRoute.shared
     private var activeTab: NexdoTab { showingAsk ? .askAI : selection }
 
@@ -162,13 +169,13 @@ private struct NexdoTabShell: View {
                 HStack(spacing: 4) {
                     ForEach(NexdoTab.allCases) { tab in
                         if tab == .askAI {
-                            Button { showingPomodoro = true } label: {
+                            Button { showingWellness = true } label: {
                                 Image("pomodoro-clock").renderingMode(.original).resizable().scaledToFit()
                                     .frame(width: 62, height: 58)
                             }
                             .frame(maxWidth: .infinity)
                             .buttonStyle(.plain)
-                            .accessibilityLabel("Pomodoro")
+                            .accessibilityLabel("Calorie Tracker and Pomodoro Focus")
                         }
                         Button { if tab == .askAI { showingAsk = true } else {
                             if tab == .tasks && selection != .tasks { model.taskQuery.date = .today }
@@ -199,6 +206,15 @@ private struct NexdoTabShell: View {
         }
         .onAppear { openPomodoroNotification() }
         .onChange(of: pomodoroRoute.owner) { _, _ in openPomodoroNotification() }
+        .sheet(isPresented: $showingWellness, onDismiss: {
+            guard let choice = wellnessChoice else { openPomodoroNotification(); return }
+            wellnessChoice = nil
+            if choice { showingCalories = true } else { showingPomodoro = true }
+        }) {
+            WellnessChooserView { choice in wellnessChoice = choice; showingWellness = false }
+                .presentationDetents([.large]).presentationDragIndicator(.visible)
+        }
+        .fullScreenCover(isPresented: $showingCalories, onDismiss: { openPomodoroNotification() }) { CalorieTrackerView() }
         .fullScreenCover(isPresented: $showingPomodoro) {
             if let owner = model.profile?.id {
                 PomodoroView(api: model.momentAPI, owner: owner, onTasks: { selection = .tasks })
@@ -209,6 +225,7 @@ private struct NexdoTabShell: View {
         guard let pending = pomodoroRoute.owner, let owner = model.profile?.id else { return }
         guard pending == TaskActionCoordinator.ownerKey(owner) else { pomodoroRoute.owner = nil; return }
         if showingAsk { showingAsk = false; return }
+        if showingWellness || showingCalories { return }
         pomodoroRoute.owner = nil
         showingPomodoro = true
     }
