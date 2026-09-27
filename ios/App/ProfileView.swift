@@ -62,6 +62,7 @@ struct AccountView: View {
                         }
                     }.padding(.vertical, 8)
                     voiceUsageCard
+                    NavigationLink { HelpView() } label: { menuRow("Help", "questionmark.circle") }
                     NavigationLink { FeedbackView() } label: { menuRow("Feedback", "bubble.left.and.text.bubble.right") }
                     NavigationLink { ProfileSettingsView() } label: { menuRow("Edit profile and settings", "person.crop.circle") }
                     NavigationLink { ChangePasswordView() } label: { menuRow("Change password", "lock.rotation") }
