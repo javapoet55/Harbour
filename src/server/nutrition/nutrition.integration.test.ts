@@ -167,9 +167,20 @@ describe('no answer, call-backs and the app food log', () => {
   it('rate-limits "call me now" and respects the calling window', async () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(new Date('2026-10-05T03:00:00Z'));
-    expect((await requestCallNow(userId, new Date('2026-10-05T03:00:00Z'))).status).toBe('dialing');
+    const manual = await requestCallNow(userId, new Date('2026-10-05T03:00:00Z'));
+    expect(manual.status).toBe('dialing');
+    expect((await prisma.nutritionCall.findUniqueOrThrow({ where: { id: manual.callId } })).attempt).toBe(101);
     expect(await code(requestCallNow(userId, new Date('2026-10-05T03:05:00Z')))).toBe('CALL_COOLDOWN');
     expect(await code(requestCallNow(userId, new Date('2026-10-05T12:00:00Z')))).toBe('OUTSIDE_CALL_WINDOW'); // 05:00 PDT
     vi.useRealTimers();
+  });
+  it('still places the scheduled evening call on a day with an earlier "call me now" test call', async () => {
+    await updateSettings(userId, 'x', { enabled: true, localTime: '20:00' });
+    const manual = await prisma.nutritionCall.create({ data: { userId, localDate: '2026-10-06', attempt: 101, scheduledFor: new Date('2026-10-06T21:00:00Z'), status: 'COMPLETED' } });
+    const tick = await runNutritionTick(new Date('2026-10-07T03:00:30Z'), async () => {}); // 20:00:30 PDT on Oct 6
+    expect(tick).toMatchObject({ queued: 1 });
+    const evening = await prisma.nutritionCall.findFirstOrThrow({ where: { userId, localDate: '2026-10-06', attempt: 1 } });
+    expect(evening.status).toBe('QUEUED');
+    expect(manual.attempt).toBe(101);
   });
 });

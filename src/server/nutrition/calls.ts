@@ -14,6 +14,12 @@ import { callToken, createTwilioCall, hangupTwiml, streamTwiml } from './twilio'
 type Call = NonNullable<Awaited<ReturnType<typeof prisma.nutritionCall.findUnique>>>;
 const TERMINAL = ['COMPLETED', 'NO_ANSWER', 'VOICEMAIL', 'FAILED', 'CANCELLED', 'SKIPPED', 'EXPIRED'];
 const MAX_ATTEMPTS_PER_DAY = 4;
+/**
+ * "Call me now" calls are numbered from 101 so they never take attempt 1, which is reserved for the
+ * scheduled daily call (a test call in the afternoon must not block that evening's call).
+ */
+export const MANUAL_ATTEMPT_BASE = 100;
+const attemptNumber = (attempt: number) => attempt % MANUAL_ATTEMPT_BASE;
 const isUniqueViolation = (e: unknown) => !!e && typeof e === 'object' && 'code' in e && (e as { code: unknown }).code === 'P2002';
 
 export function callsConfigured(cfg = nutritionCallConfig()) {
@@ -82,9 +88,9 @@ export async function requestCallNow(userId: string, now = new Date()) {
   if (!withinCallWindow(settings.timeZone, now)) throw new NutritionError('OUTSIDE_CALL_WINDOW');
   if (settings.lastManualCallAt && now.getTime() - settings.lastManualCallAt.getTime() < MANUAL_CALL_COOLDOWN_MINUTES * 60_000) throw new NutritionError('CALL_COOLDOWN');
   const localDate = localDateIn(settings.timeZone, now);
-  const last = await prisma.nutritionCall.findFirst({ where: { userId, localDate }, orderBy: { attempt: 'desc' }, select: { attempt: true } });
-  const attempt = (last?.attempt ?? 0) + 1;
-  if (attempt > MAX_ATTEMPTS_PER_DAY + 2) throw new NutritionError('CALL_COOLDOWN');
+  const last = await prisma.nutritionCall.findFirst({ where: { userId, localDate, attempt: { gt: MANUAL_ATTEMPT_BASE } }, orderBy: { attempt: 'desc' }, select: { attempt: true } });
+  const attempt = Math.max(MANUAL_ATTEMPT_BASE, last?.attempt ?? 0) + 1;
+  if (attempt > MANUAL_ATTEMPT_BASE + 20) throw new NutritionError('CALL_COOLDOWN');
   await prisma.nutritionCallSettings.update({ where: { userId }, data: { lastManualCallAt: now } });
   const call = await prisma.nutritionCall.create({ data: { userId, localDate, attempt, scheduledFor: now } });
   const result = await dialCall(call.id);
@@ -283,7 +289,7 @@ export async function executeTool(callId: string, name: string, rawArgs: unknown
       const at = new Date(Date.now() + (args as { minutes: number }).minutes * 60_000);
       const settings = await prisma.nutritionCallSettings.findUnique({ where: { userId } });
       let scheduled = false;
-      if (settings && withinCallWindow(settings.timeZone, at) && call.attempt < MAX_ATTEMPTS_PER_DAY) {
+      if (settings && withinCallWindow(settings.timeZone, at) && attemptNumber(call.attempt) < MAX_ATTEMPTS_PER_DAY) {
         try { await prisma.nutritionCall.create({ data: { userId, localDate, attempt: call.attempt + 1, scheduledFor: at } }); scheduled = true; }
         catch (e) { if (!isUniqueViolation(e)) throw e; }
       }
