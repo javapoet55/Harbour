@@ -15,6 +15,7 @@ import { readSettings, startPhoneVerification, updateSettings, verifyPhone } fro
 import { addEntry, dayLog, deleteEntry, periodSummary, updateEntry } from '@/server/nutrition/log';
 import { completeCall, dialCall, executeTool, handleCallStatus, requestCallNow, runNutritionTick, sessionForCall, twimlForCall } from '@/server/nutrition/calls';
 import { NutritionError } from '@/server/nutrition/errors';
+import { settleLateLookups } from '@/server/nutrition/fast-lookup';
 import { ZodError } from 'zod';
 import type { FoodFacts } from '@/server/shopping/food/model';
 
@@ -120,6 +121,50 @@ describe('scheduling and a full call', () => {
       ['chicken biryani', 'NEEDS_REVIEW', 'no_database_match'],
     ]);
     expect(await executeTool(callId, 'get_day_summary', {}, lookup)).toMatchObject({ error: 'call_not_active', end: true });
+  });
+});
+
+describe('fast saving during a call', () => {
+  const slow = (ms: number, facts: FoodFacts | null) => async () => { await new Promise(r => setTimeout(r, ms)); return facts; };
+  it('looks up a meal in parallel and saves slow foods right away, then fills in the database values', async () => {
+    vi.stubEnv('NUTRITION_LOOKUP_BUDGET_MS', '60');
+    const c = await prisma.nutritionCall.create({ data: { userId, localDate: '2026-10-10', attempt: 1, scheduledFor: new Date(), status: 'IN_PROGRESS' } });
+    let active = 0, peak = 0;
+    const lookup = async (q: { name: string }) => {
+      active++; peak = Math.max(peak, active);
+      await new Promise(r => setTimeout(r, q.name === 'banana' ? 250 : 20));
+      active--;
+      return q.name === 'banana' ? banana : null;
+    };
+    const started = Date.now();
+    const result = await executeTool(c.id, 'log_food_items', { items: [
+      { meal: 'BREAKFAST', description: 'a banana', foodName: 'banana', estimatedGrams: 118, estimatedKcal: 110 },
+      { meal: 'BREAKFAST', description: 'masala dosa', foodName: 'masala dosa', estimatedGrams: 200, estimatedKcal: 380 },
+    ] }, lookup) as { saved: { id: string; kcal: number }[] };
+    expect(Date.now() - started).toBeLessThan(220);                 // did not wait for the 250 ms lookup
+    expect(peak).toBe(2);                                            // both foods looked up at the same time
+    expect(result.saved.map(s => s.kcal)).toEqual([110, 380]);       // banana: estimate for now
+    const pending = await prisma.foodLogEntry.findUniqueOrThrow({ where: { id: result.saved[0].id } });
+    expect(pending).toMatchObject({ status: 'DRAFT', reviewReason: 'lookup_pending', source: 'ESTIMATE' });
+    await settleLateLookups();
+    const filled = await prisma.foodLogEntry.findUniqueOrThrow({ where: { id: result.saved[0].id } });
+    expect(filled).toMatchObject({ kcal: 105, source: 'USDA', status: 'DRAFT', reviewReason: null });
+    const dosa = await prisma.foodLogEntry.findUniqueOrThrow({ where: { id: result.saved[1].id } });
+    expect(dosa).toMatchObject({ status: 'NEEDS_REVIEW', reviewReason: 'no_database_match', kcal: 380 });
+    expect(await executeTool(c.id, 'finish_call', { confirmed: true }, lookup)).toMatchObject({ end: true });
+    expect((await prisma.foodLogEntry.findUniqueOrThrow({ where: { id: result.saved[0].id } })).status).toBe('CONFIRMED');
+    vi.unstubAllEnvs();
+    for (const [k, v] of Object.entries({ NUTRITION_CALLS_ENABLED: 'true', APP_URL: 'https://app.example.com', NUTRITION_CALL_WORKER_URL: 'wss://worker.example.com/twilio-media', VOICE_WORKER_SECRET: 'wsecret', TWILIO_ACCOUNT_SID: 'AC1', TWILIO_AUTH_TOKEN: 'tok', TWILIO_VOICE_NUMBER: '+15550000000' })) vi.stubEnv(k, v);
+  });
+  it('never lets a late lookup overwrite a correction made on the call', async () => {
+    vi.stubEnv('NUTRITION_LOOKUP_BUDGET_MS', '50');
+    const c = await prisma.nutritionCall.create({ data: { userId, localDate: '2026-10-11', attempt: 1, scheduledFor: new Date(), status: 'IN_PROGRESS' } });
+    const saved = await executeTool(c.id, 'log_food_items', { items: [{ meal: 'LUNCH', description: 'a banana', foodName: 'banana', estimatedGrams: 118, estimatedKcal: 110 }] }, slow(200, banana)) as { saved: { id: string }[] };
+    const id = saved.saved[0].id;
+    await executeTool(c.id, 'update_food_item', { id, foodName: 'plantain', estimatedGrams: 150, estimatedKcal: 180 }, async () => null);
+    await settleLateLookups();
+    expect(await prisma.foodLogEntry.findUniqueOrThrow({ where: { id } })).toMatchObject({ foodName: 'plantain', kcal: 180 });
+    vi.stubEnv('NUTRITION_LOOKUP_BUDGET_MS', '800');
   });
 });
 

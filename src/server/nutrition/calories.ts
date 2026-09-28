@@ -78,3 +78,30 @@ export async function calculateCalories(item: FoodItemInput, lookup: FoodLookup)
     reviewReason: facts ? (grams === null ? 'portion_unknown' : 'nutrition_unavailable') : 'no_database_match',
   };
 }
+
+/**
+ * Keeps the phone conversation moving. A nutrition lookup that is already cached answers in a few
+ * milliseconds; a first-time food can take one to two seconds at USDA. If the answer is not back within
+ * the budget, the item is saved straight away with the model's estimate (reviewReason "lookup_pending")
+ * and the database values replace it when the lookup finishes (fast-lookup.ts). The read-back always
+ * uses current values.
+ */
+export const PENDING = 'lookup_pending';
+
+export function lookupBudgetMs() {
+  const value = Number(process.env.NUTRITION_LOOKUP_BUDGET_MS ?? 800);
+  return Number.isFinite(value) && value >= 50 && value <= 10_000 ? value : 800;
+}
+
+export type TimedCalories = { result: CalorieResult; late: Promise<CalorieResult> | null };
+
+export async function caloriesWithinBudget(item: FoodItemInput, lookup: FoodLookup, budgetMs = lookupBudgetMs()): Promise<TimedCalories> {
+  const full = calculateCalories(item, lookup);
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<null>(resolve => { timer = setTimeout(() => resolve(null), budgetMs); });
+  const first = await Promise.race([full, timeout]);
+  clearTimeout(timer);
+  if (first) return { result: first, late: null };
+  const estimate = await calculateCalories(item, async () => null); // instant: the model's own estimate
+  return { result: { ...estimate, reviewReason: PENDING }, late: full };
+}

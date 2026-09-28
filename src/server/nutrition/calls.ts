@@ -2,7 +2,8 @@ import { z } from 'zod';
 import { prisma } from '@/server/db';
 import { pushProvider } from '@/providers';
 import { log } from '@/lib/logger';
-import { calculateCalories, portionGrams, type FoodItemInput, type FoodLookup } from './calories';
+import { portionGrams, type FoodItemInput, type FoodLookup } from './calories';
+import { applyLateLookup, caloriesWithinBudget, cancelLateLookup } from './fast-lookup';
 import { isRealtimeVoice, DEFAULT_VOICE, LATE_DIAL_GRACE_MINUTES, MANUAL_CALL_COOLDOWN_MINUTES, MEALS, nutritionCallConfig, RETRY_DELAY_MINUTES } from './config';
 import { NutritionError } from './errors';
 import { keyWords } from './text';
@@ -231,15 +232,19 @@ export async function executeTool(callId: string, name: string, rawArgs: unknown
   const { userId, localDate } = call;
   switch (name as ToolName) {
     case 'log_food_items': {
+      const items = (args as { items: FoodItemInput[] }).items;
+      // All foods in the meal are looked up at once, each within the latency budget.
+      const timed = await Promise.all(items.map(item => caloriesWithinBudget(item, lookup)));
       const saved = [];
-      for (const item of (args as { items: FoodItemInput[] }).items) {
-        const r = await calculateCalories(item, lookup);
+      for (const [index, item] of items.entries()) {
+        const { result: r, late } = timed[index];
         const e = await prisma.foodLogEntry.create({ data: {
           userId, localDate, callId, meal: item.meal, description: item.description, foodName: r.foodName,
           quantity: item.quantity ?? null, unit: item.unit ?? null, grams: r.grams, kcal: r.kcal,
           proteinG: r.proteinG, carbsG: r.carbsG, fatG: r.fatG, source: r.source, sourceRef: r.sourceRef,
-          status: r.needsReview ? 'NEEDS_REVIEW' : 'DRAFT', reviewReason: r.reviewReason,
+          status: r.needsReview && !late ? 'NEEDS_REVIEW' : 'DRAFT', reviewReason: r.reviewReason,
         } });
+        if (late) applyLateLookup(e.id, late);
         saved.push({ id: e.id, food: e.foodName, kcal: e.kcal, estimate: r.source === 'ESTIMATE' });
       }
       return { saved, dayTotalKcal: await dayTotal(userId, localDate) };
@@ -258,15 +263,19 @@ export async function executeTool(callId: string, name: string, rawArgs: unknown
         const newGrams = portionGrams(next).grams;
         next.estimatedKcal = e.grams && newGrams && a.foodName === undefined ? e.kcal * (newGrams / e.grams) : e.kcal;
       }
-      const r = foodChanged ? await calculateCalories(next, lookup) : null;
+      const timed = foodChanged ? await caloriesWithinBudget(next, lookup) : null;
+      if (timed) cancelLateLookup(e.id); // an earlier pending lookup must not overwrite this correction
+      const r = timed?.result ?? null;
       const u = await prisma.foodLogEntry.update({ where: { id: e.id }, data: {
         meal: next.meal, description: next.description, quantity: next.quantity ?? null, unit: next.unit ?? null,
         ...(r ? { foodName: r.foodName, grams: r.grams, kcal: r.kcal, proteinG: r.proteinG, carbsG: r.carbsG, fatG: r.fatG, source: r.source, sourceRef: r.sourceRef,
-          status: r.needsReview ? 'NEEDS_REVIEW' : (e.callId === callId ? 'DRAFT' : e.status), reviewReason: r.reviewReason } : {}),
+          status: r.needsReview && !timed?.late ? 'NEEDS_REVIEW' : (e.callId === callId ? 'DRAFT' : e.status), reviewReason: r.reviewReason } : {}),
       } });
+      if (timed?.late) applyLateLookup(e.id, timed.late);
       return { updated: { id: u.id, food: u.foodName, kcal: u.kcal }, dayTotalKcal: await dayTotal(userId, localDate) };
     }
     case 'remove_food_item': {
+      cancelLateLookup((args as { id: string }).id);
       const { count } = await prisma.foodLogEntry.deleteMany({ where: { id: (args as { id: string }).id, userId, localDate } });
       return count ? { removed: true, dayTotalKcal: await dayTotal(userId, localDate) } : { error: 'item_not_found' };
     }

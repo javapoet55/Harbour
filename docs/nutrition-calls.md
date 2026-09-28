@@ -21,6 +21,11 @@ after the user confirms. Calls are capped at 5 minutes. The feature is **off** u
    the call, calorie estimates without a database match, and (if Deepgram is configured) items the
    independent Flux transcript never heard are marked `NEEDS_REVIEW` for the user to check in the app.
 
+Saving food stays fast: every food in a meal is looked up at once, and a lookup that takes longer than
+`NUTRITION_LOOKUP_BUDGET_MS` (default 800 ms) is saved immediately with the model's estimate, then
+replaced by the database values when the lookup finishes (unless the item was corrected or removed
+meanwhile). The agent also says a short "Got it." while it saves.
+
 Calls are only placed 08:00–21:30 in the user's time zone and up to 60 minutes late (e.g. after a
 worker restart). No-answer policy: `NOTIFY` (push), `RETRY_ONCE` (+15 min) or `SKIP`.
 
@@ -42,6 +47,7 @@ call records which filter was used (`NutritionCall.noiseFilter`).
    - `APP_URL` must be the exact public origin Twilio calls (e.g. `https://app.nexdoapp.com`);
      Twilio signatures are verified against it.
    - Optional: `NUTRITION_CALL_MAX_SECONDS` (60–300, default 300), `NUTRITION_OPENAI_NOISE_REDUCTION=off`,
+     `NUTRITION_LOOKUP_BUDGET_MS` (default 800),
      `NUTRITION_PHONE_CODE_CHANNEL` (`voice` default: code read aloud by call; `sms` needs A2P 10DLC approval)
 4. **New Railway service `nutrition-call-worker`** from this repo:
    - Build: `npm ci --ignore-scripts` · Start: `node scripts/nutrition-call-worker.mjs`
