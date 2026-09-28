@@ -108,6 +108,13 @@ describe('call bridge', () => {
       transcript: [{ role: 'user', text: 'two rotis and dal' }, { role: 'assistant', text: 'Thanks, have a good night!' }],
     }));
   });
+  it('uses the tool’s closing line when it provides one (e.g. "Connecting you now")', async () => {
+    const { bridge, openai } = setup({ ok: true, end: true, say: 'Say only: "Connecting you to Mom now."' });
+    await bridge.handleTwilioMessage(JSON.stringify(start)); openai.emit('open');
+    model(openai, { type: 'response.done', response: { output: [{ type: 'function_call', call_id: 'fc3', name: 'connect_now', arguments: '{}' }] } });
+    await flush(); await flush();
+    expect(openai.sent.at(-1)).toMatchObject({ type: 'response.create', response: { instructions: 'Say only: "Connecting you to Mom now." Do not call any tools.', tool_choice: 'none' } });
+  });
   it('ends the call without a report when the API rejects the call token', async () => {
     const { bridge, api, closedTwilio } = setup();
     api.session.mockRejectedValueOnce(new Error('api_401'));

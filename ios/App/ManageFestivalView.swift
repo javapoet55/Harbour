@@ -221,6 +221,7 @@ struct ManageFestivalView: View {
         Text("\(automaticCount) automatic · \(model.selected.count-automaticCount) will be sent by you").font(.subheadline)
         if model.selected.contains(where:{model.channel($0)=="email"}) && model.store.snapshot?.emailAccount?.status != "connected" {NavigationLink("Connect / Reconnect email"){MomentSettingsView().environmentObject(model.store)}}
         MomentCard{Toggle("Notify me 1 hour before",isOn:$model.notify).accessibilityIdentifier("moment-send-reminder")}
+        MomentConnectSection(store:model.store,moments:model.selected.compactMap{r in model.store.moments.first{$0.id==r.momentID}})
         Label("At the scheduled time, we’ll remind you to send manual wishes. For Messages, open the prepared wish and tap Send. Only email marked automatic sends for you.",systemImage:"info.circle.fill").font(.subheadline).padding().background(.blue.opacity(0.08),in:RoundedRectangle(cornerRadius:14))
         if model.dirty{MomentPrimary(title:"Save Changes"){save()}}
         MomentPrimary(title:"Schedule Wish"){if let issue=FestivalValidation.schedule(settings:model.settings,date:model.sendDate,active:model.active,emailReady:model.emailReady,recipients:model.recipients){model.error=issue}else if model.dirty{model.error="Save changes first."}else{scheduleConfirm=true}}.disabled(model.generatingImage)

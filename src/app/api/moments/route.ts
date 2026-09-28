@@ -9,6 +9,8 @@ import { MomentError } from '@/server/moments/domain';
 import { listMoments, saveMoment, generateDraft, approveDraft, schedule, changePlan, runJobs, sendGreetingNow } from '@/server/moments/service';
 import { connectURL, revokeEmail } from '@/server/moments/email';
 import { z } from 'zod';
+import { callerIdStatus, removeCallerId, startCallerIdVerification } from '@/server/moment-calls/caller-id';
+import { connectNow, connectPreview, connectStatus, saveConnect } from '@/server/moment-calls/service';
 function failure(e:unknown) { if(e instanceof SyntaxError) return NextResponse.json({error:"Invalid JSON request."},{status:400}); return e instanceof MomentError ? NextResponse.json({error:e.message},{status:e.status}) : jsonError(e); }
 async function healthHandlerGET() { try { return NextResponse.json(await listMoments((await requireUser()).id)); } catch(e) { return failure(e); } }
 async function healthHandlerPOST(req:Request) {
@@ -31,6 +33,13 @@ async function healthHandlerPOST(req:Request) {
     return NextResponse.json({plans:await prisma.deliveryPlan.findMany({where:{id:{in:plans.map(plan=>plan.id)}}})});
    }
    case 'plan': return NextResponse.json(await changePlan(user.id,p.input));
+   case 'callerIdStart': return NextResponse.json(await startCallerIdVerification(user.id,(p.input as {phone?:unknown}|undefined)?.phone));
+   case 'callerIdStatus': return NextResponse.json({callerId:await callerIdStatus(user.id)});
+   case 'callerIdRemove': return NextResponse.json(await removeCallerId(user.id));
+   case 'connectStatus': return NextResponse.json(await connectStatus(user.id,z.object({momentIds:z.array(z.string().max(40)).max(50).optional()}).parse(p.input ?? {}).momentIds));
+   case 'connectPreview': return NextResponse.json(await connectPreview(user.id,p.input));
+   case 'connectSave': return NextResponse.json(await saveConnect(user.id,p.input));
+   case 'connectNow': return NextResponse.json(await connectNow(user.id,p.input));
    case 'connectEmail': return NextResponse.json({url:await connectURL(user.id)});
    case 'disconnectEmail': {
     if(await prisma.deliveryPlan.count({where:{draft:{moment:{userId:user.id}},status:'SENDING'}})) throw new MomentError('Email is being submitted. Refresh before disconnecting.',409);
