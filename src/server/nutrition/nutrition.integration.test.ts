@@ -16,6 +16,7 @@ import { addEntry, dayLog, deleteEntry, periodSummary, updateEntry } from '@/ser
 import { completeCall, dialCall, executeTool, handleCallStatus, requestCallNow, runNutritionTick, sessionForCall, twimlForCall } from '@/server/nutrition/calls';
 import { NutritionError } from '@/server/nutrition/errors';
 import { settleLateLookups } from '@/server/nutrition/fast-lookup';
+import { dailyInsight, handleInsight } from '@/server/nutrition/insights';
 import { ZodError } from 'zod';
 import type { FoodFacts } from '@/server/shopping/food/model';
 
@@ -168,6 +169,58 @@ describe('fast saving during a call', () => {
   });
 });
 
+describe('daily insight and one action', () => {
+  let other = '';
+  beforeAll(async () => {
+    other = (await prisma.user.create({ data: { email: `insight-${Date.now()}@example.com`, name: 'Meera', passwordHash: 'x', timeZone: 'America/Los_Angeles' } })).id;
+    await updateSettings(other, 'America/Los_Angeles', { goals: { Protein: 120, Fiber: 25, Calcium: 1000, Iron: 18, 'Vitamin D': 800 } });
+    const full = { fiberG: 30, calciumMg: 1100, ironMg: 20, vitaminDIu: 900 };
+    for (const [i, d] of ['2026-09-22', '2026-09-23', '2026-09-24', '2026-09-25'].entries()) {
+      await prisma.foodLogEntry.create({ data: { userId: other, localDate: d, meal: 'LUNCH', description: 'rice and curry', foodName: 'rice', kcal: 900, proteinG: 30 + i, ...full, source: 'USDA', status: 'CONFIRMED' } });
+    }
+    await prisma.shoppingList.create({ data: { id: `list-${Date.now()}`, userId: other, title: 'Weekend shop', date: '2026-09-26', timeZone: 'America/Los_Angeles', items: { create: [{ id: `item-${Date.now()}`, name: 'Eggs', category: 'Dairy', sortOrder: 0 }] } } });
+  });
+  it('spots the protein pattern and offers foods not already on the list', async () => {
+    const insight = await dailyInsight(other, '2026-09-25');
+    expect(insight).toMatchObject({ kind: 'GAP', nutrient: 'protein', items: ['Greek yogurt', 'Lentils'], listTitle: 'Weekend shop', state: 'open' });
+    expect(insight?.text).toContain('Protein was under 72 g on 4 of your last 4 logged days');
+  });
+  it('adds the foods to the shopping list once, bumping the list revision', async () => {
+    const insight = (await dailyInsight(other, '2026-09-25'))!;
+    await expect(handleInsight(other, '2026-09-25', 'forged-key', 'add')).rejects.toBeInstanceOf(NutritionError);
+    const before = await prisma.shoppingList.findFirstOrThrow({ where: { userId: other } });
+    expect(await handleInsight(other, '2026-09-25', insight.key, 'add')).toEqual({ ok: true, added: ['Greek yogurt', 'Lentils'], listTitle: 'Weekend shop' });
+    const after = await prisma.shoppingList.findFirstOrThrow({ where: { userId: other }, include: { items: { orderBy: { sortOrder: 'asc' } } } });
+    expect(after.items.map(i => [i.name, i.notes])).toEqual([['Eggs', ''], ['Greek yogurt', 'Suggested by NexDo'], ['Lentils', 'Suggested by NexDo']]);
+    expect(after.revision).toBe(before.revision + 1);
+    expect(await dailyInsight(other, '2026-09-25')).toMatchObject({ state: 'added' });
+    expect((await handleInsight(other, '2026-09-25', insight.key, 'add')).added).toEqual([]);  // pressing again adds nothing
+  });
+  it('can be dismissed, and turned off entirely', async () => {
+    await prisma.foodLogEntry.create({ data: { userId: other, localDate: '2026-09-26', meal: 'LUNCH', description: 'rice', foodName: 'rice', kcal: 900, proteinG: 30, fiberG: 30, calciumMg: 1100, ironMg: 20, vitaminDIu: 900, source: 'USDA', status: 'CONFIRMED' } });
+    const next = (await dailyInsight(other, '2026-09-26'))!;
+    expect(next.state).toBe('open');                                                     // a new day, a new insight
+    await handleInsight(other, '2026-09-26', next.key, 'dismiss');
+    expect((await dailyInsight(other, '2026-09-26'))?.state).toBe('dismissed');
+    await updateSettings(other, 'x', { insightsEnabled: false });
+    expect(await dailyInsight(other, '2026-09-26')).toBeNull();
+    await updateSettings(other, 'x', { insightsEnabled: true });
+  });
+  it('offers the insight on the call and adds the foods when the user says yes', async () => {
+    await prisma.foodLogEntry.create({ data: { userId: other, localDate: '2026-09-27', meal: 'LUNCH', description: 'rice', foodName: 'rice', kcal: 900, proteinG: 30, fiberG: 30, calciumMg: 1100, ironMg: 20, vitaminDIu: 900, source: 'USDA', status: 'CONFIRMED' } });
+    await prisma.shoppingItem.deleteMany({ where: { list: { userId: other }, name: { in: ['Greek yogurt', 'Lentils'] } } });
+    const call = await prisma.nutritionCall.create({ data: { userId: other, localDate: '2026-09-27', attempt: 1, scheduledFor: new Date(), status: 'IN_PROGRESS' } });
+    const offered = await executeTool(call.id, 'get_daily_insight', {}, lookup) as { insight: { text: string; offersShoppingItems: boolean } };
+    expect(offered.insight).toMatchObject({ offersShoppingItems: true });
+    expect(offered.insight.text).toMatch(/^Protein was under 72 g/);
+    expect(await executeTool(call.id, 'add_insight_items', {}, lookup)).toEqual({ added: ['Greek yogurt', 'Lentils'], listTitle: 'Weekend shop' });
+  });
+  it('totals fiber, calcium, iron and vitamin D in the day view', async () => {
+    const day = await dayLog(other, '2026-09-22');
+    expect(day.totals).toMatchObject({ fiberG: 30, calciumMg: 1100, ironMg: 20, vitaminDIu: 900 });
+  });
+});
+
 describe('no answer, call-backs and the app food log', () => {
   it('retries once after 15 minutes on no answer when the user chose Retry once', async () => {
     const c = await prisma.nutritionCall.create({ data: { userId, localDate: '2026-09-29', attempt: 1, scheduledFor: new Date(), status: 'DIALING', twilioCallSid: 'CA_na' } });
@@ -205,9 +258,10 @@ describe('no answer, call-backs and the app food log', () => {
     expect(await updateEntry(userId, flagged.id, { kcal: 650 })).toMatchObject({ kcal: 650, source: 'MANUAL', status: 'CONFIRMED' });
     expect(await deleteEntry(userId, added.id)).toEqual({ deleted: true });
     expect(await code(deleteEntry(userId, added.id))).toBe('NOT_FOUND');
-    const week = await periodSummary(userId, '2026-09-28', 7);
+    const week = await periodSummary(userId, '2026-09-24', 7);                 // a Thursday
+    expect(week).toMatchObject({ startDate: '2026-09-21', endDate: '2026-09-27', daysLogged: 1, calorieGoal: 1800 }); // Mon–Sun
+    expect(week.daily.map(d => d.date)).toEqual(['2026-09-21', '2026-09-22', '2026-09-23', '2026-09-24', '2026-09-25', '2026-09-26', '2026-09-27']);
     expect(week.daily.find(d => d.date === '2026-09-27')?.kcal).toBe(25 + 210 + 650);
-    expect(week).toMatchObject({ daysLogged: 1, calorieGoal: 1800 });
   });
   it('rate-limits "call me now" and respects the calling window', async () => {
     vi.useFakeTimers({ toFake: ['Date'] });

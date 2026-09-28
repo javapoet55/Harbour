@@ -14,6 +14,7 @@ struct NutritionSettings: Decodable, Sendable {
     var calorieGoal: Int
     var goals: [String: Double]?
     var voices: [String]
+    var insightsEnabled: Bool?
 }
 
 struct NutritionTotals: Decodable, Sendable {
@@ -21,6 +22,22 @@ struct NutritionTotals: Decodable, Sendable {
     var proteinG: Double
     var carbsG: Double
     var fatG: Double
+    // Key nutrients (absent from servers before they were tracked).
+    var fiberG: Double?
+    var calciumMg: Double?
+    var ironMg: Double?
+    var vitaminDIu: Double?
+}
+
+/// Today's one insight, with at most one action (GET/POST /api/nutrition/insight).
+struct NutritionInsight: Decodable, Sendable, Equatable {
+    let key: String
+    let kind: String
+    let title: String
+    let text: String
+    let items: [String]
+    let listTitle: String?
+    var state: String
 }
 
 struct NutritionEntry: Decodable, Sendable, Identifiable {
@@ -77,6 +94,7 @@ struct NutritionSummary: Decodable, Sendable {
         var voice: String?
         var calorieGoal: Int?
         var goals: [String: Int]?
+        var insightsEnabled: Bool?
     }
     private struct PhoneStart: Encodable { var action = "start"; let phone: String }
     private struct PhoneVerify: Encodable { var action = "verify"; let code: String }
@@ -106,6 +124,27 @@ struct NutritionSummary: Decodable, Sendable {
     func loadSummary(month: Bool, endingOn date: String) async {
         guard let api else { return }
         _ = await attempt { let value: NutritionSummary = try await api.request("/api/nutrition/summary?period=\(month ? "month" : "week")&date=\(date)"); summary = value }
+    }
+
+    @Published private(set) var insight: NutritionInsight?
+    private struct InsightResponse: Decodable, Sendable { let insight: NutritionInsight? }
+    private struct InsightAction: Encodable { let date: String; let key: String; let action: String }
+    private struct InsightResult: Decodable, Sendable { let added: [String]; let listTitle: String? }
+
+    func loadInsight(_ date: String) async {
+        guard let api else { return }
+        do { let value: InsightResponse = try await api.request("/api/nutrition/insight?date=\(date)"); insight = value.insight }
+        catch { insight = nil } // an insight is optional; never block the dashboard on it
+    }
+
+    func actOnInsight(add: Bool, date: String) async {
+        guard let api, let current = insight else { return }
+        do {
+            let result: InsightResult = try await api.request("/api/nutrition/insight", method: "POST", body: JSONEncoder().encode(InsightAction(date: date, key: current.key, action: add ? "add" : "dismiss")))
+            // The card itself shows "Added to <list>"; the server confirmed which foods were new.
+            insight?.state = add ? "added" : "dismissed"
+            _ = result
+        } catch { self.error = error.localizedDescription }
     }
 
     func save(_ update: SettingsUpdate) async -> Bool {
@@ -232,6 +271,7 @@ struct CalorieTrackerView: View {
     @State private var foodCalories = ""
     @State private var meal = "BREAKFAST"
     @State private var started = false
+    @State private var insightsEnabled = true
 
     init(api: APIClient? = nil) {
         _store = StateObject(wrappedValue: CalorieStore(api: api))
@@ -332,6 +372,7 @@ struct CalorieTrackerView: View {
     private func refresh() async {
         guard live else { return }
         await store.loadDay(dateKey)
+        if period == "Today" { await store.loadInsight(dateKey) }
         if period != "Today" || page == .insights { await store.loadSummary(month: period == "Month", endingOn: dateKey) }
     }
 
@@ -344,11 +385,13 @@ struct CalorieTrackerView: View {
         calorieGoal = settings.calorieGoal
         if let saved = settings.goals { goals = labels.indices.map { index in saved[labels[index]].map { Int($0) } ?? goals[index] } }
         phoneInput = settings.phone ?? ""
+        insightsEnabled = settings.insightsEnabled ?? true
     }
 
     private var settingsUpdate: CalorieStore.SettingsUpdate {
         CalorieStore.SettingsUpdate(localTime: Self.hhmm(callTime), timeZone: timeZoneID, repeatDaily: repeatDaily, noAnswer: noAnswer, voice: voice,
-                                    calorieGoal: calorieGoal, goals: Dictionary(uniqueKeysWithValues: zip(labels, goals.map { min(10000, max(1, $0)) })))
+                                    calorieGoal: calorieGoal, goals: Dictionary(uniqueKeysWithValues: zip(labels, goals.map { min(10000, max(1, $0)) })),
+                                    insightsEnabled: live ? insightsEnabled : nil)
     }
 
     private static func hhmm(_ date: Date) -> String {
@@ -491,6 +534,12 @@ struct CalorieTrackerView: View {
             goalRows(0..<3)
             Text("Key Nutrients (Optional)").font(.headline)
             goalRows(3..<8)
+            if live {
+                card {
+                    Toggle("Daily insight", isOn: $insightsEnabled).tint(.indigo).accessibilityIdentifier("insights-toggle")
+                    Text("One factual observation a day about your own goals, with an optional shopping suggestion. It never labels foods good or bad.").font(.caption).foregroundStyle(.secondary)
+                }
+            }
             Button("↺ Restore sample values") { calorieGoal = 2000; goals = [150, 250, 67, 25, 1000, 18, 800, 1000] }
             primary("Next") { goals = goals.map { min(10000, max(1, $0)) }; go(.confirm) }
         }
@@ -612,7 +661,11 @@ struct CalorieTrackerView: View {
         case 0: return Int(totals.proteinG.rounded())
         case 1: return Int(totals.carbsG.rounded())
         case 2: return Int(totals.fatG.rounded())
-        default: return nil // not tracked yet
+        case 3: return totals.fiberG.map { Int($0.rounded()) }
+        case 4: return totals.calciumMg.map { Int($0.rounded()) }
+        case 5: return totals.ironMg.map { Int($0.rounded()) }
+        case 6: return totals.vitaminDIu.map { Int($0.rounded()) }
+        default: return nil // omega-3 is not tracked yet
         }
     }
     private var chartValues: (values: [Int], labels: [String]) {
@@ -636,6 +689,7 @@ struct CalorieTrackerView: View {
         Group {
             Picker("Period", selection: $period) { ForEach(["Today", "Week", "Month"], id: \.self) { Text($0) } }.pickerStyle(.segmented)
             dateSelector
+            if period == "Today", live, let insight = store.insight, insight.state == "open" || insight.state == "added" { insightCard(insight) }
             if period == "Today" {
                 HStack(spacing: 18) {
                     ZStack {
@@ -656,7 +710,7 @@ struct CalorieTrackerView: View {
                 }
             } else {
                 card {
-                    Text(period == "Week" ? "Calories · Last 7 days" : "Calories · Weekly averages").font(.headline)
+                    Text(period == "Week" ? (live ? "Calories · This week (Mon–Sun)" : "Calories · Last 7 days") : "Calories · Weekly averages").font(.headline)
                     ChartBars(values: chartValues.values, labels: chartValues.labels, goal: goal)
                     if live, let summary = store.summary {
                         Text(summary.daysLogged == 0 ? "Nothing logged in this period yet" : "Average \(summary.averageKcal) kcal on \(summary.daysLogged) logged day\(summary.daysLogged == 1 ? "" : "s")").font(.caption).foregroundStyle(.secondary)
@@ -684,7 +738,7 @@ struct CalorieTrackerView: View {
                     }
                     if let value = intake(i) { ProgressView(value: min(Double(value) / Double(max(1, goals[i])), 1)).tint(colors[i]) }
                 }
-                if live { Text("Key nutrients aren’t tracked yet — calories, protein, carbs and fats are.").font(.caption).foregroundStyle(.secondary) }
+                if live { Text("Omega-3 isn’t tracked yet. Other values come from USDA and Open Food Facts data for the foods you log; estimated items don’t add to them.").font(.caption).foregroundStyle(.secondary) }
             }
             primary("View Food Log") { go(.log) }
             Button("Manage daily check-in") { go(.time) }.frame(maxWidth: .infinity)
@@ -695,6 +749,29 @@ struct CalorieTrackerView: View {
                 }.frame(maxWidth: .infinity)
             }
         }
+    }
+    private func insightCard(_ insight: NutritionInsight) -> some View {
+        card {
+            HStack(alignment: .top, spacing: 12) {
+                icon(insight.kind == "GAP" ? "sparkles" : insight.kind == "STREAK" ? "flame.fill" : "chart.line.uptrend.xyaxis", insight.kind == "GAP" ? .purple : .orange)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Today’s insight").font(.caption.bold()).foregroundStyle(.secondary)
+                    Text(insight.title).font(.headline)
+                    Text(insight.text).font(.subheadline)
+                }
+            }
+            if insight.state == "added" {
+                Label("Added to \(insight.listTitle ?? "your shopping list")", systemImage: "checkmark.circle.fill").font(.subheadline).foregroundStyle(.green)
+            } else if !insight.items.isEmpty {
+                HStack {
+                    Button { Task { await store.actOnInsight(add: true, date: dateKey) } } label: { Label("Add to \(insight.listTitle ?? "shopping list")", systemImage: "cart.badge.plus") }
+                        .buttonStyle(.borderedProminent).tint(.indigo).accessibilityIdentifier("insight-add")
+                    Button("Not now") { Task { await store.actOnInsight(add: false, date: dateKey) } }.accessibilityIdentifier("insight-dismiss")
+                }
+            } else {
+                Button("Got it") { Task { await store.actOnInsight(add: false, date: dateKey) } }.accessibilityIdentifier("insight-dismiss")
+            }
+        }.accessibilityIdentifier("insight-card")
     }
     private var insights: some View {
         Group {

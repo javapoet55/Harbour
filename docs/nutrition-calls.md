@@ -33,6 +33,31 @@ Noise handling at launch is OpenAI Realtime's near-field noise reduction. A serv
 (e.g. Krisp) plugs into `scripts/nutrition-call-worker/noise-filter.mjs` without other changes; each
 call records which filter was used (`NutritionCall.noiseFilter`).
 
+## Daily insight (one observation, one action)
+
+`GET /api/nutrition/insight?date=` returns at most one insight for the day, from the last 7 days of the
+food log against the user's own goals (`src/server/nutrition/insights.ts`):
+
+- **Gap**: a nutrient (protein, fiber, calcium, iron, vitamin D) under 60% of its goal on at least 3
+  logged days and half of the days considered, e.g. "Protein was under 90 g on 4 of your last 7 logged
+  days, mostly on days without breakfast. Add Greek yogurt and Lentils to your shopping list?". A day only
+  counts for a nutrient when at least 70% of its calories come from foods whose value is known, so
+  missing data never looks like a shortfall. The largest shortfall wins.
+- **Streak** when there is no gap, **Need data** below 3 logged days.
+- Insights only ever suggest *adding* foods. Calories above goal never produce an insight, and foods are
+  never called good or bad. Users can turn insights off (`insightsEnabled` in settings).
+
+`POST /api/nutrition/insight { date, key, action: 'add' | 'dismiss' }`. "add" puts the suggested foods
+(skipping ones already there) on the soonest unfinished shopping list, or a new "Groceries" list, notes
+them "Suggested by NexDo" and bumps the list revision. Keys that don't match today's insight are refused.
+
+On the check-in call, after the read-back, the agent calls `get_daily_insight`, says it in one sentence
+and offers to add the foods (`add_insight_items`); it skips this when under 40 seconds remain.
+
+Food log entries also store fiber (g), calcium (mg), iron (mg) and vitamin D (IU) from USDA/Open Food
+Facts; the day totals include them. Omega-3 is not tracked. The Week summary is the Monday–Sunday week
+containing the date (`startDate`, `endDate`).
+
 ## Deploy checklist
 
 1. **Migration** `20260927200000_nutrition_calls` (additive: three new tables) runs automatically on
@@ -73,7 +98,8 @@ All routes use the normal session cookie. Dates are the user's local `YYYY-MM-DD
 | Add food | `POST /api/nutrition/log` `{ date, meal "BREAKFAST"\|"LUNCH"\|"DINNER"\|"SNACKS", description, kcal? , foodName?, grams? }` (without `kcal` it is looked up) |
 | Edit / confirm a flagged item | `PATCH /api/nutrition/log/{id}` `{ kcal?, meal?, description?, confirm: true }` |
 | Remove food | `DELETE /api/nutrition/log/{id}` |
-| Week / Month charts | `GET /api/nutrition/summary?period=week\|month&date=` → daily kcal, average, days logged |
+| Week / Month charts | `GET /api/nutrition/summary?period=week\|month&date=` → daily kcal (Week: Monday–Sunday), average, days logged |
+| Today's insight | `GET /api/nutrition/insight?date=`; `POST /api/nutrition/insight { key, action: "add"\|"dismiss" }` |
 
 Errors return `{ code, error }` with a user-readable `error`.
 

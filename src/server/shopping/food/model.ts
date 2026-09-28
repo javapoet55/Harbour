@@ -1,4 +1,5 @@
-export type Nutrient = 'calories' | 'protein' | 'totalFat' | 'saturatedFat' | 'carbohydrates' | 'sugar' | 'sodium' | 'calcium' | 'fiber';
+export type Nutrient = 'calories' | 'protein' | 'totalFat' | 'saturatedFat' | 'carbohydrates' | 'sugar' | 'sodium' | 'calcium' | 'fiber' | 'iron' | 'vitaminD';
+// The nutrients shopping uses for completeness. Iron and vitamin D are carried for the food log but not required here.
 export const nutrients: Nutrient[] = ['calories','protein','totalFat','saturatedFat','carbohydrates','sugar','sodium','calcium','fiber'];
 export type Nutrition = Partial<Record<Nutrient, number>> & { servingSize: string; servingAmount: number; servingUnit: 'g' | 'ml' };
 export type MatchQuality = 'exact_barcode' | 'branded_match' | 'representative_generic';

@@ -120,6 +120,6 @@ describe('realtime session', () => {
     expect(session.instructions).toContain('within 5 minutes');
     expect(session.instructions).toContain('Never state a calorie number yourself');
     expect(session.instructions).toContain('("Got it.")');
-    expect(nutritionCallTools.map(t => t.name)).toEqual(['log_food_items', 'update_food_item', 'remove_food_item', 'get_day_summary', 'finish_call', 'call_back_later', 'skip_today']);
+    expect(nutritionCallTools.map(t => t.name)).toEqual(['log_food_items', 'update_food_item', 'remove_food_item', 'get_day_summary', 'get_daily_insight', 'add_insight_items', 'finish_call', 'call_back_later', 'skip_today']);
   });
 });

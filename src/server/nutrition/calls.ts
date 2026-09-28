@@ -7,6 +7,7 @@ import { applyLateLookup, caloriesWithinBudget, cancelLateLookup } from './fast-
 import { isRealtimeVoice, DEFAULT_VOICE, LATE_DIAL_GRACE_MINUTES, MANUAL_CALL_COOLDOWN_MINUTES, MEALS, nutritionCallConfig, RETRY_DELAY_MINUTES } from './config';
 import { NutritionError } from './errors';
 import { keyWords } from './text';
+import { dailyInsight, handleInsight } from './insights';
 import { defaultLookup } from './log';
 import { nutritionCallSession } from './session';
 import { dueCall, localDateIn, withinCallWindow } from './time';
@@ -209,6 +210,8 @@ const toolSchemas = {
   update_food_item: itemSchema.partial().extend({ id: z.string().min(1).max(40) }),
   remove_food_item: z.object({ id: z.string().min(1).max(40) }),
   get_day_summary: z.object({}),
+  get_daily_insight: z.object({}),
+  add_insight_items: z.object({}),
   finish_call: z.object({ confirmed: z.boolean() }),
   call_back_later: z.object({ minutes: z.number().int().min(10).max(120) }),
   skip_today: z.object({ reason: z.enum(['declined', 'voicemail', 'wrong_person']) }),
@@ -241,7 +244,7 @@ export async function executeTool(callId: string, name: string, rawArgs: unknown
         const e = await prisma.foodLogEntry.create({ data: {
           userId, localDate, callId, meal: item.meal, description: item.description, foodName: r.foodName,
           quantity: item.quantity ?? null, unit: item.unit ?? null, grams: r.grams, kcal: r.kcal,
-          proteinG: r.proteinG, carbsG: r.carbsG, fatG: r.fatG, source: r.source, sourceRef: r.sourceRef,
+          proteinG: r.proteinG, carbsG: r.carbsG, fatG: r.fatG, fiberG: r.fiberG, calciumMg: r.calciumMg, ironMg: r.ironMg, vitaminDIu: r.vitaminDIu, source: r.source, sourceRef: r.sourceRef,
           status: r.needsReview && !late ? 'NEEDS_REVIEW' : 'DRAFT', reviewReason: r.reviewReason,
         } });
         if (late) applyLateLookup(e.id, late);
@@ -268,7 +271,7 @@ export async function executeTool(callId: string, name: string, rawArgs: unknown
       const r = timed?.result ?? null;
       const u = await prisma.foodLogEntry.update({ where: { id: e.id }, data: {
         meal: next.meal, description: next.description, quantity: next.quantity ?? null, unit: next.unit ?? null,
-        ...(r ? { foodName: r.foodName, grams: r.grams, kcal: r.kcal, proteinG: r.proteinG, carbsG: r.carbsG, fatG: r.fatG, source: r.source, sourceRef: r.sourceRef,
+        ...(r ? { foodName: r.foodName, grams: r.grams, kcal: r.kcal, proteinG: r.proteinG, carbsG: r.carbsG, fatG: r.fatG, fiberG: r.fiberG, calciumMg: r.calciumMg, ironMg: r.ironMg, vitaminDIu: r.vitaminDIu, source: r.source, sourceRef: r.sourceRef,
           status: r.needsReview && !timed?.late ? 'NEEDS_REVIEW' : (e.callId === callId ? 'DRAFT' : e.status), reviewReason: r.reviewReason } : {}),
       } });
       if (timed?.late) applyLateLookup(e.id, timed.late);
@@ -288,6 +291,17 @@ export async function executeTool(callId: string, name: string, rawArgs: unknown
         items: entries.map(e => ({ id: e.id, meal: e.meal, description: e.description, kcal: e.kcal, estimate: e.source === 'ESTIMATE' })),
         totalKcal: entries.reduce((t, e) => t + e.kcal, 0), goalKcal: settings?.calorieGoal ?? 2000,
       };
+    }
+    case 'get_daily_insight': {
+      const insight = await dailyInsight(userId, localDate).catch(() => null);
+      if (!insight || insight.kind !== 'GAP' || insight.state !== 'open') return { insight: null };
+      return { insight: { text: insight.text, offersShoppingItems: insight.items.length > 0, items: insight.items } };
+    }
+    case 'add_insight_items': {
+      const insight = await dailyInsight(userId, localDate).catch(() => null);
+      if (!insight?.items.length) return { added: [] };
+      const result = await handleInsight(userId, localDate, insight.key, 'add');
+      return { added: result.added, listTitle: result.listTitle };
     }
     case 'finish_call': {
       if ((args as { confirmed: boolean }).confirmed) await prisma.foodLogEntry.updateMany({ where: { callId, status: 'DRAFT' }, data: { status: 'CONFIRMED' } });

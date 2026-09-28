@@ -17,6 +17,7 @@ export type CalorieResult = {
   matchedName: string | null; // the database record it matched, for display
   grams: number | null; kcal: number;
   proteinG: number | null; carbsG: number | null; fatG: number | null;
+  fiberG: number | null; calciumMg: number | null; ironMg: number | null; vitaminDIu: number | null;
   source: 'USDA' | 'OPEN_FOOD_FACTS' | 'ESTIMATE';
   sourceRef: string | null;
   needsReview: boolean; reviewReason: string | null;
@@ -66,6 +67,7 @@ export async function calculateCalories(item: FoodItemInput, lookup: FoodLookup)
       const volumeMismatch = fromVolume && n.servingUnit === 'g';
       return {
         foodName: item.foodName, matchedName: facts.name, grams, kcal, proteinG: scaled(n.protein), carbsG: scaled(n.carbohydrates), fatG: scaled(n.totalFat),
+        fiberG: scaled(n.fiber), calciumMg: scaled(n.calcium), ironMg: scaled(n.iron), vitaminDIu: scaled(n.vitaminD),
         source: facts.source, sourceRef: facts.id,
         needsReview: volumeMismatch, reviewReason: volumeMismatch ? 'volume_converted_at_water_density' : null,
       };
@@ -74,6 +76,7 @@ export async function calculateCalories(item: FoodItemInput, lookup: FoodLookup)
   const estimate = finite(item.estimatedKcal) ? Math.min(Math.round(item.estimatedKcal), MAX_ITEM_KCAL) : 0;
   return {
     foodName: item.foodName, matchedName: null, grams, kcal: estimate, proteinG: null, carbsG: null, fatG: null,
+    fiberG: null, calciumMg: null, ironMg: null, vitaminDIu: null,
     source: 'ESTIMATE', sourceRef: null, needsReview: true,
     reviewReason: facts ? (grams === null ? 'portion_unknown' : 'nutrition_unavailable') : 'no_database_match',
   };

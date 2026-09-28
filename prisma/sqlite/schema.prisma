@@ -723,6 +723,9 @@ model NutritionCallSettings {
   calorieGoal       Int      @default(2000)
   goalsJson         String?
   lastManualCallAt  DateTime?
+  insightsEnabled   Boolean  @default(true)
+  insightHandledKey String?
+  insightHandledAction String?
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
   @@index([enabled])
@@ -768,6 +771,10 @@ model FoodLogEntry {
   proteinG     Float?
   carbsG       Float?
   fatG         Float?
+  fiberG       Float?
+  calciumMg    Float?
+  ironMg       Float?
+  vitaminDIu   Float?
   source       String
   sourceRef    String?
   status       String   @default("CONFIRMED")

@@ -43,12 +43,14 @@ export function normalizeUSDA(raw:unknown,match:MatchQuality):FoodFacts|null {
   facts.size=text(r.packageWeight)||undefined;facts.lastUpdated=text(r.modifiedDate)||text(r.publicationDate)||undefined;
   // Full FDC food details amounts are per 100 g, including branded records. Never treat labelNutrients as per 100 g.
   const n:Nutrition={servingSize:'100 g',servingAmount:100,servingUnit:'g'};
-  const mapping:Record<number,keyof Nutrition>={1008:'calories',2048:'calories',1003:'protein',1004:'totalFat',1258:'saturatedFat',1005:'carbohydrates',2000:'sugar',1067:'sugar',1093:'sodium',1087:'calcium',1079:'fiber'};
+  const mapping:Record<number,keyof Nutrition>={1008:'calories',2048:'calories',1003:'protein',1004:'totalFat',1258:'saturatedFat',1005:'carbohydrates',2000:'sugar',1067:'sugar',1093:'sodium',1087:'calcium',1079:'fiber',1089:'iron',1110:'vitaminD',1114:'vitaminD'};
   for(const entry of array(r.foodNutrients)){
     const value=obj(entry),nutrient=obj(value.nutrient),id=Number(nutrient.id),key=mapping[id],amount=finite(value.amount),unit=text(nutrient.unitName).toLowerCase();
     if(!key||amount===undefined)continue;
-    const target=key==='calories'?'kcal':key==='sodium'||key==='calcium'?'mg':'g';
-    const converted=unit===target?amount:unit==='g'&&target==='mg'?amount*1000:unit==='mg'&&target==='g'?amount/1000:undefined;
+    const target=key==='calories'?'kcal':key==='sodium'||key==='calcium'||key==='iron'?'mg':key==='vitaminD'?'iu':'g';
+    // Vitamin D is kept in IU; FDC reports it both in IU and in µg (1 µg = 40 IU).
+    const micrograms=unit==='µg'||unit==='ug'||unit==='mcg';
+    const converted=unit===target?amount:unit==='g'&&target==='mg'?amount*1000:unit==='mg'&&target==='g'?amount/1000:target==='iu'&&micrograms?amount*40:undefined;
     if(converted!==undefined && finite(converted)!==undefined && (n[key]===undefined || id===1008))Object.assign(n,{[key]:converted});
   }
   facts.nutrition=n;
@@ -66,9 +68,11 @@ export function normalizeOFF(raw:unknown,match:MatchQuality):FoodFacts|null {
   // OFF stores _100g values per 100g or 100ml. Without an explicit volume basis use mass; never convert g↔ml.
   const unit=text(r.nutrition_data_per)==='100ml'?'ml':'g';
   const n:Nutrition={servingSize:`100 ${unit}`,servingAmount:100,servingUnit:unit},values=obj(r.nutriments);
-  const keys={calories:'energy-kcal',protein:'proteins',totalFat:'fat',saturatedFat:'saturated-fat',carbohydrates:'carbohydrates',sugar:'sugars',sodium:'sodium',calcium:'calcium',fiber:'fiber'} as const;
+  const keys={calories:'energy-kcal',protein:'proteins',totalFat:'fat',saturatedFat:'saturated-fat',carbohydrates:'carbohydrates',sugar:'sugars',sodium:'sodium',calcium:'calcium',fiber:'fiber',iron:'iron',vitaminD:'vitamin-d'} as const;
+  // OFF stores every nutrient in grams per 100 g/ml: sodium, calcium and iron become mg; vitamin D becomes IU (1 µg = 40 IU).
+  const scale=(key:string)=>key==='sodium'||key==='calcium'||key==='iron'?1000:key==='vitaminD'?40_000_000:1;
   if(r.no_nutrition_data!=='on' && ['100g','100ml'].includes(text(r.nutrition_data_per)))for(const [key,off] of Object.entries(keys)){
-    const value=finite(values[`${off}_100g`]);if(value!==undefined)Object.assign(n,{[key]:value*(key==='sodium'||key==='calcium'?1000:1)});
+    const value=finite(values[`${off}_100g`]);if(value!==undefined)Object.assign(n,{[key]:value*scale(key)});
   }
   f.nutrition=n;
   const labels=(v:unknown)=>strings(v).filter(t=>/^en:[a-z-]+$/.test(t)).map(t=>t.slice(3).replace(/-/g,' ')).map(t=>t[0].toUpperCase()+t.slice(1));

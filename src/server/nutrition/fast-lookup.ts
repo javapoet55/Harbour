@@ -35,6 +35,7 @@ export function applyLateLookup(entryId: string, late: Promise<CalorieResult>) {
     }
     await prisma.foodLogEntry.update({ where: { id: entryId }, data: {
       foodName: r.foodName, grams: r.grams, kcal: r.kcal, proteinG: r.proteinG, carbsG: r.carbsG, fatG: r.fatG,
+      fiberG: r.fiberG, calciumMg: r.calciumMg, ironMg: r.ironMg, vitaminDIu: r.vitaminDIu,
       source: r.source, sourceRef: r.sourceRef, reviewReason, ...(r.needsReview ? { status: 'NEEDS_REVIEW' } : {}),
     } });
   });
