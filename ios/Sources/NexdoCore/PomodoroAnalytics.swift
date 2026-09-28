@@ -5,7 +5,7 @@ public enum PomodoroPeriod: String, CaseIterable, Sendable {
     public var title: String { switch self { case .today: "Today"; case .week: "This Week"; case .month: "This Month"; case .all: "All Time" } }
 }
 
-/// Activity is attributed to the session's start date in the user's current calendar.
+/// Activity is attributed to the session's start date in the user's current calendar; weeks run Monday–Sunday.
 /// Pauses are excluded by the timer model; breaks never contribute to focus time.
 public struct PomodoroAnalytics: Sendable {
     public struct Bucket: Identifiable, Sendable {
@@ -43,7 +43,10 @@ public struct PomodoroAnalytics: Sendable {
             return total > 0 ? CategoryTotal(category: category, seconds: total) : nil
         }
     }
-    public init(sessions input: [PomodoroSession], period: PomodoroPeriod, now: Date = Date(), calendar: Calendar = .current) {
+    public init(sessions input: [PomodoroSession], period: PomodoroPeriod, now: Date = Date(), calendar base: Calendar = .current) {
+        // Weeks always run Monday to Sunday, whatever the device's region uses (US devices start on Sunday).
+        var calendar = base
+        calendar.firstWeekday = 2
         self.now = now; self.calendar = calendar; self.period = period
         var latest: [String: PomodoroSession] = [:]
         for session in input where session.startedAt <= now.timeIntervalSince1970 {
