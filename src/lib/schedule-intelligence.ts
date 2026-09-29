@@ -66,7 +66,7 @@ export function scoreTasks(tasks: IntelligenceTask[], now = new Date(), capacity
       task.dependencyBlocked ? 'dependency blocked' : '',
       task.dueAt && capacity !== undefined && capacity < task.durationMin ? 'not enough time before the deadline' : '',
     ].filter(Boolean);
-    return { taskId: task.id, title: task.title, score, reasons: reasons.length ? reasons : ['scheduled work'], deadlineRisk,
+    return { taskId: task.id, title: task.title, score, reasons: reasons.length ? reasons : [task.startAt ? 'scheduled work' : 'open task'], deadlineRisk,
       factors: { importance, urgency: dueUrgency, deadlineRisk, dependencyImpact, context: (context + preference) / 2 } };
   }).sort((a, b) => b.score - a.score || a.title.localeCompare(b.title));
 }
@@ -190,7 +190,7 @@ export function analyzeSchedule(input: {
     attention.push({ id: `dependency:${task.id}`, label: 'Blocked', title: task.title, explanation: 'This task is waiting or has an unfinished dependency.', recommendedAction: 'Resolve the dependency before reserving time for this task.', kind: 'task', taskId: task.id });
   }
 
-  const top = priorities.find((ranked) => todayTasks.some((task) => task.id === ranked.taskId) || overdue.some((task) => task.id === ranked.taskId)) ?? priorities[0] ?? null;
+  const top = priorities.find((ranked) => todayTasks.some((task) => task.id === ranked.taskId) || overdue.some((task) => task.id === ranked.taskId)) ?? null;
   const focus = tasks.find((task) => task.id === top?.taskId);
   let recommendation: TodaySnapshotData['recommendation'] = attention[0]
     ? { title: 'Start here', explanation: attention[0].recommendedAction, kind: attention[0].kind, taskId: attention[0].taskId }

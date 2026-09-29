@@ -269,7 +269,13 @@ struct CalendarView: View {
                 }
             }.foregroundStyle(Color.blue)
             if let info = model.scheduleIntelligence?.today, info.day == dates.key(Date()) {
-                Label(info.recommendation.title, systemImage: "exclamationmark.triangle").font(.headline)
+                if !reviewableConflicts.isEmpty {
+                    Label("Review schedule conflicts", systemImage: "exclamationmark.triangle").font(.headline)
+                } else if info.appointments == 0 && info.tasks == 0 {
+                    Text("Your schedule is clear").font(.headline)
+                } else {
+                    Text("Your schedule today").font(.headline)
+                }
                 Text("\(info.appointments) calendar commitments today · \(DurationDisplay.durationLabel(info.availableMinutes)) of usable time remain")
                     .font(.caption).foregroundStyle(Color.nexdoSecondary)
             } else if !model.intelligenceLoading && model.intelligenceError == nil {

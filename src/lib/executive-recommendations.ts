@@ -195,7 +195,7 @@ export function buildExecutiveRecommendation(context: ExecutiveContext, intent: 
   }
   recommendation.reasoning = priorities.map((item) => `${item.title}: ${item.reasons.join('; ')}`);
   if (context.contextWarnings?.length) {
-    recommendation.sections.unshift({ title: 'Calendar freshness', items: context.contextWarnings });
+    // Sync diagnostics remain in assumptions, not actionable briefing cards.
     if (recommendation.spoken) recommendation.spoken = `${context.contextWarnings.join(' ')} ${recommendation.spoken}`;
   }
   recommendation.conversationalSummary = recommendation.summary;

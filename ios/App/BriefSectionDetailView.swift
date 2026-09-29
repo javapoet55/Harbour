@@ -21,7 +21,7 @@ struct BriefSectionDetailView: View {
     // mutations when a complete task title identifies exactly one current task.
     private func task(for text: String) -> NexdoTask? {
         let matches = model.tasks.filter {
-            !$0.title.isEmpty && text.range(of: "(?<![\\p{L}\\p{N}])" + NSRegularExpression.escapedPattern(for: $0.title) + "(?![\\p{L}\\p{N}])", options: [.regularExpression, .caseInsensitive]) != nil
+            !$0.isDone && $0.status != "CANCELLED" && BriefContent.taskTitleMatches($0.title, text: text)
         }
         return matches.count == 1 ? matches.first : nil
     }
@@ -49,7 +49,7 @@ struct BriefSectionDetailView: View {
                     HStack(spacing: 12) {
                         DetailArtwork(part: .star).frame(width: 48, height: 48).accessibilityHidden(true)
                         VStack(alignment: .leading, spacing: 5) {
-                            Text(isPriority ? "Focus on what matters" : "Your \(title.lowercased())").font(.headline).foregroundStyle(.pink)
+                            Text(isPriority ? "Focus on what matters" : "Your \(title == "AI Response" ? "AI response" : title.lowercased())").font(.headline).foregroundStyle(.pink)
                             Text("Based on your schedule, deadlines, and context.").font(.subheadline).foregroundStyle(secondary)
                         }.frame(maxWidth: .infinity, alignment: .leading)
                         DetailArtwork(part: .target).frame(width: 70, height: 60).accessibilityHidden(true)

@@ -242,7 +242,7 @@ public struct AssistantTurn: Decodable, Sendable {
         }
         public let proposedScheduleChanges: [Change]
     }
-    public struct Section: Decodable, Sendable { public let title: String; public let items: [String] }
+    public struct Section: Decodable, Sendable { public let title: String; public let items: [String]; public init(title: String, items: [String]) { self.title = title; self.items = items } }
     public struct Visual: Decodable, Sendable { public let summary: String; public let sections: [Section]?; public let tasks: [String]?; public var appointments: [String]? = nil; public var overdue: [String]? = nil; public var next: String? = nil }
     public struct Confirmation: Decodable, Sendable { public let actionId: String; public let prompt: String }
     public let spoken: String

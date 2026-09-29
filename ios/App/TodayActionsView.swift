@@ -179,8 +179,16 @@ struct ActionNeededCard: View {
                         .frame(maxWidth: .infinity, minHeight: 44)
                 }.buttonStyle(NexdoGradientButtonStyle())
             case .chooseContact:
-                Button("Choose contact or enter details") { onChoose() }
-                    .buttonStyle(.borderedProminent)
+                Button(action: onChoose) {
+                    Text("Choose contact or enter details")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(Color.nexdoInk)
+                        .multilineTextAlignment(.center)
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                        .padding(.horizontal, 14).padding(.vertical, 6)
+                        .background(Color(red: 0.88, green: 0.86, blue: 0.98), in: RoundedRectangle(cornerRadius: 18))
+                        .overlay(RoundedRectangle(cornerRadius: 18).stroke(Color.nexdoIndigo.opacity(0.2)))
+                }.buttonStyle(.plain)
             case .ready:
                 if isBusiness { Button("Change business", action: onTask).font(.subheadline) }
             }
