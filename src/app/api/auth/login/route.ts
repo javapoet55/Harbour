@@ -1,3 +1,4 @@
+import { signupProof } from '@/server/account-auth';
 import { healthRoute } from '@/server/health/telemetry';
 import { NextResponse } from 'next/server';
 import { login } from '@/server/auth';
@@ -12,7 +13,7 @@ async function healthHandlerPOST(req: Request) {
   const user = await login(String(body.email ?? ''), String(body.password ?? ''));
   if (!user) return NextResponse.json({ error: 'Invalid email or password.' }, { status: 401 });
   if (!user.emailVerifiedAt) {
-    return NextResponse.json({ code: 'EMAIL_NOT_VERIFIED', error: 'Verify your email address to sign in.', email: user.email }, { status: 403 });
+    return NextResponse.json({ code: 'EMAIL_NOT_VERIFIED', verificationProof: signupProof(user), error: 'Verify your email address to sign in.', email: user.email }, { status: 403 });
   }
   await writeSession(user.id);
   const admin = isAdminEmail(user.email);

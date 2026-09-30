@@ -39,7 +39,7 @@ export function initialMessages(email: string, reason: PendingVerification['reas
  */
 export default function VerifyEmail() {
   const theme = useTheme();
-  const params = useLocalSearchParams<{ email?: string; reason?: string }>();
+  const params = useLocalSearchParams<{ email?: string; reason?: string; verificationProof?: string }>();
   const email = params.email ?? '';
   const reason = (params.reason as PendingVerification['reason'] | undefined) ?? 'codeSent';
 
@@ -72,7 +72,7 @@ export default function VerifyEmail() {
     setErrorMessage(undefined);
     setMessage(undefined);
     verify.mutate(
-      { email, code },
+      { email, code, ...(params.verificationProof ? { verificationProof: params.verificationProof } : {}) },
       {
         onSuccess: () => router.replace('/today'),
         // TODO(phase2-decision): the server gives no distinct "too many attempts" code. After five

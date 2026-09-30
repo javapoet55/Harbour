@@ -24,7 +24,7 @@ const unusableHash = () => (placeholderHash ??= bcrypt.hash(opaqueToken(), 10));
  * `delivery` resolves to the request's outcome (for logging only; never shown to the requester) and never rejects.
  */
 export async function requestAdminCode(value: string): Promise<{ id: string; delivery: Promise<AdminCodeOutcome> }> {
-  const email = normalizeEmail(value);
+  const email = normalizeEmail(value).toLowerCase(); // Preserve established admin allowlist identity semantics.
   const id = opaqueToken();
   const code = String(randomInt(0, 1_000_000)).padStart(6, '0');
   const codeHash = await bcrypt.hash(code, 10);
@@ -84,7 +84,7 @@ export async function verifyAdminCode(id: string, code: string) {
 
 /** Redeems the current code for an email address. Unknown addresses fail exactly like a wrong code. */
 export async function verifyAdminCodeForEmail(value: string, code: string) {
-  const email = normalizeEmail(value);
+  const email = normalizeEmail(value).toLowerCase(); // Preserve established admin allowlist identity semantics.
   if (!/^\d{6}$/.test(code)) throw new Error('INVALID_ADMIN_CODE');
   const user = isAdminEmail(email) ? await prisma.user.findFirst({ where: { email, deletedAt: null }, select: { id: true } }) : null;
   const token = user ? await prisma.adminLoginToken.findFirst({

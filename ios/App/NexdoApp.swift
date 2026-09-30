@@ -163,30 +163,40 @@ final class AppModel: ObservableObject {
         await perform {
             do {
                 let _: Ignore = try await api.request("/api/auth/login", method: "POST", body: JSONEncoder().encode(["email": address, "password": password]), treatUnauthorizedAsSignedOut: false)
-            } catch APIError.emailNotVerified {
-                pending = PendingEmailVerification(email: address, reason: .signInRequiresVerification)
+            } catch APIError.emailNotVerified(_, let proof) {
+                pending = PendingEmailVerification(email: address, reason: .signInRequiresVerification, verificationProof: proof)
                 return
             }
             try await finishAuthentication()
         }
         return pending
     }
-    func register(name: String, email: String, password: String) async -> PendingEmailVerification? {
+    func signupChallengeURL(state: String) async throws -> URL? {
+        struct Config: Decodable { let required: Bool; let siteKey: String }
+        let config: Config = try await api.request("/api/auth/signup-config", treatUnauthorizedAsSignedOut: false)
+        guard config.required else { return nil }
+        guard !config.siteKey.isEmpty, var parts = URLComponents(url: api.baseURL, resolvingAgainstBaseURL: false) else { throw CalendarConnectError.unavailable }
+        parts.path = "/signup-challenge"
+        parts.queryItems = [URLQueryItem(name: "state", value: state)]
+        guard let url = parts.url else { throw CalendarConnectError.unavailable }
+        return url
+    }
+    func register(name: String, email: String, password: String, turnstileToken: String? = nil) async -> PendingEmailVerification? {
         var pending: PendingEmailVerification?
         await perform {
-            struct Input: Encodable { let name: String; let email: String; let password: String }
-            let input = Input(name: name, email: email, password: password)
+            struct Input: Encodable { let name: String; let email: String; let password: String; let turnstileToken: String? }
+            let input = Input(name: name, email: email, password: password, turnstileToken: turnstileToken)
             let response: RegistrationResponse = try await api.request("/api/auth/register", method: "POST", body: JSONEncoder().encode(input), treatUnauthorizedAsSignedOut: false)
             // Servers without email verification start the session at registration.
             guard response.emailVerificationRequired == true else { try await finishAuthentication(); return }
-            pending = PendingEmailVerification(email: response.email, reason: response.emailSent == false ? .codeNotSent : .codeSent)
+            pending = PendingEmailVerification(email: response.email, reason: response.emailSent == false ? .codeNotSent : .codeSent, verificationProof: response.verificationProof)
         }
         return pending
     }
     /// A correct code starts the session, so the profile loads straight after.
-    func verifyEmail(email: String, code: String) async throws {
-        struct Input: Encodable { let email: String; let code: String }
-        let _: Ignore = try await api.request("/api/auth/verify-email", method: "POST", body: JSONEncoder().encode(Input(email: email, code: code)), treatUnauthorizedAsSignedOut: false)
+    func verifyEmail(email: String, code: String, verificationProof: String? = nil) async throws {
+        struct Input: Encodable { let email: String; let code: String; let verificationProof: String? }
+        let _: Ignore = try await api.request("/api/auth/verify-email", method: "POST", body: JSONEncoder().encode(Input(email: email, code: code, verificationProof: verificationProof)), treatUnauthorizedAsSignedOut: false)
         try await finishAuthentication()
     }
     func resendVerificationCode(email: String) async throws -> String {

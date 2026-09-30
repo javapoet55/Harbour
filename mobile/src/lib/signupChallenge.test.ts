@@ -1,0 +1,20 @@
+jest.mock('../config', () => ({ getApiUrl: () => 'https://app.nexdo.test' }));
+jest.mock('expo-crypto', () => ({ randomUUID: () => 'state-1234567890123456' }));
+jest.mock('expo-web-browser', () => ({ openAuthSessionAsync: jest.fn() }));
+import { openAuthSessionAsync } from 'expo-web-browser';
+import { signupChallenge } from './signupChallenge';
+import { resetOAuthCallbacks } from './oauthCallbacks';
+const fetchMock = jest.fn();
+const originalFetch = global.fetch;
+beforeEach(() => { resetOAuthCallbacks(); jest.clearAllMocks(); global.fetch = fetchMock; fetchMock.mockResolvedValue({ ok: true, json: async () => ({ required: true, siteKey: 'public-site-key' }) }); });
+afterAll(() => { global.fetch = originalFetch; });
+it('returns a token only from the matching signup callback', async () => {
+  (openAuthSessionAsync as jest.Mock).mockResolvedValue({ type: 'success', url: 'nexdo://signup-challenge?state=state-1234567890123456&token=token' });
+  expect(await signupChallenge()).toBe('token');
+});
+it.each(['nexdo://signup-challenge?state=wrong&token=token', 'nexdo://wrong?state=state-1234567890123456&token=token'])('rejects a mismatched callback %s', async url => {
+  (openAuthSessionAsync as jest.Mock).mockResolvedValue({ type: 'success', url });
+  await expect(signupChallenge()).rejects.toThrow('security check');
+});
+it('fails closed on missing configuration', async () => { fetchMock.mockResolvedValue({ ok: true, json: async () => ({ required: true, siteKey: '' }) }); await expect(signupChallenge()).rejects.toThrow('unavailable'); expect(openAuthSessionAsync).not.toHaveBeenCalled(); });
+it('allows only server-configured local development without a challenge', async () => { fetchMock.mockResolvedValue({ ok: true, json: async () => ({ required: false }) }); expect(await signupChallenge()).toBeUndefined(); });

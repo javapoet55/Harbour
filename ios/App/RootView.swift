@@ -559,9 +559,36 @@ private struct SignInView: View {
     }
 }
 
+@MainActor
+private final class SignupChallengeCoordinator: NSObject, ObservableObject, ASWebAuthenticationPresentationContextProviding {
+    private var session: ASWebAuthenticationSession?
+    func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
+        UIApplication.shared.connectedScenes.compactMap { ($0 as? UIWindowScene)?.keyWindow }.first ?? ASPresentationAnchor()
+    }
+    func run(url: URL, state: String) async throws -> String {
+        try await withCheckedThrowingContinuation { continuation in
+            session = ASWebAuthenticationSession(url: url, callbackURLScheme: "nexdo") { callback, _ in
+                Task { @MainActor in
+                    defer { self.session = nil }
+                    let parts = callback.flatMap { URLComponents(url: $0, resolvingAgainstBaseURL: false) }
+                    let token = parts?.queryItems?.first(where: { $0.name == "token" })?.value ?? ""
+                    guard parts?.host == "signup-challenge", parts?.queryItems?.first(where: { $0.name == "state" })?.value == state, !token.isEmpty else {
+                        continuation.resume(throwing: CancellationError()); return
+                    }
+                    continuation.resume(returning: token)
+                }
+            }
+            session?.presentationContextProvider = self
+            if session?.start() != true { session = nil; continuation.resume(throwing: CancellationError()) }
+        }
+    }
+}
+
 private struct SignUpView: View {
     @EnvironmentObject private var model: AppModel
     @Environment(\.dismiss) private var dismiss
+    @StateObject private var signupChallenge = SignupChallengeCoordinator()
+    @State private var checkingSignup = false
     @State private var name = ""
     @State private var email = ""
     @State private var password = ""
@@ -648,7 +675,7 @@ private struct SignUpView: View {
     }
     @State private var verification: PendingEmailVerification?
     private var canCreate: Bool {
-        !model.busy && !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && email.contains("@") && password.count >= 12 && confirmation.count >= 12
+        !model.busy && !checkingSignup && !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && email.contains("@") && password.count >= 12 && confirmation.count >= 12
     }
     private func closeSignUp() {
         dismiss()
@@ -657,7 +684,17 @@ private struct SignUpView: View {
     private func create() {
         guard password == confirmation else { localError = "The passwords do not match."; return }
         localError = nil
-        Task { if let pending = await model.register(name: name, email: email, password: password) { verification = pending } }
+        checkingSignup = true
+        Task {
+            defer { checkingSignup = false }
+            do {
+                let state = UUID().uuidString
+                let url = try await model.signupChallengeURL(state: state)
+                var token: String?
+                if let url { token = try await signupChallenge.run(url: url, state: state) }
+                if let pending = await model.register(name: name, email: email, password: password, turnstileToken: token) { verification = pending }
+            } catch { localError = "Please complete the security check and try again." }
+        }
     }
 }
 
@@ -888,7 +925,7 @@ private struct EmailVerificationView: View {
         working = true; errorMessage = nil; message = nil; codeFocused = false
         Task {
             defer { working = false }
-            do { try await model.verifyEmail(email: pending.email, code: code) }
+            do { try await model.verifyEmail(email: pending.email, code: code, verificationProof: pending.verificationProof) }
             catch { errorMessage = error.localizedDescription; codeFocused = true }
         }
     }

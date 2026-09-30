@@ -2,6 +2,7 @@ import Foundation
 
 public struct RegistrationResponse: Decodable, Sendable {
     public let email: String
+    public let verificationProof: String?
     public let emailVerificationRequired: Bool?
     public let emailSent: Bool?
 }
@@ -17,9 +18,11 @@ public struct PendingEmailVerification: Identifiable, Hashable, Sendable {
         case codeSent, codeNotSent, signInRequiresVerification
     }
     public let email: String
+    public let verificationProof: String?
     public let reason: Reason
     public var id: String { email }
-    public init(email: String, reason: Reason) {
+    public init(email: String, reason: Reason, verificationProof: String? = nil) {
+        self.verificationProof = verificationProof
         self.email = email
         self.reason = reason
     }

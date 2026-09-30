@@ -1,11 +1,13 @@
 import bcrypt from 'bcryptjs';
-import { randomInt } from 'node:crypto';
+import { randomInt, timingSafeEqual } from 'node:crypto';
 import { z } from 'zod';
 import { prisma } from './db';
 import { emailDeliveryMocked, emailProvider } from '@/providers';
 import { passwordResetMessage, verifyEmailMessage } from './email/messages';
 
-const emailSchema = z.string().trim().toLowerCase().email().max(254);
+import { normalizeSignupEmail } from './signup/email-risk';
+import { limitCodeSend, securityEvent, securityRef } from './signup/abuse';
+import { recordPromotionEligibility } from './signup/promotion';
 const nameSchema = z.string().trim().min(1).max(100);
 
 export const CODE_TTL_MINUTES = { verify: 24 * 60, reset: 15 } as const;
@@ -23,9 +25,7 @@ export function validatePassword(value: string) {
 }
 
 export function normalizeEmail(value: string) {
-  const result = emailSchema.safeParse(value);
-  if (!result.success) throw new Error('INVALID_ACCOUNT_INPUT');
-  return result.data;
+  return normalizeSignupEmail(value);
 }
 
 function generateCode() {
@@ -57,6 +57,7 @@ export async function registerAccount(input: { name: string; email: string; pass
   const email = normalizeEmail(input.email);
   const password = validatePassword(input.password);
   const passwordHash = await bcrypt.hash(password, 12);
+  if (await prisma.user.findFirst({ where: { OR: [{ email }, { email: email.toLowerCase() }] } })) throw new Error('ACCOUNT_EXISTS');
   try {
     return await prisma.user.create({
       data: { name: name.data, email, passwordHash, preference: { create: {} } },
@@ -67,7 +68,8 @@ export async function registerAccount(input: { name: string; email: string; pass
   }
 }
 
-export async function sendEmailVerification(user: { id: string; email: string }): Promise<CodeDelivery> {
+export async function sendEmailVerification(user: { id: string; email: string }, sendReserved = false): Promise<CodeDelivery> {
+  if (!sendReserved) await limitCodeSend(user.email, 'verify');
   const recent = await prisma.emailVerificationToken.count({
     where: { userId: user.id, createdAt: { gte: new Date(Date.now() - SEND_WINDOW_MINUTES * 60_000) } },
   });
@@ -75,32 +77,43 @@ export async function sendEmailVerification(user: { id: string; email: string })
 
   const code = generateCode();
   const codeHash = await bcrypt.hash(code, 10);
-  await prisma.$transaction([
-    prisma.emailVerificationToken.updateMany({ where: { userId: user.id, usedAt: null }, data: { usedAt: new Date() } }),
-    prisma.emailVerificationToken.create({ data: { userId: user.id, codeHash, expiresAt: codeExpiry('verify') } }),
-  ]);
+  await prisma.$transaction(async tx => {
+    // Lock the account before invalidating old codes; resends cannot leave two active codes.
+    await tx.user.update({ where: { id: user.id }, data: { updatedAt: new Date() } });
+    await tx.emailVerificationToken.updateMany({ where: { userId: user.id, usedAt: null }, data: { usedAt: new Date() } });
+    await tx.emailVerificationToken.create({ data: { userId: user.id, codeHash, expiresAt: codeExpiry('verify') } });
+  });
 
   const delivery = await emailProvider.send({ to: user.email, ...codeEmail(code, 'verify') });
   if (delivery.status === 'FAILED') throw new Error('EMAIL_UNAVAILABLE');
+  securityEvent('otp_requested', user.email);
   return { delivered: true, ...developmentCode(code) };
 }
 
 export async function requestEmailVerification(emailValue: string): Promise<CodeDelivery> {
   const email = normalizeEmail(emailValue);
-  const user = await prisma.user.findFirst({ where: { email, deletedAt: null } });
+  const user = await prisma.user.findFirst({ where: { OR: [{ email }, { email: email.toLowerCase() }], deletedAt: null } });
   if (!user || user.emailVerifiedAt) {
     // Keep the response timing closer to the real-account path to reduce account enumeration signals.
+    await limitCodeSend(email, 'verify');
     await bcrypt.hash('000000', 10);
     return { delivered: true };
   }
   return sendEmailVerification(user);
 }
 
-export async function verifyEmail(emailValue: string, code: string) {
+// Bind OTP activation to the password-authenticated signup context. This prevents a victim
+// from activating an attacker-pre-registered password merely by entering an emailed code.
+export function signupProof(user: { id: string; passwordHash: string }) {
+  return securityRef(`signup-context:${user.id}:${user.passwordHash}`);
+}
+
+export async function verifyEmail(emailValue: string, code: string, proof = '') {
   const email = normalizeEmail(emailValue);
   if (!/^\d{6}$/.test(code)) throw new Error('INVALID_VERIFICATION_CODE');
-  const user = await prisma.user.findFirst({ where: { email, deletedAt: null } });
-  if (!user) throw new Error('INVALID_VERIFICATION_CODE');
+  const user = await prisma.user.findFirst({ where: { OR: [{ email }, { email: email.toLowerCase() }], deletedAt: null } });
+  if (!user) throw new Error('INVALID_VERIFICATION_CONTEXT');
+  if (!/^[a-f0-9]{64}$/.test(proof) || !timingSafeEqual(Buffer.from(proof), Buffer.from(signupProof(user)))) throw new Error('INVALID_VERIFICATION_CONTEXT');
   const token = await prisma.emailVerificationToken.findFirst({
     where: { userId: user.id, usedAt: null, expiresAt: { gt: new Date() } },
     orderBy: { createdAt: 'desc' },
@@ -108,22 +121,26 @@ export async function verifyEmail(emailValue: string, code: string) {
   if (!token) throw new Error('INVALID_VERIFICATION_CODE');
   // Count the attempt before comparing so concurrent guesses cannot exceed the limit.
   const counted = await prisma.emailVerificationToken.updateMany({
-    where: { id: token.id, attempts: { lt: MAX_CODE_ATTEMPTS } },
+    where: { id: token.id, usedAt: null, expiresAt: { gt: new Date() }, attempts: { lt: MAX_CODE_ATTEMPTS } },
     data: { attempts: { increment: 1 } },
   });
   if (counted.count !== 1 || !await bcrypt.compare(code, token.codeHash)) throw new Error('INVALID_VERIFICATION_CODE');
   const verifiedAt = new Date();
   await prisma.$transaction(async (tx) => {
-    const claimed = await tx.emailVerificationToken.updateMany({ where: { id: token.id, usedAt: null }, data: { usedAt: verifiedAt } });
+    const claimed = await tx.emailVerificationToken.updateMany({ where: { id: token.id, usedAt: null, expiresAt: { gt: new Date() } }, data: { usedAt: verifiedAt } });
     if (claimed.count !== 1) throw new Error('INVALID_VERIFICATION_CODE');
     await tx.user.update({ where: { id: user.id }, data: { emailVerifiedAt: user.emailVerifiedAt ?? verifiedAt } });
+    await recordPromotionEligibility(user.id, tx);
   });
+  securityEvent('otp_verified', email);
+  securityEvent('signup_activated', email);
   return user;
 }
 
 export async function createPasswordReset(emailValue: string): Promise<CodeDelivery> {
   const email = normalizeEmail(emailValue);
-  const user = await prisma.user.findFirst({ where: { email, deletedAt: null } });
+  await limitCodeSend(email, 'reset');
+  const user = await prisma.user.findFirst({ where: { OR: [{ email }, { email: email.toLowerCase() }], deletedAt: null } });
   if (!user) {
     // Keep the response timing closer to the real-account path to reduce account enumeration signals.
     await bcrypt.hash('000000', 10);
@@ -137,13 +154,15 @@ export async function createPasswordReset(emailValue: string): Promise<CodeDeliv
 
   const code = generateCode();
   const codeHash = await bcrypt.hash(code, 10);
-  await prisma.$transaction([
-    prisma.passwordResetToken.updateMany({ where: { userId: user.id, usedAt: null }, data: { usedAt: new Date() } }),
-    prisma.passwordResetToken.create({ data: { userId: user.id, codeHash, expiresAt: codeExpiry('reset') } }),
-  ]);
+  await prisma.$transaction(async tx => {
+    await tx.user.update({ where: { id: user.id }, data: { updatedAt: new Date() } });
+    await tx.passwordResetToken.updateMany({ where: { userId: user.id, usedAt: null }, data: { usedAt: new Date() } });
+    await tx.passwordResetToken.create({ data: { userId: user.id, codeHash, expiresAt: codeExpiry('reset') } });
+  });
 
   const delivery = await emailProvider.send({ to: user.email, ...codeEmail(code, 'reset') });
   if (delivery.status === 'FAILED') throw new Error('EMAIL_UNAVAILABLE');
+  securityEvent('otp_requested', user.email);
   return { delivered: true, ...developmentCode(code) };
 }
 
@@ -151,7 +170,7 @@ export async function resetPassword(input: { email: string; code: string; passwo
   const email = normalizeEmail(input.email);
   const password = validatePassword(input.password);
   if (!/^\d{6}$/.test(input.code)) throw new Error('INVALID_RESET_CODE');
-  const user = await prisma.user.findFirst({ where: { email, deletedAt: null } });
+  const user = await prisma.user.findFirst({ where: { OR: [{ email }, { email: email.toLowerCase() }], deletedAt: null } });
   if (!user) throw new Error('INVALID_RESET_CODE');
   const token = await prisma.passwordResetToken.findFirst({
     where: { userId: user.id, usedAt: null, expiresAt: { gt: new Date() } },
@@ -160,15 +179,17 @@ export async function resetPassword(input: { email: string; code: string; passwo
   if (!token) throw new Error('INVALID_RESET_CODE');
   // Count the attempt before comparing so concurrent guesses cannot exceed the limit.
   const counted = await prisma.passwordResetToken.updateMany({
-    where: { id: token.id, attempts: { lt: MAX_CODE_ATTEMPTS } },
+    where: { id: token.id, usedAt: null, expiresAt: { gt: new Date() }, attempts: { lt: MAX_CODE_ATTEMPTS } },
     data: { attempts: { increment: 1 } },
   });
   if (counted.count !== 1 || !await bcrypt.compare(input.code, token.codeHash)) throw new Error('INVALID_RESET_CODE');
   const passwordHash = await bcrypt.hash(password, 12);
   await prisma.$transaction(async (tx) => {
-    const claimed = await tx.passwordResetToken.updateMany({ where: { id: token.id, usedAt: null }, data: { usedAt: new Date() } });
+    const claimed = await tx.passwordResetToken.updateMany({ where: { id: token.id, usedAt: null, expiresAt: { gt: new Date() } }, data: { usedAt: new Date() } });
     if (claimed.count !== 1) throw new Error('INVALID_RESET_CODE');
+    await tx.emailVerificationToken.updateMany({ where: { userId: user.id, usedAt: null }, data: { usedAt: new Date() } });
     // A valid reset code proves control of the inbox, so it also verifies the email.
     await tx.user.update({ where: { id: user.id }, data: { passwordHash, emailVerifiedAt: user.emailVerifiedAt ?? new Date() } });
+    await recordPromotionEligibility(user.id, tx);
   });
 }

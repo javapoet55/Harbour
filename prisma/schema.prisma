@@ -774,3 +774,18 @@ model FoodLogEntry {
   @@index([userId, localDate])
   @@index([callId])
 }
+
+// HMAC keys only. Expired buckets may be pruned after one day.
+model AuthRateBucket {
+  key String @id
+  count Int @default(0)
+  expiresAt DateTime
+  @@index([expiresAt])
+}
+
+// Separate from account access. Survives account deletion to prevent promotion replay.
+model SignupPromotionClaim {
+  key String @id
+  userId String
+  createdAt DateTime @default(now())
+}

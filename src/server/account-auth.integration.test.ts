@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { PrismaClient } from '@/generated/prisma';
-import { CODE_TTL_MINUTES, createPasswordReset, registerAccount, requestEmailVerification, resetPassword, sendEmailVerification, validatePassword, verifyEmail } from './account-auth';
+import { signupProof, CODE_TTL_MINUTES, createPasswordReset, registerAccount, requestEmailVerification, resetPassword, sendEmailVerification, validatePassword, verifyEmail } from './account-auth';
+import { securityRef } from './signup/abuse';
 import { login } from './auth';
 
 const prisma = new PrismaClient();
@@ -25,6 +26,7 @@ describe('native account authentication', () => {
     await prisma.passwordResetToken.deleteMany({ where: { userId: { in: ids } } });
     await prisma.emailVerificationToken.deleteMany({ where: { userId: { in: ids } } });
     await prisma.userPreference.deleteMany({ where: { userId: { in: ids } } });
+    await prisma.userMemory.deleteMany({ where: { userId: { in: ids } } });
     await prisma.user.deleteMany({ where: { id: { in: ids } } });
     await prisma.$disconnect();
   });
@@ -35,7 +37,7 @@ describe('native account authentication', () => {
   });
 
   it('creates a database-backed account and prevents duplicates', async () => {
-    const user = await registerAccount({ name: 'Native User', email: `  ${email.toUpperCase()} `, password: 'initial-password-123' });
+    const user = await registerAccount({ name: 'Native User', email: `  ${email.split('@')[0]}@NEXDO.TEST `, password: 'initial-password-123' });
     userId = user.id;
     expect(user.email).toBe(email);
     expect(await login(email, 'initial-password-123')).toMatchObject({ id: user.id });
@@ -79,15 +81,17 @@ describe('native account authentication', () => {
     const token = await prisma.emailVerificationToken.findFirstOrThrow({ where: { userId: user.id, usedAt: null } });
     expectCodeLifetime(token.expiresAt, CODE_TTL_MINUTES.verify);
 
+    await prisma.authRateBucket.updateMany({ where: { key: securityRef(`otp-cooldown:verify:${user.email.toLowerCase()}`) }, data: { expiresAt: new Date(0) } });
     const second = await requestEmailVerification(user.email);
     expect(second.developmentCode).toMatch(/^\d{6}$/);
     if (first.developmentCode !== second.developmentCode) {
-      await expect(verifyEmail(user.email, first.developmentCode!)).rejects.toThrow('INVALID_VERIFICATION_CODE');
+      await expect(verifyEmail(user.email, first.developmentCode!, signupProof(user))).rejects.toThrow('INVALID_VERIFICATION_CODE');
     }
 
-    await verifyEmail(user.email, second.developmentCode!);
+    await verifyEmail(user.email, second.developmentCode!, signupProof(user));
     expect((await prisma.user.findUniqueOrThrow({ where: { id: user.id } })).emailVerifiedAt).toBeInstanceOf(Date);
-    await expect(verifyEmail(user.email, second.developmentCode!)).rejects.toThrow('INVALID_VERIFICATION_CODE');
+    await expect(verifyEmail(user.email, second.developmentCode!, signupProof(user))).rejects.toThrow('INVALID_VERIFICATION_CODE');
+    await prisma.authRateBucket.updateMany({ where: { key: securityRef(`otp-cooldown:verify:${user.email.toLowerCase()}`) }, data: { expiresAt: new Date(0) } });
     expect(await requestEmailVerification(user.email)).toEqual({ delivered: true });
   });
 
@@ -96,13 +100,14 @@ describe('native account authentication', () => {
     createdIds.push(user.id);
     const { developmentCode } = await sendEmailVerification(user);
     for (let attempt = 0; attempt < 5; attempt += 1) {
-      await expect(verifyEmail(user.email, wrongCode(developmentCode!))).rejects.toThrow('INVALID_VERIFICATION_CODE');
+      await expect(verifyEmail(user.email, wrongCode(developmentCode!), signupProof(user))).rejects.toThrow('INVALID_VERIFICATION_CODE');
     }
-    await expect(verifyEmail(user.email, developmentCode!)).rejects.toThrow('INVALID_VERIFICATION_CODE');
+    await expect(verifyEmail(user.email, developmentCode!, signupProof(user))).rejects.toThrow('INVALID_VERIFICATION_CODE');
     expect((await prisma.user.findUniqueOrThrow({ where: { id: user.id } })).emailVerifiedAt).toBeNull();
 
+    await prisma.authRateBucket.updateMany({ where: { key: securityRef(`otp-cooldown:verify:${user.email.toLowerCase()}`) }, data: { expiresAt: new Date(0) } });
     const replacement = await requestEmailVerification(user.email);
-    await verifyEmail(user.email, replacement.developmentCode!);
+    await verifyEmail(user.email, replacement.developmentCode!, signupProof(user));
     expect((await prisma.user.findUniqueOrThrow({ where: { id: user.id } })).emailVerifiedAt).toBeInstanceOf(Date);
   });
 

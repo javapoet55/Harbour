@@ -118,8 +118,9 @@ export type PasswordResetResponse = { message: string; delivered: boolean };
  * runs outside production with email delivery mocked.
  */
 export type RegistrationResponse = {
-  id: string;
-  name: string;
+  verificationProof?: string;
+  id?: string;
+  name?: string;
   email: string;
   emailVerificationRequired?: boolean;
   emailSent?: boolean;

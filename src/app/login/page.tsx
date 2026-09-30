@@ -23,6 +23,7 @@ export default function LoginPage() {
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
       if (body.code === 'EMAIL_NOT_VERIFIED') {
+      if (typeof body.verificationProof === 'string') sessionStorage.setItem('nexdo-verification-proof', body.verificationProof);
         router.push(`/verify-email?email=${encodeURIComponent(body.email || email)}&reason=unverified`);
         return;
       }

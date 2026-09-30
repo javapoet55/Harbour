@@ -23,15 +23,17 @@ import { useEffect, useRef } from 'react';
  *   (`useOAuthCallback`), refreshes, and shows Swift's message.
  */
 
-export type OAuthCallbackKind = 'calendar' | 'moments-email';
+export type OAuthCallbackKind = 'calendar' | 'moments-email' | 'signup';
 
 /** The screen each flow is started from and stays on (ProfileView.swift:332-348, MomentEditor.swift:228). */
 export const OAUTH_LANDING: Record<OAuthCallbackKind, string> = {
+  signup: '/sign-up',
   calendar: '/account/settings',
   'moments-email': '/moments/settings',
 };
 
 const HOSTS: Record<string, OAuthCallbackKind> = {
+  'signup-challenge': 'signup',
   'calendar-connected': 'calendar',
   'moments-email': 'moments-email',
 };

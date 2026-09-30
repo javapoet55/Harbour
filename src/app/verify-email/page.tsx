@@ -35,13 +35,14 @@ function VerifyEmailForm() {
       const response = await fetch('/api/auth/verify-email', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, code }),
+        body: JSON.stringify({ email, code, verificationProof: sessionStorage.getItem('nexdo-verification-proof') }),
       });
       if (!response.ok) {
         const body = await response.json().catch(() => ({}));
         setError(body.error || 'Verification failed.');
         return;
       }
+      sessionStorage.removeItem('nexdo-verification-proof');
       router.push('/');
       router.refresh();
     } finally {
@@ -93,7 +94,7 @@ function VerifyEmailForm() {
           {cooldown > 0 ? `Send a new code in ${cooldown}s` : 'Send a new code'}
         </button>
       </form>
-      <p className="mt-4 text-center text-sm text-[var(--muted)]"><Link className="font-semibold text-[var(--brand)] hover:underline" href="/login">Back to sign in</Link></p>
+      <p className="mt-4 text-center text-sm text-[var(--muted)]"><Link className="font-semibold text-[var(--brand)] hover:underline" href="/login">Back to sign in</Link> · <Link href="/reset-password">Reset password</Link></p>
     </main>
   );
 }
