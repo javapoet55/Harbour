@@ -70,4 +70,19 @@ struct PomodoroAnalyticsTests {
         let all = PomodoroAnalytics(sessions: [older, recent], period: .all, now: now, calendar: calendar)
         #expect(all.focusSeconds == 3000); #expect(all.buckets.count == 4)
     }
+    @Test func weeksRunMondayToSundayEvenOnSundayFirstDevices() {
+        var us = Calendar(identifier: .gregorian); us.timeZone = TimeZone(identifier: "America/Los_Angeles")!; us.firstWeekday = 1
+        let sunday = date("2026-09-27T19:00:00Z")          // Sun 27 Sep 2026, 12 PM Pacific
+        let saturday = finished(date("2026-09-26T18:00:00Z")) // previous day, same Monday-based week
+        let stats = PomodoroAnalytics(sessions: [saturday], period: .week, now: sunday, calendar: us)
+        #expect(stats.interval.start == date("2026-09-21T07:00:00Z"))   // Mon 21 Sep, midnight Pacific
+        #expect(stats.interval.end == date("2026-09-28T07:00:00Z"))     // through Sun 27 Sep
+        #expect(stats.buckets.count == 7)
+        #expect(stats.calendar.component(.weekday, from: stats.buckets.first!.start) == 2)  // Monday
+        #expect(stats.calendar.component(.weekday, from: stats.buckets.last!.start) == 1)   // Sunday
+        #expect(stats.focusSeconds == 1500)
+        let monday = PomodoroAnalytics(sessions: [saturday], period: .week, now: date("2026-09-28T16:00:00Z"), calendar: us)
+        #expect(monday.interval.start == date("2026-09-28T07:00:00Z"))  // a new week starts Monday
+        #expect(monday.focusSeconds == 0 && monday.previousSeconds == 1500)
+    }
 }

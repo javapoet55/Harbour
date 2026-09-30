@@ -36,3 +36,17 @@ import Testing
     #expect(turn.displaySections.map(\.title) == ["AI Response"])
     #expect(turn.displaySections.flatMap(\.items) == ["Your answer"])
 }
+
+@Test func briefingDoesNotTreatEmptyStatementsAsActions() {
+    for value in ["none detected", "No tasks are scheduled for today.", "No calendar appointment conflicts are visible.", "There’s no overloaded block showing for today.", "The main risk is drift: without a chosen priority, today can slip by unused.", "1 task calendar link(s) changed outside Nexdo."] {
+        #expect(!BriefContent.isUseful(value))
+    }
+    #expect(BriefContent.isUseful("Review proposal — overdue"))
+}
+
+@Test func briefingTaskMatchingRequiresAnActualTitleLead() {
+    #expect(!BriefContent.taskTitleMatches("appointment", text: "No calendar appointment conflicts are visible."))
+    #expect(!BriefContent.taskTitleMatches("Bill", text: "Bill Payment — scheduled work"))
+    #expect(BriefContent.taskTitleMatches("Bill Payment", text: "1. Bill Payment — overdue"))
+    #expect(BriefContent.taskTitleMatches("Review proposal", text: "Review proposal is due today."))
+}

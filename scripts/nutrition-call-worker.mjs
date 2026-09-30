@@ -51,16 +51,18 @@ wss.on('connection', twilio => {
 const port = Number(env.PORT || 8080);
 server.listen(port, () => log(`listening on ${port}`));
 
-// Minute tick, same pattern as the Moments worker.
-const tickUrl = new URL('/api/nutrition-calls/tick', baseUrl);
+// Minute tick, same pattern as the Moments worker: food check-in calls and "connect me on the day" calls.
+const ticks = [['tick', '/api/nutrition-calls/tick'], ['moment tick', '/api/moment-calls/tick']].map(([name, path]) => [name, new URL(path, baseUrl)]);
 (async () => {
   while (!stopping) {
     const started = Date.now();
-    try {
-      const response = await fetch(tickUrl, { method: 'POST', redirect: 'error', headers: { Authorization: `Bearer ${env.HARBOR_CRON_SECRET}` }, signal: AbortSignal.timeout(55000) });
-      log(`tick: HTTP ${response.status}`);
-      await response.body?.cancel();
-    } catch { log('tick failed; retrying next cycle'); }
+    await Promise.all(ticks.map(async ([name, url]) => {
+      try {
+        const response = await fetch(url, { method: 'POST', redirect: 'error', headers: { Authorization: `Bearer ${env.HARBOR_CRON_SECRET}` }, signal: AbortSignal.timeout(55000) });
+        log(`${name}: HTTP ${response.status}`);
+        await response.body?.cancel();
+      } catch { log(`${name} failed; retrying next cycle`); }
+    }));
     if (!stopping) await delay(Math.max(1000, 60000 - (Date.now() - started)));
   }
 })();

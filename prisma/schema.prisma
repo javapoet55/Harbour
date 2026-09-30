@@ -9,6 +9,7 @@ datasource db {
 }
 
 model User {
+  callerIdentity CallerIdentity?
   nutritionCallSettings NutritionCallSettings?
   nutritionCalls NutritionCall[]
   foodLogEntries FoodLogEntry[]
@@ -472,6 +473,10 @@ model ImportantMoment {
   updatedAt DateTime @updatedAt
   drafts WishDraft[]
   cardImages GreetingCardImage[]
+  connectEnabled Boolean @default(false)
+  connectTime String @default("09:00")
+  connectTimeZone String @default("")
+  connectCalls MomentConnectCall[]
   @@unique([userId, sourceKey])
 }
 model WishDraft {
@@ -718,6 +723,9 @@ model NutritionCallSettings {
   calorieGoal       Int      @default(2000)
   goalsJson         String?
   lastManualCallAt  DateTime?
+  insightsEnabled   Boolean  @default(true)
+  insightHandledKey String?
+  insightHandledAction String?
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
   @@index([enabled])
@@ -763,6 +771,10 @@ model FoodLogEntry {
   proteinG     Float?
   carbsG       Float?
   fatG         Float?
+  fiberG       Float?
+  calciumMg    Float?
+  ironMg       Float?
+  vitaminDIu   Float?
   source       String
   sourceRef    String?
   status       String   @default("CONFIRMED")
@@ -773,6 +785,42 @@ model FoodLogEntry {
   updatedAt    DateTime @updatedAt
   @@index([userId, localDate])
   @@index([callId])
+}
+
+// "Connect me on the day": the user's own number verified with Twilio so bridged calls show it as caller ID.
+model CallerIdentity {
+  userId      String    @id
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  phoneE164   String
+  status      String    @default("PENDING")
+  twilioSid   String?
+  requestedAt DateTime
+  verifiedAt  DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model MomentConnectCall {
+  id             String          @id @default(cuid())
+  userId         String
+  momentId       String
+  moment         ImportantMoment @relation(fields: [momentId], references: [id], onDelete: Cascade)
+  occurrenceDate String
+  attempt        Int
+  status         String          @default("QUEUED")
+  decision       String?
+  direct         Boolean         @default(false)
+  scheduledFor   DateTime
+  twilioCallSid  String?         @unique
+  startedAt      DateTime?
+  endedAt        DateTime?
+  talkSeconds    Int?
+  error          String?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  @@unique([momentId, occurrenceDate, attempt])
+  @@index([status, scheduledFor])
+  @@index([userId])
 }
 
 // HMAC keys only. Expired buckets may be pruned after one day.

@@ -135,8 +135,7 @@ private struct NexdoTabShell: View {
     @State private var askPrompt = ""
     @State private var showingPomodoro = false
     @State private var showingWellness = false
-    @State private var showingCalories = false
-    @State private var wellnessChoice: Bool?
+    @State private var wellnessChoice: WellnessExit?
     @ObservedObject private var pomodoroRoute = PomodoroNotificationRoute.shared
     private var activeTab: NexdoTab { showingAsk ? .askAI : selection }
 
@@ -174,12 +173,12 @@ private struct NexdoTabShell: View {
                     ForEach(NexdoTab.allCases) { tab in
                         if tab == .askAI {
                             Button { showingWellness = true } label: {
-                                Image("pomodoro-clock").renderingMode(.original).resizable().scaledToFit()
+                                Image("wellness-navigation").renderingMode(.original).resizable().scaledToFit()
                                     .frame(width: 62, height: 58)
                             }
                             .frame(maxWidth: .infinity)
                             .buttonStyle(.plain)
-                            .accessibilityLabel("Calorie Tracker and Pomodoro Focus")
+                            .accessibilityLabel("Wellness menu: Calorie Tracker, Pomodoro, Moments and Shopping")
                         }
                         Button { if tab == .askAI { showingAsk = true } else {
                             if tab == .tasks && selection != .tasks { model.taskQuery.date = .today }
@@ -210,15 +209,13 @@ private struct NexdoTabShell: View {
         }
         .onAppear { openPomodoroNotification() }
         .onChange(of: pomodoroRoute.owner) { _, _ in openPomodoroNotification() }
-        .sheet(isPresented: $showingWellness, onDismiss: {
+        .fullScreenCover(isPresented: $showingWellness, onDismiss: {
             guard let choice = wellnessChoice else { openPomodoroNotification(); return }
             wellnessChoice = nil
-            if choice { showingCalories = true } else { showingPomodoro = true }
+            switch choice { case .home: selection = .today; case .calendar: selection = .calendar; case .tasks: model.taskQuery.date = .today; selection = .tasks; case .askAI: showingAsk = true }
         }) {
             WellnessChooserView { choice in wellnessChoice = choice; showingWellness = false }
-                .presentationDetents([.large]).presentationDragIndicator(.visible)
         }
-        .fullScreenCover(isPresented: $showingCalories, onDismiss: { openPomodoroNotification() }) { CalorieTrackerView() }
         .fullScreenCover(isPresented: $showingPomodoro) {
             if let owner = model.profile?.id {
                 PomodoroView(api: model.momentAPI, owner: owner, onTasks: { selection = .tasks })
@@ -229,7 +226,7 @@ private struct NexdoTabShell: View {
         guard let pending = pomodoroRoute.owner, let owner = model.profile?.id else { return }
         guard pending == TaskActionCoordinator.ownerKey(owner) else { pomodoroRoute.owner = nil; return }
         if showingAsk { showingAsk = false; return }
-        if showingWellness || showingCalories { return }
+        if showingWellness { return }
         pomodoroRoute.owner = nil
         showingPomodoro = true
     }

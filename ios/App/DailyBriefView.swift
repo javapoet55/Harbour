@@ -5,6 +5,20 @@ struct DailyBriefView: View {
     let intent: NexdoAIIntent
     let name: String
     let sections: [AssistantTurn.Section]
+    @EnvironmentObject private var model: AppModel
+    private var visibleSections: [AssistantTurn.Section] {
+        sections.compactMap { section in
+            guard !section.title.lowercased().contains("calendar freshness") else { return nil }
+            let priorities = section.title.lowercased().contains("priorit") || section.title.lowercased().contains("focus")
+            let items = section.items.filter { item in
+                BriefContent.isUseful(item) && (!priorities || model.tasks.contains {
+                    !$0.isDone && $0.status != "CANCELLED" && BriefContent.taskTitleMatches($0.title, text: item)
+                })
+            }
+            guard !items.isEmpty else { return nil }
+            return AssistantTurn.Section(title: section.title, items: items)
+        }
+    }
     @Binding var prompt: String
     @FocusState.Binding var typing: Bool
     let busy: Bool
@@ -54,11 +68,11 @@ struct DailyBriefView: View {
                 .background(.purple.opacity(0.07), in: RoundedRectangle(cornerRadius: 22))
                 .overlay(RoundedRectangle(cornerRadius: 22).stroke(.white, lineWidth: 1))
 
-            ForEach(Array(sections.enumerated()), id: \.offset) { index, section in
+            ForEach(Array(visibleSections.enumerated()), id: \.offset) { index, section in
                 sectionCard(index, section)
             }
-            if sections.isEmpty {
-                Text("No briefing details were returned. Try summarizing your day again.").font(.subheadline).foregroundStyle(secondary)
+            if visibleSections.isEmpty {
+                Text("Nothing needs your attention here right now.").font(.subheadline).foregroundStyle(secondary)
             }
             HStack(spacing: 10) {
                 HStack(spacing: 10) {
@@ -86,14 +100,14 @@ struct DailyBriefView: View {
         }.foregroundStyle(ink).buttonStyle(.plain).padding(.top, 18)
             .onAppear {
                 #if DEBUG
-                if ProcessInfo.processInfo.arguments.contains("-open-brief-detail"), !sections.isEmpty { selectedSection = SectionRoute(id: 0) }
+                if ProcessInfo.processInfo.arguments.contains("-open-brief-detail"), !visibleSections.isEmpty { selectedSection = SectionRoute(id: 0) }
                 #endif
             }
             .fullScreenCover(item: $selectedSection) { route in
-                if sections.indices.contains(route.id) {
-                    BriefSectionDetailView(title: style(sections[route.id].title).0,
-                        items: sections[route.id].items, ask: ask,
-                        read: { read(route.id, sections[route.id].items.joined(separator: "\n\n")) })
+                if visibleSections.indices.contains(route.id) {
+                    BriefSectionDetailView(title: style(visibleSections[route.id].title).0,
+                        items: visibleSections[route.id].items, ask: ask,
+                        read: { read(route.id, visibleSections[route.id].items.joined(separator: "\n\n")) })
                 }
             }
     }
@@ -138,6 +152,7 @@ struct DailyBriefView: View {
 
     private func style(_ title: String) -> (String, BriefArtwork.Part, Color) {
         let title = title.lowercased()
+        if title == "ai response" { return ("AI Response", .lightbulb, .green) }
         if title.contains("priorit") || title.contains("focus") { return ("Top Priorities", .priority, .pink) }
         if title.contains("deadline") { return ("Upcoming Deadlines", .calendar, .blue) }
         if title.contains("conflict") || title.contains("risk") { return ("Conflicts & Risks", .warning, .orange) }

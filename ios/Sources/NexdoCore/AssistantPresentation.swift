@@ -23,3 +23,21 @@ extension AssistantTurn {
         return sections
     }
 }
+
+/// Legacy prose is not evidence of an actionable task or a schedule conflict.
+public enum BriefContent {
+    public static func isUseful(_ text: String) -> Bool {
+        let value = text.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: "’", with: "'")
+        if value.isEmpty { return false }
+        return !["none detected", "nothing to report", "no tasks", "no open focus", "no matching actionable", "no calendar appointment", "no hard,", "no conflicts", "no schedule conflicts", "there's no overloaded", "the main risk is drift", "the main live planning focus", "past contact and admin tasks", "task calendar link(s) changed outside", "their current calendar blocks are protected"].contains { value.contains($0) }
+    }
+    public static func taskTitleMatches(_ title: String, text: String) -> Bool {
+        let value = text.trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: "^\\d+[.)]\\s*", with: "", options: .regularExpression)
+        let name = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty else { return false }
+        return value.caseInsensitiveCompare(name) == .orderedSame ||
+            value.range(of: "^" + NSRegularExpression.escapedPattern(for: name) + "(?:\\s+[—–-]\\s+|[:,.]\\s+|\\s+is\\s+)", options: [.regularExpression, .caseInsensitive]) != nil
+    }
+}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { calculateCalories, portionGrams } from './calories';
+import { calculateCalories, caloriesWithinBudget, portionGrams } from './calories';
 import { keyWords } from './text';
 import { nutritionCallSession, nutritionCallTools } from './session';
 import { dateRange, dueCall, effectiveCallTime, withinCallWindow } from './time';
@@ -66,6 +66,17 @@ describe('calories', () => {
   });
 });
 
+describe('lookup budget', () => {
+  it('answers from a fast lookup, and falls back to the estimate when the lookup is slow', async () => {
+    const item = { meal: 'LUNCH' as const, description: 'banana', foodName: 'banana', estimatedGrams: 118, estimatedKcal: 110 };
+    const fast = await caloriesWithinBudget(item, async () => facts(89), 200);
+    expect(fast).toMatchObject({ result: { kcal: 105, source: 'USDA' }, late: null });
+    const slow = await caloriesWithinBudget(item, () => new Promise(r => setTimeout(() => r(facts(89)), 120)), 30);
+    expect(slow.result).toMatchObject({ kcal: 110, source: 'ESTIMATE', reviewReason: 'lookup_pending' });
+    expect(await slow.late).toMatchObject({ kcal: 105, source: 'USDA' });
+  });
+});
+
 describe('twilio and worker tokens', () => {
   it('matches an independently computed Twilio signature', () => {
     const url = 'https://app.example.com/api/nutrition-calls/twiml?callId=abc';
@@ -108,6 +119,7 @@ describe('realtime session', () => {
     expect(session.instructions).toContain('transcribed');
     expect(session.instructions).toContain('within 5 minutes');
     expect(session.instructions).toContain('Never state a calorie number yourself');
-    expect(nutritionCallTools.map(t => t.name)).toEqual(['log_food_items', 'update_food_item', 'remove_food_item', 'get_day_summary', 'finish_call', 'call_back_later', 'skip_today']);
+    expect(session.instructions).toContain('("Got it.")');
+    expect(nutritionCallTools.map(t => t.name)).toEqual(['log_food_items', 'update_food_item', 'remove_food_item', 'get_day_summary', 'get_daily_insight', 'add_insight_items', 'finish_call', 'call_back_later', 'skip_today']);
   });
 });

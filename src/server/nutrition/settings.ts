@@ -26,6 +26,7 @@ export function publicSettings(row: SettingsRow | null, fallbackTimeZone: string
     voice: row?.voice ?? DEFAULT_VOICE,
     calorieGoal: row?.calorieGoal ?? 2000,
     goals: row?.goalsJson ? JSON.parse(row.goalsJson) as Record<string, number> : null,
+    insightsEnabled: row?.insightsEnabled ?? true,
     voices: REALTIME_VOICES,
   };
 }
@@ -43,6 +44,7 @@ export const settingsInput = z.object({
   voice: z.string().refine(isRealtimeVoice).optional(),
   calorieGoal: z.number().int().min(500).max(5000).optional(),
   goals: z.record(z.string().max(40), z.number().min(0).max(10000)).refine(g => Object.keys(g).length <= 20).optional(),
+  insightsEnabled: z.boolean().optional(),
 }).strict();
 
 export async function updateSettings(userId: string, fallbackTimeZone: string, raw: unknown) {
@@ -59,6 +61,7 @@ export async function updateSettings(userId: string, fallbackTimeZone: string, r
     ...(input.voice ? { voice: input.voice } : {}),
     ...(input.calorieGoal ? { calorieGoal: input.calorieGoal } : {}),
     ...(input.goals ? { goalsJson: JSON.stringify(input.goals) } : {}),
+    ...(input.insightsEnabled !== undefined ? { insightsEnabled: input.insightsEnabled } : {}),
   };
   const row = await prisma.nutritionCallSettings.upsert({
     where: { userId },

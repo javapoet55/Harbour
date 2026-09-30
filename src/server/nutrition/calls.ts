@@ -2,10 +2,12 @@ import { z } from 'zod';
 import { prisma } from '@/server/db';
 import { pushProvider } from '@/providers';
 import { log } from '@/lib/logger';
-import { calculateCalories, portionGrams, type FoodItemInput, type FoodLookup } from './calories';
+import { portionGrams, type FoodItemInput, type FoodLookup } from './calories';
+import { applyLateLookup, caloriesWithinBudget, cancelLateLookup } from './fast-lookup';
 import { isRealtimeVoice, DEFAULT_VOICE, LATE_DIAL_GRACE_MINUTES, MANUAL_CALL_COOLDOWN_MINUTES, MEALS, nutritionCallConfig, RETRY_DELAY_MINUTES } from './config';
 import { NutritionError } from './errors';
 import { keyWords } from './text';
+import { dailyInsight, handleInsight } from './insights';
 import { defaultLookup } from './log';
 import { nutritionCallSession } from './session';
 import { dueCall, localDateIn, withinCallWindow } from './time';
@@ -14,6 +16,12 @@ import { callToken, createTwilioCall, hangupTwiml, streamTwiml } from './twilio'
 type Call = NonNullable<Awaited<ReturnType<typeof prisma.nutritionCall.findUnique>>>;
 const TERMINAL = ['COMPLETED', 'NO_ANSWER', 'VOICEMAIL', 'FAILED', 'CANCELLED', 'SKIPPED', 'EXPIRED'];
 const MAX_ATTEMPTS_PER_DAY = 4;
+/**
+ * "Call me now" calls are numbered from 101 so they never take attempt 1, which is reserved for the
+ * scheduled daily call (a test call in the afternoon must not block that evening's call).
+ */
+export const MANUAL_ATTEMPT_BASE = 100;
+const attemptNumber = (attempt: number) => attempt % MANUAL_ATTEMPT_BASE;
 const isUniqueViolation = (e: unknown) => !!e && typeof e === 'object' && 'code' in e && (e as { code: unknown }).code === 'P2002';
 
 export function callsConfigured(cfg = nutritionCallConfig()) {
@@ -82,9 +90,9 @@ export async function requestCallNow(userId: string, now = new Date()) {
   if (!withinCallWindow(settings.timeZone, now)) throw new NutritionError('OUTSIDE_CALL_WINDOW');
   if (settings.lastManualCallAt && now.getTime() - settings.lastManualCallAt.getTime() < MANUAL_CALL_COOLDOWN_MINUTES * 60_000) throw new NutritionError('CALL_COOLDOWN');
   const localDate = localDateIn(settings.timeZone, now);
-  const last = await prisma.nutritionCall.findFirst({ where: { userId, localDate }, orderBy: { attempt: 'desc' }, select: { attempt: true } });
-  const attempt = (last?.attempt ?? 0) + 1;
-  if (attempt > MAX_ATTEMPTS_PER_DAY + 2) throw new NutritionError('CALL_COOLDOWN');
+  const last = await prisma.nutritionCall.findFirst({ where: { userId, localDate, attempt: { gt: MANUAL_ATTEMPT_BASE } }, orderBy: { attempt: 'desc' }, select: { attempt: true } });
+  const attempt = Math.max(MANUAL_ATTEMPT_BASE, last?.attempt ?? 0) + 1;
+  if (attempt > MANUAL_ATTEMPT_BASE + 20) throw new NutritionError('CALL_COOLDOWN');
   await prisma.nutritionCallSettings.update({ where: { userId }, data: { lastManualCallAt: now } });
   const call = await prisma.nutritionCall.create({ data: { userId, localDate, attempt, scheduledFor: now } });
   const result = await dialCall(call.id);
@@ -202,6 +210,8 @@ const toolSchemas = {
   update_food_item: itemSchema.partial().extend({ id: z.string().min(1).max(40) }),
   remove_food_item: z.object({ id: z.string().min(1).max(40) }),
   get_day_summary: z.object({}),
+  get_daily_insight: z.object({}),
+  add_insight_items: z.object({}),
   finish_call: z.object({ confirmed: z.boolean() }),
   call_back_later: z.object({ minutes: z.number().int().min(10).max(120) }),
   skip_today: z.object({ reason: z.enum(['declined', 'voicemail', 'wrong_person']) }),
@@ -225,15 +235,19 @@ export async function executeTool(callId: string, name: string, rawArgs: unknown
   const { userId, localDate } = call;
   switch (name as ToolName) {
     case 'log_food_items': {
+      const items = (args as { items: FoodItemInput[] }).items;
+      // All foods in the meal are looked up at once, each within the latency budget.
+      const timed = await Promise.all(items.map(item => caloriesWithinBudget(item, lookup)));
       const saved = [];
-      for (const item of (args as { items: FoodItemInput[] }).items) {
-        const r = await calculateCalories(item, lookup);
+      for (const [index, item] of items.entries()) {
+        const { result: r, late } = timed[index];
         const e = await prisma.foodLogEntry.create({ data: {
           userId, localDate, callId, meal: item.meal, description: item.description, foodName: r.foodName,
           quantity: item.quantity ?? null, unit: item.unit ?? null, grams: r.grams, kcal: r.kcal,
-          proteinG: r.proteinG, carbsG: r.carbsG, fatG: r.fatG, source: r.source, sourceRef: r.sourceRef,
-          status: r.needsReview ? 'NEEDS_REVIEW' : 'DRAFT', reviewReason: r.reviewReason,
+          proteinG: r.proteinG, carbsG: r.carbsG, fatG: r.fatG, fiberG: r.fiberG, calciumMg: r.calciumMg, ironMg: r.ironMg, vitaminDIu: r.vitaminDIu, source: r.source, sourceRef: r.sourceRef,
+          status: r.needsReview && !late ? 'NEEDS_REVIEW' : 'DRAFT', reviewReason: r.reviewReason,
         } });
+        if (late) applyLateLookup(e.id, late);
         saved.push({ id: e.id, food: e.foodName, kcal: e.kcal, estimate: r.source === 'ESTIMATE' });
       }
       return { saved, dayTotalKcal: await dayTotal(userId, localDate) };
@@ -252,15 +266,19 @@ export async function executeTool(callId: string, name: string, rawArgs: unknown
         const newGrams = portionGrams(next).grams;
         next.estimatedKcal = e.grams && newGrams && a.foodName === undefined ? e.kcal * (newGrams / e.grams) : e.kcal;
       }
-      const r = foodChanged ? await calculateCalories(next, lookup) : null;
+      const timed = foodChanged ? await caloriesWithinBudget(next, lookup) : null;
+      if (timed) cancelLateLookup(e.id); // an earlier pending lookup must not overwrite this correction
+      const r = timed?.result ?? null;
       const u = await prisma.foodLogEntry.update({ where: { id: e.id }, data: {
         meal: next.meal, description: next.description, quantity: next.quantity ?? null, unit: next.unit ?? null,
-        ...(r ? { foodName: r.foodName, grams: r.grams, kcal: r.kcal, proteinG: r.proteinG, carbsG: r.carbsG, fatG: r.fatG, source: r.source, sourceRef: r.sourceRef,
-          status: r.needsReview ? 'NEEDS_REVIEW' : (e.callId === callId ? 'DRAFT' : e.status), reviewReason: r.reviewReason } : {}),
+        ...(r ? { foodName: r.foodName, grams: r.grams, kcal: r.kcal, proteinG: r.proteinG, carbsG: r.carbsG, fatG: r.fatG, fiberG: r.fiberG, calciumMg: r.calciumMg, ironMg: r.ironMg, vitaminDIu: r.vitaminDIu, source: r.source, sourceRef: r.sourceRef,
+          status: r.needsReview && !timed?.late ? 'NEEDS_REVIEW' : (e.callId === callId ? 'DRAFT' : e.status), reviewReason: r.reviewReason } : {}),
       } });
+      if (timed?.late) applyLateLookup(e.id, timed.late);
       return { updated: { id: u.id, food: u.foodName, kcal: u.kcal }, dayTotalKcal: await dayTotal(userId, localDate) };
     }
     case 'remove_food_item': {
+      cancelLateLookup((args as { id: string }).id);
       const { count } = await prisma.foodLogEntry.deleteMany({ where: { id: (args as { id: string }).id, userId, localDate } });
       return count ? { removed: true, dayTotalKcal: await dayTotal(userId, localDate) } : { error: 'item_not_found' };
     }
@@ -274,6 +292,17 @@ export async function executeTool(callId: string, name: string, rawArgs: unknown
         totalKcal: entries.reduce((t, e) => t + e.kcal, 0), goalKcal: settings?.calorieGoal ?? 2000,
       };
     }
+    case 'get_daily_insight': {
+      const insight = await dailyInsight(userId, localDate).catch(() => null);
+      if (!insight || insight.kind !== 'GAP' || insight.state !== 'open') return { insight: null };
+      return { insight: { text: insight.text, offersShoppingItems: insight.items.length > 0, items: insight.items } };
+    }
+    case 'add_insight_items': {
+      const insight = await dailyInsight(userId, localDate).catch(() => null);
+      if (!insight?.items.length) return { added: [] };
+      const result = await handleInsight(userId, localDate, insight.key, 'add');
+      return { added: result.added, listTitle: result.listTitle };
+    }
     case 'finish_call': {
       if ((args as { confirmed: boolean }).confirmed) await prisma.foodLogEntry.updateMany({ where: { callId, status: 'DRAFT' }, data: { status: 'CONFIRMED' } });
       await prisma.nutritionCall.update({ where: { id: callId }, data: { endReason: 'finished' } });
@@ -283,7 +312,7 @@ export async function executeTool(callId: string, name: string, rawArgs: unknown
       const at = new Date(Date.now() + (args as { minutes: number }).minutes * 60_000);
       const settings = await prisma.nutritionCallSettings.findUnique({ where: { userId } });
       let scheduled = false;
-      if (settings && withinCallWindow(settings.timeZone, at) && call.attempt < MAX_ATTEMPTS_PER_DAY) {
+      if (settings && withinCallWindow(settings.timeZone, at) && attemptNumber(call.attempt) < MAX_ATTEMPTS_PER_DAY) {
         try { await prisma.nutritionCall.create({ data: { userId, localDate, attempt: call.attempt + 1, scheduledFor: at } }); scheduled = true; }
         catch (e) { if (!isUniqueViolation(e)) throw e; }
       }

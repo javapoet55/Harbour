@@ -123,17 +123,17 @@ export class CallBridge {
       return;
     }
     this.responseDone = false;
-    let end = false;
+    let end = false, say = null;
     for (const call of calls) {
       let result;
       try { result = await this.d.api.tool(this.token, call.name, call.arguments ?? '{}'); }
       catch { result = { error: 'tool_unavailable', say: 'Apologize briefly: saving is not working right now; they can add items in the app.' }; }
-      if (result?.end) end = true;
+      if (result?.end) { end = true; if (typeof result.say === 'string') say = result.say.slice(0, 300); }
       this.sendModel({ type: 'conversation.item.create', item: { type: 'function_call_output', call_id: call.call_id, output: JSON.stringify(result ?? {}) } });
     }
     if (end) {
       this.endAfterResponse = true;
-      this.sendModel({ type: 'response.create', response: { instructions: 'Say a warm one-sentence goodbye now. Do not call any tools.', tool_choice: 'none' } });
+      this.sendModel({ type: 'response.create', response: { instructions: `${say ?? 'Say a warm one-sentence goodbye now.'} Do not call any tools.`, tool_choice: 'none' } });
     } else this.sendModel({ type: 'response.create' });
   }
 
