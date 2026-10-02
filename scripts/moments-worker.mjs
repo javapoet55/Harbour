@@ -28,5 +28,11 @@ while (!stopping) {
     console.log(`Moments tick: HTTP ${response.status}`);
     await response.body?.cancel();
   } catch { console.error('Moments tick failed; retrying on next cycle'); }
+  // Shopping email failures must not interrupt Moments or calendar scheduling.
+  try {
+    const response = await fetch(new URL('/api/shopping/email-tick', base), {method:'POST', redirect:'error', headers:{Authorization:`Bearer ${secret}`}, signal:AbortSignal.timeout(55000)});
+    console.log(`Shopping email tick: HTTP ${response.status}`);
+    await response.body?.cancel();
+  } catch { console.error('Shopping email tick failed; retrying on next cycle'); }
   if (!stopping) await delay(Math.max(1000, 60000 - (Date.now() - started)));
 }

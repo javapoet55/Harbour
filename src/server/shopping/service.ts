@@ -35,7 +35,9 @@ export async function shoppingAction(userId:string,raw:unknown,idempotencyKey?:s
    await tx.shoppingList.update({where:{id:list.id},data:{completedAt:new Date()}});
    if(!list.weekly)return {list:await tx.shoppingList.findUnique({where:{id:list.id},include})};
    const today=new Intl.DateTimeFormat('en-CA',{timeZone:list.timeZone,year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
-   return {list:await tx.shoppingList.create({data:{userId,title:list.title,date:nextShoppingDate(list.date,today),timeZone:list.timeZone,weekly:true,generatedFrom:list.id,items:{create:list.items.map((i,sortOrder)=>({id:randomUUID(),name:i.name,category:i.category,quantity:i.quantity,size:i.size,notes:i.notes,imageData:i.imageData,brand:i.brand,barcode:i.barcode,favorite:i.favorite,favoriteAlternatives:i.favoriteAlternatives??undefined,checked:false,sortOrder}))}},include})};
+   const nextList=await tx.shoppingList.create({data:{userId,title:list.title,date:nextShoppingDate(list.date,today),timeZone:list.timeZone,weekly:true,generatedFrom:list.id,items:{create:list.items.map((i,sortOrder)=>({id:randomUUID(),name:i.name,category:i.category,quantity:i.quantity,size:i.size,notes:i.notes,imageData:i.imageData,brand:i.brand,barcode:i.barcode,favorite:i.favorite,favoriteAlternatives:i.favoriteAlternatives??undefined,checked:false,sortOrder}))}},include});
+   await tx.shoppingEmailSchedule.updateMany({where:{listId:list.id},data:{listId:nextList.id}});
+   return {list:nextList};
   }
   if(list.completedAt)throw new MomentError('Copy this completed list to make changes.');
   const {items,...data}=listInput.parse(p.input);

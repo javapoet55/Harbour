@@ -565,6 +565,7 @@ model ShoppingList {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   items ShoppingItem[]
+  emailSchedule ShoppingEmailSchedule?
   @@index([userId, date])
 }
 model ShoppingItem {
@@ -836,4 +837,41 @@ model SignupPromotionClaim {
   key String @id
   userId String
   createdAt DateTime @default(now())
+}
+
+model ShoppingEmailSchedule {
+  id String @id @default(cuid())
+  listId String @unique
+  list ShoppingList @relation(fields: [listId], references: [id], onDelete: Cascade)
+  recipient String
+  recipientName String
+  timeZone String
+  weekday Int @default(6)
+  hour Int @default(10)
+  minute Int @default(0)
+  enabled Boolean @default(true)
+  consentAt DateTime
+  nextRunAt DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  runs ShoppingEmailRun[]
+  @@index([enabled, nextRunAt])
+}
+model ShoppingEmailRun {
+  id String @id @default(cuid())
+  scheduleId String
+  schedule ShoppingEmailSchedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+  dueAt DateTime
+  status String @default("pending")
+  recipient String
+  subject String
+  body String
+  attempts Int @default(0)
+  retryAt DateTime
+  providerId String?
+  detail String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([scheduleId, dueAt])
+  @@index([status, retryAt])
 }

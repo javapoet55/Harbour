@@ -535,6 +535,7 @@ private struct ShoppingShare:View {
     var body:some View{NavigationStack{List{
         Section{Label(list.title,systemImage:"cart.fill");Text(GroceryList.itemCount(list.items.count))}
         Section("Share via Messages, Mail, or another app"){ShareLink(item:list.shareText){Label("Share list as text",systemImage:"square.and.arrow.up")}}
+        Section("Scheduled sharing"){NavigationLink("Weekly email to store manager"){ShoppingEmailView(store:store,list:list)}}
         Section("View-only link"){
             Text("Anyone with the link can view this list and its edits. The link stays with this trip; next week’s list needs a new link. Revoke it whenever you like.").font(.caption)
             if let url {ShareLink(item:url){Label("Share Link",systemImage:"link")};Button("Revoke Link",role:.destructive){Task{if let saved=await store.action("revoke",list:list,input:[String:String]()){list=saved;self.url=nil;onUpdate(saved)}}}}
