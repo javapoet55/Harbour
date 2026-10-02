@@ -230,6 +230,17 @@ struct ShoppingDetail:View {
     var body:some View {
         List {
             Section {
+                if !readOnly {
+                    NavigationLink { ShoppingEmailView(store:store,list:list) } label: {
+                        HStack(spacing:12) {
+                            Image(systemName:"envelope.badge.clock").font(.title2).foregroundStyle(Color.nexdoBlue)
+                            VStack(alignment:.leading,spacing:4) {
+                                Text("Schedule email").font(.headline)
+                                Text("Send your list to your store manager every week").font(.caption).foregroundStyle(.secondary)
+                            }
+                        }.padding(.vertical,8)
+                    }.accessibilityLabel("Schedule shopping list email")
+                }
                 HStack{shoppingIcon;VStack(alignment:.leading){Text(list.title).font(.title2.bold());Text("\(list.items.count-list.remaining) added · \(GroceryList.itemCount(list.items.count))").foregroundStyle(.secondary)}}
                     .listRowInsets(EdgeInsets(top:0,leading:16,bottom:3,trailing:16)).listRowBackground(Color.clear).listRowSeparator(.hidden)
                 HStack(spacing:8){

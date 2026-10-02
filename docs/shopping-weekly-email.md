@@ -8,7 +8,7 @@ The native iPhone Shopping List → Share List → Weekly email to store manager
 2. Configure the existing `MOMENTS_GOOGLE_CLIENT_ID`, `MOMENTS_GOOGLE_CLIENT_SECRET`, `MOMENTS_GOOGLE_REDIRECT_URI`, credential encryption and session signing settings. The existing verified Gmail OAuth connection is shared with Important Moments; no credentials are returned to the phone.
 3. Set `SHOPPING_EMAIL_ENABLED=true` in the API service only when ready to enable the feature.
 4. Redeploy the persistent `scripts/moments-worker.mjs` service with its existing `MOMENTS_API_BASE_URL` and matching `HARBOR_CRON_SECRET`. It now POSTs `/api/shopping/email-tick` each cycle independently of whether Moments scheduling is enabled. Do not rely on a timer inside the web server.
-5. Ship the updated native iOS app. No Expo UI is included in this change.
+5. Ship the updated native iOS or Expo app. Both expose Schedule email directly on an active Shopping List. Expo also supports Gmail connection, preview, pause, and recent status.
 6. Connect Gmail in the new screen and explicitly save a schedule. Enabling the server flag alone never creates schedules or sends a message.
 
 The tick processes one send per call to bound provider timeouts. At higher volumes run additional workers or tick more frequently; claims protect against duplicate execution. Queue delay means this is a target start time, not exact-second delivery. Check worker HTTP status logs and recent runs in the app.
