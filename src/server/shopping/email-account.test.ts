@@ -5,7 +5,7 @@ import {gmail} from '@/server/moments/email';
 
 const mocks=vi.hoisted(()=>({requireUser:vi.fn()}));
 vi.mock('@/server/auth',()=>({requireUser:mocks.requireUser}));
-import {POST as moments} from '@/app/api/moments/route';
+import {POST as moments, DELETE as deleteMoments} from '@/app/api/moments/route';
 import {GET as schedule} from '@/app/api/shopping/email-schedule/route';
 
 // No worker runs in this file; far-future times keep these rows away from other files' worker ticks.
@@ -52,6 +52,17 @@ it('refuses to disconnect while a shopping email is being sent',async()=>{
  expect((await prisma.shoppingEmailSchedule.findUniqueOrThrow({where:{id:s.id}})).enabled).toBe(true);
  expect(await prisma.momentEmailAccount.findUnique({where:{userId}})).not.toBeNull();
  await prisma.shoppingEmailRun.updateMany({where:{scheduleId:s.id},data:{status:'uncertain'}});
+});
+it('disconnects Gmail and deletes Moments data even when the saved token cannot be decrypted',async()=>{
+ const unreadable='v1.AAAAAAAAAAAAAAAA.AAAAAAAAAAAAAAAAAAAAAA.AAAA';
+ const fetch=vi.fn();vi.stubGlobal('fetch',fetch);
+ await account();await prisma.momentEmailAccount.update({where:{userId},data:{refreshToken:unreadable}});
+ expect((await disconnect()).status).toBe(200);
+ expect(await prisma.momentEmailAccount.findUnique({where:{userId}})).toBeNull();
+ await account();await prisma.momentEmailAccount.update({where:{userId},data:{refreshToken:unreadable}});
+ expect((await deleteMoments()).status).toBe(200);
+ expect(await prisma.momentEmailAccount.findUnique({where:{userId}})).toBeNull();
+ expect(fetch).not.toHaveBeenCalled();
 });
 it('explains a missing list ID',async()=>{
  const res=await schedule(new Request('https://nexdo.test/api/shopping/email-schedule'));
