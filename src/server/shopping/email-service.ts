@@ -42,36 +42,48 @@ export async function pauseEmailSchedule(userId:string,listId:string){
   await tx.shoppingEmailRun.updateMany({where:{scheduleId:s.id,status:'pending'},data:{status:'cancelled',detail:'Schedule paused'}});
  });
 }
-export async function runShoppingEmails(now=new Date(),provider:WishEmailProvider=gmail){
+// Token refresh plus send can take ~35s, so new sends stop early enough to finish within the worker's 55s request timeout.
+const SEND_BUDGET_MS=20000, SEND_CONCURRENCY=5, QUEUE_BATCH=50;
+type DueSchedule={id:string;listId:string;recipient:string;recipientName:string;timeZone:string;weekday:number;hour:number;minute:number;nextRunAt:Date};
+async function queueRun(s:DueSchedule,now:Date){
+ await prisma.$transaction(async tx=>{
+  const claim=await tx.shoppingEmailSchedule.updateMany({where:{id:s.id,enabled:true,nextRunAt:s.nextRunAt},data:{nextRunAt:nextWeekly(now,s)}});
+  if(!claim.count)return;
+  const list=await tx.shoppingList.findUniqueOrThrow({where:{id:s.listId},include:{items:{orderBy:{sortOrder:'asc'}}}});
+  const mail=shoppingEmail(list.title,s.recipientName,list.items);
+  const stale=now.getTime()-s.nextRunAt.getTime()>24*3600000;
+  const skip=mail.empty||!!list.completedAt||stale;
+  await tx.shoppingEmailRun.create({data:{scheduleId:s.id,dueAt:s.nextRunAt,retryAt:now,recipient:s.recipient,subject:mail.subject,body:mail.body,status:skip?'skipped':'pending',detail:stale?'Missed run is more than 24 hours old':list.completedAt?'Shopping trip completed':mail.empty?'No unpurchased items':null}});
+ });
+}
+async function sendNext(now:Date,provider:WishEmailProvider){
+ const job=await prisma.shoppingEmailRun.findFirst({where:{status:'pending',retryAt:{lte:now},schedule:{enabled:true}},include:{schedule:{include:{list:true}}},orderBy:{retryAt:'asc'}});
+ if(!job)return 'empty';
+ const claim=await prisma.$transaction(async tx=>{
+  const lock=await tx.shoppingEmailSchedule.updateMany({where:{id:job.scheduleId,enabled:true},data:{updatedAt:now}});
+  if(!lock.count)return {count:0};
+  return tx.shoppingEmailRun.updateMany({where:{id:job.id,status:'pending',attempts:job.attempts},data:{status:'sending',attempts:{increment:1}}});
+ });if(!claim.count)return 'claimed';
+ const result=await provider.send(job.schedule.list.userId,job.recipient,job.subject,job.body,job.id).catch(()=>({kind:'uncertain' as const,error:'Delivery could not be verified. Check your Gmail Sent folder.'}));
+ const retry=result.kind==='retry'&&job.attempts<2&&now.getTime()-job.dueAt.getTime()<24*3600000;
+ await prisma.shoppingEmailRun.update({where:{id:job.id},data:{status:retry?'pending':result.kind==='retry'?'failed':result.kind==='permanent'?'failed':result.kind,providerId:result.kind==='sent'?result.id:null,detail:result.kind==='sent'?'Accepted by Gmail; store confirmation is separate.':result.error,retryAt:new Date(now.getTime()+5*60000)}});
+ if(result.kind==='reconnect')await prisma.shoppingEmailSchedule.update({where:{id:job.scheduleId},data:{enabled:false}});
+ return 'processed';
+}
+export async function runShoppingEmails(now=new Date(),provider:WishEmailProvider=gmail,budgetMs=SEND_BUDGET_MS){
  if(!active())return {processed:0};
  // A crashed sender may already have submitted: do not risk sending the same email twice.
  await prisma.shoppingEmailRun.updateMany({where:{status:'sending',updatedAt:{lt:new Date(now.getTime()-10*60000)}},data:{status:'uncertain',detail:'Delivery could not be verified. Check your Gmail Sent folder.'}});
- const due=await prisma.shoppingEmailSchedule.findMany({where:{enabled:true,nextRunAt:{lte:now}},take:20,orderBy:{nextRunAt:'asc'}});
- for(const s of due){
-  await prisma.$transaction(async tx=>{
-   const claim=await tx.shoppingEmailSchedule.updateMany({where:{id:s.id,enabled:true,nextRunAt:s.nextRunAt},data:{nextRunAt:nextWeekly(now,s)}});
-   if(!claim.count)return;
-   const list=await tx.shoppingList.findUniqueOrThrow({where:{id:s.listId},include:{items:{orderBy:{sortOrder:'asc'}}}});
-   const mail=shoppingEmail(list.title,s.recipientName,list.items);
-   const stale=now.getTime()-s.nextRunAt.getTime()>24*3600000;
-   const skip=mail.empty||!!list.completedAt||stale;
-   await tx.shoppingEmailRun.create({data:{scheduleId:s.id,dueAt:s.nextRunAt,retryAt:now,recipient:s.recipient,subject:mail.subject,body:mail.body,status:skip?'skipped':'pending',detail:stale?'Missed run is more than 24 hours old':list.completedAt?'Shopping trip completed':mail.empty?'No unpurchased items':null}});
-  });
+ // Every queued schedule moves to next week, so this drains all due schedules.
+ for(;;){
+  const due=await prisma.shoppingEmailSchedule.findMany({where:{enabled:true,nextRunAt:{lte:now}},take:QUEUE_BATCH,orderBy:{nextRunAt:'asc'}});
+  for(const s of due)await queueRun(s,now);
+  if(due.length<QUEUE_BATCH)break;
  }
  await prisma.shoppingEmailRun.updateMany({where:{status:'pending',dueAt:{lt:new Date(now.getTime()-24*3600000)}},data:{status:'skipped',detail:'Queued email is more than 24 hours old'}});
- const jobs=await prisma.shoppingEmailRun.findMany({where:{status:'pending',retryAt:{lte:now},schedule:{enabled:true}},include:{schedule:{include:{list:true}}},take:1,orderBy:{retryAt:'asc'}});
- let processed=0;
- for(const job of jobs){
-  const claim=await prisma.$transaction(async tx=>{
-   const lock=await tx.shoppingEmailSchedule.updateMany({where:{id:job.scheduleId,enabled:true},data:{updatedAt:now}});
-   if(!lock.count)return {count:0};
-   return tx.shoppingEmailRun.updateMany({where:{id:job.id,status:'pending'},data:{status:'sending',attempts:{increment:1}}});
-  });if(!claim.count)continue;
-  const result=await provider.send(job.schedule.list.userId,job.recipient,job.subject,job.body,job.id).catch(()=>({kind:'uncertain' as const,error:'Delivery could not be verified. Check your Gmail Sent folder.'}));
-  const retry=result.kind==='retry'&&job.attempts<2&&now.getTime()-job.dueAt.getTime()<24*3600000;
-  await prisma.shoppingEmailRun.update({where:{id:job.id},data:{status:retry?'pending':result.kind==='retry'?'failed':result.kind==='permanent'?'failed':result.kind,providerId:result.kind==='sent'?result.id:null,detail:result.kind==='sent'?'Accepted by Gmail; store confirmation is separate.':result.error,retryAt:new Date(now.getTime()+5*60000)}});
-  if(result.kind==='reconnect')await prisma.shoppingEmailSchedule.update({where:{id:job.scheduleId},data:{enabled:false}});
-  processed++;
- }
+ const deadline=Date.now()+budgetMs;let processed=0;
+ await Promise.all(Array.from({length:SEND_CONCURRENCY},async()=>{
+  while(Date.now()<deadline){const r=await sendNext(now,provider);if(r==='empty')return;if(r==='processed')processed++;}
+ }));
  return {processed};
 }
