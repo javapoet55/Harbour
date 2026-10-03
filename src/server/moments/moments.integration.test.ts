@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { prisma } from '@/server/db';
-import { saveMoment, generateDraft, approveDraft, schedule, changePlan, runJobs, listMoments, sendGreetingNow } from './service';
+import { saveMoment, generateDraft, approveDraft, schedule, changePlan, runJobs, listMoments, sendGreetingNow, sendDueEmails } from './service';
 import { fallback, occurrence, nextAnnual, mayTransition } from './domain';
 import { randomUUID } from 'node:crypto';
 let userId='';
@@ -193,4 +193,36 @@ it('Send Now supports phone-only recipients without inventing an email address',
  const d=await ready();await prisma.importantMoment.update({where:{id:d.momentID},data:{email:''}});
  const plans=await sendGreetingNow(userId,{momentID:d.momentID,body:'Hello 🎉',operationID:randomUUID(),approved:true});
  expect(plans).toHaveLength(1);expect(plans[0].channel).toBe('messages');
+});
+
+it('sends more than 30 due emails in one run, several at a time',async()=>{
+ const plans=[];for(let i=0;i<35;i++) plans.push(await plan('email',true));
+ await prisma.deliveryPlan.updateMany({where:{id:{in:plans.map(p=>p.id)}},data:{nextAttemptAt:new Date(0)}});
+ let active=0,peak=0;
+ await sendDueEmails({send:async(_u,_r,_s,_b,key)=>{active++;peak=Math.max(peak,active);await new Promise(r=>setTimeout(r,20));active--;return {kind:'sent',id:key};}},new Date(),{draft:{moment:{userId}}});
+ const saved=await prisma.deliveryPlan.findMany({where:{id:{in:plans.map(p=>p.id)}}});
+ expect(saved.every(p=>p.status==='SENT')).toBe(true);
+ expect(peak).toBeGreaterThan(1);expect(peak).toBeLessThanOrEqual(5);
+},30000);
+it('keeps sending other emails when one plan hits a database error',async()=>{
+ const bad=await plan('email',true),good=await plan('email',true);
+ await prisma.deliveryPlan.update({where:{id:bad.id},data:{nextAttemptAt:new Date(1)}});
+ await prisma.deliveryPlan.update({where:{id:good.id},data:{nextAttemptAt:new Date(2)}});
+ const errors=vi.spyOn(console,'error').mockImplementation(()=>{});
+ // An unstorable provider ID makes the follow-up database write throw for this plan only.
+ await sendDueEmails({send:async(_u,_r,_s,_b,key)=>({kind:'sent',id:(key===bad.idempotencyKey?123:'ok') as string})},new Date(),{draft:{moment:{userId}}});
+ errors.mockRestore();
+ expect((await prisma.deliveryPlan.findUniqueOrThrow({where:{id:good.id}})).status).toBe('SENT');
+ expect((await prisma.deliveryPlan.findUniqueOrThrow({where:{id:bad.id}})).status).toBe('SENDING');
+});
+it('stamps each claim with its own pick-up time, not the run start',async()=>{
+ const p=await plan('email',true);await prisma.deliveryPlan.update({where:{id:p.id},data:{nextAttemptAt:new Date(0)}});
+ const started=Date.now();let claimedAt=0;
+ await runJobs({send:async()=>{claimedAt=+(await prisma.deliveryPlan.findUniqueOrThrow({where:{id:p.id}})).claimedAt!;return {kind:'sent',id:'claimed'};}},p.id,new Date(started-10*60000));
+ expect(claimedAt).toBeGreaterThanOrEqual(started);
+});
+it('creates next year\'s email right after sending a yearly wish',async()=>{
+ const p=await plan('email',true);await prisma.deliveryPlan.update({where:{id:p.id},data:{repeatYearly:true,nextAttemptAt:new Date(0)}});
+ await sendDueEmails({send:async()=>({kind:'sent',id:'yearly'})},new Date(),{id:p.id});
+ expect(await prisma.deliveryPlan.findUnique({where:{idempotencyKey:`${p.id}:annual`}})).not.toBeNull();
 });

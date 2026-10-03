@@ -16,16 +16,15 @@ private struct ShoppingEmailSnapshot: Decodable {
     func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
         UIApplication.shared.connectedScenes.compactMap { ($0 as? UIWindowScene)?.keyWindow }.first ?? ASPresentationAnchor()
     }
-    func start(_ url: URL, completion: @escaping (Bool) -> Void) {
+    func start(_ url: URL, completion: @escaping (String?) -> Void) {
         session = ASWebAuthenticationSession(url: url, callbackURLScheme: "nexdo") { callback, _ in
             Task { @MainActor in
-                let ok = callback?.host == "moments-email" && callback.flatMap { URLComponents(url: $0, resolvingAgainstBaseURL: false) }?.queryItems?.first(where: { $0.name == "status" })?.value == "connected"
-                completion(ok); self.session = nil
+                completion(MomentEmailOAuth.ticket(from: callback)); self.session = nil
             }
         }
         session?.presentationContextProvider = self
         session?.prefersEphemeralWebBrowserSession = true
-        if session?.start() != true { completion(false) }
+        if session?.start() != true { completion(nil) }
     }
 }
 struct ShoppingEmailView: View {
@@ -135,7 +134,14 @@ struct ShoppingEmailView: View {
             struct Link: Decodable { let url: String }
             let link: Link = try await store.api.request("/api/shopping/email-schedule", method:"POST", body:JSONSerialization.data(withJSONObject:["operation":"connect", "listId":list.id]))
             guard let url = URL(string:link.url) else { throw APIError.invalidResponse }
-            oauth.start(url) { ok in Task { @MainActor in if ok { await load() } else { error = "Email connection cancelled or failed." } } }
+            oauth.start(url) { ticket in Task { @MainActor in
+                guard let ticket else { error = "Email connection cancelled or failed."; return }
+                do {
+                    struct Confirmed: Decodable {}
+                    let _: Confirmed = try await store.api.request("/api/moments", method: "POST", body: JSONSerialization.data(withJSONObject: ["operation": "connectEmailConfirm", "input": ["ticket": ticket]]))
+                    await load()
+                } catch { self.error = error.localizedDescription }
+            } }
         } catch { self.error = error.localizedDescription }
     }
 }

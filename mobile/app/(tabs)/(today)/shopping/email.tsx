@@ -49,7 +49,9 @@ export default function ShoppingEmailScreen() {
     try {
       if (operation === 'connect') {
         const { url } = await shoppingEmailApi.connect(id);
-        if (!await connectGmail(url)) throw new Error(EMAIL_CONNECT_FAILED);
+        const ticket = await connectGmail(url);
+        if (!ticket) throw new Error(EMAIL_CONNECT_FAILED);
+        await shoppingEmailApi.confirmGmail(ticket);
         await load(); setNotice('Gmail connected. Review and save your schedule.');
       } else {
         const value = operation === 'pause' ? await shoppingEmailApi.pause(id) : await shoppingEmailApi.save(id, {
