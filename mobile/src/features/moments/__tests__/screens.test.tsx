@@ -1068,6 +1068,16 @@ describe('Wish details', () => {
     expect(screen.getByTestId('wish-title').props.children).toBe('Opened — delivery not confirmed');
   });
 
+  it('lets the person settle a "Check Sent mail" email', async () => {
+    load([moment({ drafts: [draft({ plans: [plan({ id: 'p1', channel: 'email', automaticDelivery: true, status: 'UNCERTAIN' })] })] })]);
+    mockParams = { planId: 'p1' };
+    await render(<WishDetails />);
+    expect(screen.queryByTestId('wish-retry')).toBeNull();
+    expect(screen.getByTestId('wish-uncertain-sent')).toBeTruthy();
+    await fireEvent.press(screen.getByTestId('wish-uncertain-failed'));
+    await waitFor(() => expect(mockPost).toHaveBeenCalledWith('plan', { id: 'p1', action: 'failed' }, undefined));
+  });
+
   it('shows the scheduled confirmation and history actions', async () => {
     load([moment({ drafts: [draft({ plans: [plan({ id: 'p1', status: 'SENT' })] })] })]);
     mockParams = { planId: 'p1' };
