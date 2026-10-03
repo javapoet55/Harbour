@@ -73,3 +73,18 @@ it('serializes competing workers so only one provider call is made',async()=>{
  await Promise.all([runShoppingEmails(now,single),runShoppingEmails(now,single)]);
  expect(single.send).toHaveBeenCalledTimes(1);expect(await prisma.shoppingEmailRun.count({where:{scheduleId:schedule.id}})).toBe(1);await pauseEmailSchedule(userId,list.id);
 });
+it('sends every due schedule in one tick, beyond a single batch',async()=>{
+ const due=[];for(let i=0;i<25;i++)due.push(await setup());
+ const bulk={send:vi.fn(async()=>({kind:'sent' as const,id:'bulk'}))};
+ expect(await runShoppingEmails(now,bulk)).toEqual({processed:25});
+ await runShoppingEmails(now,bulk);expect(bulk.send).toHaveBeenCalledTimes(25);
+ expect(await prisma.shoppingEmailRun.count({where:{scheduleId:{in:due.map(d=>d.schedule.id)},status:'sent'}})).toBe(25);
+ for(const {list} of due)await pauseEmailSchedule(userId,list.id);
+});
+it('stops starting sends when the tick budget is spent and continues next tick',async()=>{
+ const {list,schedule}=await setup();const p={send:vi.fn(async()=>({kind:'sent' as const,id:'later'}))};
+ await runShoppingEmails(now,p,0);expect(p.send).not.toHaveBeenCalled();
+ expect((await prisma.shoppingEmailRun.findFirstOrThrow({where:{scheduleId:schedule.id}})).status).toBe('pending');
+ await runShoppingEmails(now,p);expect(p.send).toHaveBeenCalledTimes(1);
+ expect((await prisma.shoppingEmailRun.findFirstOrThrow({where:{scheduleId:schedule.id}})).status).toBe('sent');await pauseEmailSchedule(userId,list.id);
+});

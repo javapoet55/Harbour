@@ -11,7 +11,7 @@ The native iPhone Shopping List → Share List → Weekly email to store manager
 5. Ship the updated native iOS or Expo app. Both expose Schedule email directly on an active Shopping List. Expo also supports Gmail connection, preview, pause, and recent status.
 6. Connect Gmail in the new screen and explicitly save a schedule. Enabling the server flag alone never creates schedules or sends a message.
 
-The tick processes one send per call to bound provider timeouts. At higher volumes run additional workers or tick more frequently; claims protect against duplicate execution. Queue delay means this is a target start time, not exact-second delivery. Check worker HTTP status logs and recent runs in the app.
+Each tick queues every due schedule, then sends up to five emails at a time and stops starting new sends after 20 seconds, so it finishes within the worker's 55-second request timeout. Remaining emails go out on the next tick, about a minute later. Additional workers increase throughput; claims protect against duplicate execution. Queue delay means this is a target start time, not exact-second delivery. Check worker HTTP status logs and recent runs in the app.
 
 ## Semantics
 
