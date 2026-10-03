@@ -16,11 +16,12 @@ Each tick queues every due schedule, then sends up to five emails at a time and 
 ## Semantics
 
 - Sends only unchecked items from a snapshot at the due time, including quantities, sizes and notes. No attachments or view-only link are sent.
-- A completed weekly trip transfers its schedule to the newly generated list. If the trip is completed before that week's email goes out, that week is recorded as skipped and the new list is first emailed at the following weekly time. Manually copying a list does not copy the authorization.
+- A completed weekly trip transfers its schedule to the newly generated list. If the trip is completed before that week's email goes out, that week is recorded as skipped and the new list is first emailed at the following weekly time. Completing a one-off (non-weekly) list turns its schedule off and cancels any queued email. Manually copying a list does not copy the authorization.
 - Empty/completed lists are skipped. Runs missed by over 24 hours are skipped instead of sending stale groceries.
 - Local weekly calculation respects daylight saving; nonexistent local times are skipped that week.
 - Definitive provider rate limits, and Google token outages or timeouts (nothing submitted yet), retry after five minutes, up to three attempts. Pending retries retain the original snapshot. These never pause the schedule or ask the user to reconnect.
 - Ambiguous provider errors or abandoned sends are marked uncertain, never automatically resubmitted. User must check Gmail Sent mail. A repeated Message-ID alone is not an idempotency guarantee.
+- Saving a schedule never sends more than one email in 7 days: if this week's email already went out (or was skipped), the next send is the first chosen weekly time at least 7 days later. Changing the time before this week's email goes out moves it within the same week.
 - Pausing cancels pending sends. Pause/edit returns a conflict if a send is already underway; submitted mail cannot be recalled.
 - Expired or revoked email access (Google rejects the saved grant), or a permanent rejection such as a bad recipient address, pauses the schedule. Fix the cause and explicitly save to resume.
 - If one schedule errors unexpectedly, it is logged and retried next tick; other schedules keep sending.

@@ -74,6 +74,26 @@ it('retries definite rate limits with the same snapshot and cancels retry when p
  await runShoppingEmails(now,limited);expect((await prisma.shoppingEmailRun.findFirstOrThrow({where:{scheduleId:schedule.id}})).status).toBe('pending');
  await pauseEmailSchedule(userId,list.id);await runShoppingEmails(new Date(now.getTime()+600000),limited);expect(limited.send).toHaveBeenCalledTimes(1);
 });
+it('does not send a second email the same week when the time is changed after it went out',async()=>{
+ const {list,schedule}=await setup();await runShoppingEmails(now,provider);
+ const saved=await saveEmailSchedule(userId,list.id,{...settings,hour:11},new Date(now.getTime()+5*60000));
+ expect(saved.nextRunAt.toISOString()).toBe('2030-01-12T19:00:00.000Z');
+ await runShoppingEmails(new Date('2030-01-05T19:00:00Z'),provider);
+ expect(await prisma.shoppingEmailRun.count({where:{scheduleId:schedule.id,status:'sent'}})).toBe(1);
+ await pauseEmailSchedule(userId,list.id);
+});
+it('still sends this week when the time is changed before the email goes out',async()=>{
+ const {list}=await setup();
+ const saved=await saveEmailSchedule(userId,list.id,{...settings,hour:11},new Date(now.getTime()-30000));
+ expect(saved.nextRunAt.toISOString()).toBe('2030-01-05T19:00:00.000Z');await pauseEmailSchedule(userId,list.id);
+});
+it('turns the schedule off when a one-off list is completed',async()=>{
+ const list=await prisma.shoppingList.create({data:{userId,title:'Party',date:'2030-01-05',timeZone:settings.timeZone,weekly:false,items:{create:{id:randomUUID(),name:'Cake',quantity:'1',size:'',notes:'',category:'Bakery',checked:false}}}});
+ const schedule=await saveEmailSchedule(userId,list.id,settings,new Date(now.getTime()-60000));
+ await shoppingAction(userId,{operation:'complete',id:list.id,revision:0});
+ expect((await prisma.shoppingEmailSchedule.findUniqueOrThrow({where:{id:schedule.id}})).enabled).toBe(false);
+ await runShoppingEmails(now,provider);expect(await prisma.shoppingEmailRun.count({where:{scheduleId:schedule.id}})).toBe(0);
+});
 it('moves a weekly schedule to the next list when completing a trip',async()=>{
  const {list,schedule}=await setup();const result=await shoppingAction(userId,{operation:'complete',id:list.id,revision:0});
  if(!('list' in result)||!result.list)throw Error('Missing next list');

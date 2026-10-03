@@ -3,6 +3,7 @@ import {log} from '@/lib/logger';
 import {MomentError} from '@/server/moments/domain';
 import {gmail,emailConfigured, type WishEmailProvider} from '@/server/moments/email';
 import {nextWeekly,scheduleInput,shoppingEmail} from './email-domain';
+const WEEK_MS=7*86400000;
 const active=()=>process.env.SHOPPING_EMAIL_ENABLED==='true';
 async function owned(userId:string,listId:string){
  const list=await prisma.shoppingList.findFirst({where:{id:listId,userId},include:{items:{orderBy:{sortOrder:'asc'}}}});
@@ -30,7 +31,10 @@ export async function saveEmailSchedule(userId:string,listId:string,raw:unknown,
    if(await tx.shoppingEmailRun.count({where:{scheduleId:previous.id,status:'sending'}}))throw new MomentError('An email is being sent. Try again shortly.',409);
    await tx.shoppingEmailRun.updateMany({where:{scheduleId:previous.id,status:'pending'},data:{status:'cancelled',detail:'Schedule changed'}});
   }
-  return tx.shoppingEmailSchedule.upsert({where:{listId},create:{listId,...settings,consentAt:now,nextRunAt:nextWeekly(now,settings)},update:{...settings,enabled:true,consentAt:now,nextRunAt:nextWeekly(now,settings)}});
+  // Editing after this week's email went out (or was skipped) must not send another one within the same 7 days.
+  const last=previous&&await tx.shoppingEmailRun.findFirst({where:{scheduleId:previous.id,status:{in:['sent','uncertain','skipped']}},orderBy:{dueAt:'desc'}});
+  const nextRunAt=nextWeekly(last?new Date(Math.max(now.getTime(),last.dueAt.getTime()+WEEK_MS-1)):now,settings);
+  return tx.shoppingEmailSchedule.upsert({where:{listId},create:{listId,...settings,consentAt:now,nextRunAt},update:{...settings,enabled:true,consentAt:now,nextRunAt}});
  });
 }
 export async function pauseEmailSchedule(userId:string,listId:string){
