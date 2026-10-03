@@ -553,6 +553,11 @@ struct WishPlanView: View {
                 if current.status == "FAILED" && current.automaticDelivery { Button("Retry after reconnecting") { Task { await store.perform { try await store.planAction(current, action: "retry") } } } }
                 Button("Cancel scheduled wish", role: .destructive) { cancel = true }
             }
+            if current.status == "UNCERTAIN" {
+                Text("Check the Sent folder in Gmail, then tell Nexdo what happened.").font(.footnote).foregroundStyle(.secondary)
+                Button("I found it in Sent mail") { Task { await store.perform { try await store.planAction(current, action: "sent") } } }.buttonStyle(.bordered)
+                Button("It wasn't sent") { Task { await store.perform { try await store.planAction(current, action: "failed") } } }
+            }
             if ["SENT","COPIED","SHARED"].contains(current.status) {
                 Button("Copy message") { UIPasteboard.general.string = current.body }
                 if let m = store.moments.first(where: { $0.drafts.contains { $0.id == current.draftID } }) { NavigationLink("Reuse next year") { ReviewWishView(moment: m) } }
