@@ -3,18 +3,21 @@ jest.mock('expo-router', () => ({ router: { push: (...args: unknown[]) => mockPu
 
 import { handleNotificationResponse } from '../../../actions/useActionNotifications';
 import { DISMISS_ACTION_IDENTIFIER } from '../../../actions/notifications';
-import { emailCallbackConnected } from '../device';
+import { emailCallbackTicket } from '../device';
 import { momentsStore } from '../store';
 import { draft, moment, plan, settings } from '../testFixtures';
 import { handleMomentNotification, routedDestination } from '../useMomentsLifecycle';
 
 describe('Gmail callback deep link', () => {
-  it('accepts only nexdo://moments-email?status=connected', () => {
-    expect(emailCallbackConnected('nexdo://moments-email?status=connected')).toBe(true);
-    expect(emailCallbackConnected('nexdo://moments-email?status=error')).toBe(false);
-    expect(emailCallbackConnected('nexdo://moments-email')).toBe(false);
-    expect(emailCallbackConnected('nexdo://other?status=connected')).toBe(false);
-    expect(emailCallbackConnected('https://example.com/moments-email?status=connected')).toBe(false);
+  it('returns the ticket only from nexdo://moments-email?status=confirm&ticket=…', () => {
+    expect(emailCallbackTicket('nexdo://moments-email?status=confirm&ticket=v1.a.b.c')).toBe('v1.a.b.c');
+    expect(emailCallbackTicket('nexdo://moments-email?status=confirm&ticket=v1.a%2Bb')).toBe('v1.a+b');
+    expect(emailCallbackTicket('nexdo://moments-email?status=confirm')).toBeNull();
+    expect(emailCallbackTicket('nexdo://moments-email?status=connected')).toBeNull();
+    expect(emailCallbackTicket('nexdo://moments-email?status=error')).toBeNull();
+    expect(emailCallbackTicket('nexdo://moments-email')).toBeNull();
+    expect(emailCallbackTicket('nexdo://other?status=confirm&ticket=v1.a')).toBeNull();
+    expect(emailCallbackTicket('https://example.com/moments-email?status=confirm&ticket=v1.a')).toBeNull();
   });
 });
 
