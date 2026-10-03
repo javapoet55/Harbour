@@ -5,8 +5,9 @@ import {MomentError} from '@/server/moments/domain';
 import {emailSchedule,saveEmailSchedule,pauseEmailSchedule} from '@/server/shopping/email-service';
 import {connectURL} from '@/server/moments/email';
 const headers={'Cache-Control':'private, no-store'};
-function failure(e:unknown){if(e instanceof ZodError||e instanceof SyntaxError)return Response.json({error:'Check the recipient, schedule, timezone, and sending permission.'},{status:400,headers});return e instanceof MomentError?Response.json({error:e.message},{status:e.status,headers}):jsonError(e)}
-export async function GET(req:Request){try{const user=await requireUser();const id=z.string().min(1).parse(new URL(req.url).searchParams.get('listId'));return Response.json(await emailSchedule(user.id,id),{headers})}catch(e){return failure(e)}}
+const missingList=()=>Response.json({error:'A shopping list ID is required.'},{status:400,headers});
+function failure(e:unknown){if(e instanceof ZodError&&e.issues.some(i=>i.path[0]==='listId'))return missingList();if(e instanceof ZodError||e instanceof SyntaxError)return Response.json({error:'Check the recipient, schedule, timezone, and sending permission.'},{status:400,headers});return e instanceof MomentError?Response.json({error:e.message},{status:e.status,headers}):jsonError(e)}
+export async function GET(req:Request){try{const user=await requireUser();const id=new URL(req.url).searchParams.get('listId');if(!id)return missingList();return Response.json(await emailSchedule(user.id,id),{headers})}catch(e){return failure(e)}}
 export async function POST(req:Request){try{
  const user=await requireUser();const text=await req.text();if(text.length>4000)return Response.json({error:'Request too large'},{status:413,headers});
  const body=z.object({listId:z.string().min(1),operation:z.enum(['save','pause','connect']),input:z.unknown().optional()}).parse(JSON.parse(text));

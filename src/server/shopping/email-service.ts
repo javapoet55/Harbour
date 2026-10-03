@@ -1,4 +1,5 @@
 import {prisma} from '@/server/db';
+import {log} from '@/lib/logger';
 import {MomentError} from '@/server/moments/domain';
 import {gmail,emailConfigured, type WishEmailProvider} from '@/server/moments/email';
 import {nextWeekly,scheduleInput,shoppingEmail} from './email-domain';
@@ -42,6 +43,16 @@ export async function pauseEmailSchedule(userId:string,listId:string){
   await tx.shoppingEmailRun.updateMany({where:{scheduleId:s.id,status:'pending'},data:{status:'cancelled',detail:'Schedule paused'}});
  });
 }
+// Used when the shared Gmail account is disconnected, so schedules don't keep showing as active.
+export const shoppingEmailSending=(userId:string)=>prisma.shoppingEmailRun.count({where:{status:'sending',schedule:{list:{userId}}}});
+export function stopShoppingEmails(userId:string){
+ return [
+  prisma.shoppingEmailRun.updateMany({where:{status:'pending',schedule:{list:{userId}}},data:{status:'cancelled',detail:'Gmail disconnected'}}),
+  prisma.shoppingEmailSchedule.updateMany({where:{enabled:true,list:{userId}},data:{enabled:false}}),
+ ] as const;
+}
+const RUN_RETENTION_MS=90*86400000, TERMINAL=['sent','skipped','cancelled','failed','uncertain','reconnect'];
+const errorName=(e:unknown)=>e instanceof Error?e.name:'Error';
 // Token refresh plus send can take ~35s, so new sends stop early enough to finish within the worker's 55s request timeout.
 const SEND_BUDGET_MS=20000, SEND_CONCURRENCY=5, QUEUE_BATCH=50;
 type DueSchedule={id:string;listId:string;recipient:string;recipientName:string;timeZone:string;weekday:number;hour:number;minute:number;nextRunAt:Date};
@@ -56,9 +67,16 @@ async function queueRun(s:DueSchedule,now:Date){
   await tx.shoppingEmailRun.create({data:{scheduleId:s.id,dueAt:s.nextRunAt,retryAt:now,recipient:s.recipient,subject:mail.subject,body:mail.body,status:skip?'skipped':'pending',detail:stale?'Missed run is more than 24 hours old':list.completedAt?'Shopping trip completed':mail.empty?'No unpurchased items':null}});
  });
 }
-async function sendNext(now:Date,provider:WishEmailProvider){
- const job=await prisma.shoppingEmailRun.findFirst({where:{status:'pending',retryAt:{lte:now},schedule:{enabled:true}},include:{schedule:{include:{list:true}}},orderBy:{retryAt:'asc'}});
+const findJob=(now:Date,failed:Set<string>)=>prisma.shoppingEmailRun.findFirst({where:{status:'pending',retryAt:{lte:now},schedule:{enabled:true},id:{notIn:[...failed]}},include:{schedule:{include:{list:true}}},orderBy:{retryAt:'asc'}});
+type Job=NonNullable<Awaited<ReturnType<typeof findJob>>>;
+// A job that errors is skipped for the rest of the tick; one stuck in 'sending' becomes 'uncertain' after 10 minutes.
+async function sendNext(now:Date,provider:WishEmailProvider,failed:Set<string>){
+ const job=await findJob(now,failed);
  if(!job)return 'empty';
+ try{return await send(job,now,provider)}
+ catch(e){failed.add(job.id);log('error','shopping_email_send_failed',{runId:job.id,error:errorName(e)});return 'error'}
+}
+async function send(job:Job,now:Date,provider:WishEmailProvider){
  const claim=await prisma.$transaction(async tx=>{
   const lock=await tx.shoppingEmailSchedule.updateMany({where:{id:job.scheduleId,enabled:true},data:{updatedAt:now}});
   if(!lock.count)return {count:0};
@@ -66,24 +84,28 @@ async function sendNext(now:Date,provider:WishEmailProvider){
  });if(!claim.count)return 'claimed';
  const result=await provider.send(job.schedule.list.userId,job.recipient,job.subject,job.body,job.id).catch(()=>({kind:'uncertain' as const,error:'Delivery could not be verified. Check your Gmail Sent folder.'}));
  const retry=result.kind==='retry'&&job.attempts<2&&now.getTime()-job.dueAt.getTime()<24*3600000;
- await prisma.shoppingEmailRun.update({where:{id:job.id},data:{status:retry?'pending':result.kind==='retry'?'failed':result.kind==='permanent'?'failed':result.kind,providerId:result.kind==='sent'?result.id:null,detail:result.kind==='sent'?'Accepted by Gmail; store confirmation is separate.':result.error,retryAt:new Date(now.getTime()+5*60000)}});
- if(result.kind==='reconnect')await prisma.shoppingEmailSchedule.update({where:{id:job.scheduleId},data:{enabled:false}});
+ await prisma.shoppingEmailRun.update({where:{id:job.id},data:{status:retry?'pending':result.kind==='retry'?'failed':result.kind==='permanent'?'failed':result.kind,providerId:result.kind==='sent'?result.id:null,detail:result.kind==='sent'?'Accepted by Gmail; store confirmation is separate.':result.kind==='permanent'?`${result.error} Check the recipient, then save the schedule to resume.`:result.error,retryAt:new Date(now.getTime()+5*60000)}});
+ // Retrying a rejected address or revoked access every week would fail the same way; the user must re-save.
+ if(result.kind==='reconnect'||result.kind==='permanent')await prisma.shoppingEmailSchedule.update({where:{id:job.scheduleId},data:{enabled:false}});
  return 'processed';
 }
 export async function runShoppingEmails(now=new Date(),provider:WishEmailProvider=gmail,budgetMs=SEND_BUDGET_MS){
  if(!active())return {processed:0};
  // A crashed sender may already have submitted: do not risk sending the same email twice.
  await prisma.shoppingEmailRun.updateMany({where:{status:'sending',updatedAt:{lt:new Date(now.getTime()-10*60000)}},data:{status:'uncertain',detail:'Delivery could not be verified. Check your Gmail Sent folder.'}});
- // Every queued schedule moves to next week, so this drains all due schedules.
+ await prisma.shoppingEmailRun.deleteMany({where:{status:{in:TERMINAL},retryAt:{lt:new Date(now.getTime()-RUN_RETENTION_MS)}}});
+ // Every queued schedule moves to next week, so this drains all due schedules. A schedule that errors is
+ // left due for the next tick and skipped for the rest of this one, so it cannot hold up everyone else.
+ const failedSchedules:string[]=[];
  for(;;){
-  const due=await prisma.shoppingEmailSchedule.findMany({where:{enabled:true,nextRunAt:{lte:now}},take:QUEUE_BATCH,orderBy:{nextRunAt:'asc'}});
-  for(const s of due)await queueRun(s,now);
+  const due=await prisma.shoppingEmailSchedule.findMany({where:{enabled:true,nextRunAt:{lte:now},id:{notIn:failedSchedules}},take:QUEUE_BATCH,orderBy:{nextRunAt:'asc'}});
+  for(const s of due)await queueRun(s,now).catch(e=>{failedSchedules.push(s.id);log('error','shopping_email_queue_failed',{scheduleId:s.id,error:errorName(e)})});
   if(due.length<QUEUE_BATCH)break;
  }
  await prisma.shoppingEmailRun.updateMany({where:{status:'pending',dueAt:{lt:new Date(now.getTime()-24*3600000)}},data:{status:'skipped',detail:'Queued email is more than 24 hours old'}});
- const deadline=Date.now()+budgetMs;let processed=0;
+ const deadline=Date.now()+budgetMs,failedRuns=new Set<string>();let processed=0;
  await Promise.all(Array.from({length:SEND_CONCURRENCY},async()=>{
-  while(Date.now()<deadline){const r=await sendNext(now,provider);if(r==='empty')return;if(r==='processed')processed++;}
+  while(Date.now()<deadline){const r=await sendNext(now,provider,failedRuns);if(r==='empty')return;if(r==='processed')processed++;}
  }));
  return {processed};
 }

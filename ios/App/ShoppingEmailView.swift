@@ -100,8 +100,11 @@ struct ShoppingEmailView: View {
     private func displayDate(_ text: String) -> String {
         let f = ISO8601DateFormatter(); f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         guard let date = f.date(from: text) else { return text }
-        let out = DateFormatter(); out.dateStyle = .medium; out.timeStyle = .short; out.timeZone = TimeZone(identifier: zone)
-        return out.string(from: date) + " (\(zone))"
+        // Use the saved schedule's timezone, not the one being edited in the field.
+        let saved = snapshot?.schedule?.timeZone ?? zone
+        let timeZone = TimeZone(identifier: saved) ?? .current
+        let out = DateFormatter(); out.dateStyle = .medium; out.timeStyle = .short; out.timeZone = timeZone
+        return out.string(from: date) + " (\(timeZone.identifier))"
     }
     @MainActor private func load() async {
         busy = true; defer { busy = false }

@@ -14,6 +14,7 @@ export async function connectURL(userID: string) {
 }
 async function token(params: Record<string,string>) {
   const res=await observedFetch('https://oauth2.googleapis.com/token',{method:'POST',signal:AbortSignal.timeout(15000),body:new URLSearchParams({client_id:process.env.MOMENTS_GOOGLE_CLIENT_ID!,client_secret:process.env.MOMENTS_GOOGLE_CLIENT_SECRET!,...params})});
+  if (res.status===429||res.status>=500) throw new MomentError('Gmail is temporarily unavailable. Try again shortly.',503);
   if (!res.ok) throw new MomentError('Reconnect your email account.',409);
   return await res.json() as {access_token:string; refresh_token?:string};
 }
@@ -66,9 +67,14 @@ export const gmail: WishEmailProvider = {
  async send(userId,recipient,subject,body,key,extras) {
   const account=await prisma.momentEmailAccount.findUnique({where:{userId}});
   if(!account||account.status!=='connected') return {kind:'reconnect',error:'Reconnect your email account.'};
+  const reconnect=async():Promise<EmailResult>=>{ await prisma.momentEmailAccount.update({where:{userId},data:{status:'reconnect'}}); return {kind:'reconnect',error:'Reconnect your email account.'}; };
+  let refresh:string|null;
+  try { refresh=decryptCredential(account.refreshToken); } catch { return reconnect(); }
+  if(!refresh) return reconnect();
   let access:string;
-  try { access=(await token({grant_type:'refresh_token',refresh_token:decryptCredential(account.refreshToken)!})).access_token; }
-  catch { await prisma.momentEmailAccount.update({where:{userId},data:{status:'reconnect'}}); return {kind:'reconnect',error:'Reconnect your email account.'}; }
+  // Only a definite rejection of the saved grant needs the user; outages and timeouts are retried. Nothing was submitted yet.
+  try { access=(await token({grant_type:'refresh_token',refresh_token:refresh})).access_token; }
+  catch(e) { return e instanceof MomentError&&e.status===409 ? reconnect() : {kind:'retry',error:'Gmail was temporarily unavailable. Will retry.'}; }
   // Never retry an ambiguous submission: Gmail send has no idempotency-key guarantee.
   try {
     const raw=buildWishMessage({recipient,subject,body,key,card:extras?.card,signature:extras?.signature});
