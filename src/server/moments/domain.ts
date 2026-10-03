@@ -40,7 +40,7 @@ export function fallback(firstName: string, type: string, tone: string, version=
 }
 export const editableStatuses = ['SCHEDULED','AWAITING_CONFIRMATION','FAILED'];
 export function mayTransition(from: string, to: string) {
-  const transitions: Record<string,string[]> = {SCHEDULED:['SENDING','CANCELLED','FAILED','EXPIRED'], AWAITING_CONFIRMATION:['SENT','CANCELLED','FAILED','COPIED','SHARED','EXPIRED'], SENDING:['SENT','FAILED','SCHEDULED','UNCERTAIN'], FAILED:['CANCELLED','SCHEDULED']};
+  const transitions: Record<string,string[]> = {SCHEDULED:['SENDING','CANCELLED','FAILED','EXPIRED'], AWAITING_CONFIRMATION:['SENT','CANCELLED','FAILED','COPIED','SHARED','EXPIRED'], SENDING:['SENT','FAILED','SCHEDULED','UNCERTAIN'], FAILED:['CANCELLED','SCHEDULED'], UNCERTAIN:['SENT','FAILED']};
   return transitions[from]?.includes(to) ?? false;
 }
 export class MomentError extends Error { constructor(message: string, public status=400) { super(message); } }

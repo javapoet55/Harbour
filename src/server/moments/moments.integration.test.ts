@@ -226,3 +226,39 @@ it('creates next year\'s email right after sending a yearly wish',async()=>{
  await sendDueEmails({send:async()=>({kind:'sent',id:'yearly'})},new Date(),{id:p.id});
  expect(await prisma.deliveryPlan.findUnique({where:{idempotencyKey:`${p.id}:annual`}})).not.toBeNull();
 });
+it('lets the user settle a "Check Sent mail" email, freeing the person for new wishes',async()=>{
+ const sent=await plan('email',true),notSent=await plan('email',true);
+ await prisma.deliveryPlan.updateMany({where:{id:{in:[sent.id,notSent.id]}},data:{status:'UNCERTAIN'}});
+ await prisma.deliveryPlan.update({where:{id:sent.id},data:{repeatYearly:true}});
+ await changePlan(userId,{id:sent.id,action:'sent'});
+ expect((await prisma.deliveryPlan.findUniqueOrThrow({where:{id:sent.id}})).status).toBe('SENT');
+ expect(await prisma.deliveryPlan.findUnique({where:{idempotencyKey:`${sent.id}:annual`}})).not.toBeNull();
+ await changePlan(userId,{id:notSent.id,action:'failed'});
+ expect((await prisma.deliveryPlan.findUniqueOrThrow({where:{id:notSent.id}})).status).toBe('FAILED');
+ await changePlan(userId,{id:notSent.id,action:'cancel'});
+ const momentID=(await prisma.wishDraft.findUniqueOrThrow({where:{id:notSent.draftID}})).momentID;
+ const {draft}=await generateDraft(userId,{momentID,tone:'Warm'});await approveDraft(userId,{id:draft.id,body:draft.body,approved:true});
+ await expect(schedule(userId,{draftID:draft.id,channel:'email',recipient:'test@example.com',scheduledAtUTC:new Date(Date.now()+3600000).toISOString(),timeZoneID:'America/Los_Angeles',automaticDelivery:true,reminderOffset:0,repeatYearly:false,idempotencyKey:randomUUID(),approved:true})).resolves.toMatchObject({status:'SCHEDULED'});
+});
+it('gives a user Retry a fresh set of attempts after automatic retries ran out',async()=>{
+ const p=await plan('email',true);await prisma.deliveryPlan.update({where:{id:p.id},data:{status:'FAILED',attempts:4}});
+ await changePlan(userId,{id:p.id,action:'retry'});
+ expect((await prisma.deliveryPlan.findUniqueOrThrow({where:{id:p.id}})).attempts).toBe(0);
+ let calls=0;await runJobs({send:async()=>{calls++;return {kind:'sent',id:'fresh'};}},p.id);
+ expect(calls).toBe(1);
+});
+it('carries a yearly wish on to next year when this year fails or expires, but not when cancelled',async()=>{
+ const failed=await plan('email',true),expired=await plan(),cancelled=await plan('email',true);
+ await prisma.deliveryPlan.updateMany({where:{id:{in:[failed.id,expired.id,cancelled.id]}},data:{repeatYearly:true}});
+ await prisma.deliveryPlan.update({where:{id:failed.id},data:{nextAttemptAt:new Date(0)}});
+ await runJobs({send:async()=>({kind:'reconnect',error:'Reconnect your email account.'})},failed.id);
+ await prisma.deliveryPlan.update({where:{id:expired.id},data:{scheduledAtUTC:new Date(Date.now()-2*86400000)}});
+ await listMoments(userId);
+ await changePlan(userId,{id:cancelled.id,action:'cancel'});
+ const next=(id:string)=>prisma.deliveryPlan.findUnique({where:{idempotencyKey:`${id}:annual`}});
+ expect((await prisma.deliveryPlan.findUniqueOrThrow({where:{id:failed.id}})).status).toBe('FAILED');
+ expect(await next(failed.id)).toMatchObject({status:'SCHEDULED',automaticDelivery:true});
+ expect((await prisma.deliveryPlan.findUniqueOrThrow({where:{id:expired.id}})).status).toBe('EXPIRED');
+ expect(await next(expired.id)).toMatchObject({status:'AWAITING_CONFIRMATION'});
+ expect(await next(cancelled.id)).toBeNull();
+});
