@@ -16,7 +16,7 @@ The tick processes one send per call to bound provider timeouts. At higher volum
 ## Semantics
 
 - Sends only unchecked items from a snapshot at the due time, including quantities, sizes and notes. No attachments or view-only link are sent.
-- A completed weekly trip transfers its schedule to the newly generated list. Manually copying a list does not copy the authorization.
+- A completed weekly trip transfers its schedule to the newly generated list. If the trip is completed before that week's email goes out, that week is recorded as skipped and the new list is first emailed at the following weekly time. Manually copying a list does not copy the authorization.
 - Empty/completed lists are skipped. Runs missed by over 24 hours are skipped instead of sending stale groceries.
 - Local weekly calculation respects daylight saving; nonexistent local times are skipped that week.
 - Definitive provider rate limits retry after five minutes, up to three attempts. Pending retries retain the original snapshot.

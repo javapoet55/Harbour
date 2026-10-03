@@ -2,6 +2,7 @@ import {randomUUID,randomBytes,createHash} from 'node:crypto';
 import {prisma} from '@/server/db';
 import {z} from 'zod';
 import {listInput,nextShoppingDate,parseShopping} from './domain';
+import {nextWeekly} from './email-domain';
 import {MomentError} from '@/server/moments/domain';
 import {recommendShoppingAlternatives} from './alternatives';
 const include={items:{orderBy:{sortOrder:'asc' as const}}};
@@ -36,7 +37,15 @@ export async function shoppingAction(userId:string,raw:unknown,idempotencyKey?:s
    if(!list.weekly)return {list:await tx.shoppingList.findUnique({where:{id:list.id},include})};
    const today=new Intl.DateTimeFormat('en-CA',{timeZone:list.timeZone,year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
    const nextList=await tx.shoppingList.create({data:{userId,title:list.title,date:nextShoppingDate(list.date,today),timeZone:list.timeZone,weekly:true,generatedFrom:list.id,items:{create:list.items.map((i,sortOrder)=>({id:randomUUID(),name:i.name,category:i.category,quantity:i.quantity,size:i.size,notes:i.notes,imageData:i.imageData,brand:i.brand,barcode:i.barcode,favorite:i.favorite,favoriteAlternatives:i.favoriteAlternatives??undefined,checked:false,sortOrder}))}},include});
-   await tx.shoppingEmailSchedule.updateMany({where:{listId:list.id},data:{listId:nextList.id}});
+   await tx.shoppingEmailSchedule.updateMany({where:{listId:list.id},data:{updatedAt:new Date()}});
+   const schedule=await tx.shoppingEmailSchedule.findUnique({where:{listId:list.id}});
+   if(schedule){
+    // A trip finished before its email went out skips that week instead of emailing next week's list early.
+    const attached=new Date(Math.max(list.createdAt.getTime(),schedule.createdAt.getTime()));
+    const skip=schedule.enabled&&!await tx.shoppingEmailRun.count({where:{scheduleId:schedule.id,dueAt:{gte:attached}}});
+    if(skip)await tx.shoppingEmailRun.create({data:{scheduleId:schedule.id,dueAt:schedule.nextRunAt,retryAt:schedule.nextRunAt,status:'skipped',recipient:schedule.recipient,subject:`Shopping list: ${list.title}`,body:'',detail:'Shopping trip completed before the scheduled email'}});
+    await tx.shoppingEmailSchedule.update({where:{id:schedule.id},data:{listId:nextList.id,...(skip?{nextRunAt:nextWeekly(new Date(Math.max(Date.now(),schedule.nextRunAt.getTime())),schedule)}:{})}});
+   }
    return {list:nextList};
   }
   if(list.completedAt)throw new MomentError('Copy this completed list to make changes.');

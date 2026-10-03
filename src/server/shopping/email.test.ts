@@ -56,6 +56,23 @@ it('moves a weekly schedule to the next list when completing a trip',async()=>{
  if(!('list' in result)||!result.list)throw Error('Missing next list');
  expect((await prisma.shoppingEmailSchedule.findUniqueOrThrow({where:{id:schedule.id}})).listId).toBe(result.list.id);await pauseEmailSchedule(userId,result.list.id);
 });
+it('skips that week when the trip is completed before the email goes out',async()=>{
+ const {list,schedule}=await setup();const p={send:vi.fn(async()=>({kind:'sent' as const,id:'early'}))};
+ const result=await shoppingAction(userId,{operation:'complete',id:list.id,revision:0});if(!('list' in result)||!result.list)throw Error('Missing next list');
+ const moved=await prisma.shoppingEmailSchedule.findUniqueOrThrow({where:{id:schedule.id},include:{runs:true}});
+ expect(moved.listId).toBe(result.list.id);expect(moved.nextRunAt.toISOString()).toBe('2030-01-12T18:00:00.000Z');
+ expect(moved.runs.map(r=>[r.status,r.dueAt.toISOString()])).toEqual([['skipped','2030-01-05T18:00:00.000Z']]);
+ await runShoppingEmails(now,p);expect(p.send).not.toHaveBeenCalled();await pauseEmailSchedule(userId,result.list.id);
+});
+it('keeps the next weekly time when the email went out before the trip was completed',async()=>{
+ const {list,schedule}=await setup();await runShoppingEmails(now,provider);
+ const result=await shoppingAction(userId,{operation:'complete',id:list.id,revision:0});if(!('list' in result)||!result.list)throw Error('Missing next list');
+ expect((await prisma.shoppingEmailSchedule.findUniqueOrThrow({where:{id:schedule.id}})).nextRunAt.toISOString()).toBe('2030-01-12T18:00:00.000Z');
+ await prisma.shoppingEmailSchedule.updateMany({where:{list:{userId},id:{not:schedule.id}},data:{enabled:false}});
+ await runShoppingEmails(new Date('2030-01-12T18:00:00Z'),provider);
+ const next=await prisma.shoppingEmailRun.findFirstOrThrow({where:{scheduleId:schedule.id,dueAt:new Date('2030-01-12T18:00:00Z')}});
+ expect(next.status).toBe('sent');expect(next.body).toContain('Milk');await pauseEmailSchedule(userId,result.list.id);
+});
 it('marks abandoned sends uncertain rather than submitting twice',async()=>{
  const {schedule}=await setup();await prisma.shoppingEmailSchedule.update({where:{id:schedule.id},data:{nextRunAt:nextWeekly(now,settings)}});
  await prisma.shoppingEmailRun.create({data:{scheduleId:schedule.id,dueAt:now,retryAt:now,recipient:settings.recipient,subject:'Test',body:'Test',status:'sending',updatedAt:new Date(now.getTime()-11*60000)}});
