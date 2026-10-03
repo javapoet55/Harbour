@@ -221,6 +221,8 @@ struct ShoppingDetail:View {
     @State private var alternativesFor:GroceryItem?
     @State private var parseBusy=false
     @State private var error:String?
+    @Environment(\.scenePhase) private var offersScenePhase
+    @State private var offers:ShoppingOffersSnapshot?
     @State private var selectedCategory="All"
     @FocusState private var quickAddFocused:Bool
     init(store:ShoppingStore,initial:GroceryList){self.store=store;_list=State(initialValue:initial)}
@@ -243,6 +245,12 @@ struct ShoppingDetail:View {
                 }
                 HStack{shoppingIcon;VStack(alignment:.leading){Text(list.title).font(.title2.bold());Text("\(list.items.count-list.remaining) added · \(GroceryList.itemCount(list.items.count))").foregroundStyle(.secondary)}}
                     .listRowInsets(EdgeInsets(top:0,leading:16,bottom:3,trailing:16)).listRowBackground(Color.clear).listRowSeparator(.hidden)
+                NavigationLink {
+                    ShoppingOffersView(store:store,list:list,onUpdate:{list=$0})
+                } label: {
+                    Label("View offers" + (offers.map { " (\($0.matches.count))" } ?? ""),systemImage:"tag")
+                        .font(.subheadline.weight(.semibold)).foregroundStyle(Color.nexdoIndigo)
+                }.accessibilityIdentifier("shopping-view-offers")
                 HStack(spacing:8){
                         Button{
                             if quick.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty {quickAddFocused=true}else{quickAdd()}
@@ -286,9 +294,33 @@ struct ShoppingDetail:View {
             }
             if !list.items.isEmpty {
                 Section {
+                    if !readOnly {
+                        HStack(spacing: 16) {
+                            Button("Select All") { setAllItemsChecked(true) }
+                                .disabled(list.remaining == 0)
+                                .accessibilityIdentifier("shopping-select-all")
+                            Spacer(minLength: 8)
+                            Button("Unselect All") { setAllItemsChecked(false) }
+                                .disabled(list.remaining == list.items.count)
+                                .accessibilityIdentifier("shopping-unselect-all")
+                        }
+                        .font(.subheadline.weight(.semibold))
+                        .tint(Color.nexdoBlue)
+                        .buttonStyle(.borderless)
+                        .frame(minHeight: 44)
+                    }
                     ForEach(visibleItems){row in
-                        GroceryRow(row:row,readOnly:false,onToggle:{toggle(row)},onEdit:{item=row},onAlternatives:{alternativesFor=row})
-                            .swipeActions{Button("Delete",role:.destructive){delete(row)}}
+                        VStack(alignment:.leading,spacing:6) {
+                            GroceryRow(row:row,readOnly:readOnly,onToggle:{toggle(row)},onEdit:{item=row},onAlternatives:{alternativesFor=row})
+                            NavigationLink {
+                                ShoppingOffersView(store:store,list:list,itemId:row.id,onUpdate:{list=$0})
+                            } label: {
+                                Label(ShoppingOffersSnapshot.badge(offers?.matches.filter{$0.itemId==row.id},selected:row.chosenOffer),systemImage:"tag")
+                                    .font(.caption.weight(.semibold)).foregroundStyle(Color.nexdoBlue)
+                                    .padding(.horizontal,10).padding(.vertical,7)
+                                    .background(Color.nexdoBlue.opacity(0.08),in:Capsule())
+                            }.accessibilityLabel("Offers for \(row.name)")
+                        }.swipeActions{Button("Delete",role:.destructive){delete(row)}.disabled(readOnly)}
                     }
                 }
             }
@@ -303,7 +335,7 @@ struct ShoppingDetail:View {
                 ToolbarItem(placement:.topBarTrailing){Menu{
                     Button("List settings"){settings=true}.disabled(readOnly)
                     Button("Copy list"){copy=true}
-                    if !readOnly {Button("Uncheck all"){var next=list;next.items=next.items.map{var i=$0;i.checked=false;return i};save(next)}}
+                    if !readOnly {Button("Unselect All"){setAllItemsChecked(false)}.disabled(list.remaining == list.items.count)}
                     Button("Delete list",role:.destructive){deleting=true}
                 }label:{Image(systemName:"ellipsis")}.accessibilityLabel("List options")}
             }
@@ -315,6 +347,13 @@ struct ShoppingDetail:View {
             }
             .sheet(isPresented:$voice){ShoppingVoiceView(store:store){items in var next=list;next.items.append(contentsOf:items);save(next)}}
             .sheet(isPresented:$copy){NewShoppingList(store:store,source:list){list=$0}}
+            .task(id:"\(list.revision)-\(offersScenePhase)"){
+                guard offersScenePhase == .active else{return}
+                repeat {
+                    offers = try? await store.api.request("/api/shopping/offers?listId=\(list.id.addingPercentEncoding(withAllowedCharacters:.urlQueryAllowed) ?? list.id)")
+                    do{try await Task.sleep(for:.seconds(60))}catch{return}
+                } while !Task.isCancelled
+            }
             .sheet(isPresented:$settings){ShoppingSettings(initial:list){save($0)}}
             .sheet(isPresented:$sharing){ShoppingShare(store:store,list:list){list=$0}}
             .sheet(isPresented:$recommendations){AskNexdoView(textPage:true,shoppingContext:ShoppingRecommendationContext(listName:list.title,itemNames:list.items.map(\.name)))}
@@ -349,6 +388,14 @@ struct ShoppingDetail:View {
                 .accessibilityIdentifier("shopping-ai-recommendations")
         }.padding(.horizontal,16).padding(.vertical,10)
             .background(.ultraThinMaterial).overlay(alignment:.top){Divider().opacity(0.5)}
+    }
+    private func setAllItemsChecked(_ checked: Bool) {
+        guard !readOnly, !store.busy else { return }
+        var next = list
+        // Apply to the whole list, including items hidden by a category filter.
+        for index in next.items.indices { next.items[index].checked = checked }
+        guard next != list else { return }
+        save(next)
     }
     private func toggleItem(_ item: GroceryItem) {
         var next = list
@@ -527,7 +574,7 @@ private struct ShoppingCompletionView:View {
     }
 }
 
-private struct ShoppingSettings:View {
+struct ShoppingSettings:View {
     @Environment(\.dismiss) private var dismiss
     @State var initial:GroceryList
     let onSave:(GroceryList)->Void
@@ -536,7 +583,15 @@ private struct ShoppingSettings:View {
         DatePicker("Shopping date",selection:Binding(get:{MomentDates.date(initial.date,zone:initial.timeZone)},set:{initial.date=MomentDates.day($0,zone:initial.timeZone)}),displayedComponents:.date)
         Toggle("Repeat weekly",isOn:$initial.weekly)
         Text("Next week’s list is created when you complete this trip.")
-    }.navigationTitle("List Settings").toolbar{Button("Save"){onSave(initial);dismiss()}.disabled(initial.title.trimmingCharacters(in:.whitespaces).isEmpty)}}}
+        Section {
+            TextField("Store name",text:Binding(get:{initial.storeName ?? ""},set:{initial.storeName=$0}))
+            TextField("Street address, city, state",text:Binding(get:{initial.storeAddress ?? ""},set:{initial.storeAddress=$0}))
+                .textContentType(.fullStreetAddress)
+            TextField("ZIP code",text:Binding(get:{initial.storeZip ?? ""},set:{initial.storeZip=$0}))
+                .keyboardType(.numbersAndPunctuation).textContentType(.postalCode)
+        } header: {Text("Store details")} footer: {Text("Used to find offers for your store location. Verified sources are required; some stores are not available yet.")}
+
+    }.navigationTitle("List Settings").toolbar{Button("Save"){onSave(initial);dismiss()}.disabled(initial.title.trimmingCharacters(in:.whitespaces).isEmpty || (!(initial.storeZip ?? "").isEmpty && (initial.storeZip ?? "").range(of:"^[0-9]{5}(-[0-9]{4})?$",options:.regularExpression)==nil))}}}
 }
 private struct ShoppingShare:View {
     @ObservedObject var store:ShoppingStore

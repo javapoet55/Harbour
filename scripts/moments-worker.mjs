@@ -34,5 +34,11 @@ while (!stopping) {
     console.log(`Shopping email tick: HTTP ${response.status}`);
     await response.body?.cancel();
   } catch { console.error('Shopping email tick failed; retrying on next cycle'); }
+  // Database lease/due date ensures one daily collection per shared offer region.
+  try {
+    const response = await fetch(new URL('/api/shopping/offers-tick', base), {method:'POST', redirect:'error', headers:{Authorization:`Bearer ${secret}`}, signal:AbortSignal.timeout(30000)});
+    console.log(`Shopping offers tick: HTTP ${response.status}`);
+    await response.body?.cancel();
+  } catch { console.error('Shopping offers check failed; retrying on next cycle'); }
   if (!stopping) await delay(Math.max(1000, 60000 - (Date.now() - started)));
 }

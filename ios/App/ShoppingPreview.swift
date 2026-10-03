@@ -20,6 +20,10 @@ final class ShoppingPreviewProtocol:URLProtocol,@unchecked Sendable {
         if ProcessInfo.processInfo.arguments.contains("-shopping-photo-preview") {
             items[0].imageData=UIImage(named:"grocery-banana")?.pngData()?.base64EncodedString()
         }
+        if ProcessInfo.processInfo.arguments.contains("-shopping-offers-preview") {
+            items[0] = .init(name:"Starbucks Ground Coffee",category:"Drinks",size:"12 oz")
+            items[0].brand = "Starbucks"
+        }
         let encoded=(try! JSONSerialization.jsonObject(with:JSONEncoder().encode(items))) as! [[String:Any]]
         lists=[["id":"preview-list","title":"Weekly Shopping List","date":MomentDates.day(Date().addingTimeInterval(2*86400),zone:"America/Los_Angeles"),"timeZone":"America/Los_Angeles","weekly":true,"revision":0,"items":encoded]]
     }
@@ -27,6 +31,14 @@ final class ShoppingPreviewProtocol:URLProtocol,@unchecked Sendable {
         Self.lock.lock();defer{Self.lock.unlock()}
         var response:[String:Any]=["lists":Self.lists]
         var status = 200
+        if request.url?.path == "/api/shopping/offers", request.httpMethod != "POST" {
+            let item=(Self.lists.first?["items"] as? [[String:Any]])?.first ?? [:]
+            let date=ISO8601DateFormatter().string(from:Date())
+            response=["status":"Design preview only — sample offers, not live store prices.","lastCheckedAt":date,"sourceURL":"https://www.costco.com/o/-/warehouse-savings","matches":[[
+                "itemId":item["id"] ?? "", "itemName":item["name"] ?? "Coffee", "category":"matching", "reasons":["Matches your Starbucks brand","Matches requested size: 12 oz"],"differences":[],"selected":false,
+                "offer":["id":"preview-offer","product":"Starbucks Ground Coffee","brand":"Starbucks","packageSize":"12 oz","price":"$7.99","savings":"$2 off","store":"Sample store","conditions":"Design preview only. Sample offer and pricing.","sourceURL":"https://www.costco.com/o/-/warehouse-savings","startsAt":date,"expiresAt":ISO8601DateFormatter().string(from:Date().addingTimeInterval(7*86400)),"checkedAt":date]
+            ]]]
+        }
         if request.httpMethod=="POST"{
             var data=request.httpBody
             if data==nil,let stream=request.httpBodyStream{
@@ -70,6 +82,11 @@ final class ShoppingPreviewProtocol:URLProtocol,@unchecked Sendable {
                 if operation=="delete"{Self.lists.remove(at:index);response=[:]}
             }
         }
+        if request.url?.path == "/api/shopping/email-schedule" {
+            // Debug-only visual fixture; never uses a real account or sends email.
+            response = ["available": true, "account": ["email": "demo@example.com", "status": "connected"],
+                        "schedule": ["recipient": "store@example.com", "recipientName": "Store manager", "timeZone": "America/Los_Angeles", "weekday": 6, "hour": 10, "minute": 0, "enabled": true, "nextRunAt": "2026-10-10T17:00:00.000Z", "runs": []]]
+        }
         let data=try! JSONSerialization.data(withJSONObject:response)
         client?.urlProtocol(self,didReceive:HTTPURLResponse(url:request.url!,statusCode:status,httpVersion:nil,headerFields:["Content-Type":"application/json"])!,cacheStoragePolicy:.notAllowed)
         client?.urlProtocol(self,didLoad:data);client?.urlProtocolDidFinishLoading(self)
@@ -83,6 +100,17 @@ struct ShoppingDesignPreview:View {
         let config=URLSessionConfiguration.ephemeral;config.protocolClasses=[ShoppingPreviewProtocol.self]
         _store=StateObject(wrappedValue:ShoppingStore(api:try! APIClient(baseURL:URL(string:"https://shopping-preview.invalid")!,configuration:config)))
     }
-    var body:some View {NavigationStack{ShoppingHome(store:store)}.tint(.nexdoIndigo)}
+    var body:some View {
+        NavigationStack {
+            if ProcessInfo.processInfo.arguments.contains("-shopping-email-preview") {
+                Group {
+                    if let list = store.lists.first { ShoppingEmailView(store: store, list: list) }
+                    else { ProgressView() }
+                }.task { await store.refresh() }
+            } else if ProcessInfo.processInfo.arguments.contains("-shopping-offers-preview") {
+                Group {if let list=store.lists.first {ShoppingOffersView(store:store,list:list,onUpdate:{_ in})}else{ProgressView()}}.task{await store.refresh()}
+            } else { ShoppingHome(store:store) }
+        }.tint(.nexdoIndigo)
+    }
 }
 #endif

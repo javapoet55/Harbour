@@ -44,7 +44,7 @@ export async function shoppingAction(userId:string,raw:unknown,idempotencyKey?:s
     return {list:await tx.shoppingList.findUnique({where:{id:list.id},include})};
    }
    const today=new Intl.DateTimeFormat('en-CA',{timeZone:list.timeZone,year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
-   const nextList=await tx.shoppingList.create({data:{userId,title:list.title,date:nextShoppingDate(list.date,today),timeZone:list.timeZone,weekly:true,generatedFrom:list.id,items:{create:list.items.map((i,sortOrder)=>({id:randomUUID(),name:i.name,category:i.category,quantity:i.quantity,size:i.size,notes:i.notes,imageData:i.imageData,brand:i.brand,barcode:i.barcode,favorite:i.favorite,favoriteAlternatives:i.favoriteAlternatives??undefined,checked:false,sortOrder}))}},include});
+   const nextList=await tx.shoppingList.create({data:{userId,title:list.title,storeName:list.storeName,storeAddress:list.storeAddress,storeZip:list.storeZip,date:nextShoppingDate(list.date,today),timeZone:list.timeZone,weekly:true,generatedFrom:list.id,items:{create:list.items.map((i,sortOrder)=>({id:randomUUID(),name:i.name,category:i.category,quantity:i.quantity,size:i.size,notes:i.notes,imageData:i.imageData,brand:i.brand,barcode:i.barcode,favorite:i.favorite,favoriteAlternatives:i.favoriteAlternatives??undefined,checked:false,sortOrder}))}},include});
    await tx.shoppingEmailSchedule.updateMany({where:{listId:list.id},data:{updatedAt:new Date()}});
    const schedule=await tx.shoppingEmailSchedule.findUnique({where:{listId:list.id}});
    if(schedule){
@@ -60,6 +60,6 @@ export async function shoppingAction(userId:string,raw:unknown,idempotencyKey?:s
   const {items,...data}=listInput.parse(p.input);
   await tx.shoppingItem.deleteMany({where:{listId:list.id}});
   // Preserve IDs already owned by this list; never accept IDs from another list.
-  return {list:await tx.shoppingList.update({where:{id:list.id},data:{...data,items:{create:items.map((i,sortOrder)=>({...i,imageData:i.imageData === undefined ? list.items.find(old=>old.id===i.id)?.imageData ?? null : i.imageData,id:list.items.some(old=>old.id===i.id)?i.id:randomUUID(),sortOrder}))}},include})};
+  return {list:await tx.shoppingList.update({where:{id:list.id},data:{...data,items:{create:items.map((i,sortOrder)=>({...i,chosenOffer:list.items.find(old=>old.id===i.id && old.name===i.name && old.size===i.size && old.notes===i.notes && (old.brand??undefined)===i.brand && (data.storeName===undefined || data.storeName===list.storeName) && (data.storeZip===undefined || data.storeZip===list.storeZip))?.chosenOffer ?? undefined,imageData:i.imageData === undefined ? list.items.find(old=>old.id===i.id)?.imageData ?? null : i.imageData,id:list.items.some(old=>old.id===i.id)?i.id:randomUUID(),sortOrder}))}},include})};
  });
 }
