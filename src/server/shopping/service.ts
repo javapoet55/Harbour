@@ -34,7 +34,15 @@ export async function shoppingAction(userId:string,raw:unknown,idempotencyKey?:s
   if(p.operation==='complete'){
    if(list.completedAt)return {list};
    await tx.shoppingList.update({where:{id:list.id},data:{completedAt:new Date()}});
-   if(!list.weekly)return {list:await tx.shoppingList.findUnique({where:{id:list.id},include})};
+   if(!list.weekly){
+    // A one-off list has no next trip, so its email schedule ends with it.
+    const schedule=await tx.shoppingEmailSchedule.findUnique({where:{listId:list.id}});
+    if(schedule){
+     await tx.shoppingEmailSchedule.update({where:{id:schedule.id},data:{enabled:false}});
+     await tx.shoppingEmailRun.updateMany({where:{scheduleId:schedule.id,status:'pending'},data:{status:'cancelled',detail:'Shopping trip completed'}});
+    }
+    return {list:await tx.shoppingList.findUnique({where:{id:list.id},include})};
+   }
    const today=new Intl.DateTimeFormat('en-CA',{timeZone:list.timeZone,year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
    const nextList=await tx.shoppingList.create({data:{userId,title:list.title,date:nextShoppingDate(list.date,today),timeZone:list.timeZone,weekly:true,generatedFrom:list.id,items:{create:list.items.map((i,sortOrder)=>({id:randomUUID(),name:i.name,category:i.category,quantity:i.quantity,size:i.size,notes:i.notes,imageData:i.imageData,brand:i.brand,barcode:i.barcode,favorite:i.favorite,favoriteAlternatives:i.favoriteAlternatives??undefined,checked:false,sortOrder}))}},include});
    await tx.shoppingEmailSchedule.updateMany({where:{listId:list.id},data:{updatedAt:new Date()}});
