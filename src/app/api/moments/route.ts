@@ -7,7 +7,7 @@ import { jsonError } from '@/lib/http';
 import { prisma } from '@/server/db';
 import { MomentError } from '@/server/moments/domain';
 import { listMoments, saveMoment, generateDraft, approveDraft, schedule, changePlan, runJobs, sendGreetingNow } from '@/server/moments/service';
-import { connectURL, revokeEmail } from '@/server/moments/email';
+import { confirmConnect, connectURL, revokeEmail } from '@/server/moments/email';
 import { shoppingEmailSending, stopShoppingEmails } from '@/server/shopping/email-service';
 import { z } from 'zod';
 import { callerIdStatus, removeCallerId, startCallerIdVerification } from '@/server/moment-calls/caller-id';
@@ -42,6 +42,7 @@ async function healthHandlerPOST(req:Request) {
    case 'connectSave': return NextResponse.json(await saveConnect(user.id,p.input));
    case 'connectNow': return NextResponse.json(await connectNow(user.id,p.input));
    case 'connectEmail': return NextResponse.json({url:await connectURL(user.id)});
+   case 'connectEmailConfirm': await confirmConnect(user.id,(p.input as {ticket?:unknown}|undefined)?.ticket); return NextResponse.json({ok:true});
    case 'disconnectEmail': {
     if(await prisma.deliveryPlan.count({where:{draft:{moment:{userId:user.id}},status:'SENDING'}})||await shoppingEmailSending(user.id)) throw new MomentError('Email is being submitted. Refresh before disconnecting.',409);
     await revokeEmail(user.id);

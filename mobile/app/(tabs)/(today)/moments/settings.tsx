@@ -5,7 +5,7 @@ import { ActivityIndicator, Alert, Linking, StyleSheet, View } from 'react-nativ
 
 import type { ConnectEmailResponse, MomentOK } from '../../../../src/api/moments';
 import { Text } from '../../../../src/components/Text';
-import { connectGmail, contactMomentInput, EMAIL_CONNECT_FAILED, emailCallbackConnected, pickContact } from '../../../../src/features/moments/device';
+import { connectGmail, contactMomentInput, EMAIL_CONNECT_FAILED, emailCallbackTicket, pickContact } from '../../../../src/features/moments/device';
 import { FormButton, FormLink, FormRow, FormScroll, FormSection, FormText } from '../../../../src/features/moments/form';
 import { momentsStore, reminderStatusText, useMoments } from '../../../../src/features/moments/store';
 import { useOAuthCallback } from '../../../../src/lib/oauthCallbacks';
@@ -18,6 +18,9 @@ import { textStyles, useTheme } from '../../../../src/theme';
  * The contact import is the SYSTEM PICKER — one person, chosen by the user — never a read of the
  * address book. Its editor opens as a sheet.
  */
+
+const confirmGmail = (ticket: string) =>
+  momentsStore.getState().request<MomentOK>('connectEmailConfirm', { ticket }).then(() => undefined);
 export default function MomentSettingsScreen() {
   const theme = useTheme();
   const snapshot = useMoments((state) => state.snapshot);
@@ -33,9 +36,10 @@ export default function MomentSettingsScreen() {
   }, []);
 
   // A Gmail callback that arrived as a deep link after Android dropped the session: Swift's
-  // completion handler (ImportantMomentsStore.swift:185-189) — refresh on `connected`, else the error.
+  // completion handler (ImportantMomentsStore.swift `MomentEmailOAuth`) — confirm the ticket, else the error.
   useOAuthCallback('moments-email', (url) => {
-    if (emailCallbackConnected(url)) void momentsStore.getState().refresh();
+    const ticket = emailCallbackTicket(url);
+    if (ticket) void momentsStore.getState().perform(() => confirmGmail(ticket));
     else momentsStore.getState().setError(EMAIL_CONNECT_FAILED);
   });
 
@@ -63,7 +67,9 @@ export default function MomentSettingsScreen() {
   const connect = () =>
     void momentsStore.getState().perform(async () => {
       const link = await momentsStore.getState().request<ConnectEmailResponse>('connectEmail', {});
-      if (!(await connectGmail(link.url))) throw new Error(EMAIL_CONNECT_FAILED);
+      const ticket = await connectGmail(link.url);
+      if (!ticket) throw new Error(EMAIL_CONNECT_FAILED);
+      await confirmGmail(ticket);
     });
 
   const deleteAll = () =>

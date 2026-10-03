@@ -123,6 +123,7 @@ export type MomentOperation =
   | 'schedule'
   | 'plan'
   | 'connectEmail'
+  | 'connectEmailConfirm'
   | 'disconnectEmail'
   | 'visibility'
   | 'festivalSave'

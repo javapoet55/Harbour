@@ -227,12 +227,21 @@ struct MomentOK: Decodable, Sendable {}
         guard let url = URL(string: link.url) else { throw APIError.invalidResponse }
         session = ASWebAuthenticationSession(url: url, callbackURLScheme: "nexdo") { callback, _ in
             Task { @MainActor in
-                if callback?.host != "moments-email" || URLComponents(url: callback!, resolvingAgainstBaseURL: false)?.queryItems?.first(where: {$0.name == "status"})?.value != "connected" { store.error = "Email connection cancelled or failed. Try connecting again." }
-                else { await store.refresh() }
-                self.session = nil
+                defer { self.session = nil }
+                guard let ticket = MomentEmailOAuth.ticket(from: callback) else { store.error = "Email connection cancelled or failed. Try connecting again."; return }
+                do { let _: MomentOK = try await store.request("connectEmailConfirm", ["ticket": ticket]); await store.refresh() }
+                catch { store.error = error.localizedDescription }
             }
         }
         session?.presentationContextProvider = self; session?.prefersEphemeralWebBrowserSession = true
         if session?.start() != true { throw TaskActionServiceError.unavailable }
+    }
+    /// The server saves Gmail only after this signed-in app confirms the ticket from `nexdo://moments-email?status=confirm&ticket=…`.
+    static func ticket(from callback: URL?) -> String? {
+        guard let callback, callback.host == "moments-email",
+              let items = URLComponents(url: callback, resolvingAgainstBaseURL: false)?.queryItems,
+              items.first(where: { $0.name == "status" })?.value == "confirm",
+              let ticket = items.first(where: { $0.name == "ticket" })?.value, !ticket.isEmpty else { return nil }
+        return ticket
     }
 }

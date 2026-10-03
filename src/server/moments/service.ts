@@ -4,6 +4,7 @@ import { observedFetch } from '@/server/health/telemetry';
 import { refreshFestivalCatalog, readFestivalSettings } from './festival';
 import { log } from '@/lib/logger';
 import { prisma } from '@/server/db';
+import type { Prisma } from '@/generated/prisma';
 import { z } from 'zod';
 import { MomentError, momentInput, toneSchema, fallback, zone, occurrence, nextAnnual, editableStatuses, mayTransition } from './domain';
 import { gmail, emailConfigured, type WishEmailProvider } from './email';
@@ -192,6 +193,43 @@ async function expireUnconfirmed(now:Date, userId?:string) {
  return prisma.deliveryPlan.updateMany({where:{status:'AWAITING_CONFIRMATION',scheduledAtUTC:{lte:new Date(+now-86400000)},...(userId?{draft:{moment:{userId}}}:{})},data:{status:'EXPIRED',lastError:'This wish expired 24 hours after its scheduled send time because delivery was not confirmed. Create a new wish to send it.'}});
 }
 function signatureOf(settings:string) { const value=readFestivalSettings(settings).cardSignature; return typeof value==='string' ? value : null; }
+const SEND_BUDGET_MS=20000, SEND_CONCURRENCY=5;
+type DueJob=Prisma.DeliveryPlanGetPayload<{include:{draft:{include:{moment:true}}}}>;
+async function deliver(job:DueJob,provider:WishEmailProvider,now:Date) {
+ // claimedAt is the real pick-up time so a slow tick's later sends aren't swept as interrupted.
+ const claim=await prisma.deliveryPlan.updateMany({where:{id:job.id,status:'SCHEDULED',updatedAt:job.updatedAt},data:{status:'SENDING',claimedAt:new Date(),attempts:{increment:1}}});
+ if(!claim.count) return false;
+ const healthStarted=performance.now();
+ if(!job.draft.moment.enabled||+now-+job.scheduledAtUTC>86400000) { await prisma.deliveryPlan.update({where:{id:job.id},data:{status:'FAILED',lastError:'Moment disabled or delivery more than one day late. Review before retrying.'}});return true; }
+ let result: Awaited<ReturnType<WishEmailProvider['send']>>;
+ try {
+  // A card is included only when the delivery references one; otherwise the email is text only.
+  const card=job.cardId ? await prisma.greetingCardImage.findUnique({where:{id:job.cardId},select:{id:true,mime:true,bytes:true}}) : null;
+  result=await provider.send(job.draft.moment.userId,job.recipient,job.subject,job.body,job.idempotencyKey,{card,signature:signatureOf(job.draft.moment.festivalSettings)});
+ }
+ catch { result={kind:'uncertain',error:'Delivery could not be verified. Check Sent mail.'}; }
+ log(result.kind==='sent'?'info':'warn',result.kind==='sent'?'automatic_email_sent':'automatic_email_failed');
+ const retry=result.kind==='retry'&&job.attempts<3;
+ await recordEvent({kind:'job',service:'Moments email',operation:job.id,status:result.kind==='sent'?200:500,durationMs:performance.now()-healthStarted,errorCode:result.kind==='sent'?undefined:'DELIVERY_FAILED'});
+ const status=result.kind==='sent'?'SENT':result.kind==='uncertain'?'UNCERTAIN':retry?'SCHEDULED':'FAILED';
+ await prisma.deliveryPlan.update({where:{id:job.id},data:{status,providerMessageID:result.kind==='sent'?result.id:null,lastError:result.kind==='sent'?null:result.error,sentAt:result.kind==='sent'?now:null,nextAttemptAt:new Date(+now+60000*2**job.attempts)}});
+ if(status==='SENT'&&job.repeatYearly) await createAnnual(job.id);
+ return true;
+}
+// Sends run SEND_CONCURRENCY at a time until the budget is spent, well inside the worker's 55s request
+// timeout. A plan that throws is logged and skipped for the rest of this tick so it can't block the others.
+export async function sendDueEmails(provider:WishEmailProvider,now:Date,scope:Prisma.DeliveryPlanWhereInput={}) {
+ const single=typeof scope.id==='string', deadline=Date.now()+SEND_BUDGET_MS, skipped=new Set<string>();let processed=0;
+ await Promise.all(Array.from({length:single?1:SEND_CONCURRENCY},async()=>{
+  while(single||Date.now()<deadline) {
+   const job=await prisma.deliveryPlan.findFirst({where:{AND:[scope,{id:{notIn:[...skipped]}}],status:'SCHEDULED',automaticDelivery:true,nextAttemptAt:{lte:now}},include:{draft:{include:{moment:true}}},orderBy:{nextAttemptAt:'asc'}});
+   if(!job) return;
+   try { if(await deliver(job,provider,now)) processed++; }
+   catch(e) { skipped.add(job.id); log('error','automatic_email_job_failed',{planId:job.id,error:e instanceof Error?e.name:'unknown'}); }
+  }
+ }));
+ return {processed};
+}
 async function runJobsImpl(provider:WishEmailProvider=gmail, onlyID?:string, now=new Date()) {
  if(!onlyID) {
  await expireUnconfirmed(now);
@@ -200,32 +238,10 @@ async function runJobsImpl(provider:WishEmailProvider=gmail, onlyID?:string, now
  }
  // A crashed in-flight send is ambiguous. Never reclaim it and risk duplicate delivery.
  await prisma.deliveryPlan.updateMany({where:{...(onlyID?{id:onlyID}:{}),status:'SENDING',claimedAt:{lt:new Date(+now-5*60000)}},data:{status:'UNCERTAIN',lastError:'Delivery interrupted. Check Sent mail before sending again.'}});
- const jobs=await prisma.deliveryPlan.findMany({where:{...(onlyID?{id:onlyID}:{}),status:'SCHEDULED',automaticDelivery:true,nextAttemptAt:{lte:now}},include:{draft:{include:{moment:true}}},take:30,orderBy:{nextAttemptAt:'asc'}});
- let processed=0;
- for(const job of jobs) {
-  const claim=await prisma.deliveryPlan.updateMany({where:{id:job.id,status:'SCHEDULED',updatedAt:job.updatedAt},data:{status:'SENDING',claimedAt:now,attempts:{increment:1}}});
-  if(!claim.count) continue;
-  processed++;
-  const healthStarted=performance.now();
-  if(!job.draft.moment.enabled||+now-+job.scheduledAtUTC>86400000) { await prisma.deliveryPlan.update({where:{id:job.id},data:{status:'FAILED',lastError:'Moment disabled or delivery more than one day late. Review before retrying.'}});continue; }
-  let result: Awaited<ReturnType<WishEmailProvider['send']>>;
-  try {
-   // A card is included only when the delivery references one; otherwise the email is text only.
-   const card=job.cardId ? await prisma.greetingCardImage.findUnique({where:{id:job.cardId},select:{id:true,mime:true,bytes:true}}) : null;
-   result=await provider.send(job.draft.moment.userId,job.recipient,job.subject,job.body,job.idempotencyKey,{card,signature:signatureOf(job.draft.moment.festivalSettings)});
-  }
-  catch { result={kind:'uncertain',error:'Delivery could not be verified. Check Sent mail.'}; }
-  log(result.kind==='sent'?'info':'warn',result.kind==='sent'?'automatic_email_sent':'automatic_email_failed');
-  const retry=result.kind==='retry'&&job.attempts<3;
-  await recordEvent({kind:'job',service:'Moments email',operation:job.id,status:result.kind==='sent'?200:500,durationMs:performance.now()-healthStarted,errorCode:result.kind==='sent'?undefined:'DELIVERY_FAILED'});
-  const status=result.kind==='sent'?'SENT':result.kind==='uncertain'?'UNCERTAIN':retry?'SCHEDULED':'FAILED';
-  await prisma.$transaction(async tx=>{
-   await tx.deliveryPlan.update({where:{id:job.id},data:{status,providerMessageID:result.kind==='sent'?result.id:null,lastError:result.kind==='sent'?null:result.error,sentAt:result.kind==='sent'?now:null,nextAttemptAt:new Date(+now+60000*2**job.attempts)}});
-
-  });
- }
- const recurring=await prisma.deliveryPlan.findMany({where:{...(onlyID?{id:onlyID}:{}),status:'SENT',repeatYearly:true},select:{id:true}});
- for(const plan of recurring) await createAnnual(plan.id);
+ const {processed}=await sendDueEmails(provider,now,onlyID?{id:onlyID}:{});
+ // Next year's copy is made right after each send; this only recovers a send whose follow-up step failed.
+ const recurring=await prisma.deliveryPlan.findMany({where:{...(onlyID?{id:onlyID}:{sentAt:{gte:new Date(+now-86400000)}}),status:'SENT',repeatYearly:true},select:{id:true}});
+ for(const plan of recurring) await createAnnual(plan.id).catch(e=>log('error','automatic_email_repeat_failed',{planId:plan.id,error:e instanceof Error?e.name:'unknown'}));
  return {processed};
 }
 
