@@ -19,13 +19,15 @@ Each tick queues every due schedule, then sends up to five emails at a time and 
 - A completed weekly trip transfers its schedule to the newly generated list. Manually copying a list does not copy the authorization.
 - Empty/completed lists are skipped. Runs missed by over 24 hours are skipped instead of sending stale groceries.
 - Local weekly calculation respects daylight saving; nonexistent local times are skipped that week.
-- Definitive provider rate limits retry after five minutes, up to three attempts. Pending retries retain the original snapshot.
+- Definitive provider rate limits, and Google token outages or timeouts (nothing submitted yet), retry after five minutes, up to three attempts. Pending retries retain the original snapshot. These never pause the schedule or ask the user to reconnect.
 - Ambiguous provider errors or abandoned sends are marked uncertain, never automatically resubmitted. User must check Gmail Sent mail. A repeated Message-ID alone is not an idempotency guarantee.
 - Pausing cancels pending sends. Pause/edit returns a conflict if a send is already underway; submitted mail cannot be recalled.
-- Expired email access pauses the schedule. Reconnect and explicitly save to resume.
+- Expired or revoked email access (Google rejects the saved grant), or a permanent rejection such as a bad recipient address, pauses the schedule. Fix the cause and explicitly save to resume.
+- If one schedule errors unexpectedly, it is logged and retried next tick; other schedules keep sending.
+- Finished runs (and their email snapshot) are deleted 90 days after their last attempt.
 - “Sent” means Gmail accepted the message, not inbox delivery, reading or store/order confirmation.
 - Recent status/history is displayed in-app; this version does not send push delivery notifications.
-- The existing Gmail connection can be revoked in Important Moments settings; this also removes access for Shopping List email.
+- The existing Gmail connection can be revoked in Important Moments settings; this also pauses Shopping List schedules and cancels their queued emails. Disconnecting returns a conflict while a shopping email is being sent.
 
 ## Validation
 

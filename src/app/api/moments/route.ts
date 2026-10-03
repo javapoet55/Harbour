@@ -8,6 +8,7 @@ import { prisma } from '@/server/db';
 import { MomentError } from '@/server/moments/domain';
 import { listMoments, saveMoment, generateDraft, approveDraft, schedule, changePlan, runJobs, sendGreetingNow } from '@/server/moments/service';
 import { connectURL, revokeEmail } from '@/server/moments/email';
+import { shoppingEmailSending, stopShoppingEmails } from '@/server/shopping/email-service';
 import { z } from 'zod';
 import { callerIdStatus, removeCallerId, startCallerIdVerification } from '@/server/moment-calls/caller-id';
 import { connectNow, connectPreview, connectStatus, saveConnect } from '@/server/moment-calls/service';
@@ -42,9 +43,9 @@ async function healthHandlerPOST(req:Request) {
    case 'connectNow': return NextResponse.json(await connectNow(user.id,p.input));
    case 'connectEmail': return NextResponse.json({url:await connectURL(user.id)});
    case 'disconnectEmail': {
-    if(await prisma.deliveryPlan.count({where:{draft:{moment:{userId:user.id}},status:'SENDING'}})) throw new MomentError('Email is being submitted. Refresh before disconnecting.',409);
+    if(await prisma.deliveryPlan.count({where:{draft:{moment:{userId:user.id}},status:'SENDING'}})||await shoppingEmailSending(user.id)) throw new MomentError('Email is being submitted. Refresh before disconnecting.',409);
     await revokeEmail(user.id);
-    await prisma.$transaction([prisma.deliveryPlan.updateMany({where:{draft:{moment:{userId:user.id}},automaticDelivery:true,status:'SCHEDULED'},data:{status:'CANCELLED'}}),prisma.momentEmailAccount.deleteMany({where:{userId:user.id}})]);return NextResponse.json({ok:true});
+    await prisma.$transaction([...stopShoppingEmails(user.id),prisma.deliveryPlan.updateMany({where:{draft:{moment:{userId:user.id}},automaticDelivery:true,status:'SCHEDULED'},data:{status:'CANCELLED'}}),prisma.momentEmailAccount.deleteMany({where:{userId:user.id}})]);return NextResponse.json({ok:true});
    }
    case 'visibility': {
     const v=z.object({id:z.string(),enabled:z.boolean(),snoozedUntil:z.iso.datetime({offset:true}).nullable().optional()}).parse(p.input);
@@ -56,9 +57,9 @@ async function healthHandlerPOST(req:Request) {
  } catch(e) {return failure(e);}
 }
 async function healthHandlerDELETE() {
- try { const user=await requireUser();if(await prisma.deliveryPlan.count({where:{draft:{moment:{userId:user.id}},status:'SENDING'}})) throw new MomentError('A send is in progress. Try again after it finishes.',409);
+ try { const user=await requireUser();if(await prisma.deliveryPlan.count({where:{draft:{moment:{userId:user.id}},status:'SENDING'}})||await shoppingEmailSending(user.id)) throw new MomentError('A send is in progress. Try again after it finishes.',409);
  await revokeEmail(user.id);
- await prisma.$transaction([prisma.importantMoment.deleteMany({where:{userId:user.id}}),prisma.momentEmailAccount.deleteMany({where:{userId:user.id}})]);return NextResponse.json({ok:true}); }catch(e){return failure(e);}
+ await prisma.$transaction([...stopShoppingEmails(user.id),prisma.importantMoment.deleteMany({where:{userId:user.id}}),prisma.momentEmailAccount.deleteMany({where:{userId:user.id}})]);return NextResponse.json({ok:true}); }catch(e){return failure(e);}
 }
 
 export const GET = healthRoute('GET /api/moments', healthHandlerGET);

@@ -41,6 +41,29 @@ it('skips empty lists and old missed runs',async()=>{
  const old=await setup();await prisma.shoppingEmailSchedule.update({where:{id:old.schedule.id},data:{nextRunAt:new Date(now.getTime()-2*86400000)}});await runShoppingEmails(now,provider);expect((await prisma.shoppingEmailRun.findFirstOrThrow({where:{scheduleId:old.schedule.id}})).detail).toContain('24 hours');
 });
 it('pausing prevents a scheduled email',async()=>{const {list,schedule}=await setup();await pauseEmailSchedule(userId,list.id);await runShoppingEmails(now,provider);expect(await prisma.shoppingEmailRun.count({where:{scheduleId:schedule.id}})).toBe(0)});
+it('pauses the schedule after a permanent rejection instead of failing every week',async()=>{
+ const {schedule}=await setup();const rejected={send:vi.fn(async()=>({kind:'permanent' as const,error:'Email provider rejected the message.'}))};
+ await runShoppingEmails(now,rejected);
+ const run=await prisma.shoppingEmailRun.findFirstOrThrow({where:{scheduleId:schedule.id}});expect(run.status).toBe('failed');expect(run.detail).toContain('save the schedule');
+ expect((await prisma.shoppingEmailSchedule.findUniqueOrThrow({where:{id:schedule.id}})).enabled).toBe(false);
+});
+it('keeps sending other schedules when one fails to queue',async()=>{
+ const bad=await setup();const good=await setup();
+ await prisma.shoppingEmailSchedule.update({where:{id:bad.schedule.id},data:{timeZone:'Invalid/Zone'}});
+ const errors=vi.spyOn(console,'error').mockImplementation(()=>{});
+ try{
+  await runShoppingEmails(now,provider);
+  expect((await prisma.shoppingEmailRun.findFirstOrThrow({where:{scheduleId:good.schedule.id}})).status).toBe('sent');
+  expect(await prisma.shoppingEmailRun.count({where:{scheduleId:bad.schedule.id}})).toBe(0);
+  expect(String(errors.mock.calls[0]?.[0])).toContain('shopping_email_queue_failed');
+ }finally{errors.mockRestore();await prisma.shoppingEmailSchedule.update({where:{id:bad.schedule.id},data:{enabled:false}})}
+});
+it('deletes finished run history after 90 days',async()=>{
+ const {schedule}=await setup();await prisma.shoppingEmailSchedule.update({where:{id:schedule.id},data:{enabled:false}});
+ const run=(days:number)=>prisma.shoppingEmailRun.create({data:{scheduleId:schedule.id,dueAt:new Date(now.getTime()-days*86400000),retryAt:new Date(now.getTime()-days*86400000),recipient:settings.recipient,subject:'Old',body:'Milk',status:'sent'}});
+ const old=await run(91),recent=await run(30);await runShoppingEmails(now,provider);
+ expect(await prisma.shoppingEmailRun.findUnique({where:{id:old.id}})).toBeNull();expect(await prisma.shoppingEmailRun.findUnique({where:{id:recent.id}})).not.toBeNull();
+});
 it('does not retry uncertain sends',async()=>{
  const {schedule}=await setup();const uncertain={send:vi.fn(async()=>({kind:'uncertain' as const,error:'Check Sent mail'}))};
  await runShoppingEmails(now,uncertain);await runShoppingEmails(new Date(now.getTime()+600000),uncertain);expect(uncertain.send).toHaveBeenCalledTimes(1);
