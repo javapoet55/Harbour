@@ -55,7 +55,10 @@ struct ShoppingOffersView:View {
                         ShoppingOfferDetail(store:store,list:list,match:match){updated in list=updated;onUpdate(updated);Task{await load()}}
                     } label: {OfferPanel {OfferSummary(offer:match.offer);Text(match.itemName).font(.caption).foregroundStyle(Color.nexdoSecondary);Text(match.differences.first ?? match.reasons.joined(separator:" · ")).font(.subheadline).foregroundStyle(Color.nexdoBlue);if match.selected{Label("Chosen for this item",systemImage:"checkmark.circle.fill").foregroundStyle(.green)}}}.buttonStyle(.plain)
                 }
-                if snapshot != nil && visible.isEmpty {OfferPanel {Label("No \(tabs.first{$0.0==category}!.1.lowercased()) offers",systemImage:"tag");Text("Try another category, or check your store settings. New offers appear after the daily source check.").font(.subheadline).foregroundStyle(.secondary)}}
+                if let snapshot, visible.isEmpty {OfferPanel {
+                    if matches.isEmpty {Label("No offers for \(itemId == nil ? "this list":"this item") yet",systemImage:"tag");Text(snapshot.status).font(.subheadline).foregroundStyle(.secondary)}
+                    else {Label("No \(tabs.first{$0.0==category}!.1.lowercased()) offers",systemImage:"tag");Text("Try another category, or check your store settings. New offers appear after the daily source check.").font(.subheadline).foregroundStyle(.secondary)}
+                }}
                 ForEach(list.items.filter{(itemId==nil || $0.id==itemId) && $0.chosenOffer != nil}) {item in
                     OfferPanel {
                         Text("Chosen for \(item.name)").font(.headline)
@@ -78,7 +81,11 @@ struct ShoppingOffersView:View {
             .sheet(isPresented:$settings){ShoppingSettings(initial:list){next in Task{if let saved=await store.action("save",list:list,input:ShoppingInput(next)){list=saved;onUpdate(saved);await load()}else{error=store.error}}}}
     }
     private func load() async {
-        do {let result:ShoppingOffersSnapshot=try await store.api.request("/api/shopping/offers?listId=\(list.id)");snapshot=result;error=nil}
+        do {
+            let result:ShoppingOffersSnapshot=try await store.api.request("/api/shopping/offers?listId=\(list.id)");snapshot=result;error=nil
+            // Open on a tab that has offers; most items have no brand, so their offers are under Available.
+            if !matches.contains(where:{$0.category==category}),let first=tabs.first(where:{tab in matches.contains{$0.category==tab.0}}) {category=first.0}
+        }
         catch {self.error=error.localizedDescription}
     }
     private func remove(_ item:GroceryItem) async {

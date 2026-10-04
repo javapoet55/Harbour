@@ -13,7 +13,8 @@ export function parseCostco(html:string,now=new Date()):OfferRecord[]{
  const offers:OfferRecord[]=[];
  const blocks=html.split(/<a\b[^>]*data-testid="Link"[^>]*href="https:\/\/www\.costco\.com\//).slice(1);
  for(const block of blocks){
-  if(!/>Warehouse<\/div>/.test(block))continue;
+  // “Warehouse” (warehouse and online) and “Warehouse Only” are both in-store offers; “Online Only” is not.
+  if(!/>Warehouse(?: Only)?<\/div>/.test(block))continue;
   const title=block.match(/<span[^>]*>([^<]+)<\/span>/)?.[1];
   const item=block.match(/>Item ([\d, /]+)</)?.[1];
   const priceHTML=block.match(/data-testid="Text_prices_and_percentages_prices"[^>]*>([\s\S]*?)<\/p>/)?.[1];
@@ -21,7 +22,8 @@ export function parseCostco(html:string,now=new Date()):OfferRecord[]{
   const product=text(title),amount=text(priceHTML),save=block.includes('data-testid="Text_prices_and_percentages_prepend_text">Save<');
   const after=block.match(/data-testid="Text_prices_and_percentages_append_text"[^>]*>([^<]+)</)?.[1];
   if(!/^\$\d+(?:\.\d{2})?$/.test(amount)||(!save&&!after?.match(/^After \$[\d.]+ OFF$/)))continue;
-  const size=block.match(/mui-17ue058" data-testid="Text">([^<]+)</)?.[1];
+  // The package size is the text block directly before the item number; generated class names change between deploys.
+  const size=block.match(/<div data-testid="MarkdownRenderer"[^>]*><div[^>]*data-testid="Text">([^<]+)<\/div><\/div><div[^>]*><div[^>]*data-testid="Text">Item /)?.[1];
   const conditions=block.match(/>Item [^<]+<\/div><div[^>]*>([\s\S]*?)<\/div>/)?.[1];
   const image=block.match(/<img[^>]*src="(https:\/\/gdx-assets\.costco\.com\/[^"<>]+)"/)?.[1];
   offers.push({id:createHash('sha256').update(`costco:${item}:${valid[1]}`).digest('hex'),product,brand:identifyBrand(product),packageSize:size?text(size):null,
