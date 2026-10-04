@@ -223,12 +223,14 @@ struct ShoppingDetail:View {
     @State private var error:String?
     @Environment(\.scenePhase) private var offersScenePhase
     @State private var offers:ShoppingOffersSnapshot?
+    @State private var openStorePlaceID: String?
     @State private var shortcutEmail=false
     @State private var shortcutOffers=false
     @Environment(\.dynamicTypeSize) private var shortcutTypeSize
     @State private var selectedCategory="All"
     @FocusState private var quickAddFocused:Bool
     init(store:ShoppingStore,initial:GroceryList,openSettings:Bool=false){self.store=store;_list=State(initialValue:initial);_settings=State(initialValue:openSettings)}
+    private var attachedStoreName: String { (list.storeName ?? "").trimmingCharacters(in: .whitespacesAndNewlines) }
     private var readOnly:Bool {list.completedAt != nil}
     private var visibleCategories:[String] {GroceryItem.categories.filter{category in list.items.contains{$0.category==category}}}
     private var visibleItems:[GroceryItem] {selectedCategory == "All" ? list.items:list.items.filter{$0.category==selectedCategory}}
@@ -237,18 +239,22 @@ struct ShoppingDetail:View {
             Section {
                 HStack(spacing: 12) {
                     StoreBrandLogo(api: store.api, listID: list.id, identity: [list.storeName ?? "", list.storeWebsite ?? ""].joined(separator: "|"), expandsOnTap: true)
-                    VStack(alignment: .leading) {
+                    VStack(alignment: .leading, spacing: 4) {
                         Text(list.title).font(.title2.bold())
-                        Text("\(list.items.count-list.remaining) added · \(GroceryList.itemCount(list.items.count))").foregroundStyle(.secondary)
-                    }
-                    Spacer(minLength: 0)
-                    if !readOnly {
-                        Button { settings = true } label: {
-                            Image(systemName: "chevron.right").font(.subheadline.weight(.semibold))
-                                .foregroundStyle(Color.nexdoSecondary).frame(width: 44, height: 44)
-                        }.buttonStyle(.borderless).accessibilityLabel("List settings")
-                            .accessibilityIdentifier("shopping-header-settings")
-                    }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .fixedSize(horizontal: false, vertical: true)
+                        HStack(spacing: 8) {
+                            Text("\(list.items.count-list.remaining) added · \(GroceryList.itemCount(list.items.count))").foregroundStyle(.secondary)
+                            Spacer(minLength: 0)
+                            if !readOnly {
+                                Button { settings = true } label: {
+                                    Image(systemName: "chevron.right").font(.subheadline.weight(.semibold))
+                                        .foregroundStyle(Color.nexdoSecondary).frame(width: 44, height: 44)
+                                }.buttonStyle(.borderless).accessibilityLabel("List settings")
+                                    .accessibilityIdentifier("shopping-header-settings")
+                            }
+                        }
+                    }.frame(maxWidth: .infinity, alignment: .leading)
                 }
                     .listRowInsets(EdgeInsets(top:0,leading:16,bottom:3,trailing:16)).listRowBackground(Color.clear).listRowSeparator(.hidden)
                 shoppingShortcuts
@@ -317,14 +323,23 @@ struct ShoppingDetail:View {
             if list.items.isEmpty {ContentUnavailableView("Nothing on the list yet",systemImage:"basket",description:Text("Add items above or dictate a few groceries."))}
             if let message=error ?? store.error {Text(message).foregroundStyle(.red);Button("Retry Save"){save(list)}.disabled(readOnly);Button("Discard local edits and reload"){Task{await store.refresh();if let current=store.lists.first(where:{$0.id==list.id}){list=current;error=nil}}}}
         }.listSectionSpacing(10).contentMargins(.top,4,for:.scrollContent).scrollContentBackground(.hidden).background{TodayBackdrop()}
-            .navigationTitle("Shopping List").navigationBarTitleDisplayMode(.inline)
+            .navigationTitle(attachedStoreName.isEmpty ? "Shopping List" : attachedStoreName).navigationBarTitleDisplayMode(.inline)
             .disabled(store.busy)
             .navigationDestination(isPresented:$shortcutEmail){ShoppingEmailView(store:store,list:list)}
             .navigationDestination(isPresented:$shortcutOffers){ShoppingOffersView(store:store,list:list,onUpdate:{list=$0})}
             .safeAreaInset(edge:.bottom,spacing:0){shoppingActions}
             .toolbar{
-                ToolbarItem(placement:.topBarTrailing){Button{sharing=true}label:{Image(systemName:"square.and.arrow.up")}.accessibilityLabel("Share list")}
+                ToolbarItem(placement: .principal) {
+                    VStack(spacing: 2) {
+                        Text(attachedStoreName.isEmpty ? "Shopping List" : attachedStoreName)
+                            .font(.headline).lineLimit(1).truncationMode(.tail)
+                        if !attachedStoreName.isEmpty, let placeID = list.storePlaceId, openStorePlaceID == placeID {
+                            Text("Open Now").font(.caption.weight(.semibold)).foregroundStyle(.green)
+                        }
+                    }.accessibilityElement(children: .combine)
+                }
                 ToolbarItem(placement:.topBarTrailing){Menu{
+                    Button { sharing = true } label: { Label("Share list", systemImage: "square.and.arrow.up") }
                     Button("List settings"){settings=true}.disabled(readOnly)
                     Button("Copy list"){copy=true}
                     if !readOnly {
@@ -347,6 +362,18 @@ struct ShoppingDetail:View {
                 repeat {
                     offers = try? await store.api.request("/api/shopping/offers?listId=\(list.id.addingPercentEncoding(withAllowedCharacters:.urlQueryAllowed) ?? list.id)")
                     do{try await Task.sleep(for:.seconds(60))}catch{return}
+                } while !Task.isCancelled
+            }
+            .task(id: "store-hours-\(list.storePlaceId ?? "")-\(offersScenePhase)") {
+                openStorePlaceID = nil
+                guard offersScenePhase == .active, let placeID = list.storePlaceId, !placeID.isEmpty else { return }
+                var components = URLComponents()
+                components.queryItems = [URLQueryItem(name: "placeId", value: placeID)]
+                repeat {
+                    let hours: ShoppingStoreHours? = try? await store.api.request("/api/shopping/stores/hours?\(components.percentEncodedQuery ?? "")")
+                    guard !Task.isCancelled else { return }
+                    openStorePlaceID = hours?.openNow == true ? placeID : nil
+                    do { try await Task.sleep(for: .seconds(60)) } catch { return }
                 } while !Task.isCancelled
             }
             .sheet(isPresented:$settings){ShoppingSettings(store:store,initial:list){save($0)}}
@@ -774,7 +801,24 @@ private struct ShoppingShare:View {
         }
         if let error=store.error{Text(error).foregroundStyle(.red)}
     }.navigationTitle("Share List").task{updateURL()}}}
-    private func updateURL(){if let token=list.shareToken{url=store.api.baseURL.appendingPathComponent("shared/shopping/"+token)}}
+    private func updateURL() {
+        guard let token = list.shareToken else { url = nil; return }
+        // Encode the same secret compactly; sharing again never creates a new token.
+        let characters = Array(token)
+        guard characters.count == 64 else {
+            url = store.api.baseURL.appendingPathComponent("shared/shopping/" + token); return
+        }
+        var bytes = [UInt8]()
+        for index in stride(from: 0, to: characters.count, by: 2) {
+            guard let byte = UInt8(String(characters[index...index + 1]), radix: 16) else { url = nil; return }
+            bytes.append(byte)
+        }
+        let compact = Data(bytes).base64EncodedString()
+            .replacingOccurrences(of: "+", with: "-")
+            .replacingOccurrences(of: "/", with: "_")
+            .replacingOccurrences(of: "=", with: "")
+        url = store.api.baseURL.appendingPathComponent("s/" + compact)
+    }
 }
 
 private struct GroceryRow:View {

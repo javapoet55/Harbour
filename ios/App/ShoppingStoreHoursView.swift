@@ -1,18 +1,19 @@
 import SwiftUI
 
+struct ShoppingStoreHours: Decodable, Sendable {
+    let days: [String]
+    let openNow: Bool?
+    let current: Bool
+}
+
 struct ShoppingStoreHoursView: View {
     let api: APIClient
     let placeID: String?
     let name: String
     let mapsURL: URL?
-    @State private var result: Hours?
+    @State private var result: ShoppingStoreHours?
     @State private var busy = false
     @State private var error: String?
-    private struct Hours: Decodable, Sendable {
-        let days: [String]
-        let openNow: Bool?
-        let current: Bool
-    }
     var body: some View {
         List {
             Section {
@@ -39,7 +40,7 @@ struct ShoppingStoreHoursView: View {
         do {
             var components = URLComponents()
             components.queryItems = [URLQueryItem(name: "placeId", value: placeID)]
-            let response: Hours = try await api.request("/api/shopping/stores/hours?\(components.percentEncodedQuery ?? "")")
+            let response: ShoppingStoreHours = try await api.request("/api/shopping/stores/hours?\(components.percentEncodedQuery ?? "")")
             try Task.checkCancellation(); result = response
         } catch { if !Task.isCancelled { self.error = "Unable to load store hours. Try again or open Google Maps." } }
     }

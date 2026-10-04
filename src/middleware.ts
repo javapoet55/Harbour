@@ -16,7 +16,7 @@ function adminAppRedirect(req: NextRequest) {
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
   if (pathname === '/admin' || pathname.startsWith('/admin/')) return adminAppRedirect(req);
-  if (pathname.startsWith('/shared/shopping/') || pathname.startsWith('/api/') || pathname.startsWith('/_next') || pathname.includes('.')) {
+  if (pathname.startsWith('/s/') || pathname.startsWith('/shared/shopping/') || pathname.startsWith('/api/') || pathname.startsWith('/_next') || pathname.includes('.')) {
     return NextResponse.next();
   }
   const session = req.cookies.get('harbor_session')?.value;

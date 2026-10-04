@@ -1,7 +1,24 @@
+import type { Metadata } from 'next';
 import {prisma} from '@/server/db';
 import {notFound} from 'next/navigation';
 export const dynamic='force-dynamic';
-export const metadata={title:'Shared shopping list · NexDo',robots:{index:false,follow:false},referrer:'no-referrer'};
+export const metadata: Metadata = {
+ title: 'Shared shopping list · NexDo',
+ description: 'View the selected shopping items shared with you on NexDo.',
+ applicationName: 'NexDo - www.nexdoapp.com',
+ robots: { index: false, follow: false }, referrer: 'no-referrer',
+ openGraph: {
+  type: 'website', title: 'Shared shopping list · NexDo',
+  description: 'View the selected shopping items shared with you on NexDo.',
+  siteName: 'NexDo - www.nexdoapp.com',
+  images: [{ url: 'https://app.nexdoapp.com/nexdo-app-512.png', width: 512, height: 512, alt: 'NexDo logo' }],
+ },
+ twitter: {
+  card: 'summary', title: 'Shared shopping list · NexDo',
+  description: 'View the selected shopping items shared with you on NexDo.',
+  images: ['https://app.nexdoapp.com/nexdo-app-512.png'],
+ },
+};
 export default async function SharedShopping({params}:{params:Promise<{token:string}>}){
  const {token}=await params;if(!/^[a-f0-9]{64}$/.test(token))notFound();
  const list=await prisma.shoppingList.findUnique({where:{shareToken:token},include:{items:{orderBy:{sortOrder:'asc'}}}});if(!list)notFound();

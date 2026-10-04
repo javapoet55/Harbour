@@ -199,6 +199,7 @@ import XCTest
     }
     func testShareLinkCreateRevokeAndDismiss() {
         openList()
+        app.buttons["List options"].tap()
         app.buttons["Share list"].tap()
         XCTAssertTrue(app.navigationBars["Share List"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["Share list as text"].exists)
