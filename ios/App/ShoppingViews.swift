@@ -130,7 +130,7 @@ struct ShoppingHome: View {
                 NewShoppingList(store: store) { created = $0 }
             }
             .navigationDestination(isPresented: Binding(get: { created != nil && !create }, set: { if !$0 { created = nil } })) {
-                if let created { ShoppingDetail(store: store, initial: created) }
+                if let created { ShoppingDetail(store: store, initial: created, openSettings: true) }
             }
             .refreshable { await store.refresh() }.task { await store.refresh() }
     }
@@ -144,7 +144,7 @@ private struct NewShoppingList: View {
     var source: GroceryList? = nil
     var onCreated: ((GroceryList) -> Void)? = nil
     @Environment(\.dismiss) private var dismiss
-    @State private var title = "Weekly Shopping List"
+    @State private var title = "Shopping List"
     @State private var date = Date()
     @State private var weekly = true
     @State private var useLast = false
@@ -175,7 +175,7 @@ private struct NewShoppingList: View {
             }.navigationTitle("New List").navigationBarTitleDisplayMode(.inline).tint(.nexdoIndigo)
                 .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }
                 .safeAreaInset(edge: .bottom) {
-                    MomentPrimary(title: store.busy ? "Creating…" : "Create List") {
+                    MomentPrimary(title: store.busy ? "Creating…" : (source == nil ? "Create List & Add Store" : "Create List")) {
                         Task {
                             let value = GroceryList(id: UUID().uuidString, title: title.trimmingCharacters(in: .whitespacesAndNewlines), date: MomentDates.day(date, zone: TimeZone.current.identifier), timeZone: TimeZone.current.identifier, weekly: weekly, revision: 0, items: useLast ? (previous?.items.map { var i = $0; i.checked = false; return i } ?? []) : [])
                             if let saved = await store.action("create", input: ShoppingInput(value), idempotencyKey: createKey) { onCreated?(saved); dismiss() }
@@ -228,7 +228,7 @@ struct ShoppingDetail:View {
     @Environment(\.dynamicTypeSize) private var shortcutTypeSize
     @State private var selectedCategory="All"
     @FocusState private var quickAddFocused:Bool
-    init(store:ShoppingStore,initial:GroceryList){self.store=store;_list=State(initialValue:initial)}
+    init(store:ShoppingStore,initial:GroceryList,openSettings:Bool=false){self.store=store;_list=State(initialValue:initial);_settings=State(initialValue:openSettings)}
     private var readOnly:Bool {list.completedAt != nil}
     private var visibleCategories:[String] {GroceryItem.categories.filter{category in list.items.contains{$0.category==category}}}
     private var visibleItems:[GroceryItem] {selectedCategory == "All" ? list.items:list.items.filter{$0.category==selectedCategory}}

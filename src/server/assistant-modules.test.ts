@@ -33,3 +33,19 @@ it('updates a moment while rejecting stale dates',async()=>{
  expect((await prisma.importantMoment.findUniqueOrThrow({where:{id:moment.id}})).occurrenceDate).toBe('2030-10-20');
  await expect(executeModuleTool(owner,'stale','update_moment',args)).rejects.toThrow('changed');
 });
+it('reads bounded nutrition totals without leaking other users or treating missing data as zero',async()=>{
+ await prisma.foodLogEntry.createMany({data:[
+  {userId:owner,localDate:'2030-10-01',meal:'LUNCH',description:'Lunch',foodName:'Lentils',kcal:400,proteinG:20,source:'MANUAL'},
+  {userId:owner,localDate:'2030-10-02',meal:'DINNER',description:'Dinner',foodName:'Soup',kcal:200,source:'MANUAL',status:'NEEDS_REVIEW'},
+  {userId:other,localDate:'2030-10-01',meal:'LUNCH',description:'Other',foodName:'Other',kcal:999,source:'MANUAL'},
+ ]});
+ const result=await executeModuleTool(owner,'read','find_nutrition_summary',{from:'2030-10-01',to:'2030-10-07'});
+ expect(result).toMatchObject({success:true,loggedDays:2,calendarDays:7,entryCount:2,needsReview:1,
+  totals:{kcal:{total:600},proteinG:{total:20,knownEntries:1,totalEntries:2},fiberG:{total:null,knownEntries:0}}});
+ expect((result.daily as {date:string;logged:boolean}[]).find(d=>d.date==='2030-10-03')?.logged).toBe(false);
+ await expect(executeModuleTool(owner,'read','find_nutrition_summary',{from:'2030-10-08',to:'2030-10-01'})).rejects.toThrow('31 days');
+ await expect(executeModuleTool(owner,'read','find_nutrition_summary',{from:'2030-01-01',to:'2030-10-01'})).rejects.toThrow('31 days');
+ expect(moduleSchemas.find_nutrition_summary.safeParse({from:'2030-02-30',to:'2030-03-01'}).success).toBe(false);
+ const empty=await executeModuleTool(owner,'read','find_nutrition_summary',{from:'2031-01-01',to:'2031-01-07'});
+ expect(empty).toMatchObject({entryCount:0,loggedDays:0,totals:{kcal:{total:null}}});
+});

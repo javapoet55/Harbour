@@ -25,10 +25,9 @@ struct WellnessChooserView: View {
                     }.padding(.horizontal, 14 * scale)
                     HStack(alignment: .top, spacing: 16) {
                         Text("“").font(.system(size: 58 * scale, weight: .bold, design: .rounded)).foregroundStyle(.indigo.opacity(0.75))
-                        VStack(alignment: .leading, spacing: 10) {
-                            Text("“A more organized you,\na brighter tomorrow.”").font(.system(size: 17 * scale, weight: .medium))
-                            Text("— NexDo").font(.system(size: 14 * scale)).foregroundStyle(Color.nexdoSecondary)
-                        }.padding(.top, 10)
+                        Text("“A more organized you,\na brighter tomorrow.” — NexDo")
+                            .font(.system(size: 15 * scale, weight: .medium))
+                            .fixedSize(horizontal: false, vertical: true).padding(.top, 10)
                         Spacer(minLength: 0)
                     }.padding(22 * scale).frame(maxWidth: .infinity, alignment: .leading)
                         .background(LinearGradient(colors: [.indigo.opacity(0.07), .blue.opacity(0.12)], startPoint: .topLeading, endPoint: .bottomTrailing), in: RoundedRectangle(cornerRadius: 20 * scale))
@@ -39,6 +38,14 @@ struct WellnessChooserView: View {
                 .foregroundStyle(ink)
         }
         .fullScreenCover(item: $destination) { target in
+            if let guide = WellnessModuleGuide.Kind(rawValue:target.rawValue) {
+                WellnessModuleEntrance(kind:guide,onHome:{ destination=nil }) { moduleDestination(target) }
+            } else {
+                moduleDestination(target)
+            }
+        }
+    }
+    @ViewBuilder private func moduleDestination(_ target:Destination) -> some View {
             switch target {
             case .calories: CalorieTrackerView(api: model.profile == nil ? nil : model.momentAPI)
             case .pomodoro:
@@ -51,7 +58,6 @@ struct WellnessChooserView: View {
                 WellnessInsightsDestination()
             case .profile: AccountView()
             }
-        }
     }
     private var backButton: some View { Button { destination = nil } label: { Label("Back", systemImage: "chevron.left") } }
     private func hero(scale: CGFloat) -> some View {
@@ -102,8 +108,8 @@ struct WellnessChooserView: View {
             footer("Today", icon: "sun.max") { onSelect(.home) }
             footer("Tasks", icon: "checkmark.circle") { onSelect(.tasks) }
             Button {} label: {
-                WellnessPackRegion(rect: CGRect(x: 302, y: 878, width: 130, height: 127))
-                    .frame(width: 68, height: 68).clipShape(Circle())
+                Image("wellness-navigation").renderingMode(.original).resizable().scaledToFit()
+                    .frame(width: 62, height: 58)
             }.buttonStyle(.plain).frame(maxWidth: .infinity).accessibilityLabel("Wellness menu").accessibilityAddTraits(.isSelected)
             footer("Ask AI", icon: "sparkles") { onSelect(.askAI) }
             footer("Calendar", icon: "calendar") { onSelect(.calendar) }

@@ -4,7 +4,7 @@ import { prisma } from './db';
 import { moduleTools, moduleInstructions, executeModuleTool, moduleSchemas } from './assistant-modules';
 import type { AssistantTurn } from './assistant';
 
-function turn(transcript:string,spoken:string,actionId?:string,contextActionId?:string):AssistantTurn{return {transcript,spoken,intent:{intent:'UNKNOWN',confidence:1,confirmationRequired:!!actionId,raw:transcript},visual:{summary:spoken,appointments:[],tasks:[],overdue:[],next:actionId?'Confirm to apply these changes.':'',rangeLabel:'Moments & Shopping'},confirmation:actionId?{prompt:spoken,actionId}:null,contextActionId};}
+function turn(transcript:string,spoken:string,actionId?:string,contextActionId?:string):AssistantTurn{return {transcript,spoken,intent:{intent:'UNKNOWN',confidence:1,confirmationRequired:!!actionId,raw:transcript},visual:{summary:spoken,appointments:[],tasks:[],overdue:[],next:actionId?'Confirm to apply these changes.':'',rangeLabel:'NexDo modules'},confirmation:actionId?{prompt:spoken,actionId}:null,contextActionId};}
 export async function moduleConversation(userId:string,transcript:string,confirm?:string,reject?:string,context?:string):Promise<AssistantTurn|null>{
  const actionID=confirm||reject||context;
  const previous=actionID?await prisma.assistantAction.findFirst({where:{id:actionID,userId,intent:'MODULE_CONVERSATION'}}):null;
@@ -19,7 +19,7 @@ export async function moduleConversation(userId:string,transcript:string,confirm
   try{const result=await executeModuleTool(userId,previous.id,p.name,p.args);await prisma.assistantAction.update({where:{id:previous.id},data:{resultJson:JSON.stringify(result)}});return turn(transcript,'Saved your changes. Open Important Moments or Shopping Lists to review them.',undefined,previous.id);}
   catch{return turn(transcript,'The change could not be completed. Refresh the module and ask again to check its current state.',undefined,previous.id);}
  }
- if(!previous&&!/\b(moment|moments|birthday|anniversary|festival|diwali|greeting|shopping|grocery|groceries|get well soon)\b/i.test(transcript))return null;
+ if(!previous&&!/\b(moment|moments|birthday|anniversary|festival|diwali|greeting|shopping|grocery|groceries|get well soon|calories|calorie|nutrition|nutrient|nutrients|protein|fiber|food logs|ate|eaten|meals)\b/i.test(transcript))return null;
  if(!process.env.OPENAI_API_KEY)return turn(transcript,'AI is unavailable. You can manage moments and shopping lists from Today.');
  const user=await prisma.user.findUniqueOrThrow({where:{id:userId},select:{timeZone:true}});
  const input:unknown[]=[{role:'user',content:JSON.stringify({request:transcript,previous:previous?JSON.parse(previous.payloadJson):null,now:new Date().toISOString(),timeZone:user.timeZone})}];
