@@ -57,6 +57,8 @@ export type ImportantMoment = {
   festivalSettings?: string | null;
   snoozedUntil?: string | null;
   nextOccurrence: string;
+  /** The subject automatic emails use, built from the occasion rather than the title. Absent from older servers. */
+  emailSubject?: string;
   drafts: WishDraft[];
   /**
    * The finished card stored for scheduled emails, without its bytes (`cardSummaries`,

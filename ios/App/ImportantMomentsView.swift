@@ -432,7 +432,7 @@ struct WishDeliveryView: View {
         .navigationTitle("Choose Delivery").navigationBarTitleDisplayMode(.inline)
         .onAppear { if recipient.isEmpty { recipient = moment.phone } }
         .sheet(isPresented: $confirmEmail) {
-            WishEmailConfirmation(account: store.snapshot?.emailAccount?.email ?? "No connected account", recipient: recipient, subject: moment.title, message: draft.body) { confirmEmail = false; send() }
+            WishEmailConfirmation(account: store.snapshot?.emailAccount?.email ?? "No connected account", recipient: recipient, subject: moment.emailSubject ?? moment.title, message: draft.body) { confirmEmail = false; send() }
         }
         .sheet(isPresented: $showComposer) { ActionMessageComposer(recipient: recipient, body: draft.body) { result in
             showComposer = false

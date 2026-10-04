@@ -6,6 +6,8 @@ public struct ImportantMoment: Codable, Identifiable, Sendable {
     public var festivalSettings: String?
     public var snoozedUntil: String?
     public var nextOccurrence: String
+    /// The subject automatic emails use, built from the occasion rather than the title. Absent from older servers.
+    public var emailSubject: String?
     public var drafts: [WishDraft]
     /// The saved greeting card automatic emails include, or nil. Absent from servers before the card feature.
     public var card: GreetingCardInfo?
