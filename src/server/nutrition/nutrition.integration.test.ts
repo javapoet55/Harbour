@@ -51,14 +51,60 @@ describe('settings and phone verification', () => {
   });
   it('keeps the verified number and does not throttle when the code send fails', async () => {
     codeCall.mockImplementationOnce(async () => ({ error: 'twilio down', sid: '' }));
-    expect(await code(startPhoneVerification(userId, 'America/Los_Angeles', '+14155550123', new Date('2026-09-27T20:01:00Z')))).toBe('CODE_UNAVAILABLE');
+    expect(await code(startPhoneVerification(userId, 'America/Los_Angeles', '+14155550124', new Date('2026-09-27T20:01:00Z')))).toBe('CODE_UNAVAILABLE');
     const s = await prisma.nutritionCallSettings.findUniqueOrThrow({ where: { userId } });
     expect(s).toMatchObject({ phoneE164: '+14155550123', enabled: true });   // the failed send did not wipe verification or calls
     expect(s.phoneVerifiedAt).not.toBeNull();
     // The failed send never wrote phoneCodeSentAt, so an immediate retry is allowed, and re-sending
     // to the already-verified number leaves the verification in place.
-    await expect(startPhoneVerification(userId, 'America/Los_Angeles', '+14155550123', new Date('2026-09-27T20:01:30Z'))).resolves.toMatchObject({ sent: true });
+    await expect(startPhoneVerification(userId, 'America/Los_Angeles', '+14155550123', new Date('2026-09-27T20:01:30Z'))).resolves.toMatchObject({ sent: false, alreadyVerified: true });
     expect((await readSettings(userId, 'x')).phoneVerified).toBe(true);
+  });
+});
+
+describe('retained phone verification', () => {
+  it.each(['voice', 'sms'])('reuses the verified number without sending %s or changing settings', async channel => {
+    const owner = await prisma.user.create({ data: { email: `retained-${channel}-${crypto.randomUUID()}@example.com`, name: 'Test Customer', passwordHash: 'x', timeZone: 'UTC' } });
+    const now = new Date('2026-09-27T20:00:30Z');
+    await prisma.nutritionCallSettings.create({ data: {
+      userId: owner.id, phoneE164: '+14155550123', phoneVerifiedAt: now,
+      phoneCodeSentAt: now, enabled: true, consentAt: now, localTime: '19:00', voice: 'cedar', calorieGoal: 1800,
+    } });
+    const before = await prisma.nutritionCallSettings.findUniqueOrThrow({ where: { userId: owner.id } });
+    const voiceCount = codeCall.mock.calls.length, smsCount = sms.mock.calls.length;
+    const previous = process.env.NUTRITION_PHONE_CODE_CHANNEL;
+    process.env.NUTRITION_PHONE_CODE_CHANNEL = channel;
+    try {
+      for (const when of [now, new Date('2027-09-27T20:00:30Z')]) {
+        expect(await startPhoneVerification(owner.id, 'UTC', '  +14155550123  ', when)).toEqual({ sent: false, alreadyVerified: true, phoneVerified: true, message: 'Already verified' });
+      }
+      expect(await prisma.nutritionCallSettings.findUniqueOrThrow({ where: { userId: owner.id } })).toEqual(before);
+      await updateSettings(owner.id, 'UTC', { enabled: false });
+      expect(await startPhoneVerification(owner.id, 'UTC', '+14155550123', now)).toMatchObject({ alreadyVerified: true });
+      expect((await readSettings(owner.id, 'UTC')).enabled).toBe(false);
+      expect(codeCall).toHaveBeenCalledTimes(voiceCount);
+      expect(sms).toHaveBeenCalledTimes(smsCount);
+    } finally {
+      if (previous === undefined) delete process.env.NUTRITION_PHONE_CODE_CHANNEL;
+      else process.env.NUTRITION_PHONE_CODE_CHANNEL = previous;
+      await prisma.user.delete({ where: { id: owner.id } });
+    }
+  });
+
+  it('still verifies changed numbers and does not reuse another account’s verification', async () => {
+    const owner = await prisma.user.create({ data: { email: `changed-${crypto.randomUUID()}@example.com`, name: 'Test Customer', passwordHash: 'x', timeZone: 'UTC' } });
+    const other = await prisma.user.create({ data: { email: `other-${crypto.randomUUID()}@example.com`, name: 'Test Customer', passwordHash: 'x', timeZone: 'UTC' } });
+    const now = new Date('2026-09-27T20:00:00Z');
+    await prisma.nutritionCallSettings.create({ data: { userId: owner.id, phoneE164: '+14155550123', phoneVerifiedAt: now, enabled: true } });
+    try {
+      expect(await startPhoneVerification(other.id, 'UTC', '+14155550123', now)).toMatchObject({ sent: true, alreadyVerified: false });
+      expect(await startPhoneVerification(owner.id, 'UTC', '+14155550124', now)).toMatchObject({ sent: true, alreadyVerified: false });
+      expect(await readSettings(owner.id, 'UTC')).toMatchObject({ phone: '+14155550124', phoneVerified: false, enabled: false });
+      expect(await code(updateSettings(owner.id, 'UTC', { enabled: true }))).toBe('PHONE_NOT_VERIFIED');
+      expect(await verifyPhone(owner.id, 'UTC', '123456', now)).toMatchObject({ phoneVerified: true });
+    } finally {
+      await prisma.user.deleteMany({ where: { id: { in: [owner.id, other.id] } } });
+    }
   });
 });
 

@@ -1,4 +1,5 @@
 import Script from 'next/script';
+import { SupportChat } from '@/components/support-chat';
 import type { Metadata, Viewport } from 'next';
 import type { ReactNode } from 'react';
 import { Geist } from 'next/font/google';
@@ -27,7 +28,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     <html lang="en" className={`${geist.variable} h-full`}>
       {/* Extensions such as ClickUp add body attributes before React hydrates.
           Suppress only this element's mismatch; child hydration checks stay active. */}
-      <body className="min-h-full antialiased" suppressHydrationWarning>{children}<Script src="/firebase-bridge.js" strategy="afterInteractive" /></body>
+      <body className="min-h-full antialiased" suppressHydrationWarning>{children}<SupportChat /><Script src="/firebase-bridge.js" strategy="afterInteractive" /></body>
     </html>
   );
 }

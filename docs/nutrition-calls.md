@@ -113,3 +113,5 @@ Errors return `{ code, error }` with a user-readable `error`.
 
 Not yet covered by automated tests: a live Twilio + OpenAI call. Do one end-to-end call on a verified
 number after deploying, and listen for greeting, barge-in, read-back and hang-up.
+
+Phone verification is retained per account and phone number. Clients should load settings first and skip code entry when `phoneVerified` is true for the selected number. Repeating `action: "start"` for that same verified number returns `{ sent: false, alreadyVerified: true, phoneVerified: true, message: "Already verified" }`, even within the resend cooldown. Continue setup without asking for a code; calls, consent, and preferences are unchanged. A new/unverified number returns `sent: true`, `alreadyVerified: false`, `phoneVerified: false`, and `channel` after sending a code. Changing the number still disables calls until the new number is verified.

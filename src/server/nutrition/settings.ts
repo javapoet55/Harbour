@@ -84,6 +84,11 @@ export async function startPhoneVerification(userId: string, fallbackTimeZone: s
   if (typeof phone !== 'string' || !E164.test(phone.trim())) throw new NutritionError('INVALID_PHONE');
   const phoneE164 = phone.trim();
   const existing = await prisma.nutritionCallSettings.findUnique({ where: { userId } });
+  // Verification belongs to this account and number, not to a setup visit.
+  // Check before throttling: a verified number needs neither a new code nor a state reset.
+  if (existing?.phoneE164 === phoneE164 && existing.phoneVerifiedAt) {
+    return { sent: false, alreadyVerified: true, phoneVerified: true, message: 'Already verified' };
+  }
   if (existing?.phoneCodeSentAt && now.getTime() - existing.phoneCodeSentAt.getTime() < RESEND_MS) throw new NutritionError('CODE_THROTTLED');
   const code = String(randomInt(0, 1_000_000)).padStart(6, '0');
   const channel = codeChannel();
@@ -105,7 +110,7 @@ export async function startPhoneVerification(userId: string, fallbackTimeZone: s
     phoneCodeHash: hashCode(userId, code), phoneCodeExpiresAt: new Date(now.getTime() + CODE_TTL_MS), phoneCodeAttempts: 0, phoneCodeSentAt: now,
   };
   await prisma.nutritionCallSettings.upsert({ where: { userId }, create: { userId, timeZone: fallbackTimeZone, ...data }, update: data });
-  return { sent: true, channel };
+  return { sent: true, alreadyVerified: false, phoneVerified: false, channel };
 }
 
 export async function verifyPhone(userId: string, fallbackTimeZone: string, code: unknown, now = new Date()) {

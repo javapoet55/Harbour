@@ -102,7 +102,7 @@ struct WellnessChooserView: View {
             footer("Today", icon: "sun.max") { onSelect(.home) }
             footer("Tasks", icon: "checkmark.circle") { onSelect(.tasks) }
             Button {} label: {
-                Image("wellness-navigation").renderingMode(.original).resizable().scaledToFit()
+                WellnessPackRegion(rect: CGRect(x: 302, y: 878, width: 130, height: 127))
                     .frame(width: 68, height: 68).clipShape(Circle())
             }.buttonStyle(.plain).frame(maxWidth: .infinity).accessibilityLabel("Wellness menu").accessibilityAddTraits(.isSelected)
             footer("Ask AI", icon: "sparkles") { onSelect(.askAI) }

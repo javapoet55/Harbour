@@ -110,11 +110,11 @@ export function shareUrl(token: string, client: ApiClient = getApi()): string {
   return `${client.baseUrl}/shared/shopping/${token}`;
 }
 
-export type ShoppingEmailSettings = { recipient: string; recipientName: string; timeZone: string; weekday: number; hour: number; minute: number; consent: true };
+export type ShoppingEmailSettings = { customerPhone: string; recipient: string; recipientName: string; timeZone: string; weekday: number; hour: number; minute: number; consent: true };
 export type ShoppingEmailSnapshot = {
   available: boolean;
   account: { email: string; status: string } | null;
-  schedule: (Omit<ShoppingEmailSettings, 'consent'> & { enabled: boolean; nextRunAt: string; runs: { id: string; dueAt: string; status: string; detail: string | null }[] }) | null;
+  schedule: (Omit<ShoppingEmailSettings, 'consent' | 'customerPhone'> & { customerPhone: string | null; enabled: boolean; nextRunAt: string; runs: { id: string; dueAt: string; status: string; detail: string | null }[] }) | null;
 };
 export const shoppingEmailApi = {
   get: (listId: string) => getApi().get<ShoppingEmailSnapshot>(`/api/shopping/email-schedule?listId=${encodeURIComponent(listId)}`),

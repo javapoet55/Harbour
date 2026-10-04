@@ -20,7 +20,16 @@ async function healthHandlerGET(req: Request, ctx: { params: Promise<{ provider:
       ? await verifyConnectToken(connectToken, provider).catch(() => null)
       : (await currentUser())?.id ?? null;
     if (!userId) throw new Error('UNAUTHENTICATED');
-    return NextResponse.redirect(oauthAuthorizationUrl(provider, await createOAuthState(userId, provider, native)));
+    const state = await createOAuthState(userId, provider, native);
+    const response = NextResponse.redirect(oauthAuthorizationUrl(provider, state));
+    // Bind the callback to the browser that initiated it, including native ASWebAuthenticationSession.
+    response.cookies.set(`calendar-oauth-${provider}`, state, {
+      httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax',
+      path: `/api/calendar/oauth/${provider}/callback`, maxAge: 600,
+    });
+    response.headers.set('Cache-Control', 'no-store');
+    response.headers.set('Referrer-Policy', 'no-referrer');
+    return response;
   });
 }
 

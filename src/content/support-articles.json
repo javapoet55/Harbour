@@ -1,0 +1,362 @@
+[
+  {
+    "id": "plan-free",
+    "title": "Free pricing and features",
+    "text": "Free: $0 per month or $0 per year. A great way to experience Nexdo and see the power of AI in your day.\nUnlimited tasks: Create as many tasks as you need. Keep your to-dos in one place.\n1 calendar connection: Connect one external calendar. See its events alongside your tasks.\nBasic AI assistant (5 actions/week): Get help capturing and planning tasks. Includes five AI actions each week.\nDaily briefing (limited): See a summary of your daily plans. Free includes limited briefing access.\nBasic schedule view: See your tasks and calendar together. Review what is planned for your day.\nResponsive web app: Use Nexdo in your web browser. The layout adapts to your screen.\nCommunity support: Get help through community support. Share questions about using Nexdo.",
+    "url": "/pricing",
+    "platform": "Website",
+    "keywords": "price cost subscription billing monthly annual"
+  },
+  {
+    "id": "plan-nexdo-pro",
+    "title": "Nexdo Pro pricing and features",
+    "text": "Nexdo Pro: $9.99 per month or $99.99 per year. Plan your day, choose your next step, and turn intentions into action.\nEverything in Free: Keep every feature in the Free plan. Add the planning tools listed below.\nGenerous AI usage, subject to fair-use limits: Use AI more often for daily planning. Fair-use limits still apply.\nExecutive Daily Briefing and Top 3 priorities: Review your day and top three tasks. Prioritize urgent and important work.\nWhat Should I Do Next? Refreshes as your day changes: Get a useful next-step suggestion. Refreshes on task changes and app return.\nTasks that fit your available time, with alternatives and focus sessions: Find work that fits an open time slot. Start focus or choose another option.\nAsk Nexdo by voice or text about your tasks and calendar: Ask questions by speaking or typing. Answers use your tasks and calendar.\nContinuous voice conversations: create tasks, add more, and make corrections: Keep talking to add or correct tasks. Hear replies in the same conversation.\nCreate calendar appointments and events by voice: Speak an appointment’s date and time. Save a calendar entry, not a booking.\nCall, Message, Email, or Remind Later for contact tasks: Open a contact action from a task. Review the contact or snooze it for later.\nWeekly progress, focus time, and completed-work reviews: Look back at your weekly progress. Review completed work and focus time.\nSchedule Insights & Conflict Alerts: Spot overlapping or tight schedules. Review work that needs more time.\nFix My Day schedule optimization: Review proposed moves for your tasks. Approve changes before they apply.\nClear next steps for vague tasks (coming soon): Coming soon: clarify a vague task. Save a small, actionable next step.\nMultiple calendar connections: Connect more than one calendar. See work and personal plans together.\nPriority email support: Get priority help through email. Ask for support with using Nexdo.",
+    "url": "/pricing",
+    "platform": "Website",
+    "keywords": "price cost subscription billing monthly annual"
+  },
+  {
+    "id": "plan-nexdo-max",
+    "title": "Nexdo Max pricing and features",
+    "text": "Nexdo Max: $19.99 per month or $199.99 per year. Deeper personalization to make room for your most important work.\nEverything in Pro: Keep every feature in the Pro plan. Add the Max features listed below.\nPersonalized duration estimates and completion insights: Opt in to estimates from work history. Review duration and completion predictions.\nWork-pattern and postponement insights: See patterns in your completed work. Notice tasks you repeatedly postpone.\nProtected-time proposals for repeatedly postponed work (coming soon): Coming soon: reserve time for delayed work. Approve a block protected from replanning.\nExpanded voice allowance for frequent conversations (coming soon): Coming soon: a larger voice allowance. For more frequent planning conversations.\nAdvanced analytics & insights: Explore insights from your work history. Review progress and completion patterns.\nEmail & commitment intelligence (coming soon): Coming soon: find commitments in email. Turn relevant messages into suggested tasks.\nGoal planning & tracking (coming soon): Coming soon: plan and track your goals. Connect everyday work to bigger aims.\nEarly access to new features: Try selected features before wider release. Availability depends on the rollout.\nPriority support: Get priority assistance with Nexdo. Ask for help with features or your account.",
+    "url": "/pricing",
+    "platform": "Website",
+    "keywords": "price cost subscription billing monthly annual"
+  },
+  {
+    "id": "pricing-faq-0",
+    "title": "Can I try Nexdo before I pay?",
+    "text": "Pro and Max include a 14-day free trial, with no credit card required. You can also explore Nexdo with the Free plan.",
+    "url": "/pricing#faq-title",
+    "platform": "Website",
+    "keywords": ""
+  },
+  {
+    "id": "pricing-faq-1",
+    "title": "What’s the difference between Pro and Max?",
+    "text": "Pro brings daily priorities, next-action recommendations, continuous voice conversations, contact actions, and weekly reviews. Max adds personalized duration estimates, completion predictions, and work-pattern insights. Protected-time proposals, an expanded voice allowance, and email intelligence are coming soon. Fair-use limits apply.",
+    "url": "/pricing#faq-title",
+    "platform": "Website",
+    "keywords": ""
+  },
+  {
+    "id": "pricing-faq-2",
+    "title": "Can I change plans later?",
+    "text": "You can choose monthly or annual billing. For help changing an existing subscription, contact support.",
+    "url": "/pricing#faq-title",
+    "platform": "Website",
+    "keywords": ""
+  },
+  {
+    "id": "pricing-faq-3",
+    "title": "Is my data secure?",
+    "text": "Nexdo asks for approval before applying AI-proposed changes and lets you choose whether to enable personalization.",
+    "url": "/pricing#faq-title",
+    "platform": "Website",
+    "keywords": ""
+  },
+  {
+    "id": "pricing-faq-4",
+    "title": "Do you offer refunds?",
+    "text": "Contact support to confirm the refund terms that apply to your subscription before purchasing.",
+    "url": "/pricing#faq-title",
+    "platform": "Website",
+    "keywords": ""
+  },
+  {
+    "id": "pricing-faq-5",
+    "title": "Do you offer team or business plans?",
+    "text": "Nexdo Max is designed for power users, executives and teams. Contact support to discuss your team’s requirements.",
+    "url": "/pricing#faq-title",
+    "platform": "Website",
+    "keywords": ""
+  },
+  {
+    "id": "website-overview",
+    "title": "What can Nexdo do?",
+    "text": "Meet the AI-powered to-do app that turns a full head into a clear plan. Tasks, calendar, and a conversation that brings it all together.",
+    "url": "/welcome",
+    "platform": "Website",
+    "keywords": "overview getting started features"
+  },
+  {
+    "id": "website-faq-10",
+    "title": "Is this demo using my real tasks?",
+    "text": "No. The walkthrough uses fixed sample stories, selected locally in your browser. It does not contact an AI service or read, save, or change your tasks. Sign in to use Nexdo with your own data.",
+    "url": "/welcome#questions",
+    "platform": "Website",
+    "keywords": ""
+  },
+  {
+    "id": "website-faq-11",
+    "title": "What makes Nexdo AI-powered?",
+    "text": "Nexdo includes structured conversational task interpretation, contextual follow-ups, grounded briefings, scheduling, and consent-based statistical predictions. Full language-model conversations and OpenAI-generated speech require the service to be configured.",
+    "url": "/welcome#questions",
+    "platform": "Website",
+    "keywords": ""
+  },
+  {
+    "id": "website-faq-12",
+    "title": "Will AI rearrange my day without asking?",
+    "text": "AI-generated material changes are proposed for review. Nexdo validates the actions and asks for approval before applying them. Direct actions you choose, such as completing a task, still work normally.",
+    "url": "/welcome#questions",
+    "platform": "Website",
+    "keywords": ""
+  },
+  {
+    "id": "website-faq-13",
+    "title": "Can I use it on my phone?",
+    "text": "Yes. Nexdo has a responsive web interface for phones, tablets, and desktops. This is a web app; this page does not claim an App Store release.",
+    "url": "/welcome#questions",
+    "platform": "Website",
+    "keywords": ""
+  },
+  {
+    "id": "website-faq-14",
+    "title": "What about calendars and reminders?",
+    "text": "Nexdo supports calendar integration and reminder workflows. Google or Microsoft connections and delivery channels need configuration and permission. Availability depends on the enabled providers; this demo does not connect any accounts.",
+    "url": "/welcome#questions",
+    "platform": "Website",
+    "keywords": ""
+  },
+  {
+    "id": "feature-0",
+    "title": "Your next move",
+    "text": "Know what to do next. Find one useful task that fits your available time, with alternatives and a focus session. Recommendations refresh after task changes and when you return to the app. Time, deadlines, dependencies, and work in progress inform the recommendation. Availability varies by plan and platform; continuous voice and contact actions are featured in the native iOS experience.",
+    "url": "/features/ai-assistant#product-features",
+    "platform": "Website",
+    "keywords": ""
+  },
+  {
+    "id": "feature-1",
+    "title": "Daily clarity",
+    "text": "Start with your Top 3. Bring priorities, deadlines, and calendar commitments into one briefing. See three recommended focus tasks, ranked by urgency, importance, and capacity. Briefings use your saved tasks, calendar, and working preferences. Availability varies by plan and platform; continuous voice and contact actions are featured in the native iOS experience.",
+    "url": "/features/ai-assistant#product-features",
+    "platform": "Website",
+    "keywords": ""
+  },
+  {
+    "id": "feature-2",
+    "title": "Continuous voice",
+    "text": "Speak. Refine. Keep going.. Capture tasks in a natural voice conversation. Add another task, correct a time, and hear a reply without starting over. Realtime voice requires microphone access. Ambiguous details may need clarification. Availability varies by plan and platform; continuous voice and contact actions are featured in the native iOS experience.",
+    "url": "/features/ai-assistant#product-features",
+    "platform": "Website",
+    "keywords": ""
+  },
+  {
+    "id": "feature-3",
+    "title": "Ask Nexdo",
+    "text": "Ask about your real day. Ask by voice or free-form text about your tasks, calendar, and recommendations. Get contextual help planning or creating work. Answers use the data available to Nexdo, including the freshness of synced calendars. Availability varies by plan and platform; continuous voice and contact actions are featured in the native iOS experience.",
+    "url": "/features/ai-assistant#product-features",
+    "platform": "Website",
+    "keywords": ""
+  },
+  {
+    "id": "feature-4",
+    "title": "Voice appointments",
+    "text": "Say it. Put it on the calendar.. Create appointments and events through the Calendar voice flow. Refine dates and times conversationally, with calendar entries kept separate from tasks. Creates calendar entries; it does not book with a provider or send invitations. Availability varies by plan and platform; continuous voice and contact actions are featured in the native iOS experience.",
+    "url": "/features/ai-assistant#product-features",
+    "platform": "Website",
+    "keywords": ""
+  },
+  {
+    "id": "feature-5",
+    "title": "Schedule intelligence",
+    "text": "See where time gets tight. Spot conflicts and capacity problems using task durations, calendar events, working hours, and appointment buffers. Buffers are planning allowances, not live travel estimates. Availability varies by plan and platform; continuous voice and contact actions are featured in the native iOS experience.",
+    "url": "/features/ai-assistant#product-features",
+    "platform": "Website",
+    "keywords": ""
+  },
+  {
+    "id": "feature-6",
+    "title": "Fix My Day",
+    "text": "Change the plan with confidence. Ask Nexdo to propose a revised schedule when priorities or commitments change. Review moves before applying them, keeping fixed commitments in place. Replanning proposes changes; it does not continuously detect meetings running late. Availability varies by plan and platform; continuous voice and contact actions are featured in the native iOS experience.",
+    "url": "/features/ai-assistant#product-features",
+    "platform": "Website",
+    "keywords": ""
+  },
+  {
+    "id": "feature-7",
+    "title": "Contact actions",
+    "text": "Turn a reminder into an action. For contact tasks, move from the reminder to Call, Message, Email, or Remind Later. Resolve the right contact and review the action. Opening a call or composer does not confirm that the conversation happened. Availability varies by plan and platform; continuous voice and contact actions are featured in the native iOS experience.",
+    "url": "/features/ai-assistant#product-features",
+    "platform": "Website",
+    "keywords": ""
+  },
+  {
+    "id": "feature-8",
+    "title": "Weekly review",
+    "text": "See the progress you made. Review completed work, focus time, and unfinished priorities in a Monday-to-Sunday summary. Use the perspective to plan what comes next. Summaries reflect the task and focus activity recorded in Nexdo. Availability varies by plan and platform; continuous voice and contact actions are featured in the native iOS experience.",
+    "url": "/features/ai-assistant#product-features",
+    "platform": "Website",
+    "keywords": ""
+  },
+  {
+    "id": "feature-9",
+    "title": "Personalized estimates",
+    "text": "Plan around your own rhythm. Opt in to estimates and completion insights informed by your work history. Notice work patterns and repeated postponements as you plan. Personalization is optional. Predictions are estimates, not guarantees. Availability varies by plan and platform; continuous voice and contact actions are featured in the native iOS experience.",
+    "url": "/features/ai-assistant#product-features",
+    "platform": "Website",
+    "keywords": ""
+  },
+  {
+    "id": "calendar-create",
+    "title": "How do I add an appointment?",
+    "text": "Open Calendar and tap Add Manually. Enter the event title, choose its start and end, and add a location or notes if needed. Save the event and review any confirmation shown. You can also use Add by Voice to describe the appointment.",
+    "url": "/help#calendar-create",
+    "platform": "iPhone app",
+    "keywords": "create book meeting event new"
+  },
+  {
+    "id": "calendar-views",
+    "title": "How do I switch between Schedule, Week, and Month?",
+    "text": "Use the Schedule, Week, and Month tabs at the top of Calendar. Schedule lists your items by day. Week and Month help you browse dates. In Schedule, use the date-range menu to choose how many days to show.",
+    "url": "/help#calendar-views",
+    "platform": "iPhone app",
+    "keywords": "view dates upcoming next seven days"
+  },
+  {
+    "id": "calendar-complete",
+    "title": "How do I mark an appointment complete or incomplete?",
+    "text": "Tap the appointment to open Event Details. Choose Mark Complete (the green check) when it is finished, or Mark Incomplete (the red cross) to undo completion. Nexdo saves this status. Marking an imported event complete does not change the event in its original calendar.",
+    "url": "/help#calendar-complete",
+    "platform": "iPhone app",
+    "keywords": "done finish check cross undo status"
+  },
+  {
+    "id": "calendar-edit",
+    "title": "How do I change an appointment’s time or notes?",
+    "text": "Open the appointment and tap Edit in Event Details. Update the title, location, start, end, or notes, then tap Save. For an event imported from another calendar, edit it in the original calendar. Open in Calendar opens your device’s calendar at the event date.",
+    "url": "/help#calendar-edit",
+    "platform": "iPhone app",
+    "keywords": "reschedule move rename details location"
+  },
+  {
+    "id": "calendar-repeat",
+    "title": "Can I create a repeating appointment?",
+    "text": "When adding an appointment manually, use Repeat to choose Daily, Weekly, Monthly, or Particular days of the week. Choose Repeat until and, when needed, the weekdays. Monthly events repeat on the same date; months without that date are skipped.",
+    "url": "/help#calendar-repeat",
+    "platform": "iPhone app",
+    "keywords": "recurring recurrence series weekdays"
+  },
+  {
+    "id": "calendar-connect",
+    "title": "How do I connect Google Calendar?",
+    "text": "Open your profile, choose Edit profile and settings, and find the calendar connection section. Tap Connect Google Calendar and finish Google sign-in. Review the connection’s settings: a read-only connection imports events but does not receive tasks or events created in Nexdo.",
+    "url": "/help#calendar-connect",
+    "platform": "iPhone app",
+    "keywords": "sync synchronize external import account integration"
+  },
+  {
+    "id": "calendar-find",
+    "title": "Why can’t I see an event or task in Calendar?",
+    "text": "Check the selected date and date range, then check the Calendar filters. Turn on Tasks or Calendar events as needed, and clear search text or use Reset filters. Completed shows items marked complete. A task without a scheduled time or due date may appear under Unscheduled & overdue rather than on a day’s timeline.",
+    "url": "/help#calendar-find",
+    "platform": "iPhone app",
+    "keywords": "missing search filter hidden empty"
+  },
+  {
+    "id": "calendar-conflicts",
+    "title": "What should I do when a scheduling conflict appears?",
+    "text": "Review the overlapping task or appointment and choose another time if needed. For voice booking, clearly confirm the final date and time before creation. A requested time outside working hours or on a weekend is not, by itself, an overlapping appointment. Check the saved event’s details after it is created.",
+    "url": "/help#calendar-conflicts",
+    "platform": "iPhone app",
+    "keywords": "overlap clash weekend working hours voice booking"
+  },
+  {
+    "id": "calendar-task",
+    "title": "What does Add to Tasks do?",
+    "text": "In Event Details, tap Add to Tasks to create a task using the appointment’s title and notes, with its start time as the task’s due date. It does not create another calendar appointment. Repeating this action for the same event reuses the task. The task and appointment have separate completion states.",
+    "url": "/help#calendar-task",
+    "platform": "iPhone app",
+    "keywords": "convert copy to do duplicate deadline"
+  },
+  {
+    "id": "calendar-delete",
+    "title": "How do I delete an appointment?",
+    "text": "Open an event created in Nexdo, tap Delete Event, and confirm. If it was sent to a connected calendar, Nexdo also attempts to remove it there and shows a warning if that fails. Delete an imported event in its original calendar. Mark Incomplete changes completion status; it does not delete the event.",
+    "url": "/help#calendar-delete",
+    "platform": "iPhone app",
+    "keywords": "remove cancel trash external"
+  },
+  {
+    "id": "tasks-create",
+    "title": "How do I create a task?",
+    "text": "Open Tasks and choose Add Manually to enter a task, or Add by Voice to describe it aloud. Give it a clear title and add scheduling details if needed. Review the details and save or confirm the task. Check the task list for the saved result.",
+    "url": "/help#tasks-create",
+    "platform": "iPhone app",
+    "keywords": "new add voice speech create"
+  },
+  {
+    "id": "tasks-edit",
+    "title": "How do I edit a task?",
+    "text": "Tap a task to open its details. Change its title, notes, priority, estimate, or other available fields, then tap Save changes. Some tasks show a compact layout; use Show additional details to reveal more fields.",
+    "url": "/help#tasks-edit",
+    "platform": "iPhone app",
+    "keywords": "change rename update save details"
+  },
+  {
+    "id": "tasks-complete",
+    "title": "How do I complete a task or reopen it?",
+    "text": "Open the task and tap Mark complete. To reopen it, find it using the Completed filter, open its details, and tap Mark incomplete. A completed task no longer appears with open tasks in the same way, so check your filters if it seems to disappear.",
+    "url": "/help#tasks-complete",
+    "platform": "iPhone app",
+    "keywords": "done finish undo check status reopen"
+  },
+  {
+    "id": "tasks-schedule",
+    "title": "What is the difference between a scheduled time and a due date?",
+    "text": "A scheduled time is when you plan to work on the task. A due date is its deadline. Use the task’s schedule fields to change when you plan to work, then save. Calendar can show scheduled tasks and task deadlines, so a deadline is not necessarily a booked appointment.",
+    "url": "/help#tasks-schedule",
+    "platform": "iPhone app",
+    "keywords": "start end time deadline reschedule calendar"
+  },
+  {
+    "id": "tasks-find",
+    "title": "Why is my task missing from Today?",
+    "text": "Today shows tasks that match that view’s date and filters. Try Tomorrow, This Week, or All, and clear any search or extra filters. If you already completed the task, check Completed. Open the task to check its schedule and due date.",
+    "url": "/help#tasks-find",
+    "platform": "iPhone app",
+    "keywords": "search missing hidden list empty tomorrow week all"
+  },
+  {
+    "id": "tasks-priority",
+    "title": "How do I set a task’s priority and duration?",
+    "text": "Open task details and use Priority to choose Low, Normal, High, or Critical. Use Estimate to set how many minutes the work may take, then tap Save changes. The estimate describes planned effort; it does not mean the task is automatically finished after that time.",
+    "url": "/help#tasks-priority",
+    "platform": "iPhone app",
+    "keywords": "important urgent critical estimate minutes effort"
+  },
+  {
+    "id": "tasks-repeat",
+    "title": "How do I make a task repeat?",
+    "text": "Open task details and find Repeat. Choose Daily, Weekly, Monthly, or Yearly, then save your changes. Choose None to turn repetition off. If the Repeat field is hidden, open Show additional details first.",
+    "url": "/help#tasks-repeat",
+    "platform": "iPhone app",
+    "keywords": "recurring recurrence daily weekly monthly yearly"
+  },
+  {
+    "id": "tasks-project",
+    "title": "How do I organize tasks into a project?",
+    "text": "Use the Projects tab in Tasks to manage your projects. In a task’s details, use the Project field to choose its project and save. Project assignment groups related work while the task keeps its own schedule, priority, and completion status.",
+    "url": "/help#tasks-project",
+    "platform": "iPhone app",
+    "keywords": "group organize folder assignment"
+  },
+  {
+    "id": "tasks-notes",
+    "title": "Can I add notes and smaller steps to a task?",
+    "text": "Yes. Open task details and use the steps section to break the work into smaller actions. Add context or links under Notes, then tap Save changes. If these fields are not visible, choose Show additional details.",
+    "url": "/help#tasks-notes",
+    "platform": "iPhone app",
+    "keywords": "subtasks checklist description links context"
+  },
+  {
+    "id": "tasks-focus",
+    "title": "How can I use Pomodoro while working on a task?",
+    "text": "Open the center navigation icon and choose Pomodoro Focus. Choose a focus category, optionally enter the task as your session name, set the duration, and start. Some task screens also offer Start a 25-minute focus session. Finishing a focus timer does not automatically mark the task complete; mark it complete when the work is done.",
+    "url": "/help#tasks-focus",
+    "platform": "iPhone app",
+    "keywords": "timer concentrate focus session break productivity"
+  }
+]

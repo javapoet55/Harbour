@@ -223,6 +223,9 @@ struct ShoppingDetail:View {
     @State private var error:String?
     @Environment(\.scenePhase) private var offersScenePhase
     @State private var offers:ShoppingOffersSnapshot?
+    @State private var shortcutEmail=false
+    @State private var shortcutOffers=false
+    @Environment(\.dynamicTypeSize) private var shortcutTypeSize
     @State private var selectedCategory="All"
     @FocusState private var quickAddFocused:Bool
     init(store:ShoppingStore,initial:GroceryList){self.store=store;_list=State(initialValue:initial)}
@@ -232,25 +235,11 @@ struct ShoppingDetail:View {
     var body:some View {
         List {
             Section {
-                if !readOnly {
-                    NavigationLink { ShoppingEmailView(store:store,list:list) } label: {
-                        HStack(spacing:12) {
-                            Image(systemName:"envelope.badge.clock").font(.title2).foregroundStyle(Color.nexdoBlue)
-                            VStack(alignment:.leading,spacing:4) {
-                                Text("Schedule email").font(.headline)
-                                Text("Send your list to your store manager every week").font(.caption).foregroundStyle(.secondary)
-                            }
-                        }.padding(.vertical,8)
-                    }.accessibilityLabel("Schedule shopping list email")
-                }
-                HStack{shoppingIcon;VStack(alignment:.leading){Text(list.title).font(.title2.bold());Text("\(list.items.count-list.remaining) added · \(GroceryList.itemCount(list.items.count))").foregroundStyle(.secondary)}}
+                HStack{StoreBrandLogo(api:store.api,listID:list.id,identity:[list.storeName ?? "",list.storeWebsite ?? ""].joined(separator:"|"));VStack(alignment:.leading){Text(list.title).font(.title2.bold());Text("\(list.items.count-list.remaining) added · \(GroceryList.itemCount(list.items.count))").foregroundStyle(.secondary)}}
                     .listRowInsets(EdgeInsets(top:0,leading:16,bottom:3,trailing:16)).listRowBackground(Color.clear).listRowSeparator(.hidden)
-                NavigationLink {
-                    ShoppingOffersView(store:store,list:list,onUpdate:{list=$0})
-                } label: {
-                    Label("View offers" + (offers.map { " (\($0.matches.count))" } ?? ""),systemImage:"tag")
-                        .font(.subheadline.weight(.semibold)).foregroundStyle(Color.nexdoIndigo)
-                }.accessibilityIdentifier("shopping-view-offers")
+                shoppingShortcuts
+                    .listRowInsets(EdgeInsets(top:8,leading:16,bottom:8,trailing:16))
+                    .listRowBackground(Color.clear).listRowSeparator(.hidden)
                 HStack(spacing:8){
                         Button{
                             if quick.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty {quickAddFocused=true}else{quickAdd()}
@@ -312,14 +301,16 @@ struct ShoppingDetail:View {
                     ForEach(visibleItems){row in
                         VStack(alignment:.leading,spacing:6) {
                             GroceryRow(row:row,readOnly:readOnly,onToggle:{toggle(row)},onEdit:{item=row},onAlternatives:{alternativesFor=row})
-                            NavigationLink {
-                                ShoppingOffersView(store:store,list:list,itemId:row.id,onUpdate:{list=$0})
-                            } label: {
-                                Label(ShoppingOffersSnapshot.badge(offers?.matches.filter{$0.itemId==row.id},selected:row.chosenOffer),systemImage:"tag")
-                                    .font(.caption.weight(.semibold)).foregroundStyle(Color.nexdoBlue)
-                                    .padding(.horizontal,10).padding(.vertical,7)
-                                    .background(Color.nexdoBlue.opacity(0.08),in:Capsule())
-                            }.accessibilityLabel("Offers for \(row.name)")
+                            if let itemOffers = offers?.matches.filter({ $0.itemId == row.id && ["matching", "available", "alternative"].contains($0.category) }), !itemOffers.isEmpty {
+                                NavigationLink {
+                                    ShoppingOffersView(store:store,list:list,itemId:row.id,onUpdate:{list=$0})
+                                } label: {
+                                    Label(ShoppingOffersSnapshot.badge(itemOffers,selected:row.chosenOffer.flatMap { selected in itemOffers.contains(where: { $0.offer.id == selected.id }) ? selected : nil }),systemImage:"tag")
+                                        .font(.caption.weight(.semibold)).foregroundStyle(Color.nexdoBlue)
+                                        .padding(.horizontal,10).padding(.vertical,7)
+                                        .background(Color.nexdoBlue.opacity(0.08),in:Capsule())
+                                }.accessibilityLabel("Offers for \(row.name)")
+                            }
                         }.swipeActions{Button("Delete",role:.destructive){delete(row)}.disabled(readOnly)}
                     }
                 }
@@ -329,6 +320,8 @@ struct ShoppingDetail:View {
         }.listSectionSpacing(10).contentMargins(.top,4,for:.scrollContent).scrollContentBackground(.hidden).background{TodayBackdrop()}
             .navigationTitle("Shopping List").navigationBarTitleDisplayMode(.inline)
             .disabled(store.busy)
+            .navigationDestination(isPresented:$shortcutEmail){ShoppingEmailView(store:store,list:list)}
+            .navigationDestination(isPresented:$shortcutOffers){ShoppingOffersView(store:store,list:list,onUpdate:{list=$0})}
             .safeAreaInset(edge:.bottom,spacing:0){shoppingActions}
             .toolbar{
                 ToolbarItem(placement:.topBarTrailing){Button{sharing=true}label:{Image(systemName:"square.and.arrow.up")}.accessibilityLabel("Share list")}
@@ -388,6 +381,31 @@ struct ShoppingDetail:View {
                 .accessibilityIdentifier("shopping-ai-recommendations")
         }.padding(.horizontal,16).padding(.vertical,10)
             .background(.ultraThinMaterial).overlay(alignment:.top){Divider().opacity(0.5)}
+    }
+    private var shoppingShortcuts:some View {
+        let layout = shortcutTypeSize.isAccessibilitySize ? AnyLayout(VStackLayout(spacing:8)) : AnyLayout(HStackLayout(alignment:.top,spacing:8))
+        return layout {
+            Button {shortcutEmail=true} label: {
+                shortcutCard("Schedule Email",icon:"envelope.fill",color:.nexdoBlue)
+            }.frame(maxWidth:.infinity).disabled(readOnly).accessibilityIdentifier("shopping-shortcut-email")
+            Button {shortcutOffers=true} label: {
+                shortcutCard("View Offers" + (offers.map { " (\($0.matches.count))" } ?? ""),icon:"tag",color:.nexdoIndigo)
+            }.frame(maxWidth:.infinity).accessibilityIdentifier("shopping-shortcut-offers")
+        }.buttonStyle(.plain)
+    }
+    private func shortcutCard(_ title:String,icon:String,color:Color)->some View {
+        VStack(alignment:.leading,spacing:6) {
+            HStack {
+                Image(systemName:icon).font(.system(size:18,weight:.semibold)).foregroundStyle(color)
+                    .frame(width:30,height:30).background(color.opacity(0.08),in:RoundedRectangle(cornerRadius:9))
+                Spacer(minLength:0)
+                Image(systemName:"chevron.right").font(.caption.weight(.semibold)).foregroundStyle(Color.nexdoSecondary)
+            }
+            Text(title).font(.subheadline.weight(.semibold)).foregroundStyle(Color.nexdoInk)
+                .lineLimit(shortcutTypeSize.isAccessibilitySize ? nil:1).minimumScaleFactor(0.8)
+        }.padding(10).frame(maxWidth:.infinity,alignment:.leading)
+            .background(Color(uiColor:.secondarySystemGroupedBackground),in:RoundedRectangle(cornerRadius:18))
+            .accessibilityElement(children:.combine)
     }
     private func setAllItemsChecked(_ checked: Bool) {
         guard !readOnly, !store.busy else { return }
@@ -575,6 +593,7 @@ private struct ShoppingCompletionView:View {
 }
 
 private struct ShoppingStoreSuggestion:Decodable,Sendable,Identifiable {
+    let website:String?
     let id:String
     let name:String
     let address:String
@@ -587,6 +606,11 @@ struct ShoppingSettings:View {
     @Environment(\.dismiss) private var dismiss
     @State var initial:GroceryList
     let onSave:(GroceryList)->Void
+    @State private var addressLines: ShoppingStoreAddress
+    init(store: ShoppingStore, initial: GroceryList, onSave: @escaping (GroceryList) -> Void) {
+        self.store = store; self._initial = State(initialValue: initial); self.onSave = onSave
+        self._addressLines = State(initialValue: ShoppingStoreAddress(address: initial.storeAddress, zip: initial.storeZip))
+    }
     var body:some View{NavigationStack{Form{
         TextField("List name",text:$initial.title)
         DatePicker("Shopping date",selection:Binding(get:{MomentDates.date(initial.date,zone:initial.timeZone)},set:{initial.date=MomentDates.day($0,zone:initial.timeZone)}),displayedComponents:.date)
@@ -595,19 +619,38 @@ struct ShoppingSettings:View {
         Section {
             NavigationLink {
                 ShoppingStoreFinder(store:store,area:initial.storeZip ?? "") { selected in
+                    initial.storePlaceId=selected.id
+                    initial.storeWebsite=selected.website
                     initial.storeName=selected.name
                     initial.storeAddress=selected.address
                     initial.storeZip=selected.zip
+                    addressLines = ShoppingStoreAddress(address: selected.address, zip: selected.zip)
                 }
             } label: {Label("Add New Store",systemImage:"plus")}
                 .accessibilityIdentifier("shopping-add-store")
-            TextField("Store name",text:Binding(get:{initial.storeName ?? ""},set:{initial.storeName=$0}))
-            TextField("Street address, city, state",text:Binding(get:{initial.storeAddress ?? ""},set:{initial.storeAddress=$0}))
-                .textContentType(.fullStreetAddress)
-            TextField("ZIP code",text:Binding(get:{initial.storeZip ?? ""},set:{initial.storeZip=$0}))
-                .keyboardType(.numbersAndPunctuation).textContentType(.postalCode)
-        } header: {Text("Store details")} footer: {Text("Used to find offers for your store location. Offers are available for Costco, Safeway, Albertsons, Vons, Jewel-Osco and other supported stores.")}
+            TextField("Store name",text:Binding(get:{initial.storeName ?? ""},set:{initial.storeName=$0;initial.storeWebsite=nil;initial.storePlaceId=nil}))
+            TextField("Street address", text: Binding(get: { addressLines.street }, set: { updateAddress(street: $0) }), axis: .vertical)
+                .textContentType(.streetAddressLine1).lineLimit(1...3)
+            TextField("City, state and ZIP code", text: Binding(get: { addressLines.locality }, set: { updateAddress(locality: $0) }), axis: .vertical)
+                .lineLimit(1...2)
+            if let url = ShoppingStoreAddress.mapsURL(name: initial.storeName, address: initial.storeAddress, placeID: initial.storePlaceId, directions: true) {
+                Link(destination: url) { Label("Directions", systemImage: "arrow.triangle.turn.up.right.diamond") }
+            }
+            NavigationLink {
+                ShoppingStoreHoursView(api: store.api, placeID: initial.storePlaceId, name: initial.storeName ?? "Store", mapsURL: ShoppingStoreAddress.mapsURL(name: initial.storeName, address: initial.storeAddress, placeID: initial.storePlaceId, directions: false))
+            } label: { Label("Store Hours", systemImage: "clock") }
+
+        } header: {Text("Store details")} footer: {Text("Used to find offers for your store location. Verified sources are required; some stores are not available yet.")}
     }.navigationTitle("List Settings").toolbar{Button("Save"){onSave(initial);dismiss()}.disabled(initial.title.trimmingCharacters(in:.whitespaces).isEmpty || (!(initial.storeZip ?? "").isEmpty && (initial.storeZip ?? "").range(of:"^[0-9]{5}(-[0-9]{4})?$",options:.regularExpression)==nil))}}}
+    private func updateAddress(street: String? = nil, locality: String? = nil) {
+        var lines = addressLines
+        if let street { lines.street = street }
+        if let locality { lines.locality = locality }
+        addressLines = lines
+        initial.storeAddress = lines.fullAddress
+        initial.storeZip = lines.zip
+        initial.storePlaceId = nil; initial.storeWebsite = nil
+    }
 }
 private struct ShoppingStoreFinder:View {
     @ObservedObject var store:ShoppingStore

@@ -59,16 +59,19 @@ const RUN_RETENTION_MS=90*86400000, TERMINAL=['sent','skipped','cancelled','fail
 const errorName=(e:unknown)=>e instanceof Error?e.name:'Error';
 // Token refresh plus send can take ~35s, so new sends stop early enough to finish within the worker's 55s request timeout.
 const SEND_BUDGET_MS=20000, SEND_CONCURRENCY=5, QUEUE_BATCH=50;
-type DueSchedule={id:string;listId:string;recipient:string;recipientName:string;timeZone:string;weekday:number;hour:number;minute:number;nextRunAt:Date};
+type DueSchedule={id:string;listId:string;recipient:string;recipientName:string;timeZone:string;weekday:number;hour:number;minute:number;nextRunAt:Date;pickupDate:string|null;pickupStartHour:number|null;customerPhone:string|null};
 async function queueRun(s:DueSchedule,now:Date){
  await prisma.$transaction(async tx=>{
   const claim=await tx.shoppingEmailSchedule.updateMany({where:{id:s.id,enabled:true,nextRunAt:s.nextRunAt},data:{nextRunAt:nextWeekly(now,s)}});
   if(!claim.count)return;
   const list=await tx.shoppingList.findUniqueOrThrow({where:{id:s.listId},include:{items:{orderBy:{sortOrder:'asc'}}}});
-  const mail=shoppingEmail(list.title,s.recipientName,list.items);
+  const sender=await tx.user.findUniqueOrThrow({where:{id:list.userId},select:{name:true}});
+  const mail=shoppingEmail(list.title,s.recipientName,list.items,{pickupDate:s.pickupDate,pickupStartHour:s.pickupStartHour,timeZone:s.timeZone,runAt:now},{name:sender.name,phoneNumber:s.customerPhone});
   const stale=now.getTime()-s.nextRunAt.getTime()>24*3600000;
-  const skip=mail.empty||!!list.completedAt||stale;
-  await tx.shoppingEmailRun.create({data:{scheduleId:s.id,dueAt:s.nextRunAt,retryAt:now,recipient:s.recipient,subject:mail.subject,body:mail.body,status:skip?'skipped':'pending',detail:stale?'Missed run is more than 24 hours old':list.completedAt?'Shopping trip completed':mail.empty?'No unpurchased items':null}});
+  const missingPhone=!s.customerPhone;
+  if(missingPhone)await tx.shoppingEmailSchedule.update({where:{id:s.id},data:{enabled:false}});
+  const skip=mail.empty||!!list.completedAt||stale||missingPhone;
+  await tx.shoppingEmailRun.create({data:{scheduleId:s.id,dueAt:s.nextRunAt,retryAt:now,recipient:s.recipient,subject:mail.subject,body:mail.body,status:skip?'skipped':'pending',detail:missingPhone?'Add your phone number in Share List and save to resume emails':stale?'Missed run is more than 24 hours old':list.completedAt?'Shopping trip completed':mail.empty?'No selected items':null}});
  });
 }
 const findJob=(now:Date,failed:Set<string>)=>prisma.shoppingEmailRun.findFirst({where:{status:'pending',retryAt:{lte:now},schedule:{enabled:true},id:{notIn:[...failed]}},include:{schedule:{include:{list:true}}},orderBy:{retryAt:'asc'}});

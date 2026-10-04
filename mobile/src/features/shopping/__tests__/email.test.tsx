@@ -8,24 +8,26 @@ jest.mock('../store', () => ({ useShopping: (select: (state: unknown) => unknown
 import Screen from '../../../../app/(tabs)/(today)/shopping/email';
 const initial = { available: true, account: { email: 'me@example.com', status: 'connected' }, schedule: null };
 beforeEach(() => { jest.clearAllMocks(); mockGet.mockResolvedValue(initial); mockSave.mockResolvedValue(initial); });
-it('defaults to Saturday 10 AM, previews unchecked items and requires consent', async () => {
+it('defaults to Saturday 10 AM, previews checked items and requires consent', async () => {
  await render(<Screen />); await screen.findByLabelText('Recipient name');
  expect(screen.getByLabelText('Delivery time').props.value).toBe('10:00');
  expect(screen.getByLabelText('Saturday').props.accessibilityState.selected).toBe(true);
- expect(screen.getByText('• Milk — 2 · litres')).toBeTruthy(); expect(screen.queryByText(/• Eggs/)).toBeNull();
+ expect(screen.getByText('• Eggs — 1')).toBeTruthy(); expect(screen.queryByText(/• Milk/)).toBeNull();
  await fireEvent.changeText(screen.getByLabelText('Recipient name'), 'Alex');
  await fireEvent.changeText(screen.getByLabelText('Recipient email'), 'alex@example.com');
+ await fireEvent.changeText(screen.getByLabelText('Your phone number'), '+1 (415) 555-0123');
  expect(screen.getByRole('button', { name: 'Save weekly schedule' }).props.accessibilityState.disabled).toBe(true);
  await fireEvent(screen.getByLabelText('Authorize automatic weekly email'), 'valueChange', true);
  await fireEvent.press(screen.getByRole('button', { name: 'Save weekly schedule' }));
- await waitFor(() => expect(mockSave).toHaveBeenCalledWith('list-1', { recipientName: 'Alex', recipient: 'alex@example.com', timeZone: 'America/Los_Angeles', weekday: 6, hour: 10, minute: 0, consent: true }));
+ await waitFor(() => expect(mockSave).toHaveBeenCalledWith('list-1', { customerPhone: '+14155550123', recipientName: 'Alex', recipient: 'alex@example.com', timeZone: 'America/Los_Angeles', weekday: 6, hour: 10, minute: 0, consent: true }));
  await screen.findByText('Weekly email scheduled.');
 });
 it('loads and pauses an existing schedule', async () => {
- const schedule = { recipientName: 'Alex', recipient: 'alex@example.com', timeZone: 'UTC', weekday: 2, hour: 14, minute: 30, enabled: true, nextRunAt: '2030-01-08T14:30:00Z', runs: [] };
+ const schedule = { customerPhone: '+14155550123', recipientName: 'Alex', recipient: 'alex@example.com', timeZone: 'UTC', weekday: 2, hour: 14, minute: 30, enabled: true, nextRunAt: '2030-01-08T14:30:00Z', runs: [] };
  mockGet.mockResolvedValue({ ...initial, schedule }); mockPause.mockResolvedValue({ ...initial, schedule: { ...schedule, enabled: false } });
  await render(<Screen />); await screen.findByText('Schedule active');
  expect(screen.getByLabelText('Delivery time').props.value).toBe('14:30');
+ expect(screen.getByLabelText('Your phone number').props.value).toBe('+14155550123');
  await fireEvent.press(screen.getByRole('button', { name: 'Pause weekly emails' }));
  await screen.findByText('Schedule paused'); expect(mockPause).toHaveBeenCalledWith('list-1');
 });

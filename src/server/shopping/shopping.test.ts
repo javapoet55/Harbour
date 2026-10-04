@@ -84,7 +84,6 @@ it('keeps a shared link on the explicitly shared trip after weekly completion',a
  expect(next.list.shareToken).toBeNull();
  expect((await prisma.shoppingList.findUniqueOrThrow({where:{shareToken:shared.list.shareToken!}})).id).toBe(a.list.id);
 });
-
 it('persists Places identity, copies it weekly, and clears it on legacy-client store changes',async()=>{
  const data={...input(),storeName:'Costco',storeAddress:'Test address',storeZip:'94526',storePlaceId:'test-place',storeWebsite:'https://www.costco.com/warehouse'};
  const created=await shoppingAction(owner,{operation:'create',input:data});if(!('list'in created)||!created.list)throw Error('Missing list');

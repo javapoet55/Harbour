@@ -4,7 +4,7 @@ The native iPhone Shopping List → Share List → Weekly email to store manager
 
 ## Deployment
 
-1. Apply `20261002190000_shopping_email` through the existing migration deployment. Both PostgreSQL and SQLite migrations are provided.
+1. Apply `20261002190000_shopping_email` , `20261003050000_shopping_email_pickup`, and `20261003060000_shopping_customer_phone` through the existing migration deployment. Both PostgreSQL and SQLite migrations are provided.
 2. Configure the existing `MOMENTS_GOOGLE_CLIENT_ID`, `MOMENTS_GOOGLE_CLIENT_SECRET`, `MOMENTS_GOOGLE_REDIRECT_URI`, credential encryption and session signing settings. The existing verified Gmail OAuth connection is shared with Important Moments; no credentials are returned to the phone.
 3. Set `SHOPPING_EMAIL_ENABLED=true` in the API service only when ready to enable the feature.
 4. Redeploy the persistent `scripts/moments-worker.mjs` service with its existing `MOMENTS_API_BASE_URL` and matching `HARBOR_CRON_SECRET`. It now POSTs `/api/shopping/email-tick` each cycle independently of whether Moments scheduling is enabled. Do not rely on a timer inside the web server.
@@ -15,11 +15,13 @@ Each tick queues every due schedule, then sends up to five emails at a time and 
 
 ## Semantics
 
-- Sends only unchecked items from a snapshot at the due time, including quantities, sizes and notes. No attachments or view-only link are sent.
-- A completed weekly trip transfers its schedule to the newly generated list. If the trip is completed before that week's email goes out, that week is recorded as skipped and the new list is first emailed at the following weekly time. Completing a one-off (non-weekly) list turns its schedule off and cancels any queued email. Manually copying a list does not copy the authorization.
-- Empty/completed lists are skipped. Runs missed by over 24 hours are skipped instead of sending stale groceries.
+- Pickup preferences are optional for older clients/schedules. The iOS Share List screen saves a timezone dropdown, pickup date, and one-hour window (9–10 AM through 7–8 PM). Email includes the requested pickup date/window and timezone, subject to store confirmation. For weekly recurrence, the date advances in seven-day steps to the next window starting at or after the run; it is independent of email send time.
+- The signature uses the sender’s profile name and the required customer phone entered in Share List. The phone is saved per schedule, normalized with country code, and disclosed as shared with the store; it does not overwrite the profile phone. New saves require a valid number. Legacy schedules without one are paused by the migration (and any old pending snapshots are cancelled), or skipped and paused at their next run until the customer adds a number and saves. Pickup timezone abbreviations follow the pickup date (for example PDT in October, PST in winter). The template asks the store to confirm pickup/availability and call and email when ready.
+- Sends only checked (selected) items from a snapshot at the due time, including quantities, sizes and notes. No attachments or view-only link are sent.
+- A completed weekly trip transfers its schedule to the newly generated list. Manually copying a list does not copy the authorization.
+- Lists with no checked items and completed lists are skipped. Runs missed by over 24 hours are skipped instead of sending stale groceries.
 - Local weekly calculation respects daylight saving; nonexistent local times are skipped that week.
-- Definitive provider rate limits, and Google token outages or timeouts (nothing submitted yet), retry after five minutes, up to three attempts. Pending retries retain the original snapshot. These never pause the schedule or ask the user to reconnect.
+- Definitive provider rate limits retry after five minutes, up to three attempts. Pending retries retain the original snapshot. Before deploying a change to selection semantics, pause/re-save schedules with pending runs to cancel their old snapshots; already submitted email cannot be changed.
 - Ambiguous provider errors or abandoned sends are marked uncertain, never automatically resubmitted. User must check Gmail Sent mail. A repeated Message-ID alone is not an idempotency guarantee.
 - Saving a schedule never sends more than one email in 7 days: if this week's email already went out (or was skipped), the next send is the first chosen weekly time at least 7 days later. Changing the time before this week's email goes out moves it within the same week.
 - Pausing cancels pending sends. Pause/edit returns a conflict if a send is already underway; submitted mail cannot be recalled.

@@ -9,7 +9,16 @@ struct MomentsManagementEntry: View {
     private var groups:[MomentDisplayGroup] {
         MomentDisplayGroup.groups(store.moments.filter {
             !$0.isArchived
-        }.sorted { $0.nextOccurrence < $1.nextOccurrence })
+        }).sorted { left, right in
+            let leftDate = managementDate(left)
+            let rightDate = managementDate(right)
+            return leftDate == rightDate ? left.id < right.id : leftDate > rightDate
+        }
+    }
+    private func managementDate(_ group: MomentDisplayGroup) -> Date {
+        group.moments.map { moment in
+            moment.upcomingDelivery?.date ?? MomentDates.date(moment.nextOccurrence, zone: moment.timeZoneID)
+        }.max() ?? .distantPast
     }
     var body:some View {
         ZStack {
@@ -49,15 +58,19 @@ struct MomentsManagementEntry: View {
                                         VStack(alignment:.leading,spacing:6) {
                                             Text(moment.title).font(.headline)
                                             Text(moment.typeLabel).font(.subheadline).foregroundStyle(.secondary)
-                                            if filter == .scheduled {
-                                                let plans = group.moments.compactMap(\.upcomingDelivery).sorted { $0.date < $1.date }
-                                                let dates = plans.reduce(into: [String]()) { labels, plan in
-                                                    let label = MomentDates.label(plan.date, zone: plan.timeZoneID)
-                                                    if !labels.contains(label) { labels.append(label) }
+                                            let dates = group.moments.reduce(into: [String]()) { labels, entry in
+                                                let label: String
+                                                if let plan = entry.upcomingDelivery {
+                                                    label = "Scheduled: " + MomentDates.sendDayLabel(plan.date, zone: plan.timeZoneID)
+                                                } else {
+                                                    label = "Date: " + MomentDates.sendDayLabel(MomentDates.date(entry.nextOccurrence, zone: entry.timeZoneID), zone: entry.timeZoneID)
                                                 }
-                                                ForEach(dates, id: \.self) { date in
-                                                    Label(date, systemImage: "calendar").font(.subheadline).foregroundStyle(Color.nexdoIndigo)
-                                                }
+                                                if !labels.contains(label) { labels.append(label) }
+                                            }
+                                            ForEach(dates, id: \.self) { date in
+                                                Label(date, systemImage: "calendar")
+                                                    .font(.subheadline).foregroundStyle(Color.nexdoIndigo)
+                                                    .fixedSize(horizontal: false, vertical: true)
                                             }
                                             if !moment.enabled {Text("Inactive").font(.caption).foregroundStyle(.secondary)}
                                         }

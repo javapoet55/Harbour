@@ -8,7 +8,7 @@ const input = z.discriminatedUnion('action', [
   z.object({ action: z.literal('start'), phone: z.string().max(20) }).strict(),
   z.object({ action: z.literal('verify'), code: z.string().max(10) }).strict(),
 ]);
-/** { action: 'start', phone: '+14155550123' } sends an SMS code; { action: 'verify', code: '123456' } confirms it. */
+/** Start returns alreadyVerified for this account's verified number, otherwise sends a voice/SMS code. */
 export async function POST(request: Request) {
   try {
     const user = await requireUser();

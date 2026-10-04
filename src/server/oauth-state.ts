@@ -1,10 +1,11 @@
+import { randomUUID } from 'node:crypto';
 import { SignJWT, jwtVerify } from 'jose';
 import type { OAuthProvider } from '@/providers/calendar';
 import { sessionSigningKey } from './session-key';
 
 export async function createOAuthState(userId: string, provider: OAuthProvider, native = false) {
   return new SignJWT({ sub: userId, provider, native, purpose: 'calendar-oauth' })
-    .setProtectedHeader({ alg: 'HS256' }).setIssuedAt().setExpirationTime('10m').sign(sessionSigningKey());
+    .setProtectedHeader({ alg: 'HS256' }).setJti(randomUUID()).setIssuedAt().setExpirationTime('10m').sign(sessionSigningKey());
 }
 
 export async function isNativeOAuthState(token: string, provider: OAuthProvider) {

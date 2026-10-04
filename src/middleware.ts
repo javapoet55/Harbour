@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { adminAppUrl } from '@/lib/admin-app-url';
 
-const PUBLIC = ['/signup-challenge', '/places-policy', '/login', '/signup', '/verify-email', '/reset-password', '/manifest.json', '/welcome', '/pricing', '/features/ai-assistant'];
+const PUBLIC = ['/signup-challenge', '/help', '/places-policy', '/login', '/signup', '/verify-email', '/reset-password', '/manifest.json', '/welcome', '/pricing', '/features/ai-assistant'];
 
 /**
  * The admin portal moved to the standalone admin app. Old /admin links go to the same page there:

@@ -22,6 +22,7 @@ export default function ShoppingEmailScreen() {
   const [notice, setNotice] = useState('');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
+  const [customerPhone, setCustomerPhone] = useState('');
   const [day, setDay] = useState(6);
   const [time, setTime] = useState('10:00');
   const [zone, setZone] = useState(list?.timeZone || Intl.DateTimeFormat().resolvedOptions().timeZone);
@@ -30,7 +31,7 @@ export default function ShoppingEmailScreen() {
     try {
       const value = await shoppingEmailApi.get(id); setSnapshot(value); setError('');
       if (value.schedule) {
-        const s = value.schedule; setName(s.recipientName); setEmail(s.recipient); setDay(s.weekday); setZone(s.timeZone);
+        const s = value.schedule; setCustomerPhone(s.customerPhone || ''); setName(s.recipientName); setEmail(s.recipient); setDay(s.weekday); setZone(s.timeZone);
         setTime(`${String(s.hour).padStart(2, '0')}:${String(s.minute).padStart(2, '0')}`);
       }
       setConsent(false);
@@ -43,7 +44,9 @@ export default function ShoppingEmailScreen() {
   const validTime = /^([01]\d|2[0-3]):[0-5]\d$/.test(time);
   let validZone = true; try { new Intl.DateTimeFormat('en', { timeZone: zone }); } catch { validZone = false; }
   const ready = !loading && !busy && !!snapshot?.available && snapshot.account?.status === 'connected';
-  const valid = ready && consent && name.trim().length > 0 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()) && validTime && validZone;
+  const normalizedPhone = customerPhone.replace(/[\s().-]/g, '');
+  const validPhone = /^\+[1-9]\d{7,14}$/.test(normalizedPhone);
+  const valid = validPhone && ready && consent && name.trim().length > 0 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()) && validTime && validZone;
   const act = async (operation: 'save' | 'pause' | 'connect') => {
     setBusy(true); setError(''); setNotice('');
     try {
@@ -55,7 +58,7 @@ export default function ShoppingEmailScreen() {
         await load(); setNotice('Gmail connected. Review and save your schedule.');
       } else {
         const value = operation === 'pause' ? await shoppingEmailApi.pause(id) : await shoppingEmailApi.save(id, {
-          recipient: email.trim(), recipientName: name.trim(), timeZone: zone, weekday: day,
+          customerPhone: normalizedPhone, recipient: email.trim(), recipientName: name.trim(), timeZone: zone, weekday: day,
           hour: Number(time.split(':')[0]), minute: Number(time.split(':')[1]), consent: true,
         });
         setSnapshot(value); setConsent(false); setNotice(operation === 'pause' ? 'Weekly emails paused.' : 'Weekly email scheduled.');
@@ -89,6 +92,11 @@ export default function ShoppingEmailScreen() {
           <Text>Recipient name</Text><TextInput accessibilityLabel="Recipient name" value={name} onChangeText={setName} maxLength={100} style={field} editable={!busy} placeholder="e.g. Alex" placeholderTextColor={colors.secondaryLabel} />
           <Text>Email address</Text><TextInput accessibilityLabel="Recipient email" value={email} onChangeText={setEmail} maxLength={254} keyboardType="email-address" autoCapitalize="none" autoCorrect={false} style={field} editable={!busy} placeholder="manager@store.com" placeholderTextColor={colors.secondaryLabel} />
         </View>
+        <View style={card}><Text style={label}>Your contact number</Text>
+          <Text style={secondary}>The store will use this number for pickup updates and questions. It will be included in your email.</Text>
+          <TextInput accessibilityLabel="Your phone number" value={customerPhone} onChangeText={setCustomerPhone} keyboardType="phone-pad" textContentType="telephoneNumber" placeholder="+1 415 555 0123" placeholderTextColor={colors.secondaryLabel} style={field} editable={!busy} />
+          {!validPhone && <Text style={secondary}>Enter your phone number with country code, for example +1.</Text>}
+        </View>
         <View style={card}><Text style={label}>03 · Weekly delivery</Text>
           <View style={styles.days}>{days.map((d, i) => <Pressable key={d} accessibilityRole="radio" accessibilityLabel={d} accessibilityState={{ selected: day === i }} disabled={busy} onPress={() => setDay(i)} style={[styles.day, { backgroundColor: day === i ? '#6041D9' : colors.fieldSurface }]}><Text style={{ color: day === i ? 'white' : colors.label }}>{d.slice(0, 3)}</Text></Pressable>)}</View>
           <Text>Time (24-hour format)</Text><TextInput accessibilityLabel="Delivery time" value={time} onChangeText={setTime} placeholder="10:00" keyboardType="numbers-and-punctuation" style={field} editable={!busy} />
@@ -97,11 +105,11 @@ export default function ShoppingEmailScreen() {
           {!validZone && <Text style={secondary}>Enter a valid timezone, such as America/Los_Angeles.</Text>}
           <Text style={secondary}>Every {days[day]} at {time}. Daylight saving is handled automatically. Sending may take a few minutes.</Text>
         </View>
-        <View style={card}><Text style={label}>Email preview</Text><Text style={secondary}>The latest unchecked items are included when the email runs. Empty lists are skipped.</Text>
+        <View style={card}><Text style={label}>Email preview</Text><Text style={secondary}>Only checked items are included when the email runs. Unchecked items are excluded. If nothing is checked, the email is skipped.</Text>
           <Text>Hi {name.trim() || 'there'},</Text><Text>Here is my shopping list:</Text>
-          {list?.items.filter(i => !i.checked).slice(0, 5).map(i => <Text key={i.id}>• {i.name} — {i.quantity}{i.size ? ` · ${i.size}` : ''}{i.notes ? ` (${i.notes})` : ''}</Text>)}
-          {!list?.items.some(i => !i.checked) && <Text style={secondary}>Your unchecked items will appear here.</Text>}
-          {(list?.items.filter(i => !i.checked).length || 0) > 5 && <Text style={secondary}>All remaining unchecked items will also be included.</Text>}
+          {list?.items.filter(i => i.checked).slice(0, 5).map(i => <Text key={i.id}>• {i.name} — {i.quantity}{i.size ? ` · ${i.size}` : ''}{i.notes ? ` (${i.notes})` : ''}</Text>)}
+          {!list?.items.some(i => i.checked) && <Text style={secondary}>Check items in your shopping list to include them here.</Text>}
+          {(list?.items.filter(i => i.checked).length || 0) > 5 && <Text style={secondary}>All other checked items will also be included.</Text>}
           <Text>Please let me know about availability and any substitutions.</Text>
         </View>
         <View style={card}><View style={styles.consent}><Text style={{ flex: 1 }}>I authorize NexDo to email this list to this recipient automatically each week.</Text><Switch accessibilityLabel="Authorize automatic weekly email" value={consent} onValueChange={setConsent} disabled={busy} /></View>

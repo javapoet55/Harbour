@@ -209,6 +209,7 @@ private extension View {
 
 
 struct ProfileSettingsView: View {
+    var openCalendarSettings = false
     @AppStorage(AppAppearance.storageKey) private var appearance: AppAppearance = .system
     @AppStorage(AppVoice.volumeStorageKey) private var appVoiceVolume = AppVoice.defaultVolume
     @EnvironmentObject private var model: AppModel
@@ -232,6 +233,7 @@ struct ProfileSettingsView: View {
     @StateObject private var calendarOAuth = CalendarOAuthCoordinator()
 
     var body: some View {
+        ScrollViewReader { scrollProxy in
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
                 card("Appearance") {
@@ -321,7 +323,7 @@ struct ProfileSettingsView: View {
                         Link(destination: LegalLinks.termsOfService) { Label(LegalLinks.termsOfServiceTitle, systemImage: "doc.text") }
                             .accessibilityIdentifier("settings-terms-of-service")
                         Button("Delete account", role: .destructive) { confirmsDeletion = true }
-                    }
+                    }.id("calendar-settings")
                     Button { save() } label: {
                         HStack { if saving { ProgressView().tint(.white) }; Text(saving ? "Saving…" : "Save settings").bold() }.frame(maxWidth: .infinity, minHeight: 50)
                     }.foregroundStyle(.white).background(NexdoTheme.saveGradient, in: Capsule())
@@ -329,6 +331,10 @@ struct ProfileSettingsView: View {
                 if let failure { Text(failure).foregroundStyle(.red).accessibilityAddTraits(.updatesFrequently) }
                 if let message { Label(message, systemImage: "checkmark.circle").foregroundStyle(Color.nexdoIndigo).accessibilityAddTraits(.updatesFrequently) }
             }.padding(20).disabled(saving || connecting)
+        }
+        .onChange(of: loading) { _, isLoading in
+            if !isLoading && openCalendarSettings { scrollProxy.scrollTo("calendar-settings", anchor: .top) }
+        }
         }
         .background(ProfileBackground()).navigationTitle("Settings").navigationBarTitleDisplayMode(.large)
         .toolbar {
