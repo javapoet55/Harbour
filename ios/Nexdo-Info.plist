@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
     <key>NSLocationWhenInUseUsageDescription</key>
-    <string>Nexdo uses your approximate location to show local weather.</string>
+    <string>NexDo uses your approximate location to show local weather and find nearby stores when you request it.</string>
 	<key>NexdoAPIBaseURL</key>
 	<string>$(API_BASE_URL)</string>
 </dict>

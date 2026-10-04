@@ -354,7 +354,7 @@ struct ShoppingDetail:View {
                     do{try await Task.sleep(for:.seconds(60))}catch{return}
                 } while !Task.isCancelled
             }
-            .sheet(isPresented:$settings){ShoppingSettings(initial:list){save($0)}}
+            .sheet(isPresented:$settings){ShoppingSettings(store:store,initial:list){save($0)}}
             .sheet(isPresented:$sharing){ShoppingShare(store:store,list:list){list=$0}}
             .sheet(isPresented:$recommendations){AskNexdoView(textPage:true,shoppingContext:ShoppingRecommendationContext(listName:list.title,itemNames:list.items.map(\.name)))}
             .sheet(item:$alternativesFor){original in
@@ -574,7 +574,16 @@ private struct ShoppingCompletionView:View {
     }
 }
 
+private struct ShoppingStoreSuggestion:Decodable,Sendable,Identifiable {
+    let id:String
+    let name:String
+    let address:String
+    let zip:String
+    let attributions:[String]
+    let distanceKm:Double?
+}
 struct ShoppingSettings:View {
+    @ObservedObject var store:ShoppingStore
     @Environment(\.dismiss) private var dismiss
     @State var initial:GroceryList
     let onSave:(GroceryList)->Void
@@ -584,14 +593,118 @@ struct ShoppingSettings:View {
         Toggle("Repeat weekly",isOn:$initial.weekly)
         Text("Next week’s list is created when you complete this trip.")
         Section {
+            NavigationLink {
+                ShoppingStoreFinder(store:store,area:initial.storeZip ?? "") { selected in
+                    initial.storeName=selected.name
+                    initial.storeAddress=selected.address
+                    initial.storeZip=selected.zip
+                }
+            } label: {Label("Add New Store",systemImage:"plus")}
+                .accessibilityIdentifier("shopping-add-store")
             TextField("Store name",text:Binding(get:{initial.storeName ?? ""},set:{initial.storeName=$0}))
             TextField("Street address, city, state",text:Binding(get:{initial.storeAddress ?? ""},set:{initial.storeAddress=$0}))
                 .textContentType(.fullStreetAddress)
             TextField("ZIP code",text:Binding(get:{initial.storeZip ?? ""},set:{initial.storeZip=$0}))
                 .keyboardType(.numbersAndPunctuation).textContentType(.postalCode)
         } header: {Text("Store details")} footer: {Text("Used to find offers for your store location. Offers are available for Costco, Safeway, Albertsons, Vons, Jewel-Osco and other supported stores.")}
-
     }.navigationTitle("List Settings").toolbar{Button("Save"){onSave(initial);dismiss()}.disabled(initial.title.trimmingCharacters(in:.whitespaces).isEmpty || (!(initial.storeZip ?? "").isEmpty && (initial.storeZip ?? "").range(of:"^[0-9]{5}(-[0-9]{4})?$",options:.regularExpression)==nil))}}}
+}
+private struct ShoppingStoreFinder:View {
+    @ObservedObject var store:ShoppingStore
+    @Environment(\.dismiss) private var dismiss
+    @State var area:String
+    let onSelect:(ShoppingStoreSuggestion)->Void
+    @State private var name=""
+    @State private var suggestions:[ShoppingStoreSuggestion]=[]
+    @State private var searchBusy=false
+    @State private var searchError:String?
+    @State private var latitude:Double?
+    @State private var longitude:Double?
+    @State private var locationBusy=false
+    @State private var locationProvider=WeatherLocationProvider()
+    @State private var searchRevision=0
+    private var searchKey:String { "\(name)|\(area)|\(latitude ?? 0)|\(longitude ?? 0)|\(searchRevision)" }
+    var body:some View {
+        ScrollView {
+            VStack(spacing:14) {
+                VStack(spacing:12) {
+                    searchField("City or ZIP code",text:$area,icon:"mappin.and.ellipse")
+                    searchField("Search by store name",text:$name,icon:"magnifyingglass")
+                    Button {Task{await useLocation(requestPermission:true)}} label: {
+                        Label(locationBusy ? "Finding your location…":"Use my location",systemImage:"location.fill")
+                            .font(.subheadline.weight(.semibold))
+                    }.disabled(locationBusy)
+                    if latitude != nil && area.isEmpty {Text("Near your current location · Distances are straight-line estimates").font(.caption).foregroundStyle(Color.nexdoSecondary)}
+                }.padding(16).background(.regularMaterial,in:RoundedRectangle(cornerRadius:22))
+                if searchBusy {ProgressView("Finding stores…").padding()}
+                if let searchError {
+                    Text(searchError).font(.subheadline).foregroundStyle(Color.nexdoSecondary)
+                    Button("Try again"){searchRevision += 1}
+                }
+                if !searchBusy && searchError == nil && suggestions.isEmpty {
+                    Label(area.isEmpty && latitude == nil ? "Enter a city or ZIP code, or use your location to find grocery stores.":"No stores found. Try another location or store name.",systemImage:"storefront")
+                        .foregroundStyle(Color.nexdoSecondary).padding()
+                }
+                ForEach(suggestions) { suggestion in
+                    HStack(alignment:.top,spacing:12) {
+                        Image(systemName:"storefront.fill").font(.title2).foregroundStyle(Color.nexdoIndigo)
+                            .frame(width:48,height:56).background(Color.nexdoIndigo.opacity(0.08),in:RoundedRectangle(cornerRadius:12))
+                        VStack(alignment:.leading,spacing:5) {
+                            Text(suggestion.name).font(.headline).foregroundStyle(Color.nexdoInk)
+                            Text(suggestion.address).font(.subheadline).foregroundStyle(Color.nexdoSecondary).fixedSize(horizontal:false,vertical:true)
+                            if let distance=suggestion.distanceKm {Text(String(format:"%.2f km",distance)).font(.caption).foregroundStyle(Color.nexdoBlue)}
+                            ForEach(suggestion.attributions,id:\.self){Text($0).font(.caption2).foregroundStyle(.secondary)}
+                            Button {onSelect(suggestion);dismiss()} label: {
+                                Text("Add").font(.subheadline.bold()).foregroundStyle(.white).padding(.horizontal,22).padding(.vertical,9)
+                                    .background(NexdoTheme.gradient,in:Capsule())
+                            }.buttonStyle(.plain).accessibilityLabel("Add \(suggestion.name), \(suggestion.address)")
+                        }.frame(maxWidth:.infinity,alignment:.leading)
+                    }.padding(14).frame(maxWidth:.infinity,alignment:.leading)
+                        .background(Color(uiColor:.secondarySystemGroupedBackground),in:RoundedRectangle(cornerRadius:20))
+                }
+                if !suggestions.isEmpty {Text("Google Maps").font(.caption.weight(.medium)).foregroundStyle(Color.nexdoSecondary)}
+            }.padding(16)
+        }.background{TodayBackdrop()}
+            .navigationTitle("Stores Near You").navigationBarTitleDisplayMode(.inline)
+            .tint(Color.nexdoIndigo)
+            .task {if area.isEmpty {await useLocation(requestPermission:false)}}
+            .task(id:searchKey){await findStores()}
+    }
+    private func searchField(_ title:String,text:Binding<String>,icon:String)->some View {
+        HStack {
+            Image(systemName:icon).foregroundStyle(Color.nexdoIndigo)
+            TextField(title,text:text).autocorrectionDisabled().submitLabel(.search)
+        }.padding(13).background(Color(uiColor:.secondarySystemGroupedBackground),in:RoundedRectangle(cornerRadius:16))
+    }
+    private func useLocation(requestPermission:Bool) async {
+        locationBusy=true;searchError=nil
+        defer {locationBusy=false}
+        do {
+            let coordinate=try await locationProvider.locate(requestPermission:requestPermission)
+            guard !Task.isCancelled else{return}
+            latitude=coordinate.latitude;longitude=coordinate.longitude;area="";searchRevision += 1
+        } catch {if requestPermission {searchError="Location is unavailable. Enter a city or ZIP code, or allow location access in iPhone Settings."}}
+    }
+    private func findStores() async {
+        suggestions=[];searchError=nil;searchBusy=false
+        let key=searchKey
+        let query=name.trimmingCharacters(in:.whitespacesAndNewlines)
+        let region=area.trimmingCharacters(in:.whitespacesAndNewlines)
+        guard region.count >= 2 || (region.isEmpty && latitude != nil && longitude != nil) else{return}
+        do {
+            try await Task.sleep(for:.milliseconds(600));try Task.checkCancellation();searchBusy=true
+            var body:[String:Any]=["name":query]
+            if !region.isEmpty {body["area"]=region}
+            else {body["latitude"]=latitude;body["longitude"]=longitude}
+            struct Results:Decodable,Sendable {let stores:[ShoppingStoreSuggestion]}
+            let result:Results=try await store.api.request("/api/shopping/stores",method:"POST",body:JSONSerialization.data(withJSONObject:body))
+            try Task.checkCancellation();guard key==searchKey else{return}
+            suggestions=result.stores;searchBusy=false
+        } catch {
+            guard !Task.isCancelled,key==searchKey else{return}
+            searchBusy=false;searchError=error.localizedDescription
+        }
+    }
 }
 private struct ShoppingShare:View {
     @ObservedObject var store:ShoppingStore

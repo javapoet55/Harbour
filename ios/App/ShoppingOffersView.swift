@@ -78,7 +78,7 @@ struct ShoppingOffersView:View {
             }.padding(18)
         }.background{TodayBackdrop()}.navigationTitle(itemId==nil ? "Offers for your list":"Item offers").navigationBarTitleDisplayMode(.inline)
             .task{await load()}.refreshable{await load()}
-            .sheet(isPresented:$settings){ShoppingSettings(initial:list){next in Task{if let saved=await store.action("save",list:list,input:ShoppingInput(next)){list=saved;onUpdate(saved);await load()}else{error=store.error}}}}
+            .sheet(isPresented:$settings){ShoppingSettings(store:store,initial:list){next in Task{if let saved=await store.action("save",list:list,input:ShoppingInput(next)){list=saved;onUpdate(saved);await load()}else{error=store.error}}}}
     }
     private func load() async {
         do {
