@@ -5,6 +5,7 @@ import { SignJWT, jwtVerify } from 'jose';
 import { sessionSigningKey } from '@/server/session-key';
 import { MomentError } from './domain';
 import { randomUUID } from 'node:crypto';
+import { log } from '@/lib/logger';
 import { renderWishEmail } from '@/server/email/wish-template';
 export function emailConfigured() { return !!(process.env.MOMENTS_GOOGLE_CLIENT_ID && process.env.MOMENTS_GOOGLE_CLIENT_SECRET && process.env.MOMENTS_GOOGLE_REDIRECT_URI); }
 export async function connectURL(userID: string) {
@@ -102,6 +103,10 @@ export const gmail: WishEmailProvider = {
 export async function revokeEmail(userId:string) {
  const account=await prisma.momentEmailAccount.findUnique({where:{userId}});
  if(!account) return;
- const response=await observedFetch('https://oauth2.googleapis.com/revoke',{method:'POST',signal:AbortSignal.timeout(15000),headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({token:decryptCredential(account.refreshToken)!})});
+ let token:string|null=null;
+ try { token=decryptCredential(account.refreshToken); } catch { /* handled below */ }
+ // An unreadable token can't be revoked at Google; disconnecting must still remove it locally.
+ if(!token) { log('warn','moments_email_revoke_skipped',{reason:'unreadable_credential'}); return; }
+ const response=await observedFetch('https://oauth2.googleapis.com/revoke',{method:'POST',signal:AbortSignal.timeout(15000),headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({token})});
  if(!response.ok&&response.status!==400) throw new MomentError('Email access could not be revoked. Try disconnecting again.',502);
 }

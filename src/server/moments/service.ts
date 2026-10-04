@@ -161,7 +161,9 @@ export async function changePlan(userId:string,input:unknown) {
  const p=z.object({id:z.string(),action:z.enum(['cancel','sent','failed','copied','shared','reschedule','retry','sendNow','opened']),scheduledAtUTC:z.iso.datetime({offset:true}).optional(),timeZoneID:zone.optional()}).parse(input);
  await expireUnconfirmed(new Date(),userId);
  const plan=await prisma.deliveryPlan.findFirst({where:{id:p.id,draft:{moment:{userId}}}}); if(!plan) throw new MomentError('Delivery not found.',404);
- const to={cancel:'CANCELLED',sent:'SENT',failed:'FAILED',copied:'COPIED',shared:'SHARED',reschedule:plan.status,retry:'SCHEDULED',sendNow:'SCHEDULED',opened:plan.status}[p.action];
+ // Moving a failed delivery to a new time makes it active again.
+ const rescheduled=plan.status==='FAILED'?(plan.automaticDelivery?'SCHEDULED':'AWAITING_CONFIRMATION'):plan.status;
+ const to={cancel:'CANCELLED',sent:'SENT',failed:'FAILED',copied:'COPIED',shared:'SHARED',reschedule:rescheduled,retry:'SCHEDULED',sendNow:'SCHEDULED',opened:plan.status}[p.action];
  // The user settles a "Check Sent mail" email by looking in Gmail: it either went out or it didn't.
  if(plan.status!=='UNCERTAIN'&&['sent','copied','shared','failed'].includes(p.action) && (plan.automaticDelivery || plan.channel==='email'&&p.action==='sent')) throw new MomentError('Delivery result must come from the provider.');
  if(p.action==='sent'&&plan.channel!=='messages'&&plan.status!=='UNCERTAIN'||p.action==='copied'&&plan.channel!=='copy'||p.action==='shared'&&plan.channel!=='share') throw new MomentError('Invalid delivery result.');
@@ -175,7 +177,7 @@ export async function changePlan(userId:string,input:unknown) {
  } else if(!mayTransition(plan.status,to)) throw new MomentError('Delivery is no longer editable. Refresh its status.',409);
  // A user's Retry starts a fresh set of automatic attempts.
  if(p.action==='retry'&&!plan.automaticDelivery) throw new MomentError('This delivery cannot be retried.');
- const changed=await prisma.deliveryPlan.updateMany({where:{id:plan.id,status:plan.status,updatedAt:plan.updatedAt},data:{status:to,...(p.action==='opened'?{lastError:'Messages opened; delivery not confirmed.'}:{}),...(p.action==='reschedule'?{lastError:null,scheduledAtUTC:new Date(p.scheduledAtUTC!),nextAttemptAt:new Date(p.scheduledAtUTC!),timeZoneID:p.timeZoneID??plan.timeZoneID,annualMonthDay:formatInTimeZone(new Date(p.scheduledAtUTC!),p.timeZoneID??plan.timeZoneID,'MM-dd')}:{}),...(['retry','sendNow'].includes(p.action)?{nextAttemptAt:new Date(),lastError:null}:{}),...(p.action==='retry'?{attempts:0}:{}),...(p.action==='failed'&&plan.status==='UNCERTAIN'?{lastError:'Marked as not sent. Retry, edit the schedule or cancel.'}:{}),...(p.action==='sendNow'?{automaticDelivery:true,scheduledAtUTC:new Date()}:{}),...(to==='SENT'?{sentAt:new Date(),lastError:null}: {})}});
+ const changed=await prisma.deliveryPlan.updateMany({where:{id:plan.id,status:plan.status,updatedAt:plan.updatedAt},data:{status:to,...(p.action==='opened'?{lastError:'Messages opened; delivery not confirmed.'}:{}),...(p.action==='reschedule'?{lastError:null,...(plan.status==='FAILED'?{attempts:0}:{}),scheduledAtUTC:new Date(p.scheduledAtUTC!),nextAttemptAt:new Date(p.scheduledAtUTC!),timeZoneID:p.timeZoneID??plan.timeZoneID,annualMonthDay:formatInTimeZone(new Date(p.scheduledAtUTC!),p.timeZoneID??plan.timeZoneID,'MM-dd')}:{}),...(['retry','sendNow'].includes(p.action)?{nextAttemptAt:new Date(),lastError:null}:{}),...(p.action==='retry'?{attempts:0}:{}),...(p.action==='failed'&&plan.status==='UNCERTAIN'?{lastError:'Marked as not sent. Retry, edit the schedule or cancel.'}:{}),...(p.action==='sendNow'?{automaticDelivery:true,scheduledAtUTC:new Date()}:{}),...(to==='SENT'?{sentAt:new Date(),lastError:null}: {})}});
  if(!changed.count) throw new MomentError('Delivery changed; refresh before editing.',409);
  if(to==='CANCELLED') log('info','scheduled_wish_cancelled');
  if(to==='SENT') log('info','wish_send_confirmed');
@@ -208,7 +210,8 @@ async function deliver(job:DueJob,provider:WishEmailProvider,now:Date) {
  const claim=await prisma.deliveryPlan.updateMany({where:{id:job.id,status:'SCHEDULED',updatedAt:job.updatedAt},data:{status:'SENDING',claimedAt:new Date(),attempts:{increment:1}}});
  if(!claim.count) return false;
  const healthStarted=performance.now();
- if(!job.draft.moment.enabled||+now-+job.scheduledAtUTC>86400000) { await prisma.deliveryPlan.update({where:{id:job.id},data:{status:'FAILED',lastError:'Moment disabled or delivery more than one day late. Review before retrying.'}});if(job.repeatYearly) await createAnnual(job.id);return true; }
+ // Lateness counts from the attempt that is due, so a user's Retry after a day can still send.
+ if(!job.draft.moment.enabled||+now-Math.max(+job.scheduledAtUTC,+job.nextAttemptAt)>86400000) { await prisma.deliveryPlan.update({where:{id:job.id},data:{status:'FAILED',lastError:'Moment disabled or delivery more than one day late. Review before retrying.'}});if(job.repeatYearly) await createAnnual(job.id);return true; }
  let result: Awaited<ReturnType<WishEmailProvider['send']>>;
  try {
   // A card is included only when the delivery references one; otherwise the email is text only.
