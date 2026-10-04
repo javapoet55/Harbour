@@ -2,7 +2,7 @@ import {beforeAll,afterAll,beforeEach,it,expect,vi} from 'vitest';
 import {randomUUID} from 'node:crypto';
 import {prisma} from '@/server/db';
 import {shoppingAction} from '../service';
-import {matchOffer,sourceForStore,type OfferRecord} from './domain';
+import {matchOffer,sourceForStore,isCostco,type OfferRecord} from './domain';
 import {parseCostco,COSTCO_SOURCE} from './costco';
 import {collectOffers,listOffers,chooseOffer} from './service';
 const now=new Date();
@@ -22,11 +22,39 @@ it('does not guess location support',()=>{
  for(const zip of ['99501','96701','00901','',null])expect(sourceForStore('Costco',zip)).toBeNull();
  expect(sourceForStore('Target','94040')).toBeNull();
 });
-function fixture(save:boolean){return 'Pricing may vary by location in AK, HI, PR, Costco Business Centers and online | Valid 9/21/26 - 10/18/26'+Array.from({length:5},(_,i)=>`<a data-testid="Link" href="https://www.costco.com/product-${i}"><span>Peet&#x27;s Coffee Ground Coffee</span></a><div>Warehouse</div><div class="mui-17ue058" data-testid="Text">32 oz</div><div>Item ${100+i}</div><div>Limit 5.</div>${save?'<div data-testid="Text_prices_and_percentages_prepend_text">Save</div>':''}<p data-testid="Text_prices_and_percentages_prices"><span>$</span><span>6</span><span>.</span><span>50</span></p>${save?'':'<div data-testid="Text_prices_and_percentages_append_text">After $2 OFF</div>'}`).join('');}
+const tile=(i:number,availability:string,name='Peet&#x27;s Coffee Ground Coffee')=>`<a data-testid="Link" href="https://www.costco.com/product-${i}"><span class="mui-jde8tf">${name}</span></a><div data-testid="Text">${availability}</div><div id="x-item-description"><div data-testid="MarkdownRenderer" class="mui-1upc632"><div class="mui-1y8o037" data-testid="Text">${name}</div></div></div><div data-testid="MarkdownRenderer" class="mui-a1b2c3"><div class="mui-zz9" data-testid="Text">32 oz</div></div><div class="mui-x4n4mc"><div class="mui-1kmtvi0" data-testid="Text">Item ${100+i}</div>`;
+function fixture(save:boolean){return 'Pricing may vary by location in AK, HI, PR, Costco Business Centers and online | Valid 9/21/26 - 10/18/26'+Array.from({length:5},(_,i)=>`${tile(i,'Warehouse')}<div>Limit 5.</div></div>${save?'<div data-testid="Text_prices_and_percentages_prepend_text">Save</div>':''}<p data-testid="Text_prices_and_percentages_prices"><span>$</span><span>6</span><span>.</span><span>50</span></p>${save?'':'<div data-testid="Text_prices_and_percentages_append_text">After $2 OFF</div>'}`).join('');}
 it('extracts advertised savings without inventing a selling price or unit price',()=>{
  const savings=parseCostco(fixture(true),now);expect(savings).toHaveLength(5);expect(savings[0].price).toBeNull();expect(savings[0].savings).toBe('$6.50 off');expect(savings[0].unitPrice).toBeNull();expect(savings[0].packageSize).toBe('32 oz');
  const priced=parseCostco(fixture(false),now);expect(priced[0].price).toBe('$6.50');expect(priced[0].savings).toBe('$2 OFF');
  expect(()=>parseCostco('<html>Access denied</html>')).toThrow();
+});
+it('keeps Warehouse Only offers and drops Online Only ones',()=>{
+ const price='<p data-testid="Text_prices_and_percentages_prices">$4</p><div data-testid="Text_prices_and_percentages_append_text">After $2 OFF</div>';
+ const html=fixture(true)+tile(7,'Warehouse Only','Sukhi&#x27;s Butter Chicken')+'</div>'+price+tile(8,'Online Only','Online Coffee')+'</div>'+price;
+ const offers=parseCostco(html,now);
+ expect(offers.map(o=>o.product)).toContain("Sukhi's Butter Chicken");
+ expect(offers.map(o=>o.product)).not.toContain('Online Coffee');
+});
+it('accepts common Costco store names but not Business Centers or other stores',()=>{
+ for(const name of ['Costco','COSTCO Wholesale','Costco - Mountain View','costco.com'])expect(isCostco(name)).toBe(true);
+ for(const name of ['Costco Business Center','Target','Costcutter',null])expect(isCostco(name)).toBe(false);
+});
+it('does not match staples to products that only mention them, and covers more Costco categories',()=>{
+ const item=(name:string)=>({name,brand:null,size:'',notes:''});
+ const offer=(product:string)=>deal({product,brand:null});
+ expect(matchOffer(item('Butter'),offer('St Michel La Grande Galette French Butter Cookies'))).toBeNull();
+ expect(matchOffer(item('Butter'),offer('Nature Valley Peanut Butter Dark Chocolate Protein Chewy Bars'))).toBeNull();
+ expect(matchOffer(item('Rice'),offer("Kellogg's Original Rice Krispies Treats"))).toBeNull();
+ expect(matchOffer(item('Rice'),offer('Weider Red Yeast Rice Plus'))).toBeNull();
+ expect(matchOffer(item('Chicken'),offer("Campbell's Simply Chicken Noodle Soup"))).toBeNull();
+ expect(matchOffer(item('Chicken'),offer('Blue Buffalo Top Chews Dog Treats Chicken & Apple Recipe Sausage Bites'))).toBeNull();
+ expect(matchOffer(item('Protein bars'),offer('Nature Valley Peanut Butter Dark Chocolate Protein Chewy Bars'))?.category).toBe('available');
+ expect(matchOffer(item('Shampoo'),offer('Pantene Essential Botanicals Hydrating Volume Shampoo'))?.category).toBe('available');
+ expect(matchOffer(item('Sparkling water'),offer('Waterloo Sparkling Water'))?.category).toBe('available');
+ expect(matchOffer(item('Tylenol'),offer('Tylenol Extra Strength'))?.category).toBe('available');
+ expect(matchOffer(item('Tylenol'),offer('Advil Liqui-Gels'))).toBeNull();
+ expect(matchOffer(item('Fish oil'),offer('OLLY Sleep'))).toBeNull();
 });
 let owner='',other='';
 beforeAll(async()=>{owner=(await prisma.user.create({data:{email:randomUUID()+'@example.com',name:'Owner',passwordHash:''}})).id;other=(await prisma.user.create({data:{email:randomUUID()+'@example.com',name:'Other',passwordHash:''}})).id;});

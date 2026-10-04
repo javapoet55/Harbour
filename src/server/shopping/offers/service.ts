@@ -1,15 +1,16 @@
 import {randomUUID} from 'node:crypto';
 import {prisma} from '@/server/db';
 import {Prisma} from '@/generated/prisma';
+import {log} from '@/lib/logger';
 import {MomentError} from '@/server/moments/domain';
-import {matchOffer,sourceForStore} from './domain';
+import {matchOffer,sourceForStore,isCostco} from './domain';
 import {collectCostco,COSTCO_SOURCE} from './costco';
 const SOURCE='costco-us-warehouse';
 export async function listOffers(userId:string,listId:string,now=new Date()){
  const list=await prisma.shoppingList.findFirst({where:{id:listId,userId},include:{items:true}});
  if(!list)throw new MomentError('List not found',404);
  const sourceId=sourceForStore(list.storeName,list.storeZip);
- if(!sourceId)return {matches:[],status:!list.storeName||!list.storeZip?'Add your store name, address and ZIP code in List Settings.':'Verified offers are not yet available for this store location.',lastCheckedAt:null,sourceURL:null};
+ if(!sourceId)return {matches:[],status:!list.storeName||!list.storeZip?'Add your store name, address and ZIP code in List Settings.':!isCostco(list.storeName)?'Offers are available for Costco warehouses only. Other stores are not supported yet.':'Costco offers cover warehouses in the contiguous US only.',lastCheckedAt:null,sourceURL:null};
  const source=await prisma.shoppingOfferSource.findUnique({where:{id:sourceId}});
  const fresh=source?.lastSuccessAt && +now-+source.lastSuccessAt<=48*3600000;
  const offers=fresh?await prisma.shoppingOffer.findMany({where:{sourceId,startsAt:{lte:now},expiresAt:{gt:now}}}):[];
@@ -52,7 +53,9 @@ export async function collectOffers(collector=collectCostco,now=new Date()){
    for(const offer of offers.filter(o=>o.expiresAt>now))await tx.shoppingOffer.create({data:{...offer,sourceId:SOURCE}});
   });
   return {checked:true,count:offers.length};
- }catch{
+ }catch(e){
+  // Only the reason is logged: no page content or customer data.
+  log('error','shopping_offers_check_failed',{error:e instanceof Error?e.message:'unknown'});
   const source=await prisma.shoppingOfferSource.findUnique({where:{id:SOURCE}});
   const failures=(source?.failures??0)+1;
   await prisma.shoppingOfferSource.updateMany({where:{id:SOURCE,leaseToken:token},data:{lastCheckedAt:now,error:'Source check failed; retry scheduled',failures,nextCheckAt:new Date(+now+Math.min(6*3600000,15*60000*2**Math.min(failures-1,5))),leaseToken:null,leaseUntil:null}});
