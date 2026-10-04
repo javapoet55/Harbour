@@ -27,7 +27,18 @@ export async function connect(code:string,state:string) {
   const res=await observedFetch('https://openidconnect.googleapis.com/v1/userinfo',{headers:{Authorization:`Bearer ${t.access_token}`},signal:AbortSignal.timeout(15000)});
   const profile=await res.json() as {email?:string;email_verified?:boolean};
   if(!res.ok||!profile.email||!profile.email_verified) throw new MomentError('Unable to verify email account.');
-  await prisma.momentEmailAccount.upsert({where:{userId:payload.sub},create:{userId:payload.sub,email:profile.email,refreshToken:encryptCredential(t.refresh_token)!},update:{email:profile.email,refreshToken:encryptCredential(t.refresh_token)!,status:'connected'}});
+  // Anyone holding a connect link can finish Google's consent, so nothing is saved here. The account is
+  // saved only when the signed-in app that received this ticket confirms it as the same user.
+  return encryptCredential(JSON.stringify({purpose:TICKET_PURPOSE,sub:payload.sub,email:profile.email,refreshToken:t.refresh_token,exp:Date.now()+TICKET_MS}))!;
+}
+const TICKET_PURPOSE='moments-email-ticket', TICKET_MS=10*60000;
+export async function confirmConnect(userId:string,ticket:unknown) {
+  let t:Record<string,unknown>={};
+  try { if(typeof ticket==='string'&&ticket.startsWith('v1.')) t=JSON.parse(decryptCredential(ticket)!); } catch { /* rejected below */ }
+  if(t.purpose!==TICKET_PURPOSE||typeof t.email!=='string'||typeof t.refreshToken!=='string'||typeof t.exp!=='number'||t.exp<Date.now()) throw new MomentError('Email connection expired or failed. Try connecting again.');
+  if(t.sub!==userId) throw new MomentError('This email connection was started from a different Nexdo account.',403);
+  const refreshToken=encryptCredential(t.refreshToken)!;
+  await prisma.momentEmailAccount.upsert({where:{userId},create:{userId,email:t.email,refreshToken},update:{email:t.email,refreshToken,status:'connected'}});
 }
 export type EmailResult = {kind:'sent'; id:string}|{kind:'retry'|'permanent'|'uncertain'|'reconnect'; error:string};
 export type WishCard = {id:string; mime:string; bytes:Uint8Array};

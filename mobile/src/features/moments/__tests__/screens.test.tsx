@@ -793,13 +793,14 @@ describe('Moments Settings', () => {
 
   // A `nexdo://moments-email` callback that arrived as a deep link with no session open (Android
   // restarted the app while the browser was up): ImportantMomentsStore.swift:185-189.
-  it('refreshes for a connected Gmail callback link that arrives with no session open', async () => {
+  it('confirms the ticket and refreshes for a Gmail callback link that arrives with no session open', async () => {
     resetOAuthCallbacks();
     load([], { emailConfigured: true });
     mockSnapshot.mockResolvedValue({ moments: [], emailAccount: { email: 'me@gmail.com', status: 'connected' }, emailConfigured: true, automaticEmailEnabled: false });
-    deliverOAuthCallback('moments-email', 'nexdo://moments-email?status=connected');
+    deliverOAuthCallback('moments-email', 'nexdo://moments-email?status=confirm&ticket=v1.ticket');
     await render(<MomentSettings />);
     await waitFor(() => expect(screen.getByText('me@gmail.com')).toBeTruthy());
+    expect(mockPost).toHaveBeenCalledWith('connectEmailConfirm', { ticket: 'v1.ticket' }, undefined);
     expect(screen.queryByTestId('settings-error')).toBeNull();
   });
 
@@ -821,7 +822,7 @@ describe('Moments Settings', () => {
     let redirected: string | null = 'unset';
     mockOpenAuthSession.mockImplementation(async () => {
       setTimeout(() => {
-        redirected = redirectOAuthCallback('nexdo://moments-email?status=connected');
+        redirected = redirectOAuthCallback('nexdo://moments-email?status=confirm&ticket=v1.late');
       }, 50);
       return { type: 'dismiss' };
     });
@@ -829,6 +830,7 @@ describe('Moments Settings', () => {
     await fireEvent.press(screen.getByTestId('settings-connect'));
 
     await waitFor(() => expect(mockSnapshot).toHaveBeenCalled());
+    expect(mockPost).toHaveBeenCalledWith('connectEmailConfirm', { ticket: 'v1.late' }, undefined);
     expect(mockOpenAuthSession).toHaveBeenCalledWith('https://accounts.example.com/consent', 'nexdo://moments-email', { preferEphemeralSession: true });
     expect(screen.queryByTestId('settings-error')).toBeNull();
     expect(redirected).toBeNull();
@@ -1064,6 +1066,16 @@ describe('Wish details', () => {
     mockParams = { planId: 'p1' };
     await render(<WishDetails />);
     expect(screen.getByTestId('wish-title').props.children).toBe('Opened — delivery not confirmed');
+  });
+
+  it('lets the person settle a "Check Sent mail" email', async () => {
+    load([moment({ drafts: [draft({ plans: [plan({ id: 'p1', channel: 'email', automaticDelivery: true, status: 'UNCERTAIN' })] })] })]);
+    mockParams = { planId: 'p1' };
+    await render(<WishDetails />);
+    expect(screen.queryByTestId('wish-retry')).toBeNull();
+    expect(screen.getByTestId('wish-uncertain-sent')).toBeTruthy();
+    await fireEvent.press(screen.getByTestId('wish-uncertain-failed'));
+    await waitFor(() => expect(mockPost).toHaveBeenCalledWith('plan', { id: 'p1', action: 'failed' }, undefined));
   });
 
   it('shows the scheduled confirmation and history actions', async () => {

@@ -74,3 +74,11 @@ import Testing
     #expect(ShoppingVoiceScene.shouldClose(.background,requestingPermission:false))
     #expect(!ShoppingVoiceScene.shouldClose(.active,requestingPermission:false))
 }
+
+@Test func shoppingChosenOfferDecodesWithoutLettingNormalSavesForgeIt() throws {
+    let json=#"{"id":"item","name":"Coffee","category":"Drinks","quantity":"1","size":"12 oz","notes":"","checked":false,"chosenOffer":{"id":"offer","product":"Ground Coffee","packageSize":"12 oz","store":"Costco","sourceURL":"https://www.costco.com/o/-/warehouse-savings","expiresAt":"2030-10-18T00:00:00Z"}}"#.data(using:.utf8)!
+    let item=try JSONDecoder().decode(GroceryItem.self,from:json)
+    #expect(item.chosenOffer?.store == "Costco")
+    let encoded=try JSONSerialization.jsonObject(with:JSONEncoder().encode(item)) as! [String:Any]
+    #expect(encoded["chosenOffer"] == nil)
+}

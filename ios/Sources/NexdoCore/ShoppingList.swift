@@ -1,5 +1,14 @@
 import Foundation
 
+public struct ChosenShoppingOffer: Codable, Equatable, Sendable {
+    public let id:String
+    public let product:String
+    public let brand:String?
+    public let packageSize:String?
+    public let store:String
+    public let sourceURL:String
+    public let expiresAt:String
+}
 public struct GroceryItem: Codable, Identifiable, Equatable, Sendable {
     public var id:String = UUID().uuidString
     public var name:String = ""
@@ -8,6 +17,7 @@ public struct GroceryItem: Codable, Identifiable, Equatable, Sendable {
     public var size:String = ""
     public var notes:String = ""
     public var imageData:String?
+    public var chosenOffer:ChosenShoppingOffer?
     public var brand:String?
     public var barcode:String?
     public var checked:Bool = false
@@ -16,7 +26,7 @@ public struct GroceryItem: Codable, Identifiable, Equatable, Sendable {
     public init(name:String = "",category:String = "Other",quantity:String = "1",size:String = "",notes:String = "") {
         self.name=name;self.category=category;self.quantity=quantity;self.size=size;self.notes=notes
     }
-    enum CodingKeys:String,CodingKey {case id,name,category,quantity,size,notes,checked,imageData,favorite,favoriteAlternatives,brand,barcode}
+    enum CodingKeys:String,CodingKey {case id,name,category,quantity,size,notes,checked,imageData,favorite,favoriteAlternatives,brand,barcode,chosenOffer}
     public func encode(to encoder:Encoder) throws {
         var c=encoder.container(keyedBy:CodingKeys.self)
         try c.encodeIfPresent(brand,forKey:.brand);try c.encodeIfPresent(barcode,forKey:.barcode)
@@ -104,6 +114,9 @@ public struct GroceryList: Codable, Identifiable, Equatable, Sendable {
     public var weekly:Bool
     public var completedAt:String?
     public var revision:Int
+    public var storeName:String?
+    public var storeAddress:String?
+    public var storeZip:String?
     public var shareToken:String?
     public var items:[GroceryItem]
     public var remaining:Int {items.filter{!$0.checked}.count}

@@ -5,7 +5,7 @@ import { useEffect, useRef } from 'react';
  *
  * - `nexdo://calendar-connected?calendar=<provider>-connected` or `?calendar=error&detail=…`
  *   (src/app/api/calendar/oauth/[provider]/callback/route.ts:9-10, when the state is native).
- * - `nexdo://moments-email?status=connected|error` (src/app/api/moments/email/callback/route.ts:7).
+ * - `nexdo://moments-email?status=confirm&ticket=…|error` (src/app/api/moments/email/callback/route.ts:7).
  *
  * Swift never routes these: `ASWebAuthenticationSession(callbackURLScheme: "nexdo")` captures the
  * redirect and hands it to the code that opened the session (ProfileView.swift:13-25,

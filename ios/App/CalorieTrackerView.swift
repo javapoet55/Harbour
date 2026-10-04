@@ -214,13 +214,16 @@ struct NutritionSummary: Decodable, Sendable {
         return formatter.string(from: date)
     }
 
-    /// Accepts "+14155550123", "(415) 555-0123" or "415 555 0123" (US) and returns E.164, or nil.
+    /// Accepts "+14155550123" and returns E.164, or nil. A bare national number is only read as
+    /// US (+1) when the device region is the US — elsewhere a local number can't be mapped to a
+    /// country reliably, so the country code is required instead of silently guessing "+1".
     static func e164(_ raw: String) -> String? {
         let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         let digits = trimmed.filter(\.isNumber)
         if trimmed.hasPrefix("+") { return (8...15).contains(digits.count) && digits.first != "0" ? "+" + digits : nil }
-        if digits.count == 10 { return "+1" + digits }
-        if digits.count == 11 && digits.hasPrefix("1") { return "+" + digits }
+        let usLocale = (Locale.current as NSLocale).object(forKey: .countryCode) as? String == "US"
+        if usLocale && digits.count == 10 { return "+1" + digits }
+        if usLocale && digits.count == 11 && digits.hasPrefix("1") { return "+" + digits }
         return nil
     }
 
@@ -292,6 +295,7 @@ struct CalorieTrackerView: View {
     private var live: Bool { store.live }
     private var userZone: TimeZone { TimeZone(identifier: store.settings?.timeZone ?? timeZoneID) ?? .current }
     private var dateKey: String { CalorieStore.dayString(selectedDate, timeZone: userZone) }
+    private var isToday: Bool { dateKey == CalorieStore.dayString(Date(), timeZone: userZone) }
     private var entries: [NutritionEntry] { store.day?.entries ?? [] }
     private var total: Int { store.day?.totals.kcal ?? 0 }
     private var goal: Int { live ? (store.settings?.calorieGoal ?? calorieGoal) : calorieGoal }
@@ -372,8 +376,9 @@ struct CalorieTrackerView: View {
     private func refresh() async {
         guard live else { return }
         await store.loadDay(dateKey)
-        if period == "Today" { await store.loadInsight(dateKey) }
-        if period != "Today" || page == .insights { await store.loadSummary(month: period == "Month", endingOn: dateKey) }
+        if period == "Today" && isToday { await store.loadInsight(dateKey) }
+        // The insights page always shows "This Week" — the Month period only applies to the dashboard chart.
+        if period != "Today" || page == .insights { await store.loadSummary(month: page == .insights ? false : period == "Month", endingOn: dateKey) }
     }
 
     private func apply(_ settings: NutritionSettings) {
@@ -656,7 +661,7 @@ struct CalorieTrackerView: View {
     }
     private func intake(_ index: Int) -> Int? {
         guard live else { return sampleIntake[index] }
-        guard let totals = store.day?.totals else { return 0 }
+        guard let totals = store.day?.totals else { return nil }
         switch index {
         case 0: return Int(totals.proteinG.rounded())
         case 1: return Int(totals.carbsG.rounded())
@@ -677,6 +682,27 @@ struct CalorieTrackerView: View {
             let labels = daily.map { day in parser.date(from: day.date).map { letters[utc.component(.weekday, from: $0) - 1] } ?? "·" }
             return (daily.map(\.kcal), live ? labels : ["M", "T", "W", "T", "F", "S", "S"])
         }
+        // Month: one bar per calendar week (Mon–Sun). Sample dates don't parse, so previews fall back to chunks.
+        if live {
+            let parser = DateFormatter(); parser.locale = Locale(identifier: "en_US_POSIX"); parser.dateFormat = "yyyy-MM-dd"; parser.timeZone = TimeZone(identifier: "UTC")
+            var utc = Calendar(identifier: .gregorian); utc.timeZone = TimeZone(identifier: "UTC") ?? .current
+            let weekStart = DateFormatter(); weekStart.locale = Locale(identifier: "en_US_POSIX"); weekStart.dateFormat = "M/d"; weekStart.timeZone = TimeZone(identifier: "UTC")
+            var labels: [String] = []
+            var grouped: [[Int]] = []
+            for day in daily {
+                guard let parsed = parser.date(from: day.date) else { continue }
+                let daysSinceMonday = (utc.component(.weekday, from: parsed) + 5) % 7
+                let monday = utc.date(byAdding: .day, value: -daysSinceMonday, to: parsed) ?? parsed
+                let label = weekStart.string(from: monday)
+                if labels.last == label { grouped[grouped.count - 1].append(day.kcal) }
+                else { labels.append(label); grouped.append([day.kcal]) }
+            }
+            let averages = grouped.map { week -> Int in
+                let logged = week.filter { $0 > 0 }
+                return logged.isEmpty ? 0 : logged.reduce(0, +) / logged.count
+            }
+            return (averages, labels)
+        }
         let recent = Array(daily.suffix(28))
         let weeks = stride(from: 0, to: recent.count, by: 7).map { Array(recent[$0..<min($0 + 7, recent.count)]) }
         let averages = weeks.map { week -> Int in
@@ -689,7 +715,7 @@ struct CalorieTrackerView: View {
         Group {
             Picker("Period", selection: $period) { ForEach(["Today", "Week", "Month"], id: \.self) { Text($0) } }.pickerStyle(.segmented)
             dateSelector
-            if period == "Today", live, let insight = store.insight, insight.state == "open" || insight.state == "added" { insightCard(insight) }
+            if period == "Today", isToday, live, let insight = store.insight, insight.state == "open" || insight.state == "added" { insightCard(insight) }
             if period == "Today" {
                 HStack(spacing: 18) {
                     ZStack {

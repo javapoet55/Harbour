@@ -88,12 +88,16 @@ export async function requestCallNow(userId: string, now = new Date()) {
   const settings = await prisma.nutritionCallSettings.findUnique({ where: { userId } });
   if (!settings?.phoneVerifiedAt || !settings.phoneE164) throw new NutritionError('PHONE_NOT_VERIFIED');
   if (!withinCallWindow(settings.timeZone, now)) throw new NutritionError('OUTSIDE_CALL_WINDOW');
-  if (settings.lastManualCallAt && now.getTime() - settings.lastManualCallAt.getTime() < MANUAL_CALL_COOLDOWN_MINUTES * 60_000) throw new NutritionError('CALL_COOLDOWN');
   const localDate = localDateIn(settings.timeZone, now);
   const last = await prisma.nutritionCall.findFirst({ where: { userId, localDate, attempt: { gt: MANUAL_ATTEMPT_BASE } }, orderBy: { attempt: 'desc' }, select: { attempt: true } });
   const attempt = Math.max(MANUAL_ATTEMPT_BASE, last?.attempt ?? 0) + 1;
   if (attempt > MANUAL_ATTEMPT_BASE + 20) throw new NutritionError('CALL_COOLDOWN');
-  await prisma.nutritionCallSettings.update({ where: { userId }, data: { lastManualCallAt: now } });
+  // Claim the cooldown atomically: two concurrent requests cannot both pass a read-then-write check.
+  const claimed = await prisma.nutritionCallSettings.updateMany({
+    where: { userId, OR: [{ lastManualCallAt: null }, { lastManualCallAt: { lt: new Date(now.getTime() - MANUAL_CALL_COOLDOWN_MINUTES * 60_000) } }] },
+    data: { lastManualCallAt: now },
+  });
+  if (!claimed.count) throw new NutritionError('CALL_COOLDOWN');
   const call = await prisma.nutritionCall.create({ data: { userId, localDate, attempt, scheduledFor: now } });
   const result = await dialCall(call.id);
   return { callId: call.id, status: result.status };
@@ -109,7 +113,12 @@ export async function twimlForCall(callId: string, params: Record<string, string
     await finalizeCall(callId, { status: 'VOICEMAIL', endReason: answeredBy, answeredBy });
     return hangupTwiml();
   }
-  await prisma.nutritionCall.update({ where: { id: callId }, data: { status: 'IN_PROGRESS', startedAt: new Date(), answeredBy, twilioCallSid: call.twilioCallSid ?? params.CallSid ?? null } });
+  // Guard on DIALING so a late "completed" status callback (which finalizes the call) cannot race this update.
+  const bridged = await prisma.nutritionCall.updateMany({
+    where: { id: callId, status: 'DIALING' },
+    data: { status: 'IN_PROGRESS', startedAt: new Date(), answeredBy, twilioCallSid: call.twilioCallSid ?? params.CallSid ?? null },
+  });
+  if (!bridged.count) return hangupTwiml();
   return streamTwiml(cfg.workerUrl, callToken(cfg.workerSecret, callId));
 }
 
@@ -126,7 +135,9 @@ export async function handleCallStatus(callId: string, params: Record<string, st
     // after this callback. Only record the duration; the tick retires calls the worker never reported.
     if (call.status === 'IN_PROGRESS') {
       if (Number.isFinite(duration)) await prisma.nutritionCall.update({ where: { id: callId }, data: { durationSec: Math.round(duration) } });
-    } else await finalizeCall(callId, { status: 'NO_ANSWER', endReason: 'twilio_completed' });
+    // "completed" while still DIALING means the call was answered but the TwiML fetch never bridged it.
+    // That is a failed session, not a no-answer — marking it NO_ANSWER would wrongly redial someone who picked up.
+    } else await finalizeCall(callId, { status: 'FAILED', endReason: 'twilio_completed' });
   }
 }
 
@@ -256,7 +267,7 @@ export async function executeTool(callId: string, name: string, rawArgs: unknown
       const a = args as Partial<FoodItemInput> & { id: string };
       const e = await prisma.foodLogEntry.findFirst({ where: { id: a.id, userId, localDate } });
       if (!e) return { error: 'item_not_found' };
-      const foodChanged = a.foodName !== undefined || a.quantity !== undefined || a.unit !== undefined || a.estimatedGrams !== undefined;
+      const foodChanged = a.foodName !== undefined || a.quantity !== undefined || a.unit !== undefined || a.estimatedGrams !== undefined || a.estimatedKcal !== undefined;
       const next: FoodItemInput = {
         meal: (a.meal ?? e.meal) as FoodItemInput['meal'], description: a.description ?? e.description, foodName: a.foodName ?? e.foodName,
         quantity: a.quantity ?? e.quantity ?? undefined, unit: a.unit ?? e.unit ?? undefined, estimatedGrams: a.estimatedGrams ?? e.grams ?? undefined, estimatedKcal: a.estimatedKcal,
@@ -293,13 +304,14 @@ export async function executeTool(callId: string, name: string, rawArgs: unknown
       };
     }
     case 'get_daily_insight': {
-      const insight = await dailyInsight(userId, localDate).catch(() => null);
+      const insight = await dailyInsight(userId, localDate).catch(e => { log('warn', 'nutrition.insight_failed', { error: String(e) }); return null; });
       if (!insight || insight.kind !== 'GAP' || insight.state !== 'open') return { insight: null };
       return { insight: { text: insight.text, offersShoppingItems: insight.items.length > 0, items: insight.items } };
     }
     case 'add_insight_items': {
-      const insight = await dailyInsight(userId, localDate).catch(() => null);
-      if (!insight?.items.length) return { added: [] };
+      const insight = await dailyInsight(userId, localDate).catch(e => { log('warn', 'nutrition.insight_failed', { error: String(e) }); return null; });
+      // Only what get_daily_insight could have offered: an open GAP with foods to add.
+      if (!insight || insight.kind !== 'GAP' || insight.state !== 'open' || !insight.items.length) return { added: [] };
       const result = await handleInsight(userId, localDate, insight.key, 'add');
       return { added: result.added, listTitle: result.listTitle };
     }

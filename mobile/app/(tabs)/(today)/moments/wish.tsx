@@ -19,7 +19,8 @@ import { textStyles, useTheme } from '../../../../src/theme';
  * `WishPlanView` (ios/App/ImportantMomentsView.swift:495-551): one wish's delivery, always read back
  * from the latest snapshot (`current`). Edit Schedule, "Review & Open Messages" for a Messages wish
  * awaiting you, "Send email now", Retry for a failed automatic email, and Cancel behind a
- * confirmation; for a delivered wish, Copy message and Reuse next year.
+ * confirmation; for a "Check Sent mail" email, "I found it in Sent mail" / "It wasn't sent"; for a
+ * delivered wish, Copy message and Reuse next year.
  *
  * `confirmation` is the form Schedule Wish pushes: "Wish scheduled" and the calendar tick.
  */
@@ -118,6 +119,13 @@ export default function WishDetailsScreen() {
             <Pressable accessibilityRole="button" onPress={cancel} testID="wish-cancel">
               <Text style={[textStyles.body, { color: theme.colors.danger }]}>Cancel scheduled wish</Text>
             </Pressable>
+          </>
+        ) : null}
+        {current.status === 'UNCERTAIN' ? (
+          <>
+            <Text style={[textStyles.body, { color: theme.colors.label }]}>Check the Sent folder in Gmail, then tell Nexdo what happened.</Text>
+            <BorderedButton centered title="I found it in Sent mail" onPress={() => void momentsStore.getState().perform(() => momentsStore.getState().planAction(current, 'sent'))} testID="wish-uncertain-sent" />
+            <BorderedButton centered title="It wasn't sent" onPress={() => void momentsStore.getState().perform(() => momentsStore.getState().planAction(current, 'failed'))} testID="wish-uncertain-failed" />
           </>
         ) : null}
         {HISTORY_STATUSES.includes(current.status) ? (

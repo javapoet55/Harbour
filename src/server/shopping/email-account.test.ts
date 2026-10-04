@@ -1,12 +1,13 @@
 import {afterAll,afterEach,beforeAll,expect,it,vi} from 'vitest';
 import {randomUUID} from 'node:crypto';
 import {prisma} from '@/server/db';
-import {gmail} from '@/server/moments/email';
+import {connectURL, gmail} from '@/server/moments/email';
 
 const mocks=vi.hoisted(()=>({requireUser:vi.fn()}));
 vi.mock('@/server/auth',()=>({requireUser:mocks.requireUser}));
 import {POST as moments, DELETE as deleteMoments} from '@/app/api/moments/route';
 import {GET as schedule} from '@/app/api/shopping/email-schedule/route';
+import {GET as callback} from '@/app/api/moments/email/callback/route';
 
 // No worker runs in this file; far-future times keep these rows away from other files' worker ticks.
 const future=new Date('2099-01-03T18:00:00Z');
@@ -18,7 +19,7 @@ async function activeSchedule(){
 }
 const disconnect=()=>moments(new Request('https://nexdo.test/api/moments',{method:'POST',body:JSON.stringify({operation:'disconnectEmail'})}));
 beforeAll(async()=>{userId=(await prisma.user.create({data:{email:randomUUID()+'@example.com',name:'Shopper',passwordHash:''}})).id;mocks.requireUser.mockResolvedValue({id:userId})});
-afterEach(()=>{vi.unstubAllGlobals()});
+afterEach(()=>{vi.unstubAllGlobals();vi.unstubAllEnvs()});
 afterAll(async()=>{await prisma.user.delete({where:{id:userId}})});
 
 it('retries when Google is down or unreachable instead of asking to reconnect',async()=>{
@@ -67,4 +68,28 @@ it('disconnects Gmail and deletes Moments data even when the saved token cannot 
 it('explains a missing list ID',async()=>{
  const res=await schedule(new Request('https://nexdo.test/api/shopping/email-schedule'));
  expect(res.status).toBe(400);expect((await res.json()).error).toBe('A shopping list ID is required.');
+});
+
+it('saves a connected Gmail only when the same signed-in user confirms the ticket',async()=>{
+ vi.stubEnv('MOMENTS_GOOGLE_CLIENT_ID','id');vi.stubEnv('MOMENTS_GOOGLE_CLIENT_SECRET','secret');vi.stubEnv('MOMENTS_GOOGLE_REDIRECT_URI','https://nexdo.test/api/moments/email/callback');
+ vi.stubGlobal('fetch',vi.fn(async(url:string|URL)=>String(url).includes('/token')?Response.json({access_token:'access',refresh_token:'victim-refresh'}):Response.json({email:'victim@example.com',email_verified:true})));
+ await prisma.momentEmailAccount.deleteMany({where:{userId}});
+ const attacker=(await prisma.user.create({data:{email:randomUUID()+'@example.com',name:'Attacker',passwordHash:''}})).id;
+ const complete=async(owner:string)=>new URL((await callback(new Request(`https://nexdo.test/api/moments/email/callback?code=c&state=${new URL(await connectURL(owner)).searchParams.get('state')}`))).headers.get('Location')!);
+ const confirm=(ticket:unknown)=>moments(new Request('https://nexdo.test/api/moments',{method:'POST',body:JSON.stringify({operation:'connectEmailConfirm',input:{ticket}})}));
+ try {
+  // The attacker's link, completed by the signed-in victim: nothing is saved, and the victim's app can't attach it either.
+  const location=await complete(attacker);
+  expect(location.searchParams.get('status')).toBe('confirm');
+  const ticket=location.searchParams.get('ticket')!;
+  expect(ticket).not.toContain('victim-refresh');
+  expect(await prisma.momentEmailAccount.findUnique({where:{userId:attacker}})).toBeNull();
+  expect((await confirm(ticket)).status).toBe(403);
+  expect(await prisma.momentEmailAccount.findUnique({where:{userId}})).toBeNull();
+  expect((await confirm(JSON.stringify({purpose:'moments-email-ticket',sub:userId,email:'x@example.com',refreshToken:'forged',exp:Date.now()+60000}))).status).toBe(400);
+  // The user's own link, confirmed by their own app.
+  expect((await confirm((await complete(userId)).searchParams.get('ticket'))).status).toBe(200);
+  const saved=await prisma.momentEmailAccount.findUniqueOrThrow({where:{userId}});
+  expect(saved.email).toBe('victim@example.com');expect(saved.refreshToken).not.toBe('victim-refresh');
+ } finally { await prisma.user.delete({where:{id:attacker}}); }
 });

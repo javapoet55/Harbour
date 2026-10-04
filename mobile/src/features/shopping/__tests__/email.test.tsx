@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 jest.mock('expo-router', () => ({ useLocalSearchParams: () => ({ id: 'list-1' }), Stack: { Screen: () => null } }));
-const mockGet = jest.fn(); const mockSave = jest.fn(); const mockPause = jest.fn(); const mockConnect = jest.fn();
-jest.mock('../../../api/shopping', () => ({ shoppingEmailApi: { get: (...args: unknown[]) => mockGet(...args), save: (...args: unknown[]) => mockSave(...args), pause: (...args: unknown[]) => mockPause(...args), connect: (...args: unknown[]) => mockConnect(...args) } }));
+const mockGet = jest.fn(); const mockSave = jest.fn(); const mockPause = jest.fn(); const mockConnect = jest.fn(); const mockConfirm = jest.fn();
+jest.mock('../../../api/shopping', () => ({ shoppingEmailApi: { get: (...args: unknown[]) => mockGet(...args), save: (...args: unknown[]) => mockSave(...args), pause: (...args: unknown[]) => mockPause(...args), connect: (...args: unknown[]) => mockConnect(...args), confirmGmail: (...args: unknown[]) => mockConfirm(...args) } }));
 const mockGmail = jest.fn();
 jest.mock('../../moments/device', () => ({ connectGmail: (...args: unknown[]) => mockGmail(...args), EMAIL_CONNECT_FAILED: 'Connection cancelled' }));
 jest.mock('../store', () => ({ useShopping: (select: (state: unknown) => unknown) => select({ lists: [{ id: 'list-1', title: 'Saturday groceries', timeZone: 'America/Los_Angeles', items: [{ id: '1', name: 'Milk', quantity: '2', size: 'litres', notes: '', checked: false }, { id: '2', name: 'Eggs', quantity: '1', size: '', notes: '', checked: true }] }] }) }));
@@ -35,7 +35,7 @@ it('displays server failures and offers reload', async () => {
  await screen.findByText('Connected · emails come from your account');
 });
 it('connects Gmail and refreshes the sender account', async () => {
- mockGet.mockResolvedValueOnce({ ...initial, account: null }); mockConnect.mockResolvedValue({ url: 'https://accounts.google.com/test' }); mockGmail.mockResolvedValue(true);
+ mockGet.mockResolvedValueOnce({ ...initial, account: null }); mockConnect.mockResolvedValue({ url: 'https://accounts.google.com/test' }); mockGmail.mockResolvedValue('v1.ticket'); mockConfirm.mockResolvedValue({ ok: true });
  await render(<Screen />); await fireEvent.press(await screen.findByRole('button', { name: 'Connect Gmail' }));
- await screen.findByText('Gmail connected. Review and save your schedule.'); expect(mockGmail).toHaveBeenCalledWith('https://accounts.google.com/test');
+ await screen.findByText('Gmail connected. Review and save your schedule.'); expect(mockGmail).toHaveBeenCalledWith('https://accounts.google.com/test'); expect(mockConfirm).toHaveBeenCalledWith('v1.ticket');
 });

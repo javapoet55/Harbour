@@ -4,7 +4,7 @@ import { productData } from '@/server/shopping/food/service';
 import { calculateCalories, MAX_ITEM_KCAL, type FoodLookup } from './calories';
 import { MEALS } from './config';
 import { NutritionError } from './errors';
-import { dateRange, isLocalDate } from './time';
+import { dateRange, dateRangeFrom, isLocalDate } from './time';
 
 export const defaultLookup: FoodLookup = query => productData.lookup(query);
 
@@ -24,11 +24,18 @@ export async function dayLog(userId: string, date: string) {
     prisma.foodLogEntry.findMany({ where: { userId, localDate: date }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] }),
     prisma.nutritionCallSettings.findUnique({ where: { userId }, select: { calorieGoal: true } }),
   ]);
-  const sum = (key: 'kcal' | 'proteinG' | 'carbsG' | 'fatG' | 'fiberG' | 'calciumMg' | 'ironMg' | 'vitaminDIu') => Math.round(entries.reduce((t, e) => t + (e[key] ?? 0), 0) * 10) / 10;
+  const sum = (key: 'kcal' | 'proteinG' | 'carbsG' | 'fatG' | 'fiberG' | 'calciumMg' | 'ironMg' | 'vitaminDIu') => {
+    let total = 0, known = false;
+    for (const e of entries) { const v = e[key]; if (v !== null) { known = true; total += v; } }
+    return known ? Math.round(total * 10) / 10 : null;
+  };
+  const orZero = (v: number | null) => v ?? 0;
+  const whole = (v: number | null) => (v === null ? null : Math.round(v));
   return {
     date, calorieGoal: settings?.calorieGoal ?? 2000,
-    totals: { kcal: Math.round(sum('kcal')), proteinG: sum('proteinG'), carbsG: sum('carbsG'), fatG: sum('fatG'),
-      fiberG: sum('fiberG'), calciumMg: Math.round(sum('calciumMg')), ironMg: sum('ironMg'), vitaminDIu: Math.round(sum('vitaminDIu')) },
+    // Null means no logged entry carried the nutrient — the app renders that as "no data", never a fake zero.
+    totals: { kcal: Math.round(orZero(sum('kcal'))), proteinG: orZero(sum('proteinG')), carbsG: orZero(sum('carbsG')), fatG: orZero(sum('fatG')),
+      fiberG: sum('fiberG'), calciumMg: whole(sum('calciumMg')), ironMg: sum('ironMg'), vitaminDIu: whole(sum('vitaminDIu')) },
     needsReview: entries.filter(e => e.status !== 'CONFIRMED').length,
     entries: entries.map(publicEntry),
   };
@@ -81,7 +88,7 @@ export async function updateEntry(userId: string, id: string, raw: unknown) {
   const e = await prisma.foodLogEntry.update({ where: { id }, data: {
     ...(patch.meal ? { meal: patch.meal } : {}),
     ...(patch.description ? { description: patch.description } : {}),
-    ...(patch.kcal !== undefined ? { kcal: patch.kcal, source: 'MANUAL', proteinG: null, carbsG: null, fatG: null, fiberG: null, calciumMg: null, ironMg: null, vitaminDIu: null } : {}),
+    ...(patch.kcal !== undefined ? { kcal: patch.kcal, source: 'MANUAL', sourceRef: null, proteinG: null, carbsG: null, fatG: null, fiberG: null, calciumMg: null, ironMg: null, vitaminDIu: null } : {}),
     ...(patch.confirm || patch.kcal !== undefined ? { status: 'CONFIRMED', reviewReason: null } : {}),
   } });
   return publicEntry(e);
@@ -102,7 +109,7 @@ export function mondayOf(date: string) {
 /** Daily calorie totals: Week is the Monday–Sunday week containing the date; Month is the 30 days ending on it. */
 export async function periodSummary(userId: string, endDate: string, days: 7 | 30) {
   if (!isLocalDate(endDate)) throw new NutritionError('INVALID_INPUT');
-  const dates = days === 7 ? dateRange(mondayOf(endDate), -7) : dateRange(endDate, days);
+  const dates = days === 7 ? dateRangeFrom(mondayOf(endDate), 7) : dateRange(endDate, days);
   const groups = await prisma.foodLogEntry.groupBy({
     by: ['localDate'], where: { userId, localDate: { gte: dates[0], lte: dates[dates.length - 1] } }, _sum: { kcal: true },
   });

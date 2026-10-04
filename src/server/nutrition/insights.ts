@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { prisma } from '@/server/db';
 import { categoryFor } from '@/server/shopping/domain';
 import { NutritionError } from './errors';
-import { dateRange, isLocalDate } from './time';
+import { dateRange, isLocalDate, localDateIn } from './time';
 
 /**
  * One factual observation a day, with at most one action. Insights only ever suggest *adding* foods toward
@@ -106,19 +106,48 @@ export async function handleInsight(userId: string, date: string, key: unknown, 
     where: { userId }, create: { userId, timeZone: tz, insightHandledKey: insight.key, insightHandledAction: a }, update: { insightHandledKey: insight.key, insightHandledAction: a },
   });
   if (action === 'dismiss') { await record('DISMISSED'); return { ok: true, added: [] as string[], listTitle: null }; }
-  if (!insight.items.length || insight.state === 'added') return { ok: true, added: [] as string[], listTitle: insight.listTitle };
-  const added = await prisma.$transaction(async tx => {
-    let list = await tx.shoppingList.findFirst({ where: { userId, completedAt: null, date: { gte: date } }, include: { items: true }, orderBy: [{ date: 'asc' }, { createdAt: 'asc' }] })
-      ?? await tx.shoppingList.findFirst({ where: { userId, completedAt: null }, include: { items: true }, orderBy: [{ date: 'desc' }, { createdAt: 'desc' }] });
-    if (!list) list = await tx.shoppingList.create({ data: { id: randomUUID(), userId, title: 'Groceries', date, timeZone: tz }, include: { items: true } });
-    const have = new Set(list.items.map(i => i.name.trim().toLowerCase()));
-    const names = insight.items.filter(n => !have.has(n.toLowerCase()));
-    let order = list.items.reduce((m, i) => Math.max(m, i.sortOrder), -1);
-    for (const name of names) await tx.shoppingItem.create({ data: { id: randomUUID(), listId: list.id, name, category: categoryFor(name), notes: 'Suggested by NexDo', sortOrder: ++order } });
-    // Bump the revision so another device holding the old list refreshes instead of overwriting these items.
-    await tx.shoppingList.update({ where: { id: list.id }, data: { revision: { increment: 1 } } });
-    return { names, title: list.title };
-  });
-  await record('ADDED');
+  if (!insight.items.length || insight.state !== 'open') return { ok: true, added: [] as string[], listTitle: insight.listTitle };
+  // Never target or create a list in the past: the anchor is the later of the insight's date and today.
+  const today = localDateIn(tz);
+  const listDate = date > today ? date : today;
+  let added: { names: string[]; title: string };
+  try {
+    added = await prisma.$transaction(async tx => {
+      // Claim the insight inside the transaction, so a concurrent "add" waits for this write and
+      // sees it already handled instead of both requests inserting the same items.
+      const claimed = await tx.nutritionCallSettings.updateMany({
+        where: {
+          userId,
+          // "Not already added" — NOT(...) can't be used here because SQL NULL makes the whole
+          // predicate NULL (not TRUE) when either column is unset, so a fresh row would never match.
+          OR: [
+            { insightHandledKey: null },
+            { insightHandledKey: { not: insight.key } },
+            { insightHandledAction: null },
+            { insightHandledAction: { not: 'ADDED' } },
+          ],
+        },
+        data: { insightHandledKey: insight.key, insightHandledAction: 'ADDED' },
+      });
+      if (!claimed.count) {
+        if (await tx.nutritionCallSettings.findUnique({ where: { userId }, select: { userId: true } })) return { names: [] as string[], title: insight.listTitle ?? 'Groceries' };
+        await tx.nutritionCallSettings.create({ data: { userId, timeZone: tz, insightHandledKey: insight.key, insightHandledAction: 'ADDED' } });
+      }
+      let list = await tx.shoppingList.findFirst({ where: { userId, completedAt: null, date: { gte: listDate } }, include: { items: true }, orderBy: [{ date: 'asc' }, { createdAt: 'asc' }] })
+        ?? await tx.shoppingList.findFirst({ where: { userId, completedAt: null }, include: { items: true }, orderBy: [{ date: 'desc' }, { createdAt: 'desc' }] });
+      if (!list) list = await tx.shoppingList.create({ data: { id: randomUUID(), userId, title: 'Groceries', date: listDate, timeZone: tz }, include: { items: true } });
+      const have = new Set(list.items.map(i => i.name.trim().toLowerCase()));
+      const names = insight.items.filter(n => !have.has(n.toLowerCase()));
+      let order = list.items.reduce((m, i) => Math.max(m, i.sortOrder), -1);
+      for (const name of names) await tx.shoppingItem.create({ data: { id: randomUUID(), listId: list.id, name, category: categoryFor(name), notes: 'Suggested by NexDo', sortOrder: ++order } });
+      // Bump the revision so another device holding the old list refreshes instead of overwriting these items.
+      await tx.shoppingList.update({ where: { id: list.id }, data: { revision: { increment: 1 } } });
+      return { names, title: list.title };
+    });
+  } catch (e) {
+    if (!isUniqueViolation(e)) throw e;
+    return { ok: true, added: [] as string[], listTitle: insight.listTitle };
+  }
   return { ok: true, added: added.names, listTitle: added.title };
 }
+const isUniqueViolation = (e: unknown) => !!e && typeof e === 'object' && 'code' in e && (e as { code: unknown }).code === 'P2002';

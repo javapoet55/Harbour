@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { prisma } from '@/server/db';
-import { saveMoment, generateDraft, approveDraft, schedule, changePlan, runJobs, listMoments, sendGreetingNow } from './service';
+import { saveMoment, generateDraft, approveDraft, schedule, changePlan, runJobs, listMoments, sendGreetingNow, sendDueEmails } from './service';
 import { fallback, occurrence, nextAnnual, mayTransition } from './domain';
 import { randomUUID } from 'node:crypto';
 let userId='';
@@ -197,4 +197,72 @@ it('Send Now supports phone-only recipients without inventing an email address',
  const d=await ready();await prisma.importantMoment.update({where:{id:d.momentID},data:{email:''}});
  const plans=await sendGreetingNow(userId,{momentID:d.momentID,body:'Hello 🎉',operationID:randomUUID(),approved:true});
  expect(plans).toHaveLength(1);expect(plans[0].channel).toBe('messages');
+});
+
+it('sends more than 30 due emails in one run, several at a time',async()=>{
+ const plans=[];for(let i=0;i<35;i++) plans.push(await plan('email',true));
+ await prisma.deliveryPlan.updateMany({where:{id:{in:plans.map(p=>p.id)}},data:{nextAttemptAt:new Date(0)}});
+ let active=0,peak=0;
+ await sendDueEmails({send:async(_u,_r,_s,_b,key)=>{active++;peak=Math.max(peak,active);await new Promise(r=>setTimeout(r,20));active--;return {kind:'sent',id:key};}},new Date(),{draft:{moment:{userId}}});
+ const saved=await prisma.deliveryPlan.findMany({where:{id:{in:plans.map(p=>p.id)}}});
+ expect(saved.every(p=>p.status==='SENT')).toBe(true);
+ expect(peak).toBeGreaterThan(1);expect(peak).toBeLessThanOrEqual(5);
+},30000);
+it('keeps sending other emails when one plan hits a database error',async()=>{
+ const bad=await plan('email',true),good=await plan('email',true);
+ await prisma.deliveryPlan.update({where:{id:bad.id},data:{nextAttemptAt:new Date(1)}});
+ await prisma.deliveryPlan.update({where:{id:good.id},data:{nextAttemptAt:new Date(2)}});
+ const errors=vi.spyOn(console,'error').mockImplementation(()=>{});
+ // An unstorable provider ID makes the follow-up database write throw for this plan only.
+ await sendDueEmails({send:async(_u,_r,_s,_b,key)=>({kind:'sent',id:(key===bad.idempotencyKey?123:'ok') as string})},new Date(),{draft:{moment:{userId}}});
+ errors.mockRestore();
+ expect((await prisma.deliveryPlan.findUniqueOrThrow({where:{id:good.id}})).status).toBe('SENT');
+ expect((await prisma.deliveryPlan.findUniqueOrThrow({where:{id:bad.id}})).status).toBe('SENDING');
+});
+it('stamps each claim with its own pick-up time, not the run start',async()=>{
+ const p=await plan('email',true);await prisma.deliveryPlan.update({where:{id:p.id},data:{nextAttemptAt:new Date(0)}});
+ const started=Date.now();let claimedAt=0;
+ await runJobs({send:async()=>{claimedAt=+(await prisma.deliveryPlan.findUniqueOrThrow({where:{id:p.id}})).claimedAt!;return {kind:'sent',id:'claimed'};}},p.id,new Date(started-10*60000));
+ expect(claimedAt).toBeGreaterThanOrEqual(started);
+});
+it('creates next year\'s email right after sending a yearly wish',async()=>{
+ const p=await plan('email',true);await prisma.deliveryPlan.update({where:{id:p.id},data:{repeatYearly:true,nextAttemptAt:new Date(0)}});
+ await sendDueEmails({send:async()=>({kind:'sent',id:'yearly'})},new Date(),{id:p.id});
+ expect(await prisma.deliveryPlan.findUnique({where:{idempotencyKey:`${p.id}:annual`}})).not.toBeNull();
+});
+it('lets the user settle a "Check Sent mail" email, freeing the person for new wishes',async()=>{
+ const sent=await plan('email',true),notSent=await plan('email',true);
+ await prisma.deliveryPlan.updateMany({where:{id:{in:[sent.id,notSent.id]}},data:{status:'UNCERTAIN'}});
+ await prisma.deliveryPlan.update({where:{id:sent.id},data:{repeatYearly:true}});
+ await changePlan(userId,{id:sent.id,action:'sent'});
+ expect((await prisma.deliveryPlan.findUniqueOrThrow({where:{id:sent.id}})).status).toBe('SENT');
+ expect(await prisma.deliveryPlan.findUnique({where:{idempotencyKey:`${sent.id}:annual`}})).not.toBeNull();
+ await changePlan(userId,{id:notSent.id,action:'failed'});
+ expect((await prisma.deliveryPlan.findUniqueOrThrow({where:{id:notSent.id}})).status).toBe('FAILED');
+ await changePlan(userId,{id:notSent.id,action:'cancel'});
+ const momentID=(await prisma.wishDraft.findUniqueOrThrow({where:{id:notSent.draftID}})).momentID;
+ const {draft}=await generateDraft(userId,{momentID,tone:'Warm'});await approveDraft(userId,{id:draft.id,body:draft.body,approved:true});
+ await expect(schedule(userId,{draftID:draft.id,channel:'email',recipient:'test@example.com',scheduledAtUTC:new Date(Date.now()+3600000).toISOString(),timeZoneID:'America/Los_Angeles',automaticDelivery:true,reminderOffset:0,repeatYearly:false,idempotencyKey:randomUUID(),approved:true})).resolves.toMatchObject({status:'SCHEDULED'});
+});
+it('gives a user Retry a fresh set of attempts after automatic retries ran out',async()=>{
+ const p=await plan('email',true);await prisma.deliveryPlan.update({where:{id:p.id},data:{status:'FAILED',attempts:4}});
+ await changePlan(userId,{id:p.id,action:'retry'});
+ expect((await prisma.deliveryPlan.findUniqueOrThrow({where:{id:p.id}})).attempts).toBe(0);
+ let calls=0;await runJobs({send:async()=>{calls++;return {kind:'sent',id:'fresh'};}},p.id);
+ expect(calls).toBe(1);
+});
+it('carries a yearly wish on to next year when this year fails or expires, but not when cancelled',async()=>{
+ const failed=await plan('email',true),expired=await plan(),cancelled=await plan('email',true);
+ await prisma.deliveryPlan.updateMany({where:{id:{in:[failed.id,expired.id,cancelled.id]}},data:{repeatYearly:true}});
+ await prisma.deliveryPlan.update({where:{id:failed.id},data:{nextAttemptAt:new Date(0)}});
+ await runJobs({send:async()=>({kind:'reconnect',error:'Reconnect your email account.'})},failed.id);
+ await prisma.deliveryPlan.update({where:{id:expired.id},data:{scheduledAtUTC:new Date(Date.now()-2*86400000)}});
+ await listMoments(userId);
+ await changePlan(userId,{id:cancelled.id,action:'cancel'});
+ const next=(id:string)=>prisma.deliveryPlan.findUnique({where:{idempotencyKey:`${id}:annual`}});
+ expect((await prisma.deliveryPlan.findUniqueOrThrow({where:{id:failed.id}})).status).toBe('FAILED');
+ expect(await next(failed.id)).toMatchObject({status:'SCHEDULED',automaticDelivery:true});
+ expect((await prisma.deliveryPlan.findUniqueOrThrow({where:{id:expired.id}})).status).toBe('EXPIRED');
+ expect(await next(expired.id)).toMatchObject({status:'AWAITING_CONFIRMATION'});
+ expect(await next(cancelled.id)).toBeNull();
 });
