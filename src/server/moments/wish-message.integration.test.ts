@@ -193,6 +193,6 @@ describe('card emails carry the saved wish in both parts', () => {
     const plan = await scheduleEmail(m.id, custom);
     const raw = await send(plan.id);
     expect(raw).not.toContain('multipart/');
-    expect(raw).toBe(buildWishMessage({ recipient: 'asha@example.com', subject: 'Asha’s birthday', body: custom, key: plan.idempotencyKey, card: null }));
+    expect(raw).toBe(buildWishMessage({ recipient: 'asha@example.com', subject: 'Happy Birthday, Asha!', body: custom, key: plan.idempotencyKey, card: null }));
   });
 });

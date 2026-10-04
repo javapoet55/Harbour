@@ -1021,6 +1021,18 @@ describe('Choose Delivery', () => {
     expect(mockPost).toHaveBeenCalledWith('schedule', expect.objectContaining({ channel: 'copy', sendNow: true, automaticDelivery: false }), undefined);
     expect(mockPost).toHaveBeenCalledWith('plan', { id: 'cp', action: 'copied' }, undefined);
   });
+
+  it('shows the occasion subject, never the moment title, before sending an email', async () => {
+    const item = moment({ id: 'm', type: 'birthday', title: 'Ask about her surgery', firstName: 'Sam', email: 'a@b.co', emailSubject: 'Happy Birthday, Sam!', drafts: [draft({ id: 'd', body: 'Hi Sam' })] });
+    load([item], { emailAccount: { email: 'me@gmail.com', status: 'connected' }, emailConfigured: true });
+    mockParams = { momentId: 'm', draftId: 'd' };
+    await render(<ChooseDelivery />);
+    await fireEvent.press(screen.getByTestId('delivery-email'));
+    await fireEvent.press(screen.getByTestId('delivery-send'));
+    expect(screen.getByText('Happy Birthday, Sam!')).toBeTruthy();
+    // The title stays only in the screen header the user sees.
+    expect(screen.getAllByText('Ask about her surgery')).toHaveLength(1);
+  });
 });
 
 describe('Wish details', () => {

@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { prisma } from '@/server/db';
 import { saveMoment, generateDraft, approveDraft, schedule, changePlan, runJobs, listMoments, sendGreetingNow, sendDueEmails } from './service';
-import { fallback, occurrence, nextAnnual, mayTransition } from './domain';
+import { fallback, occurrence, nextAnnual, mayTransition, wishSubject } from './domain';
 import { randomUUID } from 'node:crypto';
 let userId='';
 const input={type:'birthday',title:'Test birthday',firstName:'Test',email:'test@example.com',phone:'+15555550123',occurrenceDate:'2000-02-29',yearly:true,timeZoneID:'America/Los_Angeles',sourceKey:'test'};
@@ -265,4 +265,23 @@ it('carries a yearly wish on to next year when this year fails or expires, but n
  expect((await prisma.deliveryPlan.findUniqueOrThrow({where:{id:expired.id}})).status).toBe('EXPIRED');
  expect(await next(expired.id)).toMatchObject({status:'AWAITING_CONFIRMATION'});
  expect(await next(cancelled.id)).toBeNull();
+});
+it('builds email subjects from the occasion and first name, never the title',()=>{
+ const m=(type:string,firstName='Sam')=>wishSubject({type,firstName,title:'Private note about Sam'});
+ expect([m('birthday'),m('anniversary'),m('getWellSoon'),m('custom'),m('birthday',' ')]).toEqual(['Happy Birthday, Sam!','Happy Anniversary, Sam!','Get well soon, Sam','Best wishes, Sam','Happy Birthday!']);
+ expect(wishSubject({type:'festival',firstName:'',title:'Diwali'})).toBe('Diwali');
+});
+it('never puts a private title in a scheduled, resent or next-year email subject',async()=>{
+ const m=await saveMoment(userId,{...input,title:'Ask about her surgery',sourceKey:randomUUID(),email:randomUUID()+'@example.com'});
+ expect(m.emailSubject).toBe('Happy Birthday, Test!');
+ expect((await listMoments(userId)).moments.find(x=>x.id===m.id)?.emailSubject).toBe('Happy Birthday, Test!');
+ const {draft}=await generateDraft(userId,{momentID:m.id,tone:'Warm'});await approveDraft(userId,{id:draft.id,body:draft.body,approved:true});
+ const p=await schedule(userId,{draftID:draft.id,channel:'email',recipient:'test@example.com',scheduledAtUTC:new Date(Date.now()+3600000).toISOString(),timeZoneID:'America/Los_Angeles',automaticDelivery:true,reminderOffset:0,repeatYearly:true,idempotencyKey:randomUUID(),approved:true});
+ expect(p.subject).toBe('Happy Birthday, Test!');
+ // A plan saved before this change still carries the title; it is corrected when it sends.
+ await prisma.deliveryPlan.update({where:{id:p.id},data:{subject:'Ask about her surgery',nextAttemptAt:new Date(0)}});
+ const subjects:string[]=[];await runJobs({send:async(_u,_r,subject)=>{subjects.push(subject);return {kind:'sent',id:'subject'};}},p.id);
+ expect(subjects).toEqual(['Happy Birthday, Test!']);
+ expect((await prisma.deliveryPlan.findUniqueOrThrow({where:{id:p.id}})).subject).toBe('Happy Birthday, Test!');
+ expect((await prisma.deliveryPlan.findUniqueOrThrow({where:{idempotencyKey:`${p.id}:annual`}})).subject).toBe('Happy Birthday, Test!');
 });
