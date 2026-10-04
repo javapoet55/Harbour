@@ -9,6 +9,8 @@ const normalize=(s:string)=>s.toLowerCase().replace(/[^a-z0-9%]+/g,' ').trim();
 // First match wins: specific product types (soups, cookies, pet treats, supplements…) come before the
 // staple they mention, so “Butter” never matches butter cookies and “Rice” never matches Rice Krispies.
 const families:[string,RegExp][]=[
+ ['air purifier filters',/\b(?:air purifier|air cleaner)\b.*\b(?:filters?|replacement)\b|\b(?:filters?|replacement)\b.*\b(?:air purifier|air cleaner)\b/],
+ ['air purifiers',/\bair purifiers?\b/],
  ['pet food',/\b(?:dogs?|cats?|pets?|puppy|kitten)\b/],
  ['supplements',/\b(?:vitamins?|multivitamins?|multi(?! purpose)|supplements?|probiotics?|fish oil|omega 3|melatonin|zinc|magnesium|calcium|collagen|turmeric|coq10|b 12|b complex|iron|elderberry|red yeast rice|lutein|ashwagandha|l theanine)\b/],
  ['medicine',/\b(?:pain relie(?:f|ver)|advil|tylenol|aleve|motrin|excedrin|mucinex|dayquil|nyquil|robitussin|theraflu|delsym|vicks|ibuprofen|acetaminophen|naproxen|cough|cold flu)\b/],
@@ -46,14 +48,15 @@ const family=(s:string)=>families.find(([,r])=>r.test(normalize(s)))?.[0];
 // Families too broad to imply the same product: an offer must share at least one of the item's own words.
 const broad=new Set(['pet food','supplements','medicine']);
 const singular=(w:string)=>w.length>3&&w.endsWith('s')&&!w.endsWith('ss')?w.slice(0,-1):w;
-export const brands=['Kirkland Signature','Starbucks','Peet’s Coffee',"Peet's Coffee",'Chosen Foods','Chobani','Oikos','Tide','Bounty','Charmin','Horizon','Fairlife','Kerrygold','Dawn','Cascade','CJ Foods bibigo'];
+export const brands=['Winix','Kirkland Signature','Starbucks','Peet’s Coffee',"Peet's Coffee",'Chosen Foods','Chobani','Oikos','Tide','Bounty','Charmin','Horizon','Fairlife','Kerrygold','Dawn','Cascade','CJ Foods bibigo'];
 export function identifyBrand(product:string){return brands.find(b=>normalize(product).includes(normalize(b)))??null;}
 export function matchOffer(item:Item,offer:OfferRecord){
  const a=family(item.name),b=family(offer.product);
  if(!a||a!==b)return null;
  const reasons:string[]=[`Product: ${a}`],differences:string[]=[];
  const brand=item.brand?.trim()||identifyBrand(item.name);
- if(brand){if(normalize(offer.brand??'')===normalize(brand))reasons.push(`Matches your ${brand} brand`);else differences.push(`Brand: ${offer.brand??'not specified by source'}; requested ${brand}`);}
+ const offerBrand=offer.brand?.trim()||identifyBrand(offer.product);
+ if(brand){if(normalize(offerBrand??'')===normalize(brand))reasons.push(`Matches your ${brand} brand`);else differences.push(`Brand: ${offerBrand??'not specified by source'}; requested ${brand}`);}
  const size=normalize(item.size).replace(/\s/g,'');
  if(size){if(size===normalize(offer.packageSize??'').replace(/\s/g,''))reasons.push(`Matches requested size: ${item.size}`);else differences.push(`Package: ${offer.packageSize??'not specified'}; requested ${item.size}`);}
  // Retain all stated preferences, including dietary needs and free-form notes. Unverified preferences never count as a match.

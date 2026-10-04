@@ -146,3 +146,12 @@ it('lets a customer choose a weekly ad offer for their list',async()=>{
  const chosen=(await chooseOffer(owner,list.id,list.items[0].id,'flipp-deal',list.revision)).list!;
  expect(chosen.items[0].chosenOffer).toMatchObject({product:'Lucerne Milk',store:'Safeway'});
 });
+
+it('matches the Winix C710 by product, brand and model without matching filters or other models exactly',()=>{
+ const item={name:'Winix C710 air purifier',brand:null,size:'',notes:''};
+ const offer=deal({product:'Winix C710 Air Purifier',brand:null,packageSize:null});
+ expect(matchOffer(item,offer)?.category).toBe('matching');
+ expect(matchOffer(item,deal({...offer,product:'Winix C909 Air Purifier'}))?.category).toBe('alternative');
+ expect(matchOffer(item,deal({...offer,product:'Winix C710 Air Purifier Replacement Filter'}))).toBeNull();
+ expect(matchOffer({...item,name:'Canola Oil'},offer)).toBeNull();
+});
