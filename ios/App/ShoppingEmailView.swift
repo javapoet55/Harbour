@@ -46,7 +46,15 @@ struct ShoppingEmailView: View {
             Section {
                 Label("Weekly shopping email", systemImage: "envelope.badge.clock")
                 Text("Email the latest unpurchased items to your store manager, even when NexDo is closed. Empty lists are skipped.").font(.subheadline).foregroundStyle(.secondary)
-                Text(list.title).font(.headline)
+            }
+            Section {
+                Text("Selected list for weekly sharing.")
+                    .font(.subheadline).foregroundStyle(.secondary)
+            } header: {
+                Text(list.title)
+                    .font(.headline)
+                    .textCase(nil)
+                    .accessibilityIdentifier("shopping-email-list-title")
             }
             Section("Send from") {
                 if let account = snapshot?.account { Text(account.email); Text(account.status.capitalized).foregroundStyle(.secondary) }
