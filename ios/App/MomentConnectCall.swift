@@ -168,6 +168,7 @@ struct MomentConnectDraft: Equatable {
 struct MomentConnectSection: View {
     @StateObject private var model: MomentConnectModel
     @State private var verifying = false
+    @State private var showingHowItWorks = false
     @State private var previewTask: Task<Void, Never>?
     private let moments: [ImportantMoment]
 
@@ -199,6 +200,7 @@ struct MomentConnectSection: View {
         .task { await model.load(momentIDs: moments.map(\.id)) }
         .onChange(of: moments.map(\.id)) { _, ids in Task { await model.load(momentIDs: ids) } }
         .sheet(isPresented: $verifying) { CallerIDVerificationSheet(model: model) }
+        .sheet(isPresented: $showingHowItWorks) { MomentCallingGuide() }
         .alert("Connect me on the day", isPresented: Binding(get: { model.error != nil || model.notice != nil }, set: { if !$0 { model.error = nil; model.notice = nil } })) {
             Button("OK", role: .cancel) { model.error = nil; model.notice = nil }
         } message: { Text(model.error ?? model.notice ?? "") }
@@ -272,6 +274,10 @@ struct MomentConnectSection: View {
                         .buttonStyle(.borderedProminent).disabled(model.busy || (draft.enabled && model.previews[moment.id]?.userOk == false))
                         .accessibilityIdentifier("connect-save-\(moment.id)")
                 }
+                Button("How it works", systemImage: "questionmark.circle") { showingHowItWorks = true }
+                    .font(.subheadline.weight(.semibold))
+                    .frame(minHeight:44)
+                    .accessibilityIdentifier("connect-how-it-works-\(moment.id)")
                 if let last = state.lastCall {
                     Text("Last call (\(last.date)): \(MomentConnectModel.statusLabel(last.status))").font(.caption).foregroundStyle(.secondary)
                 }
@@ -367,6 +373,82 @@ struct CallerIDVerificationSheet: View {
                 if status == "VERIFIED" { code = nil; editing = false; return }
                 if status == "FAILED" { failed = true; return }
             }
+        }
+    }
+}
+
+
+private struct MomentCallingGuide: View {
+    @Environment(\.dynamicTypeSize) private var typeSize
+    @Environment(\.dismiss) private var dismiss
+    private let ink = Color(red:0.07,green:0.05,blue:0.24)
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment:.leading,spacing:20) {
+                    HStack(alignment:.top,spacing:16) {
+                        MomentCallingArtwork(rect:CGRect(x:25,y:55,width:172,height:156))
+                            .frame(width:76,height:76)
+                        VStack(alignment:.leading,spacing:10) {
+                            Text("We call for you on special days").font(.title.bold())
+                            Text("NexDo makes the call at the time you choose and connects you with your loved ones.")
+                                .foregroundStyle(.secondary)
+                        }
+                    }.padding(.vertical,12)
+                    step(1,title:"Set it up",text:"Turn on the calling feature, verify your phone number, and choose the call time and time zone.",rect:CGRect(x:1022,y:273,width:257,height:182))
+                    step(2,title:"We call you",text:"On the selected day, NexDo calls you at the scheduled time. Answer the call and confirm that you’d like to be connected.",rect:CGRect(x:24,y:514,width:220,height:201))
+                    step(3,title:"You’re connected",text:"After you say yes, we dial your loved one and connect you. They’ll see your verified phone number.",rect:CGRect(x:594,y:518,width:466,height:195))
+                    HStack(alignment:.top,spacing:12) {
+                        Image(systemName:"info.circle.fill").font(.title2).foregroundStyle(.blue)
+                        VStack(alignment:.leading,spacing:8) {
+                            Text("Good to know").font(.headline)
+                            Text("• We call you only on the days you choose.")
+                            Text("• If you don’t answer or confirm, we won’t call your loved one.")
+                            Text("• Your loved one sees your verified phone number.")
+                            Text("• You can change or turn off this feature anytime.")
+                        }.font(.subheadline)
+                    }.padding(18).frame(maxWidth:.infinity,alignment:.leading)
+                        .background(Color.blue.opacity(0.08),in:RoundedRectangle(cornerRadius:22))
+                    Button { dismiss() } label: {
+                        Text("Got it!").font(.headline).foregroundStyle(.white)
+                            .frame(maxWidth:.infinity,minHeight:52)
+                            .background(LinearGradient(colors:[Color.purple,Color.nexdoIndigo],startPoint:.topLeading,endPoint:.bottomTrailing),in:Capsule())
+                    }.buttonStyle(.plain).accessibilityIdentifier("calling-guide-done")
+                    Button("Back to settings") { dismiss() }
+                        .font(.headline).frame(maxWidth:.infinity,minHeight:44)
+                }.padding(20)
+            }
+            .foregroundStyle(ink)
+            .background(LinearGradient(colors:[Color.blue.opacity(0.13),Color.purple.opacity(0.09),Color.white],startPoint:.topLeading,endPoint:.bottomTrailing).ignoresSafeArea())
+            .navigationTitle("How It Works").navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement:.cancellationAction) {
+                Button("Back",systemImage:"chevron.left") { dismiss() }
+            } }
+        }.tint(.nexdoIndigo)
+    }
+    private func step(_ number:Int,title:String,text:String,rect:CGRect) -> some View {
+        HStack(alignment:.top,spacing:10) {
+            Text("\(number)").font(.title3.bold()).foregroundStyle(Color.nexdoIndigo)
+                .frame(width:32,height:32).background(Color.nexdoIndigo.opacity(0.09),in:Circle())
+            let layout = typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment:.leading,spacing:12)) : AnyLayout(HStackLayout(alignment:.center,spacing:12))
+            layout {
+                VStack(alignment:.leading,spacing:10) {
+                    Text(title).font(.title3.bold())
+                    Text(text).font(.subheadline).foregroundStyle(.secondary).fixedSize(horizontal:false,vertical:true)
+                }.frame(maxWidth:.infinity,alignment:.leading)
+                MomentCallingArtwork(rect:rect).frame(width:typeSize.isAccessibilitySize ? 180:100,height:120)
+            }.padding(18).frame(maxWidth:.infinity,alignment:.leading)
+                .background(.white.opacity(0.9),in:RoundedRectangle(cornerRadius:24))
+        }
+    }
+}
+private struct MomentCallingArtwork: View {
+    let rect: CGRect
+    private static let source = UIImage(named:"moment-calling-pack")?.cgImage
+    var body: some View {
+        if let source=Self.source,let region=source.cropping(to:rect) {
+            Image(decorative:region,scale:1).resizable().interpolation(.high).scaledToFit()
+                .accessibilityHidden(true)
         }
     }
 }

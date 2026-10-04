@@ -106,7 +106,7 @@ struct ShoppingHome: View {
                                 if index > 0 { Divider() }
                                 NavigationLink { ShoppingDetail(store: store, initial: list) } label: {
                                     HStack(spacing: 12) {
-                                        listTile(list.completedAt == nil ? "cart.fill" : "doc.on.doc", color: list.completedAt == nil ? .green : .nexdoIndigo)
+                                        StoreBrandLogo(api: store.api, listID: list.id, identity: [list.storeName ?? "", list.storeWebsite ?? ""].joined(separator: "|"), size: 48)
                                         VStack(alignment: .leading, spacing: 4) {
                                             Text(list.title).font(.headline).foregroundStyle(Color.nexdoInk)
                                             Text(GroceryList.itemCount(list.items.count) + (list.completedAt == nil ? "" : " · Completed")).font(.caption).foregroundStyle(Color.nexdoSecondary)
@@ -235,7 +235,21 @@ struct ShoppingDetail:View {
     var body:some View {
         List {
             Section {
-                HStack{StoreBrandLogo(api:store.api,listID:list.id,identity:[list.storeName ?? "",list.storeWebsite ?? ""].joined(separator:"|"));VStack(alignment:.leading){Text(list.title).font(.title2.bold());Text("\(list.items.count-list.remaining) added · \(GroceryList.itemCount(list.items.count))").foregroundStyle(.secondary)}}
+                HStack(spacing: 12) {
+                    StoreBrandLogo(api: store.api, listID: list.id, identity: [list.storeName ?? "", list.storeWebsite ?? ""].joined(separator: "|"), expandsOnTap: true)
+                    VStack(alignment: .leading) {
+                        Text(list.title).font(.title2.bold())
+                        Text("\(list.items.count-list.remaining) added · \(GroceryList.itemCount(list.items.count))").foregroundStyle(.secondary)
+                    }
+                    Spacer(minLength: 0)
+                    if !readOnly {
+                        Button { settings = true } label: {
+                            Image(systemName: "chevron.right").font(.subheadline.weight(.semibold))
+                                .foregroundStyle(Color.nexdoSecondary).frame(width: 44, height: 44)
+                        }.buttonStyle(.borderless).accessibilityLabel("List settings")
+                            .accessibilityIdentifier("shopping-header-settings")
+                    }
+                }
                     .listRowInsets(EdgeInsets(top:0,leading:16,bottom:3,trailing:16)).listRowBackground(Color.clear).listRowSeparator(.hidden)
                 shoppingShortcuts
                     .listRowInsets(EdgeInsets(top:8,leading:16,bottom:8,trailing:16))
@@ -283,21 +297,6 @@ struct ShoppingDetail:View {
             }
             if !list.items.isEmpty {
                 Section {
-                    if !readOnly {
-                        HStack(spacing: 16) {
-                            Button("Select All") { setAllItemsChecked(true) }
-                                .disabled(list.remaining == 0)
-                                .accessibilityIdentifier("shopping-select-all")
-                            Spacer(minLength: 8)
-                            Button("Unselect All") { setAllItemsChecked(false) }
-                                .disabled(list.remaining == list.items.count)
-                                .accessibilityIdentifier("shopping-unselect-all")
-                        }
-                        .font(.subheadline.weight(.semibold))
-                        .tint(Color.nexdoBlue)
-                        .buttonStyle(.borderless)
-                        .frame(minHeight: 44)
-                    }
                     ForEach(visibleItems){row in
                         VStack(alignment:.leading,spacing:6) {
                             GroceryRow(row:row,readOnly:readOnly,onToggle:{toggle(row)},onEdit:{item=row},onAlternatives:{alternativesFor=row})
@@ -328,7 +327,10 @@ struct ShoppingDetail:View {
                 ToolbarItem(placement:.topBarTrailing){Menu{
                     Button("List settings"){settings=true}.disabled(readOnly)
                     Button("Copy list"){copy=true}
-                    if !readOnly {Button("Unselect All"){setAllItemsChecked(false)}.disabled(list.remaining == list.items.count)}
+                    if !readOnly {
+                        Button("Select All"){setAllItemsChecked(true)}.disabled(list.remaining == 0)
+                        Button("Unselect All"){setAllItemsChecked(false)}.disabled(list.remaining == list.items.count)
+                    }
                     Button("Delete list",role:.destructive){deleting=true}
                 }label:{Image(systemName:"ellipsis")}.accessibilityLabel("List options")}
             }
@@ -382,15 +384,22 @@ struct ShoppingDetail:View {
         }.padding(.horizontal,16).padding(.vertical,10)
             .background(.ultraThinMaterial).overlay(alignment:.top){Divider().opacity(0.5)}
     }
+    private var showsOffersShortcut:Bool {
+        if let offers, !offers.matches.isEmpty { return true }
+        let storeWords = (list.storeName ?? "").lowercased().split { !$0.isLetter && !$0.isNumber }
+        return storeWords.contains("costco") || storeWords.contains("safeway")
+    }
     private var shoppingShortcuts:some View {
         let layout = shortcutTypeSize.isAccessibilitySize ? AnyLayout(VStackLayout(spacing:8)) : AnyLayout(HStackLayout(alignment:.top,spacing:8))
         return layout {
             Button {shortcutEmail=true} label: {
                 shortcutCard("Schedule Email",icon:"envelope.fill",color:.nexdoBlue)
             }.frame(maxWidth:.infinity).disabled(readOnly).accessibilityIdentifier("shopping-shortcut-email")
+            if showsOffersShortcut {
             Button {shortcutOffers=true} label: {
                 shortcutCard("View Offers" + (offers.map { " (\($0.matches.count))" } ?? ""),icon:"tag",color:.nexdoIndigo)
             }.frame(maxWidth:.infinity).accessibilityIdentifier("shopping-shortcut-offers")
+            }
         }.buttonStyle(.plain)
     }
     private func shortcutCard(_ title:String,icon:String,color:Color)->some View {

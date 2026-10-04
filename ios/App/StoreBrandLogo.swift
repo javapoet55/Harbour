@@ -12,20 +12,51 @@ struct StoreBrandLogo: View {
     let api: APIClient
     let listID: String
     let identity: String
+    var size: CGFloat = 56
+    var expandsOnTap = false
+    @State private var expanded = false
     @State private var image: UIImage?
     @State private var label = "Shopping list"
     var body: some View {
         Group {
+            if expandsOnTap, image != nil {
+                Button { expanded = true } label: { avatar }
+                    .buttonStyle(.borderless)
+                    .accessibilityLabel("Expand \(label) logo")
+                    .accessibilityIdentifier("shopping-store-logo-preview")
+            } else {
+                avatar.accessibilityLabel(image == nil ? "Shopping list" : "\(label) logo")
+            }
+        }
+        .task(id: "\(listID)|\(identity)") { await load() }
+        .sheet(isPresented: $expanded) {
+            NavigationStack {
+                Group {
+                    if let image {
+                        Image(uiImage: image).resizable().scaledToFit().padding(24)
+                            .accessibilityLabel("\(label) logo")
+                    }
+                }.frame(maxWidth: .infinity, maxHeight: .infinity).background(.white)
+                    .navigationTitle(label).navigationBarTitleDisplayMode(.inline)
+                    .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { expanded = false } } }
+            }.presentationDragIndicator(.visible)
+        }
+    }
+    private var avatar: some View {
+        Group {
             if let image {
-                Image(uiImage: image).resizable().scaledToFit().padding(5)
+                // Use nearly the full badge instead of adding a second large inset
+                // around the provider's already padded logo artwork.
+                Image(uiImage: image).resizable().scaledToFit().padding(size * 0.03)
             } else {
                 Image(systemName: "cart.fill").font(.title).foregroundStyle(.green)
             }
         }
-        .frame(width: 56, height: 56)
-        .background(.green.opacity(0.14), in: RoundedRectangle(cornerRadius: 17))
-        .accessibilityLabel(image == nil ? "Shopping list" : "\(label) logo")
-        .task(id: "\(listID)|\(identity)") { await load() }
+        .frame(width: size, height: size)
+        .background(image == nil ? Color.green.opacity(0.14) : Color.white)
+        .clipShape(Circle())
+        .overlay(Circle().stroke(Color.green.opacity(0.12), lineWidth: 1))
+        .contentShape(Circle())
     }
     @MainActor private func load() async {
         let cacheKey = "\(listID)|\(identity)"
@@ -64,7 +95,7 @@ struct StoreBrandLogo: View {
                 guard let source = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
                 return CGImageSourceCreateThumbnailAtIndex(source, 0, [
                     kCGImageSourceCreateThumbnailFromImageAlways: true,
-                    kCGImageSourceThumbnailMaxPixelSize: 168,
+                    kCGImageSourceThumbnailMaxPixelSize: 768,
                     kCGImageSourceCreateThumbnailWithTransform: true
                 ] as CFDictionary)
             }.value

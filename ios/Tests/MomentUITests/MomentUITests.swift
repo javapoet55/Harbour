@@ -592,10 +592,12 @@ import XCTest
     func testEmailConnectionOnlyForEmailRecipients() {
         app.launchArguments.append("-moment-email-disconnected")
         openFestivalManager();app.buttons["festival-tab-Schedule"].tap()
-        let channel=app.buttons.matching(NSPredicate(format:"label BEGINSWITH %@","Channel for Damien")).firstMatch
+        let channel=app.buttons["Email for Damien"]
         for _ in 0..<6 {if channel.isHittable{break};app.swipeUp()}
         XCTAssertFalse(app.buttons["Connect / Reconnect email"].exists)
-        channel.tap();app.buttons["Email"].tap()
+        XCTAssertTrue(app.buttons["Messages for Damien"].exists)
+        XCTAssertTrue(app.buttons["Copy / Share for Damien"].exists)
+        channel.tap()
         let connect=app.buttons["Connect / Reconnect email"]
         for _ in 0..<5 {if connect.isHittable{break};app.swipeUp()}
         XCTAssertTrue(connect.exists)
@@ -796,6 +798,30 @@ import XCTest
         app.navigationBars["Wish details"].buttons.firstMatch.tap()
         XCTAssertTrue(app.buttons["Add Moment"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.navigationBars["Wish details"].exists)
+    }
+    func testBirthdayContactPickerEmptySelectionThenSelectAndSave() {
+        app.buttons["moments-create-new"].tap()
+        XCTAssertTrue(app.navigationBars["Create Moment"].waitForExistence(timeout: 5))
+        let choose = app.buttons["Choose from Contacts"]
+        for _ in 0..<4 { if choose.isHittable { break }; app.swipeUp() }
+        choose.tap()
+        XCTAssertTrue(app.navigationBars["Contacts"].waitForExistence(timeout: 5))
+        app.navigationBars["Contacts"].buttons["Done"].tap()
+        XCTAssertTrue(app.navigationBars["Create Moment"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["moment-save-top"].isEnabled)
+        choose.tap()
+        XCTAssertTrue(app.navigationBars["Contacts"].waitForExistence(timeout: 5))
+        app.cells["John Appleseed"].tap()
+        app.navigationBars["Contacts"].buttons["Done"].tap()
+        XCTAssertTrue(app.navigationBars["Add Recipient"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.textFields["recipient-name"].value as? String, "John")
+        app.buttons["recipient-confirm"].tap()
+        XCTAssertTrue(app.navigationBars["Create Moment"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["moment-save-top"].isEnabled)
+        app.buttons["moment-save-top"].tap()
+        XCTAssertTrue(app.navigationBars["Manage Moment"].waitForExistence(timeout: 10))
+        app.buttons["Contacts"].tap()
+        XCTAssertTrue(app.buttons["Select John"].waitForExistence(timeout: 5))
     }
     func testChooseFromContactsAddsEachPickedContact() {
         app.buttons["Add Moment"].tap()

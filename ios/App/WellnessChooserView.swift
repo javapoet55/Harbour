@@ -18,10 +18,10 @@ struct WellnessChooserView: View {
                 VStack(spacing: 0) {
                     hero(scale: scale)
                     VStack(spacing: 10 * scale) {
+                        module(.shopping, title: "Shopping List", subtitle: "Plan, shop and save time", tags: "Groceries  ·  Send to store  ·  Stay organized", color: Color(red: 0, green: 0.46, blue: 0.23), icon: CGRect(x: 1176, y: 428, width: 95, height: 94), art: CGRect(x: 1146, y: 691, width: 185, height: 177), scale: scale)
                         module(.calories, title: "Calorie Tracker", subtitle: "Track your meals, goals & nutrition", tags: "Eat well  ·  Feel great  ·  Stay healthy", color: Color(red: 0.78, green: 0.27, blue: 0), icon: CGRect(x: 43, y: 429, width: 93, height: 92), art: CGRect(x: 490, y: 695, width: 195, height: 171), scale: scale)
                         module(.pomodoro, title: "Pomodoro Focus", subtitle: "Make time for deep work", tags: "Focus  ·  Be productive  ·  Get more done", color: .nexdoIndigo, icon: CGRect(x: 422, y: 429, width: 99, height: 93), art: CGRect(x: 686, y: 690, width: 193, height: 176), scale: scale)
                         module(.moments, title: "Moments", subtitle: "Remember what matters", tags: "Birthdays  ·  Festivals  ·  Special occasions", color: Color(red: 0.87, green: 0.08, blue: 0.37), icon: CGRect(x: 798, y: 428, width: 94, height: 95), art: CGRect(x: 896, y: 693, width: 234, height: 178), scale: scale)
-                        module(.shopping, title: "Shopping List", subtitle: "Plan, shop and save time", tags: "Groceries  ·  Send to store  ·  Stay organized", color: Color(red: 0, green: 0.46, blue: 0.23), icon: CGRect(x: 1176, y: 428, width: 95, height: 94), art: CGRect(x: 1146, y: 691, width: 185, height: 177), scale: scale)
                     }.padding(.horizontal, 14 * scale)
                     HStack(alignment: .top, spacing: 16) {
                         Text("“").font(.system(size: 58 * scale, weight: .bold, design: .rounded)).foregroundStyle(.indigo.opacity(0.75))

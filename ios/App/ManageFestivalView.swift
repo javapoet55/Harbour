@@ -209,7 +209,7 @@ struct ManageFestivalView: View {
     private var message:some View {Group{
         Text("Wish Message").font(.largeTitle.bold());HStack{Label("For \(model.selected.count) selected contact\(model.selected.count == 1 ? "":"s")",systemImage:"person.2.fill").font(.subheadline);Spacer();Button("Personalize"){personalize=true}.frame(minHeight:44)}
         MomentSegments(options:["Warm","Personal","Short","Fun"],selection:$model.settings.tone).disabled(generatingWish)
-        MomentCard(fill:LinearGradient(colors:[Color.blue.opacity(0.22),Color.cyan.opacity(0.10)],startPoint:.topLeading,endPoint:.bottomTrailing)){TextEditor(text:Binding(get:{model.settings.baseMessage},set:{model.setMessage($0)})).frame(minHeight:130).overlay(alignment:.topLeading){if model.settings.baseMessage.isEmpty {Text(model.suggestion).foregroundStyle(.tertiary).padding(.top,8).padding(.leading,5).allowsHitTesting(false).accessibilityHidden(true)}}.focused($focusedField,equals:.message).scrollContentBackground(.hidden).disabled(generatingWish).opacity(generatingWish ? 0.45:1).accessibilityLabel("\(model.occasionLabel) wish message");Text("\(model.settings.baseMessage.count)/500").font(.caption).frame(maxWidth:.infinity,alignment:.trailing).foregroundStyle(model.settings.baseMessage.count>500 ? .red:.secondary);if model.settings.baseMessage.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty {Button("Use suggestion",systemImage:"text.badge.plus"){model.useSuggestion()}.font(.subheadline).frame(minHeight:44).accessibilityIdentifier("wish-use-suggestion")}}
+        MomentCard(fill:LinearGradient(colors:[Color.blue.opacity(0.22),Color.cyan.opacity(0.10)],startPoint:.topLeading,endPoint:.bottomTrailing)){TextEditor(text:Binding(get:{model.settings.baseMessage},set:{model.setMessage($0)})).frame(minHeight:130).overlay(alignment:.topLeading){if model.settings.baseMessage.isEmpty {Text("Tap Regenerate to display an AI wish message. You can still edit it.").foregroundStyle(.secondary).padding(.top,8).padding(.leading,5).allowsHitTesting(false).accessibilityHidden(true)}}.focused($focusedField,equals:.message).scrollContentBackground(.hidden).disabled(generatingWish).opacity(generatingWish ? 0.45:1).accessibilityLabel("\(model.occasionLabel) wish message").accessibilityHint(model.settings.baseMessage.isEmpty ? "Tap Regenerate to display an AI wish message. You can still edit it." : "");Text("\(model.settings.baseMessage.count)/500").font(.caption).frame(maxWidth:.infinity,alignment:.trailing).foregroundStyle(model.settings.baseMessage.count>500 ? .red:.secondary);if model.settings.baseMessage.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty {Button("Use suggestion",systemImage:"text.badge.plus"){model.useSuggestion()}.font(.subheadline).frame(minHeight:44).accessibilityIdentifier("wish-use-suggestion")}}
         HStack{Button{if model.settings.manuallyEdited{regenerateConfirm=true}else{Task{await model.generate(aiConsent:aiConsent)}}}label:{WishRegenerateLabel(title:"Regenerate",generating:generatingWish)}.disabled(generatingWish).accessibilityIdentifier("wish-regenerate");Spacer();Button("Edit",systemImage:"pencil"){focusedField = .message}.disabled(generatingWish)}.buttonStyle(.bordered).frame(minHeight:44)
         Toggle("Use AI for this draft",isOn:$aiConsent).disabled(generatingWish);Text("Shares only occasion, tone and your optional context. Generated text is a draft for your review.").font(.caption).foregroundStyle(.secondary)
         Text("Greeting Card").font(.title2.bold())
@@ -230,7 +230,7 @@ struct ManageFestivalView: View {
     private var schedule:some View {Group{
         momentSection
         Text("Send time").font(.title2.bold());MomentCard{DatePicker("Date and time",selection:$model.sendDate,in:Date()...).environment(\.timeZone,TimeZone(identifier:model.zone) ?? .current);zonePicker;Divider();preparationPicker}
-        Text("Delivery").font(.title2.bold());MomentCard{ForEach(model.selected){r in VStack(alignment:.leading){HStack{Text(r.initials).padding(10).background(Color.nexdoIndigo.opacity(0.12),in:Circle());Text(r.name).font(.headline);Spacer()};Picker("Channel for \(r.name)",selection:Binding(get:{model.channel(r)},set:{model.settings.channels[r.key]=$0})){if !r.phone.isEmpty{Text("Messages").tag("messages")};if !r.email.isEmpty{Text("Email").tag("email")};Text("Copy / Share").tag("share")};if model.channel(r)=="email"{Toggle("Send automatically",isOn:Binding(get:{model.settings.automatic[r.key] ?? false},set:{model.settings.automatic[r.key]=$0})).disabled(!model.emailReady);Text(model.settings.automatic[r.key]==true ? "Auto-send":"You send at the scheduled time").font(.caption)}else{Text(model.channel(r)=="messages" ? "You tap Send at the scheduled time":"Manual share only").font(.caption)};Divider()}}}
+        Text("Delivery").font(.title2.bold());MomentCard{ForEach(model.selected){r in VStack(alignment:.leading){HStack{Text(r.initials).padding(10).background(Color.nexdoIndigo.opacity(0.12),in:Circle());Text(r.name).font(.headline);Spacer()};deliveryTags(for:r);if model.channel(r)=="email"{Toggle("Send automatically",isOn:Binding(get:{model.settings.automatic[r.key] ?? false},set:{model.settings.automatic[r.key]=$0})).disabled(!model.emailReady);Text(model.settings.automatic[r.key]==true ? "Auto-send":"You send at the scheduled time").font(.caption)}else{Text(model.channel(r)=="messages" ? "You tap Send at the scheduled time":"Manual share only").font(.caption)};Divider()}}}
         Text("\(automaticCount) automatic · \(model.selected.count-automaticCount) will be sent by you").font(.subheadline)
         if model.selected.contains(where:{model.channel($0)=="email"}) && model.store.snapshot?.emailAccount?.status != "connected" {NavigationLink("Connect / Reconnect email"){MomentSettingsView().environmentObject(model.store)}}
         MomentCard{Toggle("Notify me 1 hour before",isOn:$model.notify).accessibilityIdentifier("moment-send-reminder")}
@@ -240,6 +240,34 @@ struct ManageFestivalView: View {
         MomentPrimary(title:"Schedule Wish"){if let issue=FestivalValidation.schedule(settings:model.settings,date:model.sendDate,active:model.active,emailReady:model.emailReady,recipients:model.recipients){model.error=issue}else if model.dirty{model.error="Save changes first."}else{scheduleConfirm=true}}.disabled(model.generatingImage)
         ForEach(model.store.plans.filter{p in p.status != "CANCELLED" && model.originals.contains{$0.drafts.contains{$0.id==p.draftID}}}){p in NavigationLink("\(p.statusLabel) · \(p.channel.capitalized)"){WishPlanView(plan:p)}}
     }}
+    private func deliveryTags(for recipient:ManagedFestivalRecipient) -> some View {
+        ViewThatFits(in:.horizontal) {
+            HStack(spacing:8) { deliveryOptions(for:recipient) }.fixedSize(horizontal:true,vertical:false)
+            VStack(alignment:.leading,spacing:8) { deliveryOptions(for:recipient) }
+        }
+        .padding(.vertical,8)
+    }
+    @ViewBuilder private func deliveryOptions(for recipient:ManagedFestivalRecipient) -> some View {
+        if !recipient.phone.isEmpty { deliveryTag("Messages",channel:"messages",recipient:recipient) }
+        if !recipient.email.isEmpty { deliveryTag("Email",channel:"email",recipient:recipient) }
+        deliveryTag("Copy / Share",channel:"share",recipient:recipient)
+    }
+    private func deliveryTag(_ title:String,channel:String,recipient:ManagedFestivalRecipient) -> some View {
+        let selected=model.channel(recipient)==channel
+        return Button { model.settings.channels[recipient.key]=channel } label: {
+            HStack(spacing:6) {
+                if selected { Image(systemName:"checkmark").font(.caption.bold()) }
+                Text(title).font(.subheadline.weight(.semibold))
+            }
+            .padding(.horizontal,14)
+            .frame(minHeight:44)
+            .foregroundStyle(selected ? Color.white:Color.nexdoIndigo)
+            .background(selected ? Color.nexdoIndigo:Color.nexdoIndigo.opacity(0.08),in:Capsule())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("\(title) for \(recipient.name)")
+        .accessibilityAddTraits(selected ? .isSelected:[])
+    }
     private var automaticCount:Int{model.selected.filter{model.channel($0)=="email" && model.settings.automatic[$0.key]==true}.count}
     private var confirmation:some View {
         FestivalScheduleReview(model:model) { scheduleConfirm=false }

@@ -127,18 +127,12 @@ private struct FestivalGroupCard: View {
                 HStack(alignment: .top, spacing: 14) {
                     MomentIconTile(type: moment.type, title: moment.title)
                     VStack(alignment: .leading, spacing: 8) {
-                        HStack(alignment:.top,spacing:8) {
-                            Text(moment.title).font(.title3.bold()).frame(maxWidth:.infinity,alignment:.leading)
-                            Button(action:onManage) {
-                                Image(systemName:"gearshape").font(.title3).frame(width:44,height:44)
-                            }.buttonStyle(.plain).foregroundStyle(Color.nexdoIndigo)
-                                .accessibilityLabel("Manage \(moment.title)")
-                                .accessibilityIdentifier("festival-manage-\(moment.id)")
-                        }
+                        Text(moment.title).font(.title3.bold()).padding(.trailing,44)
+
                         Text("\(moment.typeLabel) · \(MomentDates.relative(moment.nextOccurrence, zone: moment.timeZoneID))")
                             .font(.subheadline).foregroundStyle(.secondary)
                         Text(MomentDates.sendDayLabel(MomentDates.date(moment.nextOccurrence,zone:moment.timeZoneID),zone:moment.timeZoneID))
-                            .font(.subheadline).foregroundStyle(.secondary)
+                            .font(.subheadline.bold()).foregroundStyle(.secondary)
                             .fixedSize(horizontal:false,vertical:true)
                             .accessibilityIdentifier("festival-date-\(moment.id)")
                         let scheduledPlans = group.moments.filter(\.enabled).compactMap(\.upcomingDelivery)
@@ -155,6 +149,13 @@ private struct FestivalGroupCard: View {
                             MomentStatusBadge(title:label,color:.blue,icon:"clock")
                         }
                     }.frame(maxWidth: .infinity, alignment: .leading)
+                        .overlay(alignment:.topTrailing) {
+                            Button(action:onManage) {
+                                Image(systemName:"gearshape").font(.title3).frame(width:44,height:44)
+                            }.buttonStyle(.plain).foregroundStyle(Color.nexdoIndigo)
+                                .accessibilityLabel("Manage \(moment.title)")
+                                .accessibilityIdentifier("festival-manage-\(moment.id)")
+                        }
                 }
             }
             .contentShape(Rectangle())
@@ -256,7 +257,7 @@ struct ImportantMomentsView: View {
                     HStack(spacing:8) {
                         ForEach(MomentUpcomingFilter.allCases,id:\.self) { period in
                             Button { upcomingFilter=period } label: {
-                                Text(period.rawValue).font(.subheadline.bold()).padding(.horizontal,16).frame(minHeight:44)
+                                Text("\(period.rawValue) (\(MomentDisplayGroup.groups(displayed.filter { period.includes(day:$0.nextOccurrence,zone:$0.timeZoneID) }).count))").font(.subheadline.bold()).padding(.horizontal,16).frame(minHeight:44)
                                     .foregroundStyle(upcomingFilter == period ? .white : Color.nexdoIndigo)
                                     .background {
                                         Capsule().fill(upcomingFilter == period ? Color.nexdoIndigo : Color.nexdoIndigo.opacity(0.08))
@@ -306,7 +307,7 @@ struct ImportantMomentsView: View {
             if let error = store.error { Text(error).foregroundStyle(.red); Button("Retry") { Task { await store.refresh() } } }
             if store.loading { ProgressView() }
             if let synced = store.lastSynced { Text("Updated \(synced.formatted(date: .omitted, time: .shortened))").font(.caption).foregroundStyle(.secondary) }
-            Button { creatingMoment = true } label: { Label("Add Moment", systemImage: "plus").font(.headline).frame(maxWidth: .infinity, minHeight: 52) }.buttonStyle(.borderedProminent)
+            Button { creatingMoment = true } label: { Label("Add Moment", systemImage: "plus").font(.headline).frame(maxWidth: .infinity, minHeight: 52) }.buttonStyle(.borderedProminent).tint(Color(red:24/255,green:119/255,blue:242/255))
         }.padding(18) } }
         .navigationDestination(isPresented: $creatingMoment) {
             MomentEditor(onDone: { creatingMoment = false })
