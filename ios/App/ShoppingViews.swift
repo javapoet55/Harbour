@@ -589,7 +589,7 @@ struct ShoppingSettings:View {
                 .textContentType(.fullStreetAddress)
             TextField("ZIP code",text:Binding(get:{initial.storeZip ?? ""},set:{initial.storeZip=$0}))
                 .keyboardType(.numbersAndPunctuation).textContentType(.postalCode)
-        } header: {Text("Store details")} footer: {Text("Used to find offers for your store location. Offers are available for Costco warehouses in the contiguous US; other stores are not supported yet.")}
+        } header: {Text("Store details")} footer: {Text("Used to find offers for your store location. Offers are available for Costco, Safeway, Albertsons, Vons, Jewel-Osco and other supported stores.")}
 
     }.navigationTitle("List Settings").toolbar{Button("Save"){onSave(initial);dismiss()}.disabled(initial.title.trimmingCharacters(in:.whitespaces).isEmpty || (!(initial.storeZip ?? "").isEmpty && (initial.storeZip ?? "").range(of:"^[0-9]{5}(-[0-9]{4})?$",options:.regularExpression)==nil))}}}
 }

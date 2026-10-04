@@ -31,8 +31,9 @@ const families:[string,RegExp][]=[
  ['energy drinks',/\benergy (?:drinks?|shots?)\b/],
  ['nutrition shakes',/\b(?:nutrition|protein) shakes?\b|\bensure\b|\bglucerna\b/],
  ['juice',/\bjuices?\b/],
+ ['coconut milk',/\bcoconut milk\b/],['plant milk',/\b(?:almond|oat|soy|cashew|rice) milk\b/],
  ['coffee',/\bcoffee\b(?!\s*(?:maker|machine|table|creamer))|\bk cups?\b/],['avocado oil',/\bavocado oil\b/],
- ['olive oil',/\bolive oil\b/],['milk',/^(?:(?:organic|whole|skim|low fat|2%|1%|kirkland signature|horizon|fairlife)\s+)*milk\b|\b(?:whole|2%|1%|skim) milk\b/],
+ ['olive oil',/\bolive oil\b/],['milk',/\bmilk\b(?!\s*(?:chocolate|candy|shake))/],
  ['eggs',/\beggs?\b/],['bread',/\bbread\b/],['butter',/\bbutter\b/],['yogurt',/\byogurt\b/],
  ['rice',/\brice\b/],['pasta',/\bpasta\b/],['paper towels',/\bpaper towels?\b/],['toilet paper',/\b(?:toilet paper|bath tissue)\b/],
  ['facial tissue',/\b(?:facial )?tissues?\b|\bkleenex\b/],
@@ -63,11 +64,49 @@ export function matchOffer(item:Item,offer:OfferRecord){
  if(missing.length)differences.push(`Not confirmed by the ad: ${missing.join(', ')}`);
  return {category:differences.length?'alternative':brand?'matching':'available',reasons,differences};
 }
+export type OfferProvider='costco'|'flipp';
+export interface OfferSourceDef{provider:OfferProvider;id:string;store:string;region:string;merchant?:string;zip?:string;}
+export interface StoreInfo{provider:OfferProvider;store:string;merchant?:string;}
+// Albertsons-family banners whose weekly ads are Flipp-powered. Alias, display name, Flipp merchant id.
+const stores:[RegExp,string,OfferProvider,string?][]=[
+ [/\bcostco\b/,'Costco','costco'],
+ [/\bsafeway\b/,'Safeway','flipp','safeway'],
+ [/\bvons\b/,'Vons','flipp','vons'],
+ [/\bjewel\b/,'Jewel-Osco','flipp','jewelosco'],
+ [/\bacme\b/,'ACME Markets','flipp','acmemarkets'],
+ [/\bshaws?\b/,"Shaw's",'flipp','shaws'],
+ [/\btom thumb\b/,'Tom Thumb','flipp','tomthumb'],
+ [/\brandalls?\b/,'Randalls','flipp','randalls'],
+ [/\bpavilions\b/,'Pavilions','flipp','pavilions'],
+ [/\balbertsons?\s*markets?\b/,'Albertsons Market','flipp','albertsonsmarket'],
+ [/\balbertsons?\b/,'Albertsons','flipp','albertsons'],
+ [/\bandronicos?\b/,"Andronico's",'flipp','andronicoscommunitymarkets'],
+ [/\bbalduccis?\b/,"Balducci's",'flipp','balduccis'],
+ [/\bunited supermarkets?\b/,'United Supermarkets','flipp','unitedsupermarkets'],
+ [/\bmarket street\b/,'Market Street','flipp','marketstreet'],
+ [/\bhaggens?\b/,'Haggen','flipp','haggen'],
+ [/\bcarrs\b/,'Carrs','flipp','carrsqc'],
+ [/\bamigos\b/,'Amigos','flipp','amigosunited'],
+ [/\bkings food\b/,'Kings Food Markets','flipp','kingsfoodmarkets'],
+ [/\bstar markets?\b/,'Star Market','flipp','starmarket']
+];
 /** “Costco”, “Costco Wholesale” or “Costco - Mountain View”; Business Centers have different pricing. */
 export function isCostco(name:string|null){const n=normalize(name??'');return /\bcostco\b/.test(n)&&!/\bbusiness\b/.test(n);}
-export function sourceForStore(name:string|null,zip:string|null){
- if(!isCostco(name))return null;
- // The published warehouse region excludes AK, HI, PR and territories; do not apply its prices there.
- const prefix=Number((zip??'').slice(0,3));
- return /^\d{5}(?:-\d{4})?$/.test(zip??'')&&prefix>=10&&prefix<967?'costco-us-warehouse':null;
+/** The offer provider for a user-typed store name, or null when no source covers it. */
+export function storeForName(name:string|null):StoreInfo|null{
+ const n=normalize(name??'');
+ for(const [re,store,provider,merchant] of stores)if(re.test(n)&&!(provider==='costco'&&/\bbusiness\b/.test(n)))return{provider,store,merchant};
+ return null;
+}
+/** The offer source a list reads from: one shared source for Costco, one per ZIP for local-priced stores. */
+export function sourceForList(name:string|null,zip:string|null):OfferSourceDef|null{
+ const info=storeForName(name);
+ if(!info)return null;
+ if(info.provider==='costco'){
+  // The published warehouse region excludes AK, HI, PR and territories; do not apply its prices there.
+  const prefix=Number((zip??'').slice(0,3));
+  return /^\d{5}(?:-\d{4})?$/.test(zip??'')&&prefix>=10&&prefix<967?{provider:'costco',id:'costco-us-warehouse',store:'Costco',region:'US contiguous warehouses'}:null;
+ }
+ const z=(zip??'').match(/^(\d{5})(?:-\d{4})?$/)?.[1];
+ return z?{provider:'flipp',id:`flipp:${info.merchant}:${z}`,store:info.store,region:`ZIP ${z}`,merchant:info.merchant,zip:z}:null;
 }
