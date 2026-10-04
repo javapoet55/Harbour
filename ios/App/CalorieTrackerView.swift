@@ -377,7 +377,8 @@ struct CalorieTrackerView: View {
         guard live else { return }
         await store.loadDay(dateKey)
         if period == "Today" && isToday { await store.loadInsight(dateKey) }
-        if period != "Today" || page == .insights { await store.loadSummary(month: period == "Month", endingOn: dateKey) }
+        // The insights page always shows "This Week" — the Month period only applies to the dashboard chart.
+        if period != "Today" || page == .insights { await store.loadSummary(month: page == .insights ? false : period == "Month", endingOn: dateKey) }
     }
 
     private func apply(_ settings: NutritionSettings) {

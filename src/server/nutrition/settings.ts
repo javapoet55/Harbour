@@ -86,21 +86,26 @@ export async function startPhoneVerification(userId: string, fallbackTimeZone: s
   const existing = await prisma.nutritionCallSettings.findUnique({ where: { userId } });
   if (existing?.phoneCodeSentAt && now.getTime() - existing.phoneCodeSentAt.getTime() < RESEND_MS) throw new NutritionError('CODE_THROTTLED');
   const code = String(randomInt(0, 1_000_000)).padStart(6, '0');
-  const data = {
-    phoneE164, phoneVerifiedAt: null, enabled: false,
-    phoneCodeHash: hashCode(userId, code), phoneCodeExpiresAt: new Date(now.getTime() + CODE_TTL_MS), phoneCodeAttempts: 0, phoneCodeSentAt: now,
-  };
-  await prisma.nutritionCallSettings.upsert({ where: { userId }, create: { userId, timeZone: fallbackTimeZone, ...data }, update: data });
-  if (codeChannel() === 'voice') {
+  const channel = codeChannel();
+  // Send first; the row is written only once a code is actually on its way, so a provider
+  // failure neither clears an existing verification nor arms the resend throttle.
+  if (channel === 'voice') {
     const { twilio } = nutritionCallConfig();
     if (!twilio.accountSid || !twilio.authToken || !twilio.from) throw new NutritionError('CODE_UNAVAILABLE');
     const call = await placeCodeCall({ accountSid: twilio.accountSid, authToken: twilio.authToken, from: twilio.from, to: phoneE164, code });
     if ('error' in call) throw new NutritionError('CODE_UNAVAILABLE');
-    return { sent: true, channel: 'voice' as const };
+  } else {
+    const sent = await smsProvider.send({ to: phoneE164, text: `Your NexDo check-in code is ${code}. It expires in 10 minutes.` });
+    if (sent.status !== 'SENT') throw new NutritionError('CODE_UNAVAILABLE');
   }
-  const sent = await smsProvider.send({ to: phoneE164, text: `Your NexDo check-in code is ${code}. It expires in 10 minutes.` });
-  if (sent.status !== 'SENT') throw new NutritionError('CODE_UNAVAILABLE');
-  return { sent: true, channel: 'sms' as const };
+  // Changing the number turns calls off until it is verified; resending to the same number does not.
+  const changing = existing?.phoneE164 !== phoneE164;
+  const data = {
+    phoneE164, ...(changing ? { phoneVerifiedAt: null, enabled: false } : {}),
+    phoneCodeHash: hashCode(userId, code), phoneCodeExpiresAt: new Date(now.getTime() + CODE_TTL_MS), phoneCodeAttempts: 0, phoneCodeSentAt: now,
+  };
+  await prisma.nutritionCallSettings.upsert({ where: { userId }, create: { userId, timeZone: fallbackTimeZone, ...data }, update: data });
+  return { sent: true, channel };
 }
 
 export async function verifyPhone(userId: string, fallbackTimeZone: string, code: unknown, now = new Date()) {

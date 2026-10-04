@@ -49,6 +49,17 @@ describe('settings and phone verification', () => {
     expect(codeCall.mock.calls[0][0]).toMatchObject({ to: '+14155550123', code: '123456', from: '+15550000000' });
     expect(sms).not.toHaveBeenCalled();
   });
+  it('keeps the verified number and does not throttle when the code send fails', async () => {
+    codeCall.mockImplementationOnce(async () => ({ error: 'twilio down', sid: '' }));
+    expect(await code(startPhoneVerification(userId, 'America/Los_Angeles', '+14155550123', new Date('2026-09-27T20:01:00Z')))).toBe('CODE_UNAVAILABLE');
+    const s = await prisma.nutritionCallSettings.findUniqueOrThrow({ where: { userId } });
+    expect(s).toMatchObject({ phoneE164: '+14155550123', enabled: true });   // the failed send did not wipe verification or calls
+    expect(s.phoneVerifiedAt).not.toBeNull();
+    // The failed send never wrote phoneCodeSentAt, so an immediate retry is allowed, and re-sending
+    // to the already-verified number leaves the verification in place.
+    await expect(startPhoneVerification(userId, 'America/Los_Angeles', '+14155550123', new Date('2026-09-27T20:01:30Z'))).resolves.toMatchObject({ sent: true });
+    expect((await readSettings(userId, 'x')).phoneVerified).toBe(true);
+  });
 });
 
 describe('scheduling and a full call', () => {
@@ -210,6 +221,7 @@ describe('daily insight and one action', () => {
     expect(next.state).toBe('open');                                                     // a new day, a new insight
     await handleInsight(other, '2026-09-26', next.key, 'dismiss');
     expect((await dailyInsight(other, '2026-09-26'))?.state).toBe('dismissed');
+    expect((await handleInsight(other, '2026-09-26', next.key, 'add')).added).toEqual([]);  // a dismissed insight stays handled
     await updateSettings(other, 'x', { insightsEnabled: false });
     expect(await dailyInsight(other, '2026-09-26')).toBeNull();
     await updateSettings(other, 'x', { insightsEnabled: true });
@@ -222,6 +234,15 @@ describe('daily insight and one action', () => {
     expect(offered.insight).toMatchObject({ offersShoppingItems: true });
     expect(offered.insight.text).toMatch(/^Protein was under 72 g/);
     expect(await executeTool(call.id, 'add_insight_items', {}, lookup)).toEqual({ added: ['Greek yogurt', 'Lentils'], listTitle: 'Weekend shop' });
+  });
+  it('adds the foods only once when two add requests land at the same time', async () => {
+    await prisma.foodLogEntry.create({ data: { userId: other, localDate: '2026-09-28', meal: 'LUNCH', description: 'rice', foodName: 'rice', kcal: 900, proteinG: 30, fiberG: 30, calciumMg: 1100, ironMg: 20, vitaminDIu: 900, source: 'USDA', status: 'CONFIRMED' } });
+    await prisma.shoppingItem.deleteMany({ where: { list: { userId: other }, name: { in: ['Greek yogurt', 'Lentils'] } } });
+    const insight = (await dailyInsight(other, '2026-09-28'))!;
+    const [a, b] = await Promise.all([handleInsight(other, '2026-09-28', insight.key, 'add'), handleInsight(other, '2026-09-28', insight.key, 'add')]);
+    expect([...a.added, ...b.added].sort()).toEqual(['Greek yogurt', 'Lentils']);
+    const list = await prisma.shoppingList.findFirstOrThrow({ where: { userId: other }, include: { items: true } });
+    expect(list.items.filter(i => i.name === 'Greek yogurt')).toHaveLength(1);
   });
   it('totals fiber, calcium, iron and vitamin D in the day view', async () => {
     const day = await dayLog(other, '2026-09-22');
