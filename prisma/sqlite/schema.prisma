@@ -538,6 +538,8 @@ model MomentEmailAccount {
 }
 
 model ShoppingList {
+  storePlaceId String?
+  storeWebsite String?
   storeName String?
   storeAddress String?
   storeZip String?

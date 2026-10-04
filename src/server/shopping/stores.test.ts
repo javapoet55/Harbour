@@ -69,3 +69,10 @@ it('returns distance only when searching from the actual coordinate origin',asyn
   expect((await searchShoppingStores({name:'',latitude:37.8,longitude:-122})).stores[0].distanceKm).toBe(0);
   expect((await searchShoppingStores({name:'',area:'San Ramon',latitude:37.8,longitude:-122})).stores[0].distanceKm).toBeNull();
 });
+
+it('reuses the website from the same Places request without a details lookup',async()=>{
+ vi.stubEnv('GOOGLE_PLACES_API_KEY','test-only');const fetcher=vi.fn().mockResolvedValue(Response.json({places:[{...sample.places[0],websiteUri:'https://www.costco.com/warehouse'}]}));vi.stubGlobal('fetch',fetcher);
+ const result=await searchShoppingStores({name:'Costco',zip:'94582'});
+ expect(result.stores[0].website).toBe('https://www.costco.com/warehouse');expect(fetcher).toHaveBeenCalledTimes(1);
+ expect(fetcher.mock.calls[0][1].headers['X-Goog-FieldMask']).toContain('places.websiteUri');
+});

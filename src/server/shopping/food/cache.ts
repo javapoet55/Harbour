@@ -54,8 +54,8 @@ export class FoodCache {
   }
 }
 // Shared fixed-window budgets across workers/replicas; no personal queries are stored here.
-export async function providerPermit(provider:'usda'|'off_product'|'off_search'):Promise<boolean> {
-  const interval=provider==='usda'?3600000:60000, limit=provider==='usda'?900:provider==='off_product'?14:9;
+export async function providerPermit(provider:'usda'|'off_product'|'off_search'|'brandfetch'):Promise<boolean> {
+  const interval=(provider==='usda'||provider==='brandfetch')?3600000:60000, limit=provider==='brandfetch'?100:provider==='usda'?900:provider==='off_product'?14:9;
   const key=`food:${provider}`,now=new Date();
   try {
     await prisma.foodProviderBudget.upsert({where:{key},update:{},create:{key,count:0,resetAt:new Date(+now+interval)}});

@@ -25,6 +25,8 @@ export default defineConfig({
     // provider takes its mock branch. A test that needs a configured provider stubs it for itself.
     env: {
       HARBOR_DATABASE_URL: process.env.HARBOR_DATABASE_URL,
+      BRANDFETCH_API_KEY: '',
+      BRANDFETCH_CLIENT_ID: '',
       VAPID_PUBLIC_KEY: '',
       VAPID_PRIVATE_KEY: '',
       SENDGRID_API_KEY: '',

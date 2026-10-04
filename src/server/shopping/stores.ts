@@ -1,3 +1,4 @@
+import { normalizeDomain } from './brands/identity';
 import { z } from 'zod';
 import { MomentError } from '@/server/moments/domain';
 
@@ -13,6 +14,7 @@ export const storeSearchInput = z.object({
 // don't strictly need stays optional; places missing name/address are dropped instead of failing.
 const resultSchema = z.object({ places: z.array(z.object({
   id: z.string(), displayName: z.object({ text: z.string() }).optional(), formattedAddress: z.string().optional(),
+  websiteUri: z.string().optional(),
   businessStatus: z.string().optional(),
   location: z.object({latitude:z.number(),longitude:z.number()}).optional(),
   addressComponents: z.array(z.object({ longText: z.string().optional(), types: z.array(z.string()).optional() })).optional(),
@@ -32,7 +34,7 @@ export async function searchShoppingStores(input: z.infer<typeof storeSearchInpu
   if (!key) throw new MomentError('Store search is not configured yet. You can enter the address manually.', 503);
   let response: Response;
   try {
-    response = await placesPost(key, 'places.id,places.displayName,places.formattedAddress,places.addressComponents,places.businessStatus,places.attributions,places.location',
+    response = await placesPost(key, 'places.id,places.displayName,places.formattedAddress,places.addressComponents,places.businessStatus,places.attributions,places.location,places.websiteUri',
       { textQuery: `${p.name ? `${p.name} store` : "grocery stores"}${p.zip || p.area ? ` near ${p.zip || p.area}, USA` : ""}`,
         pageSize: 15, languageCode: 'en', regionCode: 'US',
         ...(!p.zip && !p.area ? { locationBias: { circle: { center: { latitude: p.latitude, longitude: p.longitude }, radius: 25000 } } } : {}),
@@ -50,6 +52,7 @@ export async function searchShoppingStores(input: z.infer<typeof storeSearchInpu
   return { stores: (data.places ?? [])
     .filter(place => (!place.businessStatus || place.businessStatus === 'OPERATIONAL') && !!place.displayName?.text && !!place.formattedAddress)
     .map(place => ({
+      website: normalizeDomain(place.websiteUri) ? place.websiteUri : undefined,
       id: place.id, name: place.displayName!.text, address: place.formattedAddress!,
       distanceKm: p.latitude !== undefined && p.longitude !== undefined && !p.zip && !p.area && place.location ? distanceKm(p.latitude,p.longitude,place.location.latitude,place.location.longitude) : null,
       zip: place.addressComponents?.find(c => c.types?.includes('postal_code'))?.longText ?? '',

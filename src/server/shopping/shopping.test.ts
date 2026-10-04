@@ -84,3 +84,14 @@ it('keeps a shared link on the explicitly shared trip after weekly completion',a
  expect(next.list.shareToken).toBeNull();
  expect((await prisma.shoppingList.findUniqueOrThrow({where:{shareToken:shared.list.shareToken!}})).id).toBe(a.list.id);
 });
+
+it('persists Places identity, copies it weekly, and clears it on legacy-client store changes',async()=>{
+ const data={...input(),storeName:'Costco',storeAddress:'Test address',storeZip:'94526',storePlaceId:'test-place',storeWebsite:'https://www.costco.com/warehouse'};
+ const created=await shoppingAction(owner,{operation:'create',input:data});if(!('list'in created)||!created.list)throw Error('Missing list');
+ expect(created.list).toMatchObject({storePlaceId:'test-place',storeWebsite:data.storeWebsite});
+ const next=await shoppingAction(owner,{operation:'complete',id:created.list.id,revision:0});if(!('list'in next)||!next.list)throw Error('Missing next list');
+ expect(next.list).toMatchObject({storePlaceId:'test-place',storeWebsite:data.storeWebsite});
+ const legacy={...input(),storeName:'Other store',storeAddress:'New address',storeZip:'94582'};
+ const saved=await shoppingAction(owner,{operation:'save',id:next.list.id,revision:0,input:legacy});if(!('list'in saved)||!saved.list)throw Error('Missing saved list');
+ expect(saved.list).toMatchObject({storePlaceId:null,storeWebsite:null});
+});
