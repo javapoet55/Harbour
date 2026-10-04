@@ -40,9 +40,14 @@ export function withinCallWindow(timeZone: string, at: Date): boolean {
   return minutes >= minutesOf(CALL_WINDOW.earliest) && minutes <= minutesOf(CALL_WINDOW.latest);
 }
 
-/** Inclusive list of local dates ending at `endDate`; a negative count lists `-days` dates starting at it instead. */
+/** Inclusive list of `days` local dates ending at `endDate`. */
 export function dateRange(endDate: string, days: number): string[] {
-  const anchor = Date.parse(`${endDate}T12:00:00Z`);
-  if (days < 0) return Array.from({ length: -days }, (_, i) => new Date(anchor + i * 86_400_000).toISOString().slice(0, 10));
-  return Array.from({ length: days }, (_, i) => new Date(anchor - (days - 1 - i) * 86_400_000).toISOString().slice(0, 10));
+  const end = Date.parse(`${endDate}T12:00:00Z`);
+  return Array.from({ length: days }, (_, i) => new Date(end - (days - 1 - i) * 86_400_000).toISOString().slice(0, 10));
+}
+
+/** Inclusive list of `days` local dates starting at `startDate`. */
+export function dateRangeFrom(startDate: string, days: number): string[] {
+  const start = Date.parse(`${startDate}T12:00:00Z`);
+  return Array.from({ length: days }, (_, i) => new Date(start + i * 86_400_000).toISOString().slice(0, 10));
 }

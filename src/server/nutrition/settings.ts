@@ -43,7 +43,7 @@ export const settingsInput = z.object({
   noAnswer: z.enum(NO_ANSWER_POLICIES).optional(),
   voice: z.string().refine(isRealtimeVoice).optional(),
   calorieGoal: z.number().int().min(500).max(5000).optional(),
-  goals: z.record(z.string().max(40), z.number().min(0).max(10000)).refine(g => Object.keys(g).length <= 20).optional(),
+  goals: z.record(z.string().max(40), z.number().min(1).max(10000)).refine(g => Object.keys(g).length <= 20).optional(),
   insightsEnabled: z.boolean().optional(),
 }).strict();
 

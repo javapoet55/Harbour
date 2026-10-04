@@ -167,6 +167,14 @@ describe('fast saving during a call', () => {
     expect(await prisma.foodLogEntry.findUniqueOrThrow({ where: { id } })).toMatchObject({ foodName: 'plantain', kcal: 180 });
     vi.stubEnv('NUTRITION_LOOKUP_BUDGET_MS', '800');
   });
+  it('applies a calorie-only correction to an estimated item', async () => {
+    const c = await prisma.nutritionCall.create({ data: { userId, localDate: '2026-10-12', attempt: 1, scheduledFor: new Date(), status: 'IN_PROGRESS' } });
+    const saved = await executeTool(c.id, 'log_food_items', { items: [{ meal: 'LUNCH', description: 'chicken biryani', foodName: 'chicken biryani', estimatedGrams: 400, estimatedKcal: 700 }] }, lookup) as { saved: { id: string }[] };
+    const id = saved.saved[0].id;
+    const upd = await executeTool(c.id, 'update_food_item', { id, estimatedKcal: 620 }, lookup);
+    expect(upd).toMatchObject({ updated: { kcal: 620 } });
+    expect(await prisma.foodLogEntry.findUniqueOrThrow({ where: { id } })).toMatchObject({ kcal: 620, source: 'ESTIMATE', status: 'NEEDS_REVIEW' });
+  });
 });
 
 describe('daily insight and one action', () => {
