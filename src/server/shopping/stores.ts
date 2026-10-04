@@ -7,7 +7,8 @@ export const storeSearchInput = z.object({
   zip: z.string().regex(/^\d{5}(-\d{4})?$/).optional(),
   latitude: z.number().finite().min(-90).max(90).optional(),
   longitude: z.number().finite().min(-180).max(180).optional(),
-}).refine(p => !!p.zip || !!p.area || (p.latitude !== undefined && p.longitude !== undefined), 'Enter a ZIP code or use your location.');
+}).refine(p => !!p.zip || !!p.area || (p.latitude !== undefined && p.longitude !== undefined), 'Enter a ZIP code or use your location.')
+  .refine(p => (p.latitude === undefined) === (p.longitude === undefined), 'Latitude and longitude must be sent together.');
 const resultSchema = z.object({ places: z.array(z.object({
   id: z.string(), displayName: z.object({ text: z.string() }), formattedAddress: z.string(),
   businessStatus: z.string().optional(),
@@ -33,13 +34,20 @@ export async function searchShoppingStores(input: z.infer<typeof storeSearchInpu
     });
   } catch { throw new MomentError('Store search is temporarily unavailable. Try again or enter the address manually.', 503); }
   if (!response.ok) throw new MomentError('Store search is temporarily unavailable. Try again or enter the address manually.', 503);
-  const data = resultSchema.parse(await response.json());
-  return { stores: (data.places ?? []).filter(p => !p.businessStatus || p.businessStatus === 'OPERATIONAL').map(p => ({
-    id: p.id, name: p.displayName.text, address: p.formattedAddress,
-    distanceKm: input.latitude !== undefined && input.longitude !== undefined && !input.zip && !input.area && p.location ? distanceKm(input.latitude,input.longitude,p.location.latitude,p.location.longitude) : null,
-    zip: p.addressComponents?.find(c => c.types.includes('postal_code'))?.longText ?? '',
-    attributions: (p.attributions ?? []).map(a => a.provider).filter((a): a is string => !!a),
-  })).sort((a,b)=>(a.distanceKm ?? Infinity)-(b.distanceKm ?? Infinity)) };
+  // A malformed body (non-JSON or an unexpected shape) is an upstream failure, not a client error —
+  // without this it would surface as a 400 "invalid input" through the route's ZodError/SyntaxError handling.
+  let data: z.infer<typeof resultSchema>;
+  try {
+    data = resultSchema.parse(await response.json());
+  } catch {
+    throw new MomentError('Store search is temporarily unavailable. Try again or enter the address manually.', 503);
+  }
+  return { stores: (data.places ?? []).filter(place => !place.businessStatus || place.businessStatus === 'OPERATIONAL').map(place => ({
+    id: place.id, name: place.displayName.text, address: place.formattedAddress,
+    distanceKm: p.latitude !== undefined && p.longitude !== undefined && !p.zip && !p.area && place.location ? distanceKm(p.latitude,p.longitude,place.location.latitude,place.location.longitude) : null,
+    zip: place.addressComponents?.find(c => c.types.includes('postal_code'))?.longText ?? '',
+    attributions: (place.attributions ?? []).map(a => a.provider).filter((a): a is string => !!a),
+  })).sort((a,b)=>(a.distanceKm ?? Number.MAX_VALUE)-(b.distanceKm ?? Number.MAX_VALUE)) };
 }
 
 function distanceKm(lat:number,lon:number,toLat:number,toLon:number) {

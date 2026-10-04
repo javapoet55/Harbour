@@ -25,6 +25,16 @@ it('returns a safe failure without exposing provider details or credentials',asy
   vi.stubEnv('GOOGLE_PLACES_API_KEY','test-only');vi.stubGlobal('fetch',vi.fn().mockResolvedValue(new Response('private error',{status:403})));
   await expect(searchShoppingStores({name:'Costco',zip:'94582'})).rejects.toMatchObject({status:503,message:expect.stringContaining('temporarily unavailable')});
 });
+it('maps an unexpected provider payload to 503 instead of a client input error',async()=>{
+  vi.stubEnv('GOOGLE_PLACES_API_KEY','test-only');vi.stubGlobal('fetch',vi.fn().mockResolvedValue(Response.json({places:[{id:'x'}]})));
+  await expect(searchShoppingStores({name:'Costco',zip:'94582'})).rejects.toMatchObject({status:503});
+  vi.stubGlobal('fetch',vi.fn().mockResolvedValue(new Response('<html>error</html>',{status:200})));
+  await expect(searchShoppingStores({name:'Costco',zip:'94582'})).rejects.toMatchObject({status:503});
+});
+it('requires latitude and longitude as a pair',()=>{
+  expect(storeSearchInput.safeParse({name:'Costco',latitude:37.8}).success).toBe(false);
+  expect(storeSearchInput.safeParse({name:'Costco',longitude:-122}).success).toBe(false);
+});
 it('does not request Google without a configured key',async()=>{
   vi.stubEnv('GOOGLE_PLACES_API_KEY','');const fetcher=vi.fn();vi.stubGlobal('fetch',fetcher);
   await expect(searchShoppingStores({name:'Costco',zip:'94582'})).rejects.toMatchObject({status:503});expect(fetcher).not.toHaveBeenCalled();
