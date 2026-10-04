@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest';
-import { searchShoppingStores, storeSearchInput } from './stores';
+import { searchShoppingStores, storeLogo, storeSearchInput } from './stores';
 afterEach(() => { vi.unstubAllGlobals(); vi.unstubAllEnvs(); });
 const sample = {places:[{id:'store-1',displayName:{text:'Costco Wholesale'},formattedAddress:'3150 Fostoria Way, Danville, CA 94526, USA',businessStatus:'OPERATIONAL',addressComponents:[{longText:'94526',types:['postal_code']}]}]};
 it('searches the entered ZIP and returns the full address and branch ZIP', async () => {
@@ -26,10 +26,30 @@ it('returns a safe failure without exposing provider details or credentials',asy
   await expect(searchShoppingStores({name:'Costco',zip:'94582'})).rejects.toMatchObject({status:503,message:expect.stringContaining('temporarily unavailable')});
 });
 it('maps an unexpected provider payload to 503 instead of a client input error',async()=>{
-  vi.stubEnv('GOOGLE_PLACES_API_KEY','test-only');vi.stubGlobal('fetch',vi.fn().mockResolvedValue(Response.json({places:[{id:'x'}]})));
+  vi.stubEnv('GOOGLE_PLACES_API_KEY','test-only');vi.stubGlobal('fetch',vi.fn().mockResolvedValue(Response.json({places:'oops'})));
   await expect(searchShoppingStores({name:'Costco',zip:'94582'})).rejects.toMatchObject({status:503});
   vi.stubGlobal('fetch',vi.fn().mockResolvedValue(new Response('<html>error</html>',{status:200})));
   await expect(searchShoppingStores({name:'Costco',zip:'94582'})).rejects.toMatchObject({status:503});
+});
+it('tolerates address components without a types list, as Google returns for plus codes',async()=>{
+  vi.stubEnv('GOOGLE_PLACES_API_KEY','test-only');
+  const odd={...sample.places[0],addressComponents:[{longText:'218090021',languageCode:'en'},{longText:'94526',types:['postal_code']}]};
+  vi.stubGlobal('fetch',vi.fn().mockResolvedValue(Response.json({places:[odd]})));
+  expect((await searchShoppingStores({name:'Costco',latitude:37.8,longitude:-122})).stores[0]).toMatchObject({name:'Costco Wholesale',zip:'94526'});
+});
+it('returns the store photo bytes from Google Places media',async()=>{
+  vi.stubEnv('GOOGLE_PLACES_API_KEY','test-only');
+  const fetcher=vi.fn()
+    .mockResolvedValueOnce(Response.json({places:[{id:'store-1',photos:[{name:'places/store-1/photos/abc'}]}]}))
+    .mockResolvedValueOnce(new Response(new Uint8Array([1,2,3]),{headers:{'Content-Type':'image/jpeg'}}));
+  vi.stubGlobal('fetch',fetcher);
+  expect(await storeLogo({name:'Costco',zip:'94582'})).toEqual({bytes:expect.any(ArrayBuffer),contentType:'image/jpeg'});
+  expect(fetcher.mock.calls[1][0]).toContain('places/store-1/photos/abc/media');
+});
+it('returns null when no store photo exists',async()=>{
+  vi.stubEnv('GOOGLE_PLACES_API_KEY','test-only');
+  vi.stubGlobal('fetch',vi.fn().mockResolvedValue(Response.json({places:[{id:'store-1'}]})));
+  expect(await storeLogo({name:'Costco'})).toBeNull();
 });
 it('requires latitude and longitude as a pair',()=>{
   expect(storeSearchInput.safeParse({name:'Costco',latitude:37.8}).success).toBe(false);
