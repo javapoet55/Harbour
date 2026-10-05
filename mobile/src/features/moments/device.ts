@@ -294,7 +294,21 @@ export function festivalMomentInput(name: string, zone: string = deviceZone()): 
   input.title = `${name} Wishes`;
   input.yearly = false;
   input.source = 'festivalCatalog';
+  input.sourceKey = festivalSourceKey(name);
   return input;
+}
+
+/**
+ * fac34ed (MomentEditor.swift:530-532): "A stable key lets the server dedupe a reimport against the moment
+ * it created before." The name lower-cased and split on anything that is not a letter, mark or digit
+ * (`CharacterSet.alphanumerics.inverted`), joined with hyphens.
+ */
+export function festivalSourceKey(name: string): string {
+  return `festival:${name
+    .toLowerCase()
+    .split(/[^\p{L}\p{M}\p{N}]+/u)
+    .filter((part) => part !== '')
+    .join('-')}`;
 }
 
 /**
