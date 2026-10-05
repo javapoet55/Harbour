@@ -403,8 +403,10 @@ These continue the list above (1–17).
     photo with AI?"). Consent is per session and can be withdrawn in Settings.
 25. **A sticky bottom action bar** (pattern 13) now also appears on Task Details (**Save changes** /
     **Mark complete**), Item Alternatives and the Calorie setup steps.
-26. **Wellness screens ignore dark mode** (§22 "For the team", "Wellness has no dark mode"). Do not copy that: the RN port should theme
-    them like every other screen.
+26. **Wellness screens ignore dark mode** (§22 "For the team", "Wellness has no dark mode"). Decided in
+    the Phase 12 prep: the RN chooser and guides keep Swift's fixed LIGHT design in both themes, without
+    Swift's unreadable text, and a test enforces it (`mobile/docs/android-polish.md` §23). Moments and
+    Shopping, inside the same cover, follow the theme.
 
 ### Test data
 
