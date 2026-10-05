@@ -132,7 +132,7 @@ describe('reminder notification routing is unaffected by the move', () => {
  * draw the centre button, and forwards to the cover.
  */
 describe('Wellness covers', () => {
-  it.each(['wellness/index.tsx', 'wellness/guide/[kind].tsx', 'wellness/calories.tsx'])('%s is a cover outside the tabs', (file) => {
+  it.each(['wellness/index.tsx', 'wellness/guide/[kind].tsx', 'wellness/pomodoro.tsx', 'wellness/calories.tsx'])('%s is a cover outside the tabs', (file) => {
     expect(exists(file)).toBe(true);
     expect(file.startsWith('(tabs)/')).toBe(false);
   });

@@ -3,6 +3,7 @@ import { router } from 'expo-router';
 import { useEffect } from 'react';
 
 import { handleMomentNotification } from '../features/moments/useMomentsLifecycle';
+import { handlePomodoroNotification, presentationFor } from '../features/pomodoro/route';
 import { useCoordinator } from './coordinator';
 import { DEFAULT_ACTION_IDENTIFIER, DISMISS_ACTION_IDENTIFIER, FOREGROUND_PRESENTATION, registerActionCategory, readActionPayload } from './notifications';
 
@@ -25,12 +26,14 @@ import { DEFAULT_ACTION_IDENTIFIER, DISMISS_ACTION_IDENTIFIER, FOREGROUND_PRESEN
 // The delegate is set at launch in Swift, before any view exists; this is the module-scope
 // equivalent, so a notification delivered during startup is still presented correctly.
 Notifications.setNotificationHandler({
-  handleNotification: async () => FOREGROUND_PRESENTATION,
+  // Pomodoro's in-app chime plays its sound with no banner (src/features/pomodoro/route.ts).
+  handleNotification: async (notification) => presentationFor(notification, FOREGROUND_PRESENTATION),
 });
 
 /** `didReceive response` (TaskActionNotifications.swift:65-72). */
 export function handleNotificationResponse(response: Notifications.NotificationResponse): void {
-  // Swift checks the Moments payload first and independently (TaskActionNotifications.swift:68-70).
+  // Swift reads the Pomodoro and Moments payloads first and independently (TaskActionNotifications.swift:67-78).
+  handlePomodoroNotification(response.notification.request.content.data, response.actionIdentifier, DISMISS_ACTION_IDENTIFIER);
   handleMomentNotification(response.notification.request.content.data, response.actionIdentifier, DISMISS_ACTION_IDENTIFIER);
   const payload = readActionPayload(response.notification.request.content.data);
   if (!payload) return;

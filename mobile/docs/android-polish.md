@@ -1217,3 +1217,26 @@ are listed here, Android-only or not.
   1.6 or more (iOS's AX1 is 1.65; Android 14's 1.8× and 2× settings qualify, "Largest" 1.3× does not).
 - **The guide's bar** is drawn by the screen: a glass back circle in the module's colour and the inline
   title "How It Works", as on the other covers.
+
+### Pomodoro (timer, dashboard, history, category insights)
+
+- **Sound: the phone's default notification sound, for both.** The end-of-phase alert uses it, as in
+  Swift (`content.sound = .default`). Swift's in-app chime is iOS system sound 1005, which has no file to
+  ship, so the chime plays the default notification sound too: an immediate local notification that the
+  foreground handler presents with sound only — no banner, no list entry — removed four seconds later.
+  No sound file is bundled. Without notification permission the chime is silent, as the alert is. When a
+  phase ends with Pomodoro on screen, the alert (banner and sound) and the chime both play, as on iOS.
+- **Keep screen awake** is expo-keep-awake under one tag, held only during an unpaused focus on the timer
+  screen in the foreground with "Distraction-free mode" on, and released on leaving — Swift's
+  `isIdleTimerDisabled` rule. It needs no Android permission.
+- **The notification tap** opens Pomodoro over the tabs (`from=notification`). With Ask open, Ask closes
+  first; with the Wellness chooser or a guide open, the tap waits until they close; with Pomodoro already
+  showing, nothing more opens (Swift would present a second cover once the chooser closed).
+- **Charts and rings are drawn from Views** (no SVG or chart module): bars and the minute grid as views,
+  the timer ring and the category donut as 180 short segments, the ring's angular gradient sampled per
+  segment. A bar is picked by tapping, not by dragging along the chart. Axis labels are en-US ("3PM",
+  "Mon", "Sep 26"), the format Swift's captures show.
+- **Sheets** (history, session details) are React Native page sheets; the dashboard's "…" menu and the
+  trend-period menu use the Moments popover, which follows the system theme while the screen stays light.
+- **The timer counts from the stored deadline**, ticking once a second while shown, and catches up on
+  return to the foreground, as Swift's `scenePhase` handler does.

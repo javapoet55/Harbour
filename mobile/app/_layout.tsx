@@ -12,6 +12,7 @@ import { useActionNotifications } from '../src/actions/useActionNotifications';
 import { onSignedOut } from '../src/api';
 import { RootErrorBoundary } from '../src/components/RootErrorBoundary';
 import { useMomentsLifecycle } from '../src/features/moments/useMomentsLifecycle';
+import { usePomodoroLifecycle } from '../src/features/pomodoro/usePomodoroNotificationRoute';
 import { useShoppingLifecycle } from '../src/features/shopping/useShoppingLifecycle';
 import { createQueryClient } from '../src/query/client';
 import { queryKeys } from '../src/query/keys';
@@ -188,6 +189,9 @@ export function RootNavigator() {
 
   // Shopping Lists: the lists belong to the signed-in account, so a different account starts empty.
   useShoppingLifecycle(profile?.id);
+
+  // Pomodoro: a different account (or none) resets the store and its pending alerts.
+  usePomodoroLifecycle(profile?.id);
 
   return (
     <>

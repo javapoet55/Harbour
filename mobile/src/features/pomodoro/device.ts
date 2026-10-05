@@ -6,6 +6,7 @@ import { useStore } from 'zustand';
 import { ownerKeyFor } from '../../actions/persistence';
 import { pomodoroApi } from '../../api/pomodoro';
 import { ensureReminderChannel, reminderChannel, requestNotificationPermission } from '../../lib/notificationPermission';
+import { CHIME_MARKER } from './route';
 import { cacheKey, createPomodoroStore, type PomodoroAlert, type PomodoroCache, type PomodoroDeps, type PomodoroState } from './store';
 
 /**
@@ -49,6 +50,27 @@ async function replaceAlerts(owner: string, alerts: PomodoroAlert[]): Promise<vo
   }
 }
 
+/**
+ * The in-app chime when a phase ends on screen. Swift plays iOS system sound 1005
+ * (`AudioServicesPlaySystemSound`, PomodoroStore.swift:70), which has no file to ship. This plays the
+ * phone's DEFAULT NOTIFICATION SOUND instead — the same sound the alert uses — by posting an immediate
+ * notification that the foreground handler presents with sound only (`presentationFor`), then removing
+ * it. Without notification permission it is silent, as an alert would be (android-polish.md §21).
+ */
+export async function playChime(): Promise<void> {
+  try {
+    await ensureReminderChannel();
+    const channel = reminderChannel();
+    const identifier = await Notifications.scheduleNotificationAsync({
+      content: { title: 'Pomodoro', body: '', sound: true, data: { [CHIME_MARKER]: true } },
+      trigger: channel.channelId ? { channelId: channel.channelId } : null,
+    });
+    setTimeout(() => void Notifications.dismissNotificationAsync(identifier).catch(() => undefined), 4000);
+  } catch {
+    // A chime that cannot play is skipped, as Swift's system sound would be on a muted phone.
+  }
+}
+
 export function livePomodoroDeps(overrides: Partial<PomodoroDeps> = {}): PomodoroDeps {
   return {
     page: (owner, cursor) => pomodoroApi.page(owner, cursor),
@@ -56,8 +78,7 @@ export function livePomodoroDeps(overrides: Partial<PomodoroDeps> = {}): Pomodor
     load,
     persist: (owner, cache) => AsyncStorage.setItem(cacheKey(owner), JSON.stringify(cache)),
     replaceAlerts,
-    // TODO(phase-12-screens): system sound 1005 has no Expo equivalent; the screens run bundles a cue.
-    chime: () => undefined,
+    chime: () => void playChime(),
     uuid: () => Crypto.randomUUID().toUpperCase(),
     now: () => Date.now(),
     ...overrides,
