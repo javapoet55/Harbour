@@ -259,6 +259,9 @@ describe('List Settings', () => {
     expect(screen.getByText('Hours for the next seven days · Store local time')).toBeTruthy();
     expect(screen.getByText('View store on Google Maps')).toBeTruthy();
     expect(mockHours).toHaveBeenCalledWith('place-1');
+    // The system back: a chevron on glass, labelled "Back", not a "Back" text capsule.
+    expect(screen.getByTestId('list-settings-back').props.accessibilityLabel).toBe('Back');
+    expect(screen.queryByText('Back')).toBeNull();
     await fireEvent.press(screen.getByTestId('list-settings-back'));
     expect(screen.getByText('List Settings')).toBeTruthy();
   });

@@ -1542,4 +1542,7 @@ captures; results row by row in `docs/reference/PARITY.md` "UI-parity pass 3". F
 - **Item editor's large title** is pulled up into the bar on iOS only; on Android the bar sits above it.
 - **Weekly email**: Time is a captioned box with a pill (`ClockField variant="pill"`), and a `DateField` with
   an empty label draws only its pill, at the leading edge.
+- **List Settings' pages have the system back** (`SheetButton` `icon: 'back'`): an ink chevron on a glass
+  circle, as a push inside Swift's sheet `NavigationStack`, so the title stays centred.
+- **`arrow.up.left` points up-left** (`TaskSymbol` turns Ionicons' up arrow −45°): Ask's suggestion rows.
 

@@ -788,6 +788,13 @@ reached** (with the reason).
 | 27 | Add Item / Edit Item | **fixed** | the large title's iOS-only −20 pull hid its top half under Android's sheet bar. Not saved |
 | 28 | Share List | checked | Android form chrome as logged; no link created |
 | 29 | Weekly email and pickup details | **fixed** | the time was a settings-style "TIME" caption over a bordered field; Swift's `field("Time")` is the same captioned box as Repeat with the pill inside (`ClockField variant="pill"`); the date pill sat at the trailing edge, a `.labelsHidden()` `DatePicker` is leading (`DateField` with no label). Not saved |
+| 30 | New List | checked | Android form chrome as logged; cancelled |
+| 31 | List Settings with store | checked | not saved |
+| 32 | Stores Near You | **fixed** | (with row 33) the page's back was a "Back" text capsule pushing the title off-centre; Swift's push inside the sheet has the system back, an ink chevron on glass (`SheetButton` gains `icon: 'back'`). No store added |
+| 33 | Store Hours | **fixed** | as row 32 |
+| 34 | Add Item with photo identification | not reached | needs a photo taken with the camera, which is then sent to `/api/shopping/recognize`; the editor itself is row 27, and the camera is the system's (platform gap) |
+| 35 | Shopping Recommendations | **fixed** | the suggestion rows' `arrow.up.left` drew as a plain up arrow; `TaskSymbol` now turns it −45° (↖), which also fixes Ask's text page. The title wraps beside the 56 pt close at this width, as an unlimited `Text` in Swift's `HStack` would |
+| — | Shopping in dark mode | checked | Shopping Detail readable in dark; the only dark iPhone capture predates the redesign |
 
 ### Not reached in this run
 

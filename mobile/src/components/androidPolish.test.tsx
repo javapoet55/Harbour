@@ -1,11 +1,12 @@
 import { fireEvent, render, screen } from '@testing-library/react-native';
-import { Platform, StyleSheet } from 'react-native';
+import { Platform, StyleSheet, View } from 'react-native';
 
 import { palettes } from '../theme';
 import { ProjectAssignmentField } from './ProjectAssignmentField';
 import { StickyFooter } from './StickyFooter';
 import { DetailCheckbox, DetailMenu, DetailOutlineButton, DetailTextInput, SectionLabel } from './TaskDetailParts';
 import { CreationCard, DatePill } from './TaskListParts';
+import { TaskSymbol } from './TaskSymbol';
 import { Text } from './Text';
 
 jest.mock('../query/useProjects', () => ({
@@ -200,5 +201,25 @@ describe('Text slack on Android', () => {
     await style({ style: { padding: 16 } });
     expect(flat('t')).toEqual(expect.not.objectContaining({ paddingStart: expect.anything() }));
     expect(flat('t').paddingHorizontal).toBeUndefined();
+  });
+});
+
+/** `arrow.up.left` has no Ionicons glyph pointing that way: the up arrow, turned −45° (↖). */
+describe('TaskSymbol', () => {
+  it('turns arrow.up.left to point up and to the left, and leaves others upright', async () => {
+    // The Ionicons mock renders a View; the test ID sits on a wrapper so each glyph can be read.
+    await render(
+      <>
+        <View testID="turned">
+          <TaskSymbol color="#000" name="arrow.up.left" size={17} />
+        </View>
+        <View testID="upright">
+          <TaskSymbol color="#000" name="arrow.up" size={17} />
+        </View>
+      </>,
+    );
+    const glyph = (testID: string) => screen.getByTestId(testID).children[0] as unknown as { props: { style?: unknown } };
+    expect(StyleSheet.flatten(glyph('turned').props.style as never)).toEqual({ transform: [{ rotate: '-45deg' }] });
+    expect(glyph('upright').props.style).toBeUndefined();
   });
 });

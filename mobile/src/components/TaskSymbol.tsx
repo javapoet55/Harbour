@@ -137,6 +137,10 @@ export type TaskSymbolProps = {
   color: string;
 };
 
+/** Symbols Ionicons only has upright: drawn turned. `arrow.up.left` points up and to the left (↖). */
+const turned: Partial<Record<keyof typeof taskIcons, string>> = { 'arrow.up.left': '-45deg' };
+
 export function TaskSymbol({ name, size, color }: TaskSymbolProps) {
-  return <Ionicons name={taskIcons[name]} size={size} color={color} />;
+  const turn = turned[name];
+  return <Ionicons name={taskIcons[name]} size={size} color={color} style={turn ? { transform: [{ rotate: turn }] } : undefined} />;
 }
