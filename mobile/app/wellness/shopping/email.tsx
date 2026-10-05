@@ -3,12 +3,12 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Switch, TextInput, View } from 'react-native';
-import { shoppingEmailApi, type ShoppingEmailSnapshot } from '../../../../src/api/shopping';
-import { KeyboardAwareScrollView } from '../../../../src/components/keyboard';
-import { Text } from '../../../../src/components/Text';
-import { connectGmail, EMAIL_CONNECT_FAILED } from '../../../../src/features/moments/device';
-import { useShopping } from '../../../../src/features/shopping/store';
-import { useTheme } from '../../../../src/theme';
+import { shoppingEmailApi, type ShoppingEmailSnapshot } from '../../../src/api/shopping';
+import { KeyboardAwareScrollView } from '../../../src/components/keyboard';
+import { Text } from '../../../src/components/Text';
+import { connectGmail, EMAIL_CONNECT_FAILED } from '../../../src/features/moments/device';
+import { useShopping } from '../../../src/features/shopping/store';
+import { useTheme } from '../../../src/theme';
 
 const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 export default function ShoppingEmailScreen() {

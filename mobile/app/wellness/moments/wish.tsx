@@ -3,17 +3,17 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
-import { Text } from '../../../../src/components/Text';
-import { TodayBackdrop } from '../../../../src/components/TodayShell';
-import { BorderedButton, ErrorText, MomentCard, MomentPrimary, MomentSheet } from '../../../../src/features/moments/components';
-import { momentLabel } from '../../../../src/features/moments/dates';
-import { canSendMessage, copyText, openMessages } from '../../../../src/features/moments/device';
-import { capitalized, composerPlanAction, HISTORY_STATUSES, momentForPlan, planDate, planEditable, planStatusLabel } from '../../../../src/features/moments/domain';
-import { DateField, FormButton, FormRow, FormScroll, FormSection, FormText, LabeledValue } from '../../../../src/features/moments/form';
-import { findPlan } from '../../../../src/features/moments/handoff';
-import { momentsStore, useMomentList, useMoments } from '../../../../src/features/moments/store';
-import { WishEmailConfirmation } from '../../../../src/features/moments/WishEmailConfirmation';
-import { textStyles, useTheme } from '../../../../src/theme';
+import { Text } from '../../../src/components/Text';
+import { TodayBackdrop } from '../../../src/components/TodayShell';
+import { BorderedButton, ErrorText, MomentCard, MomentPrimary, MomentSheet } from '../../../src/features/moments/components';
+import { momentLabel } from '../../../src/features/moments/dates';
+import { canSendMessage, copyText, openMessages } from '../../../src/features/moments/device';
+import { capitalized, composerPlanAction, HISTORY_STATUSES, momentForPlan, planDate, planEditable, planStatusLabel } from '../../../src/features/moments/domain';
+import { DateField, FormButton, FormRow, FormScroll, FormSection, FormText, LabeledValue } from '../../../src/features/moments/form';
+import { findPlan } from '../../../src/features/moments/handoff';
+import { momentsStore, useMomentList, useMoments } from '../../../src/features/moments/store';
+import { WishEmailConfirmation } from '../../../src/features/moments/WishEmailConfirmation';
+import { textStyles, useTheme } from '../../../src/theme';
 
 /**
  * `WishPlanView` (ios/App/ImportantMomentsView.swift:519-583): one wish's delivery, always read back
@@ -159,7 +159,7 @@ export default function WishDetailsScreen() {
               <Text style={[textStyles.body, { color: theme.colors.link }]}>Copy message</Text>
             </Pressable>
             {moment ? (
-              <Pressable accessibilityRole="button" onPress={() => router.push({ pathname: '/moments/review', params: { id: moment.id } })} testID="wish-reuse">
+              <Pressable accessibilityRole="button" onPress={() => router.push({ pathname: '/wellness/moments/review', params: { id: moment.id } })} testID="wish-reuse">
                 <Text style={[textStyles.body, { color: theme.colors.link }]}>Reuse next year</Text>
               </Pressable>
             ) : null}

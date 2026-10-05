@@ -205,8 +205,8 @@ export default function Today() {
             Shopping push their screens (TodayQuickAccess.swift:64-76). */}
         <TodayQuickAccess
           momentsSubtitle={`${upcomingMomentCount(moments, queueNow)} upcoming`}
-          onMoments={() => router.push('/moments')}
-          onShopping={() => router.push('/shopping')}
+          onMoments={() => router.push('/wellness/moments')}
+          onShopping={() => router.push('/wellness/shopping')}
           onWeekly={() => router.push('/today/weekly-summary')}
           shoppingSubtitle={shoppingSubtitle(shopping.lists, shopping.failed)}
         />

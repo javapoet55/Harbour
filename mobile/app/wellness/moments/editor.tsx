@@ -1,9 +1,9 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 
-import type { MomentInput } from '../../../../src/api/moments';
-import { MomentEditorView } from '../../../../src/features/moments/MomentEditorView';
-import { momentsStore } from '../../../../src/features/moments/store';
+import type { MomentInput } from '../../../src/api/moments';
+import { MomentEditorView } from '../../../src/features/moments/MomentEditorView';
+import { momentsStore } from '../../../src/features/moments/store';
 
 /**
  * Create / Edit Moment, pushed (ImportantMomentsView.swift:295, :115; ManageFestivalView.swift:23;
@@ -27,7 +27,7 @@ export default function MomentEditorScreen() {
     <MomentEditorView
       moment={moment}
       imported={imported}
-      onDone={params.done === 'list' ? () => router.dismissTo('/moments') : undefined}
+      onDone={params.done === 'list' ? () => router.dismissTo('/wellness/moments') : undefined}
       dismiss={() => router.back()}
     />
   );

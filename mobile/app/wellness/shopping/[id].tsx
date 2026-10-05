@@ -4,21 +4,21 @@ import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useRef, useState } from 'react';
 import { Alert, Keyboard, Modal, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 
-import type { GroceryItem, GroceryList } from '../../../../src/api/shopping';
-import { KeyboardAwareScrollView } from '../../../../src/components/keyboard';
-import { withAlpha } from '../../../../src/components/SignInBackdrop';
-import { Text } from '../../../../src/components/Text';
-import { TodayBackdrop } from '../../../../src/components/TodayShell';
-import { ShoppingAlternativesSheet } from '../../../../src/features/shopping/AlternativesSheet';
-import { ShoppingRecommendationsSheet } from '../../../../src/features/shopping/RecommendationsSheet';
-import { CategoryChip, GroceryRow, grocerySeparatorInset, ShoppingActionBar, ShoppingIcon, SwipeToDelete } from '../../../../src/features/shopping/components';
-import { completionSummary, ShoppingCompletionView, type ShoppingCompletionSummary } from '../../../../src/features/shopping/CompletionView';
-import { ItemEditorSheet } from '../../../../src/features/shopping/ItemEditorSheet';
-import { appended, CATEGORIES, itemCount, listInput, remaining, removed, suggestionsFor, toggled, uncheckedAll, upserted } from '../../../../src/features/shopping/model';
-import { ListSettingsSheet, NewListSheet, ShareListSheet } from '../../../../src/features/shopping/sheets';
-import { shoppingStore, useShopping } from '../../../../src/features/shopping/store';
-import { VoiceSheet } from '../../../../src/features/shopping/VoiceSheet';
-import { brand, textStyles, useTheme } from '../../../../src/theme';
+import type { GroceryItem, GroceryList } from '../../../src/api/shopping';
+import { KeyboardAwareScrollView } from '../../../src/components/keyboard';
+import { withAlpha } from '../../../src/components/SignInBackdrop';
+import { Text } from '../../../src/components/Text';
+import { TodayBackdrop } from '../../../src/components/TodayShell';
+import { ShoppingAlternativesSheet } from '../../../src/features/shopping/AlternativesSheet';
+import { ShoppingRecommendationsSheet } from '../../../src/features/shopping/RecommendationsSheet';
+import { CategoryChip, GroceryRow, grocerySeparatorInset, ShoppingActionBar, ShoppingIcon, SwipeToDelete } from '../../../src/features/shopping/components';
+import { completionSummary, ShoppingCompletionView, type ShoppingCompletionSummary } from '../../../src/features/shopping/CompletionView';
+import { ItemEditorSheet } from '../../../src/features/shopping/ItemEditorSheet';
+import { appended, CATEGORIES, itemCount, listInput, remaining, removed, suggestionsFor, toggled, uncheckedAll, upserted } from '../../../src/features/shopping/model';
+import { ListSettingsSheet, NewListSheet, ShareListSheet } from '../../../src/features/shopping/sheets';
+import { shoppingStore, useShopping } from '../../../src/features/shopping/store';
+import { VoiceSheet } from '../../../src/features/shopping/VoiceSheet';
+import { brand, textStyles, useTheme } from '../../../src/theme';
 
 /** `quickAdd()`'s message when the server finds nothing to add (ShoppingViews.swift:382). */
 export const NO_ITEMS_FOUND = 'No items found. Type an item and try again.';
@@ -189,7 +189,7 @@ export default function ShoppingDetailScreen() {
       <View style={styles.fill} pointerEvents={busy ? 'none' : 'auto'}>
         {/* On Android the action bar rides up on the keyboard, so the focused field has to clear it too. */}
         <KeyboardAwareScrollView bottomOffset={barHeight} keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingBottom: barHeight + 16 }} testID="shopping-detail">
-          {!readOnly && <Pressable accessibilityRole="button" accessibilityLabel="Schedule shopping list email" onPress={() => router.push({ pathname: '/shopping/email', params: { id: list.id } })} style={{ margin: 16, padding: 16, borderRadius: 18, backgroundColor: theme.colors.secondaryBackground, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+          {!readOnly && <Pressable accessibilityRole="button" accessibilityLabel="Schedule shopping list email" onPress={() => router.push({ pathname: '/wellness/shopping/email', params: { id: list.id } })} style={{ margin: 16, padding: 16, borderRadius: 18, backgroundColor: theme.colors.secondaryBackground, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
             <Ionicons name="mail-outline" size={26} color={theme.colors.link} />
             <View style={{ flex: 1 }}><Text style={{ fontWeight: '700', color: theme.colors.label }}>Schedule email</Text><Text style={{ color: theme.colors.secondaryLabel }}>Send your list to your store manager every week</Text></View>
             <Ionicons name="chevron-forward" size={20} color={theme.colors.link} />

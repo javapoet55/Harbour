@@ -54,5 +54,5 @@ it('Moments and Shopping are the existing screens in the Today stack', async () 
   await continueToModule('moments');
   await continueToModule('shopping');
   expect(mockClose).toHaveBeenCalledTimes(2);
-  expect(mockRouter.navigate.mock.calls).toEqual([['/moments'], ['/shopping']]);
+  expect(mockRouter.navigate.mock.calls).toEqual([['/wellness/moments'], ['/wellness/shopping']]);
 });

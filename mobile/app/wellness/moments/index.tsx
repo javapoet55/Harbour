@@ -4,10 +4,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 
-import type { ImportantMoment, WishDeliveryPlan } from '../../../../src/api/moments';
-import { Text } from '../../../../src/components/Text';
-import { TodayBackdrop } from '../../../../src/components/TodayShell';
-import { GlassCapsule, GlassCircle } from '../../../../src/components/PushedHeader';
+import type { ImportantMoment, WishDeliveryPlan } from '../../../src/api/moments';
+import { Text } from '../../../src/components/Text';
+import { TodayBackdrop } from '../../../src/components/TodayShell';
+import { GlassCapsule, GlassCircle } from '../../../src/components/PushedHeader';
 import {
   caption,
   headline,
@@ -17,8 +17,8 @@ import {
   MomentStatusBadge,
   systemColors,
   title1,
-} from '../../../../src/features/moments/components';
-import { momentDate, momentLabel, momentRelative, sendDayLabel, shortTime, UPCOMING_GROUPS } from '../../../../src/features/moments/dates';
+} from '../../../src/features/moments/components';
+import { momentDate, momentLabel, momentRelative, sendDayLabel, shortTime, UPCOMING_GROUPS } from '../../../src/features/moments/dates';
 import {
   capitalized,
   DELIVERY_FILTERS,
@@ -39,16 +39,16 @@ import {
   latestDraft,
   type MomentDisplayGroup,
   type MomentsTab,
-} from '../../../../src/features/moments/domain';
-import { MenuPicker } from '../../../../src/features/moments/form';
-import { momentsStore, useMomentList, useMoments } from '../../../../src/features/moments/store';
-import { routedDestination } from '../../../../src/features/moments/useMomentsLifecycle';
-import { brand, linearGradientStops, textStyles, useTheme } from '../../../../src/theme';
+} from '../../../src/features/moments/domain';
+import { MenuPicker } from '../../../src/features/moments/form';
+import { momentsStore, useMomentList, useMoments } from '../../../src/features/moments/store';
+import { routedDestination } from '../../../src/features/moments/useMomentsLifecycle';
+import { brand, linearGradientStops, textStyles, useTheme } from '../../../src/theme';
 
 const GRADIENT = linearGradientStops([brand.nexdoMagenta, brand.nexdoIndigo, brand.nexdoBlue]);
 
 function manageHref(group: MomentDisplayGroup) {
-  return { pathname: '/moments/manage' as const, params: { ids: group.moments.map((moment) => moment.id).join(',') } };
+  return { pathname: '/wellness/moments/manage' as const, params: { ids: group.moments.map((moment) => moment.id).join(',') } };
 }
 
 /**
@@ -121,7 +121,7 @@ export default function ImportantMomentsScreen() {
               }
             : {}),
           headerRight: () => (
-            <Pressable accessibilityRole="button" accessibilityLabel="Important Moments settings" onPress={() => router.push('/moments/settings')} hitSlop={6} testID="moments-settings">
+            <Pressable accessibilityRole="button" accessibilityLabel="Important Moments settings" onPress={() => router.push('/wellness/moments/settings')} hitSlop={6} testID="moments-settings">
               <GlassCircle>
                 <Ionicons name="settings-outline" size={22} color={theme.colors.link} />
               </GlassCircle>
@@ -170,12 +170,12 @@ export default function ImportantMomentsScreen() {
                   <Text style={[styles.subheadline, { color: theme.colors.secondaryLabel }]}>{`${review} wish${review === 1 ? ' needs' : 'es need'} review`}</Text>
                   {ready > 0 ? <Text style={[styles.subheadline, { color: theme.colors.secondaryLabel }]}>{`${ready} ready to schedule`}</Text> : null}
                   <View style={styles.summaryActions}>
-                    <Pressable accessibilityRole="button" onPress={() => router.push('/moments/manage-list')} style={styles.summaryAction} testID="moments-manage">
+                    <Pressable accessibilityRole="button" onPress={() => router.push('/wellness/moments/manage-list')} style={styles.summaryAction} testID="moments-manage">
                       <Text numberOfLines={1} style={[styles.summaryActionLabel, { color: theme.colors.link }]}>
                         Manage
                       </Text>
                     </Pressable>
-                    <Pressable accessibilityRole="button" onPress={() => router.push({ pathname: '/moments/editor', params: { done: 'list' } })} style={styles.summaryAction} testID="moments-create-new">
+                    <Pressable accessibilityRole="button" onPress={() => router.push({ pathname: '/wellness/moments/editor', params: { done: 'list' } })} style={styles.summaryAction} testID="moments-create-new">
                       <Text numberOfLines={1} style={[styles.summaryActionLabel, { color: theme.colors.link }]}>
                         Create New
                       </Text>
@@ -256,7 +256,7 @@ export default function ImportantMomentsScreen() {
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Add Moment"
-          onPress={() => router.push({ pathname: '/moments/editor', params: { done: 'list' } })}
+          onPress={() => router.push({ pathname: '/wellness/moments/editor', params: { done: 'list' } })}
           style={[styles.addButton, { backgroundColor: theme.colors.tint }]}
           testID="moments-add"
         >
@@ -291,7 +291,7 @@ function UpcomingMomentRow({ moment, now }: { moment: ImportantMoment; now: numb
                 icon={plan.automaticDelivery ? 'checkmark-circle' : 'time-outline'}
               />
               <Text style={[caption, { color: theme.colors.secondaryLabel }]}>{`${capitalized(plan.channel)} · ${momentLabel(planDate(plan), plan.timeZoneID)}`}</Text>
-              <Pressable accessibilityRole="button" accessibilityLabel="Manage" onPress={() => router.push({ pathname: '/moments/wish', params: { planId: plan.id } })} style={styles.link} testID={`moment-manage-${moment.id}`}>
+              <Pressable accessibilityRole="button" accessibilityLabel="Manage" onPress={() => router.push({ pathname: '/wellness/moments/wish', params: { planId: plan.id } })} style={styles.link} testID={`moment-manage-${moment.id}`}>
                 <Ionicons name="chevron-forward" size={17} color={theme.colors.link} />
                 <Text style={[textStyles.body, { color: theme.colors.link }]}>Manage</Text>
               </Pressable>
@@ -309,7 +309,7 @@ function UpcomingMomentRow({ moment, now }: { moment: ImportantMoment; now: numb
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel={latest === undefined ? 'Create wish' : 'Review wish'}
-                onPress={() => router.push({ pathname: '/moments/review', params: { id: moment.id } })}
+                onPress={() => router.push({ pathname: '/wellness/moments/review', params: { id: moment.id } })}
                 style={styles.reviewButtonWrap}
                 testID={`moment-review-${moment.id}`}
               >
@@ -319,7 +319,7 @@ function UpcomingMomentRow({ moment, now }: { moment: ImportantMoment; now: numb
               </Pressable>
             </>
           )}
-          <Pressable accessibilityRole="button" onPress={() => router.push({ pathname: '/moments/editor', params: { id: moment.id, done: 'back' } })} style={styles.link} testID={`moment-edit-${moment.id}`}>
+          <Pressable accessibilityRole="button" onPress={() => router.push({ pathname: '/wellness/moments/editor', params: { id: moment.id, done: 'back' } })} style={styles.link} testID={`moment-edit-${moment.id}`}>
             <Text style={[styles.subheadline, { color: theme.colors.link }]}>Edit</Text>
           </Pressable>
         </View>
@@ -372,7 +372,7 @@ function FestivalGroupCard({ group, onManage, now }: { group: MomentDisplayGroup
 function PlanCard({ plan, moment }: { plan: WishDeliveryPlan; moment: ImportantMoment | undefined }) {
   const theme = useTheme();
   return (
-    <Pressable accessibilityRole="button" onPress={() => router.push({ pathname: '/moments/wish', params: { planId: plan.id } })} testID={`plan-card-${plan.id}`}>
+    <Pressable accessibilityRole="button" onPress={() => router.push({ pathname: '/wellness/moments/wish', params: { planId: plan.id } })} testID={`plan-card-${plan.id}`}>
       <MomentCard>
         <View style={styles.rowTop}>
           <MomentIconTile type={moment?.type ?? 'custom'} title={moment?.title ?? plan.subject} />

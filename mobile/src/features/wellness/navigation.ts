@@ -59,5 +59,5 @@ export async function continueToModule(module: WellnessModule): Promise<void> {
     return;
   }
   await closePresentedScreens();
-  router.navigate(module === 'moments' ? '/moments' : '/shopping');
+  router.navigate(module === 'moments' ? '/wellness/moments' : '/wellness/shopping');
 }

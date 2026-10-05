@@ -2,8 +2,8 @@ import { router } from 'expo-router';
 import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
-import { FESTIVAL_REGIONS, festivalMomentInput } from '../../../../src/features/moments/device';
-import { FormLink, FormRow, FormScroll, FormSection, FormText, MenuPicker } from '../../../../src/features/moments/form';
+import { FESTIVAL_REGIONS, festivalMomentInput } from '../../../src/features/moments/device';
+import { FormLink, FormRow, FormScroll, FormSection, FormText, MenuPicker } from '../../../src/features/moments/form';
 
 /**
  * `MomentFestivalView` (ios/App/MomentEditor.swift:311-322): the hard-coded regions, sorted, and each
@@ -33,7 +33,7 @@ export default function ChooseFestivalsScreen() {
             <FormRow key={name} last={index === festivals.length - 1}>
               <FormLink
                 title={name}
-                onPress={() => router.push({ pathname: '/moments/editor', params: { imported: JSON.stringify(festivalMomentInput(name)), done: 'back' } })}
+                onPress={() => router.push({ pathname: '/wellness/moments/editor', params: { imported: JSON.stringify(festivalMomentInput(name)), done: 'back' } })}
                 testID={`festival-${name}`}
               />
             </FormRow>

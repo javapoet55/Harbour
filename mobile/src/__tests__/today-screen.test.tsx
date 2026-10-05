@@ -491,9 +491,9 @@ describe('Today navigation to the Run B screens', () => {
   it('opens Moments and Shopping from their tiles', async () => {
     await renderToday();
     await fireEvent.press(screen.getByTestId('quick-access-moments'));
-    expect(mockPush).toHaveBeenCalledWith('/moments');
+    expect(mockPush).toHaveBeenCalledWith('/wellness/moments');
     await fireEvent.press(screen.getByTestId('quick-access-shopping'));
-    expect(mockPush).toHaveBeenCalledWith('/shopping');
+    expect(mockPush).toHaveBeenCalledWith('/wellness/shopping');
   });
 
   it('opens the attention screen from the summary chip', async () => {

@@ -3,13 +3,13 @@ import { router } from 'expo-router';
 import { useEffect } from 'react';
 import { ActivityIndicator, Alert, Linking, StyleSheet, View } from 'react-native';
 
-import type { ConnectEmailResponse, MomentOK } from '../../../../src/api/moments';
-import { Text } from '../../../../src/components/Text';
-import { connectGmail, contactMomentInput, EMAIL_CONNECT_FAILED, emailCallbackTicket, pickContact } from '../../../../src/features/moments/device';
-import { FormButton, FormLink, FormRow, FormScroll, FormSection, FormText } from '../../../../src/features/moments/form';
-import { momentsStore, reminderStatusText, useMoments } from '../../../../src/features/moments/store';
-import { useOAuthCallback } from '../../../../src/lib/oauthCallbacks';
-import { textStyles, useTheme } from '../../../../src/theme';
+import type { ConnectEmailResponse, MomentOK } from '../../../src/api/moments';
+import { Text } from '../../../src/components/Text';
+import { connectGmail, contactMomentInput, EMAIL_CONNECT_FAILED, emailCallbackTicket, pickContact } from '../../../src/features/moments/device';
+import { FormButton, FormLink, FormRow, FormScroll, FormSection, FormText } from '../../../src/features/moments/form';
+import { momentsStore, reminderStatusText, useMoments } from '../../../src/features/moments/store';
+import { useOAuthCallback } from '../../../src/lib/oauthCallbacks';
+import { textStyles, useTheme } from '../../../src/theme';
 
 /**
  * `MomentSettingsView` (ios/App/MomentEditor.swift:205-245): the imports, the connected Gmail account,
@@ -48,7 +48,7 @@ export default function MomentSettingsScreen() {
       const contact = await pickContact();
       if (!contact) return;
       const input = await contactMomentInput(contact);
-      router.push({ pathname: '/moments/import-editor', params: { imported: JSON.stringify(input) } });
+      router.push({ pathname: '/wellness/moments/import-editor', params: { imported: JSON.stringify(input) } });
     } catch (caught) {
       momentsStore.getState().setError(caught instanceof Error ? caught.message : String(caught));
     }
@@ -87,10 +87,10 @@ export default function MomentSettingsScreen() {
             <FormButton title="Choose a contact birthday" onPress={explainContacts} testID="settings-contact" />
           </FormRow>
           <FormRow>
-            <FormLink title="Choose calendars and anniversary candidates" onPress={() => router.push('/moments/calendar-import')} testID="settings-calendars" />
+            <FormLink title="Choose calendars and anniversary candidates" onPress={() => router.push('/wellness/moments/calendar-import')} testID="settings-calendars" />
           </FormRow>
           <FormRow>
-            <FormLink title="Choose festivals" onPress={() => router.push('/moments/festivals')} testID="settings-festivals" />
+            <FormLink title="Choose festivals" onPress={() => router.push('/wellness/moments/festivals')} testID="settings-festivals" />
           </FormRow>
           <FormRow last>
             <FormText caption>No religion or festival preferences are inferred. Imported items require your confirmation before saving.</FormText>

@@ -2,8 +2,8 @@ import { router } from 'expo-router';
 import { useState } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 
-import { calendarCandidates, calendarMomentInput, deviceCalendars, type CalendarCandidate, type CalendarChoice } from '../../../../src/features/moments/device';
-import { FormButton, FormLink, FormRow, FormScroll, FormSection, FormText } from '../../../../src/features/moments/form';
+import { calendarCandidates, calendarMomentInput, deviceCalendars, type CalendarCandidate, type CalendarChoice } from '../../../src/features/moments/device';
+import { FormButton, FormLink, FormRow, FormScroll, FormSection, FormText } from '../../../src/features/moments/form';
 
 /**
  * `MomentCalendarImportView` (ios/App/MomentEditor.swift:288-310). Reads the DEVICE calendar the
@@ -30,7 +30,7 @@ export default function CalendarImportScreen() {
 
   const open = async (candidate: CalendarCandidate) => {
     const input = await calendarMomentInput(candidate);
-    router.push({ pathname: '/moments/editor', params: { imported: JSON.stringify(input), done: 'back' } });
+    router.push({ pathname: '/wellness/moments/editor', params: { imported: JSON.stringify(input), done: 'back' } });
   };
 
   return (

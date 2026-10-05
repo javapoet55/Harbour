@@ -4,20 +4,20 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, TextInput, View } from 'react-native';
 
-import type { ImportantMoment, PlanResponse, WishDeliveryPlan, WishDraft } from '../../../../src/api/moments';
-import { TaskActionError } from '../../../../src/actions/errors';
-import { KeyboardAwareScrollView } from '../../../../src/components/keyboard';
-import { SettingsSegments } from '../../../../src/components/SettingsControls';
-import { Text } from '../../../../src/components/Text';
-import { TodayBackdrop } from '../../../../src/components/TodayShell';
-import { ErrorText, IconLabel, MomentCard, MomentPrimary, Secondary, headline, title1 } from '../../../../src/features/moments/components';
-import { isoString } from '../../../../src/features/moments/dates';
-import { canSendMessage, copyText, openMessages, shareText } from '../../../../src/features/moments/device';
-import { capitalized, composerPlanAction, momentIcon } from '../../../../src/features/moments/domain';
-import { findDraft, findPlan, rememberPlan } from '../../../../src/features/moments/handoff';
-import { momentsStore, useMoments } from '../../../../src/features/moments/store';
-import { WishEmailConfirmation } from '../../../../src/features/moments/WishEmailConfirmation';
-import { textStyles, useTheme } from '../../../../src/theme';
+import type { ImportantMoment, PlanResponse, WishDeliveryPlan, WishDraft } from '../../../src/api/moments';
+import { TaskActionError } from '../../../src/actions/errors';
+import { KeyboardAwareScrollView } from '../../../src/components/keyboard';
+import { SettingsSegments } from '../../../src/components/SettingsControls';
+import { Text } from '../../../src/components/Text';
+import { TodayBackdrop } from '../../../src/components/TodayShell';
+import { ErrorText, IconLabel, MomentCard, MomentPrimary, Secondary, headline, title1 } from '../../../src/features/moments/components';
+import { isoString } from '../../../src/features/moments/dates';
+import { canSendMessage, copyText, openMessages, shareText } from '../../../src/features/moments/device';
+import { capitalized, composerPlanAction, momentIcon } from '../../../src/features/moments/domain';
+import { findDraft, findPlan, rememberPlan } from '../../../src/features/moments/handoff';
+import { momentsStore, useMoments } from '../../../src/features/moments/store';
+import { WishEmailConfirmation } from '../../../src/features/moments/WishEmailConfirmation';
+import { textStyles, useTheme } from '../../../src/theme';
 
 const CHANNELS = [
   { id: 'messages', title: 'Messages', icon: 'chatbubble' },
@@ -167,7 +167,7 @@ export default function ChooseDeliveryScreen() {
         {!sendsNow ? (
           <Pressable
             accessibilityRole="button"
-            onPress={() => router.push({ pathname: '/moments/schedule-wish', params: { momentId: moment.id, draftId: draft.id, channel, recipient } })}
+            onPress={() => router.push({ pathname: '/wellness/moments/schedule-wish', params: { momentId: moment.id, draftId: draft.id, channel, recipient } })}
             style={[styles.prominent, { backgroundColor: theme.colors.tint }]}
             testID="delivery-choose-time"
           >
@@ -182,7 +182,7 @@ export default function ChooseDeliveryScreen() {
           />
         )}
         {plan && !composing ? (
-          <Pressable accessibilityRole="button" onPress={() => router.push({ pathname: '/moments/wish', params: { planId: plan.id } })} testID="delivery-status">
+          <Pressable accessibilityRole="button" onPress={() => router.push({ pathname: '/wellness/moments/wish', params: { planId: plan.id } })} testID="delivery-status">
             <Text style={[textStyles.body, { color: theme.colors.link }]}>View delivery status</Text>
           </Pressable>
         ) : null}

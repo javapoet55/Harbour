@@ -3,18 +3,18 @@ import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { Keyboard, Pressable, StyleSheet, TextInput, View } from 'react-native';
 
-import type { DraftResponse, GenerateResponse, ImportantMoment, WishDraft } from '../../../../src/api/moments';
-import { KeyboardAwareScrollView } from '../../../../src/components/keyboard';
-import { Text } from '../../../../src/components/Text';
-import { TodayBackdrop } from '../../../../src/components/TodayShell';
-import { GlassCapsule } from '../../../../src/components/PushedHeader';
-import { BorderedButton, caption, ErrorText, IconLabel, KEYBOARD_DONE_BAR_HEIGHT, KeyboardDoneBar, MomentCard, MomentPrimary, MomentSegments, Secondary } from '../../../../src/features/moments/components';
-import { characterCount, latestDraft, momentIcon, supportsGreetingCard, typeLabel } from '../../../../src/features/moments/domain';
-import { Disclosure, FormToggle } from '../../../../src/features/moments/form';
-import { rememberDraft } from '../../../../src/features/moments/handoff';
-import { MomentGreetingCardSection } from '../../../../src/features/moments/MomentGreetingCardSection';
-import { momentsStore, useMoments } from '../../../../src/features/moments/store';
-import { isAndroid, textStyles, useTheme } from '../../../../src/theme';
+import type { DraftResponse, GenerateResponse, ImportantMoment, WishDraft } from '../../../src/api/moments';
+import { KeyboardAwareScrollView } from '../../../src/components/keyboard';
+import { Text } from '../../../src/components/Text';
+import { TodayBackdrop } from '../../../src/components/TodayShell';
+import { GlassCapsule } from '../../../src/components/PushedHeader';
+import { BorderedButton, caption, ErrorText, IconLabel, KEYBOARD_DONE_BAR_HEIGHT, KeyboardDoneBar, MomentCard, MomentPrimary, MomentSegments, Secondary } from '../../../src/features/moments/components';
+import { characterCount, latestDraft, momentIcon, supportsGreetingCard, typeLabel } from '../../../src/features/moments/domain';
+import { Disclosure, FormToggle } from '../../../src/features/moments/form';
+import { rememberDraft } from '../../../src/features/moments/handoff';
+import { MomentGreetingCardSection } from '../../../src/features/moments/MomentGreetingCardSection';
+import { momentsStore, useMoments } from '../../../src/features/moments/store';
+import { isAndroid, textStyles, useTheme } from '../../../src/theme';
 
 const TONES = ['Warm', 'Personal', 'Short', 'Fun'] as const;
 
@@ -87,7 +87,7 @@ export default function ReviewWishScreen() {
       const result = await momentsStore.getState().request<DraftResponse>('approve', { id: draft.id, body: bodyText, approved: true });
       setDraft(result.draft);
       rememberDraft(result.draft);
-      router.push({ pathname: '/moments/delivery', params: { momentId: moment.id, draftId: result.draft.id } });
+      router.push({ pathname: '/wellness/moments/delivery', params: { momentId: moment.id, draftId: result.draft.id } });
     });
   };
 

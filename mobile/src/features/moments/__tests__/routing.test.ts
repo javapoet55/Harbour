@@ -44,15 +44,15 @@ describe('moment notification routing', () => {
 
   it('opens the editable wish first, then Manage Moment, then Review Wish', () => {
     const withPlan = moment({ id: 'a', drafts: [draft({ plans: [plan({ id: 'sent', status: 'SENT' }), plan({ id: 'live' })] })] });
-    expect(routedDestination(withPlan, [withPlan])).toEqual({ pathname: '/moments/wish', params: { planId: 'live' } });
+    expect(routedDestination(withPlan, [withPlan])).toEqual({ pathname: '/wellness/moments/wish', params: { planId: 'live' } });
 
     const encoded = settings({ groupID: 'g' });
     const one = moment({ id: 'b1', firstName: 'B', festivalSettings: encoded });
     const archived = moment({ id: 'b2', firstName: 'C', festivalSettings: settings({ groupID: 'g', archived: true }) });
     const two = moment({ id: 'b3', firstName: 'D', festivalSettings: encoded });
-    expect(routedDestination(one, [one, archived, two])).toEqual({ pathname: '/moments/manage', params: { ids: 'b1,b3' } });
+    expect(routedDestination(one, [one, archived, two])).toEqual({ pathname: '/wellness/moments/manage', params: { ids: 'b1,b3' } });
 
     const custom = moment({ id: 'c', type: 'custom' });
-    expect(routedDestination(custom, [custom])).toEqual({ pathname: '/moments/review', params: { id: 'c' } });
+    expect(routedDestination(custom, [custom])).toEqual({ pathname: '/wellness/moments/review', params: { id: 'c' } });
   });
 });

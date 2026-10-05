@@ -2,9 +2,9 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 
-import { ManageMomentView } from '../../../../src/features/moments/ManageMomentView';
-import type { MomentDisplayGroup } from '../../../../src/features/moments/domain';
-import { momentsStore } from '../../../../src/features/moments/store';
+import { ManageMomentView } from '../../../src/features/moments/ManageMomentView';
+import type { MomentDisplayGroup } from '../../../src/features/moments/domain';
+import { momentsStore } from '../../../src/features/moments/store';
 
 /**
  * Manage Moment for a group of recipients (`ManageFestivalView(group:store:onDone:)`,
@@ -30,5 +30,5 @@ export default function ManageMomentScreen() {
       </View>
     );
   }
-  return <ManageMomentView group={group} onDone={() => router.dismissTo('/moments')} />;
+  return <ManageMomentView group={group} onDone={() => router.dismissTo('/wellness/moments')} />;
 }

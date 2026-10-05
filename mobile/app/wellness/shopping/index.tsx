@@ -3,15 +3,15 @@ import { router, Stack } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 
-import { Text } from '../../../../src/components/Text';
-import { TodayBackdrop } from '../../../../src/components/TodayShell';
-import { headline, MomentCard, systemColors } from '../../../../src/features/moments/components';
-import { momentDate } from '../../../../src/features/moments/dates';
-import { ListTile } from '../../../../src/features/shopping/components';
-import { itemCount } from '../../../../src/features/shopping/model';
-import { NewListSheet } from '../../../../src/features/shopping/sheets';
-import { shoppingStore, useShopping } from '../../../../src/features/shopping/store';
-import { brand, textStyles, useTheme } from '../../../../src/theme';
+import { Text } from '../../../src/components/Text';
+import { TodayBackdrop } from '../../../src/components/TodayShell';
+import { headline, MomentCard, systemColors } from '../../../src/features/moments/components';
+import { momentDate } from '../../../src/features/moments/dates';
+import { ListTile } from '../../../src/features/shopping/components';
+import { itemCount } from '../../../src/features/shopping/model';
+import { NewListSheet } from '../../../src/features/shopping/sheets';
+import { shoppingStore, useShopping } from '../../../src/features/shopping/store';
+import { brand, textStyles, useTheme } from '../../../src/theme';
 
 /** `.dateTime.month(.abbreviated).day()` in the device locale — "25 Sep" or "Sep 25". */
 function shortDay(day: string, zone: string): string {
@@ -80,7 +80,7 @@ export default function MyListsScreen() {
               return (
                 <View key={list.id}>
                   {index > 0 ? <View style={[styles.divider, { backgroundColor: theme.colors.separator }]} /> : null}
-                  <Pressable accessibilityRole="button" onPress={() => router.push({ pathname: '/shopping/[id]', params: { id: list.id } })} style={styles.listRow} testID={`shopping-list-${list.id}`}>
+                  <Pressable accessibilityRole="button" onPress={() => router.push({ pathname: '/wellness/shopping/[id]', params: { id: list.id } })} style={styles.listRow} testID={`shopping-list-${list.id}`}>
                     <ListTile icon={open ? 'cart' : 'copy-outline'} color={open ? systemColors.green : brand.nexdoIndigo} />
                     <View style={styles.grow}>
                       <Text style={[headline, { color: theme.colors.ink }]}>{list.title}</Text>
@@ -109,7 +109,7 @@ export default function MyListsScreen() {
         visible={create}
         onClose={() => setCreate(false)}
         // `.navigationDestination(… created != nil && !create)`: the new list opens once the sheet is gone.
-        onCreated={(list) => router.push({ pathname: '/shopping/[id]', params: { id: list.id } })}
+        onCreated={(list) => router.push({ pathname: '/wellness/shopping/[id]', params: { id: list.id } })}
       />
     </View>
   );
