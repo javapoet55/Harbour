@@ -38,4 +38,12 @@ export const queryKeys = {
     all: () => ['assistant'] as const,
     consent: () => ['assistant', 'consent'] as const,
   },
+  /** `CalorieStore` (ios/App/CalorieTrackerView.swift:70-215), per account. */
+  nutrition: {
+    all: (ownerId: string) => ['nutrition', ownerId] as const,
+    settings: (ownerId: string) => ['nutrition', ownerId, 'settings'] as const,
+    day: (ownerId: string, date: string) => ['nutrition', ownerId, 'day', date] as const,
+    summary: (ownerId: string, period: 'week' | 'month', date: string) => ['nutrition', ownerId, 'summary', period, date] as const,
+    insight: (ownerId: string, date: string) => ['nutrition', ownerId, 'insight', date] as const,
+  },
 };
