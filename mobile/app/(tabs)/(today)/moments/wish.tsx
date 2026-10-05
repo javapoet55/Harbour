@@ -89,7 +89,11 @@ export default function WishDetailsScreen() {
             <LabeledValue label="Reminder" value={current.reminderOffset === 60 ? '1 hour before' : 'At scheduled time'} />
             <LabeledValue label="Repeat" value={current.repeatYearly ? 'Yearly' : 'Once'} />
             <Text style={[textStyles.body, styles.body, { color: theme.colors.label }]}>{current.body}</Text>
-            {current.lastError ? <ErrorText>{current.lastError}</ErrorText> : null}
+            {current.status === 'EXPIRED' ? (
+              <ErrorText>This wish expired 24 hours after its scheduled send time because delivery was not confirmed. Create a new wish to send it.</ErrorText>
+            ) : current.lastError ? (
+              <ErrorText>{current.lastError}</ErrorText>
+            ) : null}
           </MomentCard>
         </View>
         {planEditable(current) ? (

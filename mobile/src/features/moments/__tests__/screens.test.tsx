@@ -1046,6 +1046,18 @@ describe('Wish details', () => {
     ).toBeTruthy();
   });
 
+  // ImportantMomentsView.swift:544-546: an expired wish always explains itself the same way; any other
+  // status shows the plan's own last error.
+  it('explains an expired wish with Swift\'s fixed text rather than its last error', async () => {
+    load([moment({ drafts: [draft({ plans: [plan({ id: 'p1', status: 'EXPIRED', lastError: 'Messages opened; delivery not confirmed.' })] })] })]);
+    mockParams = { planId: 'p1' };
+    await render(<WishDetails />);
+    expect(
+      screen.getByText('This wish expired 24 hours after its scheduled send time because delivery was not confirmed. Create a new wish to send it.'),
+    ).toBeTruthy();
+    expect(screen.queryByText('Messages opened; delivery not confirmed.')).toBeNull();
+  });
+
   it('keeps "Review the delivery status below." for a copy wish awaiting you', async () => {
     load([moment({ drafts: [draft({ plans: [plan({ id: 'p1', channel: 'copy' })] })] })]);
     mockParams = { planId: 'p1' };
