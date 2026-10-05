@@ -50,13 +50,13 @@ describe('redirectSystemPath (+native-intent)', () => {
   it('lands on the flow’s own screen when no session is open (the app was restarted)', () => {
     expect(redirectSystemPath({ path: CALENDAR_OK, initial: true })).toBe('/account/settings');
     expect(takeOAuthCallback('calendar')).toBe(CALENDAR_OK);
-    expect(redirectSystemPath({ path: EMAIL_OK, initial: false })).toBe('/moments/settings');
+    expect(redirectSystemPath({ path: EMAIL_OK, initial: false })).toBe('/wellness/moments/settings');
     expect(takeOAuthCallback('moments-email')).toBe(EMAIL_OK);
   });
 
   it('a calendar session does not swallow the Gmail callback', () => {
     const end = beginOAuthSession('calendar');
-    expect(redirectOAuthCallback(EMAIL_OK)).toBe('/moments/settings');
+    expect(redirectOAuthCallback(EMAIL_OK)).toBe('/wellness/moments/settings');
     end();
   });
 });

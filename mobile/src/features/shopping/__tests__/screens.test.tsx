@@ -41,8 +41,8 @@ import { shoppingApi } from '../../../api/shopping';
 import { VOICE_MESSAGES } from '../voice';
 import { CONSENT_KEY, useTranscriptionConsent } from '../device';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import MyLists from '../../../../app/(tabs)/(today)/shopping/index';
-import Detail from '../../../../app/(tabs)/(today)/shopping/[id]';
+import MyLists from '../../../../app/wellness/shopping/index';
+import Detail from '../../../../app/wellness/shopping/[id]';
 
 const mockedCrypto = Crypto as unknown as Record<string, jest.Mock>;
 
@@ -84,7 +84,7 @@ describe('My Lists', () => {
     expect(screen.getByText('2 items')).toBeTruthy();
     expect(screen.getByText('1 item · Completed')).toBeTruthy();
     await fireEvent.press(screen.getByTestId('shopping-list-l2'));
-    expect(mockPush).toHaveBeenCalledWith({ pathname: '/shopping/[id]', params: { id: 'l2' } });
+    expect(mockPush).toHaveBeenCalledWith({ pathname: '/wellness/shopping/[id]', params: { id: 'l2' } });
   });
 
   it('shows the empty state that had no capture', async () => {
@@ -106,7 +106,7 @@ describe('My Lists', () => {
     await fireEvent.changeText(screen.getByTestId('shopping-list-name'), 'Weekly Shopping List');
     await fireEvent.press(screen.getByTestId('shopping-use-last'));
     await fireEvent.press(screen.getByTestId('shopping-create'));
-    await waitFor(() => expect(mockPush).toHaveBeenCalledWith({ pathname: '/shopping/[id]', params: { id: 'new' } }));
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith({ pathname: '/wellness/shopping/[id]', params: { id: 'new' } }));
     const envelope = mockPost.mock.calls[0][0];
     expect(envelope.operation).toBe('create');
     expect(envelope.id).toBeUndefined();

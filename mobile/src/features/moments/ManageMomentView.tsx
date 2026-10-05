@@ -820,7 +820,7 @@ export function ManageMomentView({ group, onDone }: { group: MomentDisplayGroup;
               {!ready ? (
                 <>
                   <Text style={[caption, { color: theme.colors.label }]}>Automatic email needs a connected account and backend scheduler.</Text>
-                  <Pressable accessibilityRole="button" onPress={() => router.push('/moments/settings')} testID="festival-connect-email">
+                  <Pressable accessibilityRole="button" onPress={() => router.push('/wellness/moments/settings')} testID="festival-connect-email">
                     <Text style={[textStyles.body, { color: theme.colors.link }]}>Connect / Reconnect email</Text>
                   </Pressable>
                 </>
@@ -839,7 +839,7 @@ export function ManageMomentView({ group, onDone }: { group: MomentDisplayGroup;
               {dirty ? <MomentPrimary title="Save Changes" onPress={() => save()} testID="festival-schedule-save" /> : null}
               <MomentPrimary title="Schedule Wish" onPress={scheduleWish} disabled={state.generatingImage} testID="festival-schedule" />
               {planLinks.map((plan) => (
-                <Pressable key={plan.id} accessibilityRole="button" onPress={() => router.push({ pathname: '/moments/wish', params: { planId: plan.id } })} testID={`festival-plan-${plan.id}`}>
+                <Pressable key={plan.id} accessibilityRole="button" onPress={() => router.push({ pathname: '/wellness/moments/wish', params: { planId: plan.id } })} testID={`festival-plan-${plan.id}`}>
                   <Text style={[textStyles.body, { color: theme.colors.link }]}>{`${planStatusLabel(plan)} · ${capitalized(plan.channel)}`}</Text>
                 </Pressable>
               ))}
@@ -872,7 +872,7 @@ export function ManageMomentView({ group, onDone }: { group: MomentDisplayGroup;
             title: type === 'festival' ? 'Festival settings' : 'Moment settings',
             onPress: () => {
               Keyboard.dismiss();
-              router.push('/moments/settings');
+              router.push('/wellness/moments/settings');
             },
             testID: 'festival-settings-menu',
           },

@@ -63,8 +63,8 @@ those. Everything else is worth reporting.
    five-day forecast.
 8. The greeting line and today's date read the same as the iPhone's.
 9. The range pills (Today / 5 days / All). Switch between them and compare the counts.
-10. **Quick Access**: Weekly / Moments / Shopping. Tap **Weekly** → progress, focus time,
-    accomplishments. **Moments** opens Important Moments. (Shopping opens a title-only placeholder until Run C.)
+10. **Quick Access**: the title and one gradient chart button. Tap it → Weekly Summary: progress, focus
+    time, accomplishments. There are no Moments or Shopping tiles (Phase 12): those open from Wellness.
 11. From Weekly Summary, **Plan next week with Nexdo AI →** opens Ask with the prompt filled in, not
     sent.
 12. **Needs attention**, if your account has anything overdue or conflicting: one row, then a
@@ -182,8 +182,9 @@ now>".
 ### Part 13 — Important Moments (16 steps)
 
 Added in Phase 11 Run B. **Needs a new development or preview build** — it adds three native modules
-(calendar, clipboard, sharing). The way in is the **Moments** tile in Today's Quick Access row, or a
-Moments reminder notification.
+(calendar, clipboard, sharing). The way in is the centre **Wellness** button in the tab bar →
+**Moments** → **Got it!**, or a Moments reminder notification. Back from Important Moments returns to the
+Wellness menu, and there is no tab bar inside it (Phase 12).
 
 Use a test moment named `Parity …`, as the iPhone captures did. Never confirm **Delete all** on real data.
 
@@ -231,8 +232,8 @@ Use a test moment named `Parity …`, as the iPhone captures did. Never confirm 
 ### Part 14 — Shopping Lists (16 steps)
 
 Added in Phase 11 Run C. Needs the same new build as Part 13 (it also re-enables the camera
-permission). The way in is the **Shopping** tile in Today's Quick Access row; its status line ("N items
-· Fri") should match what the lists show.
+permission). The way in is the centre **Wellness** button → **Shopping List** →
+**Got it!**; Back from My Lists returns to the Wellness menu (Phase 12). Today no longer has a Shopping tile.
 Use a test list named `Parity …`.
 
 95. Today → **Shopping** → **My Lists**: **Create New List**, then **Recent Lists** with each list's
@@ -419,8 +420,8 @@ Run on the phone with the iPhone next to it, same account. Automated coverage is
 | # | Check | Expect | Automated |
 | --- | --- | --- | --- |
 | A1.1 | Today, top to bottom | Quick Access, "Your day, in focus", Action Needed (if due), protected time (if proposed), Focus next, Needs attention row. No Weekly Summary card, no Daily Briefing, no "What should I do now?" | `today-screen`, `today-actions` |
-| A1.2 | Quick Access statuses | "N upcoming" and "N items · Fri" match the iPhone; airplane mode + reopen → Shopping reads "View lists" | `today-screen`, `lib/todayQuickAccess` |
-| A1.3 | Moments / Shopping tiles | Moments opens Important Moments; Shopping opens the title-only "My Lists" placeholder | `today-screen` |
+| A1.2 | Quick Access statuses | **Superseded in Phase 12**: the tiles and their statuses are gone (TodayQuickAccess.swift:3-18) | — |
+| A1.3 | Moments / Shopping tiles | **Superseded in Phase 12**: no tiles; Moments and Shopping open from Wellness. Today shows only the Weekly Summary button | `today-screen` |
 | A1.4 | Summary line | "X Tasks · Y Appointments · Z Moments"; the total includes today's moments; 3/5 days shows 0 Moments | `today-screen`, `lib/todayQuickAccess` |
 | A1.5 | Focus next | With a suggestion: title, "N min · Fits your free time", Start focus, Other options; "…" → Other options / Dismiss suggestion. Without: "Find my next task" | `voice-screens` |
 | A1.6 | Attention row | "N overdue tasks · N other" and the count badge; tap → half-height sheet, drag to full | `today-screen`, `attention-sheet` |

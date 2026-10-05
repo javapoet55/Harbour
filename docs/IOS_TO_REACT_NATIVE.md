@@ -2117,6 +2117,175 @@ JavaScript), and the five bundled illustrations are downscaled to 256 px (7.2 MB
 Phase 12 part 1 runs on `rn-phase-12`: the Windows machine traces the server and builds the plumbing (no
 screens) while the Mac runs the Swift capture pass. Subsections are added by whichever machine owns them.
 
+### Reference pass (Mac)
+
+The Mac ran the capture pass; it changed **no React Native code**. It covers every iPhone screen that is new
+or changed in `git diff 8c36d98 HEAD -- ios/` (73 commits on `ios/`; HEAD `dcb8310` on `rn-phase-12`).
+It follows the Phase 11 method: each view was traced from `RootView` to check it is mounted, then
+captured from a Debug build of the Swift app against `https://app-dev.nexdoapp.com`. The captures, how
+they were taken, and the test data are indexed in `mobile/docs/reference/README.md`, "Phase 12".
+
+**Totals: 180 captures, 48 screens (27 new, 21 changed), 9 unmounted entries** (5 that are new since
+`8c36d98`, plus 4 carried over from Phase 11). Line numbers below are as
+of `dcb8310`; paths are relative to `ios/App/` unless they start with `Sources/` or `src/`.
+
+### The navigation change behind most of this
+
+The tab bar is now **Today | Tasks | [Wellness] | Ask AI | Calendar** (`RootView.swift:142-224`). The
+centre button (`:175-181`) opens `WellnessChooserView` as a `.fullScreenCover` (`:212-218`). Ask AI is
+also a `.fullScreenCover` (`:162-168`), not a pushed tab. Today's Quick Access row is now just a
+**Weekly Summary** button (`TodayQuickAccess.swift:3-18`): the Moments and Shopping tiles are gone,
+so **Moments and Shopping can now only be reached through Wellness**. Every Wellness module card
+first shows a module guide ("How It Works", **Got it!** / **Back to Home**) and only then the module
+(`WellnessChooserView.swift:40-56`, `WellnessModuleGuide.swift:63-101`).
+
+RN shape (settled in the Phase 12 prep): one `app/wellness/` stack of full-screen covers holds the
+chooser, the guides, Pomodoro and the Calorie Tracker, and since `3f97b6c` also Moments
+(`app/wellness/moments/`) and Shopping (`app/wellness/shopping/`), pushed inside the cover. "Got it!"
+replaces the guide with the module, so Back returns to the chooser, and neither the tab bar nor the
+chooser's bar shows inside a module (`f2f2fec`). Today's Quick Access is the single Weekly Summary
+button (`e42021c`).
+
+The **RN route** column gives the final location: the file where the screen lives, or where it will
+live, marked *(to build)*. Rows marked *(Run A)* are the Mac's proposal for routes that Windows' Run A
+(`app/account`, `app/ask`, `app/calendar`) is deciding now.
+
+### Screen inventory
+
+Tick the box when the RN screen lands, with the commit that built it. Ticked rows were built by Windows
+Runs C and D (see those subsections below); their actual routes differ from the proposed ones, so the
+tick says where each landed. **New** screens did not exist at `8c36d98`; **changed**
+screens are listed again under "Changed screens".
+
+| Built | Screen | Swift file (`body`) | How reached | Endpoints | RN route | Captures |
+| --- | --- | --- | --- | --- | --- | --- |
+| [x] `4462549` (`WellnessTabButton.tsx`) | Tab bar Wellness button — **changed** | `RootView.swift:175-181` (in `NexdoTabShell`, `:142-224`) | Every tab screen | none | `app/(tabs)/_layout.tsx`, `src/components/WellnessTabButton.tsx` | `today-v2`, `tasks-v2-empty` (tab bar with the centre button) |
+| [x] `4462549` as `app/wellness/index.tsx` | Wellness chooser — new | `WellnessChooserView.swift:5` (`:14-47`) | Tab bar → centre Wellness button (`.fullScreenCover`) | none | `app/wellness/index.tsx` | `wellness-chooser`, `-scrolled`, `-dark` |
+| [x] `4462549` as `app/wellness/guide/[kind].tsx` | Module guide ×4 — new | `WellnessModuleGuide.swift:4` (`:63-101`), entrance `:132` | Wellness → any module card | none | `app/wellness/guide/[kind].tsx` | `module-guide-shopping`, `-scrolled`, `-dark`, `module-guide-calories`, `-pomodoro`, `-moments` |
+| [x] `001fce5` as `PomodoroDashboard.tsx` in `app/wellness/pomodoro.tsx`; plumbing `98041ff` | Pomodoro dashboard (Overview / Sessions / Insights) — new | `PomodoroDashboard.swift:4` (`:24-66`) | Wellness → Pomodoro Focus → Got it! | `GET /api/pomodoro` | `app/wellness/pomodoro.tsx` (`PomodoroDashboard`) | `pomodoro-dashboard-empty`, `pomodoro-dashboard`, `pomodoro-sessions-empty`, `pomodoro-sessions`, `pomodoro-insights-empty`, `pomodoro-insights`, `pomodoro-options-menu`, `pomodoro-about-metrics` |
+| [x] `001fce5` as `app/wellness/pomodoro.tsx` | Pomodoro timer: setup, focus, paused, break, complete, stopped — new | `PomodoroView.swift:3` (`:28-75`) | Dashboard → **Start Focus Session** | `PUT /api/pomodoro` | `app/wellness/pomodoro.tsx` | `pomodoro-setup`, `-setup-filled`, `-focus-running`, `-focus-paused`, `-stop-confirm`, `-stopped`, `-break`, `-complete` |
+| [x] `001fce5` (`PomodoroView.tsx` history `Modal`; session details in `PomodoroDashboard.tsx`) | Pomodoro history sheet and session detail — new | `PomodoroView.swift:70` → `PomodoroDashboard` (`initialTab: .sessions`); detail sheet `PomodoroDashboard.swift:56` | Timer → clock icon; a session row | `GET /api/pomodoro` | `app/wellness/pomodoro.tsx` (history `Modal`) | `pomodoro-history-sheet`, `pomodoro-session-detail` |
+| [x] `a73947f` in `app/wellness/calories.tsx`; plumbing `0fd4101` | Calorie Tracker setup: Create Agent → time → goals → Review & Confirm — new | `CalorieTrackerView.swift:250` (`:324-363`, pages enum `:322`) | Wellness → Calorie Tracker → Got it! (skipped when the server says `enabled`, `:368`) | `GET/PUT /api/nutrition/settings`, `POST /api/nutrition/phone` | `app/wellness/calories.tsx` (one screen, Swift's pages) | `calorie-create-agent`, `-scrolled`, `calorie-setup-time`, `-scrolled`, `calorie-setup-goals`, `-scrolled`, `calorie-setup-confirm`, `-scrolled` |
+| [x] `a73947f` in `app/wellness/calories.tsx`; plumbing `0fd4101` | Nutrition dashboard (Today / Week / Month) — new | `CalorieTrackerView.swift` (dashboard page) | After setup, or directly when enabled | `GET /api/nutrition/log`, `/summary`, `/insight` | `app/wellness/calories.tsx` | `calorie-dashboard-empty`, `-empty-scrolled`, `-week-empty`, `-month-empty`, `calorie-dashboard`, `-week`, `-month` |
+| [x] `a73947f` in `app/wellness/calories.tsx`; plumbing `0fd4101` | Food Log and Add Food — new | `CalorieTrackerView.swift` (log page; editor sheet `:357`) | Dashboard → **View Food Log** → **Add Food** | `POST`/`PATCH`/`DELETE /api/nutrition/log` | `app/wellness/calories.tsx` (food editor sheet) | `calorie-food-log-empty`, `calorie-food-log`, `calorie-add-food`, `-filled` |
+| [x] `a73947f` in `app/wellness/calories.tsx`; plumbing `0fd4101` | Nutrition Insights and Recommendations — new | `CalorieTrackerView.swift` (insights page) | Dashboard → **View Insights** | `GET`/`POST /api/nutrition/insight` | `app/wellness/calories.tsx` | `calorie-insights`, `-scrolled`, `calorie-recommendations` |
+| [ ] | Ask AI landing, four cards — **changed** | `AskAILandingView.swift:5` (`:24-86`) | Tab bar → Ask AI | `POST /api/assistant` | `app/ask/index.tsx` | `ask-ai-cards`, `-dark`, `-loading` |
+| [ ] | Daily Brief / Top 3 / Due & Risks / Find Time — new | `DailyBriefView.swift:4` (`:37-113`), shown by `AskNexdoView.swift:259-276` | Ask AI → any card | `POST /api/assistant` | `app/ask/brief.tsx?intent=` *(Run A)* | `daily-brief`, `-scrolled`, `brief-top3`, `brief-due-risks`, `brief-find-time` |
+| [ ] | Brief section detail — new | `BriefSectionDetailView.swift:3` (`:29-81`) | Brief → a section card (`.fullScreenCover`, `DailyBriefView.swift:106`) | `PATCH /api/tasks/{id}` (complete) | `app/ask/brief-section.tsx` *(Run A)* | `brief-section-detail`, `-menu`, `-risks`, `-next-move`, `-tasks`, `-tasks-scrolled` |
+| [ ] | Help — new | `HelpView.swift:3` (`:11-95`), content `Sources/NexdoCore/HelpTopics.swift` | Avatar → **Help** (`ProfileView.swift:65`) | none | `app/account/help.tsx` *(Run A)* | `help`, `help-topic-expanded`, `help-category-tasks`, `help-search-results`, `help-search-empty`, `help-bottom` |
+| [ ] | Feedback — new | `FeedbackView.swift:3` (`:18-63`) | Avatar → **Feedback**, or Help → **Still need help?** | `POST /api/feedback` | `app/account/feedback.tsx` *(Run A)* | `feedback-empty`, `-dark`, `feedback-filled`, `feedback-thanks` |
+| [ ] | Change password — new | `ProfileView.swift:150` (`ChangePasswordView`, `:161-188`) | Avatar → **Change password** | `POST /api/auth/change-password` | `app/account/change-password.tsx` *(Run A)* | `change-password`, `-error-mismatch`, `-confirm` |
+| [ ] | Account ("My Page") — **changed** | `ProfileView.swift:48` (`:53-85`) | Avatar on Today or Tasks | `GET /api/voice/usage` | `app/account/index.tsx` | `account-v2`, `-dark` |
+| [ ] | Event Details — new | `CalendarEventDetailsView.swift:3` (`:24-107`) | Calendar → an **event** row (`.sheet`, `CalendarView.swift:177-181`) | `GET`/`PATCH`/`DELETE /api/calendar/events/{id}`, `POST …/{id}/task` | `app/calendar/event/[id].tsx` *(Run A)* | `event-details`, `-dark`, `-scrolled`, `-menu`, `-completed`, `-added-to-tasks`, `event-delete-confirm` |
+| [ ] | Edit Event — new | `CalendarEventDetailsView.swift:168` (`:179-210`) | Event Details → **Edit** (Nexdo events only, `:20`) | `PATCH /api/calendar/events/{id}` | `app/calendar/event/[id]/edit.tsx` *(Run A)* | `event-edit` |
+| [ ] | Calendar tab — **changed** (collapsed empty days, review conflicts) | `CalendarView.swift:3` (`:73-183`) | Tab bar → Calendar | unchanged | `app/(tabs)/calendar.tsx` | `calendar-v2`, `-collapsed-days` |
+| [ ] | Tasks tab with search and "All time" history — **changed** | `RootView.swift:1663` (`TasksView`, `:1685-1771`) | Tab bar → Tasks → magnifier (`:1791`) | `GET /api/tasks` (filtered on the device, `Sources/NexdoCore/TaskQuery.swift`) | `app/(tabs)/(tasks)/tasks.tsx` | `tasks-v2-empty`, `tasks-search`, `-results`, `-empty`, `-keyboard` |
+| [ ] | Task Details — **changed** (Nexdo Action card, focus session button) | `TaskDetailsView.swift:3` (`:33-115`) | Tap a task | unchanged | `app/task/[id].tsx` | `task-details-v2`, `-scrolled` |
+| [ ] | Task agent: location, business results, outreach draft — new | `TaskAgentCard.swift:4` (`:59-180`), inline in Task Details (`TaskDetailsView.swift:39`) | Task Details of a task the server marks eligible (e.g. "Call electrician") | `GET`/`POST /api/tasks/{id}/agent` | component in `app/task/[id].tsx` *(to build)* | `task-agent-location`, `task-agent-results`, `-reviews`, `-services`, `-scrolled-1`, `-scrolled-2`, `task-agent-outreach-draft` |
+| [ ] | Nexdo Action contact screen — **changed** | `TaskActionView.swift:101` (`:146-305`) | Task card **Call**/**Message** pill, Today action card | on device | `app/action/[id].tsx` | `task-action-error-no-contact`, `task-action-contact-details` |
+| [ ] | Today action cards and queue — **changed** (business candidate card) | `TodayActionsView.swift:10` (`:27-85`), card `:96`, queue `:287` | Today | `GET /api/tasks/{id}/agent` | `app/(tabs)/(today)/today/index.tsx`, `app/action/queue.tsx` | `today-v2`, `-dark`, `today-action-card-contact`, `today-action-card-business`, `today-action-queue` |
+| [ ] | Important Moments with date filters (Today / Tomorrow / This Week / Later) — **changed** | `ImportantMomentsView.swift:209` (`:221-324`; default filter Today, `:216`) | Wellness → Moments → Got it! | `GET /api/moments` | `app/wellness/moments/index.tsx` | `moments-date-filter-today-empty`, `-tomorrow`, `-this-week`, `-later-scrolled`, `moments-scheduled-v2` |
+| [ ] | Manage Moments tabs (Scheduled / Need Review / Ready to Schedule) — new | `ManageFestivalView.swift:4` (`MomentsManagementEntry`, `:23-87`) | Summary card → **Manage** (`ImportantMomentsView.swift:315`) | `GET /api/moments` | `app/wellness/moments/manage-list.tsx` | `moments-manage-tabs-scheduled-empty`, `-scheduled`, `-scheduled-dark`, `-need-review`, `-ready` |
+| [ ] | Create Moment — **changed** (time zone, manual recipient) | `MomentEditor.swift` | Summary card → **Create New** | `POST /api/moments` `festivalSave` | `app/wellness/moments/editor.tsx` | `moment-create-v2`, `-filled` |
+| [ ] | Manage Moment, three tabs (Contacts / Message / Schedule) — **changed** (was four) | `ManageFestivalView.swift:89` (`:109-140`) | Card gear, a Manage row, or after Create | `POST /api/moments` `festivalSave`, `schedule` | `app/wellness/moments/manage.tsx` (`ManageMomentView`) | `moment-manage-v2-contacts`, `-message`, `-message-scrolled`, `-message-saved`, `-schedule`, `-schedule-delivery` |
+| [ ] | Connect me on the day — new | `MomentConnectCall.swift:168` (`MomentConnectSection`, `:186-207`) | Manage Moment → Schedule (inline, `ManageFestivalView.swift:237`) | `POST /api/moments` `connectStatus` / `connectPreview` / `connectSave` / `connectNow` | section in `ManageMomentView` (`app/wellness/moments/manage.tsx`) *(to build)* | `moment-connect-section` |
+| [ ] | Verify caller ID ("Show my number") — new | `MomentConnectCall.swift:306` (`:317-357`) | Connect section → **Verify my number** | `callerIdStart` / `callerIdStatus` / `callerIdRemove` | sheet in `ManageMomentView` *(to build)* | `moment-caller-id-sheet` |
+| [ ] | How it works (calling guide) — new | `MomentConnectCall.swift:381` (`:385-428`) | Connect section → **How it works** | none | sheet in `ManageMomentView` *(to build)* | `moment-calling-guide`, `-scrolled` |
+| [ ] | Review schedule — **changed** (Send Now) | `ManageFestivalView.swift:428` (`FestivalScheduleReview`, `:448-539`) | Schedule tab → **Schedule Wish** | `schedule` | sheet in `ManageMomentView` (`app/wellness/moments/manage.tsx`) | `moment-schedule-review-v2` |
+| [ ] | Send now — new | `ManageFestivalView.swift:488-536` | Review schedule → **Send Now** | `sendGreetingNow` | sheet in `ManageMomentView` *(to build)* | `moment-send-now-confirm` |
+| [ ] | Schedule confirmed — **changed** | `ManageFestivalView.swift:348` (`:362-386`) | Review → **Confirm Schedule** | — | in `ManageMomentView` (`app/wellness/moments/manage.tsx`) | `moment-schedule-success-v2` |
+| [ ] | My Lists with store logos — **changed** | `ShoppingViews.swift:78` (`:82-136`); `StoreBrandLogo.swift:11` | Wellness → Shopping List → Got it! | `GET /api/shopping`, `GET /api/shopping/store-brand` | `app/wellness/shopping/index.tsx` | `shopping-lists-v2` |
+| [ ] | New List ("Create List & Add Store") — **changed** | `ShoppingViews.swift:142` (`:153-188`) | **Create New List** | `POST /api/shopping` `create` | `NewListSheet` (`src/features/shopping/sheets.tsx`) in `app/wellness/shopping/index.tsx` | `shopping-new-list-v2` |
+| [ ] | List Settings with store — **changed** | `ShoppingViews.swift:642` (`:652-682`) | After create, or ⋯ → List settings | `save` | `ListSettingsSheet` in `app/wellness/shopping/[id].tsx` | `shopping-list-settings-store`, `-filled` |
+| [ ] | Stores Near You — new | `ShoppingViews.swift:693` (`:708-753`) | List Settings → **Add New Store** | `POST /api/shopping/stores` | `app/wellness/shopping/stores.tsx` *(to build)* | `shopping-stores-empty`, `shopping-stores-results` |
+| [ ] | Store Hours — new | `ShoppingStoreHoursView.swift:9` (`:17-35`) | List Settings → **Store Hours** | `GET /api/shopping/stores/hours` | `app/wellness/shopping/store-hours.tsx` *(to build)* | `shopping-store-hours-empty`, `shopping-store-hours` |
+| [ ] | Shopping Detail — **changed** (store header, Open Now, Schedule Email / View Offers, offer badges, camera) | `ShoppingViews.swift:206` (`:237-393`) | Tap a list | `GET /api/shopping/offers` (60 s poll), `/stores/hours` | `app/wellness/shopping/[id].tsx` | `shopping-detail-store-empty`, `shopping-detail-store`, `-offer-badges`, `-options-menu-v2` |
+| [ ] | Offers for list, item offers, offer details — new | `ShoppingOffersView.swift:27` (`:40-82`), detail `:96` (`:104-119`) | **View Offers**, or an item's offer badge | `GET`/`POST /api/shopping/offers` | `app/wellness/shopping/offers.tsx`, `app/wellness/shopping/offer/[id].tsx` *(to build)* | `shopping-offers-available`, `-matching-empty`, `-alternatives`, `-store-menu`, `-item`, `shopping-offer-detail`, `-selected` |
+| [ ] | Item Alternatives (redesigned) — **changed** | `ShoppingAlternativesView.swift:3` (`:26-91`); design `ShoppingAlternativesDesign.swift` | ★ on a food row (`ShoppingViews.swift:855`) | `POST /api/shopping` `alternatives` | `AlternativesSheet` in `app/wellness/shopping/[id].tsx` | `shopping-alternatives-v2`, `-loading`, `-scrolled`, `-why`, `-goal-picker`, `-goal-picker-selected`, `-filtered`, `-replace-confirm`, `-replaced` |
+| [ ] | Alternative Item Details — new | `ShoppingAlternativesView.swift:261` (`:293-333`) | Alternatives → an item's name or chevron | — | pushed inside `AlternativesSheet` *(to build)* | `shopping-alternative-details`, `-scrolled`, `-bottom` |
+| [ ] | Add Item with photo identification — **changed** | `ShoppingItemEditor.swift:5` (`:31-135`); consent alert `:114` | Detail → camera button, or tap an item | `POST /api/shopping/recognize` | `ItemEditorSheet` in `app/wellness/shopping/[id].tsx` | `shopping-item-editor-v2`, `-scrolled`, `shopping-photo-identify-consent`, `-loading`, `-filled` |
+| [ ] | Share List — **changed** (short link, weekly email entry) | `ShoppingViews.swift:790` (`:795-805`) | ⋯ → Share list | `share`, `revoke` | `ShareListSheet` in `app/wellness/shopping/[id].tsx` | `shopping-share-list-v2`, `-link` |
+| [ ] | Weekly email and pickup details — new | `ShoppingEmailView.swift:32` (`:55-118`) | **Schedule Email**, or Share → **Weekly email to store manager** | `GET`/`POST /api/shopping/email-schedule` | `app/wellness/shopping/email.tsx` (exists; rebuild) | `shopping-weekly-email`, `-scrolled`, `-bottom` |
+| [ ] | Shopping Recommendations — **changed** (own endpoint) | `AskNexdoView.swift` with `shoppingContext` | Detail → **AI Powered Recommendations** | `POST /api/shopping/recommendations` | `RecommendationsSheet` in `app/wellness/shopping/[id].tsx` | `shopping-recommendations-v2`, `-filled`, `-loading`, `-answer` |
+
+`account-settings-calendar-connected` is also new. It shows the connected-calendar state of Account →
+Settings that Phase 11 could not capture (§21 "Not captured"); this account has Google Calendar connected.
+
+### Changed screens
+
+What changed on screens that already had an RN port:
+
+1. **Tab bar**: the centre Wellness button; Ask AI becomes a full-screen cover.
+2. **Today**: Quick Access is one Weekly Summary button. The action cards gain a **business
+   candidate** variant ("Find a business to contact" → **Choose a business**), and the queue sheet
+   lists due actions with their overdue age.
+3. **Tasks**: search with an **All time** history range (open tasks first); the Tasks / Projects
+   pills.
+4. **Task Details**: the "Nexdo Action" card and **Start a 25-minute focus session**. Eligible
+   tasks show the task agent card above everything else.
+5. **Nexdo Action** contact screen: the "No contact selected" error and the Contact details form.
+6. **Account**: Help, Feedback and Change password rows.
+7. **Calendar**: collapsible empty days; tapping an event row opens Event Details (a task row still
+   pushes Task Details).
+8. **Ask AI**: four intent cards open a Daily-Brief-style page instead of a chat answer.
+9. **Moments**: date filter chips (default **Today**); Manage Moments tabs; Manage Moment drops to
+   three tabs (Details is folded into Schedule); Create Moment gains Time zone; Review schedule gains
+   **Send Now**; the Schedule tab gains "Connect me on the day".
+10. **Shopping**: a store per list (Stores Near You, hours, Open Now, brand logo), offers, photo
+    identification, the redesigned alternatives flow with item details and goal filters, the
+    `/s/<token>` short link, the weekly email to a store manager with pickup details, and
+    recommendations on their own endpoint.
+
+### Server endpoints
+
+Every route the app calls exists on the server (`src/app/api`). New or changed since `8c36d98`:
+
+| Feature | Method + path | Server route |
+| --- | --- | --- |
+| Pomodoro | `GET /api/pomodoro?owner=&cursor=`, `PUT /api/pomodoro` (compare-and-set on `revision`, 4 KB max) | `pomodoro/route.ts:7`, `:15` → `src/server/pomodoro/sessions.ts` |
+| Calorie Tracker | `GET`/`PUT /api/nutrition/settings` | `nutrition/settings/route.ts:6`, `:10` |
+| | `GET /api/nutrition/log?date=`, `POST /api/nutrition/log`, `PATCH`/`DELETE /api/nutrition/log/{id}` | `nutrition/log/route.ts:8`, `:15`; `log/[id]/route.ts:7`, `:11` |
+| | `GET /api/nutrition/summary?period=week\|month&date=` | `nutrition/summary/route.ts:8` |
+| | `GET`/`POST /api/nutrition/insight` | `nutrition/insight/route.ts:8`, `:16` |
+| | `POST /api/nutrition/phone` (`start` / `verify`), `POST /api/nutrition/call-now` | `nutrition/phone/route.ts:12`; `call-now/route.ts:7` (Twilio dials from the server) |
+| Food voice | `POST /api/realtime/task-session` with `scope: "food"`; `POST /api/realtime/tool` `lookup_food` | `realtime/task-session/route.ts:18-20`; `realtime/tool/route.ts:18-26` |
+| Ask AI cards, Daily Brief | `POST /api/assistant` (existing; the brief is built on the device, `Sources/NexdoCore/AssistantPresentation.swift`) | `assistant/route.ts` |
+| Shopping recommendations | `POST /api/shopping/recommendations` `{ prompt, listName, itemNames }` | `shopping/recommendations/route.ts:11` |
+| Feedback | `POST /api/feedback` `{ id, title, description, stars }` | `feedback/route.ts:8` |
+| Account security | `POST /api/auth/change-password` (ends the session) | `auth/change-password/route.ts:12` |
+| Sign-up | `GET /api/auth/signup-config`; `POST /api/auth/register` adds `turnstileToken`; login 403 carries `verificationProof`; `verify-email` now requires it | `auth/signup-config/route.ts:2`, `auth/register/route.ts:9`, `auth/login/route.ts:16`, `auth/verify-email/route.ts:12` |
+| Event Details | `GET /api/calendar/events/{id}`; `PATCH` adds `completed`; `POST /api/calendar/events/{id}/task` | `calendar/events/[id]/route.ts:68`, `:19`; `[id]/task/route.ts:5` |
+| Task agent | `GET`/`POST /api/tasks/{id}/agent` (status `NO_RESULTS`; evidence has `rating`, `reviews`; fewer than 20 Google reviews are hidden) | `tasks/[id]/agent/route.ts:9`, `:10` |
+| Connect me on the day | `POST /api/moments` ops `connectStatus`, `connectPreview`, `connectSave`, `connectNow`, `callerIdStart`, `callerIdStatus`, `callerIdRemove` | `moments/route.ts:37-43` → `src/server/moment-calls/` |
+| Moments | ops `sendGreetingNow` (new), `festivalSave` (adds `prepareHours`, `type`), `connectEmailConfirm` (new); `GET` adds `emailSubject` | `moments/route.ts:24`, `:31`, `:45` |
+| Shopping | `POST /api/shopping` `alternatives` (adds `facts`, `whyThisSwap`, `originalFacts`; **no local fallback any more**); `create`/`save` add store fields and item `brand`, `barcode`, `favorite` | `shopping/route.ts:10` |
+| | `POST /api/shopping/recognize` (photo, server-side vision; 422 when unsure) | `shopping/recognize/route.ts:15` |
+| | `GET /api/shopping/offers?listId=`, `POST /api/shopping/offers` | `shopping/offers/route.ts:8`, `:9` |
+| | `POST /api/shopping/stores`, `GET /api/shopping/stores/hours?placeId=` (Google Places) | `shopping/stores/route.ts:8`; `stores/hours/route.ts:7` |
+| | `GET /api/shopping/store-brand?listId=` (logos from `cdn.brandfetch.io` only) | `shopping/store-brand/route.ts:7` |
+| | `GET`/`POST /api/shopping/email-schedule` (`save` / `pause` / `connect`) | `shopping/email-schedule/route.ts:10`, `:11` |
+| Weather | none: the app calls `api.open-meteo.com` directly with rounded device coordinates (`Sources/NexdoCore/WeatherClient.swift:15`) | — |
+
+**Device APIs an RN port needs:** local notifications with actions (Pomodoro, task actions), keep-awake
+(Pomodoro), the camera and photo library (photo identification), device location (Stores Near You,
+weather), Contacts, the Messages and Mail composers, the share sheet, `ASWebAuthenticationSession`
+(Gmail connect, sign-up challenge), and opening the Calendar app (`calshow:`). Charts are Swift
+Charts. Connect-me calls are placed by Twilio on the server; the app does not use CallKit.
+
+### Unmounted views (not to be built)
+
+| Swift type | Where | Why it cannot be reached |
+| --- | --- | --- |
+| `WeatherForecastView` (all its changes) | `WeatherForecastView.swift:3` | Only created by `TodayTopBar` when `showsWeather`; both callers pass `false` (`RootView.swift:1154`, `:1692`) |
+| `WellnessInsightsDestination`, and Account through Wellness | `WellnessChooserView.swift:152`, `:59` | The `.insights` / `.profile` cases exist, but `destination` is only set by `module()` (`:83`) for the four module cards |
+| `AskShoppingDestination` and the Moments sheet in Ask AI | `AskAILandingView.swift:116`, `:78-85` | `select()` cases 5–7 (`:108-110`) cannot happen: `cards` has four entries (`:18-23`) |
+| `NutritionPackArtwork` | `ShoppingAlternativesDesign.swift:148` | Never instantiated |
+| TodayView `adding` sheet | `RootView.swift:1291` | `add: nil` (`:1156`), so nothing sets it |
+| TodayView `showingOverdueTasks` / `selectedScheduleCheck` destinations, `attentionDetails` | `RootView.swift:1304-1309`, `:1328` | The states are never assigned; `attentionDetails` is never referenced (already dead in Phase 11) |
+| `ShoppingTodayCard` → Recurring Tasks hub, New Recurring Task | `ShoppingViews.swift:3`, `:38` | Never instantiated (dead since Phase 11) |
+| `ImportantMomentsTodayCard` | `ImportantMomentsView.swift:17` | Never instantiated (dead since Phase 11) |
+| Design-preview harnesses (`-pomodoro-design-preview`, `-calorie-design-preview`, `-wellness-design-preview`, …) | `RootView.swift:19-79` | `#if DEBUG` launch arguments only |
+
 ### Server facts
 
 Traced from the `route.ts` files and the `src/server` modules they call, read against the Swift callers.
@@ -2414,70 +2583,6 @@ needed filter and `emailSubject` already matched. **All 10 fixed in Windows part
 - [x] **Tests.** "I found it in Sent mail" and Retry are covered (`2082895`); they passed before too, the
   behaviour already matched. The comma greeting is covered by `b010d7a`'s test.
 
-### For the team
-
-- **Swift and the server disagree on the greeting after a dropped name.** Swift trims spaces only
-  (`MomentGreeting.swift:50`, `.whitespaces`); the server's `trimStart()` also removes a line break
-  (`src/server/moments/wish-message.ts`). "Happy Birthday, Visakan!\nHave fun" for Sam is "Happy Birthday,
-  Sam! \nHave fun" on the phones and "Happy Birthday, Sam! Have fun" on the server, which rewrites pending
-  plans, so the preview and the sent text can differ by that line break. RN follows Swift; one side should
-  change.
-- **Pomodoro session names: Swift caps characters, the server caps UTF-16 units.** `PomodoroSession.init`
-  and the name field keep `prefix(120)` characters (`Pomodoro.swift:36`, `PomodoroView.swift:103`), but
-  `pomodoroSchema` allows `name` up to 120 UTF-16 units (`src/server/pomodoro/sessions.ts:8`). A name of
-  emoji or other astral characters passes on the phone and is refused with 400, so the session never
-  syncs. RN caps at 120 UTF-16 units. Swift should match the server, or the server count characters.
-- **A Pomodoro alert tapped while the Wellness chooser is open opens a second Pomodoro.** Swift's
-  `openPomodoroNotification()` waits for the chooser to close (`RootView.swift:229`) and then presents
-  `showingPomodoro` even if the user had already gone into Pomodoro from the chooser. RN treats an open
-  Pomodoro as handled.
-- **Unreachable Wellness destinations.** `WellnessChooserView` keeps `insights` (Weekly Summary) and
-  `profile` (Account) destinations that no card or button opens (`WellnessChooserView.swift:10`, `:57-59`).
-  Not built in RN; delete them in Swift or add their cards.
-
-- **The phone check always says "call", whatever the server does.** The confirm page reads "First
-  we'll call it once and read out a 6-digit code.", the button "Call me with a code", and the notice
-  "Calling … now. Answer to hear your 6-digit code." (`CalorieTrackerView.swift:590-595`). The server sends
-  the code by voice or SMS (`NUTRITION_PHONE_CODE_CHANNEL`, returned as `channel`), and for a number that is
-  already verified answers `sent: false, alreadyVerified: true` without calling
-  (`src/server/nutrition/settings.ts:90`, `:113`); Swift ignores both, shows "Calling…" and the code field.
-  RN copies Swift.
-- **"Call me now to try it" always says "Calling you now."** `callNow()` decodes `CallStarted` and drops
-  its `status` (`CalorieTrackerView.swift:164-167`, `:643-644`); the server answers 202 with `cancelled`
-  when calls are off, or `failed` / `not_claimed`. RN copies Swift.
-- **Editing a logged food wipes its nutrients.** The editor's Save always sends `kcal`, even when only the
-  name or meal changed (`CalorieTrackerView.swift:905`), and the server treats any `kcal` as a manual
-  correction: source MANUAL and every macro and micronutrient set to null (`src/server/nutrition/log.ts:91`).
-  Renaming "Salmon" to "Grilled salmon" loses its protein, fat and vitamin D. Swift should send `kcal` only
-  when it changed, or the server keep nutrients when the value is the same.
-- **"This week" means the last seven days in the insight.** The insight's copy says "this week" ("Log N more
-  days this week…", "… is running low this week", `src/server/nutrition/insights.ts:37`, `:65`) but it is
-  computed over the 7 days ending on the date (`:31`, `:86`), while the summary and the Insights page's
-  "This Week" are the Monday–Sunday week. On a Wednesday the two disagree.
-- **The Calorie Tracker guide promises features the tracker does not have.** "Quickly add what you eat by
-  search, scan, or voice" and "Choose a goal like maintain, lose, or gain" (`WellnessModuleGuide.swift:32-33`):
-  there is no food search, barcode scan or in-app voice entry, and no maintain / lose / gain choice — only a
-  daily calorie number. Copied unchanged.
-
-- **Account: only Change password keeps the card.** In `ProfileView` the `.padding(8).profileCard()` now
-  applies to the Change password row alone (`ProfileView.swift:68-69`); Help, Feedback and "Edit profile and
-  settings" sit bare on the background, which looks like a lost `VStack` from `19eb8e4`. RN copies Swift.
-- **White on white in dark mode, three times.** Help's cards (`HelpView.swift:121`),
-  the Ask AI landing (`AskAILandingView.swift:71`, `:77`: a backdrop ending in `.white` and a `.white`
-  field) and Event Details' cards (`CalendarEventDetailsView.swift:163`) are fixed white under `nexdoInk`,
-  which is white in dark mode. RN keeps the landing light and uses the theme surface for the other two.
-- **A brief section page can go blank with no way out.** Completing the last task named on "Top Priorities"
-  from its own page removes that section from `visibleSections`, and the `fullScreenCover` then renders
-  nothing (`DailyBriefView.swift:106-111`) — a white full-screen cover with no back button. RN keeps the
-  title and says "Nothing to report here today."
-- **"Read aloud" on a brief page can fail silently.** With OpenAI sharing off, `speakAnswer` sets
-  `voiceError` (`AskNexdoView.swift:531`), but the message lives in `composer`, which the brief hides
-  (`:333`). Nothing happens on screen. RN copies Swift.
-- **Unreachable Ask code.** Nothing mounts `NexdoAISuggestionCard`, `entryCards` or "Free form Text"
-  (`showingText`, `AskNexdoView.swift:341`) any more, `AskAILandingView.select` keeps Shopping, Moments and
-  typing cases for cards 5-7 when there are four cards, and the `planTomorrow` intent has no entry. Not
-  built in RN; delete them in Swift or bring them back.
-
 ### Windows part 2: keep-awake, time entry, Pomodoro sound
 
 Full suite after part 2: 126 suites, 1,940 tests passing (28 new); `tsc --noEmit` and eslint clean.
@@ -2610,5 +2715,138 @@ gone, as nothing in Swift opens them.
 wide); 10 files, 245 KB.
 
 **Native modules and permissions: none new.** Open in Calendar on Android is a `content://` view intent and
-needs no permission. Deviations are in `mobile/docs/android-polish.md` §23; the Swift issues found are under
-"For the team" above.
+needs no permission. Deviations are in `mobile/docs/android-polish.md` §24; the Swift issues found are under
+"For the team" below.
+
+### For the team
+
+Swift and server issues found by both machines, reported here and not fixed. The Windows items come
+first, unchanged; the Mac reference pass’s items follow, with their captures.
+
+- **Swift and the server disagree on the greeting after a dropped name.** Swift trims spaces only
+  (`MomentGreeting.swift:50`, `.whitespaces`); the server's `trimStart()` also removes a line break
+  (`src/server/moments/wish-message.ts`). "Happy Birthday, Visakan!\nHave fun" for Sam is "Happy Birthday,
+  Sam! \nHave fun" on the phones and "Happy Birthday, Sam! Have fun" on the server, which rewrites pending
+  plans, so the preview and the sent text can differ by that line break. RN follows Swift; one side should
+  change.
+- **Pomodoro session names: Swift caps characters, the server caps UTF-16 units.** `PomodoroSession.init`
+  and the name field keep `prefix(120)` characters (`Pomodoro.swift:36`, `PomodoroView.swift:103`), but
+  `pomodoroSchema` allows `name` up to 120 UTF-16 units (`src/server/pomodoro/sessions.ts:8`). A name of
+  emoji or other astral characters passes on the phone and is refused with 400, so the session never
+  syncs. RN caps at 120 UTF-16 units. Swift should match the server, or the server count characters.
+- **A Pomodoro alert tapped while the Wellness chooser is open opens a second Pomodoro.** Swift's
+  `openPomodoroNotification()` waits for the chooser to close (`RootView.swift:229`) and then presents
+  `showingPomodoro` even if the user had already gone into Pomodoro from the chooser. RN treats an open
+  Pomodoro as handled.
+- **Unreachable Wellness destinations.** `WellnessChooserView` keeps `insights` (Weekly Summary) and
+  `profile` (Account) destinations that no card or button opens (`WellnessChooserView.swift:10`, `:57-59`).
+  Not built in RN; delete them in Swift or add their cards.
+
+- **The phone check always says "call", whatever the server does.** The confirm page reads "First
+  we'll call it once and read out a 6-digit code.", the button "Call me with a code", and the notice
+  "Calling … now. Answer to hear your 6-digit code." (`CalorieTrackerView.swift:590-595`). The server sends
+  the code by voice or SMS (`NUTRITION_PHONE_CODE_CHANNEL`, returned as `channel`), and for a number that is
+  already verified answers `sent: false, alreadyVerified: true` without calling
+  (`src/server/nutrition/settings.ts:90`, `:113`); Swift ignores both, shows "Calling…" and the code field.
+  RN copies Swift.
+- **"Call me now to try it" always says "Calling you now."** `callNow()` decodes `CallStarted` and drops
+  its `status` (`CalorieTrackerView.swift:164-167`, `:643-644`); the server answers 202 with `cancelled`
+  when calls are off, or `failed` / `not_claimed`. RN copies Swift.
+- **Editing a logged food wipes its nutrients.** The editor's Save always sends `kcal`, even when only the
+  name or meal changed (`CalorieTrackerView.swift:905`), and the server treats any `kcal` as a manual
+  correction: source MANUAL and every macro and micronutrient set to null (`src/server/nutrition/log.ts:91`).
+  Renaming "Salmon" to "Grilled salmon" loses its protein, fat and vitamin D. Swift should send `kcal` only
+  when it changed, or the server keep nutrients when the value is the same.
+- **"This week" means the last seven days in the insight.** The insight's copy says "this week" ("Log N more
+  days this week…", "… is running low this week", `src/server/nutrition/insights.ts:37`, `:65`) but it is
+  computed over the 7 days ending on the date (`:31`, `:86`), while the summary and the Insights page's
+  "This Week" are the Monday–Sunday week. On a Wednesday the two disagree.
+- **The Calorie Tracker guide promises features the tracker does not have.** "Quickly add what you eat by
+  search, scan, or voice" and "Choose a goal like maintain, lose, or gain" (`WellnessModuleGuide.swift:32-33`):
+  there is no food search, barcode scan or in-app voice entry, and no maintain / lose / gain choice — only a
+  daily calorie number. Copied unchanged.
+
+- **Account: only Change password keeps the card.** In `ProfileView` the `.padding(8).profileCard()` now
+  applies to the Change password row alone (`ProfileView.swift:68-69`); Help, Feedback and "Edit profile and
+  settings" sit bare on the background, which looks like a lost `VStack` from `19eb8e4`. RN copies Swift.
+- **White on white in dark mode, three times.** Help's cards (`HelpView.swift:121`),
+  the Ask AI landing (`AskAILandingView.swift:71`, `:77`: a backdrop ending in `.white` and a `.white`
+  field) and Event Details' cards (`CalendarEventDetailsView.swift:163`) are fixed white under `nexdoInk`,
+  which is white in dark mode. RN keeps the landing light and uses the theme surface for the other two.
+- **A brief section page can go blank with no way out.** Completing the last task named on "Top Priorities"
+  from its own page removes that section from `visibleSections`, and the `fullScreenCover` then renders
+  nothing (`DailyBriefView.swift:106-111`) — a white full-screen cover with no back button. RN keeps the
+  title and says "Nothing to report here today."
+- **"Read aloud" on a brief page can fail silently.** With OpenAI sharing off, `speakAnswer` sets
+  `voiceError` (`AskNexdoView.swift:531`), but the message lives in `composer`, which the brief hides
+  (`:333`). Nothing happens on screen. RN copies Swift.
+- **Unreachable Ask code.** Nothing mounts `NexdoAISuggestionCard`, `entryCards` or "Free form Text"
+  (`showingText`, `AskNexdoView.swift:341`) any more, `AskAILandingView.select` keeps Shopping, Moments and
+  typing cases for cards 5-7 when there are four cards, and the `planTomorrow` intent has no entry. Not
+  built in RN; delete them in Swift or bring them back.
+
+- **Wellness has no dark mode.** The chooser and the module guides draw on hard-coded light
+  gradients and white cards (`WellnessChooserView.swift:36`, `:101`). With the system in dark mode,
+  the card subtitles, the guide step text, the "Back to Home" link and the tab bar labels turn
+  white-on-white or dark-on-dark (`wellness-chooser-dark`, `module-guide-shopping-dark`). Every other
+  new screen follows the appearance. RN keeps the fixed light design without the lost text, enforced by
+  `src/features/wellness/__tests__/darkMode.test.tsx` (`mobile/docs/android-polish.md` §23).
+- **The Time zone row is blank on Create Moment and the Schedule tab for India.** The pickers list
+  `TimeZone.knownTimeZoneIdentifiers` (`MomentEditor.swift:44`, `ManageFestivalView.swift:187`), and
+  the default is `TimeZone.current.identifier` (`Sources/NexdoCore/ImportantMoment.swift:84`). On
+  this Mac that is `Asia/Kolkata`, which the list does not contain (it has the legacy
+  `Asia/Calcutta`), so no row matches. Review schedule still shows "Asia/Kolkata", so the value is
+  kept; only the picker is blank. Any canonical zone the list spells the old way (for example
+  `Europe/Kyiv`) is affected.
+- **Offer dates are shown in the phone's time zone.** `offerDate` (`ShoppingOffersView.swift:132-136`)
+  formats `expiresAt` in the device zone. A Safeway offer ending 6 Oct in California reads "Valid
+  through 7 Oct 2026" in India (`shopping-offer-detail`).
+- **Alternatives can suggest the item itself, and show zero differences as changes.** For "2% milk"
+  the first alternative was "2% milk" (`shopping-alternatives-v2`). Lactose-free milk passed the
+  "Higher protein" filter and is tagged "Lower sugar · Higher protein", yet its table shows equal
+  sugar and protein with "↑ 0 g" / "↓ 0 g" (`ShoppingAlternativesView.swift:454-455`;
+  `shopping-alternative-details`).
+- **Brief counts are sentence counts.** The section badge and the detail subtitle count the AI's
+  bullet sentences, so "Upcoming Deadlines 2" sits over "No deadlines appear to fall today", and the
+  detail says "2 items to review" (`daily-brief`, `brief-section-detail`).
+- **Event Details always shows both Mark Complete and Mark Incomplete**
+  (`CalendarEventDetailsView.swift:44-45`; the ⋯ menu at `:86` shows the right one). On delete
+  with warnings, the alert binding and its OK button both call `dismiss()` (`:97`).
+- **"Connect me to …" is disabled with no reason given.** The switch is
+  `.disabled(!model.verified || …)` (`MomentConnectCall.swift:237`) but is drawn like an enabled off
+  switch; nothing says to verify the number first.
+- **The calling guide title is cut off**: "We call for you on s…" (`MomentConnectCall.swift:393`,
+  `moment-calling-guide`).
+- **Pomodoro labels**: the third tab reads "Insights" until it is selected, then "Categories"
+  (`PomodoroDashboard.swift:81`). The completion screen says **Back to Tasks** even when Pomodoro was
+  opened from Wellness (`PomodoroView.swift:174`).
+- **Overdue ages in hours**: "257 hr 1 min overdue" on Today's action cards and queue
+  (`TodayActionsView.swift:339`).
+- **"Choose contact"** on the Nexdo Action screen is black text on a dark indigo button
+  (`TaskActionView.swift:180`, `task-action-error-no-contact`).
+- **Feedback has no way to dismiss the keyboard**: no Done accessory, no tap-outside, and Return
+  adds a newline, so the rating and **Submit** are covered until you scroll.
+- **Tasks search**: the tab bar rides up above the keyboard (`tasks-search-keyboard`).
+- **Shopping Recommendations** promises "your list changes after you approve them", but the answer
+  has no approve or add control (`AskNexdoView.swift:380`, `shopping-recommendations-v2-answer`).
+- **Share List** has no close button; only a swipe dismisses it.
+- **Calendar** says "1 calendar commitments today".
+- **Stores Near You ignores an unknown area**: "Qzxqv Nowhere" still returns Safeways in other
+  states rather than an empty result.
+
+
+- `ShoppingAlternativeDetails` receives `initialTab` but never uses it; the tab is always
+  Nutrition (`ShoppingAlternativesView.swift:267`, `:274`). *(From reading the code; not seen on screen.)*
+- `ShoppingOffersView` (`:85`) and `ShoppingEmailView` (`:315`) put `listId` in the query without
+  percent-encoding; `ShoppingViews.swift:363` encodes it. *(From reading the code; not seen on screen.)*
+- Send Now (`ManageFestivalView.swift:501-536`) starts `sendNow()` while its confirmation sheet is
+  still dismissing, so the Messages sheet can collide with it. `confirm()` pushes the success
+  screen before closing the review sheet (`:607-608`). *(From reading the code; not seen on screen.)*
+- `POST /api/nutrition/phone` `start` can answer `{ sent: false, alreadyVerified: true }` or send
+  the code by SMS; the app always says it is calling and waits for a code
+  (`CalorieTrackerView.swift:595`). *(From reading the code; not seen on screen.)* Same issue as the
+  Windows item "The phone check always says “call”" above.
+- `/api/moments` turns invalid input into 500 "Request failed." instead of 400: its `failure()`
+  does not handle `ZodError` (`src/app/api/moments/route.ts:15`). *(From reading the code; not seen on screen.)*
+- Item Alternatives no longer falls back to local suggestions on error, so any server failure is
+  shown to the user. *(From reading the code; not seen on screen.)*

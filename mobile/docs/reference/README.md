@@ -12,6 +12,11 @@ A **third pass** (Phase 11 Run D) covers the screens that `e13730b` (smart life 
 intelligence) and `987a90e` (shopping polish) changed or added. See
 [Run D: smart reminders and shopping intelligence](#run-d-smart-reminders-and-shopping-intelligence).
 
+A **fourth pass** (Phase 12) covers everything new or changed on the iPhone between `8c36d98` and
+`dcb8310`: the Wellness shell, Pomodoro, Calorie Tracker, the Ask AI cards and Daily Brief, Help,
+Feedback, account security, Event Details, the task agent, Moments and Shopping. See
+[Phase 12](#phase-12-wellness-ask-ai-account-tasks-moments-and-shopping).
+
 ## How they were taken
 
 These settings are the same as the first pass:
@@ -277,3 +282,154 @@ On the demo account:
 - **Tasks**, created from the New Task editor: "Remind me to return the jacket by Friday" (saved as "Return the jacket by Friday", Return), "Remind me to pay the electric bill by the 30th" ("Pay the electric bill by", Bill), "Remind me the laptop warranty expires on September 26" ("The laptop warranty", Expires, 26 Sep 2026), and "Remind me my passport expires on September 26" ("Passport", Renewal, 26 Sep 2026). Two earlier attempts dated 14 Mar 2027 ("The laptop warranty", "Passport") were probably also created, but the Tasks tab cannot show them. "The laptop warranty" (26 Sep) was completed by mistake and restored with "Save anyway" at its original time.
 - **List "Parity Run D List"** (not weekly): whole milk, eggs (checked), bananas (checked), chicken breast, loaf bread, paper towels, frozen peas, and rice, which was **replaced with Brown rice** from Item Alternatives. The trip is **completed**.
 - Three alternatives requests (whole milk, chicken breast, rice), answered by the AI path.
+
+## Phase 12: Wellness, Ask AI, account, Tasks, Moments and Shopping
+
+The fourth capture pass. It covers every iPhone screen that is new or changed in
+`git diff 8c36d98 HEAD -- ios/` (HEAD `dcb8310`). The screen inventory, the endpoint table, the
+unmounted views and the Swift bugs are in `docs/IOS_TO_REACT_NATIVE.md` §22. **Line numbers are as of
+`dcb8310`.**
+
+### How they were taken
+
+The settings are the same as the earlier passes: iPhone 17 Pro simulator, iOS 26.5, Dynamic Type
+`large`, a Debug build of the Swift app only (so `https://app-dev.nexdoapp.com`),
+`PLATFORM=ios ./scripts/capture.sh <name>`, and `xcrun simctl ui <device> appearance dark` for dark
+variants. Differences from Run D:
+
+- **Device:** the earlier iPhone 17 Pro simulator no longer existed. A new one was created with the
+  same device type and runtime (`com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro`, iOS 26.5,
+  23F77).
+- **Account:** a different account from the earlier passes. The display name is **visakan**
+  (visakan@apzzo.com), so the captures show "Hi visakan" where Run D showed "John". The account has
+  Google Calendar and Gmail connected, which made `account-settings-calendar-connected` and the
+  weekly-email screen possible.
+- **Driver:** the same kind of scratchpad XCUITest (not committed). It attached to the running app,
+  and before each capture it dumped the view tree and refused the capture unless the text that
+  identifies the screen was present.
+- **Transient states** (`shopping-alternatives-v2-loading`, `shopping-photo-identify-loading`,
+  `shopping-recommendations-v2-loading`, `ask-ai-cards-loading`): the simulator was screenshotted
+  in a loop while the button was tapped, and the frame showing the spinner was resized exactly as
+  `capture.sh` does.
+- **Size:** the new screens are mostly full-bleed gradients and illustrations, and 117 of the 180
+  captures came out of `capture.sh` over the 500 KB budget (largest 951 KB, 91.8 MB in total).
+  Palette quantisation is still forbidden, so those 117 were instead **resized to half their pixel
+  dimensions (360 px wide)** with `sips`: no colour reduction and no format change. All 180 are now
+  under 500 KB, 40.2 MB in total. The other 63 are at the usual 720 px. Small text was checked
+  against the full-size originals (chart axis ticks, grey footnotes, captions) and is still
+  readable, so none was kept at full size. Compare a 360 px capture at half the scale of a 720 px
+  one.
+- **Dark mode** was captured for shared components only: the Wellness shell, the module guide, Ask AI,
+  Account, Feedback, Event Details, Manage Moments and Today.
+
+`-v2` marks a new capture of a screen that already has a reference from an earlier pass. The older
+capture is kept and is superseded by the `-v2` one.
+
+### Captures
+
+| Area | Captures |
+| --- | --- |
+| Wellness | `wellness-chooser`, `wellness-chooser-scrolled`, `wellness-chooser-dark` |
+| Module guides | `module-guide-shopping`, `module-guide-shopping-scrolled`, `module-guide-shopping-dark`, `module-guide-calories`, `module-guide-pomodoro`, `module-guide-moments` |
+| Pomodoro | `pomodoro-dashboard-empty`, `pomodoro-dashboard`, `pomodoro-sessions-empty`, `pomodoro-sessions`, `pomodoro-insights-empty`, `pomodoro-insights`, `pomodoro-options-menu`, `pomodoro-about-metrics`, `pomodoro-setup`, `pomodoro-setup-filled`, `pomodoro-focus-running`, `pomodoro-focus-paused`, `pomodoro-history-sheet`, `pomodoro-session-detail`, `pomodoro-break`, `pomodoro-complete`, `pomodoro-stop-confirm`, `pomodoro-stopped` |
+| Calorie Tracker | `calorie-create-agent`, `calorie-create-agent-scrolled`, `calorie-setup-time`, `calorie-setup-time-scrolled`, `calorie-setup-goals`, `calorie-setup-goals-scrolled`, `calorie-setup-confirm`, `calorie-setup-confirm-scrolled`, `calorie-dashboard-empty`, `calorie-dashboard-empty-scrolled`, `calorie-dashboard-week-empty`, `calorie-dashboard-month-empty`, `calorie-dashboard`, `calorie-dashboard-week`, `calorie-dashboard-month`, `calorie-food-log-empty`, `calorie-food-log`, `calorie-add-food`, `calorie-add-food-filled`, `calorie-insights`, `calorie-insights-scrolled`, `calorie-recommendations` |
+| Ask AI and Daily Brief | `ask-ai-cards`, `ask-ai-cards-dark`, `ask-ai-cards-loading`, `daily-brief`, `daily-brief-scrolled`, `brief-top3`, `brief-due-risks`, `brief-find-time`, `brief-section-detail`, `brief-section-detail-menu`, `brief-section-detail-risks`, `brief-section-detail-next-move`, `brief-section-detail-tasks`, `brief-section-detail-tasks-scrolled` |
+| Account, Help, Feedback, password | `account-v2`, `account-v2-dark`, `account-settings-calendar-connected`, `help`, `help-topic-expanded`, `help-category-tasks`, `help-search-results`, `help-search-empty`, `help-bottom`, `feedback-empty`, `feedback-empty-dark`, `feedback-filled`, `feedback-thanks`, `change-password`, `change-password-error-mismatch`, `change-password-confirm` |
+| Calendar and Event Details | `calendar-v2`, `calendar-v2-collapsed-days`, `event-details`, `event-details-dark`, `event-details-scrolled`, `event-details-menu`, `event-details-completed`, `event-details-added-to-tasks`, `event-delete-confirm`, `event-edit` |
+| Today | `today-v2`, `today-v2-dark`, `today-action-card-contact`, `today-action-card-business`, `today-action-queue` |
+| Tasks and actions | `tasks-v2-empty`, `tasks-search`, `tasks-search-results`, `tasks-search-empty`, `tasks-search-keyboard`, `task-details-v2`, `task-details-v2-scrolled`, `task-agent-location`, `task-agent-results`, `task-agent-results-reviews`, `task-agent-results-services`, `task-agent-results-scrolled-1`, `task-agent-results-scrolled-2`, `task-agent-outreach-draft`, `task-action-error-no-contact`, `task-action-contact-details` |
+| Moments | `moments-date-filter-today-empty`, `moments-date-filter-tomorrow`, `moments-date-filter-this-week`, `moments-date-filter-later-scrolled`, `moments-scheduled-v2`, `moments-manage-tabs-scheduled-empty`, `moments-manage-tabs-scheduled`, `moments-manage-tabs-scheduled-dark`, `moments-manage-tabs-need-review`, `moments-manage-tabs-ready`, `moment-create-v2`, `moment-create-v2-filled`, `moment-manage-v2-contacts`, `moment-manage-v2-message`, `moment-manage-v2-message-scrolled`, `moment-manage-v2-message-saved`, `moment-manage-v2-schedule`, `moment-manage-v2-schedule-delivery`, `moment-connect-section`, `moment-caller-id-sheet`, `moment-calling-guide`, `moment-calling-guide-scrolled`, `moment-schedule-review-v2`, `moment-send-now-confirm`, `moment-schedule-success-v2` |
+| Shopping: lists and stores | `shopping-lists-v2`, `shopping-new-list-v2`, `shopping-list-settings-store`, `shopping-list-settings-store-filled`, `shopping-stores-empty`, `shopping-stores-results`, `shopping-store-hours-empty`, `shopping-store-hours`, `shopping-detail-store-empty`, `shopping-detail-store`, `shopping-detail-offer-badges`, `shopping-detail-options-menu-v2` |
+| Shopping: offers | `shopping-offers-available`, `shopping-offers-matching-empty`, `shopping-offers-alternatives`, `shopping-offers-store-menu`, `shopping-offers-item`, `shopping-offer-detail`, `shopping-offer-detail-selected` |
+| Shopping: alternatives | `shopping-alternatives-v2-loading`, `shopping-alternatives-v2`, `shopping-alternatives-v2-scrolled`, `shopping-alternatives-why`, `shopping-alternatives-goal-picker`, `shopping-alternatives-goal-picker-selected`, `shopping-alternatives-filtered`, `shopping-alternative-details`, `shopping-alternative-details-scrolled`, `shopping-alternative-details-bottom`, `shopping-alternatives-replace-confirm`, `shopping-alternatives-replaced` |
+| Shopping: item, photo identification | `shopping-item-editor-v2`, `shopping-item-editor-v2-scrolled`, `shopping-photo-identify-consent`, `shopping-photo-identify-loading`, `shopping-photo-identify-filled` |
+| Shopping: sharing, weekly email, recommendations | `shopping-share-list-v2`, `shopping-share-list-v2-link`, `shopping-weekly-email`, `shopping-weekly-email-scrolled`, `shopping-weekly-email-bottom`, `shopping-recommendations-v2`, `shopping-recommendations-v2-filled`, `shopping-recommendations-v2-loading`, `shopping-recommendations-v2-answer` |
+
+### Superseded by this pass
+
+| Earlier capture | Now |
+| --- | --- |
+| `today-default`, `today-3days`, `today-5days`, `today-dark` | `today-v2`, `today-v2-dark`: Quick Access is one Weekly Summary button; the Wellness button sits in the tab bar |
+| `shopping-lists-default`, `shopping-new-list*` | `shopping-lists-v2`, `shopping-new-list-v2` ("Create List & Add Store") |
+| `shopping-alternatives*` (Run D) | `shopping-alternatives-v2*` and the details, goal and replace captures |
+| `shopping-item-editor*`, `shopping-share-list*` | `shopping-item-editor-v2*`, `shopping-share-list-v2*` |
+| `shopping-detail-redesign-options-menu` | `shopping-detail-options-menu-v2` |
+| `moment-create-*`, `moment-manage-*` (four tabs), `moment-manage-schedule-confirm`, `moment-schedule-success` | the `moment-create-v2*`, `moment-manage-v2-*`, `moment-schedule-review-v2` and `moment-schedule-success-v2` captures. Manage Moment has three tabs now |
+| `moments-default`, `moments-scheduled`, `moments-manage-list` | `moments-date-filter-*`, `moments-scheduled-v2`, `moments-manage-tabs-*` |
+| `account-default` | `account-v2` |
+| `account-settings-calendars-empty` | still current for an account with no calendar; `account-settings-calendar-connected` adds the connected state |
+
+### Not captured
+
+| Screen or state | Why |
+| --- | --- |
+| Calorie "All Set" page, verified phone, daily calls | Turning calls on needs an SMS code to a real phone and makes Twilio call it. Setup was finished with **Save without calls**, which goes straight to the dashboard. The disabled **Turn On Daily Calls** is in `calorie-setup-confirm-scrolled` |
+| Connect me on the day: verified number, toggle on, **Connect now** | Verifying makes Twilio call a real number, and Connect now only appears on the day. The unverified state and the caller-ID sheet are captured |
+| Send now, after confirming | It sends a real email from the connected Gmail and opens Messages. The confirmation sheet is captured |
+| Weekly email, saved schedule | Saving schedules real weekly emails to a store manager. The form is captured, not submitted |
+| Change password, server error | Submitting needs the real current password to be wrong for certain, and success signs the account out. The mismatch error and the confirmation are captured |
+| Task agent: business chosen, Messages draft sent | Choosing a business changes the real task and Messages would contact a real business |
+| Item Alternatives, error | Only on a server failure. Source: `ShoppingAlternativesView.swift:26-91` |
+| Stores Near You, no results | A nonsense area still returns stores (see §22 "For the team", "Stores Near You ignores an unknown area"); a nonsense store name was not tried to completion |
+| Daily Brief section with **Call / Message** opening Messages | Needs a real contact on the task; the Nexdo Action screen's no-contact error is captured instead |
+| Share sheet, store logo | The system share sheet is not Nexdo UI. Safeway returned no logo, so `shopping-lists-v2` shows the cart fallback |
+| Pomodoro from a notification | Same `PomodoroView` as the captured timer, presented from `RootView.swift:219-223` |
+| Unmounted views | Listed in §22; not built |
+
+### Global patterns introduced by Phase 12
+
+These continue the list above (1–17).
+
+18. **Full-screen module shells.** Wellness, Ask AI and each Wellness module open as
+    `.fullScreenCover`, not as pushes or tabs, so the tab bar is hidden inside them and each has its
+    own close or back button.
+19. **The module guide before every module** ("How It Works", three numbered illustrated steps, a
+    green tagline card, **Got it!** and **Back to Home**), `WellnessModuleGuide.swift:63-101`. It is
+    shown every time, not once.
+20. **Illustration packs.** Screens draw their art from one sprite sheet per feature
+    (`wellness-menu-pack`, `module-guide-pack`, `calorie-design-pack`, `daily-brief-pack`,
+    `brief-detail-pack`, `alternatives-design-pack`, `moment-calling-pack`, `nutrition-detail-pack`)
+    cut by `CGRect`. The RN port needs either the same sheets with crop rectangles or pre-cut images.
+21. **The brief card list**: an icon tile, a bold title with a count bubble, two lines of grey text
+    and a chevron, on white cards. It is used by the Daily Brief pages, and section detail repeats it
+    with task cards.
+22. **Segmented pills with a count**: "Today (0)", "Scheduled (1)", "Available (2)", "All (6)". The
+    selected pill is filled (gradient in Moments, indigo in Shopping), and the row scrolls
+    horizontally. It is used by Moments date filters, Manage Moments, offers and alternatives.
+23. **Inline expanding cards**: Help questions, the task agent's business rows and the outreach
+    draft expand in place with a chevron instead of pushing a screen.
+24. **AI consent before AI calls**: Shopping recommendations, photo identification and the Ask AI
+    cards all ask for OpenAI sharing first; photo identification uses its own alert ("Identify this
+    photo with AI?"). Consent is per session and can be withdrawn in Settings.
+25. **A sticky bottom action bar** (pattern 13) now also appears on Task Details (**Save changes** /
+    **Mark complete**), Item Alternatives and the Calorie setup steps.
+26. **Wellness screens ignore dark mode** (§22 "For the team", "Wellness has no dark mode"). Decided in
+    the Phase 12 prep: the RN chooser and guides keep Swift's fixed LIGHT design in both themes, without
+    Swift's unreadable text, and a test enforces it (`mobile/docs/android-polish.md` §23). Moments and
+    Shopping, inside the same cover, follow the theme.
+
+### Test data
+
+On the account above, all named `Parity …` except where noted:
+
+- **List "Parity Weekly Groceries"** (Safeway, 145 Jackson St, San Francisco): 2% milk
+  (**replaced with Lactose-free milk** from Item Alternatives), whole wheat bread (offer **The Rustik
+  Oven Bread** chosen), bananas, eggs, chicken breast, and **Parity mango** (from photo
+  identification). Its share link was created and then revoked. No weekly email was saved.
+- **Moment "Parity Birthday"** (6 Oct 2026, yearly), recipient **Parity Kate**, +1 415 555 0100
+  (a fictional 555 number) and parity@example.com. Wish approved and **scheduled for 6 Oct 2026
+  8:00 AM, Messages, manual send**. Nothing was sent.
+- **Calendar event "Parity appointment"** (5 Oct 2026, 1:27–1:57 PM, "Parity Clinic, 145 Jackson
+  St"); marked complete, then incomplete. **Add to Tasks** created the task "Parity appointment".
+- **Food log entry "Parity oatmeal with banana"**, 350 kcal, breakfast, 5 Oct 2026. Calorie Tracker
+  was set up with **Save without calls** (8:00 PM, goal 2,000 kcal), so nutrition settings now exist.
+- **Pomodoro sessions "Parity focus"**: one completed 5-minute session with a break, and one stopped
+  after a few seconds.
+- **Feedback "Parity test feedback"** (4 stars, "Parity reference capture. Please delete.") in the
+  server's feedback table.
+- Not named Parity: one task agent search for **Electrician · 94109** on the existing task "Call
+  electrician" (no business chosen, nothing sent). That task was **completed by mistake and restored**
+  at once with its original date. A Google Calendar sync was triggered once. AI consent was granted
+  for the Ask AI and Shopping captures, then withdrawn in Settings. The simulator's Photos library
+  has a mango image (`grocery-mango` from the app's assets), and the simulator has Contacts and
+  notification permission.

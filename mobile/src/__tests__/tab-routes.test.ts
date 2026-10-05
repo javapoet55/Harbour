@@ -34,14 +34,8 @@ describe('routes Swift pushes stay inside the tab navigator', () => {
     { file: '(tabs)/(today)/today/weekly-summary.tsx', url: '/today/weekly-summary', swift: '.navigationDestination (RootView.swift:1196)' },
     // Pushed from weekly-summary, which is itself pushed.
     { file: '(tabs)/(today)/today/weekly-tasks.tsx', url: '/today/weekly-tasks', swift: 'NavigationLink (WeeklySummaryView.swift:104, 110)' },
-    // Phase 11: pushed from the Quick Access tiles into Today's stack (TodayQuickAccess.swift:68, :72),
-    // and on from there, so the bar stays — UI-parity pass 2.
-    { file: '(tabs)/(today)/moments/index.tsx', url: '/moments', swift: 'NavigationLink (TodayQuickAccess.swift:68)' },
-    { file: '(tabs)/(today)/moments/manage.tsx', url: '/moments/manage', swift: '.navigationDestination (ImportantMomentsView.swift:301)' },
-    { file: '(tabs)/(today)/moments/review.tsx', url: '/moments/review', swift: 'NavigationLink (ImportantMomentsView.swift:109)' },
-    { file: '(tabs)/(today)/moments/wish.tsx', url: '/moments/wish', swift: 'NavigationLink (ImportantMomentsView.swift:274)' },
-    { file: '(tabs)/(today)/shopping/index.tsx', url: '/shopping', swift: 'NavigationLink (TodayQuickAccess.swift:72)' },
-    { file: '(tabs)/(today)/shopping/[id].tsx', url: '/shopping/[id]', swift: 'NavigationLink (ShoppingViews.swift:107)' },
+    // Important Moments and Shopping left the Today stack in Phase 12: Swift now reaches them only
+    // through the Wellness cover (see "Wellness covers" below).
   ];
 
   it.each(PUSHED)('$url is under (tabs) — Swift uses $swift', ({ file }) => {
@@ -135,6 +129,39 @@ describe('Wellness covers', () => {
   it.each(['wellness/index.tsx', 'wellness/guide/[kind].tsx', 'wellness/pomodoro.tsx', 'wellness/calories.tsx'])('%s is a cover outside the tabs', (file) => {
     expect(exists(file)).toBe(true);
     expect(file.startsWith('(tabs)/')).toBe(false);
+  });
+
+  /**
+   * Phase 12: Moments and Shopping are reached only through Wellness, and Swift shows them inside the
+   * chooser's cover (`moduleDestination`, WellnessChooserView.swift:44-58) with no tab bar, so they are
+   * pushes in the wellness stack, not the Today tab's.
+   */
+  it.each([
+    ['wellness/moments/index.tsx', '/wellness/moments'],
+    ['wellness/moments/manage.tsx', '/wellness/moments/manage'],
+    ['wellness/moments/review.tsx', '/wellness/moments/review'],
+    ['wellness/moments/wish.tsx', '/wellness/moments/wish'],
+    ['wellness/shopping/index.tsx', '/wellness/shopping'],
+    ['wellness/shopping/[id].tsx', '/wellness/shopping/[id]'],
+    ['wellness/shopping/email.tsx', '/wellness/shopping/email'],
+  ])('%s is in the wellness stack at %s', (file, url) => {
+    expect(exists(file)).toBe(true);
+    expect(urlFor(file)).toBe(url);
+  });
+
+  it('declares Moments and Shopping as pushes inside the cover, hiding the chooser and its bottom bar', () => {
+    const wellness = fs.readFileSync(path.join(APP, 'wellness/_layout.tsx'), 'utf8');
+    expect(wellness).toMatch(/presentation: 'card' as const/);
+    for (const name of ['moments/index', 'moments/manage', 'shopping/index', 'shopping/\\[id\\]', 'shopping/email']) {
+      expect(wellness).toMatch(new RegExp(`name="${name}" options=\\{\\{ \\.\\.\\.pushed,`));
+    }
+  });
+
+  it('nothing of Moments or Shopping is left in the Today tab', () => {
+    expect(exists('(tabs)/(today)/moments')).toBe(false);
+    expect(exists('(tabs)/(today)/shopping')).toBe(false);
+    const today = fs.readFileSync(path.join(APP, '(tabs)/(today)/_layout.tsx'), 'utf8');
+    expect(today).not.toMatch(/name="(moments|shopping)\//);
   });
 
   it('the centre tab route forwards to the chooser', () => {

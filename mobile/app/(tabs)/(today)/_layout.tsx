@@ -15,10 +15,9 @@ import { stackHeaderOptions, useTheme } from '../../../src/theme';
  * again from there.
  *
  * `(today)` is a **route group**, like `(tasks)`, so it adds nothing to a URL: `today/…` still serves
- * `/today/…`, and Important Moments and Shopping — which Swift PUSHES from the Quick Access tiles into
- * this same `NavigationStack` (TodayQuickAccess.swift:68, :72), keeping the tab bar — still serve
- * `/moments/…` and `/shopping/…`. They are declared here rather than in stacks of their own for the
- * reason `(tasks)` gives: Swift has one `NavigationStack` per tab.
+ * `/today/…`. Important Moments and Shopping used to be pushed here from the Quick Access tiles; since
+ * Phase 12 Swift reaches them only through the Wellness cover (TodayQuickAccess.swift:3-18), so they
+ * live in `app/wellness/` instead.
  *
  * Needs attention and Reschedule all are NOT here: they are sheets that cover the tab bar, so they
  * are presented from the root stack (`app/attention.tsx`, `app/reschedule-all.tsx`).
@@ -67,33 +66,6 @@ export default function TodayLayout() {
       <Stack.Screen name="today/weekly-summary" options={{ ...pushed, title: 'Weekly Summary' }} />
       {/* The title follows the filter, so `weekly-tasks` sets its own. */}
       <Stack.Screen name="today/weekly-tasks" options={pushed} />
-
-      {/*
-        Important Moments (Run B): every screen is a push with an `.inline` title, over the grouped
-        background. The editor is registered twice: `editor` is a push, `import-editor` is the `.sheet`
-        Moments Settings uses for a picked contact (MomentEditor.swift:242).
-      */}
-      <Stack.Screen name="moments/index" options={{ ...pushed, title: 'Important Moments' }} />
-      <Stack.Screen name="moments/manage-list" options={{ ...pushed, title: 'Manage Moments' }} />
-      <Stack.Screen name="moments/editor" options={{ ...pushed, title: 'Create Moment' }} />
-      <Stack.Screen
-        name="moments/import-editor"
-        options={{ ...stackHeaderOptions(theme, theme.colors.groupedBackground), title: 'Create Moment', presentation: 'modal' }}
-      />
-      <Stack.Screen name="moments/manage" options={{ ...pushed, title: 'Manage Moment' }} />
-      <Stack.Screen name="moments/review" options={{ ...pushed, title: 'Review Wish' }} />
-      <Stack.Screen name="moments/delivery" options={{ ...pushed, title: 'Choose Delivery' }} />
-      <Stack.Screen name="moments/schedule-wish" options={{ ...pushed, title: 'Schedule Wish' }} />
-      <Stack.Screen name="moments/wish" options={{ ...pushed, title: 'Wish details' }} />
-      <Stack.Screen name="moments/settings" options={{ ...pushed, title: 'Moments Settings' }} />
-      <Stack.Screen name="moments/calendar-import" options={{ ...pushed, title: 'Calendar Moments' }} />
-      <Stack.Screen name="moments/festivals" options={{ ...pushed, title: 'Choose Festivals' }} />
-
-      {/* Shopping Lists (Run C): `ShoppingHome` and `ShoppingDetail` push; everything else is a
-          `.sheet` of those two, presented in-screen with `MomentSheet`. */}
-      <Stack.Screen name="shopping/index" options={{ ...pushed, title: 'My Lists' }} />
-      <Stack.Screen name="shopping/email" options={{ ...pushed, title: 'Schedule email' }} />
-      <Stack.Screen name="shopping/[id]" options={{ ...pushed, title: 'Shopping List' }} />
     </Stack>
   );
 }

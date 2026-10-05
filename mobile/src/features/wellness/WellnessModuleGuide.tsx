@@ -85,7 +85,7 @@ export function WellnessModuleGuide({ kind, onContinue, onHome }: { kind: Wellne
       {/* `.navigationTitle("How It Works")`, inline, with the Back button in the module's colour. */}
       <View style={[styles.bar, { paddingTop: insets.top }]}>
         <Pressable accessibilityLabel="Back" accessibilityRole="button" hitSlop={6} onPress={onHome} testID="module-guide-back">
-          <GlassCircle>
+          <GlassCircle scheme="light">
             <TaskSymbol color={guide.color} name="chevron.backward" size={22} />
           </GlassCircle>
         </Pressable>

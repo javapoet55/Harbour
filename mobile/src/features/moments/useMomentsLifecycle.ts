@@ -32,7 +32,7 @@ export function useMomentsLifecycle(profileId: string | null | undefined): void 
   useEffect(() => {
     if (!route) return;
     momentsStore.getState().clearRoute();
-    router.push({ pathname: '/moments', params: { routed: route.id } });
+    router.push({ pathname: '/wellness/moments', params: { routed: route.id } });
   }, [route]);
 }
 
@@ -57,10 +57,10 @@ export function handleMomentNotification(data: unknown, actionIdentifier: string
  */
 export function routedDestination(moment: ImportantMoment, moments: ImportantMoment[]): { pathname: string; params: Record<string, string> } {
   const plan = moment.drafts.flatMap((draft) => draft.plans ?? []).find(planEditable);
-  if (plan) return { pathname: '/moments/wish', params: { planId: plan.id } };
+  if (plan) return { pathname: '/wellness/moments/wish', params: { planId: plan.id } };
   if (supportsGreetingCard(moment)) {
     const group = editableGroups(moments.filter((item) => item.type === moment.type)).find((entry) => entry.moments.some((item) => item.id === moment.id));
-    if (group) return { pathname: '/moments/manage', params: { ids: group.moments.map((item) => item.id).join(',') } };
+    if (group) return { pathname: '/wellness/moments/manage', params: { ids: group.moments.map((item) => item.id).join(',') } };
   }
-  return { pathname: '/moments/review', params: { id: moment.id } };
+  return { pathname: '/wellness/moments/review', params: { id: moment.id } };
 }

@@ -43,16 +43,14 @@ it('a module card opens its guide', () => {
   expect(mockRouter.push).toHaveBeenCalledWith({ pathname: '/wellness/guide/[kind]', params: { kind: 'shopping' } });
 });
 
-it('Pomodoro and the Calorie Tracker replace the guide inside the cover', async () => {
+it('every module replaces its guide inside the cover, so Back returns to the chooser', async () => {
   await continueToModule('pomodoro');
   await continueToModule('calories');
-  expect(mockRouter.replace.mock.calls).toEqual([['/wellness/pomodoro'], ['/wellness/calories']]);
-  expect(mockClose).not.toHaveBeenCalled();
-});
-
-it('Moments and Shopping are the existing screens in the Today stack', async () => {
   await continueToModule('moments');
   await continueToModule('shopping');
-  expect(mockClose).toHaveBeenCalledTimes(2);
-  expect(mockRouter.navigate.mock.calls).toEqual([['/moments'], ['/shopping']]);
+  expect(mockRouter.replace.mock.calls).toEqual([['/wellness/pomodoro'], ['/wellness/calories'], ['/wellness/moments'], ['/wellness/shopping']]);
+  // Nothing closes the cover or leaves for a tab: the modules stay in the wellness stack.
+  expect(mockClose).not.toHaveBeenCalled();
+  expect(mockRouter.navigate).not.toHaveBeenCalled();
+  expect(mockRouter.push).not.toHaveBeenCalled();
 });

@@ -1275,9 +1275,46 @@ Deviations from Swift, Android-only or not:
   `assets/wellness/calorie-agent.png` (31 KB). `nutrition-detail-pack` belongs to Shopping Alternatives,
   not this screen, so it was not copied.
 
+## 23. Phase 12 prep: Wellness holds Moments and Shopping; the light design is enforced (2026-10-05)
+
+JavaScript only; no new build needed.
+
+### Moments and Shopping inside the Wellness cover
+
+- **Supersedes §21's "Moments and Shopping open in the Today stack".** Their routes moved from
+  `app/(tabs)/(today)/` to `app/wellness/moments/` and `app/wellness/shopping/`, pushed in the wellness
+  stack with the same glass bar as before. "Got it!" replaces the guide with the module, as Swift's
+  `WellnessModuleEntrance` swaps its content, so Back returns to the chooser rather than to Today.
+- **No tab bar and no chooser bar inside a module**, as in Swift (`moments-date-filter-*`,
+  `shopping-detail-store`): the module covers both. Before this, Moments and Shopping kept the tab bar
+  because they were pushed in the Today tab.
+- **Today's Quick Access is the one Weekly Summary button** (TodayQuickAccess.swift:3-18). The Moments
+  and Shopping tiles are gone, so Wellness is their only entry, and Today no longer fetches shopping
+  lists.
+- Moments and Shopping still **follow the phone's theme**. Only the chooser and the guides are fixed light.
+
+### The chooser and the guides stay light in dark mode
+
+Swift's intent is a fixed light design (§21), but on iOS in dark mode its chooser and guides actually
+lose text: subtitles, step text, "Back to Home" and the bar's labels turn white on white (`wellness-chooser-dark`,
+`module-guide-shopping-dark`). That is a Swift bug, kept on the §22 "For the team" list. Android keeps the
+design and not the bug. An audit for anything that still followed the theme found two leaks, now fixed:
+
+- **The guide's Back button plate.** `GlassCircle` drew the theme's plate, a translucent grey in dark mode.
+  It takes an optional `scheme` now, and the guides pass `"light"`. Every other caller is unchanged.
+- **The status bar.** The root layout picks it from the theme, so dark mode drew a white clock over these
+  white screens. `FixedLightStatusBar` asks for dark content while the chooser or a guide is focused,
+  and only then: the chooser stays mounted under Moments and Shopping, which follow the theme.
+
+Every text, icon and background on both screens was already a literal or a fixed light-palette value.
+`src/features/wellness/__tests__/darkMode.test.tsx` renders the chooser and all four guides in Day and in
+Night and requires the **drawn** trees (styles flattened) to be identical. A control case proves the
+comparison catches a themed colour, and each render must contain the screen's text, so a blank render
+cannot pass. Removing the `GlassCircle` fix makes five of its cases fail.
+
 ---
 
-## 23. Phase 12 Run A: Account, Help, Feedback, Change password, Ask AI, Daily Brief, Appointment details (2026-10-05)
+## 24. Phase 12 Run A: Account, Help, Feedback, Change password, Ask AI, Daily Brief, Appointment details (2026-10-05)
 
 Built from the Swift source; the Ask and Calendar captures in `mobile/docs/reference/ios/` predate these
 designs, so they were not used. Deviations from Swift, Android-only or not:

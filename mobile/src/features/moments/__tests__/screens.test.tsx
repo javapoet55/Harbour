@@ -64,15 +64,15 @@ import { momentsStore } from '../store';
 import { draft, moment, plan, settings } from '../testFixtures';
 import { deliverOAuthCallback, redirectOAuthCallback, resetOAuthCallbacks } from '../../../lib/oauthCallbacks';
 
-import ImportantMoments from '../../../../app/(tabs)/(today)/moments/index';
-import ManageMoment from '../../../../app/(tabs)/(today)/moments/manage';
-import MomentEditor from '../../../../app/(tabs)/(today)/moments/editor';
-import MomentSettings from '../../../../app/(tabs)/(today)/moments/settings';
-import ChooseDelivery from '../../../../app/(tabs)/(today)/moments/delivery';
-import WishDetails from '../../../../app/(tabs)/(today)/moments/wish';
-import ChooseFestivals from '../../../../app/(tabs)/(today)/moments/festivals';
-import ScheduleWish from '../../../../app/(tabs)/(today)/moments/schedule-wish';
-import ReviewWish from '../../../../app/(tabs)/(today)/moments/review';
+import ImportantMoments from '../../../../app/wellness/moments/index';
+import ManageMoment from '../../../../app/wellness/moments/manage';
+import MomentEditor from '../../../../app/wellness/moments/editor';
+import MomentSettings from '../../../../app/wellness/moments/settings';
+import ChooseDelivery from '../../../../app/wellness/moments/delivery';
+import WishDetails from '../../../../app/wellness/moments/wish';
+import ChooseFestivals from '../../../../app/wellness/moments/festivals';
+import ScheduleWish from '../../../../app/wellness/moments/schedule-wish';
+import ReviewWish from '../../../../app/wellness/moments/review';
 
 function load(moments: ImportantMoment[], extra: Partial<MomentsSnapshot> = {}) {
   const snapshot: MomentsSnapshot = { moments, emailAccount: null, emailConfigured: false, automaticEmailEnabled: false, ...extra };
@@ -125,9 +125,9 @@ describe('Important Moments list', () => {
     expect(screen.getByText('Ready to schedule')).toBeTruthy();
     expect(screen.getByText('Create a personal wish')).toBeTruthy();
     await fireEvent.press(screen.getByTestId('festival-manage-a'));
-    expect(mockPush).toHaveBeenCalledWith({ pathname: '/moments/manage', params: { ids: 'a,b' } });
+    expect(mockPush).toHaveBeenCalledWith({ pathname: '/wellness/moments/manage', params: { ids: 'a,b' } });
     await fireEvent.press(screen.getByLabelText('Create wish'));
-    expect(mockPush).toHaveBeenLastCalledWith({ pathname: '/moments/review', params: { id: 'c' } });
+    expect(mockPush).toHaveBeenLastCalledWith({ pathname: '/wellness/moments/review', params: { id: 'c' } });
     await waitFor(() => expect(mockSnapshot).toHaveBeenCalled());
   });
 
@@ -137,7 +137,7 @@ describe('Important Moments list', () => {
     expect(screen.getByText('No moments yet')).toBeTruthy();
     expect(screen.getByText('Add a moment manually, or select contacts and calendars in Settings.')).toBeTruthy();
     await fireEvent.press(screen.getByTestId('moments-add'));
-    expect(mockPush).toHaveBeenCalledWith({ pathname: '/moments/editor', params: { done: 'list' } });
+    expect(mockPush).toHaveBeenCalledWith({ pathname: '/wellness/moments/editor', params: { done: 'list' } });
   });
 
   // ImportantMomentsView.swift:274-276, :293: the wish tabs answer for their own filtered plans.
@@ -1000,7 +1000,7 @@ describe('Choose Delivery', () => {
     expect(screen.getByText('Open Messages')).toBeTruthy();
     await fireEvent.press(screen.getByTestId('delivery-when-Schedule'));
     await fireEvent.press(screen.getByTestId('delivery-choose-time'));
-    expect(mockPush).toHaveBeenCalledWith({ pathname: '/moments/schedule-wish', params: { momentId: 'm', draftId: 'd', channel: 'messages', recipient: '+15555550100' } });
+    expect(mockPush).toHaveBeenCalledWith({ pathname: '/wellness/moments/schedule-wish', params: { momentId: 'm', draftId: 'd', channel: 'messages', recipient: '+15555550100' } });
     await fireEvent.press(screen.getByTestId('delivery-email'));
     expect(screen.getByText('From: Connect email in Important Moments Settings')).toBeTruthy();
     expect(screen.getByTestId('delivery-recipient').props.value).toBe('a@b.co');
@@ -1197,7 +1197,7 @@ describe('Choose Festivals', () => {
     await fireEvent.press(screen.getByTestId('festival-region-India'));
     for (const name of ['Diwali', 'Holi', 'Eid', 'Pongal']) expect(screen.getByText(name)).toBeTruthy();
     await fireEvent.press(screen.getByTestId('festival-Diwali'));
-    expect(mockPush).toHaveBeenCalledWith({ pathname: '/moments/editor', params: { imported: expect.stringContaining('"title":"Diwali Wishes"'), done: 'back' } });
+    expect(mockPush).toHaveBeenCalledWith({ pathname: '/wellness/moments/editor', params: { imported: expect.stringContaining('"title":"Diwali Wishes"'), done: 'back' } });
   });
 });
 

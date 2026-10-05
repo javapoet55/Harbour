@@ -36,7 +36,6 @@ import {
   todayMoments,
   typeLabel,
   upcomingDelivery,
-  upcomingMomentCount,
   updatingTitle,
   validateRecipients,
   validateSchedule,
@@ -278,18 +277,6 @@ describe('display groups', () => {
     expect(editableGroups([removed, current])[0].moments.map((item) => item.id)).toEqual(['current']);
     expect(displayGroups([removed, current])[0].moments).toHaveLength(2);
     expect(editableGroups([{ ...current, festivalSettings: '{ "archived" : true }' }])).toHaveLength(0);
-  });
-
-  it('counts upcoming groups for the Quick Access tile', () => {
-    const now = Date.parse('2030-09-01T12:00:00Z');
-    const encoded = settings();
-    const list = [
-      moment({ id: 'a', firstName: 'a', festivalSettings: encoded }),
-      moment({ id: 'b', firstName: 'b', festivalSettings: encoded }),
-      moment({ id: 'c', type: 'custom', enabled: false }),
-      moment({ id: 'd', type: 'custom', occurrenceDate: '2030-08-01', nextOccurrence: '2030-08-01' }),
-    ];
-    expect(upcomingMomentCount(list, now)).toBe(1);
   });
 });
 

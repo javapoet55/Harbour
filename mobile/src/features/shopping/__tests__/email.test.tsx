@@ -5,7 +5,7 @@ jest.mock('../../../api/shopping', () => ({ shoppingEmailApi: { get: (...args: u
 const mockGmail = jest.fn();
 jest.mock('../../moments/device', () => ({ connectGmail: (...args: unknown[]) => mockGmail(...args), EMAIL_CONNECT_FAILED: 'Connection cancelled' }));
 jest.mock('../store', () => ({ useShopping: (select: (state: unknown) => unknown) => select({ lists: [{ id: 'list-1', title: 'Saturday groceries', timeZone: 'America/Los_Angeles', items: [{ id: '1', name: 'Milk', quantity: '2', size: 'litres', notes: '', checked: false }, { id: '2', name: 'Eggs', quantity: '1', size: '', notes: '', checked: true }] }] }) }));
-import Screen from '../../../../app/(tabs)/(today)/shopping/email';
+import Screen from '../../../../app/wellness/shopping/email';
 const initial = { available: true, account: { email: 'me@example.com', status: 'connected' }, schedule: null };
 beforeEach(() => { jest.clearAllMocks(); mockGet.mockResolvedValue(initial); mockSave.mockResolvedValue(initial); });
 it('defaults to Saturday 10 AM, previews checked items and requires consent', async () => {
