@@ -1815,7 +1815,7 @@ describe('Manage Moment, the Schedule step', () => {
     await fireEvent.press(screen.getByTestId('moment-edit-repeat'));
     await fireEvent.press(screen.getByTestId('moment-edit-save'));
     expect(alert).toHaveBeenCalledWith('Save changes to scheduled wishes?', 'Saving these changes cancels existing schedules. Review and schedule the updated wishes again.', expect.any(Array));
-    const buttons = alert.mock.calls[0][2] as { text: string; onPress?: () => void }[];
+    const buttons = alert.mock.calls.find(([title]) => title === 'Save changes to scheduled wishes?')![2] as { text: string; onPress?: () => void }[];
     buttons.find((button) => button.text === 'Keep schedules')?.onPress?.();
     expect(mockPost).not.toHaveBeenCalledWith('festivalSave', expect.anything(), undefined);
     // Cancel schedules and save goes through with cancelSchedules.

@@ -35,6 +35,7 @@ import {
   title1,
 } from './components';
 import { captureCard, GreetingCardCapture } from './cardCapture';
+import { MomentConnectSection } from './MomentConnectSection';
 import { CARD_NOT_ATTACHED, cardEncoder, encodeCard, encodeSmallerCard } from './cardImage';
 import { momentLabel, sendDayLabel } from './dates';
 import { contactChoice, contactFullName, imageStorage, pickContact, validatePickedContacts, type ContactChoice } from './device';
@@ -398,8 +399,10 @@ export function ManageMomentView({ group, onDone }: { group: MomentDisplayGroup;
     </View>
   );
 
-  // "Connect me on the day" (MomentConnectSection, ManageFestivalView.swift:237).
-  const connectSection = null;
+  // "Connect me on the day" (MomentConnectSection, ManageFestivalView.swift:237): the selected
+  // recipients' saved moments.
+  const connectMoments = selected.flatMap((recipient) => (snapshot?.moments ?? []).filter((moment) => moment.id === recipient.momentID));
+  const connectSection = <MomentConnectSection moments={connectMoments} />;
 
   const saveButtons = (
     <>
