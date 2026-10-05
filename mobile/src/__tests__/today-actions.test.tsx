@@ -154,11 +154,15 @@ describe('the action queue on Today', () => {
   });
 
   it('shows "Checking next action…" until the task has been checked', async () => {
-    mockAgent.mockReturnValue(new Promise(() => undefined));
+    let answer: (value: unknown) => void = () => undefined;
+    mockAgent.mockReturnValue(new Promise((resolve) => (answer = resolve)));
     await showDue();
 
     expect(screen.getByText('Checking next action…')).toBeTruthy();
     expect(screen.queryByTestId('today-actions-choose-contact')).toBeNull();
+    // Answer, so nothing is left pending when the suite ends.
+    answer({ run: null, intent: { eligible: false } });
+    await waitFor(() => expect(screen.getByTestId('today-actions-choose-contact')).toBeTruthy());
   });
 
   it('finds the one matching person quietly and offers their channels', async () => {
@@ -367,6 +371,8 @@ describe('action time labels', () => {
 describe('the action queue sheet', () => {
   async function showQueue(tasks: NexdoTask[]) {
     await seed(tasks);
+    // The sheet's own tasks query refetches; an empty answer would empty the queue mid-test.
+    mockTasks.mockResolvedValue({ tasks, timeZone: ZONE });
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
     queryClient.setQueryData(queryKeys.tasks.all(), { tasks, timeZone: ZONE });
     queryClient.setQueryData(queryKeys.me(), { id: OWNER, name: 'Ada', email: 'a@b.c', timeZone: ZONE });
