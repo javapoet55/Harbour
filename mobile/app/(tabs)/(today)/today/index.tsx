@@ -12,7 +12,7 @@ import { FocusSessionStrip } from '../../../../src/components/FocusSessionStrip'
 import { TodayAttentionRow } from '../../../../src/components/TodayAttentionRow';
 import { TodayIntelligenceCard } from '../../../../src/components/TodayIntelligenceCard';
 import { TodayQuickAccess } from '../../../../src/components/TodayQuickAccess';
-import { TasksTopBar, TodayBackdrop } from '../../../../src/components/TodayShell';
+import { StatusBarScrim, TasksTopBar, TodayBackdrop } from '../../../../src/components/TodayShell';
 import { overdueResults } from '../../../../src/lib/overdueTasks';
 import { todayMoments } from '../../../../src/features/moments/domain';
 import { useMomentList } from '../../../../src/features/moments/store';
@@ -286,6 +286,7 @@ export default function Today() {
           <TodayAttentionRow onPress={() => router.push('/attention')} other={otherCount} overdue={overdueCount} />
         ) : null}
       </KeyboardAwareScrollView>
+      <StatusBarScrim />
     </View>
   );
 }

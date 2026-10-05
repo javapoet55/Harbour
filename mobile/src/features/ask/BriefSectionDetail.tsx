@@ -1,7 +1,7 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { useRef } from 'react';
-import { Alert, Pressable, ScrollView, Share, StyleSheet, View, type ImageSourcePropType } from 'react-native';
+import { Alert, Pressable, ScrollView, Share, StyleSheet, View, type ImageSourcePropType, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useCoordinator } from '../../actions/coordinator';
@@ -14,6 +14,7 @@ import type { TaskActionChannel } from '../../lib/todayActionQueue';
 import { useMinuteTick } from '../../lib/useMinuteTick';
 import { isConflictCancelled, isStaleWrite, useCompleteTask, useTasks, type ScheduleConflict } from '../../query/useTasks';
 import { useSession } from '../../store/session';
+import { palettes } from '../../theme';
 import { PopoverMenu, usePopoverMenu } from '../moments/form';
 import { startedLabel } from '../pomodoro/format';
 import { BriefArtwork, briefColors, briefInk, briefSecondary } from './DailyBrief';
@@ -233,9 +234,10 @@ function Pill({ title, icon, color, disabled, onPress, testID }: { title: string
   );
 }
 
-// No `elevation`: Android draws it at full strength and shows it through the translucent card as a lighter
-// inner panel (docs/android-polish.md §28). iOS keeps Swift's faint shadow.
-const shadow = { shadowColor: briefColors.indigo, shadowOpacity: 0.1, shadowRadius: 10, shadowOffset: { width: 0, height: 5 } } as const;
+// iOS: Swift's faint shadow. Android: no `elevation` (it drew at full strength through the translucent card
+// as a lighter inner panel) but a 1pt hairline instead, as the task agent cards do (docs/android-polish.md
+// §27, §28); without either, a near-white card vanished into the page's white end.
+const shadow = Platform.OS === 'android' ? ({ borderWidth: 1, borderColor: palettes.light.fieldBorder } as const) : ({ shadowColor: briefColors.indigo, shadowOpacity: 0.1, shadowRadius: 10, shadowOffset: { width: 0, height: 5 } } as const);
 
 const styles = StyleSheet.create({
   fill: { flex: 1, backgroundColor: '#FFFFFF' },

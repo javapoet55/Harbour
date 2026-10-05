@@ -9,7 +9,7 @@ import type { CalendarEvent } from '../../src/api';
 import { TaskSymbol, Text } from '../../src/components';
 import { CalendarSegments, CalendarSummaryCard, CalendarTimelineRow, withAlpha } from '../../src/components/CalendarParts';
 import { CalendarPushNote } from '../../src/components/CalendarPushNote';
-import { TodayBackdrop } from '../../src/components/TodayShell';
+import { StatusBarScrim, TodayBackdrop } from '../../src/components/TodayShell';
 import {
   CALENDAR_MODES,
   CALENDAR_RANGES,
@@ -561,6 +561,7 @@ export default function Calendar() {
           )
         ) : null}
       </ScrollView>
+      <StatusBarScrim subtle />
 
       {/* The filters menu (CalendarView.swift:322-335) */}
       {filtersOpen ? (

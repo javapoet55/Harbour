@@ -803,6 +803,9 @@ your next move") and keeps Android's ellipsis, so they shrink to 0.85 and then t
 | 40 | Feedback | **fixed** | Submit's gradient ran magenta → blue; `NexdoGradientButtonStyle` draws `NexdoTheme.saveGradient`, blue → indigo → magenta (`GradientButton gradient="save"`). Not submitted |
 | 41 | Change password | **fixed** | same gradient as row 40. Not confirmed |
 | 42 | Account ("My Page") | checked | Help / Feedback / Edit profile bare and Change password on a card, as Swift (§22 "For the team") |
+| 43 | Calendar tab (collapsed empty days, review conflicts) | **fixed** | **scrolled content ran through the status bar** and collided with the clock; iOS 26's scroll-edge effect keeps it legible. New `StatusBarScrim` (Android only): the page's backdrop cut to the status-bar height, drawn over the scroll — Calendar and Today. Add by Voice / Add Manually stack at this width, as logged (§10) |
+| 44 | Event Details | **fixed** | (a) after removing the shadow show-through (row 39) the near-white cards vanished into the page's white end: Android gets a 1pt `fieldBorder` hairline instead of the shadow, as the task agent cards (§27) — also Help and the brief section pages; (b) the "…" menu lacked Swift's `checkmark.circle` / `xmark.circle` / `trash` glyphs. Event "Parity appointment" (Mac); nothing completed or deleted |
+| 45 | Edit Event | checked | en-IN "pm" from the phone's locale; not saved |
 
 ### Not reached in this run
 

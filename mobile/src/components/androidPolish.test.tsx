@@ -7,6 +7,7 @@ import { StickyFooter } from './StickyFooter';
 import { DetailCheckbox, DetailMenu, DetailOutlineButton, DetailTextInput, SectionLabel } from './TaskDetailParts';
 import { CreationCard, DatePill } from './TaskListParts';
 import { TaskSymbol } from './TaskSymbol';
+import { StatusBarScrim } from './TodayShell';
 import { Text } from './Text';
 
 jest.mock('../query/useProjects', () => ({
@@ -221,5 +222,22 @@ describe('TaskSymbol', () => {
     const glyph = (testID: string) => screen.getByTestId(testID).children[0] as unknown as { props: { style?: unknown } };
     expect(StyleSheet.flatten(glyph('turned').props.style as never)).toEqual({ transform: [{ rotate: '-45deg' }] });
     expect(glyph('upright').props.style).toBeUndefined();
+  });
+});
+
+/** iOS 26's scroll-edge effect keeps the clock legible over scrolled content; Android gets the backdrop's slice. */
+describe('StatusBarScrim', () => {
+  it('covers the status bar with the page backdrop on Android', async () => {
+    onPlatform('android');
+    await render(<StatusBarScrim />);
+    const insetTop = StyleSheet.flatten(screen.getByTestId('status-bar-scrim', { includeHiddenElements: true }).props.style);
+    expect(insetTop).toMatchObject({ position: 'absolute', top: 0, overflow: 'hidden' });
+    expect(insetTop.height).toBeGreaterThan(0);
+  });
+
+  it('draws nothing on iOS', async () => {
+    onPlatform('ios');
+    await render(<StatusBarScrim />);
+    expect(screen.queryByTestId('status-bar-scrim', { includeHiddenElements: true })).toBeNull();
   });
 });

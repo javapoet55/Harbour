@@ -118,6 +118,13 @@ describe('Event Details', () => {
     await waitFor(() => expect(screen.getByTestId('event-details-status')).toHaveTextContent('Completed'));
     await fireEvent.press(screen.getByLabelText('More event actions'));
     expect(screen.getByTestId('event-details-menu-complete')).toHaveTextContent('Mark Incomplete');
+    // `Button(_:systemImage:)`: Mark Incomplete carries `xmark.circle`, Delete Event `trash`.
+    const glyphs = (node: { props: { name?: string }; children: unknown[] }): string[] => [
+      ...(node.props.name ? [node.props.name] : []),
+      ...node.children.flatMap((child) => (typeof child === 'object' && child ? glyphs(child as typeof node) : [])),
+    ];
+    expect(glyphs(screen.getByTestId('event-details-menu-complete') as never)).toEqual(['close-circle-outline']);
+    expect(glyphs(screen.getByTestId('event-details-menu-delete') as never)).toEqual(['trash-outline']);
     await fireEvent.press(screen.getByTestId('event-details-incomplete'));
     await waitFor(() => expect(mockApi.setCompleted).toHaveBeenCalledWith('e1', false));
   });

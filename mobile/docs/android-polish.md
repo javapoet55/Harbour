@@ -1556,4 +1556,10 @@ captures; results row by row in `docs/reference/PARITY.md` "UI-parity pass 3". F
   only): it showed through as a lighter inner panel. iOS keeps Swift's faint shadow.
 - **`GradientButton gradient="save"`** draws `NexdoTheme.saveGradient` (blue → indigo → magenta), which
   `NexdoGradientButtonStyle` uses: Feedback's Submit and Change password. Auth keeps the brand gradient.
+- **`StatusBarScrim`** (Android only) on Today and Calendar: the page's own backdrop, cut to the status-bar
+  height and drawn over the scroll, so scrolled text no longer runs through the clock. iOS 26 does this with
+  its scroll-edge effect.
+- **A hairline instead of a shadow** on Help, Event Details and the brief section cards (Android only):
+  without the elevation (above) the near-white cards vanished into the page's white end.
+- **Event Details' "…" menu** carries Swift's glyphs.
 
