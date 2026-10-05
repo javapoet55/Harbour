@@ -65,6 +65,7 @@ export const taskIcons = {
   sunrise: 'sunny-outline',
   'calendar.badge.clock': 'calendar-number-outline',
   'questionmark.circle': 'help-circle-outline',
+  'questionmark.circle.fill': 'help-circle',
   'chevron.up': 'chevron-up',
   'speaker.wave.2.fill': 'volume-high',
   'stop.fill': 'stop',
@@ -108,6 +109,24 @@ export const taskIcons = {
   'cart.fill': 'cart',
   ellipsis: 'ellipsis-horizontal',
   'play.fill': 'play',
+  // Account menu, Phase 12 Run A (ProfileView.swift:66-69).
+  'bubble.left.and.text.bubble.right': 'chatbubbles-outline',
+  'lock.rotation': 'lock-closed-outline',
+  // Feedback (FeedbackView.swift:33), Appointment details (CalendarEventDetailsView.swift), Daily Brief.
+  star: 'star-outline',
+  'star.fill': 'star',
+  trash: 'trash-outline',
+  link: 'link-outline',
+  location: 'location-outline',
+  'list.bullet': 'list-outline',
+  'xmark.circle': 'close-circle-outline',
+  'square.and.arrow.up': 'share-outline',
+  'arrow.up.circle.fill': 'arrow-up-circle',
+  pencil: 'pencil-outline',
+  // Ionicons has no crosshair-in-circle or keyboard glyph; these are the nearest.
+  scope: 'locate-outline',
+  keyboard: 'keypad-outline',
+  'arrow.up': 'arrow-up',
 } satisfies Record<string, IoniconName>;
 
 export type TaskSymbolName = keyof typeof taskIcons;
@@ -118,6 +137,10 @@ export type TaskSymbolProps = {
   color: string;
 };
 
+/** Symbols Ionicons only has upright: drawn turned. `arrow.up.left` points up and to the left (↖). */
+const turned: Partial<Record<keyof typeof taskIcons, string>> = { 'arrow.up.left': '-45deg' };
+
 export function TaskSymbol({ name, size, color }: TaskSymbolProps) {
-  return <Ionicons name={taskIcons[name]} size={size} color={color} />;
+  const turn = turned[name];
+  return <Ionicons name={taskIcons[name]} size={size} color={color} style={turn ? { transform: [{ rotate: turn }] } : undefined} />;
 }

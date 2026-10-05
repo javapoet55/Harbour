@@ -11,7 +11,6 @@ import {
   weekdayInitial,
 } from './weeklySummary';
 import { overdueDeadlineLabel, overdueResults } from './overdueTasks';
-import { conditionLabel, conditionSymbol, forecastDayLabel, temperatureLabel, weatherDays } from './weather';
 import type { NexdoTask } from '../api/types';
 
 const ZONE = 'Asia/Kolkata';
@@ -169,52 +168,5 @@ describe('overdueDeadlineLabel', () => {
   it('formats a medium date with a short time in the account zone', () => {
     // Hermes/ICU joins with a comma where Swift's DateFormatter uses "at"; the parts match.
     expect(overdueDeadlineLabel(NOW, ZONE)).toBe('Sep 16, 2026, 9:00 AM');
-  });
-});
-
-/** `WeatherResponse` helpers (ios/Sources/NexdoCore/Models.swift:81-140). */
-describe('weather helpers', () => {
-  it('maps each WMO band to its symbol', () => {
-    expect(conditionSymbol(0)).toBe('sun.max.fill');
-    expect(conditionSymbol(2)).toBe('cloud.sun.fill');
-    expect(conditionSymbol(48)).toBe('cloud.fog.fill');
-    expect(conditionSymbol(55)).toBe('cloud.drizzle.fill');
-    expect(conditionSymbol(81)).toBe('cloud.rain.fill');
-    expect(conditionSymbol(86)).toBe('cloud.snow.fill');
-    expect(conditionSymbol(99)).toBe('cloud.bolt.rain.fill');
-    expect(conditionSymbol(null)).toBe('thermometer.medium');
-  });
-
-  it('names each condition', () => {
-    expect(conditionLabel(0)).toBe('Clear');
-    expect(conditionLabel(3)).toBe('Cloudy');
-    expect(conditionLabel(null)).toBe('Conditions unavailable');
-  });
-
-  it('takes the first five days and reads each index defensively', () => {
-    const days = weatherDays({
-      time: ['a', 'b', 'c', 'd', 'e', 'f'],
-      weather_code: [0, 1],
-      temperature_2m_max: [80],
-      temperature_2m_min: [],
-      precipitation_probability_max: [10, 20, 30, 40, 50],
-    });
-    expect(days).toHaveLength(5);
-    expect(days[0]).toEqual({ id: 'a', code: 0, high: 80, low: null, rain: 10 });
-    expect(days[4]).toEqual({ id: 'e', code: null, high: null, low: null, rain: 50 });
-  });
-
-  it('is empty without a daily block', () => {
-    expect(weatherDays(null)).toEqual([]);
-  });
-
-  it('rounds a temperature, or shows an em dash', () => {
-    expect(temperatureLabel(71.4)).toBe('71°');
-    expect(temperatureLabel(null)).toBe('—');
-  });
-
-  it('labels the current day "Today" and others by weekday', () => {
-    expect(forecastDayLabel('2026-09-16', ZONE, NOW)).toBe('Today');
-    expect(forecastDayLabel('2026-09-18', ZONE, NOW)).toBe('Fri, Sep 18');
   });
 });

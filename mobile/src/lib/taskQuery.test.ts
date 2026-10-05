@@ -3,10 +3,12 @@ import {
   DEFAULT_TASK_QUERY,
   DISTANT_FUTURE,
   addDays,
+  beginSearch,
   dayKey,
   historyInterval,
   revealCreatedTask,
   snapshot,
+  TASK_HISTORY_RANGES,
   standardContains,
   startOfDay,
   type TaskQuery,
@@ -294,5 +296,64 @@ describe('revealCreatedTask', () => {
   it('keeps earliestFirst and historyRange, which Swift does not reset', () => {
     const next = revealCreatedTask(query({ earliestFirst: false, historyRange: 'Last Month' }), NOW, ZONE, NOW);
     expect(next).toMatchObject({ earliestFirst: false, historyRange: 'Last Month' });
+  });
+});
+
+describe('All time and search (TaskQuery.swift:24-60, :110-111)', () => {
+  it('lists All time first, in Swift\'s allCases order, and keeps This Month the default', () => {
+    expect(TASK_HISTORY_RANGES).toEqual(['All time', 'Last 2 weeks', 'This Month', 'Last Month']);
+    expect(DEFAULT_TASK_QUERY.historyRange).toBe('This Month');
+  });
+
+  it('All time is unbounded, but its exclusive end still leaves out the unscheduled key', () => {
+    const interval = historyInterval('All time', NOW, ZONE);
+    expect(interval.start).toBe(Number.NEGATIVE_INFINITY);
+    expect(interval.end).toBe(DISTANT_FUTURE);
+  });
+
+  it('beginSearch resets the date, range, status, priority and term, and leaves earliestFirst', () => {
+    const next = beginSearch(query({ date: 'Today', historyRange: 'Last Month', status: 'Completed', priority: 'LOW', search: 'x', earliestFirst: false }));
+    expect(next).toEqual({ date: 'All', historyRange: 'All time', status: 'All', priority: 'All', search: '', earliestFirst: false });
+  });
+
+  /** `searchResetsFiltersAndFindsAllDatesWithOpenMatchesFirst` (ios/Tests/NexdoCoreTests/TaskQueryTests.swift:241-250). */
+  it('search resets filters and finds all dates with open matches first', () => {
+    const now = Date.parse('2026-09-25T16:00:00Z');
+    const fixture = (id: string, due: string | null, status = 'PLANNED'): NexdoTask => ({
+      id,
+      title: id,
+      status,
+      priority: 'HIGH',
+      durationMin: 30,
+      dueAt: due,
+    });
+    let q = query({ status: 'Completed', priority: 'LOW', date: 'Today' });
+    q = beginSearch(q);
+    expect(q.date).toBe('All');
+    expect(q.status).toBe('All');
+    expect(q.priority).toBe('All');
+    const tasks = [
+      fixture('sink done', '2025-01-01T10:00:00Z', 'COMPLETED'),
+      fixture('sink open', null),
+      fixture('sink future', '2027-01-01T10:00:00Z'),
+      fixture('unrelated', null),
+      fixture('sink cancelled', null, 'CANCELLED'),
+    ];
+    expect(snapshot(q, tasks, 'UTC', now).tasks).toHaveLength(4);
+    q = { ...q, search: 'sink' };
+    expect(snapshot(q, tasks, 'UTC', now).tasks.map((item) => item.id)).toEqual(['sink future', 'sink open', 'sink done']);
+  });
+
+  it('a search term spans every date even under a bounded range', () => {
+    const tasks = [task({ id: 'old', title: 'Sink repair', status: 'COMPLETED', startAt: atLocal('2025-02-01') })];
+    const bounded = query({ date: 'All', historyRange: 'This Month', status: 'All' });
+    expect(snapshot(bounded, tasks, ZONE, NOW).tasks).toHaveLength(0);
+    expect(snapshot({ ...bounded, search: 'sink' }, tasks, ZONE, NOW).tasks.map((item) => item.id)).toEqual(['old']);
+  });
+
+  it('never widens a dated pill', () => {
+    const tasks = [task({ id: 'later', title: 'Sink', startAt: atLocal('2026-10-20') })];
+    const counts = snapshot(query({ date: 'Today', search: 'sink', historyRange: 'All time' }), tasks, ZONE, NOW).counts;
+    expect(counts).toEqual({ Today: 0, Tomorrow: 0, 'This Week': 0, All: 1 });
   });
 });

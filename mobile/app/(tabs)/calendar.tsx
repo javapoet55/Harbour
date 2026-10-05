@@ -1,14 +1,15 @@
 import { LinearGradient } from 'expo-linear-gradient';
+import { useQueryClient } from '@tanstack/react-query';
 import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { ActivityIndicator, Modal, Pressable, RefreshControl, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import type { CalendarEvent } from '../../src/api';
 import { TaskSymbol, Text } from '../../src/components';
 import { CalendarSegments, CalendarSummaryCard, CalendarTimelineRow, withAlpha } from '../../src/components/CalendarParts';
 import { CalendarPushNote } from '../../src/components/CalendarPushNote';
-import { TodayBackdrop } from '../../src/components/TodayShell';
+import { StatusBarScrim, TodayBackdrop } from '../../src/components/TodayShell';
 import {
   CALENDAR_MODES,
   CALENDAR_RANGES,
@@ -26,8 +27,9 @@ import {
 } from '../../src/lib/calendarDates';
 import { calendarRows } from '../../src/lib/calendarRows';
 import { durationLabel } from '../../src/lib/focusClock';
-import { serverTime } from '../../src/lib/taskLabels';
 import { isDone, parseServerDate } from '../../src/lib/taskQuery';
+import { intelligenceHeading, reviewableConflicts } from '../../src/features/calendar/eventDetails';
+import { queryKeys } from '../../src/query/keys';
 import { useCalendarAgenda } from '../../src/query/useCalendar';
 import { useTasks } from '../../src/query/useTasks';
 import { useScheduleIntelligence } from '../../src/query/useToday';
@@ -68,9 +70,6 @@ const CREATION_GAP_INSIDE = 8;
 
 export default function Calendar() {
   const theme = useTheme();
-  // The event detail is a `.sheet` (CalendarView.swift:168); iOS resolves its backgrounds one level
-  // up inside a sheet, so the modal below takes the elevated palette (style map section 3).
-  const sheetTheme = useTheme({ elevated: true });
   // `.toolbar(.hidden, for: .navigationBar)` (CalendarView.swift:138) leaves the SwiftUI scroll view
   // inset by the safe area. React Native insets nothing, so the wordmark drew under the status bar.
   const insets = useSafeAreaInsets();
@@ -93,7 +92,9 @@ export default function Calendar() {
   const [rangeOpen, setRangeOpen] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [expanded, setExpanded] = useState(false);
-  const [eventDetail, setEventDetail] = useState<CalendarEvent | null>(null);
+  // `expandedEmptyDays` (CalendarView.swift:20): empty days in the rolling range start collapsed.
+  const [expandedEmptyDays, setExpandedEmptyDays] = useState<Set<string>>(() => new Set());
+  const queryClient = useQueryClient();
 
   // The four filters (CalendarView.swift:19-22).
   const [showTasks, setShowTasks] = useState(true);
@@ -164,18 +165,57 @@ export default function Calendar() {
     return prefix + label(day, { weekday: 'short', month: 'short', day: 'numeric' });
   };
 
+  /**
+   * Appointment details (CalendarView.swift:177-181). The row's event shows at once while the screen
+   * fetches the server's copy, as Swift's `@State var event` does.
+   */
+  const openEvent = (event: CalendarEvent) => {
+    const key = queryKeys.calendar.event(profile?.id ?? '', event.id);
+    if (!queryClient.getQueryData(key)) queryClient.setQueryData(key, { event });
+    router.push({ pathname: '/calendar/event/[id]', params: { id: event.id, zone } });
+  };
+
+  /** `daySection(_:relative:)` (CalendarView.swift:402-440). */
   const daySection = (day: number, relative: boolean) => {
     const rows = calendarRows({ tasks: tasksFor(day), events: eventsFor(day), day, timeZone: zone, now });
+    const empty = countFor(day) === 0;
+    const expandKey = `${zone}:${calendarKey(day, zone)}`;
+    // `!relative || !empty || expandedEmptyDays.contains(key)`.
+    const isExpanded = !relative || !empty || expandedEmptyDays.has(expandKey);
+    const toggle = () =>
+      setExpandedEmptyDays((current) => {
+        const next = new Set(current);
+        if (next.has(expandKey)) next.delete(expandKey);
+        else next.add(expandKey);
+        return next;
+      });
     return (
       <View key={calendarKey(day, zone)} style={[styles.daySection, android && styles.androidDaySection]} testID={`calendar-day-${calendarKey(day, zone)}`}>
-        <View style={[styles.dayHeader, android && styles.androidDayHeader]} testID={`calendar-day-header-${calendarKey(day, zone)}`}>
-          <Text style={[styles.heading, { color: theme.colors.ink }]}>{dayTitle(day, relative)}</Text>
-          <View style={styles.grow} />
-          <Text style={[styles.subheadline, { color: theme.colors.secondary }]}>{itemCount(countFor(day))}</Text>
-          {!relative ? <FiltersButton /> : null}
-        </View>
+        {relative && empty ? (
+          <Pressable
+            accessibilityHint={`Double tap to ${isExpanded ? 'collapse' : 'expand'} this day`}
+            accessibilityRole="button"
+            accessibilityState={{ expanded: isExpanded }}
+            accessibilityValue={{ text: isExpanded ? 'Expanded' : 'Collapsed' }}
+            onPress={toggle}
+            style={styles.emptyDayHeader}
+            testID={`calendar-day-header-${calendarKey(day, zone)}`}
+          >
+            <Text style={[styles.heading, { color: theme.colors.ink }]}>{dayTitle(day, relative)}</Text>
+            <View style={styles.grow} />
+            <Text style={[styles.subheadline, { color: theme.colors.secondary }]}>{itemCount(0)}</Text>
+            <TaskSymbol name={isExpanded ? 'chevron.down' : 'chevron.right'} size={12} color={theme.colors.secondary} />
+          </Pressable>
+        ) : (
+          <View style={[styles.dayHeader, android && styles.androidDayHeader]} testID={`calendar-day-header-${calendarKey(day, zone)}`}>
+            <Text style={[styles.heading, { color: theme.colors.ink }]}>{dayTitle(day, relative)}</Text>
+            <View style={styles.grow} />
+            <Text style={[styles.subheadline, { color: theme.colors.secondary }]}>{itemCount(countFor(day))}</Text>
+            {!relative ? <FiltersButton /> : null}
+          </View>
+        )}
         <View style={[styles.divider, { backgroundColor: withAlpha(brand.nexdoIndigo, 0.08) }]} />
-        {rows.length === 0 ? (
+        {rows.length === 0 && !isExpanded ? null : rows.length === 0 ? (
           <Text style={[styles.subheadline, styles.emptyDay, android && styles.androidEmptyDay, { color: theme.colors.secondary }]} testID={`calendar-empty-${calendarKey(day, zone)}`}>
             {filtersActive ? 'No items match your filters.' : 'Nothing scheduled. Room to breathe.'}
           </Text>
@@ -187,7 +227,7 @@ export default function Calendar() {
               timeZone={zone}
               completedOnly={completedOnly}
               now={now}
-              onPress={() => (row.task ? router.push(`/task/${row.task.id}`) : setEventDetail(row.event))}
+              onPress={() => (row.task ? router.push(`/task/${row.task.id}`) : row.event ? openEvent(row.event) : undefined)}
             />
           ))
         )}
@@ -450,22 +490,26 @@ export default function Calendar() {
               {/* The backlog disclosure (CalendarView.swift:98-110) */}
               {!completedOnly ? (
                 <View
-                  style={[styles.backlog, { backgroundColor: withAlpha(theme.colors.surface, 0.7), borderColor: withAlpha(brand.nexdoBlue, 0.18) }, androidGroup(theme)]}
+                  style={[styles.backlog, { backgroundColor: withAlpha(brand.nexdoIndigo, 0.1), borderColor: withAlpha(brand.nexdoIndigo, 0.18) }, androidGroup(theme)]}
                   testID="calendar-backlog-card"
                 >
                   <Pressable
                     accessibilityRole="button"
-                    accessibilityLabel={`Unscheduled & overdue  ${backlog.length}`}
+                    accessibilityLabel={`Unscheduled & overdue, ${backlog.length} tasks`}
                     accessibilityState={{ expanded }}
                     onPress={() => setExpanded((open) => !open)}
                     testID="calendar-backlog"
                     style={styles.backlogHeader}
                   >
-                    <Text style={[styles.subheadline, styles.semibold, styles.grow, { color: theme.colors.ink }]}>
-                      {`Unscheduled & overdue  ${backlog.length}`}
-                    </Text>
-                    {/* A `DisclosureGroup` draws its chevron in the accent colour, not secondary. */}
-                    <TaskSymbol name={expanded ? 'chevron.down' : 'chevron.right'} size={14} color={theme.colors.link} />
+                    <Text style={[styles.subheadline, styles.semibold, { color: theme.colors.ink }]}>{'Unscheduled & overdue'}</Text>
+                    <View style={[styles.backlogCount, { backgroundColor: brand.nexdoIndigo }]}>
+                      <Text style={[styles.subheadline, styles.bold, { color: '#FFFFFF' }]} testID="calendar-backlog-count">
+                        {String(backlog.length)}
+                      </Text>
+                    </View>
+                    <View style={styles.grow} />
+                    {/* The disclosure chevron is ink on iOS 26 (`calendar-v2-collapsed-days`). */}
+                    <TaskSymbol name={expanded ? 'chevron.down' : 'chevron.right'} size={14} color={theme.colors.ink} />
                   </Pressable>
                   {expanded ? (
                     backlog.length === 0 ? (
@@ -517,6 +561,7 @@ export default function Calendar() {
           )
         ) : null}
       </ScrollView>
+      <StatusBarScrim subtle />
 
       {/* The filters menu (CalendarView.swift:322-335) */}
       {filtersOpen ? (
@@ -552,51 +597,6 @@ export default function Calendar() {
         </View>
       ) : null}
 
-      {/* `.sheet(item: $eventDetail)` (CalendarView.swift:168-180): an INLINE sheet, not a route. */}
-      <Modal visible={eventDetail !== null} animationType="slide" transparent onRequestClose={() => setEventDetail(null)}>
-        <View style={styles.sheetBackdrop}>
-          <View style={[styles.sheet, { backgroundColor: sheetTheme.colors.groupedBackground }]}>
-            {/* `.navigationTitle("Event Details").navigationBarTitleDisplayMode(.inline)` with a
-                trailing Done button (`:177-178`): an inline title is centred on both platforms. */}
-            <View style={styles.sheetBar}>
-              <View style={styles.sheetBarSide} />
-              <Text accessibilityRole="header" style={[styles.heading, styles.centred, styles.grow, { color: sheetTheme.colors.ink }]}>
-                Event Details
-              </Text>
-              <Pressable accessibilityRole="button" accessibilityLabel="Done" onPress={() => setEventDetail(null)} style={[styles.cancel, styles.sheetBarSide]} testID="event-detail-done">
-                <Text style={[theme.typography.body, styles.trailing, { color: sheetTheme.colors.link }]}>Done</Text>
-              </Pressable>
-            </View>
-            {eventDetail ? (
-              <>
-                {/* A `Form` on iOS 26: 16pt outer inset, 26pt corners, 16pt row inset, 56pt rows,
-                    a sentence-case `.body` header inset 32pt from the screen (style map section 7). */}
-                <View style={[styles.sheetSection, { backgroundColor: sheetTheme.colors.surface }]}>
-                  <Text style={[styles.heading, styles.formRow, { color: sheetTheme.colors.ink }]} testID="event-detail-title">
-                    {eventDetail.title}
-                  </Text>
-                </View>
-                <Text style={[theme.typography.body, styles.sectionHeader, { color: sheetTheme.colors.secondaryLabel }]}>Calendar commitment</Text>
-                <View style={[styles.sheetSection, { backgroundColor: sheetTheme.colors.surface }]}>
-                  {eventDetail.allDay === true ? (
-                    <Text style={[theme.typography.body, styles.formRow, { color: sheetTheme.colors.ink }]}>All day</Text>
-                  ) : null}
-                  <View style={[styles.formSeparator, { backgroundColor: sheetTheme.colors.listSeparator }]} />
-                  <Text style={[theme.typography.body, styles.formRow, { color: sheetTheme.colors.ink }]} testID="event-detail-starts">
-                    {`Starts: ${eventDateLabel(eventDetail.startAt, zone)}`}
-                  </Text>
-                  <View style={[styles.formSeparator, { backgroundColor: sheetTheme.colors.listSeparator }]} />
-                  <Text style={[theme.typography.body, styles.formRow, { color: sheetTheme.colors.ink }]} testID="event-detail-ends">
-                    {`Ends: ${eventDateLabel(eventDetail.endAt, zone)}`}
-                  </Text>
-                  <View style={[styles.formSeparator, { backgroundColor: sheetTheme.colors.listSeparator }]} />
-                  <Text style={[theme.typography.body, styles.formRow, { color: sheetTheme.colors.secondaryLabel }]}>{zone}</Text>
-                </View>
-              </>
-            ) : null}
-          </View>
-        </View>
-      </Modal>
     </View>
   );
 
@@ -620,7 +620,7 @@ export default function Calendar() {
         title={`${itemCount(total)} · ${deadlineIds.size} ${deadlineIds.size === 1 ? 'deadline' : 'deadlines'}`}
         detail={
           completedOnly
-            ? 'Completed tasks and past events in the selected dates'
+            ? 'Completed tasks and events in the selected dates'
             : `${overdueCount} overdue tasks overall · ${includesToday ? 'Includes today' : label(days[0], { month: 'short', day: 'numeric' })}`
         }
         testID="calendar-summary"
@@ -647,6 +647,7 @@ export default function Calendar() {
   function IntelligenceCard() {
     const today = intelligence.data?.today ?? null;
     const current = today !== null && today.day === calendarKey(now, zone);
+    const conflicts = reviewableConflicts(today, intelligence.isError, calendarKey(now, zone), zone);
     return (
       // Android: the shared form group, like every other card (docs/android-polish.md §10).
       <View
@@ -664,28 +665,33 @@ export default function Calendar() {
               Phase 5 pointed this at `/today/attention`, a port of a different view; Phase 10 built
               the sheet itself. */}
           {/* Android: the link may shrink and wrap, so the header row never clips it. */}
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Review conflicts"
-            onPress={() => router.push('/calendar/conflicts')}
-            style={[styles.cancel, android && styles.androidConflicts]}
-            testID="calendar-conflicts"
-          >
-            <Text style={[styles.caption, styles.semibold, android && styles.androidConflictsLabel, { color: '#007AFF' }]}>Review conflicts</Text>
-          </Pressable>
+          {/* Only when there is something to review (`if !reviewableConflicts.isEmpty`, :268). */}
+          {conflicts.length > 0 ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Review conflicts"
+              onPress={() => router.push('/calendar/conflicts')}
+              style={[styles.cancel, android && styles.androidConflicts]}
+              testID="calendar-conflicts"
+            >
+              <Text style={[styles.caption, styles.semibold, android && styles.androidConflictsLabel, { color: '#007AFF' }]}>Review conflicts</Text>
+            </Pressable>
+          ) : null}
         </View>
         {current && today ? (
           <>
-            {/* `Label(info.recommendation.title, systemImage: "exclamationmark.triangle")` (`:259`). */}
+            {/* The heading (`:272-278`): conflicts to review, a clear day, or today's schedule. Only the
+                first carries the warning glyph. */}
             <View style={styles.recommendation}>
-              <TaskSymbol name="exclamationmark.triangle" size={17} color={theme.colors.ink} />
-              <Text style={[styles.heading, styles.grow, { color: theme.colors.ink }]}>{today.recommendation.title}</Text>
+              {conflicts.length > 0 ? <TaskSymbol name="exclamationmark.triangle" size={17} color={theme.colors.ink} /> : null}
+              <Text style={[styles.heading, styles.grow, { color: theme.colors.ink }]} testID="calendar-intelligence-heading">
+                {intelligenceHeading(today, conflicts.length)}
+              </Text>
             </View>
             <Text style={[styles.caption, { color: theme.colors.secondary }]}>
               {/* `DurationDisplay.durationLabel(info.availableMinutes)` (`:260`) — "7 hours 43 minutes". */}
               {`${today.appointments} calendar commitments today · ${durationLabel(today.availableMinutes)} of usable time remain`}
             </Text>
-            <Text style={[styles.caption, { color: theme.colors.secondary }]}>{today.recommendation.explanation}</Text>
           </>
         ) : intelligence.isFetching || intelligence.isError ? null : (
           <>
@@ -862,14 +868,6 @@ export default function Calendar() {
   }
 }
 
-/** `eventDate(_:)` (CalendarView.swift:479): `EEE, MMM d, yyyy h:mm a`. */
-function eventDateLabel(value: string, timeZone: string): string {
-  const at = parseServerDate(value);
-  if (at === null) return 'Unavailable';
-  const date = new Intl.DateTimeFormat('en-US', { timeZone, weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }).format(new Date(at));
-  return `${date} ${serverTime(value, timeZone)}`;
-}
-
 /** `Color(red: 0.18, green: 0.36, blue: 0.59)` on the selected day (CalendarView.swift:366). */
 const SELECTED_DAY = '#2E5C96';
 
@@ -953,15 +951,8 @@ const styles = StyleSheet.create({
   creationIcon: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
   // `VStack(alignment: .leading, spacing: 4)` (CalendarView.swift:286).
   creationText: { flex: 1, gap: 4 },
-  sheetBackdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0, 0, 0, 0.35)' },
-  // A `Form` section is inset 16 from the screen on iOS 26 (style map section 7).
-  sheet: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 20, gap: 8, borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: '80%' },
-  sheetBar: { flexDirection: 'row', alignItems: 'center', paddingVertical: 6 },
-  sheetBarSide: { width: 72 },
-  // 26pt corners, 16pt row inset; each row is 56 high with the separator between rows.
-  sheetSection: { borderRadius: 26, overflow: 'hidden' },
-  formRow: { minHeight: 56, paddingHorizontal: 16, textAlignVertical: 'center' },
-  formSeparator: { height: 1, marginLeft: 16 },
-  // 32 from the screen: 16 section inset plus 16 row inset. Sentence case, `.body`, `.secondaryLabel`.
-  sectionHeader: { marginLeft: 16, marginTop: 12 },
+  // The empty-day disclosure row (CalendarView.swift:408-427): 44 high, no bottom padding.
+  emptyDayHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 44 },
+  // The backlog count (:112-117): white bold on an indigo circle, at least 32 across.
+  backlogCount: { minWidth: 32, minHeight: 32, padding: 8, borderRadius: 999, alignItems: 'center', justifyContent: 'center', marginLeft: 10 },
 });

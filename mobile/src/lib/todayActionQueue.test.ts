@@ -190,3 +190,34 @@ describe('buildActionQueue', () => {
     );
   });
 });
+
+/** Phase 12 ports of ios/Tests/NexdoCoreTests/TodayActionQueueTests.swift:91-110. */
+describe('due and upcoming actions', () => {
+  const pair = (id: string, minutes: number, extra: Partial<TaskAction> = {}) => ({
+    action: action({ id: `a-${id}`, taskId: id, contactName: id, sourceTitle: `Contact ${id}`, scheduledAt: NOW + minutes * MINUTE, ...extra }),
+    task: task({ id, title: `Contact ${id}` }),
+  });
+  const build = (pairs: ReturnType<typeof pair>[]) => queue(pairs.map((item) => item.action), pairs.map((item) => item.task));
+
+  // multipleActionCardsIncludeEveryDueActionWithoutUpcomingDuplicates
+  it('includes every due action once, and none of them in upcoming', () => {
+    const due = [0, 1, 2, 3, 4, 5].map((index) => pair(`Person${index}`, index - 5));
+    const result = build([...due, pair('Soon', 5)]);
+    expect(result.dueActions.map((item) => item.taskId)).toEqual(due.map((item) => item.task.id));
+    expect(result.upcomingActions.map((item) => item.taskId)).toEqual(['Soon']);
+    const dueIds = new Set(result.dueActions.map((item) => item.id));
+    expect(result.upcomingActions.some((item) => dueIds.has(item.id))).toBe(false);
+  });
+
+  // dueCardsUpdateAfterDismissSnoozeAndTaskCompletion
+  it('updates after a dismiss, a snooze and a completed task', () => {
+    const first = pair('First', -10, { status: 'cancelled' });
+    const second = pair('Second', -5, { snoozedUntil: NOW + 5 * MINUTE });
+    const third = pair('Third', 0);
+    expect(build([first, second, third]).dueActions.map((item) => item.taskId)).toEqual(['Third']);
+    expect(build([first, second, third]).upcomingActions.map((item) => item.taskId)).toEqual(['Second']);
+    const completed = { ...third, task: { ...third.task, status: 'COMPLETED' } };
+    expect(build([first, second, completed]).dueActions).toEqual([]);
+    expect(build([]).upcomingActions).toEqual([]);
+  });
+});

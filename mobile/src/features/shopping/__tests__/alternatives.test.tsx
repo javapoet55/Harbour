@@ -1,10 +1,7 @@
-import { act, render, waitFor } from '@testing-library/react-native';
-
 import { ApiError, createApiClient } from '../../../api/client';
-import { shoppingApi, type GroceryItem, type GroceryList, type ShoppingAlternativesResponse } from '../../../api/shopping';
-import { addedAlternative, alternativeId, alternativeItem, localAlternatives, replacedWithAlternative } from '../model';
+import { shoppingApi, type GroceryItem, type ShoppingAlternativesResponse } from '../../../api/shopping';
+import { alternativeId, alternativeItem } from '../model';
 import { createShoppingStore } from '../store';
-import { useShoppingAlternatives, type UseShoppingAlternatives } from '../useAlternatives';
 
 /**
  * Item alternatives: the `alternatives` operation (src/server/shopping/service.ts:12-15), Swift's
@@ -26,9 +23,6 @@ function item(overrides: Partial<GroceryItem> = {}): GroceryItem {
   return { id: 'i1', name: 'Chicken breast', category: 'Meat & Seafood', quantity: '1', size: 'lb', notes: '', imageData: null, checked: false, ...overrides };
 }
 
-function list(items: GroceryItem[]): GroceryList {
-  return { id: 'l1', title: 'Weekly', date: '2026-09-25', timeZone: 'UTC', weekly: true, revision: 4, completedAt: null, shareToken: null, items };
-}
 
 describe('shoppingApi.alternatives', () => {
   it('posts { operation: "alternatives", input } with no id, revision or key, and decodes the answer', async () => {
@@ -64,11 +58,30 @@ describe('ShoppingStore.alternatives', () => {
     expect(store.getState()).toMatchObject({ busy: false, error: null });
   });
 
-  it('falls back to the phone’s own list on any failure but a lost session', async () => {
-    const store = harness(jest.fn(async () => Promise.reject(new ApiError({ status: 0, code: 'NETWORK', message: 'offline' }))));
-    const answer = await store.getState().alternatives(item());
-    expect(answer).toEqual(localAlternatives(item()));
-    expect(answer.usedAI).toBe(false);
+  it('throws every failure: no phone-side fallback any more (ShoppingStore.swift:48-52)', async () => {
+    const offline = new ApiError({ status: 0, code: 'NETWORK', message: 'offline' });
+    const store = harness(jest.fn(async () => Promise.reject(offline)));
+    await expect(store.getState().alternatives(item())).rejects.toBe(offline);
+  });
+
+  it('reuses an answer for five minutes per item, unless refreshed, and not after a change', async () => {
+    let clock = 1_000;
+    const alternatives = jest.fn(async () => RESPONSE);
+    const store = createShoppingStore({ lists: jest.fn(), post: jest.fn(), alternatives, transcriptionSession: jest.fn() }, () => clock);
+    await store.getState().alternatives(item());
+    clock += 299_000;
+    await store.getState().alternatives(item());
+    expect(alternatives).toHaveBeenCalledTimes(1);
+    await store.getState().alternatives(item(), true);
+    expect(alternatives).toHaveBeenCalledTimes(2);
+    await store.getState().alternatives(item({ size: '2 lb' }));
+    expect(alternatives).toHaveBeenCalledTimes(3);
+    clock += 300_001;
+    await store.getState().alternatives(item());
+    expect(alternatives).toHaveBeenCalledTimes(4);
+    store.getState().reset();
+    await store.getState().alternatives(item());
+    expect(alternatives).toHaveBeenCalledTimes(5);
   });
 
   it('rethrows a lost session', async () => {
@@ -94,109 +107,8 @@ describe('alternative model', () => {
     });
   });
 
-  it('has Swift’s offline fallback for chicken', () => {
-    const answer = localAlternatives(item({ size: '' }));
-    expect(answer.alternatives).toHaveLength(5);
-    expect(answer.alternatives.map((alternative) => alternative.name)).toContain('Turkey breast');
-    expect(answer.alternatives[0]).toEqual({
-      name: 'Chicken breast (skinless)',
-      category: 'Meat & Seafood',
-      quantity: '1',
-      size: 'lb',
-      reason: 'Lower calorie option',
-      detail: 'Lean cut with less saturated fat',
-    });
-    expect(answer.usedAI).toBe(false);
-  });
-
-  it('has Swift’s offline fallback for milk, keeping the item’s quantity and size', () => {
-    const answer = localAlternatives(item({ name: 'Whole Milk', category: 'Dairy & Eggs', quantity: '2', size: 'gallon' }));
-    expect(answer.alternatives.map((alternative) => alternative.name)).toEqual(['Low-fat milk', 'Lactose-free milk', 'Unsweetened oat milk', 'Unsweetened soy milk']);
-    expect(answer.alternatives[0]).toMatchObject({ quantity: '2', size: 'gallon' });
-    expect(answer.tip).toBe('Choose an unsweetened alternative when you want to avoid added sugar.');
-  });
-
-  it('otherwise offers organic, store-brand and family-size versions of the base name', () => {
-    const answer = localAlternatives(item({ name: 'Organic Bread', category: 'Bakery', size: '' }));
-    expect(answer.alternatives.map((alternative) => alternative.name)).toEqual(['Organic Bread', 'Store-brand Bread', 'Family-size Bread']);
-    expect(answer.alternatives[2].size).toBe('large pack');
-    expect(answer.tip).toBe('Compare unit prices and package sizes before replacing Bread.');
-  });
-
-  it('replaces in place, keeping the original’s id and checked state', () => {
-    const before = list([item({ id: 'a', name: 'Eggs' }), item({ id: 'i1', checked: true }), item({ id: 'c', name: 'Rice' })]);
-    const next = replacedWithAlternative(before, 'i1', RESPONSE.alternatives[0]);
-    expect(next?.items.map((row) => row.id)).toEqual(['a', 'i1', 'c']);
-    expect(next?.items[1]).toMatchObject({ id: 'i1', name: 'Turkey breast', notes: 'Mild flavor', checked: true });
-    expect(before.items[1].name).toBe('Chicken breast');
-  });
-
-  it('does nothing when the original is gone', () => {
-    expect(replacedWithAlternative(list([item({ id: 'a' })]), 'i1', RESPONSE.alternatives[0])).toBeNull();
-  });
-
-  it('adds to the cart as a new, unchecked item at the end', () => {
-    const next = addedAlternative(list([item({ checked: true })]), RESPONSE.alternatives[1], 'NEW');
-    expect(next.items.map((row) => row.id)).toEqual(['i1', 'NEW']);
-    expect(next.items[1]).toMatchObject({ name: 'Salmon', checked: false, notes: 'Rich in omega-3 fatty acids' });
-  });
-});
-
-describe('useShoppingAlternatives', () => {
-  async function mount(options: { fetchAlternatives: jest.Mock; items?: GroceryItem[] }) {
-    const save = jest.fn();
-    const result: { current: UseShoppingAlternatives } = { current: null as unknown as UseShoppingAlternatives };
-    const current = list(options.items ?? [item({ checked: true })]);
-    function Probe() {
-      result.current = useShoppingAlternatives({ list: current, original: current.items[0], save, fetchAlternatives: options.fetchAlternatives, uuid: () => 'NEW' });
-      return null;
-    }
-    await render(<Probe />);
-    await waitFor(() => expect(result.current).toBeTruthy());
-    return { result, save };
-  }
-
-  it('loads once on appear and preselects the first alternative', async () => {
-    const fetchAlternatives = jest.fn(async () => RESPONSE);
-    const { result } = await mount({ fetchAlternatives });
-    await waitFor(() => expect(result.current.loading).toBe(false));
-    expect(fetchAlternatives).toHaveBeenCalledTimes(1);
-    expect(result.current.result).toEqual(RESPONSE);
-    expect(result.current.selectedId).toBe('Turkey breast|Meat & Seafood|1|lb');
-    expect(result.current.selected?.name).toBe('Turkey breast');
-  });
-
-  it('replaces the original with the selection through save', async () => {
-    const { result, save } = await mount({ fetchAlternatives: jest.fn(async () => RESPONSE) });
-    await waitFor(() => expect(result.current.loading).toBe(false));
-    await act(async () => result.current.select(alternativeId(RESPONSE.alternatives[1])));
-    let applied = false;
-    await act(async () => {
-      applied = result.current.replace();
-    });
-    expect(applied).toBe(true);
-    expect(save).toHaveBeenCalledTimes(1);
-    expect(save.mock.calls[0][0].items).toEqual([{ ...alternativeItem(RESPONSE.alternatives[1], 'i1'), checked: true }]);
-  });
-
-  it('adds the selection instead, as a new item', async () => {
-    const { result, save } = await mount({ fetchAlternatives: jest.fn(async () => RESPONSE) });
-    await waitFor(() => expect(result.current.loading).toBe(false));
-    await act(async () => {
-      result.current.addInstead();
-    });
-    expect(save.mock.calls[0][0].items.map((row: GroceryItem) => row.id)).toEqual(['i1', 'NEW']);
-  });
-
-  it('shows the error and applies nothing when loading fails, and can try again', async () => {
-    const fetchAlternatives = jest.fn().mockRejectedValueOnce(new Error('Your session has expired.')).mockResolvedValueOnce(RESPONSE);
-    const { result, save } = await mount({ fetchAlternatives });
-    await waitFor(() => expect(result.current.error).toBe('Your session has expired.'));
-    expect(result.current.replace()).toBe(false);
-    expect(result.current.addInstead()).toBe(false);
-    expect(save).not.toHaveBeenCalled();
-    await act(async () => result.current.load());
-    expect(result.current.error).toBeNull();
-    expect(result.current.selected?.name).toBe('Turkey breast');
+  it('carries the source’s brand and barcode into the new item (ShoppingList.swift:74-78)', () => {
+    const facts = { source: 'Open Food Facts', brand: 'Acme', barcode: '0123456789012' };
+    expect(alternativeItem({ ...RESPONSE.alternatives[0], facts }, 'NEW')).toMatchObject({ brand: 'Acme', barcode: '0123456789012' });
   });
 });

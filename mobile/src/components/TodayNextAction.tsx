@@ -1,9 +1,11 @@
+import { LinearGradient } from 'expo-linear-gradient';
 import { useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import type { DoNowChoice, ProtectedTimeProposal } from '../api';
 import { protectedTimeLabel } from '../query/useNextAction';
-import { brand, useTheme } from '../theme';
+import { brand, linearGradientStops, useTheme } from '../theme';
+import { SAVE_GRADIENT } from './GradientButton';
 import { withAlpha } from './SignInBackdrop';
 import { TaskSymbol } from './TaskSymbol';
 import { Text } from './Text';
@@ -177,13 +179,11 @@ export function FocusNextCard({
       ) : (
         <>
           <Text style={[styles.subheadline, { color: theme.colors.secondary }]}>Find a task for the time you have.</Text>
-          <Pressable
-            accessibilityRole="button"
-            onPress={onOtherOptions}
-            style={[styles.capsule, styles.findButton, { backgroundColor: theme.colors.tint }]}
-            testID="today-focus-find"
-          >
-            <Text style={[theme.typography.body, { color: '#FFFFFF' }]}>Find my next task</Text>
+          {/* `.buttonStyle(NexdoGradientButtonStyle())` (RootView.swift:1248): `NexdoTheme.saveGradient` in a capsule. */}
+          <Pressable accessibilityRole="button" onPress={onOtherOptions} style={styles.findButton} testID="today-focus-find">
+            <LinearGradient colors={linearGradientStops(SAVE_GRADIENT)} end={{ x: 1, y: 0.5 }} start={{ x: 0, y: 0.5 }} style={styles.capsule}>
+              <Text style={[theme.typography.body, { color: '#FFFFFF' }]}>Find my next task</Text>
+            </LinearGradient>
           </Pressable>
         </>
       )}

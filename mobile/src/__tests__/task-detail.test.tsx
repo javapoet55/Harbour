@@ -33,6 +33,11 @@ jest.mock('../api', () => ({
   },
 }));
 
+// Task Details mounts `TaskAgentCard` first (TaskDetailsView.swift:39); no business research here.
+jest.mock('../api/taskAgent', () => ({
+  taskAgentApi: { load: jest.fn(async () => ({ run: null, intent: null })), update: jest.fn() },
+}));
+
 import TaskDetail from '../../app/task/[id]';
 
 const ZONE = 'Asia/Kolkata';
@@ -421,5 +426,18 @@ describe('Task detail on Android', () => {
 
     expect(flat('detail-schedule')).toMatchObject({ padding: 12, borderRadius: 17 });
     expect(flat('detail-footer')).toMatchObject({ backgroundColor: light.surface });
+  });
+});
+
+/** `TaskDetailsView(task:initialSection:)` (TaskDetailsView.swift:9, :81-85), from the Daily Brief. */
+describe('Opening at a section', () => {
+  it('focuses Notes for "Add Note" and nothing otherwise', async () => {
+    await renderDetail();
+    expect(screen.getByTestId('detail-notes').props.autoFocus).toBe(false);
+    screen.unmount();
+
+    mockParams.mockReturnValue({ id: 't1', section: 'notes' });
+    await renderDetail();
+    expect(screen.getByTestId('detail-notes').props.autoFocus).toBe(true);
   });
 });

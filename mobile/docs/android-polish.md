@@ -1191,3 +1191,381 @@ Changes:
   "electrician"; before, such titles could pass five words and get no action).
 - Contacts are searched without a leading "the", "a", "an", "my", "our" or "your", so "the plumber"
   finds "Plumber". Cards and notifications keep the name as written.
+
+---
+
+## 21. Phase 12 Run C: Wellness chooser, module guides and Pomodoro (2026-10-05)
+
+New screens, built from the Swift source (no captures existed for them yet). The deviations from Swift
+are listed here, Android-only or not.
+
+### Wellness chooser and module guides
+
+- **Fixed light colours, in both modes.** Swift draws the chooser, the guides and Pomodoro on explicit
+  white cards and gradients with an explicit ink (and `.preferredColorScheme(.light)` on the Pomodoro
+  dashboard), so they stay light in dark mode on iOS. They stay light here too; the `link` token (the
+  dark-mode tappable colour) does not apply, and every tappable keeps Swift's own colour — the module's
+  colour on the guides, indigo on Pomodoro.
+- **Sprite sheets are pre-cut.** Swift crops `wellness-menu-pack` and `module-guide-pack` at draw time.
+  The same pixel rectangles were cut once into `assets/wellness/` (28 files, 788 KB in all), and drawn
+  whole. `.blendMode(.multiply)` is `mixBlendMode: 'multiply'` (New Architecture), so the art's white
+  sheet background drops out on the tinted cards as on iOS.
+- **The tab bar's centre button** is `wellness-navigation` at 62×58 in the 58dp bar, between Tasks and
+  Ask AI, with no title and no selection capsule, as Swift's. It opens the chooser as a full-screen
+  modal.
+- **Accessibility text size.** The guide stacks each step's picture under its text when the font scale is
+  1.6 or more (iOS's AX1 is 1.65; Android 14's 1.8× and 2× settings qualify, "Largest" 1.3× does not).
+- **The guide's bar** is drawn by the screen: a glass back circle in the module's colour and the inline
+  title "How It Works", as on the other covers.
+
+### Pomodoro (timer, dashboard, history, category insights)
+
+- **Sound: the phone's default notification sound, for both.** The end-of-phase alert uses it, as in
+  Swift (`content.sound = .default`). Swift's in-app chime is iOS system sound 1005, which has no file to
+  ship, so the chime plays the default notification sound too: an immediate local notification that the
+  foreground handler presents with sound only — no banner, no list entry — removed four seconds later.
+  No sound file is bundled. Without notification permission the chime is silent, as the alert is. When a
+  phase ends with Pomodoro on screen, the alert (banner and sound) and the chime both play, as on iOS.
+- **Keep screen awake** is expo-keep-awake under one tag, held only during an unpaused focus on the timer
+  screen in the foreground with "Distraction-free mode" on, and released on leaving — Swift's
+  `isIdleTimerDisabled` rule. It needs no Android permission.
+- **The notification tap** opens Pomodoro over the tabs (`from=notification`). With Ask open, Ask closes
+  first; with the Wellness chooser or a guide open, the tap waits until they close; with Pomodoro already
+  showing, nothing more opens (Swift would present a second cover once the chooser closed).
+- **Charts and rings are drawn from Views** (no SVG or chart module): bars and the minute grid as views,
+  the timer ring and the category donut as 180 short segments, the ring's angular gradient sampled per
+  segment. A bar is picked by tapping, not by dragging along the chart. Axis labels are en-US ("3PM",
+  "Mon", "Sep 26"), the format Swift's captures show.
+- **Sheets** (history, session details) are React Native page sheets; the dashboard's "…" menu and the
+  trend-period menu use the Moments popover, which follows the system theme while the screen stays light.
+- **The timer counts from the stored deadline**, ticking once a second while shown, and catches up on
+  return to the foreground, as Swift's `scenePhase` handler does.
+
+---
+
+## 22. Phase 12 Run D: Calorie Tracker (2026-10-05)
+
+The Calorie Tracker (`CalorieTrackerView.swift`), built from the Swift source; no captures existed yet.
+Deviations from Swift, Android-only or not:
+
+- **One screen, Swift's own pages.** All eight pages live in `app/wellness/calories.tsx` under one header,
+  moved between with Swift's `page` and `history` (Back pops, Back on the first page closes) rather than
+  a navigation stack, so there are no push animations between pages — as on iOS.
+- **Fixed light colours**, as Run C's covers: Swift draws the tracker on a white gradient with an explicit
+  ink. Plain buttons take the app tint (`.tint(.nexdoIndigo)` from `RootView`), switches and pickers the
+  system indigo (`.tint(.indigo)`); the `link` token does not apply.
+- **Pickers.** The call time is `ClockField` in its 12-hour form-row style; the time zone, the agent voice
+  and the editor's meal are the Moments `MenuPicker`; the calorie goal's `Stepper` is a − / + capsule; the
+  dashboard's date is a pill opening the system-style month grid, limited to today and earlier; Period and
+  Insights / Recommendations are segmented controls drawn from views.
+- **Rings and charts from views.** The Today ring is 180 short segments with its blue → cyan → green
+  gradient sampled along the bottom-left → top-right axis, round caps omitted; Week and Month bars are
+  views. Neither chart is interactive in Swift, so there is nothing to tap. (Run C's Pomodoro charts are
+  the ones where a bar is picked by tapping instead of dragging — §21.)
+- **"What happens next?" numbers.** SF Symbols' `1.circle.fill` … `3.circle.fill` have no Ionicons
+  equivalent: a filled circle in the step's colour with the number in white.
+- **The checkmark on "All Set!"** is the gradient masked to the icon (`@react-native-masked-view`, already
+  installed), as Swift's `.foregroundStyle(gradient)`.
+- **Alerts** are React Native's: one titled "Calorie Tracker" (or "Calorie Tracker Preview") with OK, for
+  every notice and error, as Swift's single `.alert`.
+- **Sample preview.** Swift shows the sample data when no account is signed in or under the DEBUG
+  `-calorie-design-preview` launch argument. The chooser is only reachable signed in, so a development
+  build opens the preview with `nexdo:///wellness/calories?preview=1`; release builds are always live.
+- **Art.** Only `calorie-design-pack` is drawn (the robot, 218×140 at 1305, 790), cut at its own size into
+  `assets/wellness/calorie-agent.png` (31 KB). `nutrition-detail-pack` belongs to Shopping Alternatives,
+  not this screen, so it was not copied.
+
+## 23. Phase 12 prep: Wellness holds Moments and Shopping; the light design is enforced (2026-10-05)
+
+JavaScript only; no new build needed.
+
+### Moments and Shopping inside the Wellness cover
+
+- **Supersedes §21's "Moments and Shopping open in the Today stack".** Their routes moved from
+  `app/(tabs)/(today)/` to `app/wellness/moments/` and `app/wellness/shopping/`, pushed in the wellness
+  stack with the same glass bar as before. "Got it!" replaces the guide with the module, as Swift's
+  `WellnessModuleEntrance` swaps its content, so Back returns to the chooser rather than to Today.
+- **No tab bar and no chooser bar inside a module**, as in Swift (`moments-date-filter-*`,
+  `shopping-detail-store`): the module covers both. Before this, Moments and Shopping kept the tab bar
+  because they were pushed in the Today tab.
+- **Today's Quick Access is the one Weekly Summary button** (TodayQuickAccess.swift:3-18). The Moments
+  and Shopping tiles are gone, so Wellness is their only entry, and Today no longer fetches shopping
+  lists.
+- Moments and Shopping still **follow the phone's theme**. Only the chooser and the guides are fixed light.
+
+### The chooser and the guides stay light in dark mode
+
+Swift's intent is a fixed light design (§21), but on iOS in dark mode its chooser and guides actually
+lose text: subtitles, step text, "Back to Home" and the bar's labels turn white on white (`wellness-chooser-dark`,
+`module-guide-shopping-dark`). That is a Swift bug, kept on the §22 "For the team" list. Android keeps the
+design and not the bug. An audit for anything that still followed the theme found two leaks, now fixed:
+
+- **The guide's Back button plate.** `GlassCircle` drew the theme's plate, a translucent grey in dark mode.
+  It takes an optional `scheme` now, and the guides pass `"light"`. Every other caller is unchanged.
+- **The status bar.** The root layout picks it from the theme, so dark mode drew a white clock over these
+  white screens. `FixedLightStatusBar` asks for dark content while the chooser or a guide is focused,
+  and only then: the chooser stays mounted under Moments and Shopping, which follow the theme.
+
+Every text, icon and background on both screens was already a literal or a fixed light-palette value.
+`src/features/wellness/__tests__/darkMode.test.tsx` renders the chooser and all four guides in Day and in
+Night and requires the **drawn** trees (styles flattened) to be identical. A control case proves the
+comparison catches a themed colour, and each render must contain the screen's text, so a blank render
+cannot pass. Removing the `GlassCircle` fix makes five of its cases fail.
+
+---
+
+## 24. Phase 12 Run A: Account, Help, Feedback, Change password, Ask AI, Daily Brief, Appointment details (2026-10-05)
+
+Built from the Swift source, then checked against the Mac's captures for these screens. Deviations from
+Swift, Android-only or not:
+
+### Account, Help, Feedback, Change password
+
+- **Pushed screens draw their own inline bar** (`src/components/InlineNavBar.tsx`): a back chevron in the
+  `link` colour (labelled "Back") and the centred title. iOS 26 draws the system back button as an ink
+  chevron in a glass circle (`help`, `feedback-empty`); there is no glass here.
+- **Help in dark mode.** Swift's cards are fixed white under adaptive ink — white on white. Light mode is
+  Swift's; dark mode uses the theme surface for the cards and the search field.
+- **Alerts** ("Thank you for your feedback!", "Change password and sign out?") are React Native's.
+
+### Ask AI landing, Daily Brief, section pages
+
+- **Fixed light colours** for the landing, the brief and its section pages. Swift's brief and pages use an
+  explicit ink on white; the landing fades to `.white` under `nexdoInk`, which is white text on white in
+  dark mode, so the landing keeps its light values too. The answer view and the composer stay adaptive.
+- **The orb** is a diagonal cyan → blue → purple → pink gradient with the indigo core and the face drawn
+  from views; Swift's angular gradient and its blur need a drawing library.
+- **Symbols.** SF `scope` and `keyboard` have no Ionicons match: `locate-outline` and `keypad-outline`.
+- **Artwork** is cut from `daily-brief-pack` and `brief-detail-pack` into `assets/brief/` (the robot
+  scaled from 515 to 512 wide) and drawn with `mixBlendMode: 'multiply'`, as Swift's `.blendMode(.multiply)`.
+- **"Working on it…"** sits on a translucent rounded card (no material blur).
+- **The keyboard's "Done" bar** sits at the bottom of Ask and rides up with the keyboard.
+- **Section pages are a full-screen route** (`app/ask/brief/[index]`), so Task Details and the action screen
+  can open over them. The "…" menu is the Moments popover; "Share briefing" opens the system share sheet
+  with the lines as text.
+- **A section that has gone** (its last priority task completed on the page) keeps its title over "Nothing
+  to report here today." Swift's cover renders nothing and has no way back (§22 "For the team").
+- **Task Details from a section page**: "Add Note" focuses Notes; "Schedule" / "Reschedule" scrolls the
+  SCHEDULE card into view, near the centre, as Swift's `proxy.scrollTo(_, anchor: .center)`.
+
+### Appointment details and Calendar
+
+- **A modal route** (`app/calendar/event/[id]`) rather than an inline sheet, with its own bar: back chevron,
+  "Event Details", Edit (Nexdo events) and a "…" popover, without iOS 26's glass capsules
+  (`event-details`). The Edit Event editor is a second modal.
+- **Dates are en-US** ("Oct 5, 2026 at 1:27 PM"), as across the app; the capture's Mac shows its own
+  region's "5 Oct 2026".
+- **Dark mode.** Swift's cards are fixed white (`.white.opacity(0.94)`) under adaptive ink; dark mode uses
+  the theme surface, and the status, action and delete colours take their dark-mode system values.
+- **"Delete this event?"** is an alert with Cancel and Delete Event (Android has no confirmation dialog of
+  SwiftUI's kind).
+- **Open in Calendar.** iOS opens Swift's `calshow:` URL. Android opens the Calendar app's day view at the
+  event's start with `content://com.android.calendar/time/<ms>`; no permission is needed.
+- **Edit Event's dates** are the Moments `DateField` (date pill, month grid, hour and minute wheels; date
+  only for an all-day event).
+- **An empty day** in Schedule mode is a disclosure row with a chevron, as Swift's; Week and Month always
+  show their day.
+
+## 25. Phase 12 Run E: Moments (2026-10-05)
+
+JavaScript only; no new build needed. The screens are listed in `docs/IOS_TO_REACT_NATIVE.md` §22 "Run E".
+Deviations from Swift, Android-only or not:
+
+- **Chips and capsules in dark mode.** The Today / Tomorrow / This Week / Later chips, the Manage Moments
+  tabs and the Messages / Email / Copy / Share delivery tags keep Swift's light look (8% indigo, indigo
+  text; filled indigo or the brand gradient when chosen). In dark mode an unchosen one's label is the
+  `link` token, on that colour at 16%, as every other dark-mode tappable (§6).
+- **The time zone menu lists each zone once, by its current name.** ICU spells India `Asia/Calcutta`; the
+  menu shows `Asia/Kolkata` and a stored `Asia/Calcutta` selects it. Swift's row is blank for India (§22
+  "For the team"); this is the fix, not a copy.
+- **Edit Moment** is the shared form sheet (`MomentSheet`) with Cancel and Save in its bar; Type is a menu
+  of the four greeting-card occasions; the date is the shared date field.
+- **Prepare reminder** is a menu in the Send time card (None, 1/4/8 hours, 1/3/7/14 days before), as
+  Swift's `Picker`.
+- **Connect me on the day.** The call time is `ClockField` with `hourCycle="h12"` and the form-row look
+  ("9:00 AM", hour, minute and AM/PM wheels), not a native time picker; the value stays `HH:mm` as the
+  server wants it. The time zone is the same menu as above. Errors and notices are one alert titled
+  "Connect me on the day", with OK, as Swift.
+- **Show my number.** The code is drawn in the platform monospace face (`monospace` on Android, Menlo on
+  iOS) for Swift's `.monospaced` design; the status is polled every 3 s, 60 times at most, and stops when
+  the sheet closes.
+- **How It Works** is its own full-height sheet in Swift's FIXED light design (it never follows dark
+  mode), with the round glass back button; the four pictures are `moment-calling-pack`'s regions cut once
+  into `assets/moments/` (176 KB). The title wraps where Swift truncates it.
+- **Review schedule, Send now, Edit date & time, Edit recipient and Schedule confirmed** keep Swift's fixed
+  light `ScheduleDesign` in both modes. A `FixedScheme scheme="light"` around them makes the shared date
+  pill and fields light too. On Android each sheet is the rounded shape over a dimmed page that
+  `MomentSheet` draws. Edit date & time uses the shared date field (month grid, hour and minute wheels)
+  where Swift shows a wheel `DatePicker`; Send Now and Confirm Schedule sit side by side and wrap to a
+  column when they do not fit (`ViewThatFits`).
+- **Send Now on Android.** The SMS intent cannot report whether the person tapped Send — `expo-sms`
+  answers `unknown` — so each opened wish is recorded `opened` ("delivery not confirmed"), as Choose
+  Delivery does. iOS records `sent` only for a confirmed send, as Swift. A cancelled composer records
+  nothing on either.
+- **Schedule confirmed** has no back button, as Swift (`navigationBarBackButtonHidden`), and the back
+  gesture is off: Done is the way out.
+
+---
+
+## 26. Phase 12 Run F: Shopping (2026-10-05)
+
+Built from the Swift source and the Mac's `shopping-*` captures. Deviations from Swift, Android-only or not:
+
+- **Stores Near You and Store Hours are pages of the List Settings sheet**, with Back, rather than pushes
+  inside its own `NavigationStack`; the chosen store comes back to the sheet's draft as Swift's `onSelect`.
+- **Share List → "Weekly email to store manager"** closes the sheet and pushes the weekly email on the
+  list, instead of pushing inside the sheet.
+- **Alternative Item Details** is a page of the alternatives sheet (Back returns to the list); the goal
+  picker, Why these alternatives? and the Replace confirmation are sheets over it; "Item replaced!" and
+  "Ask AI about this item" are full-screen.
+- **Store logos** load through React Native's `Image`. iOS skips the URL cache (`cache: 'reload'`, Swift's
+  "no persistent redistribution"); Android's image pipeline may keep its own cache. Only the server-named
+  `cdn.brandfetch.io` URL is ever loaded.
+- **Offer expiry** shows the store's own last day, not Swift's device-zone date (§22 "For the team").
+- **The weekly email follows the theme in dark mode.** Swift draws it in fixed light colours; light mode
+  here uses those exact values, but dark mode uses the theme so its menus, the 12-hour time picker and the
+  date pill (theme-coloured shared controls) stay readable.
+- **The settings gear on the weekly email** opens Account → Settings at the top; Swift's
+  `ProfileSettingsView(openCalendarSettings: true)` scrolls to Calendars.
+- **The photo preview** zooms with − / + on both platforms; pinching works on iOS only (Android's
+  `ScrollView` has no zoom).
+- **Swipe to delete on a completed list** does not open at all; Swift reveals a disabled Delete.
+- **"Take a Picture"** stays enabled; Swift disables it, with "Camera is available on a supported
+  device.", only where there is no camera (the simulator).
+- **Shopping Detail's title** is the store name with "Open Now" under it in the stack header's title slot;
+  the View Offers icon uses the `link` token (dark-mode tappables).
+- **Copy kept unchanged**, including "…allow location access in iPhone Settings." on Android (§22 "For
+  the team").
+
+## 27. Phase 12 Run B: Tasks, Today and the Moments leftovers (2026-10-05)
+
+JavaScript only; no new build needed. The screens are listed in `docs/IOS_TO_REACT_NATIVE.md` §22 "Run B".
+Deviations from Swift, Android-only or not:
+
+- **Tasks / Projects is a pill pair on Android too.** Swift replaced its segmented control with two capsules
+  (white on the accent gradient when chosen, over 6% indigo); the Android `SegmentRow` this screen used
+  (§9) is gone, so both platforms draw the same pills.
+- **Tasks in dark mode.** Swift's new background gradient and the white 65% section headers are light-only
+  (§22 "For the team"). In dark mode the screen keeps the subtle `TodayBackdrop`, the headers take the
+  surface colour at 65%, and the task icon tints (pink, green, orange, purple) use their dark system
+  colours. The icon tiles use Ionicons stand-ins for the SF Symbols (`construct-outline` for the wrench,
+  `laptop-outline` for the laptop).
+- **Task agent card in dark mode.** Swift's fixed white and lavender cards (the run card, the results
+  header, the business cards and tabs, the Task Information card) take the theme surface in dark, as §24
+  did; indigo and business-purple tappables and accents are the `link` token. Android draws no shadows, so
+  the run and business cards get the 1px `fieldBorder` hairline instead.
+- **Task agent card, Open in Messages on Android.** The SMS intent answers `unknown`, so no alert follows,
+  as for a cancelled composer; only a confirmed send or a failure shows one.
+- **Task agent card, layout.** The sliders menu ("Additional task details") is an inline one-item popover;
+  the rating line wraps rather than switching to Swift's compact `ViewThatFits` form; the
+  accessibility-size vertical layouts of the card are not ported. Polling carries on after a failed load
+  (Swift stops) and a later good load clears the message; the first shortlist is preselected whenever it
+  appears, not only on the load path.
+- **Nexdo Action: Choose contact** opens the system contact picker. On Android `expo-contacts` reads the
+  picked person back through the contacts provider, which needs READ_CONTACTS, so Android asks for it
+  first (the Moments picker already does; no new permission). "Choose contact" is a filled capsule in the
+  tint; the Contact details form is a page sheet on iOS and a full-screen modal on Android, with the form
+  group chrome (§2).
+- **Today, Remind later → Choose time…** uses the shared date field (month grid, hour and minute wheels) in
+  a sheet titled "Remind later", where Swift shows a compact `DatePicker`.
+- **Today, Previous / Next** are tinted capsules (`.bordered`); "Choose contact or enter details" keeps
+  Swift's fixed lavender and ink, because the card it sits on (`glassSolid`) stays light in dark mode too.
+
+## 28. UI-parity pass 3: Phase 12 on the phone (2026-10-05)
+
+Every ticked §22 row checked on a OnePlus CPH2691 (Android 16, 360 dp wide) against the Mac's iPhone
+captures; results row by row in `docs/reference/PARITY.md` "UI-parity pass 3". Fixes, Android-only or not:
+
+- **Module guides: "Back to Home" is ink.** Swift's outer `.foregroundStyle(ink)` beats the `.tint`; it was
+  the module colour. Both platforms.
+- **Pomodoro cards lose `elevation` (Android only; iOS ignores it).** Android draws an elevation shadow at
+  its own strength in `shadowColor` and ignores `shadowOpacity`, so Swift's 6% blue shadow became a blue
+  ring, and the 92% white card let the shadow show through as a grey inner panel. The 1pt stroke carries
+  the edge, as Swift's barely visible shadow does.
+- **Pomodoro chart minute labels sit on their grid lines.** They were spread evenly top to bottom, but the
+  domain is 1.3× the tallest bar, so "6m" sat ~20 dp above its line. Both platforms.
+- **Pomodoro trend chart: the picked bar's label sits on the bar** (`.annotation(position: .top)`), not at
+  the top of the chart. Both platforms.
+- **Pomodoro timer ring has no seams.** The ring's 180 segments overlap to close their gaps; the fading end
+  of Swift's gradient is translucent, so every overlap doubled up into a visible stripe. Each segment is now
+  its colour flattened over the 22% track on white. Both platforms.
+- **Pomodoro plain buttons are ink.** "Back to Tasks", "Retry sync" and the bar's back, history and "…"
+  glyphs were indigo; Swift's `.foregroundStyle(ink).tint(.indigo)` draws them in the ink. Both platforms.
+- **Pomodoro menu glyphs.** `PopoverItem` takes an optional leading `icon` (+ `iconColor`), for
+  `Button(_:systemImage:)`; the dashboard's Refresh and About these metrics use it. Callers without one are
+  unchanged.
+- **Pomodoro session details** sit below the status bar on Android (a `pageSheet` `Modal` is full screen
+  there) and title their section as written ("Focus time"), as iOS 26 does.
+- **Pomodoro keeps a dark status bar in dark mode**, as the chooser and guides do (§23): the dashboard is
+  `.preferredColorScheme(.light)` and the timer is drawn light, so white icons vanished.
+- **Pomodoro period chips are single-line.** After a reload "This Week" drew as "This" even with `Text`'s
+  1 dp slack (3 px at this phone's density): this phone's variable system font let the draw pass break at
+  the space. `numberOfLines={1}` keeps Android's layout on one line.
+- **Text's Android slack adds to the caller's padding and margin (shared, Android only).** `Text` gives every
+  label one device pixel each side (§ global fix 6) as `paddingHorizontal: 1` / `marginHorizontal: -1`, and
+  React Native lets the axis props beat the `padding` / `margin` shorthand whatever the order, so a label
+  styled `padding: 16` lost its horizontal padding. It now reads the caller's sides and adds the pixel to
+  them; a side in percent or `auto` is left as the caller set it.
+- **Calorie Tracker plain buttons and glyphs are ink**, as Pomodoro's: text buttons, the bar's back and close,
+  the day chevrons, the Add-to-log circles, the summary icons and View Insights. Pickers and switches keep
+  the system indigo (`.tint(.indigo)` on those controls).
+- **Calorie Tracker numbers are grouped** ("2,000 kcal", goal fields "1,000") as SwiftUI's localized
+  `Text("\(n)")` and `.number` print them; strings Swift builds as plain `String`s (the chart's
+  accessibility label, the Insights averages) stay ungrouped, as in Swift.
+- **Calorie ring gradient follows the ring's rotation.** Swift strokes the gradient and then rotates the
+  ring −90°, so the gradient turns too; the arc runs teal at 12 o'clock to blue at 3 o'clock.
+- **Calorie charts centre their bars** in the 155-tall frame; **the robot art is full width** (centred);
+  **the Stepper is a capsule**; **cards lose `elevation`** (Android only, as Pomodoro's); the setup's Time zone
+  and Agent voice pickers show only their value, as Swift's.
+- **Add Food** sits below the status bar on Android and titles its section "Food" / "Sample meal".
+- **Calorie Tracker keeps a dark status bar in dark mode** (`FixedLightStatusBar`).
+- **A disabled `FormToggle` dims only its switch** (shared). The row and the switch were both at 40%, so the
+  switch was dimmed twice and the label greyed out, where iOS keeps a disabled Toggle's label at full colour.
+  **A disabled `IOSSwitch` thumb has no `elevation`** (Android only): Android drew the shadow at full strength
+  through the translucent thumb as a grey smudge.
+- **Review schedule stacks its two buttons when a label wraps.** Swift's `ViewThatFits` measures each button
+  at its one-line width; at 360 dp "Confirm Schedule" needs two lines at half the row, so the pair stacks,
+  each full width. Detected from the laid-out line count (`onTextLayout`).
+- **Schedule confirmed's bar takes the page colour** (`#F7FAFF`) instead of showing the Moments backdrop.
+- **Choose Festivals region cards**: the radio mark sits over the card's top-right corner instead of taking
+  its own column, so "celebrations" keeps its width at 360 dp (Android broke it mid-word); the cards are white
+  (`.secondarySystemGroupedBackground`); "All regions" is ink.
+- **Ink, not the tint, under an outer `.foregroundStyle`**: the Manage Moment info glyph and the calling
+  guide's "Back to settings".
+- **A module's first screen has the tinted back** (Important Moments, My Lists): Swift leaves the module with
+  a toolbar `Button`, which takes the root's indigo tint; pushes deeper keep the system back in ink.
+- **My Lists draws its large title** as content (`headerLargeTitle` is iOS-only).
+- **Shopping Detail's options menu is the shared popover** (anchored, no dimming, the Share glyph);
+  `PopoverItem` gains `disabled`, drawn in `.tertiaryLabel`, and a glyph column is kept for every item when
+  any item has one. Offer badges carry the row's disclosure chevron.
+- **Glass circles** on the Shopping "…", the alternatives sheets' xmark, and Item Details' back and star (ink).
+- **Item editor's large title** is pulled up into the bar on iOS only; on Android the bar sits above it.
+- **Weekly email**: Time is a captioned box with a pill (`ClockField variant="pill"`), and a `DateField` with
+  an empty label draws only its pill, at the leading edge.
+- **List Settings' pages have the system back** (`SheetButton` `icon: 'back'`): an ink chevron on a glass
+  circle, as a push inside Swift's sheet `NavigationStack`, so the title stays centred.
+- **`arrow.up.left` points up-left** (`TaskSymbol` turns Ionicons' up arrow −45°): Ask's suggestion rows.
+- **Ask landing: two cards per row on narrow phones.** 48.8% + gap + 48.8% overflowed below ~330 dp and the
+  grid fell to one column; 45% with `flexGrow` fits any phone.
+- **`FittedText` measures explicit lines and keeps the ellipsis** (shared): a label with a line break must
+  fit line by line; `adjustsFontSizeToFit` is iOS-only now, because on Android it fitted nothing and
+  switched off the trailing ellipsis, so a label too wide at the minimum scale was clipped silently.
+- **Ask landing in dark mode** sits on white with a dark status bar: it keeps its fixed light text (§24),
+  which was invisible on the dark page behind its translucent gradient.
+- **No `elevation` under translucent cards** on Help, Event Details and the brief section pages (Android
+  only): it showed through as a lighter inner panel. iOS keeps Swift's faint shadow.
+- **`GradientButton gradient="save"`** draws `NexdoTheme.saveGradient` (blue → indigo → magenta), which
+  `NexdoGradientButtonStyle` uses: Feedback's Submit and Change password. Auth keeps the brand gradient.
+- **`StatusBarScrim`** (Android only) on Today and Calendar: the page's own backdrop, cut to the status-bar
+  height and drawn over the scroll, so scrolled text no longer runs through the clock. iOS 26 does this with
+  its scroll-edge effect.
+- **A hairline instead of a shadow** on Help, Event Details and the brief section cards (Android only):
+  without the elevation (above) the near-white cards vanished into the page's white end.
+- **Event Details' "…" menu** carries Swift's glyphs.
+- **Task Details has no stack bar** (both platforms): Swift hides it and closes with the header's xmark; the
+  bar's Close duplicated it. Android insets the content below the status bar.
+- **Nexdo Action's link buttons are ink** (`.foregroundStyle(Color.nexdoInk)`), and **Contact details** has a
+  large title over the form instead of a bar title.
+- **Today's action card and pager buttons are ink** (`ActionGlass`'s `.foregroundStyle(Color.nexdoInk)`);
+  **"Find my next task"** draws the save gradient (`NexdoGradientButtonStyle`).
+

@@ -2,6 +2,7 @@ import { Platform, useColorScheme } from 'react-native';
 
 import { useAppearance } from '../store/appearance';
 import { useElevated } from './elevation';
+import { useFixedScheme } from './scheme';
 import { palettes, type ColorScheme, type Palette } from './colors';
 import { radii } from './radii';
 import { spacing } from './spacing';
@@ -33,7 +34,9 @@ export type Theme = {
 export function useTheme(options?: { elevated?: boolean }): Theme {
   const appearance = useAppearance((state) => state.appearance);
   const system: ColorScheme = useColorScheme() === 'dark' ? 'dark' : 'light';
-  const scheme: ColorScheme = appearance === 'day' ? 'light' : appearance === 'night' ? 'dark' : system;
+  // A `FixedScheme` subtree keeps its design's scheme (scheme.tsx); everything else follows Appearance.
+  const fixed = useFixedScheme();
+  const scheme: ColorScheme = fixed ?? (appearance === 'day' ? 'light' : appearance === 'night' ? 'dark' : system);
   const palette = palettes[scheme];
   const inherited = useElevated();
   const levelled: Palette = (options?.elevated ?? inherited)

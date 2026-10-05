@@ -99,6 +99,16 @@ describe('festival import', () => {
   it('opens a "<name> Wishes" festival with no date and no yearly repeat', () => {
     expect(festivalMomentInput('Diwali', 'Asia/Kolkata')).toMatchObject({ type: 'festival', title: 'Diwali Wishes', yearly: false, source: 'festivalCatalog', occurrenceDate: '' });
   });
+
+  // fac34ed (MomentEditor.swift:530-532): a stable key lets the server match a re-import to the moment
+  // it created before, instead of building a fresh anchor every time.
+  it('keys a catalog festival by its name, the same on every import', () => {
+    expect(festivalMomentInput('Diwali', 'Asia/Kolkata').sourceKey).toBe('festival:diwali');
+    expect(festivalMomentInput('Diwali', 'UTC').sourceKey).toBe(festivalMomentInput('Diwali', 'Asia/Kolkata').sourceKey);
+    expect(festivalMomentInput('Lunar New Year').sourceKey).toBe('festival:lunar-new-year');
+    expect(festivalMomentInput("New Year's Day").sourceKey).toBe('festival:new-year-s-day');
+    expect(festivalMomentInput('Eid al-Fiṭr').sourceKey).toBe('festival:eid-al-fiṭr');
+  });
 });
 
 describe('contact address links (iOS ContactAddressLinks)', () => {

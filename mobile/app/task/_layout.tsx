@@ -34,8 +34,11 @@ export default function TaskLayout() {
         ...stackHeaderOptions(theme, theme.colors.groupedBackground),
       }}
     >
-      <Stack.Screen name="new" options={{ presentation: 'modal', title: 'New Task', headerLeft: closeButton('Close') }} />
-      <Stack.Screen name="[id]" options={{ presentation: 'modal', title: 'Task', headerLeft: closeButton('Close') }} />
+      {/* `.navigationTitle("Create New Task")` (RootView.swift:2110). */}
+      <Stack.Screen name="new" options={{ presentation: 'modal', title: 'Create New Task', headerLeft: closeButton('Close') }} />
+      {/* `TaskDetailsView(task:).toolbar(.hidden, for: .navigationBar)` (RootView.swift:2014): no bar; the screen's
+          own header carries the title and its xmark. A "Close / Task" bar here gave the sheet two closes. */}
+      <Stack.Screen name="[id]" options={{ presentation: 'modal', title: 'Task', headerShown: false }} />
       {/* Swift has only a confirmation "Done" here and a large title, both set by the screen. */}
       <Stack.Screen name="filters" options={{ presentation: 'modal' }} />
       <Stack.Screen name="voice-capture" options={{ presentation: 'fullScreenModal', title: 'Add by Voice', headerLeft: closeButton('Cancel') }} />

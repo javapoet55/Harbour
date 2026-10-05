@@ -390,3 +390,43 @@ describe('an action waiting before its time', () => {
     expect(useCoordinator.getState().actions[0].status).toBe('awaitingApproval');
   });
 });
+
+/** `screenOpened` / `screenClosed` (TaskActionCoordinator.swift:80-89). */
+describe('open Action screens', () => {
+  const at = (ms: number) => new Date(ms).toISOString();
+
+  async function waiting() {
+    const future = Date.now() + 3_600_000;
+    await useCoordinator.getState().synchronize([task({ id: 't1', title: 'Call electrician', startAt: at(future) })], OWNER, ZONE);
+    await settle();
+    const id = useCoordinator.getState().actions[0].id;
+    useCoordinator.getState().transitionTo(id, 'awaitingApproval');
+    return { id, future };
+  }
+
+  it('releases an action only when its last screen closes', async () => {
+    const { id } = await waiting();
+    useCoordinator.getState().screenOpened(id);
+    useCoordinator.getState().screenOpened(id);
+    useCoordinator.getState().screenClosed(id);
+    expect(useCoordinator.getState().actions[0].status).toBe('awaitingApproval');
+    useCoordinator.getState().screenClosed(id);
+    expect(useCoordinator.getState().actions[0].status).toBe('scheduled');
+    expect(useCoordinator.getState().openScreens).toEqual({});
+  });
+
+  it('keeps a routed action waiting when its screen closes', async () => {
+    const { id } = await waiting();
+    useCoordinator.getState().open(id);
+    useCoordinator.getState().screenOpened(id);
+    useCoordinator.getState().screenClosed(id);
+    expect(useCoordinator.getState().actions[0].status).toBe('awaitingApproval');
+  });
+
+  it('never heals an action on a sync while a screen for it is open, routed or not', async () => {
+    const { id, future } = await waiting();
+    useCoordinator.getState().screenOpened(id);
+    await useCoordinator.getState().synchronize([task({ id: 't1', title: 'Call electrician', startAt: at(future) })], OWNER, ZONE);
+    expect(useCoordinator.getState().actions[0].status).toBe('awaitingApproval');
+  });
+});

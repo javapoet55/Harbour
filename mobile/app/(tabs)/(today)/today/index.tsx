@@ -12,11 +12,11 @@ import { FocusSessionStrip } from '../../../../src/components/FocusSessionStrip'
 import { TodayAttentionRow } from '../../../../src/components/TodayAttentionRow';
 import { TodayIntelligenceCard } from '../../../../src/components/TodayIntelligenceCard';
 import { TodayQuickAccess } from '../../../../src/components/TodayQuickAccess';
-import { TasksTopBar, TodayBackdrop } from '../../../../src/components/TodayShell';
+import { StatusBarScrim, TasksTopBar, TodayBackdrop } from '../../../../src/components/TodayShell';
 import { overdueResults } from '../../../../src/lib/overdueTasks';
-import { todayMoments, upcomingMomentCount } from '../../../../src/features/moments/domain';
+import { todayMoments } from '../../../../src/features/moments/domain';
 import { useMomentList } from '../../../../src/features/moments/store';
-import { shoppingSubtitle, showsAttentionRow } from '../../../../src/lib/todayQuickAccess';
+import { showsAttentionRow } from '../../../../src/lib/todayQuickAccess';
 import {
   buildSchedule,
   dateLabel,
@@ -34,9 +34,8 @@ import {
   useProtectedTime,
   useRespondToProtectedTime,
 } from '../../../../src/query/useNextAction';
-import { useQuickAccessShopping } from '../../../../src/query/useQuickAccess';
 import { useTasks } from '../../../../src/query/useTasks';
-import { canStartRecommendation, useAgenda, useScheduleIntelligence, useWeather } from '../../../../src/query/useToday';
+import { canStartRecommendation, useAgenda, useScheduleIntelligence } from '../../../../src/query/useToday';
 import { useFocus } from '../../../../src/store/focus';
 import { useSession } from '../../../../src/store/session';
 import { brand, useTheme } from '../../../../src/theme';
@@ -46,7 +45,7 @@ import { brand, useTheme } from '../../../../src/theme';
  * (commits d444b37, e0a7bcd, 86a2b49, 63d9542).
  *
  * Child view files followed: `TodayBackdrop` (`RootView.swift:1538`), `TodayTopBar` (`:1298`),
- * `TodayQuickAccess` (`ios/App/TodayQuickAccess.swift:4-97`), `TodayIntelligenceCard` (`:1373`),
+ * `TodayQuickAccess` (`ios/App/TodayQuickAccess.swift:3-18`), `TodayIntelligenceCard` (`:1373`),
  * `TodayScheduleRow` (`:1511`), `TodayActionsView` (`ios/App/TodayActionsView.swift:9`),
  * `TodayAttentionSheet` (`ios/App/TodayAttentionSheet.swift:4`), `DoNowView`
  * (`ios/App/DoNowView.swift:3`), `FocusSessionStrip` (`ios/App/FocusSessionStrip.swift:25`).
@@ -74,12 +73,9 @@ export default function Today() {
 
   const tasks = useTasks();
   const agenda = useAgenda(5);
-  const weather = useWeather();
   const intelligence = useScheduleIntelligence();
-  // `ImportantMomentsStore` (activated and refreshed by the root layout, RootView.swift:59-81) and the
-  // Quick Access `ShoppingStore` (TodayQuickAccess.swift:16-20).
+  // `ImportantMomentsStore` (activated and refreshed by the root layout, RootView.swift:59-81).
   const moments = useMomentList();
-  const shopping = useQuickAccessShopping(profile !== null);
 
   // `TodayActionQueue(actions:tasks:now:timeZone:)` (RootView.swift:1137). Swift rebuilds it inside a
   // `TimelineView(.periodic(by: 60))`, so the relative labels tick over once a minute.
@@ -132,7 +128,6 @@ export default function Today() {
   const refresh = () => {
     void tasks.refetch();
     void agenda.refetch();
-    void weather.refetch();
     void intelligence.refetch();
   };
 
@@ -145,16 +140,10 @@ export default function Today() {
         contentContainerStyle={styles.scroll}
         refreshControl={<RefreshControl refreshing={agenda.isRefetching} onRefresh={refresh} />}
       >
+        {/* `TodayTopBar(name:temperature: nil, showsWeather: false, add: nil, account:)` (RootView.swift:1151-1157):
+            Swift dropped the weather chip and the add button from Today. */}
         <TasksTopBar
           name={profile?.name ?? ''}
-          weather={{
-            // `model.weather.map { Int($0.current.temperature.rounded()) }` (RootView.swift:1029)
-            temperature: weather.data?.forecast ? Math.round(weather.data.forecast.current.temperature_2m) : null,
-            weatherCode: weather.data?.forecast?.current.weather_code,
-            place: weather.data?.place.kind === 'unavailable' ? undefined : weather.data?.place.name,
-            onPress: () => router.push('/today/weather'),
-          }}
-          onAdd={() => router.push('/task/new')}
           // `.sheet(isPresented: $showingAccount) { AccountView() }` (RootView.swift:1181).
           onAccount={() => router.push('/account')}
           photo={profile?.photo}
@@ -201,15 +190,9 @@ export default function Today() {
         </View>
         </GlassCard>
 
-        {/* Section 5: Quick Access (RootView.swift:1078). "Weekly" pushes Weekly Summary; Moments and
-            Shopping push their screens (TodayQuickAccess.swift:64-76). */}
-        <TodayQuickAccess
-          momentsSubtitle={`${upcomingMomentCount(moments, queueNow)} upcoming`}
-          onMoments={() => router.push('/moments')}
-          onShopping={() => router.push('/shopping')}
-          onWeekly={() => router.push('/today/weekly-summary')}
-          shoppingSubtitle={shoppingSubtitle(shopping.lists, shopping.failed)}
-        />
+        {/* Section 5: Quick Access (RootView.swift:1078): the one Weekly Summary button
+            (TodayQuickAccess.swift:3-18). Moments and Shopping are reached through Wellness only. */}
+        <TodayQuickAccess onWeekly={() => router.push('/today/weekly-summary')} />
 
         {/* `FocusSessionStrip` renders itself only while a session is live. */}
         <FocusSessionStrip />
@@ -233,7 +216,14 @@ export default function Today() {
         {range === 1 ? (
           <TodayActionsView
             now={queueNow}
-            onOpen={(action, channel) => useCoordinator.getState().open(action.id, channel ?? action.preferredAction ?? null)}
+            // `TaskActionView(actionID:preferred: channel ?? preferredAction, startSelectedAction: channel != nil)`
+            // (TodayActionsView.swift:78-81): presented here directly, not through the coordinator's route.
+            onOpen={(action, channel) =>
+              router.push({
+                pathname: '/action/[id]',
+                params: { id: action.id, ...((channel ?? action.preferredAction) ? { preferred: channel ?? action.preferredAction } : {}), ...(channel ? { start: '1' } : {}) },
+              })
+            }
             onTask={(taskId) => router.push(`/task/${taskId}`)}
             onViewAll={() => router.push('/action/queue')}
             queue={queue}
@@ -296,6 +286,7 @@ export default function Today() {
           <TodayAttentionRow onPress={() => router.push('/attention')} other={otherCount} overdue={overdueCount} />
         ) : null}
       </KeyboardAwareScrollView>
+      <StatusBarScrim />
     </View>
   );
 }

@@ -1,9 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useState } from 'react';
 import { Platform, Pressable, StyleSheet, View, type LayoutChangeEvent, type StyleProp, type ViewStyle } from 'react-native';
 
-import type { AskIntent } from '../lib/askIntents';
 import type { ShoppingPromptIcon } from '../lib/shoppingRecommendations';
 import { brand, useTheme } from '../theme';
 import { withAlpha } from './SignInBackdrop';
@@ -11,131 +9,10 @@ import { TaskSymbol } from './TaskSymbol';
 import { Text, type TextProps } from './Text';
 
 /**
- * The pieces of `AskNexdoView` (ios/App/AskNexdoView.swift) that are their own views or funcs:
- * `NexdoAISuggestionCard` (`:58-87`, body `:61`), `entryCards` (`:277-291`), `entryCard(_:detail:
- * icon:voice:action:)` (`:292-310`) and the "Try a prompt" example button (`:220-227`).
+ * The "Try a prompt" example button of `AskNexdoView` (ios/App/AskNexdoView.swift:242-251), and
+ * `FittedText`. `NexdoAISuggestionCard` and `entryCards` are still in the Swift file but nothing
+ * mounts them since the Ask AI landing (`AskLanding.tsx`), so they are not ported.
  */
-
-/** `NexdoAISuggestionCard` (AskNexdoView.swift:58-87). */
-export function AskSuggestionCard({ intent, disabled, onPress }: { intent: AskIntent; disabled: boolean; onPress: () => void }) {
-  const theme = useTheme();
-  const blue = theme.colors.askBlue;
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={`${intent.title}. ${intent.detail}`}
-      accessibilityState={{ disabled }}
-      disabled={disabled}
-      onPress={onPress}
-      testID={`ask-intent-${intent.id}`}
-      style={[
-        styles.suggestion,
-        // `.disabled(blocked)` with no `.opacity` of its own, so SwiftUI's own dim alone —
-        // about 0.45, from the style map's measured 0.55 -> 0.25 on an explicitly dimmed control.
-        { backgroundColor: theme.colors.secondaryBackground, borderColor: withAlpha(blue, 0.28), opacity: disabled ? 0.45 : 1 },
-      ]}
-    >
-      <View style={[styles.suggestionIcon, { backgroundColor: withAlpha(blue, 0.16) }]}>
-        {/* `.foregroundStyle(AskStyle.ink)` on the row (`:73`): `.label`, not nexdoInk. */}
-        <TaskSymbol name={intent.icon} size={17} color={theme.colors.label} />
-      </View>
-      <View style={styles.suggestionText}>
-        <Text style={[styles.subheadline, styles.semibold, { color: theme.colors.label }]}>{intent.title}</Text>
-        {/* `AskStyle.secondary` is `.secondaryLabel` (AskNexdoView.swift:51). */}
-        <Text style={[styles.caption, { color: theme.colors.secondaryLabel }]}>{intent.detail}</Text>
-      </View>
-      <TaskSymbol name="chevron.right" size={12} color={theme.colors.secondaryLabel} />
-    </Pressable>
-  );
-}
-
-/** `entryCards` (AskNexdoView.swift:277-291): the pinned pair at the bottom of the suggestions page. */
-export function AskEntryCards({
-  disabled,
-  onVoice,
-  onText,
-}: {
-  disabled: boolean;
-  onVoice: () => void;
-  onText: () => void;
-}) {
-  const theme = useTheme();
-  return (
-    <View style={[styles.entryOuter, { backgroundColor: theme.colors.background }]}>
-      <LinearGradient
-        colors={[withAlpha(brand.nexdoMagenta, 0.05), withAlpha(brand.nexdoIndigo, 0.03)]}
-        start={{ x: 0, y: 0.5 }}
-        end={{ x: 1, y: 0.5 }}
-        style={styles.entryRow}
-      >
-        <AskEntryCard title="Ask by Voice" detail="Tap and speak" icon="mic.fill" voice disabled={disabled} onPress={onVoice} testID="ask-entry-voice" />
-        <AskEntryCard title="Free form Text" detail="Type your prompt" icon="text.bubble" voice={false} disabled={disabled} onPress={onText} testID="ask-entry-text" />
-      </LinearGradient>
-    </View>
-  );
-}
-
-/** `entryCard(_:detail:icon:voice:action:)` (AskNexdoView.swift:292-310). */
-export function AskEntryCard({
-  title,
-  detail,
-  icon,
-  voice,
-  disabled,
-  onPress,
-  testID,
-}: {
-  title: string;
-  detail: string;
-  icon: 'mic.fill' | 'text.bubble';
-  voice: boolean;
-  disabled: boolean;
-  onPress: () => void;
-  testID: string;
-}) {
-  const theme = useTheme();
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={title}
-      accessibilityState={{ disabled }}
-      disabled={disabled}
-      onPress={onPress}
-      testID={testID}
-      style={[
-        styles.entryCard,
-        {
-          backgroundColor: voice ? withAlpha(brand.nexdoIndigo, 0.05) : theme.colors.background,
-          borderColor: withAlpha(brand.nexdoIndigo, 0.14),
-          opacity: disabled ? 0.45 : 1,
-        },
-      ]}
-    >
-      {voice ? (
-        <LinearGradient
-          colors={[brand.nexdoIndigo, brand.nexdoBlue]}
-          start={{ x: 0, y: 0.5 }}
-          end={{ x: 1, y: 0.5 }}
-          style={styles.entryIcon}
-        >
-          <TaskSymbol name={icon} size={22} color="#FFFFFF" />
-        </LinearGradient>
-      ) : (
-        <View style={[styles.entryIcon, { backgroundColor: withAlpha(brand.nexdoMagenta, 0.08) }]}>
-          <TaskSymbol name={icon} size={22} color={theme.colors.link} />
-        </View>
-      )}
-      <View style={styles.entryText}>
-        {/* `.lineLimit(1).minimumScaleFactor(0.75)` on BOTH labels (AskNexdoView.swift:301-302).
-            The test phone's screen is 18 dp narrower than the iPhone's, which is enough on its own
-            to run "Free form Text" and "Type your prompt" out of room. (Not the typeface: at font
-            scale 1.0 Roboto is within 1% of SF Pro — style map §2.) */}
-        <FittedText style={[styles.footnote, styles.semibold, { color: theme.colors.ink }]}>{title}</FittedText>
-        <FittedText style={[styles.caption, { color: theme.colors.secondaryLabel }]}>{detail}</FittedText>
-      </View>
-    </Pressable>
-  );
-}
 
 /**
  * The font scale a fitted label needs: the widest measured run over the width available, clamped at
@@ -182,7 +59,9 @@ export function FittedText({
 }) {
   const [available, setAvailable] = useState(0);
   const [widths, setWidths] = useState<Record<number, number>>({});
-  const runs = numberOfLines > 1 ? children.split(/\s+/).filter(Boolean) : [children];
+  // An explicit line break fixes the lines, so each LINE must fit ("Priorities and\nyour next move" on the
+  // Ask cards); otherwise SwiftUI wraps between words and only the widest word must fit a line.
+  const runs = children.includes('\n') ? children.split('\n') : numberOfLines > 1 ? children.split(/\s+/).filter(Boolean) : [children];
   const measures = Platform.OS === 'android' || runs.length > 1;
 
   const base = StyleSheet.flatten(style);
@@ -194,8 +73,9 @@ export function FittedText({
     <View onLayout={measures ? (event: LayoutChangeEvent) => setAvailable(event.nativeEvent.layout.width) : undefined} style={containerStyle}>
       <Text
         numberOfLines={numberOfLines}
-        // Right on iOS for a single line, and a no-op on Android, where `scale` is what actually fits the label.
-        adjustsFontSizeToFit
+        // Right on iOS for a single line. On Android it does not fit anything (`scale` does) but it does switch
+        // off the trailing ellipsis, so a label still too wide at the minimum scale was clipped silently.
+        adjustsFontSizeToFit={Platform.OS === 'ios'}
         minimumFontScale={minimumFontScale}
         style={[style, scale < 1 && fontSize !== undefined && { fontSize: fontSize * scale }]}
       >

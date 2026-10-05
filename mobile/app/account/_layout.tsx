@@ -16,6 +16,10 @@ export default function AccountLayout() {
     <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: theme.colors.background } }}>
       <Stack.Screen name="index" options={{ presentation: 'modal' }} />
       <Stack.Screen name="settings" />
+      {/* Phase 12 Run A: pushed from the Account menu (ProfileView.swift:66-69). */}
+      <Stack.Screen name="help" />
+      <Stack.Screen name="feedback" />
+      <Stack.Screen name="change-password" />
     </Stack>
   );
 }

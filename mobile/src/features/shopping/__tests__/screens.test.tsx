@@ -1,4 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import React from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { Alert, AppState, Platform, Share } from 'react-native';
 
@@ -30,7 +31,20 @@ jest.mock('../../../api/shopping', () => ({
     transcriptionSession: jest.fn(),
   },
   shareUrl: (token: string) => `https://api.example.com/shared/shopping/${token}`,
+  shoppingOffersApi: { offers: (...args: unknown[]) => mockOffers(...args), choose: jest.fn(), storeHours: (...args: unknown[]) => mockHours(...args) },
+  shoppingStoresApi: { search: jest.fn(), brand: jest.fn(async () => ({ brand: { displayName: '', logoUrl: null } })), recognize: jest.fn(), recommendations: jest.fn() },
 }));
+const mockOffers = jest.fn();
+const mockHours = jest.fn();
+
+function DetailWithQueries() {
+  const [client] = React.useState(() => new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } }));
+  return (
+    <QueryClientProvider client={client}>
+      <Detail />
+    </QueryClientProvider>
+  );
+}
 
 import * as Crypto from 'expo-crypto';
 
@@ -41,8 +55,8 @@ import { shoppingApi } from '../../../api/shopping';
 import { VOICE_MESSAGES } from '../voice';
 import { CONSENT_KEY, useTranscriptionConsent } from '../device';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import MyLists from '../../../../app/(tabs)/(today)/shopping/index';
-import Detail from '../../../../app/(tabs)/(today)/shopping/[id]';
+import MyLists from '../../../../app/wellness/shopping/index';
+import Detail from '../../../../app/wellness/shopping/[id]';
 
 const mockedCrypto = Crypto as unknown as Record<string, jest.Mock>;
 
@@ -79,12 +93,14 @@ describe('My Lists', () => {
   it('shows Create New List and the recent lists, and opens one', async () => {
     load([list(), list({ id: 'l2', title: 'Costco Shopping List', completedAt: '2026-09-18T10:00:00Z', items: [item()] })]);
     await render(<MyLists />);
+    // `.navigationTitle("My Lists")` is a large title, drawn as content (`shopping-lists-v2`).
+    expect(screen.getByRole('header', { name: 'My Lists' })).toBeTruthy();
     expect(screen.getByText('Create New List')).toBeTruthy();
     expect(screen.getByText('Recent Lists')).toBeTruthy();
     expect(screen.getByText('2 items')).toBeTruthy();
     expect(screen.getByText('1 item · Completed')).toBeTruthy();
     await fireEvent.press(screen.getByTestId('shopping-list-l2'));
-    expect(mockPush).toHaveBeenCalledWith({ pathname: '/shopping/[id]', params: { id: 'l2' } });
+    expect(mockPush).toHaveBeenCalledWith({ pathname: '/wellness/shopping/[id]', params: { id: 'l2' } });
   });
 
   it('shows the empty state that had no capture', async () => {
@@ -94,7 +110,7 @@ describe('My Lists', () => {
     expect(screen.getByText('Create a list, then type or dictate what you need.')).toBeTruthy();
   });
 
-  it('creates a list with Save disabled while the name is empty, then opens it', async () => {
+  it('creates a list with Save disabled while the name is empty, then opens it on List Settings', async () => {
     load([list({ completedAt: '2026-09-18T10:00:00Z', items: [item({ checked: true })] })]);
     const created = list({ id: 'new', title: 'Weekly Shopping List', revision: 0 });
     mockPost.mockResolvedValueOnce({ list: created });
@@ -106,7 +122,8 @@ describe('My Lists', () => {
     await fireEvent.changeText(screen.getByTestId('shopping-list-name'), 'Weekly Shopping List');
     await fireEvent.press(screen.getByTestId('shopping-use-last'));
     await fireEvent.press(screen.getByTestId('shopping-create'));
-    await waitFor(() => expect(mockPush).toHaveBeenCalledWith({ pathname: '/shopping/[id]', params: { id: 'new' } }));
+    // `ShoppingDetail(…, openSettings: true)` (ShoppingViews.swift:132).
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith({ pathname: '/wellness/shopping/[id]', params: { id: 'new', settings: '1' } }));
     const envelope = mockPost.mock.calls[0][0];
     expect(envelope.operation).toBe('create');
     expect(envelope.id).toBeUndefined();
@@ -158,8 +175,9 @@ describe('List detail', () => {
   it('explains that a share link does not follow next week’s list', async () => {
     load([list()]);
     mockParams = { id: 'l1' };
-    await render(<Detail />);
-    await fireEvent.press(screen.getByTestId('list-share'));
+    await render(<DetailWithQueries />);
+    await fireEvent.press(screen.getByTestId('list-options'));
+    await fireEvent.press(screen.getByTestId('list-menu-share'));
     expect(screen.getByText('2 items')).toBeTruthy();
     expect(
       screen.getByText(
@@ -171,7 +189,7 @@ describe('List detail', () => {
   it('shows the redesigned header, chips, rows with their amount line, and no progress bar or hint', async () => {
     load([list()]);
     mockParams = { id: 'l1' };
-    await render(<Detail />);
+    await render(<DetailWithQueries />);
     // "N added · M items" (ShoppingViews.swift:233-234): N is the CHECKED count.
     expect(screen.getByTestId('list-counts').props.children).toBe('0 added · 2 items');
     expect(screen.getByText('All (2)')).toBeTruthy();
@@ -192,7 +210,7 @@ describe('List detail', () => {
   it('starts each row separator under the first Text, as iOS does: the emoji, or else the name', async () => {
     load([list({ items: [item({ id: 'bread', name: 'loaf bread', category: 'Bakery', quantity: '1', size: '' }), item(), item({ id: 'last', name: 'rice', category: 'Pantry' })] })]);
     mockParams = { id: 'l1' };
-    await render(<Detail />);
+    await render(<DetailWithQueries />);
     expect(screen.getByTestId('grocery-separator-bread')).toHaveStyle({ left: 52 });
     expect(screen.getByTestId('grocery-separator-milk')).toHaveStyle({ left: 100 });
     expect(screen.queryByTestId('grocery-separator-last')).toBeNull();
@@ -202,7 +220,7 @@ describe('List detail', () => {
     load([list()]);
     mockParams = { id: 'l1' };
     mockPost.mockImplementation(async (envelope) => ({ list: { ...list({ revision: 8 }), items: envelope.input.items } }));
-    await render(<Detail />);
+    await render(<DetailWithQueries />);
     await fireEvent.press(screen.getByTestId('chip-Produce'));
     expect(screen.getByTestId('chip-Produce').props.accessibilityState.selected).toBe(true);
     expect(screen.queryByText('Parity milk')).toBeNull();
@@ -218,7 +236,7 @@ describe('List detail', () => {
     load([list()]);
     mockParams = { id: 'l1' };
     mockPost.mockImplementation(async (envelope) => ({ list: { ...list({ revision: 8 }), items: envelope.input.items } }));
-    await render(<Detail />);
+    await render(<DetailWithQueries />);
     await fireEvent.press(screen.getByTestId('grocery-check-milk'));
     await waitFor(() => expect(screen.getByTestId('list-counts').props.children).toBe('1 added · 2 items'));
     const envelope = mockPost.mock.calls[0][0];
@@ -230,7 +248,7 @@ describe('List detail', () => {
     load([list()]);
     mockParams = { id: 'l1' };
     mockPost.mockRejectedValueOnce(new ApiError({ status: 409, message: 'This list changed on another device. Refresh before saving.' }));
-    await render(<Detail />);
+    await render(<DetailWithQueries />);
     await fireEvent.press(screen.getByTestId('grocery-check-milk'));
     await waitFor(() => expect(screen.getByTestId('list-error').props.children).toBe('This list changed on another device. Refresh before saving.'));
     expect(screen.getByTestId('list-counts').props.children).toBe('1 added · 2 items');
@@ -249,7 +267,7 @@ describe('List detail', () => {
         ? { items: [{ id: 'p1', name: 'eggs', category: 'Dairy & Eggs', quantity: '1', size: 'dozen', notes: '', checked: false }] }
         : { list: { ...list({ revision: 8 }), items: envelope.input.items } },
     );
-    await render(<Detail />);
+    await render(<DetailWithQueries />);
     await fireEvent.changeText(screen.getByTestId('shopping-quick-add'), 'ch');
     expect(screen.getByText('Cheese')).toBeTruthy();
     expect(screen.getByText('Cherry Tomatoes')).toBeTruthy();
@@ -272,7 +290,7 @@ describe('List detail', () => {
         ? { items: [{ id: 'c1', name: 'Cheese', category: 'Dairy & Eggs', quantity: '1', size: '', notes: '', checked: false }] }
         : { list: { ...list({ revision: 8 }), items: envelope.input.items } },
     );
-    await render(<Detail />);
+    await render(<DetailWithQueries />);
     await fireEvent.changeText(screen.getByTestId('shopping-quick-add'), 'che');
     await fireEvent.press(screen.getByTestId('suggestion-Cheese'));
     await waitFor(() => expect(screen.getByTestId('list-counts').props.children).toBe('0 added · 3 items'));
@@ -283,7 +301,7 @@ describe('List detail', () => {
     load([list()]);
     mockParams = { id: 'l1' };
     mockPost.mockResolvedValueOnce({ items: [{ id: 'b', name: '  ', category: 'Other', quantity: '1', size: '', notes: '', checked: false }] });
-    await render(<Detail />);
+    await render(<DetailWithQueries />);
     await fireEvent.changeText(screen.getByTestId('shopping-quick-add'), 'zzz');
     await fireEvent(screen.getByTestId('shopping-quick-add'), 'submitEditing');
     await waitFor(() => expect(screen.getByTestId('list-error').props.children).toBe('No items found. Type an item and try again.'));
@@ -294,7 +312,7 @@ describe('List detail', () => {
   it('"+" focuses the empty field and the mic is a separate target', async () => {
     load([list()]);
     mockParams = { id: 'l1' };
-    await render(<Detail />);
+    await render(<DetailWithQueries />);
     expect(screen.getByTestId('quick-add-plus').props.accessibilityLabel).toBe('Focus add item field');
     await fireEvent.press(screen.getByTestId('quick-add-plus'));
     expect(mockPost).not.toHaveBeenCalled();
@@ -316,7 +334,7 @@ describe('List detail', () => {
           }
         : { list: { ...list({ revision: 8 }), items: envelope.input.items } },
     );
-    await render(<Detail />);
+    await render(<DetailWithQueries />);
     expect(screen.getByText('Nothing on the list yet')).toBeTruthy();
     expect(screen.getByText('Add items above or dictate a few groceries.')).toBeTruthy();
     expect(screen.queryByTestId('category-chips')).toBeNull();
@@ -343,7 +361,7 @@ describe('List detail', () => {
     mockPost
       .mockResolvedValueOnce({ items: [{ id: 'b', name: ' ', category: 'Other', quantity: '1', size: '', notes: '', checked: false }] })
       .mockRejectedValueOnce(new ApiError({ status: 500, message: 'The server is busy.' }));
-    await render(<Detail />);
+    await render(<DetailWithQueries />);
     await fireEvent.press(screen.getByTestId('quick-add-mic'));
     await fireEvent.changeText(screen.getByTestId('voice-transcript'), 'hmm');
     await fireEvent.press(screen.getByTestId('voice-add'));
@@ -374,28 +392,44 @@ describe('List detail', () => {
     expect(mockBack).not.toHaveBeenCalled();
   });
 
-  it('keeps Uncheck all in the ⋯ menu and has no Edit or reorder', async () => {
+  /** The ⋯ menu (ShoppingViews.swift:342-352): Share first, then Select All / Unselect All for an open list. */
+  it('has Share, Select All and Unselect All in the ⋯ menu, each off when it would change nothing', async () => {
     load([list({ items: [item({ checked: true })] })]);
     mockParams = { id: 'l1' };
     mockPost.mockImplementation(async (envelope) => ({ list: { ...list({ revision: 8 }), items: envelope.input.items } }));
-    await render(<Detail />);
+    await render(<DetailWithQueries />);
+    expect(screen.queryByTestId('list-share')).toBeNull();
     await fireEvent.press(screen.getByTestId('list-options'));
     expect(screen.getAllByRole('button').map((node) => node.props.testID).filter((id: string | undefined) => id?.startsWith('list-menu-'))).toEqual([
+      'list-menu-share',
       'list-menu-settings',
       'list-menu-copy',
-      'list-menu-uncheck',
+      'list-menu-select-all',
+      'list-menu-unselect-all',
       'list-menu-delete',
     ]);
+    expect(screen.getByTestId('list-menu-select-all').props.accessibilityState.disabled).toBe(true);
+    // `Label("Share list", systemImage: "square.and.arrow.up")`: the only item with a glyph.
+    const glyphs = (node: { props: { name?: string }; children: unknown[] }): string[] => [
+      ...(node.props.name ? [node.props.name] : []),
+      ...node.children.flatMap((child) => (typeof child === 'object' && child ? glyphs(child as typeof node) : [])),
+    ];
+    expect(glyphs(screen.getByTestId('list-menu-share') as never)).toEqual(['share-outline']);
+    expect(glyphs(screen.getByTestId('list-menu-copy') as never)).toEqual([]);
     expect(screen.queryByText('Edit')).toBeNull();
-    await fireEvent.press(screen.getByTestId('list-menu-uncheck'));
+    await fireEvent.press(screen.getByTestId('list-menu-unselect-all'));
     await waitFor(() => expect(screen.getByTestId('list-counts').props.children).toBe('0 added · 1 item'));
+    await fireEvent.press(screen.getByTestId('list-options'));
+    expect(screen.getByTestId('list-menu-unselect-all').props.accessibilityState.disabled).toBe(true);
+    await fireEvent.press(screen.getByTestId('list-menu-select-all'));
+    await waitFor(() => expect(screen.getByTestId('list-counts').props.children).toBe('1 added · 1 item'));
   });
 
   it('asks with the singular when one item is left', async () => {
     load([list({ items: [item(), item({ id: 'banana', name: 'bananas', checked: true })] })]);
     mockParams = { id: 'l1' };
     const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
-    await render(<Detail />);
+    await render(<DetailWithQueries />);
     expect(screen.getByTestId('list-counts').props.children).toBe('1 added · 2 items');
     await fireEvent.press(screen.getByTestId('shopping-complete-trip'));
     expect(alert.mock.calls[0][0]).toBe('Complete with 1 item remaining?');
@@ -407,7 +441,7 @@ describe('List detail', () => {
     mockParams = { id: 'l1' };
     const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
     mockPost.mockResolvedValueOnce({ list: list({ id: 'next', date: '2026-10-02', revision: 0, items: [item({ checked: false })] }) });
-    await render(<Detail />);
+    await render(<DetailWithQueries />);
     await fireEvent.press(screen.getByTestId('shopping-complete-trip'));
     const [title, message, buttons] = alert.mock.calls[0] as [string, string, { text: string; onPress?: () => void }[]];
     expect(title).toBe('Complete with 2 items remaining?');
@@ -437,7 +471,7 @@ describe('List detail', () => {
     mockParams = { id: 'l1' };
     const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
     mockPost.mockResolvedValue({ list: { ...done, completedAt: '2026-09-21T10:00:00Z', revision: 8 } });
-    await render(<Detail />);
+    await render(<DetailWithQueries />);
     await fireEvent.press(screen.getByTestId('shopping-complete-trip'));
     await waitFor(() => expect(screen.getByTestId('shopping-completion')).toBeTruthy());
     expect(alert).not.toHaveBeenCalled();
@@ -453,27 +487,33 @@ describe('List detail', () => {
     load([done]);
     mockParams = { id: 'l1' };
     mockPost.mockResolvedValue({ list: { ...done, completedAt: '2026-09-21T10:00:00Z', revision: 8 } });
-    await render(<Detail />);
+    await render(<DetailWithQueries />);
     await fireEvent.press(screen.getByTestId('shopping-complete-trip'));
     await waitFor(() => expect(screen.getByTestId('shopping-completion-done')).toBeTruthy());
     await fireEvent.press(screen.getByTestId('shopping-completion-done'));
     expect(mockBack).toHaveBeenCalled();
   });
 
-  it('keeps a completed list editable, and saving it creates a new list', async () => {
+  /** `readOnly` (ShoppingViews.swift:233): a completed list's rows, settings and shortcuts are off. */
+  it('keeps a completed list read-only, and a typed item still saves as a new list', async () => {
     load([list({ completedAt: '2026-09-18T10:00:00Z' })]);
     mockParams = { id: 'l1' };
     mockPost.mockImplementation(async (envelope) => ({ list: { ...list({ id: 'NEW-LIST-ID', revision: 1 }), items: envelope.input.items } }));
-    await render(<Detail />);
-    expect(screen.getByTestId('shopping-quick-add')).toBeTruthy();
-    expect(screen.getByTestId('grocery-check-milk').props.accessibilityState.disabled).toBe(false);
+    mockPost.mockImplementationOnce(async () => ({ items: [item({ id: 'eggs', name: 'Eggs', category: 'Dairy & Eggs', quantity: '12' })] }));
+    await render(<DetailWithQueries />);
+    expect(screen.getByTestId('grocery-check-milk').props.accessibilityState.disabled).toBe(true);
+    expect(screen.getByTestId('grocery-edit-milk').props.accessibilityState?.disabled ?? screen.getByTestId('grocery-edit-milk').props.disabled).toBeTruthy();
+    expect(screen.queryByTestId('shopping-header-settings')).toBeNull();
+    expect(screen.getByTestId('shopping-shortcut-email').props.accessibilityState.disabled).toBe(true);
     await fireEvent.press(screen.getByTestId('list-options'));
-    expect(screen.queryByTestId('list-menu-uncheck')).toBeNull();
+    expect(screen.queryByTestId('list-menu-select-all')).toBeNull();
     expect(screen.getByTestId('list-menu-settings').props.accessibilityState.disabled).toBe(true);
     await fireEvent.press(screen.getByTestId('list-menu-copy'));
     await fireEvent.press(screen.getByTestId('new-list-cancel'));
-    await fireEvent.press(screen.getByTestId('grocery-check-milk'));
-    await waitFor(() => expect(mockPost).toHaveBeenCalled());
+    await fireEvent.changeText(screen.getByTestId('shopping-quick-add'), 'eggs');
+    await fireEvent(screen.getByTestId('shopping-quick-add'), 'submitEditing');
+    await waitFor(() => expect(mockPost).toHaveBeenCalledTimes(2));
+    mockPost.mock.calls.shift();
     const envelope = mockPost.mock.calls[0][0];
     expect(envelope.operation).toBe('create');
     expect(envelope.id).toBeUndefined();
@@ -481,13 +521,13 @@ describe('List detail', () => {
     expect(envelope.idempotencyKey).toBe(String(envelope.idempotencyKey).toUpperCase());
     expect(envelope.idempotencyKey).not.toBe('l1');
     expect(envelope.input).not.toHaveProperty('completedAt');
-    expect(envelope.input.items.find((value: GroceryItem) => value.id === 'milk').checked).toBe(true);
+    expect(envelope.input.items.map((value: GroceryItem) => value.id)).toEqual(['milk', 'banana', 'eggs']);
   });
 
   it('turning live transcription off disables the mic', async () => {
     load([list()]);
     mockParams = { id: 'l1' };
-    await render(<Detail />);
+    await render(<DetailWithQueries />);
     await fireEvent.press(screen.getByTestId('quick-add-mic'));
     await fireEvent(screen.getByTestId('voice-consent'), 'valueChange', false);
     expect(screen.getByTestId('voice-status').props.children).toBe('Enable live transcription below to start');
@@ -499,8 +539,9 @@ describe('List detail', () => {
     mockParams = { id: 'l1' };
     const share = jest.spyOn(Share, 'share').mockResolvedValue({ action: 'sharedAction' });
     mockPost.mockResolvedValueOnce({ list: list({ shareToken: 'tok' }) }).mockResolvedValueOnce({ list: list({ shareToken: null }) });
-    await render(<Detail />);
-    await fireEvent.press(screen.getByTestId('list-share'));
+    await render(<DetailWithQueries />);
+    await fireEvent.press(screen.getByTestId('list-options'));
+    await fireEvent.press(screen.getByTestId('list-menu-share'));
     await fireEvent.press(screen.getByTestId('share-text'));
     expect(share).toHaveBeenLastCalledWith({ message: 'Parity Shopping List\n2026-09-25\n○ Parity milk — 2 bottles\n○ bananas — 6 ' });
     await fireEvent.press(screen.getByTestId('share-create'));
@@ -516,9 +557,10 @@ describe('List detail', () => {
     load([list()]);
     mockParams = { id: 'l1' };
     mockPost.mockImplementation(async (envelope) => ({ list: { ...list({ revision: 8 }), items: envelope.input.items } }));
-    await render(<Detail />);
+    await render(<DetailWithQueries />);
     await fireEvent.press(screen.getByTestId('grocery-edit-milk'));
-    expect(screen.getByText('Item')).toBeTruthy();
+    expect(screen.getByText('Edit Item')).toBeTruthy();
+    await fireEvent.press(screen.getByTestId('item-image-toggle'));
     expect(screen.getByTestId('item-generate').props.accessibilityState.disabled).toBe(true);
     await fireEvent.changeText(screen.getByTestId('item-name'), ' ');
     expect(screen.getByTestId('item-save').props.accessibilityState.disabled).toBe(true);
@@ -532,7 +574,7 @@ describe('List detail', () => {
     mockParams = { id: 'l1' };
     const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
     mockPost.mockResolvedValueOnce({ ok: true });
-    await render(<Detail />);
+    await render(<DetailWithQueries />);
     await fireEvent.press(screen.getByTestId('list-options'));
     await fireEvent.press(screen.getByTestId('list-menu-delete'));
     const [title, , buttons] = alert.mock.calls[0] as [string, undefined, { text: string; onPress?: () => void }[]];
@@ -549,96 +591,154 @@ describe('List detail', () => {
  * The answer is the `rice` request from Run D's test data, which the capture replaced with Brown rice.
  */
 describe('Item Alternatives', () => {
-  const RICE = item({ id: 'rice', name: 'rice', category: 'Pantry', quantity: '1', size: 'bag', checked: false });
+  const MILK = item({ id: 'milk2', name: '2% milk', category: 'Dairy & Eggs', quantity: '1', size: '', notes: 'organic only', checked: true });
+  const PER100 = { servingSize: '100 g', servingAmount: 100, servingUnit: 'g' };
   const ANSWER = {
+    originalFacts: { source: 'USDA', matchQuality: 'representative_generic', nutrition: { ...PER100, calories: 50, protein: 3, totalFat: 2, saturatedFat: 1, carbohydrates: 5, sugar: 5 } },
     alternatives: [
-      { name: 'Brown rice', category: 'Pantry', quantity: '1', size: 'bag', reason: 'More whole grains', detail: 'Works well as a direct swap in most rice dishes.' },
-      { name: 'Quinoa', category: 'Pantry', quantity: '1', size: 'bag', reason: 'Protein-rich grain', detail: 'Quick-cooking complete protein' },
-      { name: 'Cauliflower rice', category: 'Frozen', quantity: '1', size: 'bag', reason: 'Vegetable option', detail: 'Light substitute for rice dishes' },
+      { name: '2% milk', category: 'Dairy & Eggs', quantity: '1', size: '', reason: 'Same', detail: 'Same item', facts: { source: 'USDA', nutrition: { ...PER100, calories: 50, protein: 3, totalFat: 2, carbohydrates: 5 } } },
+      {
+        name: 'Lactose-free milk',
+        category: 'Dairy & Eggs',
+        quantity: '1',
+        size: '',
+        reason: 'Lactose-free',
+        detail: 'Dairy milk without lactose',
+        facts: { source: 'Open Food Facts', brand: 'Stater Bros', barcode: '0123456789012', nutrition: { ...PER100, calories: 67, protein: 3, totalFat: 4, saturatedFat: 2, carbohydrates: 5, sugar: 3 }, dietary: ['Lactose-free'], bestFor: ['Coffee'] },
+      },
+      { name: 'Unsweetened oat milk', category: 'Dairy & Eggs', quantity: '1', size: 'carton', reason: 'Plant-based', detail: 'Creamy', facts: null },
     ],
-    tip: 'Brown rice is the closest whole-grain swap for everyday meals.',
+    tip: 'Choose unsweetened.',
     usedAI: true,
   };
 
   async function open(answer: () => Promise<unknown> = async () => ANSWER) {
-    load([list({ items: [item(), RICE] })]);
+    shoppingStore.getState().reset();
+    load([list({ items: [item(), MILK] })]);
     mockParams = { id: 'l1' };
     mockAlternatives.mockImplementation(answer);
     mockPost.mockImplementation(async (envelope) => ({ list: { ...list({ revision: 8 }), items: envelope.input.items } }));
-    await render(<Detail />);
-    await fireEvent.press(screen.getByLabelText('Show alternatives for rice'));
+    await render(<DetailWithQueries />);
+    await fireEvent.press(screen.getByLabelText('Show alternatives for 2% milk'));
   }
 
-  it('shows the loading state, then the original, the alternatives with the first selected, and the tip', async () => {
+  it('shows the original, the goal chips, each alternative with its supported goals and nutrition line', async () => {
     let answer: (value: unknown) => void = () => undefined;
     await open(() => new Promise((resolve) => (answer = resolve)));
     expect(screen.getByText('Item Alternatives')).toBeTruthy();
     expect(screen.getByText('Finding useful alternatives…')).toBeTruthy();
-    expect(mockAlternatives).toHaveBeenCalledWith({ name: 'rice', category: 'Pantry', quantity: '1', size: 'bag' });
+    await waitFor(() => expect(mockAlternatives).toHaveBeenCalledWith({ name: '2% milk', category: 'Dairy & Eggs', quantity: '1', size: '' }));
     await act(async () => answer(ANSWER));
-
-    expect(screen.getByTestId('alternatives-original')).toHaveTextContent(/rice1 bagOriginal Item/);
+    expect(screen.getByTestId('alternatives-original')).toHaveTextContent(/2% milk1Original Item/);
     expect(screen.getByText('AI Recommended Alternatives')).toBeTruthy();
-    expect(screen.getByText('Practical swaps based on the item in your list.')).toBeTruthy();
-    expect(screen.getByText('More whole grains')).toBeTruthy();
-    expect(screen.getByLabelText('Select Brown rice as replacement').props.accessibilityState.selected).toBe(true);
-    expect(screen.getByTestId('alternative-pill-Brown rice')).toHaveTextContent('Selected');
-    expect(screen.getByTestId('alternative-pill-Quinoa')).toHaveTextContent('Replace');
-    expect(screen.getByText('Nexdo Tip')).toBeTruthy();
-    expect(screen.getByText('Brown rice is the closest whole-grain swap for everyday meals.')).toBeTruthy();
-    expect(screen.getByText('Replace with Selected Item')).toBeTruthy();
-    expect(screen.getByText('Add to Cart Instead')).toBeTruthy();
+    expect(screen.getAllByText('Suggested alternative')).toHaveLength(2);
+    expect(screen.getByText('Lower sugar · Lactose-free')).toBeTruthy();
+    expect(screen.getByText('67 cal · 3g protein · 4g fat · 5g carbs · per 100 g')).toBeTruthy();
+    expect(screen.getByText('Nutrition details unavailable')).toBeTruthy();
+    expect(screen.getByText('Always check the product label for the most current nutrition and allergen information.')).toBeTruthy();
+    expect(screen.getByLabelText('View in Cart (2)')).toBeTruthy();
   });
 
-  it('Replace swaps the item in place, keeping its id and checked state, with the detail as notes', async () => {
+  it('filters by a goal chip, says how many match, and Show all clears it', async () => {
     await open();
-    await waitFor(() => expect(screen.getByTestId('alternatives-replace')).toBeTruthy());
-    await fireEvent.press(screen.getByTestId('alternatives-replace'));
-    await waitFor(() => expect(screen.queryByTestId('alternatives-list')).toBeNull());
+    await waitFor(() => expect(screen.getByTestId('alternatives.goal.Lower sugar')).toBeTruthy());
+    await fireEvent.press(screen.getByTestId('alternatives.goal.Lower sugar'));
+    expect(screen.getByTestId('alternatives.goalStatus')).toHaveTextContent('1 matches · Lower sugar');
+    expect(screen.queryByText('Unsweetened oat milk')).toBeNull();
+    await fireEvent.press(screen.getByTestId('alternatives.goal.Lower fat'));
+    expect(screen.getByTestId('alternatives.goalStatus')).toHaveTextContent('No verified matches for lower fat.');
+    expect(screen.getByText('No matching alternatives yet')).toBeTruthy();
+    await fireEvent.press(screen.getByTestId('alternatives.showAll'));
+    expect(screen.getByText('Unsweetened oat milk')).toBeTruthy();
+  });
+
+  it('More opens the goal picker; Apply sets the goal', async () => {
+    await open();
+    await waitFor(() => expect(screen.getByTestId('alternatives.moreGoals')).toBeTruthy());
+    await fireEvent.press(screen.getByTestId('alternatives.moreGoals'));
+    expect(screen.getByText('I’m looking for:')).toBeTruthy();
+    await fireEvent.press(screen.getByTestId('alternatives.moreOptions'));
+    await fireEvent.press(screen.getAllByTestId('alternatives.goal.Lactose-free').slice(-1)[0]);
+    await fireEvent.press(screen.getByTestId('alternatives.applyGoal'));
+    expect(screen.getByTestId('alternatives.goalStatus')).toHaveTextContent('1 matches · Lactose-free');
+  });
+
+  it('Why these? explains the suggestions', async () => {
+    await open();
+    await waitFor(() => expect(screen.getByTestId('alternatives.whyThese')).toBeTruthy());
+    await fireEvent.press(screen.getByTestId('alternatives.whyThese'));
+    expect(screen.getByText('Why these alternatives?')).toBeTruthy();
+    expect(screen.getByText('Comparable nutrition')).toBeTruthy();
+  });
+
+  it('Replace asks first, keeps the item’s own quantity, notes and checked state, and ends on Item replaced!', async () => {
+    await open();
+    await waitFor(() => expect(screen.getByTestId('alternatives.select.Lactose-free milk')).toBeTruthy());
+    await fireEvent.press(screen.getByTestId('alternatives.select.Lactose-free milk'));
+    expect(screen.getByText('Replace item?')).toBeTruthy();
+    expect(screen.getByText('Replace “2% milk” with “Lactose-free milk”? ')).toBeTruthy();
+    expect(mockPost).not.toHaveBeenCalled();
+    await fireEvent.press(screen.getByTestId('alternatives.confirm'));
+    await waitFor(() => expect(screen.getByTestId('alternatives.success')).toBeTruthy());
     const envelope = mockPost.mock.calls[0][0];
     expect(envelope).toMatchObject({ operation: 'save', id: 'l1', revision: 7 });
-    expect(envelope.input.items.map((value: GroceryItem) => [value.id, value.name, value.notes, value.checked])).toEqual([
-      ['milk', 'Parity milk', '', false],
-      ['rice', 'Brown rice', 'Works well as a direct swap in most rice dishes.', false],
-    ]);
-    // `shopping-detail-after-replace`: the row reads Brown rice, 1 bag, and the detail as its note.
-    await waitFor(() => expect(screen.getByText('Brown rice')).toBeTruthy());
-    expect(screen.getByText('Works well as a direct swap in most rice dishes.')).toBeTruthy();
+    expect(envelope.input.items[1]).toMatchObject({ id: 'milk2', name: 'Lactose-free milk', quantity: '1', size: '', notes: 'organic only', checked: true, brand: 'Stater Bros', barcode: '0123456789012', imageData: null });
+    expect(screen.getByText('2% milk has been replaced with Lactose-free milk.')).toBeTruthy();
+    await fireEvent.press(screen.getByTestId('alternatives-success-done'));
+    await waitFor(() => expect(screen.queryByTestId('alternatives-original')).toBeNull());
   });
 
-  it('Add to Cart Instead appends the selected alternative as a new item', async () => {
+  it('stars the original and an alternative', async () => {
     await open();
-    await waitFor(() => expect(screen.getByLabelText('Select Quinoa as replacement')).toBeTruthy());
-    await fireEvent.press(screen.getByLabelText('Select Quinoa as replacement'));
-    expect(screen.getByTestId('alternative-pill-Quinoa')).toHaveTextContent('Selected');
-    await fireEvent.press(screen.getByTestId('alternatives-add'));
+    await waitFor(() => expect(screen.getByTestId('alternatives.favorite.original')).toBeTruthy());
+    await fireEvent.press(screen.getByTestId('alternatives.favorite.original'));
+    await waitFor(() => expect(mockPost).toHaveBeenCalledTimes(1));
+    expect(mockPost.mock.calls[0][0].input.items[1]).toMatchObject({ favorite: true });
+    await fireEvent.press(screen.getByTestId('alternatives.favorite.Lactose-free milk|Dairy & Eggs|1|'));
+    await waitFor(() => expect(mockPost).toHaveBeenCalledTimes(2));
+    expect(mockPost.mock.calls[1][0].input.items[1].favoriteAlternatives).toEqual(['Lactose-free milk|Dairy & Eggs|1|']);
+  });
+
+  it('opens Item Details: the comparison, the nutrition table, and Add to Cart Instead appends', async () => {
+    await open();
+    await waitFor(() => expect(screen.getByTestId('alternatives.details.Lactose-free milk')).toBeTruthy());
+    await fireEvent.press(screen.getByTestId('alternatives.details.Lactose-free milk'));
+    expect(screen.getByText('Item Details')).toBeTruthy();
+    expect(screen.getByTestId('alternative.originalName')).toHaveTextContent('2% milk');
+    expect(screen.getByTestId('alternative.targetName')).toHaveTextContent('Lactose-free milk');
+    expect(screen.getByText('67 cal')).toBeTruthy();
+    expect(screen.getByText('Representative food — not an exact product.')).toBeTruthy();
+    expect(screen.getByTestId('alternative-row-Calories')).toHaveTextContent('Calories5067↑ 17');
+    expect(screen.getByTestId('alternative-row-Protein')).toHaveTextContent('Protein3 g3 g= Same');
+    await fireEvent.press(screen.getByTestId('alternative.sort.Alternative'));
+    expect(screen.getByText('Alternative: high to low')).toBeTruthy();
+    expect(screen.getByTestId('alternative.tab.Allergens')).toBeTruthy();
+    expect(screen.getByTestId('alternative.tab.Best For')).toBeTruthy();
+    await fireEvent.press(screen.getByTestId('alternative.detail.add'));
     await waitFor(() => expect(mockPost).toHaveBeenCalled());
-    const names = mockPost.mock.calls[0][0].input.items.map((value: GroceryItem) => value.name);
-    expect(names).toEqual(['Parity milk', 'rice', 'Quinoa']);
-    await waitFor(() => expect(screen.getByTestId('list-counts').props.children).toBe('0 added · 3 items'));
+    expect(mockPost.mock.calls[0][0].input.items.map((value: GroceryItem) => value.name)).toEqual(['Parity milk', '2% milk', 'Lactose-free milk']);
   });
 
-  it('falls back to the phone’s own suggestions when the request fails', async () => {
-    await open(async () => {
-      throw new ApiError({ status: 0, code: 'NETWORK', message: 'offline' });
-    });
-    await waitFor(() => expect(screen.getByText('Organic rice')).toBeTruthy());
-    expect(screen.getByText('Store-brand rice')).toBeTruthy();
-    expect(screen.getByText('Compare unit prices and package sizes before replacing rice.')).toBeTruthy();
+  it('refuses to add an alternative already in the cart', async () => {
+    await open();
+    await waitFor(() => expect(screen.getByTestId('alternatives.details.2% milk')).toBeTruthy());
+    await fireEvent.press(screen.getByTestId('alternatives.details.2% milk'));
+    await fireEvent.press(screen.getByTestId('alternative.detail.add'));
+    await waitFor(() => expect(screen.getByTestId('alternative.saveError')).toHaveTextContent('This alternative is already in your cart.'));
+    expect(mockPost).not.toHaveBeenCalled();
   });
 
-  it('shows the expired-session error with Try Again, and closes with the xmark', async () => {
+  it('shows a failed load with Try again — no phone-side fallback — and the retry skips the cache', async () => {
     await open(async () => {
-      throw new ApiError({ status: 401, code: 'SIGNED_OUT', message: 'Your session has expired. Please sign in again.' });
+      throw new ApiError({ status: 0, code: 'NETWORK', message: 'The network connection was lost.' });
     });
-    await waitFor(() => expect(screen.getByText('Couldn’t load alternatives')).toBeTruthy());
-    expect(screen.getByText('Your session has expired. Please sign in again.')).toBeTruthy();
+    await waitFor(() => expect(screen.getByTestId('alternatives.error')).toHaveTextContent('The network connection was lost.'));
+    expect(screen.queryByText('Organic 2% milk')).toBeNull();
     mockAlternatives.mockResolvedValueOnce(ANSWER);
     await fireEvent.press(screen.getByTestId('alternatives-retry'));
-    await waitFor(() => expect(screen.getByText('Brown rice')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('Lactose-free milk')).toBeTruthy());
     await fireEvent.press(screen.getByLabelText('Close alternatives'));
     expect(screen.queryByText('Item Alternatives')).toBeNull();
-    expect(mockPost).not.toHaveBeenCalled();
   });
 });
 
@@ -650,7 +750,7 @@ describe('Shopping Detail quick-add on Android', () => {
     jest.replaceProperty(Platform, 'OS', 'android');
     load([list()]);
     mockParams = { id: 'l1' };
-    await render(<Detail />);
+    await render(<DetailWithQueries />);
 
     const field = screen.getByTestId('shopping-quick-add');
     expect(field.props.numberOfLines).toBe(1);
@@ -670,7 +770,7 @@ describe('Shopping Detail quick-add on Android', () => {
   it('keeps the native placeholder on iOS', async () => {
     load([list()]);
     mockParams = { id: 'l1' };
-    await render(<Detail />);
+    await render(<DetailWithQueries />);
     expect(screen.getByTestId('shopping-quick-add').props.placeholder).toBe('Add an item (e.g. eggs, milk, bread)');
     expect(screen.getByTestId('shopping-quick-add').props.numberOfLines).toBeUndefined();
     expect(screen.queryByTestId('shopping-quick-add-placeholder')).toBeNull();
@@ -705,7 +805,7 @@ describe('Add by Voice: the microphone permission', () => {
   async function openVoice() {
     load([list()]);
     mockParams = { id: 'l1' };
-    await render(<Detail />);
+    await render(<DetailWithQueries />);
     await fireEvent.press(screen.getByTestId('quick-add-mic'));
   }
 

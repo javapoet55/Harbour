@@ -63,8 +63,8 @@ those. Everything else is worth reporting.
    five-day forecast.
 8. The greeting line and today's date read the same as the iPhone's.
 9. The range pills (Today / 5 days / All). Switch between them and compare the counts.
-10. **Quick Access**: Weekly / Moments / Shopping. Tap **Weekly** → progress, focus time,
-    accomplishments. **Moments** opens Important Moments. (Shopping opens a title-only placeholder until Run C.)
+10. **Quick Access**: the title and one gradient chart button. Tap it → Weekly Summary: progress, focus
+    time, accomplishments. There are no Moments or Shopping tiles (Phase 12): those open from Wellness.
 11. From Weekly Summary, **Plan next week with Nexdo AI →** opens Ask with the prompt filled in, not
     sent.
 12. **Needs attention**, if your account has anything overdue or conflicting: one row, then a
@@ -182,34 +182,45 @@ now>".
 ### Part 13 — Important Moments (16 steps)
 
 Added in Phase 11 Run B. **Needs a new development or preview build** — it adds three native modules
-(calendar, clipboard, sharing). The way in is the **Moments** tile in Today's Quick Access row, or a
-Moments reminder notification.
+(calendar, clipboard, sharing). The way in is the centre **Wellness** button in the tab bar →
+**Moments** → **Got it!**, or a Moments reminder notification. Back from Important Moments returns to the
+Wellness menu, and there is no tab bar inside it (Phase 12).
 
 Use a test moment named `Parity …`, as the iPhone captures did. Never confirm **Delete all** on real data.
 
 79. Today → **Moments**. The page is titled **Important Moments**, with Upcoming / Scheduled / Sent as a
     gradient control, the search field and the type menu, the summary card ("N upcoming moments",
-    wishes scheduled, wishes needing review) with **Manage** and **Create New**, then This Week / Next
-    Week / This Month / Next Month / Later.
+    wishes scheduled, wishes needing review) with **Manage** and **Create New**, then the date chips
+    **Today (n)** / **Tomorrow** / **This Week** / **Later**, Today chosen first (Phase 12). Each chip
+    shows its own moments, or "No moments today" (… tomorrow, … this week, … later). A birthday group
+    with scheduled wishes shows "2 scheduled @ 8:00 AM" badges and a gear in its top-right corner.
 80. The type menu offers All, Birthday, Anniversary, Festival, Get Well Soon, Custom. Search a title.
 81. **Scheduled** shows each wish card and the delivery menu (All / Automatic / Confirmation / Action
     needed). **Sent** shows delivered, copied and shared wishes. An empty Sent tab shows no message —
     the iPhone does the same.
-82. **Manage** → **Manage Moments**. Open a birthday: **Manage Moment** with the header card (icon,
-    name, type, the **Active** switch, "Send date · …") and the four steps.
-83. Details: rename the moment, then tap **Contacts**. It saves first — "Moment changes saved." — and
-    only then moves. Rename again and tap the back chevron: **Discard unsaved changes?**
+82. **Manage** → **Manage Moments**: tabs **Scheduled (n)** / **Need Review** / **Ready to Schedule**,
+    Scheduled first, each row with its "Scheduled: …" or "Date: …" line. Open a birthday: **Manage
+    Moment** with the header card (icon, name, type, the **Active** switch, the moment's date) and the
+    three steps **Contacts** / **Message** / **Schedule**, opening on Contacts.
+83. Contacts: change a recipient, then **Save Changes**: "Moment changes saved." and it moves on to
+    **Message** by itself. Change something and tap the back chevron: **Discard unsaved changes?**
 84. Contacts: **Add Contact** opens the phone's contact picker (one person each time), then **Choose
     delivery address**. **Enter recipient manually** opens **Add Contact**; **Add recipient** stays
     greyed until there is a name and a phone or an email.
-85. Wish Message: change the tone, edit the text (the counter reads n/500), tap **Regenerate** — it asks
+85. Message (titled **Wish Message**): change the tone, edit the text (the counter reads n/500), tap **Regenerate** — it asks
     first once you have edited. **Personalize** opens its sheet. **Save Message** → "Message approved
     and saved. Nothing has been sent."
 86. Greeting Card: **Create AI Greeting Card** opens the editor. Each generation is a paid AI call — do
     it once. **Use This Card**, then **Share Card**: the share sheet receives the artwork image.
-87. Schedule: tap **Schedule Wish** with unsaved changes — "Save changes first." appears in red under
-    the button. Save, then **Schedule Wish** → **Review schedule** → **Confirm Schedule** → **Schedule
-    confirmed** with confetti. **Done** returns to Important Moments.
+87. Schedule: the **Moment** card with **Edit** (Edit Moment: name, type, date, Repeat), **Send time**
+    with the time zone (India reads Asia/Kolkata, never blank) and **Prepare reminder** (None, 1/4/8 hours,
+    1/3/7/14 days), **Delivery** as Messages / Email / Copy / Share capsules, and **Connect me on the
+    day**. Do NOT tap **Verify my number** with a number you do not own: Twilio calls it. Tap **Schedule
+    Wish** with unsaved changes — "Save changes first." appears in red under the button. Save, then
+    **Schedule Wish** → **Review schedule** (the wish, **Scheduled for** and each recipient, each with
+    **Edit**) → **Confirm Schedule** → **Schedule confirmed!** with the green check and confetti, and no
+    back button. **Done** returns to Important Moments. **Send Now** sends the email at once and opens
+    Messages: only try it with your own address and number.
 88. **Create New**: the type menu, the automatic title, the date (a past date is accepted, as on the
     iPhone), the February 29 note. **Save** is greyed while the title is empty. A new birthday opens
     straight into Manage Moment.
@@ -231,8 +242,8 @@ Use a test moment named `Parity …`, as the iPhone captures did. Never confirm 
 ### Part 14 — Shopping Lists (16 steps)
 
 Added in Phase 11 Run C. Needs the same new build as Part 13 (it also re-enables the camera
-permission). The way in is the **Shopping** tile in Today's Quick Access row; its status line ("N items
-· Fri") should match what the lists show.
+permission). The way in is the centre **Wellness** button → **Shopping List** →
+**Got it!**; Back from My Lists returns to the Wellness menu (Phase 12). Today no longer has a Shopping tile.
 Use a test list named `Parity …`.
 
 95. Today → **Shopping** → **My Lists**: **Create New List**, then **Recent Lists** with each list's
@@ -419,8 +430,8 @@ Run on the phone with the iPhone next to it, same account. Automated coverage is
 | # | Check | Expect | Automated |
 | --- | --- | --- | --- |
 | A1.1 | Today, top to bottom | Quick Access, "Your day, in focus", Action Needed (if due), protected time (if proposed), Focus next, Needs attention row. No Weekly Summary card, no Daily Briefing, no "What should I do now?" | `today-screen`, `today-actions` |
-| A1.2 | Quick Access statuses | "N upcoming" and "N items · Fri" match the iPhone; airplane mode + reopen → Shopping reads "View lists" | `today-screen`, `lib/todayQuickAccess` |
-| A1.3 | Moments / Shopping tiles | Moments opens Important Moments; Shopping opens the title-only "My Lists" placeholder | `today-screen` |
+| A1.2 | Quick Access statuses | **Superseded in Phase 12**: the tiles and their statuses are gone (TodayQuickAccess.swift:3-18) | — |
+| A1.3 | Moments / Shopping tiles | **Superseded in Phase 12**: no tiles; Moments and Shopping open from Wellness. Today shows only the Weekly Summary button | `today-screen` |
 | A1.4 | Summary line | "X Tasks · Y Appointments · Z Moments"; the total includes today's moments; 3/5 days shows 0 Moments | `today-screen`, `lib/todayQuickAccess` |
 | A1.5 | Focus next | With a suggestion: title, "N min · Fits your free time", Start focus, Other options; "…" → Other options / Dismiss suggestion. Without: "Find my next task" | `voice-screens` |
 | A1.6 | Attention row | "N overdue tasks · N other" and the count badge; tap → half-height sheet, drag to full | `today-screen`, `attention-sheet` |

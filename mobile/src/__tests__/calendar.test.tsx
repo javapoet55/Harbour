@@ -92,6 +92,58 @@ beforeEach(() => {
 
 afterEach(() => jest.useRealTimers());
 
+const CONFLICT = {
+  id: 'overloaded',
+  label: 'Overloaded day',
+  title: 'Three tasks overlap at 2 PM',
+  explanation: 'Too much work.',
+  recommendedAction: 'Move one.',
+  kind: 'OVERLOADED_DAY',
+};
+
+function intelligenceToday(attention: (typeof CONFLICT)[], counts: { appointments?: number; tasks?: number } = {}) {
+  return {
+    today: {
+      day: '2026-09-16',
+      timeZone: ZONE,
+      commitments: 1,
+      appointments: counts.appointments ?? 1,
+      tasks: counts.tasks ?? 2,
+      overdue: 0,
+      availableMinutes: 463,
+      timeline: [],
+      attention,
+      recommendation: { title: 'Protect the morning', explanation: 'An explanation Swift no longer shows.', kind: 'FOCUS' },
+    },
+  };
+}
+
+/** `intelligence` (CalendarView.swift:262-290) and `reviewableConflicts` (:255-261). */
+describe('Schedule Intelligence', () => {
+  it('asks to review conflicts only when there are reviewable ones', async () => {
+    mockIntelligence.mockResolvedValue(intelligenceToday([CONFLICT, { ...CONFLICT, id: 'overdue' }]));
+    await renderCalendar();
+    await waitFor(() => expect(screen.getByTestId('calendar-intelligence-heading')).toHaveTextContent('Review schedule conflicts'));
+    expect(screen.getByTestId('calendar-conflicts')).toBeTruthy();
+    expect(screen.getByText('1 calendar commitments today · 7 hours 43 minutes of usable time remain')).toBeTruthy();
+    expect(screen.queryByText('Protect the morning')).toBeNull();
+    expect(screen.queryByText('An explanation Swift no longer shows.')).toBeNull();
+  });
+
+  it('says "Your schedule today" with no conflicts to review, and hides the button', async () => {
+    mockIntelligence.mockResolvedValue(intelligenceToday([{ ...CONFLICT, id: 'overdue' }, { ...CONFLICT, id: 'dependency:t1' }]));
+    await renderCalendar();
+    await waitFor(() => expect(screen.getByTestId('calendar-intelligence-heading')).toHaveTextContent('Your schedule today'));
+    expect(screen.queryByTestId('calendar-conflicts')).toBeNull();
+  });
+
+  it('says "Your schedule is clear" on an empty day', async () => {
+    mockIntelligence.mockResolvedValue(intelligenceToday([], { appointments: 0, tasks: 0 }));
+    await renderCalendar();
+    await waitFor(() => expect(screen.getByTestId('calendar-intelligence-heading')).toHaveTextContent('Your schedule is clear'));
+  });
+});
+
 /** `CalendarView.body` (ios/App/CalendarView.swift:72-176), section by section. */
 describe('Calendar tab', () => {
   it('renders the header copy and the three modes', async () => {
@@ -148,18 +200,49 @@ describe('Calendar tab', () => {
     await waitFor(() => expect(screen.getByText('4 items · 1 deadline')).toBeTruthy());
   });
 
-  it('opens a task from a row and an event detail sheet from an event row', async () => {
+  it('opens a task from a row and Appointment details from an event row', async () => {
     await renderCalendar();
     await waitFor(() => expect(screen.getByTestId('calendar-row-task:t1')).toBeTruthy());
 
     await fireEvent.press(screen.getByTestId('calendar-row-task:t1'));
     expect(mockPush).toHaveBeenCalledWith('/task/t1');
 
+    // `CalendarEventDetailsView(event:fallbackTimeZone: zone)` (CalendarView.swift:177-181).
     await fireEvent.press(screen.getByTestId('calendar-row-event:e1'));
-    await waitFor(() => expect(screen.getByTestId('event-detail-title')).toBeTruthy());
-    expect(screen.getByText('Event Details')).toBeTruthy();
-    expect(screen.getByTestId('event-detail-starts').props.children).toBe('Starts: Wed, Sep 16, 2026 9:30 AM');
-    expect(screen.getByTestId('event-detail-ends').props.children).toBe('Ends: Wed, Sep 16, 2026 10:00 AM');
+    expect(mockPush).toHaveBeenLastCalledWith({ pathname: '/calendar/event/[id]', params: { id: 'e1', zone: ZONE } });
+    expect(screen.queryByText('Calendar commitment')).toBeNull();
+  });
+
+  /** `daySection` (CalendarView.swift:402-440): an empty day in the rolling range is a disclosure. */
+  it('collapses an empty day until its header is tapped', async () => {
+    await renderCalendar();
+    const header = screen.getByTestId('calendar-day-header-2026-09-18');
+    expect(header.props.accessibilityValue).toEqual({ text: 'Collapsed' });
+    expect(header.props.accessibilityHint).toBe('Double tap to expand this day');
+    expect(screen.queryByText('Nothing scheduled. Room to breathe.')).toBeNull();
+
+    await fireEvent.press(header);
+
+    expect(screen.getByText('Nothing scheduled. Room to breathe.')).toBeTruthy();
+    expect(screen.getByTestId('calendar-day-header-2026-09-18').props.accessibilityValue).toEqual({ text: 'Expanded' });
+    await fireEvent.press(screen.getByTestId('calendar-day-header-2026-09-18'));
+    expect(screen.queryByText('Nothing scheduled. Room to breathe.')).toBeNull();
+  });
+
+  it('marks a completed event row Completed outside the Completed filter too', async () => {
+    mockAgenda.mockResolvedValue({ ...AGENDA, events: [{ ...AGENDA.events[0], completedAt: '2026-09-16T04:30:00.000Z' }] });
+    await renderCalendar();
+    await waitFor(() => expect(screen.getByText('Standup')).toBeTruthy());
+    expect(screen.getByText('Completed')).toBeTruthy();
+  });
+
+  /** The backlog disclosure's label (CalendarView.swift:109-123): the count in an indigo circle. */
+  it('labels the backlog with its count badge', async () => {
+    await renderCalendar();
+    const backlog = screen.getByTestId('calendar-backlog');
+    expect(backlog.props.accessibilityLabel).toMatch(/^Unscheduled & overdue, \d+ tasks$/);
+    expect(screen.getByText('Unscheduled & overdue')).toBeTruthy();
+    expect(screen.getByTestId('calendar-backlog-count')).toBeTruthy();
   });
 
   it('routes the creation cards', async () => {
@@ -258,6 +341,8 @@ describe('Calendar filters and search', () => {
     await fireEvent.press(screen.getByTestId('filter-tasks'));
     await fireEvent.press(screen.getByTestId('filter-events'));
 
+    // Every day is empty now, so each starts collapsed; open one.
+    await fireEvent.press(screen.getByTestId('calendar-day-header-2026-09-16'));
     await waitFor(() => expect(screen.getAllByText('No items match your filters.').length).toBeGreaterThan(0));
     expect(screen.queryByText('Nothing scheduled. Room to breathe.')).toBeNull();
   });
@@ -577,6 +662,7 @@ describe('Calendar on Android', () => {
     await renderCalendar();
     expect(flat('calendar-day-2026-09-16')).toMatchObject({ paddingTop: 20 });
     expect(flat('calendar-day-header-2026-09-16')).toMatchObject({ paddingBottom: 8 });
+    await fireEvent.press(screen.getByTestId('calendar-day-header-2026-09-18'));
     const empty = screen.getAllByText('Nothing scheduled. Room to breathe.')[0];
     expect(StyleSheet.flatten(empty.props.style)).toMatchObject({ paddingBottom: 24, color: light.secondary });
   });
@@ -589,7 +675,9 @@ describe('Calendar on Android', () => {
   });
 
   it('lets "Review conflicts" shrink and wrap instead of being clipped', async () => {
+    mockIntelligence.mockResolvedValue(intelligenceToday([CONFLICT]));
     await renderCalendar();
+    await waitFor(() => expect(screen.getByTestId('calendar-conflicts')).toBeTruthy());
     expect(flat('calendar-conflicts')).toMatchObject({ flexShrink: 1, maxWidth: '50%' });
     expect(StyleSheet.flatten(screen.getByText('Review conflicts').props.style)).toMatchObject({ textAlign: 'right' });
     expect(screen.getByText('Review conflicts').props.numberOfLines).toBeUndefined();

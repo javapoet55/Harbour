@@ -12,7 +12,7 @@ import { TodayBackdrop } from '../../components/TodayShell';
 import { androidField, androidLabel, androidSeparator, brand, FieldGroupContext, isAndroid, textStyles, useTheme } from '../../theme';
 import { headline, KEYBOARD_DONE_BAR_HEIGHT, KeyboardDoneBar, MomentCard, MomentPrimary, MomentSheet } from '../moments/components';
 import { deviceZone, momentDate, momentDay } from '../moments/dates';
-import { DateField, FormButton, FormField, FormRow, FormScroll, FormSection, FormText, FormToggle } from '../moments/form';
+import { DateField, FormButton, FormRow, FormScroll, FormSection, FormText, FormToggle } from '../moments/form';
 import { ListTile, type ListSymbol } from './components';
 import { shareMessage } from './device';
 import { copiedItems, itemCount, listInput, previousList, shareText } from './model';
@@ -21,11 +21,12 @@ import { shoppingStore, useShopping } from './store';
 const bodyText = { fontSize: 17, lineHeight: 22 };
 
 // ---------------------------------------------------------------------------------------------
-// New List (ios/App/ShoppingViews.swift:143-205)
+// New List (ios/App/ShoppingViews.swift:142-205)
 
 /**
  * `NewShoppingList`: Start from Scratch or Use Last Week's List, the name, the date and weekly repeat,
- * and "Create List" pinned at the bottom. Also "Copy list" / "Use This List Again", with `source`.
+ * and "Create List & Add Store" pinned at the bottom — the new list then opens on List Settings to add
+ * its store. "Copy list" / "Use This List Again" pass a `source` and read "Create List".
  * Save is disabled while the name is empty — the capture `shopping-new-list-error-empty-name`.
  */
 export function NewListSheet({ visible, source, onCreated, onClose }: { visible: boolean; source?: GroceryList | null; onCreated: (list: GroceryList) => void; onClose: () => void }) {
@@ -43,7 +44,7 @@ function NewListBody({ source, onCreated, onClose }: { source: GroceryList | nul
   const busy = useShopping((state) => state.busy);
   const error = useShopping((state) => state.error);
   // `.onAppear { if let source { title = source.title; useLast = true } }`
-  const [title, setTitle] = useState(source?.title ?? 'Weekly Shopping List');
+  const [title, setTitle] = useState(source?.title ?? 'Shopping List');
   const [date, setDate] = useState(() => momentDate(momentDay(Date.now(), deviceZone()), deviceZone()));
   const [weekly, setWeekly] = useState(true);
   const [useLast, setUseLast] = useState(source !== null);
@@ -125,7 +126,7 @@ function NewListBody({ source, onCreated, onClose }: { source: GroceryList | nul
         onLayout={(event) => setFooterHeight(event.nativeEvent.layout.height)}
         style={[styles.footer, { paddingBottom: 18 + insets.bottom, backgroundColor: theme.colors.glassFill }]}
       >
-        <MomentPrimary title={busy ? 'Creating…' : 'Create List'} onPress={() => void create()} disabled={disabled} testID="shopping-create" />
+        <MomentPrimary title={busy ? 'Creating…' : source === null ? 'Create List & Add Store' : 'Create List'} onPress={() => void create()} disabled={disabled} testID="shopping-create" />
       </KeyboardLift>
       <KeyboardDoneBar />
     </View>
@@ -165,87 +166,26 @@ function Choice({ title, subtitle, icon, selected, disabled = false, onPress, te
 }
 
 // ---------------------------------------------------------------------------------------------
-// List Settings (ShoppingViews.swift:305-315)
-
-/** `ShoppingSettings`: name, date, weekly. Save only — no Cancel — and disabled while the name is empty. */
-export function ListSettingsSheet({ visible, list, onSave, onClose }: { visible: boolean; list: GroceryList; onSave: (list: GroceryList) => void; onClose: () => void }) {
-  const [draft, setDraft] = useState(list);
-  const [shown, setShown] = useState(visible);
-  // A fresh copy of the list each time the sheet opens, as Swift's `@State var initial` is.
-  if (shown !== visible) {
-    setShown(visible);
-    if (visible) setDraft(list);
-  }
-  const disabled = draft.title.trim() === '';
-  return (
-    <MomentSheet
-      visible={visible}
-      title=""
-      onRequestClose={onClose}
-      right={{
-        title: 'Save',
-        disabled,
-        bold: true,
-        onPress: () => {
-          onSave(draft);
-          onClose();
-        },
-        testID: 'list-settings-save',
-      }}
-      testID="list-settings-sheet"
-    >
-      <ListSettingsBody draft={draft} setDraft={setDraft} />
-    </MomentSheet>
-  );
-}
-
-function ListSettingsBody({ draft, setDraft }: { draft: GroceryList; setDraft: (list: GroceryList) => void }) {
-  const theme = useTheme();
-  return (
-    <FormScroll testID="list-settings">
-      <Text style={[textStyles.largeTitle, styles.bold, styles.sheetTitle, { color: theme.colors.label }]}>List Settings</Text>
-      <FormSection>
-        <FormRow>
-          <FormField placeholder="List name" value={draft.title} onChangeText={(title) => setDraft({ ...draft, title })} testID="list-settings-name" />
-        </FormRow>
-        <FormRow>
-          <DateField
-            label="Shopping date"
-            value={momentDate(draft.date, draft.timeZone)}
-            onChange={(value) => setDraft({ ...draft, date: momentDay(value, draft.timeZone) })}
-            zone={draft.timeZone}
-            testID="list-settings-date"
-          />
-        </FormRow>
-        <FormRow>
-          <FormToggle label="Repeat weekly" value={draft.weekly} onValueChange={(weekly) => setDraft({ ...draft, weekly })} testID="list-settings-weekly" />
-        </FormRow>
-        <FormRow last>
-          <FormText>Next week’s list is created when you complete this trip.</FormText>
-        </FormRow>
-      </FormSection>
-    </FormScroll>
-  );
-}
-
-// ---------------------------------------------------------------------------------------------
-// Share List (ShoppingViews.swift:316-332)
+// Share List (ShoppingViews.swift:790-829)
 
 /**
- * `ShoppingShare`: the list as plain text through the share sheet, and the view-only link —
- * `<API base URL>/shared/shopping/<token>` — created and revoked on the server.
+ * `ShoppingShare`: the list as plain text through the share sheet, "Weekly email to store manager"
+ * (Scheduled sharing), and the view-only link — the compact `/s/<token>` — created and revoked on the
+ * server. Swift pushes the weekly email inside this sheet; here the sheet closes and the email screen
+ * is pushed on the list.
  */
-export function ShareListSheet({ visible, list, onUpdate, onClose }: { visible: boolean; list: GroceryList; onUpdate: (list: GroceryList) => void; onClose: () => void }) {
+export function ShareListSheet({ visible, list, onUpdate, onClose, onWeeklyEmail }: { visible: boolean; list: GroceryList; onUpdate: (list: GroceryList) => void; onClose: () => void; onWeeklyEmail: () => void }) {
   return (
     <MomentSheet visible={visible} title="" onRequestClose={onClose} testID="share-list-sheet">
-      {visible ? <ShareListBody initial={list} onUpdate={onUpdate} /> : null}
+      {visible ? <ShareListBody initial={list} onUpdate={onUpdate} onWeeklyEmail={onWeeklyEmail} /> : null}
     </MomentSheet>
   );
 }
 
-function ShareListBody({ initial, onUpdate }: { initial: GroceryList; onUpdate: (list: GroceryList) => void }) {
+function ShareListBody({ initial, onUpdate, onWeeklyEmail }: { initial: GroceryList; onUpdate: (list: GroceryList) => void; onWeeklyEmail: () => void }) {
   const theme = useTheme();
   const error = useShopping((state) => state.error);
+  const busy = useShopping((state) => state.busy);
   const [list, setList] = useState(initial);
   // `.task { updateURL() }`
   const [url, setUrl] = useState<string | null>(() => (initial.shareToken ? shareUrl(initial.shareToken) : null));
@@ -286,6 +226,14 @@ function ShareListBody({ initial, onUpdate }: { initial: GroceryList; onUpdate: 
           <FormButton icon="share-outline" title="Share list as text" onPress={() => void shareMessage(shareText(list))} testID="share-text" />
         </FormRow>
       </FormSection>
+      <FormSection header="Scheduled sharing">
+        <FormRow last>
+          <Pressable accessibilityRole="button" onPress={onWeeklyEmail} style={styles.link} testID="share-weekly-email">
+            <FormText>Weekly email to store manager</FormText>
+            <Ionicons color={theme.colors.secondaryLabel} name="chevron-forward" size={17} />
+          </Pressable>
+        </FormRow>
+      </FormSection>
       <FormSection header="View-only link">
         <FormRow>
           <FormText caption>Anyone with the link can view this list and its edits. The link stays with this trip; next week’s list needs a new link. Revoke it whenever you like.</FormText>
@@ -296,12 +244,12 @@ function ShareListBody({ initial, onUpdate }: { initial: GroceryList; onUpdate: 
               <FormButton icon="link" title="Share Link" onPress={() => void shareMessage(url)} testID="share-link" />
             </FormRow>
             <FormRow last>
-              <FormButton destructive title="Revoke Link" onPress={() => void revoke()} testID="share-revoke" />
+              <FormButton destructive disabled={busy} title="Revoke Link" onPress={() => void revoke()} testID="share-revoke" />
             </FormRow>
           </>
         ) : (
           <FormRow last>
-            <FormButton title="Create Share Link" onPress={() => void create()} testID="share-create" />
+            <FormButton disabled={busy} title="Create Share Link" onPress={() => void create()} testID="share-create" />
           </FormRow>
         )}
       </FormSection>
@@ -330,6 +278,7 @@ const styles = StyleSheet.create({
   choiceRow: { flexDirection: 'row', alignItems: 'center', gap: 14 },
   grow: { flex: 1 },
   inline: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  link: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 32 },
   bold: { fontWeight: '700' },
   // Just under the sheet's bar (FormScroll's top padding is 3 since UI-parity pass 2).
   sheetTitle: { marginHorizontal: 16, marginTop: 4 },

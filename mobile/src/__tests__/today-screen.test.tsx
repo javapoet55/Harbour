@@ -30,14 +30,14 @@ jest.mock('../api', () => ({
   },
 }));
 
-// Phase 11: the moment count and the Quick Access statuses.
+// Phase 12: Today must not fetch shopping lists any more; mocked so a call would be seen.
 const mockShopping = jest.fn();
 jest.mock('../api/shopping', () => ({
   ...jest.requireActual('../api/shopping'),
   shoppingApi: { lists: (...args: unknown[]) => mockShopping(...args) },
 }));
 
-// The weather chip calls open-meteo directly, not the Nexdo API.
+// Mocked so a direct third-party call (the removed weather chip went straight to open-meteo) is seen.
 const mockFetch = jest.fn();
 global.fetch = mockFetch as unknown as typeof fetch;
 
@@ -67,17 +67,6 @@ const AGENDA: Agenda = {
   overdue: [task({ id: 'old', title: 'Renew passport' })],
 };
 
-const FORECAST = {
-  current: { temperature_2m: 71.4, weather_code: 0 },
-  daily: {
-    time: ['2026-09-16', '2026-09-17', '2026-09-18', '2026-09-19', '2026-09-20'],
-    weather_code: [0, 1, 2, 3, 45],
-    temperature_2m_max: [80, 81, 82, 83, 84],
-    temperature_2m_min: [60, 61, 62, 63, 64],
-    precipitation_probability_max: [0, 10, 20, 30, 40],
-  },
-};
-
 async function renderToday() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 }, mutations: { retry: false, gcTime: 0 } } });
   const view = await render(
@@ -97,7 +86,6 @@ beforeEach(() => {
   useSession.setState({ status: 'signedIn', profile: { id: 'u1', name: 'Sri Ram', email: 'a@b.com', timeZone: ZONE } });
   mockTasks.mockResolvedValue({ tasks: AGENDA.tasks, timeZone: ZONE });
   mockAgenda.mockResolvedValue(AGENDA);
-  mockFetch.mockResolvedValue({ ok: true, json: async () => FORECAST });
   // No intelligence by default: the dashboard then builds its schedule from the agenda.
   mockIntelligence.mockRejectedValue(new Error('unavailable'));
   setMoments([]);
@@ -133,14 +121,11 @@ describe('Today dashboard sections', () => {
     expect(screen.getByTestId('today-range-1').props.accessibilityState.selected).toBe(true);
   });
 
-  it('renders Quick Access in place of the Weekly Summary card (d444b37)', async () => {
+  it('renders Quick Access as the single Weekly Summary button (TodayQuickAccess.swift:3-18)', async () => {
     await renderToday();
 
     expect(screen.getByText('Quick Access')).toBeTruthy();
-    expect(screen.getByText('Weekly')).toBeTruthy();
-    expect(screen.getByText('Summary')).toBeTruthy();
-    await waitFor(() => expect(screen.getByTestId('quick-access-moments-subtitle').props.children).toBe('0 upcoming'));
-    expect(screen.getByTestId('quick-access-shopping-subtitle').props.children).toBe('Your lists');
+    expect(screen.getByLabelText('Weekly Summary')).toBeTruthy();
     expect(screen.queryByText('Review progress, focus time, and accomplishments')).toBeNull();
   });
 
@@ -203,20 +188,14 @@ describe('Today dashboard sections', () => {
     expect(screen.queryByText('Find the best task for the time you have, and start focusing.')).toBeNull();
   });
 
-  it('renders the weather chip from the open-meteo forecast', async () => {
+  it('shows no weather chip and no add button: `showsWeather: false, add: nil` (RootView.swift:1151-1157)', async () => {
     await renderToday();
 
-    await waitFor(() => expect(screen.getByLabelText('San Ramon weather, 71 degrees Fahrenheit')).toBeTruthy());
-    // Fahrenheit, rounded, exactly as `Int($0.current.temperature.rounded())` does.
-    expect(screen.getByText('71°')).toBeTruthy();
-  });
-
-  it('falls back to a dash when the forecast fails, without surfacing an error', async () => {
-    mockFetch.mockRejectedValue(new Error('offline'));
-    await renderToday();
-
-    await waitFor(() => expect(screen.getByLabelText('Weather temporarily unavailable')).toBeTruthy());
-    expect(Alert.alert).not.toHaveBeenCalled();
+    expect(screen.queryByTestId('weather-chip')).toBeNull();
+    expect(screen.queryByLabelText(/weather/i)).toBeNull();
+    expect(screen.queryByLabelText('Add a task')).toBeNull();
+    expect(screen.getByTestId('open-account')).toBeTruthy();
+    expect(mockFetch).not.toHaveBeenCalled();
   });
 
   it('renders no focus strip until a session is live', async () => {
@@ -243,12 +222,6 @@ describe('Today dashboard sections', () => {
 });
 
 describe('Today navigation', () => {
-  it('opens the task editor from the add button', async () => {
-    await renderToday();
-    await fireEvent.press(screen.getByLabelText('Add a task'));
-    expect(mockPush).toHaveBeenCalledWith('/task/new');
-  });
-
   it('opens Do Now from "Find my next task"', async () => {
     await renderToday();
     await fireEvent.press(screen.getByTestId('today-focus-find'));
@@ -474,26 +447,18 @@ describe('Today attention row', () => {
 });
 
 describe('Today navigation to the Run B screens', () => {
-  it('opens the weather forecast from the chip', async () => {
-    await renderToday();
-    await waitFor(() => expect(screen.getByLabelText(/San Ramon weather/)).toBeTruthy());
-
-    await fireEvent.press(screen.getByTestId('weather-chip'));
-    expect(mockPush).toHaveBeenCalledWith('/today/weather');
-  });
-
   it('opens the weekly summary from the Quick Access tile', async () => {
     await renderToday();
     await fireEvent.press(screen.getByTestId('quick-access-weekly'));
     expect(mockPush).toHaveBeenCalledWith('/today/weekly-summary');
   });
 
-  it('opens Moments and Shopping from their tiles', async () => {
+  it('has no Moments or Shopping tile: Wellness is their only entry (Phase 12)', async () => {
     await renderToday();
-    await fireEvent.press(screen.getByTestId('quick-access-moments'));
-    expect(mockPush).toHaveBeenCalledWith('/moments');
-    await fireEvent.press(screen.getByTestId('quick-access-shopping'));
-    expect(mockPush).toHaveBeenCalledWith('/shopping');
+    expect(screen.queryByTestId('quick-access-moments')).toBeNull();
+    expect(screen.queryByTestId('quick-access-shopping')).toBeNull();
+    expect(screen.queryByText('Moments')).toBeNull();
+    expect(screen.queryByText('Shopping')).toBeNull();
   });
 
   it('opens the attention screen from the summary chip', async () => {
@@ -506,9 +471,9 @@ describe('Today navigation to the Run B screens', () => {
 });
 
 /**
- * Phase 11: the moment count and the Moments status come from Run B's Moments store (the
- * `ImportantMomentsStore` port, activated by the root layout), and Shopping from Run C's
- * `shoppingStore` — the one store My Lists uses, as Swift shares one `ShoppingStore`.
+ * Phase 11: the moment count comes from Run B's Moments store (the `ImportantMomentsStore` port,
+ * activated by the root layout). Phase 12 removed the Moments and Shopping tiles, so Today reads no
+ * shopping data at all.
  */
 describe('Today moments and shopping', () => {
   const moment = (id: string, nextOccurrence: string, extra: Partial<ImportantMoment> = {}): ImportantMoment => ({
@@ -537,8 +502,6 @@ describe('Today moments and shopping', () => {
 
     await waitFor(() => expect(screen.getByTestId('today-summary-line').props.children).toBe('1 Task · 1 Appointment · 1 Moment'));
     expect(screen.getByTestId('today-commitments').props.children).toBe('3 commitments today');
-    // Two enabled moments on or after today.
-    expect(screen.getByTestId('quick-access-moments-subtitle').props.children).toBe('2 upcoming');
   });
 
   it('drops the moment count on the longer ranges, as Swift passes 0', async () => {
@@ -551,35 +514,9 @@ describe('Today moments and shopping', () => {
     await waitFor(() => expect(screen.getByTestId('today-summary-line').props.children).toBe('2 Tasks · 1 Appointment · 0 Moments'));
   });
 
-  it('shows the earliest open shopping list’s remaining items and weekday', async () => {
-    const item = (id: string, checked: boolean) => ({ id, name: id, category: 'Other', quantity: '1', size: '', notes: '', checked });
-    mockShopping.mockResolvedValue({
-      lists: [
-        { id: 'later', title: 'Later', date: '2026-09-25', timeZone: ZONE, weekly: false, completedAt: null, revision: 0, items: [item('x', false)] },
-        { id: 'next', title: 'Next', date: '2026-09-18', timeZone: ZONE, weekly: false, completedAt: null, revision: 0, items: [item('a', false), item('b', true), item('c', false)] },
-        { id: 'done', title: 'Done', date: '2026-09-01', timeZone: ZONE, weekly: false, completedAt: '2026-09-02T00:00:00.000Z', revision: 0, items: [] },
-      ],
-    });
+  it('no longer loads shopping lists, now that the tile is gone', async () => {
     await renderToday();
-
-    await waitFor(() => expect(screen.getByTestId('quick-access-shopping-subtitle').props.children).toBe('2 items · Fri'));
-  });
-
-  it('refreshes the shared store on mount, so a sign-in reset cannot leave it empty (pass 2)', async () => {
-    const item = { id: 'a', name: 'a', category: 'Other', quantity: '1', size: '', notes: '', checked: false };
-    mockShopping.mockResolvedValue({
-      lists: [{ id: 'l', title: 'L', date: '2026-09-18', timeZone: ZONE, weekly: false, completedAt: null, revision: 0, items: [item] }],
-    });
-    await renderToday();
-
-    await waitFor(() => expect(screen.getByTestId('quick-access-shopping-subtitle').props.children).toBe('1 item · Fri'));
-    expect(shoppingStore.getState().lists).toHaveLength(1);
-  });
-
-  it('reads "View lists" when the shopping refresh fails', async () => {
-    mockShopping.mockRejectedValue(new Error('offline'));
-    await renderToday();
-
-    await waitFor(() => expect(screen.getByTestId('quick-access-shopping-subtitle').props.children).toBe('View lists'));
+    await waitFor(() => expect(screen.getByText('Quick Access')).toBeTruthy());
+    expect(mockShopping).not.toHaveBeenCalled();
   });
 });

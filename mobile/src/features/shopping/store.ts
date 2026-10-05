@@ -1,6 +1,6 @@
 import { createStore, useStore } from 'zustand';
 
-import { isApiError, messages } from '../../api/client';
+import { messages } from '../../api/client';
 import {
   shoppingApi,
   type GroceryItem,
@@ -13,7 +13,6 @@ import {
   type ShoppingSnapshot,
   type TranscriptionSession,
 } from '../../api/shopping';
-import { localAlternatives } from './model';
 
 /**
  * `ShoppingStore` (ios/App/ShoppingStore.swift:9-38).
@@ -40,10 +39,12 @@ export type ShoppingState = {
   action: (operation: Exclude<ShoppingOperation, 'parse' | 'alternatives'>, list: GroceryList | null, input: unknown, idempotencyKey?: string) => Promise<GroceryList | null>;
   parse: (text: string) => Promise<GroceryItem[]>;
   /**
-   * `alternatives(for:)` (ShoppingStore.swift:36-42). Never touches `busy` or `error`. A lost session
-   * is rethrown; ANY other failure answers with the phone's own `localAlternatives(item)`.
+   * `alternatives(for:refresh:)` (ShoppingStore.swift:39-53). Never touches `busy` or `error`. An answer
+   * is reused for five minutes per item (name, category, quantity, size, brand, barcode) unless
+   * `refresh`; the cache empties when it reaches 30. Every failure is thrown — there is no local
+   * fallback any more, so the screen shows the error.
    */
-  alternatives: (item: Pick<GroceryItem, 'name' | 'category' | 'quantity' | 'size'>) => Promise<ShoppingAlternativesResponse>;
+  alternatives: (item: Pick<GroceryItem, 'name' | 'category' | 'quantity' | 'size' | 'brand' | 'barcode'>, refresh?: boolean) => Promise<ShoppingAlternativesResponse>;
   credential: () => Promise<TranscriptionSession>;
   setError: (error: string | null) => void;
   reset: () => void;
@@ -53,7 +54,12 @@ function describe(error: unknown): string {
   return error instanceof Error && error.message ? error.message : messages.invalidResponse;
 }
 
-export function createShoppingStore(deps: ShoppingDeps) {
+/** `alternativeCache` (ShoppingStore.swift:16, :40-47): five minutes, at most 30 entries. */
+export const ALTERNATIVES_CACHE_MS = 300_000;
+const ALTERNATIVES_CACHE_LIMIT = 30;
+
+export function createShoppingStore(deps: ShoppingDeps, now: () => number = Date.now) {
+  const alternativeCache = new Map<string, { at: number; response: ShoppingAlternativesResponse }>();
   return createStore<ShoppingState>()((set, get) => ({
     lists: [],
     busy: false,
@@ -92,20 +98,32 @@ export function createShoppingStore(deps: ShoppingDeps) {
       return result.items ?? [];
     },
 
-    async alternatives(item) {
-      try {
-        return await deps.alternatives({ name: item.name, category: item.category, quantity: item.quantity, size: item.size });
-      } catch (error) {
-        if (isApiError(error) && error.code === 'SIGNED_OUT') throw error;
-        return localAlternatives(item);
-      }
+    async alternatives(item, refresh = false) {
+      const key = [item.name, item.category, item.quantity, item.size, item.brand ?? '', item.barcode ?? ''].join('|');
+      const cached = alternativeCache.get(key);
+      if (!refresh && cached && now() - cached.at < ALTERNATIVES_CACHE_MS) return cached.response;
+      // `ShoppingAlternativeInput` (ShoppingStore.swift:11) also carries the brand and barcode when known.
+      const response = await deps.alternatives({
+        name: item.name,
+        category: item.category,
+        quantity: item.quantity,
+        size: item.size,
+        ...(item.brand ? { brand: item.brand } : {}),
+        ...(item.barcode ? { barcode: item.barcode } : {}),
+      });
+      if (alternativeCache.size >= ALTERNATIVES_CACHE_LIMIT) alternativeCache.clear();
+      alternativeCache.set(key, { at: now(), response });
+      return response;
     },
 
     credential: () => deps.transcriptionSession(),
 
     setError: (error) => set({ error }),
 
-    reset: () => set({ lists: [], busy: false, error: null }),
+    reset: () => {
+      alternativeCache.clear();
+      set({ lists: [], busy: false, error: null });
+    },
   }));
 }
 

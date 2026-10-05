@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-import { DEFAULT_TASK_QUERY, type TaskQuery } from '../lib/taskQuery';
+import { beginSearch, DEFAULT_TASK_QUERY, type TaskQuery } from '../lib/taskQuery';
 
 /**
  * The live task filter. `AppModel.taskQuery` (ios/App/NexdoApp.swift) is a property on the model, not
@@ -16,6 +16,8 @@ type TaskQueryStore = {
   setQuery: (next: Partial<TaskQuery>) => void;
   /** `Button("Reset filters")` (RootView.swift:1718): only these three, not the date or the search. */
   resetFilters: () => void;
+  /** `TaskQuery.beginSearch()` (TaskQuery.swift:53-60), from the magnifier (RootView.swift:1792-1797). */
+  beginSearch: () => void;
   replace: (next: TaskQuery) => void;
 };
 
@@ -23,5 +25,6 @@ export const useTaskQuery = create<TaskQueryStore>()((set) => ({
   query: DEFAULT_TASK_QUERY,
   setQuery: (next) => set((state) => ({ query: { ...state.query, ...next } })),
   resetFilters: () => set((state) => ({ query: { ...state.query, status: 'Open', priority: 'All', earliestFirst: true } })),
+  beginSearch: () => set((state) => ({ query: beginSearch(state.query) })),
   replace: (next) => set({ query: next }),
 }));

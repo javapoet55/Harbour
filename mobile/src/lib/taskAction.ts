@@ -1,6 +1,7 @@
 import type { NexdoTask } from '../api/types';
 import { parseServerDate } from './taskQuery';
 import { detectTaskAction, type TaskActionIntent } from './taskActionDetector';
+import type { TaskActionRecipient } from './actionNeeded';
 import { notificationDate, type TaskAction, type TaskActionStatus } from './todayActionQueue';
 
 /**
@@ -21,6 +22,10 @@ export type StoredTaskAction = TaskAction & {
   context?: string | null;
   /** Epoch ms, set the moment an action enters `executing`. */
   executedAt?: number | null;
+  /** Phase 12 (TaskActionView.swift:264-330): the Google business chosen for this action, fetched fresh by id. */
+  businessCandidateID?: string | null;
+  /** Phase 12: contact details the user typed instead of picking a contact (`TaskActionRecipient`). */
+  manualRecipient?: TaskActionRecipient | null;
 };
 
 /**
@@ -139,10 +144,16 @@ export function reconcileActions({
       continue;
     }
 
-    // Same person and intent, but the task moved or was retitled: rebuild, keeping the chosen contact.
+    // Same person and intent, but the task moved or was retitled: rebuild, keeping the chosen contact,
+    // business or typed details (TaskAction.swift:103-108).
     if ((old.scheduledAt ?? null) !== schedule || old.sourceTitle !== task.title) {
       const rebuilt = makeTaskAction({ id: newId(), taskId: task.id, title: task.title, detection: detected, scheduledAt: schedule });
-      result.push({ ...rebuilt, contactIdentifier: old.contactIdentifier ?? null });
+      result.push({
+        ...rebuilt,
+        contactIdentifier: old.contactIdentifier ?? null,
+        businessCandidateID: old.businessCandidateID ?? null,
+        manualRecipient: old.manualRecipient ?? null,
+      });
       continue;
     }
 
@@ -193,6 +204,14 @@ export function desiredNotifications(actions: StoredTaskAction[], now: number, l
 export function waitingBeforeItsTime(action: StoredTaskAction, now: number): boolean {
   const at = notificationDate(action);
   return action.status === 'awaitingApproval' && at !== null && at > now;
+}
+
+/**
+ * `TaskActionReconciler.release(_:except:now:)` (TaskAction.swift:82-88): actions stuck waiting before
+ * their time go back to `scheduled`, except those whose Action screen is open.
+ */
+export function releaseActions(actions: StoredTaskAction[], except: ReadonlySet<string>, now: number): StoredTaskAction[] {
+  return actions.map((action) => (!except.has(action.id) && waitingBeforeItsTime(action, now) ? transition(action, 'scheduled', now).action : action));
 }
 
 /**

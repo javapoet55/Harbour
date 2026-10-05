@@ -159,6 +159,19 @@ describe('reconcile', () => {
     expect(result[0].contactIdentifier).toBeNull();
   });
 
+  // reschedulingPreservesSelectedRecipientButChangingPersonClearsIt (TaskActionTests.swift:131-141)
+  it('keeps a chosen business or typed recipient through a reschedule, and drops it for a new person', () => {
+    const reconcile = (previous: StoredTaskAction[], next: NexdoTask) => reconcileActions({ previous, tasks: [next], now: NOW, timeZone: ZONE, newId })[0];
+    const chosen = action({ scheduledAt: Date.parse('2026-09-09T17:00:00Z'), businessCandidateID: 'chosen-place' });
+    expect(reconcile([chosen], task({ id: 't1', startAt: '2026-09-10T18:00:00Z' })).businessCandidateID).toBe('chosen-place');
+    expect(reconcile([chosen], task({ id: 't1', title: 'Contact John at 10 AM' })).businessCandidateID ?? null).toBeNull();
+
+    const recipient = { name: 'Damien', phone: '9255550100', email: '' };
+    const typed = action({ scheduledAt: Date.parse('2026-09-09T17:00:00Z'), manualRecipient: recipient });
+    expect(reconcile([typed], task({ id: 't1', startAt: '2026-09-10T18:00:00Z' })).manualRecipient).toEqual(recipient);
+    expect(reconcile([typed], task({ id: 't1', title: 'Contact John at 10 AM' })).manualRecipient ?? null).toBeNull();
+  });
+
   it('falls back to dueAt when there is no startAt', () => {
     const result = reconcileActions({
       previous: [],

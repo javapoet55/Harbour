@@ -13,6 +13,7 @@ import { INITIAL_STATE, VoiceConversation, type VoiceCredential, type VoiceState
 import { createNativeDriver, isWebRtcAvailable } from './nativeDriver';
 import { TASK_SESSION_PATH, type VoiceScope } from './protocol';
 import { VoiceToolExecutor } from './toolExecutor';
+import type { FoodVoiceContext } from '../features/shopping/foodVoice';
 import { WebRtcTransport } from './transport';
 import { VoiceUsageMeter } from './usageMeter';
 
@@ -41,8 +42,11 @@ export function useVoiceSession({
   scope,
   enabled,
   onClose,
+  foodContext,
 }: {
   scope: VoiceScope;
+  /** The two products a food conversation compares, sent with the session (NexdoApp.swift:539). */
+  foodContext?: FoodVoiceContext;
   /** False until consent has been given, which is when Swift calls `start()`. */
   enabled: boolean;
   onClose: () => void;
@@ -59,6 +63,7 @@ export function useVoiceSession({
   const executor = useRef<VoiceToolExecutor | null>(null);
   const transport = useRef<WebRtcTransport | null>(null);
   const meter = useRef<VoiceUsageMeter | null>(null);
+  const food = useRef(foodContext);
   const closer = useRef(onClose);
   useEffect(() => {
     closer.current = onClose;
@@ -115,7 +120,7 @@ export function useVoiceSession({
         await synchronizeDeviceTimeZone(queryClient);
         const credential = await getApi().request<VoiceCredential>(TASK_SESSION_PATH, {
           method: 'POST',
-          body: { consent: true, scope },
+          body: { consent: true, scope, ...(scope === 'food' && food.current ? { foodContext: food.current } : {}) },
           timeoutMs: 25_000,
         });
         conversation.start(credential);

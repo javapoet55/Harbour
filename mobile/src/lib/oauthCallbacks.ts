@@ -29,7 +29,7 @@ export type OAuthCallbackKind = 'calendar' | 'moments-email' | 'signup';
 export const OAUTH_LANDING: Record<OAuthCallbackKind, string> = {
   signup: '/sign-up',
   calendar: '/account/settings',
-  'moments-email': '/moments/settings',
+  'moments-email': '/wellness/moments/settings',
 };
 
 const HOSTS: Record<string, OAuthCallbackKind> = {

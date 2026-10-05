@@ -46,7 +46,7 @@ export {
 } from './SettingsControls';
 export { AddTaskByVoiceView, type AddTaskByVoiceViewProps } from './AddTaskByVoiceView';
 export { AskNexdoView, type AskNexdoViewProps } from './AskNexdoView';
-export { AskEntryCard, AskEntryCards, AskExampleRow, AskSuggestionCard } from './AskParts';
+export { AskExampleRow } from './AskParts';
 export { AskResponse, AskResponseCard, AskResponseSummary, type AskResponseCardProps, type AskResponseProps } from './AskResponse';
 export { StickyFooter } from './StickyFooter';
 export { TabBarButton } from './TabBarButton';

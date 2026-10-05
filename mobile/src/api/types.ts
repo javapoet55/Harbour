@@ -203,12 +203,21 @@ export type TasksResponse = {
 // MARK: Calendar and agenda
 
 /** Matches the web `AgendaEvent`. */
+/** `CalendarEvent` (ios/Sources/NexdoCore/Models.swift:91-103). Phase 12 adds the detail fields. */
 export type CalendarEvent = {
   id: string;
   title: string;
   startAt: string;
   endAt: string;
   allDay?: boolean | null;
+  notes?: string | null;
+  location?: string | null;
+  timeZone?: string | null;
+  /** `"harbor"` for events made in Nexdo, else the provider (`"google"`, …). */
+  source?: string | null;
+  connectionId?: string | null;
+  /** Set by Mark Complete (`PATCH /api/calendar/events/{id} { completed }`); never pushed to the provider. */
+  completedAt?: string | null;
 };
 
 export type Agenda = {
@@ -222,23 +231,6 @@ export type Agenda = {
   waiting?: NexdoTask[];
   unscheduled?: NexdoTask[];
   important?: NexdoTask[];
-};
-
-// MARK: Weather (GET /api/weather, Open-Meteo field names)
-
-export type WeatherResponse = {
-  current: {
-    temperature_2m: number; // Swift: temperature
-    weather_code?: number | null; // Swift: weatherCode
-  };
-  daily?: {
-    time: string[];
-    weather_code: (number | null)[]; // Swift: weatherCode
-    temperature_2m_max: (number | null)[]; // Swift: high
-    temperature_2m_min: (number | null)[]; // Swift: low
-    precipitation_probability_max: (number | null)[]; // Swift: rain
-  } | null;
-  timezone?: string | null;
 };
 
 // MARK: Schedule intelligence

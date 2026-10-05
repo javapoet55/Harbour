@@ -18,6 +18,43 @@ export function isValidZone(zone: string): boolean {
   }
 }
 
+/**
+ * Legacy IANA spellings and the current name of the same zone. ICU (Hermes's `Intl`, and iOS's
+ * `TimeZone.knownTimeZoneIdentifiers`) still lists several zones by their old link name — India is
+ * `Asia/Calcutta` there — while a phone reports the current one (`Asia/Kolkata`).
+ *
+ * NOT COPIED from Swift: its pickers match the device's `Asia/Kolkata` against a list that only holds
+ * `Asia/Calcutta`, so the Time zone row is blank for India (§22 "For the team"). Here both spellings
+ * are one zone.
+ */
+const ZONE_ALIASES: Record<string, string> = {
+  'Asia/Calcutta': 'Asia/Kolkata',
+  'Asia/Katmandu': 'Asia/Kathmandu',
+  'Asia/Saigon': 'Asia/Ho_Chi_Minh',
+  'Asia/Rangoon': 'Asia/Yangon',
+  'Asia/Dacca': 'Asia/Dhaka',
+  'Asia/Thimbu': 'Asia/Thimphu',
+  'Asia/Ulan_Bator': 'Asia/Ulaanbaatar',
+  'Europe/Kiev': 'Europe/Kyiv',
+  'America/Buenos_Aires': 'America/Argentina/Buenos_Aires',
+  'America/Godthab': 'America/Nuuk',
+  'Atlantic/Faeroe': 'Atlantic/Faroe',
+  'Pacific/Truk': 'Pacific/Chuuk',
+  'Pacific/Ponape': 'Pacific/Pohnpei',
+  'Pacific/Enderbury': 'Pacific/Kanton',
+};
+
+/** The current name of `zone` (`Asia/Calcutta` → `Asia/Kolkata`), when this runtime knows it; else `zone`. */
+export function canonicalZone(zone: string): string {
+  const current = ZONE_ALIASES[zone];
+  return current !== undefined && isValidZone(current) ? current : zone;
+}
+
+/** Whether two identifiers name the same zone, legacy spellings included. */
+export function sameZone(a: string, b: string): boolean {
+  return canonicalZone(a) === canonicalZone(b);
+}
+
 export function deviceZone(): string {
   return Intl.DateTimeFormat().resolvedOptions().timeZone;
 }
@@ -219,4 +256,50 @@ export function upcomingGroupFor(nextOccurrenceDay: string, zone: string, now: n
   if (occurrence >= weekEnd && occurrence < addDays(weekEnd, 7, timeZone)) return 'Next Week';
   if (occurrence >= monthStart && occurrence < nextMonthStart) return 'This Month';
   return 'Later';
+}
+
+/**
+ * `MomentUpcomingFilter` (ImportantMoment.swift:99-115): the date chips on the Upcoming tab. Each
+ * moment is judged in its OWN zone's calendar, across midnight and DST. The week is
+ * `Calendar.current`'s `.weekOfYear` — Sunday-first on the en-US reference device, as `upcomingGroupFor`.
+ *
+ * Later starts after this week AND after tomorrow, so a Sunday-evening "tomorrow" is never also Later.
+ */
+export const UPCOMING_FILTERS = ['Today', 'Tomorrow', 'This Week', 'Later'] as const;
+export type UpcomingFilter = (typeof UPCOMING_FILTERS)[number];
+
+export function upcomingFilterIncludes(filter: UpcomingFilter, day: string, zone: string, now: number = Date.now()): boolean {
+  const timeZone = safeZone(zone);
+  const today = startOfDay(now, timeZone);
+  const tomorrow = addDays(today, 1, timeZone);
+  const afterTomorrow = addDays(today, 2, timeZone);
+  const date = momentDate(day, timeZone, now);
+  const [y, m, d] = momentDay(today, timeZone).split('-').map(Number);
+  const weekday = new Date(Date.UTC(y, m - 1, d)).getUTCDay(); // 0 = Sunday
+  const weekEnd = addDays(addDays(today, -weekday, timeZone), 7, timeZone);
+  switch (filter) {
+    case 'Today':
+      return date >= today && date < tomorrow;
+    case 'Tomorrow':
+      return date >= tomorrow && date < afterTomorrow;
+    case 'This Week':
+      return date >= today && date < weekEnd;
+    case 'Later':
+      return date >= Math.max(weekEnd, afterTomorrow);
+  }
+}
+
+/** The empty state's wording: "No moments today", "… tomorrow", "… this week", "… later". */
+export function upcomingFilterEmptyTitle(filter: UpcomingFilter): string {
+  return `No moments ${filter === 'Later' ? 'later' : filter.toLowerCase()}`;
+}
+
+/** `TimeZone.abbreviation(for:)`: "PDT", "GMT+5:30". */
+export function zoneAbbreviation(at: number, zone: string): string {
+  try {
+    const parts = new Intl.DateTimeFormat('en-US', { timeZone: safeZone(zone), timeZoneName: 'short' }).formatToParts(new Date(at));
+    return parts.find((part) => part.type === 'timeZoneName')?.value ?? zone;
+  } catch {
+    return zone;
+  }
 }

@@ -9,9 +9,9 @@ import { stackHeaderOptions, useTheme} from '../../src/theme';
  * (ios/App/CalendarView.swift:162), titled "New Appointment / Event" with a "Close" cancellation
  * action (`:576-577`).
  *
- * There is no event detail route: Swift's event detail is an inline `.sheet(item:)` on the tab
- * (`CalendarView.swift:168-180`), so it is built as a modal inside `app/(tabs)/calendar.tsx`.
- * There is no edit route either: `CalendarEventEditor` is create-only.
+ * `event/[id]` is Appointment details, `.sheet(item: $eventDetail) { CalendarEventDetailsView }`
+ * (`CalendarView.swift:177-181`), and `event/edit` its "Edit Event" sheet
+ * (CalendarEventDetailsView.swift:98). Both draw their own bars.
  */
 export default function CalendarLayout() {
   const theme = useTheme();
@@ -38,6 +38,8 @@ export default function CalendarLayout() {
         name="event/new"
         options={{ presentation: 'modal', title: 'New Appointment / Event', headerLeft: closeButton() }}
       />
+      <Stack.Screen name="event/[id]" options={{ presentation: 'modal', headerShown: false }} />
+      <Stack.Screen name="event/edit" options={{ presentation: 'modal', headerShown: false }} />
       {/* `.fullScreenCover` (CalendarView.swift:161). */}
       <Stack.Screen name="voice" options={{ presentation: 'fullScreenModal', headerShown: false }} />
       {/* `.sheet(isPresented: $conflicts)` (CalendarView.swift:163); it draws its own header. */}

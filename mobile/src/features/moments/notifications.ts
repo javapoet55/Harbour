@@ -9,8 +9,8 @@ import {
   requestNotificationPermission,
   type ReminderAuthorization,
 } from '../../lib/notificationPermission';
-import { addDays, momentDate, momentDay, zonedInstant } from './dates';
-import { planDate, planEditable, readFestivalSettings, sortedPlans } from './domain';
+import { momentDay, parseInstant, zonedInstant } from './dates';
+import { planDate, planEditable, preparationDate, preparationMinutes, readFestivalSettings, sortedPlans, upcomingDelivery } from './domain';
 
 /**
  * The Moments half of `ImportantMomentsStore` that talks to UserNotifications
@@ -36,8 +36,9 @@ export type { ReminderAuthorization };
 /**
  * Every reminder the current snapshot wants, soonest first (`:147-163`):
  *
- * - a festival "prepare" reminder at 08:00 in the festival's zone, `prepareDays` before the day, once
- *   per festival group;
+ * - a "prepare" reminder once per group, for every occasion (Phase 12, ImportantMomentsStore.swift:195-207):
+ *   `prepareHours` or `prepareDays` before the wish's send time — the scheduled one, else a draft time on
+ *   the day, else 08:00 in the moment's zone;
  * - a "ready" alert at the send time of every wish YOU deliver — automatic email sends itself, so it
  *   gets none;
  * - a one-hour warning when the plan asked for one (`reminderOffset == 60`).
@@ -50,14 +51,18 @@ export function buildMomentReminders(moments: ImportantMoment[], now: number = D
   const preparedGroups = new Set<string>();
 
   for (const moment of moments) {
-    if (!moment.enabled || moment.type !== 'festival') continue;
+    if (!moment.enabled) continue;
     const settings = readFestivalSettings(moment.festivalSettings);
-    if (!settings || settings.prepareDays <= 0 || preparedGroups.has(settings.groupID)) continue;
+    if (!settings || preparationMinutes(settings) <= 0 || preparedGroups.has(settings.groupID)) continue;
     preparedGroups.add(settings.groupID);
-    if (zonedInstant(moment.nextOccurrence, 8, 0, moment.timeZoneID) === null) continue;
-    const prepareDay = momentDay(addDays(momentDate(moment.nextOccurrence, moment.timeZoneID, now), -settings.prepareDays, moment.timeZoneID), moment.timeZoneID);
-    const when = zonedInstant(prepareDay, 8, 0, moment.timeZoneID);
-    if (when !== null && when > now) requests.push({ id: moment.id, at: when, body: 'Review your festival wish.' });
+    // Before the wish's own send time: the scheduled one, else a draft time on the day, else 08:00.
+    const draftTime = parseInstant(settings.draftSendDate);
+    const sameDayDraft = draftTime !== null && momentDay(draftTime, moment.timeZoneID) === moment.nextOccurrence ? draftTime : null;
+    const scheduled = upcomingDelivery(moment);
+    const occurrenceTime = scheduled ? planDate(scheduled) : (sameDayDraft ?? zonedInstant(moment.nextOccurrence, 8, 0, moment.timeZoneID));
+    if (occurrenceTime === null) continue;
+    const when = preparationDate(settings, occurrenceTime, moment.timeZoneID);
+    if (when !== null && when > now) requests.push({ id: moment.id, at: when, body: 'Review your upcoming wish.' });
   }
 
   for (const plan of sortedPlans(moments)) {

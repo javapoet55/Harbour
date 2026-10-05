@@ -18,11 +18,13 @@ import { isoString, keepTimeOnDay, momentDate, momentDay, parseInstant, zonedIns
 import {
   catalogNext,
   characterCount,
+  defaultChannel,
   fallbackWish,
   greetingHeading,
   greetingMessage,
   hasRecipient,
   isArchived,
+  storedRecipientKey,
   supportsGreetingCard,
   newFestivalSettings,
   normalizedPhone,
@@ -50,8 +52,10 @@ import {
 } from './wishMessage';
 
 /**
- * `ManageFestivalModel` (ios/App/ManageFestivalModel.swift:4-233): the four-step manager behind
- * Manage Moment for every greeting-card occasion (birthday, anniversary, festival, Get Well Soon).
+ * `ManageFestivalModel` (ios/App/ManageFestivalModel.swift): the three-step manager behind Manage
+ * Moment for every greeting-card occasion (birthday, anniversary, festival, Get Well Soon). Phase 12
+ * folded Details into Schedule — Contacts / Message / Schedule — made the occasion's type editable, and
+ * added Send Now (`sendImmediately`).
  *
  * A vanilla zustand store per screen, as Swift's is a `@StateObject` per view: the screen and every
  * sheet it presents share one instance.
@@ -62,7 +66,7 @@ import {
  * is never "dirty", while touching the send time afterwards is, because it writes `draftSendDate`.
  */
 
-export const MANAGE_TABS = ['Details', 'Contacts', 'Wish Message', 'Schedule'] as const;
+export const MANAGE_TABS = ['Contacts', 'Message', 'Schedule'] as const;
 export type ManageTab = (typeof MANAGE_TABS)[number];
 
 export type ImageVariation = { id: string; base64: string };
@@ -98,6 +102,8 @@ export type CardDeps = {
 export type ManageState = {
   tab: ManageTab;
   pendingTab: ManageTab | null;
+  /** `occasionType` (`@Published`, Phase 12): editable in Edit Moment, saved with the group. */
+  type: string;
   title: string;
   date: number;
   zone: string;
@@ -139,6 +145,7 @@ export type ManageState = {
   savedState: FestivalEditState | null;
 
   setTitle(value: string): void;
+  setType(value: string): void;
   setDate(value: number): void;
   setZone(value: string): void;
   setYearly(value: boolean): void;
@@ -151,6 +158,12 @@ export type ManageState = {
   useSuggestion(): void;
   setRecipients(recipients: ManagedRecipient[]): void;
   updateRecipient(key: string, patch: Partial<ManagedRecipient>): void;
+  /**
+   * `saveRecipient(_:replacing:)` (ManageFestivalModel.swift:185-194): replaces the recipient with the
+   * same key (a channel whose address went falls back to the default) or adds a new one, and withdraws
+   * the approval either way.
+   */
+  saveRecipient(recipient: ManagedRecipient): void;
   setError(value: string | null): void;
   setNeedsScheduleConfirmation(value: boolean): void;
   setScheduleCompleted(value: boolean): void;
@@ -161,6 +174,8 @@ export type ManageState = {
   invalidateApproval(): void;
   setActive(value: boolean, cancelSchedules?: boolean): Promise<void>;
   changeTab(target: ManageTab): Promise<void>;
+  /** `prepareNextTabAfterSave()`: a successful Save Changes / Save Message goes on to the next step. */
+  prepareNextTabAfterSave(): void;
   cancelTabChange(): void;
   save(cancelSchedules?: boolean): Promise<void>;
   generate(aiConsent: boolean): Promise<void>;
@@ -181,15 +196,24 @@ export type ManageState = {
   removeImage(): void;
   delete(): Promise<boolean>;
   schedule(): Promise<void>;
+  /**
+   * `sendImmediately()`: Send Now. One `sendGreetingNow` per selected recipient, each with an
+   * operation id kept for retries, answering every plan created — or `null` with the error set.
+   */
+  sendImmediately(): Promise<WishDeliveryPlan[] | null>;
 };
 
 export type ManageModel = StoreApi<ManageState>;
 
-/** `occasionType`, `occasionLabel`, `source` (ManageFestivalModel.swift:51-53). */
-export function occasionType(state: Pick<ManageState, 'originals'>): string {
-  return state.originals[0]?.type ?? 'festival';
+/**
+ * `occasionType`, `occasionLabel`, `source` (ManageFestivalModel.swift:69-71). Phase 12: the type is
+ * the model's own (`@Published var occasionType`), editable in Edit Moment; a state without one — a
+ * pure helper's input — reads it from the first moment.
+ */
+export function occasionType(state: Pick<ManageState, 'originals'> & { type?: string }): string {
+  return state.type ?? state.originals[0]?.type ?? 'festival';
 }
-export function occasionLabel(state: Pick<ManageState, 'originals'>): string {
+export function occasionLabel(state: Pick<ManageState, 'originals'> & { type?: string }): string {
   return typeLabel(occasionType(state));
 }
 export function occasionSource(state: Pick<ManageState, 'originals'>): string {
@@ -206,25 +230,25 @@ export function recipientChannel(state: Pick<ManageState, 'settings'>, recipient
   return state.settings.channels[recipient.key] ?? 'messages';
 }
 
-/** `fingerprint` (`:63`) and `dirty` (`:61`). */
-export function fingerprint(state: Pick<ManageState, 'title' | 'date' | 'zone' | 'yearly' | 'active' | 'recipients' | 'settings'>): string {
-  return editFingerprint(editState(state));
+/** `fingerprint` (`:89`) and `dirty` (`:79`). Phase 12: the occasion's type comes first. */
+export function fingerprint(state: Pick<ManageState, 'originals' | 'title' | 'date' | 'zone' | 'yearly' | 'active' | 'recipients' | 'settings'> & { type?: string }): string {
+  return editFingerprint(occasionType(state), editState(state));
 }
-/** The same fingerprint, taken from a saved `FestivalEditState` rather than the live screen. */
-function editFingerprint(state: FestivalEditState): string {
-  return [state.title, state.day, state.zone, String(state.yearly), String(state.active), stableStringify(state.recipients), stableStringify(state.settings)].join('|');
+/** The same fingerprint, taken from a saved type and `FestivalEditState` rather than the live screen. */
+function editFingerprint(type: string, state: FestivalEditState): string {
+  return [type, state.title, state.day, state.zone, String(state.yearly), String(state.active), stableStringify(state.recipients), stableStringify(state.settings)].join('|');
 }
 export function isDirty(state: ManageState): boolean {
   return fingerprint(state) !== state.baseline;
 }
 
 /** `reviewHeading(for:)` (`:89-91`). */
-export function reviewHeading(state: Pick<ManageState, 'originals' | 'title'>, recipient: Pick<ManagedRecipient, 'name'>): string {
+export function reviewHeading(state: Pick<ManageState, 'originals' | 'title'> & { type?: string }, recipient: Pick<ManagedRecipient, 'name'>): string {
   return greetingHeading(occasionType(state), recipient.name) ?? state.title;
 }
 
 /** `deliveryMessage(for:)` (`:92-95`). */
-export function deliveryMessage(state: Pick<ManageState, 'originals' | 'settings'>, recipient: Pick<ManagedRecipient, 'key' | 'name'>): string {
+export function deliveryMessage(state: Pick<ManageState, 'originals' | 'settings'> & { type?: string }, recipient: Pick<ManagedRecipient, 'key' | 'name'>): string {
   const custom = state.settings.overrides[recipient.key];
   if (custom !== undefined) return custom;
   return greetingMessage(state.settings.baseMessage, occasionType(state), recipient.name);
@@ -268,11 +292,13 @@ export function editState(state: Pick<ManageState, 'title' | 'date' | 'zone' | '
  * Without a saved state to compare against, a save is treated as changing delivery.
  */
 export function pendingChange(state: ManageState): FestivalChange {
+  // A changed occasion changes the wish's greeting and the moments themselves: always a delivery change.
+  if (state.type !== state.originals[0]?.type) return 'delivery';
   return state.savedState ? changeFrom(editState(state), state.savedState) : 'delivery';
 }
 
 /** `suggestion` (`:75`): placeholder wording while the Wish Message is empty. */
-export function messageSuggestion(state: Pick<ManageState, 'originals' | 'title'>): string {
+export function messageSuggestion(state: Pick<ManageState, 'originals' | 'title'> & { type?: string }): string {
   return wishSuggestion(occasionType(state), state.title);
 }
 
@@ -335,8 +361,8 @@ export function createManageModel(group: MomentDisplayGroup, deps: ManageDeps): 
   const first = group.moments[0];
   const saved = readFestivalSettings(first.festivalSettings) ?? newFestivalSettings(deps.uuid());
   const recipients: ManagedRecipient[] = group.moments.filter(hasRecipient).map((moment) => {
-    const prefix = `${moment.type}:${saved.groupID}:`;
-    const key = moment.sourceKey.startsWith(prefix) ? moment.sourceKey.slice(prefix.length) : moment.id;
+    // Any type prefix: a moment whose occasion was changed keeps its recipients' keys.
+    const key = storedRecipientKey(moment.sourceKey, saved.groupID, moment.id);
     return {
       momentID: moment.id,
       key,
@@ -368,7 +394,8 @@ export function createManageModel(group: MomentDisplayGroup, deps: ManageDeps): 
   // phone-less recipient. The defaults are applied to both here, which is what the surrounding code
   // and the baseline comment intend, and what Swift did before this commit.
   const folded = reconcileCardGreeting(settings);
-  const date = momentDate(first.nextOccurrence, first.timeZoneID, deps.now());
+  // The moment's own date (`first.occurrenceDate`, Phase 12) — what Edit Moment edits and Save sends.
+  const date = momentDate(first.occurrenceDate, first.timeZoneID, deps.now());
   let zone = first.timeZoneID;
   let sendDate = zonedInstant(first.nextOccurrence, 8, 0, first.timeZoneID) ?? date;
   const draft = parseInstant(settings.draftSendDate);
@@ -413,6 +440,7 @@ export function createManageModel(group: MomentDisplayGroup, deps: ManageDeps): 
       set({ settings: nextSettings });
       const input = {
         ids: state.originals.map((moment) => moment.id),
+        type: occasionType(state),
         title: state.title,
         date: momentDay(state.date, state.zone),
         timeZoneID: state.zone,
@@ -437,7 +465,7 @@ export function createManageModel(group: MomentDisplayGroup, deps: ManageDeps): 
       );
       if (updated.length === 0) throw new ManageError('Saved. Refresh Moments before continuing.');
       const nextRecipients = get().recipients.map((recipient) => {
-        const match = updated.find((moment) => moment.id === recipient.momentID || moment.sourceKey === `${type}:${nextSettings.groupID}:${recipient.key}`);
+        const match = updated.find((moment) => moment.id === recipient.momentID || storedRecipientKey(moment.sourceKey, nextSettings.groupID, moment.id) === recipient.key);
         return match ? { ...recipient, momentID: match.id } : recipient;
       });
       const current = get();
@@ -456,9 +484,13 @@ export function createManageModel(group: MomentDisplayGroup, deps: ManageDeps): 
       return !cancelSchedules && hasSchedules(state, store.getState()) && pendingChange(state) === 'messageOnly' && state.settings.approvedAt != null;
     }
 
+    /** Operation ids for Send Now, one per recipient, kept so a retry is the same send. */
+    const immediateOperationIDs: Record<string, string> = {};
+
     return {
-      tab: 'Details',
+      tab: 'Contacts',
       pendingTab: null,
+      type: first.type,
       title: first.title,
       date,
       zone,
@@ -493,6 +525,7 @@ export function createManageModel(group: MomentDisplayGroup, deps: ManageDeps): 
       savedState: null,
 
       setTitle: (title) => set({ title }),
+      setType: (type) => set({ type }),
       setDate(value) {
         const { date: old, zone: currentZone, sendDate: currentSend, settings: currentSettings } = get();
         if (momentDay(value, currentZone) === momentDay(old, currentZone)) {
@@ -504,7 +537,15 @@ export function createManageModel(group: MomentDisplayGroup, deps: ManageDeps): 
         const moved = keepTimeOnDay(currentSend, momentDay(value, currentZone), currentZone);
         set({ date: value, sendDate: moved, settings: { ...currentSettings, draftSendDate: isoString(moved) } });
       },
-      setZone: (zone) => set({ zone }),
+      /**
+       * `zone`'s `didSet` (`:23-31`): the moment keeps its calendar DAY in the new zone, and that is not
+       * a date edit, so the proposed send time stays where it is.
+       */
+      setZone(zone) {
+        const { zone: old, date } = get();
+        if (zone === old) return;
+        set({ zone, date: momentDate(momentDay(date, old), zone, deps.now()) });
+      },
       setYearly: (yearly) => set({ yearly }),
       setSendDate: (value) => set((state) => ({ sendDate: value, settings: { ...state.settings, draftSendDate: isoString(value) } })),
       setNotify: (value) => set((state) => ({ notify: value, settings: { ...state.settings, draftNotify: value } })),
@@ -519,6 +560,19 @@ export function createManageModel(group: MomentDisplayGroup, deps: ManageDeps): 
       },
       setRecipients: (next) => set({ recipients: next }),
       updateRecipient: (key, patch) => set((state) => ({ recipients: state.recipients.map((recipient) => (recipient.key === key ? { ...recipient, ...patch } : recipient)) })),
+      saveRecipient(recipient) {
+        const state = get();
+        const channels = { ...state.settings.channels };
+        if (state.recipients.some((item) => item.key === recipient.key)) {
+          const current = recipientChannel(state, recipient);
+          if ((current === 'messages' && recipient.phone === '') || (current === 'email' && recipient.email === '')) channels[recipient.key] = defaultChannel(recipient);
+          set({ recipients: state.recipients.map((item) => (item.key === recipient.key ? recipient : item)), settings: { ...state.settings, channels } });
+        } else {
+          channels[recipient.key] = defaultChannel(recipient);
+          set({ recipients: [...state.recipients, recipient], settings: { ...state.settings, channels } });
+        }
+        get().invalidateApproval();
+      },
       setError: (error) => set({ error }),
       setNeedsScheduleConfirmation: (value) => set({ needsScheduleConfirmation: value }),
       setScheduleCompleted: (value) => set({ scheduleCompleted: value }),
@@ -566,12 +620,20 @@ export function createManageModel(group: MomentDisplayGroup, deps: ManageDeps): 
         else set({ tab: target, pendingTab: null });
       },
 
+      prepareNextTabAfterSave() {
+        if (isBusy() || isWriting()) return;
+        const next: Record<ManageTab, ManageTab | null> = { Contacts: 'Message', Message: 'Schedule', Schedule: null };
+        set({ pendingTab: next[get().tab] });
+      },
+
       cancelTabChange: () => set({ pendingTab: null }),
 
       async save(cancelSchedules = false) {
         if (isBusy() || isWriting()) return;
         if (!isDirty(get())) {
-          set({ error: null, notice: 'No changes to save. Your existing schedule is unchanged.' });
+          // Nothing to save still moves on to the step a Save asked for.
+          const target = get().pendingTab;
+          set({ error: null, ...(target ? { tab: target, pendingTab: null } : {}), notice: 'No changes to save. Your existing schedule is unchanged.' });
           return;
         }
         set({ busy: true, error: null, notice: null });
@@ -596,10 +658,9 @@ export function createManageModel(group: MomentDisplayGroup, deps: ManageDeps): 
             // A send already under way: nothing to confirm, so this is an inline message, not a prompt.
             set({ error: wishSaveError(error.status, error.message), pendingTab: null });
           } else {
-            // A failed ordinary save keeps the edits and shows the error, but still lets the
-            // person move between steps (ManageFestivalModel.swift:117).
-            const target = get().pendingTab;
-            set({ error: errorMessage(error), ...(target ? { tab: target } : {}), pendingTab: null });
+            // A failed save keeps the edits, shows the error and STAYS on this step (Phase 12,
+            // ManageFestivalModel.swift:224).
+            set({ error: errorMessage(error), pendingTab: null });
           }
         } finally {
           set({ busy: false });
@@ -652,7 +713,7 @@ export function createManageModel(group: MomentDisplayGroup, deps: ManageDeps): 
         // An empty message never falls back to the suggestion: the placeholder is not a saved wish.
         const issue = approvalError(current);
         if (issue !== null) {
-          set({ error: issue });
+          set({ error: issue, pendingTab: null });
           return;
         }
         set({ settings: { ...current, approvedAt: isoString(deps.now()) } });
@@ -869,7 +930,7 @@ export function createManageModel(group: MomentDisplayGroup, deps: ManageDeps): 
               settings: { ...current.settings, imageID: id },
               savedImageID: id,
               imageUri: deps.images.load(id),
-              ...(savedState ? { savedState, baseline: editFingerprint(savedState) } : {}),
+              ...(savedState ? { savedState, baseline: editFingerprint(occasionType({ originals: current.originals }), savedState) } : {}),
             };
           });
         } catch {
@@ -994,6 +1055,34 @@ export function createManageModel(group: MomentDisplayGroup, deps: ManageDeps): 
         } catch (error) {
           set({ error: `${get().savedPlans.length} scheduled. ${errorMessage(error)} Retry continues remaining recipients.` });
           await store.getState().refresh();
+        } finally {
+          set({ busy: false });
+        }
+      },
+
+      async sendImmediately() {
+        if (isBusy()) return null;
+        set({ busy: true, error: null });
+        const plans: WishDeliveryPlan[] = [];
+        try {
+          for (const recipient of selectedRecipients(get())) {
+            if (!recipient.momentID) throw new ManageError('Save recipients first.');
+            const operationID = immediateOperationIDs[recipient.key] ?? deps.uuid();
+            immediateOperationIDs[recipient.key] = operationID;
+            const response = await store.getState().request<{ plans: WishDeliveryPlan[] }>('sendGreetingNow', {
+              momentID: recipient.momentID,
+              body: deliveryMessage(get(), recipient),
+              operationID,
+              approved: true,
+            });
+            plans.push(...response.plans);
+          }
+          await store.getState().refresh();
+          return plans;
+        } catch (error) {
+          set({ error: errorMessage(error) });
+          await store.getState().refresh();
+          return null;
         } finally {
           set({ busy: false });
         }

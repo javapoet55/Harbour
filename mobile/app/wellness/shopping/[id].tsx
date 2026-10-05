@@ -1,0 +1,667 @@
+import Ionicons from '@expo/vector-icons/Ionicons';
+import * as Crypto from 'expo-crypto';
+import { router, Stack, useLocalSearchParams } from 'expo-router';
+import { useEffect, useRef, useState } from 'react';
+import { Alert, Keyboard, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+
+import type { GroceryItem, GroceryList, ShoppingAlternative, ShoppingOfferMatch } from '../../../src/api/shopping';
+import { swapAdding, swapReplacing } from '../../../src/features/shopping/productFacts';
+import { KeyboardAwareScrollView } from '../../../src/components/keyboard';
+import { GlassCircle } from '../../../src/components/PushedHeader';
+import { PopoverMenu, usePopoverMenu, type PopoverItem } from '../../../src/features/moments/form';
+import { withAlpha } from '../../../src/components/SignInBackdrop';
+import { Text } from '../../../src/components/Text';
+import { TodayBackdrop } from '../../../src/components/TodayShell';
+import { ShoppingAlternativesSheet } from '../../../src/features/shopping/AlternativesSheet';
+import { ShoppingRecommendationsSheet } from '../../../src/features/shopping/RecommendationsSheet';
+import { CategoryChip, GroceryRow, grocerySeparatorInset, ShoppingActionBar, SwipeToDelete } from '../../../src/features/shopping/components';
+import { completionSummary, ShoppingCompletionView, type ShoppingCompletionSummary } from '../../../src/features/shopping/CompletionView';
+import { ItemEditorSheet } from '../../../src/features/shopping/ItemEditorSheet';
+import { appended, CATEGORIES, itemCount, listInput, newItem, remaining, removed, suggestionsFor, toggled, upserted } from '../../../src/features/shopping/model';
+import { currentChoice, offerBadge, showsOffersShortcut } from '../../../src/features/shopping/offers';
+import { StoreBrandLogo } from '../../../src/features/shopping/StoreBrandLogo';
+import { useShoppingOffers, useStoreHours } from '../../../src/query/useShoppingOffers';
+import { useAccessibilityTextSize } from '../../../src/features/wellness/useAccessibilityTextSize';
+import { ListSettingsSheet } from '../../../src/features/shopping/ListSettings';
+import { NewListSheet, ShareListSheet } from '../../../src/features/shopping/sheets';
+import { shoppingStore, useShopping } from '../../../src/features/shopping/store';
+import { VoiceSheet } from '../../../src/features/shopping/VoiceSheet';
+import { brand, textStyles, useTheme } from '../../../src/theme';
+
+/** `quickAdd()`'s message when the server finds nothing to add (ShoppingViews.swift:382). */
+export const NO_ITEMS_FOUND = 'No items found. Type an item and try again.';
+
+/**
+ * `ShoppingDetail` (ios/App/ShoppingViews.swift:206-543).
+ *
+ * Every change is applied to the screen at once and then saved with the list's revision. A save the
+ * server refuses (409 when the list changed on another device) keeps the local edits and offers
+ * "Retry Save" and "Discard local edits and reload". A completed list is read-only again (`readOnly`,
+ * `:233`): its rows, settings, shortcuts and Select All are off; a change made through Copy list or an
+ * alternative still creates a new list (`:518-526`).
+ *
+ * Top to bottom: the store logo and "N added · M items" with the settings chevron (`:240-259`), the
+ * Schedule Email / View Offers shortcuts (`:260-262`, `:421-446`), the quick-add bar with its
+ * suggestions (`:263-292`), the category chips (`:293-302`), the items with their offer badges
+ * (`:305-322`), the empty state and the save error, and the pinned action bar. The title is the store's
+ * name, with "Open Now" under it while Google says so (`:333-341`). Offers and hours are polled every
+ * 60 seconds while the app is active (`:357-377`).
+ */
+export default function ShoppingDetailScreen() {
+  const theme = useTheme();
+  // `settings`: `ShoppingDetail(…, openSettings: true)` after New List (ShoppingViews.swift:132).
+  const { id, settings: openSettings } = useLocalSearchParams<{ id?: string; settings?: string }>();
+  const [list, setList] = useState<GroceryList | null>(() => shoppingStore.getState().lists.find((item) => item.id === id) ?? null);
+  const busy = useShopping((state) => state.busy);
+  const storeError = useShopping((state) => state.error);
+  const [quick, setQuick] = useState('');
+  const [item, setItem] = useState<GroceryItem | null>(null);
+  const [voice, setVoice] = useState(false);
+  // `cameraAdd` (:213): Add Item, straight into the camera.
+  const [cameraItem, setCameraItem] = useState<GroceryItem | null>(null);
+  const [copy, setCopy] = useState(false);
+  const [settings, setSettings] = useState(openSettings === '1');
+  const [sharing, setSharing] = useState(false);
+  const [completion, setCompletion] = useState<ShoppingCompletionSummary | null>(null);
+  const [recommendations, setRecommendations] = useState(false);
+  const [alternativesFor, setAlternativesFor] = useState<GroceryItem | null>(null);
+  const [parseBusy, setParseBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [selectedCategory, setSelectedCategory] = useState('All');
+  const menuAnchor = useRef<View>(null);
+  const menu = usePopoverMenu(menuAnchor);
+  const [barHeight, setBarHeight] = useState(72);
+  const quickField = useRef<TextInput>(null);
+  // `onUpdate: { list = $0 }` (:310, :329): a screen pushed from here (offers, offer details) saves the
+  // list; its newer revision replaces this copy when it lands in the store.
+  const stored = useShopping((state) => state.lists.find((value) => value.id === id) ?? null);
+  if (list && stored && stored.id === list.id && stored.revision > list.revision) setList(stored);
+  const large = useAccessibilityTextSize();
+  // `.task(id: "\(list.revision)-\(scenePhase)")` and the hours task (:357-377): `try?`, so failures stay quiet.
+  const offers = useShoppingOffers(list?.id, { poll: true });
+  const hours = useStoreHours(list?.storePlaceId || null, { poll: true });
+  const revision = list?.revision;
+  const refetchOffers = offers.refetch;
+  useEffect(() => {
+    if (revision !== undefined) void refetchOffers();
+  }, [revision, refetchOffers]);
+
+  if (!list) return null;
+  const readOnly = list.completedAt != null;
+  const left = remaining(list);
+  const visibleCategories = CATEGORIES.filter((category) => list.items.some((row) => row.category === category));
+  const visibleItems = selectedCategory === 'All' ? list.items : list.items.filter((row) => row.category === selectedCategory);
+
+  /**
+   * `save(_:)` (:365-373): show the change, then save it against the ORIGINAL revision — or, for a
+   * completed list, create a new list from it (new id, `completedAt` cleared, revision 0).
+   */
+  const save = async (next: GroceryList) => {
+    const original = list;
+    setList(next);
+    let saved: GroceryList | null;
+    if (original.completedAt != null) {
+      const working: GroceryList = { ...next, id: Crypto.randomUUID().toUpperCase(), completedAt: null, revision: 0 };
+      saved = await shoppingStore.getState().action('create', null, listInput(working), working.id);
+    } else saved = await shoppingStore.getState().action('save', original, listInput(next));
+    if (saved) {
+      setList(saved);
+      setError(null);
+    }
+  };
+
+  /**
+   * `persistAlternative(_:)` (:468-480): unlike `save`, nothing shows until the server has the list;
+   * a completed list becomes a new one. True when saved.
+   */
+  const persistAlternative = async (next: GroceryList): Promise<boolean> => {
+    let saved: GroceryList | null;
+    if (list.completedAt != null) {
+      const working: GroceryList = { ...next, id: Crypto.randomUUID().toUpperCase(), completedAt: null, revision: 0 };
+      saved = await shoppingStore.getState().action('create', null, listInput(working), working.id);
+    } else saved = await shoppingStore.getState().action('save', list, listInput(next));
+    if (!saved) return false;
+    setList(saved);
+    setError(null);
+    return true;
+  };
+
+  /** `replace(_:with:)` (:481-486): the item keeps its own quantity, size, notes and checked state. */
+  const replaceWith = async (original: GroceryItem, alternative: ShoppingAlternative) => {
+    const next = swapReplacing(original.id, alternative, list);
+    if (!next) {
+      shoppingStore.getState().setError('This item is no longer in your list.');
+      return false;
+    }
+    return persistAlternative(next);
+  };
+
+  /** `add(_:)` (:487-492). */
+  const addAlternative = async (alternative: ShoppingAlternative) => {
+    const next = swapAdding(alternative, list, Crypto.randomUUID().toUpperCase());
+    if (!next) {
+      shoppingStore.getState().setError('This alternative is already in your cart.');
+      return false;
+    }
+    return persistAlternative(next);
+  };
+
+  /** `favorite(_:alternativeID:)` (:493-503): toggles a starred alternative, or the item itself. */
+  const favoriteAlternative = async (original: GroceryItem, alternativeId: string | null) => {
+    const index = list.items.findIndex((value) => value.id === original.id);
+    if (index === -1) return false;
+    const items = [...list.items];
+    const current = items[index];
+    if (alternativeId !== null) {
+      const favorites = current.favoriteAlternatives ?? [];
+      items[index] = { ...current, favoriteAlternatives: favorites.includes(alternativeId) ? favorites.filter((value) => value !== alternativeId) : [...favorites, alternativeId] };
+    } else items[index] = { ...current, favorite: !(current.favorite ?? false) };
+    return persistAlternative({ ...list, items });
+  };
+
+  /** `quickAdd()` (:374-387): the server parses; what it finds is appended straight to the list. */
+  const quickAdd = async (text: string = quick) => {
+    const value = text.trim();
+    if (value === '') return;
+    setParseBusy(true);
+    setError(null);
+    try {
+      const items = (await shoppingStore.getState().parse(value)).filter((row) => row.name.trim() !== '');
+      if (items.length === 0) {
+        setError(NO_ITEMS_FOUND);
+        return;
+      }
+      setQuick('');
+      void save(appended(list, items));
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : String(caught));
+    } finally {
+      setParseBusy(false);
+    }
+  };
+
+  /** `delete(_:)` (:343): a chip whose last item goes falls back to All. */
+  const deleteRow = (row: GroceryItem) => {
+    const next = removed(list, row.id);
+    if (selectedCategory !== 'All' && !next.items.some((value) => value.category === selectedCategory)) setSelectedCategory('All');
+    void save(next);
+  };
+
+  /** `completeTrip()` (:353-364). */
+  const completeTrip = async () => {
+    const finished = list;
+    const next = await shoppingStore.getState().action('complete', finished, {});
+    if (!next) return;
+    setList(next);
+    setCompletion(completionSummary(finished, next));
+  };
+
+  /** Complete Shopping (:314): asks first only when something is still unchecked (:308-310). */
+  const onComplete = () => {
+    if (left === 0) {
+      void completeTrip();
+      return;
+    }
+    Alert.alert(`Complete with ${itemCount(left)} remaining?`, 'The unchecked items will remain in your shopping history.', [
+      { text: 'Complete Shopping', onPress: () => void completeTrip() },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+  };
+
+  const confirmDelete = () =>
+    Alert.alert('Delete this list?', undefined, [
+      {
+        text: 'Delete list',
+        style: 'destructive',
+        onPress: () => {
+          void shoppingStore
+            .getState()
+            .action('delete', list, {})
+            .then(() => {
+              if (shoppingStore.getState().error === null) router.back();
+            });
+        },
+      },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+
+  const reload = async () => {
+    await shoppingStore.getState().refresh();
+    const current = shoppingStore.getState().lists.find((value) => value.id === list.id);
+    if (current) {
+      setList(current);
+      setError(null);
+    }
+  };
+
+  /** `setAllItemsChecked(_:)` (:448-455): the whole list, including items a chip hides; nothing if unchanged. */
+  const setAllChecked = (checked: boolean) => {
+    if (readOnly || busy) return;
+    if (list.items.every((row) => row.checked === checked)) return;
+    void save({ ...list, items: list.items.map((row) => ({ ...row, checked })) });
+  };
+
+  const message = error ?? storeError;
+  /** The options `Menu` (:342-352). */
+  const menuItems: PopoverItem[] = [
+    { key: 'share', title: 'Share list', icon: 'share-outline', onPress: () => setSharing(true), testID: 'list-menu-share' },
+    { key: 'settings', title: 'List settings', onPress: () => setSettings(true), disabled: readOnly, testID: 'list-menu-settings' },
+    { key: 'copy', title: 'Copy list', onPress: () => setCopy(true), testID: 'list-menu-copy' },
+    ...(readOnly
+      ? []
+      : [
+          { key: 'select', title: 'Select All', onPress: () => setAllChecked(true), disabled: left === 0, testID: 'list-menu-select-all' },
+          { key: 'unselect', title: 'Unselect All', onPress: () => setAllChecked(false), disabled: left === list.items.length, testID: 'list-menu-unselect-all' },
+        ]),
+    { key: 'delete', title: 'Delete list', onPress: confirmDelete, destructive: true, testID: 'list-menu-delete' },
+  ];
+
+  const storeName = (list.storeName ?? '').trim();
+  // `openStorePlaceID == placeID`: Google says the chosen place is open now.
+  const openNow = storeName !== '' && !!list.storePlaceId && hours.data?.openNow === true;
+  const snapshot = offers.data;
+  const offersShortcut = showsOffersShortcut(snapshot, list.storeName);
+  const openOffers = (itemId?: string) =>
+    router.push({ pathname: '/wellness/shopping/offers', params: { id: list.id, ...(itemId ? { itemId } : {}) } });
+
+  const suggestions = suggestionsFor(quick);
+
+  return (
+    <View style={styles.fill}>
+      <Stack.Screen
+        options={{
+          // `ToolbarItem(placement: .principal)`: the store's name, or "Shopping List", and "Open Now".
+          headerTitle: () => (
+            <View accessible accessibilityLabel={openNow ? `${storeName}, Open Now` : storeName || 'Shopping List'} style={styles.principal} testID="list-title">
+              <Text numberOfLines={1} style={[styles.titleText, { color: theme.colors.ink }]}>
+                {storeName || 'Shopping List'}
+              </Text>
+              {openNow ? (
+                <Text style={[styles.openNow, { color: '#34C759' }]} testID="list-open-now">
+                  Open Now
+                </Text>
+              ) : null}
+            </View>
+          ),
+          headerRight: () => (
+            // iOS 26 puts a toolbar item on a glass circle (`shopping-detail-store`), as every other pushed bar here.
+            <View collapsable={false} ref={menuAnchor}>
+              <Pressable accessibilityRole="button" accessibilityLabel="List options" onPress={menu.open} hitSlop={8} testID="list-options">
+                <GlassCircle>
+                  <Ionicons name="ellipsis-horizontal" size={22} color={theme.colors.link} />
+                </GlassCircle>
+              </Pressable>
+            </View>
+          ),
+        }}
+      />
+      <TodayBackdrop />
+      {/* `.disabled(store.busy)` (:283) covers the list; the action bar disables its own buttons. */}
+      <View style={styles.fill} pointerEvents={busy ? 'none' : 'auto'}>
+        {/* On Android the action bar rides up on the keyboard, so the focused field has to clear it too. */}
+        <KeyboardAwareScrollView bottomOffset={barHeight} keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingBottom: barHeight + 16 }} testID="shopping-detail">
+          {/* Header (:240-259): the store logo, which opens full size, and the settings chevron. */}
+          <View style={styles.header}>
+            <StoreBrandLogo expandsOnTap identity={`${list.storeName ?? ''}|${list.storeWebsite ?? ''}`} listId={list.id} />
+            <View style={[styles.grow, styles.headerText]}>
+              <Text style={[textStyles.title2, styles.bold, { color: theme.colors.label }]}>{list.title}</Text>
+              <View style={styles.countsRow}>
+                <Text style={[textStyles.body, styles.grow, { color: theme.colors.secondaryLabel }]} testID="list-counts">{`${list.items.length - left} added · ${itemCount(list.items.length)}`}</Text>
+                {!readOnly ? (
+                  <Pressable accessibilityLabel="List settings" accessibilityRole="button" onPress={() => setSettings(true)} style={styles.headerSettings} testID="shopping-header-settings">
+                    <Ionicons color={theme.colors.secondary} name="chevron-forward" size={15} />
+                  </Pressable>
+                ) : null}
+              </View>
+            </View>
+          </View>
+
+          {/* `shoppingShortcuts` (:421-446): Schedule Email, and View Offers once there is something to say. */}
+          <View style={[styles.shortcuts, large && styles.shortcutsColumn]}>
+            <ShortcutCard
+              color={brand.nexdoBlue}
+              disabled={readOnly}
+              icon="mail"
+              onPress={() => router.push({ pathname: '/wellness/shopping/email', params: { id: list.id } })}
+              testID="shopping-shortcut-email"
+              title="Schedule Email"
+            />
+            {offersShortcut ? (
+              <ShortcutCard
+                // nexdoIndigo; the `link` token, so it reads on a dark card on Android.
+                color={theme.colors.link}
+                icon="pricetag-outline"
+                onPress={() => openOffers()}
+                testID="shopping-shortcut-offers"
+                title={`View Offers${snapshot ? ` (${snapshot.matches.length})` : ''}`}
+              />
+            ) : (
+              <View style={styles.grow} />
+            )}
+          </View>
+
+          {/* Quick-add bar (:235-256): global pattern 15, the raised input card. */}
+          <View style={[styles.quickBar, { backgroundColor: theme.colors.surface, borderColor: withAlpha(brand.nexdoIndigo, 0.1), shadowColor: theme.colors.ink }]} testID="quick-add-bar">
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={quick === '' ? 'Focus add item field' : 'Add typed items'}
+              accessibilityState={{ disabled: parseBusy }}
+              disabled={parseBusy}
+              onPress={() => (quick.trim() === '' ? quickField.current?.focus() : void quickAdd())}
+              style={[styles.plus, { backgroundColor: withAlpha(brand.nexdoBlue, 0.11) }]}
+              testID="quick-add-plus"
+            >
+              <Ionicons name="add" size={22} color={brand.nexdoBlue} />
+            </Pressable>
+            {/* Android (docs/android-polish.md §6): the placeholder wrapped to a second line and was
+                clipped. The field is held to one line, and since Android cannot ellipsise a
+                TextInput placeholder, the same text is drawn as a one-line overlay that ends in "…". */}
+            <View style={styles.quickFieldWrap}>
+              <TextInput
+                ref={quickField}
+                accessibilityLabel="Add an item (e.g. eggs, milk, bread)"
+                numberOfLines={Platform.OS === 'android' ? 1 : undefined}
+                onChangeText={setQuick}
+                onSubmitEditing={() => void quickAdd()}
+                placeholder={Platform.OS === 'android' ? undefined : 'Add an item (e.g. eggs, milk, bread)'}
+                placeholderTextColor={theme.colors.placeholder}
+                returnKeyType="done"
+                style={[styles.quickField, { color: theme.colors.ink }, Platform.OS === 'android' && styles.androidQuickField]}
+                testID="shopping-quick-add"
+                value={quick}
+              />
+              {Platform.OS === 'android' && quick === '' ? (
+                <Text
+                  accessible={false}
+                  ellipsizeMode="tail"
+                  numberOfLines={1}
+                  pointerEvents="none"
+                  style={[styles.quickPlaceholder, { color: theme.colors.placeholder }]}
+                  testID="shopping-quick-add-placeholder"
+                >
+                  Add an item (e.g. eggs, milk, bread)
+                </Text>
+              ) : null}
+            </View>
+            {/* `camera.fill` (:275-279): Add Item with the camera, named from the field. */}
+            <Pressable
+              accessibilityLabel="Add item with camera"
+              accessibilityRole="button"
+              accessibilityState={{ disabled: readOnly || parseBusy }}
+              disabled={readOnly || parseBusy}
+              onPress={() => {
+                quickField.current?.blur();
+                setCameraItem({ ...newItem(Crypto.randomUUID().toUpperCase()), name: quick.trim() });
+              }}
+              style={styles.camera}
+              testID="shopping-camera-add"
+            >
+              <Ionicons name="camera" size={20} color={readOnly || parseBusy ? withAlpha(brand.nexdoBlue, 0.4) : brand.nexdoBlue} />
+            </Pressable>
+            <Pressable accessibilityRole="button" accessibilityLabel="Add groceries by voice" onPress={() => setVoice(true)} style={styles.mic} testID="quick-add-mic">
+              <Ionicons name="mic" size={20} color={theme.colors.secondary} />
+            </Pressable>
+          </View>
+
+          {/* Suggestions (:257-260): rows of the same section, so the card's top edge is square. */}
+          {suggestions.length > 0 ? (
+            <View style={[styles.suggestions, { backgroundColor: theme.colors.surface }]} testID="quick-add-suggestions">
+              {suggestions.map((name, index) => (
+                <Pressable
+                  key={name}
+                  accessibilityRole="button"
+                  onPress={() => {
+                    // `quick = name; quickAdd()`
+                    setQuick(name);
+                    void quickAdd(name);
+                  }}
+                  style={styles.suggestion}
+                  testID={`suggestion-${name}`}
+                >
+                  <Text style={[textStyles.subheadline, { color: theme.colors.link }]}>{name}</Text>
+                  {index < suggestions.length - 1 ? <View style={[styles.separator, { left: 16, backgroundColor: theme.colors.listSeparator }]} /> : null}
+                </Pressable>
+              ))}
+            </View>
+          ) : null}
+
+          {/* Category chips (:261-269): global pattern 14. */}
+          {list.items.length > 0 ? (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chips} contentContainerStyle={styles.chipsContent} testID="category-chips">
+              <CategoryChip category="All" count={list.items.length} selected={selectedCategory === 'All'} onPress={() => setSelectedCategory('All')} />
+              {visibleCategories.map((category) => (
+                <CategoryChip
+                  key={category}
+                  category={category}
+                  count={list.items.filter((row) => row.category === category).length}
+                  selected={selectedCategory === category}
+                  onPress={() => setSelectedCategory(category)}
+                />
+              ))}
+            </ScrollView>
+          ) : null}
+
+          {/* The items, one section (:271-278). */}
+          {list.items.length > 0 ? (
+            <View style={[styles.card, styles.itemsCard, { backgroundColor: theme.colors.surface }]} testID="grocery-list">
+              {visibleItems.map((row, index) => (
+                <SwipeToDelete disabled={readOnly} key={row.id} onDelete={() => deleteRow(row)} testID={`grocery-row-${row.id}`}>
+                  <View style={styles.itemRow}>
+                    <GroceryRow readOnly={readOnly} row={row} onToggle={() => void save(toggled(list, row.id))} onEdit={() => setItem(row)} onAlternatives={() => setAlternativesFor(row)} />
+                    <OfferBadge itemId={row.id} chosen={row.chosenOffer} name={row.name} matches={snapshot?.matches} onPress={() => openOffers(row.id)} />
+                  </View>
+                  {index < visibleItems.length - 1 ? (
+                    <View style={[styles.separator, { left: grocerySeparatorInset(row), backgroundColor: theme.colors.listSeparator }]} testID={`grocery-separator-${row.id}`} />
+                  ) : null}
+                </SwipeToDelete>
+              ))}
+            </View>
+          ) : (
+            // `ContentUnavailableView` (:279).
+            <View style={[styles.card, styles.empty, { backgroundColor: theme.colors.surface }]} testID="list-empty">
+              <Ionicons name="basket-outline" size={56} color={theme.colors.secondaryLabel} />
+              <Text style={[styles.emptyTitle, { color: theme.colors.label }]}>Nothing on the list yet</Text>
+              <Text style={[textStyles.body, styles.center, { color: theme.colors.secondaryLabel }]}>Add items above or dictate a few groceries.</Text>
+            </View>
+          )}
+
+          {/* The save error and its two ways out (:280). */}
+          {message ? (
+            <View style={[styles.card, styles.errorCard, { backgroundColor: theme.colors.surface }]} testID="list-error-card">
+              <View style={styles.errorRow}>
+                <Text style={[textStyles.body, { color: theme.colors.danger }]} testID="list-error">
+                  {message}
+                </Text>
+                <View style={[styles.separator, { left: 16, backgroundColor: theme.colors.listSeparator }]} />
+              </View>
+              <Pressable accessibilityRole="button" accessibilityState={{ disabled: readOnly }} disabled={readOnly} onPress={() => void save(list)} style={styles.errorRow} testID="list-retry">
+                <Text style={[textStyles.body, { color: readOnly ? theme.colors.placeholder : theme.colors.link }]}>Retry Save</Text>
+                <View style={[styles.separator, { left: 16, backgroundColor: theme.colors.listSeparator }]} />
+              </Pressable>
+              <Pressable accessibilityRole="button" onPress={() => void reload()} style={styles.errorRow} testID="list-reload">
+                <Text style={[textStyles.body, { color: theme.colors.link }]}>Discard local edits and reload</Text>
+              </Pressable>
+            </View>
+          ) : null}
+        </KeyboardAwareScrollView>
+      </View>
+
+      <ShoppingActionBar busy={busy} onComplete={onComplete} onRecommendations={() => setRecommendations(true)} onHeight={setBarHeight} />
+
+      {/* The options `Menu` (:342-352): the shared popover, anchored to "…", with no dimming (UI-parity pass 2). */}
+      <PopoverMenu
+        items={menuItems.map((entry) => ({
+          ...entry,
+          onPress: () => {
+            Keyboard.dismiss();
+            entry.onPress();
+          },
+        }))}
+        menu={menu}
+        testID="list-menu"
+      />
+
+      <ItemEditorSheet item={item} onSave={(updated) => void save(upserted(list, updated))} onClose={() => setItem(null)} />
+      <ItemEditorSheet
+        item={cameraItem}
+        launchCamera
+        onClose={() => setCameraItem(null)}
+        onSave={(added) => {
+          setSelectedCategory('All');
+          setQuick('');
+          void save(appended(list, [added]));
+        }}
+      />
+      <VoiceSheet visible={voice} onAdd={(items) => void save(appended(list, items))} onClose={() => setVoice(false)} />
+      <NewListSheet visible={copy} source={list} onCreated={setList} onClose={() => setCopy(false)} />
+      <ListSettingsSheet visible={settings} list={list} onSave={(next) => void save(next)} onClose={() => setSettings(false)} />
+      <ShareListSheet
+        visible={sharing}
+        list={list}
+        onUpdate={setList}
+        onClose={() => setSharing(false)}
+        onWeeklyEmail={() => {
+          setSharing(false);
+          router.push({ pathname: '/wellness/shopping/email', params: { id: list.id } });
+        }}
+      />
+      <ShoppingRecommendationsSheet list={list} visible={recommendations} onClose={() => setRecommendations(false)} />
+      <ShoppingAlternativesSheet
+        list={list}
+        onAdd={addAlternative}
+        onClose={() => setAlternativesFor(null)}
+        onFavorite={(alternativeId) => (alternativesFor ? favoriteAlternative(alternativesFor, alternativeId) : Promise.resolve(false))}
+        onReplace={(alternative) => (alternativesFor ? replaceWith(alternativesFor, alternative) : Promise.resolve(false))}
+        original={alternativesFor}
+      />
+      <ShoppingCompletionView
+        summary={completion}
+        onDone={() => {
+          setCompletion(null);
+          router.back();
+        }}
+        onUseAgain={() => {
+          setCompletion(null);
+          if (list.completedAt != null) setCopy(true);
+        }}
+      />
+    </View>
+  );
+}
+
+/** `shortcutCard(_:icon:color:)` (:433-446). */
+function ShortcutCard({ title, icon, color, disabled = false, onPress, testID }: { title: string; icon: keyof typeof Ionicons.glyphMap; color: string; disabled?: boolean; onPress: () => void; testID: string }) {
+  const theme = useTheme();
+  const large = useAccessibilityTextSize();
+  return (
+    <Pressable
+      accessibilityLabel={title}
+      accessibilityRole="button"
+      accessibilityState={{ disabled }}
+      disabled={disabled}
+      onPress={onPress}
+      style={[styles.shortcut, { backgroundColor: theme.colors.surface, opacity: disabled ? 0.45 : 1 }]}
+      testID={testID}
+    >
+      <View style={styles.shortcutTop}>
+        <View style={[styles.shortcutIcon, { backgroundColor: withAlpha(color, 0.08) }]}>
+          <Ionicons color={color} name={icon} size={18} />
+        </View>
+        <Ionicons color={theme.colors.secondary} name="chevron-forward" size={12} />
+      </View>
+      <Text adjustsFontSizeToFit={!large} minimumFontScale={0.8} numberOfLines={large ? undefined : 1} style={[textStyles.subheadline, styles.semibold, { color: theme.colors.ink }]}>
+        {title}
+      </Text>
+    </Pressable>
+  );
+}
+
+/**
+ * The offer badge under a row (:307-317): only when the item has matching, available or alternative
+ * offers; it names the chosen offer while that offer is still among them.
+ */
+function OfferBadge({ itemId, name, chosen, matches, onPress }: { itemId: string; name: string; chosen: GroceryItem['chosenOffer']; matches: ShoppingOfferMatch[] | undefined; onPress: () => void }) {
+  const theme = useTheme();
+  const itemOffers = (matches ?? []).filter((match) => match.itemId === itemId && ['matching', 'available', 'alternative'].includes(match.category));
+  if (itemOffers.length === 0) return null;
+  return (
+    // A `NavigationLink` in a `List` row: the capsule, and the row's disclosure chevron at the trailing edge
+    // (`shopping-detail-offer-badges`).
+    <Pressable accessibilityLabel={`Offers for ${name}`} accessibilityRole="button" onPress={onPress} style={styles.badgeRow} testID={`offer-badge-${itemId}`}>
+      <View style={[styles.badge, { backgroundColor: withAlpha(brand.nexdoBlue, 0.08) }]}>
+        <Ionicons color={brand.nexdoBlue} name="pricetag-outline" size={12} />
+        <Text style={[styles.badgeText, { color: brand.nexdoBlue }]}>{offerBadge(itemOffers, currentChoice(itemOffers, chosen))}</Text>
+      </View>
+      <Ionicons color={theme.colors.secondaryLabel} name="chevron-forward" size={14} />
+    </Pressable>
+  );
+}
+
+const styles = StyleSheet.create({
+  fill: { flex: 1 },
+  grow: { flex: 1 },
+  bold: { fontWeight: '700' },
+  center: { textAlign: 'center' },
+  // The List row insets put the header and the bar 16 inside a 16 pt section margin.
+  header: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 32, paddingTop: 20, paddingBottom: 3 },
+  headerText: { gap: 4 },
+  countsRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  headerSettings: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  principal: { alignItems: 'center', gap: 2, maxWidth: 220 },
+  titleText: { fontSize: 17, lineHeight: 22, fontWeight: '600' },
+  openNow: { fontSize: 12, lineHeight: 16, fontWeight: '600' },
+  semibold: { fontWeight: '600' },
+  // `.listRowInsets(top: 8, leading: 16, bottom: 8, trailing: 16)`, `HStackLayout(alignment: .top, spacing: 8)`.
+  shortcuts: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginHorizontal: 32, marginTop: 11, marginBottom: 5 },
+  shortcutsColumn: { flexDirection: 'column', alignItems: 'stretch' },
+  shortcut: { flex: 1, gap: 6, padding: 10, borderRadius: 18 },
+  shortcutTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  shortcutIcon: { width: 30, height: 30, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
+  badgeRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 6 },
+  badge: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 7, borderRadius: 999 },
+  badgeText: { fontSize: 12, lineHeight: 16, fontWeight: '600' },
+  // `.padding(.horizontal, 10).padding(.vertical, 6).frame(minHeight: 54)`, radius 18, 1 pt stroke,
+  // `.shadow(color: nexdoInk.opacity(0.07), radius: 8, y: 3)`.
+  quickBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginHorizontal: 32,
+    marginTop: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    minHeight: 54,
+    borderRadius: 18,
+    borderWidth: 1,
+    shadowOpacity: 0.07,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 2,
+  },
+  plus: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
+  // `.font(.subheadline)`
+  // `flex: 1` is on `quickFieldWrap`, which now holds the field in the row.
+  quickField: { fontSize: 15, paddingVertical: 4, backgroundColor: 'transparent' },
+  // Holds the field and, on Android, its one-line placeholder overlay.
+  quickFieldWrap: { flex: 1, justifyContent: 'center' },
+  // Android's EditText pads its text by default; zero it so the overlay sits exactly on the text.
+  androidQuickField: { paddingHorizontal: 0 },
+  quickPlaceholder: { position: 'absolute', left: 0, right: 0, fontSize: 15 },
+  mic: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+  camera: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  suggestions: { marginHorizontal: 16, marginTop: 5, borderBottomLeftRadius: 26, borderBottomRightRadius: 26, overflow: 'hidden' },
+  suggestion: { minHeight: 56, paddingHorizontal: 16, justifyContent: 'center' },
+  // `.listRowInsets(top: 4, leading: 16, bottom: 2, trailing: 0)` inside the section, `.padding(.vertical, 2)`.
+  chips: { marginLeft: 32, marginRight: 16, marginTop: 14 },
+  chipsContent: { gap: 8, paddingVertical: 2 },
+  card: { marginHorizontal: 16, borderRadius: 26, overflow: 'hidden' },
+  itemsCard: { marginTop: 19 },
+  // The row's own List insets: 18 leading, 16 trailing, and 15 above and below the 54 pt content.
+  itemRow: { paddingLeft: 18, paddingRight: 16, paddingVertical: 15 },
+  separator: { position: 'absolute', right: 16, bottom: 0, height: StyleSheet.hairlineWidth * 2 },
+  empty: { alignItems: 'center', gap: 8, paddingVertical: 30, paddingHorizontal: 40, marginTop: 15 },
+  // `ContentUnavailableView`'s title: `.title2.bold()`.
+  emptyTitle: { fontSize: 22, lineHeight: 28, fontWeight: '700', marginTop: 8 },
+  errorCard: { marginTop: 20 },
+  errorRow: { minHeight: 52, paddingHorizontal: 16, paddingVertical: 12, justifyContent: 'center' },
+});

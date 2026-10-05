@@ -114,7 +114,12 @@ export type KeyboardAwareScrollViewProps = ScrollViewProps & {
    * `KeyboardAvoidingView` is measured and added on its own.
    */
   bottomOffset?: number;
+  /** Receives the scroll view, for a screen that scrolls itself to a section. */
+  scrollRef?: { current: ScrollTarget | null };
 };
+
+/** The one scroll view method a screen needs from `KeyboardAwareScrollView`. */
+export type ScrollTarget = { scrollTo: (options: { y: number; animated?: boolean }) => void };
 
 /**
  * A `ScrollView` that keeps the focused field above the keyboard.
@@ -123,16 +128,27 @@ export type KeyboardAwareScrollViewProps = ScrollViewProps & {
  * keyboard-controller's, which scrolls by exactly the overlap as the keyboard animates, on focus and
  * as a multiline field grows.
  */
-export function KeyboardAwareScrollView({ bottomOffset = 0, children, ...props }: KeyboardAwareScrollViewProps) {
-  if (!isAndroid()) return <ScrollView {...props}>{children}</ScrollView>;
+export function KeyboardAwareScrollView({ bottomOffset = 0, children, scrollRef, ...props }: KeyboardAwareScrollViewProps) {
+  if (!isAndroid()) {
+    return (
+      <ScrollView
+        {...props}
+        ref={(node) => {
+          if (scrollRef) scrollRef.current = node;
+        }}
+      >
+        {children}
+      </ScrollView>
+    );
+  }
   return (
-    <AndroidAwareScrollView bottomOffset={bottomOffset} {...props}>
+    <AndroidAwareScrollView bottomOffset={bottomOffset} scrollRef={scrollRef} {...props}>
       {children}
     </AndroidAwareScrollView>
   );
 }
 
-function AndroidAwareScrollView({ bottomOffset = 0, children, onLayout, ...props }: KeyboardAwareScrollViewProps) {
+function AndroidAwareScrollView({ bottomOffset = 0, children, onLayout, scrollRef, ...props }: KeyboardAwareScrollViewProps) {
   const avoidingBottom = useContext(AvoidingContext);
   const view = useRef<KeyboardAwareScrollViewRef>(null);
   const [bottom, setBottom] = useState<number | null>(null);
@@ -148,7 +164,10 @@ function AndroidAwareScrollView({ bottomOffset = 0, children, onLayout, ...props
         onLayout?.(event);
         measureBottom(view.current as Measurable, setBottom);
       }}
-      ref={view}
+      ref={(node) => {
+        view.current = node;
+        if (scrollRef) scrollRef.current = node;
+      }}
     >
       {children}
     </KCKeyboardAwareScrollView>

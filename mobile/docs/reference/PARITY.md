@@ -739,3 +739,96 @@ figure is data, not styling.
 - **The date picker's past days** are not greyed out as `in: Date()...` does; the button refuses a past start (from Run A) — kept.
 - **Festival date pill** reads "20/09/26" on the iPhone but "25 Oct 2026" for a birthday: the compact `DatePicker`'s own choice, with no rule in the source to port — left locale-medium.
 - **Run B "Sheets are full height"** (pattern 8): now the iOS 26 large-sheet shape; no medium detents inside `MomentSheet`.
+
+## UI-parity pass 3 — Phase 12 on the phone (branch `rn-ui-parity-3-win`, Windows)
+
+Every ticked row of `docs/IOS_TO_REACT_NATIVE.md` §22 "Screen inventory" (49), on a **OnePlus CPH2691**
+(Android 16, 1080 x 2376 px at 480 dpi = **360 x 792 dp**, font scale 1.0, Tools button off), against the
+Mac's Phase 12 iPhone captures (402 pt wide). One light-mode screenshot per row, compared by eye; dark mode
+checked where the brief asked. Android screenshots are local only (`android/` is git-ignored).
+
+**This phone is 42 dp narrower than the iPhone**, so body text in fixed-width columns wraps one line sooner
+(guide steps, card subtitles). Where glyph sizes, art and padding measure the same, extra wrapping is
+recorded as checked, not fixed. **The phone's system font is OnePlus Sans**, not Roboto: weight 600 draws
+close to regular on it, so `.headline` / `.semibold` labels look lighter than on iOS. That is the device's
+font, not a style error, and is listed for a human to judge rather than changed.
+
+Status: **checked** (matches, or differs only by width/data), **fixed** (changed in this pass, re-shot on
+the phone), **platform gap** (Android cannot or should not match; logged in `android-polish.md`), **not
+reached** (with the reason).
+
+| # | §22 row | Status | Note |
+| ---: | --- | --- | --- |
+| 1 | Tab bar Wellness button | checked | centre image, no title, no capsule |
+| 2 | Wellness chooser | checked | light and dark (fixed light design, dark status-bar icons, §23). The green sliver under the Moments art is inside Swift's own crop rect (`WellnessChooserView.swift:24`) |
+| 3 | Module guide ×4 | **fixed** | "Back to Home" was the module colour; Swift's outer `.foregroundStyle(ink)` wins over `.tint` and `module-guide-shopping-scrolled` shows it in ink. All four guides checked, light and dark |
+| 4 | Pomodoro dashboard (Overview / Sessions / Insights) | **fixed** | (a) the cards' `elevation` drew a blue ring and showed through the 92% fill as a grey inner panel — removed on Android; (b) minute labels sat off their grid lines ("6m" ~20 dp high); (c) the trend chart's "5 min" pill sat at the chart top, not on its bar; (d) bar chevron and "…" were indigo, Swift's are ink; (e) the "…" menu lacked Swift's `arrow.clockwise` / `info.circle` glyphs (new optional `icon` on `PopoverItem`); (f) "This Week" lost "Week" after a reload (single-line now); (g) status-bar icons vanished in dark mode (now `FixedLightStatusBar`). Checked: donut and legend stack because Swift's `ViewThatFits` needs 306 dp and the card has 296; iOS draws Today's 3-hour buckets as thin hour-wide bars (Swift Charts `unit: .hour`), RN fills the bucket — left |
+| 5 | Pomodoro timer: setup, focus, paused, break, complete, stopped | **fixed** | (a) the ring's translucent segments doubled up at every overlap into visible stripes — each is now flattened over the track; (b) "Back to Tasks", the back chevron, history glyph and "Retry sync" were indigo, Swift's `.foregroundStyle(ink)` makes them ink (`pomodoro-complete`). Created "Parity focus 3" (completed) and "Parity stop 3" (stopped). Platform gap: the stop confirmation is an Android `AlertDialog`. Checked: the setup's scroll offset carries into a taller timer on this 792 dp screen, as it would on a short iPhone |
+| 6 | Pomodoro history sheet and session detail | **fixed** | session details drew its bar under the status bar (Android page-sheet `Modal` is full screen) — now inset; section header was "FOCUS TIME", iOS 26 shows "Focus time". Platform gap: page sheets are full height; the large title and iOS 26 row metrics are approximated. "About these metrics" is an `AlertDialog` (platform gap) |
+| 7 | Calorie Tracker setup: Create Agent → time → goals → Review & Confirm | **fixed** | (a) the robot art sat at the left edge (Android drew it at its intrinsic 218 wide; now full width, centred); (b) text buttons, bar glyphs, day chevrons, the Add-to-log circles and the summary icons were indigo, Swift's `.foregroundStyle(ink)` makes them ink (every capture shows it); (c) Time zone and Agent voice carried a "Time zone" / "Agent voice" label Swift's `Picker` does not draw in this card; (d) feature rows lost Swift's 6 pt title/detail gap; (e) numbers ungrouped: "2000 kcal", goal fields "1000" — Swift's `Text("\(n)")` and `.number` group them ("2,000"); (f) the Stepper was a rounded rectangle, iOS 26's is a capsule; (g) cards' `elevation` removed (as Pomodoro). Stopped on Review & Confirm; "Turn On Daily Calls" and "Save without calls" not tapped |
+| 8 | Nutrition dashboard (Today / Week / Month) | **fixed** | (a) the Today ring's gradient ran the wrong way (green at 2 o'clock): Swift's `.rotationEffect(-90)` turns the gradient with the ring, so 12 o'clock is teal and 3 o'clock blue; (b) Week/Month bars sat on the card floor, Swift's `.frame(height: 155)` centres the row; (c) "Goal 1000 mg" → "Goal 1,000 mg". Data is the Mac's "Parity oatmeal with banana" (350 kcal) |
+| 9 | Food Log and Add Food | **fixed** | Add Food drew its bar under the status bar, titled its section "FOOD" (iOS 26: "Food"), and its note sat on the card edge — the last was a **shared `Text` bug**: the Android slack's `paddingHorizontal: 1` beat any caller's `padding` shorthand. `Text` now adds the slack to the caller's padding and margin (also fixes the task agent bubbles, the brief's empty state, event notes and offer savings). Not saved. Platform gap: page sheet is full height |
+| 10 | Nutrition Insights and Recommendations | checked | light and dark. Calorie Tracker in dark mode: fixed-light design holds; the status bar is now kept dark (`FixedLightStatusBar`) |
+| 11 | Important Moments with date filters | checked | Today / Tomorrow / This Week / Later, Scheduled; counts differ by data. "Updated 5:49 pm" follows the phone's en-IN locale, as Swift's `.formatted` would |
+| 12 | Manage Moments tabs | checked | Scheduled, Need Review, Ready to Schedule; dark mode uses the logged `link` token (§25). Get Well Soon's tile glyph is an Ionicons stand-in |
+| 13 | Create Moment (time zone, manual recipient) | checked | Android form chrome as logged (§2, §4); left without saving |
+| 14 | Choose Festivals | **fixed** | (a) region cards broke "celebrations" mid-word ("celebrati/ons"): the trailing radio mark took its own column, leaving ~72 dp at 360 dp; it now sits over the card's corner and only the title keeps clear; (b) the cards were grey — Swift's `.secondarySystemGroupedBackground` is white in light mode; (c) "All regions" was the accent, Swift draws it ink. Checked light and dark (dark accent is the logged `link` token) |
+| 15 | Manage Moment, three tabs | **fixed** | "Parity Birthday" (the Mac's test moment). Info card glyph was the link colour; a plain `Label`'s glyph is ink. Title wraps at this width. Moment / Send time headers are the logged Android form labels (§4) |
+| 16 | Connect me on the day | **fixed** | the disabled "Connect me to Parity Kate" row was dimmed twice (row and switch) and Android drew the thumb's elevation through the translucent switch as a grey smudge; the label now stays full colour as on iOS and a disabled thumb has no elevation (shared `FormToggle` / `IOSSwitch`) |
+| 17 | Verify caller ID | not reached | opens from **Verify my number**, which the run must not tap |
+| 18 | How it works (calling guide) | **fixed** | "Back to settings" was indigo; the guide's outer `.foregroundStyle(ink)` makes it ink (capture confirms) |
+| 19 | Review schedule | **fixed** | "Confirm Schedule" wrapped to two lines inside its half-width button; Swift's `ViewThatFits` stacks the pair when they do not fit. RN now stacks them, full width, as soon as either label needs a second line |
+| 20 | Send now | not reached | opens from **Send Now**, which the run must not tap |
+| 21 | Schedule confirmed | **fixed** | the bar showed the Moments backdrop as a grey band above the `#F7FAFF` page; it now takes the page colour. Reached by confirming "Parity Birthday"'s schedule to Parity Kate (both the Mac's test items; it was already scheduled, so this re-confirmed the same 6 Oct 8:00 AM plan) |
+| 22 | My Lists with store logos | **fixed** | (a) the large title "My Lists" was missing — `.navigationTitle` without `.inline` is a large title; drawn as content; (b) the back chevron was ink: a module's first screen leaves with a toolbar `Button` (WellnessChooserView.swift:54), which takes the indigo tint — Important Moments too (`moments-date-filter-today-empty`). List titles wrap at this width |
+| 23 | Shopping Detail | **fixed** | (a) the "…" had no glass circle; (b) the options menu was a dimmed centred card with no glyphs — now the shared anchored popover with Swift's `square.and.arrow.up` on Share list (new optional `disabled` on `PopoverItem`); (c) offer badges lacked the `NavigationLink` row's trailing chevron. "Complete Shopping" wraps to two lines, as Swift's `lineLimit(2)` allows. Data: "Parity Weekly Groceries" (Mac) |
+| 24 | Offers for list, item offers, offer details | checked | the offer photo loads a moment later; titles at `.headline` (see the device-font note) |
+| 25 | Item Alternatives | **fixed** | the xmark had no glass circle (also on the "Why these?" panel); the goal picker's Cancel filled half the row — Swift frames the button outside `.bordered`, so the capsule hugs "Cancel". No Replace tapped |
+| 26 | Alternative Item Details | **fixed** | the bar's back and star were the tint, Swift's system back and toolbar star are ink on glass circles; "Add to Cart Instead" was blue, ink under the page's `.foregroundStyle(Color.nexdoInk)` |
+| 27 | Add Item / Edit Item | **fixed** | the large title's iOS-only −20 pull hid its top half under Android's sheet bar. Not saved |
+| 28 | Share List | checked | Android form chrome as logged; no link created |
+| 29 | Weekly email and pickup details | **fixed** | the time was a settings-style "TIME" caption over a bordered field; Swift's `field("Time")` is the same captioned box as Repeat with the pill inside (`ClockField variant="pill"`); the date pill sat at the trailing edge, a `.labelsHidden()` `DatePicker` is leading (`DateField` with no label). Not saved |
+| 30 | New List | checked | Android form chrome as logged; cancelled |
+| 31 | List Settings with store | checked | not saved |
+| 32 | Stores Near You | **fixed** | (with row 33) the page's back was a "Back" text capsule pushing the title off-centre; Swift's push inside the sheet has the system back, an ink chevron on glass (`SheetButton` gains `icon: 'back'`). No store added |
+| 33 | Store Hours | **fixed** | as row 32 |
+| 34 | Add Item with photo identification | not reached | needs a photo taken with the camera, which is then sent to `/api/shopping/recognize`; the editor itself is row 27, and the camera is the system's (platform gap) |
+| 35 | Shopping Recommendations | **fixed** | the suggestion rows' `arrow.up.left` drew as a plain up arrow; `TaskSymbol` now turns it −45° (↖), which also fixes Ask's text page. The title wraps beside the 56 pt close at this width, as an unlimited `Text` in Swift's `HStack` would |
+| — | Shopping in dark mode | checked | Shopping Detail readable in dark; the only dark iPhone capture predates the redesign |
+| 36 | Ask AI landing, four cards | **fixed** | (a) **the four cards stacked in one column**: each was 48.8% wide plus an 8 dp gap, more than 100% below ~330 dp of row width, so the 2-column `LazyVGrid` wrapped to one column on this phone — now 45% + `flexGrow`; (b) card details were cut with no ellipsis: `FittedText` now measures each explicit line ("Priorities and
+your next move") and keeps Android's ellipsis, so they shrink to 0.85 and then truncate, as Swift's `lineLimit(2).minimumScaleFactor(0.85)`; (c) **dark mode hid the landing's text**: its fixed-light ink sat on the theme's black through the translucent gradient — white base now, and a dark status bar on the landing and brief |
+| 37 | Daily Brief / Top 3 / Due & Risks / Find Time | not reached | every card first asks for AI data-sharing consent ("Allow sharing with OpenAI"), not granted on this phone; granting it is the account holder's decision. "Not now" returns to the landing, as Swift's |
+| 38 | Brief section detail | not reached | as row 37 |
+| 39 | Help | **fixed** | the cards showed a lighter inner panel: their `elevation` drew through the 95% white fill on Android — removed (also on Event Details' and the brief section pages' cards, which share the pattern). Topic expanded and checked. The back without glass is Run A's logged `InlineNavBar` (§24) |
+| 40 | Feedback | **fixed** | Submit's gradient ran magenta → blue; `NexdoGradientButtonStyle` draws `NexdoTheme.saveGradient`, blue → indigo → magenta (`GradientButton gradient="save"`). Not submitted |
+| 41 | Change password | **fixed** | same gradient as row 40. Not confirmed |
+| 42 | Account ("My Page") | checked | Help / Feedback / Edit profile bare and Change password on a card, as Swift (§22 "For the team") |
+| 43 | Calendar tab (collapsed empty days, review conflicts) | **fixed** | **scrolled content ran through the status bar** and collided with the clock; iOS 26's scroll-edge effect keeps it legible. New `StatusBarScrim` (Android only): the page's backdrop cut to the status-bar height, drawn over the scroll — Calendar and Today. Add by Voice / Add Manually stack at this width, as logged (§10) |
+| 44 | Event Details | **fixed** | (a) after removing the shadow show-through (row 39) the near-white cards vanished into the page's white end: Android gets a 1pt `fieldBorder` hairline instead of the shadow, as the task agent cards (§27) — also Help and the brief section pages; (b) the "…" menu lacked Swift's `checkmark.circle` / `xmark.circle` / `trash` glyphs. Event "Parity appointment" (Mac); nothing completed or deleted |
+| 45 | Edit Event | checked | en-IN "pm" from the phone's locale; not saved |
+| 46 | Tasks tab with search and "All time" | checked | search, keyboard and results ("plumber"); creation cards stack as logged (§1); icon stand-ins as logged (§27). Back from the Tasks tab returns to Today (Android tab history) |
+| 47 | Task Details | **fixed** | **two headers with two closes**: the stack drew a "Close / Task" bar above the screen's own "TASK DETAILS … ✕" header; Swift hides the bar (`.toolbar(.hidden, for: .navigationBar)`, RootView.swift:2014). Bar hidden, content inset below the status bar on Android. Outline buttons filled as logged (§2). Viewed "Call the plumber" (not a Parity item — view only, nothing changed) |
+| 48 | Task agent card | not reached | only shows for a task the server marks eligible for business research; none on this account, and creating one would start a real business search |
+| 49 | Nexdo Action contact screen | **fixed** | "Enter contact details" (and the other link buttons) were the tint; the screen's `.foregroundStyle(Color.nexdoInk)` makes them ink. Contact details: the title was in the bar, Swift's is a large title over the form. No contact chosen, nothing saved |
+| 50 | Today action cards and queue (business candidate card) | **fixed** | "Remind later", "Dismiss", "View all" and Previous / Next were the tint; the card and pager sit in `ActionGlass`, whose `.foregroundStyle(Color.nexdoInk)` makes them ink. "Find my next task" was a flat tint capsule; Swift's `NexdoGradientButtonStyle` is the save gradient. Contact and business variants and the queue checked; "Choose a business" not tapped. Light and dark |
+
+### Summary
+
+**51 lines covering the 49 §22 rows (Pomodoro's dashboard and timer, and Shopping's store pages, are split;
+a Shopping dark-mode check adds a line): 31 fixed, 14 checked, 6 not reached.** Not
+reached, each for a stated reason: Verify caller ID and Send now (their only entrances are buttons this run
+must not press), Daily Brief and its section pages (need AI data-sharing consent the phone has not given),
+photo identification (sends a camera photo to the server), and the task agent card (no eligible task on
+the account; making one starts a real business search).
+
+**Shared fixes that reach beyond their row:** `Text`'s Android slack no longer overrides caller padding;
+`FittedText` measures explicit lines and keeps the ellipsis; `PopoverItem` gains `icon` and `disabled`;
+`FormToggle` dims only its switch and `IOSSwitch` drops a disabled thumb's elevation; `TaskSymbol` turns
+`arrow.up.left`; `GradientButton` gains the save gradient; `StatusBarScrim` on Today and Calendar; the
+module-root tinted back in the Wellness stack.
+
+**Recurring causes worth knowing:** (1) an outer `.foregroundStyle(ink)` beats `.tint`, so most plain
+buttons in fixed-light screens are ink, not indigo — found on nine screens; (2) Android `elevation` under a
+translucent card shows through as a lighter panel; (3) layouts sized for 393–402 pt break at 360 dp (the
+Ask grid, festival region cards, review buttons).
+

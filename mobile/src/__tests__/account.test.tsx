@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
 import { Alert, Linking, Platform, StyleSheet } from 'react-native';
 
 import type { Profile } from '../api';
@@ -151,7 +151,7 @@ beforeEach(() => {
   jest.spyOn(Linking, 'openURL').mockResolvedValue(true).mockClear();
 });
 
-/** `AccountView` body (ios/App/ProfileView.swift:65-99). */
+/** `AccountView` body (ios/App/ProfileView.swift:53-84). */
 describe('the Account sheet', () => {
   it('renders the header, the menu rows in Swift order, and Sign out', async () => {
     await show(<Account />);
@@ -159,14 +159,20 @@ describe('the Account sheet', () => {
     expect(screen.getByText('My Page')).toBeTruthy();
     expect(screen.getByTestId('account-name')).toHaveTextContent('Ada Lovelace');
     expect(screen.getByTestId('account-email')).toHaveTextContent('ada@example.com');
-    expect(screen.getByText('Edit profile and settings')).toBeTruthy();
-    expect(screen.getByText('Inbox')).toBeTruthy();
-    expect(screen.getByText('Waiting For')).toBeTruthy();
-    expect(screen.getByText('AI Planner')).toBeTruthy();
-    expect(screen.getByText('Insights')).toBeTruthy();
-    expect(screen.getByText('Notifications')).toBeTruthy();
-    expect(screen.getByText('Settings')).toBeTruthy();
+    // Help, Feedback, Edit profile and settings, Change password (ProfileView.swift:66-69).
+    const rows = screen.getAllByTestId(/^account-(help|feedback|edit-profile|change-password)$/).map((node) => node.props.testID);
+    expect(rows).toEqual(['account-help', 'account-feedback', 'account-edit-profile', 'account-change-password']);
     expect(screen.getByText('Sign out')).toBeTruthy();
+    // 19eb8e4 removed the web rows and the second Settings row.
+    for (const gone of ['Inbox', 'Waiting For', 'AI Planner', 'Insights', 'Notifications', 'Settings']) expect(screen.queryByText(gone)).toBeNull();
+    // Only Change password sits in the card (`.padding(8).profileCard()` on that link alone).
+    expect(within(screen.getByTestId('account-menu')).getByText('Change password')).toBeTruthy();
+    expect(within(screen.getByTestId('account-menu')).queryByText('Help')).toBeNull();
+  });
+
+  it('reloads the profile each time it opens', async () => {
+    await show(<Account />);
+    await waitFor(() => expect(mockMe).toHaveBeenCalled());
   });
 
   /** A guard against inventing sections Swift does not have. */
@@ -194,20 +200,16 @@ describe('the Account sheet', () => {
     expect(mockPush).toHaveBeenCalledWith('/account/settings');
   });
 
-  it('opens Settings from the menu card', async () => {
+  it.each([
+    ['account-help', '/account/help'],
+    ['account-feedback', '/account/feedback'],
+    ['account-change-password', '/account/change-password'],
+  ])('%s pushes %s', async (id, path) => {
     await show(<Account />);
 
-    fireEvent.press(screen.getByTestId('account-settings'));
+    fireEvent.press(screen.getByTestId(id));
 
-    expect(mockPush).toHaveBeenCalledWith('/account/settings');
-  });
-
-  it('opens each web row in the browser at the production origin', async () => {
-    await show(<Account />);
-
-    fireEvent.press(screen.getByTestId('account-inbox'));
-
-    expect(Linking.openURL).toHaveBeenCalledWith('https://app.nexdoapp.com/inbox');
+    expect(mockPush).toHaveBeenCalledWith(path);
   });
 
   /** `.confirmationDialog("Sign out of Nexdo?", …)` (ProfileView.swift:96-98). */

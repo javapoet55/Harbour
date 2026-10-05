@@ -9,7 +9,7 @@ import { withAlpha } from '../../components/SignInBackdrop';
 import { Text } from '../../components/Text';
 import { androidGroup, androidLabel, androidPill, androidSeparator, FieldGroupContext, isAndroid, textStyles, useTheme } from '../../theme';
 import { KEYBOARD_DONE_BAR_HEIGHT } from './components';
-import { mediumDate, momentDay, momentStartOfDay, shortTimeIn, wallParts, zonedInstant } from './dates';
+import { canonicalZone, mediumDate, momentDay, momentStartOfDay, shortTimeIn, wallParts, zonedInstant } from './dates';
 
 /**
  * SwiftUI `Form` pieces with the iOS 26 inset-grouped metrics the rest of the app measured (style map
@@ -98,10 +98,19 @@ export function FormField({
   align,
   bold = false,
   maxLength,
+  secureTextEntry,
+  textContentType,
+  autoComplete,
+  editable,
 }: {
   placeholder: string;
   value: string;
   onChangeText: (next: string) => void;
+  /** `SecureField` (Change password). */
+  secureTextEntry?: boolean;
+  textContentType?: 'password' | 'newPassword';
+  autoComplete?: 'current-password' | 'new-password';
+  editable?: boolean;
   keyboardType?: KeyboardTypeOptions;
   autoCapitalize?: 'none' | 'sentences' | 'words';
   autoCorrect?: boolean;
@@ -117,9 +126,13 @@ export function FormField({
     <TextInput
       accessibilityLabel={accessibilityLabel ?? placeholder}
       autoCapitalize={autoCapitalize}
+      autoComplete={autoComplete}
       autoCorrect={autoCorrect}
+      editable={editable}
       keyboardType={keyboardType}
       maxLength={maxLength}
+      secureTextEntry={secureTextEntry}
+      textContentType={textContentType}
       multiline={multiline}
       onChangeText={onChangeText}
       placeholder={placeholder}
@@ -135,7 +148,9 @@ export function FormField({
 export function FormToggle({ label, value, onValueChange, disabled = false, testID }: { label: string; value: boolean; onValueChange: (next: boolean) => void; disabled?: boolean; testID?: string }) {
   const theme = useTheme();
   return (
-    <View style={[styles.inline, disabled && styles.dimmed]}>
+    // A disabled Toggle keeps its label at full colour and dims only the switch (`moment-connect-section`);
+    // dimming the row as well dimmed the switch twice.
+    <View style={styles.inline}>
       <Text style={[textStyles.body, styles.grow, { color: theme.colors.label }]}>{label}</Text>
       <IOSSwitch
         accessibilityLabel={label}
@@ -301,7 +316,19 @@ export function usePopoverMenu(anchor: { current: View | null }): MenuState {
   };
 }
 
-export type PopoverItem = { key: string; title: string; onPress: () => void; destructive?: boolean; checked?: boolean; testID?: string };
+/** `icon` is a `Button(_:systemImage:)` glyph, drawn leading in `iconColor` (the menu's tint). */
+export type PopoverItem = {
+  key: string;
+  title: string;
+  onPress: () => void;
+  destructive?: boolean;
+  checked?: boolean;
+  testID?: string;
+  icon?: keyof typeof Ionicons.glyphMap;
+  iconColor?: string;
+  /** `.disabled(…)`: drawn in `.tertiaryLabel`, not pressable. */
+  disabled?: boolean;
+};
 
 /** Each key as given, with a repeat suffixed by its row (`#2`), so two items with one value still render. */
 export function uniqueKeys(keys: string[]): string[] {
@@ -321,6 +348,9 @@ export function uniqueKeys(keys: string[]): string[] {
 export function PopoverMenu({ items, menu, showsChecks = false, testID }: { items: PopoverItem[]; menu: MenuState; showsChecks?: boolean; testID?: string }) {
   const theme = useTheme();
   const keys = uniqueKeys(items.map((item) => item.key));
+  // When any item has a glyph, iOS keeps that column for every item, so the titles line up.
+  const glyphColumn = items.some((item) => item.icon);
+  const disabledColor = theme.scheme === 'dark' ? 'rgba(235, 235, 245, 0.3)' : 'rgba(60, 60, 67, 0.3)';
   const window = useWindowDimensions();
   const placement = menu.frame
     ? menuPlacement(menu.frame, items.length, window.width, window.height)
@@ -340,7 +370,8 @@ export function PopoverMenu({ items, menu, showsChecks = false, testID }: { item
               {items.map((item, index) => (
                 <Pressable
                   accessibilityRole="button"
-                  accessibilityState={item.checked === undefined ? undefined : { selected: item.checked }}
+                  accessibilityState={item.checked === undefined ? (item.disabled ? { disabled: true } : undefined) : { selected: item.checked, disabled: item.disabled }}
+                  disabled={item.disabled}
                   key={keys[index]}
                   onPress={() => {
                     menu.close();
@@ -352,7 +383,15 @@ export function PopoverMenu({ items, menu, showsChecks = false, testID }: { item
                   {showsChecks ? (
                     <View style={styles.menuCheck}>{item.checked ? <Ionicons name="checkmark" size={17} color={theme.colors.label} /> : null}</View>
                   ) : null}
-                  <Text numberOfLines={1} style={[textStyles.body, styles.grow, { color: item.destructive ? theme.colors.danger : theme.colors.label }]}>
+                  {glyphColumn ? (
+                    <View style={styles.menuIcon}>
+                      {item.icon ? <Ionicons color={item.destructive ? theme.colors.danger : (item.iconColor ?? theme.colors.label)} name={item.icon} size={20} /> : null}
+                    </View>
+                  ) : null}
+                  <Text
+                    numberOfLines={1}
+                    style={[textStyles.body, styles.grow, { color: item.disabled ? disabledColor : item.destructive ? theme.colors.danger : theme.colors.label }]}
+                  >
                     {item.title}
                   </Text>
                 </Pressable>
@@ -424,6 +463,9 @@ const FALLBACK_ZONES = [
 /**
  * `TimeZone.knownTimeZoneIdentifiers`. Hermes may not implement `Intl.supportedValuesOf`, in which
  * case a list of the major zones stands in, always including the zone already chosen.
+ *
+ * Every entry is its CURRENT name (`canonicalZone`): ICU lists India as `Asia/Calcutta` while the phone
+ * reports `Asia/Kolkata`, and the list holds one row for the two, `Asia/Kolkata`.
  */
 export function knownTimeZones(include: string[] = []): string[] {
   let zones: string[] = [];
@@ -434,13 +476,17 @@ export function knownTimeZones(include: string[] = []): string[] {
     zones = [];
   }
   if (zones.length === 0) zones = FALLBACK_ZONES;
-  return [...new Set([...zones, ...include.filter(Boolean)])].sort();
+  return [...new Set([...zones, ...include.filter(Boolean)].map(canonicalZone))].sort();
 }
 
-/** `Picker("Time zone", selection:)` over every known identifier. */
+/**
+ * `Picker("Time zone", selection:)` over every known identifier. A legacy spelling of the chosen zone
+ * selects its row (`Asia/Calcutta` shows as `Asia/Kolkata`), so the row is never blank; the value is
+ * only rewritten when the person picks a zone.
+ */
 export function ZonePicker({ value, onChange, testID = 'zone-picker', hideLabel = false, label = 'Time zone', format }: { value: string; onChange: (next: string) => void; testID?: string; hideLabel?: boolean; label?: string; format?: (zone: string) => string }) {
   const options = knownTimeZones([value]).map((zone) => ({ value: zone, title: format ? format(zone) : zone }));
-  return <MenuPicker hideLabel={hideLabel} label={label} onChange={onChange} options={options} testID={testID} value={value} />;
+  return <MenuPicker hideLabel={hideLabel} label={label} onChange={onChange} options={options} testID={testID} value={canonicalZone(value)} />;
 }
 
 /** `TimeZone.localizedName(for: .generic, locale: .current)` — "Pacific Time". */
@@ -504,7 +550,8 @@ export function DateField({
     // The phone is 18dp narrower than the 402pt iPhone, so the pills sit 6 apart rather than 8 to keep
     // the label on one line where it fits; where it does not, it wraps, as SwiftUI's label would.
     <View style={[styles.inline, styles.dateRow, disabled && styles.dimmed]}>
-      <Text style={[textStyles.body, styles.grow, { color: theme.colors.label }]}>{label}</Text>
+      {/* `.labelsHidden()`: no label, and the pill sits at the leading edge (`shopping-weekly-email-bottom`). */}
+      {label === '' ? null : <Text style={[textStyles.body, styles.grow, { color: theme.colors.label }]}>{label}</Text>}
       <Pressable
         collapsable={false}
         ref={pill}
@@ -626,6 +673,7 @@ const styles = StyleSheet.create({
   dialog: { borderRadius: 16, paddingVertical: 8, maxHeight: '80%' },
   menu: { position: 'absolute', borderRadius: 26, paddingVertical: MENU_PADDING, elevation: 12, shadowOpacity: 0.18, shadowRadius: 24, shadowOffset: { width: 0, height: 8 } },
   menuCheck: { width: 24, alignItems: 'center' },
+  menuIcon: { width: 24, alignItems: 'center', marginRight: 4 },
   menuRowPlain: { paddingLeft: 20 },
   calendarMenu: { paddingHorizontal: 12 },
   datePopover: { position: 'absolute', borderRadius: 26, paddingHorizontal: 12, paddingVertical: 10, elevation: 12, shadowOpacity: 0.18, shadowRadius: 24, shadowOffset: { width: 0, height: 8 } },

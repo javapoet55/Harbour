@@ -28,7 +28,12 @@ import {
   OPENED_UNCONFIRMED,
   planEditable,
   planStatusLabel,
+  newFestivalSettings,
+  preparationDate,
+  preparationMinutes,
   readFestivalSettings,
+  storedRecipientKey,
+  withPreparationMinutes,
   readyToSchedule,
   recipientInitials,
   sortedPlans,
@@ -36,7 +41,6 @@ import {
   todayMoments,
   typeLabel,
   upcomingDelivery,
-  upcomingMomentCount,
   updatingTitle,
   validateRecipients,
   validateSchedule,
@@ -129,7 +133,7 @@ describe('plans', () => {
   // the same way Copy and Share do rather than claiming it was sent or failed.
   it('distinguishes an opened Messages wish from one still awaiting the composer', () => {
     expect(planStatusLabel(plan({ status: 'AWAITING_CONFIRMATION', lastError: OPENED_UNCONFIRMED }))).toBe('Opened — delivery not confirmed');
-    expect(planStatusLabel(plan({ status: 'AWAITING_CONFIRMATION', lastError: 'Something else went wrong.' }))).toBe('Confirmation required');
+    expect(planStatusLabel(plan({ status: 'AWAITING_CONFIRMATION', lastError: 'Something else went wrong.' }))).toBe('Scheduled — manual send');
   });
 
   it.each([
@@ -141,9 +145,21 @@ describe('plans', () => {
     expect(composerPlanAction(outcome)).toBe(expected);
   });
 
+  // `statusLabel(now:)` (ImportantMoment.swift:37-44): a wish you deliver yourself reads by its date and channel.
+  it('labels a wish awaiting you by whether its time has come, and how it goes out', () => {
+    const now = Date.parse('2030-09-20T08:00:00.000Z');
+    const due = { status: 'AWAITING_CONFIRMATION', scheduledAtUTC: '2030-09-20T08:00:00.000Z' };
+    expect(planStatusLabel(plan({ ...due, scheduledAtUTC: '2030-09-20T08:00:01.000Z' }), now)).toBe('Scheduled — manual send');
+    expect(planStatusLabel(plan({ ...due, channel: 'messages' }), now)).toBe('Ready to send');
+    expect(planStatusLabel(plan({ ...due, channel: 'email' }), now)).toBe('Ready to send');
+    expect(planStatusLabel(plan({ ...due, channel: 'copy' }), now)).toBe('Ready to copy');
+    expect(planStatusLabel(plan({ ...due, channel: 'share' }), now)).toBe('Ready to share');
+    expect(planStatusLabel(plan({ ...due, lastError: OPENED_UNCONFIRMED }), now)).toBe('Opened — delivery not confirmed');
+  });
+
   it('labels every status', () => {
     expect(planStatusLabel(plan({ status: 'SCHEDULED' }))).toBe('Auto-send scheduled');
-    expect(planStatusLabel(plan({ status: 'AWAITING_CONFIRMATION' }))).toBe('Confirmation required');
+    expect(planStatusLabel(plan({ status: 'AWAITING_CONFIRMATION' }))).toBe('Scheduled — manual send');
     expect(planStatusLabel(plan({ status: 'SHARED' }))).toBe('Shared — delivery not confirmed');
     expect(planStatusLabel(plan({ status: 'UNCERTAIN' }))).toBe('Check Sent mail');
     expect(planStatusLabel(plan({ status: 'CANCELLED' }))).toBe('Cancelled');
@@ -214,7 +230,8 @@ describe('FestivalSettings.read', () => {
     // Mistyped falls back to its default rather than taking the whole object down.
     expect(read?.imageAspect).toBe('Portrait');
     expect(read?.tone).toBe('Warm');
-    expect(read?.prepareDays).toBe(7);
+    // Swift's default since d76f460 (FestivalManagement.swift:6).
+    expect(read?.prepareDays).toBe(1);
     expect(read?.includeImage).toBe(false);
     expect(read?.cardGreeting).toBeNull();
     // A fresh moment's settings still round-trip unchanged.
@@ -266,18 +283,6 @@ describe('display groups', () => {
     expect(editableGroups([removed, current])[0].moments.map((item) => item.id)).toEqual(['current']);
     expect(displayGroups([removed, current])[0].moments).toHaveLength(2);
     expect(editableGroups([{ ...current, festivalSettings: '{ "archived" : true }' }])).toHaveLength(0);
-  });
-
-  it('counts upcoming groups for the Quick Access tile', () => {
-    const now = Date.parse('2030-09-01T12:00:00Z');
-    const encoded = settings();
-    const list = [
-      moment({ id: 'a', firstName: 'a', festivalSettings: encoded }),
-      moment({ id: 'b', firstName: 'b', festivalSettings: encoded }),
-      moment({ id: 'c', type: 'custom', enabled: false }),
-      moment({ id: 'd', type: 'custom', occurrenceDate: '2030-08-01', nextOccurrence: '2030-08-01' }),
-    ];
-    expect(upcomingMomentCount(list, now)).toBe(1);
   });
 });
 
@@ -426,6 +431,21 @@ describe('titles, greetings and signatures', () => {
   });
 
   /**
+   * fac34ed (MomentGreeting.swift:17, :44-52): "Happy Birthday, Visakan!" is the form the product writes,
+   * so a comma ends an opening too, and the name riding inside it is dropped — shared to Sam it must not
+   * become "Happy Birthday, Sam! Happy Birthday, Visakan! …" or carry Visakan's name.
+   */
+  it('takes the name out of a "Happy Birthday, Name!" opening before naming the new recipient', () => {
+    expect(greetingMessage('Happy Birthday, Visakan! Have a great day.', 'birthday', 'Sam')).toBe('Happy Birthday, Sam! Have a great day.');
+    expect(greetingMessage('Happy Birthday, Visakan!', 'birthday', 'Sam')).toBe('Happy Birthday, Sam!');
+    expect(greetingMessage('Happy Anniversary, Mom and Dad! Love you.', 'birthday', 'Sam')).toBe('Happy Anniversary, Sam! Love you.');
+    // A lower-case phrase after the comma is prose, not a name, and stays.
+    expect(greetingMessage('Happy Birthday, have a great day!', 'birthday', 'Sam')).toBe('Happy Birthday, Sam! have a great day!');
+    // Swift trims spaces, not line breaks, after the name (the server's trimStart differs; see §22).
+    expect(greetingMessage('Happy Birthday, Visakan!\nHave fun', 'birthday', 'Sam')).toBe('Happy Birthday, Sam! \nHave fun');
+  });
+
+  /**
    * Copied from `the resolved wish text` in src/server/moments/wish-message.integration.test.ts. The
    * server rewrites pending plans with its own `greetingMessage`, so the two must agree byte for byte.
    */
@@ -551,5 +571,38 @@ describe('recipient sheet rules (iOS RecipientDraft)', () => {
     expect(maskedAddresses({ phone: '+15550101234', email: 'asha@example.com' })).toBe('Mobile · ••• ••• 1234 · Email · a••••@example.com');
     expect(maskedAddresses({ phone: '+15550101234', email: '' })).toBe('Mobile · ••• ••• 1234');
     expect(maskedAddresses({ phone: '', email: 'asha@example.com' })).toBe('Email · a••••@example.com');
+  });
+});
+
+// preparationRemindersSupportHoursAndLegacyDays (ImportantMomentTests.swift)
+describe('preparation reminder', () => {
+  it('reads legacy days, stores hours and days exclusively, and dates the reminder', () => {
+    const legacy = readFestivalSettings('{"groupID":"test","prepareDays":3}')!;
+    expect(preparationMinutes(legacy)).toBe(4320);
+    const instant = Date.parse('2026-11-01T12:00:00Z');
+    for (const hours of [1, 4, 8]) {
+      const next = withPreparationMinutes(legacy, hours * 60);
+      expect(next.prepareDays).toBe(0);
+      const restored = readFestivalSettings(JSON.stringify(next))!;
+      expect(preparationDate(restored, instant, 'America/Los_Angeles')).toBe(instant - hours * 3_600_000);
+    }
+    expect(preparationDate(withPreparationMinutes(legacy, 0), instant, 'UTC')).toBeNull();
+    const day = withPreparationMinutes(legacy, 1440);
+    expect(day.prepareHours).toBe(0);
+    expect(day.prepareDays).toBe(1);
+  });
+
+  it('defaults new settings to one day, as Swift', () => {
+    expect(preparationMinutes(newFestivalSettings('g'))).toBe(1440);
+  });
+});
+
+// editedOccasionKeepsOriginalRecipientSettingKeys (MomentRecipientsTests.swift)
+describe('storedRecipientKey', () => {
+  it('keeps a recipient’s key across an occasion change', () => {
+    expect(storedRecipientKey('festival:group:contact:123', 'group', 'row')).toBe('contact:123');
+    expect(storedRecipientKey('birthday:group:contact', 'group', 'row')).toBe('contact');
+    expect(storedRecipientKey('manual', 'group', 'row')).toBe('row');
+    expect(storedRecipientKey('festival:other:contact', 'group', 'row')).toBe('row');
   });
 });

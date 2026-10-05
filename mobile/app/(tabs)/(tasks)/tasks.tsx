@@ -1,10 +1,11 @@
 import { router } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, RefreshControl, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 
 import { CreationCard, DatePill, HeaderButton, SectionHeader, TaskCard, TaskEmptyState, TaskSymbol, Text } from '../../../src/components';
 import { ProjectsList } from '../../../src/components/ProjectsList';
-import { SegmentRow } from '../../../src/components/SegmentRow';
+import { sectionDateLabel, TaskTabs } from '../../../src/components/TaskListParts';
 import { TasksTopBar, TodayBackdrop } from '../../../src/components/TodayShell';
 import {
   DATE_FILTER_EMPTY_TITLE,
@@ -21,18 +22,26 @@ import { useSession } from '../../../src/store/session';
 import { useTaskQuery } from '../../../src/store/taskQuery';
 import { androidChipScroll, isAndroid, useTheme } from '../../../src/theme';
 
-/** The caption under the history-range picker (RootView.swift:1678). */
+/** The caption under the history-range picker (RootView.swift:1724). */
 const HISTORY_RANGE_CAPTION: Record<TaskHistoryRange, string> = {
+  'All time': 'All open and completed tasks, with open tasks first.',
   'This Month': 'Tasks scheduled within this calendar month.',
   'Last Month': 'Previous calendar month, plus upcoming open tasks.',
   'Last 2 weeks': 'History through today, plus upcoming open tasks.',
 };
 
 /**
- * Port of `TasksView` (ios/App/RootView.swift:1620-1907).
+ * `LinearGradient([Color(red: 0.973, green: 0.977, blue: 1), Color(red: 1, green: 0.914, blue: 0.969),
+ * .white], topLeading → bottomTrailing)` (RootView.swift:1689-1690).
+ */
+const TASKS_BACKGROUND = ['#F8F9FF', '#FFE9F7', '#FFFFFF'] as const;
+
+/**
+ * Port of `TasksView` (ios/App/RootView.swift:1663-1975).
  *
  * STRUCTURE NOTE, because it differs from the brief: Tasks and Projects are ONE screen in Swift, with
- * a segmented picker switching between a task list and an inline `ProjectsView()` (RootView.swift:1657).
+ * a Tasks / Projects pill pair switching between a task list and an inline `ProjectsView()`
+ * (RootView.swift:1695-1704).
  * There is no separate Projects route, and no separate task-detail route either — tapping a task
  * opens `TaskEditor` as a SHEET (RootView.swift:1699), which for an existing task renders
  * `TaskDetailsView`. The routes here follow Swift.
@@ -50,6 +59,9 @@ export default function Tasks() {
   const [searching, setSearching] = useState(false);
   const [conflict, setConflict] = useState<ScheduleConflict | null>(null);
   const [rangeOpen, setRangeOpen] = useState(false);
+  const beginSearch = useTaskQuery((state) => state.beginSearch);
+  // `@FocusState private var searchFocused` (RootView.swift:1672).
+  const searchField = useRef<TextInput>(null);
 
   const android = isAndroid();
   const tasks = useTasks();
@@ -83,9 +95,33 @@ export default function Tasks() {
     setQuery({ date });
   };
 
+  // The magnifier (RootView.swift:1792-1797): opening a search resets the filters to every date,
+  // status and priority (`beginSearch`); closing it clears the term only.
+  const toggleSearch = () => {
+    const next = !searching;
+    setSearching(next);
+    if (next) beginSearch();
+    else setQuery({ search: '' });
+    if (next) setTimeout(() => searchField.current?.focus(), 0);
+    else searchField.current?.blur();
+  };
+
   return (
     <View style={styles.fill}>
-      <TodayBackdrop subtle />
+      {/* Swift's gradient has no dark variant; under it `nexdoInk` (white in dark) would sit on near
+          white. Dark keeps the subtle backdrop the screen used before. */}
+      {theme.scheme === 'dark' ? (
+        <TodayBackdrop subtle />
+      ) : (
+        <LinearGradient
+          colors={[...TASKS_BACKGROUND]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={StyleSheet.absoluteFill}
+          pointerEvents="none"
+          testID="tasks-background"
+        />
+      )}
       <View style={styles.content}>
         {/* `.sheet(isPresented: $account) { AccountView() }` (RootView.swift:1702). */}
         <TasksTopBar name={profile?.name ?? ''} photo={profile?.photo} onAccount={() => router.push('/account')} />
@@ -101,62 +137,21 @@ export default function Tasks() {
           {!showingProjects ? (
             <View style={styles.headerButtons}>
               <HeaderButton icon="slider.horizontal.3" label="Task filters" onPress={() => router.push('/task/filters')} />
-              <HeaderButton icon="magnifyingglass" label="Search tasks" onPress={() => setSearching((value) => !value)} />
+              <HeaderButton icon="magnifyingglass" label="Search tasks" onPress={toggleSearch} />
             </View>
           ) : null}
         </View>
 
-        {/* `Picker(...).pickerStyle(.segmented)` (RootView.swift:1650-1655). Android: the shared
-            `SegmentRow` (docs/android-polish.md §9). */}
-        {android ? (
-          <SegmentRow
-            labels={['Tasks', 'Projects']}
-            selected={showingProjects ? 1 : 0}
-            base={{ fontSize: 13, lineHeight: 18 }}
-            labelStyle={styles.segmentLabel}
-            gap={0}
-            inset={2}
-            style={[styles.segmented, { backgroundColor: theme.colors.segmentTrack }]}
-            testID="tasks-segments"
-            renderSegment={(index, fit, segmentStyle) => {
-              const label = index === 0 ? 'Tasks' : 'Projects';
-              const selected = (label === 'Projects') === showingProjects;
-              return (
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel={label}
-                  accessibilityState={{ selected }}
-                  onPress={() => setShowingProjects(label === 'Projects')}
-                  testID={`segment-${label}`}
-                  style={[styles.androidSegment, segmentStyle, selected && { backgroundColor: theme.colors.segmentSelected }]}
-                >
-                  <Text numberOfLines={1} style={[styles.segmentLabel, { fontSize: fit.fontSize, lineHeight: fit.lineHeight, color: theme.colors.ink }]}>
-                    {label}
-                  </Text>
-                </Pressable>
-              );
-            }}
-          />
-        ) : (
-        <View style={[styles.segmented, { backgroundColor: theme.colors.segmentTrack }]}>
-          {(['Tasks', 'Projects'] as const).map((label) => {
-            const selected = (label === 'Projects') === showingProjects;
-            return (
-              <Pressable
-                key={label}
-                accessibilityRole="button"
-                accessibilityLabel={label}
-                accessibilityState={{ selected }}
-                onPress={() => setShowingProjects(label === 'Projects')}
-                testID={`segment-${label}`}
-                style={[styles.segment, selected && { backgroundColor: theme.colors.segmentSelected }]}
-              >
-                <Text style={[styles.segmentLabel, { color: theme.colors.ink }]}>{label}</Text>
-              </Pressable>
-            );
-          })}
-        </View>
-        )}
+        {/* `HStack(spacing: 0) { taskTab("Tasks") taskTab("Projects") }` (RootView.swift:1695-1701), on
+            both platforms: the pill pair replaced the segmented picker and Android's `SegmentRow`. */}
+        <TaskTabs
+          projects={showingProjects}
+          onChange={(projects) => {
+            // `.onChange(of: showingProjects) { searchFocused = false }`
+            searchField.current?.blur();
+            setShowingProjects(projects);
+          }}
+        />
 
         {showingProjects ? (
           <ProjectsList
@@ -182,6 +177,7 @@ export default function Tasks() {
               <View style={[styles.searchField, { backgroundColor: theme.colors.surface }]}>
                 <TaskSymbol name="magnifyingglass" size={17} color={theme.colors.secondary} />
                 <TextInput
+                  ref={searchField}
                   accessibilityLabel="Search tasks"
                   placeholder="Search your tasks"
                   placeholderTextColor={theme.colors.secondary}
@@ -197,6 +193,7 @@ export default function Tasks() {
                   onPress={() => {
                     setQuery({ search: '' });
                     setSearching(false);
+                    searchField.current?.blur();
                   }}
                   style={styles.searchClose}
                 >
@@ -247,9 +244,10 @@ export default function Tasks() {
               ))}
             </ScrollView>
 
-            {/* `if model.taskQuery.date == .all { … }` (RootView.swift:1669-1681): the history-range
-                picker and its explanatory caption, shown only on the All pill. */}
-            {query.date === 'All' ? (
+            {/* `if model.taskQuery.date == .all && search.trimmed.isEmpty { … }` (RootView.swift:1714-1726):
+                the history-range picker and its caption, on the All pill and only while no search term
+                is entered — a search already spans every date. */}
+            {query.date === 'All' && query.search.trim() === '' ? (
               <View style={styles.historyRange}>
                 <View style={styles.historyRangeRow}>
                   <Text style={[styles.historyRangeTitle, { color: theme.colors.ink }]}>History range</Text>
@@ -326,6 +324,7 @@ export default function Tasks() {
                           ? `Completed · ${sectionTitle(section.date, zone)}`
                           : sectionTitle(section.date, zone)
                       }
+                      date={sectionDateLabel(section.date, zone)}
                       count={section.tasks.length}
                     />
                     {section.tasks.map((task) => (
@@ -355,19 +354,14 @@ const PILL_SCROLL = androidChipScroll(20);
 
 const styles = StyleSheet.create({
   fill: { flex: 1 },
-  // `.padding(.horizontal, 20)` with `VStack(spacing: 20)` (RootView.swift:1641, 1727).
-  content: { flex: 1, paddingHorizontal: 20, gap: 20 },
+  // `.padding(.horizontal, 20)` with `VStack(spacing: 16)` (RootView.swift:1691, 1749).
+  content: { flex: 1, paddingHorizontal: 20, gap: 16 },
   header: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   headerText: { flex: 1, gap: 2 },
   // `.font(.system(.largeTitle, weight: .bold))`
   title: { fontSize: 34, lineHeight: 41, fontWeight: '700' },
   subtitle: { fontSize: 15, lineHeight: 20 },
   headerButtons: { flexDirection: 'row', gap: 10 },
-  segmented: { flexDirection: 'row', borderRadius: 9, padding: 2 },
-  segment: { flex: 1, alignItems: 'center', justifyContent: 'center', minHeight: 32, borderRadius: 7 },
-  segmentLabel: { fontSize: 13, lineHeight: 18, fontWeight: '500' },
-  // Android: sized by `SegmentRow`, so no `flex: 1` share of the row.
-  androidSegment: { alignItems: 'center', justifyContent: 'center', minHeight: 32, borderRadius: 7 },
   list: { gap: 12, paddingBottom: 24 },
   searchField: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingLeft: 14, borderRadius: 16 },
   searchInput: { flex: 1, paddingVertical: 0 },

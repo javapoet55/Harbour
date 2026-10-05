@@ -1,5 +1,7 @@
 import * as Contacts from 'expo-contacts/legacy';
 
+import type { TaskAgentCandidate } from '../api/taskAgent';
+import type { TaskActionRecipient } from '../lib/actionNeeded';
 import { TaskActionError } from './errors';
 
 /**
@@ -102,4 +104,43 @@ export function toActionContact(contact: Contacts.ExistingContact, fallbackName:
       }))
       .filter((address) => address.value.length > 0),
   };
+}
+
+/** `ActionContact.selected(_:)` (TaskActionContacts.swift:52-57): Swift labels every picked address "Phone" or "Email". */
+export function selectedActionContact(contact: Contacts.ExistingContact): ActionContact {
+  return {
+    id: contact.id ?? 'selected',
+    name: contact.name && contact.name.trim().length > 0 ? contact.name : 'Selected contact',
+    phones: (contact.phoneNumbers ?? [])
+      .map((entry, index) => ({ id: entry.id ?? `phone-${index}`, label: 'Phone', value: entry.number ?? '' }))
+      .filter((address) => address.value.length > 0),
+    emails: (contact.emails ?? [])
+      .map((entry, index) => ({ id: entry.id ?? `email-${index}`, label: 'Email', value: entry.email ?? '' }))
+      .filter((address) => address.value.length > 0),
+  };
+}
+
+/** `ActionContact.manual(_:)` (TaskActionContacts.swift:58-62): details the person typed. */
+export function manualActionContact(value: TaskActionRecipient): ActionContact {
+  return {
+    id: 'manual',
+    name: value.name,
+    phones: value.phone === '' ? [] : [{ id: 'phone', label: 'Phone', value: value.phone }],
+    emails: value.email === '' ? [] : [{ id: 'email', label: 'Email', value: value.email }],
+  };
+}
+
+/** `ActionContact.business(_:)` (TaskActionContacts.swift:63-66): a business is reached by phone only. */
+export function businessActionContact(value: Pick<TaskAgentCandidate, 'id' | 'name' | 'phone'>): ActionContact {
+  return { id: value.id, name: value.name, phones: value.phone === '' ? [] : [{ id: 'phone', label: 'Phone', value: value.phone }], emails: [] };
+}
+
+/**
+ * The Today card's quiet lookup (TodayActionsView.swift:215-223): only when Contacts access was ALREADY
+ * given, so the card never prompts. `null` means "don't know"; the card then offers Choose contact.
+ */
+export async function resolveContactsSilently(name: string, identifier?: string | null): Promise<ActionContact[] | null> {
+  const current = await Contacts.getPermissionsAsync();
+  if (!current.granted) return null;
+  return resolveContacts({ name, identifier }).catch(() => null);
 }

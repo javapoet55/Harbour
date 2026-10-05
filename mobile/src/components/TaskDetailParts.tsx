@@ -12,7 +12,7 @@ import {
   isAndroid,
   useTheme,
 } from '../theme';
-import { TaskSymbol } from './TaskSymbol';
+import { TaskSymbol, type TaskSymbolName } from './TaskSymbol';
 import { Text } from './Text';
 
 /**
@@ -143,12 +143,19 @@ export function DetailMenu({
   );
 }
 
-/** `DetailOutlineButton` (TaskDetailsView.swift:297-321). */
+/**
+ * `DetailOutlineButton` (TaskDetailsView.swift:415-439). `icon` is a `Label`'s leading symbol — the
+ * footer's `Label("Mark complete", systemImage: "checkmark")` and `Label("Save changes", systemImage:
+ * "doc.text")` (`:318`, `:329`). `tinted` is that Save label's `.foregroundStyle(Color.nexdoIndigo)`,
+ * drawn in the `link` token so it follows the dark-mode tappable colour on Android.
+ */
 export function DetailOutlineButton({
   title,
   onPress,
   disabled = false,
   greenBackground = false,
+  icon,
+  tinted = false,
   testID,
   accessibilityLabel,
 }: {
@@ -156,14 +163,25 @@ export function DetailOutlineButton({
   onPress: () => void;
   disabled?: boolean;
   greenBackground?: boolean;
+  icon?: TaskSymbolName;
+  tinted?: boolean;
   testID?: string;
   accessibilityLabel?: string;
 }) {
   const theme = useTheme();
-  const body = (
-    <Text style={[styles.outlineLabel, { color: greenBackground ? '#FFFFFF' : theme.colors.ink }, !greenBackground && androidSecondaryLabel(theme)]}>
+  const labelColor = greenBackground ? '#FFFFFF' : tinted ? theme.colors.link : theme.colors.ink;
+  const label = (
+    <Text style={[styles.outlineLabel, { color: labelColor }, !greenBackground && !tinted && androidSecondaryLabel(theme)]}>
       {title}
     </Text>
+  );
+  const body = icon ? (
+    <View style={styles.outlineLabelRow}>
+      <TaskSymbol name={icon} size={17} color={labelColor} />
+      {label}
+    </View>
+  ) : (
+    label
   );
 
   return (
@@ -178,8 +196,9 @@ export function DetailOutlineButton({
       style={[styles.outlineWrapper, disabled && styles.dimmed]}
     >
       {greenBackground ? (
-        // `LinearGradient([rgb(0.04,0.43,0.26), rgb(0.02,0.32,0.23)], leading → trailing)`
-        <LinearGradient colors={['#0A6E42', '#05523B']} start={{ x: 0, y: 0.5 }} end={{ x: 1, y: 0.5 }} style={styles.outlineButton}>
+        // `LinearGradient([rgb(0, 0.68, 0.39), rgb(0, 0.49, 0.46)], leading → trailing)`
+        // (TaskDetailsView.swift:426-428).
+        <LinearGradient colors={GREEN_GRADIENT} start={{ x: 0, y: 0.5 }} end={{ x: 1, y: 0.5 }} style={styles.outlineButton}>
           {body}
         </LinearGradient>
       ) : (
@@ -247,6 +266,9 @@ export function DetailTextInput({
   placeholder,
   accessibilityLabel,
   multiline = false,
+  autoFocus = false,
+  onFocus,
+  onBlur,
   testID,
 }: {
   value: string;
@@ -254,6 +276,10 @@ export function DetailTextInput({
   placeholder?: string;
   accessibilityLabel: string;
   multiline?: boolean;
+  autoFocus?: boolean;
+  /** `.focused($focus, equals:)`: Task Details hides its footer while a field has focus. */
+  onFocus?: () => void;
+  onBlur?: () => void;
   testID?: string;
 }) {
   const theme = useTheme();
@@ -265,8 +291,15 @@ export function DetailTextInput({
       placeholderTextColor={theme.colors.secondary}
       value={value}
       onChangeText={onChangeText}
-      onFocus={() => setFocused(true)}
-      onBlur={() => setFocused(false)}
+      onFocus={() => {
+        setFocused(true);
+        onFocus?.();
+      }}
+      onBlur={() => {
+        setFocused(false);
+        onBlur?.();
+      }}
+      autoFocus={autoFocus}
       multiline={multiline}
       style={[
         theme.typography.body,
@@ -278,6 +311,9 @@ export function DetailTextInput({
     />
   );
 }
+
+/** The Mark complete gradient: rgb(0, 0.68, 0.39) → rgb(0, 0.49, 0.46) (TaskDetailsView.swift:427). */
+export const GREEN_GRADIENT = ['#00AD63', '#007D75'] as const;
 
 export function withAlpha(color: string, alpha: number): string {
   if (color.startsWith('rgba')) return color.replace(/[\d.]+\)$/, `${alpha})`);
@@ -304,6 +340,7 @@ const styles = StyleSheet.create({
   dimmed: { opacity: 0.45 },
   outlineButton: { minHeight: 44, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 14, borderRadius: 13 },
   outlineLabel: { fontSize: 15, lineHeight: 20, fontWeight: '600' },
+  outlineLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   // `.padding(16).frame(minHeight: 58)`, corner radius 17.
   checkbox: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16, minHeight: 58, borderRadius: 17, borderWidth: StyleSheet.hairlineWidth },
   checkboxTitle: { fontSize: 15, lineHeight: 20, fontWeight: '600' },

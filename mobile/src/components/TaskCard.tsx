@@ -1,13 +1,61 @@
+import Ionicons from '@expo/vector-icons/Ionicons';
+import type { ComponentProps } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import type { NexdoProject, NexdoTask } from '../api/types';
-import { resolveCategory } from '../lib/taskCategory';
 import { taskSubtitle } from '../lib/taskLabels';
 import { isDone } from '../lib/taskQuery';
-import { useTheme } from '../theme';
-import { TaskCategoryBadge } from './TaskCategoryBadge';
+import { brand, useTheme, type ColorScheme } from '../theme';
 import { TaskSymbol } from './TaskSymbol';
 import { Text } from './Text';
+
+/**
+ * The SwiftUI system colours `taskIcon` uses, light and dark (`.pink`, `.green`, `.orange`,
+ * `.purple` adapt to the scheme). `nexdoBlue` is the brand constant and does not.
+ */
+const SYSTEM_TINT = {
+  pink: { light: '#FF2D55', dark: '#FF375F' },
+  green: { light: '#34C759', dark: '#30D158' },
+  orange: { light: '#FF9500', dark: '#FF9F0A' },
+  purple: { light: '#AF52DE', dark: '#BF5AF2' },
+} as const;
+
+export type TaskIconTint = keyof typeof SYSTEM_TINT | 'nexdoBlue';
+
+/**
+ * The SF Symbols `taskIcon` returns, mapped to Ionicons. Drawn with Ionicons directly rather than
+ * through `TaskSymbol`, whose shared map has no wrench or laptop.
+ */
+const TASK_ICON_GLYPH = {
+  envelope: 'mail-outline',
+  wrench: 'construct-outline',
+  phone: 'call-outline',
+  laptopcomputer: 'laptop-outline',
+  calendar: 'calendar-outline',
+  'doc.text': 'document-text-outline',
+} as const satisfies Record<string, ComponentProps<typeof Ionicons>['name']>;
+
+export type TaskIcon = { symbol: keyof typeof TASK_ICON_GLYPH; tint: TaskIconTint };
+
+/**
+ * `TasksView.taskIcon(_:)` (ios/App/RootView.swift:1959-1967): a glyph and tint from keywords in the
+ * lowercased title, first match wins. Swift's `contains` is a plain substring test, so "recall"
+ * matches "call" there too.
+ */
+export function taskIcon(task: Pick<NexdoTask, 'title'>): TaskIcon {
+  const title = task.title.toLowerCase();
+  if (title.includes('email') || title.includes('message')) return { symbol: 'envelope', tint: 'pink' };
+  if (['plumb', 'repair', 'handyman', 'electrician'].some((word) => title.includes(word))) return { symbol: 'wrench', tint: 'nexdoBlue' };
+  if (title.includes('call') || title.includes('contact')) return { symbol: 'phone', tint: 'green' };
+  if (title.includes('laptop') || title.includes('computer')) return { symbol: 'laptopcomputer', tint: 'orange' };
+  if (title.includes('meeting') || title.includes('appointment')) return { symbol: 'calendar', tint: 'purple' };
+  return { symbol: 'doc.text', tint: 'nexdoBlue' };
+}
+
+/** The tint's colour in a scheme. */
+export function taskIconColor(tint: TaskIconTint, scheme: ColorScheme): string {
+  return tint === 'nexdoBlue' ? brand.nexdoBlue : SYSTEM_TINT[tint][scheme];
+}
 
 export type TaskCardProps = {
   task: NexdoTask;
@@ -22,23 +70,27 @@ export type TaskCardProps = {
 };
 
 /**
- * Port of `TasksView.taskCard` (ios/App/RootView.swift:1843-1876).
+ * Port of `TasksView.taskCard` (ios/App/RootView.swift:1918-1957). The Tasks tab is its only caller,
+ * in Swift and here.
  *
  * NOTE: this is `taskCard`, the row the Tasks tab actually draws — NOT the `TaskRow` struct
  * (RootView.swift:1548), which is a different, glassier row used elsewhere. They are easy to confuse:
  * `TaskRow` has priority/duration/schedule badges and a 22pt glass card, while this one has a
- * category badge, a subtitle line and an 18pt surface card.
+ * keyword icon tile, a subtitle line and an 18pt surface card. The category badge went in the
+ * redesign (7919779b).
  */
 export function TaskCard({ task, timeZone, project, busy = false, onToggle, onOpen }: TaskCardProps) {
   const theme = useTheme();
   const done = isDone(task);
-  const category = resolveCategory(task.title, task.category?.name);
+  const icon = taskIcon(task);
+  const tint = taskIconColor(icon.tint, theme.scheme);
 
   return (
     <View
       style={[
         styles.card,
-        { backgroundColor: theme.colors.surface, borderColor: withAlpha(theme.colors.secondary, 0.16) },
+        // `.background(.background.opacity(0.8))` and `.stroke(Color.nexdoIndigo.opacity(0.05))`.
+        { backgroundColor: withAlpha(theme.colors.surface, 0.8), borderColor: withAlpha(brand.nexdoIndigo, 0.05) },
       ]}
     >
       <Pressable
@@ -52,7 +104,7 @@ export function TaskCard({ task, timeZone, project, busy = false, onToggle, onOp
       >
         <TaskSymbol
           name={done ? 'checkmark.circle.fill' : 'circle'}
-          size={25}
+          size={21}
           color={done ? theme.colors.link : theme.colors.secondary}
         />
       </Pressable>
@@ -64,20 +116,18 @@ export function TaskCard({ task, timeZone, project, busy = false, onToggle, onOp
         style={styles.body}
         testID={`task-open-${task.id}`}
       >
+        {/* The 44pt icon tile: the glyph at 23pt on its tint at 11%, hidden from VoiceOver. */}
+        <View
+          accessibilityElementsHidden
+          importantForAccessibility="no-hide-descendants"
+          style={[styles.iconTile, { backgroundColor: withAlpha(tint, 0.11) }]}
+          testID={`task-icon-${task.id}`}
+        >
+          <Ionicons name={TASK_ICON_GLYPH[icon.symbol]} size={23} color={tint} testID={`task-icon-${task.id}-${icon.symbol}`} />
+        </View>
         <View style={styles.text}>
-          <Text
-            style={[
-              theme.typography.body,
-              { color: theme.colors.ink },
-              done && styles.struck,
-            ]}
-          >
-            {task.title}
-          </Text>
-          <View style={styles.subtitleRow}>
-            <TaskSymbol name="clock" size={13} color={theme.colors.secondary} />
-            <Text style={[styles.caption, { color: theme.colors.secondary }]}>{taskSubtitle(task, timeZone)}</Text>
-          </View>
+          <Text style={[styles.title, { color: theme.colors.ink }, done && styles.struck]}>{task.title}</Text>
+          <Text style={[styles.caption, { color: theme.colors.secondary }]}>{taskSubtitle(task, timeZone)}</Text>
           {project ? (
             <View style={styles.subtitleRow}>
               <TaskSymbol name="folder.fill" size={13} color={theme.colors.secondary} />
@@ -86,11 +136,6 @@ export function TaskCard({ task, timeZone, project, busy = false, onToggle, onOp
           ) : null}
         </View>
 
-        {/*
-          Swift caps the badge at 120pt and moves it below the text at accessibility sizes
-          (RootView.swift:1866-1871). The size-class switch is not reproduced; see Visual gaps.
-        */}
-        <TaskCategoryBadge appearance={category} style={styles.badge} />
         <TaskSymbol name="chevron.right" size={15} color={theme.colors.secondary} />
       </Pressable>
     </View>
@@ -118,11 +163,14 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     borderWidth: StyleSheet.hairlineWidth,
   },
-  toggle: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  // `.frame(width: 32, height: 44)` around the 21pt checkbox.
+  toggle: { width: 32, height: 44, alignItems: 'center', justifyContent: 'center' },
+  iconTile: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
   body: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 44 },
   text: { flex: 1, gap: 5 },
+  // `.font(.subheadline.weight(.medium))`
+  title: { fontSize: 15, lineHeight: 20, fontWeight: '500' },
   subtitleRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   caption: { fontSize: 12, lineHeight: 16 },
   struck: { textDecorationLine: 'line-through' },
-  badge: { maxWidth: 120 },
 });

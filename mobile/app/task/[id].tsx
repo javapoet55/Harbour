@@ -1,17 +1,20 @@
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useQueryClient } from '@tanstack/react-query';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { useCallback, useMemo, useRef, useState, type ComponentProps } from 'react';
+import { ActivityIndicator, Alert, Modal, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { KeyboardAvoidingView, KeyboardAwareScrollView, NexdoLogoMark, TaskSymbol, Text } from '../../src/components';
+import type { ScrollTarget } from '../../src/components/keyboard';
 import { useCoordinator } from '../../src/actions/coordinator';
 import type { TasksResponse } from '../../src/api/types';
 import { ClarifyTaskActionCard } from '../../src/components/ClarifyTaskActionCard';
 import { TaskActionCard } from '../../src/components/TaskActionCard';
 import { MonthCalendar } from '../../src/components/MonthCalendar';
 import { ProjectAssignmentField } from '../../src/components/ProjectAssignmentField';
+import { TaskAgentCard } from '../../src/components/TaskAgentCard';
 import {
   DetailCheckbox,
   DetailField,
@@ -37,7 +40,7 @@ import {
 import { canStartFocusSession, canStartTask, FOCUS_SESSION_MINUTES, useFocus } from '../../src/store/focus';
 import { FocusSessionStrip } from '../../src/components/FocusSessionStrip';
 import { useSession } from '../../src/store/session';
-import { androidBar, brand, isAndroid, useTheme } from '../../src/theme';
+import { androidBar, brand, isAndroid, useTheme, type Theme } from '../../src/theme';
 
 /**
  * Port of `TaskDetailsView` (ios/App/TaskDetailsView.swift), rebuilt element by element from the view
@@ -47,9 +50,14 @@ import { androidBar, brand, isAndroid, useTheme } from '../../src/theme';
  * (RootView.swift:1929) and `TasksView` presents that as a sheet. Expo Router needs a path, so it is
  * `/task/[id]` as a modal.
  *
- * Order, matching `body` exactly: header, `TaskActionCard`, `actions`, TASK, `metadata`
- * (PRIORITY + ESTIMATE side by side), PROJECT, `schedule`, REPEAT, the "Important reminders"
- * checkbox, STEPS, NOTES, then the `footer` bar.
+ * Order, matching `body` exactly: header, `TaskAgentCard`, `TaskActionCard`, `actions`, TASK,
+ * `metadata` (PRIORITY + ESTIMATE side by side), PROJECT, `schedule`, REPEAT, the "Important
+ * reminders" checkbox, STEPS, NOTES, then the `footer` bar.
+ *
+ * Business mode (TaskDetailsView.swift:39-56, :117-131, :174-233, :317-346): once `TaskAgentCard`
+ * reports research for the task, the action card and the focus/start buttons go, TASK/metadata/PROJECT
+ * become the "TASK INFORMATION" card, schedule…notes wait behind "Show additional details", the
+ * header becomes Back | Task Details | Close and the footer is an outlined Save then Mark complete.
  */
 /** `NexdoTheme.saveGradient`: blue → indigo → magenta (RootView.swift:2119). */
 const SAVE_GRADIENT = [brand.nexdoBlue, brand.nexdoIndigo, brand.nexdoMagenta] as const;
@@ -58,7 +66,11 @@ export default function TaskDetail() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const android = isAndroid();
-  const { id } = useLocalSearchParams<{ id: string }>();
+  // `section`: `TaskDetailsView(task:initialSection:)` (TaskDetailsView.swift:9, :81-85), from the Daily
+  // Brief's "Add Note" (focus Notes) and "Schedule" / "Reschedule" (scroll to SCHEDULE).
+  const { id, section } = useLocalSearchParams<{ id: string; section?: string }>();
+  const scroll = useRef<ScrollTarget | null>(null);
+  const scrolledToSection = useRef(false);
   const profile = useSession((state) => state.profile);
   const queryClient = useQueryClient();
   const task = useTask(id);
@@ -70,6 +82,15 @@ export default function TaskDetail() {
   const [conflict, setConflict] = useState<ScheduleConflict | null>(null);
   const [picking, setPicking] = useState<'date' | 'time' | null>(null);
   const [clarifyFailure, setClarifyFailure] = useState<string | null>(null);
+  // `hasBusinessResearch` (TaskDetailsView.swift:14), from `TaskAgentCard`'s callback (`:39`).
+  const [hasBusinessResearch, setHasBusinessResearch] = useState(false);
+  // `showMoreDetails` (`:15`); an `initialSection` turns it on (`:81-82`).
+  const [showMoreDetails, setShowMoreDetails] = useState(section === 'notes' || section === 'schedule');
+  const [detailsMenuOpen, setDetailsMenuOpen] = useState(false);
+  // `@FocusState focus` (`:18`): the footer hides while any of these fields has focus (`:95-97`).
+  const [focusedField, setFocusedField] = useState<string | null>(null);
+  const focusOn = useCallback((field: string) => setFocusedField(field), []);
+  const blurFrom = useCallback((field: string) => setFocusedField((current) => (current === field ? null : current)), []);
 
   const focusSession = useFocus((state) => state.session);
   const startFocus = useFocus((state) => state.startFocus);
@@ -155,8 +176,16 @@ export default function TaskDetail() {
     // The keyboard OVERLAYS the window on Android (edge to edge) rather than resizing it, so the
     // shared `KeyboardAvoidingView` lifts the pinned footer there with keyboard-controller; iOS keeps
     // React Native's `padding`. See src/components/keyboard.tsx.
-    <KeyboardAvoidingView behavior="padding" style={[styles.fill, { backgroundColor: theme.colors.background }]}>
-      {/* `header` (TaskDetailsView.swift:94-112) */}
+    // No stack bar (the layout hides it, as Swift does): Android's modal is full screen, so the header starts below
+    // the status bar; iOS's page sheet starts below it already.
+    <KeyboardAvoidingView
+      behavior="padding"
+      style={[styles.fill, { backgroundColor: theme.colors.background, paddingTop: Platform.OS === 'android' ? insets.top : 0 }]}
+    >
+      {/* `header` (TaskDetailsView.swift:117-155) */}
+      {hasBusinessResearch ? (
+        <BusinessHeader theme={theme} blocked={blocked} onClose={() => router.back()} />
+      ) : (
       <View style={[styles.header, { borderBottomColor: withAlpha(brand.nexdoIndigo, 0.1) }]}>
         <View style={styles.headerText}>
           <Text style={[styles.eyebrow, { color: theme.colors.link }]}>TASK DETAILS</Text>
@@ -184,13 +213,25 @@ export default function TaskDetail() {
           <TaskSymbol name="xmark" size={17} color={theme.colors.link} />
         </Pressable>
       </View>
+      )}
 
       <KeyboardAwareScrollView
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="interactive"
         contentContainerStyle={[styles.scroll, android && styles.androidScroll]}
+        scrollRef={scroll}
       >
-        {/* `TaskActionCard(task:)` (TaskDetailsView.swift:34). Its FIRST branch — a scheduled contact
+        {/* `TaskAgentCard` (TaskDetailsView.swift:39), always first. */}
+        <TaskAgentCard
+          taskId={task.id}
+          onResearchAvailable={setHasBusinessResearch}
+          onFieldFocus={focusOn}
+          onFieldBlur={blurFrom}
+        />
+
+        {hasBusinessResearch ? null : (
+        <>
+        {/* `TaskActionCard(task:)` (TaskDetailsView.swift:41). Its FIRST branch — a scheduled contact
             action — wins; the clarify card below is the fall-through (TaskActionView.swift:10, `:36`). */}
         <TaskActionCard task={task} onOpen={(id) => useCoordinator.getState().open(id)} />
         {hasContactAction ? null : (
@@ -265,12 +306,121 @@ export default function TaskDetail() {
             testID="detail-start-task"
           />
         </View>
+        </>
+        )}
 
+        {hasBusinessResearch ? (
+          // `agentTaskInformation` (TaskDetailsView.swift:174-233).
+          <View style={styles.information} testID="detail-task-information">
+            <View style={styles.informationHeader}>
+              <Text accessibilityRole="header" style={[styles.informationTitle, { color: theme.colors.secondary }]}>
+                TASK INFORMATION
+              </Text>
+              <View style={styles.grow} />
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Additional task details"
+                accessibilityValue={{ text: showMoreDetails ? 'Shown' : 'Hidden' }}
+                accessibilityState={{ expanded: detailsMenuOpen }}
+                onPress={() => setDetailsMenuOpen((open) => !open)}
+                style={[styles.sliders, { backgroundColor: withAlpha(brand.nexdoIndigo, 0.06) }]}
+                testID="detail-more-menu"
+              >
+                <TaskSymbol name="slider.horizontal.3" size={20} color={theme.colors.link} />
+              </Pressable>
+            </View>
+            {detailsMenuOpen ? (
+              // SwiftUI's `Menu` with its one item, as an inline popover.
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={showMoreDetails ? 'Hide additional details' : 'Show additional details'}
+                onPress={() => {
+                  setFocusedField(null);
+                  setShowMoreDetails((shown) => !shown);
+                  setDetailsMenuOpen(false);
+                }}
+                style={[styles.menuItem, { backgroundColor: theme.colors.surface, borderColor: android ? theme.colors.fieldBorder : withAlpha(brand.nexdoIndigo, 0.16) }]}
+                testID="detail-more-toggle"
+              >
+                <Text style={[theme.typography.body, styles.grow, { color: theme.colors.ink }]}>
+                  {showMoreDetails ? 'Hide additional details' : 'Show additional details'}
+                </Text>
+                <TaskSymbol name="slider.horizontal.3" size={17} color={theme.colors.link} />
+              </Pressable>
+            ) : null}
+            <View
+              style={[
+                styles.informationCard,
+                { backgroundColor: theme.scheme === 'dark' ? theme.colors.surface : '#FFFFFF', borderColor: withAlpha(brand.nexdoIndigo, 0.05) },
+                android && { borderColor: theme.colors.fieldBorder },
+              ]}
+            >
+              <View style={styles.informationRow}>
+                <InfoIcon name="document-text-outline" color={brand.nexdoBlue} />
+                <View style={[styles.grow, styles.informationField]}>
+                  <Text style={[styles.caption, { color: theme.colors.secondary }]}>Task</Text>
+                  <DetailTextInput
+                    value={current.title}
+                    onChangeText={(title) => set({ title })}
+                    placeholder="Task"
+                    accessibilityLabel="Task title"
+                    onFocus={() => focusOn('title')}
+                    onBlur={() => blurFrom('title')}
+                    testID="detail-title"
+                  />
+                </View>
+              </View>
+              <View style={styles.informationPair}>
+                <View style={[styles.grow, styles.informationRowTight]}>
+                  <InfoIcon name="flag-outline" color={SYSTEM_PURPLE} />
+                  <View style={[styles.grow, styles.informationField]}>
+                    <Text style={[styles.caption, { color: theme.colors.secondary }]}>Priority</Text>
+                    <DetailMenu
+                      label="Priority"
+                      accessibilityLabel="Priority"
+                      value={current.priority}
+                      options={['LOW', 'NORMAL', 'HIGH', 'CRITICAL']}
+                      display={capitalised}
+                      onSelect={(priority) => set({ priority })}
+                      testID="detail-priority"
+                    />
+                  </View>
+                </View>
+                <View style={[styles.grow, styles.informationRowTight]}>
+                  <InfoIcon name="time-outline" color={SYSTEM_GREEN} />
+                  <View style={[styles.grow, styles.informationField]}>
+                    <Text style={[styles.caption, { color: theme.colors.secondary }]}>Estimate</Text>
+                    {/* No Less/More group here: Swift's business estimate menu has none (`:214-218`). */}
+                    <DetailMenu
+                      label="Estimate"
+                      accessibilityLabel="Estimate"
+                      value={String(current.duration)}
+                      options={['15', '30', '45', '60', '90', '120'].sort(byNumber)}
+                      display={(minutes) => `${minutes} min`}
+                      onSelect={(minutes) => set({ duration: Number(minutes) })}
+                      testID="detail-estimate"
+                    />
+                  </View>
+                </View>
+              </View>
+              <View style={styles.informationRow}>
+                <InfoIcon name="folder-outline" color={SYSTEM_ORANGE} />
+                <View style={[styles.grow, styles.informationField]}>
+                  <Text style={[styles.caption, { color: theme.colors.secondary }]}>Project</Text>
+                  <ProjectAssignmentField projectID={current.projectId} onChange={(projectId) => set({ projectId })} />
+                </View>
+              </View>
+            </View>
+          </View>
+        ) : (
+        <>
         <DetailField title="TASK">
           <DetailTextInput
             value={current.title}
             onChangeText={(title) => set({ title })}
             accessibilityLabel="Task title"
+            onFocus={() => focusOn('title')}
+            onBlur={() => blurFrom('title')}
             testID="detail-title"
           />
         </DetailField>
@@ -326,6 +476,12 @@ export default function TaskDetail() {
         <DetailField title="PROJECT">
           <ProjectAssignmentField projectID={current.projectId} onChange={(projectId) => set({ projectId })} />
         </DetailField>
+        </>
+        )}
+
+        {/* schedule … notes: always, or in business mode behind "Show additional details" (`:57`). */}
+        {!hasBusinessResearch || showMoreDetails ? (
+        <>
 
         {/* `schedule` (TaskDetailsView.swift:150-171) */}
         {/* Android lays SCHEDULE out like every other field — label, then the date and time fields —
@@ -337,6 +493,12 @@ export default function TaskDetail() {
               : [styles.scheduleCard, { backgroundColor: theme.colors.background, borderColor: withAlpha(brand.nexdoIndigo, 0.16) }]
           }
           testID="detail-schedule"
+          onLayout={(event) => {
+            // `proxy.scrollTo("schedule", anchor: .center)`, once.
+            if (section !== 'schedule' || scrolledToSection.current) return;
+            scrolledToSection.current = true;
+            scroll.current?.scrollTo({ y: Math.max(0, event.nativeEvent.layout.y - 160), animated: true });
+          }}
         >
           <SectionLabel title="SCHEDULE" />
           {scheduleAt !== null ? (
@@ -421,6 +583,8 @@ export default function TaskDetail() {
                   onChangeText={setNewStep}
                   placeholder="Add a step"
                   accessibilityLabel="Add task step"
+                  onFocus={() => focusOn('step')}
+                  onBlur={() => blurFrom('step')}
                   testID="detail-new-step"
                 />
               </View>
@@ -446,14 +610,22 @@ export default function TaskDetail() {
             onChangeText={(notes) => set({ notes })}
             placeholder="Context, links, or anything you need to remember..."
             accessibilityLabel="Task notes"
+            autoFocus={section === 'notes'}
             multiline
+            onFocus={() => focusOn('notes')}
+            onBlur={() => blurFrom('notes')}
             testID="detail-notes"
           />
         </DetailField>
+        </>
+        ) : null}
       </KeyboardAwareScrollView>
 
-      {/* `footer` (TaskDetailsView.swift:203-227): Mark complete and Save changes, side by side. */}
+      {/* `footer` (TaskDetailsView.swift:314-350), only while no field has focus (`:95-97`). Business
+          mode: an outlined Save changes, then Mark complete; otherwise Mark complete, then the gradient
+          Save changes. */}
       {/* Android: a raised surface and a top hairline, so the bar separates from the scroll content. */}
+      {focusedField === null ? (
       <View
         style={[
           styles.footer,
@@ -463,16 +635,31 @@ export default function TaskDetail() {
         ]}
         testID="detail-footer"
       >
+        {hasBusinessResearch ? (
+          <View style={styles.footerButton}>
+            <DetailOutlineButton
+              title="Save changes"
+              accessibilityLabel="Save task changes"
+              icon="doc.text"
+              tinted
+              disabled={blocked || !valid || !dirty}
+              onPress={() => persist()}
+              testID="detail-save"
+            />
+          </View>
+        ) : null}
         <View style={styles.footerButton}>
           <DetailOutlineButton
             title={isDone(task) ? 'Mark incomplete' : 'Mark complete'}
             accessibilityLabel={isDone(task) ? 'Mark task incomplete' : 'Mark task complete'}
+            icon="checkmark"
             greenBackground
             disabled={blocked || !valid}
             onPress={markComplete}
             testID="detail-complete"
           />
         </View>
+        {hasBusinessResearch ? null : (
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Save task changes"
@@ -489,7 +676,9 @@ export default function TaskDetail() {
             <Text style={[styles.saveLabel, { color: '#FFFFFF' }]}>{update.isPending ? 'Saving…' : 'Save changes'}</Text>
           </LinearGradient>
         </Pressable>
+        )}
       </View>
+      ) : null}
 
       {/* The two `.datePickerStyle(.compact)` pickers (TaskDetailsView.swift:156-163). */}
       <Modal visible={picking !== null} animationType="slide" transparent onRequestClose={() => setPicking(null)}>
@@ -514,6 +703,57 @@ export default function TaskDetail() {
         </View>
       </Modal>
     </KeyboardAvoidingView>
+  );
+}
+
+/** `Color.purple`, `Color.green`, `Color.orange`: the iOS system colours on the information icons. */
+const SYSTEM_PURPLE = '#AF52DE';
+const SYSTEM_GREEN = '#34C759';
+const SYSTEM_ORANGE = '#FF9500';
+
+/**
+ * The business-mode header (TaskDetailsView.swift:118-131): Back and Close both dismiss, in 42pt
+ * circles of indigo at 4% with a 12% ring, around a centred "Task Details".
+ */
+function BusinessHeader({ theme, blocked, onClose }: { theme: Theme; blocked: boolean; onClose: () => void }) {
+  const circle = [styles.headerCircle, { backgroundColor: withAlpha(brand.nexdoIndigo, 0.04), borderColor: withAlpha(brand.nexdoIndigo, 0.12) }];
+  return (
+    <View style={styles.businessHeader} testID="detail-business-header">
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Back"
+        accessibilityState={{ disabled: blocked }}
+        disabled={blocked}
+        onPress={onClose}
+        style={circle}
+        testID="detail-back"
+      >
+        <TaskSymbol name="chevron.left" size={20} color={theme.colors.link} />
+      </Pressable>
+      <Text accessibilityRole="header" style={[styles.businessTitle, { color: theme.colors.ink }]}>
+        Task Details
+      </Text>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Close task details"
+        accessibilityState={{ disabled: blocked }}
+        disabled={blocked}
+        onPress={onClose}
+        style={circle}
+        testID="detail-close"
+      >
+        <TaskSymbol name="xmark" size={20} color={theme.colors.link} />
+      </Pressable>
+    </View>
+  );
+}
+
+/** `taskIcon(_:color:)` (TaskDetailsView.swift:234-237): a 36×42 tile at 9% of the icon's colour. */
+function InfoIcon({ name, color }: { name: ComponentProps<typeof Ionicons>['name']; color: string }) {
+  return (
+    <View style={[styles.infoIcon, { backgroundColor: withAlpha(color, 0.09) }]} importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
+      <Ionicons name={name} size={22} color={color} />
+    </View>
   );
 }
 
@@ -621,4 +861,31 @@ const styles = StyleSheet.create({
   sheetDone: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 4 },
   timeGrid: { maxHeight: 320 },
   timeRow: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 8 },
+  // Business header: `.padding(.horizontal, 20).padding(.vertical, 14)`, 42pt circles, `.headline`.
+  businessHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 14 },
+  headerCircle: { width: 42, height: 42, borderRadius: 21, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  businessTitle: { fontSize: 17, lineHeight: 22, fontWeight: '600' },
+  // `agentTaskInformation`: `VStack(spacing: 12)`, the eyebrow `.caption.weight(.bold).tracking(1.8)`.
+  information: { gap: 12 },
+  informationHeader: { flexDirection: 'row', alignItems: 'center' },
+  informationTitle: { fontSize: 12, lineHeight: 16, fontWeight: '700', letterSpacing: 1.8 },
+  sliders: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
+  menuItem: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 44, paddingHorizontal: 14, borderRadius: 13, borderWidth: 1 },
+  // `VStack(spacing: 18)…padding(14)` in an 18pt card with an indigo 5% stroke and shadow.
+  informationCard: {
+    gap: 18,
+    padding: 14,
+    borderRadius: 18,
+    borderWidth: 1,
+    shadowColor: '#3D29F0',
+    shadowOpacity: 0.04,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+  },
+  informationRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
+  informationRowTight: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
+  informationPair: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
+  informationField: { gap: 5 },
+  // Level with the field under its 16pt caption and 5pt gap.
+  infoIcon: { width: 36, height: 42, marginTop: 22, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
 });

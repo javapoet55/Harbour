@@ -13,6 +13,7 @@ import {
   RevealablePasswordField,
   Text,
 } from '../../src/components';
+import { SECURITY_CHECK_MESSAGE, signupChallenge } from '../../src/lib/signupChallenge';
 import { useSignUp } from '../../src/query/useAuth';
 import { signUpSchema, type SignUpValues } from '../../src/schemas/auth';
 import { inputText, systemText, textStyles, useTheme } from '../../src/theme';
@@ -45,16 +46,33 @@ export default function SignUp() {
   });
 
   const [name, email, password, confirmation] = useWatch({ control, name: ['name', 'email', 'password', 'confirmation'] });
+  // `model.busy`: the register call. "Creating Account…" shows only for this.
   const busy = signUp.isPending;
-  // RootView.swift:561-563 `canCreate`.
-  const canCreate = !busy && name.trim().length > 0 && email.includes('@') && password.length >= 12 && confirmation.length >= 12;
+  // `checkingSignup` (RootView.swift:588): the security check, which disables the button but keeps its label.
+  const [checking, setChecking] = useState(false);
+  // RootView.swift:672-673 `canCreate`.
+  const canCreate = !busy && !checking && name.trim().length > 0 && email.includes('@') && password.length >= 12 && confirmation.length >= 12;
 
   // The inline footnote slot: a schema message, or whatever the server said.
   const inlineError = errors.confirmation?.message ?? errors.password?.message ?? errors.email?.message ?? errors.name?.message ?? errors.root?.message;
 
-  const submit = handleSubmit((values) => {
-    signUp.mutate(
-      { name: values.name, email: values.email, password: values.password },
+  /**
+   * `create()` (RootView.swift:679-693): the security check first, under `checkingSignup`, and only then
+   * the registration with its token. A failed check shows Swift's one message and registers nothing.
+   */
+  const submit = handleSubmit(async (values) => {
+    setChecking(true);
+    let turnstileToken: string | undefined;
+    try {
+      turnstileToken = await signupChallenge();
+    } catch {
+      setError('root', { message: SECURITY_CHECK_MESSAGE });
+      setChecking(false);
+      return;
+    }
+    // `defer { checkingSignup = false }` runs after `register` returns.
+    await signUp.mutateAsync(
+      { name: values.name, email: values.email, password: values.password, turnstileToken },
       {
         onSuccess: (pending) => {
           // A server without email verification signs in at registration; the gate takes over.
@@ -64,7 +82,8 @@ export default function SignUp() {
         // Whatever the server said, in the one inline slot Swift has.
         onError: (error) => setError('root', { message: error.message }),
       },
-    );
+    ).catch(() => undefined);
+    setChecking(false);
   });
 
   return (
@@ -178,7 +197,7 @@ export default function SignUp() {
                   blurField('confirmation');
                 }}
                 returnKeyType="go"
-                onSubmitEditing={() => submit()}
+                onSubmitEditing={() => void submit()}
               />
             )}
           />
@@ -197,7 +216,8 @@ export default function SignUp() {
 
       <GradientButton
         title={busy ? 'Creating Account…' : 'Create Account'}
-        onPress={() => submit()}
+        // `create()` starts a Task and returns; the check and registration run on without blocking the tap.
+        onPress={() => void submit()}
         disabled={!canCreate}
         minHeight={60}
         style={styles.createButton}

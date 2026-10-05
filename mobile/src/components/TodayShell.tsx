@@ -1,7 +1,6 @@
 import { LinearGradient } from 'expo-linear-gradient';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
 
-import { conditionSymbol } from '../lib/weather';
 import { brand, useTheme } from '../theme';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NexdoLogoMark } from './NexdoLogoMark';
@@ -77,6 +76,31 @@ function SoftBlob({
 }
 
 /** `TodayBackdrop` (RootView.swift:1534-1546). */
+/**
+ * Android: the page's own backdrop, cut to the status-bar height and drawn OVER the scrolling content, so
+ * text scrolled up no longer runs through the clock and icons. iOS 26 gets the same from its scroll-edge
+ * effect, which fades content under the status bar (`calendar-v2-collapsed-days`); React Native has none.
+ * The backdrop is laid out at the window's full height inside the clip, so the slice matches exactly.
+ */
+export function StatusBarScrim({ subtle = false }: { subtle?: boolean }) {
+  const insets = useSafeAreaInsets();
+  const { height } = useWindowDimensions();
+  if (Platform.OS !== 'android' || insets.top === 0) return null;
+  return (
+    <View
+      accessibilityElementsHidden
+      importantForAccessibility="no-hide-descendants"
+      pointerEvents="none"
+      style={[styles.scrim, { height: insets.top }]}
+      testID="status-bar-scrim"
+    >
+      <View style={{ height }}>
+        <TodayBackdrop subtle={subtle} />
+      </View>
+    </View>
+  );
+}
+
 export function TodayBackdrop({ subtle = false }: { subtle?: boolean }) {
   const theme = useTheme();
   const blobOpacity = subtle ? 0.25 : 1;
@@ -153,62 +177,17 @@ export function TodayHeaderButton({
 }
 
 /**
- * The weather chip (RootView.swift:1310-1325): a 44pt gradient circle carrying the condition glyph
- * over the temperature in Fahrenheit, or an en dash when the forecast has not loaded.
- *
- * The accessibility label names the forecast's place: San Ramon on iOS, where `WeatherClient`
- * hardcodes those coordinates, and the device's town on Android (see `resolveWeatherPlace`).
- */
-export function WeatherChip({
-  temperature,
-  weatherCode,
-  place = 'San Ramon',
-  onPress,
-  testID,
-}: {
-  temperature: number | null;
-  weatherCode: number | null | undefined;
-  /** The forecast's place, for the accessibility label. */
-  place?: string;
-  onPress: () => void;
-  testID?: string;
-}) {
-  return (
-    <Pressable
-      accessible
-      accessibilityRole="button"
-      accessibilityLabel={
-        temperature === null ? 'Weather temporarily unavailable' : `${place} weather, ${temperature} degrees Fahrenheit`
-      }
-      accessibilityHint="Opens the five-day forecast"
-      onPress={onPress}
-      testID={testID}
-    >
-      <LinearGradient colors={[...NEXDO_GRADIENT]} start={{ x: 0, y: 0.5 }} end={{ x: 1, y: 0.5 }} style={styles.headerButton}>
-        <TaskSymbol name={conditionSymbol(weatherCode)} size={12} color="#FFFFFF" />
-        <Text style={styles.temperature}>{temperature === null ? '\u2013\u00b0' : `${temperature}\u00b0`}</Text>
-      </LinearGradient>
-    </Pressable>
-  );
-}
-
-/**
- * `TodayTopBar` (RootView.swift:1283-1341). The Tasks tab passes `showsWeather: false` and no `add`
- * (RootView.swift:1645); Today passes both (`:1027-1032`), so they are optional here.
+ * `TodayTopBar` (RootView.swift:1283-1341). Both callers now pass `temperature: nil,
+ * showsWeather: false, add: nil` — Today (RootView.swift:1151-1157) and Tasks (`:1692`) — so the
+ * weather chip and the add button are not ported; the bar is the brand mark and the avatar.
  */
 export function TasksTopBar({
   name,
   onAccount,
-  weather,
-  onAdd,
   photo,
 }: {
   name: string;
   onAccount: () => void;
-  /** Omitted by the Tasks tab, which sets `showsWeather: false`. */
-  weather?: { temperature: number | null; weatherCode: number | null | undefined; place?: string; onPress: () => void };
-  /** Omitted by the Tasks tab, which passes `add: nil`. */
-  onAdd?: () => void;
   /** `model.profile?.photo` — the stored `data:image/jpeg;base64,…` URL, when there is one. */
   photo?: string | null;
 }) {
@@ -238,18 +217,6 @@ export function TasksTopBar({
         </View>
       </View>
 
-      {weather ? (
-        <WeatherChip
-          temperature={weather.temperature}
-          weatherCode={weather.weatherCode}
-          place={weather.place}
-          onPress={weather.onPress}
-          testID="weather-chip"
-        />
-      ) : null}
-
-      {onAdd ? <TodayHeaderButton icon="plus" label="Add a task" onPress={onAdd} testID="today-add" /> : null}
-
       <Pressable accessibilityRole="button" accessibilityLabel={`Open account for ${name}`} onPress={onAccount} testID="open-account">
         <ProfileAvatar name={name} photo={photo} size={44} />
       </Pressable>
@@ -264,6 +231,7 @@ function withAlpha(hex: string, alpha: number): string {
 }
 
 const styles = StyleSheet.create({
+  scrim: { position: 'absolute', top: 0, left: 0, right: 0, overflow: 'hidden', zIndex: 1 },
   blob: { position: 'absolute', left: '50%', top: '50%' },
   avatar: { alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#FFFFFF' },
   topBar: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 50 },
@@ -272,6 +240,5 @@ const styles = StyleSheet.create({
   brandRow: { flexDirection: 'row', alignItems: 'center', gap: 3 },
   brandName: { fontSize: 24, lineHeight: 28, fontWeight: '700' },
   brandTag: { fontSize: 8, lineHeight: 10, fontWeight: '700', letterSpacing: 0.35 },
-  headerButton: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', gap: 1 },
-  temperature: { fontSize: 13, lineHeight: 15, fontWeight: '700', color: '#FFFFFF' },
+  headerButton: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
 });

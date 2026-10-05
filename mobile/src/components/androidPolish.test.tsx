@@ -1,11 +1,13 @@
 import { fireEvent, render, screen } from '@testing-library/react-native';
-import { Platform, StyleSheet } from 'react-native';
+import { Platform, StyleSheet, View } from 'react-native';
 
 import { palettes } from '../theme';
 import { ProjectAssignmentField } from './ProjectAssignmentField';
 import { StickyFooter } from './StickyFooter';
 import { DetailCheckbox, DetailMenu, DetailOutlineButton, DetailTextInput, SectionLabel } from './TaskDetailParts';
 import { CreationCard, DatePill } from './TaskListParts';
+import { TaskSymbol } from './TaskSymbol';
+import { StatusBarScrim } from './TodayShell';
 import { Text } from './Text';
 
 jest.mock('../query/useProjects', () => ({
@@ -153,5 +155,89 @@ describe('Task Details parts on iOS', () => {
   it('keeps the untracked section label', async () => {
     await render(<SectionLabel title="PRIORITY" />);
     expect(StyleSheet.flatten(screen.getByText('PRIORITY').props.style).letterSpacing).toBeUndefined();
+  });
+});
+
+/**
+ * `Text`'s Android slack (one device pixel each side) is ADDED to the caller's horizontal padding and
+ * margin. `paddingHorizontal` beats the `padding` shorthand in React Native whatever the order, so a
+ * plain slack wiped `padding: 16` down to 1 — the Add Food note sat on its card's edge.
+ */
+describe('Text slack on Android', () => {
+  const style = async (props: Parameters<typeof Text>[0]) => {
+    await render(
+      <Text testID="t" {...props}>
+        x
+      </Text>,
+    );
+  };
+
+  it('keeps a caller\'s padding shorthand and adds the slack to it', async () => {
+    onPlatform('android');
+    await style({ style: { padding: 16 } });
+    expect(flat('t')).toMatchObject({ padding: 16, paddingStart: 17, paddingEnd: 17, marginStart: -1, marginEnd: -1 });
+  });
+
+  it('adds to each side as set, and to a margin', async () => {
+    onPlatform('android');
+    await style({ style: { paddingLeft: 4, paddingHorizontal: 10, margin: 8 } });
+    expect(flat('t')).toMatchObject({ paddingStart: 5, paddingEnd: 11, marginStart: 7, marginEnd: 7 });
+  });
+
+  it('leaves a percentage or auto side alone', async () => {
+    onPlatform('android');
+    await style({ style: { marginHorizontal: 'auto' } });
+    expect(flat('t').marginStart).toBeUndefined();
+    expect(flat('t').marginHorizontal).toBe('auto');
+  });
+
+  it('is the plain one-pixel slack when the caller sets none', async () => {
+    onPlatform('android');
+    await style({});
+    expect(flat('t')).toMatchObject({ paddingHorizontal: 1, marginHorizontal: -1 });
+  });
+
+  it('adds nothing on iOS', async () => {
+    onPlatform('ios');
+    await style({ style: { padding: 16 } });
+    expect(flat('t')).toEqual(expect.not.objectContaining({ paddingStart: expect.anything() }));
+    expect(flat('t').paddingHorizontal).toBeUndefined();
+  });
+});
+
+/** `arrow.up.left` has no Ionicons glyph pointing that way: the up arrow, turned −45° (↖). */
+describe('TaskSymbol', () => {
+  it('turns arrow.up.left to point up and to the left, and leaves others upright', async () => {
+    // The Ionicons mock renders a View; the test ID sits on a wrapper so each glyph can be read.
+    await render(
+      <>
+        <View testID="turned">
+          <TaskSymbol color="#000" name="arrow.up.left" size={17} />
+        </View>
+        <View testID="upright">
+          <TaskSymbol color="#000" name="arrow.up" size={17} />
+        </View>
+      </>,
+    );
+    const glyph = (testID: string) => screen.getByTestId(testID).children[0] as unknown as { props: { style?: unknown } };
+    expect(StyleSheet.flatten(glyph('turned').props.style as never)).toEqual({ transform: [{ rotate: '-45deg' }] });
+    expect(glyph('upright').props.style).toBeUndefined();
+  });
+});
+
+/** iOS 26's scroll-edge effect keeps the clock legible over scrolled content; Android gets the backdrop's slice. */
+describe('StatusBarScrim', () => {
+  it('covers the status bar with the page backdrop on Android', async () => {
+    onPlatform('android');
+    await render(<StatusBarScrim />);
+    const insetTop = StyleSheet.flatten(screen.getByTestId('status-bar-scrim', { includeHiddenElements: true }).props.style);
+    expect(insetTop).toMatchObject({ position: 'absolute', top: 0, overflow: 'hidden' });
+    expect(insetTop.height).toBeGreaterThan(0);
+  });
+
+  it('draws nothing on iOS', async () => {
+    onPlatform('ios');
+    await render(<StatusBarScrim />);
+    expect(screen.queryByTestId('status-bar-scrim', { includeHiddenElements: true })).toBeNull();
   });
 });

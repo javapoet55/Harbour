@@ -72,16 +72,15 @@ export function taskOccursOn(task: NexdoTask, day: string, timeZone: string, com
 }
 
 /**
- * `CalendarEventFilter.matches` (CalendarDates.swift:44-52).
- *
- * "Events have no completion flag: their exclusive end time determines completion."
+ * `CalendarEventFilter.matches` (CalendarDates.swift:44-52). With "Completed" on, an event counts only
+ * once it has been marked complete (`completedAt`), not merely because its end has passed. `now` is
+ * kept, as Swift keeps it, but no longer used.
  */
 export function calendarEventMatches({
   event,
   day,
   timeZone,
   completedOnly,
-  now = Date.now(),
 }: {
   event: CalendarEvent;
   day: string;
@@ -91,8 +90,7 @@ export function calendarEventMatches({
 }): boolean {
   if (!eventOccursOn(event, day, timeZone)) return false;
   if (!completedOnly) return true;
-  const end = parseServerDate(event.endAt);
-  return end !== null && end <= now;
+  return event.completedAt != null;
 }
 
 /** The three calendar modes (CalendarView.swift:4). */

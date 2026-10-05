@@ -1,6 +1,7 @@
 import { router } from 'expo-router';
-import { useState } from 'react';
-import { Alert, Linking, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { useQueryClient } from '@tanstack/react-query';
+import { useEffect, useState } from 'react';
+import { Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AccountAvatar, AccountMenuRow, ProfileBackground, ProfileCard } from '../../src/components/ProfileParts';
@@ -10,21 +11,21 @@ import { VoiceUsageCard } from '../../src/features/account/VoiceUsageCard';
 import { closePresentedScreens, replaceWithSignIn } from '../../src/lib/sessionNavigation';
 import { useSignOut } from '../../src/query/useAuth';
 import { useMe } from '../../src/query/useMe';
+import { reloadProfile } from '../../src/query/useProfile';
 import { useVoiceUsage } from '../../src/query/useVoiceUsage';
 import { ElevatedSurface, useTheme } from '../../src/theme';
 
 /**
- * `AccountView` (ios/App/ProfileView.swift:60), **body `:65-99`**, read top to bottom.
+ * `AccountView` (ios/App/ProfileView.swift:48), **body `:53-84`**, read top to bottom.
  *
- * Children followed: `ProfileAvatar` (`:39`, body `:48-57`), `ProfileBackground` (`:116-118`),
- * `menuRow(_:_:web:)` (`:104-110`) and `webRow(_:_:_:)` (`:111-114`) — all in
- * `src/components/ProfileParts.tsx` — and `ProfileSettingsView` (`:126`), which is `app/account/settings.tsx`.
+ * Children followed: `ProfileAvatar` (`:39`, body `:48-57`), `ProfileBackground` (`:116-118`) and
+ * `menuRow(_:_:)` (`:136-143`) — all in `src/components/ProfileParts.tsx` — then the pushed screens:
+ * Help (`app/account/help.tsx`), Feedback (`feedback.tsx`), `ProfileSettingsView` (`settings.tsx`) and
+ * `ChangePasswordView` (`change-password.tsx`).
  *
- * The five web rows open the PRODUCTION web app in the system browser. Swift hardcodes that origin
- * (`:112`) rather than using the configured API base, and this does the same: those pages exist only
- * on the deployed site, so pointing them at a development server would open nothing.
+ * Since 19eb8e4 the five web rows (Inbox, Waiting For, AI Planner, Insights, Notifications) and the
+ * second Settings row are gone; Help (277c20f), Feedback and Change password (19eb8e4) took their place.
  */
-const WEB_ORIGIN = 'https://app.nexdoapp.com';
 
 /**
  * `AccountView` is a `.sheet` from both entry points (RootView.swift:1181, `:1702`), so everything below resolves the *elevated* system backgrounds.
@@ -49,10 +50,14 @@ function AccountSheet() {
   const { data: profile } = useMe();
   // `.task { await model.refreshVoiceUsage() }` (ProfileView.swift:97): asked every time Account opens.
   const { data: voiceUsage } = useVoiceUsage();
+  const queryClient = useQueryClient();
+  // `.task { try? await model.reloadProfile() … }` (ProfileView.swift:79-82): fresh each time Account opens.
+  useEffect(() => {
+    void reloadProfile(queryClient).catch(() => undefined);
+  }, [queryClient]);
   const signOut = useSignOut({ beforeSessionEnds: closePresentedScreens });
   const [signingOut, setSigningOut] = useState(false);
 
-  const openWeb = (path: string) => void Linking.openURL(WEB_ORIGIN + path);
 
   /** `dismiss()` (ProfileView.swift:71, `:99`): close the sheet, back to whichever tab presented it. */
   const dismiss = () => router.back();
@@ -126,7 +131,9 @@ function AccountSheet() {
         {/* 2. The Real-time Voice card (`:77`, card `:101-132`). */}
         <VoiceUsageCard usage={voiceUsage} />
 
-        {/* 3. The standalone link to Settings (`:78`). */}
+        {/* 3. Help, Feedback and "Edit profile and settings" (ProfileView.swift:66-68): plain rows. */}
+        <AccountMenuRow icon="questionmark.circle" onPress={() => router.push('/account/help')} testID="account-help" title="Help" />
+        <AccountMenuRow icon="bubble.left.and.text.bubble.right" onPress={() => router.push('/account/feedback')} testID="account-feedback" title="Feedback" />
         <AccountMenuRow
           icon="person.crop.circle"
           onPress={() => router.push('/account/settings')}
@@ -134,22 +141,13 @@ function AccountSheet() {
           title="Edit profile and settings"
         />
 
-        {/* 4. The card of web rows, then Settings again (`:79-86`). */}
+        {/* 4. "Change password" (`:69-70`) — the only row in a card: `.padding(8).profileCard()` sits on
+            this NavigationLink alone since 19eb8e4 removed the web rows' card (§22 "For the team"). */}
         <ProfileCard style={styles.menuCard} testID="account-menu">
-          <AccountMenuRow icon="tray" onPress={() => openWeb('/inbox')} testID="account-inbox" title="Inbox" web />
-          <AccountMenuRow icon="stopwatch" onPress={() => openWeb('/waiting')} testID="account-waiting" title="Waiting For" web />
-          <AccountMenuRow icon="sparkles" onPress={() => openWeb('/planner')} testID="account-planner" title="AI Planner" web />
-          <AccountMenuRow icon="chart.bar" onPress={() => openWeb('/insights')} testID="account-insights" title="Insights" web />
-          <AccountMenuRow icon="bell" onPress={() => openWeb('/notifications')} testID="account-notifications" title="Notifications" web />
-          <AccountMenuRow
-            icon="slider.horizontal.3"
-            onPress={() => router.push('/account/settings')}
-            testID="account-settings"
-            title="Settings"
-          />
+          <AccountMenuRow icon="lock.rotation" onPress={() => router.push('/account/change-password')} testID="account-change-password" title="Change password" />
         </ProfileCard>
 
-        {/* 5. Sign out (`:87-89`). */}
+        {/* 5. Sign out (`:71-73`). */}
         <Pressable
           accessibilityLabel="Sign out"
           accessibilityRole="button"

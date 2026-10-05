@@ -2,7 +2,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 
 import { androidChip, brand, isAndroid, useTheme } from '../theme';
-import type { TaskDateFilter } from '../lib/taskQuery';
+import { DISTANT_FUTURE, type TaskDateFilter } from '../lib/taskQuery';
 import { TaskSymbol, type TaskSymbolName } from './TaskSymbol';
 import { Text } from './Text';
 
@@ -12,8 +12,52 @@ import { Text } from './Text';
  * separate struct, so the line references below point into `TasksView` itself.
  */
 
-/** The accent used across the Tasks screen: `LinearGradient([.nexdoIndigo, .nexdoBlue], leading→trailing)`. */
-export const TASK_ACCENT = [brand.nexdoIndigo, brand.nexdoBlue] as const;
+/**
+ * The accent used across the Tasks screen (RootView.swift:1684): `LinearGradient([Color(red: 0.68,
+ * green: 0.20, blue: 1), .nexdoIndigo, Color(red: 0.36, green: 0.46, blue: 1)], leading→trailing)`.
+ */
+export const TASK_ACCENT = ['#AD33FF', brand.nexdoIndigo, '#5C75FF'] as const;
+
+/**
+ * `TasksView.taskTab(_:projects:)` (RootView.swift:1773-1780) inside its track (`:1695-1700`): two
+ * full-width capsules in an `HStack(spacing: 0)`, padded 4 on a `nexdoIndigo` 6% capsule. The selected
+ * one is white text on `TASK_ACCENT`; the other is ink on clear. It replaced the segmented picker, on
+ * Android too (where `SegmentRow` drew it before).
+ */
+export function TaskTabs({ projects, onChange }: { projects: boolean; onChange: (projects: boolean) => void }) {
+  const theme = useTheme();
+  return (
+    <View style={[styles.tabTrack, { backgroundColor: withAlpha(brand.nexdoIndigo, 0.06) }]} testID="tasks-segments">
+      {(['Tasks', 'Projects'] as const).map((label) => {
+        const selected = (label === 'Projects') === projects;
+        const text = (
+          <Text numberOfLines={1} style={[styles.tabLabel, { color: selected ? '#FFFFFF' : theme.colors.ink }]}>
+            {label}
+          </Text>
+        );
+        return (
+          <Pressable
+            key={label}
+            accessibilityRole="button"
+            accessibilityLabel={label}
+            accessibilityState={{ selected }}
+            onPress={() => onChange(label === 'Projects')}
+            style={styles.tabCell}
+            testID={`segment-${label}`}
+          >
+            {selected ? (
+              <LinearGradient colors={[...TASK_ACCENT]} start={{ x: 0, y: 0.5 }} end={{ x: 1, y: 0.5 }} style={styles.tab} testID={`segment-${label}-selected`}>
+                {text}
+              </LinearGradient>
+            ) : (
+              <View style={styles.tab}>{text}</View>
+            )}
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
 
 /** `TasksView.headerButton` (RootView.swift:1748-1756): a 44pt tinted square. */
 export function HeaderButton({ icon, label, onPress }: { icon: TaskSymbolName; label: string; onPress: () => void }) {
@@ -125,8 +169,9 @@ export function CreationCard({
           <TaskSymbol name={icon} size={24} color="#FFFFFF" />
         </LinearGradient>
       ) : (
-        <View style={[styles.creationIcon, { backgroundColor: withAlpha(brand.nexdoMagenta, 0.08) }]}>
-          <TaskSymbol name={icon} size={24} color={theme.colors.link} />
+        // `Color.nexdoBlue` on `Color.nexdoBlue.opacity(0.15)` (RootView.swift:1835-1838).
+        <View style={[styles.creationIcon, { backgroundColor: withAlpha(brand.nexdoBlue, 0.15) }]} testID={testID ? `${testID}-icon` : undefined}>
+          <TaskSymbol name={icon} size={24} color={brand.nexdoBlue} />
         </View>
       )}
       <View style={styles.creationText}>
@@ -141,14 +186,45 @@ export function CreationCard({
   );
 }
 
-/** The section header row (RootView.swift:1832-1838): the title, then the count on the right. */
-export function SectionHeader({ title, count }: { title: string; count: number }) {
+/**
+ * `sectionDate(_:)` (RootView.swift:1969-1974): `DateFormatter` with `"EEEE, MMM d"` in the account
+ * zone, e.g. "Wednesday, Sep 16". Null for the unscheduled bucket (`group.date != .distantFuture`).
+ */
+export function sectionDateLabel(date: number, timeZone: string): string | null {
+  if (date === DISTANT_FUTURE) return null;
+  const format = (zone?: string) =>
+    new Intl.DateTimeFormat('en-US', { timeZone: zone, weekday: 'long', month: 'short', day: 'numeric' }).formatToParts(new Date(date));
+  let parts: Intl.DateTimeFormatPart[];
+  try {
+    parts = format(timeZone);
+  } catch {
+    parts = format();
+  }
+  const get = (type: string) => parts.find((part) => part.type === type)?.value ?? '';
+  return `${get('weekday')}, ${get('month')} ${get('day')}`;
+}
+
+/**
+ * The section header row (RootView.swift:1899-1911): a calendar glyph, the title over the day's date,
+ * and the count on the right, on a white 65% rounded card.
+ *
+ * Dark mode: Swift's card is a fixed `Color.white.opacity(0.65)` under `nexdoInk`, which is white in
+ * dark, so the title would vanish. Dark uses the surface at the same 65% instead.
+ */
+export function SectionHeader({ title, date, count }: { title: string; date?: string | null; count: number }) {
   const theme = useTheme();
+  const card = theme.scheme === 'dark' ? withAlpha(theme.colors.surface, 0.65) : SECTION_CARD_LIGHT;
   return (
-    <View style={styles.sectionHeader}>
-      <Text accessibilityRole="header" style={[styles.sectionTitle, { color: theme.colors.ink }]}>
-        {title}
-      </Text>
+    <View style={[styles.sectionHeader, { backgroundColor: card }]} testID="section-header">
+      <View style={styles.sectionIcon}>
+        <TaskSymbol name="calendar" size={22} color={brand.nexdoBlue} />
+      </View>
+      <View style={styles.sectionText}>
+        <Text accessibilityRole="header" style={[styles.sectionTitle, { color: theme.colors.ink }]}>
+          {title}
+        </Text>
+        {date ? <Text style={[styles.sectionDate, { color: theme.colors.secondary }]}>{date}</Text> : null}
+      </View>
       <Text style={[styles.sectionCount, { color: theme.colors.secondary }]}>
         {count} {count === 1 ? 'task' : 'tasks'}
       </Text>
@@ -179,6 +255,9 @@ export function TaskEmptyState({ title, onAdd, style }: { title: string; onAdd: 
   );
 }
 
+/** `Color.white.opacity(0.65)`. */
+const SECTION_CARD_LIGHT = 'rgba(255, 255, 255, 0.65)';
+
 export function withAlpha(color: string, alpha: number): string {
   if (color.startsWith('rgba')) return color.replace(/[\d.]+\)$/, `${alpha})`);
   const hex = color.replace('#', '');
@@ -188,6 +267,12 @@ export function withAlpha(color: string, alpha: number): string {
 }
 
 const styles = StyleSheet.create({
+  // `.padding(4)` on the capsule track; each tab `.frame(maxWidth: .infinity, minHeight: 40)`.
+  tabTrack: { flexDirection: 'row', padding: 4, borderRadius: 999 },
+  tabCell: { flex: 1 },
+  tab: { minHeight: 40, borderRadius: 999, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 8 },
+  // `.font(.subheadline.weight(.semibold))`
+  tabLabel: { fontSize: 15, lineHeight: 20, fontWeight: '600' },
   headerButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 15, borderWidth: StyleSheet.hairlineWidth },
   // `.padding(.horizontal, 8).frame(minHeight: 44)`, capsule.
   pill: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 8, minHeight: 44, borderRadius: 999 },
@@ -202,9 +287,14 @@ const styles = StyleSheet.create({
   creationText: { flex: 1, gap: 5 },
   creationTitle: { fontSize: 13, lineHeight: 18, fontWeight: '600' },
   creationSubtitle: { fontSize: 12, lineHeight: 16 },
-  sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 2 },
+  // `HStack(spacing: 12)` with `.padding(12)` on a radius-16 card.
+  sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, borderRadius: 16 },
+  // `.font(.title2)` in a 36x40 frame.
+  sectionIcon: { width: 36, height: 40, alignItems: 'center', justifyContent: 'center' },
+  sectionText: { flex: 1, gap: 2 },
   // `.font(.title3.bold())`
   sectionTitle: { fontSize: 20, lineHeight: 25, fontWeight: '700' },
+  sectionDate: { fontSize: 12, lineHeight: 16 },
   sectionCount: { fontSize: 15, lineHeight: 20 },
   empty: { alignItems: 'center', gap: 8, paddingVertical: 30 },
   emptyTitle: { fontSize: 17, lineHeight: 22, fontWeight: '600', textAlign: 'center' },

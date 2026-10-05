@@ -1,3 +1,35 @@
+// Every machine formats in the Mac's en-US locale. Node takes its default locale from the OS (en-IN on
+// the Windows PC, where LANG is ignored), so a call that names no locale gets en-US here instead. The
+// time zone is pinned in jest.globalSetup.js.
+const TEST_LOCALE = 'en-US';
+const withLocale = (locales) => (locales === undefined ? TEST_LOCALE : locales);
+for (const name of ['DateTimeFormat', 'NumberFormat', 'Collator', 'PluralRules', 'RelativeTimeFormat', 'ListFormat', 'Segmenter']) {
+  const Real = Intl[name];
+  if (!Real) continue;
+  const Pinned = function (locales, options) {
+    return new Real(withLocale(locales), options);
+  };
+  Pinned.prototype = Real.prototype;
+  Pinned.supportedLocalesOf = Real.supportedLocalesOf.bind(Real);
+  Intl[name] = Pinned;
+}
+for (const [proto, methods] of [
+  [Date.prototype, ['toLocaleString', 'toLocaleDateString', 'toLocaleTimeString']],
+  [Number.prototype, ['toLocaleString']],
+]) {
+  for (const method of methods) {
+    const real = proto[method];
+    proto[method] = function (locales, options) {
+      return real.call(this, withLocale(locales), options);
+    };
+  }
+}
+const realLocaleCompare = String.prototype.localeCompare;
+// eslint-disable-next-line no-extend-native -- replaces a built-in on purpose, tests only
+String.prototype.localeCompare = function (that, locales, options) {
+  return realLocaleCompare.call(this, that, withLocale(locales), options);
+};
+
 // Native modules the auth screens pull in. jest-expo does not provide these, and none of them has
 // behaviour the tests care about — they only need to render and resolve.
 
@@ -204,7 +236,7 @@ afterEach(async () => {
   await new Promise((resolve) => realSetTimeout(resolve, 0));
 });
 
-// expo-location is native. Weather only reads it on Android; suites that exercise it mock it again.
+// expo-location is native. Shopping's store search reads it (StorePages.tsx); suites that exercise it mock it again.
 jest.mock('expo-location', () => ({
   Accuracy: { Lowest: 1, Low: 2, Balanced: 3, High: 4, Highest: 5, BestForNavigation: 6 },
   getForegroundPermissionsAsync: jest.fn(async () => ({ granted: false, status: 'undetermined', canAskAgain: true })),

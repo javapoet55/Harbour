@@ -29,6 +29,11 @@ jest.mock('../api', () => ({
   },
 }));
 
+// Task Details mounts `TaskAgentCard` first (TaskDetailsView.swift:39); no business research here.
+jest.mock('../api/taskAgent', () => ({
+  taskAgentApi: { load: jest.fn(async () => ({ run: null, intent: null })), update: jest.fn() },
+}));
+
 import NewTask from '../../app/task/new';
 import TaskDetail from '../../app/task/[id]';
 
