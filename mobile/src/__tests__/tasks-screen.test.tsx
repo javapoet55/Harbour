@@ -224,6 +224,140 @@ describe('Tasks screen', () => {
   });
 });
 
+/** The Phase 12 search, history range and redesign (RootView.swift:1690-1797, TaskQuery.swift:53-60). */
+describe('Tasks screen search and redesign', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    jest.useFakeTimers({ now: NOW, doNotFake: ['nextTick', 'setImmediate'] });
+    resetRevisions();
+    useTaskQuery.setState({ query: DEFAULT_TASK_QUERY });
+    useSession.setState({ status: 'signedIn', profile: { id: 'u1', name: 'Sri Ram', email: 'a@b.com', timeZone: ZONE } });
+    mockTasks.mockResolvedValue({ tasks: FIXTURE, timeZone: ZONE });
+    mockProjects.mockResolvedValue({ projects: [], unassignedTaskCount: 0 });
+  });
+
+  afterEach(() => jest.useRealTimers());
+
+  const searchInput = () => screen.getAllByLabelText('Search tasks').find((node) => node.props.placeholder === 'Search your tasks');
+
+  it('the magnifier resets the filters to every date, status and priority, keeping earliestFirst', async () => {
+    useTaskQuery.setState({ query: { ...DEFAULT_TASK_QUERY, date: 'Tomorrow', status: 'Completed', priority: 'HIGH', historyRange: 'Last Month', earliestFirst: false } });
+    await renderTasks();
+
+    await fireEvent.press(screen.getByLabelText('Search tasks'));
+
+    expect(useTaskQuery.getState().query).toEqual({ date: 'All', historyRange: 'All time', status: 'All', priority: 'All', search: '', earliestFirst: false });
+    expect(searchInput()).toBeTruthy();
+    // Every task, open and completed, on every date.
+    await waitFor(() => expect(screen.getByText('Book the dentist')).toBeTruthy());
+    expect(screen.getByText('Pay the rent')).toBeTruthy();
+    expect(screen.getByTestId('date-pill-All').props.accessibilityState.selected).toBe(true);
+  });
+
+  it('a second press clears the term only, and the field closes', async () => {
+    await renderTasks();
+    await fireEvent.press(screen.getByLabelText('Search tasks'));
+    await fireEvent.changeText(searchInput()!, 'passport');
+
+    const header = screen.getAllByLabelText('Search tasks').find((node) => node.props.placeholder === undefined);
+    await fireEvent.press(header!);
+
+    expect(useTaskQuery.getState().query).toMatchObject({ search: '', date: 'All', historyRange: 'All time', status: 'All' });
+    expect(searchInput()).toBeUndefined();
+  });
+
+  it('the close button clears the term and closes the field', async () => {
+    await renderTasks();
+    await fireEvent.press(screen.getByLabelText('Search tasks'));
+    await fireEvent.changeText(searchInput()!, 'rent');
+    await fireEvent.press(screen.getByLabelText('Close search'));
+
+    expect(useTaskQuery.getState().query.search).toBe('');
+    expect(searchInput()).toBeUndefined();
+  });
+
+  it('hides the History range row while a search term is entered (RootView.swift:1714)', async () => {
+    await renderTasks();
+    await fireEvent.press(screen.getByLabelText('Search tasks'));
+    expect(screen.getByText('History range')).toBeTruthy();
+
+    await fireEvent.changeText(searchInput()!, 'passport');
+    expect(screen.queryByText('History range')).toBeNull();
+
+    await fireEvent.changeText(searchInput()!, '   ');
+    expect(screen.getByText('History range')).toBeTruthy();
+  });
+
+  it('offers All time first and captions it', async () => {
+    useTaskQuery.setState({ query: { ...DEFAULT_TASK_QUERY, date: 'All' } });
+    await renderTasks();
+    expect(screen.getByText('Tasks scheduled within this calendar month.')).toBeTruthy();
+
+    await fireEvent.press(screen.getByTestId('history-range'));
+    const options = screen.getAllByTestId(/^history-range-/).map((node) => node.props.testID);
+    expect(options).toEqual(['history-range-All time', 'history-range-Last 2 weeks', 'history-range-This Month', 'history-range-Last Month']);
+
+    await fireEvent.press(screen.getByTestId('history-range-All time'));
+    expect(screen.getByText('All open and completed tasks, with open tasks first.')).toBeTruthy();
+  });
+
+  it('switches Tasks and Projects through the pill pair, marking the selected pill', async () => {
+    await renderTasks();
+    expect(screen.getByTestId('segment-Tasks').props.accessibilityState.selected).toBe(true);
+    expect(screen.getByTestId('segment-Tasks-selected')).toBeTruthy();
+
+    await fireEvent.press(screen.getByTestId('segment-Projects'));
+
+    expect(screen.getByTestId('segment-Projects').props.accessibilityState.selected).toBe(true);
+    expect(screen.getByTestId('segment-Tasks').props.accessibilityState.selected).toBe(false);
+    expect(screen.getByTestId('segment-Projects-selected')).toBeTruthy();
+    // The filter and search buttons belong to the task list only (`if !showingProjects`).
+    expect(screen.queryByLabelText('Task filters')).toBeNull();
+  });
+
+  it('uses the same pill pair on Android, not SegmentRow', async () => {
+    jest.replaceProperty(Platform, 'OS', 'android');
+    await renderTasks();
+    expect(screen.getByTestId('segment-Tasks-selected')).toBeTruthy();
+    expect(StyleSheet.flatten(screen.getByTestId('tasks-segments').props.style)).toMatchObject({ padding: 4, borderRadius: 999 });
+    jest.restoreAllMocks();
+  });
+
+  it('draws each row with its keyword icon', async () => {
+    mockTasks.mockResolvedValue({
+      tasks: [
+        task({ id: 'e', title: 'Email alex@example.com', startAt: atLocal('2026-09-16', '10:00') }),
+        task({ id: 'p', title: 'Contact Plumbers', startAt: atLocal('2026-09-16', '11:00') }),
+        task({ id: 'g', title: 'Contact Gutter technician', startAt: atLocal('2026-09-16', '12:00') }),
+        task({ id: 'l', title: 'Return my laptop at Best Buy', startAt: atLocal('2026-09-16', '13:00') }),
+        task({ id: 'm', title: 'Client meeting', startAt: atLocal('2026-09-16', '14:00') }),
+        task({ id: 'q', title: 'Prepare Q3 deck', startAt: atLocal('2026-09-16', '15:00') }),
+      ],
+      timeZone: ZONE,
+    });
+    await renderTasks();
+    await waitFor(() => expect(screen.getByText('Prepare Q3 deck')).toBeTruthy());
+
+    const hidden = { includeHiddenElements: true };
+    expect(screen.getByTestId('task-icon-e-envelope', hidden)).toBeTruthy();
+    expect(screen.getByTestId('task-icon-p-wrench', hidden)).toBeTruthy();
+    expect(screen.getByTestId('task-icon-g-phone', hidden)).toBeTruthy();
+    expect(screen.getByTestId('task-icon-l-laptopcomputer', hidden)).toBeTruthy();
+    expect(screen.getByTestId('task-icon-m-calendar', hidden)).toBeTruthy();
+    expect(screen.getByTestId('task-icon-q-doc.text', hidden)).toBeTruthy();
+  });
+
+  it('captions each dated section with its day', async () => {
+    await renderTasks();
+    await waitFor(() => expect(screen.getByText('Wednesday, Sep 16')).toBeTruthy());
+  });
+
+  it('paints the light gradient background (RootView.swift:1689-1690)', async () => {
+    await renderTasks();
+    expect(screen.getByTestId('tasks-background').props.colors).toEqual(['#F8F9FF', '#FFE9F7', '#FFFFFF']);
+  });
+});
+
 /** docs/android-polish.md §2: the creation cards stack and the date chips scroll edge to edge. */
 describe('Tasks screen on Android', () => {
   beforeEach(() => {

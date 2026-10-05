@@ -24,11 +24,11 @@ export const DATE_FILTER_EMPTY_TITLE: Record<TaskDateFilter, string> = {
   'This Week': 'Your week is clear',
 };
 
-/** `TaskHistoryRange` (TaskQuery.swift:24-42). */
-export const TASK_HISTORY_RANGES = ['Last 2 weeks', 'This Month', 'Last Month'] as const;
+/** `TaskHistoryRange` (TaskQuery.swift:24-42), in Swift's `allCases` order. */
+export const TASK_HISTORY_RANGES = ['All time', 'Last 2 weeks', 'This Month', 'Last Month'] as const;
 export type TaskHistoryRange = (typeof TASK_HISTORY_RANGES)[number];
 
-/** `TaskQuery` (TaskQuery.swift:44-52). */
+/** `TaskQuery` (TaskQuery.swift:44-51). */
 export type TaskQuery = {
   date: TaskDateFilter;
   search: string;
@@ -157,10 +157,14 @@ export function monthInterval(at: number, timeZone: string): Interval {
   return { start, end };
 }
 
-/** `TaskHistoryRange.interval(now:calendar:)` (TaskQuery.swift:29-41). */
+/** `TaskHistoryRange.interval(now:calendar:)` (TaskQuery.swift:27-41). */
 export function historyInterval(range: TaskHistoryRange, now: number, timeZone: string): Interval {
   const today = startOfDay(now, timeZone);
   switch (range) {
+    case 'All time':
+      // `DateInterval(start: .distantPast, end: .distantFuture)` (:31-32). The end is exclusive, so an
+      // unscheduled task (keyed at `DISTANT_FUTURE`) is NOT in it; `allDateSearch` admits it instead.
+      return { start: Number.NEGATIVE_INFINITY, end: DISTANT_FUTURE };
     case 'Last 2 weeks':
       return { start: addDays(today, -13, timeZone), end: addDays(today, 1, timeZone) };
     case 'This Month':
@@ -220,7 +224,9 @@ export function snapshot(query: TaskQuery, tasks: NexdoTask[], timeZone: string,
       const interval = intervals[filter];
       const inHistory = scheduled >= interval.start && scheduled < interval.end;
       const upcomingOpen = filter === 'All' && query.historyRange !== 'This Month' && !done && scheduled >= tomorrow;
-      if (!inHistory && !upcomingOpen) continue;
+      // `allDateSearch` (TaskQuery.swift:110-111): All time, or any search term, spans every date.
+      const allDateSearch = filter === 'All' && (query.historyRange === 'All time' || term.length > 0);
+      if (!inHistory && !upcomingOpen && !allDateSearch) continue;
       counts[filter] += 1;
       if (filter === query.date) selected.push({ task, date: scheduled });
     }
@@ -255,6 +261,14 @@ export function snapshot(query: TaskQuery, tasks: NexdoTask[], timeZone: string,
   }
 
   return { tasks: selected.map((item) => item.task), sections, counts };
+}
+
+/**
+ * `TaskQuery.beginSearch()` (TaskQuery.swift:53-60): a keyword search across all dates, priorities and
+ * completion states. `earliestFirst` is left as it is.
+ */
+export function beginSearch(query: TaskQuery): TaskQuery {
+  return { ...query, date: 'All', historyRange: 'All time', status: 'All', priority: 'All', search: '' };
 }
 
 /**

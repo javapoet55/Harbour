@@ -1,12 +1,15 @@
 import { fireEvent, render, screen } from '@testing-library/react-native';
+import { StyleSheet } from 'react-native';
 
 import type { NexdoTask } from '../api/types';
 import { resolveCategory } from '../lib/taskCategory';
 import { NexdoTaskBackdrop } from './NexdoTaskBackdrop';
 import { TaskBadge } from './TaskBadge';
-import { TaskCard } from './TaskCard';
+import { DISTANT_FUTURE } from '../lib/taskQuery';
+import { brand } from '../theme';
+import { TaskCard, taskIcon, taskIconColor } from './TaskCard';
 import { TaskCategoryBadge } from './TaskCategoryBadge';
-import { CreationCard, DatePill, HeaderButton, SectionHeader, TaskEmptyState } from './TaskListParts';
+import { CreationCard, DatePill, HeaderButton, SectionHeader, sectionDateLabel, TASK_ACCENT, TaskEmptyState, TaskTabs } from './TaskListParts';
 
 const ZONE = 'Asia/Kolkata';
 
@@ -23,13 +26,21 @@ function task(overrides: Partial<NexdoTask> = {}): NexdoTask {
 }
 
 describe('TaskCard', () => {
-  it('renders the title, the subtitle and the category badge', async () => {
+  it('renders the title and a plain subtitle, with no category badge (RootView.swift:1938-1940)', async () => {
     await render(<TaskCard task={task()} timeZone={ZONE} onToggle={jest.fn()} onOpen={jest.fn()} />);
 
     expect(screen.getByText('Renew passport')).toBeTruthy();
     expect(screen.getByText('9:00 AM · 30 min')).toBeTruthy();
-    // "Renew passport" infers travel, whose default label is Travel.
-    expect(screen.getByLabelText('Category: Travel')).toBeTruthy();
+    expect(screen.queryByLabelText(/^Category:/)).toBeNull();
+    expect(StyleSheet.flatten(screen.getByText('Renew passport').props.style)).toMatchObject({ fontSize: 15, fontWeight: '500' });
+  });
+
+  it('draws the keyword icon tile, hidden from assistive technology', async () => {
+    await render(<TaskCard task={task({ title: 'Email the landlord' })} timeZone={ZONE} onToggle={jest.fn()} onOpen={jest.fn()} />);
+    const tile = screen.getByTestId('task-icon-t1', { includeHiddenElements: true });
+    expect(tile.props.accessibilityElementsHidden).toBe(true);
+    expect(StyleSheet.flatten(tile.props.style)).toMatchObject({ width: 44, height: 44, borderRadius: 14 });
+    expect(screen.getByTestId('task-icon-t1-envelope', { includeHiddenElements: true })).toBeTruthy();
   });
 
   it('labels the toggle Complete when open and Restore when done', async () => {
@@ -84,9 +95,62 @@ describe('TaskCard', () => {
     expect(screen.getByText('Home move')).toBeTruthy();
   });
 
-  it("prefers the server's category name for the label", async () => {
-    await render(<TaskCard task={task({ category: { name: 'Errands' } })} timeZone={ZONE} onToggle={jest.fn()} onOpen={jest.fn()} />);
-    expect(screen.getByLabelText('Category: Errands')).toBeTruthy();
+  it('fits the 21pt checkbox in a 32x44 hit area', async () => {
+    await render(<TaskCard task={task()} timeZone={ZONE} onToggle={jest.fn()} onOpen={jest.fn()} />);
+    expect(StyleSheet.flatten(screen.getByTestId('task-toggle-t1').props.style)).toMatchObject({ width: 32, height: 44 });
+  });
+});
+
+/** `TasksView.taskIcon(_:)` (RootView.swift:1959-1967). */
+describe('taskIcon', () => {
+  it.each([
+    ['Email alex@example.com', 'envelope', 'pink'],
+    ['Reply to the message', 'envelope', 'pink'],
+    ['Contact Plumbers', 'wrench', 'nexdoBlue'],
+    ['Book a handyman', 'wrench', 'nexdoBlue'],
+    ['Repair the fence', 'wrench', 'nexdoBlue'],
+    ['Find an electrician', 'wrench', 'nexdoBlue'],
+    ['Contact Gutter technician', 'phone', 'green'],
+    ['Call mom', 'phone', 'green'],
+    ['Return my laptop at Best Buy', 'laptopcomputer', 'orange'],
+    ['Back up the computer', 'laptopcomputer', 'orange'],
+    ['Client meeting', 'calendar', 'purple'],
+    ['Dentist appointment', 'calendar', 'purple'],
+    ['Prepare Q3 deck', 'doc.text', 'nexdoBlue'],
+  ])('%s → %s in %s', (title, symbol, tint) => {
+    expect(taskIcon({ title })).toEqual({ symbol, tint });
+  });
+
+  it('checks the keywords in Swift order: email before call', () => {
+    expect(taskIcon({ title: 'Email to call back' }).symbol).toBe('envelope');
+  });
+
+  it('resolves nexdoBlue to the brand blue and the system colours per scheme', () => {
+    expect(taskIconColor('nexdoBlue', 'dark')).toBe(brand.nexdoBlue);
+    expect(taskIconColor('pink', 'light')).toBe('#FF2D55');
+    expect(taskIconColor('green', 'dark')).toBe('#30D158');
+  });
+});
+
+describe('TaskTabs', () => {
+  it('marks the selected tab and draws it on the accent gradient', async () => {
+    await render(<TaskTabs projects={false} onChange={jest.fn()} />);
+    expect(screen.getByTestId('segment-Tasks').props.accessibilityState.selected).toBe(true);
+    expect(screen.getByTestId('segment-Projects').props.accessibilityState.selected).toBe(false);
+    expect(screen.getByTestId('segment-Tasks-selected')).toBeTruthy();
+    expect(screen.queryByTestId('segment-Projects-selected')).toBeNull();
+    expect(StyleSheet.flatten(screen.getByText('Tasks').props.style)).toMatchObject({ color: '#FFFFFF', fontSize: 15, fontWeight: '600' });
+  });
+
+  it('reports the chosen tab', async () => {
+    const onChange = jest.fn();
+    await render(<TaskTabs projects={false} onChange={onChange} />);
+    await fireEvent.press(screen.getByTestId('segment-Projects'));
+    expect(onChange).toHaveBeenCalledWith(true);
+  });
+
+  it('uses the purple → indigo → blue accent (RootView.swift:1684)', () => {
+    expect(TASK_ACCENT).toEqual(['#AD33FF', brand.nexdoIndigo, '#5C75FF']);
   });
 });
 
@@ -144,9 +208,31 @@ describe('CreationCard', () => {
     expect(screen.getByText('Add Manually')).toBeTruthy();
     expect(screen.getByText('Type a task')).toBeTruthy();
   });
+
+  it('draws the Add Manually glyph in nexdoBlue on a nexdoBlue 15% circle (RootView.swift:1835-1838)', async () => {
+    await render(<CreationCard title="Add Manually" subtitle="Type a task" icon="plus" isVoice={false} onPress={jest.fn()} testID="add-manually" />);
+    expect(StyleSheet.flatten(screen.getByTestId('add-manually-icon').props.style).backgroundColor).toBe('rgba(5, 148, 245, 0.15)');
+  });
 });
 
 describe('SectionHeader', () => {
+  it('shows the calendar glyph, the title and the date caption', async () => {
+    await render(<SectionHeader title="Today" date="Wednesday, Sep 16" count={2} />);
+    expect(screen.getByRole('header', { name: 'Today' })).toBeTruthy();
+    expect(screen.getByText('Wednesday, Sep 16')).toBeTruthy();
+    expect(StyleSheet.flatten(screen.getByTestId('section-header').props.style)).toMatchObject({
+      padding: 12,
+      borderRadius: 16,
+      backgroundColor: 'rgba(255, 255, 255, 0.65)',
+    });
+  });
+
+  it('formats the date as "EEEE, MMM d" in the account zone, and omits it for unscheduled', () => {
+    // 2026-09-15 18:30 UTC is midnight on Wednesday the 16th in Kolkata.
+    expect(sectionDateLabel(Date.parse('2026-09-15T18:30:00.000Z'), ZONE)).toBe('Wednesday, Sep 16');
+    expect(sectionDateLabel(DISTANT_FUTURE, ZONE)).toBeNull();
+  });
+
   it('singularises the count', async () => {
     const { rerender } = await render(<SectionHeader title="Today" count={1} />);
     expect(screen.getByText('1 task')).toBeTruthy();

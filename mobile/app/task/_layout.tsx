@@ -34,7 +34,8 @@ export default function TaskLayout() {
         ...stackHeaderOptions(theme, theme.colors.groupedBackground),
       }}
     >
-      <Stack.Screen name="new" options={{ presentation: 'modal', title: 'New Task', headerLeft: closeButton('Close') }} />
+      {/* `.navigationTitle("Create New Task")` (RootView.swift:2110). */}
+      <Stack.Screen name="new" options={{ presentation: 'modal', title: 'Create New Task', headerLeft: closeButton('Close') }} />
       <Stack.Screen name="[id]" options={{ presentation: 'modal', title: 'Task', headerLeft: closeButton('Close') }} />
       {/* Swift has only a confirmation "Done" here and a large title, both set by the screen. */}
       <Stack.Screen name="filters" options={{ presentation: 'modal' }} />
