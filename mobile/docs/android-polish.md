@@ -1552,4 +1552,8 @@ captures; results row by row in `docs/reference/PARITY.md` "UI-parity pass 3". F
   switched off the trailing ellipsis, so a label too wide at the minimum scale was clipped silently.
 - **Ask landing in dark mode** sits on white with a dark status bar: it keeps its fixed light text (§24),
   which was invisible on the dark page behind its translucent gradient.
+- **No `elevation` under translucent cards** on Help, Event Details and the brief section pages (Android
+  only): it showed through as a lighter inner panel. iOS keeps Swift's faint shadow.
+- **`GradientButton gradient="save"`** draws `NexdoTheme.saveGradient` (blue → indigo → magenta), which
+  `NexdoGradientButtonStyle` uses: Feedback's Submit and Change password. Auth keeps the brand gradient.
 

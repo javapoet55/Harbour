@@ -6,7 +6,7 @@ import { GlassCard } from '../components/GlassCard';
 import { ANDROID_DISABLED_GRADIENT_OPACITY, GradientButton } from '../components/GradientButton';
 import { SignInBackdrop } from '../components/SignInBackdrop';
 import { Text } from '../components/Text';
-import { palettes } from '../theme';
+import { brand, palettes } from '../theme';
 
 jest.mock('expo-router', () => ({
   router: { push: jest.fn(), replace: jest.fn(), back: jest.fn() },
@@ -85,6 +85,15 @@ describe('the primary button', () => {
     await rerender(<GradientButton title="Sign In" onPress={jest.fn()} minHeight={62} testID="button" />);
     expect(flat('button-gradient')).toMatchObject({ opacity: 1 });
     expect(StyleSheet.flatten(screen.getByText('Sign In').props.style).color).toBe(light.onTint);
+  });
+
+  it('draws NexdoGradientButtonStyle's save gradient (blue → indigo → magenta) when asked, the brand one by default', async () => {
+    onPlatform('android');
+    const { rerender } = await render(<GradientButton title="Sign In" onPress={jest.fn()} minHeight={62} testID="button" />);
+    const first = () => screen.getByTestId('button-gradient').props.colors[0];
+    expect(first()).toBe(brand.nexdoMagenta);
+    await rerender(<GradientButton gradient="save" title="Submit feedback" onPress={jest.fn()} minHeight={50} testID="button" />);
+    expect(first()).toBe(brand.nexdoBlue);
   });
 
   it('keeps the Swift dimming on iOS', async () => {

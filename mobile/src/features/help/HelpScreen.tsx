@@ -199,7 +199,9 @@ export function HelpScreen({ onBack, onFeedback }: { onBack: () => void; onFeedb
   );
 }
 
-const shadow = { shadowColor: brand.nexdoIndigo, shadowOpacity: 0.04, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 1 } as const;
+// No `elevation`: Android draws it at full strength and shows it through the translucent card as a lighter
+// inner panel (docs/android-polish.md §28). iOS keeps Swift's faint shadow.
+const shadow = { shadowColor: brand.nexdoIndigo, shadowOpacity: 0.04, shadowRadius: 10, shadowOffset: { width: 0, height: 4 } } as const;
 
 const styles = StyleSheet.create({
   fill: { flex: 1 },

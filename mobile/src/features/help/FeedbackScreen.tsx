@@ -110,7 +110,7 @@ export function FeedbackScreen({ onDone }: { onDone: () => void }) {
         <FormSection>
           <FormRow last>
             <View style={styles.submit}>
-              <GradientButton disabled={!valid || locked} minHeight={50} onPress={() => void send()} testID="feedback.submit" title={saving ? 'Submitting…' : 'Submit feedback'} />
+              <GradientButton disabled={!valid || locked} gradient="save" minHeight={50} onPress={() => void send()} testID="feedback.submit" title={saving ? 'Submitting…' : 'Submit feedback'} />
               {saving ? <ActivityIndicator color="#FFFFFF" style={styles.spinner} /> : null}
             </View>
           </FormRow>

@@ -112,7 +112,7 @@ export function ChangePasswordScreen({ onBack }: { onBack: () => void }) {
         <FormSection>
           <FormRow last>
             <View style={styles.submit}>
-              <GradientButton disabled={!valid || saving} minHeight={50} onPress={confirm} testID="change-password-submit" title={saving ? 'Changing password…' : 'Change password'} />
+              <GradientButton disabled={!valid || saving} gradient="save" minHeight={50} onPress={confirm} testID="change-password-submit" title={saving ? 'Changing password…' : 'Change password'} />
             </View>
           </FormRow>
         </FormSection>

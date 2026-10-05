@@ -276,7 +276,9 @@ function show(message: string, then?: () => void) {
   Alert.alert('Event Details', message, [{ text: 'OK', onPress: then }], { cancelable: false });
 }
 
-const shadow = { shadowColor: '#5856D6', shadowOpacity: 0.035, shadowRadius: 14, shadowOffset: { width: 0, height: 6 }, elevation: 1 } as const;
+// No `elevation`: Android draws it at full strength and shows it through the translucent card as a lighter
+// inner panel (docs/android-polish.md §28). iOS keeps Swift's faint shadow.
+const shadow = { shadowColor: '#5856D6', shadowOpacity: 0.035, shadowRadius: 14, shadowOffset: { width: 0, height: 6 } } as const;
 
 const styles = StyleSheet.create({
   fill: { flex: 1 },

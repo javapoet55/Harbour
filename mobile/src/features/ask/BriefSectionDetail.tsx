@@ -233,7 +233,9 @@ function Pill({ title, icon, color, disabled, onPress, testID }: { title: string
   );
 }
 
-const shadow = { shadowColor: briefColors.indigo, shadowOpacity: 0.1, shadowRadius: 10, shadowOffset: { width: 0, height: 5 }, elevation: 3 } as const;
+// No `elevation`: Android draws it at full strength and shows it through the translucent card as a lighter
+// inner panel (docs/android-polish.md §28). iOS keeps Swift's faint shadow.
+const shadow = { shadowColor: briefColors.indigo, shadowOpacity: 0.1, shadowRadius: 10, shadowOffset: { width: 0, height: 5 } } as const;
 
 const styles = StyleSheet.create({
   fill: { flex: 1, backgroundColor: '#FFFFFF' },

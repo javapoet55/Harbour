@@ -799,6 +799,10 @@ reached** (with the reason).
 your next move") and keeps Android's ellipsis, so they shrink to 0.85 and then truncate, as Swift's `lineLimit(2).minimumScaleFactor(0.85)`; (c) **dark mode hid the landing's text**: its fixed-light ink sat on the theme's black through the translucent gradient — white base now, and a dark status bar on the landing and brief |
 | 37 | Daily Brief / Top 3 / Due & Risks / Find Time | not reached | every card first asks for AI data-sharing consent ("Allow sharing with OpenAI"), not granted on this phone; granting it is the account holder's decision. "Not now" returns to the landing, as Swift's |
 | 38 | Brief section detail | not reached | as row 37 |
+| 39 | Help | **fixed** | the cards showed a lighter inner panel: their `elevation` drew through the 95% white fill on Android — removed (also on Event Details' and the brief section pages' cards, which share the pattern). Topic expanded and checked. The back without glass is Run A's logged `InlineNavBar` (§24) |
+| 40 | Feedback | **fixed** | Submit's gradient ran magenta → blue; `NexdoGradientButtonStyle` draws `NexdoTheme.saveGradient`, blue → indigo → magenta (`GradientButton gradient="save"`). Not submitted |
+| 41 | Change password | **fixed** | same gradient as row 40. Not confirmed |
+| 42 | Account ("My Page") | checked | Help / Feedback / Edit profile bare and Change password on a card, as Swift (§22 "For the team") |
 
 ### Not reached in this run
 
