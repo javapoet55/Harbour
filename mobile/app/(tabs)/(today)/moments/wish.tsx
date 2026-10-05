@@ -81,7 +81,18 @@ export default function WishDetailsScreen() {
         <View style={styles.stretch}>
           <MomentCard>
             <Text style={[textStyles.title2, styles.bold, { color: theme.colors.label }]}>{current.subject}</Text>
-            <Text style={[textStyles.body, { color: theme.colors.label }]}>{current.recipient}</Text>
+            {/* `Label(current.recipient, systemImage:)` (:537): phone.fill, envelope.fill or person.fill. */}
+            <View style={styles.label}>
+              <Ionicons
+                name={current.channel === 'messages' ? 'call' : current.channel === 'email' ? 'mail' : 'person'}
+                size={17}
+                color={theme.colors.link}
+                accessibilityElementsHidden
+                importantForAccessibility="no-hide-descendants"
+                testID="wish-recipient-icon"
+              />
+              <Text style={[textStyles.body, styles.labelText, { color: theme.colors.label }]}>{current.recipient}</Text>
+            </View>
             <View style={[styles.divider, { backgroundColor: theme.colors.separator }]} />
             <LabeledValue label="Delivery" value={capitalized(current.channel)} />
             <LabeledValue label="Send time" value={momentLabel(planDate(current), current.timeZoneID)} />
@@ -205,6 +216,9 @@ const styles = StyleSheet.create({
   center: { textAlign: 'center' },
   bold: { fontWeight: '700' },
   divider: { height: StyleSheet.hairlineWidth },
+  // SwiftUI `Label`: the icon, then the title, centred on one line.
+  label: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  labelText: { flexShrink: 1 },
   body: { marginTop: 8 },
   // Just under the sheet's bar (FormScroll's top padding is 3 since UI-parity pass 2).
   sheetTitle: { marginHorizontal: 16, marginTop: 4 },

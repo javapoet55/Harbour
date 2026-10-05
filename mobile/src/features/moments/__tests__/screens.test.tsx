@@ -1058,6 +1058,21 @@ describe('Wish details', () => {
     expect(screen.queryByText('Messages opened; delivery not confirmed.')).toBeNull();
   });
 
+  // ImportantMomentsView.swift:537: `Label(recipient, systemImage:)` — phone for Messages, envelope for
+  // email, a person otherwise.
+  it.each([
+    ['messages', 'call'],
+    ['email', 'mail'],
+    ['copy', 'person'],
+  ])('marks a %s recipient with the %s icon', async (channel, icon) => {
+    load([moment({ drafts: [draft({ plans: [plan({ id: 'p1', channel, recipient: 'sam@example.com' })] })] })]);
+    mockParams = { planId: 'p1' };
+    await render(<WishDetails />);
+    // The icon is decorative (hidden from screen readers); the recipient text is what is read.
+    expect(screen.getByTestId('wish-recipient-icon', { includeHiddenElements: true }).props.name).toBe(icon);
+    expect(screen.getByText('sam@example.com')).toBeTruthy();
+  });
+
   it('keeps "Review the delivery status below." for a copy wish awaiting you', async () => {
     load([moment({ drafts: [draft({ plans: [plan({ id: 'p1', channel: 'copy' })] })] })]);
     mockParams = { planId: 'p1' };
