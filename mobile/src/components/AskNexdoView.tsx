@@ -4,6 +4,7 @@ import { router } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Keyboard, Linking, Modal, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { StatusBar } from 'expo-status-bar';
 
 import { AskLanding } from '../features/ask/AskLanding';
 import { setBriefHandlers } from '../features/ask/briefHandlers';
@@ -374,13 +375,18 @@ export function AskNexdoView({ textPage, initialPrompt = '', shoppingContext, on
   const showsBriefing = brief !== null;
   // `if !showsBriefing && (textPage || model.turn != nil)` (:203): the landing and the brief draw their own.
   const showsHeader = !showsBriefing && (textPage || turn !== null);
+  // The landing keeps its light values in both modes (docs/android-polish.md §24), so it must sit on white:
+  // over the dark theme background its translucent gradient turned dark and hid its ink text.
+  const showsLanding = !showsBriefing && turn === null && !textPage;
 
   return (
     // A sheet's top edge sits below the status bar already, so only a route needs the top inset.
     <SafeAreaView
       edges={presentedAsSheet ? ['left', 'right', 'bottom'] : ['top', 'left', 'right', 'bottom']}
-      style={[styles.fill, { backgroundColor: showsBriefing ? '#FFFFFF' : theme.colors.background }]}
+      style={[styles.fill, { backgroundColor: showsBriefing || showsLanding ? '#FFFFFF' : theme.colors.background }]}
     >
+      {/* Fixed light screens keep a dark clock in dark mode (as Wellness's, docs/android-polish.md §23). */}
+      {showsLanding || showsBriefing ? <StatusBar style="dark" /> : null}
       {/* The brief's backdrop (`:305-309`): fixed light, under the safe areas too. */}
       {showsBriefing ? (
         <LinearGradient

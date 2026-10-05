@@ -59,7 +59,9 @@ export function FittedText({
 }) {
   const [available, setAvailable] = useState(0);
   const [widths, setWidths] = useState<Record<number, number>>({});
-  const runs = numberOfLines > 1 ? children.split(/\s+/).filter(Boolean) : [children];
+  // An explicit line break fixes the lines, so each LINE must fit ("Priorities and\nyour next move" on the
+  // Ask cards); otherwise SwiftUI wraps between words and only the widest word must fit a line.
+  const runs = children.includes('\n') ? children.split('\n') : numberOfLines > 1 ? children.split(/\s+/).filter(Boolean) : [children];
   const measures = Platform.OS === 'android' || runs.length > 1;
 
   const base = StyleSheet.flatten(style);
@@ -71,8 +73,9 @@ export function FittedText({
     <View onLayout={measures ? (event: LayoutChangeEvent) => setAvailable(event.nativeEvent.layout.width) : undefined} style={containerStyle}>
       <Text
         numberOfLines={numberOfLines}
-        // Right on iOS for a single line, and a no-op on Android, where `scale` is what actually fits the label.
-        adjustsFontSizeToFit
+        // Right on iOS for a single line. On Android it does not fit anything (`scale` does) but it does switch
+        // off the trailing ellipsis, so a label still too wide at the minimum scale was clipped silently.
+        adjustsFontSizeToFit={Platform.OS === 'ios'}
         minimumFontScale={minimumFontScale}
         style={[style, scale < 1 && fontSize !== undefined && { fontSize: fontSize * scale }]}
       >

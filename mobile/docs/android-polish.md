@@ -1545,4 +1545,11 @@ captures; results row by row in `docs/reference/PARITY.md` "UI-parity pass 3". F
 - **List Settings' pages have the system back** (`SheetButton` `icon: 'back'`): an ink chevron on a glass
   circle, as a push inside Swift's sheet `NavigationStack`, so the title stays centred.
 - **`arrow.up.left` points up-left** (`TaskSymbol` turns Ionicons' up arrow −45°): Ask's suggestion rows.
+- **Ask landing: two cards per row on narrow phones.** 48.8% + gap + 48.8% overflowed below ~330 dp and the
+  grid fell to one column; 45% with `flexGrow` fits any phone.
+- **`FittedText` measures explicit lines and keeps the ellipsis** (shared): a label with a line break must
+  fit line by line; `adjustsFontSizeToFit` is iOS-only now, because on Android it fitted nothing and
+  switched off the trailing ellipsis, so a label too wide at the minimum scale was clipped silently.
+- **Ask landing in dark mode** sits on white with a dark status bar: it keeps its fixed light text (§24),
+  which was invisible on the dark page behind its translucent gradient.
 

@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { StyleSheet } from 'react-native';
 
 import type { AssistantTurn, NexdoTask } from '../api';
 import { useAssistantStore } from '../store/assistant';
@@ -114,6 +115,17 @@ describe('the Ask AI landing', () => {
     expect(screen.queryByText('Help me plan tomorrow')).toBeNull();
     expect(screen.queryByTestId('ask-entry-text')).toBeNull();
     expect(screen.queryByTestId('ask-field')).toBeNull();
+  });
+
+  it('lays the cards out two to a row with room for the gap, on a white base whatever the theme', async () => {
+    const dimensions = jest.spyOn(require('react-native'), 'useWindowDimensions').mockReturnValue({ width: 360, height: 792, scale: 3, fontScale: 1 });
+    await show(<Ask />);
+    // 48.8% + 8 + 48.8% overflowed on a 360 dp phone and wrapped the grid to one column.
+    const card = StyleSheet.flatten(screen.getByTestId('ask-card-0').props.style);
+    expect(card.width).toBe('45%');
+    expect(card.flexGrow).toBe(1);
+    expect(StyleSheet.flatten(screen.getByTestId('ask-landing').props.style).backgroundColor).toBe('#FFFFFF');
+    dimensions.mockRestore();
   });
 
   it('says "there" when the profile has no name', async () => {

@@ -2,6 +2,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import type { ReactNode } from 'react';
 import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 
+import { FittedText } from '../../components/AskParts';
 import { NexdoLogoMark } from '../../components/NexdoLogoMark';
 import { withAlpha } from '../../components/SignInBackdrop';
 import { TaskSymbol } from '../../components/TaskSymbol';
@@ -116,9 +117,14 @@ export function AskLanding({
                 </View>
                 <View style={[styles.grow, styles.cardText]}>
                   <Text style={[large ? styles.headline : styles.cardTitle, { color: ink }]}>{card.title}</Text>
-                  <Text numberOfLines={large ? undefined : 2} style={[large ? styles.body : styles.cardDetail, { color: secondary }]}>
-                    {card.detail}
-                  </Text>
+                  {large ? (
+                    <Text style={[styles.body, { color: secondary }]}>{card.detail}</Text>
+                  ) : (
+                    // `.lineLimit(2).minimumScaleFactor(0.85)`: shrunk to keep each line whole, not truncated.
+                    <FittedText minimumFontScale={0.85} numberOfLines={2} style={[styles.cardDetail, { color: secondary }]}>
+                      {card.detail}
+                    </FittedText>
+                  )}
                 </View>
                 <View style={styles.cardChevron}>
                   <TaskSymbol color={secondary} name="chevron.right" size={11} />
@@ -245,14 +251,17 @@ const styles = StyleSheet.create({
   cardDetail: { fontSize: 13, lineHeight: 16 },
 
   // `VStack(alignment: .leading, spacing: 12)`, at least the viewport tall (AskNexdoView.swift:256).
-  landing: { flexGrow: 1, gap: 12 },
+  // A white base under the translucent gradient: the landing is fixed light (§24) whatever the theme.
+  landing: { flexGrow: 1, gap: 12, backgroundColor: '#FFFFFF' },
   header: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingTop: 12 },
   close: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255, 255, 255, 0.65)' },
   greetingRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 6 },
   greeting: { gap: 5 },
   orbSlot: { width: 94, alignItems: 'center' },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  half: { width: '48.8%', flexGrow: 1 },
+  // Two per row with the 8 gap between: 48.8% + 8 + 48.8% overflowed below ~330 dp of row width (a 360 dp
+  // phone), wrapping the grid to one column. 45% leaves room for the gap at any phone width; flexGrow fills it.
+  half: { width: '45%', flexGrow: 1 },
   full: { width: '100%' },
   card: { flexDirection: 'row', alignItems: 'flex-start', gap: 7, padding: 10, minHeight: 120, borderRadius: 17 },
   cardIcon: { width: 34, height: 36, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },

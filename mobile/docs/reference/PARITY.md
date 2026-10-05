@@ -795,6 +795,10 @@ reached** (with the reason).
 | 34 | Add Item with photo identification | not reached | needs a photo taken with the camera, which is then sent to `/api/shopping/recognize`; the editor itself is row 27, and the camera is the system's (platform gap) |
 | 35 | Shopping Recommendations | **fixed** | the suggestion rows' `arrow.up.left` drew as a plain up arrow; `TaskSymbol` now turns it −45° (↖), which also fixes Ask's text page. The title wraps beside the 56 pt close at this width, as an unlimited `Text` in Swift's `HStack` would |
 | — | Shopping in dark mode | checked | Shopping Detail readable in dark; the only dark iPhone capture predates the redesign |
+| 36 | Ask AI landing, four cards | **fixed** | (a) **the four cards stacked in one column**: each was 48.8% wide plus an 8 dp gap, more than 100% below ~330 dp of row width, so the 2-column `LazyVGrid` wrapped to one column on this phone — now 45% + `flexGrow`; (b) card details were cut with no ellipsis: `FittedText` now measures each explicit line ("Priorities and
+your next move") and keeps Android's ellipsis, so they shrink to 0.85 and then truncate, as Swift's `lineLimit(2).minimumScaleFactor(0.85)`; (c) **dark mode hid the landing's text**: its fixed-light ink sat on the theme's black through the translucent gradient — white base now, and a dark status bar on the landing and brief |
+| 37 | Daily Brief / Top 3 / Due & Risks / Find Time | not reached | every card first asks for AI data-sharing consent ("Allow sharing with OpenAI"), not granted on this phone; granting it is the account holder's decision. "Not now" returns to the landing, as Swift's |
+| 38 | Brief section detail | not reached | as row 37 |
 
 ### Not reached in this run
 
