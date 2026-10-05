@@ -39,14 +39,35 @@ export function shareText(list: Pick<GroceryList, 'title' | 'date' | 'items'>): 
   ].join('\n');
 }
 
-/** `ShoppingInput(list)` (ShoppingStore.swift:5-8). Every item key is encoded, `imageData` as `null` when absent. */
-export function listInput(list: Pick<GroceryList, 'title' | 'date' | 'timeZone' | 'weekly' | 'items'>): ShoppingInput {
+/** Swift's synthesized `encodeIfPresent`: the key only when it has a value. */
+function present<K extends string, V>(key: K, value: V | null | undefined): Partial<Record<K, V>> {
+  return value == null ? {} : ({ [key]: value } as Record<K, V>);
+}
+
+/**
+ * `ShoppingInput(list)` (ShoppingStore.swift:5-10) and `GroceryItem.encode(to:)` (ShoppingList.swift:30-38).
+ * Every item key is encoded, `imageData` as `null` when absent; `brand`, `barcode`, `favorite`,
+ * `favoriteAlternatives` and the store fields only when set; `chosenOffer` never. Leaving `brand` out
+ * would make the server drop the item's chosen offer (src/server/shopping/service.ts:68).
+ */
+export function listInput(
+  list: Pick<GroceryList, 'title' | 'date' | 'timeZone' | 'weekly' | 'items' | 'storePlaceId' | 'storeWebsite' | 'storeName' | 'storeAddress' | 'storeZip'>,
+): ShoppingInput {
   return {
     title: list.title,
     date: list.date,
     timeZone: list.timeZone,
     weekly: list.weekly,
+    ...present('storePlaceId', list.storePlaceId),
+    ...present('storeWebsite', list.storeWebsite),
+    ...present('storeName', list.storeName),
+    ...present('storeAddress', list.storeAddress),
+    ...present('storeZip', list.storeZip),
     items: list.items.map((item) => ({
+      ...present('brand', item.brand),
+      ...present('barcode', item.barcode),
+      ...present('favorite', item.favorite),
+      ...present('favoriteAlternatives', item.favoriteAlternatives),
       id: item.id,
       name: item.name,
       category: item.category,

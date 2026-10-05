@@ -38,6 +38,11 @@ export const queryKeys = {
     all: () => ['assistant'] as const,
     consent: () => ['assistant', 'consent'] as const,
   },
+  /** Store offers and hours (ShoppingOffersView.swift, ShoppingStoreHoursView.swift), per account. */
+  shopping: {
+    offers: (ownerId: string, listId: string) => ['shopping-offers', ownerId, listId] as const,
+    storeHours: (ownerId: string, placeId: string) => ['store-hours', ownerId, placeId] as const,
+  },
   /** `CalorieStore` (ios/App/CalorieTrackerView.swift:70-215), per account. */
   nutrition: {
     all: (ownerId: string) => ['nutrition', ownerId] as const,
