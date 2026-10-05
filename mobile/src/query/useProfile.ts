@@ -29,9 +29,7 @@ export async function reloadProfile(queryClient: QueryClient): Promise<Profile> 
  * `refreshSupplementaryData()` (called at the end of `saveProfileSettings`, NexdoApp.swift:239).
  *
  * Preferences decide working hours, quiet hours, the next-action policy and the confirmation level,
- * so everything the server derives from them is stale after a save. The weather chip is NOT
- * invalidated: `WeatherClient` uses hardcoded coordinates and its own `timezone=auto`, so it does not
- * depend on the account zone — see the note in `useToday.ts`.
+ * so everything the server derives from them is stale after a save.
  */
 export function refreshSupplementaryData(queryClient: QueryClient): void {
   void queryClient.invalidateQueries({ queryKey: queryKeys.agenda.all() });

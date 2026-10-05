@@ -233,23 +233,6 @@ export type Agenda = {
   important?: NexdoTask[];
 };
 
-// MARK: Weather (GET /api/weather, Open-Meteo field names)
-
-export type WeatherResponse = {
-  current: {
-    temperature_2m: number; // Swift: temperature
-    weather_code?: number | null; // Swift: weatherCode
-  };
-  daily?: {
-    time: string[];
-    weather_code: (number | null)[]; // Swift: weatherCode
-    temperature_2m_max: (number | null)[]; // Swift: high
-    temperature_2m_min: (number | null)[]; // Swift: low
-    precipitation_probability_max: (number | null)[]; // Swift: rain
-  } | null;
-  timezone?: string | null;
-};
-
 // MARK: Schedule intelligence
 
 export type ScheduleTimelineItem = {

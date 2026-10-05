@@ -58,8 +58,6 @@ export default function TodayLayout() {
         name="today/do-now"
         options={{ presentation: 'modal', title: 'What should I do now?', headerRight: doneButton() }}
       />
-      {/* `.sheet(isPresented:)` on the weather chip (RootView.swift:1338). */}
-      <Stack.Screen name="today/weather" options={{ presentation: 'modal', title: 'Weather', headerRight: doneButton() }} />
       {/* The remaining `navigationDestination`s (RootView.swift:1193-1200) all PUSH. */}
       <Stack.Screen name="today/schedule-check" options={{ ...pushed, title: 'Schedule check' }} />
       <Stack.Screen name="today/overdue" options={{ ...pushed, title: 'Unfinished deadlines' }} />

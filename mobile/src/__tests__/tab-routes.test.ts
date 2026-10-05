@@ -74,13 +74,12 @@ describe('routes Swift pushes stay inside the tab navigator', () => {
     ['action/[id].tsx', '.sheet (RootView.swift:59)'],
     ['calendar/conflicts.tsx', '.sheet (CalendarView.swift:163)'],
     ['today/do-now.tsx', '.sheet (RootView.swift:1180)'],
-    ['today/weather.tsx', '.sheet (RootView.swift:1337)'],
     // Phase 11: Needs attention is a `[.medium, .large]` sheet (RootView.swift:1188-1191), and
     // Reschedule all is a sheet over it (TodayAttentionSheet.swift:87-98). Both are root form sheets.
     ['attention.tsx', '.sheet (RootView.swift:1188)'],
     ['reschedule-all.tsx', '.sheet (TodayAttentionSheet.swift:87)'],
   ])('%s is presented as a sheet in Swift, so it covers the bar — %s', (file) => {
-    // do-now and weather moved with the Today stack but are declared `presentation: 'modal'`, which
+    // do-now moved with the Today stack but are declared `presentation: 'modal'`, which
     // covers the bar; everything else is a sibling of `(tabs)`.
     const inTabs = exists(path.join('(tabs)', '(today)', file));
     expect(inTabs || exists(file)).toBe(true);

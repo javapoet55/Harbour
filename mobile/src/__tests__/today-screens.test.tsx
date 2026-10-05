@@ -46,12 +46,8 @@ jest.mock('../api', () => ({
   },
 }));
 
-const mockFetch = jest.fn();
-global.fetch = mockFetch as unknown as typeof fetch;
-
 import Overdue from '../../app/(tabs)/(today)/today/overdue';
 import ScheduleCheck from '../../app/(tabs)/(today)/today/schedule-check';
-import Weather from '../../app/(tabs)/(today)/today/weather';
 import WeeklySummaryScreen from '../../app/(tabs)/(today)/today/weekly-summary';
 import WeeklyTasks from '../../app/(tabs)/(today)/today/weekly-tasks';
 
@@ -66,16 +62,6 @@ function task(overrides: Partial<NexdoTask> & { id: string }): NexdoTask {
 function wrap(node: React.ReactElement) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 }, mutations: { retry: false, gcTime: 0 } } });
   return render(<QueryClientProvider client={queryClient}>{node}</QueryClientProvider>);
-}
-
-/**
- * Render the weather screen and wait for the forecast to be ON SCREEN. Waiting for the fetch call, or
- * for "San Ramon", is not enough: both happen before the query resolves.
- */
-async function renderWeather() {
-  const view = await wrap(<Weather />);
-  await waitFor(() => expect(screen.getByTestId('weather-current')).toBeTruthy());
-  return view;
 }
 
 const SUMMARY: WeeklySummary = {
@@ -101,24 +87,6 @@ const SUMMARY: WeeklySummary = {
   limitations: [],
 };
 
-/**
- * What open-meteo actually returns for the hardcoded San Ramon coordinates with `timezone=auto`: the
- * forecast is in AMERICA/LOS_ANGELES, so at 2026-09-16 09:00 Kolkata it is still the 15th there, and
- * the first row is the one that reads "Today". Swift resolves it the same way
- * (`WeatherForecastView.swift:85-95` defaults to America/Los_Angeles).
- */
-const FORECAST = {
-  current: { temperature_2m: 71.4, weather_code: 0 },
-  timezone: 'America/Los_Angeles',
-  daily: {
-    time: ['2026-09-15', '2026-09-16', '2026-09-17', '2026-09-18', '2026-09-19'],
-    weather_code: [0, 61, 2, 3, 45],
-    temperature_2m_max: [80, 81, 82, 83, 84],
-    temperature_2m_min: [60, 61, 62, 63, 64],
-    precipitation_probability_max: [0, 80, 20, 30, 40],
-  },
-};
-
 beforeEach(() => {
   jest.clearAllMocks();
   jest.useFakeTimers({ now: NOW, doNotFake: ['nextTick', 'setImmediate'] });
@@ -128,7 +96,6 @@ beforeEach(() => {
   mockTasks.mockResolvedValue({ tasks: [], timeZone: ZONE });
   mockWeekly.mockResolvedValue(SUMMARY);
   mockIntelligence.mockRejectedValue(new Error('unavailable'));
-  mockFetch.mockResolvedValue({ ok: true, json: async () => FORECAST });
 });
 
 afterEach(() => jest.useRealTimers());
@@ -170,44 +137,6 @@ describe('Overdue screen', () => {
 
     await fireEvent.press(screen.getByTestId('overdue-row-a'));
     expect(mockPush).toHaveBeenCalledWith('/task/a');
-  });
-});
-
-/** `WeatherForecastView` (ios/App/WeatherForecastView.swift:11-72). */
-describe('Weather forecast screen', () => {
-  it('renders the hardcoded location, the current reading and five days', async () => {
-    await renderWeather();
-
-    expect(screen.getByText('San Ramon')).toBeTruthy();
-    expect(screen.getByText('5-day forecast · °F')).toBeTruthy();
-    expect(screen.getByText('71°')).toBeTruthy();
-    for (const day of FORECAST.daily.time) {
-      expect(screen.getByTestId(`weather-day-${day}`)).toBeTruthy();
-    }
-  });
-
-  it('labels the first day "Today" and names each condition', async () => {
-    await renderWeather();
-    expect(screen.getByText('Today')).toBeTruthy();
-    expect(screen.getByText('Rain')).toBeTruthy();
-    expect(screen.getByText('80% chance of precipitation')).toBeTruthy();
-  });
-
-  it('shows the high and low for each day', async () => {
-    await renderWeather();
-    expect(screen.getByText('H 80°')).toBeTruthy();
-    expect(screen.getByText('L 60°')).toBeTruthy();
-  });
-
-  it('shows the load failure wording when nothing is cached', async () => {
-    mockFetch.mockRejectedValue(new Error('offline'));
-    await wrap(<Weather />);
-    await waitFor(() => expect(screen.getByText('Couldn’t load the forecast. Please try again.')).toBeTruthy());
-  });
-
-  it('credits Open-Meteo', async () => {
-    await renderWeather();
-    expect(screen.getByLabelText('Weather by Open-Meteo')).toBeTruthy();
   });
 });
 

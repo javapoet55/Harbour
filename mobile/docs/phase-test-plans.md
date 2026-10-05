@@ -518,9 +518,10 @@ synced calendar event today.
    the intelligence card. Nothing else.
 2. The greeting reads "Good morning/afternoon/evening, <first name>" and switches at noon and 17:00 in
    the ACCOUNT time zone, not the phone's. The line under it reads "Wed, Sep 16, 2026".
-3. The top bar shows the Nexdo mark, a weather chip, a "+" button and your avatar.
-4. Tap "+": the task editor opens.
-5. Pull down to refresh. Tasks, agenda and weather all reload.
+3. The top bar shows the Nexdo mark and your avatar only. Since Phase 12 there is NO weather chip and
+   NO "+" button (Swift passes `showsWeather: false, add: nil`, RootView.swift:1151-1157).
+4. (Removed in Phase 12: the "+" button is gone. Add tasks from the Tasks tab.)
+5. Pull down to refresh. Tasks and the agenda reload.
 
 ### 2. The range picker
 
@@ -556,12 +557,8 @@ synced calendar event today.
 
 ### 6. Weather
 
-21. The chip shows a condition glyph over a temperature in Fahrenheit.
-22. Turn airplane mode on and reopen the tab: the chip shows "–°" and NO error alert appears.
-23. NOTE: iOS keeps Swift's hardcoded San Ramon, California coordinates (`WeatherClient.swift:17`) and
-    never asks for location. ANDROID forecasts the phone's approximate location: the chip stays "–°"
-    until location is allowed on the Weather screen, then shows the local reading.
-24. Tapping the chip does nothing yet; the forecast sheet is Phase 4B.
+21-24. Removed in Phase 12: Today no longer shows weather, and there is no forecast screen. Confirm no
+    weather chip appears anywhere on Today.
 
 ### 7. Do Now
 
@@ -606,8 +603,8 @@ synced calendar event today.
 ### 10. What is NOT here yet (Phase 4B)
 
 45. Confirm these are ABSENT rather than broken: the action queue, the protected-time card, the
-    persistent next-action card, the "Needs your attention" list, the weekly summary screen, the
-    overdue screen and the weather forecast sheet.
+    persistent next-action card, the "Needs your attention" list, the weekly summary screen and the
+    overdue screen.
 
 ## Phase 4B on-device test plan
 
@@ -627,19 +624,8 @@ completed work so the weekly summary has something to show.
 
 ### 2. Weather forecast
 
-7. Tap the weather chip on Today. The sheet is titled "Weather".
-8. The heading reads the place and "5-day forecast · °F". iOS: "San Ramon" is CORRECT (Swift's
-   hardcoded coordinates, no location prompt). Android: the first open asks for approximate location.
-   Allow it and the heading is your town, with its forecast. Deny it and the screen reads "Location
-   unavailable — enable location to see local weather" with an "Enable location" button, and no
-   forecast for any other city.
-9. The current reading shows a condition glyph and a large temperature.
-10. Five day rows follow, each with a weekday, a condition name, a glyph, and H/L temperatures.
-11. The first row reads "Today" — note this is today in the FORECAST's zone (America/Los_Angeles),
-    which may be yesterday's date where you are. That matches Swift.
-12. A day with rain shows "N% chance of precipitation".
-13. Turn airplane mode on and reopen: "Couldn't load the forecast. Please try again." with a Retry.
-14. "Weather by Open-Meteo" opens the provider's site.
+7-14. Removed in Phase 12: Swift dropped the weather chip from Today (RootView.swift:1151-1157), and
+    the forecast sheet went with it. Skip these steps.
 
 ### 3. Weekly summary
 

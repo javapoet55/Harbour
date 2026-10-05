@@ -37,7 +37,7 @@ jest.mock('../api/shopping', () => ({
   shoppingApi: { lists: (...args: unknown[]) => mockShopping(...args) },
 }));
 
-// The weather chip calls open-meteo directly, not the Nexdo API.
+// Mocked so a direct third-party call (the removed weather chip went straight to open-meteo) is seen.
 const mockFetch = jest.fn();
 global.fetch = mockFetch as unknown as typeof fetch;
 
@@ -67,17 +67,6 @@ const AGENDA: Agenda = {
   overdue: [task({ id: 'old', title: 'Renew passport' })],
 };
 
-const FORECAST = {
-  current: { temperature_2m: 71.4, weather_code: 0 },
-  daily: {
-    time: ['2026-09-16', '2026-09-17', '2026-09-18', '2026-09-19', '2026-09-20'],
-    weather_code: [0, 1, 2, 3, 45],
-    temperature_2m_max: [80, 81, 82, 83, 84],
-    temperature_2m_min: [60, 61, 62, 63, 64],
-    precipitation_probability_max: [0, 10, 20, 30, 40],
-  },
-};
-
 async function renderToday() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 }, mutations: { retry: false, gcTime: 0 } } });
   const view = await render(
@@ -97,7 +86,6 @@ beforeEach(() => {
   useSession.setState({ status: 'signedIn', profile: { id: 'u1', name: 'Sri Ram', email: 'a@b.com', timeZone: ZONE } });
   mockTasks.mockResolvedValue({ tasks: AGENDA.tasks, timeZone: ZONE });
   mockAgenda.mockResolvedValue(AGENDA);
-  mockFetch.mockResolvedValue({ ok: true, json: async () => FORECAST });
   // No intelligence by default: the dashboard then builds its schedule from the agenda.
   mockIntelligence.mockRejectedValue(new Error('unavailable'));
   setMoments([]);
@@ -200,20 +188,14 @@ describe('Today dashboard sections', () => {
     expect(screen.queryByText('Find the best task for the time you have, and start focusing.')).toBeNull();
   });
 
-  it('renders the weather chip from the open-meteo forecast', async () => {
+  it('shows no weather chip and no add button: `showsWeather: false, add: nil` (RootView.swift:1151-1157)', async () => {
     await renderToday();
 
-    await waitFor(() => expect(screen.getByLabelText('San Ramon weather, 71 degrees Fahrenheit')).toBeTruthy());
-    // Fahrenheit, rounded, exactly as `Int($0.current.temperature.rounded())` does.
-    expect(screen.getByText('71°')).toBeTruthy();
-  });
-
-  it('falls back to a dash when the forecast fails, without surfacing an error', async () => {
-    mockFetch.mockRejectedValue(new Error('offline'));
-    await renderToday();
-
-    await waitFor(() => expect(screen.getByLabelText('Weather temporarily unavailable')).toBeTruthy());
-    expect(Alert.alert).not.toHaveBeenCalled();
+    expect(screen.queryByTestId('weather-chip')).toBeNull();
+    expect(screen.queryByLabelText(/weather/i)).toBeNull();
+    expect(screen.queryByLabelText('Add a task')).toBeNull();
+    expect(screen.getByTestId('open-account')).toBeTruthy();
+    expect(mockFetch).not.toHaveBeenCalled();
   });
 
   it('renders no focus strip until a session is live', async () => {
@@ -240,12 +222,6 @@ describe('Today dashboard sections', () => {
 });
 
 describe('Today navigation', () => {
-  it('opens the task editor from the add button', async () => {
-    await renderToday();
-    await fireEvent.press(screen.getByLabelText('Add a task'));
-    expect(mockPush).toHaveBeenCalledWith('/task/new');
-  });
-
   it('opens Do Now from "Find my next task"', async () => {
     await renderToday();
     await fireEvent.press(screen.getByTestId('today-focus-find'));
@@ -471,14 +447,6 @@ describe('Today attention row', () => {
 });
 
 describe('Today navigation to the Run B screens', () => {
-  it('opens the weather forecast from the chip', async () => {
-    await renderToday();
-    await waitFor(() => expect(screen.getByLabelText(/San Ramon weather/)).toBeTruthy());
-
-    await fireEvent.press(screen.getByTestId('weather-chip'));
-    expect(mockPush).toHaveBeenCalledWith('/today/weather');
-  });
-
   it('opens the weekly summary from the Quick Access tile', async () => {
     await renderToday();
     await fireEvent.press(screen.getByTestId('quick-access-weekly'));

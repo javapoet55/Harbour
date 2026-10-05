@@ -73,10 +73,10 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       //   seconds after the app is backgrounded (VoiceConversationSession.swift:209).
       'android.permission.FOREGROUND_SERVICE',
       'android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK',
-      // - ACCESS_FINE_LOCATION: added by expo-location. Weather needs only the town, so Android asks for
-      //   APPROXIMATE location (ACCESS_COARSE_LOCATION, which expo-location's manifest also declares and
-      //   which alone counts as granted). expo-location's config plugin is deliberately NOT listed: its
-      //   only job would be iOS usage strings, and iOS weather keeps Swift's fixed coordinates.
+      // - ACCESS_FINE_LOCATION: added by expo-location. Shopping's nearby-store search needs only the
+      //   town, so Android asks for APPROXIMATE location (ACCESS_COARSE_LOCATION, which expo-location's
+      //   manifest also declares and which alone counts as granted). expo-location's config plugin is
+      //   deliberately NOT listed: its only job would be iOS usage strings.
       'android.permission.ACCESS_FINE_LOCATION',
       // - AD_ID: added by @react-native-firebase/analytics. Nexdo never reads the advertising ID, and
       //   declaring it would make Play ask us to disclose ad-ID use in Data safety. Analytics keeps

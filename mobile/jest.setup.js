@@ -204,7 +204,7 @@ afterEach(async () => {
   await new Promise((resolve) => realSetTimeout(resolve, 0));
 });
 
-// expo-location is native. Weather only reads it on Android; suites that exercise it mock it again.
+// expo-location is native. Shopping's store search reads it (StorePages.tsx); suites that exercise it mock it again.
 jest.mock('expo-location', () => ({
   Accuracy: { Lowest: 1, Low: 2, Balanced: 3, High: 4, Highest: 5, BestForNavigation: 6 },
   getForegroundPermissionsAsync: jest.fn(async () => ({ granted: false, status: 'undetermined', canAskAgain: true })),

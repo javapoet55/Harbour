@@ -35,7 +35,7 @@ import {
   useRespondToProtectedTime,
 } from '../../../../src/query/useNextAction';
 import { useTasks } from '../../../../src/query/useTasks';
-import { canStartRecommendation, useAgenda, useScheduleIntelligence, useWeather } from '../../../../src/query/useToday';
+import { canStartRecommendation, useAgenda, useScheduleIntelligence } from '../../../../src/query/useToday';
 import { useFocus } from '../../../../src/store/focus';
 import { useSession } from '../../../../src/store/session';
 import { brand, useTheme } from '../../../../src/theme';
@@ -73,7 +73,6 @@ export default function Today() {
 
   const tasks = useTasks();
   const agenda = useAgenda(5);
-  const weather = useWeather();
   const intelligence = useScheduleIntelligence();
   // `ImportantMomentsStore` (activated and refreshed by the root layout, RootView.swift:59-81).
   const moments = useMomentList();
@@ -129,7 +128,6 @@ export default function Today() {
   const refresh = () => {
     void tasks.refetch();
     void agenda.refetch();
-    void weather.refetch();
     void intelligence.refetch();
   };
 
@@ -142,16 +140,10 @@ export default function Today() {
         contentContainerStyle={styles.scroll}
         refreshControl={<RefreshControl refreshing={agenda.isRefetching} onRefresh={refresh} />}
       >
+        {/* `TodayTopBar(name:temperature: nil, showsWeather: false, add: nil, account:)` (RootView.swift:1151-1157):
+            Swift dropped the weather chip and the add button from Today. */}
         <TasksTopBar
           name={profile?.name ?? ''}
-          weather={{
-            // `model.weather.map { Int($0.current.temperature.rounded()) }` (RootView.swift:1029)
-            temperature: weather.data?.forecast ? Math.round(weather.data.forecast.current.temperature_2m) : null,
-            weatherCode: weather.data?.forecast?.current.weather_code,
-            place: weather.data?.place.kind === 'unavailable' ? undefined : weather.data?.place.name,
-            onPress: () => router.push('/today/weather'),
-          }}
-          onAdd={() => router.push('/task/new')}
           // `.sheet(isPresented: $showingAccount) { AccountView() }` (RootView.swift:1181).
           onAccount={() => router.push('/account')}
           photo={profile?.photo}

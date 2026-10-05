@@ -17,7 +17,6 @@ export const queryKeys = {
     all: () => ['agenda'] as const,
     range: (from: string, to: string) => ['agenda', from, to] as const,
   },
-  weather: () => ['weather'] as const,
   /** A task's business research (`loadTaskAgent`, ios/App/NexdoApp.swift:553), per account. */
   taskAgent: {
     all: (ownerId: string) => ['task-agent', ownerId] as const,
