@@ -15,6 +15,8 @@ const families:[string,RegExp][]=[
  ['supplements',/\b(?:vitamins?|multivitamins?|multi(?! purpose)|supplements?|probiotics?|fish oil|omega 3|melatonin|zinc|magnesium|calcium|collagen|turmeric|coq10|b 12|b complex|iron|elderberry|red yeast rice|lutein|ashwagandha|l theanine)\b/],
  ['medicine',/\b(?:pain relie(?:f|ver)|advil|tylenol|aleve|motrin|excedrin|mucinex|dayquil|nyquil|robitussin|theraflu|delsym|vicks|ibuprofen|acetaminophen|naproxen|cough|cold flu)\b/],
  ['prepared meals',/\b(?:butter chicken|yakisoba|ravioli|bake kit)\b/],
+ // Bar soap must come before snack bars, or “Dove Bar Soap” matches granola-bar items.
+ ['bar soap',/\b(?:bar|bath|beauty|hand|body|facial|face) soap\b|\bsoap bars?\b|\bbars? of soap\b|\b(?:beauty|bath) bars?\b/],
  ['snack bars',/\bbars?\b|\bkrispies treats\b/],
  ['peanut butter',/\bpeanut butter\b/],
  ['cookies',/\bcookies?\b|\bbiscoff\b/],
@@ -68,37 +70,37 @@ export function matchOffer(item:Item,offer:OfferRecord){
  return {category:differences.length?'alternative':brand?'matching':'available',reasons,differences};
 }
 export type OfferProvider='costco'|'flipp';
-export interface OfferSourceDef{provider:OfferProvider;id:string;store:string;region:string;merchant?:string;zip?:string;}
-export interface StoreInfo{provider:OfferProvider;store:string;merchant?:string;}
-// Albertsons-family banners whose weekly ads are Flipp-powered. Alias, display name, Flipp merchant id.
-const stores:[RegExp,string,OfferProvider,string?][]=[
+export interface OfferSourceDef{provider:OfferProvider;id:string;store:string;region:string;merchant?:string;zip?:string;site?:string;}
+export interface StoreInfo{provider:OfferProvider;store:string;merchant?:string;site?:string;}
+// Albertsons-family banners whose weekly ads are Flipp-powered. Alias, display name, Flipp merchant id, ad page domain.
+const stores:[RegExp,string,OfferProvider,string?,string?][]=[
  [/\bcostco\b/,'Costco','costco'],
- [/\bsafeway\b/,'Safeway','flipp','safeway'],
- [/\bvons\b/,'Vons','flipp','vons'],
- [/\bjewel\b/,'Jewel-Osco','flipp','jewelosco'],
- [/\bacme\b/,'ACME Markets','flipp','acmemarkets'],
- [/\bshaws?\b/,"Shaw's",'flipp','shaws'],
- [/\btom thumb\b/,'Tom Thumb','flipp','tomthumb'],
- [/\brandalls?\b/,'Randalls','flipp','randalls'],
- [/\bpavilions\b/,'Pavilions','flipp','pavilions'],
- [/\balbertsons?\s*markets?\b/,'Albertsons Market','flipp','albertsonsmarket'],
- [/\balbertsons?\b/,'Albertsons','flipp','albertsons'],
- [/\bandronicos?\b/,"Andronico's",'flipp','andronicoscommunitymarkets'],
- [/\bbalduccis?\b/,"Balducci's",'flipp','balduccis'],
- [/\bunited supermarkets?\b/,'United Supermarkets','flipp','unitedsupermarkets'],
- [/\bmarket street\b/,'Market Street','flipp','marketstreet'],
- [/\bhaggens?\b/,'Haggen','flipp','haggen'],
- [/\bcarrs\b/,'Carrs','flipp','carrsqc'],
- [/\bamigos\b/,'Amigos','flipp','amigosunited'],
- [/\bkings food\b/,'Kings Food Markets','flipp','kingsfoodmarkets'],
- [/\bstar markets?\b/,'Star Market','flipp','starmarket']
+ [/\bsafeway\b/,'Safeway','flipp','safeway','safeway.com'],
+ [/\bvons\b/,'Vons','flipp','vons','vons.com'],
+ [/\bjewel\b/,'Jewel-Osco','flipp','jewelosco','jewelosco.com'],
+ [/\bacme\b/,'ACME Markets','flipp','acmemarkets','acmemarkets.com'],
+ [/\bshaws?\b/,"Shaw's",'flipp','shaws','shaws.com'],
+ [/\btom thumb\b/,'Tom Thumb','flipp','tomthumb','tomthumb.com'],
+ [/\brandalls?\b/,'Randalls','flipp','randalls','randalls.com'],
+ [/\bpavilions\b/,'Pavilions','flipp','pavilions','pavilions.com'],
+ [/\balbertsons?\s*markets?\b/,'Albertsons Market','flipp','albertsonsmarket','albertsonsmarket.com'],
+ [/\balbertsons?\b/,'Albertsons','flipp','albertsons','albertsons.com'],
+ [/\bandronicos?\b/,"Andronico's",'flipp','andronicoscommunitymarkets','andronicos.com'],
+ [/\bbalduccis?\b/,"Balducci's",'flipp','balduccis','balduccis.com'],
+ [/\bunited supermarkets?\b/,'United Supermarkets','flipp','unitedsupermarkets','unitedsupermarkets.com'],
+ [/\bmarket street\b/,'Market Street','flipp','marketstreet','marketstreet.com'],
+ [/\bhaggens?\b/,'Haggen','flipp','haggen','haggen.com'],
+ [/\bcarrs\b/,'Carrs','flipp','carrsqc','carrsqc.com'],
+ [/\bamigos\b/,'Amigos','flipp','amigosunited','amigosunited.com'],
+ [/\bkings food\b/,'Kings Food Markets','flipp','kingsfoodmarkets','kingsfoodmarkets.com'],
+ [/\bstar markets?\b/,'Star Market','flipp','starmarket','starmarket.com']
 ];
 /** “Costco”, “Costco Wholesale” or “Costco - Mountain View”; Business Centers have different pricing. */
 export function isCostco(name:string|null){const n=normalize(name??'');return /\bcostco\b/.test(n)&&!/\bbusiness\b/.test(n);}
 /** The offer provider for a user-typed store name, or null when no source covers it. */
 export function storeForName(name:string|null):StoreInfo|null{
  const n=normalize(name??'');
- for(const [re,store,provider,merchant] of stores)if(re.test(n)&&!(provider==='costco'&&/\bbusiness\b/.test(n)))return{provider,store,merchant};
+ for(const [re,store,provider,merchant,site] of stores)if(re.test(n)&&!(provider==='costco'&&/\bbusiness\b/.test(n)))return{provider,store,merchant,site};
  return null;
 }
 /** The offer source a list reads from: one shared source for Costco, one per ZIP for local-priced stores. */
@@ -111,5 +113,5 @@ export function sourceForList(name:string|null,zip:string|null):OfferSourceDef|n
   return /^\d{5}(?:-\d{4})?$/.test(zip??'')&&prefix>=10&&prefix<967?{provider:'costco',id:'costco-us-warehouse',store:'Costco',region:'US contiguous warehouses'}:null;
  }
  const z=(zip??'').match(/^(\d{5})(?:-\d{4})?$/)?.[1];
- return z?{provider:'flipp',id:`flipp:${info.merchant}:${z}`,store:info.store,region:`ZIP ${z}`,merchant:info.merchant,zip:z}:null;
+ return z?{provider:'flipp',id:`flipp:${info.merchant}:${z}`,store:info.store,region:`ZIP ${z}`,merchant:info.merchant,zip:z,site:info.site}:null;
 }

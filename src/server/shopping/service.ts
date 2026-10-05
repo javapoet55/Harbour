@@ -27,10 +27,11 @@ export async function shoppingAction(userId:string,raw:unknown,idempotencyKey?:s
    const saved=await tx.shoppingList.update({where:{id:list.id},data:{shareToken:list.shareToken??randomBytes(32).toString('hex')},include});return {list:saved};
   }
   if(p.operation==='revoke')return {list:await tx.shoppingList.update({where:{id:list.id},data:{shareToken:null},include})};
+  // Deleting expresses the owner's intent regardless of which device last edited the list.
+  if(p.operation==='delete'){await tx.shoppingList.delete({where:{id:list.id}});return {ok:true};}
   if(p.revision!==list.revision)throw new MomentError('This list changed on another device. Refresh before saving.',409);
   const claim=await tx.shoppingList.updateMany({where:{id:list.id,userId,revision:p.revision},data:{revision:{increment:1}}});
   if(!claim.count)throw new MomentError('This list changed. Refresh and try again.',409);
-  if(p.operation==='delete'){await tx.shoppingList.delete({where:{id:list.id}});return {ok:true};}
   if(p.operation==='complete'){
    if(list.completedAt)return {list};
    await tx.shoppingList.update({where:{id:list.id},data:{completedAt:new Date()}});
@@ -51,7 +52,7 @@ export async function shoppingAction(userId:string,raw:unknown,idempotencyKey?:s
     // A trip finished before its email went out skips that week instead of emailing next week's list early.
     const attached=new Date(Math.max(list.createdAt.getTime(),schedule.createdAt.getTime()));
     const skip=schedule.enabled&&!await tx.shoppingEmailRun.count({where:{scheduleId:schedule.id,dueAt:{gte:attached}}});
-    if(skip)await tx.shoppingEmailRun.create({data:{scheduleId:schedule.id,dueAt:schedule.nextRunAt,retryAt:schedule.nextRunAt,status:'skipped',recipient:schedule.recipient,subject:`Shopping list: ${list.title}`,body:'',detail:'Shopping trip completed before the scheduled email'}});
+    if(skip)await tx.shoppingEmailRun.create({data:{scheduleId:schedule.id,dueAt:schedule.nextRunAt,retryAt:schedule.nextRunAt,status:'skipped',recipient:schedule.recipient,subject:'Shopping list',body:'',detail:'Shopping trip completed before the scheduled email'}});
     await tx.shoppingEmailSchedule.update({where:{id:schedule.id},data:{listId:nextList.id,...(skip?{nextRunAt:nextWeekly(new Date(Math.max(Date.now(),schedule.nextRunAt.getTime())),schedule)}:{})}});
    }
    return {list:nextList};

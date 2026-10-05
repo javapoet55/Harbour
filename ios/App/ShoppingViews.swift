@@ -412,7 +412,9 @@ struct ShoppingDetail:View {
             .background(.ultraThinMaterial).overlay(alignment:.top){Divider().opacity(0.5)}
     }
     private var showsOffersShortcut:Bool {
-        if let offers, !offers.matches.isEmpty { return true }
+        // Once the snapshot loads, show the shortcut for every store: the offers screen itself
+        // explains the status for stores and locations the backend does not cover.
+        if offers != nil { return true }
         let storeWords = (list.storeName ?? "").lowercased().split { !$0.isLetter && !$0.isNumber }
         return storeWords.contains("costco") || storeWords.contains("safeway")
     }
@@ -796,8 +798,8 @@ private struct ShoppingShare:View {
         Section("Scheduled sharing"){NavigationLink("Weekly email to store manager"){ShoppingEmailView(store:store,list:list)}}
         Section("View-only link"){
             Text("Anyone with the link can view this list and its edits. The link stays with this trip; next week’s list needs a new link. Revoke it whenever you like.").font(.caption)
-            if let url {ShareLink(item:url){Label("Share Link",systemImage:"link")};Button("Revoke Link",role:.destructive){Task{if let saved=await store.action("revoke",list:list,input:[String:String]()){list=saved;self.url=nil;onUpdate(saved)}}}}
-            else{Button("Create Share Link"){Task{if let saved=await store.action("share",list:list,input:[String:String]()){list=saved;onUpdate(saved);updateURL()}}}}
+            if let url {ShareLink(item:url){Label("Share Link",systemImage:"link")};Button("Revoke Link",role:.destructive){Task{if let saved=await store.action("revoke",list:list,input:[String:String]()){list=saved;self.url=nil;onUpdate(saved)}}}.disabled(store.busy)}
+            else{Button("Create Share Link"){Task{if let saved=await store.action("share",list:list,input:[String:String]()){list=saved;onUpdate(saved);updateURL()}}}.disabled(store.busy)}
         }
         if let error=store.error{Text(error).foregroundStyle(.red)}
     }.navigationTitle("Share List").task{updateURL()}}}
