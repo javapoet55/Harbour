@@ -780,6 +780,14 @@ reached** (with the reason).
 | 19 | Review schedule | **fixed** | "Confirm Schedule" wrapped to two lines inside its half-width button; Swift's `ViewThatFits` stacks the pair when they do not fit. RN now stacks them, full width, as soon as either label needs a second line |
 | 20 | Send now | not reached | opens from **Send Now**, which the run must not tap |
 | 21 | Schedule confirmed | **fixed** | the bar showed the Moments backdrop as a grey band above the `#F7FAFF` page; it now takes the page colour. Reached by confirming "Parity Birthday"'s schedule to Parity Kate (both the Mac's test items; it was already scheduled, so this re-confirmed the same 6 Oct 8:00 AM plan) |
+| 22 | My Lists with store logos | **fixed** | (a) the large title "My Lists" was missing — `.navigationTitle` without `.inline` is a large title; drawn as content; (b) the back chevron was ink: a module's first screen leaves with a toolbar `Button` (WellnessChooserView.swift:54), which takes the indigo tint — Important Moments too (`moments-date-filter-today-empty`). List titles wrap at this width |
+| 23 | Shopping Detail | **fixed** | (a) the "…" had no glass circle; (b) the options menu was a dimmed centred card with no glyphs — now the shared anchored popover with Swift's `square.and.arrow.up` on Share list (new optional `disabled` on `PopoverItem`); (c) offer badges lacked the `NavigationLink` row's trailing chevron. "Complete Shopping" wraps to two lines, as Swift's `lineLimit(2)` allows. Data: "Parity Weekly Groceries" (Mac) |
+| 24 | Offers for list, item offers, offer details | checked | the offer photo loads a moment later; titles at `.headline` (see the device-font note) |
+| 25 | Item Alternatives | **fixed** | the xmark had no glass circle (also on the "Why these?" panel); the goal picker's Cancel filled half the row — Swift frames the button outside `.bordered`, so the capsule hugs "Cancel". No Replace tapped |
+| 26 | Alternative Item Details | **fixed** | the bar's back and star were the tint, Swift's system back and toolbar star are ink on glass circles; "Add to Cart Instead" was blue, ink under the page's `.foregroundStyle(Color.nexdoInk)` |
+| 27 | Add Item / Edit Item | **fixed** | the large title's iOS-only −20 pull hid its top half under Android's sheet bar. Not saved |
+| 28 | Share List | checked | Android form chrome as logged; no link created |
+| 29 | Weekly email and pickup details | **fixed** | the time was a settings-style "TIME" caption over a bordered field; Swift's `field("Time")` is the same captioned box as Repeat with the pill inside (`ClockField variant="pill"`); the date pill sat at the trailing edge, a `.labelsHidden()` `DatePicker` is leading (`DateField` with no label). Not saved |
 
 ### Not reached in this run
 

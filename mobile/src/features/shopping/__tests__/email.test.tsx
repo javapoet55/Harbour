@@ -93,6 +93,15 @@ describe('Weekly shopping email', () => {
     expect(screen.queryByText('Recent emails')).toBeNull();
   });
 
+  it('draws Time as a captioned box like Repeat, with the pill inside and no second label', async () => {
+    await open();
+    // `field("Time") { DatePicker(…).labelsHidden() }`: one "Time" caption, the value as a pill.
+    expect(screen.getAllByText('Time')).toHaveLength(1);
+    expect(screen.getByTestId('shopping-email-time').props.accessibilityLabel).toBe('Time, 10:00 AM');
+    // The pickup date's `DatePicker` is `.labelsHidden()` too: only the box's "Date" caption.
+    expect(screen.getAllByText('Date')).toHaveLength(1);
+  });
+
   it('when connected, shows the account with its status and no Connect button', async () => {
     await open();
     expect(screen.getByTestId('shopping-email-account')).toHaveTextContent('ada@gmail.com');

@@ -1,7 +1,7 @@
 import { Stack } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { pushedHeaderOptions } from '../../src/components/PushedHeader';
+import { GlassBackButton, pushedHeaderOptions } from '../../src/components/PushedHeader';
 import { stackHeaderOptions, useTheme } from '../../src/theme';
 
 /**
@@ -33,6 +33,10 @@ export default function WellnessLayout() {
     ...pushedHeaderOptions(theme, insets.top),
     presentation: 'card' as const,
   };
+  // A module's first screen leaves the module with a toolbar `Button` ("Back", `chevron.left`), which takes
+  // the root's indigo tint (WellnessChooserView.swift:54, `moments-date-filter-today-empty`,
+  // `shopping-lists-v2`); deeper pushes keep the system back, in ink.
+  const moduleRoot = { ...pushed, headerLeft: () => <GlassBackButton tint={theme.colors.link} /> };
 
   return (
     <Stack screenOptions={{ headerShown: false, presentation: 'fullScreenModal', contentStyle: { backgroundColor: '#FFFFFF' } }}>
@@ -46,7 +50,7 @@ export default function WellnessLayout() {
         background. The editor is registered twice: `editor` is a push, `import-editor` is the `.sheet`
         Moments Settings uses for a picked contact (MomentEditor.swift:242).
       */}
-      <Stack.Screen name="moments/index" options={{ ...pushed, title: 'Important Moments' }} />
+      <Stack.Screen name="moments/index" options={{ ...moduleRoot, title: 'Important Moments' }} />
       <Stack.Screen name="moments/manage-list" options={{ ...pushed, title: 'Manage Moments' }} />
       <Stack.Screen name="moments/editor" options={{ ...pushed, title: 'Create Moment' }} />
       <Stack.Screen
@@ -69,7 +73,8 @@ export default function WellnessLayout() {
 
       {/* Shopping Lists (Run C): `ShoppingHome` and `ShoppingDetail` push; everything else is a
           `.sheet` of those two, presented in-screen with `MomentSheet`. */}
-      <Stack.Screen name="shopping/index" options={{ ...pushed, title: 'My Lists' }} />
+      {/* `.navigationTitle("My Lists")` is a LARGE title (no `.inline`): drawn by the screen, the bar keeps only Back. */}
+      <Stack.Screen name="shopping/index" options={{ ...moduleRoot, title: '' }} />
       <Stack.Screen name="shopping/email" options={{ ...pushed, title: 'Share List' }} />
       <Stack.Screen name="shopping/[id]" options={{ ...pushed, title: 'Shopping List' }} />
       {/* Run F: the offers screens push from Shopping Detail (ShoppingOffersView.swift:79, :118). The

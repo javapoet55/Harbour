@@ -326,6 +326,8 @@ export type PopoverItem = {
   testID?: string;
   icon?: keyof typeof Ionicons.glyphMap;
   iconColor?: string;
+  /** `.disabled(…)`: drawn in `.tertiaryLabel`, not pressable. */
+  disabled?: boolean;
 };
 
 /** Each key as given, with a repeat suffixed by its row (`#2`), so two items with one value still render. */
@@ -346,6 +348,9 @@ export function uniqueKeys(keys: string[]): string[] {
 export function PopoverMenu({ items, menu, showsChecks = false, testID }: { items: PopoverItem[]; menu: MenuState; showsChecks?: boolean; testID?: string }) {
   const theme = useTheme();
   const keys = uniqueKeys(items.map((item) => item.key));
+  // When any item has a glyph, iOS keeps that column for every item, so the titles line up.
+  const glyphColumn = items.some((item) => item.icon);
+  const disabledColor = theme.scheme === 'dark' ? 'rgba(235, 235, 245, 0.3)' : 'rgba(60, 60, 67, 0.3)';
   const window = useWindowDimensions();
   const placement = menu.frame
     ? menuPlacement(menu.frame, items.length, window.width, window.height)
@@ -365,7 +370,8 @@ export function PopoverMenu({ items, menu, showsChecks = false, testID }: { item
               {items.map((item, index) => (
                 <Pressable
                   accessibilityRole="button"
-                  accessibilityState={item.checked === undefined ? undefined : { selected: item.checked }}
+                  accessibilityState={item.checked === undefined ? (item.disabled ? { disabled: true } : undefined) : { selected: item.checked, disabled: item.disabled }}
+                  disabled={item.disabled}
                   key={keys[index]}
                   onPress={() => {
                     menu.close();
@@ -377,12 +383,15 @@ export function PopoverMenu({ items, menu, showsChecks = false, testID }: { item
                   {showsChecks ? (
                     <View style={styles.menuCheck}>{item.checked ? <Ionicons name="checkmark" size={17} color={theme.colors.label} /> : null}</View>
                   ) : null}
-                  {item.icon ? (
+                  {glyphColumn ? (
                     <View style={styles.menuIcon}>
-                      <Ionicons color={item.destructive ? theme.colors.danger : (item.iconColor ?? theme.colors.label)} name={item.icon} size={20} />
+                      {item.icon ? <Ionicons color={item.destructive ? theme.colors.danger : (item.iconColor ?? theme.colors.label)} name={item.icon} size={20} /> : null}
                     </View>
                   ) : null}
-                  <Text numberOfLines={1} style={[textStyles.body, styles.grow, { color: item.destructive ? theme.colors.danger : theme.colors.label }]}>
+                  <Text
+                    numberOfLines={1}
+                    style={[textStyles.body, styles.grow, { color: item.disabled ? disabledColor : item.destructive ? theme.colors.danger : theme.colors.label }]}
+                  >
                     {item.title}
                   </Text>
                 </Pressable>
@@ -541,7 +550,8 @@ export function DateField({
     // The phone is 18dp narrower than the 402pt iPhone, so the pills sit 6 apart rather than 8 to keep
     // the label on one line where it fits; where it does not, it wraps, as SwiftUI's label would.
     <View style={[styles.inline, styles.dateRow, disabled && styles.dimmed]}>
-      <Text style={[textStyles.body, styles.grow, { color: theme.colors.label }]}>{label}</Text>
+      {/* `.labelsHidden()`: no label, and the pill sits at the leading edge (`shopping-weekly-email-bottom`). */}
+      {label === '' ? null : <Text style={[textStyles.body, styles.grow, { color: theme.colors.label }]}>{label}</Text>}
       <Pressable
         collapsable={false}
         ref={pill}

@@ -1532,4 +1532,14 @@ captures; results row by row in `docs/reference/PARITY.md` "UI-parity pass 3". F
   (`.secondarySystemGroupedBackground`); "All regions" is ink.
 - **Ink, not the tint, under an outer `.foregroundStyle`**: the Manage Moment info glyph and the calling
   guide's "Back to settings".
+- **A module's first screen has the tinted back** (Important Moments, My Lists): Swift leaves the module with
+  a toolbar `Button`, which takes the root's indigo tint; pushes deeper keep the system back in ink.
+- **My Lists draws its large title** as content (`headerLargeTitle` is iOS-only).
+- **Shopping Detail's options menu is the shared popover** (anchored, no dimming, the Share glyph);
+  `PopoverItem` gains `disabled`, drawn in `.tertiaryLabel`, and a glyph column is kept for every item when
+  any item has one. Offer badges carry the row's disclosure chevron.
+- **Glass circles** on the Shopping "…", the alternatives sheets' xmark, and Item Details' back and star (ink).
+- **Item editor's large title** is pulled up into the bar on iOS only; on Android the bar sits above it.
+- **Weekly email**: Time is a captioned box with a pill (`ClockField variant="pill"`), and a `DateField` with
+  an empty label draws only its pill, at the leading edge.
 

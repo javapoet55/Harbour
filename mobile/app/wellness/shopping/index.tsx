@@ -47,6 +47,10 @@ export default function MyListsScreen() {
         refreshControl={<RefreshControl refreshing={false} onRefresh={() => void shoppingStore.getState().refresh()} />}
         testID="shopping-home"
       >
+        {/* The large title (`shopping-lists-v2`), as content; `headerLargeTitle` is iOS-only. */}
+        <Text accessibilityRole="header" style={[textStyles.largeTitle, styles.bold, styles.largeTitle, { color: theme.colors.ink }]}>
+          My Lists
+        </Text>
         <Pressable accessibilityRole="button" onPress={() => setCreate(true)} testID="shopping-create-list">
           <MomentCard>
             <View style={styles.row}>
@@ -118,6 +122,8 @@ const styles = StyleSheet.create({
   listRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 4 },
   grow: { flex: 1, gap: 4 },
   bold: { fontWeight: '700' },
+  // The content's 24 gap less 8: the large title sits close over its first card, as on iOS.
+  largeTitle: { marginTop: -8, marginBottom: -8 },
   caption: { fontSize: 12, lineHeight: 16 },
   divider: { height: StyleSheet.hairlineWidth, marginVertical: 10 },
   empty: { alignItems: 'center', gap: 8, paddingVertical: 24 },

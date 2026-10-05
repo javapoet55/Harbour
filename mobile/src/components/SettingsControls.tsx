@@ -379,7 +379,8 @@ export function ClockField({
   onChange: (next: string) => void;
   testID: string;
   hourCycle?: ClockHourCycle;
-  variant?: 'settings' | 'formRow';
+  /** `pill`: only the value pill, for a `DatePicker(…).labelsHidden()` inside a captioned box. */
+  variant?: 'settings' | 'formRow' | 'pill';
 }) {
   const theme = useTheme();
   const [open, setOpen] = useState(false);
@@ -426,6 +427,23 @@ export function ClockField({
       </Pressable>
     </Modal>
   );
+
+  if (variant === 'pill') {
+    return (
+      <View style={styles.clockPillOnly}>
+        <Pressable
+          accessibilityLabel={`${label}, ${shown}`}
+          accessibilityRole="button"
+          onPress={() => setOpen(true)}
+          style={[styles.clockPill, { backgroundColor: withAlpha('#767680', 0.12) }, pillChrome]}
+          testID={testID}
+        >
+          <Text style={[theme.typography.body, { color: theme.colors.label }]}>{shown}</Text>
+        </Pressable>
+        {picker}
+      </View>
+    );
+  }
 
   if (variant === 'formRow') {
     return (
@@ -609,6 +627,7 @@ const styles = StyleSheet.create({
   // `variant="formRow"`: the Moments form's `DateField` row and pill (form.tsx `inline`, `datePill`).
   clockRow: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 24 },
   clockRowLabel: { flex: 1 },
+  clockPillOnly: { flexDirection: 'row' },
   clockPill: { borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6 },
 
   sliderRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
