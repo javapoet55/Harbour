@@ -1,4 +1,7 @@
-jest.mock('../lib/signupChallenge', () => ({ signupChallenge: jest.fn().mockResolvedValue(undefined) }));
+jest.mock('../lib/signupChallenge', () => ({
+  SECURITY_CHECK_MESSAGE: 'Please complete the security check and try again.',
+  signupChallenge: jest.fn().mockResolvedValue(undefined),
+}));
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 
@@ -54,5 +57,50 @@ describe('sign-up server errors', () => {
 
     // Exactly one node carries the message: no per-field copy alongside the footnote.
     await waitFor(() => expect(screen.getAllByText(message)).toHaveLength(1));
+  });
+});
+
+/**
+ * `SignUpView.create()` (RootView.swift:674-693): the security check runs under its own
+ * `checkingSignup` flag. The button is disabled while the browser check is open but still reads
+ * "Create Account"; "Creating Account…" is `model.busy`, the register call. The token the check
+ * returns is sent with the registration, and a failed check shows Swift's one message.
+ */
+describe('the security check before registering', () => {
+  const challenge = jest.requireMock('../lib/signupChallenge').signupChallenge as jest.Mock;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    challenge.mockResolvedValue(undefined);
+  });
+
+  it('keeps "Create Account", disabled, while the browser check is open', async () => {
+    let finish: (token: string) => void = () => undefined;
+    challenge.mockReturnValue(new Promise((resolve) => (finish = resolve)));
+    let register: (value: unknown) => void = () => undefined;
+    mockRegister.mockReturnValue(new Promise((resolve) => (register = resolve)));
+    await renderSignUp();
+    await fillIn();
+
+    await fireEvent.press(screen.getByLabelText('Create Account'));
+    await waitFor(() => expect(screen.getByLabelText('Create Account').props.accessibilityState.disabled).toBe(true));
+    expect(screen.queryByLabelText('Creating Account…')).toBeNull();
+    expect(mockRegister).not.toHaveBeenCalled();
+
+    finish('turnstile-token');
+    await waitFor(() => expect(screen.getByLabelText('Creating Account…')).toBeTruthy());
+    expect(mockRegister).toHaveBeenCalledWith('Sri Ram', 'person@example.com', 'a-long-enough-password', undefined, 'turnstile-token');
+    register({ email: 'person@example.com', emailVerificationRequired: true, emailSent: true });
+  });
+
+  it("shows Swift's message when the check fails, and does not register", async () => {
+    challenge.mockRejectedValue(new Error('Please complete the security check and try again.'));
+    await renderSignUp();
+    await fillIn();
+
+    await fireEvent.press(screen.getByLabelText('Create Account'));
+    await waitFor(() => expect(screen.getAllByText('Please complete the security check and try again.')).toHaveLength(1));
+    expect(mockRegister).not.toHaveBeenCalled();
+    await waitFor(() => expect(screen.getByLabelText('Create Account').props.accessibilityState.disabled).toBe(false));
   });
 });
