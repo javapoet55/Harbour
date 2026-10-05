@@ -739,3 +739,26 @@ figure is data, not styling.
 - **The date picker's past days** are not greyed out as `in: Date()...` does; the button refuses a past start (from Run A) — kept.
 - **Festival date pill** reads "20/09/26" on the iPhone but "25 Oct 2026" for a birthday: the compact `DatePicker`'s own choice, with no rule in the source to port — left locale-medium.
 - **Run B "Sheets are full height"** (pattern 8): now the iOS 26 large-sheet shape; no medium detents inside `MomentSheet`.
+
+## UI-parity pass 3 — Phase 12 on the phone (branch `rn-ui-parity-3-win`, Windows)
+
+Every ticked row of `docs/IOS_TO_REACT_NATIVE.md` §22 "Screen inventory" (49), on a **OnePlus CPH2691**
+(Android 16, 1080 x 2376 px at 480 dpi = **360 x 792 dp**, font scale 1.0, Tools button off), against the
+Mac's Phase 12 iPhone captures (402 pt wide). One light-mode screenshot per row, compared by eye; dark mode
+checked where the brief asked. Android screenshots are local only (`android/` is git-ignored).
+
+**This phone is 42 dp narrower than the iPhone**, so body text in fixed-width columns wraps one line sooner
+(guide steps, card subtitles). Where glyph sizes, art and padding measure the same, extra wrapping is
+recorded as checked, not fixed. **The phone's system font is OnePlus Sans**, not Roboto: weight 600 draws
+close to regular on it, so `.headline` / `.semibold` labels look lighter than on iOS. That is the device's
+font, not a style error, and is listed for a human to judge rather than changed.
+
+Status: **checked** (matches, or differs only by width/data), **fixed** (changed in this pass, re-shot on
+the phone), **platform gap** (Android cannot or should not match; logged in `android-polish.md`), **not
+reached** (with the reason).
+
+| # | §22 row | Status | Note |
+| ---: | --- | --- | --- |
+| 1 | Tab bar Wellness button | checked | centre image, no title, no capsule |
+| 2 | Wellness chooser | checked | light and dark (fixed light design, dark status-bar icons, §23). The green sliver under the Moments art is inside Swift's own crop rect (`WellnessChooserView.swift:24`) |
+| 3 | Module guide ×4 | **fixed** | "Back to Home" was the module colour; Swift's outer `.foregroundStyle(ink)` wins over `.tint` and `module-guide-shopping-scrolled` shows it in ink. All four guides checked, light and dark |
