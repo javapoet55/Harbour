@@ -90,7 +90,32 @@ describe('the schedule review sheet', () => {
     await show();
 
     await waitFor(() => expect(screen.getByTestId('conflicts-empty')).toBeTruthy());
-    expect(screen.getByText('No issues reported by schedule intelligence.')).toBeTruthy();
+    expect(screen.getByText('No conflicts reported by schedule intelligence.')).toBeTruthy();
+  });
+
+  /** `reviewableConflicts` (CalendarView.swift:255-261): overdue and blocked tasks have their own flows. */
+  it('leaves out the overdue and dependency items', async () => {
+    mockIntelligence.mockResolvedValue(
+      intelligence(todayKey(), [
+        { ...ITEM, id: 'overdue', title: 'Two tasks are overdue' },
+        { ...ITEM, id: 'dependency:t1', title: 'Blocked by another task' },
+        ITEM,
+      ]),
+    );
+
+    await show();
+
+    await waitFor(() => expect(screen.getByTestId('conflict-overloaded')).toBeTruthy());
+    expect(screen.queryByText('Two tasks are overdue')).toBeNull();
+    expect(screen.queryByText('Blocked by another task')).toBeNull();
+  });
+
+  it('says there is nothing to review when only overdue items remain', async () => {
+    mockIntelligence.mockResolvedValue(intelligence(todayKey(), [{ ...ITEM, id: 'overdue' }]));
+
+    await show();
+
+    await waitFor(() => expect(screen.getByText('No conflicts reported by schedule intelligence.')).toBeTruthy());
   });
 
   /**

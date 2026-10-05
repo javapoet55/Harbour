@@ -166,7 +166,7 @@ export function CalendarTimelineRow({
   const critical = tone === 'critical';
   const badges = (
     <View style={styles.badges}>
-      {completedOnly ? <CalendarBadge text={row.event !== null ? 'Past event' : 'Completed'} tone="green" /> : null}
+      {completedOnly || row.event?.completedAt != null ? <CalendarBadge text="Completed" tone="green" /> : null}
       {late ? <CalendarBadge text="Overdue" tone="orange" /> : null}
       {critical ? <CalendarBadge text="Critical" tone="red" /> : null}
       {row.deadline ? <CalendarBadge text="Deadline" tone="indigo" /> : null}

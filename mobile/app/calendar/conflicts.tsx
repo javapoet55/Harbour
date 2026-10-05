@@ -4,6 +4,7 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'reac
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Text } from '../../src/components/Text';
+import { reviewableConflicts } from '../../src/features/calendar/eventDetails';
 import { calendarKey } from '../../src/lib/calendarDates';
 import { useMe } from '../../src/query/useMe';
 import { useScheduleIntelligence } from '../../src/query/useToday';
@@ -32,6 +33,8 @@ export default function CalendarConflicts() {
   const today = intelligence.data?.today ?? null;
   // `if let info = model.scheduleIntelligence?.today, info.day == dates.key(Date())` (`:466`).
   const current = today !== null && today.day === calendarKey(now, zone);
+  // `reviewableConflicts` (CalendarView.swift:255-261): no overdue or dependency items.
+  const conflicts = reviewableConflicts(today, intelligence.isError, calendarKey(now, zone), zone);
 
   return (
     <SafeAreaView edges={['top', 'left', 'right', 'bottom']} style={[styles.fill, { backgroundColor: theme.colors.groupedBackground }]}>
@@ -57,12 +60,12 @@ export default function CalendarConflicts() {
             <Text style={[theme.typography.body, styles.sectionTitle, { color: theme.colors.secondaryLabel }]}>Today’s schedule review</Text>
             {/* A `List` section has a fill and no stroke. */}
             <View style={[styles.card, { backgroundColor: theme.colors.surface }]}>
-              {today.attention.length === 0 ? (
+              {conflicts.length === 0 ? (
                 <Text style={[theme.typography.body, styles.row, { color: theme.colors.ink }]} testID="conflicts-empty">
-                  No issues reported by schedule intelligence.
+                  No conflicts reported by schedule intelligence.
                 </Text>
               ) : (
-                today.attention.map((item, index) => (
+                conflicts.map((item, index) => (
                   // A `List` row separator is `listSeparator` at 1pt, not a hairline `.separator`.
                   <View key={item.id} style={[styles.item, index > 0 ? { borderTopColor: theme.colors.listSeparator, borderTopWidth: 1 } : null]} testID={`conflict-${item.id}`}>
                     <Text style={[styles.caption, { color: theme.colors.secondary }]}>{item.label}</Text>
