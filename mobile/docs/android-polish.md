@@ -1501,3 +1501,22 @@ captures; results row by row in `docs/reference/PARITY.md` "UI-parity pass 3". F
 - **Pomodoro period chips are single-line.** After a reload "This Week" drew as "This" even with `Text`'s
   1 dp slack (3 px at this phone's density): this phone's variable system font let the draw pass break at
   the space. `numberOfLines={1}` keeps Android's layout on one line.
+- **Text's Android slack adds to the caller's padding and margin (shared, Android only).** `Text` gives every
+  label one device pixel each side (§ global fix 6) as `paddingHorizontal: 1` / `marginHorizontal: -1`, and
+  React Native lets the axis props beat the `padding` / `margin` shorthand whatever the order, so a label
+  styled `padding: 16` lost its horizontal padding. It now reads the caller's sides and adds the pixel to
+  them; a side in percent or `auto` is left as the caller set it.
+- **Calorie Tracker plain buttons and glyphs are ink**, as Pomodoro's: text buttons, the bar's back and close,
+  the day chevrons, the Add-to-log circles, the summary icons and View Insights. Pickers and switches keep
+  the system indigo (`.tint(.indigo)` on those controls).
+- **Calorie Tracker numbers are grouped** ("2,000 kcal", goal fields "1,000") as SwiftUI's localized
+  `Text("\(n)")` and `.number` print them; strings Swift builds as plain `String`s (the chart's
+  accessibility label, the Insights averages) stay ungrouped, as in Swift.
+- **Calorie ring gradient follows the ring's rotation.** Swift strokes the gradient and then rotates the
+  ring −90°, so the gradient turns too; the arc runs teal at 12 o'clock to blue at 3 o'clock.
+- **Calorie charts centre their bars** in the 155-tall frame; **the robot art is full width** (centred);
+  **the Stepper is a capsule**; **cards lose `elevation`** (Android only, as Pomodoro's); the setup's Time zone
+  and Agent voice pickers show only their value, as Swift's.
+- **Add Food** sits below the status bar on Android and titles its section "Food" / "Sample meal".
+- **Calorie Tracker keeps a dark status bar in dark mode** (`FixedLightStatusBar`).
+

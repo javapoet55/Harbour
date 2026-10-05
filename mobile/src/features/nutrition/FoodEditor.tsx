@@ -1,4 +1,4 @@
-import { Modal, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { Modal, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import type { NutritionEntry, NutritionMeal } from '../../api/nutrition';
@@ -45,7 +45,7 @@ export function FoodEditor({
   return (
     <Modal animationType="slide" onRequestClose={onCancel} presentationStyle="pageSheet" visible={draft !== null}>
       {draft ? (
-        <View style={[styles.sheet, { paddingBottom: insets.bottom }]} testID="calorie-food-editor">
+        <View style={[styles.sheet, { paddingTop: Platform.OS === 'android' ? insets.top : 0, paddingBottom: insets.bottom }]} testID="calorie-food-editor">
           <View style={styles.bar}>
             <Pressable accessibilityRole="button" onPress={onCancel} style={styles.side} testID="calorie-editor-cancel">
               <Text style={[styles.body, { color: TINT }]}>Cancel</Text>
@@ -65,7 +65,7 @@ export function FoodEditor({
             </Pressable>
           </View>
           <ScrollView contentContainerStyle={styles.form} keyboardShouldPersistTaps="handled">
-            <Text style={styles.sectionHeader}>{live ? 'FOOD' : 'SAMPLE MEAL'}</Text>
+            <Text style={styles.sectionHeader}>{live ? 'Food' : 'Sample meal'}</Text>
             <View style={styles.group}>
               <TextInput
                 onChangeText={(name) => onChange({ ...draft, name })}
@@ -108,7 +108,8 @@ const styles = StyleSheet.create({
   body: { fontSize: 17, lineHeight: 22, color: INK },
   disabled: { opacity: 0.35 },
   form: { padding: 16, gap: 8 },
-  sectionHeader: { fontSize: 13, lineHeight: 18, color: SECONDARY, marginLeft: 16, marginTop: 8 },
+  // iOS 26 draws a `Form` `Section("…")` header as written, row-sized and semibold (`calorie-add-food`).
+  sectionHeader: { fontSize: 17, lineHeight: 22, fontWeight: '600', color: SECONDARY, marginLeft: 16, marginTop: 8 },
   group: { backgroundColor: '#FFFFFF', borderRadius: 10, overflow: 'hidden', marginBottom: 16 },
   field: { minHeight: 44, paddingHorizontal: 16, fontSize: 17, color: INK },
   separator: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: 'rgba(60, 60, 67, 0.29)' },

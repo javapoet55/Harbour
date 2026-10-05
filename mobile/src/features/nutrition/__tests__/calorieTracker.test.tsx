@@ -139,7 +139,7 @@ describe('the design preview (not live)', () => {
     expect(screen.getByText('Your Nutrition Goals')).toBeTruthy();
     expect(screen.queryByTestId('insights-toggle')).toBeNull();
     await press('calorie-goal-stepper-increment');
-    expect(screen.getByTestId('calorie-goal-value')).toHaveTextContent('2050 kcal');
+    expect(screen.getByTestId('calorie-goal-value')).toHaveTextContent('2,050 kcal');
     await fireEvent.changeText(screen.getByTestId('calorie-goal-0'), '0');
     await fireEvent.changeText(screen.getByTestId('calorie-goal-7'), '20000');
     await press('calorie-goals-next');
@@ -149,16 +149,16 @@ describe('the design preview (not live)', () => {
     expect(summary.getByText('Call time: 7:30 PM')).toBeTruthy();
     expect(summary.getByText('If no answer: Retry once')).toBeTruthy();
     expect(summary.getByText('Voice: Marin')).toBeTruthy();
-    expect(summary.getByText('2050 kcal goal')).toBeTruthy();
+    expect(summary.getByText('2,050 kcal goal')).toBeTruthy();
     expect(screen.queryByTestId('calorie-phone')).toBeNull();
     expect(screen.getByText('Here’s what you’ve set up. You can change these options anytime in this preview.')).toBeTruthy();
 
     // Back to Goals: Next clamped the values to 1 … 10,000.
     await press('calorie-back');
     expect(screen.getByTestId('calorie-goal-0').props.value).toBe('1');
-    expect(screen.getByTestId('calorie-goal-7').props.value).toBe('10000');
+    expect(screen.getByTestId('calorie-goal-7').props.value).toBe('10,000');
     await press('calorie-restore-goals');
-    expect(screen.getByTestId('calorie-goal-value')).toHaveTextContent('2000 kcal');
+    expect(screen.getByTestId('calorie-goal-value')).toHaveTextContent('2,000 kcal');
     expect(screen.getByTestId('calorie-goal-0').props.value).toBe('150');
     await press('calorie-goals-next');
 
@@ -190,7 +190,7 @@ describe('the design preview (not live)', () => {
     await open(false);
     await press('calorie-to-dashboard');
     expect(screen.getByTestId('calorie-total')).toHaveTextContent('1,430');
-    expect(screen.getByText('of 2000 kcal')).toBeTruthy();
+    expect(screen.getByText('of 2,000 kcal')).toBeTruthy();
     expect(screen.getByTestId('calorie-left')).toHaveTextContent('570');
     expect(screen.getByTestId('calorie-percent')).toHaveTextContent('71%');
     expect(within(screen.getByTestId('calorie-macro-0')).getByText('82 / 150 g')).toBeTruthy();
@@ -224,7 +224,7 @@ describe('the design preview (not live)', () => {
     expect(screen.getByText('Food Ideas')).toBeTruthy();
     await press('calorie-idea-🥣 Greek yogurt');
     expect(screen.getByTestId('calorie-editor-name').props.value).toBe('Greek yogurt');
-    expect(screen.getByText('SAMPLE MEAL')).toBeTruthy();
+    expect(screen.getByText('Sample meal')).toBeTruthy();
     expect(screen.getByText('This entry changes the preview only.')).toBeTruthy();
     await press('calorie-editor-cancel');
     expect(screen.queryByTestId('calorie-food-editor')).toBeNull();
@@ -262,7 +262,7 @@ describe('the design preview (not live)', () => {
     // Dinner holds only the salmon: the group total and the row both read 220.
     await waitFor(() => expect(within(screen.getByTestId('calorie-meal-DINNER')).getAllByText('220 kcal')).toHaveLength(2));
     // 1,430 − 105 (banana) + 95 (apple) + 40 (salmon) = 1,460.
-    expect(within(screen.getByTestId('calorie-log-total')).getByText('1460 / 2000 kcal')).toBeTruthy();
+    expect(within(screen.getByTestId('calorie-log-total')).getByText('1,460 / 2,000 kcal')).toBeTruthy();
   });
 });
 
@@ -350,11 +350,11 @@ describe('live', () => {
     expect(mockApi.insight).toHaveBeenCalledWith('2026-10-05');
     expect(screen.getByText('Fiber has been low')).toBeTruthy();
     expect(screen.getByTestId('calorie-total')).toHaveTextContent('450');
-    expect(screen.getByText('of 1800 kcal')).toBeTruthy();
+    expect(screen.getByText('of 1,800 kcal')).toBeTruthy();
     expect(within(screen.getByTestId('calorie-macro-0')).getByText('40 / 120 g')).toBeTruthy();
     expect(within(screen.getByTestId('calorie-key-nutrients')).getByText('10 / 25 g')).toBeTruthy();
     // Calcium is unknown today and omega-3 is not tracked: both show their goal alone.
-    expect(within(screen.getByTestId('calorie-key-nutrients')).getAllByText('Goal 1000 mg')).toHaveLength(2);
+    expect(within(screen.getByTestId('calorie-key-nutrients')).getAllByText('Goal 1,000 mg')).toHaveLength(2);
     expect(screen.getByText(/Omega-3 isn’t tracked yet/)).toBeTruthy();
     expect(screen.getByText('1 item to review in your food log')).toBeTruthy();
 
@@ -413,7 +413,7 @@ describe('live', () => {
     await waitFor(() => expect(mockApi.updateEntry).toHaveBeenCalledWith('e2', { confirm: true }));
 
     await press('calorie-edit-e2');
-    expect(screen.getByText('FOOD')).toBeTruthy();
+    expect(screen.getByText('Food')).toBeTruthy();
     expect(screen.getByText('Saved to your food log for Oct 5, 2026.')).toBeTruthy();
     await fireEvent.changeText(screen.getByTestId('calorie-editor-calories'), '190');
     await press('calorie-editor-save');

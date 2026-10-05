@@ -15,10 +15,15 @@ import { MenuPicker } from '../moments/form';
 import { CALORIE_AGENT } from '../wellness/art';
 import { FoodEditor, type FoodDraft } from './FoodEditor';
 import { chartValues, DEFAULT_VOICES, e164, goalsFrom, intake, MEALS, needsReview, NO_ANSWER_CHOICES, NUTRIENTS, nutritionDay, nutritionZone, zoneChoices } from './model';
-import { CalorieRing, Card, ChartBars, DateSelector, Feature, GRADIENT, IconTile, INK, Primary, ProgressBar, SECONDARY, Segmented, Stepper, Steps, styles as parts, SYSTEM_INDIGO, TextButton, TINT, type IconName } from './parts';
+import { CalorieRing, Card, ChartBars, DateSelector, Feature, GRADIENT, IconTile, INK, Primary, ProgressBar, SECONDARY, Segmented, Stepper, Steps, styles as parts, SYSTEM_INDIGO, TextButton, type IconName } from './parts';
 import { SAMPLE_INTAKE } from './sample';
 import { useCalorieStore } from './useCalorieStore';
 import { useNutritionSettings } from '../../query/useNutrition';
+
+/** An integer as SwiftUI's `Text("\(n)")` prints it: a `LocalizedStringKey` groups thousands ("2,000"). */
+function grouped(value: number): string {
+  return value.toLocaleString('en-US');
+}
 
 /**
  * `CalorieTrackerView` (ios/App/CalorieTrackerView.swift:245-916): the Daily Food Check-in. Eight pages
@@ -233,11 +238,11 @@ export function CalorieTracker({ live, onClose, now = Date.now, region = deviceR
       <Card>
         <ClockField hourCycle="h12" label="Call time" onChange={setCallTime} testID="calorie-call-time" value={callTime} variant="formRow" />
         <Divider />
-        <MenuPicker label="Time zone" onChange={setTimeZoneID} options={zoneChoices(timeZoneID).map((value) => ({ value, title: zoneName(value) }))} testID="calorie-time-zone" value={timeZoneID} />
+        <MenuPicker hideLabel label="Time zone" onChange={setTimeZoneID} options={zoneChoices(timeZoneID).map((value) => ({ value, title: zoneName(value) }))} testID="calorie-time-zone" value={timeZoneID} />
         <Divider />
         <ToggleRow label="Repeat every day" onChange={setRepeatDaily} testID="calorie-repeat" value={repeatDaily} />
         <Divider />
-        <MenuPicker label="Agent voice" onChange={setVoice} options={voices.map((value) => ({ value, title: capitalized(value) }))} testID="calorie-voice" value={voice} />
+        <MenuPicker hideLabel label="Agent voice" onChange={setVoice} options={voices.map((value) => ({ value, title: capitalized(value) }))} testID="calorie-voice" value={voice} />
       </Card>
       <Text style={[parts.caption, { color: SECONDARY }]}>Calls are placed between 8:00 AM and 9:30 PM.</Text>
       <Text style={parts.headline}>If I don’t answer</Text>
@@ -300,7 +305,7 @@ export function CalorieTracker({ live, onClose, now = Date.now, region = deviceR
           <IconTile color="#FF3B30" name="flame" />
           <View>
             <Text style={parts.body}>Daily calorie goal</Text>
-            <Text style={parts.title2} testID="calorie-goal-value">{`${calorieGoal} kcal`}</Text>
+            <Text style={parts.title2} testID="calorie-goal-value">{`${grouped(calorieGoal)} kcal`}</Text>
           </View>
         </View>
         <Stepper label="Adjust calories" max={5000} min={500} onChange={setCalorieGoal} step={50} testID="calorie-goal-stepper" value={calorieGoal} />
@@ -346,7 +351,7 @@ export function CalorieTracker({ live, onClose, now = Date.now, region = deviceR
       <SummaryLabel icon="globe-outline" text={zoneName(timeZoneID)} />
       <SummaryLabel icon="repeat" text={repeatDaily ? 'Every day' : 'One check-in'} />
       <SummaryLabel icon="pulse" text={`Voice: ${capitalized(voice)}`} />
-      <SummaryLabel icon="flame-outline" text={`${calorieGoal} kcal goal`} />
+      <SummaryLabel icon="flame-outline" text={`${grouped(calorieGoal)} kcal goal`} />
       <SummaryLabel icon="restaurant-outline" text="Protein, Carbs, Fats & key nutrients" />
       <SummaryLabel icon="notifications-outline" text={`If no answer: ${NO_ANSWER_CHOICES.find((choice) => choice.key === noAnswer)?.title ?? noAnswer}`} />
     </Card>
@@ -564,13 +569,13 @@ export function CalorieTracker({ live, onClose, now = Date.now, region = deviceR
                 <Text style={parts.largeTitle} testID="calorie-total">
                   {total.toLocaleString('en-US')}
                 </Text>
-                <Text style={parts.caption}>{`of ${goal} kcal`}</Text>
+                <Text style={parts.caption}>{`of ${grouped(goal)} kcal`}</Text>
               </CalorieRing>
             </View>
             <View style={styles.todayCards}>
               <Card>
                 <Text style={parts.title2} testID="calorie-left">
-                  {String(Math.max(0, goal - total))}
+                  {grouped(Math.max(0, goal - total))}
                 </Text>
                 <Text style={parts.caption}>kcal left</Text>
               </Card>
@@ -614,7 +619,7 @@ export function CalorieTracker({ live, onClose, now = Date.now, region = deviceR
       <View style={styles.row}>
         <Text style={[parts.headline, parts.grow]}>Key Nutrients</Text>
         <Pressable accessibilityRole="button" onPress={() => go('insights')} testID="calorie-view-insights">
-          <Text style={[parts.subheadline, { color: TINT }]}>View Insights</Text>
+          <Text style={[parts.subheadline, { color: INK }]}>View Insights</Text>
         </Pressable>
       </View>
       <Card testID="calorie-key-nutrients">
@@ -629,7 +634,7 @@ export function CalorieTracker({ live, onClose, now = Date.now, region = deviceR
                 {value !== null ? (
                   <Text style={parts.caption}>{`${value} / ${target} ${NUTRIENTS[index].unit}`}</Text>
                 ) : (
-                  <Text style={[parts.caption, { color: SECONDARY }]}>{`Goal ${target} ${NUTRIENTS[index].unit}`}</Text>
+                  <Text style={[parts.caption, { color: SECONDARY }]}>{`Goal ${grouped(target)} ${NUTRIENTS[index].unit}`}</Text>
                 )}
               </View>
               {value !== null ? <ProgressBar color={COLORS[index]} value={value / target} /> : null}
@@ -721,7 +726,7 @@ export function CalorieTracker({ live, onClose, now = Date.now, region = deviceR
           <View style={styles.row}>
             <Text style={[parts.headline, parts.grow]}>{name}</Text>
             <Pressable accessibilityLabel="Add to log" accessibilityRole="button" onPress={() => openEditor(Array.from(name).slice(2).join(''))} testID={`calorie-idea-${name}`}>
-              <Ionicons color={TINT} name="add-circle" size={26} />
+              <Ionicons color={INK} name="add-circle" size={26} />
             </Pressable>
           </View>
           <Text style={[parts.caption, { color: SECONDARY }]}>{live ? 'Add it to your food log for this day.' : 'Explore this food in your sample meal log.'}</Text>
@@ -742,7 +747,7 @@ export function CalorieTracker({ live, onClose, now = Date.now, region = deviceR
           <Card key={group.key} testID={`calorie-meal-${group.key}`}>
             <View style={styles.row}>
               <Text style={[parts.headline, parts.grow]}>{group.title}</Text>
-              <Text style={parts.subheadline}>{`${items.reduce((sum, entry) => sum + entry.kcal, 0)} kcal`}</Text>
+              <Text style={parts.subheadline}>{`${grouped(items.reduce((sum, entry) => sum + entry.kcal, 0))} kcal`}</Text>
             </View>
             {items.map((food) => (
               <View key={food.id}>
@@ -763,7 +768,7 @@ export function CalorieTracker({ live, onClose, now = Date.now, region = deviceR
           <Ionicons color={INK} name="flame" size={17} />
           <Text style={parts.body}>Total Calories</Text>
         </View>
-        <Text style={parts.title2}>{`${total} / ${goal} kcal`}</Text>
+        <Text style={parts.title2}>{`${grouped(total)} / ${grouped(goal)} kcal`}</Text>
         <ProgressBar color="#00C7BE" value={ratio} />
       </Card>
       <Primary onPress={() => openEditor('')} testID="calorie-add-food" title="Add Food" />
@@ -777,13 +782,13 @@ export function CalorieTracker({ live, onClose, now = Date.now, region = deviceR
       <LinearGradient colors={[withAlpha('#AF52DE', 0.065), '#FFFFFF', withAlpha('#007AFF', 0.055)]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
       <View style={[styles.header, { paddingTop: insets.top }]}>
         <Pressable accessibilityLabel="Back" accessibilityRole="button" onPress={back} style={styles.headerButton} testID="calorie-back">
-          <Ionicons color={TINT} name="chevron-back" size={22} />
+          <Ionicons color={INK} name="chevron-back" size={22} />
         </Pressable>
         <Text accessibilityRole="header" style={[parts.headline, styles.headerTitle]}>
           {TITLES[page](live)}
         </Text>
         <Pressable accessibilityLabel="Close calorie tracker" accessibilityRole="button" onPress={onClose} style={styles.headerButton} testID="calorie-close">
-          <Ionicons color={TINT} name="close" size={22} />
+          <Ionicons color={INK} name="close" size={22} />
         </Pressable>
       </View>
       <Text style={[parts.caption, styles.status, { color: SECONDARY }]} testID="calorie-status">
@@ -835,19 +840,23 @@ function ToggleRow({ label, value, onChange, testID }: { label: string; value: b
 function SummaryLabel({ icon, text }: { icon: IconName; text: string }) {
   return (
     <View style={styles.label}>
-      <Ionicons color={TINT} name={icon} size={17} />
+      <Ionicons color={INK} name={icon} size={17} />
       <Text style={parts.body}>{text}</Text>
     </View>
   );
 }
 
-/** `TextField(_, value:, format: .number)` with a number pad, 65 wide, right-aligned. */
+/**
+ * `TextField(_, value:, format: .number)` with a number pad, 65 wide, right-aligned. `.number` shows the
+ * value grouped ("1,000") and regroups it when editing ends.
+ */
 function GoalField({ label, value, onChange, testID }: { label: string; value: number; onChange: (next: number) => void; testID: string }) {
-  const [text, setText] = useState(String(value));
+  const [text, setText] = useState(grouped(value));
   return (
     <TextInput
       accessibilityLabel={label}
       keyboardType="number-pad"
+      onBlur={() => setText((current) => (current === '' ? current : grouped(Number.parseInt(current.replace(/\D/g, ''), 10))))}
       onChangeText={(next) => {
         const digits = next.replace(/\D/g, '');
         setText(digits);
@@ -901,7 +910,7 @@ function FoodRow({ food, onEdit, onRemove, onConfirm }: { food: NutritionEntry; 
         {food.fromCall ? <Ionicons accessibilityLabel="From your call" color="#34C759" name="call" size={12} /> : null}
         <Text style={[parts.subheadline, parts.grow]}>{food.description}</Text>
         <Pressable accessibilityLabel={`Edit ${food.description}, ${food.kcal} calories`} accessibilityRole="button" onPress={onEdit}>
-          <Text style={parts.caption}>{`${food.kcal} kcal`}</Text>
+          <Text style={parts.caption}>{`${grouped(food.kcal)} kcal`}</Text>
         </Pressable>
         <Pressable accessibilityLabel={`Remove ${food.description}`} accessibilityRole="button" onPress={onRemove} style={styles.remove}>
           <Ionicons color="#FF3B30" name="remove-circle-outline" size={20} />
@@ -929,7 +938,8 @@ const styles = StyleSheet.create({
   status: { textAlign: 'center', paddingBottom: 8 },
   content: { padding: 20, gap: 20, width: '100%', maxWidth: 650, alignSelf: 'center' },
   centered: { textAlign: 'center' },
-  art: { alignSelf: 'stretch' },
+  // Full width, the picture centred in it (`CaloriePackArt`'s GeometryReader); `stretch` alone left Android at the intrinsic 218 wide.
+  art: { alignSelf: 'stretch', width: '100%' },
   row: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   label: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   divider: { height: StyleSheet.hairlineWidth, backgroundColor: 'rgba(60, 60, 67, 0.29)' },

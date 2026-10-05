@@ -155,3 +155,50 @@ describe('Task Details parts on iOS', () => {
     expect(StyleSheet.flatten(screen.getByText('PRIORITY').props.style).letterSpacing).toBeUndefined();
   });
 });
+
+/**
+ * `Text`'s Android slack (one device pixel each side) is ADDED to the caller's horizontal padding and
+ * margin. `paddingHorizontal` beats the `padding` shorthand in React Native whatever the order, so a
+ * plain slack wiped `padding: 16` down to 1 — the Add Food note sat on its card's edge.
+ */
+describe('Text slack on Android', () => {
+  const style = async (props: Parameters<typeof Text>[0]) => {
+    await render(
+      <Text testID="t" {...props}>
+        x
+      </Text>,
+    );
+  };
+
+  it('keeps a caller\'s padding shorthand and adds the slack to it', async () => {
+    onPlatform('android');
+    await style({ style: { padding: 16 } });
+    expect(flat('t')).toMatchObject({ padding: 16, paddingStart: 17, paddingEnd: 17, marginStart: -1, marginEnd: -1 });
+  });
+
+  it('adds to each side as set, and to a margin', async () => {
+    onPlatform('android');
+    await style({ style: { paddingLeft: 4, paddingHorizontal: 10, margin: 8 } });
+    expect(flat('t')).toMatchObject({ paddingStart: 5, paddingEnd: 11, marginStart: 7, marginEnd: 7 });
+  });
+
+  it('leaves a percentage or auto side alone', async () => {
+    onPlatform('android');
+    await style({ style: { marginHorizontal: 'auto' } });
+    expect(flat('t').marginStart).toBeUndefined();
+    expect(flat('t').marginHorizontal).toBe('auto');
+  });
+
+  it('is the plain one-pixel slack when the caller sets none', async () => {
+    onPlatform('android');
+    await style({});
+    expect(flat('t')).toMatchObject({ paddingHorizontal: 1, marginHorizontal: -1 });
+  });
+
+  it('adds nothing on iOS', async () => {
+    onPlatform('ios');
+    await style({ style: { padding: 16 } });
+    expect(flat('t')).toEqual(expect.not.objectContaining({ paddingStart: expect.anything() }));
+    expect(flat('t').paddingHorizontal).toBeUndefined();
+  });
+});

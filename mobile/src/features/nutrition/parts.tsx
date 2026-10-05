@@ -79,7 +79,7 @@ export function TextButton({
         style={[
           small ? styles.captionBold : styles.body,
           bold && styles.bold,
-          { color: destructive ? '#FF3B30' : TINT },
+          { color: destructive ? '#FF3B30' : INK },
           disabled && styles.disabledText,
         ]}
       >
@@ -112,7 +112,7 @@ export function Feature({ icon, color, title, detail, testID }: { icon: IconName
   return (
     <View style={styles.feature} testID={testID}>
       <IconTile color={color} name={icon} />
-      <View style={styles.grow}>
+      <View style={[styles.grow, styles.featureText]}>
         <Text style={styles.headline}>{title}</Text>
         <Text style={[styles.subheadline, { color: SECONDARY }]}>{detail}</Text>
       </View>
@@ -225,9 +225,12 @@ export function CalorieRing({ ratio, children }: { ratio: number; children: Reac
     [52, 199, 89],
   ];
   const colorAt = (angle: number) => {
-    // The segment's place along the bottom-left → top-right axis of the ring's box.
+    // The segment's place along the bottom-left → top-right axis of the UNROTATED ring: Swift strokes the
+    // gradient first and then `.rotationEffect(.degrees(-90))`, so the gradient turns with the ring. A
+    // segment `angle` clockwise from 12 o'clock on screen sat `angle` clockwise from 3 o'clock before it,
+    // at (cos, sin) with y down; bottom-left → top-right reads x − y. 12 o'clock is teal, 3 o'clock blue.
     const radians = (angle * Math.PI) / 180;
-    const t = Math.max(0, Math.min(1, (Math.sin(radians) + 1 + Math.cos(radians) + 1) / 4));
+    const t = Math.max(0, Math.min(1, (Math.cos(radians) - Math.sin(radians) + 2) / 4));
     const scaled = t * 2;
     const index = Math.min(1, Math.floor(scaled));
     const local = scaled - index;
@@ -256,12 +259,14 @@ export function ChartBars({ values, labels, goal }: { values: number[]; labels: 
       style={styles.chart}
       testID="calorie-chart"
     >
-      {values.map((value, index) => (
-        <View key={index} style={styles.chartColumn}>
-          <LinearGradient colors={['#32ADE6', SYSTEM_INDIGO]} style={[styles.bar, { height: Math.max(4, (value / top) * 120) }]} />
-          <Text style={styles.caption}>{index < labels.length ? labels[index] : ''}</Text>
-        </View>
-      ))}
+      <View style={styles.chartRow}>
+        {values.map((value, index) => (
+          <View key={index} style={styles.chartColumn}>
+            <LinearGradient colors={['#32ADE6', SYSTEM_INDIGO]} style={[styles.bar, { height: Math.max(4, (value / top) * 120) }]} />
+            <Text style={styles.caption}>{index < labels.length ? labels[index] : ''}</Text>
+          </View>
+        ))}
+      </View>
     </View>
   );
 }
@@ -277,7 +282,7 @@ export function DateSelector({ at, zone, onChange, now }: { at: number; zone: st
   return (
     <View style={styles.dateRow}>
       <Pressable accessibilityLabel="Previous day" accessibilityRole="button" onPress={() => onChange(addDays(at, -1, zone) + (at - startOfDay(at, zone)))} style={styles.dateArrow} testID="calorie-previous-day">
-        <Ionicons color={TINT} name="chevron-back" size={20} />
+        <Ionicons color={INK} name="chevron-back" size={20} />
       </Pressable>
       <Pressable accessibilityLabel={`Date, ${label}`} accessibilityRole="button" onPress={() => setOpen(true)} style={styles.datePill} testID="calorie-date">
         <Text style={styles.body}>{label}</Text>
@@ -289,7 +294,7 @@ export function DateSelector({ at, zone, onChange, now }: { at: number; zone: st
         style={styles.dateArrow}
         testID="calorie-next-day"
       >
-        <Ionicons color={TINT} name="chevron-forward" size={20} />
+        <Ionicons color={INK} name="chevron-forward" size={20} />
       </Pressable>
       <Modal animationType="fade" onRequestClose={() => setOpen(false)} transparent visible={open}>
         <Pressable onPress={() => setOpen(false)} style={styles.scrim}>
@@ -325,7 +330,8 @@ export const styles = StyleSheet.create({
     shadowOpacity: 0.04,
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 4 },
-    elevation: 1,
+    // No `elevation`: Android draws it at full strength in `shadowColor` and shows it through the 90% fill
+    // (an outline and a grey inner panel). The 1pt stroke carries the edge, as on Pomodoro's cards.
   },
   primary: { padding: 16, borderRadius: 16, alignItems: 'center' },
   primaryText: { color: '#FFFFFF', fontSize: 17, lineHeight: 22, fontWeight: '600' },
@@ -345,6 +351,8 @@ export const styles = StyleSheet.create({
   iconTile: { width: 46, height: 46, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
   numberCircle: { width: 24, height: 24, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   numberText: { color: '#FFFFFF', fontSize: 14, lineHeight: 17, fontWeight: '700' },
+  // `VStack(alignment: .leading, spacing: 6)` (CalorieTrackerView.swift:445).
+  featureText: { gap: 6 },
   feature: { flexDirection: 'row', alignItems: 'flex-start', gap: 14, paddingVertical: 8 },
   steps: { flexDirection: 'row', padding: 14, borderRadius: 18, backgroundColor: withAlpha(SYSTEM_INDIGO, 0.04) },
   step: { flex: 1, alignItems: 'center', gap: 6 },
@@ -361,12 +369,16 @@ export const styles = StyleSheet.create({
   },
   segmentText: { fontSize: 13, lineHeight: 18, color: INK },
   stepperRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  stepper: { flexDirection: 'row', alignItems: 'center', borderRadius: 8, backgroundColor: 'rgba(118, 118, 128, 0.12)' },
+  // iOS 26's Stepper is a capsule (`calorie-setup-goals`).
+  stepper: { flexDirection: 'row', alignItems: 'center', borderRadius: 999, backgroundColor: 'rgba(118, 118, 128, 0.12)' },
   stepperButton: { width: 47, height: 32, alignItems: 'center', justifyContent: 'center' },
   stepperDivider: { width: StyleSheet.hairlineWidth, height: 18, backgroundColor: 'rgba(60, 60, 67, 0.29)' },
   track: { height: 4, borderRadius: 2, backgroundColor: 'rgba(118, 118, 128, 0.2)', overflow: 'hidden' },
   fill: { height: '100%', borderRadius: 2 },
-  chart: { flexDirection: 'row', alignItems: 'flex-end', gap: 12, height: 155 },
+  // `HStack(alignment: .bottom).frame(height: 155)`: the row is as tall as its tallest column and the
+  // frame centres it, so short bars sit mid-card, not on its floor (`calorie-dashboard-week`).
+  chart: { height: 155, justifyContent: 'center' },
+  chartRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 12 },
   chartColumn: { flex: 1, alignItems: 'center', justifyContent: 'flex-end', gap: 8 },
   bar: { alignSelf: 'stretch', borderRadius: 5 },
   dateRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },

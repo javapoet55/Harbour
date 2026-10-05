@@ -5,7 +5,7 @@ import type { Profile } from '../../../api';
 import { useSession } from '../../../store/session';
 
 let mockParams: Record<string, string> = {};
-jest.mock('expo-router', () => ({ router: { back: jest.fn() }, useLocalSearchParams: () => mockParams }));
+jest.mock('expo-router', () => ({ router: { back: jest.fn() }, useLocalSearchParams: () => mockParams, useIsFocused: () => true }));
 jest.mock('../../../api/nutrition', () => ({
   nutritionApi: {
     settings: jest.fn(async () => ({ enabled: false, phoneVerified: false, localTime: '20:00', timeZone: 'UTC', repeatDaily: true, noAnswer: 'NOTIFY', voice: 'marin', calorieGoal: 2000, voices: ['marin'] })),
