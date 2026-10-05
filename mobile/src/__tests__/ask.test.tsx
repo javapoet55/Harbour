@@ -17,6 +17,11 @@ jest.mock('expo-router', () => ({
 
 const mockAssistant = jest.fn();
 const mockTasks = jest.fn();
+const mockRecommend = jest.fn();
+jest.mock('../api/shopping', () => ({
+  ...jest.requireActual('../api/shopping'),
+  shoppingStoresApi: { search: jest.fn(), brand: jest.fn(), recognize: jest.fn(), recommendations: (...args: unknown[]) => mockRecommend(...args) },
+}));
 jest.mock('../api', () => ({
   ...jest.requireActual('../api'),
   endpoints: {
@@ -28,7 +33,6 @@ jest.mock('../api', () => ({
 import Ask from '../../app/ask/index';
 import { AskNexdoView } from '../components/AskNexdoView';
 import { briefHandlers } from '../features/ask/briefHandlers';
-import { shoppingSubmission } from '../lib/shoppingRecommendations';
 
 const BRIEFING = 'Give me my full day briefing for today: priorities, deadlines, conflicts, and my next move.';
 const TOP_THREE = 'Pick my top 3 focus tasks, ranked by urgency, estimated effort, and impact.';
@@ -80,6 +84,7 @@ beforeEach(() => {
   mockPush.mockClear();
   mockBack.mockClear();
   mockAssistant.mockReset();
+  mockRecommend.mockReset();
   mockTasks.mockReset();
   mockTasks.mockResolvedValue({ tasks: [GUTTER], timeZone: 'UTC' });
   useAssistantStore.getState().reset();
@@ -527,28 +532,34 @@ describe('Shopping Recommendations', () => {
     expect(mockBack).not.toHaveBeenCalled();
   });
 
-  it('sends the list ahead of the request and shows only the words typed as the question', async () => {
-    mockAssistant.mockResolvedValue(turn());
+  /** `askShopping(_:context:)` (NexdoApp.swift:804-814): its own endpoint, not an `/api/assistant` prompt. */
+  it('asks POST /api/shopping/recommendations with the list, and shows the words typed as the question', async () => {
+    mockRecommend.mockResolvedValue(turn({ contextActionId: 'should-not-stick', visual: { summary: 'Try these.', sections: [{ title: 'Shopping suggestions', items: ['Add rice'] }] } }));
     await show(<AskNexdoView textPage shoppingContext={CONTEXT} onClose={jest.fn()} />);
 
     await fireEvent.press(screen.getByText('Suggest groceries for three balanced dinners.'));
     expect(screen.getByTestId('ask-field').props.value).toBe('Suggest groceries for three balanced dinners.');
-    expect(mockAssistant).not.toHaveBeenCalled();
+    expect(mockRecommend).not.toHaveBeenCalled();
     await fireEvent.press(screen.getByLabelText('Get shopping recommendations'));
 
     await waitFor(() => expect(screen.getByTestId('ask-summary')).toBeTruthy());
-    const transcript = mockAssistant.mock.calls[0][0].transcript;
-    expect(transcript).toBe(
-      'Review my shopping list "Parity Run D List". Current items: whole milk, eggs, bananas. Give practical grocery advice for this list. Do not add, replace, remove, or complete anything without my explicit approval.\n\nCustomer request: Suggest groceries for three balanced dinners.',
-    );
+    expect(mockRecommend).toHaveBeenCalledWith({ prompt: 'Suggest groceries for three balanced dinners.', listName: 'Parity Run D List', itemNames: ['whole milk', 'eggs', 'bananas'] });
+    expect(mockAssistant).not.toHaveBeenCalled();
     expect(screen.getByTestId('ask-last-prompt').props.children).toBe('Suggest groceries for three balanced dinners.');
+    // `contextID = nil`: a recommendation starts no assistant thread.
+    expect(useAssistantStore.getState().contextId).toBeNull();
     // No bottom composer after an answer in shopping mode (:333).
     expect(screen.queryAllByTestId('ask-field')).toHaveLength(0);
   });
 
-  it('says "none yet" for an empty list', () => {
-    expect(shoppingSubmission({ listName: 'Empty', itemNames: [] }, 'Hi')).toBe(
-      'Review my shopping list "Empty". Current items: none yet. Give practical grocery advice for this list. Do not add, replace, remove, or complete anything without my explicit approval.\n\nCustomer request: Hi',
-    );
+  it('lets a shopping question through the general-knowledge guard, and shows a failure with Retry', async () => {
+    mockRecommend.mockRejectedValueOnce(new Error('Shopping recommendations did not finish. Please try again.')).mockResolvedValueOnce(turn());
+    await show(<AskNexdoView textPage shoppingContext={CONTEXT} onClose={jest.fn()} />);
+    await fireEvent.press(screen.getByText('What practical essentials are missing from this list?'));
+    await fireEvent.press(screen.getByLabelText('Get shopping recommendations'));
+    await waitFor(() => expect(screen.getByTestId('ask-failed')).toBeTruthy());
+    expect(mockRecommend).toHaveBeenCalledTimes(1);
+    await fireEvent.press(screen.getByTestId('ask-retry'));
+    await waitFor(() => expect(screen.getByTestId('ask-summary')).toBeTruthy());
   });
 });

@@ -12,9 +12,9 @@ import { ASK_MAX_LENGTH, ASK_TEXT_EXAMPLES } from '../lib/askIntents';
 import { blockedTurn, policyGuardRefusal } from '../lib/assistantPolicy';
 import { displaySections, spokenText } from '../lib/assistantPresentation';
 import { briefingIntent, briefStyle, visibleBriefSections } from '../lib/dailyBrief';
-import { SHOPPING_PROMPTS, shoppingPromptIcon, shoppingSubmission, type ShoppingRecommendationContext } from '../lib/shoppingRecommendations';
+import { SHOPPING_PROMPTS, shoppingPromptIcon, type ShoppingRecommendationContext } from '../lib/shoppingRecommendations';
 import { speechChunks } from '../lib/speechText';
-import { useAsk } from '../query/useAssistant';
+import { useAsk, useShoppingRecommendations } from '../query/useAssistant';
 import { useTasks } from '../query/useTasks';
 import { useAssistantStore } from '../store/assistant';
 import { useConsent } from '../store/consent';
@@ -81,6 +81,7 @@ export function AskNexdoView({ textPage, initialPrompt = '', shoppingContext, on
   const sheetTheme = useTheme({ elevated: true });
   const consent = useConsent();
   const ask = useAsk();
+  const recommend = useShoppingRecommendations();
 
   const turn = useAssistantStore((state) => state.turn);
   const lastAssistantPrompt = useAssistantStore((state) => state.lastAssistantPrompt);
@@ -105,7 +106,7 @@ export function AskNexdoView({ textPage, initialPrompt = '', shoppingContext, on
   const brief = turn === null ? null : briefingIntent(lastAssistantPrompt, (turn.confirmation ?? null) !== null,shoppingContext !== undefined);
   const briefSections = turn !== null && brief !== null ? visibleBriefSections(displaySections(turn), tasks) : [];
 
-  const submitting = ask.isPending;
+  const submitting = ask.isPending || recommend.isPending;
   // `blocked` (AskNexdoView.swift:148). Swift also ORs in `model.busy`, the app-wide "Updating…"
   // flag; React Query has no single global equivalent, so this is the Ask request alone.
   const blocked = submitting;
@@ -158,7 +159,7 @@ export function AskNexdoView({ textPage, initialPrompt = '', shoppingContext, on
     if (query.length === 0 || query.length > ASK_MAX_LENGTH) return;
 
     // The policy guard runs BEFORE the consent gate and before any network call.
-    if (policyGuardRefusal(query) !== null) {
+    if (policyGuardRefusal(query, { shopping: shoppingContext !== undefined }) !== null) {
       useAssistantStore.getState().setTurn(blockedTurn(query), query);
       setFailedQuery(null);
       if (prompt.trim() === query) setPrompt('');
@@ -175,25 +176,20 @@ export function AskNexdoView({ textPage, initialPrompt = '', shoppingContext, on
     setVoiceError(null);
     setLastRequestWasVoice(speakResponse);
     setFailedQuery(null);
-    ask.mutate(
-      { text: submission(query) },
-      {
-        onSuccess: () => {
-          showAsAsked(query);
-          if (prompt.trim() === query) setPrompt('');
-          if (speakResponse) speakAnswer();
-        },
-        onError: () => setFailedQuery(query),
-      },
-    );
+    send(query, () => {
+      if (prompt.trim() === query) setPrompt('');
+      if (speakResponse) speakAnswer();
+    });
   };
 
-  /** `shoppingContext.map { $0.assistantContext + "\n\nCustomer request: " + query } ?? query` (:469). */
-  const submission = (query: string) => (shoppingContext ? shoppingSubmission(shoppingContext, query) : query);
-
-  /** `if shoppingContext != nil { model.lastAssistantPrompt = query }` (:472): show the words typed. */
-  const showAsAsked = (query: string) => {
-    if (shoppingContext) useAssistantStore.setState({ lastAssistantPrompt: query });
+  /**
+   * `model.askShopping(query, context:)` for Shopping Recommendations, else `model.ask(query)`
+   * (AskNexdoView.swift:509-512). A failure keeps the query for Retry.
+   */
+  const send = (query: string, onDone: () => void) => {
+    const handlers = { onSuccess: onDone, onError: () => setFailedQuery(query) };
+    if (shoppingContext) recommend.mutate({ text: query, context: shoppingContext }, handlers);
+    else ask.mutate({ text: query }, handlers);
   };
 
   /**
@@ -206,16 +202,9 @@ export function AskNexdoView({ textPage, initialPrompt = '', shoppingContext, on
     setVoiceError(null);
     setLastRequestWasVoice(false);
     setFailedQuery(null);
-    ask.mutate(
-      { text: submission(query) },
-      {
-        onSuccess: () => {
-          showAsAsked(query);
-          if (prompt.trim() === query) setPrompt('');
-        },
-        onError: () => setFailedQuery(query),
-      },
-    );
+    send(query, () => {
+      if (prompt.trim() === query) setPrompt('');
+    });
   }
 
   /** The close button (AskNexdoView.swift:207-214). */

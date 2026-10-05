@@ -59,13 +59,15 @@ const OPENERS = ['why ', 'what ', 'who ', 'how ', 'when ', 'where '];
 /**
  * `policyGuardRefusal(for:)` (AskNexdoView.swift:156-169). Returns the refusal text, or `null` when
  * the prompt may be sent. Order matters and is Swift's: violent, sexual, political, then the
- * general-knowledge checks.
+ * general-knowledge checks — which Shopping Recommendations skips (`if shoppingContext != nil { return
+ * nil }`, :168): "What practical essentials are missing…?" is a fair shopping question.
  */
-export function policyGuardRefusal(query: string): string | null {
+export function policyGuardRefusal(query: string, { shopping = false }: { shopping?: boolean } = {}): string | null {
   const normalized = query.toLowerCase();
   if (VIOLENT.some((pattern) => pattern.test(query))) return POLICY_REFUSAL;
   if (SEXUAL.some((pattern) => pattern.test(query))) return POLICY_REFUSAL;
   if (POLITICAL.some((pattern) => pattern.test(query))) return POLICY_REFUSAL;
+  if (shopping) return null;
 
   if (COMMON.some((pattern) => pattern.test(query)) && !TASK_INTENT.test(query)) {
     return POLICY_COMMON_QUESTION_REFUSAL;
