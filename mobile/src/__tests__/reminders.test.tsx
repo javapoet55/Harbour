@@ -1,7 +1,8 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import * as Notifications from 'expo-notifications';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
-import { Alert } from 'react-native';
+import { Alert, StyleSheet } from 'react-native';
+import { palettes } from '../theme';
 
 import type { NexdoTask } from '../api';
 import { useCoordinator, scheduledWork } from '../actions/coordinator';
@@ -182,6 +183,8 @@ describe('the action screen', () => {
     expect(screen.queryByTestId('action-email')).toBeNull();
     expect(screen.getByText('Choose contact')).toBeTruthy();
     expect(screen.getByText('Enter contact details')).toBeTruthy();
+    // A plain Button under `.foregroundStyle(Color.nexdoInk)` (TaskActionView.swift:239): ink, not the tint.
+    expect(StyleSheet.flatten(screen.getByText('Enter contact details').props.style).color).toBe(palettes.light.ink);
     expect(screen.getByText('Remind me in 15 minutes')).toBeTruthy();
     expect(screen.getByText('Dismiss')).toBeTruthy();
     expect(useCoordinator.getState().actions[0].contactIdentifier).toBe('c1');
@@ -301,7 +304,8 @@ describe('the action screen', () => {
     await waitFor(() => expect(screen.getByText('Enter contact details')).toBeTruthy());
 
     await fireEvent.press(screen.getByText('Enter contact details'));
-    expect(screen.getByText('Contact details')).toBeTruthy();
+    // A large title over the form, not a bar title (`task-action-contact-details`).
+    expect(StyleSheet.flatten(screen.getByText('Contact details').props.style).fontSize).toBe(34);
     // Prefilled with the name as the task wrote it.
     expect(screen.getByTestId('contact-details-name').props.value).toBe('Damien');
     expect(screen.getByText('Enter a name and a valid phone number or email address.')).toBeTruthy();

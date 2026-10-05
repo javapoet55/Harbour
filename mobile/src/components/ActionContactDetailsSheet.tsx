@@ -47,9 +47,6 @@ export function ActionContactDetailsSheet({
           <Pressable accessibilityRole="button" hitSlop={8} onPress={onCancel} testID="contact-details-cancel">
             <Text style={[styles.body, { color: theme.colors.link }]}>Cancel</Text>
           </Pressable>
-          <Text accessibilityRole="header" style={[styles.navTitle, { color: theme.colors.ink }]}>
-            Contact details
-          </Text>
           <Pressable
             accessibilityRole="button"
             accessibilityState={{ disabled: !valid }}
@@ -62,6 +59,11 @@ export function ActionContactDetailsSheet({
           </Pressable>
         </View>
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+          {/* `.navigationTitle("Contact details")` with no `.inline`: a large title over the form
+              (`task-action-contact-details`), not a bar title. */}
+          <Text accessibilityRole="header" style={[styles.largeTitle, { color: theme.colors.label }]}>
+            Contact details
+          </Text>
           {/* A `Form` section: one inset card, rows split by hairlines. */}
           <View style={[styles.group, { backgroundColor: theme.colors.surface }, androidGroup(theme)]}>
             <TextInput
@@ -118,8 +120,8 @@ const styles = StyleSheet.create({
   semibold: { fontWeight: '600' },
   caption: { fontSize: 12, lineHeight: 16, paddingHorizontal: 16, paddingVertical: 12 },
   navBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 14 },
-  navTitle: { fontSize: 17, lineHeight: 22, fontWeight: '600' },
-  content: { padding: 20 },
+  largeTitle: { fontSize: 34, lineHeight: 41, fontWeight: '700', marginBottom: 8 },
+  content: { padding: 20, paddingTop: 0 },
   group: { borderRadius: 12, overflow: 'hidden' },
   field: { fontSize: 17, minHeight: 44, paddingHorizontal: 16, paddingVertical: 11 },
   separator: { height: StyleSheet.hairlineWidth, marginLeft: 16 },

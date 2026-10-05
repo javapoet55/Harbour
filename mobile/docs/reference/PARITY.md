@@ -806,6 +806,10 @@ your next move") and keeps Android's ellipsis, so they shrink to 0.85 and then t
 | 43 | Calendar tab (collapsed empty days, review conflicts) | **fixed** | **scrolled content ran through the status bar** and collided with the clock; iOS 26's scroll-edge effect keeps it legible. New `StatusBarScrim` (Android only): the page's backdrop cut to the status-bar height, drawn over the scroll — Calendar and Today. Add by Voice / Add Manually stack at this width, as logged (§10) |
 | 44 | Event Details | **fixed** | (a) after removing the shadow show-through (row 39) the near-white cards vanished into the page's white end: Android gets a 1pt `fieldBorder` hairline instead of the shadow, as the task agent cards (§27) — also Help and the brief section pages; (b) the "…" menu lacked Swift's `checkmark.circle` / `xmark.circle` / `trash` glyphs. Event "Parity appointment" (Mac); nothing completed or deleted |
 | 45 | Edit Event | checked | en-IN "pm" from the phone's locale; not saved |
+| 46 | Tasks tab with search and "All time" | checked | search, keyboard and results ("plumber"); creation cards stack as logged (§1); icon stand-ins as logged (§27). Back from the Tasks tab returns to Today (Android tab history) |
+| 47 | Task Details | **fixed** | **two headers with two closes**: the stack drew a "Close / Task" bar above the screen's own "TASK DETAILS … ✕" header; Swift hides the bar (`.toolbar(.hidden, for: .navigationBar)`, RootView.swift:2014). Bar hidden, content inset below the status bar on Android. Outline buttons filled as logged (§2). Viewed "Call the plumber" (not a Parity item — view only, nothing changed) |
+| 48 | Task agent card | not reached | only shows for a task the server marks eligible for business research; none on this account, and creating one would start a real business search |
+| 49 | Nexdo Action contact screen | **fixed** | "Enter contact details" (and the other link buttons) were the tint; the screen's `.foregroundStyle(Color.nexdoInk)` makes them ink. Contact details: the title was in the bar, Swift's is a large title over the form. No contact chosen, nothing saved |
 
 ### Not reached in this run
 

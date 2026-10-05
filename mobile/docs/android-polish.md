@@ -1562,4 +1562,8 @@ captures; results row by row in `docs/reference/PARITY.md` "UI-parity pass 3". F
 - **A hairline instead of a shadow** on Help, Event Details and the brief section cards (Android only):
   without the elevation (above) the near-white cards vanished into the page's white end.
 - **Event Details' "…" menu** carries Swift's glyphs.
+- **Task Details has no stack bar** (both platforms): Swift hides it and closes with the header's xmark; the
+  bar's Close duplicated it. Android insets the content below the status bar.
+- **Nexdo Action's link buttons are ink** (`.foregroundStyle(Color.nexdoInk)`), and **Contact details** has a
+  large title over the form instead of a bar title.
 
