@@ -394,6 +394,11 @@ export function CallerIDVerificationSheet({ model, visible, onClose }: { model: 
 /** The guide's fixed light palette (`ink`, MomentConnectCall.swift:384), as Swift draws it in both modes. */
 const GUIDE_INK = '#120D3D'; // Color(red: 0.07, green: 0.05, blue: 0.24)
 const GUIDE_SECONDARY = 'rgba(60, 60, 67, 0.6)';
+/**
+ * `Color.nexdoIndigo` as this FIXED-LIGHT guide uses it (`.tint(.nexdoIndigo)`, :437). It never meets a
+ * dark background, so the dark-mode `link` rule does not apply — as Wellness's `fixedLightIndigo`.
+ */
+const GUIDE_INDIGO = brand.nexdoIndigo;
 const GUIDE_ART = {
   header: require('../../../assets/moments/calling-header.png'),
   steps: [require('../../../assets/moments/calling-step1.png'), require('../../../assets/moments/calling-step2.png'), require('../../../assets/moments/calling-step3.png')],
@@ -427,7 +432,7 @@ export function MomentCallingGuide({ visible, onClose }: { visible: boolean; onC
         <View style={[styles.guideBar, { paddingTop: Platform.OS === 'android' ? insets.top + 8 : 12 }]}>
           <Pressable accessibilityRole="button" accessibilityLabel="Back" hitSlop={6} onPress={onClose} testID="calling-guide-back">
             <GlassCircle scheme="light">
-              <Ionicons name="chevron-back" size={24} color={brand.nexdoIndigo} />
+              <Ionicons name="chevron-back" size={24} color={GUIDE_INDIGO} />
             </GlassCircle>
           </Pressable>
           <Text accessibilityRole="header" style={[styles.guideBarTitle, { color: GUIDE_INK }]}>
@@ -446,7 +451,7 @@ export function MomentCallingGuide({ visible, onClose }: { visible: boolean; onC
           {GUIDE_STEPS.map(([title, text], index) => (
             <View key={title} style={styles.guideStep} testID={`calling-guide-step-${index + 1}`}>
               <View style={[styles.guideNumber, { backgroundColor: withAlpha(brand.nexdoIndigo, 0.09) }]}>
-                <Text style={[textStyles.title3, styles.bold, { color: brand.nexdoIndigo }]}>{String(index + 1)}</Text>
+                <Text style={[textStyles.title3, styles.bold, { color: GUIDE_INDIGO }]}>{String(index + 1)}</Text>
               </View>
               <View style={styles.guideCard}>
                 <View style={styles.guideCardText}>
@@ -474,7 +479,7 @@ export function MomentCallingGuide({ visible, onClose }: { visible: boolean; onC
             </LinearGradient>
           </Pressable>
           <Pressable accessibilityRole="button" onPress={onClose} style={styles.guideBack} testID="calling-guide-settings">
-            <Text style={[headline, { color: brand.nexdoIndigo }]}>Back to settings</Text>
+            <Text style={[headline, { color: GUIDE_INDIGO }]}>Back to settings</Text>
           </Pressable>
         </ScrollView>
       </View>
