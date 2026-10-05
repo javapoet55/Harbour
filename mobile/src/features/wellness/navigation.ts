@@ -44,20 +44,18 @@ export function openModuleGuide(module: WellnessModule): void {
 /**
  * "Got it!" — the module itself (`moduleDestination`, WellnessChooserView.swift:44-58).
  *
- * Pomodoro and the Calorie Tracker replace the guide inside the cover, as Swift's entrance swaps its
- * content. Moments and Shopping are the EXISTING screens, which live in the Today tab's stack: the covers
- * close and the screen is pushed there. DIVERGENCE: Swift shows them inside the cover, so their Back
- * returns to the chooser; here Back returns to Today (§22 Run C).
+ * `WellnessModuleEntrance` swaps the guide for the module inside the cover (`continued = true`,
+ * WellnessModuleGuide.swift:133-141), so every module REPLACES the guide in the wellness stack: Back
+ * from the module's first screen (Moments' `backButton`, `destination = nil`) returns to the chooser.
+ * The chooser's bottom bar is its own `safeAreaInset` (:36), so it is hidden inside a module.
  */
 export async function continueToModule(module: WellnessModule): Promise<void> {
-  if (module === 'pomodoro') {
-    router.replace('/wellness/pomodoro');
-    return;
-  }
-  if (module === 'calories') {
-    router.replace('/wellness/calories');
-    return;
-  }
-  await closePresentedScreens();
-  router.navigate(module === 'moments' ? '/wellness/moments' : '/wellness/shopping');
+  router.replace(MODULE_ROUTE[module]);
 }
+
+const MODULE_ROUTE = {
+  pomodoro: '/wellness/pomodoro',
+  calories: '/wellness/calories',
+  moments: '/wellness/moments',
+  shopping: '/wellness/shopping',
+} as const satisfies Record<WellnessModule, string>;

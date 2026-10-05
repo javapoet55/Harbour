@@ -149,6 +149,14 @@ describe('Wellness covers', () => {
     expect(urlFor(file)).toBe(url);
   });
 
+  it('declares Moments and Shopping as pushes inside the cover, hiding the chooser and its bottom bar', () => {
+    const wellness = fs.readFileSync(path.join(APP, 'wellness/_layout.tsx'), 'utf8');
+    expect(wellness).toMatch(/presentation: 'card' as const/);
+    for (const name of ['moments/index', 'moments/manage', 'shopping/index', 'shopping/\\[id\\]', 'shopping/email']) {
+      expect(wellness).toMatch(new RegExp(`name="${name}" options=\\{\\{ \\.\\.\\.pushed,`));
+    }
+  });
+
   it('nothing of Moments or Shopping is left in the Today tab', () => {
     expect(exists('(tabs)/(today)/moments')).toBe(false);
     expect(exists('(tabs)/(today)/shopping')).toBe(false);
