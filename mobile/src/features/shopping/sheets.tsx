@@ -166,23 +166,26 @@ function Choice({ title, subtitle, icon, selected, disabled = false, onPress, te
 }
 
 // ---------------------------------------------------------------------------------------------
-// Share List (ShoppingViews.swift:316-332)
+// Share List (ShoppingViews.swift:790-829)
 
 /**
- * `ShoppingShare`: the list as plain text through the share sheet, and the view-only link —
- * `<API base URL>/shared/shopping/<token>` — created and revoked on the server.
+ * `ShoppingShare`: the list as plain text through the share sheet, "Weekly email to store manager"
+ * (Scheduled sharing), and the view-only link — the compact `/s/<token>` — created and revoked on the
+ * server. Swift pushes the weekly email inside this sheet; here the sheet closes and the email screen
+ * is pushed on the list.
  */
-export function ShareListSheet({ visible, list, onUpdate, onClose }: { visible: boolean; list: GroceryList; onUpdate: (list: GroceryList) => void; onClose: () => void }) {
+export function ShareListSheet({ visible, list, onUpdate, onClose, onWeeklyEmail }: { visible: boolean; list: GroceryList; onUpdate: (list: GroceryList) => void; onClose: () => void; onWeeklyEmail: () => void }) {
   return (
     <MomentSheet visible={visible} title="" onRequestClose={onClose} testID="share-list-sheet">
-      {visible ? <ShareListBody initial={list} onUpdate={onUpdate} /> : null}
+      {visible ? <ShareListBody initial={list} onUpdate={onUpdate} onWeeklyEmail={onWeeklyEmail} /> : null}
     </MomentSheet>
   );
 }
 
-function ShareListBody({ initial, onUpdate }: { initial: GroceryList; onUpdate: (list: GroceryList) => void }) {
+function ShareListBody({ initial, onUpdate, onWeeklyEmail }: { initial: GroceryList; onUpdate: (list: GroceryList) => void; onWeeklyEmail: () => void }) {
   const theme = useTheme();
   const error = useShopping((state) => state.error);
+  const busy = useShopping((state) => state.busy);
   const [list, setList] = useState(initial);
   // `.task { updateURL() }`
   const [url, setUrl] = useState<string | null>(() => (initial.shareToken ? shareUrl(initial.shareToken) : null));
@@ -223,6 +226,14 @@ function ShareListBody({ initial, onUpdate }: { initial: GroceryList; onUpdate: 
           <FormButton icon="share-outline" title="Share list as text" onPress={() => void shareMessage(shareText(list))} testID="share-text" />
         </FormRow>
       </FormSection>
+      <FormSection header="Scheduled sharing">
+        <FormRow last>
+          <Pressable accessibilityRole="button" onPress={onWeeklyEmail} style={styles.link} testID="share-weekly-email">
+            <FormText>Weekly email to store manager</FormText>
+            <Ionicons color={theme.colors.secondaryLabel} name="chevron-forward" size={17} />
+          </Pressable>
+        </FormRow>
+      </FormSection>
       <FormSection header="View-only link">
         <FormRow>
           <FormText caption>Anyone with the link can view this list and its edits. The link stays with this trip; next week’s list needs a new link. Revoke it whenever you like.</FormText>
@@ -233,12 +244,12 @@ function ShareListBody({ initial, onUpdate }: { initial: GroceryList; onUpdate: 
               <FormButton icon="link" title="Share Link" onPress={() => void shareMessage(url)} testID="share-link" />
             </FormRow>
             <FormRow last>
-              <FormButton destructive title="Revoke Link" onPress={() => void revoke()} testID="share-revoke" />
+              <FormButton destructive disabled={busy} title="Revoke Link" onPress={() => void revoke()} testID="share-revoke" />
             </FormRow>
           </>
         ) : (
           <FormRow last>
-            <FormButton title="Create Share Link" onPress={() => void create()} testID="share-create" />
+            <FormButton disabled={busy} title="Create Share Link" onPress={() => void create()} testID="share-create" />
           </FormRow>
         )}
       </FormSection>
@@ -267,6 +278,7 @@ const styles = StyleSheet.create({
   choiceRow: { flexDirection: 'row', alignItems: 'center', gap: 14 },
   grow: { flex: 1 },
   inline: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  link: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 32 },
   bold: { fontWeight: '700' },
   // Just under the sheet's bar (FormScroll's top padding is 3 since UI-parity pass 2).
   sheetTitle: { marginHorizontal: 16, marginTop: 4 },

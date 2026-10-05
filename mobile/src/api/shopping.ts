@@ -146,9 +146,26 @@ export const shoppingEndpoints = {
   list: (client: ApiClient = getApi()) => shoppingApi.lists(client),
 };
 
-/** `store.api.baseURL.appendingPathComponent("shared/shopping/" + token)` (ShoppingViews.swift:331). */
-export function shareUrl(token: string, client: ApiClient = getApi()): string {
-  return `${client.baseUrl}/shared/shopping/${token}`;
+/**
+ * `updateURL()` (ShoppingViews.swift:811-828): "Encode the same secret compactly; sharing again never
+ * creates a new token." A 64-character hex token becomes `/s/<base64url of its 32 bytes>`; any other
+ * token keeps the long `/shared/shopping/<token>`, and a 64-character token that is not hex has no link.
+ */
+export function shareUrl(token: string, client: ApiClient = getApi()): string | null {
+  if (token.length !== 64) return `${client.baseUrl}/shared/shopping/${token}`;
+  if (!/^[0-9a-fA-F]{64}$/.test(token)) return null;
+  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
+  const bytes = token.match(/../g)!.map((pair) => parseInt(pair, 16));
+  let out = '';
+  for (let index = 0; index < bytes.length; index += 3) {
+    const [a, b = 0, c = 0] = bytes.slice(index, index + 3);
+    const chunk = (a << 16) | (b << 8) | c;
+    const count = Math.min(3, bytes.length - index);
+    out += alphabet[(chunk >> 18) & 63] + alphabet[(chunk >> 12) & 63];
+    if (count > 1) out += alphabet[(chunk >> 6) & 63];
+    if (count > 2) out += alphabet[chunk & 63];
+  }
+  return `${client.baseUrl}/s/${out}`;
 }
 
 /**

@@ -519,7 +519,16 @@ export default function ShoppingDetailScreen() {
       <VoiceSheet visible={voice} onAdd={(items) => void save(appended(list, items))} onClose={() => setVoice(false)} />
       <NewListSheet visible={copy} source={list} onCreated={setList} onClose={() => setCopy(false)} />
       <ListSettingsSheet visible={settings} list={list} onSave={(next) => void save(next)} onClose={() => setSettings(false)} />
-      <ShareListSheet visible={sharing} list={list} onUpdate={setList} onClose={() => setSharing(false)} />
+      <ShareListSheet
+        visible={sharing}
+        list={list}
+        onUpdate={setList}
+        onClose={() => setSharing(false)}
+        onWeeklyEmail={() => {
+          setSharing(false);
+          router.push({ pathname: '/wellness/shopping/email', params: { id: list.id } });
+        }}
+      />
       <ShoppingRecommendationsSheet list={list} visible={recommendations} onClose={() => setRecommendations(false)} />
       <ShoppingAlternativesSheet
         list={list}
