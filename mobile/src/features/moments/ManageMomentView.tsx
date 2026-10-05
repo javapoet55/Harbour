@@ -49,12 +49,17 @@ import {
   recipientInitials,
   sortedPlans,
   validateSchedule,
+  MOMENT_TYPES,
+  PREPARATION_CHOICES,
+  preparationMinutes,
+  typeLabel,
+  withPreparationMinutes,
   type ManagedRecipient,
   type MomentDisplayGroup,
   defaultChannel,
   type RecipientDraft,
 } from './domain';
-import { DateField, Disclosure, FormField, FormScroll, FormSection, FormRow, FormToggle, FormButton, LabeledValue, MenuPicker, PopoverMenu, usePopoverMenu, ZonePicker, genericZoneName } from './form';
+import { DateField, Disclosure, FormField, FormScroll, FormSection, FormRow, FormToggle, FormButton, MenuPicker, PopoverMenu, usePopoverMenu, ZonePicker, genericZoneName } from './form';
 import { FestivalGreetingCard, GreetingCardEditor } from './GreetingCard';
 import {
   cardMessage,
@@ -118,10 +123,11 @@ export function useManageModel(group: MomentDisplayGroup): ManageModel {
 const TONES = ['Warm', 'Personal', 'Short', 'Fun'] as const;
 
 /**
- * `ManageFestivalView` (ios/App/ManageFestivalView.swift:45-220): the header summary card with the
- * Active toggle, the Details / Contacts / Wish Message / Schedule step tabs (a tab change auto-saves
- * pending edits and a failed save stays put), every sheet and dialog, and — once "Confirm Schedule"
- * succeeds — `FestivalScheduleSuccess` with its confetti (`:227-261`).
+ * `ManageFestivalView` (ios/App/ManageFestivalView.swift:89-278): the header summary card with the
+ * Active toggle, the Contacts / Message / Schedule step tabs (Phase 12: Details folded into Schedule; a
+ * tab change auto-saves pending edits and a failed save stays put; a successful Save goes on to the next
+ * step), Edit Moment, every sheet and dialog, and — once "Confirm Schedule" succeeds —
+ * `FestivalScheduleSuccess` with its confetti (`:348-387`).
  *
  * `onDone` is the `onDone` closure Swift threads through: Done on the success screen, and nothing else.
  */
@@ -167,6 +173,9 @@ export function ManageMomentView({ group, onDone }: { group: MomentDisplayGroup;
   const [personalize, setPersonalize] = useState(false);
   const [imageSheet, setImageSheet] = useState(false);
   const [scheduleConfirm, setScheduleConfirm] = useState(false);
+  // `momentEditor` (:97): Edit Moment, from the Moment card on Schedule.
+  const [momentEditor, setMomentEditor] = useState(false);
+  const [momentEditorKey, setMomentEditorKey] = useState(0);
   const [aiConsent, setAiConsent] = useState(false);
   const approveAfterCancel = useRef(false);
   const [contactChoices, setContactChoices] = useState<ContactChoice[]>([]);
@@ -191,7 +200,8 @@ export function ManageMomentView({ group, onDone }: { group: MomentDisplayGroup;
 
   // `.alert("Save changes to scheduled wishes?", isPresented: $model.needsScheduleConfirmation)`
   useEffect(() => {
-    if (!state.needsScheduleConfirmation) return;
+    // Edit Moment asks its own question about schedules (MomentDetailsSheet), so not twice.
+    if (!state.needsScheduleConfirmation || momentEditor) return;
     Alert.alert(
       'Save changes to scheduled wishes?',
       'Saving these changes cancels the existing schedules for this moment. After saving, review and schedule your updated wishes again.',
@@ -215,7 +225,7 @@ export function ManageMomentView({ group, onDone }: { group: MomentDisplayGroup;
       ],
       { cancelable: false },
     );
-  }, [model, state.needsScheduleConfirmation]);
+  }, [model, state.needsScheduleConfirmation, momentEditor]);
 
   const back = () => {
     if (!dirty) {
@@ -267,6 +277,9 @@ export function ManageMomentView({ group, onDone }: { group: MomentDisplayGroup;
    * text rather than cancelling them.
    */
   const save = (approve = false) => {
+    Keyboard.dismiss();
+    // Phase 12: a successful save goes on to the next step (Contacts → Message → Schedule).
+    model.getState().prepareNextTabAfterSave();
     approveAfterCancel.current = approve;
     const current = model.getState();
     const scheduled = hasSchedules(current, momentsStore.getState());
@@ -385,6 +398,9 @@ export function ManageMomentView({ group, onDone }: { group: MomentDisplayGroup;
     </View>
   );
 
+  // "Connect me on the day" (MomentConnectSection, ManageFestivalView.swift:237).
+  const connectSection = null;
+
   const saveButtons = (
     <>
       <MomentPrimary title="Save Changes" onPress={() => save()} testID="festival-save" />
@@ -441,9 +457,9 @@ export function ManageMomentView({ group, onDone }: { group: MomentDisplayGroup;
               </View>
             </View>
             <View testID="festival-send-date">
-              {/* The header shows the occasion date, the same value Details edits; the Schedule
-                  step keeps its own delivery date and time (ManageFestivalView.swift:114). */}
-              <IconLabel icon="calendar-outline" title={`Moment date · ${sendDayLabel(state.date, state.zone)}`} color={theme.colors.secondaryLabel} style={textStyles.subheadline} size={15} />
+              {/* `Label(MomentDates.sendDayLabel(model.date, …), systemImage: "calendar")` (:155): the
+                  moment's own date, which Edit Moment changes. */}
+              <IconLabel icon="calendar-outline" title={sendDayLabel(state.date, state.zone)} color={theme.colors.secondaryLabel} style={textStyles.subheadline} size={15} />
             </View>
           </MomentCard>
 
@@ -503,8 +519,8 @@ export function ManageMomentView({ group, onDone }: { group: MomentDisplayGroup;
                   style={[styles.tab, active && { backgroundColor: brand.nexdoIndigo }]}
                   testID={`festival-tab-${tab}`}
                 >
-                  {/* `.lineLimit(1).minimumScaleFactor(0.7)` (ManageFestivalView.swift:120): "Wish Message"
-                      shrinks to fit its quarter rather than truncating. */}
+                  {/* `.lineLimit(1).minimumScaleFactor(0.7)` (ManageFestivalView.swift:161): a label
+                      shrinks to fit its third rather than truncating. */}
                   <FitText
                     fontSize={textStyles.subheadline.fontSize}
                     lineHeight={textStyles.subheadline.lineHeight}
@@ -518,91 +534,6 @@ export function ManageMomentView({ group, onDone }: { group: MomentDisplayGroup;
             })}
           </View>
           )}
-
-          {state.tab === 'Details' ? (
-            <>
-              <Text style={[textStyles.largeTitle, styles.bold, { color: theme.colors.label }]}>Moment Details</Text>
-              <MomentCard grouped>
-                <View style={styles.inline}>
-                  <Text style={[textStyles.body, { color: theme.colors.label }]}>Moment name</Text>
-                  <TextInput
-                    accessibilityLabel="Moment name"
-                    onChangeText={(value) => model.getState().setTitle(value)}
-                    onSubmitEditing={() => Keyboard.dismiss()}
-                    placeholder="Moment name"
-                    placeholderTextColor={theme.colors.placeholder}
-                    returnKeyType="done"
-                    style={[styles.nameInput, { color: theme.colors.label }]}
-                    testID="festival-name"
-                    value={state.title}
-                  />
-                  <Ionicons name="pencil" size={17} color={theme.colors.label} />
-                </View>
-                <View style={[styles.divider, { backgroundColor: theme.colors.separator }, androidSeparator(theme)]} />
-                <LabeledValue label="Type" value={occasionLabel(state)} />
-                <View style={[styles.divider, { backgroundColor: theme.colors.separator }, androidSeparator(theme)]} />
-                <DateField
-                  label="Date"
-                  value={state.date}
-                  onChange={(value) => model.getState().setDate(value)}
-                  zone={state.zone}
-                  disabled={state.settings.catalogManaged}
-                  testID="festival-details-date"
-                />
-              </MomentCard>
-              <CardHeading title="Reminder & Repeat">
-                <MomentCard grouped>
-                  {occasionSource(state) === 'festivalCatalog' ? (
-                    <>
-                      <FormToggle
-                        label="Update festival date automatically"
-                        value={state.settings.catalogManaged}
-                        onValueChange={(value) => {
-                          model.getState().updateSettings({ catalogManaged: value });
-                          if (value) model.getState().useCatalog();
-                        }}
-                        testID="festival-catalog-managed"
-                      />
-                      <MenuPicker
-                        hideLabel
-                        label="Catalog festival"
-                        options={[{ value: '', title: 'Select festival' }, ...state.catalog.map((entry) => ({ value: entry.id, title: entry.name }))]}
-                        value={state.settings.catalogID}
-                        onChange={(value) => model.getState().updateSettings({ catalogID: value })}
-                        testID="festival-catalog"
-                      />
-                      <Text style={[caption, { color: theme.colors.label }]}>Only verified catalog dates are used. If no date is available, confirm it manually.</Text>
-                    </>
-                  ) : (
-                    <>
-                      <FormToggle label="Repeat every year" value={state.yearly} onValueChange={(value) => model.getState().setYearly(value)} testID="festival-yearly" />
-                      <Text style={[caption, { color: theme.colors.secondaryLabel }]}>
-                        {type === 'festival'
-                          ? 'Dates repeat yearly; festivals may move.\nConfirm the date and schedule each year.'
-                          : 'Repeats on this date each year.\nReview and schedule each wish separately.'}
-                      </Text>
-                    </>
-                  )}
-                  <View style={[styles.divider, { backgroundColor: theme.colors.separator }, androidSeparator(theme)]} />
-                  <View style={styles.inline}>
-                    <Text style={[textStyles.body, styles.grow, { color: theme.colors.label }]}>Prepare reminder</Text>
-                    <MenuPicker
-                      hideLabel
-                      label="Prepare reminder"
-                      options={[{ value: 0, title: 'None' }, ...[1, 3, 7, 14].map((days) => ({ value: days, title: `${days} day${days === 1 ? '' : 's'} before` }))]}
-                      value={state.settings.prepareDays}
-                      onChange={(value) => model.getState().updateSettings({ prepareDays: value })}
-                      testID="festival-prepare"
-                    />
-                  </View>
-                  <Text style={[caption, { color: theme.colors.secondaryLabel }]}>Review only. Nothing is sent.</Text>
-                  <View style={[styles.divider, { backgroundColor: theme.colors.separator }, androidSeparator(theme)]} />
-                  {zoneOptions(state.zone, (zone) => model.getState().setZone(zone), 'festival-zone')}
-                </MomentCard>
-              </CardHeading>
-              {saveButtons}
-            </>
-          ) : null}
 
           {state.tab === 'Contacts' ? (
             <>
@@ -661,7 +592,7 @@ export function ManageMomentView({ group, onDone }: { group: MomentDisplayGroup;
             </>
           ) : null}
 
-          {state.tab === 'Wish Message' ? (
+          {state.tab === 'Message' ? (
             <>
               <Text style={[textStyles.largeTitle, styles.bold, { color: theme.colors.label }]}>Wish Message</Text>
               <View style={styles.inline}>
@@ -762,23 +693,91 @@ export function ManageMomentView({ group, onDone }: { group: MomentDisplayGroup;
 
           {state.tab === 'Schedule' ? (
             <>
-              <Text style={[textStyles.largeTitle, styles.bold, { color: theme.colors.label }]}>Schedule</Text>
-              <IconLabel icon="calendar-outline" title={sendDayLabel(state.sendDate, state.zone)} color={theme.colors.secondaryLabel} />
+              {/* `momentSection` (:162-178): the moment itself, with Edit Moment. */}
+              <CardHeading title="Moment">
+                <MomentCard testID="festival-moment">
+                  <View style={styles.momentRow}>
+                    <MomentIconTile type={type} title={state.title} />
+                    <View style={styles.grow}>
+                      <Text style={[headline, { color: theme.colors.label }]}>{state.title}</Text>
+                      <Secondary>{occasionLabel(state)}</Secondary>
+                      <Text style={[textStyles.subheadline, { color: theme.colors.label }]} testID="festival-moment-date">
+                        {sendDayLabel(state.date, state.zone)}
+                      </Text>
+                    </View>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel="Edit Moment"
+                      hitSlop={6}
+                      onPress={() => {
+                        Keyboard.dismiss();
+                        setMomentEditorKey((key) => key + 1);
+                        setMomentEditor(true);
+                      }}
+                      style={styles.editMoment}
+                      testID="moment-edit"
+                    >
+                      <Ionicons name="pencil" size={17} color={theme.colors.link} />
+                      <Text style={[textStyles.body, { color: theme.colors.link }]}>Edit</Text>
+                    </Pressable>
+                  </View>
+                  {occasionSource(state) === 'festivalCatalog' && type === 'festival' ? (
+                    <>
+                      <FormToggle
+                        label="Update festival date automatically"
+                        value={state.settings.catalogManaged}
+                        onValueChange={(value) => {
+                          model.getState().updateSettings({ catalogManaged: value });
+                          if (value) model.getState().useCatalog();
+                        }}
+                        testID="festival-catalog-managed"
+                      />
+                      <MenuPicker
+                        hideLabel
+                        label="Catalog festival"
+                        options={[{ value: '', title: 'Select festival' }, ...state.catalog.map((entry) => ({ value: entry.id, title: entry.name }))]}
+                        value={state.settings.catalogID}
+                        onChange={(value) => model.getState().updateSettings({ catalogID: value })}
+                        testID="festival-catalog"
+                      />
+                      <Text style={[caption, { color: theme.colors.label }]}>Only verified catalog dates are used. If no date is available, confirm it manually.</Text>
+                    </>
+                  ) : (
+                    <>
+                      <FormToggle label="Repeat every year" value={state.yearly} onValueChange={(value) => model.getState().setYearly(value)} testID="moment-repeat-yearly" />
+                      <Text style={[caption, { color: theme.colors.secondaryLabel }]}>
+                        {type === 'festival'
+                          ? 'Dates repeat yearly; festivals may move.\nConfirm the date and schedule each year.'
+                          : 'Repeats on this date each year.\nReview and schedule each wish separately.'}
+                      </Text>
+                    </>
+                  )}
+                </MomentCard>
+              </CardHeading>
               <CardHeading title="Send time">
                 <MomentCard grouped>
                   <DateField includeTime label="Date and time" value={state.sendDate} onChange={(value) => model.getState().setSendDate(value)} zone={state.zone} minimum={openedAt} testID="festival-send-time" />
-                  {zoneOptions(state.zone, (zone) => model.getState().setZone(zone), 'festival-schedule-zone')}
+                  {zoneOptions(state.zone, (zone) => model.getState().setZone(zone), 'moment-time-zone')}
+                  <View style={[styles.divider, { backgroundColor: theme.colors.separator }, androidSeparator(theme)]} />
+                  {/* `preparationPicker` (:179-186): hours or days before; reminds only. */}
+                  <View style={styles.inline}>
+                    <Text style={[textStyles.body, styles.grow, { color: theme.colors.label }]}>Prepare reminder</Text>
+                    <MenuPicker
+                      hideLabel
+                      label="Prepare reminder"
+                      options={PREPARATION_CHOICES}
+                      value={preparationMinutes(state.settings)}
+                      onChange={(value) => model.getState().updateSettings(withPreparationMinutes(model.getState().settings, value))}
+                      testID="moment-prepare-reminder"
+                    />
+                  </View>
+                  <Text style={[caption, { color: theme.colors.secondaryLabel }]}>Reminds you to review the wish. Nothing is sent.</Text>
                 </MomentCard>
               </CardHeading>
               <CardHeading title="Delivery">
                 <MomentCard grouped>
                   {selected.map((recipient) => {
                     const channel = recipientChannel(state, recipient);
-                    const options = [
-                      ...(recipient.phone !== '' ? [{ value: 'messages', title: 'Messages' }] : []),
-                      ...(recipient.email !== '' ? [{ value: 'email', title: 'Email' }] : []),
-                      { value: 'share', title: 'Copy / Share' },
-                    ];
                     return (
                       <View key={recipient.key} style={styles.deliveryRow}>
                         <View style={styles.inline}>
@@ -787,15 +786,12 @@ export function ManageMomentView({ group, onDone }: { group: MomentDisplayGroup;
                           </View>
                           <Text style={[headline, { color: theme.colors.label }]}>{recipient.name}</Text>
                         </View>
-                        <MenuPicker
-                          hideLabel
-                          accessibilityLabel={`Channel for ${recipient.name}`}
-                          label={`Channel for ${recipient.name}`}
-                          options={options}
-                          value={channel}
-                          onChange={(value) => model.getState().updateSettings({ channels: { ...model.getState().settings.channels, [recipient.key]: value } })}
-                          testID={`festival-channel-${recipient.key}`}
-                        />
+                        {/* `deliveryTags(for:)` (:243-270): Messages / Email / Copy / Share capsules. */}
+                        <View style={styles.tags} testID={`festival-channels-${recipient.key}`}>
+                          {recipient.phone !== '' ? <DeliveryTag title="Messages" recipient={recipient.name} selected={channel === 'messages'} onPress={() => model.getState().updateSettings({ channels: { ...model.getState().settings.channels, [recipient.key]: 'messages' } })} testID={`festival-channel-${recipient.key}-messages`} /> : null}
+                          {recipient.email !== '' ? <DeliveryTag title="Email" recipient={recipient.name} selected={channel === 'email'} onPress={() => model.getState().updateSettings({ channels: { ...model.getState().settings.channels, [recipient.key]: 'email' } })} testID={`festival-channel-${recipient.key}-email`} /> : null}
+                          <DeliveryTag title="Copy / Share" recipient={recipient.name} selected={channel === 'share'} onPress={() => model.getState().updateSettings({ channels: { ...model.getState().settings.channels, [recipient.key]: 'share' } })} testID={`festival-channel-${recipient.key}-share`} />
+                        </View>
                         {channel === 'email' ? (
                           <>
                             <FormToggle
@@ -817,23 +813,20 @@ export function ManageMomentView({ group, onDone }: { group: MomentDisplayGroup;
                 </MomentCard>
               </CardHeading>
               <Text style={[textStyles.subheadline, { color: theme.colors.label }]}>{`${automaticCount} automatic · ${selected.length - automaticCount} will be sent by you`}</Text>
-              {!ready ? (
-                <>
-                  <Text style={[caption, { color: theme.colors.label }]}>Automatic email needs a connected account and backend scheduler.</Text>
-                  <Pressable accessibilityRole="button" onPress={() => router.push('/wellness/moments/settings')} testID="festival-connect-email">
-                    <Text style={[textStyles.body, { color: theme.colors.link }]}>Connect / Reconnect email</Text>
-                  </Pressable>
-                </>
+              {/* Only when someone is set to Email and the account is not connected (:235). */}
+              {selected.some((recipient) => recipientChannel(state, recipient) === 'email') && snapshot?.emailAccount?.status !== 'connected' ? (
+                <Pressable accessibilityRole="button" onPress={() => router.push('/wellness/moments/settings')} testID="festival-connect-email">
+                  <Text style={[textStyles.body, { color: theme.colors.link }]}>Connect / Reconnect email</Text>
+                </Pressable>
               ) : null}
               <MomentCard grouped>
-                <FormToggle label="Notify me 1 hour before" value={state.notify} onValueChange={(value) => model.getState().setNotify(value)} testID="festival-notify" />
-                <View style={[styles.divider, { backgroundColor: theme.colors.separator }, androidSeparator(theme)]} />
-                <LabeledValue label="Send if app is closed" value="Email only" />
+                <FormToggle label="Notify me 1 hour before" value={state.notify} onValueChange={(value) => model.getState().setNotify(value)} testID="moment-send-reminder" />
               </MomentCard>
+              {connectSection}
               <View style={[styles.info, { backgroundColor: withAlpha(systemColors.blue, 0.08) }]}>
                 <Ionicons name="information-circle" size={17} color={theme.colors.link} />
                 <Text style={[textStyles.subheadline, styles.grow, { color: theme.colors.label }]}>
-                  At the scheduled time, open your reminder to send the prepared wish. You, the sender, must tap Send in Messages. Recipients do not need to confirm.
+                  At the scheduled time, we’ll remind you to send manual wishes. For Messages, open the prepared wish and tap Send. Only email marked automatic sends for you.
                 </Text>
               </View>
               {dirty ? <MomentPrimary title="Save Changes" onPress={() => save()} testID="festival-schedule-save" /> : null}
@@ -852,9 +845,9 @@ export function ManageMomentView({ group, onDone }: { group: MomentDisplayGroup;
               <Secondary>Saving…</Secondary>
             </View>
           ) : null}
-          {/* The Wish Message tab shows its errors next to Save Message. */}
-          {state.tab !== 'Wish Message' && state.error ? <ErrorText testID="festival-error">{state.error}</ErrorText> : null}
-          {state.notice ? (
+          {/* The Message tab shows its errors next to Save Message; Schedule shows no notices (:116-117). */}
+          {state.tab !== 'Message' && state.error ? <ErrorText testID="festival-error">{state.error}</ErrorText> : null}
+          {state.tab !== 'Schedule' && state.notice ? (
             <Text style={[textStyles.subheadline, { color: theme.colors.secondaryLabel }]} testID="festival-notice">
               {state.notice}
             </Text>
@@ -981,6 +974,8 @@ export function ManageMomentView({ group, onDone }: { group: MomentDisplayGroup;
 
       <GreetingCardEditor model={model} visible={imageSheet} onClose={() => setImageSheet(false)} />
       <GreetingCardCapture model={model} />
+
+      <MomentDetailsSheet key={momentEditorKey} model={model} visible={momentEditor} onClose={() => setMomentEditor(false)} />
 
       {/* `confirmation` (:183-215) */}
       <MomentSheet plain visible={scheduleConfirm} title="" onRequestClose={() => setScheduleConfirm(false)} right={{ title: 'Cancel', onPress: () => setScheduleConfirm(false), testID: 'confirm-cancel' }} testID="schedule-confirm-sheet">
@@ -1224,6 +1219,113 @@ export function ScheduleSuccess({
   );
 }
 
+/**
+ * `deliveryTag(_:channel:recipient:)` (ManageFestivalView.swift:255-270): a channel capsule — filled
+ * indigo with a checkmark when chosen, 8% indigo otherwise; at least 44 tall.
+ */
+function DeliveryTag({ title, recipient, selected, onPress, testID }: { title: string; recipient: string; selected: boolean; onPress: () => void; testID: string }) {
+  const theme = useTheme();
+  // Dark mode: an unselected tag's label is the `link` token, on that colour at 16% (android-polish.md).
+  const idle = theme.scheme === 'dark' ? withAlpha(theme.colors.link, 0.16) : withAlpha(brand.nexdoIndigo, 0.08);
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`${title} for ${recipient}`}
+      accessibilityState={{ selected }}
+      onPress={onPress}
+      style={[styles.tag, { backgroundColor: selected ? brand.nexdoIndigo : idle }]}
+      testID={testID}
+    >
+      {selected ? <Ionicons name="checkmark" size={13} color="#FFFFFF" /> : null}
+      <Text style={[textStyles.subheadline, styles.semibold, { color: selected ? '#FFFFFF' : theme.colors.link }]}>{title}</Text>
+    </Pressable>
+  );
+}
+
+/**
+ * `MomentDetailsSheet` (ManageFestivalView.swift:279-347): Edit Moment, a temporary draft of the name,
+ * type, date and Repeat. Save writes the draft into the model and saves; a failure, or a save that would
+ * cancel schedules, puts the model back as it was. With schedules, Save asks first ("Save changes to
+ * scheduled wishes?"). A catalog-managed festival's date and Repeat are fixed.
+ */
+/** A fresh draft for each opening (`init(model:)`): the parent re-keys the sheet when it opens. */
+function MomentDetailsSheet({ model, visible, onClose }: { model: ManageModel; visible: boolean; onClose: () => void }) {
+  const theme = useTheme();
+  const state = useStore(model);
+  const [title, setTitle] = useState(state.title);
+  const [type, setType] = useState(occasionType(state));
+  const [date, setDate] = useState(state.date);
+  const [yearly, setYearly] = useState(state.yearly);
+  const [error, setError] = useState<string | null>(null);
+  const changed = title !== state.title || type !== occasionType(state) || date !== state.date || yearly !== state.yearly;
+  const fixedDate = state.settings.catalogManaged && type === 'festival';
+
+  const commit = async (cancelSchedules: boolean) => {
+    const current = model.getState();
+    const old = { title: current.title, type: occasionType(current), date: current.date, yearly: current.yearly, sendDate: current.sendDate, settings: current.settings };
+    const restore = () => model.setState({ title: old.title, type: old.type, date: old.date, yearly: old.yearly, sendDate: old.sendDate, settings: old.settings });
+    current.setTitle(title);
+    current.setType(type);
+    current.setDate(date);
+    current.setYearly(yearly);
+    if (type !== 'festival') current.updateSettings({ catalogManaged: false });
+    await model.getState().save(cancelSchedules);
+    const after = model.getState();
+    if (after.error !== null) {
+      setError(after.error);
+      restore();
+    } else if (after.needsScheduleConfirmation) {
+      after.setNeedsScheduleConfirmation(false);
+      restore();
+      confirm();
+    } else onClose();
+  };
+  const confirm = () =>
+    Alert.alert('Save changes to scheduled wishes?', 'Saving these changes cancels existing schedules. Review and schedule the updated wishes again.', [
+      { text: 'Keep schedules', style: 'cancel' },
+      { text: 'Cancel schedules and save', onPress: () => void commit(true) },
+    ]);
+  const save = () => {
+    Keyboard.dismiss();
+    if (!changed) onClose();
+    else if (hasSchedules(model.getState(), momentsStore.getState())) confirm();
+    else void commit(false);
+  };
+
+  return (
+    <MomentSheet
+      visible={visible}
+      title="Edit Moment"
+      onRequestClose={() => !state.busy && onClose()}
+      left={{ title: 'Cancel', onPress: onClose, disabled: state.busy, testID: 'moment-edit-cancel' }}
+      right={{ title: 'Save', onPress: save, bold: true, disabled: state.busy || title.trim() === '' || characterCount(title) > 150, testID: 'moment-edit-save' }}
+      testID="moment-edit-sheet"
+    >
+      <FormScroll>
+        <FormSection header="Moment">
+          <FormRow>
+            <FormField placeholder="Moment name" value={title} onChangeText={setTitle} testID="festival-name" />
+          </FormRow>
+          <FormRow>
+            <MenuPicker label="Type" options={MOMENT_TYPES.filter((value) => value !== 'custom').map((value) => ({ value, title: typeLabel(value) }))} value={type} onChange={setType} testID="moment-edit-type" />
+          </FormRow>
+          <FormRow>
+            <DateField label="Moment date" value={date} onChange={setDate} zone={state.zone} disabled={fixedDate} testID="moment-edit-date" />
+          </FormRow>
+          <FormRow>
+            <FormToggle label="Repeat every year" value={yearly} onValueChange={setYearly} disabled={fixedDate} testID="moment-edit-repeat" />
+          </FormRow>
+          <FormRow last>
+            <Text style={[caption, { color: theme.colors.secondaryLabel }]}>Review and schedule each wish separately. Repeating a moment does not automatically send future wishes.</Text>
+          </FormRow>
+        </FormSection>
+        {error ? <ErrorText testID="moment-edit-error">{error}</ErrorText> : null}
+      </FormScroll>
+      <KeyboardDoneBar testID="moment-edit-keyboard-done" />
+    </MomentSheet>
+  );
+}
+
 const styles = StyleSheet.create({
   fill: { flex: 1 },
   content: { padding: 18, gap: 20, paddingBottom: 60 },
@@ -1265,5 +1367,11 @@ const styles = StyleSheet.create({
   sheetTitle: { marginHorizontal: 16, marginTop: 4 },
   recipientActions: { flexDirection: 'row', justifyContent: 'space-between', paddingTop: 8 },
   confirm: { padding: 16, gap: 18, paddingBottom: 60 },
+  semibold: { fontWeight: '600' },
+  momentRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
+  editMoment: { flexDirection: 'row', alignItems: 'center', gap: 4, minHeight: 44 },
+  // `ViewThatFits`: one row of capsules, wrapping when they do not fit.
+  tags: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingVertical: 8 },
+  tag: { flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 44, paddingHorizontal: 14, borderRadius: 999 },
 });
 
