@@ -1354,6 +1354,54 @@ describe('Recipients on Android', () => {
     expect(isDisabled('moment-save')).toBe(false);
   });
 
+  /** A saved festival opens its manager, which asks for the catalog. */
+  function serveCatalog() {
+    const saves = mockPost.getMockImplementation()!;
+    mockPost.mockImplementation(async (operation: string, ...rest: unknown[]) => (operation === 'festivalCatalog' ? { entries: [] } : saves(operation, ...rest)));
+  }
+
+  // fac34ed (MomentEditor.swift:129-135): re-importing a catalog festival keeps the saved group's id, so
+  // its recipients update in place instead of a second group of duplicates.
+  it('re-imports a saved catalog festival into its existing group', async () => {
+    jest.replaceProperty(Platform, 'OS', 'android');
+    const day = future(30);
+    const saved = moment({
+      id: 'diwali-1',
+      type: 'festival',
+      title: 'Diwali Wishes',
+      firstName: 'Asha',
+      occurrenceDate: day,
+      nextOccurrence: day,
+      source: 'festivalCatalog',
+      sourceKey: 'festival:diwali',
+      festivalSettings: settings({ groupID: 'SAVED-GROUP' }),
+    });
+    load([saved]);
+    serveSaves({ ...saved, id: 'new' });
+    serveCatalog();
+    const imported = { ...newMomentInput('festival:diwali', 'UTC'), type: 'festival', title: 'Diwali Wishes', yearly: false, source: 'festivalCatalog', occurrenceDate: day };
+    await render(<MomentEditorView imported={imported} dismiss={jest.fn()} />);
+    await addManually({ name: 'Ravi Kumar', email: 'ravi@example.com' });
+    await fireEvent.press(screen.getByTestId('moment-save'));
+    await waitFor(() => expect(mockPost.mock.calls.some(([operation]) => operation === 'festivalSave')).toBe(true));
+    const input = mockPost.mock.calls.find(([operation]) => operation === 'festivalSave')![1];
+    expect(input.settings.groupID).toBe('SAVED-GROUP');
+  });
+
+  it('starts a new group for a festival that was never imported', async () => {
+    jest.replaceProperty(Platform, 'OS', 'android');
+    const day = future(30);
+    load([]);
+    serveSaves(moment({ id: 'new', type: 'festival', title: 'Holi Wishes', occurrenceDate: day, nextOccurrence: day, source: 'festivalCatalog', sourceKey: 'festival:holi' }));
+    serveCatalog();
+    const imported = { ...newMomentInput('festival:holi', 'UTC'), type: 'festival', title: 'Holi Wishes', yearly: false, source: 'festivalCatalog', occurrenceDate: day };
+    await render(<MomentEditorView imported={imported} dismiss={jest.fn()} />);
+    await addManually({ name: 'Ravi Kumar', email: 'ravi@example.com' });
+    await fireEvent.press(screen.getByTestId('moment-save'));
+    await waitFor(() => expect(mockPost.mock.calls.some(([operation]) => operation === 'festivalSave')).toBe(true));
+    expect(mockPost.mock.calls.find(([operation]) => operation === 'festivalSave')![1].settings.groupID).toMatch(/^UUID-\d+$/);
+  });
+
   it('edits and removes a row, and the first person names the moment', async () => {
     jest.replaceProperty(Platform, 'OS', 'android');
     load([]);

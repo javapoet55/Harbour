@@ -21,6 +21,7 @@ import {
   newFestivalSettings,
   newMomentInput,
   normalizedPhone,
+  readFestivalSettings,
   recipientProblem,
   RECIPIENTS_REQUIRED,
   supportsGreetingCard,
@@ -121,7 +122,16 @@ export function MomentEditorView({ moment, imported, onDone, dismiss }: { moment
   const [sheet, setSheet] = useState<RecipientSheetRequest | null>(null);
   // The picked contact's numbers and addresses, by recipient key, so Edit offers them again.
   const [contactChoices, setContactChoices] = useState<Record<string, { phones: string[]; emails: string[] }>>({});
-  const [groupID] = useState(() => Crypto.randomUUID().toUpperCase());
+  // Reimporting a catalog festival keeps the saved group's id, so its recipients update in place instead of a
+  // second group of duplicates (fac34ed, MomentEditor.swift:129-135). Anything else starts a new group.
+  const [groupID] = useState(() => {
+    if (imported?.source === 'festivalCatalog') {
+      const existing = moments.find((item) => item.sourceKey === imported.sourceKey);
+      const saved = readFestivalSettings(existing?.festivalSettings);
+      if (saved) return saved.groupID;
+    }
+    return Crypto.randomUUID().toUpperCase();
+  });
 
   const saveDisabled = busy || !dateConfirmed || input.title.trim() === '' || (multi && recipients.length === 0);
   const locked = completedSave || savedRecipientIDs.length > 0;
