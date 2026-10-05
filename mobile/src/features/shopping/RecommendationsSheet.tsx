@@ -8,7 +8,8 @@ import { useTheme } from '../../theme';
 /**
  * `.sheet(isPresented: $recommendations) { AskNexdoView(textPage: true, shoppingContext:
  * ShoppingRecommendationContext(listName: list.title, itemNames: list.items.map(\.name))) }`
- * (ios/App/ShoppingViews.swift:299), opened by AI Powered Recommendations (`:321-328`).
+ * (ios/App/ShoppingViews.swift:354), opened by Recommendations (`:403-411`). The questions go to
+ * `POST /api/shopping/recommendations` (`useShoppingRecommendations`).
  */
 export function ShoppingRecommendationsSheet({ list, visible, onClose }: { list: GroceryList; visible: boolean; onClose: () => void }) {
   const theme = useTheme({ elevated: true });

@@ -19,7 +19,7 @@ import { FormButton, FormRow, FormScroll, FormSection, FormText } from '../momen
  * the List Settings sheet, so the chosen store comes back to the sheet's draft as Swift's `onSelect`.
  */
 
-/** "Location is unavailable…" (:766), shown only after the user asked for their location. */
+/** "Location is unavailable…" (:767), shown only after the user asked for their location. */
 export const LOCATION_UNAVAILABLE = 'Location is unavailable. Enter a city or ZIP code, or allow location access in iPhone Settings.';
 
 type Coordinate = { latitude: number; longitude: number };

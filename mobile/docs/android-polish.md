@@ -1405,6 +1405,38 @@ Deviations from Swift, Android-only or not:
 - **Schedule confirmed** has no back button, as Swift (`navigationBarBackButtonHidden`), and the back
   gesture is off: Done is the way out.
 
+---
+
+## 26. Phase 12 Run F: Shopping (2026-10-05)
+
+Built from the Swift source and the Mac's `shopping-*` captures. Deviations from Swift, Android-only or not:
+
+- **Stores Near You and Store Hours are pages of the List Settings sheet**, with Back, rather than pushes
+  inside its own `NavigationStack`; the chosen store comes back to the sheet's draft as Swift's `onSelect`.
+- **Share List → "Weekly email to store manager"** closes the sheet and pushes the weekly email on the
+  list, instead of pushing inside the sheet.
+- **Alternative Item Details** is a page of the alternatives sheet (Back returns to the list); the goal
+  picker, Why these alternatives? and the Replace confirmation are sheets over it; "Item replaced!" and
+  "Ask AI about this item" are full-screen.
+- **Store logos** load through React Native's `Image`. iOS skips the URL cache (`cache: 'reload'`, Swift's
+  "no persistent redistribution"); Android's image pipeline may keep its own cache. Only the server-named
+  `cdn.brandfetch.io` URL is ever loaded.
+- **Offer expiry** shows the store's own last day, not Swift's device-zone date (§22 "For the team").
+- **The weekly email follows the theme in dark mode.** Swift draws it in fixed light colours; light mode
+  here uses those exact values, but dark mode uses the theme so its menus, the 12-hour time picker and the
+  date pill (theme-coloured shared controls) stay readable.
+- **The settings gear on the weekly email** opens Account → Settings at the top; Swift's
+  `ProfileSettingsView(openCalendarSettings: true)` scrolls to Calendars.
+- **The photo preview** zooms with − / + on both platforms; pinching works on iOS only (Android's
+  `ScrollView` has no zoom).
+- **Swipe to delete on a completed list** does not open at all; Swift reveals a disabled Delete.
+- **"Take a Picture"** stays enabled; Swift disables it, with "Camera is available on a supported
+  device.", only where there is no camera (the simulator).
+- **Shopping Detail's title** is the store name with "Open Now" under it in the stack header's title slot;
+  the View Offers icon uses the `link` token (dark-mode tappables).
+- **Copy kept unchanged**, including "…allow location access in iPhone Settings." on Android (§22 "For
+  the team").
+
 ## 27. Phase 12 Run B: Tasks, Today and the Moments leftovers (2026-10-05)
 
 JavaScript only; no new build needed. The screens are listed in `docs/IOS_TO_REACT_NATIVE.md` §22 "Run B".

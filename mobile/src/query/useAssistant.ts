@@ -1,4 +1,6 @@
 import { useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query';
+import { shoppingStoresApi } from '../api/shopping';
+import { recommendationInput, type ShoppingRecommendationContext } from '../lib/shoppingRecommendations';
 
 import { endpoints, type AssistantTurn } from '../api';
 import { useAssistantStore } from '../store/assistant';
@@ -46,6 +48,23 @@ function reloadAfterChanges(queryClient: QueryClient): void {
   void queryClient.invalidateQueries({ queryKey: queryKeys.scheduleIntelligence() });
   void queryClient.invalidateQueries({ queryKey: queryKeys.calendar.all() });
   void queryClient.invalidateQueries({ queryKey: queryKeys.projects.all() });
+}
+
+/**
+ * `AppModel.askShopping(_:context:)` (NexdoApp.swift:804-814): Shopping Recommendations on their own
+ * endpoint, 40 s. The answer becomes the one turn, with no thread handle (`contextID = nil`).
+ */
+export function useShoppingRecommendations() {
+  return useMutation<AssistantTurn, Error, { text: string; context: ShoppingRecommendationContext }>({
+    mutationFn: async ({ text, context }) => {
+      if (!useConsent.getState().ai) throw new AskRefused('Sharing with OpenAI has not been allowed.');
+      if (text.trim().length === 0) throw new AskRefused('The prompt is empty.');
+      return shoppingStoresApi.recommendations(recommendationInput(context, text));
+    },
+    onSuccess: (turn, { text }) => {
+      useAssistantStore.getState().setTurn({ ...turn, contextActionId: null }, text);
+    },
+  });
 }
 
 export function useAsk() {

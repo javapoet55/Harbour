@@ -5,15 +5,12 @@
  */
 export type ShoppingRecommendationContext = { listName: string; itemNames: string[] };
 
-/** `assistantContext` (AskNexdoView.swift:92-94), character for character. */
-export function shoppingAssistantContext(context: ShoppingRecommendationContext): string {
-  const items = context.itemNames.length === 0 ? 'none yet' : context.itemNames.join(', ');
-  return `Review my shopping list "${context.listName}". Current items: ${items}. Give practical grocery advice for this list. Do not add, replace, remove, or complete anything without my explicit approval.`;
-}
-
-/** `request(_:)` (AskNexdoView.swift:469): the context goes first, then the customer's own words. */
-export function shoppingSubmission(context: ShoppingRecommendationContext, query: string): string {
-  return `${shoppingAssistantContext(context)}\n\nCustomer request: ${query}`;
+/**
+ * `AppModel.askShopping(_:context:)` (NexdoApp.swift:804-814): the question, the list's name and its
+ * item names go to `POST /api/shopping/recommendations`, not into an `/api/assistant` prompt.
+ */
+export function recommendationInput(context: ShoppingRecommendationContext, prompt: string) {
+  return { prompt, listName: context.listName, itemNames: context.itemNames };
 }
 
 /** `promptSuggestions` with a shopping context (AskNexdoView.swift:309-316). */
