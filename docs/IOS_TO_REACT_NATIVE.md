@@ -2422,6 +2422,18 @@ needed filter and `emailSubject` already matched. **All 10 fixed in Windows part
   Sam! \nHave fun" on the phones and "Happy Birthday, Sam! Have fun" on the server, which rewrites pending
   plans, so the preview and the sent text can differ by that line break. RN follows Swift; one side should
   change.
+- **Pomodoro session names: Swift caps characters, the server caps UTF-16 units.** `PomodoroSession.init`
+  and the name field keep `prefix(120)` characters (`Pomodoro.swift:36`, `PomodoroView.swift:103`), but
+  `pomodoroSchema` allows `name` up to 120 UTF-16 units (`src/server/pomodoro/sessions.ts:8`). A name of
+  emoji or other astral characters passes on the phone and is refused with 400, so the session never
+  syncs. RN caps at 120 UTF-16 units. Swift should match the server, or the server count characters.
+- **A Pomodoro alert tapped while the Wellness chooser is open opens a second Pomodoro.** Swift's
+  `openPomodoroNotification()` waits for the chooser to close (`RootView.swift:229`) and then presents
+  `showingPomodoro` even if the user had already gone into Pomodoro from the chooser. RN treats an open
+  Pomodoro as handled.
+- **Unreachable Wellness destinations.** `WellnessChooserView` keeps `insights` (Weekly Summary) and
+  `profile` (Account) destinations that no card or button opens (`WellnessChooserView.swift:10`, `:57-59`).
+  Not built in RN; delete them in Swift or add their cards.
 
 ### Windows part 2: keep-awake, time entry, Pomodoro sound
 
@@ -2445,3 +2457,45 @@ Full suite after part 2: 126 suites, 1,940 tests passing (28 new); `tsc --noEmit
   notification sound (`:133`). Both come from iOS itself, and nothing is bundled in `ios/` (its two `.wav`
   files are the voice and shopping cues). Nothing was added; `chime` in `src/features/pomodoro/device.ts`
   stays a no-op until someone picks a sound for Android and iOS.
+
+### Run C: Wellness, module guides and Pomodoro (Windows)
+
+Built from the Swift source; no captures for these screens were in `mobile/docs/reference/ios/` yet.
+Full suite after Run C: 133 suites, 2,001 tests passing (61 new); `tsc --noEmit` and eslint clean.
+
+| Screen | Swift | RN |
+| --- | --- | --- |
+| Tab bar centre Wellness button | `RootView.swift:172-182` | `src/components/WellnessTabButton.tsx`; `Tabs.Screen name="wellness"` in `app/(tabs)/_layout.tsx`, press intercepted |
+| Wellness chooser | `WellnessChooserView.swift:5-133` | `app/wellness/index.tsx`, `src/features/wellness/WellnessChooser.tsx` |
+| Module guides (four) | `WellnessModuleGuide.swift` | `app/wellness/guide/[kind].tsx`, `src/features/wellness/WellnessModuleGuide.tsx` |
+| Calorie Tracker route (Run D) | `CalorieTrackerView.swift` | `app/wellness/calories.tsx` — a Back button only, for Run D to fill |
+| Pomodoro timer: setup, focus, break, completion | `PomodoroView.swift` | `app/wellness/pomodoro.tsx`, `src/features/pomodoro/PomodoroView.tsx` |
+| Pomodoro dashboard: Overview, Sessions, Insights, session details | `PomodoroDashboard.swift` | `src/features/pomodoro/PomodoroDashboard.tsx`, `charts.tsx`, `format.ts` |
+| Notification tap route | `PomodoroNotificationRoute`, `RootView.swift:209-232` | `src/features/pomodoro/route.ts`, `usePomodoroNotificationRoute.ts` |
+
+Prep (own commit): `ClockField` gained `hourCycle="h12"` ("8:00 PM", 12/1–11 and AM/PM wheels) and
+`variant="formRow"` (label left, value in the Moments form pill). The value stays `"HH:mm"`; Account's
+working hours are unchanged and still pass their tests.
+
+**Presentation, as Swift.** The chooser, every guide and Pomodoro are full-screen modals over the tabs
+(`app/wellness/`), not tab-stack screens. A guide's "Got it!" replaces it with Pomodoro or the Calorie
+Tracker inside the cover; "Back" and "Back to Home" return to the chooser. The chooser's own bottom bar
+closes the covers and goes to Today, Tasks (list reset to Today), Ask AI or Calendar. Not built, because no
+card reaches them: the chooser's `insights` and `profile` destinations.
+
+**Deviations** (the Android-side detail is in `mobile/docs/android-polish.md` §21):
+
+- **Moments and Shopping open in the Today stack.** Swift shows them inside the chooser's cover, so their
+  Back returns to the chooser; the existing RN screens live in the Today tab's stack, so "Got it!" closes
+  the covers and opens them there, and their Back returns to Today.
+- **Charts, the timer ring and the donut are drawn from Views** (no SVG or chart module). A bar is picked
+  by tapping rather than dragging.
+- **The in-app chime is the phone's default notification sound**, played by a sound-only immediate
+  notification; the alerts keep the default sound as in Swift. No sound file (this supersedes part 2's
+  "stays a no-op").
+- **Fixed light colours** on all these screens, as Swift draws them.
+
+**Native modules and permissions: none new.** `expo-keep-awake` (declared in part 2) now holds the screen
+on during an unpaused focus; it needs no Android permission. Notifications use the existing
+expo-notifications setup and `reminders` channel. The 28 cut images in `assets/wellness/` total 788 KB;
+`pomodoro-clock` was not copied because nothing in Swift draws it.
