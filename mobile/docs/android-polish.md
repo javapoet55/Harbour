@@ -1404,3 +1404,37 @@ Deviations from Swift, Android-only or not:
   nothing on either.
 - **Schedule confirmed** has no back button, as Swift (`navigationBarBackButtonHidden`), and the back
   gesture is off: Done is the way out.
+
+## 27. Phase 12 Run B: Tasks, Today and the Moments leftovers (2026-10-05)
+
+JavaScript only; no new build needed. The screens are listed in `docs/IOS_TO_REACT_NATIVE.md` §22 "Run B".
+Deviations from Swift, Android-only or not:
+
+- **Tasks / Projects is a pill pair on Android too.** Swift replaced its segmented control with two capsules
+  (white on the accent gradient when chosen, over 6% indigo); the Android `SegmentRow` this screen used
+  (§9) is gone, so both platforms draw the same pills.
+- **Tasks in dark mode.** Swift's new background gradient and the white 65% section headers are light-only
+  (§22 "For the team"). In dark mode the screen keeps the subtle `TodayBackdrop`, the headers take the
+  surface colour at 65%, and the task icon tints (pink, green, orange, purple) use their dark system
+  colours. The icon tiles use Ionicons stand-ins for the SF Symbols (`construct-outline` for the wrench,
+  `laptop-outline` for the laptop).
+- **Task agent card in dark mode.** Swift's fixed white and lavender cards (the run card, the results
+  header, the business cards and tabs, the Task Information card) take the theme surface in dark, as §24
+  did; indigo and business-purple tappables and accents are the `link` token. Android draws no shadows, so
+  the run and business cards get the 1px `fieldBorder` hairline instead.
+- **Task agent card, Open in Messages on Android.** The SMS intent answers `unknown`, so no alert follows,
+  as for a cancelled composer; only a confirmed send or a failure shows one.
+- **Task agent card, layout.** The sliders menu ("Additional task details") is an inline one-item popover;
+  the rating line wraps rather than switching to Swift's compact `ViewThatFits` form; the
+  accessibility-size vertical layouts of the card are not ported. Polling carries on after a failed load
+  (Swift stops) and a later good load clears the message; the first shortlist is preselected whenever it
+  appears, not only on the load path.
+- **Nexdo Action: Choose contact** opens the system contact picker. On Android `expo-contacts` reads the
+  picked person back through the contacts provider, which needs READ_CONTACTS, so Android asks for it
+  first (the Moments picker already does; no new permission). "Choose contact" is a filled capsule in the
+  tint; the Contact details form is a page sheet on iOS and a full-screen modal on Android, with the form
+  group chrome (§2).
+- **Today, Remind later → Choose time…** uses the shared date field (month grid, hour and minute wheels) in
+  a sheet titled "Remind later", where Swift shows a compact `DatePicker`.
+- **Today, Previous / Next** are tinted capsules (`.bordered`); "Choose contact or enter details" keeps
+  Swift's fixed lavender and ink, because the card it sits on (`glassSolid`) stays light in dark mode too.

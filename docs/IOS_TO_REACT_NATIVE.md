@@ -2179,15 +2179,15 @@ screens are listed again under "Changed screens".
 | [x] `d48c2eb`, `be7211d` as `app/calendar/event/[id].tsx` | Event Details — new | `CalendarEventDetailsView.swift:3` (`:24-107`) | Calendar → an **event** row (`.sheet`, `CalendarView.swift:177-181`) | `GET`/`PATCH`/`DELETE /api/calendar/events/{id}`, `POST …/{id}/task` | `app/calendar/event/[id].tsx` *(Run A)* | `event-details`, `-dark`, `-scrolled`, `-menu`, `-completed`, `-added-to-tasks`, `event-delete-confirm` |
 | [x] `d48c2eb` as `app/calendar/event/edit.tsx` | Edit Event — new | `CalendarEventDetailsView.swift:168` (`:179-210`) | Event Details → **Edit** (Nexdo events only, `:20`) | `PATCH /api/calendar/events/{id}` | `app/calendar/event/[id]/edit.tsx` *(Run A)* | `event-edit` |
 | [x] `d48c2eb`, `be7211d` as `app/(tabs)/calendar.tsx` | Calendar tab — **changed** (collapsed empty days, review conflicts) | `CalendarView.swift:3` (`:73-183`) | Tab bar → Calendar | unchanged | `app/(tabs)/calendar.tsx` | `calendar-v2`, `-collapsed-days` |
-| [ ] | Tasks tab with search and "All time" history — **changed** | `RootView.swift:1663` (`TasksView`, `:1685-1771`) | Tab bar → Tasks → magnifier (`:1791`) | `GET /api/tasks` (filtered on the device, `Sources/NexdoCore/TaskQuery.swift`) | `app/(tabs)/(tasks)/tasks.tsx` | `tasks-v2-empty`, `tasks-search`, `-results`, `-empty`, `-keyboard` |
-| [ ] | Task Details — **changed** (Nexdo Action card, focus session button) | `TaskDetailsView.swift:3` (`:33-115`) | Tap a task | unchanged | `app/task/[id].tsx` | `task-details-v2`, `-scrolled` |
-| [ ] | Task agent: location, business results, outreach draft — new | `TaskAgentCard.swift:4` (`:59-180`), inline in Task Details (`TaskDetailsView.swift:39`) | Task Details of a task the server marks eligible (e.g. "Call electrician") | `GET`/`POST /api/tasks/{id}/agent` | component in `app/task/[id].tsx` *(to build)* | `task-agent-location`, `task-agent-results`, `-reviews`, `-services`, `-scrolled-1`, `-scrolled-2`, `task-agent-outreach-draft` |
-| [ ] | Nexdo Action contact screen — **changed** | `TaskActionView.swift:101` (`:146-305`) | Task card **Call**/**Message** pill, Today action card | on device | `app/action/[id].tsx` | `task-action-error-no-contact`, `task-action-contact-details` |
-| [ ] | Today action cards and queue — **changed** (business candidate card) | `TodayActionsView.swift:10` (`:27-85`), card `:96`, queue `:287` | Today | `GET /api/tasks/{id}/agent` | `app/(tabs)/(today)/today/index.tsx`, `app/action/queue.tsx` | `today-v2`, `-dark`, `today-action-card-contact`, `today-action-card-business`, `today-action-queue` |
+| [x] `403f681` | Tasks tab with search and "All time" history — **changed** | `RootView.swift:1663` (`TasksView`, `:1685-1771`) | Tab bar → Tasks → magnifier (`:1791`) | `GET /api/tasks` (filtered on the device, `Sources/NexdoCore/TaskQuery.swift`) | `app/(tabs)/(tasks)/tasks.tsx` | `tasks-v2-empty`, `tasks-search`, `-results`, `-empty`, `-keyboard` |
+| [x] `fed4966` (business mode; the action card and focus button already matched) | Task Details — **changed** (Nexdo Action card, focus session button) | `TaskDetailsView.swift:3` (`:33-115`) | Tap a task | unchanged | `app/task/[id].tsx` | `task-details-v2`, `-scrolled` |
+| [x] `fed4966` as `src/components/TaskAgentCard.tsx` | Task agent: location, business results, outreach draft — new | `TaskAgentCard.swift:4` (`:59-180`), inline in Task Details (`TaskDetailsView.swift:39`) | Task Details of a task the server marks eligible (e.g. "Call electrician") | `GET`/`POST /api/tasks/{id}/agent` | component in `app/task/[id].tsx` *(to build)* | `task-agent-location`, `task-agent-results`, `-reviews`, `-services`, `-scrolled-1`, `-scrolled-2`, `task-agent-outreach-draft` |
+| [x] `769069c` | Nexdo Action contact screen — **changed** | `TaskActionView.swift:101` (`:146-305`) | Task card **Call**/**Message** pill, Today action card | on device | `app/action/[id].tsx` | `task-action-error-no-contact`, `task-action-contact-details` |
+| [x] `783217e`; weather removed `512e067` | Today action cards and queue — **changed** (business candidate card) | `TodayActionsView.swift:10` (`:27-85`), card `:96`, queue `:287` | Today | `GET /api/tasks/{id}/agent` | `app/(tabs)/(today)/today/index.tsx`, `app/action/queue.tsx` | `today-v2`, `-dark`, `today-action-card-contact`, `today-action-card-business`, `today-action-queue` |
 | [x] `f6c3829` | Important Moments with date filters (Today / Tomorrow / This Week / Later) — **changed** | `ImportantMomentsView.swift:209` (`:221-324`; default filter Today, `:216`) | Wellness → Moments → Got it! | `GET /api/moments` | `app/wellness/moments/index.tsx` | `moments-date-filter-today-empty`, `-tomorrow`, `-this-week`, `-later-scrolled`, `moments-scheduled-v2` |
 | [x] `16c0536` | Manage Moments tabs (Scheduled / Need Review / Ready to Schedule) — new | `ManageFestivalView.swift:4` (`MomentsManagementEntry`, `:23-87`) | Summary card → **Manage** (`ImportantMomentsView.swift:315`) | `GET /api/moments` | `app/wellness/moments/manage-list.tsx` | `moments-manage-tabs-scheduled-empty`, `-scheduled`, `-scheduled-dark`, `-need-review`, `-ready` |
 | [x] `ca8324b` (time zone; manual recipient was already built) | Create Moment — **changed** (time zone, manual recipient) | `MomentEditor.swift` | Summary card → **Create New** | `POST /api/moments` `festivalSave` | `app/wellness/moments/editor.tsx` (`MomentEditorView`) | `moment-create-v2`, `-filled` |
-| [ ] | Choose Festivals — **changed** (hero, region cards, festival list; missed by the reference pass) | `MomentEditor.swift:306` (`MomentFestivalView`, `:330-357`…) | Moments settings → Choose festivals | none | `app/wellness/moments/festivals.tsx` (exists; rebuild) | — (not captured) |
+| [x] `d74768c`; captures `7d3ff92` | Choose Festivals — **changed** (hero, region cards, festival list; missed by the reference pass) | `MomentEditor.swift:306` (`MomentFestivalView`, `:330-357`…) | Moments settings → Choose festivals | none | `app/wellness/moments/festivals.tsx` | `festivals-v2`, `-scrolled`, `-bottom`, `-region-india`, `-region-india-scrolled`, `-region-india-dark` |
 | [x] `9c3dee0` | Manage Moment, three tabs (Contacts / Message / Schedule) — **changed** (was four) | `ManageFestivalView.swift:89` (`:109-140`) | Card gear, a Manage row, or after Create | `POST /api/moments` `festivalSave`, `schedule` | `app/wellness/moments/manage.tsx` (`ManageMomentView`, with `MomentDetailsSheet`) | `moment-manage-v2-contacts`, `-message`, `-message-scrolled`, `-message-saved`, `-schedule`, `-schedule-delivery` |
 | [x] `8962288`, `0927e9d` | Connect me on the day — new | `MomentConnectCall.swift:168` (`MomentConnectSection`, `:186-207`) | Manage Moment → Schedule (inline, `ManageFestivalView.swift:237`) | `POST /api/moments` `connectStatus` / `connectPreview` / `connectSave` / `connectNow` | `MomentConnectSection` (`src/features/moments/MomentConnectSection.tsx`) on the Schedule step | `moment-connect-section` |
 | [x] `8962288` | Verify caller ID ("Show my number") — new | `MomentConnectCall.swift:306` (`:317-357`) | Connect section → **Verify my number** | `callerIdStart` / `callerIdStatus` / `callerIdRemove` | `CallerIDVerificationSheet` in `MomentConnectSection.tsx` | `moment-caller-id-sheet` |
@@ -2775,6 +2775,56 @@ existing Moments tests were rewritten to the three-step screen and the date chip
 `scheduleReview.test.tsx`; ports of `preparationRemindersSupportHoursAndLegacyDays` and
 `editedOccasionKeepsOriginalRecipientSettingKeys`. Android deviations: `mobile/docs/android-polish.md` §25.
 
+### Run B: Tasks, Today and the Moments leftovers (Mac)
+
+The open Tasks and Today rows and the two Moments items Run E left, built on `rn-phase-12-mac` from the
+Swift source and the reference captures. One commit per screen group:
+
+| Rows | Swift | RN | Commit |
+| --- | --- | --- | --- |
+| Choose Festivals captures | `MomentEditor.swift:306-535` | `mobile/docs/reference/ios/festivals-v2*.png` | `7d3ff92` |
+| Choose Festivals redesign | `MomentFestivalView` (`MomentEditor.swift:306-535`) | `app/wellness/moments/festivals.tsx` | `d74768c` |
+| Moments notification taps | `ImportantMomentsStore.resolveRoute`, `routedPlanID`, `showingNotificationInbox` (`ImportantMomentsView.swift:599-607`) | `store.ts` (`routedPlanID`, `showingInbox`), `useMomentsLifecycle.ts`, `routedDestination` | `5471398` |
+| Nexdo Action contact screen | `TaskActionView.swift:101-429`; `TaskActionContacts.swift:52-66`; `TaskActionCoordinator.swift:60-89`; `TaskAction.swift:82-108` | `app/action/[id].tsx`, `ActionContactDetailsSheet.tsx`, `contacts.ts`, `coordinator.ts` (`screenOpened`/`screenClosed`), `taskAction.ts` (`releaseActions`); API `src/api/taskAgent.ts`, `src/query/useTaskAgent.ts` | `769069c` |
+| Today top bar: no weather, no add button | `RootView.swift:1151-1157`, `:1692` | `TodayShell.tsx`, `today/index.tsx`; weather route and `useWeather` deleted | `512e067` |
+| Tasks tab: search, All time, pills | `TaskQuery.swift:24-111`; `RootView.swift:1663-1957` | `tasks.tsx`, `taskQuery.ts` (`beginSearch`), `TaskListParts.tsx` (`TaskTabs`), `TaskCard.tsx` | `403f681` |
+| Today action cards and queue | `TodayActionsView.swift:10-340`; `TodayActionQueue.swift:6-10`; `ActionNeededState.swift` | `TodayActions.tsx`, `todayActionQueue.ts` (`dueActions`, `upcomingActions`), `app/action/queue.tsx` | `783217e`, `fab459d` |
+| Task agent card; Task Details business mode | `TaskAgentCard.swift`; `TaskDetailsView.swift:36-330` | `TaskAgentCard.tsx`, `src/lib/taskAgent.ts`, `app/task/[id].tsx`, `TaskDetailParts.tsx`; art `assets/task-agent/` | `fed4966` |
+
+**"Start a 25-minute focus session" does not open Pomodoro in Swift.** `model.startFocus` patches the task
+to `IN_PROGRESS` with `focusMinutes: 25` and shows `FocusSessionStrip` (`TaskDetailsView.swift:164`,
+`NexdoApp.swift:727-757`); nothing presents `PomodoroView`. RN already did exactly that, so the button is
+unchanged and does not open `app/wellness/pomodoro.tsx`.
+
+**Moments notification taps:** a tap resolves to the moment that owns the tapped id, as a moment or as one
+of its wishes, and opens it with that wish (`routedPlanID`); a moment that no longer exists opens the
+Moments list instead. The "notification inbox" note under Run E is done.
+
+**Today:** every due action takes a turn in the Action Needed card ("N Actions need attention",
+Previous / Next, View all); Next up lists only what is not due. The card checks the task's business
+research first (`ActionNeededState`): Checking next action…, Retry, Find / Choose a business (to Task
+Details), Choose contact or enter details, then only the channels the recipient has. It looks the person
+up in Contacts only when access was already given, and never prompts. Overdue ages read "1 hr 30 min
+overdue"; "Remind later" gained "Choose time…". The queue sheet opens Task Details.
+
+**Native modules and permissions: none new.** The contact picker is the installed `expo-contacts`
+(`presentContactPickerAsync`), Messages the installed `expo-sms`, Copy the installed `expo-clipboard`.
+`expo-location` stays installed for Shopping; no permission was added or removed. The two task-agent
+pictures are 160 KB in `assets/task-agent/`.
+
+**Never a real call, text or email in testing:** `/api/tasks/{id}/agent`, Contacts, the picker, `expo-sms`
+and `Linking` are mocked in every suite (`reminders.test.tsx`, `today-actions.test.tsx`,
+`TaskAgentCard.test.tsx`, `task-detail-business.test.tsx`); a Call stops at the confirmation alert.
+
+**Tests:** 155 suites, 2,299 tests, all green; `tsc` and eslint clean. New: `TaskAgentCard.test.tsx`,
+`task-detail-business.test.tsx`, `tasks-screen` and `TaskComponents` additions, `store/taskQuery.test.ts`,
+`task-layout.test.tsx`, `taskActionRelease.test.ts`; the action-screen, Today action and queue tests were
+rewritten to the new flows. Swift ports: `searchResetsFiltersAndFindsAllDatesWithOpenMatchesFirst`,
+`reschedulingPreservesSelectedRecipientButChangingPersonClearsIt`, `onlyAWaitingActionIsReleased`,
+`theNextSyncRepairsStuckActionsButNeverOneOnScreen`, `aNewFutureScheduleRebuildsAStuckActionAtTheNewTime`,
+`multipleActionCardsIncludeEveryDueActionWithoutUpcomingDuplicates`,
+`dueCardsUpdateAfterDismissSnoozeAndTaskCompletion`. Android deviations: `mobile/docs/android-polish.md` §27.
+
 ### For the team
 
 Swift and server issues found by both machines, reported here and not fixed. The Windows items come
@@ -2923,3 +2973,36 @@ first, unchanged; the Mac reference pass’s items follow, with their captures.
 - **Send Now refuses everyone when Messages is unavailable.** `sendNow()` checks `canSendText()` if ANY
   recipient has a phone (`ManageFestivalView.swift:546`), so on a device without Messages a recipient set to
   Email is not sent either. RN copies it. *(From reading the code.)*
+
+**From Run B (Swift, report only; RN copies Swift unless noted):**
+- **Nexdo Action, contact lookup:** every lookup failure, Contacts access refused included, reads "No
+  contact selected. Choose a contact or enter details below.", so the "Allow Nexdo to access Contacts"
+  guidance never shows; and the error sits *under* the buttons it calls "below".
+- **Nexdo Action, personal tasks:** a plain "Call Asha" with no saved contact asks the agent endpoint
+  first, so offline it shows "Couldn’t check this task" although no business is involved.
+- **Nexdo Action, dead code:** with no recipient there are no channel buttons, so `resolve()`'s Contacts
+  search can no longer be reached from the screen.
+- **Nexdo Action, details form and composer:** the form prefills the raw name ("the plumber"), not the
+  search form; the email composer ignores the business draft; picked contacts lose their own phone and
+  email labels (always "Phone" / "Email").
+- **Today card:** `isBusiness` is true whenever a run exists, even a cancelled one, so a person task that
+  once had research shows "Find a business"; Dismiss and Remind later read `contactName`, not the chosen
+  recipient; a queue row whose task is not loaded does nothing; overdue minutes truncate while future
+  minutes round up.
+- **Task agent card:** NO_RESULTS and CANCELLED runs are dead ends (no retry, search or cancel, and the
+  server refuses resume and retry for them); "Phone number copied." and "Draft copied." go into `error`,
+  so they show as errors and hide the spinner; `TaskAgentCard.swift:68` tests `question.key ==
+  "urgency"` after excluding it on `:67`; the search button always sends `key: "location"` (`:82`);
+  "Show more" shows under any review, however short (`:386`); polling keys on the status, so every
+  action fires an extra GET.
+- **Task agent and Tasks tab, dark mode:** the agent cards, the Task Information card, the Tasks
+  background and the white 65% section headers are fixed light under adaptive ink — white on white in
+  dark mode. RN uses the theme surface in dark (android-polish §27).
+- **Tasks search:** closing search never restores the filters it reset (All, All time, All statuses);
+  during a search, Today then All resets the status to Open and hides completed matches; a section
+  caption repeats its title ("Friday, Sep 18" twice) for any day but Today, Yesterday and Tomorrow;
+  `taskIcon` matches substrings, so "recall" gets the phone icon.
+- **Task Details, business mode:** the header has Back and Close, which do the same thing.
+- **Weather:** `AppModel.refreshWeather` still runs on every load and locates the device, but nothing
+  shows the result; `TodayView` keeps an `adding` sheet nothing opens.
+
