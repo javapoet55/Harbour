@@ -7,7 +7,7 @@ import { ShoppingActionBar } from '../components';
 /**
  * The action bar labels are `.lineLimit(2).minimumScaleFactor(0.78)` (ShoppingViews.swift:314-323):
  * SwiftUI wraps them between words and shrinks rather than split one. On a OnePlus the RN label
- * painted "AI Powered Reco / mmendations", because `adjustsFontSizeToFit` does nothing on Android.
+ * painted "AI Powered Reco / mmendations" (the label before `4414957`), because `adjustsFontSizeToFit` does nothing on Android.
  */
 describe('ShoppingActionBar labels', () => {
   const layout = async (node: Parameters<typeof fireEvent>[0], width: number) =>
@@ -22,14 +22,15 @@ describe('ShoppingActionBar labels', () => {
 
   it('shrinks the label until its widest word fits a line', async () => {
     await renderBar();
-    const label = screen.getByText('AI Powered Recommendations');
-    await layout(label.parent!, 110);
-    await layout(word('AI'), 16);
-    await layout(word('Powered'), 60);
-    await layout(word('Recommendations'), 125);
+    const label = screen.getByText('Complete Shopping');
+    await layout(label.parent!, 60);
+    await layout(word('Complete'), 70);
+    await layout(word('Shopping'), 66);
 
-    expect(fontSizeOf('AI Powered Recommendations')).toBeCloseTo(15 * (110 / 125));
-    expect(screen.getByText('AI Powered Recommendations').props.numberOfLines).toBe(2);
+    expect(fontSizeOf('Complete Shopping')).toBeCloseTo(15 * (60 / 70));
+    expect(screen.getByText('Complete Shopping').props.numberOfLines).toBe(2);
+    // "Recommendations" since `4414957` (ShoppingViews.swift:404).
+    expect(screen.getByLabelText('Recommendations')).toBeTruthy();
   });
 
   it('keeps the full size when every word already fits', async () => {
@@ -43,10 +44,11 @@ describe('ShoppingActionBar labels', () => {
 
   it('stops at the 0.78 scale factor, as SwiftUI does', async () => {
     await renderBar();
-    await layout(screen.getByText('AI Powered Recommendations').parent!, 80);
-    await layout(word('Recommendations'), 125);
+    await layout(screen.getByText('Complete Shopping').parent!, 40);
+    await layout(word('Complete'), 70);
+    await layout(word('Shopping'), 66);
 
-    expect(fontSizeOf('AI Powered Recommendations')).toBeCloseTo(15 * 0.78);
+    expect(fontSizeOf('Complete Shopping')).toBeCloseTo(15 * 0.78);
   });
 });
 

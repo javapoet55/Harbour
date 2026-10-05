@@ -1,4 +1,4 @@
-import type { ChosenShoppingOffer, GroceryList, ShoppingOfferCategory, ShoppingOfferMatch } from '../../api/shopping';
+import type { ChosenShoppingOffer, GroceryList, ShoppingOfferCategory, ShoppingOfferMatch, ShoppingOffersSnapshot } from '../../api/shopping';
 
 /**
  * The pure parts of the store offers screens (ios/App/ShoppingOffersView.swift) and the offer badge on
@@ -73,4 +73,15 @@ export function offerDate(value: string, locale?: string): string {
   const at = Date.parse(value);
   if (Number.isNaN(at)) return value;
   return new Intl.DateTimeFormat(locale, { dateStyle: 'medium' }).format(new Date(at));
+}
+
+/**
+ * `showsOffersShortcut` (ShoppingViews.swift:414-420): "Once the snapshot loads, show the shortcut for
+ * every store: the offers screen itself explains the status for stores and locations the backend does
+ * not cover." Before that, only for a Costco or Safeway store name.
+ */
+export function showsOffersShortcut(snapshot: ShoppingOffersSnapshot | undefined | null, storeName: string | null | undefined): boolean {
+  if (snapshot) return true;
+  const words = (storeName ?? '').toLowerCase().split(/[^\p{L}\p{N}]+/u);
+  return words.includes('costco') || words.includes('safeway');
 }

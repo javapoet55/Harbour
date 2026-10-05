@@ -1,20 +1,24 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import * as Crypto from 'expo-crypto';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Alert, Keyboard, Modal, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 
-import type { GroceryItem, GroceryList } from '../../../src/api/shopping';
+import type { GroceryItem, GroceryList, ShoppingOfferMatch } from '../../../src/api/shopping';
 import { KeyboardAwareScrollView } from '../../../src/components/keyboard';
 import { withAlpha } from '../../../src/components/SignInBackdrop';
 import { Text } from '../../../src/components/Text';
 import { TodayBackdrop } from '../../../src/components/TodayShell';
 import { ShoppingAlternativesSheet } from '../../../src/features/shopping/AlternativesSheet';
 import { ShoppingRecommendationsSheet } from '../../../src/features/shopping/RecommendationsSheet';
-import { CategoryChip, GroceryRow, grocerySeparatorInset, ShoppingActionBar, ShoppingIcon, SwipeToDelete } from '../../../src/features/shopping/components';
+import { CategoryChip, GroceryRow, grocerySeparatorInset, ShoppingActionBar, SwipeToDelete } from '../../../src/features/shopping/components';
 import { completionSummary, ShoppingCompletionView, type ShoppingCompletionSummary } from '../../../src/features/shopping/CompletionView';
 import { ItemEditorSheet } from '../../../src/features/shopping/ItemEditorSheet';
-import { appended, CATEGORIES, itemCount, listInput, remaining, removed, suggestionsFor, toggled, uncheckedAll, upserted } from '../../../src/features/shopping/model';
+import { appended, CATEGORIES, itemCount, listInput, remaining, removed, suggestionsFor, toggled, upserted } from '../../../src/features/shopping/model';
+import { currentChoice, offerBadge, showsOffersShortcut } from '../../../src/features/shopping/offers';
+import { StoreBrandLogo } from '../../../src/features/shopping/StoreBrandLogo';
+import { useShoppingOffers, useStoreHours } from '../../../src/query/useShoppingOffers';
+import { useAccessibilityTextSize } from '../../../src/features/wellness/useAccessibilityTextSize';
 import { ListSettingsSheet } from '../../../src/features/shopping/ListSettings';
 import { NewListSheet, ShareListSheet } from '../../../src/features/shopping/sheets';
 import { shoppingStore, useShopping } from '../../../src/features/shopping/store';
@@ -25,17 +29,20 @@ import { brand, textStyles, useTheme } from '../../../src/theme';
 export const NO_ITEMS_FOUND = 'No items found. Type an item and try again.';
 
 /**
- * `ShoppingDetail` (ios/App/ShoppingViews.swift:207-400), as redesigned by e13730b and 987a90e.
+ * `ShoppingDetail` (ios/App/ShoppingViews.swift:206-543).
  *
  * Every change is applied to the screen at once and then saved with the list's revision. A save the
  * server refuses (409 when the list changed on another device) keeps the local edits and offers
- * "Retry Save" and "Discard local edits and reload". A completed list is NOT read-only any more: the
- * rows stay live (`:274`), and saving it creates a new list instead (`:365-373`).
+ * "Retry Save" and "Discard local edits and reload". A completed list is read-only again (`readOnly`,
+ * `:233`): its rows, settings, shortcuts and Select All are off; a change made through Copy list or an
+ * alternative still creates a new list (`:518-526`).
  *
- * Top to bottom: the header "N added · M items" (`:233-234`), the quick-add bar (`:235-256`) with its
- * suggestions (`:257-260`), the category chips (`:261-269`), one item section with swipe-to-delete
- * (`:271-278`), the empty state and the save error (`:279-280`), and the pinned action bar (`:284`,
- * `:312-331`). Typed items go straight onto the list — there is no Review Items step (`:374-387`).
+ * Top to bottom: the store logo and "N added · M items" with the settings chevron (`:240-259`), the
+ * Schedule Email / View Offers shortcuts (`:260-262`, `:421-446`), the quick-add bar with its
+ * suggestions (`:263-292`), the category chips (`:293-302`), the items with their offer badges
+ * (`:305-322`), the empty state and the save error, and the pinned action bar. The title is the store's
+ * name, with "Open Now" under it while Google says so (`:333-341`). Offers and hours are polled every
+ * 60 seconds while the app is active (`:357-377`).
  */
 export default function ShoppingDetailScreen() {
   const theme = useTheme();
@@ -59,6 +66,15 @@ export default function ShoppingDetailScreen() {
   const [menu, setMenu] = useState(false);
   const [barHeight, setBarHeight] = useState(72);
   const quickField = useRef<TextInput>(null);
+  const large = useAccessibilityTextSize();
+  // `.task(id: "\(list.revision)-\(scenePhase)")` and the hours task (:357-377): `try?`, so failures stay quiet.
+  const offers = useShoppingOffers(list?.id, { poll: true });
+  const hours = useStoreHours(list?.storePlaceId || null, { poll: true });
+  const revision = list?.revision;
+  const refetchOffers = offers.refetch;
+  useEffect(() => {
+    if (revision !== undefined) void refetchOffers();
+  }, [revision, refetchOffers]);
 
   if (!list) return null;
   const readOnly = list.completedAt != null;
@@ -159,14 +175,35 @@ export default function ShoppingDetailScreen() {
     }
   };
 
+  /** `setAllItemsChecked(_:)` (:448-455): the whole list, including items a chip hides; nothing if unchanged. */
+  const setAllChecked = (checked: boolean) => {
+    if (readOnly || busy) return;
+    if (list.items.every((row) => row.checked === checked)) return;
+    void save({ ...list, items: list.items.map((row) => ({ ...row, checked })) });
+  };
+
   const message = error ?? storeError;
-  /** The options `Menu` (:287-292). Edit and reorder are gone. */
+  /** The options `Menu` (:342-352). */
   const menuItems: { title: string; onPress: () => void; disabled?: boolean; destructive?: boolean; testID: string }[] = [
+    { title: 'Share list', onPress: () => setSharing(true), testID: 'list-menu-share' },
     { title: 'List settings', onPress: () => setSettings(true), disabled: readOnly, testID: 'list-menu-settings' },
     { title: 'Copy list', onPress: () => setCopy(true), testID: 'list-menu-copy' },
-    ...(readOnly ? [] : [{ title: 'Uncheck all', onPress: () => void save(uncheckedAll(list)), testID: 'list-menu-uncheck' }]),
+    ...(readOnly
+      ? []
+      : [
+          { title: 'Select All', onPress: () => setAllChecked(true), disabled: left === 0, testID: 'list-menu-select-all' },
+          { title: 'Unselect All', onPress: () => setAllChecked(false), disabled: left === list.items.length, testID: 'list-menu-unselect-all' },
+        ]),
     { title: 'Delete list', onPress: confirmDelete, destructive: true, testID: 'list-menu-delete' },
   ];
+
+  const storeName = (list.storeName ?? '').trim();
+  // `openStorePlaceID == placeID`: Google says the chosen place is open now.
+  const openNow = storeName !== '' && !!list.storePlaceId && hours.data?.openNow === true;
+  const snapshot = offers.data;
+  const offersShortcut = showsOffersShortcut(snapshot, list.storeName);
+  const openOffers = (itemId?: string) =>
+    router.push({ pathname: '/wellness/shopping/offers', params: { id: list.id, ...(itemId ? { itemId } : {}) } });
 
   const suggestions = suggestionsFor(quick);
 
@@ -174,15 +211,23 @@ export default function ShoppingDetailScreen() {
     <View style={styles.fill}>
       <Stack.Screen
         options={{
-          headerRight: () => (
-            <View style={styles.toolbar}>
-              <Pressable accessibilityRole="button" accessibilityLabel="Share list" onPress={() => setSharing(true)} hitSlop={8} testID="list-share">
-                <Ionicons name="share-outline" size={22} color={theme.colors.link} />
-              </Pressable>
-              <Pressable accessibilityRole="button" accessibilityLabel="List options" onPress={() => setMenu(true)} hitSlop={8} testID="list-options">
-                <Ionicons name="ellipsis-horizontal" size={22} color={theme.colors.link} />
-              </Pressable>
+          // `ToolbarItem(placement: .principal)`: the store's name, or "Shopping List", and "Open Now".
+          headerTitle: () => (
+            <View accessible accessibilityLabel={openNow ? `${storeName}, Open Now` : storeName || 'Shopping List'} style={styles.principal} testID="list-title">
+              <Text numberOfLines={1} style={[styles.titleText, { color: theme.colors.ink }]}>
+                {storeName || 'Shopping List'}
+              </Text>
+              {openNow ? (
+                <Text style={[styles.openNow, { color: '#34C759' }]} testID="list-open-now">
+                  Open Now
+                </Text>
+              ) : null}
             </View>
+          ),
+          headerRight: () => (
+            <Pressable accessibilityRole="button" accessibilityLabel="List options" onPress={() => setMenu(true)} hitSlop={8} testID="list-options">
+              <Ionicons name="ellipsis-horizontal" size={22} color={theme.colors.link} />
+            </Pressable>
           ),
         }}
       />
@@ -191,18 +236,43 @@ export default function ShoppingDetailScreen() {
       <View style={styles.fill} pointerEvents={busy ? 'none' : 'auto'}>
         {/* On Android the action bar rides up on the keyboard, so the focused field has to clear it too. */}
         <KeyboardAwareScrollView bottomOffset={barHeight} keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingBottom: barHeight + 16 }} testID="shopping-detail">
-          {!readOnly && <Pressable accessibilityRole="button" accessibilityLabel="Schedule shopping list email" onPress={() => router.push({ pathname: '/wellness/shopping/email', params: { id: list.id } })} style={{ margin: 16, padding: 16, borderRadius: 18, backgroundColor: theme.colors.secondaryBackground, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-            <Ionicons name="mail-outline" size={26} color={theme.colors.link} />
-            <View style={{ flex: 1 }}><Text style={{ fontWeight: '700', color: theme.colors.label }}>Schedule email</Text><Text style={{ color: theme.colors.secondaryLabel }}>Send your list to your store manager every week</Text></View>
-            <Ionicons name="chevron-forward" size={20} color={theme.colors.link} />
-          </Pressable>}
-          {/* Header (:233-234). */}
+          {/* Header (:240-259): the store logo, which opens full size, and the settings chevron. */}
           <View style={styles.header}>
-            <ShoppingIcon />
-            <View style={styles.grow}>
+            <StoreBrandLogo expandsOnTap identity={`${list.storeName ?? ''}|${list.storeWebsite ?? ''}`} listId={list.id} />
+            <View style={[styles.grow, styles.headerText]}>
               <Text style={[textStyles.title2, styles.bold, { color: theme.colors.label }]}>{list.title}</Text>
-              <Text style={[textStyles.body, { color: theme.colors.secondaryLabel }]} testID="list-counts">{`${list.items.length - left} added · ${itemCount(list.items.length)}`}</Text>
+              <View style={styles.countsRow}>
+                <Text style={[textStyles.body, styles.grow, { color: theme.colors.secondaryLabel }]} testID="list-counts">{`${list.items.length - left} added · ${itemCount(list.items.length)}`}</Text>
+                {!readOnly ? (
+                  <Pressable accessibilityLabel="List settings" accessibilityRole="button" onPress={() => setSettings(true)} style={styles.headerSettings} testID="shopping-header-settings">
+                    <Ionicons color={theme.colors.secondary} name="chevron-forward" size={15} />
+                  </Pressable>
+                ) : null}
+              </View>
             </View>
+          </View>
+
+          {/* `shoppingShortcuts` (:421-446): Schedule Email, and View Offers once there is something to say. */}
+          <View style={[styles.shortcuts, large && styles.shortcutsColumn]}>
+            <ShortcutCard
+              color={brand.nexdoBlue}
+              disabled={readOnly}
+              icon="mail"
+              onPress={() => router.push({ pathname: '/wellness/shopping/email', params: { id: list.id } })}
+              testID="shopping-shortcut-email"
+              title="Schedule Email"
+            />
+            {offersShortcut ? (
+              <ShortcutCard
+                color={brand.nexdoIndigo}
+                icon="pricetag-outline"
+                onPress={() => openOffers()}
+                testID="shopping-shortcut-offers"
+                title={`View Offers${snapshot ? ` (${snapshot.matches.length})` : ''}`}
+              />
+            ) : (
+              <View style={styles.grow} />
+            )}
           </View>
 
           {/* Quick-add bar (:235-256): global pattern 15, the raised input card. */}
@@ -295,9 +365,10 @@ export default function ShoppingDetailScreen() {
           {list.items.length > 0 ? (
             <View style={[styles.card, styles.itemsCard, { backgroundColor: theme.colors.surface }]} testID="grocery-list">
               {visibleItems.map((row, index) => (
-                <SwipeToDelete key={row.id} onDelete={() => deleteRow(row)} testID={`grocery-row-${row.id}`}>
+                <SwipeToDelete disabled={readOnly} key={row.id} onDelete={() => deleteRow(row)} testID={`grocery-row-${row.id}`}>
                   <View style={styles.itemRow}>
-                    <GroceryRow row={row} onToggle={() => void save(toggled(list, row.id))} onEdit={() => setItem(row)} onAlternatives={() => setAlternativesFor(row)} />
+                    <GroceryRow readOnly={readOnly} row={row} onToggle={() => void save(toggled(list, row.id))} onEdit={() => setItem(row)} onAlternatives={() => setAlternativesFor(row)} />
+                    <OfferBadge itemId={row.id} chosen={row.chosenOffer} name={row.name} matches={snapshot?.matches} onPress={() => openOffers(row.id)} />
                   </View>
                   {index < visibleItems.length - 1 ? (
                     <View style={[styles.separator, { left: grocerySeparatorInset(row), backgroundColor: theme.colors.listSeparator }]} testID={`grocery-separator-${row.id}`} />
@@ -384,6 +455,48 @@ export default function ShoppingDetailScreen() {
   );
 }
 
+/** `shortcutCard(_:icon:color:)` (:433-446). */
+function ShortcutCard({ title, icon, color, disabled = false, onPress, testID }: { title: string; icon: keyof typeof Ionicons.glyphMap; color: string; disabled?: boolean; onPress: () => void; testID: string }) {
+  const theme = useTheme();
+  const large = useAccessibilityTextSize();
+  return (
+    <Pressable
+      accessibilityLabel={title}
+      accessibilityRole="button"
+      accessibilityState={{ disabled }}
+      disabled={disabled}
+      onPress={onPress}
+      style={[styles.shortcut, { backgroundColor: theme.colors.surface, opacity: disabled ? 0.45 : 1 }]}
+      testID={testID}
+    >
+      <View style={styles.shortcutTop}>
+        <View style={[styles.shortcutIcon, { backgroundColor: withAlpha(color, 0.08) }]}>
+          <Ionicons color={color} name={icon} size={18} />
+        </View>
+        <Ionicons color={theme.colors.secondary} name="chevron-forward" size={12} />
+      </View>
+      <Text adjustsFontSizeToFit={!large} minimumFontScale={0.8} numberOfLines={large ? undefined : 1} style={[textStyles.subheadline, styles.semibold, { color: theme.colors.ink }]}>
+        {title}
+      </Text>
+    </Pressable>
+  );
+}
+
+/**
+ * The offer badge under a row (:307-317): only when the item has matching, available or alternative
+ * offers; it names the chosen offer while that offer is still among them.
+ */
+function OfferBadge({ itemId, name, chosen, matches, onPress }: { itemId: string; name: string; chosen: GroceryItem['chosenOffer']; matches: ShoppingOfferMatch[] | undefined; onPress: () => void }) {
+  const itemOffers = (matches ?? []).filter((match) => match.itemId === itemId && ['matching', 'available', 'alternative'].includes(match.category));
+  if (itemOffers.length === 0) return null;
+  return (
+    <Pressable accessibilityLabel={`Offers for ${name}`} accessibilityRole="button" onPress={onPress} style={[styles.badge, { backgroundColor: withAlpha(brand.nexdoBlue, 0.08) }]} testID={`offer-badge-${itemId}`}>
+      <Ionicons color={brand.nexdoBlue} name="pricetag-outline" size={12} />
+      <Text style={[styles.badgeText, { color: brand.nexdoBlue }]}>{offerBadge(itemOffers, currentChoice(itemOffers, chosen))}</Text>
+    </Pressable>
+  );
+}
+
 const styles = StyleSheet.create({
   fill: { flex: 1 },
   grow: { flex: 1 },
@@ -391,6 +504,21 @@ const styles = StyleSheet.create({
   center: { textAlign: 'center' },
   // The List row insets put the header and the bar 16 inside a 16 pt section margin.
   header: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 32, paddingTop: 20, paddingBottom: 3 },
+  headerText: { gap: 4 },
+  countsRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  headerSettings: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  principal: { alignItems: 'center', gap: 2, maxWidth: 220 },
+  titleText: { fontSize: 17, lineHeight: 22, fontWeight: '600' },
+  openNow: { fontSize: 12, lineHeight: 16, fontWeight: '600' },
+  semibold: { fontWeight: '600' },
+  // `.listRowInsets(top: 8, leading: 16, bottom: 8, trailing: 16)`, `HStackLayout(alignment: .top, spacing: 8)`.
+  shortcuts: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginHorizontal: 32, marginTop: 11, marginBottom: 5 },
+  shortcutsColumn: { flexDirection: 'column', alignItems: 'stretch' },
+  shortcut: { flex: 1, gap: 6, padding: 10, borderRadius: 18 },
+  shortcutTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  shortcutIcon: { width: 30, height: 30, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
+  badge: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', gap: 5, paddingHorizontal: 10, paddingVertical: 7, borderRadius: 999, marginTop: 6 },
+  badgeText: { fontSize: 12, lineHeight: 16, fontWeight: '600' },
   // `.padding(.horizontal, 10).padding(.vertical, 6).frame(minHeight: 54)`, radius 18, 1 pt stroke,
   // `.shadow(color: nexdoInk.opacity(0.07), radius: 8, y: 3)`.
   quickBar: {
@@ -434,7 +562,6 @@ const styles = StyleSheet.create({
   emptyTitle: { fontSize: 22, lineHeight: 28, fontWeight: '700', marginTop: 8 },
   errorCard: { marginTop: 20 },
   errorRow: { minHeight: 52, paddingHorizontal: 16, paddingVertical: 12, justifyContent: 'center' },
-  toolbar: { flexDirection: 'row', alignItems: 'center', gap: 18 },
   menuScrim: { flex: 1, backgroundColor: 'rgba(0,0,0,0.2)', alignItems: 'flex-end', paddingTop: 90, paddingRight: 16 },
   menu: { borderRadius: 14, minWidth: 220, paddingVertical: 4 },
   menuRow: { minHeight: 48, paddingHorizontal: 16, justifyContent: 'center' },

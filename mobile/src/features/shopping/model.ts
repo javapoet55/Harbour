@@ -231,7 +231,7 @@ export function addedAlternative(list: GroceryList, choice: ShoppingAlternative,
 // ---------------------------------------------------------------------------------------------
 // GroceryArtwork (ShoppingViews.swift:363-402)
 
-export type GroceryAsset = 'onion' | 'milk' | 'banana' | 'tomato' | 'eggs';
+export type GroceryAsset = 'onion' | 'milk' | 'mango' | 'banana' | 'tomato' | 'eggs';
 
 /** `words`: the name lowercased and split on every non-letter. */
 function words(name: string): Set<string> {
@@ -252,10 +252,28 @@ export function groceryAsset(name: string): GroceryAsset | null {
   const set = words(name);
   if (any(set, ['onion', 'onions'])) return 'onion';
   if (set.has('milk')) return 'milk';
+  if (any(set, ['mango', 'mangoes', 'mangos'])) return 'mango';
   if (any(set, ['banana', 'bananas'])) return 'banana';
   if (any(set, ['tomato', 'tomatoes'])) return 'tomato';
   if (any(set, ['egg', 'eggs'])) return 'eggs';
   return null;
+}
+
+const NON_FOOD = new Set(['pump', 'parts', 'accessories', 'graphics', 'ssd', 'motherboard', 'processor', 'mouse', 'mice', 'keyboard', 'computer', 'laptop', 'desktop', 'monitor', 'charger', 'charging', 'cable', 'adapter', 'usb', 'headphones', 'earbuds', 'speaker', 'speakers', 'phone', 'iphone', 'ipad', 'macbook', 'watch', 'tv', 'television', 'camera', 'printer', 'electronics', 'battery', 'batteries', 'car', 'cars', 'automotive', 'motor', 'engine', 'brake', 'brakes', 'tire', 'tires', 'tyre', 'tyres', 'gear', 'gears', 'bearing', 'bearings', 'spark', 'coolant', 'wiper', 'mechanical', 'screw', 'screws', 'bolt', 'bolts', 'wrench', 'detergent', 'soap', 'shampoo', 'cleaner', 'tissue', 'tissues', 'towel', 'towels']);
+const FOOD_CATEGORIES = ['Produce', 'Dairy & Eggs', 'Meat & Seafood', 'Bakery', 'Pantry', 'Frozen', 'Drinks'];
+const FOODS = new Set(['mango', 'mangoes', 'tofu', 'snack', 'snacks', 'fruit', 'vegetable', 'vegetables', 'apple', 'apples', 'banana', 'bananas', 'orange', 'oranges', 'tomato', 'tomatoes', 'potato', 'potatoes', 'onion', 'onions', 'carrot', 'carrots', 'avocado', 'avocados', 'spinach', 'lettuce', 'broccoli', 'berry', 'berries', 'strawberries', 'grapes', 'lemon', 'lime', 'pepper', 'peppers', 'milk', 'egg', 'eggs', 'cheese', 'yogurt', 'butter', 'bread', 'bagel', 'bagels', 'tortilla', 'rice', 'pasta', 'flour', 'sugar', 'salt', 'olive', 'canola', 'sauce', 'beans', 'lentils', 'cereal', 'oats', 'honey', 'chicken', 'beef', 'pork', 'salmon', 'fish', 'shrimp', 'turkey', 'coffee', 'tea', 'juice', 'soda', 'water', 'nuts', 'almonds', 'chocolate', 'chips', 'crackers', 'cookies', 'soup']);
+
+/**
+ * `supportsFoodAlternatives` (ios/Sources/NexdoCore/ShoppingList.swift:40-50): "Nutrition alternatives
+ * apply to food, not every item stored in a shopping list." The name is checked first — "older parsers
+ * can classify “Apple mouse” as produce" — then the food categories, then common foods under Other.
+ */
+export function supportsFoodAlternatives(item: Pick<GroceryItem, 'name' | 'category'>): boolean {
+  const set = words(item.name);
+  if ([...set].some((word) => NON_FOOD.has(word))) return false;
+  if (FOOD_CATEGORIES.includes(item.category)) return true;
+  if (item.category !== 'Other') return false;
+  return [...set].some((word) => FOODS.has(word));
 }
 
 const KEYWORD_EMOJI: [string[], string][] = [
