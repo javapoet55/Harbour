@@ -7,7 +7,8 @@ import {matchOffer,sourceForList,storeForName,type OfferProvider,type OfferRecor
 import {collectCostco,COSTCO_SOURCE} from './costco';
 import {collectFlipp} from './flipp';
 const COSTCO:OfferSourceDef={provider:'costco',id:'costco-us-warehouse',store:'Costco',region:'US contiguous warehouses'};
-const SOURCE_URL:Record<OfferProvider,string>={costco:COSTCO_SOURCE,flipp:'https://www.safeway.com/weeklyad'};
+// Each banner's own weekly-ad page, so “View store source” opens the store the customer picked.
+const sourceURL=(s:OfferSourceDef)=>s.provider==='costco'?COSTCO_SOURCE:`https://${s.site??`${s.merchant}.com`}/weeklyad`;
 const FRESH=48*3600000;
 type Collector=(def:OfferSourceDef,now:Date)=>Promise<OfferRecord[]>;
 const collectors:Record<OfferProvider,Collector>={costco:async()=>collectCostco(),flipp:(def,now)=>collectFlipp(def,now)};
@@ -22,7 +23,7 @@ export async function listOffers(userId:string,listId:string,now=new Date()){
  const matches=list.items.flatMap(item=>offers.flatMap(offer=>{
   const match=matchOffer(item,offer);return match?[{itemId:item.id,itemName:item.name,...match,offer:{...offer,store:source!.store},selected:(item.chosenOffer as {id?:string}|null)?.id===offer.id}]:[];
  }));
- return {matches,lastCheckedAt:source?.lastCheckedAt??null,sourceURL:source?.url??SOURCE_URL[src.provider],status:!source?.lastSuccessAt?'Offers are awaiting their first verified daily check.':!fresh?'Offer checks are delayed. Deals are hidden until refreshed.':source.error?'Last check failed; showing previously verified, unexpired offers.':src.provider==='costco'?'Warehouse offers for the contiguous US. Availability may vary by store.':`Weekly Ad offers for ${src.store} near ZIP ${src.zip}. Prices and loyalty terms vary by store.`};
+ return {matches,lastCheckedAt:source?.lastCheckedAt??null,sourceURL:source?.url??sourceURL(src),status:!source?.lastSuccessAt?'Offers are awaiting their first verified daily check.':!fresh?'Offer checks are delayed. Deals are hidden until refreshed.':source.error?'Last check failed; showing previously verified, unexpired offers.':src.provider==='costco'?'Warehouse offers for the contiguous US. Availability may vary by store.':`Weekly Ad offers for ${src.store} near ZIP ${src.zip}. Prices and loyalty terms vary by store.`};
 }
 export async function chooseOffer(userId:string,listId:string,itemId:string,offerId:string|null,revision:number){
  return prisma.$transaction(async tx=>{
@@ -72,7 +73,7 @@ export async function collectOffers(now=new Date(),extra:Partial<Record<OfferPro
  for(const l of await prisma.shoppingList.findMany({where:{storeName:{not:null},storeZip:{not:null}},select:{storeName:true,storeZip:true},distinct:['storeName','storeZip']})){
   const s=sourceForList(l.storeName,l.storeZip);if(s)wanted.set(s.id,s);
  }
- for(const s of wanted.values())await prisma.shoppingOfferSource.upsert({where:{id:s.id},update:{store:s.store,region:s.region,url:SOURCE_URL[s.provider]},create:{id:s.id,store:s.store,region:s.region,url:SOURCE_URL[s.provider],nextCheckAt:now}});
+ for(const s of wanted.values())await prisma.shoppingOfferSource.upsert({where:{id:s.id},update:{store:s.store,region:s.region,url:sourceURL(s)},create:{id:s.id,store:s.store,region:s.region,url:sourceURL(s),nextCheckAt:now}});
  await prisma.shoppingOfferSource.deleteMany({where:{id:{notIn:[...wanted.keys()]}}});
  const due=await prisma.shoppingOfferSource.findMany({where:{id:{in:[...wanted.keys()]},nextCheckAt:{lte:now},OR:[{leaseUntil:null},{leaseUntil:{lt:now}}]},orderBy:{nextCheckAt:'asc'},take:10});
  const results=[];

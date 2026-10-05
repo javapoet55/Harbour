@@ -27,7 +27,7 @@ it('requires consent, a valid timezone, and a safe recipient',()=>{
  for(const changes of [{consent:false},{timeZone:'invalid'},{recipient:'x@example.com\r\nBcc:y@example.com'}])expect(scheduleInput.safeParse({...settings,...changes}).success).toBe(false);
 });
 it('only includes checked items and preserves quantities and notes',()=>{
- const mail=shoppingEmail('Food','Alex',[{name:'Milk',quantity:'2',size:'litres',notes:'Organic',checked:true},{name:'Eggs',quantity:'1',size:'',notes:'',checked:false}]);
+ const mail=shoppingEmail('Alex',[{name:'Milk',quantity:'2',size:'litres',notes:'Organic',checked:true},{name:'Eggs',quantity:'1',size:'',notes:'',checked:false}]);
  expect(mail.body).toContain('Milk — 2 litres (Organic)');expect(mail.body).not.toContain('Eggs');
 });
 it('rejects access by another user',async()=>{const {list}=await setup();await expect(emailSchedule('other',list.id)).rejects.toThrow('not found');await expect(pauseEmailSchedule('other',list.id)).rejects.toThrow('not found');await pauseEmailSchedule(userId,list.id)});
@@ -162,8 +162,8 @@ it('snapshots the latest checked items at run time and excludes unchecked items'
  expect(sender.send).toHaveBeenCalledWith(userId,settings.recipient,run.subject,run.body,run.id);
 });
 it('treats both an empty list and a fully unchecked list as empty email content',()=>{
- expect(shoppingEmail('Food','Alex',[]).empty).toBe(true);
- expect(shoppingEmail('Food','Alex',[{name:'Milk',quantity:'1',size:'',notes:'',checked:false}]).empty).toBe(true);
+ expect(shoppingEmail('Alex',[]).empty).toBe(true);
+ expect(shoppingEmail('Alex',[{name:'Milk',quantity:'1',size:'',notes:'',checked:false}]).empty).toBe(true);
 });
 it('validates pickup dates and one-hour windows from 9 AM through 8 PM',()=>{
  for(const extra of [{pickupDate:'2030-02-30',pickupStartHour:9},{pickupDate:'2030-01-05',pickupStartHour:20},{pickupDate:'2030-01-05',pickupStartHour:8},{pickupDate:'2030-01-05'}])expect(scheduleInput.safeParse({...settings,...extra}).success).toBe(false);
@@ -180,14 +180,15 @@ it('persists pickup preferences and includes them in the scheduled email',async(
  expect(run.body).toContain('Please confirm this pickup window');
 });
 it('advances an old pickup date weekly and formats the last window correctly',()=>{
- const mail=shoppingEmail('Food','Alex',[{name:'Milk',quantity:'1',size:'',notes:'',checked:true}],{pickupDate:'2029-12-29',pickupStartHour:19,timeZone:settings.timeZone,runAt:now});
+ const mail=shoppingEmail('Alex',[{name:'Milk',quantity:'1',size:'',notes:'',checked:true}],{pickupDate:'2029-12-29',pickupStartHour:19,timeZone:settings.timeZone,runAt:now});
  expect(mail.body).toContain('Sat, Jan 5, 2030');expect(mail.body).toContain('7 PM–8 PM');
- const past=shoppingEmail('Food','Alex',[],{pickupDate:'2030-01-05',pickupStartHour:9,timeZone:settings.timeZone,runAt:now});
+ const past=shoppingEmail('Alex',[],{pickupDate:'2030-01-05',pickupStartHour:9,timeZone:settings.timeZone,runAt:now});
  expect(past.body).toContain('Sat, Jan 12, 2030');
 });
 
 it('uses the requested template with sender identity and daylight-saving timezone',()=>{
- const mail=shoppingEmail('Target shopping list','Sri',[{name:'Eggs',quantity:'1',size:'dozen',notes:'Organic',checked:true}],{pickupDate:'2026-10-03',pickupStartHour:9,timeZone:'America/Los_Angeles',runAt:new Date('2026-10-02T18:00:00Z')},{name:'Sender Name',phoneNumber:'+15555550123'});
+ const mail=shoppingEmail('Sri',[{name:'Eggs',quantity:'1',size:'dozen',notes:'Organic',checked:true}],{pickupDate:'2026-10-03',pickupStartHour:9,timeZone:'America/Los_Angeles',runAt:new Date('2026-10-02T18:00:00Z')},{name:'Sender Name',phoneNumber:'+15555550123'});
+ expect(mail.subject).toBe('Shopping list');
  expect(mail.body).toBe('Hi Sri,\n\nHere is my shopping list:\n\n• Eggs — 1 dozen (Organic)\n\nPreferred pickup: Sat, Oct 3, 2026 · 9 AM–10 AM PDT.\n\nPlease confirm this pickup window. Please let me know about availability and any substitutions.\n\nPlease call and email me once my items are ready to be picked up.\n\nThank you!\nSender Name\n+15555550123\nSent with NexDo');
 });
 it('uses the form phone instead of a different saved profile phone',async()=>{
@@ -197,7 +198,7 @@ it('uses the form phone instead of a different saved profile phone',async()=>{
  expect(run.body).toContain('Thank you!\nShopper\n+15555550123\nSent with NexDo');
 });
 it('omits missing sender details rather than printing placeholders',()=>{
- const mail=shoppingEmail('Food','Alex',[],undefined,{name:'Shopper',phoneNumber:null});
+ const mail=shoppingEmail('Alex',[],undefined,{name:'Shopper',phoneNumber:null});
  expect(mail.body).toContain('Thank you!\nShopper\nSent with NexDo');
  expect(mail.body).not.toContain('undefined');expect(mail.body).not.toContain('confirm this pickup window');
 });
@@ -212,10 +213,11 @@ it('persists the form phone and returns it when reopening the schedule',async()=
  expect((await emailSchedule(userId,list.id)).schedule?.customerPhone).toBe('+442079460123');
  await pauseEmailSchedule(userId,list.id);
 });
-it('pauses legacy schedules without a customer phone instead of sending',async()=>{
+it('keeps legacy schedules saved before the phone field existed sending without a number',async()=>{
  const {schedule}=await setup();await prisma.shoppingEmailSchedule.update({where:{id:schedule.id},data:{customerPhone:null}});
- const sender={send:vi.fn(async()=>({kind:'sent' as const,id:'should-not-send'}))};await runShoppingEmails(now,sender);
- expect(sender.send).not.toHaveBeenCalled();
- expect((await prisma.shoppingEmailSchedule.findUniqueOrThrow({where:{id:schedule.id}})).enabled).toBe(false);
- expect((await prisma.shoppingEmailRun.findFirstOrThrow({where:{scheduleId:schedule.id}})).detail).toContain('Add your phone number');
+ const sender={send:vi.fn(async()=>({kind:'sent' as const,id:'legacy-receipt'}))};await runShoppingEmails(now,sender);
+ expect(sender.send).toHaveBeenCalledTimes(1);
+ expect((await prisma.shoppingEmailSchedule.findUniqueOrThrow({where:{id:schedule.id}})).enabled).toBe(true);
+ const run=await prisma.shoppingEmailRun.findFirstOrThrow({where:{scheduleId:schedule.id}});
+ expect(run.status).toBe('sent');expect(run.body).toContain('Thank you!\nShopper\nSent with NexDo');
 });

@@ -104,8 +104,8 @@ struct ShoppingItemEditor:View {
                 else if launchCamera && initial.imageData == nil{dismiss()}
             }.ignoresSafeArea()}
             .fullScreenCover(item:$previewPhoto) { ShoppingPhotoPreview(image:$0.image) }
+            // Capitalize once when the editor opens; rewriting on every keystroke fights typing.
             .onAppear { capitalizeItemName() }
-            .onChange(of:initial.name) { _,_ in capitalizeItemName() }
             .task {
                 guard launchCamera && !didLaunchCamera else{return}
                 didLaunchCamera=true;imageExpanded=true

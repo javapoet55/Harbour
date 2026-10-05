@@ -8,20 +8,30 @@ const headers={'user-agent':UA};
 // Each banner's own weekly-ad page publishes its public merchant identifier and access token in the
 // JS bundle it serves to every visitor, so they are resolved at runtime instead of being hardcoded.
 interface Banner{merchant:string;token:string;}
-let banners:Promise<Map<string,Banner>>|null=null;
-async function flippBanners(site='https://www.safeway.com'):Promise<Map<string,Banner>>{
- banners??=(async()=>{
-  const page=await (await fetch(`${site}/weeklyad`,{headers,signal:AbortSignal.timeout(30000)})).text();
-  const js=page.match(/weeklyad\/dist\/weeklyad\/main\.[0-9a-f]+\.js/)?.[0];
-  if(!js)throw new Error('Weekly ad app not found');
-  const bundle=await (await fetch(`${site}/${js}`,{headers,signal:AbortSignal.timeout(30000)})).text();
-  const out=new Map<string,Banner>();
-  for(const m of bundle.matchAll(/(\w+):\{url:"https:\/\/aq\.flippenterprise\.net\/\d+\/iframe\.js",accessToken:"([0-9a-f]{32})"[^}]*?merchantName:"(\w+)"/g))
-   out.set(m[3],{merchant:m[3],token:m[2]});
-  if(out.size<5)throw new Error('Weekly ad app configuration not found');
-  return out;
- })();
- return banners;
+// Tokens live in the banner's hashed JS bundle, which changes on every deploy, so they are cached
+// only briefly. A failed lookup is never cached, and an API auth error forces a re-resolve.
+const BANNER_TTL=6*3600000;
+let banners:{at:number;map:Map<string,Banner>}|null=null;
+let resolving:Promise<Map<string,Banner>>|null=null;
+async function resolveBanners(site='https://www.safeway.com'):Promise<Map<string,Banner>>{
+ const page=await (await fetch(`${site}/weeklyad`,{headers,signal:AbortSignal.timeout(30000)})).text();
+ const js=page.match(/weeklyad\/dist\/weeklyad\/main\.[0-9a-f]+\.js/)?.[0];
+ if(!js)throw new Error('Weekly ad app not found');
+ const bundle=await (await fetch(`${site}/${js}`,{headers,signal:AbortSignal.timeout(30000)})).text();
+ const out=new Map<string,Banner>();
+ for(const m of bundle.matchAll(/(\w+):\{url:"https:\/\/aq\.flippenterprise\.net\/\d+\/iframe\.js",accessToken:"([0-9a-f]{32})"[^}]*?merchantName:"(\w+)"/g))
+  out.set(m[3],{merchant:m[3],token:m[2]});
+ if(out.size<5)throw new Error('Weekly ad app configuration not found');
+ return out;
+}
+async function flippBanners(refresh=false):Promise<Map<string,Banner>>{
+ if(!refresh&&banners&&Date.now()-banners.at<BANNER_TTL)return banners.map;
+ // Keep serving the last good tokens when re-resolution fails; the API still accepts recently issued ones.
+ resolving??=resolveBanners()
+  .then(map=>{banners={at:Date.now(),map};return map;})
+  .catch(e=>{if(banners)return banners.map;throw e;})
+  .finally(()=>{resolving=null;});
+ return resolving;
 }
 
 interface FlippPublication{id:number;name?:string;pdf_url?:string;valid_from:string;valid_to:string;}
@@ -44,7 +54,7 @@ export function flippOffers(items:FlippItem[],pub:FlippPublication,def:OfferSour
    product,brand,packageSize:null,price,savings,unitPrice:null,
    conditions:`${terms?terms+' ':''}${def.store} Weekly Ad offer near ZIP ${def.zip}, valid ${pub.valid_from.slice(0,10)} to ${pub.valid_to.slice(0,10)}. Member prices may require a free loyalty account.`,
    imageURL:p.hosted_coupon_image??p.image_url??p.large_image_url??null,
-   sourceURL:pub.pdf_url??`https://${def.merchant}.com/weeklyad`,
+   sourceURL:pub.pdf_url??(def.site?`https://${def.site}/weeklyad`:`https://${def.merchant}.com/weeklyad`),
    startsAt:new Date(pub.valid_from),expiresAt:new Date(pub.valid_to),checkedAt:now
   });
  }
@@ -58,9 +68,18 @@ async function json(url:string){
 }
 
 export async function collectFlipp(def:OfferSourceDef,now=new Date()):Promise<OfferRecord[]>{
- const banner=(await flippBanners()).get(def.merchant!);
+ let banner=(await flippBanners()).get(def.merchant!);
  if(!banner)throw new Error(`No weekly ad app found for ${def.store}`);
- const pubs:FlippPublication[]=await json(`https://api.flipp.com/flyerkit/v4.0/publications/${banner.merchant}?locale=en-US&postal_code=${def.zip}&access_token=${banner.token}`);
+ const publications=(b:Banner)=>json(`https://api.flipp.com/flyerkit/v4.0/publications/${b.merchant}?locale=en-US&postal_code=${def.zip}&access_token=${b.token}`) as Promise<FlippPublication[]>;
+ let pubs:FlippPublication[];
+ try{pubs=await publications(banner);}
+ catch(e){
+  // A rotated token answers 401/403; re-resolve once from the store's live bundle and retry.
+  if(!/HTTP (401|403)/.test(e instanceof Error?e.message:''))throw e;
+  banner=(await flippBanners(true)).get(def.merchant!);
+  if(!banner)throw new Error(`No weekly ad app found for ${def.store}`);
+  pubs=await publications(banner);
+ }
  if(!Array.isArray(pubs)||!pubs.length)throw new Error(`No weekly ad for ${def.store} near ZIP ${def.zip}`);
  const pub=pubs.find(p=>/weekly ad/i.test(p.name??''))??pubs[0];
  const startsAt=new Date(pub.valid_from),expiresAt=new Date(pub.valid_to);

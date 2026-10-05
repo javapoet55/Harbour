@@ -25,7 +25,7 @@ export function nextWeekly(after:Date,s:{timeZone:string;weekday:number;hour:num
  }
  throw Error('Unable to calculate next weekly run');
 }
-export function shoppingEmail(title:string,name:string,items:{name:string;quantity:string;size:string;notes:string;checked:boolean}[],pickup?:{pickupDate?:string|null;pickupStartHour?:number|null;timeZone:string;runAt:Date},sender?:{name:string;phoneNumber?:string|null}) {
+export function shoppingEmail(name:string,items:{name:string;quantity:string;size:string;notes:string;checked:boolean}[],pickup?:{pickupDate?:string|null;pickupStartHour?:number|null;timeZone:string;runAt:Date},sender?:{name:string;phoneNumber?:string|null}) {
  // Checked items are the user-selected items to send to the store.
  const selected=items.filter(i=>i.checked);
  let pickupText='';
@@ -41,5 +41,6 @@ export function shoppingEmail(title:string,name:string,items:{name:string;quanti
   pickupText=`\n\nPreferred pickup: ${formatInTimeZone(start,pickup.timeZone,'EEE, MMM d, yyyy')} · ${formatInTimeZone(start,pickup.timeZone,'h a')}–${formatInTimeZone(new Date(+start+3600000),pickup.timeZone,'h a')} ${zoneLabel}.`;
  }
  const signature=[sender?.name.trim(),sender?.phoneNumber?.trim()].filter(Boolean).join('\n');
- return {empty:selected.length===0,subject:`Shopping list: ${title}`,body:`Hi ${name},\n\nHere is my shopping list:\n\n${selected.map(i=>`• ${i.name} — ${i.quantity}${i.size?' '+i.size:''}${i.notes?' ('+i.notes+')':''}`).join('\n')}${pickupText}\n\n${pickupText?'Please confirm this pickup window. ':''}Please let me know about availability and any substitutions.\n\nPlease call and email me once my items are ready to be picked up.\n\nThank you!\n${signature?signature+'\n':''}Sent with NexDo`};
+ // The subject never contains the user's own list title, which may be a private note.
+ return {empty:selected.length===0,subject:'Shopping list',body:`Hi ${name},\n\nHere is my shopping list:\n\n${selected.map(i=>`• ${i.name} — ${i.quantity}${i.size?' '+i.size:''}${i.notes?' ('+i.notes+')':''}`).join('\n')}${pickupText}\n\n${pickupText?'Please confirm this pickup window. ':''}Please let me know about availability and any substitutions.\n\nPlease call and email me once my items are ready to be picked up.\n\nThank you!\n${signature?signature+'\n':''}Sent with NexDo`};
 }
