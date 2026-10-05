@@ -8,7 +8,7 @@ jest.mock('../api', () => ({ getApi: () => ({ baseUrl: 'https://app.nexdo.test',
 import { openAuthSessionAsync } from 'expo-web-browser';
 
 import { ApiError } from '../api/client';
-import { resetOAuthCallbacks } from './oauthCallbacks';
+import { deliverOAuthCallback, resetOAuthCallbacks } from './oauthCallbacks';
 import { signupChallenge } from './signupChallenge';
 
 /** `AppModel.signupChallengeURL` (NexdoApp.swift:174-183) and `SignUpView.create()` (RootView.swift:676-693). */
@@ -90,4 +90,30 @@ it.each([
 ])('rejects a callback with %s', async (_name, url) => {
   (openAuthSessionAsync as jest.Mock).mockResolvedValue({ type: 'success', url });
   await expect(signupChallenge()).rejects.toThrow('security check');
+});
+
+/**
+ * Android's `openAuthSessionAsync` polyfill can report `dismiss` before the redirect's deep link
+ * arrives. Swift's session only ever ends with the callback or a cancel, so a finished check must still
+ * yield its token: the same late-callback window the calendar and Moments email flows use.
+ */
+describe('a redirect that arrives after the browser reports dismiss', () => {
+  beforeEach(() => jest.useFakeTimers());
+  afterEach(() => jest.useRealTimers());
+
+  it('still yields the token a second later', async () => {
+    (openAuthSessionAsync as jest.Mock).mockResolvedValue({ type: 'dismiss' });
+    const outcome = signupChallenge().then((token) => ({ token }), (error: Error) => ({ error: error.message }));
+    await jest.advanceTimersByTimeAsync(1000);
+    deliverOAuthCallback('signup', 'nexdo://signup-challenge?state=state-1234567890123456&token=late');
+    await jest.advanceTimersByTimeAsync(10);
+    expect(await outcome).toEqual({ token: 'late' });
+  });
+
+  it('is a cancel when nothing arrives', async () => {
+    (openAuthSessionAsync as jest.Mock).mockResolvedValue({ type: 'dismiss' });
+    const outcome = signupChallenge().then((token) => ({ token }), (error: Error) => ({ error: error.message }));
+    await jest.advanceTimersByTimeAsync(2000);
+    expect(await outcome).toEqual({ error: 'Please complete the security check and try again.' });
+  });
 });

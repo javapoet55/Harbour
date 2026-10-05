@@ -1,7 +1,7 @@
 import * as WebBrowser from 'expo-web-browser';
 import * as Crypto from 'expo-crypto';
 import { getApi } from '../api';
-import { beginOAuthSession, takeOAuthCallback, waitForOAuthCallback } from './oauthCallbacks';
+import { beginOAuthSession, LATE_CALLBACK_MS, takeOAuthCallback, waitForOAuthCallback } from './oauthCallbacks';
 
 /**
  * The one message `SignUpView.create()` shows for ANY failure of the security check — the config
@@ -71,7 +71,11 @@ async function run(): Promise<string | undefined> {
   takeOAuthCallback('signup');
   try {
     const result = await WebBrowser.openAuthSessionAsync(signupChallengeUrl(api.baseUrl, state), 'nexdo://signup-challenge');
-    const callback = result.type === 'success' ? result.url : await waitForOAuthCallback('signup', 500);
+    // Swift's session ends with the callback or a cancel. Android's polyfill can report `dismiss` before
+    // the redirect's deep link lands, so wait the same window as the calendar and Moments email flows.
+    // If Android killed the app instead, `+native-intent` lands on Sign Up and the next check discards
+    // the stale callback — the user starts again, as on iOS when the session dies with the app.
+    const callback = result.type === 'success' ? result.url : await waitForOAuthCallback('signup', LATE_CALLBACK_MS);
     const token = callback ? challengeToken(callback, state) : null;
     if (!token) throw new Error('Security check not completed.');
     return token;
