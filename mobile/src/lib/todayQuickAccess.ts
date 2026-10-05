@@ -1,50 +1,9 @@
-import type { GroceryList } from '../api/shopping';
-import { itemCount } from '../features/shopping/model';
-
 /**
- * The pure logic behind the Phase 11 Today changes: the Shopping status, the summary line and the
- * attention row. The moment counts are Run B's `todayMoments` and `upcomingMomentCount`
- * (src/features/moments/domain.ts), read from the one Moments store, as Swift's Today reads
- * `ImportantMomentsStore`.
+ * The pure logic behind the Phase 11 Today changes: the summary line and the attention row. The
+ * moment count is Run B's `todayMoments` (src/features/moments/domain.ts), read from the one Moments
+ * store, as Swift's Today reads `ImportantMomentsStore`. The Shopping tile's status went with the tile
+ * in Phase 12 (TodayQuickAccess.swift:3-18).
  */
-
-// MARK: Shopping
-
-/**
- * `nextList` (TodayQuickAccess.swift:24-26): the earliest uncompleted list by its `yyyy-MM-dd` date.
- * `sorted(by:)` is not stable in Swift, so ties have no defined winner; this keeps the server order.
- */
-export function nextShoppingList(lists: GroceryList[]): GroceryList | null {
-  const open = lists.filter((list) => list.completedAt == null);
-  if (open.length === 0) return null;
-  return [...open].sort((left, right) => (left.date < right.date ? -1 : left.date > right.date ? 1 : 0))[0];
-}
-
-/** `GroceryList.remaining` (ShoppingList.swift:43). */
-export function remainingItems(list: GroceryList): number {
-  return list.items.filter((item) => !item.checked).length;
-}
-
-/**
- * The weekday of a list's `yyyy-MM-dd` date: `dateFormat = "EEE"` over `MomentDates.date(list.date,
- * zone: list.timeZone)`, formatted in the same zone — so it is the calendar weekday of that date.
- */
-function shortWeekday(date: string): string {
-  const [year, month, day] = date.split('-').map(Number);
-  if (!year || !month || !day) return '';
-  return new Intl.DateTimeFormat('en-US', { weekday: 'short', timeZone: 'UTC' }).format(new Date(Date.UTC(year, month - 1, day, 12)));
-}
-
-/**
- * `shoppingSubtitle` (TodayQuickAccess.swift:32-40). A failed refresh reads "View lists", no open
- * list reads "Your lists", otherwise "N items · Fri" ("1 item · Fri" for one).
- */
-export function shoppingSubtitle(lists: GroceryList[], failed: boolean): string {
-  if (failed) return 'View lists';
-  const list = nextShoppingList(lists);
-  if (!list) return 'Your lists';
-  return `${itemCount(remainingItems(list))} · ${shortWeekday(list.date)}`;
-}
 
 // MARK: The "Your day, in focus" summary
 

@@ -743,14 +743,6 @@ export function todayMoments(moments: ImportantMoment[], now: number = Date.now(
   );
 }
 
-/**
- * The Quick Access tile's count (TodayQuickAccess.swift:27-31), for Run A's tile: enabled moments
- * from today on, grouped the way the list groups them.
- */
-export function upcomingMomentCount(moments: ImportantMoment[], now: number = Date.now()): number {
-  return displayGroups(moments.filter((moment) => moment.enabled && moment.nextOccurrence >= momentDay(now, moment.timeZoneID))).length;
-}
-
 /** The moment a plan belongs to. */
 export function momentForPlan(moments: ImportantMoment[], plan: Pick<WishDeliveryPlan, 'draftID'>): ImportantMoment | undefined {
   return moments.find((moment) => moment.drafts.some((draft) => draft.id === plan.draftID));

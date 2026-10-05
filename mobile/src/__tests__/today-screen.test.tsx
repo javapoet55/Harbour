@@ -30,7 +30,7 @@ jest.mock('../api', () => ({
   },
 }));
 
-// Phase 11: the moment count and the Quick Access statuses.
+// Phase 12: Today must not fetch shopping lists any more; mocked so a call would be seen.
 const mockShopping = jest.fn();
 jest.mock('../api/shopping', () => ({
   ...jest.requireActual('../api/shopping'),
@@ -133,14 +133,11 @@ describe('Today dashboard sections', () => {
     expect(screen.getByTestId('today-range-1').props.accessibilityState.selected).toBe(true);
   });
 
-  it('renders Quick Access in place of the Weekly Summary card (d444b37)', async () => {
+  it('renders Quick Access as the single Weekly Summary button (TodayQuickAccess.swift:3-18)', async () => {
     await renderToday();
 
     expect(screen.getByText('Quick Access')).toBeTruthy();
-    expect(screen.getByText('Weekly')).toBeTruthy();
-    expect(screen.getByText('Summary')).toBeTruthy();
-    await waitFor(() => expect(screen.getByTestId('quick-access-moments-subtitle').props.children).toBe('0 upcoming'));
-    expect(screen.getByTestId('quick-access-shopping-subtitle').props.children).toBe('Your lists');
+    expect(screen.getByLabelText('Weekly Summary')).toBeTruthy();
     expect(screen.queryByText('Review progress, focus time, and accomplishments')).toBeNull();
   });
 
@@ -488,12 +485,12 @@ describe('Today navigation to the Run B screens', () => {
     expect(mockPush).toHaveBeenCalledWith('/today/weekly-summary');
   });
 
-  it('opens Moments and Shopping from their tiles', async () => {
+  it('has no Moments or Shopping tile: Wellness is their only entry (Phase 12)', async () => {
     await renderToday();
-    await fireEvent.press(screen.getByTestId('quick-access-moments'));
-    expect(mockPush).toHaveBeenCalledWith('/wellness/moments');
-    await fireEvent.press(screen.getByTestId('quick-access-shopping'));
-    expect(mockPush).toHaveBeenCalledWith('/wellness/shopping');
+    expect(screen.queryByTestId('quick-access-moments')).toBeNull();
+    expect(screen.queryByTestId('quick-access-shopping')).toBeNull();
+    expect(screen.queryByText('Moments')).toBeNull();
+    expect(screen.queryByText('Shopping')).toBeNull();
   });
 
   it('opens the attention screen from the summary chip', async () => {
@@ -506,9 +503,9 @@ describe('Today navigation to the Run B screens', () => {
 });
 
 /**
- * Phase 11: the moment count and the Moments status come from Run B's Moments store (the
- * `ImportantMomentsStore` port, activated by the root layout), and Shopping from Run C's
- * `shoppingStore` — the one store My Lists uses, as Swift shares one `ShoppingStore`.
+ * Phase 11: the moment count comes from Run B's Moments store (the `ImportantMomentsStore` port,
+ * activated by the root layout). Phase 12 removed the Moments and Shopping tiles, so Today reads no
+ * shopping data at all.
  */
 describe('Today moments and shopping', () => {
   const moment = (id: string, nextOccurrence: string, extra: Partial<ImportantMoment> = {}): ImportantMoment => ({
@@ -537,8 +534,6 @@ describe('Today moments and shopping', () => {
 
     await waitFor(() => expect(screen.getByTestId('today-summary-line').props.children).toBe('1 Task · 1 Appointment · 1 Moment'));
     expect(screen.getByTestId('today-commitments').props.children).toBe('3 commitments today');
-    // Two enabled moments on or after today.
-    expect(screen.getByTestId('quick-access-moments-subtitle').props.children).toBe('2 upcoming');
   });
 
   it('drops the moment count on the longer ranges, as Swift passes 0', async () => {
@@ -551,35 +546,9 @@ describe('Today moments and shopping', () => {
     await waitFor(() => expect(screen.getByTestId('today-summary-line').props.children).toBe('2 Tasks · 1 Appointment · 0 Moments'));
   });
 
-  it('shows the earliest open shopping list’s remaining items and weekday', async () => {
-    const item = (id: string, checked: boolean) => ({ id, name: id, category: 'Other', quantity: '1', size: '', notes: '', checked });
-    mockShopping.mockResolvedValue({
-      lists: [
-        { id: 'later', title: 'Later', date: '2026-09-25', timeZone: ZONE, weekly: false, completedAt: null, revision: 0, items: [item('x', false)] },
-        { id: 'next', title: 'Next', date: '2026-09-18', timeZone: ZONE, weekly: false, completedAt: null, revision: 0, items: [item('a', false), item('b', true), item('c', false)] },
-        { id: 'done', title: 'Done', date: '2026-09-01', timeZone: ZONE, weekly: false, completedAt: '2026-09-02T00:00:00.000Z', revision: 0, items: [] },
-      ],
-    });
+  it('no longer loads shopping lists, now that the tile is gone', async () => {
     await renderToday();
-
-    await waitFor(() => expect(screen.getByTestId('quick-access-shopping-subtitle').props.children).toBe('2 items · Fri'));
-  });
-
-  it('refreshes the shared store on mount, so a sign-in reset cannot leave it empty (pass 2)', async () => {
-    const item = { id: 'a', name: 'a', category: 'Other', quantity: '1', size: '', notes: '', checked: false };
-    mockShopping.mockResolvedValue({
-      lists: [{ id: 'l', title: 'L', date: '2026-09-18', timeZone: ZONE, weekly: false, completedAt: null, revision: 0, items: [item] }],
-    });
-    await renderToday();
-
-    await waitFor(() => expect(screen.getByTestId('quick-access-shopping-subtitle').props.children).toBe('1 item · Fri'));
-    expect(shoppingStore.getState().lists).toHaveLength(1);
-  });
-
-  it('reads "View lists" when the shopping refresh fails', async () => {
-    mockShopping.mockRejectedValue(new Error('offline'));
-    await renderToday();
-
-    await waitFor(() => expect(screen.getByTestId('quick-access-shopping-subtitle').props.children).toBe('View lists'));
+    await waitFor(() => expect(screen.getByText('Quick Access')).toBeTruthy());
+    expect(mockShopping).not.toHaveBeenCalled();
   });
 });
