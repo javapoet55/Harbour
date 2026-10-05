@@ -129,7 +129,7 @@ describe('plans', () => {
   // the same way Copy and Share do rather than claiming it was sent or failed.
   it('distinguishes an opened Messages wish from one still awaiting the composer', () => {
     expect(planStatusLabel(plan({ status: 'AWAITING_CONFIRMATION', lastError: OPENED_UNCONFIRMED }))).toBe('Opened — delivery not confirmed');
-    expect(planStatusLabel(plan({ status: 'AWAITING_CONFIRMATION', lastError: 'Something else went wrong.' }))).toBe('Confirmation required');
+    expect(planStatusLabel(plan({ status: 'AWAITING_CONFIRMATION', lastError: 'Something else went wrong.' }))).toBe('Scheduled — manual send');
   });
 
   it.each([
@@ -141,9 +141,21 @@ describe('plans', () => {
     expect(composerPlanAction(outcome)).toBe(expected);
   });
 
+  // `statusLabel(now:)` (ImportantMoment.swift:37-44): a wish you deliver yourself reads by its date and channel.
+  it('labels a wish awaiting you by whether its time has come, and how it goes out', () => {
+    const now = Date.parse('2030-09-20T08:00:00.000Z');
+    const due = { status: 'AWAITING_CONFIRMATION', scheduledAtUTC: '2030-09-20T08:00:00.000Z' };
+    expect(planStatusLabel(plan({ ...due, scheduledAtUTC: '2030-09-20T08:00:01.000Z' }), now)).toBe('Scheduled — manual send');
+    expect(planStatusLabel(plan({ ...due, channel: 'messages' }), now)).toBe('Ready to send');
+    expect(planStatusLabel(plan({ ...due, channel: 'email' }), now)).toBe('Ready to send');
+    expect(planStatusLabel(plan({ ...due, channel: 'copy' }), now)).toBe('Ready to copy');
+    expect(planStatusLabel(plan({ ...due, channel: 'share' }), now)).toBe('Ready to share');
+    expect(planStatusLabel(plan({ ...due, lastError: OPENED_UNCONFIRMED }), now)).toBe('Opened — delivery not confirmed');
+  });
+
   it('labels every status', () => {
     expect(planStatusLabel(plan({ status: 'SCHEDULED' }))).toBe('Auto-send scheduled');
-    expect(planStatusLabel(plan({ status: 'AWAITING_CONFIRMATION' }))).toBe('Confirmation required');
+    expect(planStatusLabel(plan({ status: 'AWAITING_CONFIRMATION' }))).toBe('Scheduled — manual send');
     expect(planStatusLabel(plan({ status: 'SHARED' }))).toBe('Shared — delivery not confirmed');
     expect(planStatusLabel(plan({ status: 'UNCERTAIN' }))).toBe('Check Sent mail');
     expect(planStatusLabel(plan({ status: 'CANCELLED' }))).toBe('Cancelled');

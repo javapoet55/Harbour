@@ -84,13 +84,18 @@ export function composerPlanAction(outcome: MessageComposeOutcome): PlanAction |
   }
 }
 
-/** `statusLabel` (ImportantMoment.swift:34-42). */
-export function planStatusLabel(plan: Pick<WishDeliveryPlan, 'status' | 'lastError'>): string {
+/**
+ * `statusLabel(now:)` (ImportantMoment.swift:35-48). A wish awaiting you reads "Scheduled — manual send"
+ * until its time, then "Ready to send / copy / share" by its channel; an opened Messages wish says so.
+ */
+export function planStatusLabel(plan: Pick<WishDeliveryPlan, 'status' | 'lastError' | 'scheduledAtUTC' | 'channel'>, now: number = Date.now()): string {
   switch (plan.status) {
     case 'SCHEDULED':
       return 'Auto-send scheduled';
     case 'AWAITING_CONFIRMATION':
-      return plan.lastError === OPENED_UNCONFIRMED ? 'Opened — delivery not confirmed' : 'Confirmation required';
+      if (plan.lastError === OPENED_UNCONFIRMED) return 'Opened — delivery not confirmed';
+      if (planDate(plan) > now) return 'Scheduled — manual send';
+      return plan.channel === 'copy' ? 'Ready to copy' : plan.channel === 'share' ? 'Ready to share' : 'Ready to send';
     case 'SENT':
       return 'Sent';
     case 'COPIED':

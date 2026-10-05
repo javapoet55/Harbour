@@ -198,7 +198,7 @@ describe('Important Moments list', () => {
     await render(<ImportantMoments />);
     await fireEvent.press(screen.getByTestId('moments-tab-Scheduled'));
     expect(screen.getByText('Sam’s Birthday')).toBeTruthy();
-    expect(screen.getByText('Confirmation required')).toBeTruthy();
+    expect(screen.getByText('Scheduled — manual send')).toBeTruthy();
     await fireEvent.press(screen.getByTestId('moments-delivery-filter'));
     await fireEvent.press(screen.getByTestId('moments-delivery-filter-Automatic'));
     expect(screen.queryByText('Sam’s Birthday')).toBeNull();
@@ -1042,7 +1042,7 @@ describe('Wish details', () => {
     mockParams = { planId: 'p1' };
     const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
     await render(<WishDetails />);
-    expect(screen.getByTestId('wish-title').props.children).toBe('Confirmation required');
+    expect(screen.getByTestId('wish-title').props.children).toBe('Scheduled — manual send');
     expect(screen.getByText('Review & Open Messages')).toBeTruthy();
     await fireEvent.press(screen.getByTestId('wish-cancel'));
     expect(alert).toHaveBeenCalledWith('Cancel this wish?', undefined, expect.any(Array));
