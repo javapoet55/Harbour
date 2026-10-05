@@ -1134,6 +1134,19 @@ describe('Wish details', () => {
     await waitFor(() => expect(mockPost).toHaveBeenCalledWith('plan', { id: 'p1', action: 'failed' }, undefined));
   });
 
+  // ImportantMomentsView.swift:557-561: the prompt is a secondary footnote, "I found it in Sent mail" is
+  // `.bordered`, and "It wasn't sent" is a plain button — the safer answer is the one that stands out.
+  it('styles the "Check Sent mail" choices as Swift does', async () => {
+    load([moment({ drafts: [draft({ plans: [plan({ id: 'p1', channel: 'email', automaticDelivery: true, status: 'UNCERTAIN' })] })] })]);
+    mockParams = { planId: 'p1' };
+    await render(<WishDetails />);
+    const prompt = StyleSheet.flatten(screen.getByText('Check the Sent folder in Gmail, then tell Nexdo what happened.').props.style);
+    expect(prompt.fontSize).toBe(13);
+    expect(StyleSheet.flatten(screen.getByTestId('wish-uncertain-sent').props.style).backgroundColor).toBeDefined();
+    expect(StyleSheet.flatten(screen.getByTestId('wish-uncertain-failed').props.style ?? {}).backgroundColor).toBeUndefined();
+    expect(screen.getByLabelText("It wasn't sent")).toBeTruthy();
+  });
+
   it('shows the scheduled confirmation and history actions', async () => {
     load([moment({ drafts: [draft({ plans: [plan({ id: 'p1', status: 'SENT' })] })] })]);
     mockParams = { planId: 'p1' };

@@ -140,9 +140,17 @@ export default function WishDetailsScreen() {
         ) : null}
         {current.status === 'UNCERTAIN' ? (
           <>
-            <Text style={[textStyles.body, { color: theme.colors.label }]}>Check the Sent folder in Gmail, then tell Nexdo what happened.</Text>
+            {/* :557-561 — a secondary footnote, a `.bordered` "found it", and a plain "wasn't sent". */}
+            <Text style={[textStyles.footnote, styles.center, { color: theme.colors.secondaryLabel }]}>Check the Sent folder in Gmail, then tell Nexdo what happened.</Text>
             <BorderedButton centered title="I found it in Sent mail" onPress={() => void momentsStore.getState().perform(() => momentsStore.getState().planAction(current, 'sent'))} testID="wish-uncertain-sent" />
-            <BorderedButton centered title="It wasn't sent" onPress={() => void momentsStore.getState().perform(() => momentsStore.getState().planAction(current, 'failed'))} testID="wish-uncertain-failed" />
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="It wasn't sent"
+              onPress={() => void momentsStore.getState().perform(() => momentsStore.getState().planAction(current, 'failed'))}
+              testID="wish-uncertain-failed"
+            >
+              <Text style={[textStyles.body, { color: theme.colors.link }]}>It wasn&apos;t sent</Text>
+            </Pressable>
           </>
         ) : null}
         {HISTORY_STATUSES.includes(current.status) ? (
