@@ -4,8 +4,10 @@ import { nutritionCallConfig } from '@/server/nutrition/config';
 import { nanpZone, toE164 } from './rules';
 import { twilioApi } from './twilio';
 
-type CallerIdList = { outgoing_caller_ids?: { sid: string; phone_number: string }[] };
+type CallerIdList = { outgoing_caller_ids?: { sid: string; phone_number: string; friendly_name?: string }[] };
 type ValidationRequest = { validation_code?: string; phone_number?: string };
+/** Tags the Twilio entry a verification request creates so only its own requester can complete it. */
+const friendlyName = (userId: string) => `Nexdo:${userId}`;
 const RESEND_MS = 60_000;
 const POLL_WINDOW_MS = 15 * 60_000;
 
@@ -42,7 +44,7 @@ export async function startCallerIdVerification(userId: string, rawPhone: unknow
   if (stale) await twilioApi(c, 'DELETE', `/OutgoingCallerIds/${encodeURIComponent(stale.sid)}.json`);
   if (existing?.twilioSid && existing.phoneE164 !== phone) await twilioApi(c, 'DELETE', `/OutgoingCallerIds/${encodeURIComponent(existing.twilioSid)}.json`);
   const request = await twilioApi<ValidationRequest>(c, 'POST', '/OutgoingCallerIds.json', new URLSearchParams({
-    PhoneNumber: phone, FriendlyName: 'Nexdo user', CallDelay: '5',
+    PhoneNumber: phone, FriendlyName: friendlyName(userId), CallDelay: '5',
     StatusCallback: `${cfg.appUrl}/api/moment-calls/caller-id-status?userId=${encodeURIComponent(userId)}`, StatusCallbackMethod: 'POST',
   }));
   if (!request.ok || !request.data.validation_code) throw new MomentError('We couldn’t start the verification call. Please try again shortly.', 502);
@@ -70,9 +72,14 @@ export async function callerIdStatus(userId: string, now = new Date()): Promise<
   if (!record) return null;
   if (record.status === 'PENDING' && now.getTime() - record.requestedAt.getTime() < POLL_WINDOW_MS) {
     const found = await findInTwilio(record.phoneE164).catch(() => null);
-    if (found) {
-      await prisma.callerIdentity.update({ where: { userId }, data: { status: 'VERIFIED', twilioSid: found.sid, verifiedAt: now } });
-      return { phone: record.phoneE164, status: 'VERIFIED' };
+    // Only a verified Twilio entry that this user's own request created counts: an entry another
+    // user's (or an older, unrelated) verification left behind must not verify this record.
+    if (found?.friendly_name === friendlyName(userId)) {
+      const owner = await prisma.callerIdentity.findFirst({ where: { phoneE164: record.phoneE164, status: 'VERIFIED', NOT: { userId } } });
+      if (!owner) {
+        await prisma.callerIdentity.update({ where: { userId }, data: { status: 'VERIFIED', twilioSid: found.sid, verifiedAt: now } });
+        return { phone: record.phoneE164, status: 'VERIFIED' };
+      }
     }
   }
   return { phone: record.phoneE164, status: record.status as 'PENDING' | 'VERIFIED' | 'FAILED' };

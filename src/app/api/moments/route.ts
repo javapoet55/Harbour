@@ -46,7 +46,7 @@ async function healthHandlerPOST(req:Request) {
    case 'disconnectEmail': {
     if(await prisma.deliveryPlan.count({where:{draft:{moment:{userId:user.id}},status:'SENDING'}})||await shoppingEmailSending(user.id)) throw new MomentError('Email is being submitted. Refresh before disconnecting.',409);
     await revokeEmail(user.id);
-    await prisma.$transaction([...stopShoppingEmails(user.id),prisma.deliveryPlan.updateMany({where:{draft:{moment:{userId:user.id}},automaticDelivery:true,status:'SCHEDULED'},data:{status:'CANCELLED'}}),prisma.momentEmailAccount.deleteMany({where:{userId:user.id}})]);return NextResponse.json({ok:true});
+    await prisma.$transaction([...stopShoppingEmails(user.id),prisma.deliveryPlan.updateMany({where:{draft:{moment:{userId:user.id}},channel:'email',status:{in:['SCHEDULED','AWAITING_CONFIRMATION']}},data:{status:'CANCELLED'}}),prisma.momentEmailAccount.deleteMany({where:{userId:user.id}})]);return NextResponse.json({ok:true});
    }
    case 'visibility': {
     const v=z.object({id:z.string(),enabled:z.boolean(),snoozedUntil:z.iso.datetime({offset:true}).nullable().optional()}).parse(p.input);

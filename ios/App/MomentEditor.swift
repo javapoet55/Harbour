@@ -126,6 +126,13 @@ struct MomentEditor: View {
                 input.type = m.type; input.title = m.title; input.firstName = m.firstName; input.phone = m.phone; input.email = m.email; input.yearly = m.yearly; input.timeZoneID = m.timeZoneID; input.source = m.source; input.sourceKey = m.sourceKey; input.occurrenceDate = m.occurrenceDate
             } else if let imported {
                 input = imported; dateConfirmed = !imported.occurrenceDate.isEmpty
+                // Reimporting a catalog festival keeps the saved group's id, so its recipients update
+                // in place instead of a second group of duplicates.
+                if imported.source == "festivalCatalog",
+                   let existing = store.moments.first(where: { $0.sourceKey == imported.sourceKey }),
+                   let saved = FestivalSettings.read(existing.festivalSettings) {
+                    groupSettings.groupID = saved.groupID
+                }
                 // A contact imported with its birthday starts as the moment's first recipient.
                 let draft = RecipientDraft(name: imported.firstName, phone: imported.phone, email: imported.email)
                 if draft.issue(among: []) == nil { recipients = [draft.recipient()] }
@@ -520,6 +527,9 @@ struct MomentFestivalView: View {
         input.title = name + " Wishes"
         input.yearly = false
         input.source = "festivalCatalog"
+        // A stable key lets the server dedupe a reimport against the moment it created before;
+        // without one every catalog import built a fresh anchor.
+        input.sourceKey = "festival:" + name.lowercased().components(separatedBy: CharacterSet.alphanumerics.inverted).filter { !$0.isEmpty }.joined(separator: "-")
         return input
     }
 }
