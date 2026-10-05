@@ -75,3 +75,19 @@ it('opens the challenge page on the API origin, whatever the configured URL look
   await signupChallenge();
   expect(openAuthSessionAsync).toHaveBeenCalledWith('https://app.nexdo.test/signup-challenge?state=state-1234567890123456', 'nexdo://signup-challenge');
 });
+
+// `URLComponents.queryItems` (RootView.swift:570-572) percent-decodes but keeps '+'; WHATWG `URL`'s
+// `searchParams` would turn it into a space and break the token.
+it('reads the callback as URLComponents does', async () => {
+  (openAuthSessionAsync as jest.Mock).mockResolvedValue({ type: 'success', url: 'nexdo://signup-challenge?state=state-1234567890123456&token=0.a+b%2Fc_d' });
+  expect(await signupChallenge()).toBe('0.a+b/c_d');
+});
+
+it.each([
+  ['no token', 'nexdo://signup-challenge?state=state-1234567890123456'],
+  ['an empty token', 'nexdo://signup-challenge?state=state-1234567890123456&token='],
+  ['a broken escape', 'nexdo://signup-challenge?state=state-1234567890123456&token=%E0%A4%A'],
+])('rejects a callback with %s', async (_name, url) => {
+  (openAuthSessionAsync as jest.Mock).mockResolvedValue({ type: 'success', url });
+  await expect(signupChallenge()).rejects.toThrow('security check');
+});
