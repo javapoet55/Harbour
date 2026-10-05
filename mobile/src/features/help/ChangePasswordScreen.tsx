@@ -108,9 +108,14 @@ export function ChangePasswordScreen({ onBack }: { onBack: () => void }) {
             </FormRow>
           </FormSection>
         ) : null}
-        <View style={styles.submit}>
-          <GradientButton disabled={!valid || saving} minHeight={50} onPress={confirm} testID="change-password-submit" title={saving ? 'Changing password…' : 'Change password'} />
-        </View>
+        {/* The button is a `Form` row of its own (`change-password`). */}
+        <FormSection>
+          <FormRow last>
+            <View style={styles.submit}>
+              <GradientButton disabled={!valid || saving} minHeight={50} onPress={confirm} testID="change-password-submit" title={saving ? 'Changing password…' : 'Change password'} />
+            </View>
+          </FormRow>
+        </FormSection>
       </FormScroll>
     </SafeAreaView>
   );
@@ -118,5 +123,5 @@ export function ChangePasswordScreen({ onBack }: { onBack: () => void }) {
 
 const styles = StyleSheet.create({
   fill: { flex: 1 },
-  submit: { marginTop: 8, marginHorizontal: 16 },
+  submit: { flex: 1 },
 });

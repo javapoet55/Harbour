@@ -65,6 +65,7 @@ export const taskIcons = {
   sunrise: 'sunny-outline',
   'calendar.badge.clock': 'calendar-number-outline',
   'questionmark.circle': 'help-circle-outline',
+  'questionmark.circle.fill': 'help-circle',
   'chevron.up': 'chevron-up',
   'speaker.wave.2.fill': 'volume-high',
   'stop.fill': 'stop',

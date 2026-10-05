@@ -229,8 +229,9 @@ export function EventDetailsScreen({ id, fallbackTimeZone }: { id: string; fallb
             <TaskSymbol color={theme.colors.ink} name="doc.text" size={17} />
             <Text style={[styles.headline, styles.grow, { color: theme.colors.ink }]}>Notes</Text>
             {editable ? (
+              // Inside the screen's `.foregroundStyle(Color.nexdoInk)` (:79), so ink, not the tint (`event-details`).
               <Pressable accessibilityRole="button" hitSlop={8} onPress={edit} testID="event-details-edit-notes">
-                <Text style={[styles.body, { color: theme.colors.link }]}>Edit</Text>
+                <Text style={[styles.body, { color: theme.colors.ink }]}>Edit</Text>
               </Pressable>
             ) : null}
           </View>
@@ -240,9 +241,9 @@ export function EventDetailsScreen({ id, fallbackTimeZone }: { id: string; fallb
         </View>
 
         <Pressable accessibilityLabel="Open in Calendar" accessibilityRole="button" onPress={openCalendar} style={[styles.card, styles.openRow, { backgroundColor: card }]} testID="event-details-open">
-          <TaskSymbol color={theme.colors.link} name="link" size={17} />
-          <Text style={[styles.body, styles.semibold, styles.grow, { color: theme.colors.link }]}>Open in Calendar</Text>
-          <TaskSymbol color={theme.colors.link} name="chevron.right" size={13} />
+          <TaskSymbol color={theme.colors.ink} name="link" size={17} />
+          <Text style={[styles.body, styles.semibold, styles.grow, { color: theme.colors.ink }]}>Open in Calendar</Text>
+          <TaskSymbol color={theme.colors.ink} name="chevron.right" size={13} />
         </Pressable>
 
         {editable ? (

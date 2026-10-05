@@ -1316,14 +1316,14 @@ cannot pass. Removing the `GlassCircle` fix makes five of its cases fail.
 
 ## 24. Phase 12 Run A: Account, Help, Feedback, Change password, Ask AI, Daily Brief, Appointment details (2026-10-05)
 
-Built from the Swift source; the Ask and Calendar captures in `mobile/docs/reference/ios/` predate these
-designs, so they were not used. Deviations from Swift, Android-only or not:
+Built from the Swift source, then checked against the Mac's captures for these screens. Deviations from
+Swift, Android-only or not:
 
 ### Account, Help, Feedback, Change password
 
 - **Pushed screens draw their own inline bar** (`src/components/InlineNavBar.tsx`): a back chevron in the
-  `link` colour (labelled "Back") and the centred title. Swift's bar shows the system back button; there is
-  no previous-title text on Android.
+  `link` colour (labelled "Back") and the centred title. iOS 26 draws the system back button as an ink
+  chevron in a glass circle (`help`, `feedback-empty`); there is no glass here.
 - **Help in dark mode.** Swift's cards are fixed white under adaptive ink — white on white. Light mode is
   Swift's; dark mode uses the theme surface for the cards and the search field.
 - **Alerts** ("Thank you for your feedback!", "Change password and sign out?") are React Native's.
@@ -1351,7 +1351,10 @@ designs, so they were not used. Deviations from Swift, Android-only or not:
 ### Appointment details and Calendar
 
 - **A modal route** (`app/calendar/event/[id]`) rather than an inline sheet, with its own bar: back chevron,
-  "Event Details", Edit (Nexdo events) and a "…" popover. The Edit Event editor is a second modal.
+  "Event Details", Edit (Nexdo events) and a "…" popover, without iOS 26's glass capsules
+  (`event-details`). The Edit Event editor is a second modal.
+- **Dates are en-US** ("Oct 5, 2026 at 1:27 PM"), as across the app; the capture's Mac shows its own
+  region's "5 Oct 2026".
 - **Dark mode.** Swift's cards are fixed white (`.white.opacity(0.94)`) under adaptive ink; dark mode uses
   the theme surface, and the status, action and delete colours take their dark-mode system values.
 - **"Delete this event?"** is an alert with Cancel and Delete Event (Android has no confirmation dialog of

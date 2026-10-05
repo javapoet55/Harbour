@@ -508,8 +508,8 @@ export default function Calendar() {
                       </Text>
                     </View>
                     <View style={styles.grow} />
-                    {/* A `DisclosureGroup` draws its chevron in the accent colour, not secondary. */}
-                    <TaskSymbol name={expanded ? 'chevron.down' : 'chevron.right'} size={14} color={theme.colors.link} />
+                    {/* The disclosure chevron is ink on iOS 26 (`calendar-v2-collapsed-days`). */}
+                    <TaskSymbol name={expanded ? 'chevron.down' : 'chevron.right'} size={14} color={theme.colors.ink} />
                   </Pressable>
                   {expanded ? (
                     backlog.length === 0 ? (

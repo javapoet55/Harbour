@@ -49,28 +49,32 @@ export function FeedbackScreen({ onDone }: { onDone: () => void }) {
     <SafeAreaView edges={['top', 'left', 'right']} style={[styles.fill, { backgroundColor: theme.colors.groupedBackground }]} testID="feedback-screen">
       <InlineNavBar backHidden={saving} onBack={onDone} testID="feedback-nav" title="Feedback" />
       <FormScroll>
+        {/* Each counter and the stars caption is its own row, as in Swift's `Form` (`feedback-empty`). */}
         <FormSection disabled={locked} header="Title">
+          <FormRow>
+            <FormField onChangeText={setTitle} placeholder="What would you like to share?" testID="feedback.title" value={title} />
+          </FormRow>
           <FormRow last>
-            <View style={styles.field}>
-              <FormField onChangeText={setTitle} placeholder="What would you like to share?" testID="feedback.title" value={title} />
-              <Text style={[styles.caption, { color: titleCount.over ? theme.colors.danger : theme.colors.secondaryLabel }]} testID="feedback.title.count">
-                {titleCount.label}
-              </Text>
-            </View>
+            <Text style={[styles.caption, { color: titleCount.over ? theme.colors.danger : theme.colors.secondaryLabel }]} testID="feedback.title.count">
+              {titleCount.label}
+            </Text>
           </FormRow>
         </FormSection>
         <FormSection disabled={locked} header="Description">
-          <FormRow last>
-            <View style={styles.field}>
+          <FormRow>
+            {/* `.lineLimit(5...12)`. */}
+            <View style={styles.description}>
               <FormField multiline onChangeText={setDescription} placeholder="Tell us about your experience or suggestion…" testID="feedback.description" value={description} />
-              <Text style={[styles.caption, { color: descriptionCount.over ? theme.colors.danger : theme.colors.secondaryLabel }]} testID="feedback.description.count">
-                {descriptionCount.label}
-              </Text>
             </View>
+          </FormRow>
+          <FormRow last>
+            <Text style={[styles.caption, { color: descriptionCount.over ? theme.colors.danger : theme.colors.secondaryLabel }]} testID="feedback.description.count">
+              {descriptionCount.label}
+            </Text>
           </FormRow>
         </FormSection>
         <FormSection disabled={locked} header="Your rating">
-          <FormRow last>
+          <FormRow>
             <View style={styles.field}>
               <View style={styles.stars}>
                 {[1, 2, 3, 4, 5].map((value) => (
@@ -87,8 +91,10 @@ export function FeedbackScreen({ onDone }: { onDone: () => void }) {
                   </Pressable>
                 ))}
               </View>
-              <Text style={[styles.caption, { color: theme.colors.secondaryLabel }]}>{starsCaption(stars)}</Text>
             </View>
+          </FormRow>
+          <FormRow last>
+            <Text style={[styles.caption, { color: theme.colors.secondaryLabel }]}>{starsCaption(stars)}</Text>
           </FormRow>
         </FormSection>
         {failure ? (
@@ -100,10 +106,15 @@ export function FeedbackScreen({ onDone }: { onDone: () => void }) {
             </FormRow>
           </FormSection>
         ) : null}
-        <View style={styles.submit}>
-          <GradientButton disabled={!valid || locked} minHeight={50} onPress={() => void send()} testID="feedback.submit" title={saving ? 'Submitting…' : 'Submit feedback'} />
-          {saving ? <ActivityIndicator color="#FFFFFF" style={styles.spinner} /> : null}
-        </View>
+        {/* The button is a `Form` row of its own. */}
+        <FormSection>
+          <FormRow last>
+            <View style={styles.submit}>
+              <GradientButton disabled={!valid || locked} minHeight={50} onPress={() => void send()} testID="feedback.submit" title={saving ? 'Submitting…' : 'Submit feedback'} />
+              {saving ? <ActivityIndicator color="#FFFFFF" style={styles.spinner} /> : null}
+            </View>
+          </FormRow>
+        </FormSection>
       </FormScroll>
     </SafeAreaView>
   );
@@ -115,6 +126,7 @@ const styles = StyleSheet.create({
   caption: { fontSize: 12, lineHeight: 16 },
   stars: { flexDirection: 'row', gap: 4 },
   star: { flex: 1, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
-  submit: { marginTop: 8, marginHorizontal: 16, justifyContent: 'center' },
+  description: { flex: 1, minHeight: 116 },
+  submit: { flex: 1, justifyContent: 'center' },
   spinner: { position: 'absolute', left: 24 },
 });

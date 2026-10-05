@@ -56,7 +56,7 @@ export function HelpScreen({ onBack, onFeedback }: { onBack: () => void; onFeedb
       <ScrollView contentContainerStyle={styles.content} keyboardDismissMode="interactive" keyboardShouldPersistTaps="handled">
         <View style={styles.intro}>
           <View style={styles.eyebrow}>
-            <TaskSymbol color={theme.colors.link} name="questionmark.circle" size={12} />
+            <TaskSymbol color={theme.colors.link} name="questionmark.circle.fill" size={12} />
             <Text style={[styles.eyebrowText, { color: theme.colors.link }]}>NEXDO HELP</Text>
           </View>
           <Text style={[styles.title2, { color: theme.colors.ink }]}>How can we help you?</Text>
@@ -166,8 +166,11 @@ export function HelpScreen({ onBack, onFeedback }: { onBack: () => void; onFeedb
                     return (
                       <View key={topic.id} style={[styles.topic, { backgroundColor: card }]} testID={`help-topic-${topic.id}`}>
                         <Pressable accessibilityRole="button" accessibilityState={{ expanded: open }} onPress={() => toggle(topic.id)} style={styles.topicHeader}>
-                          <Text style={[styles.question, styles.grow, { color: theme.colors.ink }]}>{topic.question}</Text>
-                          <TaskSymbol color={theme.colors.link} name={open ? 'chevron.down' : 'chevron.right'} size={13} />
+                          {/* The label hugs its text; a wrapped question centres its lines, as the
+                              `DisclosureGroup` label does (`help`). The indicator is ink, not the tint. */}
+                          <Text style={[styles.question, styles.shrink, styles.centered, { color: theme.colors.ink }]}>{topic.question}</Text>
+                          <View style={styles.grow} />
+                          <TaskSymbol color={theme.colors.ink} name={open ? 'chevron.down' : 'chevron.right'} size={13} />
                         </Pressable>
                         {open ? (
                           <Text selectable style={[styles.body, styles.answer, { color: theme.colors.secondary }]}>
@@ -201,6 +204,7 @@ const shadow = { shadowColor: brand.nexdoIndigo, shadowOpacity: 0.04, shadowRadi
 const styles = StyleSheet.create({
   fill: { flex: 1 },
   grow: { flex: 1 },
+  shrink: { flexShrink: 1 },
   content: { padding: 20, gap: 18 },
   intro: { gap: 10 },
   eyebrow: { flexDirection: 'row', alignItems: 'center', gap: 6 },

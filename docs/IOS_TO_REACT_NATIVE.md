@@ -2685,9 +2685,12 @@ Deviations are in `mobile/docs/android-polish.md` §22; Run C's tap-instead-of-d
 
 ### Run A: Account, Help, Feedback, Change password, Ask AI, Daily Brief, Appointment details (Windows)
 
-Built from the Swift source on the part 1 clients (help topics, feedback, event completion). The Ask and
-Calendar captures in `mobile/docs/reference/ios/` predate these designs and were not used. Full suite after
-Run A: 140 suites, 2,085 tests passing (68 new); `tsc --noEmit` and eslint clean.
+Built from the Swift source on the part 1 clients (help topics, feedback, event completion). The Mac's
+captures for these screens (`c3aab8d`) landed during the run and were checked afterwards; that pass moved
+Feedback's counters and both forms' buttons into rows of their own, made Help's topic chevrons, the backlog
+chevron, Event Details' Notes "Edit" and "Open in Calendar" ink, and filled the "NEXDO HELP" glyph. Full
+suite after Run A, merged with the Mac's pass: 142 suites, 2,084 tests passing (68 new in Run A);
+`tsc --noEmit` and eslint clean.
 
 | Screen | Swift | Built as |
 | --- | --- | --- |
