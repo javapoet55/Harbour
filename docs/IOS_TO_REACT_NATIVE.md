@@ -2780,7 +2780,8 @@ existing Moments tests were rewritten to the three-step screen and the date chip
 Built from the Swift source (`git diff 8c36d98 HEAD` on the Shopping files) and the Mac's `shopping-*`
 captures, on the part 1 offers / hours plumbing plus four new endpoints (`POST /api/shopping/stores`,
 `GET /api/shopping/store-brand`, `POST /api/shopping/recognize`, `POST /api/shopping/recommendations`).
-Full suite after Run F: see the push report (148 suites at the last run); `tsc --noEmit` and eslint clean.
+Full suite after Run F, merged with Run E: 2201 tests in 152 suites, all passing
+(the suite pins en-US and `America/Los_Angeles` in `jest.setup.js` / `jest.globalSetup.js`); `tsc --noEmit` and eslint clean.
 
 | Screen | Built as |
 | --- | --- |

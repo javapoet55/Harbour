@@ -80,6 +80,7 @@
   "private": true,
   "jest": {
     "preset": "jest-expo",
+    "globalSetup": "<rootDir>/jest.globalSetup.js",
     "testPathIgnorePatterns": [
       "/node_modules/",
       "/.expo/",
