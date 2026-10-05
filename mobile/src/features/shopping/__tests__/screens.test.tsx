@@ -550,7 +550,8 @@ describe('List detail', () => {
     mockPost.mockImplementation(async (envelope) => ({ list: { ...list({ revision: 8 }), items: envelope.input.items } }));
     await render(<DetailWithQueries />);
     await fireEvent.press(screen.getByTestId('grocery-edit-milk'));
-    expect(screen.getByText('Item')).toBeTruthy();
+    expect(screen.getByText('Edit Item')).toBeTruthy();
+    await fireEvent.press(screen.getByTestId('item-image-toggle'));
     expect(screen.getByTestId('item-generate').props.accessibilityState.disabled).toBe(true);
     await fireEvent.changeText(screen.getByTestId('item-name'), ' ');
     expect(screen.getByTestId('item-save').props.accessibilityState.disabled).toBe(true);

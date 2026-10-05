@@ -15,7 +15,7 @@ import { ShoppingRecommendationsSheet } from '../../../src/features/shopping/Rec
 import { CategoryChip, GroceryRow, grocerySeparatorInset, ShoppingActionBar, SwipeToDelete } from '../../../src/features/shopping/components';
 import { completionSummary, ShoppingCompletionView, type ShoppingCompletionSummary } from '../../../src/features/shopping/CompletionView';
 import { ItemEditorSheet } from '../../../src/features/shopping/ItemEditorSheet';
-import { appended, CATEGORIES, itemCount, listInput, remaining, removed, suggestionsFor, toggled, upserted } from '../../../src/features/shopping/model';
+import { appended, CATEGORIES, itemCount, listInput, newItem, remaining, removed, suggestionsFor, toggled, upserted } from '../../../src/features/shopping/model';
 import { currentChoice, offerBadge, showsOffersShortcut } from '../../../src/features/shopping/offers';
 import { StoreBrandLogo } from '../../../src/features/shopping/StoreBrandLogo';
 import { useShoppingOffers, useStoreHours } from '../../../src/query/useShoppingOffers';
@@ -55,6 +55,8 @@ export default function ShoppingDetailScreen() {
   const [quick, setQuick] = useState('');
   const [item, setItem] = useState<GroceryItem | null>(null);
   const [voice, setVoice] = useState(false);
+  // `cameraAdd` (:213): Add Item, straight into the camera.
+  const [cameraItem, setCameraItem] = useState<GroceryItem | null>(null);
   const [copy, setCopy] = useState(false);
   const [settings, setSettings] = useState(openSettings === '1');
   const [sharing, setSharing] = useState(false);
@@ -372,6 +374,21 @@ export default function ShoppingDetailScreen() {
                 </Text>
               ) : null}
             </View>
+            {/* `camera.fill` (:275-279): Add Item with the camera, named from the field. */}
+            <Pressable
+              accessibilityLabel="Add item with camera"
+              accessibilityRole="button"
+              accessibilityState={{ disabled: readOnly || parseBusy }}
+              disabled={readOnly || parseBusy}
+              onPress={() => {
+                quickField.current?.blur();
+                setCameraItem({ ...newItem(Crypto.randomUUID().toUpperCase()), name: quick.trim() });
+              }}
+              style={styles.camera}
+              testID="shopping-camera-add"
+            >
+              <Ionicons name="camera" size={20} color={readOnly || parseBusy ? withAlpha(brand.nexdoBlue, 0.4) : brand.nexdoBlue} />
+            </Pressable>
             <Pressable accessibilityRole="button" accessibilityLabel="Add groceries by voice" onPress={() => setVoice(true)} style={styles.mic} testID="quick-add-mic">
               <Ionicons name="mic" size={20} color={theme.colors.secondary} />
             </Pressable>
@@ -488,6 +505,16 @@ export default function ShoppingDetailScreen() {
       </Modal>
 
       <ItemEditorSheet item={item} onSave={(updated) => void save(upserted(list, updated))} onClose={() => setItem(null)} />
+      <ItemEditorSheet
+        item={cameraItem}
+        launchCamera
+        onClose={() => setCameraItem(null)}
+        onSave={(added) => {
+          setSelectedCategory('All');
+          setQuick('');
+          void save(appended(list, [added]));
+        }}
+      />
       <VoiceSheet visible={voice} onAdd={(items) => void save(appended(list, items))} onClose={() => setVoice(false)} />
       <NewListSheet visible={copy} source={list} onCreated={setList} onClose={() => setCopy(false)} />
       <ListSettingsSheet visible={settings} list={list} onSave={(next) => void save(next)} onClose={() => setSettings(false)} />
@@ -608,6 +635,7 @@ const styles = StyleSheet.create({
   androidQuickField: { paddingHorizontal: 0 },
   quickPlaceholder: { position: 'absolute', left: 0, right: 0, fontSize: 15 },
   mic: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+  camera: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   suggestions: { marginHorizontal: 16, marginTop: 5, borderBottomLeftRadius: 26, borderBottomRightRadius: 26, overflow: 'hidden' },
   suggestion: { minHeight: 56, paddingHorizontal: 16, justifyContent: 'center' },
   // `.listRowInsets(top: 4, leading: 16, bottom: 2, trailing: 0)` inside the section, `.padding(.vertical, 2)`.
