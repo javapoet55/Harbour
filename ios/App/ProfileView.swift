@@ -155,6 +155,7 @@ private struct ChangePasswordView: View {
     @State private var confirming = false
     @State private var saving = false
     @State private var failure: String?
+    @State private var resettingPassword = false
     private var valid: Bool {
         !current.isEmpty && new.count >= 12 && new.utf8.count <= 72 && new == confirmation && new != current
     }
@@ -174,8 +175,18 @@ private struct ChangePasswordView: View {
             Button { confirming = true } label: {
                 Text(saving ? "Changing password…" : "Change password").frame(maxWidth: .infinity)
             }.buttonStyle(NexdoGradientButtonStyle()).disabled(!valid || saving)
+            Section {
+                Button("Forgot password?") { resettingPassword = true }
+                    .font(.subheadline.weight(.medium))
+                    .frame(maxWidth: .infinity)
+            } footer: {
+                Text("We’ll email you a code to set a new password. You’ll need to sign in again afterwards.")
+            }
         }
         .disabled(saving)
+        .sheet(isPresented: $resettingPassword) {
+            PasswordResetView(initialEmail: model.profile?.email ?? "") { Task { await model.reset() } }
+        }
         .navigationTitle("Change password").navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(saving)
         .interactiveDismissDisabled(saving)
