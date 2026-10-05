@@ -116,8 +116,8 @@ function Legend({ color, title }: { color: string; title: string }) {
   );
 }
 
-/** One short segment of a ring, rotated to `angle` (degrees clockwise from 12 o'clock). */
-function Segment({ size, stroke, angle, length, color }: { size: number; stroke: number; angle: number; length: number; color: string }) {
+/** One short segment of a ring, rotated to `angle` (degrees clockwise from 12 o'clock). Also draws the Calorie Tracker's ring. */
+export function Segment({ size, stroke, angle, length, color }: { size: number; stroke: number; angle: number; length: number; color: string }) {
   const radius = (size - stroke) / 2;
   return (
     <View

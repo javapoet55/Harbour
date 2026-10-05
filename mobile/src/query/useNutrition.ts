@@ -24,10 +24,10 @@ function useOwner(): string {
   return useSession((state) => state.profile?.id) ?? '';
 }
 
-/** `loadSettings()` (`:114-117`). */
-export function useNutritionSettings() {
+/** `loadSettings()` (`:114-117`). `enabled: false` for the Calorie Tracker's sample preview, which loads nothing. */
+export function useNutritionSettings({ enabled = true }: { enabled?: boolean } = {}) {
   const owner = useOwner();
-  return useQuery({ queryKey: queryKeys.nutrition.settings(owner), queryFn: () => nutritionApi.settings(), enabled: owner !== '' });
+  return useQuery({ queryKey: queryKeys.nutrition.settings(owner), queryFn: () => nutritionApi.settings(), enabled: enabled && owner !== '' });
 }
 
 /** `loadDay(_:)` (`:119-122`). */

@@ -1240,3 +1240,37 @@ are listed here, Android-only or not.
   trend-period menu use the Moments popover, which follows the system theme while the screen stays light.
 - **The timer counts from the stored deadline**, ticking once a second while shown, and catches up on
   return to the foreground, as Swift's `scenePhase` handler does.
+
+---
+
+## 22. Phase 12 Run D: Calorie Tracker (2026-10-05)
+
+The Calorie Tracker (`CalorieTrackerView.swift`), built from the Swift source; no captures existed yet.
+Deviations from Swift, Android-only or not:
+
+- **One screen, Swift's own pages.** All eight pages live in `app/wellness/calories.tsx` under one header,
+  moved between with Swift's `page` and `history` (Back pops, Back on the first page closes) rather than
+  a navigation stack, so there are no push animations between pages — as on iOS.
+- **Fixed light colours**, as Run C's covers: Swift draws the tracker on a white gradient with an explicit
+  ink. Plain buttons take the app tint (`.tint(.nexdoIndigo)` from `RootView`), switches and pickers the
+  system indigo (`.tint(.indigo)`); the `link` token does not apply.
+- **Pickers.** The call time is `ClockField` in its 12-hour form-row style; the time zone, the agent voice
+  and the editor's meal are the Moments `MenuPicker`; the calorie goal's `Stepper` is a − / + capsule; the
+  dashboard's date is a pill opening the system-style month grid, limited to today and earlier; Period and
+  Insights / Recommendations are segmented controls drawn from views.
+- **Rings and charts from views.** The Today ring is 180 short segments with its blue → cyan → green
+  gradient sampled along the bottom-left → top-right axis, round caps omitted; Week and Month bars are
+  views. Neither chart is interactive in Swift, so there is nothing to tap. (Run C's Pomodoro charts are
+  the ones where a bar is picked by tapping instead of dragging — §21.)
+- **"What happens next?" numbers.** SF Symbols' `1.circle.fill` … `3.circle.fill` have no Ionicons
+  equivalent: a filled circle in the step's colour with the number in white.
+- **The checkmark on "All Set!"** is the gradient masked to the icon (`@react-native-masked-view`, already
+  installed), as Swift's `.foregroundStyle(gradient)`.
+- **Alerts** are React Native's: one titled "Calorie Tracker" (or "Calorie Tracker Preview") with OK, for
+  every notice and error, as Swift's single `.alert`.
+- **Sample preview.** Swift shows the sample data when no account is signed in or under the DEBUG
+  `-calorie-design-preview` launch argument. The chooser is only reachable signed in, so a development
+  build opens the preview with `nexdo:///wellness/calories?preview=1`; release builds are always live.
+- **Art.** Only `calorie-design-pack` is drawn (the robot, 218×140 at 1305, 790), cut at its own size into
+  `assets/wellness/calorie-agent.png` (31 KB). `nutrition-detail-pack` belongs to Shopping Alternatives,
+  not this screen, so it was not copied.

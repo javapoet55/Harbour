@@ -62,3 +62,9 @@ export const WELLNESS_NAVIGATION: ImageSourcePropType = require('../../../assets
 
 /** `Image("pomodoro-tomato")`: the focus timer's centre picture. */
 export const POMODORO_TOMATO: ImageSourcePropType = require('../../../assets/wellness/pomodoro-tomato.png');
+
+/**
+ * `CaloriePackArt` (CalorieTrackerView.swift:918-930): the robot illustration, the 218×140 region at
+ * (1305, 790) of `calorie-design-pack`, cut at its own size — the sheet has no more detail to give.
+ */
+export const CALORIE_AGENT: ImageSourcePropType = require('../../../assets/wellness/calorie-agent.png');
