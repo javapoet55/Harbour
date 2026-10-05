@@ -1,6 +1,7 @@
 import type { Prisma } from '@/generated/prisma';
 import { prisma } from './db';
 import { rangeForNextNDays, startOfLocalDay, tzToday, ymd, zonedDateTime } from '@/lib/time';
+import { withoutTaskMirrors, type IntelligenceEvent } from '@/lib/schedule-intelligence';
 
 const openStatuses = ['INBOX', 'PLANNED', 'IN_PROGRESS', 'WAITING'];
 
@@ -86,7 +87,18 @@ export async function snapshotForRange(userId: string, timeZone: string, days: n
     listEventsInRange(userId, range.start, range.end),
     overdueTasks(userId, timeZone, now),
   ]);
-  return { range, tasks, events, overdue };
+  return { range, tasks, events: await withoutTaskTimeBlocks(userId, events), overdue };
+}
+
+// A scheduled task written to the connected calendar is mirrored as an event; the task already shows it.
+async function withoutTaskTimeBlocks<T extends IntelligenceEvent & { externalId: string | null }>(userId: string, events: T[]) {
+  if (!events.length) return events;
+  const externalIds = events.flatMap((event) => event.externalId ? [event.externalId] : []);
+  const linked = await prisma.task.findMany({
+    where: { userId, deletedAt: null, OR: [{ calendarEventId: { in: events.map((event) => event.id) } }, ...(externalIds.length ? [{ externalEventId: { in: externalIds } }] : [])] },
+    select: { id: true, title: true, status: true, priority: true, startAt: true, dueAt: true, durationMin: true, calendarEventId: true, externalEventId: true },
+  });
+  return linked.length ? withoutTaskMirrors(events, linked) : events;
 }
 
 export function taskWhereForUser(userId: string): Prisma.TaskWhereInput {
