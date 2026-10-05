@@ -16,7 +16,8 @@ export const UNCONFIRMED_TOOL_RESULT =
 /** Realtime error codes the Swift session ignores (VoiceConversationSession.swift:299). */
 export const BENIGN_ERROR_CODES = ['response_cancel_not_active', 'conversation_already_has_active_response'];
 
-export type VoiceScope = 'general' | 'calendar';
+/** `food`: Item Alternatives' "Ask AI about this item" (AddTaskByVoiceView.swift:64-68, NexdoApp.swift:538). */
+export type VoiceScope = 'general' | 'calendar' | 'food';
 
 export type TaskSessionRequest = { consent: true; scope: VoiceScope };
 export type TaskSessionResponse = { value: string; expiresAt: number; model: string };

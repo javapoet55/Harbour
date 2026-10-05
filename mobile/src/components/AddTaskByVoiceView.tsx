@@ -1,6 +1,6 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -9,6 +9,7 @@ import { useConsent } from '../store/consent';
 import { voiceStatus } from '../voice/conversation';
 import { useVoiceSession } from '../voice/useVoiceSession';
 import type { VoiceScope } from '../voice/protocol';
+import type { FoodVoiceContext } from '../features/shopping/foodVoice';
 import { brand, useTheme } from '../theme';
 import { CalendarPushNote } from './CalendarPushNote';
 import { withAlpha } from './SignInBackdrop';
@@ -33,6 +34,13 @@ export type AddTaskByVoiceViewProps = {
   askMode?: boolean;
   /** `AddTaskByVoiceView(calendarOnly:)` (`:20`), which also narrows the tool scope. */
   calendarOnly?: boolean;
+  /**
+   * `AddTaskByVoiceView(askMode: true, foodContext:)` (`:64-68`): Item Alternatives' "Ask AI about this
+   * item". The session's scope is `food`, the tools only look food up, and the copy is about the two items.
+   */
+  foodContext?: FoodVoiceContext;
+  /** Closes the screen when it is not a route (Item Alternatives presents it over its own sheet). */
+  onClose?: () => void;
 };
 
 /** `AddTaskByVoiceView.swift:69-71`. The ask-mode examples changed in 8c5f969 (moments and shopping). */
@@ -40,13 +48,23 @@ const EXAMPLES = {
   calendar: ['“Dentist appointment tomorrow at 11 AM for 30 minutes”', '“Team meeting Friday at 2 PM for an hour”', '“That’s all”'],
   ask: ['“What birthdays are coming up?”', '“Add two gallons of milk to my shopping list”', '“Remind me to call Damien at 11 AM”'],
   task: ['“Call Damien tomorrow at 11 AM”', '“Actually make that noon”', '“That’s all”'],
+  food: ['“Which item has more protein?”', '“What allergens are declared?”', '“How can I use this in a recipe?”'],
 } as const;
+
+/** The food consent alert (`:172-175`). */
+const FOOD_CONSENT_BODY =
+  'Your voice and these two product names are shared with OpenAI. Food lookups use USDA and Open Food Facts. This conversation does not change your shopping list.';
 
 /** The consent alert (`:87-91`). */
 const CONSENT_BODY =
   'Your voice and relevant task, calendar, and recommendation details are shared with OpenAI during this conversation. Clear task requests are saved automatically. Calls and emails still require your approval.';
 
-export function AddTaskByVoiceView({ askMode = false, calendarOnly = false }: AddTaskByVoiceViewProps) {
+export function AddTaskByVoiceView({ askMode = false, calendarOnly = false, foodContext, onClose }: AddTaskByVoiceViewProps) {
+  const close = onClose ?? (() => router.back());
+  const closeRef = useRef(close);
+  useEffect(() => {
+    closeRef.current = close;
+  });
   const theme = useTheme();
   const profile = useSession((state) => state.profile);
   // `@State private var consent` (`:11`): the alert is shown until it is answered.
@@ -56,8 +74,8 @@ export function AddTaskByVoiceView({ askMode = false, calendarOnly = false }: Ad
   });
   const [asked, setAsked] = useState(false);
 
-  const scope: VoiceScope = calendarOnly ? 'calendar' : 'general';
-  const voice = useVoiceSession({ scope, enabled: allowed, onClose: () => router.back() });
+  const scope: VoiceScope = foodContext ? 'food' : calendarOnly ? 'calendar' : 'general';
+  const voice = useVoiceSession({ scope, enabled: allowed, onClose: close, foodContext });
 
   /**
    * `.task { … if model.aiConsent && model.voiceConsent { await start() } else { consent = true } }`
@@ -68,8 +86,8 @@ export function AddTaskByVoiceView({ askMode = false, calendarOnly = false }: Ad
     if (allowed || asked) return;
     const timer = setTimeout(() => {
       setAsked(true);
-      Alert.alert(calendarOnly ? 'Use voice to add calendar events?' : 'Use voice to manage tasks?', CONSENT_BODY, [
-        { text: 'Not now', style: 'cancel', onPress: () => router.back() },
+      Alert.alert(foodContext ? 'Ask about food by voice?' : calendarOnly ? 'Use voice to add calendar events?' : 'Use voice to manage tasks?', foodContext ? FOOD_CONSENT_BODY : CONSENT_BODY, [
+        { text: 'Not now', style: 'cancel', onPress: () => closeRef.current() },
         {
           text: 'Allow and start',
           onPress: () => {
@@ -80,11 +98,11 @@ export function AddTaskByVoiceView({ askMode = false, calendarOnly = false }: Ad
       ]);
     }, 0);
     return () => clearTimeout(timer);
-  }, [allowed, asked, calendarOnly]);
+  }, [allowed, asked, calendarOnly, foodContext]);
 
-  const status = voice.starting ? 'Connecting…' : voiceStatus(voice.state);
+  const status = voice.starting ? 'Connecting…' : foodContext && voice.state.phase === 'toolExecution' ? 'Looking up food information…' : voiceStatus(voice.state);
   const error = voice.startupError ?? voice.state.error;
-  const examples = calendarOnly ? EXAMPLES.calendar : askMode ? EXAMPLES.ask : EXAMPLES.task;
+  const examples = foodContext ? EXAMPLES.food : calendarOnly ? EXAMPLES.calendar : askMode ? EXAMPLES.ask : EXAMPLES.task;
   const muteDisabled =
     voice.starting || ['idle', 'connecting', 'closing', 'disconnected', 'connectionLost'].includes(voice.state.phase);
 
@@ -104,7 +122,7 @@ export function AddTaskByVoiceView({ askMode = false, calendarOnly = false }: Ad
           hitSlop={8}
           onPress={() => {
             voice.close();
-            router.back();
+            close();
           }}
           testID="voice-close"
         >
@@ -115,7 +133,7 @@ export function AddTaskByVoiceView({ askMode = false, calendarOnly = false }: Ad
         </Pressable>
         <View style={styles.grow} />
         <Text accessibilityRole="header" style={[styles.headline, { color: theme.colors.ink }]}>
-          {askMode ? 'Ask by Voice' : 'Add by Voice'}
+          {foodContext ? 'Ask AI about this item' : askMode ? 'Ask by Voice' : 'Add by Voice'}
         </Text>
         <View style={styles.grow} />
         {/* `Text("Close").hidden()` (`:37`): keeps the title centred. */}
@@ -124,10 +142,12 @@ export function AddTaskByVoiceView({ askMode = false, calendarOnly = false }: Ad
 
       <ScrollView contentContainerStyle={styles.scroll}>
         <Text style={[styles.largeTitle, styles.centred, { color: theme.colors.ink }]}>
-          {calendarOnly ? 'Speak your appointment' : askMode ? 'Ask Nexdo anything' : 'Speak your task'}
+          {foodContext ? 'Ask about your food' : calendarOnly ? 'Speak your appointment' : askMode ? 'Ask Nexdo anything' : 'Speak your task'}
         </Text>
         <Text style={[theme.typography.body, styles.centred, { color: theme.colors.secondary }]}>
-          {calendarOnly
+          {foodContext
+            ? `Compare ${foodContext.original.name} and ${foodContext.alternative.name}. Ask about nutrition, ingredients, or allergies.`
+            : calendarOnly
             ? 'Tell me the event, date, and time. I’ll add it to your calendar.'
             : askMode
               ? // 8c5f969 (AddTaskByVoiceView.swift:42).
@@ -221,7 +241,7 @@ export function AddTaskByVoiceView({ askMode = false, calendarOnly = false }: Ad
           disabled={voice.state.phase === 'closing'}
           onPress={() => {
             voice.finish();
-            if (voice.state.phase === 'idle') router.back();
+            if (voice.state.phase === 'idle') close();
           }}
           style={[styles.done, { backgroundColor: theme.colors.tint, opacity: voice.state.phase === 'closing' ? 0.55 : 1 }]}
           testID="voice-done"

@@ -4,7 +4,8 @@ import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { Alert, Keyboard, Modal, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 
-import type { GroceryItem, GroceryList, ShoppingOfferMatch } from '../../../src/api/shopping';
+import type { GroceryItem, GroceryList, ShoppingAlternative, ShoppingOfferMatch } from '../../../src/api/shopping';
+import { swapAdding, swapReplacing } from '../../../src/features/shopping/productFacts';
 import { KeyboardAwareScrollView } from '../../../src/components/keyboard';
 import { withAlpha } from '../../../src/components/SignInBackdrop';
 import { Text } from '../../../src/components/Text';
@@ -102,6 +103,55 @@ export default function ShoppingDetailScreen() {
       setList(saved);
       setError(null);
     }
+  };
+
+  /**
+   * `persistAlternative(_:)` (:468-480): unlike `save`, nothing shows until the server has the list;
+   * a completed list becomes a new one. True when saved.
+   */
+  const persistAlternative = async (next: GroceryList): Promise<boolean> => {
+    let saved: GroceryList | null;
+    if (list.completedAt != null) {
+      const working: GroceryList = { ...next, id: Crypto.randomUUID().toUpperCase(), completedAt: null, revision: 0 };
+      saved = await shoppingStore.getState().action('create', null, listInput(working), working.id);
+    } else saved = await shoppingStore.getState().action('save', list, listInput(next));
+    if (!saved) return false;
+    setList(saved);
+    setError(null);
+    return true;
+  };
+
+  /** `replace(_:with:)` (:481-486): the item keeps its own quantity, size, notes and checked state. */
+  const replaceWith = async (original: GroceryItem, alternative: ShoppingAlternative) => {
+    const next = swapReplacing(original.id, alternative, list);
+    if (!next) {
+      shoppingStore.getState().setError('This item is no longer in your list.');
+      return false;
+    }
+    return persistAlternative(next);
+  };
+
+  /** `add(_:)` (:487-492). */
+  const addAlternative = async (alternative: ShoppingAlternative) => {
+    const next = swapAdding(alternative, list, Crypto.randomUUID().toUpperCase());
+    if (!next) {
+      shoppingStore.getState().setError('This alternative is already in your cart.');
+      return false;
+    }
+    return persistAlternative(next);
+  };
+
+  /** `favorite(_:alternativeID:)` (:493-503): toggles a starred alternative, or the item itself. */
+  const favoriteAlternative = async (original: GroceryItem, alternativeId: string | null) => {
+    const index = list.items.findIndex((value) => value.id === original.id);
+    if (index === -1) return false;
+    const items = [...list.items];
+    const current = items[index];
+    if (alternativeId !== null) {
+      const favorites = current.favoriteAlternatives ?? [];
+      items[index] = { ...current, favoriteAlternatives: favorites.includes(alternativeId) ? favorites.filter((value) => value !== alternativeId) : [...favorites, alternativeId] };
+    } else items[index] = { ...current, favorite: !(current.favorite ?? false) };
+    return persistAlternative({ ...list, items });
   };
 
   /** `quickAdd()` (:374-387): the server parses; what it finds is appended straight to the list. */
@@ -443,7 +493,14 @@ export default function ShoppingDetailScreen() {
       <ListSettingsSheet visible={settings} list={list} onSave={(next) => void save(next)} onClose={() => setSettings(false)} />
       <ShareListSheet visible={sharing} list={list} onUpdate={setList} onClose={() => setSharing(false)} />
       <ShoppingRecommendationsSheet list={list} visible={recommendations} onClose={() => setRecommendations(false)} />
-      <ShoppingAlternativesSheet list={list} original={alternativesFor} save={save} onClose={() => setAlternativesFor(null)} />
+      <ShoppingAlternativesSheet
+        list={list}
+        onAdd={addAlternative}
+        onClose={() => setAlternativesFor(null)}
+        onFavorite={(alternativeId) => (alternativesFor ? favoriteAlternative(alternativesFor, alternativeId) : Promise.resolve(false))}
+        onReplace={(alternative) => (alternativesFor ? replaceWith(alternativesFor, alternative) : Promise.resolve(false))}
+        original={alternativesFor}
+      />
       <ShoppingCompletionView
         summary={completion}
         onDone={() => {

@@ -27,6 +27,10 @@ const CALENDAR_ONLY_TOOLS = ['get_current_time', 'create_calendar_event', 'get_s
 
 /** `VoiceToolExecutor.execute` (`:17-19`) when the screen is calendar-only. */
 const CALENDAR_ONLY_REFUSAL = { success: false, error: 'This screen creates appointments and events only.' };
+/** VoiceToolExecutor.swift:15. */
+export const FOOD_ONLY_REFUSAL = { success: false, error: 'This conversation only looks up food information.' };
+/** VoiceToolExecutor.swift:36. */
+export const FOOD_LOOKUP_UNAVAILABLE = { success: false, error: 'Food lookup unavailable. Explain the missing information; do not invent product facts.' };
 
 /** The two contact tools' shared message (`:26`, `:29`). */
 const CONTACT_SELECTED_MESSAGE =
@@ -75,8 +79,26 @@ export class VoiceToolExecutor implements VoiceToolExecuting {
   }): Promise<unknown> {
     this.assertOwner();
 
+    // `foodOnly` (VoiceToolExecutor.swift:15): a food conversation only looks food up.
+    if (this.options.scope === 'food' && name !== 'lookup_food') return FOOD_ONLY_REFUSAL;
     if (this.options.scope === 'calendar' && !CALENDAR_ONLY_TOOLS.includes(name)) {
       return CALENDAR_ONLY_REFUSAL;
+    }
+
+    if (this.options.scope === 'food') {
+      // `executeVoiceTool(…, foodOnly: true)` (NexdoApp.swift:590-594): the lookup's answer as it came;
+      // any failure becomes Swift's "Food lookup unavailable…" for the model (VoiceToolExecutor.swift:34-36).
+      try {
+        const response = await getApi().request<Record<string, unknown>>(TOOL_PATH, {
+          method: 'POST',
+          body: { consent: true, scope: 'food', sessionId, callId, name, arguments: args },
+          timeoutMs: 30_000,
+        });
+        this.assertOwner();
+        return { success: response.success === true, ...(response.facts !== undefined ? { facts: response.facts } : {}), ...(response.error !== undefined ? { error: response.error } : {}) };
+      } catch {
+        return FOOD_LOOKUP_UNAVAILABLE;
+      }
     }
 
     if (name === 'prepare_call' || name === 'prepare_email') return this.prepareContact(name, args);

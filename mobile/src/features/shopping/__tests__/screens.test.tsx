@@ -581,96 +581,154 @@ describe('List detail', () => {
  * The answer is the `rice` request from Run D's test data, which the capture replaced with Brown rice.
  */
 describe('Item Alternatives', () => {
-  const RICE = item({ id: 'rice', name: 'rice', category: 'Pantry', quantity: '1', size: 'bag', checked: false });
+  const MILK = item({ id: 'milk2', name: '2% milk', category: 'Dairy & Eggs', quantity: '1', size: '', notes: 'organic only', checked: true });
+  const PER100 = { servingSize: '100 g', servingAmount: 100, servingUnit: 'g' };
   const ANSWER = {
+    originalFacts: { source: 'USDA', matchQuality: 'representative_generic', nutrition: { ...PER100, calories: 50, protein: 3, totalFat: 2, saturatedFat: 1, carbohydrates: 5, sugar: 5 } },
     alternatives: [
-      { name: 'Brown rice', category: 'Pantry', quantity: '1', size: 'bag', reason: 'More whole grains', detail: 'Works well as a direct swap in most rice dishes.' },
-      { name: 'Quinoa', category: 'Pantry', quantity: '1', size: 'bag', reason: 'Protein-rich grain', detail: 'Quick-cooking complete protein' },
-      { name: 'Cauliflower rice', category: 'Frozen', quantity: '1', size: 'bag', reason: 'Vegetable option', detail: 'Light substitute for rice dishes' },
+      { name: '2% milk', category: 'Dairy & Eggs', quantity: '1', size: '', reason: 'Same', detail: 'Same item', facts: { source: 'USDA', nutrition: { ...PER100, calories: 50, protein: 3, totalFat: 2, carbohydrates: 5 } } },
+      {
+        name: 'Lactose-free milk',
+        category: 'Dairy & Eggs',
+        quantity: '1',
+        size: '',
+        reason: 'Lactose-free',
+        detail: 'Dairy milk without lactose',
+        facts: { source: 'Open Food Facts', brand: 'Stater Bros', barcode: '0123456789012', nutrition: { ...PER100, calories: 67, protein: 3, totalFat: 4, saturatedFat: 2, carbohydrates: 5, sugar: 3 }, dietary: ['Lactose-free'], bestFor: ['Coffee'] },
+      },
+      { name: 'Unsweetened oat milk', category: 'Dairy & Eggs', quantity: '1', size: 'carton', reason: 'Plant-based', detail: 'Creamy', facts: null },
     ],
-    tip: 'Brown rice is the closest whole-grain swap for everyday meals.',
+    tip: 'Choose unsweetened.',
     usedAI: true,
   };
 
   async function open(answer: () => Promise<unknown> = async () => ANSWER) {
-    load([list({ items: [item(), RICE] })]);
+    shoppingStore.getState().reset();
+    load([list({ items: [item(), MILK] })]);
     mockParams = { id: 'l1' };
     mockAlternatives.mockImplementation(answer);
     mockPost.mockImplementation(async (envelope) => ({ list: { ...list({ revision: 8 }), items: envelope.input.items } }));
     await render(<DetailWithQueries />);
-    await fireEvent.press(screen.getByLabelText('Show alternatives for rice'));
+    await fireEvent.press(screen.getByLabelText('Show alternatives for 2% milk'));
   }
 
-  it('shows the loading state, then the original, the alternatives with the first selected, and the tip', async () => {
+  it('shows the original, the goal chips, each alternative with its supported goals and nutrition line', async () => {
     let answer: (value: unknown) => void = () => undefined;
     await open(() => new Promise((resolve) => (answer = resolve)));
     expect(screen.getByText('Item Alternatives')).toBeTruthy();
     expect(screen.getByText('Finding useful alternatives…')).toBeTruthy();
-    expect(mockAlternatives).toHaveBeenCalledWith({ name: 'rice', category: 'Pantry', quantity: '1', size: 'bag' });
+    await waitFor(() => expect(mockAlternatives).toHaveBeenCalledWith({ name: '2% milk', category: 'Dairy & Eggs', quantity: '1', size: '' }));
     await act(async () => answer(ANSWER));
-
-    expect(screen.getByTestId('alternatives-original')).toHaveTextContent(/rice1 bagOriginal Item/);
+    expect(screen.getByTestId('alternatives-original')).toHaveTextContent(/2% milk1Original Item/);
     expect(screen.getByText('AI Recommended Alternatives')).toBeTruthy();
-    expect(screen.getByText('Practical swaps based on the item in your list.')).toBeTruthy();
-    expect(screen.getByText('More whole grains')).toBeTruthy();
-    expect(screen.getByLabelText('Select Brown rice as replacement').props.accessibilityState.selected).toBe(true);
-    expect(screen.getByTestId('alternative-pill-Brown rice')).toHaveTextContent('Selected');
-    expect(screen.getByTestId('alternative-pill-Quinoa')).toHaveTextContent('Replace');
-    expect(screen.getByText('Nexdo Tip')).toBeTruthy();
-    expect(screen.getByText('Brown rice is the closest whole-grain swap for everyday meals.')).toBeTruthy();
-    expect(screen.getByText('Replace with Selected Item')).toBeTruthy();
-    expect(screen.getByText('Add to Cart Instead')).toBeTruthy();
+    expect(screen.getAllByText('Suggested alternative')).toHaveLength(2);
+    expect(screen.getByText('Lower sugar · Lactose-free')).toBeTruthy();
+    expect(screen.getByText('67 cal · 3g protein · 4g fat · 5g carbs · per 100 g')).toBeTruthy();
+    expect(screen.getByText('Nutrition details unavailable')).toBeTruthy();
+    expect(screen.getByText('Always check the product label for the most current nutrition and allergen information.')).toBeTruthy();
+    expect(screen.getByLabelText('View in Cart (2)')).toBeTruthy();
   });
 
-  it('Replace swaps the item in place, keeping its id and checked state, with the detail as notes', async () => {
+  it('filters by a goal chip, says how many match, and Show all clears it', async () => {
     await open();
-    await waitFor(() => expect(screen.getByTestId('alternatives-replace')).toBeTruthy());
-    await fireEvent.press(screen.getByTestId('alternatives-replace'));
-    await waitFor(() => expect(screen.queryByTestId('alternatives-list')).toBeNull());
+    await waitFor(() => expect(screen.getByTestId('alternatives.goal.Lower sugar')).toBeTruthy());
+    await fireEvent.press(screen.getByTestId('alternatives.goal.Lower sugar'));
+    expect(screen.getByTestId('alternatives.goalStatus')).toHaveTextContent('1 matches · Lower sugar');
+    expect(screen.queryByText('Unsweetened oat milk')).toBeNull();
+    await fireEvent.press(screen.getByTestId('alternatives.goal.Lower fat'));
+    expect(screen.getByTestId('alternatives.goalStatus')).toHaveTextContent('No verified matches for lower fat.');
+    expect(screen.getByText('No matching alternatives yet')).toBeTruthy();
+    await fireEvent.press(screen.getByTestId('alternatives.showAll'));
+    expect(screen.getByText('Unsweetened oat milk')).toBeTruthy();
+  });
+
+  it('More opens the goal picker; Apply sets the goal', async () => {
+    await open();
+    await waitFor(() => expect(screen.getByTestId('alternatives.moreGoals')).toBeTruthy());
+    await fireEvent.press(screen.getByTestId('alternatives.moreGoals'));
+    expect(screen.getByText('I’m looking for:')).toBeTruthy();
+    await fireEvent.press(screen.getByTestId('alternatives.moreOptions'));
+    await fireEvent.press(screen.getAllByTestId('alternatives.goal.Lactose-free').slice(-1)[0]);
+    await fireEvent.press(screen.getByTestId('alternatives.applyGoal'));
+    expect(screen.getByTestId('alternatives.goalStatus')).toHaveTextContent('1 matches · Lactose-free');
+  });
+
+  it('Why these? explains the suggestions', async () => {
+    await open();
+    await waitFor(() => expect(screen.getByTestId('alternatives.whyThese')).toBeTruthy());
+    await fireEvent.press(screen.getByTestId('alternatives.whyThese'));
+    expect(screen.getByText('Why these alternatives?')).toBeTruthy();
+    expect(screen.getByText('Comparable nutrition')).toBeTruthy();
+  });
+
+  it('Replace asks first, keeps the item’s own quantity, notes and checked state, and ends on Item replaced!', async () => {
+    await open();
+    await waitFor(() => expect(screen.getByTestId('alternatives.select.Lactose-free milk')).toBeTruthy());
+    await fireEvent.press(screen.getByTestId('alternatives.select.Lactose-free milk'));
+    expect(screen.getByText('Replace item?')).toBeTruthy();
+    expect(screen.getByText('Replace “2% milk” with “Lactose-free milk”? ')).toBeTruthy();
+    expect(mockPost).not.toHaveBeenCalled();
+    await fireEvent.press(screen.getByTestId('alternatives.confirm'));
+    await waitFor(() => expect(screen.getByTestId('alternatives.success')).toBeTruthy());
     const envelope = mockPost.mock.calls[0][0];
     expect(envelope).toMatchObject({ operation: 'save', id: 'l1', revision: 7 });
-    expect(envelope.input.items.map((value: GroceryItem) => [value.id, value.name, value.notes, value.checked])).toEqual([
-      ['milk', 'Parity milk', '', false],
-      ['rice', 'Brown rice', 'Works well as a direct swap in most rice dishes.', false],
-    ]);
-    // `shopping-detail-after-replace`: the row reads Brown rice, 1 bag, and the detail as its note.
-    await waitFor(() => expect(screen.getByText('Brown rice')).toBeTruthy());
-    expect(screen.getByText('Works well as a direct swap in most rice dishes.')).toBeTruthy();
+    expect(envelope.input.items[1]).toMatchObject({ id: 'milk2', name: 'Lactose-free milk', quantity: '1', size: '', notes: 'organic only', checked: true, brand: 'Stater Bros', barcode: '0123456789012', imageData: null });
+    expect(screen.getByText('2% milk has been replaced with Lactose-free milk.')).toBeTruthy();
+    await fireEvent.press(screen.getByTestId('alternatives-success-done'));
+    await waitFor(() => expect(screen.queryByTestId('alternatives-original')).toBeNull());
   });
 
-  it('Add to Cart Instead appends the selected alternative as a new item', async () => {
+  it('stars the original and an alternative', async () => {
     await open();
-    await waitFor(() => expect(screen.getByLabelText('Select Quinoa as replacement')).toBeTruthy());
-    await fireEvent.press(screen.getByLabelText('Select Quinoa as replacement'));
-    expect(screen.getByTestId('alternative-pill-Quinoa')).toHaveTextContent('Selected');
-    await fireEvent.press(screen.getByTestId('alternatives-add'));
+    await waitFor(() => expect(screen.getByTestId('alternatives.favorite.original')).toBeTruthy());
+    await fireEvent.press(screen.getByTestId('alternatives.favorite.original'));
+    await waitFor(() => expect(mockPost).toHaveBeenCalledTimes(1));
+    expect(mockPost.mock.calls[0][0].input.items[1]).toMatchObject({ favorite: true });
+    await fireEvent.press(screen.getByTestId('alternatives.favorite.Lactose-free milk|Dairy & Eggs|1|'));
+    await waitFor(() => expect(mockPost).toHaveBeenCalledTimes(2));
+    expect(mockPost.mock.calls[1][0].input.items[1].favoriteAlternatives).toEqual(['Lactose-free milk|Dairy & Eggs|1|']);
+  });
+
+  it('opens Item Details: the comparison, the nutrition table, and Add to Cart Instead appends', async () => {
+    await open();
+    await waitFor(() => expect(screen.getByTestId('alternatives.details.Lactose-free milk')).toBeTruthy());
+    await fireEvent.press(screen.getByTestId('alternatives.details.Lactose-free milk'));
+    expect(screen.getByText('Item Details')).toBeTruthy();
+    expect(screen.getByTestId('alternative.originalName')).toHaveTextContent('2% milk');
+    expect(screen.getByTestId('alternative.targetName')).toHaveTextContent('Lactose-free milk');
+    expect(screen.getByText('67 cal')).toBeTruthy();
+    expect(screen.getByText('Representative food — not an exact product.')).toBeTruthy();
+    expect(screen.getByTestId('alternative-row-Calories')).toHaveTextContent('Calories5067↑ 17');
+    expect(screen.getByTestId('alternative-row-Protein')).toHaveTextContent('Protein3 g3 g= Same');
+    await fireEvent.press(screen.getByTestId('alternative.sort.Alternative'));
+    expect(screen.getByText('Alternative: high to low')).toBeTruthy();
+    expect(screen.getByTestId('alternative.tab.Allergens')).toBeTruthy();
+    expect(screen.getByTestId('alternative.tab.Best For')).toBeTruthy();
+    await fireEvent.press(screen.getByTestId('alternative.detail.add'));
     await waitFor(() => expect(mockPost).toHaveBeenCalled());
-    const names = mockPost.mock.calls[0][0].input.items.map((value: GroceryItem) => value.name);
-    expect(names).toEqual(['Parity milk', 'rice', 'Quinoa']);
-    await waitFor(() => expect(screen.getByTestId('list-counts').props.children).toBe('0 added · 3 items'));
+    expect(mockPost.mock.calls[0][0].input.items.map((value: GroceryItem) => value.name)).toEqual(['Parity milk', '2% milk', 'Lactose-free milk']);
   });
 
-  it('falls back to the phone’s own suggestions when the request fails', async () => {
-    await open(async () => {
-      throw new ApiError({ status: 0, code: 'NETWORK', message: 'offline' });
-    });
-    await waitFor(() => expect(screen.getByText('Organic rice')).toBeTruthy());
-    expect(screen.getByText('Store-brand rice')).toBeTruthy();
-    expect(screen.getByText('Compare unit prices and package sizes before replacing rice.')).toBeTruthy();
+  it('refuses to add an alternative already in the cart', async () => {
+    await open();
+    await waitFor(() => expect(screen.getByTestId('alternatives.details.2% milk')).toBeTruthy());
+    await fireEvent.press(screen.getByTestId('alternatives.details.2% milk'));
+    await fireEvent.press(screen.getByTestId('alternative.detail.add'));
+    await waitFor(() => expect(screen.getByTestId('alternative.saveError')).toHaveTextContent('This alternative is already in your cart.'));
+    expect(mockPost).not.toHaveBeenCalled();
   });
 
-  it('shows the expired-session error with Try Again, and closes with the xmark', async () => {
+  it('shows a failed load with Try again — no phone-side fallback — and the retry skips the cache', async () => {
     await open(async () => {
-      throw new ApiError({ status: 401, code: 'SIGNED_OUT', message: 'Your session has expired. Please sign in again.' });
+      throw new ApiError({ status: 0, code: 'NETWORK', message: 'The network connection was lost.' });
     });
-    await waitFor(() => expect(screen.getByText('Couldn’t load alternatives')).toBeTruthy());
-    expect(screen.getByText('Your session has expired. Please sign in again.')).toBeTruthy();
+    await waitFor(() => expect(screen.getByTestId('alternatives.error')).toHaveTextContent('The network connection was lost.'));
+    expect(screen.queryByText('Organic 2% milk')).toBeNull();
     mockAlternatives.mockResolvedValueOnce(ANSWER);
     await fireEvent.press(screen.getByTestId('alternatives-retry'));
-    await waitFor(() => expect(screen.getByText('Brown rice')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('Lactose-free milk')).toBeTruthy());
     await fireEvent.press(screen.getByLabelText('Close alternatives'));
     expect(screen.queryByText('Item Alternatives')).toBeNull();
-    expect(mockPost).not.toHaveBeenCalled();
   });
 });
 
