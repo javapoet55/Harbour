@@ -545,7 +545,7 @@ const styles = StyleSheet.create({
   card: { gap: 12, padding: 16, borderRadius: 22, borderWidth: 1, shadowOpacity: 0.035, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 1 },
   cardHead: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
   cardArt: { width: 42, height: 42 },
-  countPill: { padding: 14, borderRadius: 16 },
+  countPill: { alignSelf: 'flex-start', padding: 14, borderRadius: 16 },
   account: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 12, borderRadius: 14 },
   accountColumn: { flexDirection: 'column', alignItems: 'flex-start' },
   badge: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 7, borderRadius: 999 },
