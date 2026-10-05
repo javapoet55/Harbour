@@ -1,5 +1,6 @@
 import * as WebBrowser from 'expo-web-browser';
 import * as Crypto from 'expo-crypto';
+import { getApi } from '../api';
 import { getApiUrl } from '../config';
 import { beginOAuthSession, takeOAuthCallback, waitForOAuthCallback } from './oauthCallbacks';
 
@@ -10,10 +11,13 @@ import { beginOAuthSession, takeOAuthCallback, waitForOAuthCallback } from './oa
  */
 export const SECURITY_CHECK_MESSAGE = 'Please complete the security check and try again.';
 
+/** `Config` (NexdoApp.swift:175). */
+type SignupConfig = { required: boolean; siteKey?: string };
+
 async function run(): Promise<string | undefined> {
-  const response = await fetch(`${getApiUrl()}/api/auth/signup-config`, { signal: AbortSignal.timeout(10000) });
-  if (!response.ok) throw new Error('Security check unavailable.');
-  const config = await response.json();
+  // `api.request(..., treatUnauthorizedAsSignedOut: false)` (NexdoApp.swift:176): the client's HTTPS
+  // origin check, Accept header and default timeout; a 401 here is not a sign-out.
+  const config = await getApi().get<SignupConfig>('/api/auth/signup-config', { signedOutOn401: false });
   if (!config.required) return undefined;
   if (!config.siteKey) throw new Error('Security check unavailable.');
   const state = Crypto.randomUUID();
