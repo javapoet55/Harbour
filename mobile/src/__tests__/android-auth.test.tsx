@@ -87,7 +87,7 @@ describe('the primary button', () => {
     expect(StyleSheet.flatten(screen.getByText('Sign In').props.style).color).toBe(light.onTint);
   });
 
-  it('draws NexdoGradientButtonStyle's save gradient (blue → indigo → magenta) when asked, the brand one by default', async () => {
+  it('draws NexdoGradientButtonStyle’s save gradient (blue → indigo → magenta) when asked, the brand one by default', async () => {
     onPlatform('android');
     const { rerender } = await render(<GradientButton title="Sign In" onPress={jest.fn()} minHeight={62} testID="button" />);
     const first = () => screen.getByTestId('button-gradient').props.colors[0];
