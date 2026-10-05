@@ -2459,6 +2459,25 @@ needed filter and `emailSubject` already matched. **All 10 fixed in Windows part
   there is no food search, barcode scan or in-app voice entry, and no maintain / lose / gain choice — only a
   daily calorie number. Copied unchanged.
 
+- **Account: only Change password keeps the card.** In `ProfileView` the `.padding(8).profileCard()` now
+  applies to the Change password row alone (`ProfileView.swift:68-69`); Help, Feedback and "Edit profile and
+  settings" sit bare on the background, which looks like a lost `VStack` from `19eb8e4`. RN copies Swift.
+- **White on white in dark mode, three times.** Help's cards (`HelpView.swift:121`),
+  the Ask AI landing (`AskAILandingView.swift:71`, `:77`: a backdrop ending in `.white` and a `.white`
+  field) and Event Details' cards (`CalendarEventDetailsView.swift:163`) are fixed white under `nexdoInk`,
+  which is white in dark mode. RN keeps the landing light and uses the theme surface for the other two.
+- **A brief section page can go blank with no way out.** Completing the last task named on "Top Priorities"
+  from its own page removes that section from `visibleSections`, and the `fullScreenCover` then renders
+  nothing (`DailyBriefView.swift:106-111`) — a white full-screen cover with no back button. RN keeps the
+  title and says "Nothing to report here today."
+- **"Read aloud" on a brief page can fail silently.** With OpenAI sharing off, `speakAnswer` sets
+  `voiceError` (`AskNexdoView.swift:531`), but the message lives in `composer`, which the brief hides
+  (`:333`). Nothing happens on screen. RN copies Swift.
+- **Unreachable Ask code.** Nothing mounts `NexdoAISuggestionCard`, `entryCards` or "Free form Text"
+  (`showingText`, `AskNexdoView.swift:341`) any more, `AskAILandingView.select` keeps Shopping, Moments and
+  typing cases for cards 5-7 when there are four cards, and the `planTomorrow` intent has no entry. Not
+  built in RN; delete them in Swift or bring them back.
+
 ### Windows part 2: keep-awake, time entry, Pomodoro sound
 
 Full suite after part 2: 126 suites, 1,940 tests passing (28 new); `tsc --noEmit` and eslint clean.
@@ -2558,3 +2577,38 @@ preview — the same pages with sample data and labels, saving nothing — is Sw
 checkmark uses the already-installed masked view. One image, `assets/wellness/calorie-agent.png` (31 KB),
 cut from `calorie-design-pack`; `nutrition-detail-pack` is Shopping Alternatives' and was not copied.
 Deviations are in `mobile/docs/android-polish.md` §22; Run C's tap-instead-of-drag chart note is §21.
+
+### Run A: Account, Help, Feedback, Change password, Ask AI, Daily Brief, Appointment details (Windows)
+
+Built from the Swift source on the part 1 clients (help topics, feedback, event completion). The Ask and
+Calendar captures in `mobile/docs/reference/ios/` predate these designs and were not used. Full suite after
+Run A: 140 suites, 2,085 tests passing (68 new); `tsc --noEmit` and eslint clean.
+
+| Screen | Swift | Built as |
+| --- | --- | --- |
+| Account menu | `ProfileView.swift:53-84` | Help, Feedback, "Edit profile and settings", then Change password in its card, in Swift's order; the web links are gone, as in Swift |
+| Help | `HelpView.swift` | `app/account/help`: search (collapses open answers), Calendar / Tasks category cards, topics grouped by category, "No matching topics" with Reset search, "Still need help?" into Feedback |
+| Feedback | `FeedbackView.swift` | `app/account/feedback`: title (160) and description (5,000) counted in UTF-16 units, 1–5 stars, one submission id per visit so a retry cannot file twice, "Thank you for your feedback!" |
+| Change password | `ProfileView.swift:150-198` | `app/account/change-password`: three secure fields, 12+ characters and at most 72 bytes, "Change password and sign out?", then signed out to Sign in; a refusal keeps the session and shows the server's message |
+| Ask AI landing | `AskAILandingView.swift` | Ask's first page, now a full-screen cover: greeting, the four cards (My Daily Brief, Top 3 Tasks, Due & Risks, Find Time) sending their intents' queries, Ask by Voice, "Or type your request…" |
+| Daily Brief | `DailyBriefView.swift` | Shown instead of the plain answer when the last prompt was exactly one of the four briefing queries and nothing needs confirming; `BriefContent` filtering (ported with Swift's tests), intent titles and copy, section cards, "Ask anything…", mic, three suggestion chips; close returns to the landing |
+| Brief section pages | `BriefSectionDetailView.swift` | `app/ask/brief/[index]`: task cards (complete, open, Add Note, Schedule / Reschedule, or Call / Message for a contact action) and insight cards, Read aloud / Share briefing, "Need help with this?" |
+| Appointment details | `CalendarEventDetailsView.swift` | `app/calendar/event/[id]`, replacing the inline event sheet: status, Mark Complete / Mark Incomplete, Add to Tasks, Start / End / Time Zone / Calendar / Location, notes, Open in Calendar; Edit (`app/calendar/event/edit`) and Delete for Nexdo's own events |
+| Calendar | `CalendarView.swift` since `8c36d98` | Empty days collapse in Schedule mode; backlog count badge; "Review conflicts" and its sheet list only reviewable conflicts (no overdue or dependency items); headings "Review schedule conflicts" / "Your schedule is clear" / "Your schedule today" and no explanation line; "Completed" badge on completed events; "Completed tasks and events in the selected dates" |
+
+**Ask changes in Swift since the RN baseline.** The briefing and Top 3 queries changed text ("Give me my
+full day briefing for today: …", "… estimated effort, and impact."), so the brief matches Swift's exact
+strings. "Asking Nexdo…" became a centred "Working on it…" over the page, and a keyboard "Done" bar was
+added. The old intent list, "Ask by Voice" / "Free form Text" entry cards and the `app/ask/text` route are
+gone, as nothing in Swift opens them.
+
+**Task Details** takes Swift's new `initialSection`: a section page's "Add Note" opens it with Notes focused,
+"Schedule" scrolled to SCHEDULE.
+
+**Images.** Cut from `daily-brief-pack` (logo, robot, and the four section icons) and `brief-detail-pack`
+(star, target, phone, calendar) into `mobile/assets/brief/`, at their own size except the robot (515 → 512
+wide); 10 files, 245 KB.
+
+**Native modules and permissions: none new.** Open in Calendar on Android is a `content://` view intent and
+needs no permission. Deviations are in `mobile/docs/android-polish.md` §23; the Swift issues found are under
+"For the team" above.

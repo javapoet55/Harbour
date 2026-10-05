@@ -27,7 +27,7 @@ export const briefSecondary = '#4D5787'; // Color(red: 0.30, green: 0.34, blue: 
 export const briefColors = { ...swiftColors, pink: '#FF2D55', indigo: '#5856D6' };
 export const briefTones: Record<BriefTone, string> = { green: briefColors.green, pink: briefColors.pink, blue: briefColors.blue, orange: briefColors.orange };
 
-/** `BriefArtwork` (:174-199): regions of `daily-brief-pack`, cropped into assets/brief. */
+/** `BriefArtwork` (:189-213): regions of `daily-brief-pack`, cropped into assets/brief. */
 const ARTWORK: Record<'logo' | 'robot' | BriefArtworkPart, ImageSourcePropType> = {
   logo: require('../../../assets/brief/brief-logo.png'),
   robot: require('../../../assets/brief/brief-robot.png'),

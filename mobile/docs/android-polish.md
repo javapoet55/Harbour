@@ -1274,3 +1274,54 @@ Deviations from Swift, Android-only or not:
 - **Art.** Only `calorie-design-pack` is drawn (the robot, 218×140 at 1305, 790), cut at its own size into
   `assets/wellness/calorie-agent.png` (31 KB). `nutrition-detail-pack` belongs to Shopping Alternatives,
   not this screen, so it was not copied.
+
+---
+
+## 23. Phase 12 Run A: Account, Help, Feedback, Change password, Ask AI, Daily Brief, Appointment details (2026-10-05)
+
+Built from the Swift source; the Ask and Calendar captures in `mobile/docs/reference/ios/` predate these
+designs, so they were not used. Deviations from Swift, Android-only or not:
+
+### Account, Help, Feedback, Change password
+
+- **Pushed screens draw their own inline bar** (`src/components/InlineNavBar.tsx`): a back chevron in the
+  `link` colour (labelled "Back") and the centred title. Swift's bar shows the system back button; there is
+  no previous-title text on Android.
+- **Help in dark mode.** Swift's cards are fixed white under adaptive ink — white on white. Light mode is
+  Swift's; dark mode uses the theme surface for the cards and the search field.
+- **Alerts** ("Thank you for your feedback!", "Change password and sign out?") are React Native's.
+
+### Ask AI landing, Daily Brief, section pages
+
+- **Fixed light colours** for the landing, the brief and its section pages. Swift's brief and pages use an
+  explicit ink on white; the landing fades to `.white` under `nexdoInk`, which is white text on white in
+  dark mode, so the landing keeps its light values too. The answer view and the composer stay adaptive.
+- **The orb** is a diagonal cyan → blue → purple → pink gradient with the indigo core and the face drawn
+  from views; Swift's angular gradient and its blur need a drawing library.
+- **Symbols.** SF `scope` and `keyboard` have no Ionicons match: `locate-outline` and `keypad-outline`.
+- **Artwork** is cut from `daily-brief-pack` and `brief-detail-pack` into `assets/brief/` (the robot
+  scaled from 515 to 512 wide) and drawn with `mixBlendMode: 'multiply'`, as Swift's `.blendMode(.multiply)`.
+- **"Working on it…"** sits on a translucent rounded card (no material blur).
+- **The keyboard's "Done" bar** sits at the bottom of Ask and rides up with the keyboard.
+- **Section pages are a full-screen route** (`app/ask/brief/[index]`), so Task Details and the action screen
+  can open over them. The "…" menu is the Moments popover; "Share briefing" opens the system share sheet
+  with the lines as text.
+- **A section that has gone** (its last priority task completed on the page) keeps its title over "Nothing
+  to report here today." Swift's cover renders nothing and has no way back (§22 "For the team").
+- **Task Details from a section page**: "Add Note" focuses Notes; "Schedule" / "Reschedule" scrolls the
+  SCHEDULE card into view, near the centre, as Swift's `proxy.scrollTo(_, anchor: .center)`.
+
+### Appointment details and Calendar
+
+- **A modal route** (`app/calendar/event/[id]`) rather than an inline sheet, with its own bar: back chevron,
+  "Event Details", Edit (Nexdo events) and a "…" popover. The Edit Event editor is a second modal.
+- **Dark mode.** Swift's cards are fixed white (`.white.opacity(0.94)`) under adaptive ink; dark mode uses
+  the theme surface, and the status, action and delete colours take their dark-mode system values.
+- **"Delete this event?"** is an alert with Cancel and Delete Event (Android has no confirmation dialog of
+  SwiftUI's kind).
+- **Open in Calendar.** iOS opens Swift's `calshow:` URL. Android opens the Calendar app's day view at the
+  event's start with `content://com.android.calendar/time/<ms>`; no permission is needed.
+- **Edit Event's dates** are the Moments `DateField` (date pill, month grid, hour and minute wheels; date
+  only for an all-day event).
+- **An empty day** in Schedule mode is a disclosure row with a chevron, as Swift's; Week and Month always
+  show their day.

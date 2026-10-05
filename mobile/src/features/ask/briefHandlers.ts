@@ -1,6 +1,6 @@
 /**
  * What a Daily Brief section page calls back into Ask with. Swift passes `ask` and `read` closures
- * into `BriefSectionDetailView` (DailyBriefView.swift:241-246); a route cannot take closures, so the
+ * into `BriefSectionDetailView` (DailyBriefView.swift:106-111); a route cannot take closures, so the
  * open `AskNexdoView` registers its own here while it is mounted.
  */
 export type BriefHandlers = {
