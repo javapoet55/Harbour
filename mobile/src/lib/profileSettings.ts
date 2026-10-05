@@ -95,6 +95,20 @@ export function formatClock(hour: number, minute: number): string {
   return `${String(wrapped).padStart(2, '0')}:${String(wrappedMinute).padStart(2, '0')}`;
 }
 
+/** How a clock value is shown: as stored (`h23`, Account's working hours) or as Swift's compact picker shows it. */
+export type ClockHourCycle = 'h23' | 'h12';
+
+/**
+ * The text a time field shows for `"HH:mm"`. `h23` is the value itself; `h12` is the US short time a
+ * SwiftUI `DatePicker(…, displayedComponents: .hourAndMinute)` shows ("8:00 PM", "12:05 AM").
+ */
+export function clockLabel(value: string, hourCycle: ClockHourCycle = 'h23'): string {
+  if (hourCycle === 'h23') return value;
+  const { hour, minute } = parseClock(value);
+  const wrapped = ((hour % 24) + 24) % 24;
+  return `${wrapped % 12 === 0 ? 12 : wrapped % 12}:${String(((minute % 60) + 60) % 60).padStart(2, '0')} ${wrapped < 12 ? 'AM' : 'PM'}`;
+}
+
 /**
  * `TimeZone.autoupdatingCurrent.identifier.replacingOccurrences(of: "_", with: " ")`
  * (ProfileView.swift:195): the read-only value beside "Time zone (Automatic)".
