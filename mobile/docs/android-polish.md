@@ -1566,4 +1566,6 @@ captures; results row by row in `docs/reference/PARITY.md` "UI-parity pass 3". F
   bar's Close duplicated it. Android insets the content below the status bar.
 - **Nexdo Action's link buttons are ink** (`.foregroundStyle(Color.nexdoInk)`), and **Contact details** has a
   large title over the form instead of a bar title.
+- **Today's action card and pager buttons are ink** (`ActionGlass`'s `.foregroundStyle(Color.nexdoInk)`);
+  **"Find my next task"** draws the save gradient (`NexdoGradientButtonStyle`).
 

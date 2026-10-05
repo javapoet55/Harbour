@@ -810,9 +810,25 @@ your next move") and keeps Android's ellipsis, so they shrink to 0.85 and then t
 | 47 | Task Details | **fixed** | **two headers with two closes**: the stack drew a "Close / Task" bar above the screen's own "TASK DETAILS … ✕" header; Swift hides the bar (`.toolbar(.hidden, for: .navigationBar)`, RootView.swift:2014). Bar hidden, content inset below the status bar on Android. Outline buttons filled as logged (§2). Viewed "Call the plumber" (not a Parity item — view only, nothing changed) |
 | 48 | Task agent card | not reached | only shows for a task the server marks eligible for business research; none on this account, and creating one would start a real business search |
 | 49 | Nexdo Action contact screen | **fixed** | "Enter contact details" (and the other link buttons) were the tint; the screen's `.foregroundStyle(Color.nexdoInk)` makes them ink. Contact details: the title was in the bar, Swift's is a large title over the form. No contact chosen, nothing saved |
+| 50 | Today action cards and queue (business candidate card) | **fixed** | "Remind later", "Dismiss", "View all" and Previous / Next were the tint; the card and pager sit in `ActionGlass`, whose `.foregroundStyle(Color.nexdoInk)` makes them ink. "Find my next task" was a flat tint capsule; Swift's `NexdoGradientButtonStyle` is the save gradient. Contact and business variants and the queue checked; "Choose a business" not tapped. Light and dark |
 
-### Not reached in this run
+### Summary
 
-Stopped at the user's request after group 3 and resumed: see the rows above for what each later group
-reached. Rows never reached are listed in the final report of the run.
+**51 lines covering the 49 §22 rows (Pomodoro's dashboard and timer, and Shopping's store pages, are split;
+a Shopping dark-mode check adds a line): 31 fixed, 14 checked, 6 not reached.** Not
+reached, each for a stated reason: Verify caller ID and Send now (their only entrances are buttons this run
+must not press), Daily Brief and its section pages (need AI data-sharing consent the phone has not given),
+photo identification (sends a camera photo to the server), and the task agent card (no eligible task on
+the account; making one starts a real business search).
+
+**Shared fixes that reach beyond their row:** `Text`'s Android slack no longer overrides caller padding;
+`FittedText` measures explicit lines and keeps the ellipsis; `PopoverItem` gains `icon` and `disabled`;
+`FormToggle` dims only its switch and `IOSSwitch` drops a disabled thumb's elevation; `TaskSymbol` turns
+`arrow.up.left`; `GradientButton` gains the save gradient; `StatusBarScrim` on Today and Calendar; the
+module-root tinted back in the Wellness stack.
+
+**Recurring causes worth knowing:** (1) an outer `.foregroundStyle(ink)` beats `.tint`, so most plain
+buttons in fixed-light screens are ink, not indigo — found on nine screens; (2) Android `elevation` under a
+translucent card shows through as a lighter panel; (3) layouts sized for 393–402 pt break at 360 dp (the
+Ask grid, festival region cards, review buttons).
 

@@ -7,7 +7,7 @@ import { Text } from './Text';
 
 const GRADIENT = [brand.nexdoMagenta, brand.nexdoIndigo, brand.nexdoBlue] as const;
 /** `NexdoTheme.saveGradient` (RootView.swift:2201), which `NexdoGradientButtonStyle` draws: blue → indigo → magenta. */
-const SAVE_GRADIENT = [brand.nexdoBlue, brand.nexdoIndigo, brand.nexdoMagenta] as const;
+export const SAVE_GRADIENT = [brand.nexdoBlue, brand.nexdoIndigo, brand.nexdoMagenta] as const;
 
 /**
  * Swift writes `.opacity(0.55)`, but SwiftUI also dims a disabled control on its own, and the two

@@ -1,5 +1,8 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { StyleSheet } from 'react-native';
+
+import { palettes } from '../theme';
 
 import type { Agenda, NexdoTask } from '../api';
 import { useCoordinator, scheduledWork } from '../actions/coordinator';
@@ -251,6 +254,9 @@ describe('the action queue on Today', () => {
     expect(screen.getByTestId('today-actions-next-due').props.accessibilityState).toEqual({ disabled: true });
     expect(screen.getByTestId('today-actions-time')).toHaveTextContent('Due now');
 
+    // The pager and the card are in `ActionGlass` (`.foregroundStyle(Color.nexdoInk)`): their buttons are ink.
+    expect(StyleSheet.flatten(screen.getByText('View all').props.style).color).toBe(palettes.light.ink);
+    expect(StyleSheet.flatten(screen.getAllByText('Dismiss')[0].props.style).color).toBe(palettes.light.ink);
     await fireEvent.press(screen.getByTestId('today-actions-view-all-due'));
     expect(mockPush).toHaveBeenCalledWith('/action/queue');
   });
