@@ -221,7 +221,7 @@ export function MomentConnectSection({ moments }: { moments: ImportantMoment[] }
       ) : (
         <ActivityIndicator style={styles.loading} testID="connect-loading" />
       )}
-      <CallerIDVerificationSheet key={verifyKey} model={model} visible={verifying} onClose={() => setVerifying(false)} />
+      <CallerIDVerificationSheet key={`verify-${verifyKey}`} model={model} visible={verifying} onClose={() => setVerifying(false)} />
       <MomentCallingGuide visible={guide} onClose={() => setGuide(false)} />
     </View>
   );

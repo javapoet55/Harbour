@@ -5,6 +5,7 @@ export { spacing } from './spacing';
 export { typography, textStyles, systemText, inputText, type TextVariant } from './typography';
 export { useTheme, type Theme } from './useTheme';
 export { ElevatedSurface, useElevated } from './elevation';
+export { FixedScheme, useFixedScheme } from './scheme';
 export { stackHeaderOptions } from './navigation';
 export {
   androidBar,

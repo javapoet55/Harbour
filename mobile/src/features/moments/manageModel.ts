@@ -18,6 +18,7 @@ import { isoString, keepTimeOnDay, momentDate, momentDay, parseInstant, zonedIns
 import {
   catalogNext,
   characterCount,
+  defaultChannel,
   fallbackWish,
   greetingHeading,
   greetingMessage,
@@ -157,6 +158,12 @@ export type ManageState = {
   useSuggestion(): void;
   setRecipients(recipients: ManagedRecipient[]): void;
   updateRecipient(key: string, patch: Partial<ManagedRecipient>): void;
+  /**
+   * `saveRecipient(_:replacing:)` (ManageFestivalModel.swift:185-194): replaces the recipient with the
+   * same key (a channel whose address went falls back to the default) or adds a new one, and withdraws
+   * the approval either way.
+   */
+  saveRecipient(recipient: ManagedRecipient): void;
   setError(value: string | null): void;
   setNeedsScheduleConfirmation(value: boolean): void;
   setScheduleCompleted(value: boolean): void;
@@ -553,6 +560,19 @@ export function createManageModel(group: MomentDisplayGroup, deps: ManageDeps): 
       },
       setRecipients: (next) => set({ recipients: next }),
       updateRecipient: (key, patch) => set((state) => ({ recipients: state.recipients.map((recipient) => (recipient.key === key ? { ...recipient, ...patch } : recipient)) })),
+      saveRecipient(recipient) {
+        const state = get();
+        const channels = { ...state.settings.channels };
+        if (state.recipients.some((item) => item.key === recipient.key)) {
+          const current = recipientChannel(state, recipient);
+          if ((current === 'messages' && recipient.phone === '') || (current === 'email' && recipient.email === '')) channels[recipient.key] = defaultChannel(recipient);
+          set({ recipients: state.recipients.map((item) => (item.key === recipient.key ? recipient : item)), settings: { ...state.settings, channels } });
+        } else {
+          channels[recipient.key] = defaultChannel(recipient);
+          set({ recipients: [...state.recipients, recipient], settings: { ...state.settings, channels } });
+        }
+        get().invalidateApproval();
+      },
       setError: (error) => set({ error }),
       setNeedsScheduleConfirmation: (value) => set({ needsScheduleConfirmation: value }),
       setScheduleCompleted: (value) => set({ scheduleCompleted: value }),

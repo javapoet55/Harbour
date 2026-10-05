@@ -2,7 +2,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import * as Crypto from 'expo-crypto';
 import { router, Stack } from 'expo-router';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { ActivityIndicator, Alert, Keyboard, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, Keyboard, Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { useStore } from 'zustand';
 
 import { ownerKeyFor } from '../../actions/persistence';
@@ -13,7 +13,7 @@ import { TodayBackdrop } from '../../components/TodayShell';
 import { FitText } from '../../components/FitText';
 import { IOSSwitch } from '../../components/IOSSwitch';
 import { SegmentRow } from '../../components/SegmentRow';
-import { GlassCapsule, GlassCircle } from '../../components/PushedHeader';
+import { GlassCapsule } from '../../components/PushedHeader';
 import { withAlpha } from '../../components/SignInBackdrop';
 import { androidLabel, androidSeparator, ANDROID_LABEL_GAP, brand, isAndroid, textStyles, useTheme } from '../../theme';
 import {
@@ -25,19 +25,18 @@ import {
   KEYBOARD_DONE_BAR_HEIGHT,
   KeyboardDoneBar,
   MomentCard,
-  MomentConfetti,
   MomentIconTile,
   MomentPrimary,
   MomentSegments,
   MomentSheet,
   Secondary,
   systemColors,
-  title1,
 } from './components';
 import { captureCard, GreetingCardCapture } from './cardCapture';
 import { MomentConnectSection } from './MomentConnectSection';
+import { ScheduleReviewSheet, ScheduleSuccess } from './ScheduleReview';
 import { CARD_NOT_ATTACHED, cardEncoder, encodeCard, encodeSmallerCard } from './cardImage';
-import { momentLabel, sendDayLabel } from './dates';
+import { sendDayLabel } from './dates';
 import { contactChoice, contactFullName, imageStorage, pickContact, validatePickedContacts, type ContactChoice } from './device';
 import { RecipientSheet, type RecipientSheetRequest } from './RecipientSheet';
 import { recordRecipient, updateContactLinks } from './contactLinks';
@@ -45,7 +44,6 @@ import {
   capitalized,
   characterCount,
   maskedAddress,
-  planDate,
   planStatusLabel,
   recipientInitials,
   sortedPlans,
@@ -174,6 +172,7 @@ export function ManageMomentView({ group, onDone }: { group: MomentDisplayGroup;
   const [personalize, setPersonalize] = useState(false);
   const [imageSheet, setImageSheet] = useState(false);
   const [scheduleConfirm, setScheduleConfirm] = useState(false);
+  const [reviewKey, setReviewKey] = useState(0);
   // `momentEditor` (:97): Edit Moment, from the Moment card on Schedule.
   const [momentEditor, setMomentEditor] = useState(false);
   const [momentEditorKey, setMomentEditorKey] = useState(0);
@@ -370,19 +369,20 @@ export function ManageMomentView({ group, onDone }: { group: MomentDisplayGroup;
     const issue = validateSchedule({ settings: current.settings, date: current.sendDate, active: current.active, emailReady: ready, recipients: current.recipients });
     if (issue) current.setError(issue);
     else if (isDirty(current)) current.setError('Save changes first.');
-    else setScheduleConfirm(true);
+    else {
+      // A fresh review each time (`FestivalScheduleReview.init`): the parent re-keys it.
+      setReviewKey((key) => key + 1);
+      setScheduleConfirm(true);
+    }
   };
 
   if (state.scheduleCompleted) {
+    const firstSelected = selected[0];
     return (
       <ScheduleSuccess
-        title={state.title}
         occasion={type}
         plans={state.savedPlans}
-        manage={() => {
-          model.getState().showTab('Schedule');
-          model.getState().setScheduleCompleted(false);
-        }}
+        wish={firstSelected ? { heading: reviewHeading(state, firstSelected), message: deliveryMessage(state, firstSelected) } : null}
         done={onDone}
       />
     );
@@ -978,55 +978,18 @@ export function ManageMomentView({ group, onDone }: { group: MomentDisplayGroup;
       <GreetingCardEditor model={model} visible={imageSheet} onClose={() => setImageSheet(false)} />
       <GreetingCardCapture model={model} />
 
-      <MomentDetailsSheet key={momentEditorKey} model={model} visible={momentEditor} onClose={() => setMomentEditor(false)} />
+      <MomentDetailsSheet key={`details-${momentEditorKey}`} model={model} visible={momentEditor} onClose={() => setMomentEditor(false)} />
 
-      {/* `confirmation` (:183-215) */}
-      <MomentSheet plain visible={scheduleConfirm} title="" onRequestClose={() => setScheduleConfirm(false)} right={{ title: 'Cancel', onPress: () => setScheduleConfirm(false), testID: 'confirm-cancel' }} testID="schedule-confirm-sheet">
-        <ScrollView contentContainerStyle={styles.confirm}>
-          <Text style={[textStyles.largeTitle, styles.bold, { color: theme.colors.label }]}>Review schedule</Text>
-          {selected.length === 1 && selected[0] ? (
-            <>
-              <Text style={[title1, styles.bold, { color: theme.colors.label }]}>{reviewHeading(state, selected[0])}</Text>
-              <Text style={[textStyles.body, { color: theme.colors.label }]}>{deliveryMessage(state, selected[0])}</Text>
-            </>
-          ) : (
-            <Text style={[title1, styles.bold, { color: theme.colors.label }]}>{state.title}</Text>
-          )}
-          <Text style={[textStyles.body, { color: theme.colors.label }]}>{momentLabel(state.sendDate, state.zone)}</Text>
-          {selected.map((recipient) => (
-            <View key={recipient.key}>
-              <Text style={[headline, { color: theme.colors.label }]}>{recipient.name}</Text>
-              {selected.length > 1 ? (
-                <>
-                  <Text style={[headline, { color: theme.colors.label }]}>{reviewHeading(state, recipient)}</Text>
-                  <Text style={[textStyles.body, { color: theme.colors.label }]}>{deliveryMessage(state, recipient)}</Text>
-                </>
-              ) : null}
-              <Secondary>
-                {recipientChannel(state, recipient) === 'email' && state.settings.automatic[recipient.key] === true
-                  ? 'Email · Automatic send'
-                  : recipientChannel(state, recipient) === 'messages'
-                    ? 'Messages · Will be sent by you'
-                    : 'Manual delivery · Will be sent by you'}
-              </Secondary>
-            </View>
-          ))}
-          <Text style={[textStyles.body, { color: theme.colors.label }]}>You are confirming this schedule for all selected contacts. Recipients do not need to confirm.</Text>
-          {selected.some((recipient) => recipientChannel(state, recipient) === 'messages') ? (
-            <Text style={[textStyles.subheadline, { color: theme.colors.secondaryLabel }]}>
-              At the scheduled time, we’ll remind you to open the prepared wish and tap Send in Messages. Nexdo does not send Messages automatically.
-            </Text>
-          ) : null}
-          <MomentPrimary
-            title="Confirm Schedule"
-            onPress={() => {
-              setScheduleConfirm(false);
-              void model.getState().schedule();
-            }}
-            testID="confirm-schedule"
-          />
-        </ScrollView>
-      </MomentSheet>
+      {/* `confirmation` → `FestivalScheduleReview` (:272-274, :428-610). The error belongs to the review. */}
+      <ScheduleReviewSheet
+        key={`review-${reviewKey}`}
+        model={model}
+        visible={scheduleConfirm}
+        onClose={() => {
+          setScheduleConfirm(false);
+          model.getState().setError(null);
+        }}
+      />
     </View>
   );
 }
@@ -1142,83 +1105,6 @@ export function ManualRecipientSheet({ visible, onCancel, onSave }: { visible: b
         </FormSection>
       </FormScroll>
     </MomentSheet>
-  );
-}
-
-/**
- * `FestivalScheduleSuccess` (ManageFestivalView.swift:227-261), with the confetti for birthdays,
- * anniversaries and festivals — not for Get Well Soon.
- */
-export function ScheduleSuccess({
-  title,
-  occasion,
-  plans,
-  manage,
-  done,
-}: {
-  title: string;
-  occasion: string;
-  plans: { automaticDelivery: boolean; channel: string; scheduledAtUTC: string; timeZoneID: string }[];
-  manage: () => void;
-  done: () => void;
-}) {
-  const theme = useTheme();
-  const [size, setSize] = useState({ width: 0, height: 0 });
-  const summaries = [
-    ...new Set(
-      plans.map((plan) =>
-        plan.automaticDelivery
-          ? 'Will send automatically by email'
-          : plan.channel === 'messages'
-            ? 'We’ll remind you, the sender, to tap Send in Messages'
-            : 'We’ll remind you, the sender, to deliver your wish',
-      ),
-    ),
-  ].sort();
-  const times = [...new Set(plans.map((plan) => momentLabel(planDate(plan), plan.timeZoneID)))].sort();
-  return (
-    <View style={styles.fill} onLayout={(event) => setSize(event.nativeEvent.layout)} testID="schedule-success">
-      <Stack.Screen
-        options={{
-          title: 'Schedule confirmed',
-          headerBackVisible: false,
-          headerLeft: () => (
-            <Pressable accessibilityRole="button" accessibilityLabel="Back" onPress={manage} hitSlop={6} testID="success-back">
-              <GlassCircle>
-                <Ionicons name="chevron-back" size={24} color={theme.colors.ink} />
-              </GlassCircle>
-            </Pressable>
-          ),
-          headerRight: undefined,
-        }}
-      />
-      <TodayBackdrop />
-      <ScrollView contentContainerStyle={[styles.content, styles.centered]}>
-        <Ionicons name="calendar" size={68} color={theme.colors.link} />
-        <Text style={[textStyles.largeTitle, styles.bold, styles.center, { color: theme.colors.label }]}>{occasion === 'getWellSoon' ? 'Get Well Scheduled' : 'Wishes scheduled'}</Text>
-        <Text style={[textStyles.title2, { color: theme.colors.label }]}>{title}</Text>
-        <View style={styles.stretch}>
-          <MomentCard>
-            <Text style={[headline, { color: theme.colors.label }]} testID="festival-confirmation-recipients">{`For all ${plans.length} selected contact${plans.length === 1 ? '' : 's'}`}</Text>
-            {summaries.map((summary) => (
-              <IconLabel key={summary} icon={summary.startsWith('Will send') ? 'mail' : 'notifications'} title={summary} />
-            ))}
-            {times.map((time) => (
-              <Text key={time} style={[textStyles.body, styles.bold, styles.center, { color: theme.colors.label }]} testID="schedule-confirmed-date">
-                {time}
-              </Text>
-            ))}
-            <Pressable accessibilityRole="button" onPress={manage} style={styles.plainButton} testID="festival-manage-schedule">
-              <Text style={[textStyles.body, { color: theme.colors.link }]}>Manage scheduled wish</Text>
-            </Pressable>
-          </MomentCard>
-        </View>
-        <View style={styles.stretch}>
-          <MomentPrimary title="Done" onPress={done} testID="success-done" />
-        </View>
-      </ScrollView>
-      {['birthday', 'anniversary', 'festival'].includes(occasion) ? <MomentConfetti width={size.width} height={size.height} /> : null}
-    </View>
   );
 }
 
