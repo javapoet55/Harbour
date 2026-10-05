@@ -195,8 +195,9 @@ describe('ImportantMomentsStore', () => {
     expect(reminderStatusText({ reminderStatusLoaded: true, reminderAuthorization: unknown })).toBe("Check notification permission in your phone's Settings");
   });
 
-  it('resolves a notification route to an enabled moment, by its id or an editable plan id, for the same owner only', async () => {
-    const withPlan = moment({ id: 'm2', drafts: [draft({ plans: [plan({ id: 'plan-1' })] })] });
+  // Phase 12 (ImportantMomentsStore.swift:86-98): any moment that owns the tapped id, for the same owner.
+  it('resolves a notification route by moment id or by any of its wishes, for the same owner only', async () => {
+    const withPlan = moment({ id: 'm2', drafts: [draft({ plans: [plan({ id: 'plan-1', status: 'SENT' })] })] });
     const d = deps();
     d.api.snapshot.mockResolvedValue(snapshot({ moments: [moment({ id: 'off', enabled: false }), withPlan] }));
     const store = createMomentsStore(d);
@@ -206,12 +207,36 @@ describe('ImportantMomentsStore', () => {
     expect(store.getState().route).toBeNull();
     store.getState().receiveRoute('plan-1', 'hash-u');
     store.getState().resolveRoute();
+    // A sent wish still opens: the tap is for that wish, whatever its state.
     expect(store.getState().route?.id).toBe('m2');
+    expect(store.getState().routedPlanID).toBe('plan-1');
     store.getState().clearRoute();
+    // A disabled moment opens too; Swift no longer skips it.
     store.getState().receiveRoute('off', 'hash-u');
     await store.getState().refresh();
-    expect(store.getState().route).toBeNull();
+    expect(store.getState().route?.id).toBe('off');
     expect(store.getState().pendingRoute).toBeNull();
+  });
+
+  it('opens Important Moments on its own when the tapped moment is gone', async () => {
+    const d = deps();
+    d.api.snapshot.mockResolvedValue(snapshot({ moments: [moment({ id: 'other' })] }));
+    const store = createMomentsStore(d);
+    await store.getState().activate('u');
+    store.getState().receiveRoute('deleted', 'hash-u');
+    store.getState().resolveRoute();
+    expect(store.getState()).toMatchObject({ route: null, showingInbox: true, pendingRoute: null });
+    store.getState().clearInbox();
+    expect(store.getState().showingInbox).toBe(false);
+  });
+
+  it('keeps the tap until the snapshot has loaded', async () => {
+    const store = createMomentsStore(deps());
+    store.setState({ owner: 'hash-u', snapshot: null });
+    store.getState().receiveRoute('m', 'hash-u');
+    store.getState().resolveRoute();
+    expect(store.getState().pendingRoute).toEqual({ id: 'm', owner: 'hash-u' });
+    expect(store.getState().showingInbox).toBe(false);
   });
 });
 

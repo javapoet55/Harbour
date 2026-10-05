@@ -17,7 +17,7 @@ import { ownerKeyFor } from '../../actions/persistence';
 import { TaskActionError } from '../../actions/errors';
 import { alertNotificationsOff } from '../../lib/notificationPermission';
 import { isoString } from './dates';
-import { displayGroups, planEditable, sortedPlans, type MomentDisplayGroup } from './domain';
+import { displayGroups, sortedPlans, type MomentDisplayGroup } from './domain';
 import type { ManageModel } from './manageModel';
 import {
   clearMomentNotifications,
@@ -68,6 +68,13 @@ export type MomentsState = {
   route: ImportantMoment | null;
   /** `MomentNotificationRoute.shared.pending` / `.owner`. */
   pendingRoute: { id: string; owner: string } | null;
+  /** `routedPlanID` (Phase 12): the tapped id, so the wish that was tapped is the one opened. */
+  routedPlanID: string | null;
+  /**
+   * `showingNotificationInbox` (Phase 12): the tapped moment is gone, so Important Moments opens on its
+   * own (with Close) instead of the tap doing nothing.
+   */
+  showingInbox: boolean;
   owner: string | null;
   generation: number;
 
@@ -86,6 +93,7 @@ export type MomentsState = {
   receiveRoute: (id: string, owner: string) => void;
   resolveRoute: () => void;
   clearRoute: () => void;
+  clearInbox: () => void;
   setError: (error: string | null) => void;
 };
 
@@ -137,13 +145,15 @@ export function createMomentsStore(deps: MomentsDeps) {
       enablingReminders: false,
       route: null,
       pendingRoute: null,
+      routedPlanID: null,
+      showingInbox: false,
       owner: null,
       generation: 0,
 
       async activate(userId) {
         const key = userId === null ? null : await deps.ownerKey(userId);
         if (get().owner !== key) {
-          set((state) => ({ owner: key, generation: state.generation + 1, snapshot: null, route: null, error: null, lastSynced: null }));
+          set((state) => ({ owner: key, generation: state.generation + 1, snapshot: null, route: null, routedPlanID: null, showingInbox: false, error: null, lastSynced: null }));
           await deps.clearNotifications().catch(() => undefined);
         }
         if (key !== null) await get().refresh();
@@ -277,20 +287,29 @@ export function createMomentsStore(deps: MomentsDeps) {
         set({ pendingRoute: { id, owner } });
       },
 
+      /**
+       * `resolveRoute()` (ImportantMomentsStore.swift:86-98), Phase 12. Waits for a signed-in owner and a
+       * loaded snapshot — a cold launch or foreground refresh may still be loading, and the tap must not
+       * be consumed early. The tapped id is kept, and the moment that owns it (as a moment, or one of its
+       * wishes in any state) is opened; when there is none, Important Moments opens on its own.
+       */
       resolveRoute() {
         const { pendingRoute, owner, snapshot } = get();
-        if (!pendingRoute || pendingRoute.owner !== owner) return;
-        set({ pendingRoute: null });
-        const moment = (snapshot?.moments ?? []).find(
-          (item) =>
-            item.enabled &&
-            (item.id === pendingRoute.id || item.drafts.some((draft) => (draft.plans ?? []).some((plan) => plan.id === pendingRoute.id && planEditable(plan)))),
-        );
+        if (!pendingRoute || owner === null || pendingRoute.owner !== owner) return;
+        if (snapshot === null) return;
+        const id = pendingRoute.id;
+        set({ pendingRoute: null, routedPlanID: id });
+        const moment = snapshot.moments.find((item) => item.id === id || item.drafts.some((draft) => (draft.plans ?? []).some((plan) => plan.id === id)));
         if (moment) set({ route: moment });
+        else set({ showingInbox: true });
       },
 
       clearRoute() {
         set({ route: null });
+      },
+
+      clearInbox() {
+        set({ showingInbox: false });
       },
 
       setError(error) {

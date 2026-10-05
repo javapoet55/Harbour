@@ -42,7 +42,7 @@ import {
 } from '../../../src/features/moments/domain';
 import { MenuPicker } from '../../../src/features/moments/form';
 import { momentsStore, useMomentList, useMoments } from '../../../src/features/moments/store';
-import { routedDestination } from '../../../src/features/moments/useMomentsLifecycle';
+import { INBOX, routedDestination } from '../../../src/features/moments/useMomentsLifecycle';
 import { brand, linearGradientStops, textStyles, useTheme } from '../../../src/theme';
 
 const GRADIENT = linearGradientStops([brand.nexdoMagenta, brand.nexdoIndigo, brand.nexdoBlue]);
@@ -71,7 +71,7 @@ function manageHref(group: MomentDisplayGroup) {
  */
 export default function ImportantMomentsScreen() {
   const theme = useTheme();
-  const { routed } = useLocalSearchParams<{ routed?: string }>();
+  const { routed, plan: routedPlan } = useLocalSearchParams<{ routed?: string; plan?: string }>();
   const moments = useMomentList();
   const error = useMoments((state) => state.error);
   const loading = useMoments((state) => state.loading);
@@ -99,12 +99,13 @@ export default function ImportantMomentsScreen() {
 
   const routedOnce = useRef(false);
   useEffect(() => {
-    if (!routed || routedOnce.current) return;
+    // The inbox (`routed=inbox`) is the list itself, with Close: nothing to push.
+    if (!routed || routed === INBOX || routedOnce.current) return;
     const moment = moments.find((item) => item.id === routed);
     if (!moment) return;
     routedOnce.current = true;
-    router.push(routedDestination(moment, moments) as never);
-  }, [moments, routed]);
+    router.push(routedDestination(moment, moments, routedPlan) as never);
+  }, [moments, routed, routedPlan]);
 
   const displayed = useMemo(() => displayedMoments(moments, { tab, filter, search }, now), [moments, tab, filter, search, now]);
   const plans = useMemo(() => tabPlans(sortedPlans(moments), displayed, { tab, deliveryFilter }), [moments, displayed, tab, deliveryFilter]);

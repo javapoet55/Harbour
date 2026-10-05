@@ -6,7 +6,9 @@ import { DISMISS_ACTION_IDENTIFIER } from '../../../actions/notifications';
 import { emailCallbackTicket } from '../device';
 import { momentsStore } from '../store';
 import { draft, moment, plan, settings } from '../testFixtures';
-import { handleMomentNotification, routedDestination } from '../useMomentsLifecycle';
+import { act, render } from '@testing-library/react-native';
+
+import { handleMomentNotification, INBOX, routedDestination, useMomentsLifecycle } from '../useMomentsLifecycle';
 
 describe('Gmail callback deep link', () => {
   it('returns the ticket only from nexdo://moments-email?status=confirm&ticket=…', () => {
@@ -54,5 +56,42 @@ describe('moment notification routing', () => {
 
     const custom = moment({ id: 'c', type: 'custom' });
     expect(routedDestination(custom, [custom])).toEqual({ pathname: '/wellness/moments/review', params: { id: 'c' } });
+  });
+});
+
+// Phase 12: the wish that was tapped (`MomentRoutedView(planID:)`, ImportantMomentsView.swift:612-626).
+describe('routedDestination with the tapped wish', () => {
+  it('opens the tapped wish even when another one is editable, else falls back as before', () => {
+    const both = moment({ id: 'm', drafts: [draft({ plans: [plan({ id: 'editable' }), plan({ id: 'sent', status: 'SENT' })] })] });
+    expect(routedDestination(both, [both], 'sent')).toEqual({ pathname: '/wellness/moments/wish', params: { planId: 'sent' } });
+    expect(routedDestination(both, [both], 'missing')).toEqual({ pathname: '/wellness/moments/wish', params: { planId: 'editable' } });
+  });
+});
+
+describe('useMomentsLifecycle opens what a tap resolved to', () => {
+  // `activate` and `refresh` reach the API; the route effects are what is under test.
+  beforeEach(() => {
+    mockPush.mockClear();
+    jest.spyOn(momentsStore.getState(), 'activate').mockResolvedValue(undefined);
+  });
+  afterEach(() => jest.restoreAllMocks());
+
+  function Host() {
+    useMomentsLifecycle('u');
+    return null;
+  }
+
+  it('opens the tapped wish over Important Moments', async () => {
+    await render(<Host />);
+    await act(async () => momentsStore.setState({ route: moment({ id: 'm' }), routedPlanID: 'p9' }));
+    expect(mockPush).toHaveBeenCalledWith({ pathname: '/wellness/moments', params: { routed: 'm', plan: 'p9' } });
+    expect(momentsStore.getState().route).toBeNull();
+  });
+
+  it('opens Important Moments on its own when the moment is gone', async () => {
+    await render(<Host />);
+    await act(async () => momentsStore.setState({ showingInbox: true }));
+    expect(mockPush).toHaveBeenCalledWith({ pathname: '/wellness/moments', params: { routed: INBOX } });
+    expect(momentsStore.getState().showingInbox).toBe(false);
   });
 });
