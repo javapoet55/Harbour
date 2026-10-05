@@ -2435,6 +2435,30 @@ needed filter and `emailSubject` already matched. **All 10 fixed in Windows part
   `profile` (Account) destinations that no card or button opens (`WellnessChooserView.swift:10`, `:57-59`).
   Not built in RN; delete them in Swift or add their cards.
 
+- **The phone check always says "call", whatever the server does.** The confirm page reads "First
+  we'll call it once and read out a 6-digit code.", the button "Call me with a code", and the notice
+  "Calling … now. Answer to hear your 6-digit code." (`CalorieTrackerView.swift:590-595`). The server sends
+  the code by voice or SMS (`NUTRITION_PHONE_CODE_CHANNEL`, returned as `channel`), and for a number that is
+  already verified answers `sent: false, alreadyVerified: true` without calling
+  (`src/server/nutrition/settings.ts:90`, `:113`); Swift ignores both, shows "Calling…" and the code field.
+  RN copies Swift.
+- **"Call me now to try it" always says "Calling you now."** `callNow()` decodes `CallStarted` and drops
+  its `status` (`CalorieTrackerView.swift:164-167`, `:643-644`); the server answers 202 with `cancelled`
+  when calls are off, or `failed` / `not_claimed`. RN copies Swift.
+- **Editing a logged food wipes its nutrients.** The editor's Save always sends `kcal`, even when only the
+  name or meal changed (`CalorieTrackerView.swift:905`), and the server treats any `kcal` as a manual
+  correction: source MANUAL and every macro and micronutrient set to null (`src/server/nutrition/log.ts:91`).
+  Renaming "Salmon" to "Grilled salmon" loses its protein, fat and vitamin D. Swift should send `kcal` only
+  when it changed, or the server keep nutrients when the value is the same.
+- **"This week" means the last seven days in the insight.** The insight's copy says "this week" ("Log N more
+  days this week…", "… is running low this week", `src/server/nutrition/insights.ts:37`, `:65`) but it is
+  computed over the 7 days ending on the date (`:31`, `:86`), while the summary and the Insights page's
+  "This Week" are the Monday–Sunday week. On a Wednesday the two disagree.
+- **The Calorie Tracker guide promises features the tracker does not have.** "Quickly add what you eat by
+  search, scan, or voice" and "Choose a goal like maintain, lose, or gain" (`WellnessModuleGuide.swift:32-33`):
+  there is no food search, barcode scan or in-app voice entry, and no maintain / lose / gain choice — only a
+  daily calorie number. Copied unchanged.
+
 ### Windows part 2: keep-awake, time entry, Pomodoro sound
 
 Full suite after part 2: 126 suites, 1,940 tests passing (28 new); `tsc --noEmit` and eslint clean.
@@ -2499,3 +2523,38 @@ card reaches them: the chooser's `insights` and `profile` destinations.
 on during an unpaused focus; it needs no Android permission. Notifications use the existing
 expo-notifications setup and `reminders` channel. The 28 cut images in `assets/wellness/` total 788 KB;
 `pomodoro-clock` was not copied because nothing in Swift draws it.
+
+### Run D: Calorie Tracker (Windows)
+
+Built from `ios/App/CalorieTrackerView.swift` into `app/wellness/calories.tsx`, replacing Run C's
+placeholder, on the part 1 Nutrition API and hooks; no captures for it were in
+`mobile/docs/reference/ios/` yet. Full suite after Run D: 135 suites, 2,017 tests passing (16 new);
+`tsc --noEmit` and eslint clean.
+
+| Page (Swift `Page`) | Title | Built as |
+| --- | --- | --- |
+| `intro` | Create Agent | Set Up Agent, "Go to my dashboard" / "Explore sample dashboard", Learn more |
+| `time` | Daily Food Check-in | Steps; "When should NexDo call you?" — `ClockField` (12-hour, form row), time zone, Repeat every day, Agent voice; "If I don’t answer" |
+| `goals` | Daily Food Check-in | Daily calorie goal (500–5,000 in 50s), Macro Targets, Key Nutrients (Optional), Daily insight (live), "↺ Restore sample values"; Next clamps every goal to 1–10,000 |
+| `confirm` | Review & Confirm | Summary; live: phone number, Change, "Call me with a code", Verify, "Turn On Daily Calls", "Save without calls"; sample: "Preview Activation", "Maybe later" |
+| `ready` | Daily Check-in / Agent Preview | "All Set!", "What happens next?", "View Nutrition Dashboard", "Call me now to try it" (live), "Edit setup" |
+| `dashboard` | Nutrition | Today / Week / Month; date selector; the daily insight card with its one action and "Not now" / "Got it"; Today ring and cards; review link; Week (Mon–Sun, from the server) and Month bars; macros; Key Nutrients with "View Insights"; "View Food Log", "Manage daily check-in", "Pause daily calls" |
+| `insights` | Nutrition Insights | Insights / Recommendations; This Week (live, the server's Monday–Sunday week) or Nutrient Gaps (sample); Food Ideas into the editor; "Open Food Log" |
+| `log` | Today’s Food Log | Meals with their totals; rows with the call icon, "Looks right", Edit and remove; total; "Add Food" |
+| food editor (sheet) | Add Food / Edit Food | Food name, Calories (0–5,000), Meal; Cancel and Add / Save. Swift's editor has no Delete — a row's minus button removes |
+
+**How it works.** The pages are Swift's own `page` / `history` state under one header (Back pops, Back on
+the first page closes), not a navigation stack. `src/features/nutrition/useCalorieStore.ts` is
+`CalorieStore`: the part 1 query hooks when live, loading what Swift's `refresh()` loads (the day; the
+insight only for today on Today; the summary for Week / Month and the week on Insights), and local sample
+data when not. With calls already on, the tracker opens on the dashboard, as Swift's `start()`.
+
+**Live and sample.** Live is the signed-in account, as `CalorieTrackerView(api: model.profile == nil ? nil
+: …)`; the chooser card and its guide's "Got it!" open it (wired in Run C, now the real screen). The sample
+preview — the same pages with sample data and labels, saving nothing — is Swift's DEBUG
+`-calorie-design-preview`: development builds open it at `nexdo:///wellness/calories?preview=1`.
+
+**Native modules and permissions: none new.** Charts and the ring are views, as in Run C; the "All Set!"
+checkmark uses the already-installed masked view. One image, `assets/wellness/calorie-agent.png` (31 KB),
+cut from `calorie-design-pack`; `nutrition-detail-pack` is Shopping Alternatives' and was not copied.
+Deviations are in `mobile/docs/android-polish.md` §22; Run C's tap-instead-of-drag chart note is §21.
