@@ -33,6 +33,8 @@ export const queryKeys = {
   calendar: {
     all: () => ['calendar'] as const,
     connections: () => ['calendar', 'connections'] as const,
+    /** Event Details (CalendarEventDetailsView.swift:103), per account. */
+    event: (ownerId: string, id: string) => ['calendar', 'event', ownerId, id] as const,
   },
   assistant: {
     all: () => ['assistant'] as const,
