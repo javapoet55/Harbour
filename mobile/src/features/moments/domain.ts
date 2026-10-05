@@ -1,6 +1,6 @@
 import type { MessageComposeOutcome } from '../../actions/composers';
 import type { FestivalCatalogEntry, ImportantMoment, MomentInput, PlanAction, WishDeliveryPlan, WishDraft } from '../../api/moments';
-import { deviceZone, momentDate, momentDay, parseInstant, shortTimeIn, upcomingGroupFor, zonedInstant, zoneAbbreviation, type UpcomingGroup } from './dates';
+import { deviceZone, momentDate, momentDay, parseInstant, sendDayLabel, shortTimeIn, upcomingGroupFor, zonedInstant, zoneAbbreviation, type UpcomingGroup } from './dates';
 
 /**
  * The pure Important Moments model: `ImportantMoment.swift`, `FestivalManagement.swift`,
@@ -763,4 +763,61 @@ export function scheduleSummaryLabels(plans: WishDeliveryPlan[], locale?: string
   const ordered: string[] = [];
   for (const label of labels) if (!ordered.includes(label)) ordered.push(label);
   return ordered.map((label) => `${labels.filter((item) => item === label).length} scheduled @ ${label}`);
+}
+
+/**
+ * `MomentManagementFilter` (ImportantMoment.swift:198-210): the Manage Moments tabs. A group with
+ * several recipients can sit under more than one, because each recipient has its own stage.
+ */
+export const MANAGEMENT_FILTERS = ['Scheduled', 'Need Review', 'Ready to Schedule'] as const;
+export type ManagementFilter = (typeof MANAGEMENT_FILTERS)[number];
+
+export function managementFilterIncludes(filter: ManagementFilter, group: MomentDisplayGroup): boolean {
+  return group.moments.some((moment) => {
+    switch (filter) {
+      case 'Scheduled':
+        return upcomingDelivery(moment) !== undefined;
+      case 'Need Review':
+        return needsWishReview(moment) || !moment.enabled;
+      case 'Ready to Schedule':
+        return readyToSchedule(moment);
+    }
+  });
+}
+
+/**
+ * `managementDate(_:)` (ManageFestivalView.swift:18-22): the latest of each recipient's scheduled send,
+ * or its occasion when nothing is scheduled.
+ */
+export function managementDate(group: MomentDisplayGroup, now: number = Date.now()): number {
+  const dates = group.moments.map((moment) => {
+    const plan = upcomingDelivery(moment);
+    return plan ? planDate(plan) : momentDate(moment.nextOccurrence, moment.timeZoneID, now);
+  });
+  return dates.length === 0 ? -Infinity : Math.max(...dates);
+}
+
+/** `groups` (ManageFestivalView.swift:9-17): non-archived groups, LATEST first, then by id. */
+export function managementGroups(moments: ImportantMoment[], now: number = Date.now()): MomentDisplayGroup[] {
+  return displayGroups(moments.filter((moment) => !isArchived(moment))).sort((left, right) => {
+    const a = managementDate(left, now);
+    const b = managementDate(right, now);
+    return a === b ? (left.id < right.id ? -1 : left.id > right.id ? 1 : 0) : b - a;
+  });
+}
+
+/**
+ * The date lines on a Manage Moments row (ManageFestivalView.swift:61-69): "Scheduled: Tue, Oct 6,
+ * 2026" for a recipient with a wish on the way, "Date: …" otherwise, each distinct line once.
+ */
+export function managementDateLabels(group: MomentDisplayGroup, now: number = Date.now()): string[] {
+  const labels: string[] = [];
+  for (const moment of group.moments) {
+    const plan = upcomingDelivery(moment);
+    const label = plan
+      ? `Scheduled: ${sendDayLabel(planDate(plan), plan.timeZoneID)}`
+      : `Date: ${sendDayLabel(momentDate(moment.nextOccurrence, moment.timeZoneID, now), moment.timeZoneID)}`;
+    if (!labels.includes(label)) labels.push(label);
+  }
+  return labels;
 }
