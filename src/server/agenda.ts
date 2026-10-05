@@ -43,7 +43,7 @@ export async function listDisplayEventsInRange(userId: string, from: Date, to: D
   if (!events.length) return events;
   const externalIds = events.flatMap((event) => event.externalId ? [event.externalId] : []);
   const linked = await db.task.findMany({
-    where: { userId, OR: [{ calendarEventId: { in: events.map((event) => event.id) } }, ...(externalIds.length ? [{ externalEventId: { in: externalIds } }] : [])] },
+    where: { userId, OR: [{ calendarEventId: { in: events.map((event) => event.id) } }, ...(externalIds.length ? [{ calendarEventId: null, externalEventId: { in: externalIds } }] : [])] },
     select: { id: true, title: true, status: true, priority: true, startAt: true, dueAt: true, durationMin: true, deletedAt: true, calendarEventId: true, externalEventId: true },
   });
   if (!linked.length) return events;
