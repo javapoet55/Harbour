@@ -27,7 +27,9 @@ export function useShoppingOffers(listId: string | null | undefined, { poll = fa
     queryFn: () => shoppingOffersApi.offers(listId!),
     enabled: owner !== '' && !!listId,
     refetchInterval: poll ? MINUTE : false,
-    retry: poll ? false : undefined,
+    // Neither retries: the poll ignores a failure until the next minute, and the offers screen shows it
+    // at once with Retry (ShoppingOffersView.swift:51, :89).
+    retry: false,
   });
 }
 

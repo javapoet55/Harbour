@@ -250,3 +250,36 @@ export const shoppingOffersApi = {
   storeHours: (placeId: string, client: ApiClient = getApi()) =>
     client.get<ShoppingStoreHours>(`/api/shopping/stores/hours?placeId=${encodeURIComponent(placeId)}`),
 };
+
+// ---------------------------------------------------------------------------------------------
+// Phase 12 Run F: stores, store brand, photo identification, recommendations
+
+/** `ShoppingStoreSuggestion` (ShoppingViews.swift:633-641; src/server/shopping/stores.ts:52). */
+export type ShoppingStoreSuggestion = { id: string; name: string; address: string; zip: string; website?: string | null; attributions: string[]; distanceKm?: number | null };
+
+/** `StoreBrandMetadata` (StoreBrandLogo.swift:4-7). */
+export type StoreBrandMetadata = { displayName: string; logoUrl?: string | null };
+
+/** The photo identification answer (src/app/api/shopping/recognize/route.ts:11-14). 422 when unsure. */
+export type ShoppingRecognition = { name: string; brand: string; category: string; confidence: 'high' | 'medium' | 'low' };
+
+/** `ShoppingRecommendationRequest` (AskNexdoView.swift `askShopping`; recommendations/route.ts:8). */
+export type ShoppingRecommendationInput = { prompt: string; listName: string; itemNames: string[] };
+
+export const shoppingStoresApi = {
+  /** `findStores()` (ShoppingViews.swift:770-788): `name` always, then `area`, or the coordinates. 30 a minute. */
+  search: (input: { name: string; area?: string; latitude?: number; longitude?: number }, client: ApiClient = getApi()) =>
+    client.post<{ stores: ShoppingStoreSuggestion[] }>('/api/shopping/stores', input),
+
+  /** `StoreBrandLogo.load()` (StoreBrandLogo.swift:68-72), 20 s. */
+  brand: (listId: string, client: ApiClient = getApi()) =>
+    client.get<{ brand: StoreBrandMetadata }>(`/api/shopping/store-brand?listId=${encodeURIComponent(listId)}`, { timeoutMs: 20_000 }),
+
+  /** `POST /api/shopping/recognize` (ShoppingItemEditor.swift:170): a base64 JPEG, consent `true`, 40 s. */
+  recognize: (imageData: string, client: ApiClient = getApi()) =>
+    client.post<ShoppingRecognition>('/api/shopping/recognize', { imageData, consent: true }, { timeoutMs: 40_000 }),
+
+  /** `POST /api/shopping/recommendations`: answers in the assistant's turn shape, 40 s (NexdoApp.swift:810). */
+  recommendations: (input: ShoppingRecommendationInput, client: ApiClient = getApi()) =>
+    client.post<import('./types').AssistantTurn>('/api/shopping/recommendations', input, { timeoutMs: 40_000 }),
+};

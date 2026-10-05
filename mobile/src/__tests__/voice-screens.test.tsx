@@ -138,6 +138,33 @@ describe('the voice screen', () => {
     expect(mockUseVoiceSession).toHaveBeenCalledWith(expect.objectContaining({ scope: 'calendar' }));
   });
 
+  /** `AddTaskByVoiceView(askMode: true, foodContext:)` (AddTaskByVoiceView.swift:64-68), from Item Alternatives. */
+  it('renders the food-mode copy, asks for the food scope with the two products, and closes through its caller', async () => {
+    const onClose = jest.fn();
+    const food = { original: { name: '2% milk' }, alternative: { name: 'Lactose-free milk', brand: 'Stater Bros' } };
+    mockUseVoiceSession.mockReturnValue(voiceSession({ state: { phase: 'toolExecution', muted: false, transcript: '', reply: '', error: null, sessionCreatedTasks: [] } }));
+    await show(<AddTaskByVoiceView askMode foodContext={food} onClose={onClose} />);
+
+    expect(screen.getByText('Ask AI about this item')).toBeTruthy();
+    expect(screen.getByText('Ask about your food')).toBeTruthy();
+    expect(screen.getByText('Compare 2% milk and Lactose-free milk. Ask about nutrition, ingredients, or allergies.')).toBeTruthy();
+    expect(screen.getByText('“Which item has more protein?”')).toBeTruthy();
+    expect(screen.getByTestId('voice-status')).toHaveTextContent('Looking up food information…');
+    expect(mockUseVoiceSession).toHaveBeenCalledWith(expect.objectContaining({ scope: 'food', foodContext: food }));
+    await fireEvent.press(screen.getByTestId('voice-close'));
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it('asks for food consent with Swift’s copy', async () => {
+    useConsent.setState({ ai: false, voice: false });
+    await show(<AddTaskByVoiceView askMode foodContext={{ original: { name: 'A' }, alternative: { name: 'B' } }} onClose={jest.fn()} />);
+    await waitFor(() => expect(Alert.alert).toHaveBeenCalled());
+    expect((Alert.alert as jest.Mock).mock.calls[0].slice(0, 2)).toEqual([
+      'Ask about food by voice?',
+      'Your voice and these two product names are shared with OpenAI. Food lookups use USDA and Open Food Facts. This conversation does not change your shopping list.',
+    ]);
+  });
+
   /**
    * A guard against the Phase 3 stub's invented flow: Swift has no transcript review and no
    * "Add this task" confirmation — the model saves through tool calls.

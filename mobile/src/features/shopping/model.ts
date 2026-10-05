@@ -1,4 +1,4 @@
-import type { GroceryItem, GroceryList, ShoppingAlternative, ShoppingAlternativesResponse, ShoppingInput } from '../../api/shopping';
+import type { GroceryItem, GroceryList, ShoppingAlternative, ShoppingInput } from '../../api/shopping';
 
 /**
  * The pure Shopping model: ios/Sources/NexdoCore/ShoppingList.swift and the logic ShoppingViews.swift
@@ -142,8 +142,9 @@ export function alternativeId(alternative: Pick<ShoppingAlternative, 'name' | 'c
 }
 
 /**
- * `ShoppingAlternative.groceryItem` (ShoppingList.swift:44-46): a new, unchecked item with no image,
- * whose notes are the alternative's `detail`. `id` is the new item's (Swift: `UUID().uuidString`).
+ * `ShoppingAlternative.groceryItem` (ShoppingList.swift:74-78): a new, unchecked item with no image,
+ * whose notes are the alternative's `detail`, with the source's brand and barcode when it has them.
+ * `id` is the new item's (Swift: `UUID().uuidString`).
  */
 export function alternativeItem(alternative: ShoppingAlternative, id: string): GroceryItem {
   return {
@@ -155,83 +156,15 @@ export function alternativeItem(alternative: ShoppingAlternative, id: string): G
     notes: alternative.detail,
     imageData: null,
     checked: false,
+    ...(alternative.facts?.brand ? { brand: alternative.facts.brand } : {}),
+    ...(alternative.facts?.barcode ? { barcode: alternative.facts.barcode } : {}),
   };
-}
-
-function alternative(name: string, category: string, quantity: string, size: string, reason: string, detail: string): ShoppingAlternative {
-  return { name, category, quantity, size, reason, detail };
-}
-
-/**
- * `ShoppingAlternativesResponse.local(for:)` (ShoppingList.swift:53-75), verbatim: what
- * `ShoppingStore.alternatives(for:)` shows when the request fails for any reason but a lost session.
- * It is the PHONE's list, not the server's fallback (src/server/shopping/alternatives.ts:45-55): the
- * reasons differ in places and the item's own quantity and size are kept.
- */
-export function localAlternatives(item: Pick<GroceryItem, 'name' | 'category' | 'quantity' | 'size'>): ShoppingAlternativesResponse {
-  const text = item.name.toLowerCase();
-  if (text.includes('chicken')) {
-    const size = item.size === '' ? 'lb' : item.size;
-    return {
-      alternatives: [
-        alternative('Chicken breast (skinless)', 'Meat & Seafood', item.quantity, size, 'Lower calorie option', 'Lean cut with less saturated fat'),
-        alternative('Turkey breast', 'Meat & Seafood', item.quantity, size, 'Lean protein', 'Mild flavor and lower in fat'),
-        alternative('Salmon', 'Meat & Seafood', item.quantity, size, 'Omega-3 option', 'Rich flavor and useful nutrients'),
-        alternative('Firm tofu', 'Produce', '1', 'package', 'Plant-based alternative', 'Versatile source of protein'),
-        alternative('Chickpeas', 'Pantry', '2', 'cans', 'High-fiber option', 'Plant-based protein with fiber'),
-      ],
-      tip: 'Try turkey breast for a lean swap with a similar mild flavor.',
-      usedAI: false,
-    };
-  }
-  if (text.includes('milk')) {
-    return {
-      alternatives: [
-        alternative('Low-fat milk', 'Dairy & Eggs', item.quantity, item.size, 'Lower-fat option', 'Similar dairy taste with less fat'),
-        alternative('Lactose-free milk', 'Dairy & Eggs', item.quantity, item.size, 'Lactose-free', 'Dairy milk without lactose'),
-        alternative('Unsweetened oat milk', 'Dairy & Eggs', '1', 'carton', 'Plant-based option', 'Creamy texture without dairy'),
-        alternative('Unsweetened soy milk', 'Dairy & Eggs', '1', 'carton', 'More plant protein', 'Neutral flavor with protein'),
-      ],
-      tip: 'Choose an unsweetened alternative when you want to avoid added sugar.',
-      usedAI: false,
-    };
-  }
-  // `replacingOccurrences(of:"Organic ",with:"")`: every occurrence, case-sensitive.
-  const base = item.name.split('Organic ').join('');
-  return {
-    alternatives: [
-      alternative(`Organic ${base}`, item.category, item.quantity, item.size, 'Organic option', 'A comparable certified-organic choice'),
-      alternative(`Store-brand ${base}`, item.category, item.quantity, item.size, 'Budget-friendly', 'A similar option that may cost less'),
-      alternative(`Family-size ${base}`, item.category, item.quantity, item.size === '' ? 'large pack' : item.size, 'Larger package', 'Useful when you need more servings'),
-    ],
-    tip: `Compare unit prices and package sizes before replacing ${base}.`,
-    usedAI: false,
-  };
-}
-
-/**
- * "Replace with Selected Item" — `ShoppingDetail.replace(_:with:)` (ShoppingViews.swift:344-351): the
- * alternative takes the original's slot, id and checked state. `null` when the original is no longer
- * on the list, where Swift returns without saving.
- */
-export function replacedWithAlternative(list: GroceryList, originalId: string, choice: ShoppingAlternative): GroceryList | null {
-  const index = list.items.findIndex((item) => item.id === originalId);
-  if (index === -1) return null;
-  const original = list.items[index];
-  const items = [...list.items];
-  items[index] = { ...alternativeItem(choice, original.id), checked: original.checked };
-  return { ...list, items };
-}
-
-/** "Add to Cart Instead" — `ShoppingDetail.add(_:)` (ShoppingViews.swift:352): appended as a new item. */
-export function addedAlternative(list: GroceryList, choice: ShoppingAlternative, id: string): GroceryList {
-  return { ...list, items: [...list.items, alternativeItem(choice, id)] };
 }
 
 // ---------------------------------------------------------------------------------------------
 // GroceryArtwork (ShoppingViews.swift:363-402)
 
-export type GroceryAsset = 'onion' | 'milk' | 'banana' | 'tomato' | 'eggs';
+export type GroceryAsset = 'onion' | 'milk' | 'mango' | 'banana' | 'tomato' | 'eggs';
 
 /** `words`: the name lowercased and split on every non-letter. */
 function words(name: string): Set<string> {
@@ -252,10 +185,28 @@ export function groceryAsset(name: string): GroceryAsset | null {
   const set = words(name);
   if (any(set, ['onion', 'onions'])) return 'onion';
   if (set.has('milk')) return 'milk';
+  if (any(set, ['mango', 'mangoes', 'mangos'])) return 'mango';
   if (any(set, ['banana', 'bananas'])) return 'banana';
   if (any(set, ['tomato', 'tomatoes'])) return 'tomato';
   if (any(set, ['egg', 'eggs'])) return 'eggs';
   return null;
+}
+
+const NON_FOOD = new Set(['pump', 'parts', 'accessories', 'graphics', 'ssd', 'motherboard', 'processor', 'mouse', 'mice', 'keyboard', 'computer', 'laptop', 'desktop', 'monitor', 'charger', 'charging', 'cable', 'adapter', 'usb', 'headphones', 'earbuds', 'speaker', 'speakers', 'phone', 'iphone', 'ipad', 'macbook', 'watch', 'tv', 'television', 'camera', 'printer', 'electronics', 'battery', 'batteries', 'car', 'cars', 'automotive', 'motor', 'engine', 'brake', 'brakes', 'tire', 'tires', 'tyre', 'tyres', 'gear', 'gears', 'bearing', 'bearings', 'spark', 'coolant', 'wiper', 'mechanical', 'screw', 'screws', 'bolt', 'bolts', 'wrench', 'detergent', 'soap', 'shampoo', 'cleaner', 'tissue', 'tissues', 'towel', 'towels']);
+const FOOD_CATEGORIES = ['Produce', 'Dairy & Eggs', 'Meat & Seafood', 'Bakery', 'Pantry', 'Frozen', 'Drinks'];
+const FOODS = new Set(['mango', 'mangoes', 'tofu', 'snack', 'snacks', 'fruit', 'vegetable', 'vegetables', 'apple', 'apples', 'banana', 'bananas', 'orange', 'oranges', 'tomato', 'tomatoes', 'potato', 'potatoes', 'onion', 'onions', 'carrot', 'carrots', 'avocado', 'avocados', 'spinach', 'lettuce', 'broccoli', 'berry', 'berries', 'strawberries', 'grapes', 'lemon', 'lime', 'pepper', 'peppers', 'milk', 'egg', 'eggs', 'cheese', 'yogurt', 'butter', 'bread', 'bagel', 'bagels', 'tortilla', 'rice', 'pasta', 'flour', 'sugar', 'salt', 'olive', 'canola', 'sauce', 'beans', 'lentils', 'cereal', 'oats', 'honey', 'chicken', 'beef', 'pork', 'salmon', 'fish', 'shrimp', 'turkey', 'coffee', 'tea', 'juice', 'soda', 'water', 'nuts', 'almonds', 'chocolate', 'chips', 'crackers', 'cookies', 'soup']);
+
+/**
+ * `supportsFoodAlternatives` (ios/Sources/NexdoCore/ShoppingList.swift:40-50): "Nutrition alternatives
+ * apply to food, not every item stored in a shopping list." The name is checked first — "older parsers
+ * can classify “Apple mouse” as produce" — then the food categories, then common foods under Other.
+ */
+export function supportsFoodAlternatives(item: Pick<GroceryItem, 'name' | 'category'>): boolean {
+  const set = words(item.name);
+  if ([...set].some((word) => NON_FOOD.has(word))) return false;
+  if (FOOD_CATEGORIES.includes(item.category)) return true;
+  if (item.category !== 'Other') return false;
+  return [...set].some((word) => FOODS.has(word));
 }
 
 const KEYWORD_EMOJI: [string[], string][] = [

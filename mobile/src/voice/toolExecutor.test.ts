@@ -21,7 +21,7 @@ function task(overrides: Partial<NexdoTask> & { id: string }): NexdoTask {
 }
 
 function build({
-  scope = 'general' as 'general' | 'calendar',
+  scope = 'general' as 'general' | 'calendar' | 'food',
   currentOwnerId = () => OWNER as string | undefined,
   consent = () => ({ ai: true, voice: true }),
   resolve = jest.fn(),
@@ -276,5 +276,35 @@ describe('the contact tools', () => {
     // The token is gone, so it searches again rather than reusing a stale contact.
     expect(resolve).toHaveBeenCalled();
     expect(result.prepared).toBeUndefined();
+  });
+});
+
+/** The food scope: Item Alternatives' "Ask AI about this item" (VoiceToolExecutor.swift:15, :34-36). */
+describe('the food scope', () => {
+  it('only looks food up', async () => {
+    const { executor } = build({ scope: 'food' });
+    await expect(executor.execute({ name: 'create_task', args: { title: 'x' }, sessionId: 's1', callId: 'c1' })).resolves.toEqual({
+      success: false,
+      error: 'This conversation only looks up food information.',
+    });
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it('posts lookup_food with the food scope and returns the facts as they came', async () => {
+    mockRequest.mockResolvedValue({ success: true, facts: { source: 'USDA', name: 'Milk' }, task: { id: 'ignored' } });
+    const { executor, queryClient } = build({ scope: 'food' });
+    const answer = await executor.execute({ name: 'lookup_food', args: { query: 'milk' }, sessionId: 's1', callId: 'c1' });
+    expect(answer).toEqual({ success: true, facts: { source: 'USDA', name: 'Milk' } });
+    expect(mockRequest.mock.calls[0][1].body).toEqual({ consent: true, scope: 'food', sessionId: 's1', callId: 'c1', name: 'lookup_food', arguments: { query: 'milk' } });
+    expect(queryClient.getQueryData<{ tasks: unknown[] }>(queryKeys.tasks.all())?.tasks).toEqual([]);
+  });
+
+  it('turns a failed lookup into Swift’s instruction to the model', async () => {
+    mockRequest.mockRejectedValue(new Error('offline'));
+    const { executor } = build({ scope: 'food' });
+    await expect(executor.execute({ name: 'lookup_food', args: {}, sessionId: 's1', callId: 'c1' })).resolves.toEqual({
+      success: false,
+      error: 'Food lookup unavailable. Explain the missing information; do not invent product facts.',
+    });
   });
 });

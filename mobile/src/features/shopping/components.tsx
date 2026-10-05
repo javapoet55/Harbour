@@ -11,12 +11,13 @@ import { withAlpha } from '../../components/SignInBackdrop';
 import { Text } from '../../components/Text';
 import { brand, isAndroid, linearGradientStops, useTheme } from '../../theme';
 import { systemColors, type IconName } from '../moments/components';
-import { amountLabel, artworkFor, type GroceryAsset } from './model';
+import { amountLabel, artworkFor, supportsFoodAlternatives, type GroceryAsset } from './model';
 
 /** The five bundled illustrations (ios/Media.xcassets/grocery-*.imageset), downscaled from 1254 px to 256 px: they draw at 44 dp, 176 px even at xxxhdpi. */
 export const GROCERY_ASSETS: Record<GroceryAsset, ImageSourcePropType> = {
   banana: require('../../../assets/grocery/banana.png'),
   eggs: require('../../../assets/grocery/eggs.png'),
+  mango: require('../../../assets/grocery/mango.png'),
   milk: require('../../../assets/grocery/milk.png'),
   onion: require('../../../assets/grocery/onion.png'),
   tomato: require('../../../assets/grocery/tomato.png'),
@@ -159,16 +160,19 @@ export function GroceryRow({
           ) : null}
         </View>
       </Pressable>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={`Show alternatives for ${row.name}`}
-        disabled={readOnly}
-        onPress={onAlternatives}
-        style={styles.star}
-        testID={`grocery-star-${row.id}`}
-      >
-        <Ionicons name="star" size={19} color={brand.nexdoBlue} />
-      </Pressable>
+      {/* Food only (`if row.supportsFoodAlternatives`, ShoppingViews.swift:855). */}
+      {supportsFoodAlternatives(row) ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Show alternatives for ${row.name}`}
+          disabled={readOnly}
+          onPress={onAlternatives}
+          style={styles.star}
+          testID={`grocery-star-${row.id}`}
+        >
+          <Ionicons name="star" size={19} color={brand.nexdoBlue} />
+        </Pressable>
+      ) : null}
     </View>
   );
 }
@@ -217,7 +221,8 @@ const SWIPE_ACTION = 82;
  * `PanResponder` and `Animated`, so it needs no native module. Screen readers get it as the "Delete"
  * custom action, the way iOS offers a swipe action to VoiceOver.
  */
-type SwipeProps = { children: ReactNode; onDelete: () => void; testID?: string };
+/** `disabled`: `.disabled(readOnly)` on the action (ShoppingViews.swift:320) — a completed list's rows do not swipe. */
+type SwipeProps = { children: ReactNode; onDelete: () => void; disabled?: boolean; testID?: string };
 
 /**
  * A class, because the recogniser is created once and keeps mutable gesture state (the row width, the
@@ -236,7 +241,7 @@ export class SwipeToDelete extends Component<SwipeProps, { revealed: boolean }> 
   };
 
   private responder = PanResponder.create({
-    onMoveShouldSetPanResponder: (_, gesture) => Math.abs(gesture.dx) > 10 && Math.abs(gesture.dx) > Math.abs(gesture.dy) * 1.5,
+    onMoveShouldSetPanResponder: (_, gesture) => !this.props.disabled && Math.abs(gesture.dx) > 10 && Math.abs(gesture.dx) > Math.abs(gesture.dy) * 1.5,
     onPanResponderGrant: () => this.setState({ revealed: true }),
     onPanResponderMove: (_, gesture) => this.offset.setValue(Math.min(0, this.base + gesture.dx)),
     onPanResponderRelease: (_, gesture) => {
@@ -250,12 +255,12 @@ export class SwipeToDelete extends Component<SwipeProps, { revealed: boolean }> 
   });
 
   render() {
-    const { children, onDelete, testID } = this.props;
+    const { children, onDelete, disabled = false, testID } = this.props;
     return (
       <View
-        accessibilityActions={[{ name: 'delete', label: 'Delete' }]}
+        accessibilityActions={disabled ? [] : [{ name: 'delete', label: 'Delete' }]}
         onAccessibilityAction={(event) => {
-          if (event.nativeEvent.actionName === 'delete') onDelete();
+          if (!disabled && event.nativeEvent.actionName === 'delete') onDelete();
         }}
         onLayout={(event) => {
           this.width = event.nativeEvent.layout.width;
@@ -322,8 +327,8 @@ export function StickyActionBar({ children, onHeight, style, testID }: { childre
 }
 
 /**
- * `shoppingActions` (ShoppingViews.swift:312-331): Complete Shopping (gradient) and AI Powered
- * Recommendations (outlined), both disabled while the store is busy. Each label is
+ * `shoppingActions` (ShoppingViews.swift:394-412): Complete Shopping (gradient) and Recommendations
+ * (outlined), both disabled while the store is busy. Each label is
  * `.lineLimit(2).minimumScaleFactor(0.78)`: it wraps between words and shrinks rather than split one.
  */
 export function ShoppingActionBar({ busy, onComplete, onRecommendations, onHeight }: { busy: boolean; onComplete: () => void; onRecommendations: () => void; onHeight?: (height: number) => void }) {
@@ -348,7 +353,7 @@ export function ShoppingActionBar({ busy, onComplete, onRecommendations, onHeigh
       </Pressable>
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel="AI Powered Recommendations"
+        accessibilityLabel="Recommendations"
         accessibilityState={{ disabled: busy }}
         disabled={busy}
         onPress={onRecommendations}
@@ -357,7 +362,7 @@ export function ShoppingActionBar({ busy, onComplete, onRecommendations, onHeigh
       >
         <Ionicons name="sparkles" size={18} color={theme.colors.link} />
         <FittedText containerStyle={styles.actionLabel} minimumFontScale={0.78} numberOfLines={2} style={[styles.actionText, { color: theme.colors.link }]}>
-          AI Powered Recommendations
+          Recommendations
         </FittedText>
       </Pressable>
     </StickyActionBar>
