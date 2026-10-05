@@ -1,6 +1,7 @@
 import type { NexdoTask } from '../api/types';
 import { parseServerDate } from './taskQuery';
 import { detectTaskAction, type TaskActionIntent } from './taskActionDetector';
+import type { TaskActionRecipient } from './actionNeeded';
 import { notificationDate, type TaskAction, type TaskActionStatus } from './todayActionQueue';
 
 /**
@@ -21,6 +22,10 @@ export type StoredTaskAction = TaskAction & {
   context?: string | null;
   /** Epoch ms, set the moment an action enters `executing`. */
   executedAt?: number | null;
+  /** Phase 12 (TaskActionView.swift:264-330): the Google business chosen for this action, fetched fresh by id. */
+  businessCandidateID?: string | null;
+  /** Phase 12: contact details the user typed instead of picking a contact (`TaskActionRecipient`). */
+  manualRecipient?: TaskActionRecipient | null;
 };
 
 /**
