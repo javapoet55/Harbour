@@ -320,7 +320,8 @@ export default function ShoppingDetailScreen() {
             />
             {offersShortcut ? (
               <ShortcutCard
-                color={brand.nexdoIndigo}
+                // nexdoIndigo; the `link` token, so it reads on a dark card on Android.
+                color={theme.colors.link}
                 icon="pricetag-outline"
                 onPress={() => openOffers()}
                 testID="shopping-shortcut-offers"
