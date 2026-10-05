@@ -1,5 +1,6 @@
 import { router, useLocalSearchParams } from 'expo-router';
 
+import { FixedLightStatusBar } from '../../../src/features/wellness/FixedLightStatusBar';
 import { WellnessModuleGuide } from '../../../src/features/wellness/WellnessModuleGuide';
 import { continueToModule } from '../../../src/features/wellness/navigation';
 import type { WellnessModule } from '../../../src/features/wellness/art';
@@ -14,5 +15,10 @@ export default function ModuleGuideScreen() {
   const { kind } = useLocalSearchParams<{ kind?: string }>();
   const module = KINDS.find((item) => item === kind);
   if (!module) return null;
-  return <WellnessModuleGuide kind={module} onContinue={() => void continueToModule(module)} onHome={() => router.back()} />;
+  return (
+    <>
+      <FixedLightStatusBar />
+      <WellnessModuleGuide kind={module} onContinue={() => void continueToModule(module)} onHome={() => router.back()} />
+    </>
+  );
 }

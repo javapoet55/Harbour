@@ -48,11 +48,11 @@ export function useHeaderInset(): number {
   return useContext(HeaderHeightContext) ?? 0;
 }
 
-function plate(theme: Theme) {
+function plate(theme: Theme, scheme: 'light' | 'dark' = theme.scheme) {
   return {
     // Dark: a neutral translucent grey — it reads (40, 40, 42) on a dark sheet and picks up the blue of
     // the Moments backdrop, as the measured plates do.
-    backgroundColor: theme.scheme === 'dark' ? 'rgba(120, 120, 128, 0.2)' : 'rgba(255, 255, 255, 0.78)',
+    backgroundColor: scheme === 'dark' ? 'rgba(120, 120, 128, 0.2)' : 'rgba(255, 255, 255, 0.78)',
     ...(Platform.OS === 'android'
       ? { elevation: 3, shadowColor: 'rgba(61, 41, 240, 0.35)' }
       : { shadowColor: '#3D29F0', shadowOpacity: 0.12, shadowRadius: 8, shadowOffset: { width: 0, height: 3 } }),
@@ -72,9 +72,10 @@ export function GlassBackButton({ tint }: { tint?: string }) {
 }
 
 /** A round glass plate for a trailing icon button (the gear on Important Moments, "…" menus). */
-export function GlassCircle({ children }: { children: ReactNode }) {
+export function GlassCircle({ children, scheme }: { children: ReactNode; scheme?: 'light' | 'dark' }) {
   const theme = useTheme();
-  return <View style={[styles.circle, plate(theme)]}>{children}</View>;
+  // `scheme` pins the plate for a screen drawn in fixed colours (the Wellness guides stay light).
+  return <View style={[styles.circle, plate(theme, scheme)]}>{children}</View>;
 }
 
 /** A glass capsule for a text bar button ("Close", "Cancel", "Done"). */
