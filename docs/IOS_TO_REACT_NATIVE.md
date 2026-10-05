@@ -2319,16 +2319,16 @@ wall time a DST change skips, where Swift moves it forward (the server refuses i
 - The Today Action Needed card should resolve through `resolveActionNeeded`; `TodayActions.tsx` still
   derives channels from the resolved contact only.
 
-**Native modules the screens will need:** `expo-keep-awake` for Pomodoro's "Keep screen awake" (already
-in `node_modules` as a dependency of `expo`, but not declared; `npx expo install expo-keep-awake`); a
-time picker for Nutrition, the shopping email and connect calls (`@react-native-community/datetimepicker`)
-unless the screens use a JavaScript wheel; and a bundled sound asset for the Pomodoro chime (expo-audio is
-already in). Everything else uses modules already installed: expo-notifications (Pomodoro alerts),
-expo-web-browser (Gmail connect), expo-linking (Maps links).
+**Native modules the screens will need:** none beyond what is installed (updated in part 2).
+`expo-keep-awake` is now declared; time entry reuses the existing `ClockField`, so no native time picker;
+and Swift has no Pomodoro sound file to bundle (see "Windows part 2" below). The rest uses modules already
+installed: expo-notifications (Pomodoro alerts), expo-web-browser (Gmail connect), expo-linking (Maps
+links).
 
 ### Gaps in items the team already added
 
-Compared against Swift as of `fac34ed` / `263190a`. **Not fixed in this run.**
+Compared against Swift as of `fac34ed` / `263190a`. The shopping email gaps wait for the Mac's captures;
+the signup and Moments gaps are ticked as fixed in Windows part 2.
 
 **1. Weekly shopping email** (`app/(tabs)/(today)/shopping/email.tsx`, from `ae5d62d`). Swift redesigned
 the screen in `263190a`; RN took only the phone field and the checked-items preview from it.
@@ -2364,40 +2364,84 @@ the screen in `263190a`; RN took only the phone field and the checked-items prev
 - **Tests** cover none of: pickup, unavailable, not connected, blockers, cancelled connect, 409/503,
   edits surviving a reconnect, the entry points.
 
-**2. Signup challenge** (`src/lib/signupChallenge.ts`, from `b6a5844`; Swift unchanged since).
+**2. Signup challenge** (`src/lib/signupChallenge.ts`, from `b6a5844`; Swift unchanged since). **All 7
+fixed in Windows part 2.**
 
-- **Errors.** Swift shows one message for every challenge failure: "Please complete the security check
-  and try again." (`RootView.swift:687-693`). RN shows "Security check unavailable…" or raw
-  network/JSON/timeout errors (`signupChallenge.ts:7-11`).
-- **The config call skips the API client.** A bare `fetch` with a 10 s timeout, bypassing the HTTPS
-  origin check (`signupChallenge.ts:7`); Swift uses `api.request` (`NexdoApp.swift:174-176`).
-- **The challenge URL is string-joined** (`signupChallenge.ts:16`); Swift sets the path on the base URL
-  (`NexdoApp.swift:178-181`).
-- **Button label.** RN shows "Creating Account…" while the browser check is still open (`sign-up.tsx:48`,
-  `:199`); Swift keeps "Create Account" until the register call (`checkingSignup`, `RootView.swift:588`,
-  `:674-686`).
-- **Callback handling.** RN waits 500 ms for a late callback and registers `signup` as a cold-start
-  landing route that discards the token (`oauthCallbacks.ts:26-36`); it parses `nexdo://` with WHATWG
-  `URL`, where other RN callbacks use a regex (`moments/device.ts:339-345`). Not checked on Hermes.
-- **Tests.** No cancel, late callback, non-OK, network or token-less cases; `sign-up.test.tsx` mocks the
-  challenge to `undefined`, so nothing checks that `turnstileToken` reaches `register`.
+- [x] **Errors.** Swift shows one message for every challenge failure: "Please complete the security
+  check and try again." (`RootView.swift:687-693`). RN showed "Security check unavailable…" or raw
+  network/JSON/timeout errors. Fixed in `8ab6157`.
+- [x] **The config call skipped the API client.** Now `getApi().get('/api/auth/signup-config',
+  { signedOutOn401: false })`, as Swift's `api.request(…, treatUnauthorizedAsSignedOut: false)`
+  (`NexdoApp.swift:174-176`). Fixed in `fa50a5d`.
+- [x] **The challenge URL was string-joined.** Now the client's normalised origin plus
+  `/signup-challenge?state=` (`NexdoApp.swift:178-181`). Fixed in `ec02aa0`.
+- [x] **Button label.** The screen runs the check under its own `checking` flag: the button is disabled
+  but reads "Create Account", and "Creating Account…" is only the register call (`checkingSignup`,
+  `RootView.swift:588`, `:672-693`). The check moved out of `useSignUp`, which now takes the token. Fixed in
+  `4b690b7`.
+- [x] **Callback handling.** The callback is parsed as `URLComponents` reads it (host as written, `+` kept,
+  a broken escape is no value), with no WHATWG `URL` (`06e38a4`). The late-callback wait and the
+  cold-start landing route are KEPT as the Android substitution the calendar and Moments email flows also
+  use — the polyfill can report `dismiss` before the redirect lands — but the wait is now the shared
+  `LATE_CALLBACK_MS` (1.5 s) instead of 500 ms, which lost a finished check that redirected a second late
+  (`dadf6e0`). A cold start lands on Sign Up and the next check discards the stale callback: the user
+  starts again, as on iOS when the session dies with the app.
+- [x] **Tests.** Added with the fixes: every failure path, the API client, the URL, `+` and broken escapes,
+  a token-less callback, late and missing callbacks, the label while the check is open, and the token
+  reaching `register`.
 
 **3. Moments uncertain email and Retry** (`moments/wish.tsx`, `src/features/moments/domain.ts`, from
 `871bdb6`, `42360e6`). The UNCERTAIN actions, "Retry after reconnecting", "Check Sent mail", the Action
-needed filter and `emailSubject` match. The gaps are Swift's later `fac34ed` and older differences:
+needed filter and `emailSubject` already matched. **All 10 fixed in Windows part 2**; none was a server bug.
 
-- **Greeting (fac34ed).** Swift treats `,` as a separator and strips a name inside the opening
-  (`MomentGreeting.swift:17`, `:44-52`; server `wish-message.ts`). RN's `SEPARATORS` is still `'!. \n'`
-  (`domain.ts:594`), so "Happy Birthday, Visakan! …" shared to Sam becomes "Happy Birthday, Sam! Happy
-  Birthday, Visakan! …".
-- **Festival re-import (fac34ed).** Swift keys a catalog festival `festival:<slug>` and reuses the saved
-  `groupID` (`MomentEditor.swift:129-135`, `:530-532`); RN uses a random key and a new group
-  (`moments/device.ts:291-298`, `MomentEditorView.tsx:95-124`), so re-importing duplicates.
-- **AWAITING_CONFIRMATION.** Swift's title depends on date and channel ("Scheduled — manual send", "Ready
-  to send/copy/share", `ImportantMoment.swift:41-44`); RN always says "Confirmation required"
-  (`domain.ts:92-93`). The Messages subtitle (`ImportantMomentsView.swift:534`) is missing.
-- **Smaller:** EXPIRED shows `lastError` instead of Swift's fixed text (`:544-546`); no channel icon on
-  the recipient row (`:537`); the UNCERTAIN buttons are both bordered (`:557-561`); `wish.tsx:19` cites
-  old Swift lines.
-- **Tests** cover only "It wasn't sent" (`screens.test.tsx:1083-1091`); not "I found it in Sent mail",
-  Retry, or the comma greeting.
+- [x] **Greeting (fac34ed).** `,` ends an opening and the capitalised name inside it is dropped
+  (`MomentGreeting.swift:17`, `:44-52`): "Happy Birthday, Visakan! …" shared to Sam is now "Happy Birthday,
+  Sam! …". Fixed in `b010d7a`. See "For the team" for one Swift/server difference it exposes.
+- [x] **Festival re-import key (fac34ed).** A catalog festival is keyed `festival:<slug>`
+  (`MomentEditor.swift:530-532`; `festivalSourceKey` in `moments/device.ts`). Fixed in `93323fd`.
+- [x] **Festival re-import group (fac34ed).** Re-importing reuses the saved moment's `groupID`
+  (`MomentEditor.swift:129-135`). Fixed in `72b6e0c`.
+- [x] **AWAITING_CONFIRMATION title.** "Scheduled — manual send" before the send time, then "Ready to send /
+  copy / share" (`ImportantMoment.swift:35-48`), everywhere `planStatusLabel` is used. Fixed in `92bc4ec`.
+- [x] **Messages subtitle** (`ImportantMomentsView.swift:534`). Fixed in `f27f99c`.
+- [x] **EXPIRED** shows Swift's fixed text, other statuses `lastError` (`:544-546`). Fixed in `1e7e0a3`.
+- [x] **Channel icon** on the recipient row: call / mail / person for phone.fill / envelope.fill /
+  person.fill (`:537`). Fixed in `3abb423`.
+- [x] **UNCERTAIN styling.** Secondary footnote prompt, bordered "I found it in Sent mail", plain "It
+  wasn't sent" (`:557-561`). Fixed in `cc46a8d`.
+- [x] **Stale reference.** `wish.tsx` now cites `WishPlanView` at `ImportantMomentsView.swift:519-583`.
+  Comment only, so no test. Fixed in `17512ef`.
+- [x] **Tests.** "I found it in Sent mail" and Retry are covered (`2082895`); they passed before too, the
+  behaviour already matched. The comma greeting is covered by `b010d7a`'s test.
+
+### For the team
+
+- **Swift and the server disagree on the greeting after a dropped name.** Swift trims spaces only
+  (`MomentGreeting.swift:50`, `.whitespaces`); the server's `trimStart()` also removes a line break
+  (`src/server/moments/wish-message.ts`). "Happy Birthday, Visakan!\nHave fun" for Sam is "Happy Birthday,
+  Sam! \nHave fun" on the phones and "Happy Birthday, Sam! Have fun" on the server, which rewrites pending
+  plans, so the preview and the sent text can differ by that line break. RN follows Swift; one side should
+  change.
+
+### Windows part 2: keep-awake, time entry, Pomodoro sound
+
+Full suite after part 2: 126 suites, 1,940 tests passing (28 new); `tsc --noEmit` and eslint clean.
+
+- **`expo-keep-awake` is declared** (`781cab2`; the same 57.0.2 `expo` already pulled in). No screen uses
+  it yet.
+- **Time-only entry: `DateField` cannot do it; reuse `ClockField` instead.** `DateField`
+  (`src/features/moments/form.tsx:461`) always shows the date pill and the month grid; `includeTime` only
+  ADDS a time pill and the hour/minute wheels. It has no `.hourAndMinute` mode — what is missing is an
+  option that hides the date pill and `MonthCalendar` and works on `HH:mm` rather than an instant. The app
+  already has that control: `ClockField` (`src/components/SettingsControls.tsx:361`), built for Account's
+  working hours as Swift's `DatePicker(…, displayedComponents: .hourAndMinute)`, taking and returning
+  `"HH:mm"` — the shape Nutrition's `localTime`, the shopping email's `hour`/`minute` and connect calls'
+  `time` use. **The screens reuse `ClockField`; no native time picker is added.** Two things the screens
+  must handle: it shows the raw `HH:mm` and 24-hour wheels with no AM/PM column, where Swift's compact
+  picker shows the locale's time ("8:00 PM"); and it is styled as an Account settings field, not a Moments
+  form row.
+- **Pomodoro sound: Swift ships no file.** `PomodoroStore.tick()` plays iOS system sound 1005 with
+  `AudioServicesPlaySystemSound(1005)` (`PomodoroStore.swift:70`), and its alerts use the default
+  notification sound (`:133`). Both come from iOS itself, and nothing is bundled in `ios/` (its two `.wav`
+  files are the voice and shopping cues). Nothing was added; `chime` in `src/features/pomodoro/device.ts`
+  stays a no-op until someone picks a sound for Android and iOS.
