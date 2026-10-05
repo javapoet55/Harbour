@@ -2194,19 +2194,19 @@ screens are listed again under "Changed screens".
 | [ ] | Review schedule — **changed** (Send Now) | `ManageFestivalView.swift:428` (`FestivalScheduleReview`, `:448-539`) | Schedule tab → **Schedule Wish** | `schedule` | sheet in `ManageMomentView` (`app/wellness/moments/manage.tsx`) | `moment-schedule-review-v2` |
 | [ ] | Send now — new | `ManageFestivalView.swift:488-536` | Review schedule → **Send Now** | `sendGreetingNow` | sheet in `ManageMomentView` *(to build)* | `moment-send-now-confirm` |
 | [ ] | Schedule confirmed — **changed** | `ManageFestivalView.swift:348` (`:362-386`) | Review → **Confirm Schedule** | — | in `ManageMomentView` (`app/wellness/moments/manage.tsx`) | `moment-schedule-success-v2` |
-| [ ] | My Lists with store logos — **changed** | `ShoppingViews.swift:78` (`:82-136`); `StoreBrandLogo.swift:11` | Wellness → Shopping List → Got it! | `GET /api/shopping`, `GET /api/shopping/store-brand` | `app/wellness/shopping/index.tsx` | `shopping-lists-v2` |
-| [ ] | New List ("Create List & Add Store") — **changed** | `ShoppingViews.swift:142` (`:153-188`) | **Create New List** | `POST /api/shopping` `create` | `NewListSheet` (`src/features/shopping/sheets.tsx`) in `app/wellness/shopping/index.tsx` | `shopping-new-list-v2` |
-| [ ] | List Settings with store — **changed** | `ShoppingViews.swift:642` (`:652-682`) | After create, or ⋯ → List settings | `save` | `ListSettingsSheet` in `app/wellness/shopping/[id].tsx` | `shopping-list-settings-store`, `-filled` |
-| [ ] | Stores Near You — new | `ShoppingViews.swift:693` (`:708-753`) | List Settings → **Add New Store** | `POST /api/shopping/stores` | `app/wellness/shopping/stores.tsx` *(to build)* | `shopping-stores-empty`, `shopping-stores-results` |
-| [ ] | Store Hours — new | `ShoppingStoreHoursView.swift:9` (`:17-35`) | List Settings → **Store Hours** | `GET /api/shopping/stores/hours` | `app/wellness/shopping/store-hours.tsx` *(to build)* | `shopping-store-hours-empty`, `shopping-store-hours` |
-| [ ] | Shopping Detail — **changed** (store header, Open Now, Schedule Email / View Offers, offer badges, camera) | `ShoppingViews.swift:206` (`:237-393`) | Tap a list | `GET /api/shopping/offers` (60 s poll), `/stores/hours` | `app/wellness/shopping/[id].tsx` | `shopping-detail-store-empty`, `shopping-detail-store`, `-offer-badges`, `-options-menu-v2` |
-| [ ] | Offers for list, item offers, offer details — new | `ShoppingOffersView.swift:27` (`:40-82`), detail `:96` (`:104-119`) | **View Offers**, or an item's offer badge | `GET`/`POST /api/shopping/offers` | `app/wellness/shopping/offers.tsx`, `app/wellness/shopping/offer/[id].tsx` *(to build)* | `shopping-offers-available`, `-matching-empty`, `-alternatives`, `-store-menu`, `-item`, `shopping-offer-detail`, `-selected` |
-| [ ] | Item Alternatives (redesigned) — **changed** | `ShoppingAlternativesView.swift:3` (`:26-91`); design `ShoppingAlternativesDesign.swift` | ★ on a food row (`ShoppingViews.swift:855`) | `POST /api/shopping` `alternatives` | `AlternativesSheet` in `app/wellness/shopping/[id].tsx` | `shopping-alternatives-v2`, `-loading`, `-scrolled`, `-why`, `-goal-picker`, `-goal-picker-selected`, `-filtered`, `-replace-confirm`, `-replaced` |
-| [ ] | Alternative Item Details — new | `ShoppingAlternativesView.swift:261` (`:293-333`) | Alternatives → an item's name or chevron | — | pushed inside `AlternativesSheet` *(to build)* | `shopping-alternative-details`, `-scrolled`, `-bottom` |
-| [ ] | Add Item with photo identification — **changed** | `ShoppingItemEditor.swift:5` (`:31-135`); consent alert `:114` | Detail → camera button, or tap an item | `POST /api/shopping/recognize` | `ItemEditorSheet` in `app/wellness/shopping/[id].tsx` | `shopping-item-editor-v2`, `-scrolled`, `shopping-photo-identify-consent`, `-loading`, `-filled` |
-| [ ] | Share List — **changed** (short link, weekly email entry) | `ShoppingViews.swift:790` (`:795-805`) | ⋯ → Share list | `share`, `revoke` | `ShareListSheet` in `app/wellness/shopping/[id].tsx` | `shopping-share-list-v2`, `-link` |
-| [ ] | Weekly email and pickup details — new | `ShoppingEmailView.swift:32` (`:55-118`) | **Schedule Email**, or Share → **Weekly email to store manager** | `GET`/`POST /api/shopping/email-schedule` | `app/wellness/shopping/email.tsx` (exists; rebuild) | `shopping-weekly-email`, `-scrolled`, `-bottom` |
-| [ ] | Shopping Recommendations — **changed** (own endpoint) | `AskNexdoView.swift` with `shoppingContext` | Detail → **AI Powered Recommendations** | `POST /api/shopping/recommendations` | `RecommendationsSheet` in `app/wellness/shopping/[id].tsx` | `shopping-recommendations-v2`, `-filled`, `-loading`, `-answer` |
+| [x] `224ba48` as `app/wellness/shopping/index.tsx` (`StoreBrandLogo.tsx`) | My Lists with store logos — **changed** | `ShoppingViews.swift:78` (`:82-136`); `StoreBrandLogo.swift:11` | Wellness → Shopping List → Got it! | `GET /api/shopping`, `GET /api/shopping/store-brand` | `app/wellness/shopping/index.tsx` | `shopping-lists-v2` |
+| [x] `224ba48` in `NewListSheet` (`src/features/shopping/sheets.tsx`) | New List ("Create List & Add Store") — **changed** | `ShoppingViews.swift:142` (`:153-188`) | **Create New List** | `POST /api/shopping` `create` | `NewListSheet` (`src/features/shopping/sheets.tsx`) in `app/wellness/shopping/index.tsx` | `shopping-new-list-v2` |
+| [x] `224ba48` as `ListSettingsSheet` (`src/features/shopping/ListSettings.tsx`) | List Settings with store — **changed** | `ShoppingViews.swift:642` (`:652-682`) | After create, or ⋯ → List settings | `save` | `ListSettingsSheet` in `app/wellness/shopping/[id].tsx` | `shopping-list-settings-store`, `-filled` |
+| [x] `224ba48` as a page of the List Settings sheet (`StorePages.tsx`) | Stores Near You — new | `ShoppingViews.swift:693` (`:708-753`) | List Settings → **Add New Store** | `POST /api/shopping/stores` | `app/wellness/shopping/stores.tsx` *(to build)* | `shopping-stores-empty`, `shopping-stores-results` |
+| [x] `224ba48` as a page of the List Settings sheet (`StorePages.tsx`) | Store Hours — new | `ShoppingStoreHoursView.swift:9` (`:17-35`) | List Settings → **Store Hours** | `GET /api/shopping/stores/hours` | `app/wellness/shopping/store-hours.tsx` *(to build)* | `shopping-store-hours-empty`, `shopping-store-hours` |
+| [x] `d7b697d`, `fcd2f1f`, camera `ef699ee` in `app/wellness/shopping/[id].tsx` | Shopping Detail — **changed** (store header, Open Now, Schedule Email / View Offers, offer badges, camera) | `ShoppingViews.swift:206` (`:237-393`) | Tap a list | `GET /api/shopping/offers` (60 s poll), `/stores/hours` | `app/wellness/shopping/[id].tsx` | `shopping-detail-store-empty`, `shopping-detail-store`, `-offer-badges`, `-options-menu-v2` |
+| [x] `4f8181a` as `app/wellness/shopping/offers.tsx`, `app/wellness/shopping/offer.tsx` | Offers for list, item offers, offer details — new | `ShoppingOffersView.swift:27` (`:40-82`), detail `:96` (`:104-119`) | **View Offers**, or an item's offer badge | `GET`/`POST /api/shopping/offers` | `app/wellness/shopping/offers.tsx`, `app/wellness/shopping/offer/[id].tsx` *(to build)* | `shopping-offers-available`, `-matching-empty`, `-alternatives`, `-store-menu`, `-item`, `shopping-offer-detail`, `-selected` |
+| [x] `16324c7` in `AlternativesSheet.tsx` | Item Alternatives (redesigned) — **changed** | `ShoppingAlternativesView.swift:3` (`:26-91`); design `ShoppingAlternativesDesign.swift` | ★ on a food row (`ShoppingViews.swift:855`) | `POST /api/shopping` `alternatives` | `AlternativesSheet` in `app/wellness/shopping/[id].tsx` | `shopping-alternatives-v2`, `-loading`, `-scrolled`, `-why`, `-goal-picker`, `-goal-picker-selected`, `-filtered`, `-replace-confirm`, `-replaced` |
+| [x] `16324c7` pushed inside `AlternativesSheet.tsx` | Alternative Item Details — new | `ShoppingAlternativesView.swift:261` (`:293-333`) | Alternatives → an item's name or chevron | — | pushed inside `AlternativesSheet` *(to build)* | `shopping-alternative-details`, `-scrolled`, `-bottom` |
+| [x] `ef699ee` in `ItemEditorSheet.tsx` | Add Item with photo identification — **changed** | `ShoppingItemEditor.swift:5` (`:31-135`); consent alert `:114` | Detail → camera button, or tap an item | `POST /api/shopping/recognize` | `ItemEditorSheet` in `app/wellness/shopping/[id].tsx` | `shopping-item-editor-v2`, `-scrolled`, `shopping-photo-identify-consent`, `-loading`, `-filled` |
+| [x] `34cbd11` in `ShareListSheet` (`sheets.tsx`) | Share List — **changed** (short link, weekly email entry) | `ShoppingViews.swift:790` (`:795-805`) | ⋯ → Share list | `share`, `revoke` | `ShareListSheet` in `app/wellness/shopping/[id].tsx` | `shopping-share-list-v2`, `-link` |
+| [x] `34cbd11`, `bf01c26` as `app/wellness/shopping/email.tsx` (`EmailScreen.tsx`) | Weekly email and pickup details — new | `ShoppingEmailView.swift:32` (`:55-118`) | **Schedule Email**, or Share → **Weekly email to store manager** | `GET`/`POST /api/shopping/email-schedule` | `app/wellness/shopping/email.tsx` (exists; rebuild) | `shopping-weekly-email`, `-scrolled`, `-bottom` |
+| [x] `cfa1a8d` in `RecommendationsSheet.tsx` (`useShoppingRecommendations`) | Shopping Recommendations — **changed** (own endpoint) | `AskNexdoView.swift` with `shoppingContext` | Detail → **AI Powered Recommendations** | `POST /api/shopping/recommendations` | `RecommendationsSheet` in `app/wellness/shopping/[id].tsx` | `shopping-recommendations-v2`, `-filled`, `-loading`, `-answer` |
 
 `account-settings-calendar-connected` is also new. It shows the connected-calendar state of Account →
 Settings that Phase 11 could not capture (§21 "Not captured"); this account has Google Calendar connected.
@@ -2724,6 +2724,57 @@ wide); 10 files, 245 KB.
 needs no permission. Deviations are in `mobile/docs/android-polish.md` §24; the Swift issues found are under
 "For the team" below.
 
+### Run F: Shopping (Windows)
+
+Built from the Swift source (`git diff 8c36d98 HEAD` on the Shopping files) and the Mac's `shopping-*`
+captures, on the part 1 offers / hours plumbing plus four new endpoints (`POST /api/shopping/stores`,
+`GET /api/shopping/store-brand`, `POST /api/shopping/recognize`, `POST /api/shopping/recommendations`).
+Full suite after Run F: see the push report (148 suites at the last run); `tsc --noEmit` and eslint clean.
+
+| Screen | Built as |
+| --- | --- |
+| My Lists | Each list's store logo (`StoreBrandLogo`: the server names the brand; only `https://cdn.brandfetch.io` logos with no query but `c`; 60 s, 30-entry in-memory reuse; the green cart otherwise). The toolbar "+" is gone. |
+| New List | "Shopping List" by default; "Create List & Add Store" opens the new list on List Settings (Copy list keeps "Create List"). |
+| List Settings | Store details: Add New Store, store name, street and "City, state and ZIP code" lines (a typed address forgets the chosen place), Directions, Store Hours; Swift's footer; Save off for an empty name or a malformed ZIP. |
+| Stores Near You | City or ZIP and store name, searched 600 ms after typing stops (newest answer only), Use my location (one approximate fix, rounded to 0.01°), distances, attributions, "Google Maps", Add. |
+| Store Hours | Open now / Closed now, the days, current vs regular hours, Swift's error with Try again, "Choose this location using Add New Store…", View store on Google Maps. |
+| Shopping Detail | Store name and "Open Now" as the title (hours polled every 60 s), the store logo (tap to enlarge) and settings chevron, Schedule Email / View Offers (Costco or Safeway before the first answer, any store after) with the count, offer badges under offered items, the camera button, Share list / Select All / Unselect All in ⋯, a completed list read-only, "Recommendations", ★ for food only (`supportsFoodAlternatives`), mango artwork. |
+| Offers for list / item offers / offer details | Matching / Available / Alternatives with counts, opening on a tab with offers; store filter; the chosen offers with Remove selection and the stale note; how offers are labeled; Manage stores; one offer with Choose this offer / Remove selection. "Valid through" is the store's last day (see For the team). |
+| Item Alternatives | The original with its favourite star; Why these?; Lower fat / sugar / calorie chips and the goal picker; rows with the goals the source supports and a nutrition line; Replace (confirm, then "Item replaced!"); View in Cart (N). |
+| Alternative Item Details | Your item vs Alternative with calories, Representative food note, Ask AI about this item, the sortable nutrition table, allergens and best-for disclosures, Replace with this item / Add to Cart Instead, favourite star. |
+| Add Item / Edit Item | Brand and "+ Add Notes", the name capitalised once, the Item Image disclosure, a full-screen zoomable photo, "Fill details from photo with AI" after "Identify this photo with AI?" (asked once per editor), the camera opened at once for Add Item, "Camera access is off" with Open Settings. |
+| Share List | The compact `/s/<token>` link, Scheduled sharing → Weekly email to store manager, Create / Revoke Link off while busy. |
+| Weekly email | Rebuilt; see the gap list below. |
+| Shopping Recommendations | `POST /api/shopping/recommendations { prompt, listName, itemNames }`, no assistant thread, the general-knowledge guard skipped for shopping. |
+
+**The three deferred alternatives behaviours** (part 1): a five-minute cache per item (name, category,
+quantity, size, brand, barcode; Try again skips it), errors shown with Try again and no local fallback
+(`localAlternatives` is gone), and Replace keeping the item's own id, quantity, size, notes, checked state
+and favourites, with the source's brand and barcode (`swapReplacing`).
+
+**Weekly email: part 1's gaps, all closed** (section "Gaps in items the team already added", item 1):
+pickup date and window sent and restored; the entry points (Detail's Schedule Email, disabled when
+read-only, and Share List's row) with the old top-of-list card removed; fields seeded once so a reload or a
+Gmail connection keeps edits; the single save blocker with "Check availability again"; the timezone menu
+defaulting to the device zone, the repeat-day menu and a 12-hour send-time picker; the sender card (Connect
+only when not connected, the account with its status badge, the settings gear); Swift's title and copy
+including "Save schedule" / "Save changes", "Pause emails", "Weekly email is not enabled on this server
+yet." and "Email connection cancelled or failed."; the three RN-only notices dropped; the schedule status
+card; recent emails only when there are runs, capitalised, the raw date when it does not parse; a busy
+overlay, pull to refresh and inline errors; the RN-only preview and the stricter email regex removed; and
+tests for each.
+
+**Nothing sends an email.** Save stores the schedule; the server's worker sends later. Tests mock every
+email-schedule call.
+
+**Food voice.** "Ask AI about this item" opens the voice view in Swift's food mode: scope `food`, the two
+product names sent with the session, `lookup_food` the only tool, Swift's copy and consent alert.
+
+**Native modules and permissions: none new.** The camera and approximate location were already declared
+(Phase 11 Run C; weather). Images: `assets/grocery/mango.png` (256 px), `assets/alternatives/` (five milk
+cartons and six bread crops from `alternatives-design-pack`), `assets/share-list/` (eight icons, the plane
+150 px wide). Deviations are in `mobile/docs/android-polish.md` §25.
+
 ### For the team
 
 Swift and server issues found by both machines, reported here and not fixed. The Windows items come
@@ -2791,6 +2842,19 @@ first, unchanged; the Mac reference pass’s items follow, with their captures.
   typing cases for cards 5-7 when there are four cards, and the `planTomorrow` intent has no entry. Not
   built in RN; delete them in Swift or bring them back.
 
+- **Offer expiry dates read a day late east of the store.** Already on this list from the Mac's pass
+  ("Offer dates are shown in the phone's time zone"). Not copied: RN shows the store's own last day —
+  the server's end instant less 12 hours, in UTC, which is always the last day in any US zone
+  (`offerEndDate`, `src/features/shopping/offers.ts`).
+- **The Replace confirmation has a trailing space**: "Replace “2% milk” with “Lactose-free milk”? "
+  (`ShoppingAlternativesView.swift:167`). RN copies it.
+- **"Item replaced!" has two buttons that do the same thing**: Done and View in Cart both close
+  (`ShoppingAlternativesDesign.swift:118-119`). RN copies them.
+- **Stores Near You tells Android users about iPhone Settings**: "…allow location access in iPhone
+  Settings." (`ShoppingViews.swift:767`). Copied unchanged per the parity rule; worth a neutral wording.
+- **Analytics.** Item Alternatives logs `shopping_alternatives_opened`, `alternative_viewed`, goal and
+  replace events (`ShoppingAlternativesView.swift:189-192`); RN sends none while Firebase Analytics stays
+  deferred (§21).
 - **Wellness has no dark mode.** The chooser and the module guides draw on hard-coded light
   gradients and white cards (`WellnessChooserView.swift:36`, `:101`). With the system in dark mode,
   the card subtitles, the guide step text, the "Back to Home" link and the tab bar labels turn
