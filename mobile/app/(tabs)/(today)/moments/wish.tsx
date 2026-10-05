@@ -74,7 +74,9 @@ export default function WishDetailsScreen() {
               ? 'This wish will not be sent.'
               : current.automaticDelivery && current.status === 'SCHEDULED'
                 ? 'Approved email will send automatically at the scheduled time.'
-                : 'Review the delivery status below.'}
+                : current.status === 'AWAITING_CONFIRMATION' && current.channel === 'messages'
+                  ? 'Your wish and schedule are saved. Open Messages and tap Send when you are ready; Messages wishes are not sent automatically.'
+                  : 'Review the delivery status below.'}
         </Text>
         <View style={styles.stretch}>
           <MomentCard>

@@ -1036,6 +1036,23 @@ describe('Choose Delivery', () => {
 });
 
 describe('Wish details', () => {
+  // ImportantMomentsView.swift:534: a Messages wish never sends itself, and the subtitle says so.
+  it('tells you a Messages wish waits for you to tap Send', async () => {
+    load([moment({ drafts: [draft({ plans: [plan({ id: 'p1', channel: 'messages' })] })] })]);
+    mockParams = { planId: 'p1' };
+    await render(<WishDetails />);
+    expect(
+      screen.getByText('Your wish and schedule are saved. Open Messages and tap Send when you are ready; Messages wishes are not sent automatically.'),
+    ).toBeTruthy();
+  });
+
+  it('keeps "Review the delivery status below." for a copy wish awaiting you', async () => {
+    load([moment({ drafts: [draft({ plans: [plan({ id: 'p1', channel: 'copy' })] })] })]);
+    mockParams = { planId: 'p1' };
+    await render(<WishDetails />);
+    expect(screen.getByText('Review the delivery status below.')).toBeTruthy();
+  });
+
   it('offers edit, open Messages and cancel for a Messages wish awaiting you', async () => {
     const item = moment({ drafts: [draft({ plans: [plan({ id: 'p1' })] })] });
     load([item]);
