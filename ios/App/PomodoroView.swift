@@ -113,7 +113,7 @@ struct PomodoroView: View {
             }
             Toggle(isOn: $autoBreak) { VStack(alignment: .leading, spacing: 4) { Text("Auto Start Break"); Text("Start a 5-minute break automatically after focus.").font(.caption).foregroundStyle(.secondary) } }
             Toggle("Play Sound", isOn: $sound)
-            primary("Start Focus Session") { store.start(category: category, name: name, minutes: minutes, autoBreak: autoBreak, sound: sound) }
+            primary("Start Focus Session") { store.start(category: category, name: name, minutes: minutes, autoBreak: autoBreak, sound: sound); name = "" }
                 .padding(.top, max(0, startButtonSpacing - 12))
         }
     }

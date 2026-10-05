@@ -18,7 +18,8 @@ export async function PUT(request: Request) {
     const text = await request.text();
     if (text.length > 4096) return NextResponse.json({ error: 'Session is too large.' }, { status: 400 });
     const payload = JSON.parse(text);
-    if (payload?.ownerID !== user.id) return NextResponse.json({ error: 'Account changed.' }, { status: 403 });
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return NextResponse.json({ error: 'Invalid focus session.' }, { status: 400 });
+    if (payload.ownerID !== user.id) return NextResponse.json({ error: 'Account changed.' }, { status: 403 });
     return NextResponse.json({ session: await savePomodoro(user.id, payload.session) });
   } catch (error) {
     if (error instanceof ZodError || error instanceof SyntaxError) return NextResponse.json({ error: 'Invalid focus session.' }, { status: 400 });

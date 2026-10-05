@@ -77,14 +77,16 @@ import AudioToolbox
         loadingHistory = true; defer { loadingHistory = false }
         await scheduleAlerts()
         do {
+            var positions = [String: Int](minimumCapacity: sessions.count)
+            for (index, session) in sessions.enumerated() { positions[session.id] = index }
             var cursor: String?
             repeat {
             let path = "/api/pomodoro?owner=" + owner.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed)! + (cursor.map { "&cursor=" + $0 } ?? "")
             let response: ListResponse = try await api.request(path)
             for remote in response.sessions {
-                if let index = sessions.firstIndex(where: { $0.id == remote.id }) {
+                if let index = positions[remote.id] {
                     if remote.revision >= sessions[index].revision { sessions[index] = remote }
-                } else { sessions.append(remote) }
+                } else { positions[remote.id] = sessions.count; sessions.append(remote) }
                 synced[remote.id] = remote.revision
             }
             cursor = response.nextCursor

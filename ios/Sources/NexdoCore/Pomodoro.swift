@@ -47,7 +47,7 @@ public struct PomodoroSession: Codable, Identifiable, Equatable, Sendable {
         let total = Double(phase == .shortBreak ? 300 : durationMinutes * 60)
         return min(1, max(0, 1 - remaining(at: now) / total))
     }
-    private mutating func changed(_ now: Date) { revision += 1; updatedAt = now.timeIntervalSince1970 }
+    private mutating func changed(_ now: Date) { revision += 1; updatedAt = max(now.timeIntervalSince1970, startedAt) }
     @discardableResult public mutating func advance(at now: Date) -> Bool {
         guard active, !paused, let end = deadline, now.timeIntervalSince1970 >= end else { return false }
         if phase == .focus {
@@ -74,7 +74,7 @@ public struct PomodoroSession: Codable, Identifiable, Equatable, Sendable {
         guard active else { return }
         if phase == .focus { focusSeconds = max(0, Double(durationMinutes * 60) - remaining(at: now)); phase = .stopped }
         else { breakSeconds = max(0, 300 - remaining(at: now)); phase = .completed }
-        finishedAt = now.timeIntervalSince1970; deadline = nil; pausedRemaining = nil; paused = false; changed(now)
+        finishedAt = max(now.timeIntervalSince1970, startedAt); deadline = nil; pausedRemaining = nil; paused = false; changed(now)
     }
     public mutating func setKeepAwake(_ value: Bool, at now: Date) { keepAwake = value; changed(now) }
 }

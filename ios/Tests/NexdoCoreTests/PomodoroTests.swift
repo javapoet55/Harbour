@@ -29,6 +29,16 @@ struct PomodoroTests {
         var stopped = session(); stopped.stop(at: start.addingTimeInterval(75))
         #expect(stopped.phase == .stopped); #expect(stopped.focusSeconds == 75)
     }
+    @Test func stopBeforeStartKeepsServerSchemaInvariants() {
+        // A backward clock jump must not produce a session the API schema rejects
+        // (finishedAt/updatedAt below startedAt), which would stay pending forever.
+        var skewed = session(); skewed.stop(at: start.addingTimeInterval(-60))
+        #expect(skewed.phase == .stopped)
+        #expect(skewed.finishedAt == start.timeIntervalSince1970)
+        #expect(skewed.updatedAt >= skewed.startedAt)
+        var paused = session(); _ = paused.togglePause(at: start.addingTimeInterval(-30))
+        #expect(paused.updatedAt >= paused.startedAt)
+    }
     @Test func skippingBreakPreservesActualBreakTime() {
         var s = session(); _ = s.advance(at: start.addingTimeInterval(1500))
         s.stop(at: start.addingTimeInterval(1520))
