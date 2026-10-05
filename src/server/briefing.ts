@@ -1,5 +1,5 @@
 import { prisma } from './db';
-import { listEventsInRange, overdueTasks } from './agenda';
+import { listDisplayEventsInRange, overdueTasks } from './agenda';
 import { buildPersonalizedInsights, personalizedTaskDurations } from './predictions';
 import { rankFocusTasks } from '@/lib/focus-ranking';
 import { buildReplan } from '@/lib/replanning';
@@ -23,7 +23,7 @@ export async function buildCompleteBriefing(userId: string, days = 5, now = new 
       include: { dependencies: { select: { dependsOnId: true, dependsOn: { select: { status: true } } } } },
       orderBy: [{ dueAt: 'asc' }, { startAt: 'asc' }],
     }),
-    listEventsInRange(userId, startOfLocalDay(todayKey, user.timeZone), end),
+    listDisplayEventsInRange(userId, startOfLocalDay(todayKey, user.timeZone), end),
     overdueTasks(userId, user.timeZone, now),
     user.preference?.personalizationEnabled ? buildPersonalizedInsights(userId, now) : Promise.resolve(null),
   ]);
