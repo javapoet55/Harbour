@@ -2,6 +2,7 @@ import { router, Tabs } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { TabBarButton, TaskSymbol } from '../../src/components';
+import { WellnessTabButton } from '../../src/components/WellnessTabButton';
 import { useTheme } from '../../src/theme';
 
 /**
@@ -47,6 +48,18 @@ export default function TabsLayout() {
         options={{
           title: 'Tasks',
           tabBarIcon: ({ color }) => <TaskSymbol name="checkmark.circle" size={22} color={String(color)} />,
+        }}
+      />
+      {/* The centre Wellness button sits between Tasks and Ask AI (RootView.swift:172-182) and opens the
+          chooser as a full-screen cover; like Ask AI it never selects a tab. */}
+      <Tabs.Screen
+        name="wellness"
+        options={{ title: 'Wellness', tabBarButton: (props) => <WellnessTabButton {...props} /> }}
+        listeners={{
+          tabPress: (event) => {
+            event.preventDefault();
+            router.push('/wellness');
+          },
         }}
       />
       <Tabs.Screen

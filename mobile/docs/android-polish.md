@@ -1191,3 +1191,29 @@ Changes:
   "electrician"; before, such titles could pass five words and get no action).
 - Contacts are searched without a leading "the", "a", "an", "my", "our" or "your", so "the plumber"
   finds "Plumber". Cards and notifications keep the name as written.
+
+---
+
+## 21. Phase 12 Run C: Wellness chooser, module guides and Pomodoro (2026-10-05)
+
+New screens, built from the Swift source (no captures existed for them yet). The deviations from Swift
+are listed here, Android-only or not.
+
+### Wellness chooser and module guides
+
+- **Fixed light colours, in both modes.** Swift draws the chooser, the guides and Pomodoro on explicit
+  white cards and gradients with an explicit ink (and `.preferredColorScheme(.light)` on the Pomodoro
+  dashboard), so they stay light in dark mode on iOS. They stay light here too; the `link` token (the
+  dark-mode tappable colour) does not apply, and every tappable keeps Swift's own colour — the module's
+  colour on the guides, indigo on Pomodoro.
+- **Sprite sheets are pre-cut.** Swift crops `wellness-menu-pack` and `module-guide-pack` at draw time.
+  The same pixel rectangles were cut once into `assets/wellness/` (28 files, 788 KB in all), and drawn
+  whole. `.blendMode(.multiply)` is `mixBlendMode: 'multiply'` (New Architecture), so the art's white
+  sheet background drops out on the tinted cards as on iOS.
+- **The tab bar's centre button** is `wellness-navigation` at 62×58 in the 58dp bar, between Tasks and
+  Ask AI, with no title and no selection capsule, as Swift's. It opens the chooser as a full-screen
+  modal.
+- **Accessibility text size.** The guide stacks each step's picture under its text when the font scale is
+  1.6 or more (iOS's AX1 is 1.65; Android 14's 1.8× and 2× settings qualify, "Largest" 1.3× does not).
+- **The guide's bar** is drawn by the screen: a glass back circle in the module's colour and the inline
+  title "How It Works", as on the other covers.

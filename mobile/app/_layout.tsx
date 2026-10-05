@@ -215,6 +215,8 @@ export function RootNavigator() {
           <Stack.Screen name="ask" />
           <Stack.Screen name="calendar" />
           <Stack.Screen name="task" />
+          {/* The Wellness chooser, module guides, Pomodoro and the Calorie Tracker: full-screen covers. */}
+          <Stack.Screen name="wellness" />
         </Stack.Protected>
         <Stack.Protected guard={status === 'signedOut'}>
           <Stack.Screen name="(auth)" />
