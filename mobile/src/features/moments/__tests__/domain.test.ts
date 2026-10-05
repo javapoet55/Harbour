@@ -426,6 +426,21 @@ describe('titles, greetings and signatures', () => {
   });
 
   /**
+   * fac34ed (MomentGreeting.swift:17, :44-52): "Happy Birthday, Visakan!" is the form the product writes,
+   * so a comma ends an opening too, and the name riding inside it is dropped — shared to Sam it must not
+   * become "Happy Birthday, Sam! Happy Birthday, Visakan! …" or carry Visakan's name.
+   */
+  it('takes the name out of a "Happy Birthday, Name!" opening before naming the new recipient', () => {
+    expect(greetingMessage('Happy Birthday, Visakan! Have a great day.', 'birthday', 'Sam')).toBe('Happy Birthday, Sam! Have a great day.');
+    expect(greetingMessage('Happy Birthday, Visakan!', 'birthday', 'Sam')).toBe('Happy Birthday, Sam!');
+    expect(greetingMessage('Happy Anniversary, Mom and Dad! Love you.', 'birthday', 'Sam')).toBe('Happy Anniversary, Sam! Love you.');
+    // A lower-case phrase after the comma is prose, not a name, and stays.
+    expect(greetingMessage('Happy Birthday, have a great day!', 'birthday', 'Sam')).toBe('Happy Birthday, Sam! have a great day!');
+    // Swift trims spaces, not line breaks, after the name (the server's trimStart differs; see §22).
+    expect(greetingMessage('Happy Birthday, Visakan!\nHave fun', 'birthday', 'Sam')).toBe('Happy Birthday, Sam! \nHave fun');
+  });
+
+  /**
    * Copied from `the resolved wish text` in src/server/moments/wish-message.integration.test.ts. The
    * server rewrites pending plans with its own `greetingMessage`, so the two must agree byte for byte.
    */

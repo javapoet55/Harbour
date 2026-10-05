@@ -590,8 +590,17 @@ function containsName(body: string, name: string): boolean {
  */
 const OPENINGS = ['Happy Anniversary', 'Happy Birthday', 'Get well soon', 'Best wishes'];
 
-/** The separators an opening may end on, shared with the server. */
-const SEPARATORS = '!. \n';
+/**
+ * The separators an opening may end on (MomentGreeting.swift:17). Includes ',' so the greeting form the
+ * product writes — "Happy Birthday, Visakan!" — counts as an opening rather than falling through to a
+ * second prepended greeting (fac34ed).
+ */
+const SEPARATORS = '!. \n,';
+
+/** Swift's `.whitespaces`: spaces and tabs, NOT line breaks. */
+function trimmingWhitespaces(value: string): string {
+  return value.replace(/^[\p{Zs}\t]+|[\p{Zs}\t]+$/gu, '');
+}
 
 /**
  * The opening `text` already starts with, in its canonical spelling, or null. The match ignores case,
@@ -603,9 +612,10 @@ function openingOf(text: string): string | null {
 }
 
 /**
- * `MomentGreeting.message(_:type:firstName:)`: each recipient's wish names them once. Ported byte for
- * byte from `greetingMessage` in src/server/moments/wish-message.ts, which rewrites pending plans, so
- * the two must agree exactly.
+ * `MomentGreeting.message(_:type:firstName:)`: each recipient's wish names them once. Ported from Swift,
+ * which ports `greetingMessage` in src/server/moments/wish-message.ts; the server rewrites pending plans,
+ * so the two must agree. One known difference, kept as Swift has it: after dropping a name, Swift trims
+ * spaces only and the server's `trimStart` also removes a line break (§22 "For the team").
  *
  * A wish that already opens with a greeting keeps that greeting and has the name put into it, rather
  * than collecting a second one — an anniversary wish saved on a moment typed as a birthday used to
@@ -621,8 +631,18 @@ export function greetingMessage(body: string, type: string, firstName: string): 
   const opening = openingOf(text);
   if (opening !== null) {
     let at = opening.length;
-    while (at < text.length && SEPARATORS.includes(text[at])) at++;
-    const rest = text.slice(at);
+    let comma = false;
+    while (at < text.length && SEPARATORS.includes(text[at])) {
+      if (text[at] === ',') comma = true;
+      at++;
+    }
+    let rest = text.slice(at);
+    // "Happy Birthday, Visakan! …": a comma after the opening means a name rides inside the greeting
+    // itself — drop it (a capitalised phrase ending in '!') so it isn't sent to the new recipient.
+    if (comma) {
+      const name = /^\p{Lu}[^!.\n]{0,60}!/u.exec(rest);
+      if (name) rest = trimmingWhitespaces(rest.slice(name[0].length));
+    }
     return `${opening}, ${firstName.trim()}!` + (rest === '' ? '' : ` ${rest}`);
   }
   return `${greeting} ${text}`;
