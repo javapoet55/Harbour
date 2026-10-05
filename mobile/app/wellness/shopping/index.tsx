@@ -1,17 +1,18 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { router, Stack } from 'expo-router';
+import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 
 import { Text } from '../../../src/components/Text';
 import { TodayBackdrop } from '../../../src/components/TodayShell';
-import { headline, MomentCard, systemColors } from '../../../src/features/moments/components';
+import { headline, MomentCard } from '../../../src/features/moments/components';
 import { momentDate } from '../../../src/features/moments/dates';
 import { ListTile } from '../../../src/features/shopping/components';
 import { itemCount } from '../../../src/features/shopping/model';
 import { NewListSheet } from '../../../src/features/shopping/sheets';
+import { StoreBrandLogo } from '../../../src/features/shopping/StoreBrandLogo';
 import { shoppingStore, useShopping } from '../../../src/features/shopping/store';
-import { brand, textStyles, useTheme } from '../../../src/theme';
+import { textStyles, useTheme } from '../../../src/theme';
 
 /** `.dateTime.month(.abbreviated).day()` in the device locale — "25 Sep" or "Sep 25". */
 function shortDay(day: string, zone: string): string {
@@ -23,8 +24,9 @@ function shortDay(day: string, zone: string): string {
 }
 
 /**
- * `ShoppingHome` (ios/App/ShoppingViews.swift:78-138): "Create New List", then Recent Lists — or, with
- * no lists, "Your next trip starts here". Creating a list opens it.
+ * `ShoppingHome` (ios/App/ShoppingViews.swift:78-136): "Create New List", then Recent Lists with each
+ * list's store logo — or, with no lists, "Your next trip starts here". Creating a list opens it on List
+ * Settings. The toolbar "+" is gone in Swift.
  */
 export default function MyListsScreen() {
   const theme = useTheme();
@@ -39,15 +41,6 @@ export default function MyListsScreen() {
 
   return (
     <View style={styles.fill}>
-      <Stack.Screen
-        options={{
-          headerRight: () => (
-            <Pressable accessibilityRole="button" accessibilityLabel="Create shopping list" onPress={() => setCreate(true)} hitSlop={8} testID="shopping-plus">
-              <Ionicons name="add-circle" size={28} color={theme.colors.link} />
-            </Pressable>
-          ),
-        }}
-      />
       <TodayBackdrop />
       <ScrollView
         contentContainerStyle={styles.content}
@@ -77,11 +70,13 @@ export default function MyListsScreen() {
           <MomentCard>
             {lists.map((list, index) => {
               const open = list.completedAt == null;
+              // `StoreBrandLogo(… identity: [storeName, storeWebsite].joined(separator: "|"), size: 48)` (:109).
+              const identity = `${list.storeName ?? ''}|${list.storeWebsite ?? ''}`;
               return (
                 <View key={list.id}>
                   {index > 0 ? <View style={[styles.divider, { backgroundColor: theme.colors.separator }]} /> : null}
                   <Pressable accessibilityRole="button" onPress={() => router.push({ pathname: '/wellness/shopping/[id]', params: { id: list.id } })} style={styles.listRow} testID={`shopping-list-${list.id}`}>
-                    <ListTile icon={open ? 'cart' : 'copy-outline'} color={open ? systemColors.green : brand.nexdoIndigo} />
+                    <StoreBrandLogo identity={identity} listId={list.id} size={48} />
                     <View style={styles.grow}>
                       <Text style={[headline, { color: theme.colors.ink }]}>{list.title}</Text>
                       <Text style={[styles.caption, { color: theme.colors.secondary }]}>{`${itemCount(list.items.length)}${open ? '' : ' · Completed'}`}</Text>
@@ -108,8 +103,9 @@ export default function MyListsScreen() {
       <NewListSheet
         visible={create}
         onClose={() => setCreate(false)}
-        // `.navigationDestination(… created != nil && !create)`: the new list opens once the sheet is gone.
-        onCreated={(list) => router.push({ pathname: '/wellness/shopping/[id]', params: { id: list.id } })}
+        // `.navigationDestination(… created != nil && !create) { ShoppingDetail(…, openSettings: true) }`:
+        // the new list opens once the sheet is gone, on List Settings to add its store.
+        onCreated={(list) => router.push({ pathname: '/wellness/shopping/[id]', params: { id: list.id, settings: '1' } })}
       />
     </View>
   );

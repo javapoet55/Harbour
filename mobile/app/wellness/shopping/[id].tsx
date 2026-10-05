@@ -15,7 +15,8 @@ import { CategoryChip, GroceryRow, grocerySeparatorInset, ShoppingActionBar, Sho
 import { completionSummary, ShoppingCompletionView, type ShoppingCompletionSummary } from '../../../src/features/shopping/CompletionView';
 import { ItemEditorSheet } from '../../../src/features/shopping/ItemEditorSheet';
 import { appended, CATEGORIES, itemCount, listInput, remaining, removed, suggestionsFor, toggled, uncheckedAll, upserted } from '../../../src/features/shopping/model';
-import { ListSettingsSheet, NewListSheet, ShareListSheet } from '../../../src/features/shopping/sheets';
+import { ListSettingsSheet } from '../../../src/features/shopping/ListSettings';
+import { NewListSheet, ShareListSheet } from '../../../src/features/shopping/sheets';
 import { shoppingStore, useShopping } from '../../../src/features/shopping/store';
 import { VoiceSheet } from '../../../src/features/shopping/VoiceSheet';
 import { brand, textStyles, useTheme } from '../../../src/theme';
@@ -38,7 +39,8 @@ export const NO_ITEMS_FOUND = 'No items found. Type an item and try again.';
  */
 export default function ShoppingDetailScreen() {
   const theme = useTheme();
-  const { id } = useLocalSearchParams<{ id?: string }>();
+  // `settings`: `ShoppingDetail(…, openSettings: true)` after New List (ShoppingViews.swift:132).
+  const { id, settings: openSettings } = useLocalSearchParams<{ id?: string; settings?: string }>();
   const [list, setList] = useState<GroceryList | null>(() => shoppingStore.getState().lists.find((item) => item.id === id) ?? null);
   const busy = useShopping((state) => state.busy);
   const storeError = useShopping((state) => state.error);
@@ -46,7 +48,7 @@ export default function ShoppingDetailScreen() {
   const [item, setItem] = useState<GroceryItem | null>(null);
   const [voice, setVoice] = useState(false);
   const [copy, setCopy] = useState(false);
-  const [settings, setSettings] = useState(false);
+  const [settings, setSettings] = useState(openSettings === '1');
   const [sharing, setSharing] = useState(false);
   const [completion, setCompletion] = useState<ShoppingCompletionSummary | null>(null);
   const [recommendations, setRecommendations] = useState(false);

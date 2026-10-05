@@ -12,7 +12,7 @@ import { TodayBackdrop } from '../../components/TodayShell';
 import { androidField, androidLabel, androidSeparator, brand, FieldGroupContext, isAndroid, textStyles, useTheme } from '../../theme';
 import { headline, KEYBOARD_DONE_BAR_HEIGHT, KeyboardDoneBar, MomentCard, MomentPrimary, MomentSheet } from '../moments/components';
 import { deviceZone, momentDate, momentDay } from '../moments/dates';
-import { DateField, FormButton, FormField, FormRow, FormScroll, FormSection, FormText, FormToggle } from '../moments/form';
+import { DateField, FormButton, FormRow, FormScroll, FormSection, FormText, FormToggle } from '../moments/form';
 import { ListTile, type ListSymbol } from './components';
 import { shareMessage } from './device';
 import { copiedItems, itemCount, listInput, previousList, shareText } from './model';
@@ -21,11 +21,12 @@ import { shoppingStore, useShopping } from './store';
 const bodyText = { fontSize: 17, lineHeight: 22 };
 
 // ---------------------------------------------------------------------------------------------
-// New List (ios/App/ShoppingViews.swift:143-205)
+// New List (ios/App/ShoppingViews.swift:142-205)
 
 /**
  * `NewShoppingList`: Start from Scratch or Use Last Week's List, the name, the date and weekly repeat,
- * and "Create List" pinned at the bottom. Also "Copy list" / "Use This List Again", with `source`.
+ * and "Create List & Add Store" pinned at the bottom — the new list then opens on List Settings to add
+ * its store. "Copy list" / "Use This List Again" pass a `source` and read "Create List".
  * Save is disabled while the name is empty — the capture `shopping-new-list-error-empty-name`.
  */
 export function NewListSheet({ visible, source, onCreated, onClose }: { visible: boolean; source?: GroceryList | null; onCreated: (list: GroceryList) => void; onClose: () => void }) {
@@ -43,7 +44,7 @@ function NewListBody({ source, onCreated, onClose }: { source: GroceryList | nul
   const busy = useShopping((state) => state.busy);
   const error = useShopping((state) => state.error);
   // `.onAppear { if let source { title = source.title; useLast = true } }`
-  const [title, setTitle] = useState(source?.title ?? 'Weekly Shopping List');
+  const [title, setTitle] = useState(source?.title ?? 'Shopping List');
   const [date, setDate] = useState(() => momentDate(momentDay(Date.now(), deviceZone()), deviceZone()));
   const [weekly, setWeekly] = useState(true);
   const [useLast, setUseLast] = useState(source !== null);
@@ -125,7 +126,7 @@ function NewListBody({ source, onCreated, onClose }: { source: GroceryList | nul
         onLayout={(event) => setFooterHeight(event.nativeEvent.layout.height)}
         style={[styles.footer, { paddingBottom: 18 + insets.bottom, backgroundColor: theme.colors.glassFill }]}
       >
-        <MomentPrimary title={busy ? 'Creating…' : 'Create List'} onPress={() => void create()} disabled={disabled} testID="shopping-create" />
+        <MomentPrimary title={busy ? 'Creating…' : source === null ? 'Create List & Add Store' : 'Create List'} onPress={() => void create()} disabled={disabled} testID="shopping-create" />
       </KeyboardLift>
       <KeyboardDoneBar />
     </View>
@@ -161,70 +162,6 @@ function Choice({ title, subtitle, icon, selected, disabled = false, onPress, te
         </View>
       </MomentCard>
     </Pressable>
-  );
-}
-
-// ---------------------------------------------------------------------------------------------
-// List Settings (ShoppingViews.swift:305-315)
-
-/** `ShoppingSettings`: name, date, weekly. Save only — no Cancel — and disabled while the name is empty. */
-export function ListSettingsSheet({ visible, list, onSave, onClose }: { visible: boolean; list: GroceryList; onSave: (list: GroceryList) => void; onClose: () => void }) {
-  const [draft, setDraft] = useState(list);
-  const [shown, setShown] = useState(visible);
-  // A fresh copy of the list each time the sheet opens, as Swift's `@State var initial` is.
-  if (shown !== visible) {
-    setShown(visible);
-    if (visible) setDraft(list);
-  }
-  const disabled = draft.title.trim() === '';
-  return (
-    <MomentSheet
-      visible={visible}
-      title=""
-      onRequestClose={onClose}
-      right={{
-        title: 'Save',
-        disabled,
-        bold: true,
-        onPress: () => {
-          onSave(draft);
-          onClose();
-        },
-        testID: 'list-settings-save',
-      }}
-      testID="list-settings-sheet"
-    >
-      <ListSettingsBody draft={draft} setDraft={setDraft} />
-    </MomentSheet>
-  );
-}
-
-function ListSettingsBody({ draft, setDraft }: { draft: GroceryList; setDraft: (list: GroceryList) => void }) {
-  const theme = useTheme();
-  return (
-    <FormScroll testID="list-settings">
-      <Text style={[textStyles.largeTitle, styles.bold, styles.sheetTitle, { color: theme.colors.label }]}>List Settings</Text>
-      <FormSection>
-        <FormRow>
-          <FormField placeholder="List name" value={draft.title} onChangeText={(title) => setDraft({ ...draft, title })} testID="list-settings-name" />
-        </FormRow>
-        <FormRow>
-          <DateField
-            label="Shopping date"
-            value={momentDate(draft.date, draft.timeZone)}
-            onChange={(value) => setDraft({ ...draft, date: momentDay(value, draft.timeZone) })}
-            zone={draft.timeZone}
-            testID="list-settings-date"
-          />
-        </FormRow>
-        <FormRow>
-          <FormToggle label="Repeat weekly" value={draft.weekly} onValueChange={(weekly) => setDraft({ ...draft, weekly })} testID="list-settings-weekly" />
-        </FormRow>
-        <FormRow last>
-          <FormText>Next week’s list is created when you complete this trip.</FormText>
-        </FormRow>
-      </FormSection>
-    </FormScroll>
   );
 }
 

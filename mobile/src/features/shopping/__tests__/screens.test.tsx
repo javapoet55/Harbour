@@ -94,7 +94,7 @@ describe('My Lists', () => {
     expect(screen.getByText('Create a list, then type or dictate what you need.')).toBeTruthy();
   });
 
-  it('creates a list with Save disabled while the name is empty, then opens it', async () => {
+  it('creates a list with Save disabled while the name is empty, then opens it on List Settings', async () => {
     load([list({ completedAt: '2026-09-18T10:00:00Z', items: [item({ checked: true })] })]);
     const created = list({ id: 'new', title: 'Weekly Shopping List', revision: 0 });
     mockPost.mockResolvedValueOnce({ list: created });
@@ -106,7 +106,8 @@ describe('My Lists', () => {
     await fireEvent.changeText(screen.getByTestId('shopping-list-name'), 'Weekly Shopping List');
     await fireEvent.press(screen.getByTestId('shopping-use-last'));
     await fireEvent.press(screen.getByTestId('shopping-create'));
-    await waitFor(() => expect(mockPush).toHaveBeenCalledWith({ pathname: '/wellness/shopping/[id]', params: { id: 'new' } }));
+    // `ShoppingDetail(…, openSettings: true)` (ShoppingViews.swift:132).
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith({ pathname: '/wellness/shopping/[id]', params: { id: 'new', settings: '1' } }));
     const envelope = mockPost.mock.calls[0][0];
     expect(envelope.operation).toBe('create');
     expect(envelope.id).toBeUndefined();
