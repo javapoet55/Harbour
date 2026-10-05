@@ -479,7 +479,7 @@ export function MomentCallingGuide({ visible, onClose }: { visible: boolean; onC
             </LinearGradient>
           </Pressable>
           <Pressable accessibilityRole="button" onPress={onClose} style={styles.guideBack} testID="calling-guide-settings">
-            <Text style={[headline, { color: GUIDE_INDIGO }]}>Back to settings</Text>
+            <Text style={[headline, { color: GUIDE_INK }]}>Back to settings</Text>
           </Pressable>
         </ScrollView>
       </View>

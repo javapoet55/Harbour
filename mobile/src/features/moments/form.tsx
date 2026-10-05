@@ -148,7 +148,9 @@ export function FormField({
 export function FormToggle({ label, value, onValueChange, disabled = false, testID }: { label: string; value: boolean; onValueChange: (next: boolean) => void; disabled?: boolean; testID?: string }) {
   const theme = useTheme();
   return (
-    <View style={[styles.inline, disabled && styles.dimmed]}>
+    // A disabled Toggle keeps its label at full colour and dims only the switch (`moment-connect-section`);
+    // dimming the row as well dimmed the switch twice.
+    <View style={styles.inline}>
       <Text style={[textStyles.body, styles.grow, { color: theme.colors.label }]}>{label}</Text>
       <IOSSwitch
         accessibilityLabel={label}

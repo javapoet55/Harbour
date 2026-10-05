@@ -1519,4 +1519,17 @@ captures; results row by row in `docs/reference/PARITY.md` "UI-parity pass 3". F
   and Agent voice pickers show only their value, as Swift's.
 - **Add Food** sits below the status bar on Android and titles its section "Food" / "Sample meal".
 - **Calorie Tracker keeps a dark status bar in dark mode** (`FixedLightStatusBar`).
+- **A disabled `FormToggle` dims only its switch** (shared). The row and the switch were both at 40%, so the
+  switch was dimmed twice and the label greyed out, where iOS keeps a disabled Toggle's label at full colour.
+  **A disabled `IOSSwitch` thumb has no `elevation`** (Android only): Android drew the shadow at full strength
+  through the translucent thumb as a grey smudge.
+- **Review schedule stacks its two buttons when a label wraps.** Swift's `ViewThatFits` measures each button
+  at its one-line width; at 360 dp "Confirm Schedule" needs two lines at half the row, so the pair stacks,
+  each full width. Detected from the laid-out line count (`onTextLayout`).
+- **Schedule confirmed's bar takes the page colour** (`#F7FAFF`) instead of showing the Moments backdrop.
+- **Choose Festivals region cards**: the radio mark sits over the card's top-right corner instead of taking
+  its own column, so "celebrations" keeps its width at 360 dp (Android broke it mid-word); the cards are white
+  (`.secondarySystemGroupedBackground`); "All regions" is ink.
+- **Ink, not the tint, under an outer `.foregroundStyle`**: the Manage Moment info glyph and the calling
+  guide's "Back to settings".
 

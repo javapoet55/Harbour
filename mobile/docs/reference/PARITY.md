@@ -769,11 +769,20 @@ reached** (with the reason).
 | 8 | Nutrition dashboard (Today / Week / Month) | **fixed** | (a) the Today ring's gradient ran the wrong way (green at 2 o'clock): Swift's `.rotationEffect(-90)` turns the gradient with the ring, so 12 o'clock is teal and 3 o'clock blue; (b) Week/Month bars sat on the card floor, Swift's `.frame(height: 155)` centres the row; (c) "Goal 1000 mg" → "Goal 1,000 mg". Data is the Mac's "Parity oatmeal with banana" (350 kcal) |
 | 9 | Food Log and Add Food | **fixed** | Add Food drew its bar under the status bar, titled its section "FOOD" (iOS 26: "Food"), and its note sat on the card edge — the last was a **shared `Text` bug**: the Android slack's `paddingHorizontal: 1` beat any caller's `padding` shorthand. `Text` now adds the slack to the caller's padding and margin (also fixes the task agent bubbles, the brief's empty state, event notes and offer savings). Not saved. Platform gap: page sheet is full height |
 | 10 | Nutrition Insights and Recommendations | checked | light and dark. Calorie Tracker in dark mode: fixed-light design holds; the status bar is now kept dark (`FixedLightStatusBar`) |
+| 11 | Important Moments with date filters | checked | Today / Tomorrow / This Week / Later, Scheduled; counts differ by data. "Updated 5:49 pm" follows the phone's en-IN locale, as Swift's `.formatted` would |
+| 12 | Manage Moments tabs | checked | Scheduled, Need Review, Ready to Schedule; dark mode uses the logged `link` token (§25). Get Well Soon's tile glyph is an Ionicons stand-in |
+| 13 | Create Moment (time zone, manual recipient) | checked | Android form chrome as logged (§2, §4); left without saving |
+| 14 | Choose Festivals | **fixed** | (a) region cards broke "celebrations" mid-word ("celebrati/ons"): the trailing radio mark took its own column, leaving ~72 dp at 360 dp; it now sits over the card's corner and only the title keeps clear; (b) the cards were grey — Swift's `.secondarySystemGroupedBackground` is white in light mode; (c) "All regions" was the accent, Swift draws it ink. Checked light and dark (dark accent is the logged `link` token) |
+| 15 | Manage Moment, three tabs | **fixed** | "Parity Birthday" (the Mac's test moment). Info card glyph was the link colour; a plain `Label`'s glyph is ink. Title wraps at this width. Moment / Send time headers are the logged Android form labels (§4) |
+| 16 | Connect me on the day | **fixed** | the disabled "Connect me to Parity Kate" row was dimmed twice (row and switch) and Android drew the thumb's elevation through the translucent switch as a grey smudge; the label now stays full colour as on iOS and a disabled thumb has no elevation (shared `FormToggle` / `IOSSwitch`) |
+| 17 | Verify caller ID | not reached | opens from **Verify my number**, which the run must not tap |
+| 18 | How it works (calling guide) | **fixed** | "Back to settings" was indigo; the guide's outer `.foregroundStyle(ink)` makes it ink (capture confirms) |
+| 19 | Review schedule | **fixed** | "Confirm Schedule" wrapped to two lines inside its half-width button; Swift's `ViewThatFits` stacks the pair when they do not fit. RN now stacks them, full width, as soon as either label needs a second line |
+| 20 | Send now | not reached | opens from **Send Now**, which the run must not tap |
+| 21 | Schedule confirmed | **fixed** | the bar showed the Moments backdrop as a grey band above the `#F7FAFF` page; it now takes the page colour. Reached by confirming "Parity Birthday"'s schedule to Parity Kate (both the Mac's test items; it was already scheduled, so this re-confirmed the same 6 Oct 8:00 AM plan) |
 
 ### Not reached in this run
 
-Stopped at the user's request after group 3 (Calorie Tracker). Not yet checked on the phone: Moments
-(rows 26-35), Shopping (36-49 range: My Lists through Recommendations), Ask AI landing, Daily Brief and
-section detail, Account / Help / Feedback / Change password, Calendar tab, Event Details and Edit Event,
-Tasks tab, Task Details, task agent card, Nexdo Action contact screen, and Today action cards and queue —
-39 of the 49 rows. Dark mode of the shared form components was not checked either.
+Stopped at the user's request after group 3 and resumed: see the rows above for what each later group
+reached. Rows never reached are listed in the final report of the run.
+

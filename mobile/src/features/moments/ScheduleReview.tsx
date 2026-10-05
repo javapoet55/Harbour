@@ -56,7 +56,22 @@ export function ScheduleWishCard({ heading, message, occasion }: { heading: stri
 }
 
 /** `ScheduleActionStyle` (:415-427): primary blue, secondary outlined blue, or the four-colour gradient. */
-function ActionButton({ title, onPress, kind = 'primary', disabled = false, testID }: { title: string; onPress: () => void; kind?: 'primary' | 'secondary' | 'gradient'; disabled?: boolean; testID?: string }) {
+function ActionButton({
+  title,
+  onPress,
+  kind = 'primary',
+  disabled = false,
+  testID,
+  onWrap,
+}: {
+  title: string;
+  onPress: () => void;
+  kind?: 'primary' | 'secondary' | 'gradient';
+  disabled?: boolean;
+  testID?: string;
+  /** Called when the title needs more than one line at the width it was given. */
+  onWrap?: () => void;
+}) {
   const secondary = kind === 'secondary';
   return (
     <Pressable
@@ -73,7 +88,9 @@ function ActionButton({ title, onPress, kind = 'primary', disabled = false, test
         end={{ x: 1, y: 0.5 }}
         style={StyleSheet.absoluteFill}
       />
-      <Text style={[styles.headline, { color: secondary ? BLUE : '#FFFFFF' }]}>{title}</Text>
+      <Text onTextLayout={onWrap ? (event) => event.nativeEvent.lines.length > 1 && onWrap() : undefined} style={[styles.headline, { color: secondary ? BLUE : '#FFFFFF' }]}>
+        {title}
+      </Text>
     </Pressable>
   );
 }
@@ -184,6 +201,8 @@ export function ScheduleReviewSheet({ model, visible, onClose }: { model: Manage
   const [dateDraft, setDateDraft] = useState(state.sendDate);
   const [recipientDraft, setRecipientDraft] = useState<ManagedRecipient | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [stacked, setStacked] = useState(false);
+  const stack = () => setStacked(true);
   const [showAll, setShowAll] = useState(false);
   const [sendNowConfirmation, setSendNowConfirmation] = useState(false);
   const [sendNowStarted, setSendNowStarted] = useState(false);
@@ -348,13 +367,14 @@ export function ScheduleReviewSheet({ model, visible, onClose }: { model: Manage
               <ActionButton title="Done" kind="secondary" onPress={close} testID="review-done" />
             </>
           ) : (
-            // `ViewThatFits`: side by side, or stacked when they do not fit.
-            <View style={styles.deliveryButtons}>
-              <View style={styles.deliveryButton}>
-                <ActionButton title="Send Now" kind="secondary" onPress={() => setSendNowConfirmation(true)} disabled={submitting} testID="review-send-now" />
+            // `ViewThatFits`: side by side, or stacked when they do not fit. It measures each button at its
+            // ideal (one-line) width, so a label that has to wrap at half the row means "does not fit".
+            <View style={[styles.deliveryButtons, stacked && styles.deliveryStacked]} testID="review-delivery-buttons">
+              <View style={[styles.deliveryButton, stacked && styles.deliveryButtonStacked]}>
+                <ActionButton title="Send Now" kind="secondary" onPress={() => setSendNowConfirmation(true)} disabled={submitting} testID="review-send-now" onWrap={stack} />
               </View>
-              <View style={styles.deliveryButton}>
-                <ActionButton title={submitting ? 'Confirming…' : 'Confirm Schedule'} kind="gradient" onPress={() => void confirm()} disabled={submitting} testID="wish-primary" />
+              <View style={[styles.deliveryButton, stacked && styles.deliveryButtonStacked]}>
+                <ActionButton title={submitting ? 'Confirming…' : 'Confirm Schedule'} kind="gradient" onPress={() => void confirm()} disabled={submitting} testID="wish-primary" onWrap={stack} />
               </View>
             </View>
           )}
@@ -490,7 +510,19 @@ export function ScheduleSuccess({
   return (
     <FixedScheme scheme="light">
       <View style={[styles.fill, { backgroundColor: SCHEDULE_BACKGROUND }]} onLayout={(event) => setSize(event.nativeEvent.layout)} testID="schedule-success">
-        <Stack.Screen options={{ title: 'Schedule confirmed', headerBackVisible: false, headerLeft: () => null, headerRight: undefined, gestureEnabled: false }} />
+        {/* The bar sits on the page's own colour, as Swift's inline bar over `ScheduleDesign.background`;
+            the stack's default showed the Moments backdrop above it as a grey band. */}
+        <Stack.Screen
+          options={{
+            title: 'Schedule confirmed',
+            headerBackVisible: false,
+            headerLeft: () => null,
+            headerRight: undefined,
+            gestureEnabled: false,
+            headerStyle: { backgroundColor: SCHEDULE_BACKGROUND },
+            headerShadowVisible: false,
+          }}
+        />
         <ScrollView contentContainerStyle={styles.success}>
           <View style={[styles.check, { backgroundColor: withAlpha(systemColors.green, 0.08) }]}>
             <Ionicons name="checkmark-circle" size={92} color={systemColors.green} />
@@ -551,6 +583,8 @@ const styles = StyleSheet.create({
   showMore: { minHeight: 44, justifyContent: 'center' },
   info: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, padding: 14, borderRadius: 16 },
   deliveryButtons: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
+  deliveryStacked: { flexDirection: 'column', flexWrap: 'nowrap' },
+  deliveryButtonStacked: { flexGrow: 0, flexBasis: 'auto' },
   deliveryButton: { flexGrow: 1, flexBasis: 150 },
   editor: { gap: 18 },
   field: { borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(60, 60, 67, 0.29)', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 8, fontSize: 17, color: SCHEDULE_INK, backgroundColor: '#FFFFFF' },

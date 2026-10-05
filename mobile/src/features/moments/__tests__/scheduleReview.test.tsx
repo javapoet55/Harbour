@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
-import { Text } from 'react-native';
+import { StyleSheet, Text } from 'react-native';
 import * as SMS from 'expo-sms';
 
 const mockDismissTo = jest.fn();
@@ -105,6 +105,17 @@ describe('Review schedule', () => {
     expect(review.getByText('Send Now')).toBeTruthy();
     expect(review.getByText('Confirm Schedule')).toBeTruthy();
     expect(calls('schedule')).toHaveLength(0);
+  });
+
+  it('stacks Send Now and Confirm Schedule when a label would wrap (`ViewThatFits`)', async () => {
+    await openReview([person('a', 'Sam')]);
+    const row = () => StyleSheet.flatten(screen.getByTestId('review-delivery-buttons').props.style);
+    expect(row().flexDirection).toBe('row');
+    // Android reports the laid-out lines; two lines at half the row means the pair does not fit.
+    await act(async () => {
+      screen.getByText('Confirm Schedule').props.onTextLayout({ nativeEvent: { lines: [{}, {}] } });
+    });
+    expect(row().flexDirection).toBe('column');
   });
 
   it('confirms the schedule and shows Schedule confirmed, then Done returns to Moments', async () => {

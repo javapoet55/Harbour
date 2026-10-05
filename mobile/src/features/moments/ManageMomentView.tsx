@@ -827,7 +827,7 @@ export function ManageMomentView({ group, onDone }: { group: MomentDisplayGroup;
               </MomentCard>
               {connectSection}
               <View style={[styles.info, { backgroundColor: withAlpha(systemColors.blue, 0.08) }]}>
-                <Ionicons name="information-circle" size={17} color={theme.colors.link} />
+                <Ionicons name="information-circle" size={17} color={theme.colors.label} />
                 <Text style={[textStyles.subheadline, styles.grow, { color: theme.colors.label }]}>
                   At the scheduled time, we’ll remind you to send manual wishes. For Messages, open the prepared wish and tap Send. Only email marked automatic sends for you.
                 </Text>
