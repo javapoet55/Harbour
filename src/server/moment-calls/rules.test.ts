@@ -21,14 +21,29 @@ describe('phone numbers', () => {
 describe('when the connect call happens', () => {
   it('uses the recipient time zone by default and the next yearly date', () => {
     const next = nextConnectAt(mom, new Date('2026-09-27T12:00:00Z'));
-    expect(next.date).toBe('2026-10-02');
-    expect(next.at.toISOString()).toBe('2026-10-02T03:30:00.000Z');      // 9:00 AM IST
+    expect(next).not.toBeNull();
+    expect(next!.date).toBe('2026-10-02');
+    expect(next!.at.toISOString()).toBe('2026-10-02T03:30:00.000Z');      // 9:00 AM IST
   });
   it('is due from the chosen time for one hour on the moment day only', () => {
     expect(dueConnect(mom, new Date('2026-10-02T03:29:00Z'))).toBeNull();
     expect(dueConnect(mom, new Date('2026-10-02T03:30:30Z'))).toMatchObject({ date: '2026-10-02' });
     expect(dueConnect(mom, new Date('2026-10-02T04:31:00Z'))).toBeNull();
     expect(dueConnect(mom, new Date('2026-10-03T03:30:30Z'))).toBeNull();
+  });
+  it('skips a local time that does not exist on the moment day instead of throwing', () => {
+    // 2026-03-08 02:30 does not exist in America/New_York (spring forward).
+    const dst = { ...mom, occurrenceDate: '2026-03-08', yearly: false, timeZoneID: 'America/New_York', connectTimeZone: 'America/New_York', connectTime: '02:30' };
+    expect(nextConnectAt(dst, new Date('2026-03-01T12:00:00Z'))).toBeNull();
+    expect(dueConnect(dst, new Date('2026-03-08T07:00:00Z'))).toBeNull();
+    // A yearly moment slides to the next year that can host the time.
+    const yearly = { ...dst, yearly: true };
+    expect(nextConnectAt(yearly, new Date('2026-03-01T12:00:00Z'))).toMatchObject({ date: '2027-03-08' });
+  });
+  it('never queues a call outside the recipient window', () => {
+    const late = { ...mom, connectTime: '02:00' };
+    // 02:00 IST on the moment day is due, but the recipient window keeps it from queuing.
+    expect(dueConnect(late, new Date('2026-10-01T20:30:00Z'))).toBeNull();
   });
   it('previews the time for both people and checks both calling windows', () => {
     const p = previewConnect(new Date('2026-10-02T03:30:00Z'), 'America/Los_Angeles', 'Asia/Kolkata');

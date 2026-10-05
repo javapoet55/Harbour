@@ -25,9 +25,19 @@ export async function saveMoment(userId:string,input:unknown,id?:string) {
 }
 async function persistMoment(userId:string,input:unknown,id?:string) {
  const data=momentInput.parse(input);
+ // A festival member edited one moment at a time still can't take a sibling recipient's delivery
+ // address; festivalSave runs the same check across the whole group.
+ const checkGroupDuplicate=async (momentId:string,festivalSettings:string)=>{
+  const groupID=readFestivalSettings(festivalSettings).groupID;
+  if(typeof groupID!=='string'||!groupID) return;
+  const or:Prisma.ImportantMomentWhereInput[]=[...(data.email?[{email:data.email}]:[]),...(data.phone?[{phone:data.phone}]:[])];
+  if(!or.length) return;
+  if(await prisma.importantMoment.count({where:{userId,id:{not:momentId},festivalSettings:{contains:groupID},OR:or}})) throw new MomentError('Another recipient in this group already uses that email or phone.',409);
+ };
  if(id) {
   const m=await prisma.importantMoment.findFirst({where:{id,userId}}); if(!m) throw new MomentError('Moment not found.',404);
   if(await prisma.deliveryPlan.count({where:{draft:{momentID:id},status:{in:['SENDING','SCHEDULED','AWAITING_CONFIRMATION']}}})) throw new MomentError('Cancel the active wish before changing its moment.',409);
+  await checkGroupDuplicate(id,m.festivalSettings);
   return prisma.importantMoment.update({where:{id},data});
  }
  // Retries share a source key. Only imports deduplicate by recipient/type/date;
@@ -44,6 +54,7 @@ async function persistMoment(userId:string,input:unknown,id?:string) {
  if(existing) {
   if(existing.sourceKey===data.sourceKey && existing.source!=='manual') {
    if(await prisma.deliveryPlan.count({where:{draft:{momentID:existing.id},status:{in:['SENDING','SCHEDULED','AWAITING_CONFIRMATION']}}})) throw new MomentError('Cancel the active wish before updating imported details.',409);
+   await checkGroupDuplicate(existing.id,existing.festivalSettings);
    return prisma.importantMoment.update({where:{id:existing.id},data});
   }
   return existing;
@@ -195,7 +206,9 @@ async function createAnnual(id:string) {
 }
 // Manual deliveries remain available for one day after their due time, then leave the active queue.
 async function expireUnconfirmed(now:Date, userId?:string) {
- const where:Prisma.DeliveryPlanWhereInput={status:'AWAITING_CONFIRMATION',scheduledAtUTC:{lte:new Date(+now-86400000)},...(userId?{draft:{moment:{userId}}}:{})};
+ // Copy/share plans can never send themselves, so expiring them only blocks an honest 'copied' or
+ // 'shared' record later; messages still expire so a forgotten send doesn't linger.
+ const where:Prisma.DeliveryPlanWhereInput={status:'AWAITING_CONFIRMATION',channel:{notIn:['copy','share']},scheduledAtUTC:{lte:new Date(+now-86400000)},...(userId?{draft:{moment:{userId}}}:{})};
  const yearly=await prisma.deliveryPlan.findMany({where:{...where,repeatYearly:true},select:{id:true}});
  const expired=await prisma.deliveryPlan.updateMany({where,data:{status:'EXPIRED',lastError:'This wish expired 24 hours after its scheduled send time because delivery was not confirmed. Create a new wish to send it.'}});
  // An unconfirmed year still carries a yearly wish on to next year.

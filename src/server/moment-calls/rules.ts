@@ -1,5 +1,5 @@
 import { formatInTimeZone } from 'date-fns-tz';
-import { zonedDateTime } from '@/lib/time';
+import { addDays, parseYmd, zonedDateTime } from '@/lib/time';
 import { occurrence } from '@/server/moments/domain';
 import { CALL_WINDOW } from '@/server/nutrition/config';
 import { isLocalTime, isTimeZone, minutesOf } from '@/server/nutrition/time';
@@ -37,11 +37,28 @@ export const inWindow = (tz: string, at: Date) => {
 type MomentTiming = { occurrenceDate: string; yearly: boolean; timeZoneID: string; connectTime: string; connectTimeZone: string };
 export const connectZone = (m: Pick<MomentTiming, 'connectTimeZone' | 'timeZoneID'>) => m.connectTimeZone || m.timeZoneID;
 
-/** The next connect call for a moment: the moment day (in the chosen time zone) at the chosen time. */
-export function nextConnectAt(m: MomentTiming, now = new Date()): { date: string; at: Date } {
+/** True when `zonedDateTime` failed because that local time does not exist on that date (a daylight-saving gap). */
+const invalidLocalTime = (e: unknown) => e instanceof Error && e.message === 'INVALID_LOCAL_TIME';
+
+/**
+ * The next connect call for a moment: the moment day (in the chosen time zone) at the chosen time.
+ * A connectTime that falls into a daylight-saving gap cannot happen that day, so a yearly moment
+ * moves to the next year that can host it; a one-off moment has no other day and returns null.
+ */
+export function nextConnectAt(m: MomentTiming, now = new Date()): { date: string; at: Date } | null {
   const zone = connectZone(m);
-  const date = occurrence(m.occurrenceDate, m.yearly, zone, now);
-  return { date, at: zonedDateTime(date, m.connectTime, zone) };
+  let cursor = now;
+  for (let i = 0; i < 4; i++) {
+    const date = occurrence(m.occurrenceDate, m.yearly, zone, cursor);
+    try {
+      return { date, at: zonedDateTime(date, m.connectTime, zone) };
+    } catch (e) {
+      if (!invalidLocalTime(e) || !m.yearly) return null;
+      // Past this zone-day (a day and a margin, whichever way the offset leans): the next yearly candidate.
+      cursor = addDays(parseYmd(date), 2);
+    }
+  }
+  return null;
 }
 
 /** Whether today's connect call is due now: on the moment day, at or after the time, at most an hour late. */
@@ -50,7 +67,14 @@ export function dueConnect(m: MomentTiming, now = new Date()): { date: string; a
   const today = formatInTimeZone(now, zone, 'yyyy-MM-dd');
   const date = occurrence(m.occurrenceDate, m.yearly, zone, now);
   if (date !== today) return null;
-  const at = zonedDateTime(date, m.connectTime, zone);
+  let at: Date;
+  try {
+    at = zonedDateTime(date, m.connectTime, zone);
+  } catch (e) {
+    if (invalidLocalTime(e)) return null; // that local time never happens today: the call is skipped
+    throw e;
+  }
+  if (!inWindow(zone, at)) return null; // legacy rows can hold a time outside the recipient's window
   const late = now.getTime() - at.getTime();
   return late >= 0 && late <= CONNECT_GRACE_MINUTES * 60_000 ? { date, at } : null;
 }
@@ -71,7 +95,7 @@ export function suggestConnectTime(m: Omit<MomentTiming, 'connectTime'>, userZon
   const base = { ...m, connectTime: DEFAULT_CONNECT_TIME };
   const zone = connectZone(base);
   const date = occurrence(m.occurrenceDate, m.yearly, zone, now);
-  const ok = (hm: string) => { const at = zonedDateTime(date, hm, zone); return inWindow(userZone, at) && inWindow(zone, at); };
+  const ok = (hm: string) => { try { const at = zonedDateTime(date, hm, zone); return inWindow(userZone, at) && inWindow(zone, at); } catch { return false; } };
   if (ok(DEFAULT_CONNECT_TIME)) return DEFAULT_CONNECT_TIME;
   const candidates = Array.from({ length: 28 }, (_, i) => 8 * 60 + i * 30)
     .map(min => `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`)

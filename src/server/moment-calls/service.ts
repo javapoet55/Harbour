@@ -51,10 +51,11 @@ export async function connectStatus(userId: string, momentIds?: string[], now = 
       const next = nextConnectAt({ ...m, connectTime: time }, now);
       const today = formatInTimeZone(now, zone, 'yyyy-MM-dd');
       const last = calls.find(c => c.momentId === m.id);
+      const nextAt = next?.at ?? now; // null only for a one-off moment whose day can't host the time
       return {
         momentId: m.id, enabled: m.connectEnabled, time, timeZone: zone,
-        recipientPhone: recipientPhone(m), passed: !m.yearly && next.date < today, isToday: next.date === today,
-        nextCallAt: next.at.toISOString(), preview: previewConnect(next.at, zoneOfUser, zone),
+        recipientPhone: recipientPhone(m), passed: !m.yearly && (!next || next.date < today), isToday: next?.date === today,
+        nextCallAt: nextAt.toISOString(), preview: previewConnect(nextAt, zoneOfUser, zone),
         lastCall: last ? { status: last.status, date: last.occurrenceDate, at: last.updatedAt.toISOString() } : null,
       };
     }),
@@ -71,7 +72,8 @@ export async function connectPreview(userId: string, raw: unknown, now = new Dat
   const zone = input.timeZone && validZone(input.timeZone) ? input.timeZone : connectZone(moment);
   const time = input.time && validConnectTime(input.time) ? input.time : moment.connectTime;
   const next = nextConnectAt({ ...moment, connectTime: time, connectTimeZone: zone }, now);
-  return { time, timeZone: zone, nextCallAt: next.at.toISOString(), preview: previewConnect(next.at, await userZone(userId), zone) };
+  const nextAt = next?.at ?? now;
+  return { time, timeZone: zone, nextCallAt: nextAt.toISOString(), preview: previewConnect(nextAt, await userZone(userId), zone) };
 }
 
 export async function saveConnect(userId: string, raw: unknown, now = new Date()) {
@@ -93,9 +95,11 @@ export async function saveConnect(userId: string, raw: unknown, now = new Date()
   if (!validConnectTime(time)) throw new MomentError('Choose a valid call time.');
   if (!validZone(zone)) throw new MomentError('Choose a valid time zone.');
   const next = nextConnectAt({ ...moment, connectTime: time, connectTimeZone: zone }, now);
+  if (!next) throw new MomentError('That time does not exist on the moment day in that time zone. Choose a different time.');
   if (!moment.yearly && next.date < formatInTimeZone(now, zone, 'yyyy-MM-dd')) throw new MomentError('This moment has already passed.');
   const preview = previewConnect(next.at, await userZone(userId), zone);
   if (!preview.userOk) throw new MomentError(`That’s ${preview.userLocal} for you. Nexdo calls you first, so choose a time between 8:00 AM and 9:30 PM your time.`);
+  if (!preview.recipientOk) throw new MomentError(`That’s ${preview.recipientLocal} for ${recipientName(moment)}. Choose a time between 8:00 AM and 9:30 PM their time.`);
   await prisma.importantMoment.update({ where: { id: moment.id }, data: { connectEnabled: true, connectTime: time, connectTimeZone: zone } });
   return connectStatus(userId, [moment.id], now);
 }
@@ -128,7 +132,9 @@ export async function runMomentCallTick(now = new Date(), dial: (id: string) => 
   const moments = await prisma.importantMoment.findMany({ where: { connectEnabled: true, enabled: true }, include: { user: { select: { timeZone: true } } } });
   for (const m of moments) {
     if (m.snoozedUntil && m.snoozedUntil > now) continue;
-    const due = dueConnect(m, now);
+    let due: { date: string; at: Date } | null;
+    try { due = dueConnect(m, now); }
+    catch { continue; } // one moment with uncomputable timing must not stop everyone's calls
     if (!due || !inWindow(m.user.timeZone, now)) continue;
     try { await prisma.momentConnectCall.create({ data: { userId: m.userId, momentId: m.id, occurrenceDate: due.date, attempt: 1, scheduledFor: due.at } }); queued++; }
     catch (e) { if (!isUnique(e)) throw e; }
@@ -136,7 +142,9 @@ export async function runMomentCallTick(now = new Date(), dial: (id: string) => 
   const graceStart = new Date(now.getTime() - CONNECT_GRACE_MINUTES * 60_000);
   const expired = (await prisma.momentConnectCall.updateMany({ where: { status: 'QUEUED', scheduledFor: { lt: graceStart } }, data: { status: 'EXPIRED' } })).count;
   const ready = await prisma.momentConnectCall.findMany({ where: { status: 'QUEUED', scheduledFor: { lte: now, gte: graceStart } }, select: { id: true }, take: 50 });
-  for (const c of ready) { await dial(c.id); dialed++; }
+  for (let i = 0; i < ready.length; i += 5) {
+    await Promise.all(ready.slice(i, i + 5).map(async (c) => { await dial(c.id); dialed++; }));
+  }
   const stale = (await prisma.momentConnectCall.updateMany({ where: { status: { in: ['DIALING', 'IN_PROGRESS', 'CONNECTING'] }, updatedAt: { lt: new Date(Date.now() - 3 * 3600_000) } }, data: { status: 'FAILED', error: 'stale', endedAt: new Date() } })).count; // updatedAt is wall-clock
   return { status: 'ok' as const, queued, dialed, expired, stale };
 }
