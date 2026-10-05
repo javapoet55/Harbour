@@ -16,7 +16,7 @@ import { WishEmailConfirmation } from '../../../../src/features/moments/WishEmai
 import { textStyles, useTheme } from '../../../../src/theme';
 
 /**
- * `WishPlanView` (ios/App/ImportantMomentsView.swift:495-551): one wish's delivery, always read back
+ * `WishPlanView` (ios/App/ImportantMomentsView.swift:519-583): one wish's delivery, always read back
  * from the latest snapshot (`current`). Edit Schedule, "Review & Open Messages" for a Messages wish
  * awaiting you, "Send email now", Retry for a failed automatic email, and Cancel behind a
  * confirmation; for a "Check Sent mail" email, "I found it in Sent mail" / "It wasn't sent"; for a
