@@ -134,6 +134,7 @@ final class AppModel: ObservableObject {
     var momentAPI: APIClient { api }
     private let api: APIClient
     private let weatherClient = WeatherClient()
+    private let weatherLocation = WeatherLocationProvider()
     private var taskLoadID: UUID?
     private var taskRevision = 0
     private var supplementaryRefresh: Task<Void, Never>?
@@ -162,30 +163,40 @@ final class AppModel: ObservableObject {
         await perform {
             do {
                 let _: Ignore = try await api.request("/api/auth/login", method: "POST", body: JSONEncoder().encode(["email": address, "password": password]), treatUnauthorizedAsSignedOut: false)
-            } catch APIError.emailNotVerified {
-                pending = PendingEmailVerification(email: address, reason: .signInRequiresVerification)
+            } catch APIError.emailNotVerified(_, let proof) {
+                pending = PendingEmailVerification(email: address, reason: .signInRequiresVerification, verificationProof: proof)
                 return
             }
             try await finishAuthentication()
         }
         return pending
     }
-    func register(name: String, email: String, password: String) async -> PendingEmailVerification? {
+    func signupChallengeURL(state: String) async throws -> URL? {
+        struct Config: Decodable { let required: Bool; let siteKey: String }
+        let config: Config = try await api.request("/api/auth/signup-config", treatUnauthorizedAsSignedOut: false)
+        guard config.required else { return nil }
+        guard !config.siteKey.isEmpty, var parts = URLComponents(url: api.baseURL, resolvingAgainstBaseURL: false) else { throw CalendarConnectError.unavailable }
+        parts.path = "/signup-challenge"
+        parts.queryItems = [URLQueryItem(name: "state", value: state)]
+        guard let url = parts.url else { throw CalendarConnectError.unavailable }
+        return url
+    }
+    func register(name: String, email: String, password: String, turnstileToken: String? = nil) async -> PendingEmailVerification? {
         var pending: PendingEmailVerification?
         await perform {
-            struct Input: Encodable { let name: String; let email: String; let password: String }
-            let input = Input(name: name, email: email, password: password)
+            struct Input: Encodable { let name: String; let email: String; let password: String; let turnstileToken: String? }
+            let input = Input(name: name, email: email, password: password, turnstileToken: turnstileToken)
             let response: RegistrationResponse = try await api.request("/api/auth/register", method: "POST", body: JSONEncoder().encode(input), treatUnauthorizedAsSignedOut: false)
             // Servers without email verification start the session at registration.
             guard response.emailVerificationRequired == true else { try await finishAuthentication(); return }
-            pending = PendingEmailVerification(email: response.email, reason: response.emailSent == false ? .codeNotSent : .codeSent)
+            pending = PendingEmailVerification(email: response.email, reason: response.emailSent == false ? .codeNotSent : .codeSent, verificationProof: response.verificationProof)
         }
         return pending
     }
     /// A correct code starts the session, so the profile loads straight after.
-    func verifyEmail(email: String, code: String) async throws {
-        struct Input: Encodable { let email: String; let code: String }
-        let _: Ignore = try await api.request("/api/auth/verify-email", method: "POST", body: JSONEncoder().encode(Input(email: email, code: code)), treatUnauthorizedAsSignedOut: false)
+    func verifyEmail(email: String, code: String, verificationProof: String? = nil) async throws {
+        struct Input: Encodable { let email: String; let code: String; let verificationProof: String? }
+        let _: Ignore = try await api.request("/api/auth/verify-email", method: "POST", body: JSONEncoder().encode(Input(email: email, code: code, verificationProof: verificationProof)), treatUnauthorizedAsSignedOut: false)
         try await finishAuthentication()
     }
     func resendVerificationCode(email: String) async throws -> String {
@@ -223,6 +234,7 @@ final class AppModel: ObservableObject {
         let response: ProfileResponse = try await api.request("/api/me", timeout: 15)
         guard profileRevision == revision, profile?.id == userID, !photoSaveInProgress else { return }
         profile = response.user
+        rememberProfileName()
     }
     // Follow the device's location-based system zone, including daylight saving time.
     func synchronizeDeviceTimeZone() async throws {
@@ -237,8 +249,6 @@ final class AppModel: ObservableObject {
     func saveProfileSettings(_ input: ProfileSettingsInput) async throws {
         let _: Ignore = try await api.request("/api/settings", method: "PATCH", body: JSONEncoder().encode(input), timeout: 15)
         try await reloadProfile()
-        lastSignedInFirstName = ProfileName.firstName(from: profile?.name ?? "")
-        UserDefaults.standard.set(lastSignedInFirstName, forKey: "nexdo.lastSignedInFirstName")
         refreshSupplementaryData()
     }
     func saveProfilePhoto(_ photo: String?) async throws {
@@ -344,13 +354,16 @@ final class AppModel: ObservableObject {
         let response: ProfileResponse = try await api.request("/api/me")
         profile = response.user
         try await synchronizeDeviceTimeZone()
-        lastSignedInFirstName = ProfileName.firstName(from: response.user.name)
+        rememberProfileName()
+        try await load()
+    }
+    private func rememberProfileName() {
+        lastSignedInFirstName = ProfileName.firstName(from: profile?.name ?? "")
         if let lastSignedInFirstName {
             UserDefaults.standard.set(lastSignedInFirstName, forKey: "nexdo.lastSignedInFirstName")
         } else {
             UserDefaults.standard.removeObject(forKey: "nexdo.lastSignedInFirstName")
         }
-        try await load()
     }
     func load() async throws {
         // Non-task services must not hold the task spinner or fail a task refresh.
@@ -463,16 +476,22 @@ final class AppModel: ObservableObject {
     }
 
     private func refreshWeather(userID: String) async {
-        if let value = try? await weatherClient.forecast(),
-           !Task.isCancelled, profile?.id == userID { weather = value }
+        do { _ = try await loadWeatherForecast(requestPermission: false) }
+        catch { if profile?.id == userID { weather = nil } }
     }
-    func loadWeatherForecast() async throws -> WeatherResponse {
+    func loadWeatherForecast(requestPermission: Bool = true) async throws -> WeatherResponse {
         let userID = profile?.id
-        let value = try await weatherClient.forecast()
-        try Task.checkCancellation()
-        guard value.daily?.days.count == 5 else { throw APIError.invalidResponse }
-        if profile?.id == userID { weather = value }
-        return value
+        do {
+            let coordinate = try await weatherLocation.locate(requestPermission: requestPermission)
+            let value = try await weatherClient.forecast(latitude: coordinate.latitude, longitude: coordinate.longitude)
+            try Task.checkCancellation()
+            guard profile?.id == userID else { throw CancellationError() }
+            weather = value
+            return value
+        } catch {
+            if profile?.id == userID { weather = nil }
+            throw error
+        }
     }
     func calendarAgenda(from: String, days: Int) async throws -> Agenda {
         do { return try await api.request("/api/agenda?from=\(from)&days=\(days)") }
@@ -513,10 +532,12 @@ final class AppModel: ObservableObject {
         if profile?.id == owner { await refresh() }
     }
 
-    func voiceTaskSession(calendarOnly: Bool = false) async throws -> VoiceTaskSession {
+    func voiceTaskSession(calendarOnly: Bool = false, foodContext: FoodVoiceContext? = nil) async throws -> VoiceTaskSession {
         guard aiConsent && voiceConsent else { throw APIError.response(403) }
         try await synchronizeDeviceTimeZone()
-        return try await api.request("/api/realtime/task-session", method: "POST", body: JSONSerialization.data(withJSONObject: ["consent": true, "scope": calendarOnly ? "calendar" : "general"]), timeout: 25)
+        var body: [String: Any] = ["consent": true, "scope": foodContext != nil ? "food" : calendarOnly ? "calendar" : "general"]
+        if let foodContext { body["foodContext"] = try JSONSerialization.jsonObject(with: JSONEncoder().encode(foodContext)) }
+        return try await api.request("/api/realtime/task-session", method: "POST", body: JSONSerialization.data(withJSONObject: body), timeout: 25)
     }
 
     func voiceTranscriptionSession() async throws -> VoiceTaskSession {
@@ -534,7 +555,9 @@ final class AppModel: ObservableObject {
     }
     func updateTaskAgent(taskID: String, action: String, version: Int, key: String?, answer: String?, budget: String, constraints: String, candidateID: String?) async throws -> TaskAgentEnvelope {
         struct Input: Encodable { let action: String; let version: Int; let key: String?; let answer: String?; let budget: String; let constraints: String; let candidateId: String? }
-        return try await api.request("/api/tasks/\(taskID)/agent", method: "POST", body: JSONEncoder().encode(Input(action: action, version: version, key: key, answer: answer, budget: budget, constraints: constraints, candidateId: candidateID)))
+        let response: TaskAgentEnvelope = try await api.request("/api/tasks/\(taskID)/agent", method: "POST", body: JSONEncoder().encode(Input(action: action, version: version, key: key, answer: answer, budget: budget, constraints: constraints, candidateId: candidateID)))
+        NotificationCenter.default.post(name: .taskAgentChanged, object: taskID)
+        return response
     }
 
     func recordVoiceTokens(_ receipt: VoiceTokenReceipt) async {
@@ -560,10 +583,15 @@ final class AppModel: ObservableObject {
         if let usage:VoiceUsage=try? await api.request("/api/voice/usage",method:"POST",body:JSONEncoder().encode(Input(sessionId:sessionID.uuidString,durationSeconds:duration)),timeout:15),profile?.id==owner {voiceUsage=usage}
     }
 
-    func executeVoiceTool(name: String, arguments: Data, sessionID: UUID, callID: String, calendarOnly: Bool = false) async throws -> Data {
+    func executeVoiceTool(name: String, arguments: Data, sessionID: UUID, callID: String, calendarOnly: Bool = false, foodOnly: Bool = false) async throws -> Data {
         guard aiConsent && voiceConsent, let userID = profile?.id else { throw APIError.signedOut }
         let args = try JSONSerialization.jsonObject(with: arguments)
-        let body = try JSONSerialization.data(withJSONObject: ["consent": true, "scope": calendarOnly ? "calendar" : "general", "sessionId": sessionID.uuidString, "callId": callID, "name": name, "arguments": args])
+        let body = try JSONSerialization.data(withJSONObject: ["consent": true, "scope": foodOnly ? "food" : calendarOnly ? "calendar" : "general", "sessionId": sessionID.uuidString, "callId": callID, "name": name, "arguments": args])
+        if foodOnly {
+            let response: FoodVoiceLookupResponse = try await api.request("/api/realtime/tool", method: "POST", body: body, timeout: 30)
+            guard profile?.id == userID, aiConsent, voiceConsent else { throw APIError.signedOut }
+            return try JSONEncoder().encode(response)
+        }
         let response: VoiceToolResponse = try await api.request("/api/realtime/tool", method: "POST", body: body, timeout: 30)
         // Only reconcile this account. A dismissed voice screen does not discard a saved task.
         if profile?.id == userID, response.success, let task = response.task {
@@ -773,6 +801,17 @@ final class AppModel: ObservableObject {
     }
 
     @discardableResult
+    func askShopping(_ text:String, context:ShoppingRecommendationContext) async -> Bool {
+        guard aiConsent,!busy,!text.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty else{return false}
+        var succeeded=false
+        await perform(errorMessage:"Shopping recommendations are unavailable. Please try again.") {
+            struct Input:Encodable{let prompt:String;let listName:String;let itemNames:[String]}
+            let input=Input(prompt:text,listName:context.listName,itemNames:context.itemNames)
+            let result:AssistantTurn=try await api.request("/api/shopping/recommendations",method:"POST",body:JSONEncoder().encode(input),timeout:40)
+            turn=result;lastAssistantPrompt=text;contextID=nil;succeeded=true
+        }
+        return succeeded
+    }
     func ask(_ text: String, accept: Bool? = nil) async -> Bool {
         guard aiConsent, !busy, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, text.count <= 4000 else { return false }
         let proposal = turn?.confirmation?.actionId
@@ -801,6 +840,7 @@ final class AppModel: ObservableObject {
     }
     func withdrawConsent() { voiceConsent = false; aiConsent = false; turn = nil; lastAssistantPrompt = nil; contextID = nil }
     func reset() async {
+        if let owner = profile?.id { await PomodoroStore.cancelAlerts(owner: owner) }
         profileRevision += 1
         projectRevision += 1; projectLoadID = nil; projects = []; projectsLoaded = false; projectsLoading = false; projectsError = nil; unassignedTaskCount = 0
         invalidateScheduleIntelligence()
@@ -810,6 +850,17 @@ final class AppModel: ObservableObject {
         focusCompletion?.cancel(); focusCompletion = nil
         focusSession = nil
         taskQuery = TaskQuery(); tasksLoadFailed = false; profile = nil; voiceUsage = nil; tasks = []; agenda = nil; scheduleIntelligence = nil; weather = nil; withdrawConsent()
+    }
+    func submitFeedback(id: UUID, title: String, description: String, stars: Int) async throws {
+        struct Input: Encodable { let id: String; let title: String; let description: String; let stars: Int }
+        let _: Ignore = try await api.request("/api/feedback", method: "POST",
+            body: JSONEncoder().encode(Input(id: id.uuidString, title: title, description: description, stars: stars)))
+    }
+    func changePassword(current: String, new: String, confirmation: String) async throws {
+        struct Input: Encodable { let currentPassword: String; let newPassword: String; let confirmPassword: String }
+        let _: Ignore = try await api.request("/api/auth/change-password", method: "POST",
+            body: JSONEncoder().encode(Input(currentPassword: current, newPassword: new, confirmPassword: confirmation)))
+        await reset()
     }
     func logout() async {
         guard !busy else { return }
@@ -890,4 +941,8 @@ extension AppModel {
         apply(new, delta: 1)
         Task { await refreshProjects() }
     }
+}
+
+extension Notification.Name {
+    static let taskAgentChanged = Notification.Name("nexdo.taskAgentChanged")
 }

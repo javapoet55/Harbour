@@ -3,6 +3,7 @@ import MessageUI
 
 struct TaskAgentCard: View {
     @EnvironmentObject private var model: AppModel
+    @ObservedObject private var actionCoordinator = TaskActionCoordinator.shared
     let taskID: String
     @FocusState.Binding var focusedField: TaskDetailsView.Field?
     var onResearchAvailable: (Bool) -> Void = { _ in }
@@ -119,6 +120,7 @@ struct TaskAgentCard: View {
             else if let fallbackReason { Text(fallbackReason).font(.subheadline).foregroundStyle(.secondary) }
         }
         .tint(Color.nexdoIndigo)
+        .onDisappear { NotificationCenter.default.post(name: .taskAgentChanged, object: taskID) }
         .sheet(item: $messageDraft) { draft in
             ActionMessageComposer(recipient: draft.phone, body: draft.body) { result in
                 messageDraft = nil
@@ -157,7 +159,7 @@ struct TaskAgentCard: View {
                     }
                     guard !Task.isCancelled else { return }
                     if !busy {
-                        if (run?.candidates ?? []).isEmpty, let first = response.run?.candidates.first { selectedBusiness = first.id }
+                        if (run?.candidates ?? []).isEmpty, let first = response.run?.candidates.first { selectedBusiness = response.run?.candidates.first(where: { $0.id == actionCoordinator.action(for: taskID)?.businessCandidateID })?.id ?? first.id }
                         run = response.run
                         eligible = response.intent?.eligible == true
                         onResearchAvailable(eligible || run != nil)
@@ -267,6 +269,18 @@ struct TaskAgentCard: View {
                 if let link = attribution.url, let url = URL(string: link) { Link(attribution.provider, destination: url).font(.caption) }
                 else { Text(attribution.provider).font(.caption) }
             }
+            if let action = actionCoordinator.action(for: taskID) {
+                Button {
+                    actionCoordinator.update(action.id) {
+                        $0.businessCandidateID = candidate.id
+                        $0.contactIdentifier = nil
+                        $0.manualRecipient = nil
+                    }
+                } label: {
+                    Label(action.businessCandidateID == candidate.id ? "Selected for this task" : "Choose this business", systemImage: action.businessCandidateID == candidate.id ? "checkmark.circle.fill" : "checkmark.circle")
+                }.buttonStyle(.borderedProminent).foregroundStyle(.white)
+                    .accessibilityIdentifier("business.select.\(candidate.id)")
+            }
             Divider().overlay(businessPurple.opacity(0.06))
             outreachSection(candidate)
         }.tint(businessPurple)
@@ -281,8 +295,7 @@ struct TaskAgentCard: View {
                 if let evidence = candidate.evidence.first(where: { $0.source == "Google" }), let url = URL(string: evidence.url) {
                     Link(destination: url) {
                         VStack(spacing: 5) {
-                            Image(systemName: "map.fill").font(.system(size: 30)).foregroundStyle(Color.mint.opacity(0.7))
-                                .overlay { Image(systemName: "mappin.circle.fill").font(.title2).foregroundStyle(businessPurple).offset(y: -6) }
+                            Image(systemName: "map.fill").font(.system(size: 32, weight: .medium)).foregroundStyle(businessPurple)
                             Label("Open in Maps", systemImage: "arrow.up.right.square").font(.system(size: 10, weight: .semibold))
                         }.frame(width: 112, height: 82)
                             .background(LinearGradient(colors: [Color.mint.opacity(0.12), businessWash], startPoint: .topLeading, endPoint: .bottomTrailing), in: RoundedRectangle(cornerRadius: 14))
@@ -419,7 +432,7 @@ struct TaskAgentCard: View {
         VStack(alignment: .leading, spacing: 12) {
             Label("AI ASSISTANT", systemImage: "sparkles")
                 .font(.caption.weight(.bold)).tracking(1.2).foregroundStyle(businessPurple)
-            (Text(run.service == "plumber" ? "I found some plumbers " : "I found some businesses ") + Text("near you").foregroundColor(businessPurple))
+            (Text(run.service == "plumber" ? "I found the best plumbers " : "I found the best businesses ") + Text("near you").foregroundColor(businessPurple))
                 .font(.title3.bold()).foregroundStyle(Color.nexdoInk).fixedSize(horizontal: false, vertical: true)
             HStack(alignment: .top, spacing: 8) {
                 VStack(alignment: .leading, spacing: 10) {

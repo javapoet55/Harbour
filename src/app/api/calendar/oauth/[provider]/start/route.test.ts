@@ -36,6 +36,10 @@ describe('calendar OAuth start', () => {
     expect(mocks.createOAuthState).toHaveBeenCalledWith('user-1', 'google', true);
     expect(response.status).toBe(307);
     expect(response.headers.get('location')).toContain('state=signed-state');
+    expect(response.headers.get('set-cookie')).toContain('calendar-oauth-google=signed-state');
+    expect(response.headers.get('set-cookie')).toContain('HttpOnly');
+    expect(response.headers.get('set-cookie')).toContain('SameSite=lax');
+    expect(response.headers.get('cache-control')).toBe('no-store');
   });
 
   it('still redirects the web path using the session cookie', async () => {

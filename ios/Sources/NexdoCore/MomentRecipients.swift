@@ -90,8 +90,9 @@ public struct FestivalSaveRequest: Encodable, Sendable {
     public let recipients: [Recipient]
     public let settings: FestivalSettings
     public let cancelSchedules: Bool
-    public init(ids: [String], title: String, date: String, timeZoneID: String, yearly: Bool, active: Bool, recipients: [ManagedFestivalRecipient], settings: FestivalSettings, cancelSchedules: Bool = false) {
-        self.ids = ids; self.title = title; self.date = date; self.timeZoneID = timeZoneID; self.yearly = yearly; self.active = active
+    public let type: String?
+    public init(ids: [String], title: String, date: String, timeZoneID: String, yearly: Bool, active: Bool, recipients: [ManagedFestivalRecipient], settings: FestivalSettings, cancelSchedules: Bool = false, type: String? = nil) {
+        self.type = type; self.ids = ids; self.title = title; self.date = date; self.timeZoneID = timeZoneID; self.yearly = yearly; self.active = active
         self.recipients = recipients.map(Recipient.init); self.settings = settings; self.cancelSchedules = cancelSchedules
     }
     /// A new moment's recipients, saved onto the moment just created (`anchorID`). The first recipient is that moment,
@@ -165,5 +166,14 @@ public struct ContactAddressLinks: Equatable, Sendable {
             }
         }
         return nil
+    }
+}
+
+public extension ManagedFestivalRecipient {
+    /// Source keys are stable identities, even when the occasion's type changes.
+    static func storedKey(sourceKey:String,groupID:String,momentID:String) -> String {
+        let prefix=sourceKey.components(separatedBy:":").first ?? ""
+        let groupPrefix=prefix+":"+groupID+":"
+        return sourceKey.hasPrefix(groupPrefix) ? String(sourceKey.dropFirst(groupPrefix.count)) : momentID
     }
 }

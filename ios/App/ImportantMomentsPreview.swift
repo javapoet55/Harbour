@@ -92,7 +92,7 @@ final class MomentsPreviewProtocol: URLProtocol, @unchecked Sendable {
             }
             if ProcessInfo.processInfo.arguments.contains("-festival-five-recipients") {
                 for index in 2...5 {
-                    var item=moment;item["id"]="moment\(index)";item["firstName"]="Contact \(index)";item["phone"]="+1555555018\(index)";item["sourceKey"]="fixture\(index)"
+                    var item=moment;item["id"]="moment\(index)";item["firstName"]="Contact \(index)";item["phone"]="+1555555020\(index)";item["sourceKey"]="fixture\(index)"
                     moments.append(item)
                 }
             }
@@ -104,14 +104,14 @@ final class MomentsPreviewProtocol: URLProtocol, @unchecked Sendable {
             }
             for i in moments.indices {
                 if let saved=Self.festivalSaved,let ids=saved["ids"] as? [String],let id=moments[i]["id"] as? String,ids.contains(id) {
-                    moments[i]["title"]=saved["title"];moments[i]["occurrenceDate"]=saved["date"];moments[i]["nextOccurrence"]=saved["date"]
+                    moments[i]["type"]=saved["type"] ?? moments[i]["type"];moments[i]["timeZoneID"]=saved["timeZoneID"];moments[i]["title"]=saved["title"];moments[i]["occurrenceDate"]=saved["date"];moments[i]["nextOccurrence"]=saved["date"]
                     moments[i]["enabled"]=saved["active"];moments[i]["yearly"]=saved["yearly"]
                     if let settings=saved["settings"],let data=try? JSONSerialization.data(withJSONObject:settings){moments[i]["festivalSettings"]=String(data:data,encoding:.utf8)}
                 }
             }
             for i in moments.indices {if let id=moments[i]["id"] as? String {moments[i]["card"]=Self.cardImages[id]?.info ?? NSNull()}}
             for i in moments.indices {if let id=moments[i]["id"] as? String,let settings=Self.cardSettings[id],let data=try? JSONSerialization.data(withJSONObject:settings){moments[i]["festivalSettings"]=String(data:data,encoding:.utf8)}}
-            result = ["moments":Self.festivalDeleted ? []:moments,"emailAccount":["email":"you@example.com","status":"connected"],"emailConfigured":true,"automaticEmailEnabled":true]
+            result = ["moments":Self.festivalDeleted ? []:moments,"emailAccount":["email":"you@example.com","status":ProcessInfo.processInfo.arguments.contains("-moment-email-disconnected") ? "disconnected":"connected"],"emailConfigured":true,"automaticEmailEnabled":true]
         }
         let data = try! JSONSerialization.data(withJSONObject: result)
         client?.urlProtocol(self, didReceive: HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: ["Content-Type":"application/json"])!, cacheStoragePolicy: .notAllowed)
@@ -146,7 +146,7 @@ final class MomentsPreviewProtocol: URLProtocol, @unchecked Sendable {
         }
         if ProcessInfo.processInfo.arguments.contains("-moments-route-preview") {
             lock.withLock {
-                savedPlans = [["id":"plan","draftID":"draft","channel":"messages","recipient":"+15555550184","subject":"Damien’s Birthday","body":draftBody,"scheduledAtUTC":ISO8601DateFormatter().string(from: Date().addingTimeInterval(3600)),"timeZoneID":"America/Los_Angeles","status":"AWAITING_CONFIRMATION","idempotencyKey":UUID().uuidString,"automaticDelivery":false,"repeatYearly":false,"reminderOffset":0]]
+                savedPlans = [["id":"plan","draftID":"draft","channel":"messages","recipient":"+15555550184","subject":"Damien’s Birthday","body":draftBody,"scheduledAtUTC":ISO8601DateFormatter().string(from: Date().addingTimeInterval(3600)),"timeZoneID":"America/Los_Angeles","status":ProcessInfo.processInfo.arguments.contains("-expired-route-preview") ? "EXPIRED" : "AWAITING_CONFIRMATION","idempotencyKey":UUID().uuidString,"automaticDelivery":false,"repeatYearly":false,"reminderOffset":0]]
             }
         }
         let config = URLSessionConfiguration.ephemeral; config.protocolClasses = [MomentsPreviewProtocol.self]
@@ -163,7 +163,7 @@ struct MomentsDesignPreview: View {
             .task {
                 // Route like a notification tap, so the wish opens once the list has loaded, whichever refresh loads it.
                 if ProcessInfo.processInfo.arguments.contains("-moments-route-preview") {
-                    MomentNotificationRoute.shared.receive("moment", owner: TaskActionCoordinator.ownerKey("local-fixture"))
+                    MomentNotificationRoute.shared.receive("plan", owner: TaskActionCoordinator.ownerKey("local-fixture"))
                 }
                 await store.activate("local-fixture")
             }

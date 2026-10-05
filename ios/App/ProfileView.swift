@@ -62,15 +62,11 @@ struct AccountView: View {
                         }
                     }.padding(.vertical, 8)
                     voiceUsageCard
+                    NavigationLink { HelpView() } label: { menuRow("Help", "questionmark.circle") }
+                    NavigationLink { FeedbackView() } label: { menuRow("Feedback", "bubble.left.and.text.bubble.right") }
                     NavigationLink { ProfileSettingsView() } label: { menuRow("Edit profile and settings", "person.crop.circle") }
-                    VStack(spacing: 0) {
-                        webRow("Inbox", "tray", "/inbox")
-                        webRow("Waiting For", "stopwatch", "/waiting")
-                        webRow("AI Planner", "sparkles", "/planner")
-                        webRow("Insights", "chart.bar", "/insights")
-                        webRow("Notifications", "bell", "/notifications")
-                        NavigationLink { ProfileSettingsView() } label: { menuRow("Settings", "slider.horizontal.3") }
-                    }.padding(8).profileCard()
+                    NavigationLink { ChangePasswordView() } label: { menuRow("Change password", "lock.rotation") }
+                        .padding(8).profileCard()
                     Button("Sign out", role: .destructive) { confirmsSignOut = true }
                         .frame(maxWidth: .infinity, minHeight: 46).background(.background, in: RoundedRectangle(cornerRadius: 14))
                         .disabled(model.busy)
@@ -81,7 +77,10 @@ struct AccountView: View {
             .confirmationDialog("Sign out of Nexdo?", isPresented: $confirmsSignOut) {
                 Button("Sign out", role: .destructive) { Task { await model.logout(); if model.profile == nil { dismiss() } } }
             }
-            .task { await model.refreshVoiceUsage() }
+            .task {
+                try? await model.reloadProfile()
+                await model.refreshVoiceUsage()
+            }
         }.tint(.nexdoIndigo)
     }
 
@@ -126,8 +125,8 @@ struct AccountView: View {
     }
 
     private func monthLabel(_ month:String?)->String {
-        guard let month,let date=DateFormatter.voiceMonth.date(from:month) else{return "This month · updated today"}
-        return date.formatted(.dateTime.month(.wide))+" · updated today"
+        guard let month, let name = VoiceUsage.monthName(month) else { return "This month · updated today" }
+        return name + " · updated today"
     }
 
     private func closeAccount() {
@@ -148,6 +147,56 @@ struct AccountView: View {
     }
 }
 
+private struct ChangePasswordView: View {
+    @EnvironmentObject private var model: AppModel
+    @State private var current = ""
+    @State private var new = ""
+    @State private var confirmation = ""
+    @State private var confirming = false
+    @State private var saving = false
+    @State private var failure: String?
+    private var valid: Bool {
+        !current.isEmpty && new.count >= 12 && new.utf8.count <= 72 && new == confirmation && new != current
+    }
+    var body: some View {
+        Form {
+            Section {
+                SecureField("Current password", text: $current).textContentType(.password)
+                SecureField("New password", text: $new).textContentType(.newPassword)
+                SecureField("Confirm new password", text: $confirmation).textContentType(.newPassword)
+            } footer: {
+                Text("Use at least 12 characters (72 bytes maximum). You’ll need to sign in again after changing your password.")
+            }
+            if !confirmation.isEmpty && new != confirmation {
+                Text("The new passwords do not match.").foregroundStyle(.red)
+            }
+            if let failure { Text(failure).foregroundStyle(.red) }
+            Button { confirming = true } label: {
+                Text(saving ? "Changing password…" : "Change password").frame(maxWidth: .infinity)
+            }.buttonStyle(NexdoGradientButtonStyle()).disabled(!valid || saving)
+        }
+        .disabled(saving)
+        .navigationTitle("Change password").navigationBarTitleDisplayMode(.inline)
+        .navigationBarBackButtonHidden(saving)
+        .interactiveDismissDisabled(saving)
+        .alert("Change password and sign out?", isPresented: $confirming) {
+            Button("Cancel", role: .cancel) {}
+            Button("Change password") { Task { await save() } }
+        } message: {
+            Text("After your password is changed, you’ll be signed out and must sign in again using your new password. Continue?")
+        }
+    }
+    @MainActor private func save() async {
+        guard valid, !saving else { return }
+        saving = true; failure = nil
+        defer { saving = false }
+        do {
+            try await model.changePassword(current: current, new: new, confirmation: confirmation)
+            current = ""; new = ""; confirmation = ""
+        } catch { failure = error.localizedDescription }
+    }
+}
+
 private struct ProfileBackground: View {
     var body: some View { LinearGradient(colors: [Color.nexdoBlue.opacity(0.09), Color.nexdoMagenta.opacity(0.06), Color(uiColor: .systemBackground)], startPoint: .topLeading, endPoint: .bottomTrailing).ignoresSafeArea() }
 }
@@ -158,11 +207,9 @@ private extension View {
     }
 }
 
-private extension DateFormatter {
-    static let voiceMonth:DateFormatter={let value=DateFormatter();value.locale=Locale(identifier:"en_US_POSIX");value.timeZone=TimeZone(secondsFromGMT:0);value.dateFormat="yyyy-MM";return value}()
-}
 
 struct ProfileSettingsView: View {
+    var openCalendarSettings = false
     @AppStorage(AppAppearance.storageKey) private var appearance: AppAppearance = .system
     @AppStorage(AppVoice.volumeStorageKey) private var appVoiceVolume = AppVoice.defaultVolume
     @EnvironmentObject private var model: AppModel
@@ -186,6 +233,7 @@ struct ProfileSettingsView: View {
     @StateObject private var calendarOAuth = CalendarOAuthCoordinator()
 
     var body: some View {
+        ScrollViewReader { scrollProxy in
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
                 card("Appearance") {
@@ -275,7 +323,7 @@ struct ProfileSettingsView: View {
                         Link(destination: LegalLinks.termsOfService) { Label(LegalLinks.termsOfServiceTitle, systemImage: "doc.text") }
                             .accessibilityIdentifier("settings-terms-of-service")
                         Button("Delete account", role: .destructive) { confirmsDeletion = true }
-                    }
+                    }.id("calendar-settings")
                     Button { save() } label: {
                         HStack { if saving { ProgressView().tint(.white) }; Text(saving ? "Saving…" : "Save settings").bold() }.frame(maxWidth: .infinity, minHeight: 50)
                     }.foregroundStyle(.white).background(NexdoTheme.saveGradient, in: Capsule())
@@ -283,6 +331,10 @@ struct ProfileSettingsView: View {
                 if let failure { Text(failure).foregroundStyle(.red).accessibilityAddTraits(.updatesFrequently) }
                 if let message { Label(message, systemImage: "checkmark.circle").foregroundStyle(Color.nexdoIndigo).accessibilityAddTraits(.updatesFrequently) }
             }.padding(20).disabled(saving || connecting)
+        }
+        .onChange(of: loading) { _, isLoading in
+            if !isLoading && openCalendarSettings { scrollProxy.scrollTo("calendar-settings", anchor: .top) }
+        }
         }
         .background(ProfileBackground()).navigationTitle("Settings").navigationBarTitleDisplayMode(.large)
         .toolbar {

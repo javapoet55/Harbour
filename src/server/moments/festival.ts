@@ -5,6 +5,7 @@ import { log } from '@/lib/logger';
 import { repointWishText, savedWishMessage } from './wish-message';
 
 export const festivalSettings = z.object({
+ prepareHours:z.union([z.literal(0),z.literal(1),z.literal(4),z.literal(8)]).default(0),
  groupID:z.string().min(1).max(200), prepareDays:z.union([z.literal(0),z.literal(1),z.literal(3),z.literal(7),z.literal(14)]).default(1),
  catalogID:z.string().max(80).default(''), catalogManaged:z.boolean().default(false), baseMessage:z.string().max(500).default(''),
  tone:z.enum(['Warm','Personal','Short','Fun']).default('Warm'), personalContext:z.string().max(500).default(''),
@@ -19,7 +20,7 @@ export const festivalSettings = z.object({
 });
 export function readFestivalSettings(value:string) { try { return JSON.parse(value) as Record<string,unknown>; } catch { return {}; } }
 const recipient = z.object({id:z.string().optional(),key:z.string().min(1).max(200),name:z.string().trim().min(1).max(80),phone:z.string().max(40),email:z.union([z.literal(''),z.email()]),selected:z.boolean()});
-export const festivalSaveInput = z.object({ids:z.array(z.string()).min(1).max(100),title:z.string().trim().min(1).max(150),date:day,timeZoneID:zone,yearly:z.boolean(),active:z.boolean(),recipients:z.array(recipient).max(100),settings:festivalSettings,cancelSchedules:z.boolean().default(false)});
+export const festivalSaveInput = z.object({ids:z.array(z.string()).min(1).max(100),type:z.enum(['festival','birthday','anniversary','getWellSoon']).optional(),title:z.string().trim().min(1).max(150),date:day,timeZoneID:zone,yearly:z.boolean(),active:z.boolean(),recipients:z.array(recipient).max(100),settings:festivalSettings,cancelSchedules:z.boolean().default(false)});
 export async function saveFestival(userId:string,input:unknown) {
  const p=festivalSaveInput.parse(input);
  if(new Set(p.recipients.map(r=>r.key)).size!==p.recipients.length || new Set(p.recipients.flatMap(r=>r.id?[r.id]:[])).size!==p.recipients.filter(r=>r.id).length) throw new MomentError('Remove duplicate recipients.');
@@ -41,7 +42,8 @@ export async function saveFestival(userId:string,input:unknown) {
   if(moments.some(m=>readFestivalSettings(m.festivalSettings).archived===true)) throw new MomentError('This moment was removed. Refresh Moments before editing.',409);
   const anchor=moments[0];
   if(moments.some(m=>m.type!==anchor.type)) throw new MomentError('Manage one occasion category at a time.');
-  if(anchor.type!=='festival' && p.settings.catalogManaged) throw new MomentError('Catalog dates are only supported for festivals.');
+  const type=p.type ?? anchor.type;
+  if(type!=='festival' && p.settings.catalogManaged) throw new MomentError('Catalog dates are only supported for festivals.');
   if(p.settings.catalogManaged && anchor.source!=='festivalCatalog') throw new MomentError('This festival uses manually managed dates.');
   if(p.settings.catalogManaged) {
    const entry=festivalCatalog().find(e=>e.id===p.settings.catalogID);
@@ -50,24 +52,24 @@ export async function saveFestival(userId:string,input:unknown) {
   const active=await tx.deliveryPlan.count({where:{draft:{momentID:{in:p.ids}},status:{in:['SENDING','SCHEDULED','AWAITING_CONFIRMATION']}}});
   if(await tx.deliveryPlan.count({where:{draft:{momentID:{in:p.ids}},status:'SENDING'}})) throw new MomentError('A delivery is in progress. Refresh before editing.',409);
   // An approved change to the wish text alone keeps the schedules and updates their text below.
-  const messageOnly=!!active&&!p.cancelSchedules&&!!p.settings.approvedAt&&onlyMessageChanged(moments,p);
+  const messageOnly=!!active&&!p.cancelSchedules&&!!p.settings.approvedAt&&type===anchor.type&&onlyMessageChanged(moments,p);
   if(active&&!p.cancelSchedules&&!messageOnly) throw new MomentError('Existing schedules must be cancelled before saving changes. Review and schedule again.',409);
   if(!messageOnly) await tx.deliveryPlan.updateMany({where:{draft:{momentID:{in:p.ids}},status:{in:['SCHEDULED','AWAITING_CONFIRMATION','FAILED']}},data:{status:'CANCELLED'}});
   if(await tx.deliveryPlan.count({where:{draft:{momentID:{in:p.ids}},status:'SENDING'}})) throw new MomentError('A delivery started. Refresh before editing.',409);
   // A moment can be saved before anyone is selected. Keep an empty anchor,
   // without manufacturing a recipient or losing the moment's identity.
   if(!p.recipients.length) {
-   await tx.importantMoment.update({where:{id:anchor.id},data:{title:p.title,occurrenceDate:p.date,timeZoneID:p.timeZoneID,yearly:p.settings.catalogManaged?false:p.yearly,enabled:p.active,firstName:'',phone:'',email:'',festivalSettings:JSON.stringify({...p.settings,selected:{},contactIDs:{},archived:false})}});
+   await tx.importantMoment.update({where:{id:anchor.id},data:{type,title:p.title,occurrenceDate:p.date,timeZoneID:p.timeZoneID,yearly:p.settings.catalogManaged?false:p.yearly,enabled:p.active,firstName:'',phone:'',email:'',festivalSettings:JSON.stringify({...p.settings,selected:{},contactIDs:{},archived:false})}});
    await tx.importantMoment.updateMany({where:{id:{in:p.ids.filter(id=>id!==anchor.id)}},data:{enabled:false,festivalSettings:JSON.stringify({...p.settings,archived:true})}});
    return {ok:true};
   }
   const settings=JSON.stringify({...p.settings,archived:false});
   const kept:string[]=[];
   for(const r of p.recipients) {
-   const data={title:p.title,occurrenceDate:p.date,timeZoneID:p.timeZoneID,yearly:p.settings.catalogManaged?false:p.yearly,enabled:p.active&&r.selected,firstName:r.name,phone:r.phone,email:r.email,festivalSettings:settings};
+   const data={type,title:p.title,occurrenceDate:p.date,timeZoneID:p.timeZoneID,yearly:p.settings.catalogManaged?false:p.yearly,enabled:p.active&&r.selected,firstName:r.name,phone:r.phone,email:r.email,festivalSettings:settings};
    let id=r.id;
    if(id) await tx.importantMoment.update({where:{id},data});
-   else id=(await tx.importantMoment.upsert({where:{userId_sourceKey:{userId,sourceKey:anchor.type+':'+p.settings.groupID+':'+r.key}},update:data,create:{...data,userId,type:anchor.type,source:anchor.source,sourceKey:anchor.type+':'+p.settings.groupID+':'+r.key}})).id;
+   else id=(await tx.importantMoment.upsert({where:{userId_sourceKey:{userId,sourceKey:type+':'+p.settings.groupID+':'+r.key}},update:data,create:{...data,userId,type,source:anchor.source,sourceKey:type+':'+p.settings.groupID+':'+r.key}})).id;
    kept.push(id);
    const text=messageOnly ? savedWishMessage(p.settings,{key:r.key,type:anchor.type,firstName:r.name}) : null;
    if(text) await repointWishText(tx,id,text);

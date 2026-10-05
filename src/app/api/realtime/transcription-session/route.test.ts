@@ -29,7 +29,7 @@ it('issues an expiring continuous transcription session with a VAD-compatible mo
   expect(payload.expires_after.seconds).toBe(60);
   expect(payload.session.type).toBe('transcription');
   expect(payload.session.tools).toBeUndefined();
-  expect(payload.session.audio.input.turn_detection).toEqual({ type: 'server_vad', silence_duration_ms: 1800, prefix_padding_ms: 300 });
+  expect(payload.session.audio.input.turn_detection).toEqual({ type: 'server_vad', threshold: 0.65, silence_duration_ms: 800, prefix_padding_ms: 400 });
   expect(payload.session.model).toBeUndefined();
   expect(payload.session.audio.input.transcription).toEqual({ model: 'gpt-4o-transcribe' });
 });

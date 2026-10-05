@@ -9,6 +9,12 @@ datasource db {
 }
 
 model User {
+  callerIdentity CallerIdentity?
+  nutritionCallSettings NutritionCallSettings?
+  nutritionCalls NutritionCall[]
+  foodLogEntries FoodLogEntry[]
+  feedback Feedback[]
+  pomodoroSessions PomodoroSession[]
   adminLoginTokens AdminLoginToken[]
   shoppingLists ShoppingList[]
   id           String   @id @default(cuid())
@@ -260,6 +266,7 @@ model TaskDependency {
 }
 
 model RecurrenceRule {
+  anchorDay   Int?
   id          String    @id @default(cuid())
   taskId      String    @unique
   task        Task      @relation(fields: [taskId], references: [id], onDelete: Cascade)
@@ -344,6 +351,8 @@ model CalendarEvent {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
   deletedAt     DateTime?
+
+  completedAt   DateTime?
 
   @@index([pushedConnectionId, pushedExternalId])
 }
@@ -452,6 +461,10 @@ model ImportantMoment {
   updatedAt DateTime @updatedAt
   drafts WishDraft[]
   cardImages GreetingCardImage[]
+  connectEnabled Boolean @default(false)
+  connectTime String @default("09:00")
+  connectTimeZone String @default("")
+  connectCalls MomentConnectCall[]
   @@unique([userId, sourceKey])
 }
 model WishDraft {
@@ -526,6 +539,11 @@ model MomentEmailAccount {
 }
 
 model ShoppingList {
+  storePlaceId String?
+  storeWebsite String?
+  storeName String?
+  storeAddress String?
+  storeZip String?
   id String @id @default(cuid())
   userId String
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -540,9 +558,11 @@ model ShoppingList {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   items ShoppingItem[]
+  emailSchedule ShoppingEmailSchedule?
   @@index([userId, date])
 }
 model ShoppingItem {
+  chosenOffer Json?
   id String @id
   listId String
   list ShoppingList @relation(fields: [listId], references: [id], onDelete: Cascade)
@@ -663,4 +683,239 @@ model FoodProviderBudget {
   key String @id
   count Int @default(0)
   resetAt DateTime
+}
+
+model PomodoroSession {
+  id        String
+  userId    String
+  user      User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  revision  Int
+  status    String
+  stateJson String
+  startedAt DateTime
+  updatedAt DateTime @updatedAt
+  @@id([userId, id])
+  @@index([userId, startedAt])
+}
+
+model Feedback {
+  id String @id
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  customerName String
+  title String
+  description String
+  stars Int
+  createdAt DateTime @default(now())
+  @@index([createdAt, id])
+  @@index([userId])
+}
+
+// Daily food check-in call (Calorie Tracker). One row per user; the phone number is verified by SMS code before calls.
+model NutritionCallSettings {
+  userId            String   @id
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  enabled           Boolean  @default(false)
+  phoneE164         String?
+  phoneVerifiedAt   DateTime?
+  phoneCodeHash     String?
+  phoneCodeExpiresAt DateTime?
+  phoneCodeAttempts Int      @default(0)
+  phoneCodeSentAt   DateTime?
+  consentAt         DateTime?
+  localTime         String   @default("20:00")
+  timeZone          String   @default("America/Los_Angeles")
+  repeatDaily       Boolean  @default(true)
+  noAnswer          String   @default("NOTIFY")
+  voice             String   @default("marin")
+  calorieGoal       Int      @default(2000)
+  goalsJson         String?
+  lastManualCallAt  DateTime?
+  insightsEnabled   Boolean  @default(true)
+  insightHandledKey String?
+  insightHandledAction String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  @@index([enabled])
+}
+
+model NutritionCall {
+  id              String    @id @default(cuid())
+  userId          String
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  localDate       String
+  attempt         Int
+  status          String    @default("QUEUED")
+  scheduledFor    DateTime
+  twilioCallSid   String?   @unique
+  answeredBy      String?
+  startedAt       DateTime?
+  endedAt         DateTime?
+  durationSec     Int?
+  endReason       String?
+  noiseFilter     String?
+  transcriptJson  String?
+  backupTranscriptJson String?
+  error           String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  entries         FoodLogEntry[]
+  @@unique([userId, localDate, attempt])
+  @@index([status, scheduledFor])
+}
+
+model FoodLogEntry {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  localDate    String
+  meal         String
+  description  String
+  foodName     String
+  quantity     Float?
+  unit         String?
+  grams        Float?
+  kcal         Int
+  proteinG     Float?
+  carbsG       Float?
+  fatG         Float?
+  fiberG       Float?
+  calciumMg    Float?
+  ironMg       Float?
+  vitaminDIu   Float?
+  source       String
+  sourceRef    String?
+  status       String   @default("CONFIRMED")
+  reviewReason String?
+  callId       String?
+  call         NutritionCall? @relation(fields: [callId], references: [id], onDelete: SetNull)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  @@index([userId, localDate])
+  @@index([callId])
+}
+
+// "Connect me on the day": the user's own number verified with Twilio so bridged calls show it as caller ID.
+model CallerIdentity {
+  userId      String    @id
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  phoneE164   String
+  status      String    @default("PENDING")
+  twilioSid   String?
+  requestedAt DateTime
+  verifiedAt  DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model MomentConnectCall {
+  id             String          @id @default(cuid())
+  userId         String
+  momentId       String
+  moment         ImportantMoment @relation(fields: [momentId], references: [id], onDelete: Cascade)
+  occurrenceDate String
+  attempt        Int
+  status         String          @default("QUEUED")
+  decision       String?
+  direct         Boolean         @default(false)
+  scheduledFor   DateTime
+  twilioCallSid  String?         @unique
+  startedAt      DateTime?
+  endedAt        DateTime?
+  talkSeconds    Int?
+  error          String?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  @@unique([momentId, occurrenceDate, attempt])
+  @@index([status, scheduledFor])
+  @@index([userId])
+}
+
+// HMAC keys only. Expired buckets may be pruned after one day.
+model AuthRateBucket {
+  key String @id
+  count Int @default(0)
+  expiresAt DateTime
+  @@index([expiresAt])
+}
+
+// Separate from account access. Survives account deletion to prevent promotion replay.
+model SignupPromotionClaim {
+  key String @id
+  userId String
+  createdAt DateTime @default(now())
+}
+
+
+model ShoppingEmailSchedule {
+  id String @id @default(cuid())
+  listId String @unique
+  list ShoppingList @relation(fields: [listId], references: [id], onDelete: Cascade)
+  recipient String
+  recipientName String
+  customerPhone String?
+  timeZone String
+  weekday Int @default(6)
+  hour Int @default(10)
+  minute Int @default(0)
+  pickupDate String?
+  pickupStartHour Int?
+  enabled Boolean @default(true)
+  consentAt DateTime
+  nextRunAt DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  runs ShoppingEmailRun[]
+  @@index([enabled, nextRunAt])
+}
+model ShoppingEmailRun {
+  id String @id @default(cuid())
+  scheduleId String
+  schedule ShoppingEmailSchedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+  dueAt DateTime
+  status String @default("pending")
+  recipient String
+  subject String
+  body String
+  attempts Int @default(0)
+  retryAt DateTime
+  providerId String?
+  detail String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([scheduleId, dueAt])
+  @@index([status, retryAt])
+}
+
+model ShoppingOfferSource {
+  id String @id
+  store String
+  region String
+  url String
+  lastCheckedAt DateTime?
+  lastSuccessAt DateTime?
+  nextCheckAt DateTime @default(now())
+  leaseUntil DateTime?
+  leaseToken String?
+  failures Int @default(0)
+  error String?
+  offers ShoppingOffer[]
+}
+model ShoppingOffer {
+  id String @id
+  sourceId String
+  source ShoppingOfferSource @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  product String
+  brand String?
+  packageSize String?
+  price String?
+  savings String?
+  unitPrice String?
+  conditions String
+  imageURL String?
+  sourceURL String
+  startsAt DateTime
+  expiresAt DateTime
+  checkedAt DateTime
+  @@index([sourceId, expiresAt])
 }

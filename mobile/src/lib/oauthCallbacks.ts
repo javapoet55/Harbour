@@ -5,7 +5,7 @@ import { useEffect, useRef } from 'react';
  *
  * - `nexdo://calendar-connected?calendar=<provider>-connected` or `?calendar=error&detail=…`
  *   (src/app/api/calendar/oauth/[provider]/callback/route.ts:9-10, when the state is native).
- * - `nexdo://moments-email?status=connected|error` (src/app/api/moments/email/callback/route.ts:7).
+ * - `nexdo://moments-email?status=confirm&ticket=…|error` (src/app/api/moments/email/callback/route.ts:7).
  *
  * Swift never routes these: `ASWebAuthenticationSession(callbackURLScheme: "nexdo")` captures the
  * redirect and hands it to the code that opened the session (ProfileView.swift:13-25,
@@ -23,15 +23,17 @@ import { useEffect, useRef } from 'react';
  *   (`useOAuthCallback`), refreshes, and shows Swift's message.
  */
 
-export type OAuthCallbackKind = 'calendar' | 'moments-email';
+export type OAuthCallbackKind = 'calendar' | 'moments-email' | 'signup';
 
 /** The screen each flow is started from and stays on (ProfileView.swift:332-348, MomentEditor.swift:228). */
 export const OAUTH_LANDING: Record<OAuthCallbackKind, string> = {
+  signup: '/sign-up',
   calendar: '/account/settings',
   'moments-email': '/moments/settings',
 };
 
 const HOSTS: Record<string, OAuthCallbackKind> = {
+  'signup-challenge': 'signup',
   'calendar-connected': 'calendar',
   'moments-email': 'moments-email',
 };

@@ -50,21 +50,52 @@ struct FestivalContactChoice: Identifiable {
 }
 struct ManagedFestivalContactsPicker: UIViewControllerRepresentable {
     let selected:([FestivalContactChoice])->Void
-    func makeCoordinator()->Coordinator {Coordinator(selected)}
-    func makeUIViewController(context:Context)->CNContactPickerViewController {
-        let c=CNContactPickerViewController();c.delegate=context.coordinator
-        c.displayedPropertyKeys=[CNContactPhoneNumbersKey,CNContactEmailAddressesKey];return c
-    }
-    func updateUIViewController(_ c:CNContactPickerViewController,context:Context) {}
-    @MainActor final class Coordinator:NSObject,@preconcurrency CNContactPickerDelegate {
-        let selected:([FestivalContactChoice])->Void
-        init(_ selected:@escaping ([FestivalContactChoice])->Void) {self.selected=selected}
-        func contactPicker(_ picker:CNContactPickerViewController,didSelect contacts:[CNContact]) {
-            // The name is used as a first name in greetings and titles, so the given name comes first.
-            selected(contacts.map { c in FestivalContactChoice(id:c.identifier,name:(c.isKeyAvailable(CNContactGivenNameKey) && !c.givenName.isEmpty ? c.givenName : nil) ?? CNContactFormatter.string(from:c,style:.fullName) ?? "",phones:c.isKeyAvailable(CNContactPhoneNumbersKey) ? FestivalValidation.uniquePhones(c.phoneNumbers.map(\.value.stringValue)):[],emails:c.isKeyAvailable(CNContactEmailAddressesKey) ? FestivalValidation.uniqueEmails(c.emailAddresses.map {String($0.value)}):[]) })
+    func makeUIViewController(context: Context) -> Host { Host(selected: selected) }
+    func updateUIViewController(_ controller: Host, context: Context) {}
+
+    /// Contacts dismisses its presenting controller after selection. Give it a dedicated
+    /// UIKit presentation, rather than letting it dismiss SwiftUI's recipient sheet host.
+    @MainActor final class Host: UIViewController, @preconcurrency CNContactPickerDelegate {
+        private let selected: ([FestivalContactChoice]) -> Void
+        private var started = false
+        private var pending: [FestivalContactChoice]?
+        private var delivered = false
+        init(selected: @escaping ([FestivalContactChoice]) -> Void) {
+            self.selected = selected
+            super.init(nibName: nil, bundle: nil)
         }
+        required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+        override func viewDidLoad() {
+            super.viewDidLoad()
+            view.backgroundColor = .systemBackground
+        }
+        override func viewDidAppear(_ animated: Bool) {
+            super.viewDidAppear(animated)
+            if !started {
+                started = true
+                let picker = CNContactPickerViewController()
+                picker.delegate = self
+                picker.displayedPropertyKeys = [CNContactPhoneNumbersKey, CNContactEmailAddressesKey]
+                picker.modalPresentationStyle = .fullScreen
+                present(picker, animated: false)
+            } else if let pending, !delivered {
+                // This host becomes visible only after Contacts completes its own dismissal.
+                delivered = true
+                selected(pending)
+            }
+        }
+        func contactPicker(_ picker: CNContactPickerViewController, didSelect contacts: [CNContact]) {
+            pending = contacts.map { c in
+                FestivalContactChoice(id: c.identifier,
+                    name: (c.isKeyAvailable(CNContactGivenNameKey) && !c.givenName.isEmpty ? c.givenName : nil) ?? CNContactFormatter.string(from: c, style: .fullName) ?? "",
+                    phones: c.isKeyAvailable(CNContactPhoneNumbersKey) ? FestivalValidation.uniquePhones(c.phoneNumbers.map(\.value.stringValue)) : [],
+                    emails: c.isKeyAvailable(CNContactEmailAddressesKey) ? FestivalValidation.uniqueEmails(c.emailAddresses.map { String($0.value) }) : [])
+            }
+        }
+        func contactPickerDidCancel(_ picker: CNContactPickerViewController) { pending = [] }
     }
 }
+
 @MainActor struct FestivalContactsService {
     /// Reports a selected contact whose card no longer has an address that was taken from it. Addresses the user typed
     /// are never compared with the card (ContactAddressLinks).

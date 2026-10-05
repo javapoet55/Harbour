@@ -1,3 +1,4 @@
+import { validateTaskDates } from '@/lib/task-input';
 import { healthRoute } from '@/server/health/telemetry';
 import { requireAvailableSchedule } from '@/server/availability';
 import { parseProjectId } from '@/server/projects';
@@ -22,9 +23,12 @@ async function healthHandlerPATCH(req: Request, ctx: { params: Promise<{ id: str
     const user = await requireUser();
     const { id } = await ctx.params;
     const body = await req.json();
-    if (body.projectId !== undefined && (body.status !== undefined || body.startAt || body.date || body.focusAction)) {
-      return NextResponse.json({ error: 'Save the project assignment separately from status or schedule changes.' }, { status: 400 });
+    validateTaskDates(body);
+    if (body.projectId !== undefined && (body.status !== undefined || body.focusAction)) {
+      return NextResponse.json({ error: 'Save the project assignment separately from status or focus changes.' }, { status: 400 });
     }
+    if (body.status !== undefined && !['INBOX', 'PLANNED', 'IN_PROGRESS', 'WAITING', 'COMPLETED', 'CANCELLED'].includes(body.status)) return NextResponse.json({ error: 'Invalid task status.' }, { status: 400 });
+    if (body.priority !== undefined && !['LOW', 'NORMAL', 'HIGH', 'CRITICAL'].includes(body.priority)) return NextResponse.json({ error: 'Invalid task priority.' }, { status: 400 });
     // Validate schedule edits before applying metadata, duration or status changes.
     if (body.startAt || body.date || body.durationMin !== undefined || ['PLANNED', 'INBOX', 'WAITING'].includes(body.status)) {
       const existing = await prisma.task.findFirst({ where: { id, userId: user.id, deletedAt: null } });
@@ -100,16 +104,6 @@ async function healthHandlerPATCH(req: Request, ctx: { params: Promise<{ id: str
       await generateReplanProposal(user.id);
       return NextResponse.json({ task });
     }
-    if (body.startAt || body.date) {
-      const startAt = body.date
-        ? zonedDateTime(String(body.date), String(body.time || '09:00'), user.timeZone)
-        : new Date(body.startAt);
-      const task = await scheduleTask(user.id, id, startAt, body.durationMin ?? (await prisma.task.findFirstOrThrow({ where: { id, userId: user.id } })).durationMin);
-      await scheduleDefaultReminders(user.id, id, startAt, Boolean(task.critical));
-      await pushTaskToExternal(user.id, id);
-      await generateReplanProposal(user.id);
-      return NextResponse.json({ task });
-    }
     const data: Prisma.TaskUpdateInput = {};
     if (body.projectId !== undefined) {
       const projectId = parseProjectId(body.projectId);
@@ -131,7 +125,11 @@ async function healthHandlerPATCH(req: Request, ctx: { params: Promise<{ id: str
     }
     if (typeof body.critical === 'boolean') data.critical = body.critical;
     if (['LOW', 'MEDIUM', 'HIGH'].includes(body.energyLevel)) data.energyLevel = body.energyLevel;
-    const task = await updateTask(user.id, id, data);
+    const startAt = body.date ? zonedDateTime(String(body.date), String(body.time || '09:00'), user.timeZone) : body.startAt ? new Date(body.startAt) : null;
+    const task = startAt
+      ? await scheduleTask(user.id, id, startAt, body.durationMin ?? (await prisma.task.findFirstOrThrow({ where: { id, userId: user.id } })).durationMin, data)
+      : await updateTask(user.id, id, data);
+    if (startAt) await scheduleDefaultReminders(user.id, id, task.dueAt ?? startAt, Boolean(task.critical));
     if (Array.isArray(body.subtasks)) {
       const titles = body.subtasks.map((item: unknown) => typeof item === 'string' ? item.trim() : '').filter(Boolean).slice(0, 50);
       await prisma.$transaction([

@@ -141,3 +141,10 @@ describe('Today snapshot', () => {
     expect(JSON.stringify(input)).toBe(before);
   });
 });
+
+it('does not reserve today for an unrelated future deadline on an empty day', () => {
+  const result = analyzeSchedule({ ...base, now: new Date('2026-03-09T17:00:00Z'), events: [], tasks: [task('Warranty', { dueAt: new Date('2027-03-14T17:00:00Z') })] });
+  expect(result.today.commitments).toBe(0);
+  expect(result.today.recommendation.title).toBe('Room to breathe');
+  expect(result.today.recommendation.startAt).toBeUndefined();
+});

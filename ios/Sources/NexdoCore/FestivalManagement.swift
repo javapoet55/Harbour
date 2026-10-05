@@ -3,6 +3,7 @@ import Foundation
 public struct FestivalSettings: Codable, Equatable, Sendable {
     public var groupID = UUID().uuidString
     public var prepareDays = 1
+    public var prepareHours = 0
     public var catalogID = "", catalogManaged = false
     public var baseMessage = "", tone = "Warm", personalContext = ""
     public var manuallyEdited = false
@@ -27,7 +28,7 @@ public struct FestivalSettings: Codable, Equatable, Sendable {
     }
     private var hasGroup = true
     private enum CodingKeys: String, CodingKey {
-        case groupID, prepareDays, catalogID, catalogManaged, baseMessage, tone, personalContext, manuallyEdited, approvedAt
+        case groupID, prepareDays, prepareHours, catalogID, catalogManaged, baseMessage, tone, personalContext, manuallyEdited, approvedAt
         case includeImage, imageID, imageStyle, imageAspect, imagePrompt, draftSendDate, draftNotify, cardSignature, cardGreeting
         case overrides, channels, contactIDs, automatic, selected, catalogNotice, archived
     }
@@ -38,6 +39,7 @@ public struct FestivalSettings: Codable, Equatable, Sendable {
         let group: String? = optional(.groupID)
         hasGroup = !(group ?? "").isEmpty
         groupID = hasGroup ? group! : groupID
+        prepareHours = value(.prepareHours, 0)
         prepareDays = value(.prepareDays, prepareDays); catalogID = value(.catalogID, catalogID); catalogManaged = value(.catalogManaged, catalogManaged)
         baseMessage = value(.baseMessage, baseMessage); tone = value(.tone, tone); personalContext = value(.personalContext, personalContext)
         manuallyEdited = value(.manuallyEdited, manuallyEdited); approvedAt = optional(.approvedAt)
@@ -162,5 +164,19 @@ public protocol FestivalImageGenerationService: Sendable {
 public enum FestivalImageCompatibility {
     public static func valid(data:Data, mime:String, providerSupportsImages:Bool) -> Bool {
         providerSupportsImages && !data.isEmpty && data.count <= 5_000_000 && ["image/jpeg","image/png"].contains(mime)
+    }
+}
+
+public extension FestivalSettings {
+    var preparationMinutes: Int {
+        get { prepareHours > 0 ? prepareHours * 60 : prepareDays * 1440 }
+        set { prepareHours = newValue < 1440 ? newValue / 60 : 0; prepareDays = newValue >= 1440 ? newValue / 1440 : 0 }
+    }
+    func preparationDate(occurrence: Date, zone: String) -> Date? {
+        guard preparationMinutes > 0 else { return nil }
+        if prepareHours > 0 { return occurrence.addingTimeInterval(-Double(prepareHours) * 3600) }
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: zone) ?? .current
+        return calendar.date(byAdding: .day, value: -prepareDays, to: occurrence)
     }
 }

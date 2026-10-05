@@ -41,3 +41,21 @@ it('requires approval for overlaps created within a bulk operation', async () =>
   expect(() => requireNonoverlappingBatch(slots, true)).not.toThrow();
   expect(() => requireNonoverlappingBatch([{ start: at('12:00'), durationMin: 15 }, { start: at('12:15'), durationMin: 30 }], false)).not.toThrow();
 });
+
+it('allows explicit weekend and evening bookings despite unrelated calendar warnings', async () => {
+  const { explicitTimeWarnings } = await import('@/lib/availability');
+  const noisy = { ...context, contextWarnings: ['Calendar sync is stale.', 'Unrelated linked blocks are protected.'] };
+  expect(explicitTimeWarnings(noisy, new Date('2026-09-13T20:00Z'), new Date('2026-09-13T21:00Z'))).toEqual([]);
+  expect(explicitTimeWarnings(noisy, at('20:00'), at('21:00'))).toEqual([]);
+  // Touching edges or buffers alone are not simultaneous bookings.
+  expect(explicitTimeWarnings(noisy, at('11:00'), at('11:30'))).toEqual([]);
+  expect(explicitTimeWarnings(noisy, at('09:45'), at('10:00'))).toEqual([]);
+});
+it('still blocks actual task/event overlaps, including cross-midnight and excludes the edited task', async () => {
+  const { explicitTimeWarnings } = await import('@/lib/availability');
+  expect(explicitTimeWarnings(context, at('10:30'), at('11:30'))).toHaveLength(1);
+  const occupied = { ...context, tasks: [{ id: 't', status: 'PLANNED', startAt: new Date('2026-09-13T23:45Z'), durationMin: 60 }] };
+  expect(explicitTimeWarnings(occupied, at('00:00'), at('00:30'))).toHaveLength(1);
+  expect(explicitTimeWarnings(occupied, at('00:00'), at('00:30'), 't')).toEqual([]);
+  expect(explicitTimeWarnings({ ...occupied, tasks: [{ ...occupied.tasks[0], status: 'COMPLETED' }] }, at('00:00'), at('00:30'))).toEqual([]);
+});

@@ -2,6 +2,7 @@ import {randomUUID,randomBytes,createHash} from 'node:crypto';
 import {prisma} from '@/server/db';
 import {z} from 'zod';
 import {listInput,nextShoppingDate,parseShopping} from './domain';
+import {nextWeekly} from './email-domain';
 import {MomentError} from '@/server/moments/domain';
 import {recommendShoppingAlternatives} from './alternatives';
 const include={items:{orderBy:{sortOrder:'asc' as const}}};
@@ -26,21 +27,44 @@ export async function shoppingAction(userId:string,raw:unknown,idempotencyKey?:s
    const saved=await tx.shoppingList.update({where:{id:list.id},data:{shareToken:list.shareToken??randomBytes(32).toString('hex')},include});return {list:saved};
   }
   if(p.operation==='revoke')return {list:await tx.shoppingList.update({where:{id:list.id},data:{shareToken:null},include})};
+  // Deleting expresses the owner's intent regardless of which device last edited the list.
+  if(p.operation==='delete'){await tx.shoppingList.delete({where:{id:list.id}});return {ok:true};}
   if(p.revision!==list.revision)throw new MomentError('This list changed on another device. Refresh before saving.',409);
   const claim=await tx.shoppingList.updateMany({where:{id:list.id,userId,revision:p.revision},data:{revision:{increment:1}}});
   if(!claim.count)throw new MomentError('This list changed. Refresh and try again.',409);
-  if(p.operation==='delete'){await tx.shoppingList.delete({where:{id:list.id}});return {ok:true};}
   if(p.operation==='complete'){
    if(list.completedAt)return {list};
    await tx.shoppingList.update({where:{id:list.id},data:{completedAt:new Date()}});
-   if(!list.weekly)return {list:await tx.shoppingList.findUnique({where:{id:list.id},include})};
+   if(!list.weekly){
+    // A one-off list has no next trip, so its email schedule ends with it.
+    const schedule=await tx.shoppingEmailSchedule.findUnique({where:{listId:list.id}});
+    if(schedule){
+     await tx.shoppingEmailSchedule.update({where:{id:schedule.id},data:{enabled:false}});
+     await tx.shoppingEmailRun.updateMany({where:{scheduleId:schedule.id,status:'pending'},data:{status:'cancelled',detail:'Shopping trip completed'}});
+    }
+    return {list:await tx.shoppingList.findUnique({where:{id:list.id},include})};
+   }
    const today=new Intl.DateTimeFormat('en-CA',{timeZone:list.timeZone,year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
-   return {list:await tx.shoppingList.create({data:{userId,title:list.title,date:nextShoppingDate(list.date,today),timeZone:list.timeZone,weekly:true,generatedFrom:list.id,items:{create:list.items.map((i,sortOrder)=>({id:randomUUID(),name:i.name,category:i.category,quantity:i.quantity,size:i.size,notes:i.notes,imageData:i.imageData,brand:i.brand,barcode:i.barcode,favorite:i.favorite,favoriteAlternatives:i.favoriteAlternatives??undefined,checked:false,sortOrder}))}},include})};
+   const nextList=await tx.shoppingList.create({data:{userId,title:list.title,storeName:list.storeName,storeAddress:list.storeAddress,storeZip:list.storeZip,storePlaceId:list.storePlaceId,storeWebsite:list.storeWebsite,date:nextShoppingDate(list.date,today),timeZone:list.timeZone,weekly:true,generatedFrom:list.id,items:{create:list.items.map((i,sortOrder)=>({id:randomUUID(),name:i.name,category:i.category,quantity:i.quantity,size:i.size,notes:i.notes,imageData:i.imageData,brand:i.brand,barcode:i.barcode,favorite:i.favorite,favoriteAlternatives:i.favoriteAlternatives??undefined,checked:false,sortOrder}))}},include});
+   await tx.shoppingEmailSchedule.updateMany({where:{listId:list.id},data:{updatedAt:new Date()}});
+   const schedule=await tx.shoppingEmailSchedule.findUnique({where:{listId:list.id}});
+   if(schedule){
+    // A trip finished before its email went out skips that week instead of emailing next week's list early.
+    const attached=new Date(Math.max(list.createdAt.getTime(),schedule.createdAt.getTime()));
+    const skip=schedule.enabled&&!await tx.shoppingEmailRun.count({where:{scheduleId:schedule.id,dueAt:{gte:attached}}});
+    if(skip)await tx.shoppingEmailRun.create({data:{scheduleId:schedule.id,dueAt:schedule.nextRunAt,retryAt:schedule.nextRunAt,status:'skipped',recipient:schedule.recipient,subject:'Shopping list',body:'',detail:'Shopping trip completed before the scheduled email'}});
+    await tx.shoppingEmailSchedule.update({where:{id:schedule.id},data:{listId:nextList.id,...(skip?{nextRunAt:nextWeekly(new Date(Math.max(Date.now(),schedule.nextRunAt.getTime())),schedule)}:{})}});
+   }
+   return {list:nextList};
   }
   if(list.completedAt)throw new MomentError('Copy this completed list to make changes.');
   const {items,...data}=listInput.parse(p.input);
+  // Do not retain a previous store's identity when an older client changes location.
+  if (data.storeName !== list.storeName || data.storeAddress !== list.storeAddress || data.storeZip !== list.storeZip) {
+    data.storeWebsite ??= null; data.storePlaceId ??= null;
+  }
   await tx.shoppingItem.deleteMany({where:{listId:list.id}});
   // Preserve IDs already owned by this list; never accept IDs from another list.
-  return {list:await tx.shoppingList.update({where:{id:list.id},data:{...data,items:{create:items.map((i,sortOrder)=>({...i,imageData:i.imageData === undefined ? list.items.find(old=>old.id===i.id)?.imageData ?? null : i.imageData,id:list.items.some(old=>old.id===i.id)?i.id:randomUUID(),sortOrder}))}},include})};
+  return {list:await tx.shoppingList.update({where:{id:list.id},data:{...data,items:{create:items.map((i,sortOrder)=>({...i,chosenOffer:list.items.find(old=>old.id===i.id && old.name===i.name && old.size===i.size && old.notes===i.notes && (old.brand??undefined)===i.brand && (data.storeName===undefined || data.storeName===list.storeName) && (data.storeZip===undefined || data.storeZip===list.storeZip))?.chosenOffer ?? undefined,imageData:i.imageData === undefined ? list.items.find(old=>old.id===i.id)?.imageData ?? null : i.imageData,id:list.items.some(old=>old.id===i.id)?i.id:randomUUID(),sortOrder}))}},include})};
  });
 }

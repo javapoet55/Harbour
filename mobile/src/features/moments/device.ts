@@ -314,10 +314,11 @@ export const EMAIL_CALLBACK = 'nexdo://moments-email';
 
 /**
  * The consent URL comes from the server's `connectEmail`; the callback route redirects to
- * `nexdo://moments-email?status=connected|error`. Resolves `true` only for `connected`.
+ * `nexdo://moments-email?status=confirm&ticket=…|status=error`. Resolves the ticket, which the caller
+ * must send back as `connectEmailConfirm` while signed in; the server saves Gmail only then.
  * `prefersEphemeralWebBrowserSession = true` in Swift, and the same here.
  */
-export async function connectGmail(url: string): Promise<boolean> {
+export async function connectGmail(url: string): Promise<string | null> {
   // Open while the browser is: `+native-intent` then leaves the redirect to this session, and
   // Android's polyfill can report `dismiss` just before that deep link lands (src/lib/oauthCallbacks.ts).
   const end = beginOAuthSession('moments-email');
@@ -326,7 +327,7 @@ export async function connectGmail(url: string): Promise<boolean> {
     const result = await WebBrowser.openAuthSessionAsync(url, EMAIL_CALLBACK, { preferEphemeralSession: true });
     const callback = result.type === 'success' ? result.url : result.type === 'dismiss' ? await waitForOAuthCallback('moments-email', LATE_CALLBACK_MS) : null;
     takeOAuthCallback('moments-email');
-    return callback ? emailCallbackConnected(callback) : false;
+    return callback ? emailCallbackTicket(callback) : null;
   } finally {
     end();
   }
@@ -335,12 +336,10 @@ export async function connectGmail(url: string): Promise<boolean> {
 /** Swift's failure message for any callback that is not `status=connected` (ImportantMomentsStore.swift:186). */
 export const EMAIL_CONNECT_FAILED = 'Email connection cancelled or failed. Try connecting again.';
 
-export function emailCallbackConnected(url: string): boolean {
+export function emailCallbackTicket(url: string): string | null {
   const match = /^nexdo:\/\/([^/?#]*)\??([^#]*)/.exec(url);
-  if (!match || match[1] !== 'moments-email') return false;
-  const status = match[2]
-    .split('&')
-    .map((pair) => pair.split('='))
-    .find(([key]) => key === 'status')?.[1];
-  return status === 'connected';
+  if (!match || match[1] !== 'moments-email') return null;
+  const params = new Map(match[2].split('&').map((pair) => pair.split('=') as [string, string | undefined]));
+  const ticket = params.get('ticket');
+  return params.get('status') === 'confirm' && ticket ? decodeURIComponent(ticket) : null;
 }

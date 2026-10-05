@@ -9,7 +9,7 @@ const patch = (body: unknown) => PATCH(new Request('https://nexdo.test/api/setti
 describe('profile settings persistence', () => {
   let owner = ''; let other = '';
   beforeAll(async () => {
-    const create = (name: string) => prisma.user.create({ data: { name, email: `${name}-${Date.now()}@profile.test`, passwordHash: '', preference: { create: {} } } });
+    const create = (name: string) => prisma.user.create({ data: { emailVerifiedAt: new Date(), name, email: `${name}-${Date.now()}@profile.test`, passwordHash: '', preference: { create: {} } } });
     owner = (await create('Owner')).id; other = (await create('Other')).id; session.id = owner;
   });
   afterAll(async () => { await prisma.user.deleteMany({ where: { id: { in: [owner, other] } } }); });

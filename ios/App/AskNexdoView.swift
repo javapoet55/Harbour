@@ -86,7 +86,7 @@ struct NexdoAISuggestionCard: View {
     }
 }
 
-struct ShoppingRecommendationContext:Sendable {
+struct ShoppingRecommendationContext:Encodable,Sendable {
     let listName:String
     let itemNames:[String]
     var assistantContext:String {
@@ -165,6 +165,8 @@ struct AskNexdoView: View {
         if sexualPatterns.contains(where: { containsPattern($0, in: query) }) { return policyRefusal }
         if politicalPatterns.contains(where: { containsPattern($0, in: query) }) { return policyRefusal }
 
+        if shoppingContext != nil { return nil }
+
         if commonPatterns.contains(where: { containsPattern($0, in: query) }) && !containsPattern(taskIntentHints, in: query) {
             return policyCommonQuestionRefusal
         }
@@ -189,9 +191,16 @@ struct AskNexdoView: View {
         )
     }
 
+    private var briefingIntent: NexdoAIIntent? {
+        guard shoppingContext == nil, model.turn != nil, model.turn?.confirmation == nil else { return nil }
+        return [NexdoAIIntent.dailyBriefing, .topFocusTasks, .deadlinesAndRisks, .findScheduleTime]
+            .first { $0.query == model.lastAssistantPrompt }
+    }
+    private var showsBriefing: Bool { briefingIntent != nil }
+
     var body: some View {
         VStack(spacing: 0) {
-            if textPage || model.turn != nil { HStack {
+            if !showsBriefing && (textPage || model.turn != nil) { HStack {
                 Text(shoppingContext == nil ? (textPage ? "Free form Text" : "Ask Nexdo") : "Shopping Recommendations").font(.title2.bold()).foregroundStyle(Color.nexdoInk)
                     .accessibilityAddTraits(.isHeader)
                 Spacer()
@@ -217,6 +226,7 @@ struct AskNexdoView: View {
                 .accessibilityHint("Closes Ask Nexdo")
             }.padding(.horizontal, 20).padding(.top, 22) }
 
+            GeometryReader { viewport in
             ScrollView {
                 VStack(alignment: .leading, spacing: 10) {
                     if model.turn == nil {
@@ -243,8 +253,27 @@ struct AskNexdoView: View {
                             AskAILandingView(prompt: $prompt, busy: blocked, sendEnabled: validPrompt,
                                 ask: { request($0) }, voice: { stopSpeech(); showingVoice = true },
                                 close: { requestTask?.cancel(); stopSpeech(); dismiss() }, typing: $composerFocused)
+                                .frame(minHeight: max(0, viewport.size.height - 20))
 
                         }
+                    } else if showsBriefing, let turn = model.turn {
+                        DailyBriefView(intent: briefingIntent ?? .dailyBriefing, name: ProfileName.firstName(from: model.profile?.name ?? "") ?? "there",
+                            sections: turn.displaySections, prompt: $prompt, typing: $composerFocused, busy: blocked,
+                            close: {
+                                requestTask?.cancel()
+                                stopSpeech()
+                                composerFocused = false
+                                prompt = ""
+                                failedQuery = nil
+                                pendingQuery = nil
+                                model.turn = nil
+                                model.lastAssistantPrompt = nil
+                            },
+                            ask: { request($0) }, voice: { stopSpeech(); showingVoice = true },
+                            read: { index, text in
+                                if readingSection == index { stopSpeech() }
+                                else { speakAnswer(text: text, section: index) }
+                            }, readingSection: readingSection)
                     } else {
                         if let query = model.lastAssistantPrompt {
                             Label {
@@ -262,9 +291,7 @@ struct AskNexdoView: View {
                         }.disabled(blocked)
                         Button("Show suggestions") { stopSpeech(); model.turn = nil }.padding(.vertical, 12).disabled(blocked)
                     }
-                    if submitting {
-                        ProgressView("Asking Nexdo…").padding(.vertical, 16).accessibilityAddTraits(.updatesFrequently)
-                    }
+
                     if let query = failedQuery {
                         VStack(alignment: .leading, spacing: 8) {
                             Text("Nexdo couldn’t complete that request. Please try again.")
@@ -273,8 +300,22 @@ struct AskNexdoView: View {
                     }
                 }.padding(.horizontal, 20).padding(.bottom, 20)
             }.scrollDismissesKeyboard(.interactively)
+            }
         }
-        .background(AskStyle.background)
+        .background {
+            if showsBriefing {
+                LinearGradient(colors: [Color.purple.opacity(0.07), Color.blue.opacity(0.04), Color.purple.opacity(0.05)], startPoint: .topLeading, endPoint: .bottomTrailing)
+                    .background(.white).ignoresSafeArea()
+            } else { AskStyle.background }
+        }
+        .overlay {
+            if submitting {
+                ProgressView("Working on it…")
+                    .padding(24).background(.regularMaterial, in: RoundedRectangle(cornerRadius: 20))
+                    .accessibilityAddTraits(.updatesFrequently)
+                    .accessibilityIdentifier("ask-working")
+            }
+        }
         .tint(.nexdoIndigo)
         .safeAreaInset(edge: .bottom, spacing: 0) {
             VStack(spacing: 0) {
@@ -289,7 +330,7 @@ struct AskNexdoView: View {
                     .padding(.horizontal, 16)
                     .background(.regularMaterial)
                 }
-                if model.turn != nil && shoppingContext == nil { composer }
+                if model.turn != nil && shoppingContext == nil && !showsBriefing { composer }
             }
         }
         .interactiveDismissDisabled(composerFocused || submitting)
@@ -466,8 +507,9 @@ struct AskNexdoView: View {
         submitting = true
         failedQuery = nil
         requestTask = Task {
-            let submitted=shoppingContext.map{$0.assistantContext+"\n\nCustomer request: "+query} ?? query
-            let succeeded = await model.ask(submitted)
+            let succeeded:Bool
+            if let shoppingContext { succeeded = await model.askShopping(query, context:shoppingContext) }
+            else { succeeded = await model.ask(query) }
             guard !Task.isCancelled else { submitting = false; return }
             if succeeded {
                 if shoppingContext != nil {model.lastAssistantPrompt=query}

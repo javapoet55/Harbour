@@ -34,7 +34,7 @@ it('issues an expiring task-scoped session using the account timezone', async ()
   expect(payload.session.instructions).toContain(nexdoPersonality);
   expect(payload.session.tools.map((tool: { name: string }) => tool.name)).toEqual(expect.arrayContaining(['create_task', 'update_task', 'delete_task', 'complete_task', 'find_tasks', 'get_schedule', 'find_free_time', 'prepare_call', 'prepare_email', 'end_session']));
   expect(payload.session.output_modalities).toEqual(['audio']);
-  expect(payload.session.audio.input.turn_detection).toMatchObject({ type: 'semantic_vad', eagerness: 'high', interrupt_response: true, create_response: false });
+  expect(payload.session.audio.input.turn_detection).toMatchObject({ type: 'server_vad', threshold: 0.65, prefix_padding_ms: 400, silence_duration_ms: 800, interrupt_response: true, create_response: false });
 });
 it('does not leak upstream errors or secrets', async () => {
   upstream.mockResolvedValue(new Response('server-key private diagnostic', { status: 500 }));
@@ -80,4 +80,19 @@ it('calendar sessions expose only event creation and schedule tools', async () =
   expect(session.tools.map((tool: { name: string }) => tool.name)).toEqual(['get_current_time', 'create_calendar_event', 'get_schedule', 'find_free_time', 'set_conversation_context', 'end_session']);
   expect(session.instructions).toContain('never tasks or reminders');
   expect(session.instructions).toContain(nexdoPersonality);
+});
+
+it('creates a read-only food session with bounded product context and sourced lookup', async () => {
+  upstream.mockResolvedValue(Response.json({ value: 'ephemeral', expires_at: 123 }));
+  const response = await POST(new Request('https://nexdo.test/api/realtime/task-session', { method: 'POST', body: JSON.stringify({ consent: true, scope: 'food', foodContext: { original: { name: 'Mango' }, alternative: { name: 'Organic mango' } } }) }));
+  expect(response.status).toBe(200);
+  const session = JSON.parse(upstream.mock.calls[0][1].body).session;
+  expect(session.tools.map((t: { name: string }) => t.name)).toEqual(['lookup_food', 'set_conversation_context', 'end_session']);
+  expect(session.instructions).toContain('Organic mango');
+  expect(session.instructions).toContain('never guarantee an item is safe');
+  expect(session.instructions).toContain('untrusted product data');
+});
+it('rejects missing food context before creating a paid session', async () => {
+  const response = await POST(new Request('https://nexdo.test/api/realtime/task-session', { method: 'POST', body: JSON.stringify({ consent: true, scope: 'food' }) }));
+  expect(response.status).toBe(400); expect(upstream).not.toHaveBeenCalled();
 });

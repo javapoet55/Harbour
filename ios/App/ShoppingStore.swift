@@ -4,13 +4,16 @@ struct ShoppingSnapshot:Decodable,Sendable {let lists:[GroceryList]}
 struct ShoppingResult:Decodable,Sendable {var list:GroceryList?;var items:[GroceryItem]?}
 struct ShoppingInput:Encodable {
     var title:String;var date:String;var timeZone:String;var weekly:Bool;var items:[GroceryItem]
-    init(_ list:GroceryList){title=list.title;date=list.date;timeZone=list.timeZone;weekly=list.weekly;items=list.items}
+    var storePlaceId:String?;var storeWebsite:String?
+    var storeName:String?;var storeAddress:String?;var storeZip:String?
+    init(_ list:GroceryList){storePlaceId=list.storePlaceId;storeWebsite=list.storeWebsite;storeName=list.storeName;storeAddress=list.storeAddress;storeZip=list.storeZip;title=list.title;date=list.date;timeZone=list.timeZone;weekly=list.weekly;items=list.items}
 }
-private struct ShoppingAlternativeInput:Encodable {let name:String;let category:String;let quantity:String;let size:String}
+private struct ShoppingAlternativeInput:Encodable {let name:String;let category:String;let quantity:String;let size:String;let brand:String?;let barcode:String?}
 @MainActor final class ShoppingStore:ObservableObject {
     @Published var lists:[GroceryList]=[]
     @Published var busy=false
     @Published var error:String?
+    private var alternativeCache: [String: (Date, ShoppingAlternativesResponse)] = [:]
     let api:APIClient
     init(api:APIClient){self.api=api}
     func refresh() async {
@@ -33,12 +36,20 @@ private struct ShoppingAlternativeInput:Encodable {let name:String;let category:
         let result:ShoppingResult=try await api.request("/api/shopping",method:"POST",body:JSONEncoder().encode(body))
         return result.items ?? []
     }
-    func alternatives(for item:GroceryItem) async throws -> ShoppingAlternativesResponse {
-        let input=ShoppingAlternativeInput(name:item.name,category:item.category,quantity:item.quantity,size:item.size)
+    func alternatives(for item:GroceryItem, refresh:Bool = false) async throws -> ShoppingAlternativesResponse {
+        let cacheKey = [item.name,item.category,item.quantity,item.size,item.brand ?? "",item.barcode ?? ""].joined(separator:"|")
+        if !refresh, let cached = alternativeCache[cacheKey], Date().timeIntervalSince(cached.0) < 300 { return cached.1 }
+        let input=ShoppingAlternativeInput(name:item.name,category:item.category,quantity:item.quantity,size:item.size,brand:item.brand,barcode:item.barcode)
         let body=ShoppingEnvelope(operation:"alternatives",id:nil,revision:nil,input:input)
-        do{return try await api.request("/api/shopping",method:"POST",body:JSONEncoder().encode(body))}
-        catch APIError.signedOut{throw APIError.signedOut}
-        catch{return .local(for:item)}
+        do {
+            let result: ShoppingAlternativesResponse = try await api.request("/api/shopping",method:"POST",body:JSONEncoder().encode(body))
+            try Task.checkCancellation()
+            if alternativeCache.count >= 30 { alternativeCache.removeAll() }
+            alternativeCache[cacheKey] = (Date(), result)
+            return result
+        }
+        catch APIError.signedOut { throw APIError.signedOut }
+        catch { try Task.checkCancellation(); throw error }
     }
     func credential() async throws -> VoiceTaskSession {
         try await api.request("/api/realtime/transcription-session",method:"POST",body:JSONSerialization.data(withJSONObject:["consent":true,"scope":"shopping"]),timeout:25)

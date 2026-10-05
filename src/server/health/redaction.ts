@@ -1,4 +1,4 @@
-const privateKey = /secret|token|password|authorization|cookie|api.?key|prompt|conversation|transcript|recording|email|recipient|contact|description|body|payload|headers/i;
+const privateKey = /secret|token|proof|password|authorization|cookie|api.?key|prompt|conversation|transcript|recording|email|recipient|contact|description|body|payload|headers/i;
 export function redactStructured(value:unknown, depth=0):unknown {
  if(depth>6)return '[redacted]';
  if(Array.isArray(value))return value.slice(0,100).map(v=>redactStructured(v,depth+1));

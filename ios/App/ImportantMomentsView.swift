@@ -127,21 +127,15 @@ private struct FestivalGroupCard: View {
                 HStack(alignment: .top, spacing: 14) {
                     MomentIconTile(type: moment.type, title: moment.title)
                     VStack(alignment: .leading, spacing: 8) {
-                        HStack(alignment:.top,spacing:8) {
-                            Text(moment.title).font(.title3.bold()).frame(maxWidth:.infinity,alignment:.leading)
-                            Button(action:onManage) {
-                                Image(systemName:"gearshape").font(.title3).frame(width:44,height:44)
-                            }.buttonStyle(.plain).foregroundStyle(Color.nexdoIndigo)
-                                .accessibilityLabel("Manage \(moment.title)")
-                                .accessibilityIdentifier("festival-manage-\(moment.id)")
-                        }
+                        Text(moment.title).font(.title3.bold()).padding(.trailing,44)
+
                         Text("\(moment.typeLabel) · \(MomentDates.relative(moment.nextOccurrence, zone: moment.timeZoneID))")
                             .font(.subheadline).foregroundStyle(.secondary)
                         Text(MomentDates.sendDayLabel(MomentDates.date(moment.nextOccurrence,zone:moment.timeZoneID),zone:moment.timeZoneID))
-                            .font(.subheadline).foregroundStyle(.secondary)
+                            .font(.subheadline.bold()).foregroundStyle(.secondary)
                             .fixedSize(horizontal:false,vertical:true)
                             .accessibilityIdentifier("festival-date-\(moment.id)")
-                        let scheduled = group.moments.filter { $0.enabled && $0.upcomingDelivery != nil }.count
+                        let scheduledPlans = group.moments.filter(\.enabled).compactMap(\.upcomingDelivery)
                         let review = group.moments.filter(\.needsWishReview).count
                         let ready = group.moments.filter(\.readyToSchedule).count
                         let active = group.moments.filter(\.enabled).count
@@ -151,10 +145,17 @@ private struct FestivalGroupCard: View {
                         if ready > 0 {
                             MomentStatusBadge(title: ready == active ? "Ready to schedule" : "\(ready) ready to schedule",color:.blue,icon:"clock")
                         }
-                        if scheduled > 0 {
-                            MomentStatusBadge(title: "\(scheduled) scheduled", color: .blue, icon: "clock")
+                        ForEach(MomentScheduleSummary.labels(plans:scheduledPlans),id:\.self) { label in
+                            MomentStatusBadge(title:label,color:.blue,icon:"clock")
                         }
                     }.frame(maxWidth: .infinity, alignment: .leading)
+                        .overlay(alignment:.topTrailing) {
+                            Button(action:onManage) {
+                                Image(systemName:"gearshape").font(.title3).frame(width:44,height:44)
+                            }.buttonStyle(.plain).foregroundStyle(Color.nexdoIndigo)
+                                .accessibilityLabel("Manage \(moment.title)")
+                                .accessibilityIdentifier("festival-manage-\(moment.id)")
+                        }
                 }
             }
             .contentShape(Rectangle())
@@ -212,6 +213,7 @@ struct ImportantMomentsView: View {
     @State private var search = ""
     @State private var filter = "All"
     @State private var deliveryFilter = "All"
+    @State private var upcomingFilter:MomentUpcomingFilter = .today
     @State private var managingMoments = false
     @State private var creatingMoment = false
     @State private var managingFestival: MomentDisplayGroup?
@@ -251,19 +253,31 @@ struct ImportantMomentsView: View {
                         Spacer(minLength: 0)
                     }
                 }
-                ForEach(MomentUpcomingGroup.allCases, id: \.self) { group in
-                    let items = displayed.filter { $0.upcomingGroup() == group }
-                    if !items.isEmpty {
-                        Text(group.rawValue).font(.title.bold())
-                            .frame(maxWidth: .infinity, alignment: .leading).padding(.top, 8)
-                        ForEach(MomentDisplayGroup.groups(items)) { entry in
-                            if entry.moments.first?.supportsGreetingCard == true {
-                                FestivalGroupCard(onManage:{managingFestival=entry},group: entry)
-                            } else if let moment = entry.moments.first {
-                                UpcomingMomentRow(moment: moment)
-                            }
+                ScrollView(.horizontal,showsIndicators:false) {
+                    HStack(spacing:8) {
+                        ForEach(MomentUpcomingFilter.allCases,id:\.self) { period in
+                            Button { upcomingFilter=period } label: {
+                                Text("\(period.rawValue) (\(MomentDisplayGroup.groups(displayed.filter { period.includes(day:$0.nextOccurrence,zone:$0.timeZoneID) }).count))").font(.subheadline.bold()).padding(.horizontal,16).frame(minHeight:44)
+                                    .foregroundStyle(upcomingFilter == period ? .white : Color.nexdoIndigo)
+                                    .background {
+                                        Capsule().fill(upcomingFilter == period ? Color.nexdoIndigo : Color.nexdoIndigo.opacity(0.08))
+                                    }
+                            }.buttonStyle(.plain)
+                                .accessibilityAddTraits(upcomingFilter == period ? .isSelected : [])
+                                .accessibilityIdentifier("moments-period-"+period.rawValue)
                         }
                     }
+                }
+                let items=displayed.filter { upcomingFilter.includes(day:$0.nextOccurrence,zone:$0.timeZoneID) }
+                ForEach(MomentDisplayGroup.groups(items)) { entry in
+                    if entry.moments.first?.supportsGreetingCard == true {
+                        FestivalGroupCard(onManage:{managingFestival=entry},group:entry)
+                    } else if let moment=entry.moments.first {
+                        UpcomingMomentRow(moment:moment)
+                    }
+                }
+                if items.isEmpty {
+                    ContentUnavailableView("No moments \(upcomingFilter == .later ? "later" : upcomingFilter.rawValue.lowercased())",systemImage:"gift",description:Text("Choose another date filter or add a moment."))
                 }
             } else {
                 if tab == "Scheduled" { Picker("Delivery", selection: $deliveryFilter) { ForEach(["All","Automatic","Confirmation","Action needed"], id: \.self) { Text($0) } } }
@@ -290,11 +304,10 @@ struct ImportantMomentsView: View {
                     }
                 }.buttonStyle(.plain) }
             }
-            if tab == "Upcoming" && displayed.isEmpty { ContentUnavailableView("No moments yet", systemImage: "gift", description: Text("Add a moment manually, or select contacts and calendars in Settings.")) }
             if let error = store.error { Text(error).foregroundStyle(.red); Button("Retry") { Task { await store.refresh() } } }
             if store.loading { ProgressView() }
             if let synced = store.lastSynced { Text("Updated \(synced.formatted(date: .omitted, time: .shortened))").font(.caption).foregroundStyle(.secondary) }
-            Button { creatingMoment = true } label: { Label("Add Moment", systemImage: "plus").font(.headline).frame(maxWidth: .infinity, minHeight: 52) }.buttonStyle(.borderedProminent)
+            Button { creatingMoment = true } label: { Label("Add Moment", systemImage: "plus").font(.headline).frame(maxWidth: .infinity, minHeight: 52) }.buttonStyle(.borderedProminent).tint(Color(red:24/255,green:119/255,blue:242/255))
         }.padding(18) } }
         .navigationDestination(isPresented: $creatingMoment) {
             MomentEditor(onDone: { creatingMoment = false })
@@ -420,7 +433,7 @@ struct WishDeliveryView: View {
         .navigationTitle("Choose Delivery").navigationBarTitleDisplayMode(.inline)
         .onAppear { if recipient.isEmpty { recipient = moment.phone } }
         .sheet(isPresented: $confirmEmail) {
-            WishEmailConfirmation(account: store.snapshot?.emailAccount?.email ?? "No connected account", recipient: recipient, subject: moment.title, message: draft.body) { confirmEmail = false; send() }
+            WishEmailConfirmation(account: store.snapshot?.emailAccount?.email ?? "No connected account", recipient: recipient, subject: moment.emailSubject ?? moment.title, message: draft.body) { confirmEmail = false; send() }
         }
         .sheet(isPresented: $showComposer) { ActionMessageComposer(recipient: recipient, body: draft.body) { result in
             showComposer = false
@@ -518,16 +531,19 @@ struct WishPlanView: View {
         ZStack { TodayBackdrop(); ScrollView { VStack(spacing: 20) {
             Image(systemName: confirmation ? "calendar.badge.checkmark" : "gift.fill").font(.system(size: 76)).foregroundStyle(Color.nexdoIndigo).padding(20)
             Text(confirmation && ["SCHEDULED", "AWAITING_CONFIRMATION"].contains(current.status) ? "Wish scheduled" : current.statusLabel).font(.largeTitle.bold())
-            Text(current.status == "SENT" ? "Your wish was submitted successfully." : current.status == "CANCELLED" ? "This wish will not be sent." : current.automaticDelivery && current.status == "SCHEDULED" ? "Approved email will send automatically at the scheduled time." : "Review the delivery status below.").multilineTextAlignment(.center)
+            Text(current.status == "SENT" ? "Your wish was submitted successfully." : current.status == "CANCELLED" ? "This wish will not be sent." : current.automaticDelivery && current.status == "SCHEDULED" ? "Approved email will send automatically at the scheduled time." : current.status == "AWAITING_CONFIRMATION" && current.channel == "messages" ? "Your wish and schedule are saved. Open Messages and tap Send when you are ready; Messages wishes are not sent automatically." : "Review the delivery status below.").multilineTextAlignment(.center)
             MomentCard {
-                Text(current.subject).font(.title2.bold()); Text(current.recipient)
+                Text(current.subject).font(.title2.bold())
+                Label(current.recipient,systemImage:current.channel == "messages" ? "phone.fill" : current.channel == "email" ? "envelope.fill" : "person.fill")
                 Divider(); LabeledContent("Delivery", value: current.channel.capitalized)
                 LabeledContent("Send time", value: MomentDates.label(current.date, zone: current.timeZoneID))
                 LabeledContent("Time zone", value: current.timeZoneID)
                 LabeledContent("Reminder", value: current.reminderOffset == 60 ? "1 hour before" : "At scheduled time")
                 LabeledContent("Repeat", value: current.repeatYearly ? "Yearly" : "Once")
                 Text(current.body).padding(.top, 8)
-                if let error = current.lastError { Text(error).foregroundStyle(.red) }
+                if current.status == "EXPIRED" {
+                    Text("This wish expired 24 hours after its scheduled send time because delivery was not confirmed. Create a new wish to send it.").foregroundStyle(.red)
+                } else if let error = current.lastError { Text(error).foregroundStyle(.red) }
             }
             if current.editable {
                 Button("Edit Schedule") { date = max(current.date, Date().addingTimeInterval(60)); changing = true }.buttonStyle(.bordered)
@@ -537,6 +553,11 @@ struct WishPlanView: View {
                 if current.channel == "email" { Button("Send email now") { sendEmailNow = true } }
                 if current.status == "FAILED" && current.automaticDelivery { Button("Retry after reconnecting") { Task { await store.perform { try await store.planAction(current, action: "retry") } } } }
                 Button("Cancel scheduled wish", role: .destructive) { cancel = true }
+            }
+            if current.status == "UNCERTAIN" {
+                Text("Check the Sent folder in Gmail, then tell Nexdo what happened.").font(.footnote).foregroundStyle(.secondary)
+                Button("I found it in Sent mail") { Task { await store.perform { try await store.planAction(current, action: "sent") } } }.buttonStyle(.bordered)
+                Button("It wasn't sent") { Task { await store.perform { try await store.planAction(current, action: "failed") } } }
             }
             if ["SENT","COPIED","SHARED"].contains(current.status) {
                 Button("Copy message") { UIPasteboard.general.string = current.body }
@@ -575,8 +596,14 @@ struct MomentSheetHost: View {
     @EnvironmentObject private var store: ImportantMomentsStore
     var body: some View {
         Color.clear.frame(width: 0, height: 0).sheet(item: $store.route) { moment in
-            MomentRoutedView(moment: moment) { store.route = nil }
+            MomentRoutedView(moment: moment, planID: store.routedPlanID) { store.route = nil }
                 .environmentObject(store)
+        }
+        .sheet(isPresented: $store.showingNotificationInbox) {
+            NavigationStack {
+                ImportantMomentsView()
+                    .toolbar { ToolbarItem(placement: .topBarLeading) { Button("Close") { store.showingNotificationInbox = false } } }
+            }.environmentObject(store)
         }
     }
 }
@@ -585,13 +612,14 @@ struct MomentSheetHost: View {
 private struct MomentRoutedView: View {
     @EnvironmentObject private var store: ImportantMomentsStore
     let moment: ImportantMoment
+    let planID: String?
     let close: () -> Void
     @State private var showingDetail = true
     var body: some View {
         NavigationStack {
             ImportantMomentsView()
                 .navigationDestination(isPresented: $showingDetail) {
-                    if let plan = moment.drafts.flatMap({ $0.plans ?? [] }).first(where: { $0.editable }) {
+                    if let plan = moment.drafts.flatMap({ $0.plans ?? [] }).first(where: { $0.id == planID }) ?? moment.drafts.flatMap({ $0.plans ?? [] }).first(where: { $0.editable }) {
                         WishPlanView(plan: plan)
                     } else if moment.supportsGreetingCard, let group = MomentDisplayGroup.editableGroups(store.moments.filter { $0.type == moment.type }).first(where: { $0.moments.contains { $0.id == moment.id } }) {
                         ManageFestivalView(group: group, store: store,onDone:{showingDetail=false})

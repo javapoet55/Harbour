@@ -54,6 +54,7 @@ import Testing
     let raw:[String:Any] = ["id":"m","type":"festival","title":"Diwali","firstName":"Sam","phone":"","email":"","occurrenceDate":"2026-09-20","nextOccurrence":"2026-09-20","timeZoneID":"UTC","source":"manual","sourceKey":"test","yearly":false,"enabled":true,"drafts":[]]
     var moment=try JSONDecoder().decode(ImportantMoment.self,from:JSONSerialization.data(withJSONObject:raw))
     #expect(moment.needsWishReview)
+    #expect(MomentManagementFilter.needReview.includes(MomentDisplayGroup.groups([moment])[0]))
     var settings=FestivalSettings();settings.baseMessage="Happy Diwali";settings.approvedAt="2026-09-17T00:00:00Z"
     moment.festivalSettings=String(data:try JSONEncoder().encode(settings),encoding:.utf8)
     #expect(moment.readyToSchedule)
@@ -62,9 +63,15 @@ import Testing
     var plan=try JSONDecoder().decode(WishDeliveryPlan.self,from:JSONSerialization.data(withJSONObject:planRaw))
     moment.drafts=[WishDraft(id:"d",momentID:"m",tone:"Warm",body:"Hi",personalContext:"",status:"PLANNED",generationVersion:1,plans:[plan])]
     #expect(moment.upcomingDelivery != nil)
+    let group = MomentDisplayGroup.groups([moment])[0]
+    #expect(MomentManagementFilter.scheduled.includes(group))
+    #expect(!MomentManagementFilter.ready.includes(group))
+    #expect(!MomentManagementFilter.needReview.includes(group))
     #expect(!moment.needsWishReview)
     #expect(!moment.readyToSchedule)
     plan.status="CANCELLED";moment.drafts[0].plans=[plan]
+    #expect(MomentManagementFilter.ready.includes(MomentDisplayGroup.groups([moment])[0]))
+    #expect(!MomentManagementFilter.scheduled.includes(MomentDisplayGroup.groups([moment])[0]))
     #expect(moment.readyToSchedule)
     settings.approvedAt=nil
     moment.festivalSettings=String(data:try JSONEncoder().encode(settings),encoding:.utf8)
@@ -125,4 +132,68 @@ import Testing
     #expect(plan.editable)
     plan.status="EXPIRED"
     #expect(!plan.editable)
+}
+
+@Test func approvedManualWishShowsScheduledUntilDueWithoutAskingForApprovalAgain() throws {
+    let raw: [String: Any] = ["id":"plan","draftID":"draft","channel":"messages","recipient":"+15555550123","subject":"Birthday","body":"Happy Birthday!","scheduledAtUTC":"2026-09-26T15:00:00.000Z","timeZoneID":"America/Los_Angeles","status":"AWAITING_CONFIRMATION","idempotencyKey":"key","automaticDelivery":false,"repeatYearly":false,"reminderOffset":0]
+    var plan=try JSONDecoder().decode(WishDeliveryPlan.self,from:JSONSerialization.data(withJSONObject:raw))
+    #expect(plan.statusLabel(now:plan.date.addingTimeInterval(-1)) == "Scheduled — manual send")
+    #expect(plan.statusLabel(now:plan.date) == "Ready to send")
+    #expect(plan.sentAt == nil)
+    #expect(plan.editable)
+    plan.lastError="Messages opened; delivery not confirmed."
+    #expect(plan.statusLabel(now:plan.date.addingTimeInterval(-1)) == "Opened — delivery not confirmed")
+    plan.status="SENT"
+    #expect(plan.statusLabel(now:plan.date) == "Sent")
+    plan.status="SCHEDULED";plan.channel="email";plan.automaticDelivery=true
+    #expect(plan.statusLabel(now:plan.date) == "Auto-send scheduled")
+}
+
+@Test func momentDateFiltersRespectLocalDaysAndWeekBoundaries() {
+    var calendar=Calendar(identifier:.gregorian);calendar.firstWeekday=1
+    let now=ISO8601DateFormatter().date(from:"2026-09-27T02:00:00Z")!
+    func matches(_ filter:MomentUpcomingFilter,_ day:String,_ zone:String="America/Los_Angeles") -> Bool {
+        filter.includes(day:day,zone:zone,now:now,calendar:calendar)
+    }
+    #expect(matches(.today,"2026-09-26"))
+    #expect(!matches(.today,"2026-09-27"))
+    #expect(matches(.today,"2026-09-27","Asia/Tokyo"))
+    #expect(matches(.tomorrow,"2026-09-27"))
+    #expect(matches(.thisWeek,"2026-09-26"))
+    #expect(!matches(.thisWeek,"2026-09-27"))
+    #expect(!matches(.later,"2026-09-27"))
+    #expect(matches(.later,"2026-09-28"))
+    #expect(!matches(.thisWeek,"2026-09-25"))
+    let dst=ISO8601DateFormatter().date(from:"2026-03-08T09:00:00Z")!
+    #expect(MomentUpcomingFilter.tomorrow.includes(day:"2026-03-09",zone:"America/Los_Angeles",now:dst,calendar:calendar))
+}
+
+@Test func momentScheduleBadgesGroupMatchingTimes() throws {
+    func plan(_ id:String,_ time:String) throws -> WishDeliveryPlan {
+        let raw:[String:Any] = ["id":id,"draftID":id,"channel":"messages","recipient":"123","subject":"Wish","body":"Hello","scheduledAtUTC":time,"timeZoneID":"America/Los_Angeles","status":"AWAITING_CONFIRMATION","idempotencyKey":id,"automaticDelivery":false,"repeatYearly":false,"reminderOffset":0]
+        return try JSONDecoder().decode(WishDeliveryPlan.self,from:JSONSerialization.data(withJSONObject:raw))
+    }
+    let plans=try [plan("a","2026-09-26T15:00:00Z"),plan("b","2026-09-26T15:00:00Z"),plan("c","2026-09-26T17:00:00Z")]
+    let labels=MomentScheduleSummary.labels(plans:plans,locale:Locale(identifier:"en_US"))
+    #expect(labels.count == 2)
+    #expect(labels[0].hasPrefix("2 scheduled @ 8:00"))
+    #expect(labels[1].hasPrefix("1 scheduled @ 10:00"))
+    #expect(MomentScheduleSummary.labels(plans:[]).isEmpty)
+}
+
+@Test func preparationRemindersSupportHoursAndLegacyDays() throws {
+    var settings = try JSONDecoder().decode(FestivalSettings.self, from: Data(#"{"groupID":"test","prepareDays":3}"#.utf8))
+    #expect(settings.preparationMinutes == 4320)
+    let instant = ISO8601DateFormatter().date(from: "2026-11-01T12:00:00Z")!
+    for hours in [1,4,8] {
+        settings.preparationMinutes = hours * 60
+        #expect(settings.prepareDays == 0)
+        let restored = try JSONDecoder().decode(FestivalSettings.self, from: JSONEncoder().encode(settings))
+        #expect(restored.preparationDate(occurrence: instant, zone: "America/Los_Angeles") == instant.addingTimeInterval(-Double(hours)*3600))
+    }
+    settings.preparationMinutes = 0
+    #expect(settings.preparationDate(occurrence: instant, zone: "UTC") == nil)
+    settings.preparationMinutes = 1440
+    #expect(settings.prepareHours == 0)
+    #expect(settings.prepareDays == 1)
 }

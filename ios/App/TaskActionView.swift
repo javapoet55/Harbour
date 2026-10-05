@@ -105,6 +105,18 @@ struct TaskActionView: View {
     let actionID: String
     let preferred: TaskActionChannel?
     var startSelectedAction = false
+    @State private var resumeAfterSelection = false
+    @State private var checking = true
+    @State private var businessFlow = false
+    @State private var businessRun: TaskAgentRun?
+    @State private var businessDraft: String?
+    @State private var showingTask = false
+    @State private var pickingContact = false
+    @State private var enteringDetails = false
+    @State private var manualName = ""
+    @State private var manualPhone = ""
+    @State private var manualEmail = ""
+    @State private var checkFailed = false
     @State private var channel: TaskActionChannel?
     @State private var contacts: [ActionContact] = []
     @State private var contact: ActionContact?
@@ -116,7 +128,7 @@ struct TaskActionView: View {
     @State private var confirmCall = false
     @State private var composer: Composer?
     @State private var resolution: Task<Void, Never>?
-private let resolver: any TaskActionContactResolver = AppleTaskActionContacts()
+    private let resolver: any TaskActionContactResolver = AppleTaskActionContacts()
     private let emailService: any TaskActionEmailService = NativeTaskActionEmailService()
     private struct Composer: Identifiable {
         let id = UUID()
@@ -124,6 +136,7 @@ private let resolver: any TaskActionContactResolver = AppleTaskActionContacts()
         let recipient: String
         let name: String
         let context: String?
+        let body: String?
     }
     private var action: TaskAction? { coordinator.actions.first { $0.id == actionID } }
     private var task: NexdoTask? { model.tasks.first { $0.id == action?.taskId } }
@@ -135,9 +148,18 @@ private let resolver: any TaskActionContactResolver = AppleTaskActionContacts()
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
                     if let action, usable {
-                        Text("Time to contact \(action.contactName)").font(.title2.bold())
-                        Text("How would you like to get in touch?").foregroundStyle(Color.nexdoSecondary)
-                        ForEach(TaskActionChannel.allCases, id: \.self) { option in
+                        Text("Contact \(contact?.name ?? action.contactName)").font(.title2.bold())
+                        if checking { ProgressView("Checking next action…") }
+                        else if checkFailed {
+                            Text("Couldn’t check this task. Please retry.")
+                            Button("Retry") { Task { await loadDestination() } }
+                        } else if businessFlow && contact == nil {
+                            Text("Choose a business before calling or sending a message.").foregroundStyle(Color.nexdoSecondary)
+                            Button(businessRun?.candidates.isEmpty == false ? "Choose a business" : "Find businesses") { showingTask = true }
+                                .buttonStyle(.borderedProminent)
+                        } else {
+                        Text(contact == nil ? "Choose a contact or enter a phone number or email address." : "Choose how to contact \(contact!.name).").foregroundStyle(Color.nexdoSecondary)
+                        ForEach(availableChannels, id: \.self) { option in
                             Button { resolve(option) } label: {
                                 HStack {
                                     Label(title(option), systemImage: icon(option))
@@ -148,6 +170,21 @@ private let resolver: any TaskActionContactResolver = AppleTaskActionContacts()
                             }.buttonStyle(.plain).disabled(busy)
                                 .accessibilityIdentifier("taskAction.\(option.rawValue)")
                                 .accessibilityLabel("\(title(option)) \(action.contactName)")
+                        }
+                        }
+                        if !checking && !checkFailed {
+                            if businessFlow {
+                                if contact != nil { Button("Change business") { showingTask = true } }
+                                Button("Choose someone from Contacts") { pickingContact = true }
+                            } else {
+                                Button("Choose contact") { pickingContact = true }.buttonStyle(.borderedProminent)
+                                Button("Enter contact details") {
+                                    manualName = contact?.name ?? action.contactName
+                                    manualPhone = contact?.phones.first?.value ?? ""
+                                    manualEmail = contact?.emails.first?.value ?? ""
+                                    enteringDetails = true
+                                }
+                            }
                         }
                         if busy { ProgressView("Finding contact…") }
                         if !contacts.isEmpty {
@@ -187,13 +224,6 @@ private let resolver: any TaskActionContactResolver = AppleTaskActionContacts()
                             .accessibilityIdentifier("taskAction.snooze").disabled(busy)
                         Button("Dismiss") { coordinator.dismiss(actionID); closeAction() }
                             .accessibilityIdentifier("taskAction.dismiss").disabled(busy)
-                        if action.contactIdentifier != nil {
-                            Button("Choose a different contact") {
-                                coordinator.update(actionID) { $0.contactIdentifier = nil }
-                                contact = nil; contacts = []; addresses = []
-                                if let channel { resolve(channel) }
-                            }.font(.subheadline).disabled(busy)
-                        }
                         if let notice = coordinator.notice {
                             Text(notice).font(.caption).foregroundStyle(.orange)
                             Button("Retry reminders") { coordinator.retryNotifications() }
@@ -214,7 +244,7 @@ private let resolver: any TaskActionContactResolver = AppleTaskActionContacts()
             .sheet(item: $composer) { draft in
                 if draft.channel == .message {
                     ActionMessageComposer(recipient: draft.recipient,
-                        body: "Hi \(draft.name), " + (draft.context.map { "following up regarding \($0)." } ?? "just checking in."), finished: finishCompose)
+                        body: draft.body ?? ("Hi \(draft.name), " + (draft.context.map { "following up regarding \($0)." } ?? "just checking in.")), finished: finishCompose)
                         .ignoresSafeArea()
                         .interactiveDismissDisabled()
                 } else {
@@ -222,6 +252,39 @@ private let resolver: any TaskActionContactResolver = AppleTaskActionContacts()
                         .ignoresSafeArea()
                         .interactiveDismissDisabled()
                 }
+            }
+        }
+        .sheet(isPresented: $showingTask, onDismiss: { Task { await loadDestination(); if startSelectedAction, let preferred, contact != nil { resolve(preferred) } } }) {
+            if let task { TaskDetailsView(task: task) }
+        }
+        .sheet(isPresented: $pickingContact, onDismiss: resumeSelectedChannel) {
+            ActionContactPicker(selected: { value in
+                pickingContact = false
+                error = nil; businessFlow = false; businessDraft = nil
+                coordinator.update(actionID) { $0.manualRecipient = nil; $0.businessCandidateID = nil }
+                // Let the picker dismiss before opening a composer.
+                contact = value; contacts = []; addresses = []; resumeAfterSelection = true; coordinator.remember(value)
+                coordinator.update(actionID) { $0.contactIdentifier = value.id }
+            }, cancelled: { pickingContact = false })
+        }
+        .sheet(isPresented: $enteringDetails, onDismiss: resumeSelectedChannel) {
+            NavigationStack {
+                Form {
+                    TextField("Name", text: $manualName)
+                    TextField("Phone number", text: $manualPhone).keyboardType(.phonePad)
+                    TextField("Email", text: $manualEmail).keyboardType(.emailAddress).textInputAutocapitalization(.never).autocorrectionDisabled()
+                    if !validManualDetails { Text("Enter a name and a valid phone number or email address.").font(.caption) }
+                }.navigationTitle("Contact details")
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) { Button("Cancel") { enteringDetails = false } }
+                        ToolbarItem(placement: .confirmationAction) {
+                            Button("Save") {
+                                let recipient = TaskActionRecipient(name: manualName.trimmingCharacters(in: .whitespacesAndNewlines), phone: manualPhone.trimmingCharacters(in: .whitespacesAndNewlines), email: manualEmail.trimmingCharacters(in: .whitespacesAndNewlines))
+                                coordinator.update(actionID) { $0.manualRecipient = recipient; $0.contactIdentifier = nil; $0.businessCandidateID = nil }
+                                contact = .manual(recipient); contacts = []; addresses = []; resumeAfterSelection = true; error = nil; enteringDetails = false
+                            }.disabled(!validManualDetails)
+                        }
+                    }
             }
         }
         .presentationDetents([.large]).presentationDragIndicator(.visible)
@@ -236,15 +299,60 @@ private let resolver: any TaskActionContactResolver = AppleTaskActionContacts()
             // Closed while tasks were refreshing: leave the action on its schedule.
             guard usable, !Task.isCancelled else { return }
             coordinator.update(actionID) { $0.transition(to: .awaitingApproval) }
-            if startSelectedAction, let preferred, !Task.isCancelled { resolve(preferred) }
+            await loadDestination()
+            if startSelectedAction, let preferred, !Task.isCancelled, contact != nil { resolve(preferred) }
         }
+    }
+
+    private func resumeSelectedChannel() {
+        guard resumeAfterSelection else { return }
+        resumeAfterSelection = false
+        if let option = channel ?? (startSelectedAction ? preferred : nil) { resolve(option) }
+    }
+    private var availableChannels: [TaskActionChannel] {
+        ActionNeededState.channels(hasPhone: !(contact?.phones.isEmpty ?? true), hasEmail: !(contact?.emails.isEmpty ?? true))
+    }
+    private var validManualDetails: Bool {
+        TaskActionRecipient.isValid(name: manualName, phone: manualPhone, email: manualEmail)
+    }
+    private func loadDestination() async {
+        guard let action, usable else { checking = false; return }
+        checking = true; checkFailed = false; error = nil; contact = nil; businessDraft = nil; contacts = []; addresses = []
+        defer { checking = false }
+        if let recipient = action.manualRecipient { businessFlow = false; contact = .manual(recipient); return }
+        if action.contactIdentifier == nil {
+            do {
+                let response = try await model.loadTaskAgent(taskID: action.taskId)
+                guard !Task.isCancelled, usable else { return }
+                businessRun = response.run
+                businessFlow = action.businessCandidateID != nil || response.intent?.eligible == true || response.run != nil
+                if businessFlow {
+                    if let selected = response.run?.candidates.first(where: { $0.id == action.businessCandidateID }) {
+                        contact = .business(selected); businessDraft = selected.draft
+                    }
+                    return
+                }
+            } catch { checkFailed = true; return }
+        }
+        businessFlow = false
+        if let id = action.contactIdentifier, let cached = coordinator.resolvedContacts[id] { contact = cached; return }
+        do {
+            let matches = try await resolver.resolve(name: DeterministicTaskActionDetector.contactSearchName(action.contactName), identifier: action.contactIdentifier)
+            guard !Task.isCancelled, usable else { return }
+            if matches.count == 1 {
+                contact = matches[0]; coordinator.remember(matches[0])
+                coordinator.update(actionID) { $0.contactIdentifier = matches[0].id }
+            } else { contacts = matches }
+        } catch { self.error = "No contact selected. Choose a contact or enter details below." }
     }
 
     private func title(_ channel: TaskActionChannel) -> String { switch channel { case .call: "Call"; case .message: "Message"; case .email: "Email" } }
     private func icon(_ channel: TaskActionChannel) -> String { switch channel { case .call: "phone"; case .message: "message"; case .email: "envelope" } }
     private func resolve(_ option: TaskActionChannel) {
         guard let action, usable, !busy else { return }
-        channel = option; contacts = []; addresses = []; error = nil; receipt = nil; busy = true
+        channel = option; contacts = []; addresses = []; error = nil; receipt = nil
+        if let contact { choose(contact); return }
+        busy = true
         coordinator.update(actionID) { $0.transition(to: .awaitingApproval) }
         resolution?.cancel()
         resolution = Task {
@@ -259,9 +367,12 @@ private let resolver: any TaskActionContactResolver = AppleTaskActionContacts()
     }
     private func choose(_ value: ActionContact) {
         guard usable else { return }
-        contact = value; contacts = []
-        coordinator.remember(value)
-        coordinator.update(actionID) { $0.contactIdentifier = value.id }
+        contact = value; contacts = []; error = nil; selectedAddress = nil
+        if !businessFlow && action?.manualRecipient == nil {
+            coordinator.remember(value)
+            coordinator.update(actionID) { $0.contactIdentifier = value.id }
+        }
+        guard channel != nil else { return }
         addresses = channel == .email ? value.emails : value.phones
         if addresses.isEmpty { error = (channel == .email ? TaskActionServiceError.noEmail : .noPhone).localizedDescription }
         else if addresses.count == 1 { prepare(addresses[0]) }
@@ -275,7 +386,7 @@ private let resolver: any TaskActionContactResolver = AppleTaskActionContacts()
         }
         // Approval is to open an editable composer, never to send automatically.
         guard coordinator.approveExecution(actionID) else { return }
-        composer = Composer(channel: channel, recipient: address.value, name: contact.name, context: action.context)
+        composer = Composer(channel: channel, recipient: address.value, name: contact.name, context: action.context, body: businessDraft)
     }
     private func placeCall() {
         guard usable, let address = selectedAddress else { return }

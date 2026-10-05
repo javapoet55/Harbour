@@ -1,14 +1,20 @@
 import {expect,it} from 'vitest';
-import {prepareDraft} from './rank';
-
+import {prepareDraft,refreshGeneratedDraft} from './rank';
+import type {Candidate} from '@/lib/task-agent/types';
 const slots={location:'94572',urgency:'flexible' as const,budget:'',constraints:'',preferencesConfirmed:true};
-it('uses the requested electrician message with the entered ZIP code',()=>{
- expect(prepareDraft('electrician',slots)).toBe('Hi, I’m looking for an electrician in zip code: 94572.\n\nCould you please share your next available appointment, an estimated quote, and any diagnostic or service-call fee?\n\nPlease let me know if you need any additional details from me. Thank you!');
+it('asks only for availability with the requested ZIP label',()=>{
+ expect(prepareDraft('plumber',slots)).toBe('Hello there,\n\nI’m looking for a plumber in Zip: 94572. Please let me know your availability.\n\nThank you.');
+ expect(prepareDraft('electrician',slots)).toContain('an electrician');
 });
-it('preserves an entered city instead of labeling it as a ZIP code',()=>{
- expect(prepareDraft('plumber',{...slots,location:' San Ramon, CA '})).toContain('Hi, I’m looking for a plumber in San Ramon, CA.');
- expect(prepareDraft('plumber',{...slots,location:'San Ramon'})).not.toContain('zip code');
+it('preserves cities and handles ZIP+4',()=>{
+ expect(prepareDraft('plumber',{...slots,location:' San Ramon, CA '})).toContain('in San Ramon, CA.');
+ expect(prepareDraft('appliance repair',{...slots,location:'94572-1234'})).toContain('for appliance repair in Zip: 94572-1234.');
 });
-it('handles ZIP+4 and service names without an incorrect article',()=>{
- expect(prepareDraft('appliance repair',{...slots,location:'94572-1234'})).toContain('looking for appliance repair in zip code: 94572-1234.');
+it('refreshes the old generated screenshot copy without changing personalized drafts',()=>{
+ const draft='Hello there,\n\nI’m looking for plumber services in 94572. My request: Contact Plumbers. Please let me know your availability.\nCould you provide a quote, any call-out fees and your licensing/insurance details where applicable?\n\nThank you.';
+ const candidate={id:'test',draft} as Candidate;
+ expect(refreshGeneratedDraft(candidate,'plumber',slots).draft).toBe(prepareDraft('plumber',slots));
+ expect(refreshGeneratedDraft({...candidate,draft:draft.replace('Hello there','Hello Barnett Plumbing').replace('fees and','fees, and')},'plumber',slots).draft).toBe(prepareDraft('plumber',slots));
+ expect(refreshGeneratedDraft({...candidate,draftEdited:true},'plumber',slots).draft).toBe(draft);
+ expect(refreshGeneratedDraft({...candidate,draft:'Please call me about the kitchen sink.'},'plumber',slots).draft).toBe('Please call me about the kitchen sink.');
 });

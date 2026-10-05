@@ -189,6 +189,11 @@ export default function ShoppingDetailScreen() {
       <View style={styles.fill} pointerEvents={busy ? 'none' : 'auto'}>
         {/* On Android the action bar rides up on the keyboard, so the focused field has to clear it too. */}
         <KeyboardAwareScrollView bottomOffset={barHeight} keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingBottom: barHeight + 16 }} testID="shopping-detail">
+          {!readOnly && <Pressable accessibilityRole="button" accessibilityLabel="Schedule shopping list email" onPress={() => router.push({ pathname: '/shopping/email', params: { id: list.id } })} style={{ margin: 16, padding: 16, borderRadius: 18, backgroundColor: theme.colors.secondaryBackground, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+            <Ionicons name="mail-outline" size={26} color={theme.colors.link} />
+            <View style={{ flex: 1 }}><Text style={{ fontWeight: '700', color: theme.colors.label }}>Schedule email</Text><Text style={{ color: theme.colors.secondaryLabel }}>Send your list to your store manager every week</Text></View>
+            <Ionicons name="chevron-forward" size={20} color={theme.colors.link} />
+          </Pressable>}
           {/* Header (:233-234). */}
           <View style={styles.header}>
             <ShoppingIcon />

@@ -1,3 +1,4 @@
+import { foodVoiceContextSchema, foodVoiceSessionConfiguration } from '@/server/voice/food';
 import { observedFetch } from '@/server/health/telemetry';
 import { healthRoute } from '@/server/health/telemetry';
 import { voiceSessionConfiguration, calendarVoiceSessionConfiguration } from '@/server/voice/configuration';
@@ -14,7 +15,9 @@ async function healthHandlerPOST(req: Request) {
     if (consent?.consent !== true) return Response.json({ error: 'Allow voice sharing before starting.' }, { status: 400, headers });
     const key = process.env.OPENAI_API_KEY;
     if (!key) return Response.json({ error: 'Voice task creation is not configured yet. Please add your task manually.' }, { status: 503, headers });
-    const session = consent.scope === 'calendar' ? calendarVoiceSessionConfiguration(user.timeZone) : voiceSessionConfiguration(user.timeZone);
+    const foodContext = consent.scope === 'food' ? foodVoiceContextSchema.safeParse(consent.foodContext) : null;
+    if (foodContext && !foodContext.success) return Response.json({ error: 'Choose an item before starting food voice.' }, { status: 400, headers });
+    const session = foodContext?.success ? foodVoiceSessionConfiguration(user.timeZone, foodContext.data) : consent.scope === 'calendar' ? calendarVoiceSessionConfiguration(user.timeZone) : voiceSessionConfiguration(user.timeZone);
     const model = session.model;
     const response = await observedFetch('https://api.openai.com/v1/realtime/client_secrets', {
       method: 'POST',

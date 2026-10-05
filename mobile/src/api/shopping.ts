@@ -109,3 +109,18 @@ export const shoppingEndpoints = {
 export function shareUrl(token: string, client: ApiClient = getApi()): string {
   return `${client.baseUrl}/shared/shopping/${token}`;
 }
+
+export type ShoppingEmailSettings = { customerPhone: string; recipient: string; recipientName: string; timeZone: string; weekday: number; hour: number; minute: number; consent: true };
+export type ShoppingEmailSnapshot = {
+  available: boolean;
+  account: { email: string; status: string } | null;
+  schedule: (Omit<ShoppingEmailSettings, 'consent' | 'customerPhone'> & { customerPhone: string | null; enabled: boolean; nextRunAt: string; runs: { id: string; dueAt: string; status: string; detail: string | null }[] }) | null;
+};
+export const shoppingEmailApi = {
+  get: (listId: string) => getApi().get<ShoppingEmailSnapshot>(`/api/shopping/email-schedule?listId=${encodeURIComponent(listId)}`),
+  save: (listId: string, input: ShoppingEmailSettings) => getApi().post<ShoppingEmailSnapshot>('/api/shopping/email-schedule', { listId, operation: 'save', input }),
+  pause: (listId: string) => getApi().post<ShoppingEmailSnapshot>('/api/shopping/email-schedule', { listId, operation: 'pause' }),
+  connect: (listId: string) => getApi().post<{ url: string }>('/api/shopping/email-schedule', { listId, operation: 'connect' }),
+  /** Gmail is saved only once the signed-in app confirms the callback's ticket (Moments' `connectEmailConfirm`). */
+  confirmGmail: (ticket: string) => getApi().post<{ ok: true }>('/api/moments', { operation: 'connectEmailConfirm', input: { ticket } }),
+};

@@ -1,18 +1,30 @@
 import SwiftUI
 import AVFoundation
 import Network
+import OSLog
 import Combine
 import MediaPlayer
 
 @MainActor
 private final class VoiceNetworkMonitor: ObservableObject {
     @Published private(set) var isConnected = true
+    @Published private(set) var pathSignature = ""
     private let monitor = NWPathMonitor()
     private let queue = DispatchQueue(label: "com.nexdo.voice.network-monitor")
 
     init() {
         monitor.pathUpdateHandler = { [weak self] path in
-            Task { @MainActor [weak self] in self?.isConnected = path.status == .satisfied }
+            let connected = path.status == .satisfied
+            let interface = path.usesInterfaceType(.wifi) ? "wifi" : path.usesInterfaceType(.cellular) ? "cellular" : path.usesInterfaceType(.wiredEthernet) ? "wired" : "other"
+            let signature = "\(connected)-\(interface)"
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                if self.pathSignature != signature {
+                    Logger(subsystem: "com.nexdo.voice", category: "network").info("Network path: \(signature, privacy: .public)")
+                }
+                self.isConnected = connected
+                self.pathSignature = signature
+            }
         }
         monitor.start(queue: queue)
     }
@@ -48,10 +60,12 @@ struct AddTaskByVoiceView: View {
     private let gradient = LinearGradient(colors: [.nexdoMagenta, .nexdoIndigo, .nexdoBlue], startPoint: .topLeading, endPoint: .bottomTrailing)
     private let askMode: Bool
     private let calendarOnly: Bool
-    init(askMode: Bool = false, calendarOnly: Bool = false) {
+    private let foodContext: FoodVoiceContext?
+    init(askMode: Bool = false, calendarOnly: Bool = false, foodContext: FoodVoiceContext? = nil) {
+        self.foodContext = foodContext
         self.askMode = askMode
         self.calendarOnly = calendarOnly
-        let executor = VoiceToolExecutor(); executor.calendarOnly = calendarOnly; _executor = State(initialValue: executor)
+        let executor = VoiceToolExecutor(); executor.calendarOnly = calendarOnly; executor.foodOnly = foodContext != nil; _executor = State(initialValue: executor)
         let transport = VoiceWebRTCTransport()
         _transport = State(initialValue: transport)
         _voice = StateObject(wrappedValue: VoiceConversationSession(transport: transport, executor: executor))
@@ -66,23 +80,26 @@ struct AddTaskByVoiceView: View {
             VStack(spacing: 0) {
                 HStack {
                     Button { voice.close(); dismiss() } label: { Label("Close", systemImage: "xmark") }
-                    Spacer(); Text(askMode ? "Ask by Voice" : "Add by Voice").font(.headline); Spacer()
+                    Spacer(); Text(foodContext != nil ? "Ask AI about this item" : askMode ? "Ask by Voice" : "Add by Voice").font(.headline); Spacer()
                     Text("Close").hidden().accessibilityHidden(true)
                 }.padding(20)
                 ScrollView {
                     VStack(spacing: 18) {
-                        Text(calendarOnly ? "Speak your appointment" : askMode ? "Ask Nexdo anything" : "Speak your task").font(.largeTitle.bold()).multilineTextAlignment(.center)
-                        Text(calendarOnly ? "Tell me the event, date, and time. I’ll add it to your calendar." : askMode ? "Ask about tasks, calendar, important moments, or shopping lists. Keep talking to plan or make changes." : "Tell me what you want to do. Keep talking to add more or make changes.")
+                        Text(foodContext != nil ? "Ask about your food" : calendarOnly ? "Speak your appointment" : askMode ? "Ask Nexdo anything" : "Speak your task").font(.largeTitle.bold()).multilineTextAlignment(.center)
+                        Text(foodContext != nil ? "Compare \(foodContext!.original.name) and \(foodContext!.alternative.name). Ask about nutrition, ingredients, or allergies." : calendarOnly ? "Tell me the event, date, and time. I’ll add it to your calendar." : askMode ? "Ask about tasks, calendar, important moments, or shopping lists. Keep talking to plan or make changes." : "Tell me what you want to do. Keep talking to add more or make changes.")
                             .foregroundStyle(Color.nexdoSecondary).multilineTextAlignment(.center)
                         orb
-                        Text(recovering && !connectivity.isConnected ? "Waiting for network…" : recovering ? "Reconnecting…" : starting ? "Connecting…" : voice.status).font(.title2.bold()).foregroundStyle(Color.nexdoIndigo)
+                        Text(recovering && !connectivity.isConnected ? "Waiting for network…" : recovering ? "Reconnecting…" : starting ? "Connecting…" : foodContext != nil && voice.phase == .toolExecution ? "Looking up food information…" : voice.status).font(.title2.bold()).foregroundStyle(Color.nexdoIndigo)
                             .accessibilityAddTraits(.updatesFrequently)
                         if let error = startupError ?? voice.error { Text(error).foregroundStyle(.red).multilineTextAlignment(.center) }
                         if voice.phase == .paused {
                             Button("Resume") { Task { await voice.resumeAfterAudioInterruption() } }
                                 .buttonStyle(.borderedProminent)
                         } else if (startupError != nil || voice.phase == .connectionLost) && !recovering {
-                            Button("Try again") { beginAutomaticRecovery(resetAttempts: true) }
+                            Button("Try again") {
+                                if voice.phase == .idle { Task { await start() } }
+                                else { beginAutomaticRecovery(resetAttempts: true) }
+                            }
                                 .buttonStyle(.borderedProminent).disabled(starting)
                         }
                         if !voice.transcript.isEmpty { Text(voice.transcript).frame(maxWidth: .infinity, alignment: .leading).padding().background(.thinMaterial, in: RoundedRectangle(cornerRadius: 18)) }
@@ -106,9 +123,9 @@ struct AddTaskByVoiceView: View {
                         } else if voice.transcript.isEmpty {
                             VStack(spacing: 12) {
                                 Text("Try saying something like:").foregroundStyle(Color.nexdoSecondary)
-                                Text(calendarOnly ? "“Dentist appointment tomorrow at 11 AM for 30 minutes”" : askMode ? "“What birthdays are coming up?”" : "“Call Damien tomorrow at 11 AM”")
-                                Text(calendarOnly ? "“Team meeting Friday at 2 PM for an hour”" : askMode ? "“Add two gallons of milk to my shopping list”" : "“Actually make that noon”")
-                                Text(calendarOnly ? "“That’s all”" : askMode ? "“Remind me to call Damien at 11 AM”" : "“That’s all”")
+                                Text(foodContext != nil ? "“Which item has more protein?”" : calendarOnly ? "“Dentist appointment tomorrow at 11 AM for 30 minutes”" : askMode ? "“What birthdays are coming up?”" : "“Call Damien tomorrow at 11 AM”")
+                                Text(foodContext != nil ? "“What allergens are declared?”" : calendarOnly ? "“Team meeting Friday at 2 PM for an hour”" : askMode ? "“Add two gallons of milk to my shopping list”" : "“Actually make that noon”")
+                                Text(foodContext != nil ? "“How can I use this in a recipe?”" : calendarOnly ? "“That’s all”" : askMode ? "“Remind me to call Damien at 11 AM”" : "“That’s all”")
                             }.font(.subheadline).padding()
                         }
                     }.padding(24)
@@ -117,7 +134,7 @@ struct AddTaskByVoiceView: View {
                     Button { voice.toggleMute() } label: { Label(voice.muted ? "Unmute" : "Mute", systemImage: voice.muted ? "mic.slash.fill" : "mic.fill") }
                         .disabled(starting || recovering || [.idle, .connecting, .reconnecting, .paused, .closing, .disconnected, .connectionLost].contains(voice.phase))
                     Spacer()
-                    Button { updateAudioOutput(); showingSpeaker = true } label: {
+                    Button { updateAudioOutput(); showingSpeaker = true; activateDeviceSpeaker() } label: {
                         Label("Speaker", systemImage: "speaker.wave.2.fill")
                     }.accessibilityIdentifier("voice-speaker")
                     Spacer()
@@ -134,15 +151,9 @@ struct AddTaskByVoiceView: View {
                     Button("Done") { showingSpeaker = false }
                 }
                 Label(audioOutput, systemImage: "speaker.wave.2.fill")
-                Button("Use device speaker") {
-                    routingSpeaker = true; speakerError = nil
-                    Task {
-                        defer { routingSpeaker = false }
-                        do { try await transport.useDeviceSpeaker(); updateAudioOutput() }
-                        catch { speakerError = "Couldn’t switch to the speaker. Try again while voice is connected." }
-                    }
-                }.buttonStyle(.borderedProminent)
-                    .disabled(routingSpeaker || starting || recovering || [.idle, .connecting, .reconnecting, .paused, .closing, .disconnected, .connectionLost].contains(voice.phase))
+                Button("Use device speaker", action: activateDeviceSpeaker)
+                    .buttonStyle(.borderedProminent)
+                    .disabled(!canRouteSpeaker)
                 HStack {
                     Text("Nexdo voice level").font(.headline)
                     Spacer()
@@ -158,10 +169,10 @@ struct AddTaskByVoiceView: View {
                 if let speakerError { Text(speakerError).foregroundStyle(.red) }
             }.padding(24).presentationDetents([.medium, .large])
         }
-        .alert(calendarOnly ? "Use voice to add calendar events?" : "Use voice to manage tasks?", isPresented: $consent) {
+        .alert(foodContext != nil ? "Ask about food by voice?" : calendarOnly ? "Use voice to add calendar events?" : "Use voice to manage tasks?", isPresented: $consent) {
             Button("Allow and start") { model.aiConsent = true; model.voiceConsent = true; Task { await start() } }
             Button("Not now", role: .cancel) { dismiss() }
-        } message: { Text("Your voice and relevant task, calendar, and recommendation details are shared with OpenAI during this conversation. Clear task requests are saved automatically. Calls and emails still require your approval.") }
+        } message: { Text(foodContext != nil ? "Your voice and these two product names are shared with OpenAI. Food lookups use USDA and Open Food Facts. This conversation does not change your shopping list." : "Your voice and relevant task, calendar, and recommendation details are shared with OpenAI during this conversation. Clear task requests are saved automatically. Calls and emails still require your approval.") }
         .task {
             #if DEBUG
             if ProcessInfo.processInfo.arguments.contains("-ask-voice-design-preview") || ProcessInfo.processInfo.arguments.contains("-calendar-voice-preview") { return }
@@ -190,6 +201,11 @@ struct AddTaskByVoiceView: View {
             if phase == .connectionLost, scenePhase == .active { beginAutomaticRecovery() }
             if phase == .listening {
                 recoveryTask?.cancel(); recoveryTask = nil; recoveryAttempt = 0; recovering = false; startupError = nil
+            }
+        }
+        .onChange(of: connectivity.pathSignature) { _, _ in
+            if connectivity.isConnected, voice.phase == .connectionLost, scenePhase == .active {
+                beginAutomaticRecovery(resetAttempts: true)
             }
         }
         .onDisappear { recoveryTask?.cancel(); readyBell?.stop(); voice.close(); executor.clear(); endBackgroundTask() }
@@ -223,6 +239,22 @@ struct AddTaskByVoiceView: View {
         .onChange(of: model.aiConsent) { _, allowed in if !allowed { voice.close() } }
         .onChange(of: model.voiceConsent) { _, allowed in if !allowed { voice.close() } }
     }
+    private var canRouteSpeaker: Bool {
+        !routingSpeaker && !starting && !recovering && ![.idle, .connecting, .reconnecting, .paused, .closing, .disconnected, .connectionLost].contains(voice.phase)
+    }
+    private func activateDeviceSpeaker() {
+        guard canRouteSpeaker else {
+            if !routingSpeaker { speakerError = "Speaker is available when voice is connected. Try again once connected." }
+            return
+        }
+        routingSpeaker = true
+        speakerError = nil
+        Task {
+            defer { routingSpeaker = false }
+            do { try await transport.useDeviceSpeaker(); updateAudioOutput() }
+            catch { speakerError = "Couldn’t switch to the speaker. Try again while voice is connected." }
+        }
+    }
     private func updateAudioOutput() {
         let outputs = AVAudioSession.sharedInstance().currentRoute.outputs
         audioOutput = outputs.map { $0.portType == .builtInSpeaker ? "Device speaker" : $0.portName }.joined(separator: ", ")
@@ -233,7 +265,7 @@ struct AddTaskByVoiceView: View {
         starting = true; startupError = nil; defer { starting = false }
         executor.attach(model)
         do {
-            let credential = try await model.voiceTaskSession(calendarOnly: calendarOnly)
+            let credential = try await model.voiceTaskSession(calendarOnly: calendarOnly, foodContext: foodContext)
             try Task.checkCancellation()
             voice.start(credential: credential)
         } catch is CancellationError {
@@ -256,7 +288,7 @@ struct AddTaskByVoiceView: View {
                 recoveryAttempt += 1
                 if recoveryAttempt > 1 { try? await Task.sleep(for: .seconds(Double(recoveryAttempt - 1))) }
                 do {
-                    let credential = try await model.voiceTaskSession(calendarOnly: calendarOnly)
+                    let credential = try await model.voiceTaskSession(calendarOnly: calendarOnly, foodContext: foodContext)
                     try Task.checkCancellation()
                     voice.reconnect(credential: credential)
                     for _ in 0..<120 {
@@ -309,7 +341,6 @@ struct AddTaskByVoiceView: View {
 private struct VoiceDeviceVolumeControl: UIViewRepresentable {
     func makeUIView(context: Context) -> MPVolumeView {
         let view = MPVolumeView(frame: .zero)
-        view.showsRouteButton = true
         view.showsVolumeSlider = true
         return view
     }

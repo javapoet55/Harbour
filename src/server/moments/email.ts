@@ -5,6 +5,7 @@ import { SignJWT, jwtVerify } from 'jose';
 import { sessionSigningKey } from '@/server/session-key';
 import { MomentError } from './domain';
 import { randomUUID } from 'node:crypto';
+import { log } from '@/lib/logger';
 import { renderWishEmail } from '@/server/email/wish-template';
 export function emailConfigured() { return !!(process.env.MOMENTS_GOOGLE_CLIENT_ID && process.env.MOMENTS_GOOGLE_CLIENT_SECRET && process.env.MOMENTS_GOOGLE_REDIRECT_URI); }
 export async function connectURL(userID: string) {
@@ -14,6 +15,7 @@ export async function connectURL(userID: string) {
 }
 async function token(params: Record<string,string>) {
   const res=await observedFetch('https://oauth2.googleapis.com/token',{method:'POST',signal:AbortSignal.timeout(15000),body:new URLSearchParams({client_id:process.env.MOMENTS_GOOGLE_CLIENT_ID!,client_secret:process.env.MOMENTS_GOOGLE_CLIENT_SECRET!,...params})});
+  if (res.status===429||res.status>=500) throw new MomentError('Gmail is temporarily unavailable. Try again shortly.',503);
   if (!res.ok) throw new MomentError('Reconnect your email account.',409);
   return await res.json() as {access_token:string; refresh_token?:string};
 }
@@ -25,7 +27,18 @@ export async function connect(code:string,state:string) {
   const res=await observedFetch('https://openidconnect.googleapis.com/v1/userinfo',{headers:{Authorization:`Bearer ${t.access_token}`},signal:AbortSignal.timeout(15000)});
   const profile=await res.json() as {email?:string;email_verified?:boolean};
   if(!res.ok||!profile.email||!profile.email_verified) throw new MomentError('Unable to verify email account.');
-  await prisma.momentEmailAccount.upsert({where:{userId:payload.sub},create:{userId:payload.sub,email:profile.email,refreshToken:encryptCredential(t.refresh_token)!},update:{email:profile.email,refreshToken:encryptCredential(t.refresh_token)!,status:'connected'}});
+  // Anyone holding a connect link can finish Google's consent, so nothing is saved here. The account is
+  // saved only when the signed-in app that received this ticket confirms it as the same user.
+  return encryptCredential(JSON.stringify({purpose:TICKET_PURPOSE,sub:payload.sub,email:profile.email,refreshToken:t.refresh_token,exp:Date.now()+TICKET_MS}))!;
+}
+const TICKET_PURPOSE='moments-email-ticket', TICKET_MS=10*60000;
+export async function confirmConnect(userId:string,ticket:unknown) {
+  let t:Record<string,unknown>={};
+  try { if(typeof ticket==='string'&&ticket.startsWith('v1.')) t=JSON.parse(decryptCredential(ticket)!); } catch { /* rejected below */ }
+  if(t.purpose!==TICKET_PURPOSE||typeof t.email!=='string'||typeof t.refreshToken!=='string'||typeof t.exp!=='number'||t.exp<Date.now()) throw new MomentError('Email connection expired or failed. Try connecting again.');
+  if(t.sub!==userId) throw new MomentError('This email connection was started from a different Nexdo account.',403);
+  const refreshToken=encryptCredential(t.refreshToken)!;
+  await prisma.momentEmailAccount.upsert({where:{userId},create:{userId,email:t.email,refreshToken},update:{email:t.email,refreshToken,status:'connected'}});
 }
 export type EmailResult = {kind:'sent'; id:string}|{kind:'retry'|'permanent'|'uncertain'|'reconnect'; error:string};
 export type WishCard = {id:string; mime:string; bytes:Uint8Array};
@@ -66,9 +79,14 @@ export const gmail: WishEmailProvider = {
  async send(userId,recipient,subject,body,key,extras) {
   const account=await prisma.momentEmailAccount.findUnique({where:{userId}});
   if(!account||account.status!=='connected') return {kind:'reconnect',error:'Reconnect your email account.'};
+  const reconnect=async():Promise<EmailResult>=>{ await prisma.momentEmailAccount.update({where:{userId},data:{status:'reconnect'}}); return {kind:'reconnect',error:'Reconnect your email account.'}; };
+  let refresh:string|null;
+  try { refresh=decryptCredential(account.refreshToken); } catch { return reconnect(); }
+  if(!refresh) return reconnect();
   let access:string;
-  try { access=(await token({grant_type:'refresh_token',refresh_token:decryptCredential(account.refreshToken)!})).access_token; }
-  catch { await prisma.momentEmailAccount.update({where:{userId},data:{status:'reconnect'}}); return {kind:'reconnect',error:'Reconnect your email account.'}; }
+  // Only a definite rejection of the saved grant needs the user; outages and timeouts are retried. Nothing was submitted yet.
+  try { access=(await token({grant_type:'refresh_token',refresh_token:refresh})).access_token; }
+  catch(e) { return e instanceof MomentError&&e.status===409 ? reconnect() : {kind:'retry',error:'Gmail was temporarily unavailable. Will retry.'}; }
   // Never retry an ambiguous submission: Gmail send has no idempotency-key guarantee.
   try {
     const raw=buildWishMessage({recipient,subject,body,key,card:extras?.card,signature:extras?.signature});
@@ -85,6 +103,10 @@ export const gmail: WishEmailProvider = {
 export async function revokeEmail(userId:string) {
  const account=await prisma.momentEmailAccount.findUnique({where:{userId}});
  if(!account) return;
- const response=await observedFetch('https://oauth2.googleapis.com/revoke',{method:'POST',signal:AbortSignal.timeout(15000),headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({token:decryptCredential(account.refreshToken)!})});
+ let token:string|null=null;
+ try { token=decryptCredential(account.refreshToken); } catch { /* handled below */ }
+ // An unreadable token can't be revoked at Google; disconnecting must still remove it locally.
+ if(!token) { log('warn','moments_email_revoke_skipped',{reason:'unreadable_credential'}); return; }
+ const response=await observedFetch('https://oauth2.googleapis.com/revoke',{method:'POST',signal:AbortSignal.timeout(15000),headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({token})});
  if(!response.ok&&response.status!==400) throw new MomentError('Email access could not be revoked. Try disconnecting again.',502);
 }

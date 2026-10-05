@@ -87,3 +87,24 @@ private func queue(_ pairs: [(TaskAction, NexdoTask)], now: Date = queueNow) -> 
     let completed = NexdoTask(id: due.1.id, title: due.1.title, status: "COMPLETED", priority: "NORMAL", durationMin: 30, notes: nil, startAt: due.1.startAt, dueAt: nil)
     #expect(!TodayActionQueue(actions: [due.0], tasks: [completed], now: queueNow, timeZone: queueZone).hasImmediateActions)
 }
+
+@Test func multipleActionCardsIncludeEveryDueActionWithoutUpcomingDuplicates() {
+    let pairs = (0..<6).map { queued("Person\($0)", minutes: Double($0 - 5)) }
+    let result = queue(pairs + [queued("Soon", minutes: 5)])
+    #expect(result.dueActions.map(\.taskId) == (0..<6).map { "Person\($0)" })
+    #expect(result.upcomingActions.map(\.taskId) == ["Soon"])
+    #expect(Set(result.dueActions.map(\.id)).isDisjoint(with: result.upcomingActions.map(\.id)))
+}
+
+@Test func dueCardsUpdateAfterDismissSnoozeAndTaskCompletion() {
+    var first = queued("First", minutes: -10)
+    var second = queued("Second", minutes: -5)
+    let third = queued("Third", minutes: 0)
+    first.0.transition(to: .cancelled)
+    second.0.snoozedUntil = queueNow.addingTimeInterval(300)
+    #expect(queue([first, second, third]).dueActions.map(\.taskId) == ["Third"])
+    #expect(queue([first, second, third]).upcomingActions.map(\.taskId) == ["Second"])
+    let completed = NexdoTask(id: third.1.id, title: third.1.title, status: "COMPLETED", priority: "NORMAL", durationMin: 30, notes: nil, startAt: third.1.startAt, dueAt: nil)
+    #expect(queue([first, second, (third.0, completed)]).dueActions.isEmpty)
+    #expect(queue([]).upcomingActions.isEmpty)
+}

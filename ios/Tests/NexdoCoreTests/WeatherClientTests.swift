@@ -7,6 +7,8 @@ private final class WeatherStub: URLProtocol, @unchecked Sendable {
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
     override func startLoading() {
         let query = URLComponents(url: request.url!, resolvingAgainstBaseURL: false)!.queryItems!
+        #expect(query.contains(URLQueryItem(name: "latitude", value: "40.71")))
+        #expect(query.contains(URLQueryItem(name: "longitude", value: "-74.01")))
         #expect(request.url?.host == "api.open-meteo.com")
         #expect(query.contains(URLQueryItem(name: "forecast_days", value: "5")))
         #expect(query.contains(URLQueryItem(name: "temperature_unit", value: "fahrenheit")))
@@ -27,18 +29,25 @@ private final class WeatherStub: URLProtocol, @unchecked Sendable {
         config.httpAdditionalHeaders = ["X-Test-Weather": mode]
         let client = WeatherClient(configuration: config)
         if mode == "success" {
-            let forecast = try await client.forecast()
+            let forecast = try await client.forecast(latitude: 40.71, longitude: -74.01)
             #expect(forecast.daily?.days.count == 5)
             #expect(forecast.daily?.days.last?.high == 84)
         } else {
-            await #expect(throws: APIError.self) { try await client.forecast() }
+            await #expect(throws: APIError.self) { try await client.forecast(latitude: 40.71, longitude: -74.01) }
         }
     }
 }
 
 @Test func liveWeatherProviderWhenRequested() async throws {
     guard ProcessInfo.processInfo.environment["NEXDO_LIVE_WEATHER_TEST"] == "1" else { return }
-    let forecast = try await WeatherClient().forecast()
+    let forecast = try await WeatherClient().forecast(latitude: 40.71, longitude: -74.01)
     #expect(forecast.daily?.days.count == 5)
     #expect(forecast.daily?.days.allSatisfy { $0.high != nil && $0.low != nil } == true)
+}
+
+@Test func weatherRejectsInvalidCoordinatesBeforeNetworkRequest() async {
+    let client = WeatherClient()
+    for (latitude, longitude) in [(91.0, 0.0), (0.0, 181.0), (Double.nan, 0.0), (0.0, Double.infinity)] {
+        await #expect(throws: APIError.self) { try await client.forecast(latitude: latitude, longitude: longitude) }
+    }
 }

@@ -1,6 +1,6 @@
 import { addDays, parseYmd, ymd } from './time';
 
-export type Recurrence = { frequency: 'daily' | 'weekly' | 'monthly' | 'yearly'; interval: number; byWeekday?: number[] };
+export type Recurrence = { frequency: 'daily' | 'weekly' | 'monthly' | 'yearly'; interval: number; byWeekday?: number[]; anchorDay?: number };
 
 function daysInMonth(year: number, month: number) {
   return new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
@@ -8,6 +8,7 @@ function daysInMonth(year: number, month: number) {
 
 export function nextOccurrence(fromYmd: string, rule: Recurrence, count = 1): string {
   let cursor = parseYmd(fromYmd);
+  const anchorDay = rule.anchorDay ?? cursor.getUTCDate();
   const interval = Math.max(1, rule.interval || 1);
   for (let i = 0; i < count; i += 1) {
     if (rule.frequency === 'daily') cursor = addDays(cursor, interval);
@@ -21,7 +22,7 @@ export function nextOccurrence(fromYmd: string, rule: Recurrence, count = 1): st
       }
     }
     if (rule.frequency === 'monthly') {
-      const day = cursor.getUTCDate();
+      const day = anchorDay;
       const targetMonth = cursor.getUTCMonth() + interval;
       const targetYear = cursor.getUTCFullYear() + Math.floor(targetMonth / 12);
       const month = ((targetMonth % 12) + 12) % 12;
@@ -40,9 +41,13 @@ export function occurrencesUntil(fromYmd: string, rule: Recurrence, untilYmd: st
   const out = [fromYmd];
   let current = fromYmd;
   while (out.length < Math.max(1, max) && current < untilYmd) {
-    current = nextOccurrence(current, rule);
+    current = nextOccurrence(current, { ...rule, anchorDay: rule.anchorDay ?? parseYmd(fromYmd).getUTCDate() });
     if (current <= untilYmd) out.push(current);
     else break;
   }
   return out;
+}
+
+export function parseWeekdays(value?: string | null): number[] | undefined {
+  return value?.split(',').map(day => day.trim()).filter(day => /^[0-6]$/.test(day)).map(Number);
 }

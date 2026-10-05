@@ -16,8 +16,9 @@ export class ApiError extends Error {
   readonly warnings?: string[];
   /** Present for EMAIL_NOT_VERIFIED: the account email the verification code was sent to. */
   readonly email?: string;
+  readonly verificationProof?: string;
 
-  constructor(init: { status: number; message: string; code?: ApiErrorCode; warnings?: string[]; email?: string }) {
+  constructor(init: { status: number; message: string; code?: ApiErrorCode; warnings?: string[]; email?: string; verificationProof?: string }) {
     super(init.message);
     Object.setPrototypeOf(this, ApiError.prototype);
     this.name = 'ApiError';
@@ -25,6 +26,7 @@ export class ApiError extends Error {
     this.code = init.code;
     this.warnings = init.warnings;
     this.email = init.email;
+    this.verificationProof = init.verificationProof;
   }
 }
 
@@ -93,7 +95,7 @@ export function normalizeBaseUrl(raw: string): string {
   return value.replace(/\/$/, '');
 }
 
-type ServerError = { error?: unknown; code?: unknown; warnings?: unknown; email?: unknown };
+type ServerError = { error?: unknown; code?: unknown; warnings?: unknown; email?: unknown; verificationProof?: unknown };
 
 export function createApiClient(options: ApiClientOptions) {
   const baseUrl = normalizeBaseUrl(options.baseUrl);
@@ -169,6 +171,7 @@ export function createApiClient(options: ApiClientOptions) {
             status: response.status,
             code: 'EMAIL_NOT_VERIFIED',
             message: payload.error,
+            verificationProof: typeof payload.verificationProof === 'string' ? payload.verificationProof : undefined,
             email: typeof payload.email === 'string' ? payload.email : undefined,
           });
         }
@@ -263,7 +266,7 @@ function sameOriginPath(location: string, origin: string): string | null {
  * and the Sign in with Apple authorization code and raw nonce.
  */
 /** The value of any secret-bearing key, including one containing escaped quotes. */
-const SECRET_VALUE = /"(password|newPassword|code|token|authorizationCode|rawNonce)":"(?:[^"\\]|\\.)*"/g;
+const SECRET_VALUE = /"(password|newPassword|code|token|authorizationCode|rawNonce|verificationProof|turnstileToken)":"(?:[^"\\]|\\.)*"/g;
 
 /** Replace the value of any secret-bearing key in a serialised JSON body with `"***"`. */
 export function redactSecrets(serialized: string): string {

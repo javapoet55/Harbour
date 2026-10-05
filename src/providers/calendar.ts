@@ -6,11 +6,37 @@ import { prisma } from '@/server/db';
 import { zonedDateTime } from '@/lib/time';
 
 export type OAuthProvider = 'google' | 'microsoft';
-type TokenResponse = { access_token: string; refresh_token?: string; expires_in?: number; error?: string; error_description?: string };
+type TokenResponse = { access_token: string; refresh_token?: string; expires_in?: number; scope?: string; error?: string; error_description?: string };
 type GoogleEvent = { id?: string; summary?: string; description?: string; location?: string; status?: string; start?: { dateTime?: string; date?: string }; end?: { dateTime?: string; date?: string } };
 type MicrosoftEvent = { id?: string; subject?: string; bodyPreview?: string; isAllDay?: boolean; isCancelled?: boolean; '@removed'?: unknown; start?: { dateTime?: string }; end?: { dateTime?: string }; location?: { displayName?: string } };
 
-const GOOGLE_SCOPE = 'openid email https://www.googleapis.com/auth/calendar';
+// All clients use this backend flow. Primary calendars are owned by the user.
+export const GOOGLE_CALENDAR_SCOPES = [
+  'openid', 'email', // Connected-account identity (userinfo).
+  'https://www.googleapis.com/auth/calendar.events.owned', // Read/create/edit/delete EVENTS on primary.
+  'https://www.googleapis.com/auth/calendar.calendars.readonly', // calendars.get: stable ID and display name.
+] as const;
+const GOOGLE_SCOPE = GOOGLE_CALENDAR_SCOPES.join(' ');
+
+function googleRedirectUri() {
+  const value = required('GOOGLE_CALENDAR_REDIRECT_URI');
+  const url = new URL(value);
+  const local = process.env.NODE_ENV !== 'production' && ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname);
+  if ((url.protocol !== 'https:' && !(local && url.protocol === 'http:')) || url.username || url.password || url.search || url.hash) {
+    throw new Error('Google Calendar redirect URI must be a secure, fixed callback URL');
+  }
+  return value;
+}
+
+function validateGoogleGrant(scope?: string) {
+  // Google may omit scope when unchanged. Do not invalidate legacy tokens on that basis.
+  if (!scope) return;
+  const granted = new Set(scope.split(/\s+/));
+  const has = (name: string) => granted.has(`https://www.googleapis.com/auth/${name}`);
+  const events = has('calendar') || has('calendar.events') || has('calendar.events.owned');
+  const metadata = has('calendar') || has('calendar.readonly') || has('calendar.calendars') || has('calendar.calendars.readonly');
+  if (!events || !metadata) throw new CalendarAuthError('Reconnect Google Calendar and allow both calendar permissions');
+}
 const MICROSOFT_SCOPE = 'openid email offline_access User.Read Calendars.ReadWrite';
 
 function required(name: string) {
@@ -23,7 +49,7 @@ function oauthConfig(provider: OAuthProvider) {
   if (provider === 'google') return {
     clientId: required('GOOGLE_CALENDAR_CLIENT_ID'),
     clientSecret: required('GOOGLE_CALENDAR_CLIENT_SECRET'),
-    redirectUri: required('GOOGLE_CALENDAR_REDIRECT_URI'),
+    redirectUri: googleRedirectUri(),
     authorize: 'https://accounts.google.com/o/oauth2/v2/auth',
     token: 'https://oauth2.googleapis.com/token',
     scope: GOOGLE_SCOPE,
@@ -105,10 +131,11 @@ async function tokenRequest(provider: OAuthProvider, params: Record<string, stri
     method: 'POST',
     signal: AbortSignal.timeout(15000),
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({ client_id: cfg.clientId, client_secret: cfg.clientSecret, redirect_uri: cfg.redirectUri, scope: cfg.scope, ...params }),
+    body: new URLSearchParams({ client_id: cfg.clientId, client_secret: cfg.clientSecret, redirect_uri: cfg.redirectUri, ...(provider === 'microsoft' ? { scope: cfg.scope } : {}), ...params }),
   });
   const payload = await response.json() as TokenResponse;
-  if (!response.ok || !payload.access_token) throw new OAuthTokenError(payload.error_description || payload.error || 'OAuth token exchange failed', response.status, payload.error);
+  if (!response.ok || !payload.access_token) throw new OAuthTokenError('Calendar authorization failed; reconnect the account if permission expired', response.status, payload.error);
+  if (provider === 'google') validateGoogleGrant(payload.scope);
   return payload;
 }
 
@@ -141,12 +168,19 @@ export async function connectCalendar(provider: OAuthProvider, userId: string, c
     calendarId = calendar.id || 'primary';
     calendarName = calendar.name || 'Outlook Calendar';
   }
+  if (provider === 'google' && !tokens.refresh_token) {
+    const existing = await prisma.calendarConnection.findUnique({ where: { userId_provider_calendarId: { userId, provider, calendarId } } });
+    if (!existing?.refreshToken || existing.status !== 'connected') {
+      throw new CalendarAuthError('Reconnect Google Calendar to enable background sync');
+    }
+  }
   return prisma.calendarConnection.upsert({
     where: { userId_provider_calendarId: { userId, provider, calendarId } },
     update: {
       accountEmail, calendarName, status: 'connected', syncToken: null,
       accessToken: encryptCredential(tokens.access_token),
-      refreshToken: encryptCredential(tokens.refresh_token),
+      // Google can omit refresh_token on reconnect; never erase the existing credential.
+      ...(tokens.refresh_token ? { refreshToken: encryptCredential(tokens.refresh_token) } : {}),
       tokenExpiresAt: new Date(Date.now() + (tokens.expires_in || 3600) * 1000),
     },
     create: {

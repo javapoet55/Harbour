@@ -17,7 +17,15 @@ struct RootView: View {
     var body: some View {
         Group {
             #if DEBUG
-            if ProcessInfo.processInfo.arguments.contains("-agent-design-preview") {
+            if ProcessInfo.processInfo.arguments.contains("-help-design-preview") {
+                NavigationStack { HelpView() }
+            } else if ProcessInfo.processInfo.arguments.contains("-calorie-design-preview") {
+                CalorieTrackerView()
+            } else if ProcessInfo.processInfo.arguments.contains("-wellness-design-preview") {
+                WellnessChooserView { _ in }
+            } else if ProcessInfo.processInfo.arguments.contains("-pomodoro-design-preview") {
+                PomodoroView(api: model.momentAPI, owner: "preview", preview: true)
+            } else if ProcessInfo.processInfo.arguments.contains("-agent-design-preview") {
                 TaskDetailsView(task: NexdoTask(id: "agent-preview", title: "Contact Plumbers", status: "PLANNED", priority: "NORMAL", durationMin: 30, notes: nil, startAt: nil, dueAt: nil))
             } else if ProcessInfo.processInfo.arguments.contains("-shopping-design-preview") {
                 ShoppingDesignPreview()
@@ -27,6 +35,27 @@ struct RootView: View {
                 NavigationStack { CalendarEventEditor() }
             } else if ProcessInfo.processInfo.arguments.contains("-calendar-voice-preview") {
                 AddTaskByVoiceView(calendarOnly: true)
+            } else if ProcessInfo.processInfo.arguments.contains("-daily-brief-design-preview") || ProcessInfo.processInfo.arguments.contains("-brief-intent-preview") {
+                AskNexdoView().onAppear {
+                    model.tasks = [NexdoTask(id: "brief-preview", title: "Contact gutter technician", status: "PLANNED", priority: "HIGH", durationMin: 30, notes: "Discuss gutter repair and get an estimate.", startAt: nil, dueAt: "2026-09-25T18:00:00Z")]
+                    model.lastAssistantPrompt = NexdoAIIntent.dailyBriefing.query
+                    model.turn = try? JSONDecoder().decode(AssistantTurn.self, from: Data(#"{"spoken":"Your daily brief","visual":{"summary":"Your daily brief","sections":[{"title":"Top priorities","items":["Contact gutter technician is overdue. Tackle it first.","Review the plumbing quote.","Prepare for your afternoon meeting."]},{"title":"Deadlines","items":["Send the report by 4 PM."]},{"title":"Conflicts and risks","items":["Two afternoon appointments overlap."]},{"title":"Next move","items":["Call the gutter technician now."]}]}}"#.utf8))
+                    if ProcessInfo.processInfo.arguments.contains("-brief-intent-preview"),
+                       let intent = NexdoAIIntent.allCases.first(where: { ProcessInfo.processInfo.arguments.contains($0.rawValue) }) {
+                        model.lastAssistantPrompt = intent.query
+                        let heading: String
+                        let detail: String
+                        switch intent {
+                        case .topFocusTasks: heading = "Top priorities"; detail = "Contact gutter technician is overdue. Tackle it first."
+                        case .deadlinesAndRisks: heading = "Deadlines"; detail = "Send the report by 4 PM."
+                        default: heading = "Available time"; detail = "You have 30 minutes free at 2 PM."
+                        }
+                        let fixture: [String: Any] = ["spoken": detail, "visual": ["summary": detail, "sections": [["title": heading, "items": [detail]]]]]
+                        if let data = try? JSONSerialization.data(withJSONObject: fixture) {
+                            model.turn = try? JSONDecoder().decode(AssistantTurn.self, from: data)
+                        }
+                    }
+                }
             } else if ProcessInfo.processInfo.arguments.contains("-ask-design-preview") {
                 AskNexdoView()
             } else if ProcessInfo.processInfo.arguments.contains("-ask-text-design-preview") {
@@ -37,6 +66,8 @@ struct RootView: View {
                 WeeklySummaryPreview()
             } else if ProcessInfo.processInfo.arguments.contains("-projects-design-preview") {
                 ProjectsDesignPreview()
+            } else if ProcessInfo.processInfo.arguments.contains("-event-details-preview") {
+                CalendarEventDetailsView(event: try! JSONDecoder().decode(CalendarEvent.self, from: Data(#"{"id":"preview","title":"Library books return","notes":"Return library books before the due date.","source":"harbor","startAt":"2026-09-27T17:32:00Z","endAt":"2026-09-27T18:02:00Z","timeZone":"America/Los_Angeles"}"#.utf8)), fallbackTimeZone: "America/Los_Angeles", onChange: {})
             } else if ProcessInfo.processInfo.arguments.contains("-calendar-design-preview") {
                 CalendarDesignPreview()
             } else if ProcessInfo.processInfo.arguments.contains("-today-design-preview") {
@@ -102,8 +133,10 @@ private struct NexdoTabShell: View {
     @EnvironmentObject private var model: AppModel
     @State private var showingAsk = false
     @State private var askPrompt = ""
-    @State private var addingTask = false
-    @State private var addingVoice = false
+    @State private var showingPomodoro = false
+    @State private var showingWellness = false
+    @State private var wellnessChoice: WellnessExit?
+    @ObservedObject private var pomodoroRoute = PomodoroNotificationRoute.shared
     private var activeTab: NexdoTab { showingAsk ? .askAI : selection }
 
     var body: some View {
@@ -126,7 +159,7 @@ private struct NexdoTabShell: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .clipped()
         .blur(radius: showingAsk ? 2 : 0)
-        .fullScreenCover(isPresented: $showingAsk) {
+        .fullScreenCover(isPresented: $showingAsk, onDismiss: { openPomodoroNotification() }) {
             AskNexdoView(initialPrompt: askPrompt)
                 .presentationDetents([.fraction(0.84)])
                 .presentationDragIndicator(.visible)
@@ -139,15 +172,13 @@ private struct NexdoTabShell: View {
                 HStack(spacing: 4) {
                     ForEach(NexdoTab.allCases) { tab in
                         if tab == .askAI {
-                            Menu {
-                                Button("Add by Voice", systemImage: "mic") { addingVoice = true }
-                                Button("Add Manually", systemImage: "plus") { addingTask = true }
-                            } label: {
-                                Image(systemName: "plus").font(.system(size: 30, weight: .medium))
-                                    .foregroundStyle(.white).frame(width: 58, height: 58)
-                                    .background(LinearGradient(colors: [.nexdoBlue, .nexdoIndigo, .purple], startPoint: .topLeading, endPoint: .bottomTrailing), in: Circle())
-                                    .shadow(color: Color.nexdoIndigo.opacity(0.25), radius: 8, y: 4)
-                            }.accessibilityLabel("Add a task")
+                            Button { showingWellness = true } label: {
+                                Image("wellness-navigation").renderingMode(.original).resizable().scaledToFit()
+                                    .frame(width: 62, height: 58)
+                            }
+                            .frame(maxWidth: .infinity)
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("Wellness menu: Calorie Tracker, Pomodoro, Moments and Shopping")
                         }
                         Button { if tab == .askAI { showingAsk = true } else {
                             if tab == .tasks && selection != .tasks { model.taskQuery.date = .today }
@@ -176,8 +207,28 @@ private struct NexdoTabShell: View {
             .fixedSize(horizontal: false, vertical: true)
             .background { Color(uiColor: .systemBackground).ignoresSafeArea(edges: .bottom) }
         }
-        .sheet(isPresented: $addingTask) { NavigationStack { TaskEditor(task: nil) } }
-        .fullScreenCover(isPresented: $addingVoice) { AddTaskByVoiceView() }
+        .onAppear { openPomodoroNotification() }
+        .onChange(of: pomodoroRoute.owner) { _, _ in openPomodoroNotification() }
+        .fullScreenCover(isPresented: $showingWellness, onDismiss: {
+            guard let choice = wellnessChoice else { openPomodoroNotification(); return }
+            wellnessChoice = nil
+            switch choice { case .home: selection = .today; case .calendar: selection = .calendar; case .tasks: model.taskQuery.date = .today; selection = .tasks; case .askAI: showingAsk = true }
+        }) {
+            WellnessChooserView { choice in wellnessChoice = choice; showingWellness = false }
+        }
+        .fullScreenCover(isPresented: $showingPomodoro) {
+            if let owner = model.profile?.id {
+                PomodoroView(api: model.momentAPI, owner: owner, onTasks: { selection = .tasks })
+            }
+        }
+    }
+    private func openPomodoroNotification() {
+        guard let pending = pomodoroRoute.owner, let owner = model.profile?.id else { return }
+        guard pending == TaskActionCoordinator.ownerKey(owner) else { pomodoroRoute.owner = nil; return }
+        if showingAsk { showingAsk = false; return }
+        if showingWellness { return }
+        pomodoroRoute.owner = nil
+        showingPomodoro = true
     }
 }
 
@@ -316,7 +367,7 @@ private struct SignInView: View {
                         .frame(width: 116, height: 84)
                         .accessibilityHidden(true)
 
-                    Text("Welcome back, Sri")
+                    Text(model.lastSignedInFirstName.map { "Welcome back, \($0)" } ?? "Welcome back")
                         .font(.system(size: 42, weight: .bold, design: .rounded))
                         .foregroundStyle(
                             LinearGradient(
@@ -505,9 +556,36 @@ private struct SignInView: View {
     }
 }
 
+@MainActor
+private final class SignupChallengeCoordinator: NSObject, ObservableObject, ASWebAuthenticationPresentationContextProviding {
+    private var session: ASWebAuthenticationSession?
+    func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
+        UIApplication.shared.connectedScenes.compactMap { ($0 as? UIWindowScene)?.keyWindow }.first ?? ASPresentationAnchor()
+    }
+    func run(url: URL, state: String) async throws -> String {
+        try await withCheckedThrowingContinuation { continuation in
+            session = ASWebAuthenticationSession(url: url, callbackURLScheme: "nexdo") { callback, _ in
+                Task { @MainActor in
+                    defer { self.session = nil }
+                    let parts = callback.flatMap { URLComponents(url: $0, resolvingAgainstBaseURL: false) }
+                    let token = parts?.queryItems?.first(where: { $0.name == "token" })?.value ?? ""
+                    guard parts?.host == "signup-challenge", parts?.queryItems?.first(where: { $0.name == "state" })?.value == state, !token.isEmpty else {
+                        continuation.resume(throwing: CancellationError()); return
+                    }
+                    continuation.resume(returning: token)
+                }
+            }
+            session?.presentationContextProvider = self
+            if session?.start() != true { session = nil; continuation.resume(throwing: CancellationError()) }
+        }
+    }
+}
+
 private struct SignUpView: View {
     @EnvironmentObject private var model: AppModel
     @Environment(\.dismiss) private var dismiss
+    @StateObject private var signupChallenge = SignupChallengeCoordinator()
+    @State private var checkingSignup = false
     @State private var name = ""
     @State private var email = ""
     @State private var password = ""
@@ -594,7 +672,7 @@ private struct SignUpView: View {
     }
     @State private var verification: PendingEmailVerification?
     private var canCreate: Bool {
-        !model.busy && !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && email.contains("@") && password.count >= 12 && confirmation.count >= 12
+        !model.busy && !checkingSignup && !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && email.contains("@") && password.count >= 12 && confirmation.count >= 12
     }
     private func closeSignUp() {
         dismiss()
@@ -603,7 +681,17 @@ private struct SignUpView: View {
     private func create() {
         guard password == confirmation else { localError = "The passwords do not match."; return }
         localError = nil
-        Task { if let pending = await model.register(name: name, email: email, password: password) { verification = pending } }
+        checkingSignup = true
+        Task {
+            defer { checkingSignup = false }
+            do {
+                let state = UUID().uuidString
+                let url = try await model.signupChallengeURL(state: state)
+                var token: String?
+                if let url { token = try await signupChallenge.run(url: url, state: state) }
+                if let pending = await model.register(name: name, email: email, password: password, turnstileToken: token) { verification = pending }
+            } catch { localError = "Please complete the security check and try again." }
+        }
     }
 }
 
@@ -834,7 +922,7 @@ private struct EmailVerificationView: View {
         working = true; errorMessage = nil; message = nil; codeFocused = false
         Task {
             defer { working = false }
-            do { try await model.verifyEmail(email: pending.email, code: code) }
+            do { try await model.verifyEmail(email: pending.email, code: code, verificationProof: pending.verificationProof) }
             catch { errorMessage = error.localizedDescription; codeFocused = true }
         }
     }
@@ -1062,8 +1150,9 @@ private struct TodayView: View {
                     LazyVStack(spacing: 16) {
                         TodayTopBar(
                             name: model.profile?.name ?? "",
-                            temperature: model.weather.map { Int($0.current.temperature.rounded()) },
-                            add: { adding = true },
+                            temperature: nil,
+                            showsWeather: false,
+                            add: nil,
                             account: { showingAccount = true }
                         )
 
@@ -1156,7 +1245,7 @@ private struct TodayView: View {
                                     }
                                 } else {
                                     Text("Find a task for the time you have.").font(.subheadline).foregroundStyle(Color.nexdoSecondary)
-                                    Button("Find my next task") { showingDoNow = true }.buttonStyle(.borderedProminent).frame(minHeight: 44)
+                                    Button("Find my next task") { showingDoNow = true }.buttonStyle(NexdoGradientButtonStyle())
                                 }
                             }
                             .padding(.horizontal, 18).padding(.bottom, 16).padding(.top, 4)
@@ -1359,7 +1448,7 @@ struct TodayTopBar: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityElement(children: .ignore)
-                .accessibilityLabel(temperature.map { "San Ramon weather, \($0) degrees Fahrenheit" } ?? "Weather temporarily unavailable")
+                .accessibilityLabel(temperature.map { "Current location weather, \($0) degrees Fahrenheit" } ?? "Weather temporarily unavailable")
                 .accessibilityHint("Opens the five-day forecast")
             }
             if let add { TodayHeaderButton(icon: "plus", label: "Add a task", action: add) }
@@ -1622,7 +1711,7 @@ struct TasksView: View {
                                     datePills(snapshot)
                                     ScrollView(.horizontal) { datePills(snapshot) }.scrollIndicators(.hidden)
                                 }
-                                if model.taskQuery.date == .all {
+                                if model.taskQuery.date == .all && model.taskQuery.search.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                                     VStack(alignment: .leading, spacing: 6) {
                                         HStack {
                                             Text("History range").font(.subheadline.bold())
@@ -1631,7 +1720,7 @@ struct TasksView: View {
                                                 ForEach(TaskHistoryRange.allCases) { Text($0.rawValue).tag($0) }
                                             }.pickerStyle(.menu).labelsHidden().tint(.nexdoIndigo)
                                         }
-                                        Text(model.taskQuery.historyRange == .thisMonth ? "Tasks scheduled within this calendar month." : model.taskQuery.historyRange == .lastMonth ? "Previous calendar month, plus upcoming open tasks." : "History through today, plus upcoming open tasks.")
+                                        Text(model.taskQuery.historyRange == .allTime ? "All open and completed tasks, with open tasks first." : model.taskQuery.historyRange == .thisMonth ? "Tasks scheduled within this calendar month." : model.taskQuery.historyRange == .lastMonth ? "Previous calendar month, plus upcoming open tasks." : "History through today, plus upcoming open tasks.")
                                             .font(.caption).foregroundStyle(Color.nexdoSecondary)
                                     }
                                 }
@@ -1702,6 +1791,8 @@ struct TasksView: View {
                 headerButton("slider.horizontal.3", label: "Task filters") { filters = true }
                 headerButton("magnifyingglass", label: "Search tasks") {
                     searching.toggle()
+                    if searching { model.taskQuery.beginSearch() }
+                    else { model.taskQuery.search = "" }
                     searchFocused = searching
                 }
             }
@@ -1965,7 +2056,7 @@ struct TaskEditor: View {
 
                     Divider().opacity(0.45)
                     TaskEditorLabel(title: "PROJECT", icon: "folder")
-                    ProjectAssignmentField(projectID: $projectID)
+                    ProjectAssignmentField(projectID: $projectID, disclosureIcon: "chevron.right")
 
                     Divider().opacity(0.45)
                     TaskEditorLabel(title: "DATE", icon: "calendar")
@@ -2016,7 +2107,7 @@ struct TaskEditor: View {
         .foregroundStyle(Color.primary)
         .tint(TaskCreationStyle.accent)
         .onAppear { if !projectInitialized { projectID = initialProjectID; projectInitialized = true } }
-        .navigationTitle("New Task")
+        .navigationTitle("Create New Task")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .cancellationAction) { Button("Close") { closeTaskEditor() }.tint(TaskCreationStyle.accent).foregroundStyle(TaskCreationStyle.accent).disabled(model.busy) }
@@ -2085,7 +2176,7 @@ struct TaskEditor: View {
         Task {
             defer { checkingAvailability = false }
 
-            if await model.saveTask(id: task?.id, title: title.trimmingCharacters(in: .whitespacesAndNewlines), notes: notes, duration: duration, scheduledAt: resolvedCreationDate, projectId: projectID) {
+            if await model.saveTask(id: task?.id, title: title.trimmingCharacters(in: .whitespacesAndNewlines), notes: notes, duration: duration, scheduledAt: task == nil || dateExplicitlyChosen ? resolvedCreationDate : nil, projectId: projectID) {
                 dismiss()
             }
         }
@@ -2108,6 +2199,20 @@ private enum TaskFilter: String, CaseIterable, Identifiable {
 enum NexdoTheme {
     static let gradient = LinearGradient(colors: [.nexdoMagenta, .nexdoIndigo, .nexdoBlue], startPoint: .leading, endPoint: .trailing)
     static let saveGradient = LinearGradient(colors: [.nexdoBlue, .nexdoIndigo, .nexdoMagenta], startPoint: .leading, endPoint: .trailing)
+}
+
+struct NexdoGradientButtonStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var isEnabled
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .foregroundStyle(.white)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+            .frame(minHeight: 44)
+            .background(NexdoTheme.saveGradient, in: Capsule())
+            .opacity(isEnabled ? (configuration.isPressed ? 0.8 : 1) : 0.45)
+    }
 }
 
 private struct TasksHero: View {

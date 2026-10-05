@@ -3,11 +3,14 @@
 import { FormEvent, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { SignupBotCheck } from '@/components/signup-bot-check';
 import { NexdoLogo } from '@/components/nexdo-logo';
 import { PasswordInput } from '@/components/password-input';
 
 export default function SignupPage() {
   const router = useRouter();
+  const [turnstileToken, setTurnstileToken] = useState('');
+  const [attempt, setAttempt] = useState(0);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -28,7 +31,7 @@ export default function SignupPage() {
       const response = await fetch('/api/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, email, password }),
+        body: JSON.stringify({ name, email, password, turnstileToken }),
       });
       if (!response.ok) {
         const body = await response.json().catch(() => ({}));
@@ -36,9 +39,11 @@ export default function SignupPage() {
         return;
       }
       const body = await response.json().catch(() => ({}));
+      if (typeof body.verificationProof === 'string') sessionStorage.setItem('nexdo-verification-proof', body.verificationProof);
       router.push(`/verify-email?email=${encodeURIComponent(email)}${body.emailSent === false ? '&sent=0' : ''}${body.developmentCode ? `&code=${body.developmentCode}` : ''}`);
     } finally {
       setIsSubmitting(false);
+      setAttempt(value => value + 1);
     }
   }
 
@@ -66,8 +71,9 @@ export default function SignupPage() {
             <label className="block text-sm font-medium">Password<PasswordInput value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="new-password" minLength={12} required /></label>
             <label className="block text-sm font-medium">Confirm password<PasswordInput value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} autoComplete="new-password" minLength={12} required /></label>
             <p className="text-sm leading-6 text-[var(--muted)]">Use at least 12 characters. Your password is securely protected with a one-way hash.</p>
+            <SignupBotCheck onToken={setTurnstileToken} attempt={attempt} />
             {error && <p role="alert" className="text-sm text-[var(--danger)]">{error}</p>}
-            <button className="harbor-btn harbor-btn-brand w-full" type="submit" disabled={isSubmitting}>{isSubmitting ? 'Creating account…' : 'Create account'}</button>
+            <button className="harbor-btn harbor-btn-brand w-full" type="submit" disabled={isSubmitting || !turnstileToken}>{isSubmitting ? 'Creating account…' : 'Create account'}</button>
           </form>
           <p className="mt-4 text-center text-sm text-[var(--muted)]">Already have an account? <Link className="font-semibold text-[var(--brand)] hover:underline" href="/login">Sign in</Link></p>
         </section>

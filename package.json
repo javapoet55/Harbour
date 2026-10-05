@@ -15,7 +15,11 @@
     "db:migrate:deploy": "node prisma/deploy-migrations.mjs",
     "db:seed": "tsx prisma/assert-local-sqlite.ts && prisma generate --schema=prisma/sqlite/schema.prisma && tsx prisma/seed.ts",
     "db:reset": "tsx prisma/assert-local-sqlite.ts && prisma db push --force-reset --schema=prisma/sqlite/schema.prisma && tsx prisma/seed.ts",
-    "postinstall": "prisma generate --schema=prisma/schema.prisma"
+    "postinstall": "prisma generate --schema=prisma/schema.prisma",
+    "support:index": "node scripts/build-support-content.mjs",
+    "prebuild": "npm run support:index",
+    "predev": "npm run support:index",
+    "test:support": "vitest run --config support-vitest.config.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.19.3",
@@ -31,6 +35,7 @@
     "react-dom": "19.2.8",
     "tailwind-merge": "^3.3.1",
     "web-push": "^3.6.7",
+    "ws": "^8.22.0",
     "zod": "^4.1.5"
   },
   "devDependencies": {

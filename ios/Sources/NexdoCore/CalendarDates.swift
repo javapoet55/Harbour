@@ -47,7 +47,6 @@ public enum CalendarEventFilter {
     public static func matches(_ event: CalendarEvent, day: String, timeZone: String, completedOnly: Bool, now: Date = Date()) -> Bool {
         guard ServerDate.occurs(event, on: day, timeZone: timeZone) else { return false }
         guard completedOnly else { return true }
-        guard let end = ServerDate.parse(event.endAt) else { return false }
-        return end <= now
+        return event.completedAt != nil
     }
 }

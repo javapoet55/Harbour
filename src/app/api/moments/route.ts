@@ -6,9 +6,12 @@ import { requireUser } from '@/server/auth';
 import { jsonError } from '@/lib/http';
 import { prisma } from '@/server/db';
 import { MomentError } from '@/server/moments/domain';
-import { listMoments, saveMoment, generateDraft, approveDraft, schedule, changePlan, runJobs } from '@/server/moments/service';
-import { connectURL, revokeEmail } from '@/server/moments/email';
+import { listMoments, saveMoment, generateDraft, approveDraft, schedule, changePlan, runJobs, sendGreetingNow } from '@/server/moments/service';
+import { confirmConnect, connectURL, revokeEmail } from '@/server/moments/email';
+import { shoppingEmailSending, stopShoppingEmails } from '@/server/shopping/email-service';
 import { z } from 'zod';
+import { callerIdStatus, removeCallerId, startCallerIdVerification } from '@/server/moment-calls/caller-id';
+import { connectNow, connectPreview, connectStatus, saveConnect } from '@/server/moment-calls/service';
 function failure(e:unknown) { if(e instanceof SyntaxError) return NextResponse.json({error:"Invalid JSON request."},{status:400}); return e instanceof MomentError ? NextResponse.json({error:e.message},{status:e.status}) : jsonError(e); }
 async function healthHandlerGET() { try { return NextResponse.json(await listMoments((await requireUser()).id)); } catch(e) { return failure(e); } }
 async function healthHandlerPOST(req:Request) {
@@ -25,12 +28,25 @@ async function healthHandlerPOST(req:Request) {
    case 'generate': return NextResponse.json(await generateDraft(user.id,p.input));
    case 'approve': return NextResponse.json({draft:await approveDraft(user.id,p.input)});
    case 'schedule': { const plan=await schedule(user.id,p.input); if(plan.automaticDelivery&&plan.scheduledAtUTC<=new Date()) await runJobs(undefined,plan.id);return NextResponse.json({plan:await prisma.deliveryPlan.findUnique({where:{id:plan.id}})}); }
+   case 'sendGreetingNow': {
+    const plans=await sendGreetingNow(user.id,p.input);
+    for(const plan of plans)if(plan.automaticDelivery&&plan.status==='SCHEDULED')await runJobs(undefined,plan.id);
+    return NextResponse.json({plans:await prisma.deliveryPlan.findMany({where:{id:{in:plans.map(plan=>plan.id)}}})});
+   }
    case 'plan': return NextResponse.json(await changePlan(user.id,p.input));
+   case 'callerIdStart': return NextResponse.json(await startCallerIdVerification(user.id,(p.input as {phone?:unknown}|undefined)?.phone));
+   case 'callerIdStatus': return NextResponse.json({callerId:await callerIdStatus(user.id)});
+   case 'callerIdRemove': return NextResponse.json(await removeCallerId(user.id));
+   case 'connectStatus': return NextResponse.json(await connectStatus(user.id,z.object({momentIds:z.array(z.string().max(40)).max(50).optional()}).parse(p.input ?? {}).momentIds));
+   case 'connectPreview': return NextResponse.json(await connectPreview(user.id,p.input));
+   case 'connectSave': return NextResponse.json(await saveConnect(user.id,p.input));
+   case 'connectNow': return NextResponse.json(await connectNow(user.id,p.input));
    case 'connectEmail': return NextResponse.json({url:await connectURL(user.id)});
+   case 'connectEmailConfirm': await confirmConnect(user.id,(p.input as {ticket?:unknown}|undefined)?.ticket); return NextResponse.json({ok:true});
    case 'disconnectEmail': {
-    if(await prisma.deliveryPlan.count({where:{draft:{moment:{userId:user.id}},status:'SENDING'}})) throw new MomentError('Email is being submitted. Refresh before disconnecting.',409);
+    if(await prisma.deliveryPlan.count({where:{draft:{moment:{userId:user.id}},status:'SENDING'}})||await shoppingEmailSending(user.id)) throw new MomentError('Email is being submitted. Refresh before disconnecting.',409);
     await revokeEmail(user.id);
-    await prisma.$transaction([prisma.deliveryPlan.updateMany({where:{draft:{moment:{userId:user.id}},automaticDelivery:true,status:'SCHEDULED'},data:{status:'CANCELLED'}}),prisma.momentEmailAccount.deleteMany({where:{userId:user.id}})]);return NextResponse.json({ok:true});
+    await prisma.$transaction([...stopShoppingEmails(user.id),prisma.deliveryPlan.updateMany({where:{draft:{moment:{userId:user.id}},channel:'email',status:{in:['SCHEDULED','AWAITING_CONFIRMATION']}},data:{status:'CANCELLED'}}),prisma.momentEmailAccount.deleteMany({where:{userId:user.id}})]);return NextResponse.json({ok:true});
    }
    case 'visibility': {
     const v=z.object({id:z.string(),enabled:z.boolean(),snoozedUntil:z.iso.datetime({offset:true}).nullable().optional()}).parse(p.input);
@@ -42,9 +58,9 @@ async function healthHandlerPOST(req:Request) {
  } catch(e) {return failure(e);}
 }
 async function healthHandlerDELETE() {
- try { const user=await requireUser();if(await prisma.deliveryPlan.count({where:{draft:{moment:{userId:user.id}},status:'SENDING'}})) throw new MomentError('A send is in progress. Try again after it finishes.',409);
+ try { const user=await requireUser();if(await prisma.deliveryPlan.count({where:{draft:{moment:{userId:user.id}},status:'SENDING'}})||await shoppingEmailSending(user.id)) throw new MomentError('A send is in progress. Try again after it finishes.',409);
  await revokeEmail(user.id);
- await prisma.$transaction([prisma.importantMoment.deleteMany({where:{userId:user.id}}),prisma.momentEmailAccount.deleteMany({where:{userId:user.id}})]);return NextResponse.json({ok:true}); }catch(e){return failure(e);}
+ await prisma.$transaction([...stopShoppingEmails(user.id),prisma.importantMoment.deleteMany({where:{userId:user.id}}),prisma.momentEmailAccount.deleteMany({where:{userId:user.id}})]);return NextResponse.json({ok:true}); }catch(e){return failure(e);}
 }
 
 export const GET = healthRoute('GET /api/moments', healthHandlerGET);

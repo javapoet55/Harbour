@@ -67,11 +67,11 @@ export const endpoints = {
   login: (email: string, password: string, client: ApiClient = getApi()) =>
     client.post<LoginResponse>('/api/auth/login', { email, password }, { signedOutOn401: false }),
 
-  register: (name: string, email: string, password: string, client: ApiClient = getApi()) =>
-    client.post<RegistrationResponse>('/api/auth/register', { name, email, password }, { signedOutOn401: false }),
+  register: (name: string, email: string, password: string, client: ApiClient = getApi(), turnstileToken?: string) =>
+    client.post<RegistrationResponse>('/api/auth/register', { name, email, password, ...(turnstileToken ? { turnstileToken } : {}) }, { signedOutOn401: false }),
 
-  verifyEmail: (email: string, code: string, client: ApiClient = getApi()) =>
-    client.post<{ ok: boolean }>('/api/auth/verify-email', { email, code }, { signedOutOn401: false }),
+  verifyEmail: (email: string, code: string, client: ApiClient = getApi(), verificationProof?: string) =>
+    client.post<{ ok: boolean }>('/api/auth/verify-email', { email, code, ...(verificationProof ? { verificationProof } : {}) }, { signedOutOn401: false }),
 
   resendVerification: (email: string, client: ApiClient = getApi()) =>
     client.post<CodeDeliveryResponse>('/api/auth/verify-email/resend', { email }, { signedOutOn401: false }),

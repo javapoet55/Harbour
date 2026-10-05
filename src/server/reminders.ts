@@ -8,7 +8,7 @@ import { taskDueLabel } from '@/lib/task-timeline';
 import { inc } from '@/lib/metrics';
 import { log } from '@/lib/logger';
 
-export async function scheduleDefaultReminders(userId: string, taskId: string, dueAt: Date, critical = false) {
+export async function scheduleDefaultReminders(userId: string, taskId: string, dueAt: Date, critical = false, db: ReminderDb = prisma) {
   const offsets = critical
     ? [
         { ms: 24 * 60 * 60 * 1000, label: '1 day before' },
@@ -24,7 +24,7 @@ export async function scheduleDefaultReminders(userId: string, taskId: string, d
   for (const offset of offsets) {
     const fireAt = new Date(dueAt.getTime() - offset.ms);
     const key = `${taskId}:${offset.label}`;
-    await upsertReminderOccurrence(prisma, {
+    await upsertReminderOccurrence(db, {
       userId,
       taskId,
       fireAt,
@@ -79,6 +79,10 @@ async function tickRemindersImpl(now = new Date()) {
 
   let processed = 0;
   for (const reminder of due) {
+    if (reminder.task && (reminder.task.deletedAt || ['COMPLETED', 'CANCELLED'].includes(reminder.task.status))) {
+      await cancelTaskReminders(prisma, reminder.userId, reminder.task.id);
+      continue;
+    }
     const prefs = reminder.user.preference;
     if (!prefs) continue;
     const escalation: EscalationPrefs = {
@@ -106,6 +110,12 @@ async function tickRemindersImpl(now = new Date()) {
       const channel = nextEscalationChannel(escalation, history, now);
       if (!channel) break;
 
+      // Re-read before every delivery, including escalation, in case the task changed since scanning.
+      const eligible = await prisma.reminder.findFirst({ where: {
+        id: reminder.id, generation: reminder.generation, status: { in: ['SCHEDULED', 'QUEUED', 'RETRYING'] },
+        OR: [{ taskId: null }, { task: { deletedAt: null, status: { notIn: ['COMPLETED', 'CANCELLED'] } } }],
+      } });
+      if (!eligible) break;
       const healthStarted = performance.now();
       const title = reminder.task?.title ?? 'Harbor reminder';
       const body = reminder.offsetLabel;
@@ -150,7 +160,7 @@ async function tickRemindersImpl(now = new Date()) {
       : 'RETRYING';
     // Scoped to the generation read above: a reminder moved while this tick was sending keeps the new
     // occurrence's SCHEDULED status rather than taking the old one's outcome.
-    const settled = status !== reminder.status && (await prisma.reminder.updateMany({ where: { id: reminder.id, generation: reminder.generation }, data: { status } })).count > 0;
+    const settled = status !== reminder.status && (await prisma.reminder.updateMany({ where: { id: reminder.id, generation: reminder.generation, status: { in: ['SCHEDULED', 'QUEUED', 'RETRYING'] } }, data: { status } })).count > 0;
     if (settled && status === 'FAILED') { log('info', 'reminder.exhausted', { attempts: history.length }); inc('reminders.exhausted'); }
   }
   inc('reminders.ticked', processed);
@@ -175,4 +185,10 @@ export const tickReminders = (...args: Parameters<typeof tickRemindersImpl>) => 
 function reminderDueLabel(task: { dueAt: Date | null; startAt: Date | null } | null, timeZone: string, now: Date) {
   if (!task?.dueAt && !task?.startAt) return undefined;
   return taskDueLabel({ dueAt: task.dueAt?.toISOString() ?? null, startAt: task.startAt?.toISOString() ?? null }, timeZone, now);
+}
+
+/** Retain notification history while making all pending deliveries ineligible. */
+export async function cancelTaskReminders(db: ReminderDb, userId: string, taskId: string) {
+  await db.reminder.updateMany({ where: { userId, taskId, status: { in: ['SCHEDULED', 'QUEUED', 'RETRYING'] } },
+    data: { status: 'CANCELLED', generation: { increment: 1 } } });
 }

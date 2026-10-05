@@ -16,7 +16,7 @@ const productionOrigin = 'https://app.nexdoapp.com';
 const localOrigin = 'http://127.0.0.1:43217';
 
 function callback(origin: string, provider = 'google', query = '?code=test-code&state=test-state', headers?: HeadersInit) {
-  return GET(new Request(`${origin}/api/calendar/oauth/${provider}/callback${query}`, { headers }), {
+  return GET(new Request(`${origin}/api/calendar/oauth/${provider}/callback${query}`, { headers: { cookie: `calendar-oauth-${provider}=test-state`, ...Object.fromEntries(new Headers(headers)) } }), {
     params: Promise.resolve({ provider }),
   });
 }
@@ -76,15 +76,14 @@ describe('calendar OAuth callback redirects', () => {
 
   it.each(['', '?code=test-code', '?state=test-state', '?error=access_denied'])('returns cancelled/incomplete authorization safely: %s', async query => {
     const destination = expectSettingsRedirect(await callback('http://0.0.0.0:8080', 'google', query), 'error');
-    expect(destination.searchParams.get('detail')).toBe('Authorization was cancelled');
-    expect(mocks.verifyOAuthState).not.toHaveBeenCalled();
+    expect(destination.searchParams.get('detail')).toBe('Unable to connect calendar. Please reconnect and allow the requested permissions.');
     expect(mocks.connectCalendar).not.toHaveBeenCalled();
   });
 
   it('rejects invalid state before exchanging tokens', async () => {
     mocks.verifyOAuthState.mockRejectedValue(new Error('Invalid OAuth state'));
     const destination = expectSettingsRedirect(await callback('http://0.0.0.0:8080'), 'error');
-    expect(destination.searchParams.get('detail')).toBe('Invalid OAuth state');
+    expect(destination.searchParams.get('detail')).toBe('Unable to connect calendar. Please reconnect and allow the requested permissions.');
     expect(mocks.connectCalendar).not.toHaveBeenCalled();
     expect(mocks.syncConnection).not.toHaveBeenCalled();
   });
@@ -92,7 +91,7 @@ describe('calendar OAuth callback redirects', () => {
   it.each(['connectCalendar', 'syncConnection'] as const)('safely returns to Settings if %s fails', async stage => {
     mocks[stage].mockRejectedValue(new Error('Provider temporarily unavailable'));
     const destination = expectSettingsRedirect(await callback('http://0.0.0.0:8080'), 'error');
-    expect(destination.searchParams.get('detail')).toBe('Provider temporarily unavailable');
+    expect(destination.searchParams.get('detail')).toBe('Unable to connect calendar. Please reconnect and allow the requested permissions.');
     if (stage === 'connectCalendar') expect(mocks.syncConnection).not.toHaveBeenCalled();
   });
 
@@ -100,9 +99,28 @@ describe('calendar OAuth callback redirects', () => {
     const message = 'Provider failed &calendar=google-connected#' + 'x'.repeat(150);
     mocks.connectCalendar.mockRejectedValue(new Error(message));
     const destination = expectSettingsRedirect(await callback('http://0.0.0.0:8080'), 'error');
-    expect(destination.searchParams.get('detail')).toBe(message.slice(0, 120));
+    expect(destination.searchParams.get('detail')).toBe('Unable to connect calendar. Please reconnect and allow the requested permissions.');
     expect(destination.searchParams.getAll('calendar')).toEqual(['error']);
     expect(destination.hash).toBe('');
+  });
+
+  it.each(['', 'calendar-oauth-google=wrong'])('rejects a missing/mismatched browser cookie: %s', async cookie => {
+    expectSettingsRedirect(await callback(productionOrigin, 'google', undefined, { cookie }), 'error');
+    expect(mocks.connectCalendar).not.toHaveBeenCalled();
+  });
+
+  it('returns a validated native success and clears the browser cookie', async () => {
+    mocks.isNativeOAuthState.mockResolvedValue(true);
+    const response = await callback(productionOrigin);
+    expect(response.headers.get('location')).toBe('nexdo://calendar-connected?calendar=google-connected');
+    expect(response.headers.get('set-cookie')).toContain('Max-Age=0');
+  });
+
+  it('returns native denial to the app after validating browser state', async () => {
+    mocks.isNativeOAuthState.mockResolvedValue(true);
+    const response = await callback(productionOrigin, 'google', '?state=test-state&error=access_denied');
+    expect(response.headers.get('location')).toMatch(/^nexdo:\/\/calendar-connected\?calendar=error/);
+    expect(mocks.connectCalendar).not.toHaveBeenCalled();
   });
 
   it('handles unsupported providers without touching credentials', async () => {

@@ -9,19 +9,36 @@ final class ShoppingPreviewProtocol:URLProtocol,@unchecked Sendable {
     override class func canonicalRequest(for request:URLRequest)->URLRequest{request}
     static func reset(){
         lock.lock();defer{lock.unlock()}
-        let items:[GroceryItem]=[
+        var items:[GroceryItem]=[
             .init(name:"Bananas",category:"Produce",quantity:"6"),
             .init(name:"Tomatoes",category:"Produce",quantity:"4",notes:"Organic"),
             .init(name:"Spinach",category:"Produce",size:"1 bag"),
             .init(name:"Milk",category:"Dairy & Eggs",size:"1 gallon"),
             .init(name:"Eggs",category:"Dairy & Eggs",size:"1 dozen"),
             .init(name:"Rice",category:"Pantry",size:"5 kg")]
+        if ProcessInfo.processInfo.arguments.contains("-shopping-bread-preview") { items[3] = .init(name: "Bread", category: "Bakery", quantity: "1", size: "packet") }
+        if ProcessInfo.processInfo.arguments.contains("-shopping-photo-preview") {
+            items[0].imageData=UIImage(named:"grocery-banana")?.pngData()?.base64EncodedString()
+        }
+        if ProcessInfo.processInfo.arguments.contains("-shopping-offers-preview") {
+            items[0] = .init(name:"Starbucks Ground Coffee",category:"Drinks",size:"12 oz")
+            items[0].brand = "Starbucks"
+        }
         let encoded=(try! JSONSerialization.jsonObject(with:JSONEncoder().encode(items))) as! [[String:Any]]
         lists=[["id":"preview-list","title":"Weekly Shopping List","date":MomentDates.day(Date().addingTimeInterval(2*86400),zone:"America/Los_Angeles"),"timeZone":"America/Los_Angeles","weekly":true,"revision":0,"items":encoded]]
     }
     override func startLoading(){
         Self.lock.lock();defer{Self.lock.unlock()}
         var response:[String:Any]=["lists":Self.lists]
+        var status = 200
+        if request.url?.path == "/api/shopping/offers", request.httpMethod != "POST" {
+            let item=(Self.lists.first?["items"] as? [[String:Any]])?.first ?? [:]
+            let date=ISO8601DateFormatter().string(from:Date())
+            response=["status":"Design preview only — sample offers, not live store prices.","lastCheckedAt":date,"sourceURL":"https://www.costco.com/o/-/warehouse-savings","matches":[[
+                "itemId":item["id"] ?? "", "itemName":item["name"] ?? "Coffee", "category":"matching", "reasons":["Matches your Starbucks brand","Matches requested size: 12 oz"],"differences":[],"selected":false,
+                "offer":["id":"preview-offer","product":"Starbucks Ground Coffee","brand":"Starbucks","packageSize":"12 oz","price":"$7.99","savings":"$2 off","store":"Sample store","conditions":"Design preview only. Sample offer and pricing.","sourceURL":"https://www.costco.com/o/-/warehouse-savings","startsAt":date,"expiresAt":ISO8601DateFormatter().string(from:Date().addingTimeInterval(7*86400)),"checkedAt":date]
+            ]]]
+        }
         if request.httpMethod=="POST"{
             var data=request.httpBody
             if data==nil,let stream=request.httpBodyStream{
@@ -33,6 +50,26 @@ final class ShoppingPreviewProtocol:URLProtocol,@unchecked Sendable {
             let operation=json["operation"] as? String ?? ""
             if operation=="create"{
                 var list=input;list["id"]=UUID().uuidString;list["revision"]=0;Self.lists.insert(list,at:0);response=["list":list]
+            }else if operation=="alternatives", ProcessInfo.processInfo.arguments.contains("-shopping-alternatives-failure") {
+                status = 503; response = ["error":"Product data is temporarily unavailable. Please try again."]
+            }else if operation=="alternatives" {
+                var original = ShoppingProductFacts(source: "UI test fixture — not product data", nutrition: .init(servingSize: "1 cup (240 ml)", servingAmount: 240, servingUnit: "ml", calories: 150, protein: 8, totalFat: 8, saturatedFat: 5, carbohydrates: 12, sugar: 12, sodium: 105, calcium: 300), contains: ["Milk"], bestFor: ["Cereal", "Coffee", "Cooking", "Smoothies"])
+                original.price = 4.99; original.currency = "USD"; original.pricePackage = "1 gallon"
+                var milk = ShoppingAlternative(name: "2% Milk", category: "Dairy & Eggs", quantity: "1", size: "1 gallon", reason: "Test suggestion", detail: "Test fixture only")
+                var metadata = original; metadata.nutrition?.calories = 120; metadata.nutrition?.totalFat = 5; metadata.nutrition?.saturatedFat = 3; metadata.price = 4.29
+                milk.facts = metadata
+                var one = milk; one.name = "1% Milk"; one.facts?.nutrition?.totalFat = 2.5
+                var unknown = milk; unknown.name = "Lactose-free whole milk"; unknown.facts = nil
+                var result = ShoppingAlternativesResponse(alternatives: [milk,one,unknown], tip: "Preview only", usedAI: false); result.originalFacts = original
+                if ProcessInfo.processInfo.arguments.contains("-shopping-bread-preview") {
+                    result.alternatives = ["Whole wheat bread", "Multigrain bread", "Sourdough bread", "Low-carb bread", "Rye bread"].enumerated().map { index, name in
+                        var item = milk; item.name = name; item.category = "Bakery"; item.size = "packet"
+                        item.facts?.nutrition?.servingSize = "test serving"; item.facts?.nutrition?.calories = Double(100 + index * 10)
+                        return item
+                    }
+                }
+                if ProcessInfo.processInfo.arguments.contains("-shopping-empty-alternatives") { result.alternatives = [] }
+                response = (try! JSONSerialization.jsonObject(with: JSONEncoder().encode(result))) as! [String:Any]
             }else if operation=="parse"{
                 let item=GroceryItem(name:"Apples",category:"Produce",quantity:"3")
                 response=["items":[try! JSONSerialization.jsonObject(with:JSONEncoder().encode(item))]]
@@ -45,8 +82,13 @@ final class ShoppingPreviewProtocol:URLProtocol,@unchecked Sendable {
                 if operation=="delete"{Self.lists.remove(at:index);response=[:]}
             }
         }
+        if request.url?.path == "/api/shopping/email-schedule" {
+            // Debug-only visual fixture; never uses a real account or sends email.
+            response = ["available": true, "account": ["email": "demo@example.com", "status": "connected"],
+                        "schedule": ["recipient": "store@example.com", "recipientName": "Store manager", "timeZone": "America/Los_Angeles", "weekday": 6, "hour": 10, "minute": 0, "enabled": true, "nextRunAt": "2026-10-10T17:00:00.000Z", "runs": []]]
+        }
         let data=try! JSONSerialization.data(withJSONObject:response)
-        client?.urlProtocol(self,didReceive:HTTPURLResponse(url:request.url!,statusCode:200,httpVersion:nil,headerFields:["Content-Type":"application/json"])!,cacheStoragePolicy:.notAllowed)
+        client?.urlProtocol(self,didReceive:HTTPURLResponse(url:request.url!,statusCode:status,httpVersion:nil,headerFields:["Content-Type":"application/json"])!,cacheStoragePolicy:.notAllowed)
         client?.urlProtocol(self,didLoad:data);client?.urlProtocolDidFinishLoading(self)
     }
     override func stopLoading(){}
@@ -58,6 +100,17 @@ struct ShoppingDesignPreview:View {
         let config=URLSessionConfiguration.ephemeral;config.protocolClasses=[ShoppingPreviewProtocol.self]
         _store=StateObject(wrappedValue:ShoppingStore(api:try! APIClient(baseURL:URL(string:"https://shopping-preview.invalid")!,configuration:config)))
     }
-    var body:some View {NavigationStack{ShoppingHome(store:store)}.tint(.nexdoIndigo)}
+    var body:some View {
+        NavigationStack {
+            if ProcessInfo.processInfo.arguments.contains("-shopping-email-preview") {
+                Group {
+                    if let list = store.lists.first { ShoppingEmailView(store: store, list: list) }
+                    else { ProgressView() }
+                }.task { await store.refresh() }
+            } else if ProcessInfo.processInfo.arguments.contains("-shopping-offers-preview") {
+                Group {if let list=store.lists.first {ShoppingOffersView(store:store,list:list,onUpdate:{_ in})}else{ProgressView()}}.task{await store.refresh()}
+            } else { ShoppingHome(store:store) }
+        }.tint(.nexdoIndigo)
+    }
 }
 #endif

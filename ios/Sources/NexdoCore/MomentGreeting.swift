@@ -12,7 +12,9 @@ public enum MomentGreeting {
         }
     }
 
-    static let separators = Array("!. \n".utf16)
+    // Includes ',' so the greeting form the product writes — "Happy Birthday, Visakan!" — counts as an
+    // opening rather than falling through to a second prepended greeting. Same set as the server's.
+    static let separators = Array("!. \n,".utf16)
     /// Every opening the product writes, longest first so one never shadows another. Same list and order as
     /// the server (src/server/moments/wish-message.ts `openings`).
     static let openings = ["Happy Anniversary", "Happy Birthday", "Get well soon", "Best wishes"]
@@ -39,8 +41,14 @@ public enum MomentGreeting {
         if let opening = opening(of: text) {
             let units = Array(text.utf16)
             var at = opening.utf16.count
-            while at < units.count && separators.contains(units[at]) { at += 1 }
-            let rest = String(decoding: units[at...], as: UTF16.self)
+            var comma = false
+            while at < units.count && separators.contains(units[at]) { if units[at] == 0x2C { comma = true }; at += 1 }
+            var rest = String(decoding: units[at...], as: UTF16.self)
+            // "Happy Birthday, Visakan! …": a comma after the opening means a name rides inside the greeting
+            // itself — drop it (a capitalized phrase ending in '!') so it isn't sent to the new recipient.
+            if comma, let range = rest.range(of: #"^\p{Lu}[^!.\n]{0,60}!"#, options: .regularExpression) {
+                rest = String(rest[range.upperBound...]).trimmingCharacters(in: .whitespaces)
+            }
             return "\(opening), \(name)!" + (rest.isEmpty ? "" : " " + rest)
         }
         return greeting + " " + text

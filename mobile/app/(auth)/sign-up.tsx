@@ -59,7 +59,7 @@ export default function SignUp() {
         onSuccess: (pending) => {
           // A server without email verification signs in at registration; the gate takes over.
           if (!pending) return;
-          router.push({ pathname: '/verify-email', params: { email: pending.email, reason: pending.reason } });
+          router.push({ pathname: '/verify-email', params: { email: pending.email, reason: pending.reason, ...(pending.verificationProof ? { verificationProof: pending.verificationProof } : {}) } });
         },
         // Whatever the server said, in the one inline slot Swift has.
         onError: (error) => setError('root', { message: error.message }),

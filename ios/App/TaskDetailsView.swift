@@ -6,6 +6,8 @@ struct TaskDetailsView: View {
     @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let task: NexdoTask
+    enum InitialSection { case notes, schedule }
+    private let initialSection: InitialSection?
     @State private var draft: TaskDraft
     @State private var original: TaskDraft
     @State private var newStep = ""
@@ -16,8 +18,9 @@ struct TaskDetailsView: View {
     @FocusState private var focus: Field?
     enum Field: Hashable { case title, step, notes, agentLocation, agentDraft(String) }
 
-    init(task: NexdoTask) {
+    init(task: NexdoTask, initialSection: InitialSection? = nil) {
         self.task = task
+        self.initialSection = initialSection
         _draft = State(initialValue: TaskDraft(task: task))
         _original = State(initialValue: TaskDraft(task: task))
     }
@@ -52,7 +55,7 @@ struct TaskDetailsView: View {
                         field("PROJECT") { ProjectAssignmentField(projectID: $draft.projectId) }
                         }
                         if !hasBusinessResearch || showMoreDetails {
-                        schedule
+                        schedule.id("schedule")
                         field("REPEAT") {
                             menu("Repeat", value: $draft.recurrence, options: ["NONE", "DAILY", "WEEKLY", "MONTHLY", "YEARLY"])
                         }
@@ -73,6 +76,13 @@ struct TaskDetailsView: View {
                     }
                     .padding(20)
                     .disabled(blocked)
+                }
+                .onAppear {
+                    if let initialSection {
+                        showMoreDetails = true
+                        if initialSection == .notes { focus = .notes; proxy.scrollTo(Field.notes, anchor: .center) }
+                        else { proxy.scrollTo("schedule", anchor: .center) }
+                    }
                 }
                 .scrollDismissesKeyboard(.interactively)
                 .onChange(of: focus) { _, value in

@@ -40,8 +40,8 @@ beforeEach(async () => {
   vi.stubEnv('OPENAI_API_KEY', ''); vi.stubEnv('HARBOR_SESSION_SECRET', 'a'.repeat(64));
   vi.stubEnv('HARBOR_CREDENTIAL_ENCRYPTION_KEY', 'b'.repeat(64));
   jar.clear(); calls = []; providerItems = []; modelAnswer = ''; providerOffline = false;
-  userId = (await prisma.user.create({ data: { email: `${randomUUID()}@readiness.test`, passwordHash: 'not-sent-to-provider', name: 'Audit owner', preference: { create: {} } } })).id;
-  otherId = (await prisma.user.create({ data: { email: `${randomUUID()}@readiness.test`, passwordHash: 'private', name: 'Other owner' } })).id;
+  userId = (await prisma.user.create({ data: { emailVerifiedAt: new Date(), email: `${randomUUID()}@readiness.test`, passwordHash: 'not-sent-to-provider', name: 'Audit owner', preference: { create: {} } } })).id;
+  otherId = (await prisma.user.create({ data: { emailVerifiedAt: new Date(), email: `${randomUUID()}@readiness.test`, passwordHash: 'private', name: 'Other owner' } })).id;
   await writeSession(userId);
   vi.stubGlobal('fetch', vi.fn(async (input: string | URL, init?: RequestInit) => {
     const url = String(input); const method = init?.method || 'GET';

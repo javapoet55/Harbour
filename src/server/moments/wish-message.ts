@@ -8,7 +8,9 @@ import { editableStatuses } from './domain';
 export type SavedWishSettings = { baseMessage?: unknown; overrides?: unknown; approvedAt?: unknown };
 
 const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-const separators = '!. \n';
+// Includes ',' so the greeting form the product itself writes — "Happy Birthday, Visakan!" — is
+// recognized as an opening rather than falling through to a second prepended greeting.
+const separators = '!. \n,';
 
 function heading(type: string, firstName: string) {
   const name = firstName.trim();
@@ -51,8 +53,12 @@ export function greetingMessage(body: string, type: string, firstName: string) {
   const opening = openingOf(text);
   if (opening) {
     let at = opening.length;
-    while (at < text.length && separators.includes(text[at])) at++;
-    const rest = text.slice(at);
+    let comma = false;
+    while (at < text.length && separators.includes(text[at])) { if (text[at] === ',') comma = true; at++; }
+    let rest = text.slice(at);
+    // "Happy Birthday, Visakan! …": a comma after the opening means a name rides inside the greeting
+    // itself — drop it (a capitalized phrase ending in '!') so it isn't sent to the new recipient.
+    if (comma) rest = rest.replace(/^\p{Lu}[^!.\n]{0,60}!/u, '').trimStart();
     return `${opening}, ${firstName.trim()}!` + (rest ? ' ' + rest : '');
   }
   return `${greeting} ${text}`;

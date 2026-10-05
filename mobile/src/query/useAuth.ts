@@ -1,3 +1,4 @@
+import { signupChallenge } from '../lib/signupChallenge';
 import { useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query';
 
 import { endpoints, isApiError, type Profile } from '../api';
@@ -40,6 +41,7 @@ export async function finishAuthentication(queryClient: QueryClient): Promise<Pr
 
 /** `EMAIL_NOT_VERIFIED` from sign-in: the account exists but must confirm its emailed code first. */
 export type PendingVerification = {
+  verificationProof?: string;
   email: string;
   /** Mirrors `PendingEmailVerification.Reason` (ios/Sources/NexdoCore/EmailVerification.swift:16–18). */
   reason: 'codeSent' | 'codeNotSent' | 'signInRequiresVerification';
@@ -58,7 +60,7 @@ export function useSignIn() {
         await endpoints.login(address, password);
       } catch (error) {
         if (isApiError(error) && error.code === 'EMAIL_NOT_VERIFIED') {
-          return { email: error.email ?? address, reason: 'signInRequiresVerification' };
+          return { ...(error.verificationProof ? { verificationProof: error.verificationProof } : {}), email: error.email ?? address, reason: 'signInRequiresVerification' };
         }
         throw error;
       }
@@ -75,9 +77,9 @@ export function useSignIn() {
 export function useSignUp() {
   return useMutation<PendingVerification | null, Error, { name: string; email: string; password: string }>({
     mutationFn: async ({ name, email, password }) => {
-      const response = await endpoints.register(name, email, password);
+      const response = await endpoints.register(name, email, password, undefined, await signupChallenge());
       if (response.emailVerificationRequired !== true) return null;
-      return { email: response.email, reason: response.emailSent === false ? 'codeNotSent' : 'codeSent' };
+      return { ...(response.verificationProof ? { verificationProof: response.verificationProof } : {}), email: response.email, reason: response.emailSent === false ? 'codeNotSent' : 'codeSent' };
     },
   });
 }
@@ -85,9 +87,9 @@ export function useSignUp() {
 /** `AppModel.verifyEmail` (NexdoApp.swift:183–187): a correct code starts the session. */
 export function useVerifyEmail() {
   const queryClient = useQueryClient();
-  return useMutation<Profile, Error, { email: string; code: string }>({
-    mutationFn: async ({ email, code }) => {
-      await endpoints.verifyEmail(email, code);
+  return useMutation<Profile, Error, { email: string; code: string; verificationProof?: string }>({
+    mutationFn: async ({ email, code, verificationProof }) => {
+      await endpoints.verifyEmail(email, code, undefined, verificationProof);
       return finishAuthentication(queryClient);
     },
   });

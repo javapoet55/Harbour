@@ -88,6 +88,7 @@ export async function evaluateAlerts() {
       await tx.healthAudit.upsert({where:{id:`incident-${incident.id}`},update:{},create:{id:`incident-${incident.id}`,actorId:'system',action:'INCIDENT_OPENED',targetId:incident.id,detail:incident.trigger}});
     });
   }
+  await prisma.authRateBucket.deleteMany({ where: { expiresAt: { lt: new Date(Date.now() - 86400000) } } });
   await prisma.healthEvent.deleteMany({where:{createdAt:{lt:new Date(Date.now()-31*86400000)}}});
   return {checkedAt:new Date().toISOString()};
 }

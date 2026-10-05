@@ -237,3 +237,14 @@ private func fixture(_ id: String, due: String?, status: String = "PLANNED", not
     ]
     #expect(query.results(tasks, timeZone: "America/Los_Angeles", now: now).map(\.id) == ["today", "first", "last"])
 }
+
+@Test func searchResetsFiltersAndFindsAllDatesWithOpenMatchesFirst() throws {
+    let now = try #require(ServerDate.parse("2026-09-25T16:00:00Z"))
+    var query = TaskQuery(); query.status = "Completed"; query.priority = "LOW"; query.date = .today
+    query.beginSearch()
+    #expect(query.date == .all && query.status == "All" && query.priority == "All")
+    let tasks = try [fixture("sink done", due:"2025-01-01T10:00:00Z",status:"COMPLETED"),fixture("sink open",due:nil),fixture("sink future",due:"2027-01-01T10:00:00Z"),fixture("unrelated",due:nil),fixture("sink cancelled",due:nil,status:"CANCELLED")]
+    #expect(query.results(tasks,timeZone:"UTC",now:now).count == 4)
+    query.search = "sink"
+    #expect(query.results(tasks,timeZone:"UTC",now:now).map(\.id) == ["sink future","sink open","sink done"])
+}

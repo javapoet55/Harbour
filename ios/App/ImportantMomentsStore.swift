@@ -55,6 +55,8 @@ struct MomentOK: Decodable, Sendable {}
         } catch { self.error = error.localizedDescription }
     }
     @Published var route: ImportantMoment?
+    @Published var showingNotificationInbox = false
+    var routedPlanID: String?
     private let notificationAuthorization: (@Sendable () async throws -> Void)?
     private let api: APIClient
     private var owner: String?
@@ -67,7 +69,7 @@ struct MomentOK: Decodable, Sendable {}
     } }
     func activate(_ userID: String?) async {
         let key = userID.map(TaskActionCoordinator.ownerKey)
-        if owner != key { owner = key; generation = UUID(); snapshot = nil; route = nil; error = nil; lastSynced = nil; cardCache.removeAll(); await clearNotifications() }
+        if owner != key { owner = key; generation = UUID(); snapshot = nil; route = nil; showingNotificationInbox = false; routedPlanID = nil; error = nil; lastSynced = nil; cardCache.removeAll(); await clearNotifications() }
         if key != nil { await refresh() }
     }
     func refresh() async {
@@ -83,9 +85,16 @@ struct MomentOK: Decodable, Sendable {}
     }
     func resolveRoute() {
         let pending = MomentNotificationRoute.shared
-        guard let id = pending.pending, pending.owner == owner else { return }
+        guard let id = pending.pending, let owner, pending.owner == owner else { return }
+        // A foreground refresh or cold launch may still be loading. Never consume the tap early.
+        guard snapshot != nil else { return }
         pending.pending = nil
-        if let moment = moments.first(where: { $0.enabled && ($0.id == id || $0.drafts.contains { $0.plans?.contains { $0.id == id && $0.editable } == true }) }) { route = moment }
+        routedPlanID = id
+        if let moment = moments.first(where: { $0.id == id || $0.drafts.contains { $0.plans?.contains { $0.id == id } == true } }) {
+            route = moment
+        } else {
+            showingNotificationInbox = true
+        }
     }
     func request<T: Encodable, R: Decodable & Sendable>(_ operation: String, _ input: T, id: String? = nil) async throws -> R {
         guard owner != nil else { throw APIError.signedOut }
@@ -186,12 +195,13 @@ struct MomentOK: Decodable, Sendable {}
         var requests: [(String,Date,String)] = []
         let enabledDrafts = Set(moments.filter(\.enabled).flatMap { $0.drafts.map(\.id) })
         var preparedGroups = Set<String>()
-        for moment in moments where moment.enabled && moment.type == "festival" {
-            if let settings = FestivalSettings.read(moment.festivalSettings), settings.prepareDays > 0, preparedGroups.insert(settings.groupID).inserted {
-                var calendar = Calendar(identifier: .gregorian); calendar.timeZone = TimeZone(identifier: moment.timeZoneID) ?? .current
-                if let occurrenceTime = FestivalValidation.instant(day: moment.nextOccurrence, hour: 8, minute: 0, zone: moment.timeZoneID),
-                   let when = calendar.date(byAdding: .day, value: -settings.prepareDays, to: occurrenceTime), when > Date() {
-                    requests.append((moment.id, when, "Review your festival wish."))
+        for moment in moments where moment.enabled {
+            if let settings = FestivalSettings.read(moment.festivalSettings), settings.preparationMinutes > 0, preparedGroups.insert(settings.groupID).inserted {
+                let draftTime = settings.draftSendDate.flatMap { ISO8601DateFormatter().date(from: $0) }
+                let sameDayDraft = draftTime.flatMap { MomentDates.day($0, zone: moment.timeZoneID) == moment.nextOccurrence ? $0 : nil }
+                if let occurrenceTime = moment.upcomingDelivery?.date ?? sameDayDraft ?? FestivalValidation.instant(day: moment.nextOccurrence, hour: 8, minute: 0, zone: moment.timeZoneID),
+                   let when = settings.preparationDate(occurrence: occurrenceTime, zone: moment.timeZoneID), when > Date() {
+                    requests.append((moment.id, when, "Review your upcoming wish."))
                 }
             }
         }
@@ -217,12 +227,21 @@ struct MomentOK: Decodable, Sendable {}
         guard let url = URL(string: link.url) else { throw APIError.invalidResponse }
         session = ASWebAuthenticationSession(url: url, callbackURLScheme: "nexdo") { callback, _ in
             Task { @MainActor in
-                if callback?.host != "moments-email" || URLComponents(url: callback!, resolvingAgainstBaseURL: false)?.queryItems?.first(where: {$0.name == "status"})?.value != "connected" { store.error = "Email connection cancelled or failed. Try connecting again." }
-                else { await store.refresh() }
-                self.session = nil
+                defer { self.session = nil }
+                guard let ticket = MomentEmailOAuth.ticket(from: callback) else { store.error = "Email connection cancelled or failed. Try connecting again."; return }
+                do { let _: MomentOK = try await store.request("connectEmailConfirm", ["ticket": ticket]); await store.refresh() }
+                catch { store.error = error.localizedDescription }
             }
         }
         session?.presentationContextProvider = self; session?.prefersEphemeralWebBrowserSession = true
         if session?.start() != true { throw TaskActionServiceError.unavailable }
+    }
+    /// The server saves Gmail only after this signed-in app confirms the ticket from `nexdo://moments-email?status=confirm&ticket=…`.
+    static func ticket(from callback: URL?) -> String? {
+        guard let callback, callback.host == "moments-email",
+              let items = URLComponents(url: callback, resolvingAgainstBaseURL: false)?.queryItems,
+              items.first(where: { $0.name == "status" })?.value == "confirm",
+              let ticket = items.first(where: { $0.name == "ticket" })?.value, !ticket.isEmpty else { return nil }
+        return ticket
     }
 }

@@ -74,7 +74,7 @@ export default function SignIn() {
             if (!pending) return;
             // The server requires the emailed code first. Swift does NOT resend here; the verify
             // screen offers "Send a new code" instead (RootView.swift:696-697).
-            router.push({ pathname: '/verify-email', params: { email: pending.email, reason: pending.reason } });
+            router.push({ pathname: '/verify-email', params: { email: pending.email, reason: pending.reason, ...(pending.verificationProof ? { verificationProof: pending.verificationProof } : {}) } });
           },
           onError: (error) => showError(error.message),
         },

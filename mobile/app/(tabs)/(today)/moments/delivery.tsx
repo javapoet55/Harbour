@@ -191,7 +191,7 @@ export default function ChooseDeliveryScreen() {
         visible={confirmEmail}
         account={account ?? 'No connected account'}
         recipient={recipient}
-        subject={moment.title}
+        subject={moment.emailSubject ?? moment.title}
         message={draft.body}
         onCancel={() => setConfirmEmail(false)}
         onConfirm={() => {

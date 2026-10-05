@@ -50,7 +50,7 @@ describe('auth failures while opening a calendar', () => {
     env();
     network(() => Response.json({ error: 'invalid_grant', error_description: 'Token has been expired or revoked.' }, { status: 400 }));
     const c = await connection('google');
-    await expect(syncConnection(userId, c.id)).rejects.toThrow('Token has been expired or revoked.');
+    await expect(syncConnection(userId, c.id)).rejects.toThrow('Calendar authorization failed');
     expect(await status(c.id)).toBe('error');
   });
 
@@ -71,7 +71,7 @@ describe('auth failures while opening a calendar', () => {
     env();
     network(() => Response.json({ error, error_description: description }, { status: 400 }));
     const c = await connection('microsoft');
-    await expect(syncConnection(userId, c.id)).rejects.toThrow('AADSTS');
+    await expect(syncConnection(userId, c.id)).rejects.toThrow('Calendar authorization failed');
     expect(await status(c.id)).toBe('error');
   });
 });

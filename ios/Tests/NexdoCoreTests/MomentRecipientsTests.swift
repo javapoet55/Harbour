@@ -144,3 +144,10 @@ import Testing
     #expect(links.entries.count == 2)
     #expect(!stored.contains("CONTACT") && !stored.contains("asha") && !stored.contains("5555550101"))
 }
+
+@Test func editedOccasionKeepsOriginalRecipientSettingKeys() {
+    #expect(ManagedFestivalRecipient.storedKey(sourceKey:"festival:group:contact:123",groupID:"group",momentID:"row") == "contact:123")
+    #expect(ManagedFestivalRecipient.storedKey(sourceKey:"birthday:group:contact",groupID:"group",momentID:"row") == "contact")
+    #expect(ManagedFestivalRecipient.storedKey(sourceKey:"manual",groupID:"group",momentID:"row") == "row")
+    #expect(ManagedFestivalRecipient.storedKey(sourceKey:"festival:other:contact",groupID:"group",momentID:"row") == "row")
+}

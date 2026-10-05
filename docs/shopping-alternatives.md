@@ -1,0 +1,44 @@
+# Native shopping alternatives
+
+The existing Shopping List blue-star entry opens `ShoppingAlternativesView`. Goal chips filter alternatives using optional structured facts, with a match count or explicit no-match state and a Show all action, while the existing alternatives endpoint supplies practical suggestions. Compact rows push one details screen inside the existing navigation stack with an original-item header, nutrition comparison card/table, and expandable Allergens and Best For sections.
+
+## Facts and sources
+
+`ShoppingProductFacts` is optional metadata separate from recommendation text. It records source, optional source URL/date, serving-based nutrition, explicitly declared allergens/dietary attributes, uses, and optional price/package/currency. Nutrition uses kcal, grams for macronutrients, and milligrams for sodium/calcium. Comparisons normalize positive finite servings with matching `g` or `ml` units; incompatible or unknown servings have no difference.
+
+Production enrichment now uses USDA FoodData Central and Open Food Facts through the existing backend. See [food-data.md](food-data.md) for matching, provenance, caching, configuration, and deployment. Missing facts remain unavailable; model output is never a nutrition/allergen source.
+
+Numeric sample values exist only in the DEBUG `ShoppingPreview` mock transport and unit tests, explicitly labeled as test fixtures. General milk usage suggestions use a deterministic culinary mapping, not nutritional or allergy inference.
+
+## Persistence and behavior
+
+- Replace modifies the original item in its existing list, retaining identity, quantity, size, notes, checked state, favorites, and list metadata.
+- Add Instead appends a new item and keeps the original. Matching names/package sizes are rejected as duplicates.
+- Favorites use optional fields on the existing shopping item JSON, accepted by the backend item save schema and persisted in the additive shopping item migration. Deploy the corresponding backend schema change before relying on favorites in a device build against production.
+- Completed-list changes create an active copy, matching existing shopping edit behavior.
+- Replace opens a before/after confirmation. Successful persistence opens Item replaced with Done and View in Cart; Cancel never mutates the list. Save failures stay in the confirmation with a retryable error. Existing revision checks and analytics are reused.
+- Alternatives are cached per store for five minutes, capped at 30 entries. Scrolling and switching tabs make no recommendation calls.
+
+## Artwork
+
+The five `swap-*.imageset` cartons were extracted from the user-supplied `ChatGPT Image Sep 25, 2026, 08_59_25 AM.png` asset sheet. They are generic category illustrations, not evidence of a particular manufacturer/product. Bread uses the six illustrations and whole-wheat hero region from the supplied September 25 12:15 design pack, rendered as a sprite sheet. The supplied pack is a flattened image, so these are illustrative assets, not exact product photos. Other products retain the existing grocery placeholder. Native SF Symbols and existing NexDo color/gradient tokens keep controls accessible and scalable.
+
+## Validation
+
+Core tests cover numeric differences, serving normalization, missing/invalid facts, goal ranking, price comparability, explicit allergen declarations, replacement metadata, duplicate additions, legacy decoding, and favorites. Backend tests verify favorite schema compatibility and reject model-generated factual metadata. Native UI tests exercise the blue-star entry, detail tabs, Replace, Add Instead, closing without replacement, and saved favorites using the existing offline shopping preview.
+
+For manual testing, launch the DEBUG app with `-shopping-design-preview`, open Weekly Shopping List, and tap the blue star beside Milk. For normal server-backed testing, launch without preview arguments; unverified product facts should remain unavailable.
+
+Request failures are displayed with Retry instead of silently substituting unverified local alternatives. Xcode Debug uses app-dev.nexdoapp.com; its backend needs the same food-data migration and server-only provider configuration as production.
+
+## Compact design (September 25)
+
+Three quick goal chips and More open a two-column goal picker with a full-list expansion. Draft selections apply only on Apply; Cancel leaves the active goal unchanged. Why these explains source limitations without promising allergen safety. Missing-data and no-match states offer clear next actions. Details retain nutrition and allergen information, favorites, and Add Instead. Tests cover confirmation/success, cancellation, empty results, goal application, detail navigation, and persisted replacement.
+
+## Item Details comparison design
+
+Item Details uses the supplied September 25 13:12 asset pack for mango illustration, a white/blue card layout, and a four-column nutrient comparison table. Values render as rounded whole numbers; stored values and serving normalization retain full precision. The original item and proposed replacement are labeled separately, with the item text wrapping beside the illustration. An info button next to Nutrition Facts opens the food-provider data note on demand. The entire Nutrition Score card is omitted because existing provider contracts do not supply a validated 0–100 score. No placeholder score, empty ring, or supporting At a glance section is displayed. The raw provider metadata footer is removed. Replace still opens confirmation and Add Instead preserves the original.
+
+## Item Details food voice
+
+The Ask AI button opens the existing Realtime voice screen in a read-only food mode, with the same microphone consent, mute, speaker routing/volume, transcript, reconnect and usage tracking. Only the two food queries (name, optional brand/barcode) are sent as initial context. The `food` session scope exposes `lookup_food` and local conversation/end controls, not task or shopping mutations. Lookups reuse ProductDataService and its PostgreSQL cache for USDA/Open Food Facts. Product facts retain provenance and missing-allergen fields through the native tool response. The model must distinguish general knowledge from sourced product facts and must not guarantee allergy safety. No provider secrets are shipped in the app. Backend support must be deployed before the native food voice entry is used.

@@ -23,3 +23,8 @@ describe('recurrence', () => {
     expect(nextOccurrence('2024-02-29', { frequency: 'yearly', interval: 1 })).toBe('2025-02-28');
   });
 });
+
+it('recovers the month-end anchor while listing multiple occurrences', () => {
+ expect(nextOccurrence('2026-01-31', { frequency: 'monthly', interval: 1 }, 2)).toBe('2026-03-31');
+ expect(occurrencesUntil('2026-01-31', { frequency: 'monthly', interval: 1 }, '2026-04-30')).toEqual(['2026-01-31', '2026-02-28', '2026-03-31', '2026-04-30']);
+});

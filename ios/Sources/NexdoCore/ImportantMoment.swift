@@ -6,6 +6,8 @@ public struct ImportantMoment: Codable, Identifiable, Sendable {
     public var festivalSettings: String?
     public var snoozedUntil: String?
     public var nextOccurrence: String
+    /// The subject automatic emails use, built from the occasion rather than the title. Absent from older servers.
+    public var emailSubject: String?
     public var drafts: [WishDraft]
     /// The saved greeting card automatic emails include, or nil. Absent from servers before the card feature.
     public var card: GreetingCardInfo?
@@ -33,9 +35,13 @@ public struct WishDeliveryPlan: Codable, Identifiable, Sendable {
     public var sentAt, lastError: String?
     public var date: Date { ISO8601DateFormatter().date(from: scheduledAtUTC) ?? MomentDates.parseInstant(scheduledAtUTC) ?? .distantPast }
     public var editable: Bool { ["SCHEDULED", "AWAITING_CONFIRMATION", "FAILED"].contains(status) }
-    public var statusLabel: String { switch status {
+    public var statusLabel: String { statusLabel(now: Date()) }
+    public func statusLabel(now: Date) -> String { switch status {
     case "SCHEDULED": "Auto-send scheduled"
-    case "AWAITING_CONFIRMATION": lastError == "Messages opened; delivery not confirmed." ? "Opened — delivery not confirmed" : "Confirmation required"
+    case "AWAITING_CONFIRMATION":
+        if lastError == "Messages opened; delivery not confirmed." { "Opened — delivery not confirmed" }
+        else if date > now { "Scheduled — manual send" }
+        else { channel == "copy" ? "Ready to copy" : channel == "share" ? "Ready to share" : "Ready to send" }
     case "SENT": "Sent"
     case "COPIED": "Copied — delivery not confirmed"
     case "SHARED": "Shared — delivery not confirmed"
@@ -88,6 +94,40 @@ public struct MomentInput: Encodable, Sendable {
     }
     /// The payload both editor Save buttons send: this input with the picked day.
     public func forSave(day: String) -> MomentInput { var value = self; value.occurrenceDate = day; return value }
+}
+
+/// Date filters use each moment's local calendar, including across midnight and DST.
+public enum MomentUpcomingFilter: String, CaseIterable, Sendable {
+    case today = "Today", tomorrow = "Tomorrow", thisWeek = "This Week", later = "Later"
+    public func includes(day: String, zone: String, now: Date = Date(), calendar input: Calendar = .current) -> Bool {
+        var calendar=input
+        calendar.timeZone=TimeZone(identifier:zone) ?? .current
+        let today=calendar.startOfDay(for:now)
+        let tomorrow=calendar.date(byAdding:.day,value:1,to:today)!
+        let afterTomorrow=calendar.date(byAdding:.day,value:2,to:today)!
+        let date=MomentDates.date(day,zone:zone)
+        let weekEnd=calendar.dateInterval(of:.weekOfYear,for:now)?.end ?? afterTomorrow
+        switch self {
+        case .today: return date >= today && date < tomorrow
+        case .tomorrow: return date >= tomorrow && date < afterTomorrow
+        case .thisWeek: return date >= today && date < weekEnd
+        case .later: return date >= max(weekEnd,afterTomorrow)
+        }
+    }
+}
+public enum MomentScheduleSummary {
+    public static func labels(plans: [WishDeliveryPlan], locale: Locale = .current) -> [String] {
+        let multipleZones=Set(plans.map(\.timeZoneID)).count > 1
+        let labels=plans.sorted { $0.date < $1.date }.map { plan in
+            let formatter=DateFormatter()
+            formatter.locale=locale;formatter.timeZone=TimeZone(identifier:plan.timeZoneID) ?? .current
+            formatter.dateStyle = .none;formatter.timeStyle = .short
+            return formatter.string(from:plan.date) + (multipleZones ? " \(formatter.timeZone.abbreviation(for:plan.date) ?? plan.timeZoneID)" : "")
+        }
+        var ordered:[String]=[]
+        for label in labels where !ordered.contains(label) { ordered.append(label) }
+        return ordered.map { label in "\(labels.filter { $0 == label }.count) scheduled @ \(label)" }
+    }
 }
 
 public enum MomentUpcomingGroup: String, CaseIterable, Sendable {
@@ -152,5 +192,20 @@ public struct MomentDisplayGroup: Identifiable, Sendable {
             entries[key, default: []].append(moment)
         }
         return order.map { Self(id: $0, moments: entries[$0]!) }
+    }
+}
+
+/// A multi-recipient moment can have recipients at different stages.
+public enum MomentManagementFilter: String, CaseIterable, Identifiable, Sendable {
+    case scheduled = "Scheduled", needReview = "Need Review", ready = "Ready to Schedule"
+    public var id: String { rawValue }
+    public func includes(_ group: MomentDisplayGroup) -> Bool {
+        group.moments.contains { moment in
+            switch self {
+            case .scheduled: return moment.upcomingDelivery != nil
+            case .needReview: return moment.needsWishReview || !moment.enabled
+            case .ready: return moment.readyToSchedule
+            }
+        }
     }
 }

@@ -3,6 +3,11 @@ import Foundation
 public struct TodayActionQueue: Sendable {
     public static let windowMinutes = 15
     public let primaryAction: TaskAction?
+    public let dueActions: [TaskAction]
+    public var upcomingActions: [TaskAction] {
+        let dueIDs = Set(dueActions.map(\.id))
+        return nextActions.filter { !dueIDs.contains($0.id) }
+    }
     public let nextActions: [TaskAction]
     public let laterActions: [TaskAction]
     public let overdueCount: Int
@@ -35,6 +40,7 @@ public struct TodayActionQueue: Sendable {
             return $0.id < $1.id
         }.filter { seen.insert($0.taskId).inserted }
         let due = ordered.filter { $0.notificationDate! <= now }
+        dueActions = due
         primaryAction = due.first
         nextActions = ordered.filter { $0.id != due.first?.id && $0.notificationDate! <= window }
         laterActions = ordered.filter { $0.notificationDate! > window }

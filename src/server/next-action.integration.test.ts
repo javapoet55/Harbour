@@ -34,8 +34,8 @@ beforeEach(async () => {
   vi.stubEnv('OPENAI_API_KEY', ''); vi.stubEnv('HARBOR_SESSION_SECRET', 'a'.repeat(64));
   vi.stubGlobal('fetch', vi.fn(() => { throw new Error('No network expected in deterministic next-action tests'); }));
   jar.clear();
-  userId = (await prisma.user.create({ data: { email: `${randomUUID()}@next-action.test`, passwordHash: 'private-fixture', name: 'Next-action owner', timeZone: 'America/Los_Angeles', preference: { create: {} } } })).id;
-  otherId = (await prisma.user.create({ data: { email: `${randomUUID()}@next-action.test`, passwordHash: 'private', name: 'Other owner' } })).id;
+  userId = (await prisma.user.create({ data: { emailVerifiedAt: new Date(), email: `${randomUUID()}@next-action.test`, passwordHash: 'private-fixture', name: 'Next-action owner', timeZone: 'America/Los_Angeles', preference: { create: {} } } })).id;
+  otherId = (await prisma.user.create({ data: { emailVerifiedAt: new Date(), email: `${randomUUID()}@next-action.test`, passwordHash: 'private', name: 'Other owner' } })).id;
   await writeSession(userId);
 });
 afterEach(async () => {

@@ -38,9 +38,17 @@ export function fallback(firstName: string, type: string, tone: string, version=
   if (tone === 'Personal') return `${greeting}${name}! Thinking of you and sending my warmest wishes on this special day.`;
   return `${greeting}${name}! ${version % 2 ? 'Wishing you a wonderful day and a fantastic year ahead!' : 'Hope your day is filled with happiness and lovely moments!'} 🎉`;
 }
+// Email subjects come from the occasion, never the moment's title, which can be a private note.
+export function wishSubject(moment:{type:string; firstName:string; title:string}) {
+  if(moment.type === 'festival') return moment.title;
+  const name = moment.firstName.trim();
+  if(moment.type === 'getWellSoon') return name ? `Get well soon, ${name}` : 'Get well soon';
+  if(moment.type === 'birthday' || moment.type === 'anniversary') { const greeting = moment.type === 'birthday' ? 'Happy Birthday' : 'Happy Anniversary'; return name ? `${greeting}, ${name}!` : `${greeting}!`; }
+  return name ? `Best wishes, ${name}` : 'Best wishes';
+}
 export const editableStatuses = ['SCHEDULED','AWAITING_CONFIRMATION','FAILED'];
 export function mayTransition(from: string, to: string) {
-  const transitions: Record<string,string[]> = {SCHEDULED:['SENDING','CANCELLED','FAILED','EXPIRED'], AWAITING_CONFIRMATION:['SENT','CANCELLED','FAILED','COPIED','SHARED','EXPIRED'], SENDING:['SENT','FAILED','SCHEDULED','UNCERTAIN'], FAILED:['CANCELLED','SCHEDULED']};
+  const transitions: Record<string,string[]> = {SCHEDULED:['SENDING','CANCELLED','FAILED','EXPIRED'], AWAITING_CONFIRMATION:['SENT','CANCELLED','FAILED','COPIED','SHARED','EXPIRED'], SENDING:['SENT','FAILED','SCHEDULED','UNCERTAIN'], FAILED:['CANCELLED','SCHEDULED'], UNCERTAIN:['SENT','FAILED']};
   return transitions[from]?.includes(to) ?? false;
 }
 export class MomentError extends Error { constructor(message: string, public status=400) { super(message); } }

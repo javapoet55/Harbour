@@ -92,6 +92,7 @@ export default function TodayLayout() {
       {/* Shopping Lists (Run C): `ShoppingHome` and `ShoppingDetail` push; everything else is a
           `.sheet` of those two, presented in-screen with `MomentSheet`. */}
       <Stack.Screen name="shopping/index" options={{ ...pushed, title: 'My Lists' }} />
+      <Stack.Screen name="shopping/email" options={{ ...pushed, title: 'Schedule email' }} />
       <Stack.Screen name="shopping/[id]" options={{ ...pushed, title: 'Shopping List' }} />
     </Stack>
   );
