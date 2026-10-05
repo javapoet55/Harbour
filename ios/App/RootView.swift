@@ -2176,7 +2176,7 @@ struct TaskEditor: View {
         Task {
             defer { checkingAvailability = false }
 
-            if await model.saveTask(id: task?.id, title: title.trimmingCharacters(in: .whitespacesAndNewlines), notes: notes, duration: duration, scheduledAt: resolvedCreationDate, projectId: projectID) {
+            if await model.saveTask(id: task?.id, title: title.trimmingCharacters(in: .whitespacesAndNewlines), notes: notes, duration: duration, scheduledAt: task == nil || dateExplicitlyChosen ? resolvedCreationDate : nil, projectId: projectID) {
                 dismiss()
             }
         }

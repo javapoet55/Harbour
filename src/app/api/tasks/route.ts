@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+import { validateTaskDates } from '@/lib/task-input';
 import { healthRoute } from '@/server/health/telemetry';
 import { requireAvailableSchedule } from '@/server/availability';
 import { parseProjectId } from '@/server/projects';
@@ -27,12 +29,12 @@ async function healthHandlerGET(req: Request) {
   const tasks = await prisma.task.findMany({
     where: {
       userId: user.id, deletedAt: null,
-      AND: [taskTimelineCondition(params.get('timeline'), user.timeZone, now)],
+      AND: [taskTimelineCondition(params.get('timeline'), user.timeZone, now), ...(due === 'OVERDUE' ? [{ status: { notIn: ['COMPLETED', 'CANCELLED'] } }] : [])],
       ...(query ? { OR: [{ title: { contains: query } }, { notes: { contains: query } }, { waitingOn: { contains: query } }, { project: { name: { contains: query } } }] } : {}),
       ...(status && status !== 'ALL' ? { status } : {}),
       ...(priority && priority !== 'ALL' ? { priority } : {}),
       ...(energy && energy !== 'ALL' ? { energyLevel: energy } : {}),
-      ...(due === 'OVERDUE' ? { dueAt: { lt: now }, status: { notIn: ['COMPLETED', 'CANCELLED'] } } : due === 'NEXT_24_HOURS' ? { dueAt: { gte: now, lte: tomorrow } } : due === 'UNSCHEDULED' ? { startAt: null } : {}),
+      ...(due === 'OVERDUE' ? { dueAt: { lt: now } } : due === 'NEXT_24_HOURS' ? { dueAt: { gte: now, lte: tomorrow } } : due === 'UNSCHEDULED' ? { startAt: null } : {}),
     },
     include: { subtasks: true, category: true, project: true, recurrence: true, tags: { include: { tag: true } } },
     orderBy: [{ status: 'asc' }, { dueAt: 'asc' }],
@@ -44,6 +46,10 @@ async function healthHandlerPOST(req: Request) {
   try {
     const user = await requireUser();
     const body = await req.json();
+    validateTaskDates(body);
+    if (body.idempotencyKey !== undefined && (typeof body.idempotencyKey !== 'string' || !body.idempotencyKey.trim() || body.idempotencyKey.length > 200)) throw new Error('INVALID_TASK');
+    const idempotencyKey = body.idempotencyKey === undefined ? undefined : 'task-post:' + createHash('sha256').update(JSON.stringify([user.id, body.idempotencyKey])).digest('hex');
+    const existing = idempotencyKey ? await prisma.task.findFirst({ where: { userId: user.id, idempotencyKey } }) : null;
     const originalTitle = String(body.title ?? '').trim();
     const intent = parseLifeReminder(originalTitle, user.timeZone);
     const suppliedStartAt = body.startAt
@@ -53,9 +59,10 @@ async function healthHandlerPOST(req: Request) {
         : null;
     const startAt = intent.recognized && intent.reminderDate ? intent.reminderDate : suppliedStartAt;
     const dueAt = intent.recognized ? intent.dueDate ?? startAt : startAt;
-    if (!intent.recognized) await requireAvailableSchedule(user.id, startAt, body.durationMin ?? 30, body.allowScheduleConflict);
+    if (!existing && !intent.recognized) await requireAvailableSchedule(user.id, startAt, body.durationMin ?? 30, body.allowScheduleConflict);
     const task = await createTask({
       userId: user.id,
+      idempotencyKey,
       projectId: body.projectId === undefined ? undefined : parseProjectId(body.projectId),
       title: intent.recognized ? intent.title : originalTitle,
       notes: body.notes,
@@ -74,10 +81,10 @@ async function healthHandlerPOST(req: Request) {
     });
     const recurrence = intent.recognized ? intent.recurrenceRule : body.recurrence;
     if (recurrence?.frequency && ['DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY'].includes(String(recurrence.frequency).toUpperCase())) {
-      await prisma.recurrenceRule.create({ data: { taskId: task.id, frequency: String(recurrence.frequency).toUpperCase(), interval: Math.max(1, Number(recurrence.interval) || 1), byWeekday: Array.isArray(recurrence.byWeekday) ? recurrence.byWeekday.join(',') : null, until: recurrence.until ? new Date(recurrence.until) : null, count: recurrence.count ? Math.max(1, Number(recurrence.count)) : null } });
+      await prisma.recurrenceRule.upsert({ where: { taskId: task.id }, update: {}, create: { taskId: task.id, frequency: String(recurrence.frequency).toUpperCase(), interval: Math.max(1, Number(recurrence.interval) || 1), byWeekday: Array.isArray(recurrence.byWeekday) ? recurrence.byWeekday.join(',') : null, until: recurrence.until ? new Date(recurrence.until) : null, count: recurrence.count ? Math.max(1, Number(recurrence.count)) : null } });
     }
-    if (intent.recognized && intent.reminderDate) await scheduleRequestedReminder(user.id, task.id, intent.reminderDate, Boolean(body.critical));
-    else if (startAt) await scheduleDefaultReminders(user.id, task.id, startAt, Boolean(body.critical));
+    if (task.reminderAt) await scheduleRequestedReminder(user.id, task.id, task.reminderAt, task.critical);
+    else if (task.startAt) await scheduleDefaultReminders(user.id, task.id, task.dueAt ?? task.startAt, task.critical);
     if (startAt && !intent.recognized) await pushTaskToExternal(user.id, task.id);
     if (intent.recognized) {
       inc('life_reminder_created');

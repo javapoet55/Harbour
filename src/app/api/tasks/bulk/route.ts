@@ -1,11 +1,10 @@
 import { healthRoute } from '@/server/health/telemetry';
 import { requireNonoverlappingBatch } from '@/lib/schedule-warning';
-import { nextTaskStart } from '@/lib/task-next-occurrence';
 import { requireAvailableSchedule } from '@/server/availability';
 import { NextResponse } from 'next/server';
 import { requireUser } from '@/server/auth';
 import { prisma } from '@/server/db';
-import { completeTask, deleteTask } from '@/server/tasks';
+import { completeTasks, deleteTask } from '@/server/tasks';
 import { generateReplanProposal } from '@/server/replanner';
 import { jsonError } from '@/lib/http';
 
@@ -23,16 +22,13 @@ async function healthHandlerPATCH(req: Request) {
       requireNonoverlappingBatch(tasks.filter(task => task.status !== body.status).map(task => ({ start: task.startAt, durationMin: task.durationMin })), body.allowScheduleConflict);
       for (const task of tasks) if (task.status !== body.status) await requireAvailableSchedule(user.id, task.startAt, task.durationMin, body.allowScheduleConflict, task.id);
     }
-    if (body.status === 'COMPLETED' && body.allowScheduleConflict !== true) {
-      const tasks = await prisma.task.findMany({ where: { userId: user.id, id: { in: ids }, deletedAt: null }, include: { recurrence: true } });
-      requireNonoverlappingBatch(tasks.map(task => ({ start: nextTaskStart(task), durationMin: task.durationMin })), false);
-      for (const task of tasks) await requireAvailableSchedule(user.id, nextTaskStart(task), task.durationMin, false, task.id);
-    }
-    if (body.status === 'COMPLETED') await Promise.all(ids.map((id) => completeTask(user.id, id, body.allowScheduleConflict === true)));
-    else if (body.status === 'CANCELLED') await Promise.all(ids.map((id) => deleteTask(user.id, id)));
+    if (body.status === 'COMPLETED') await completeTasks(user.id, ids, body.allowScheduleConflict === true);
+    else if (body.status === 'CANCELLED') await prisma.$transaction(async tx => {
+      for (const id of ids) await deleteTask(user.id, id, tx);
+    });
     else {
-      const data: { status?: string; priority?: string; energyLevel?: string; projectId?: string | null } = {};
-      if (['INBOX', 'PLANNED', 'IN_PROGRESS', 'WAITING'].includes(body.status)) data.status = body.status;
+      const data: { status?: string; completedAt?: null; priority?: string; energyLevel?: string; projectId?: string | null } = {};
+      if (['INBOX', 'PLANNED', 'IN_PROGRESS', 'WAITING'].includes(body.status)) { data.status = body.status; data.completedAt = null; }
       if (['LOW', 'NORMAL', 'HIGH', 'CRITICAL'].includes(body.priority)) data.priority = body.priority;
       if (['LOW', 'MEDIUM', 'HIGH'].includes(body.energyLevel)) data.energyLevel = body.energyLevel;
       if (typeof body.projectId === 'string' || body.projectId === null) data.projectId = body.projectId;

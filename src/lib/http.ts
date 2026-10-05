@@ -7,6 +7,8 @@ export function jsonError(err: unknown) {
     const messages: Record<string, string> = { AUTH_RATE_LIMITED: 'Too many attempts. Please try again later.', BOT_CHECK_FAILED: 'Please complete the security check and try again.', SIGNUP_SECURITY_UNAVAILABLE: 'Account security checks are temporarily unavailable. Please try again shortly.', DISPOSABLE_EMAIL: 'Please use a permanent email address to create your Nexdo account.', INVALID_EMAIL_DOMAIN: 'Please enter a valid email address.' };
     return NextResponse.json({ error: messages[err.message] }, { status: err.message === 'AUTH_RATE_LIMITED' ? 429 : err.message === 'SIGNUP_SECURITY_UNAVAILABLE' ? 503 : 400 });
   }
+  if (err instanceof Error && err.message === 'TASK_CHANGED') return NextResponse.json({ error: 'Your task changed. Refresh and try again.' }, { status: 409 });
+  if (err instanceof Error && err.message === 'INVALID_TASK_STATE') return NextResponse.json({ error: 'Restore this task before starting it.' }, { status: 409 });
   if (err instanceof ScheduleWarning) return NextResponse.json({ code: 'SCHEDULE_WARNING', error: err.message, warnings: err.warnings }, { status: 409 });
   if (err instanceof Error && err.message === 'INVALID_PROJECT') return NextResponse.json({ error: 'Enter a project name of 1–80 characters and a valid color.' }, { status: 400 });
   if (err && typeof err === 'object' && 'code' in err && ['P2034', 'P2028'].includes(String(err.code))) return NextResponse.json({ error: 'Your data changed while this request was processing. Refresh and try again.' }, { status: 409 });

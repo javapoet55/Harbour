@@ -266,6 +266,7 @@ model TaskDependency {
 }
 
 model RecurrenceRule {
+  anchorDay   Int?
   id          String    @id @default(cuid())
   taskId      String    @unique
   task        Task      @relation(fields: [taskId], references: [id], onDelete: Cascade)

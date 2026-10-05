@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({ findMany: vi.fn(), createTask: vi.fn(), requestedReminder: vi.fn(), recurrenceCreate: vi.fn(), replan: vi.fn() }));
 vi.mock('@/server/auth', () => ({ requireUser: vi.fn(async () => ({ id: 'task-owner', timeZone: 'America/Los_Angeles' })) }));
-vi.mock('@/server/db', () => ({ prisma: { task: { findMany: mocks.findMany }, recurrenceRule: { create: mocks.recurrenceCreate } } }));
+vi.mock('@/server/db', () => ({ prisma: { task: { findMany: mocks.findMany }, recurrenceRule: { upsert: mocks.recurrenceCreate } } }));
 vi.mock('@/server/tasks', () => ({ createTask: mocks.createTask }));
 vi.mock('@/server/reminders', () => ({ scheduleDefaultReminders: vi.fn(), scheduleRequestedReminder: mocks.requestedReminder }));
 vi.mock('@/server/availability', () => ({ requireAvailableSchedule: vi.fn() }));
@@ -37,12 +37,20 @@ describe('typed smart life reminders', () => {
     vi.useFakeTimers();
     try {
       vi.setSystemTime(new Date('2026-09-19T18:00:00Z'));
-      mocks.createTask.mockResolvedValue({ id: 'bill', critical: false });
+      mocks.createTask.mockResolvedValue({ id: 'bill', critical: false, reminderAt: new Date('2026-09-20T16:00:00Z') });
       const response = await POST(new Request('http://localhost/api/tasks', { method: 'POST', body: JSON.stringify({ title: 'Pay electricity bill on the 20th every month' }) }));
       expect(response.status).toBe(200);
       expect(mocks.createTask).toHaveBeenCalledWith(expect.objectContaining({ title: 'Pay electricity bill', lifeReminderType: 'bill', originalUserText: 'Pay electricity bill on the 20th every month' }));
-      expect(mocks.recurrenceCreate).toHaveBeenCalledWith({ data: expect.objectContaining({ taskId: 'bill', frequency: 'MONTHLY', interval: 1 }) });
+      expect(mocks.recurrenceCreate).toHaveBeenCalledWith({ where: { taskId: 'bill' }, update: {}, create: expect.objectContaining({ taskId: 'bill', frequency: 'MONTHLY', interval: 1 }) });
       expect(mocks.requestedReminder).toHaveBeenCalledWith('task-owner', 'bill', new Date('2026-09-20T16:00:00Z'), false);
     } finally { vi.useRealTimers(); }
   });
+});
+
+it('combines explicit status and overdue filters instead of overwriting status', async () => {
+ await GET(new Request('http://localhost/api/tasks?status=WAITING&due=OVERDUE'));
+ const { where } = mocks.findMany.mock.calls.at(-1)![0];
+ expect(where.status).toBe('WAITING');
+ expect(where.AND).toContainEqual({ status: { notIn: ['COMPLETED', 'CANCELLED'] } });
+ expect(where.dueAt.lt).toBeInstanceOf(Date);
 });

@@ -23,3 +23,15 @@ export async function checkOccurrenceAvailability(userId: string, occurrences: A
   if (occurrences.some((event, index) => index > 0 && +event.startAt < +occurrences[index - 1].endAt)) warnings.push('Occurrences in this series overlap each other, at their scheduled times.');
   return warnings;
 }
+
+/** One read-only context load for all proposed next occurrences, before writes begin. */
+export async function requireAvailableTaskBatch(userId: string, slots: Array<{ id: string; start: Date | null; durationMin: number }>, approved: boolean) {
+  if (approved) return;
+  const scheduled = slots.filter((slot): slot is typeof slot & { start: Date } => slot.start !== null);
+  if (!scheduled.length) return;
+  const from = new Date(Math.min(...scheduled.map(slot => +slot.start)) - 86400000);
+  const end = Math.max(...scheduled.map(slot => +slot.start + slot.durationMin * 60000));
+  const context = await loadScheduleContext(userId, from, Math.ceil((end - +from) / 86400000) + 2, undefined, new Date());
+  const warnings = [...new Set(scheduled.flatMap(slot => explicitTimeWarnings(context, slot.start, new Date(+slot.start + slot.durationMin * 60000), slot.id)))];
+  if (warnings.length) throw new ScheduleWarning(warnings);
+}

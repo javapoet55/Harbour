@@ -149,6 +149,9 @@ describe('task and reminder integration', () => {
   });
 
   it('creates the next bounded recurring task when an occurrence completes', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-09-07T18:00:00Z'));
+    try {
     const start = zonedDateTime('2026-09-07', '09:30', 'America/Los_Angeles');
     const recurring = await createTask({ userId: userA, title: 'Weekday standup', startAt: start, dueAt: new Date(start.getTime() + 30 * 60_000) });
     await prisma.recurrenceRule.create({ data: { taskId: recurring.id, frequency: 'WEEKLY', interval: 1, byWeekday: '1,3,5', count: 3 } });
@@ -156,6 +159,7 @@ describe('task and reminder integration', () => {
     const next = await prisma.task.findFirstOrThrow({ where: { userId: userA, title: 'Weekday standup', status: 'PLANNED' }, include: { recurrence: true } });
     expect(next.startAt).toEqual(zonedDateTime('2026-09-09', '09:30', 'America/Los_Angeles'));
     expect(next.recurrence?.count).toBe(2);
+    } finally { vi.useRealTimers(); }
   });
 
   it('applies an approved replan and rejects a stale proposal', async () => {

@@ -1,17 +1,13 @@
 import { classifyNewTask } from './task-agent/service';
-import { requireAvailableSchedule } from './availability';
+import { requireAvailableTaskBatch } from './availability';
+import { requireNonoverlappingBatch } from '@/lib/schedule-warning';
 import { nextTaskStart } from '@/lib/task-next-occurrence';
 import type { Prisma } from '@/generated/prisma';
 import { prisma } from './db';
 import { validateProjectAssignment } from './projects';
-import { zonedDateTime } from '@/lib/time';
-import { nextOccurrence } from '@/lib/recurrence';
+import { zonedDateTime, tzToday } from '@/lib/time';
+import { cancelTaskReminders, scheduleDefaultReminders } from './reminders';
 import { inc } from '@/lib/metrics';
-
-function localYmd(date: Date, timeZone: string) {
-  const parts = Object.fromEntries(new Intl.DateTimeFormat('en-US', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(date).map((part) => [part.type, part.value]));
-  return `${parts.year}-${parts.month}-${parts.day}`;
-}
 
 export async function createTask(input: {
   userId: string;
@@ -41,7 +37,7 @@ export async function createTask(input: {
     if (existing) return existing;
   }
   const user = await prisma.user.findUniqueOrThrow({ where: { id: input.userId }, select: { timeZone: true } });
-  return prisma.$transaction(async tx => {
+  try { return await prisma.$transaction(async tx => {
     await validateProjectAssignment(tx, input.userId, input.projectId ?? null);
     const task = await tx.task.create({
       data: {
@@ -69,7 +65,14 @@ export async function createTask(input: {
     });
     await classifyNewTask(tx, task);
     return task;
-  });
+  }); } catch (error) {
+    // Concurrent retries can both miss the initial read; the unique key picks one winner.
+    if (input.idempotencyKey && error && typeof error === 'object' && 'code' in error && error.code === 'P2002') {
+      const existing = await prisma.task.findFirst({ where: { userId: input.userId, idempotencyKey: input.idempotencyKey } });
+      if (existing) return existing;
+    }
+    throw error;
+  }
 }
 
 export async function updateTask(userId: string, id: string, data: Prisma.TaskUpdateInput) {
@@ -78,18 +81,44 @@ export async function updateTask(userId: string, id: string, data: Prisma.TaskUp
     if (!existing) throw new Error('NOT_FOUND');
     if (data.project?.connect?.id) await validateProjectAssignment(tx, userId, data.project.connect.id);
     const updated = await tx.task.update({ where: { id }, data });
+    if (updated.deletedAt || ['COMPLETED', 'CANCELLED'].includes(updated.status)) await cancelTaskReminders(tx, userId, id);
     if (updated.title !== existing.title || updated.notes !== existing.notes) await classifyNewTask(tx, updated);
     return updated;
   });
 }
 
 export async function completeTask(userId: string, id: string, allowScheduleConflict = false) {
+  return (await completeTasks(userId, [id], allowScheduleConflict))[0];
+}
+
+export async function completeTasks(userId: string, ids: string[], allowScheduleConflict = false) {
   const now = new Date();
-  return prisma.$transaction(async (tx) => {
-    const task = await tx.task.findFirst({ where: { id, userId, deletedAt: null }, include: { user: { include: { preference: true } }, workSessions: true, recurrence: true, dependencies: true } });
-    if (!task) throw new Error('NOT_FOUND');
-    const recurringStart = nextTaskStart(task);
-    if (recurringStart) await requireAvailableSchedule(userId, recurringStart, task.durationMin, allowScheduleConflict, task.id);
+  const snapshots = await prisma.task.findMany({ where: { userId, id: { in: ids }, deletedAt: null }, include: { recurrence: true } });
+  if (snapshots.length !== ids.length) throw new Error('NOT_FOUND');
+  const slots = snapshots.map(task => ({ id: task.id, start: task.status === 'COMPLETED' ? null : nextTaskStart(task, now), durationMin: task.durationMin }));
+  requireNonoverlappingBatch(slots, allowScheduleConflict);
+  await requireAvailableTaskBatch(userId, slots, allowScheduleConflict);
+  return prisma.$transaction(async tx => {
+    const results = [];
+    for (const id of ids) {
+      const snapshot = snapshots.find(task => task.id === id)!;
+      const task = await tx.task.findFirst({ where: { id, userId, deletedAt: null }, include: { user: { include: { preference: true } }, workSessions: true, recurrence: true, dependencies: true, tags: true, subtasks: true } });
+      if (!task) throw new Error('NOT_FOUND');
+      // Reject a stale preflight rather than applying an unchecked schedule.
+      if (+task.updatedAt !== +snapshot.updatedAt || task.status !== snapshot.status || JSON.stringify(task.recurrence) !== JSON.stringify(snapshot.recurrence)) throw new Error('TASK_CHANGED');
+      results.push(await completeTaskInTransaction(tx, task, slots.find(slot => slot.id === id)!.start, now));
+    }
+    return results;
+  }, { timeout: 15000 });
+}
+
+type CompletionTask = Prisma.TaskGetPayload<{ include: { user: { include: { preference: true } }; workSessions: true; recurrence: true; dependencies: true; tags: true; subtasks: true } }>;
+async function completeTaskInTransaction(tx: Prisma.TransactionClient, task: CompletionTask, recurringStart: Date | null, now: Date) {
+    const { userId, id } = task;
+    if (task.status === 'COMPLETED') { await cancelTaskReminders(tx, userId, id); return task; }
+    if (task.status === 'CANCELLED') throw new Error('INVALID_TASK_STATE');
+    const claimed = await tx.task.updateMany({ where: { id, userId, status: task.status, updatedAt: task.updatedAt, deletedAt: null }, data: { status: 'COMPLETED', completedAt: now } });
+    if (claimed.count !== 1) throw new Error('TASK_CHANGED');
     let actualDurationMin = task.actualDurationMin;
     if (task.user.preference?.personalizationEnabled) {
       const active = task.workSessions.filter((session) => !session.endedAt);
@@ -100,46 +129,46 @@ export async function completeTask(userId: string, id: string, allowScheduleConf
       actualDurationMin = task.workSessions.reduce((sum, session) => sum + (session.durationMin ?? (session.endedAt ? Math.max(1, Math.round((session.endedAt.getTime() - session.startedAt.getTime()) / 60_000)) : Math.max(1, Math.round((now.getTime() - session.startedAt.getTime()) / 60_000)))), 0) || null;
     }
     const completed = await tx.task.update({ where: { id }, data: { status: 'COMPLETED', completedAt: now, actualDurationMin } });
-    if (task.recurrence && task.startAt && (!task.recurrence.count || task.recurrence.count > 1)) {
-      const byWeekday = task.recurrence.byWeekday?.split(',').map(Number).filter(Number.isInteger);
-      const nextYmd = nextOccurrence(localYmd(task.startAt, task.timeZone), { frequency: task.recurrence.frequency.toLowerCase() as 'daily' | 'weekly' | 'monthly' | 'yearly', interval: task.recurrence.interval, byWeekday });
-      const parts = new Intl.DateTimeFormat('en-GB', { timeZone: task.timeZone, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(task.startAt);
-      const hm = `${parts.find((part) => part.type === 'hour')?.value}:${parts.find((part) => part.type === 'minute')?.value}`;
-      const nextStart = zonedDateTime(nextYmd, hm, task.timeZone);
-      if (!task.recurrence.until || nextStart <= task.recurrence.until) {
-        const dueOffset = task.dueAt ? task.dueAt.getTime() - task.startAt.getTime() : 0;
-        const reminderOffset = task.reminderAt ? task.reminderAt.getTime() - task.startAt.getTime() : null;
-        const nextReminderAt = reminderOffset === null ? null : new Date(nextStart.getTime() + reminderOffset);
-        const nextTask = await tx.task.create({ data: {
-          userId, listId: task.listId, projectId: task.projectId, categoryId: task.categoryId, title: task.title, notes: task.notes, kind: task.kind,
-          status: 'PLANNED', priority: task.priority, startAt: nextStart, dueAt: task.dueAt ? new Date(nextStart.getTime() + dueOffset) : null,
-          reminderAt: nextReminderAt,
-          lifeReminderType: task.lifeReminderType, lifeReminderConfidence: task.lifeReminderConfidence, originalUserText: task.originalUserText,
-          durationMin: task.durationMin, energyLevel: task.energyLevel, timeZone: task.timeZone, notifyPush: task.notifyPush, notifyEmail: task.notifyEmail,
-          splittable: task.splittable, minFocusMin: task.minFocusMin,
-          notifySms: task.notifySms, critical: task.critical, dependencies: { create: task.dependencies.map((dependency) => ({ dependsOnId: dependency.dependsOnId })) },
-          recurrence: { create: { frequency: task.recurrence.frequency, interval: task.recurrence.interval, byWeekday: task.recurrence.byWeekday, until: task.recurrence.until, count: task.recurrence.count ? task.recurrence.count - 1 : null } },
-        } });
-        await classifyNewTask(tx, nextTask);
-        if (nextReminderAt) await tx.reminder.create({ data: {
-          userId, taskId: nextTask.id, fireAt: nextReminderAt, offsetLabel: 'requested reminder', critical: task.critical,
-          idempotencyKey: `${nextTask.id}:requested`, channelPlan: task.critical ? 'push,email,sms' : 'push,email',
-        } });
-      }
+    await cancelTaskReminders(tx, userId, id);
+    if (task.recurrence && task.startAt && recurringStart) {
+      const nextStart = recurringStart;
+      const dueOffset = task.dueAt ? task.dueAt.getTime() - task.startAt.getTime() : 0;
+      const reminderOffset = task.reminderAt ? task.reminderAt.getTime() - task.startAt.getTime() : null;
+      const nextReminderAt = reminderOffset === null ? null : new Date(nextStart.getTime() + reminderOffset);
+      const nextTask = await tx.task.create({ data: {
+        userId, listId: task.listId, projectId: task.projectId, categoryId: task.categoryId, title: task.title, notes: task.notes, kind: task.kind,
+        status: 'PLANNED', priority: task.priority, startAt: nextStart, dueAt: task.dueAt ? new Date(nextStart.getTime() + dueOffset) : null,
+        reminderAt: nextReminderAt,
+        lifeReminderType: task.lifeReminderType, lifeReminderConfidence: task.lifeReminderConfidence, originalUserText: task.originalUserText,
+        durationMin: task.durationMin, energyLevel: task.energyLevel, timeZone: task.timeZone, notifyPush: task.notifyPush, notifyEmail: task.notifyEmail,
+        splittable: task.splittable, minFocusMin: task.minFocusMin,
+        waitingOn: task.waitingOn, assignee: task.assignee,
+        tags: { create: task.tags.map(tag => ({ tagId: tag.tagId })) },
+        subtasks: { create: task.subtasks.map(subtask => ({ title: subtask.title, sortOrder: subtask.sortOrder })) },
+        notifySms: task.notifySms, critical: task.critical, dependencies: { create: task.dependencies.map((dependency) => ({ dependsOnId: dependency.dependsOnId })) },
+        recurrence: { create: { anchorDay: task.recurrence.anchorDay ?? tzToday(task.timeZone, task.startAt).getUTCDate(), frequency: task.recurrence.frequency, interval: task.recurrence.interval, byWeekday: task.recurrence.byWeekday, until: task.recurrence.until, count: task.recurrence.count ? task.recurrence.count - 1 : null } },
+      } });
+      await classifyNewTask(tx, nextTask);
+      if (!nextReminderAt) await scheduleDefaultReminders(userId, nextTask.id, nextTask.dueAt ?? nextStart, task.critical, tx);
+      if (nextReminderAt) await tx.reminder.create({ data: {
+        userId, taskId: nextTask.id, fireAt: nextReminderAt, offsetLabel: 'requested reminder', critical: task.critical,
+        idempotencyKey: `${nextTask.id}:requested`, channelPlan: task.critical ? 'push,email,sms' : 'push,email',
+      } });
     }
+
     if (task.lifeReminderType) inc('life_reminder_completed');
     return completed;
-  });
 }
 
 export async function startTask(userId: string, id: string, now = new Date(), db?: Prisma.TransactionClient) {
   const start = async (tx: Prisma.TransactionClient) => {
     const task = await tx.task.findFirst({ where: { id, userId, deletedAt: null }, include: { user: { include: { preference: true } }, workSessions: { where: { endedAt: null } } } });
     if (!task) throw new Error('NOT_FOUND');
+    if (['COMPLETED', 'CANCELLED'].includes(task.status)) throw new Error('INVALID_TASK_STATE');
     if (task.user.preference?.personalizationEnabled && task.workSessions.length === 0) {
       await tx.taskWorkSession.create({ data: { userId, taskId: id, startedAt: now } });
     }
-    return tx.task.update({ where: { id }, data: { status: 'IN_PROGRESS', startedAt: task.user.preference?.personalizationEnabled ? (task.startedAt ?? now) : task.startedAt } });
+    return tx.task.update({ where: { id }, data: { status: 'IN_PROGRESS', completedAt: null, startedAt: task.user.preference?.personalizationEnabled ? (task.startedAt ?? now) : task.startedAt } });
   };
   return db ? start(db) : prisma.$transaction(start);
 }
@@ -156,26 +185,35 @@ export async function finishFocusWork(userId: string, taskId: string, sessionId:
   });
 }
 
-export async function deleteTask(userId: string, id: string) {
-  return updateTask(userId, id, { deletedAt: new Date(), status: 'CANCELLED' });
+export async function deleteTask(userId: string, id: string, db?: Prisma.TransactionClient) {
+  const remove = async (tx: Prisma.TransactionClient) => {
+    const task = await tx.task.findFirst({ where: { id, userId } });
+    if (!task) throw new Error('NOT_FOUND');
+    await cancelTaskReminders(tx, userId, id);
+    return tx.task.update({ where: { id }, data: { deletedAt: task.deletedAt ?? new Date(), status: 'CANCELLED' } });
+  };
+  return db ? remove(db) : prisma.$transaction(remove);
 }
 
-export async function scheduleTask(userId: string, id: string, startAt: Date, durationMin?: number) {
+export async function scheduleTask(userId: string, id: string, startAt: Date, durationMin?: number, metadata: Prisma.TaskUpdateInput = {}) {
   const duration = durationMin ?? 30;
   if (!Number.isFinite(+startAt) || !Number.isInteger(duration) || duration < 1 || duration > 1440) throw new Error('INVALID_TASK');
   return prisma.$transaction(async (tx) => {
     const task = await tx.task.findFirst({ where: { id, userId, deletedAt: null }, include: { user: { include: { preference: true } } } });
     if (!task) throw new Error('NOT_FOUND');
+    if (metadata.project?.connect?.id) await validateProjectAssignment(tx, userId, metadata.project.connect.id);
     const postponed = Boolean(task.user.preference?.personalizationEnabled && task.startAt && startAt.getTime() > task.startAt.getTime());
-    const startAndDueCoupled = task.dueAt == null || (task.startAt != null && task.dueAt.getTime() === task.startAt.getTime());
-    const shiftedDueAt = startAndDueCoupled ? new Date(startAt.getTime() + duration * 60_000) : task.dueAt;
+    const startAndDueCoupled = task.dueAt != null && task.startAt != null && task.dueAt.getTime() === task.startAt.getTime();
+    const shiftedDueAt = startAndDueCoupled ? new Date(startAt) : task.dueAt;
     const shiftedReminderAt = task.reminderAt && task.startAt ? new Date(task.reminderAt.getTime() + startAt.getTime() - task.startAt.getTime()) : task.reminderAt;
     return tx.task.update({ where: { id }, data: {
+      ...metadata,
       startAt,
+      completedAt: null,
       dueAt: shiftedDueAt,
       reminderAt: shiftedReminderAt,
       durationMin: duration,
-      status: 'PLANNED',
+      status: typeof metadata.status === 'string' ? metadata.status : 'PLANNED',
       postponeCount: postponed ? { increment: 1 } : undefined,
       lastRescheduledAt: postponed ? new Date() : undefined,
     } });

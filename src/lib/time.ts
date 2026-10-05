@@ -42,6 +42,9 @@ export function tzToday(timeZone: string, now = new Date()): Date {
 
 /** Convert a local calendar date + HH:mm in `timeZone` to a UTC Date. */
 export function zonedDateTime(ymdValue: string, hm: string, timeZone: string): Date {
+  if (typeof ymdValue !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(ymdValue) || typeof hm !== 'string' || !/^([01]\d|2[0-3]):[0-5]\d$/.test(hm)) throw new Error('INVALID_LOCAL_TIME');
+  const calendarDate = parseYmd(ymdValue);
+  if (!Number.isFinite(+calendarDate) || ymd(calendarDate) !== ymdValue) throw new Error('INVALID_LOCAL_TIME');
   const [year, month, day] = ymdValue.split('-').map(Number);
   const [hour, minute] = hm.split(':').map(Number);
   const guess = new Date(Date.UTC(year, month - 1, day, hour, minute, 0));
