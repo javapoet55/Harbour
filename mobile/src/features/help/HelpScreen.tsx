@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, TextInput, View, useWindowDimensions } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, TextInput, View, useWindowDimensions, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { InlineNavBar } from '../../components/InlineNavBar';
@@ -8,7 +8,7 @@ import { TaskSymbol, type TaskSymbolName } from '../../components/TaskSymbol';
 import { Text } from '../../components/Text';
 import { TodayBackdrop } from '../../components/TodayShell';
 import { HELP_CATEGORIES, searchHelp, type HelpCategory } from '../../lib/helpTopics';
-import { brand, useTheme } from '../../theme';
+import { brand, palettes, useTheme } from '../../theme';
 
 /**
  * `HelpView` (ios/App/HelpView.swift), pushed from Account: a search field, the Calendar and Tasks
@@ -199,7 +199,10 @@ export function HelpScreen({ onBack, onFeedback }: { onBack: () => void; onFeedb
   );
 }
 
-const shadow = { shadowColor: brand.nexdoIndigo, shadowOpacity: 0.04, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 1 } as const;
+// iOS: Swift's faint shadow. Android: no `elevation` (it drew at full strength through the translucent card
+// as a lighter inner panel) but a 1pt hairline instead, as the task agent cards do (docs/android-polish.md
+// §27, §28); without either, a near-white card vanished into the page's white end.
+const shadow = Platform.OS === 'android' ? ({ borderWidth: 1, borderColor: palettes.light.fieldBorder } as const) : ({ shadowColor: brand.nexdoIndigo, shadowOpacity: 0.04, shadowRadius: 10, shadowOffset: { width: 0, height: 4 } } as const);
 
 const styles = StyleSheet.create({
   fill: { flex: 1 },
@@ -223,7 +226,8 @@ const styles = StyleSheet.create({
   grid: { flexDirection: 'row', gap: 14 },
   gridColumn: { flexDirection: 'column' },
   half: { flex: 1 },
-  categoryCard: { gap: 12, padding: 16, borderRadius: 22, borderWidth: 2, ...shadow },
+  // `...shadow` first: the category card keeps its own 2pt selection border on Android too.
+  categoryCard: { ...shadow, gap: 12, padding: 16, borderRadius: 22, borderWidth: 2 },
   categoryTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   categoryIcon: { width: 46, height: 46, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
   row: { flexDirection: 'row', alignItems: 'center' },

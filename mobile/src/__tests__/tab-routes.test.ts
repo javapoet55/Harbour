@@ -152,7 +152,12 @@ describe('Wellness covers', () => {
     const wellness = fs.readFileSync(path.join(APP, 'wellness/_layout.tsx'), 'utf8');
     expect(wellness).toMatch(/presentation: 'card' as const/);
     for (const name of ['moments/index', 'moments/manage', 'shopping/index', 'shopping/\\[id\\]', 'shopping/email']) {
-      expect(wellness).toMatch(new RegExp(`name="${name}" options=\\{\\{ \\.\\.\\.pushed,`));
+      expect(wellness).toMatch(new RegExp(`name="${name}" options=\\{\\{ \\.\\.\\.(pushed|moduleRoot),`));
+    }
+    // A module's first screen is a push too, with Swift's tinted toolbar Back (WellnessChooserView.swift:54).
+    expect(wellness).toContain('const moduleRoot = { ...pushed, headerLeft: () => <GlassBackButton tint={theme.colors.link} /> };');
+    for (const name of ['moments/index', 'shopping/index']) {
+      expect(wellness).toMatch(new RegExp(`name="${name}" options=\\{\\{ \\.\\.\\.moduleRoot,`));
     }
   });
 

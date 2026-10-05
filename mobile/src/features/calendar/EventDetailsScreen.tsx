@@ -9,7 +9,7 @@ import { TaskSymbol, type TaskSymbolName } from '../../components/TaskSymbol';
 import { Text } from '../../components/Text';
 import { TodayBackdrop } from '../../components/TodayShell';
 import { useAddEventTask, useCalendarEvent, useDeleteCalendarEvent, useSetEventCompletion } from '../../query/useCalendarEvent';
-import { useTheme } from '../../theme';
+import { palettes, useTheme } from '../../theme';
 import { PopoverMenu, usePopoverMenu } from '../moments/form';
 import { systemColors } from '../moments/components';
 import { eventCalendarName, eventDateText, eventEditable, eventStatus, openInCalendarURL, warningsMessage } from './eventDetails';
@@ -176,10 +176,13 @@ export function EventDetailsScreen({ id, fallbackTimeZone }: { id: string; fallb
           {
             key: 'complete',
             title: completed ? 'Mark Incomplete' : 'Mark Complete',
+            // `Button(_:systemImage:)` (CalendarEventDetailsView.swift:86-89): the glyph in the menu's tint.
+            icon: completed ? 'close-circle-outline' : 'checkmark-circle-outline',
+            iconColor: theme.colors.link,
             onPress: () => setCompletion(!completed),
             testID: 'event-details-menu-complete',
           },
-          ...(editable ? [{ key: 'delete', title: 'Delete Event', destructive: true, onPress: confirmDelete, testID: 'event-details-menu-delete' }] : []),
+          ...(editable ? [{ key: 'delete', title: 'Delete Event', icon: 'trash-outline' as const, destructive: true, onPress: confirmDelete, testID: 'event-details-menu-delete' }] : []),
         ]}
         menu={menu}
         testID="event-details-menu"
@@ -276,7 +279,10 @@ function show(message: string, then?: () => void) {
   Alert.alert('Event Details', message, [{ text: 'OK', onPress: then }], { cancelable: false });
 }
 
-const shadow = { shadowColor: '#5856D6', shadowOpacity: 0.035, shadowRadius: 14, shadowOffset: { width: 0, height: 6 }, elevation: 1 } as const;
+// iOS: Swift's faint shadow. Android: no `elevation` (it drew at full strength through the translucent card
+// as a lighter inner panel) but a 1pt hairline instead, as the task agent cards do (docs/android-polish.md
+// §27, §28); without either, a near-white card vanished into the page's white end.
+const shadow = Platform.OS === 'android' ? ({ borderWidth: 1, borderColor: palettes.light.fieldBorder } as const) : ({ shadowColor: '#5856D6', shadowOpacity: 0.035, shadowRadius: 14, shadowOffset: { width: 0, height: 6 } } as const);
 
 const styles = StyleSheet.create({
   fill: { flex: 1 },

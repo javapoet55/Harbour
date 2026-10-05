@@ -2,6 +2,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 
 import { PomodoroView } from '../../src/features/pomodoro/PomodoroView';
 import { pomodoroStore } from '../../src/features/pomodoro/device';
+import { FixedLightStatusBar } from '../../src/features/wellness/FixedLightStatusBar';
 import { leaveWellness } from '../../src/features/wellness/navigation';
 import { closePresentedScreens } from '../../src/lib/sessionNavigation';
 import { useSession } from '../../src/store/session';
@@ -24,5 +25,11 @@ export default function PomodoroScreen() {
     await closePresentedScreens();
     router.navigate('/tasks');
   };
-  return <PomodoroView onClose={() => router.back()} onTasks={() => void toTasks()} owner={owner} store={pomodoroStore} />;
+  return (
+    <>
+      {/* Fixed light in both modes (`.preferredColorScheme(.light)`), so the clock stays dark. */}
+      <FixedLightStatusBar />
+      <PomodoroView onClose={() => router.back()} onTasks={() => void toTasks()} owner={owner} store={pomodoroStore} />
+    </>
+  );
 }

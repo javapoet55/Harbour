@@ -87,6 +87,15 @@ describe('the primary button', () => {
     expect(StyleSheet.flatten(screen.getByText('Sign In').props.style).color).toBe(light.onTint);
   });
 
+  it('draws NexdoGradientButtonStyle’s save gradient (blue → indigo → magenta) when asked, the brand one by default', async () => {
+    onPlatform('android');
+    const { rerender } = await render(<GradientButton title="Sign In" onPress={jest.fn()} minHeight={62} testID="button" />);
+    const first = () => screen.getByTestId('button-gradient').props.colors[0];
+    expect(first()).toBe('rgb(240, 20, 199)'); // nexdoMagenta #F014C7
+    await rerender(<GradientButton gradient="save" title="Submit feedback" onPress={jest.fn()} minHeight={50} testID="button" />);
+    expect(first()).toBe('rgb(5, 148, 245)'); // nexdoBlue #0594F5
+  });
+
   it('keeps the Swift dimming on iOS', async () => {
     onPlatform('ios');
     await render(<GradientButton title="Sign In" onPress={jest.fn()} disabled minHeight={62} testID="button" />);

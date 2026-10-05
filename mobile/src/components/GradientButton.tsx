@@ -6,6 +6,8 @@ import { withAlpha } from './SignInBackdrop';
 import { Text } from './Text';
 
 const GRADIENT = [brand.nexdoMagenta, brand.nexdoIndigo, brand.nexdoBlue] as const;
+/** `NexdoTheme.saveGradient` (RootView.swift:2201), which `NexdoGradientButtonStyle` draws: blue → indigo → magenta. */
+export const SAVE_GRADIENT = [brand.nexdoBlue, brand.nexdoIndigo, brand.nexdoMagenta] as const;
 
 /**
  * Swift writes `.opacity(0.55)`, but SwiftUI also dims a disabled control on its own, and the two
@@ -27,6 +29,8 @@ export type GradientButtonProps = {
   minHeight: number;
   style?: StyleProp<ViewStyle>;
   testID?: string;
+  /** `save`: `NexdoGradientButtonStyle`'s reversed gradient (Feedback, Change password). Default: `NexdoTheme.gradient`. */
+  gradient?: 'brand' | 'save';
 };
 
 /**
@@ -41,9 +45,9 @@ export type GradientButtonProps = {
  *
  * The Swift title carries the busy state ("Signing In…"), so the caller passes the finished string.
  */
-export function GradientButton({ title, onPress, disabled = false, minHeight, style, testID }: GradientButtonProps) {
+export function GradientButton({ title, onPress, disabled = false, minHeight, style, testID, gradient = 'brand' }: GradientButtonProps) {
   const theme = useTheme();
-  const colors = linearGradientStops(GRADIENT);
+  const colors = linearGradientStops(gradient === 'save' ? SAVE_GRADIENT : GRADIENT);
 
   if (Platform.OS === 'android') {
     // The whole-button 0.25 dimmed the label with the fill into a muddy block that read as broken.

@@ -21,7 +21,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { GlassCard } from '../../components/GlassCard';
 import { SegmentRow } from '../../components/SegmentRow';
 import { KeyboardAwareScrollView } from '../../components/keyboard';
-import { GlassCapsule } from '../../components/PushedHeader';
+import { GlassCapsule, GlassCircle } from '../../components/PushedHeader';
 import { withAlpha } from '../../components/SignInBackdrop';
 import { Text } from '../../components/Text';
 import { androidGroup, brand, ElevatedSurface, FieldGroupContext, isAndroid, linearGradientStops, useTheme } from '../../theme';
@@ -441,7 +441,8 @@ export function MomentSheet({
   visible: boolean;
   title: string;
   onRequestClose: () => void;
-  left?: { title: string; onPress: () => void; disabled?: boolean; testID?: string };
+  /** `icon: 'back'` draws the system back: a chevron on a glass circle, with `title` as its label. */
+  left?: { title: string; onPress: () => void; disabled?: boolean; testID?: string; icon?: 'back' };
   right?: { title: string; onPress: () => void; disabled?: boolean; testID?: string; bold?: boolean };
   children: ReactNode;
   testID?: string;
@@ -485,8 +486,31 @@ export function MomentSheet({
   );
 }
 
-function SheetButton({ title, onPress, disabled = false, testID, bold = false }: { title: string; onPress: () => void; disabled?: boolean; testID?: string; bold?: boolean }) {
+function SheetButton({
+  title,
+  onPress,
+  disabled = false,
+  testID,
+  bold = false,
+  icon,
+}: {
+  title: string;
+  onPress: () => void;
+  disabled?: boolean;
+  testID?: string;
+  bold?: boolean;
+  icon?: 'back';
+}) {
   const theme = useTheme();
+  if (icon === 'back') {
+    return (
+      <Pressable accessibilityRole="button" accessibilityLabel={title} accessibilityState={{ disabled }} disabled={disabled} onPress={onPress} hitSlop={8} testID={testID}>
+        <GlassCircle>
+          <Ionicons name="chevron-back" size={24} color={theme.colors.ink} />
+        </GlassCircle>
+      </Pressable>
+    );
+  }
   return (
     <Pressable
       accessibilityRole="button"

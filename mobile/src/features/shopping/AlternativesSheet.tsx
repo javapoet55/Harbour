@@ -6,6 +6,8 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import type { GroceryItem, GroceryList, ShoppingAlternative, ShoppingAlternativesResponse } from '../../api/shopping';
 import { AddTaskByVoiceView } from '../../components/AddTaskByVoiceView';
+// The xmark sits on iOS 26's glass circle (`shopping-alternatives-v2`), as the pushed bars' buttons do.
+import { GlassCircle } from '../../components/PushedHeader';
 import { withAlpha } from '../../components/SignInBackdrop';
 import { Text } from '../../components/Text';
 import { brand, linearGradientStops, textStyles, useTheme } from '../../theme';
@@ -264,7 +266,9 @@ function Panel({ visible, title, onClose, children, footer, testID }: { visible:
             {title}
           </Text>
           <Pressable accessibilityLabel="Close" accessibilityRole="button" hitSlop={8} onPress={onClose} style={[styles.barSide, styles.barTrailing]} testID={`${testID}-close`}>
-            <Ionicons color={theme.colors.link} name="close" size={24} />
+            <GlassCircle>
+              <Ionicons color={theme.colors.link} name="close" size={24} />
+            </GlassCircle>
           </Pressable>
         </View>
         <ScrollView contentContainerStyle={styles.panelContent}>{children}</ScrollView>
@@ -480,7 +484,9 @@ function AlternativesBody({ list, original, onClose, onReplace, onAdd, onFavorit
           Item Alternatives
         </Text>
         <Pressable accessibilityLabel="Close alternatives" accessibilityRole="button" hitSlop={8} onPress={onClose} style={[styles.barSide, styles.barTrailing]} testID="alternatives-close">
-          <Ionicons color={theme.colors.link} name="close" size={24} />
+          <GlassCircle>
+              <Ionicons color={theme.colors.link} name="close" size={24} />
+            </GlassCircle>
         </Pressable>
       </View>
       <ScrollView contentContainerStyle={[styles.content, { paddingBottom: 100 + insets.bottom }]}>
@@ -671,9 +677,13 @@ function GoalPicker({ visible, original, selected, onApply, onClose }: { visible
     <Panel
       footer={
         <View style={styles.footerRow}>
-          <Pressable accessibilityRole="button" onPress={onClose} style={[styles.footerButton, styles.bordered, { backgroundColor: withAlpha(BLUE, 0.12) }]} testID="alternatives-goal-cancel">
-            <Text style={[textStyles.body, { color: BLUE }]}>Cancel</Text>
-          </Pressable>
+          {/* `.frame(maxWidth: .infinity, minHeight: 52).buttonStyle(.bordered)`: the frame is outside the style,
+              so the bordered capsule hugs "Cancel", centred in its half (`shopping-alternatives-goal-picker`). */}
+          <View style={[styles.footerButton, styles.centered]}>
+            <Pressable accessibilityRole="button" onPress={onClose} style={[styles.bordered, { backgroundColor: withAlpha(BLUE, 0.12) }]} testID="alternatives-goal-cancel">
+              <Text style={[textStyles.body, { color: BLUE }]}>Cancel</Text>
+            </Pressable>
+          </View>
           <View style={styles.footerButton}>
             <BlueButton
               onPress={() => {
@@ -901,13 +911,18 @@ function AlternativeDetails({
     <View style={[styles.fill, { backgroundColor: theme.colors.background }]} testID="alternative-details">
       <View style={styles.bar}>
         <Pressable accessibilityLabel="Back" accessibilityRole="button" hitSlop={8} onPress={onBack} style={styles.barSide} testID="alternative-details-back">
-          <Ionicons color={theme.colors.link} name="chevron-back" size={24} />
+          {/* The system back and the toolbar star: ink on iOS 26's glass circles (`shopping-alternative-details`). */}
+          <GlassCircle>
+            <Ionicons color={theme.colors.ink} name="chevron-back" size={24} />
+          </GlassCircle>
         </Pressable>
         <Text accessibilityRole="header" style={[styles.headline, styles.barTitle, { color: theme.colors.ink }]}>
           Item Details
         </Text>
         <Pressable accessibilityLabel={favorite ? 'Remove favorite' : 'Add favorite'} accessibilityRole="button" hitSlop={8} onPress={onFavorite} style={[styles.barSide, styles.barTrailing]} testID="alternative-details-favorite">
-          <Ionicons color={theme.colors.link} name={favorite ? 'star' : 'star-outline'} size={22} />
+          <GlassCircle>
+            <Ionicons color={theme.colors.ink} name={favorite ? 'star' : 'star-outline'} size={22} />
+          </GlassCircle>
         </Pressable>
       </View>
       <ScrollView contentContainerStyle={styles.details}>
@@ -1062,7 +1077,8 @@ function AlternativeDetails({
         <View style={styles.gap10}>
           <BlueButton disabled={saving} onPress={() => perform(false)} testID="alternative.detail.replace" title="Replace with this item" />
           <Pressable accessibilityRole="button" accessibilityState={{ disabled: saving }} disabled={saving} onPress={() => perform(true)} style={[styles.minHeight, styles.selfCenter]} testID="alternative.detail.add">
-            <Text style={[styles.headline, { color: BLUE }]}>Add to Cart Instead</Text>
+            {/* A plain Button under the page's `.foregroundStyle(Color.nexdoInk)`: ink (`shopping-alternative-details-bottom`). */}
+            <Text style={[styles.headline, { color: theme.colors.ink }]}>Add to Cart Instead</Text>
           </Pressable>
           {saving ? (
             <View style={styles.progress}>
@@ -1165,6 +1181,7 @@ const styles = StyleSheet.create({
   bordered: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 44, paddingHorizontal: 16, borderRadius: 999 },
   footerRow: { flexDirection: 'row', gap: 12 },
   footerButton: { flex: 1, minHeight: 52 },
+  centered: { alignItems: 'center', justifyContent: 'center' },
   pickerOriginal: { flexDirection: 'row', alignItems: 'center', gap: 14 },
   goalGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
   goalTile: { width: '47%', flexGrow: 1, minHeight: 88, padding: 4, gap: 8, borderRadius: 18, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },

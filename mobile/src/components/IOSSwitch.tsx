@@ -67,6 +67,9 @@ export function IOSSwitch({
         <Animated.View
           style={[
             styles.thumb,
+            // Android draws `elevation` at full strength under a translucent view, so a dimmed switch showed
+            // the thumb's shadow through it as a grey smudge.
+            disabled && styles.flatThumb,
             { transform: [{ translateX: position.interpolate({ inputRange: [0, 1], outputRange: [0, travel] }) }] },
           ]}
         />
@@ -88,5 +91,6 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 1 },
     elevation: 2,
   },
+  flatThumb: { elevation: 0 },
   dimmed: { opacity: 0.4 },
 });

@@ -3,7 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useMemo, useRef, useState, type ComponentProps } from 'react';
-import { ActivityIndicator, Alert, Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Alert, Modal, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { KeyboardAvoidingView, KeyboardAwareScrollView, NexdoLogoMark, TaskSymbol, Text } from '../../src/components';
@@ -176,7 +176,12 @@ export default function TaskDetail() {
     // The keyboard OVERLAYS the window on Android (edge to edge) rather than resizing it, so the
     // shared `KeyboardAvoidingView` lifts the pinned footer there with keyboard-controller; iOS keeps
     // React Native's `padding`. See src/components/keyboard.tsx.
-    <KeyboardAvoidingView behavior="padding" style={[styles.fill, { backgroundColor: theme.colors.background }]}>
+    // No stack bar (the layout hides it, as Swift does): Android's modal is full screen, so the header starts below
+    // the status bar; iOS's page sheet starts below it already.
+    <KeyboardAvoidingView
+      behavior="padding"
+      style={[styles.fill, { backgroundColor: theme.colors.background, paddingTop: Platform.OS === 'android' ? insets.top : 0 }]}
+    >
       {/* `header` (TaskDetailsView.swift:117-155) */}
       {hasBusinessResearch ? (
         <BusinessHeader theme={theme} blocked={blocked} onClose={() => router.back()} />

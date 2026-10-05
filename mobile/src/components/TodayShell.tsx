@@ -1,5 +1,5 @@
 import { LinearGradient } from 'expo-linear-gradient';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
 
 import { brand, useTheme } from '../theme';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -76,6 +76,31 @@ function SoftBlob({
 }
 
 /** `TodayBackdrop` (RootView.swift:1534-1546). */
+/**
+ * Android: the page's own backdrop, cut to the status-bar height and drawn OVER the scrolling content, so
+ * text scrolled up no longer runs through the clock and icons. iOS 26 gets the same from its scroll-edge
+ * effect, which fades content under the status bar (`calendar-v2-collapsed-days`); React Native has none.
+ * The backdrop is laid out at the window's full height inside the clip, so the slice matches exactly.
+ */
+export function StatusBarScrim({ subtle = false }: { subtle?: boolean }) {
+  const insets = useSafeAreaInsets();
+  const { height } = useWindowDimensions();
+  if (Platform.OS !== 'android' || insets.top === 0) return null;
+  return (
+    <View
+      accessibilityElementsHidden
+      importantForAccessibility="no-hide-descendants"
+      pointerEvents="none"
+      style={[styles.scrim, { height: insets.top }]}
+      testID="status-bar-scrim"
+    >
+      <View style={{ height }}>
+        <TodayBackdrop subtle={subtle} />
+      </View>
+    </View>
+  );
+}
+
 export function TodayBackdrop({ subtle = false }: { subtle?: boolean }) {
   const theme = useTheme();
   const blobOpacity = subtle ? 0.25 : 1;
@@ -206,6 +231,7 @@ function withAlpha(hex: string, alpha: number): string {
 }
 
 const styles = StyleSheet.create({
+  scrim: { position: 'absolute', top: 0, left: 0, right: 0, overflow: 'hidden', zIndex: 1 },
   blob: { position: 'absolute', left: '50%', top: '50%' },
   avatar: { alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#FFFFFF' },
   topBar: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 50 },

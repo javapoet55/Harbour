@@ -75,8 +75,8 @@ export default function ChooseFestivalsScreen() {
   const [region, setRegion] = useState<string | null>(null);
   const accent = accentColor(theme);
   const visible = region ? (FESTIVAL_REGIONS[region] ?? []) : REGIONS.flatMap((name) => FESTIVAL_REGIONS[name] ?? []);
-  // `secondarySystemGroupedBackground`.
-  const surface = theme.colors.secondaryBackground;
+  // `.secondarySystemGroupedBackground`: white in light, #1C1C1E in dark (`festivals-v2`).
+  const surface = theme.colors.surface;
 
   return (
     <View style={styles.fill}>
@@ -128,10 +128,13 @@ export default function ChooseFestivalsScreen() {
                   >
                     <Ionicons name={regionIcon(name)} size={21} color={accent} style={styles.regionIcon} />
                     <View style={styles.grow}>
-                      <Text style={[textStyles.subheadline, styles.semibold, { color: theme.colors.ink }]}>{name}</Text>
+                      <Text style={[textStyles.subheadline, styles.semibold, styles.regionName, { color: theme.colors.ink }]}>{name}</Text>
                       <Text style={[styles.caption, { color: theme.colors.secondary }]}>{`${count} celebrations`}</Text>
                     </View>
-                    <Ionicons name={selected ? 'checkmark-circle' : 'ellipse-outline'} size={13} color={selected ? accent : withAlpha(theme.colors.secondary, 0.5)} />
+                    {/* Swift's trailing mark takes a column of its own. On a 360 dp phone that left the text
+                        narrower than "celebrations", which Android then broke mid-word; the mark sits in the
+                        same corner but over the card, and only the title keeps clear of it. */}
+                    <Ionicons name={selected ? 'checkmark-circle' : 'ellipse-outline'} size={13} color={selected ? accent : withAlpha(theme.colors.secondary, 0.5)} style={styles.regionMark} />
                   </Pressable>
                 );
               })}
@@ -147,7 +150,8 @@ export default function ChooseFestivalsScreen() {
               </View>
               {region ? (
                 <Pressable accessibilityRole="button" onPress={() => setRegion(null)} style={styles.allRegions} testID="festival-all-regions">
-                  <Text style={[textStyles.subheadline, styles.semibold, { color: accent }]}>All regions</Text>
+                  {/* A plain Button under the screen's `.foregroundStyle(Color.nexdoInk)`: ink, not the tint. */}
+                  <Text style={[textStyles.subheadline, styles.semibold, { color: theme.colors.ink }]}>All regions</Text>
                 </Pressable>
               ) : null}
             </View>
@@ -210,6 +214,8 @@ const styles = StyleSheet.create({
   halfWidth: { width: '47.5%', flexGrow: 1 },
   fullWidth: { width: '100%' },
   regionCard: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, padding: 14, minHeight: 84, borderRadius: 20 },
+  regionMark: { position: 'absolute', top: 14, right: 14 },
+  regionName: { marginRight: 23 },
   regionIcon: { width: 30, height: 32, textAlign: 'center' },
   listHeading: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8 },
   allRegions: { paddingVertical: 12 },

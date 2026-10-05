@@ -1,6 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Image, Linking, Modal, Pressable, ScrollView, StyleSheet, TextInput, View, useWindowDimensions } from 'react-native';
+import { ActivityIndicator, Alert, Image, Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, TextInput, View, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { isApiError } from '../../api/client';
@@ -412,7 +412,9 @@ const styles = StyleSheet.create({
   inline: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   bold: { fontWeight: '700' },
   headline: { fontSize: 17, lineHeight: 22, fontWeight: '600' },
-  title: { marginHorizontal: 16, marginTop: -20 },
+  // iOS: pulled up into the page sheet's bar space. Android's sheet draws its bar above the scroll, so the
+  // same pull hid the title's top half under it (`shopping-item-editor-v2`).
+  title: { marginHorizontal: 16, marginTop: Platform.OS === 'ios' ? -20 : 0 },
   field: { flex: 1, paddingVertical: 8, backgroundColor: 'transparent' },
   disclosure: { flex: 1, flexDirection: 'row', alignItems: 'center', minHeight: 32 },
   preview: { width: '100%', height: 200 },

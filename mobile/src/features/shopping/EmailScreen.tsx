@@ -394,7 +394,9 @@ export function EmailScreen({ list }: { list: GroceryList }) {
                   )}
                 </View>
                 <View style={large ? null : styles.grow}>
-                  <ClockField hourCycle="h12" label="Time" onChange={setTime} testID="shopping-email-time" value={time} />
+                  {/* `field("Time") { DatePicker(…).labelsHidden() }`: the same captioned box as Repeat, with the
+                      12-hour pill inside it, not the settings-style caption over a bordered field. */}
+                  {field('Time', <ClockField hourCycle="h12" label="Time" onChange={setTime} testID="shopping-email-time" value={time} variant="pill" />)}
                 </View>
               </View>
               <Text style={[textStyles.subheadline, styles.bold, { color: ink }]}>Preferred pickup time</Text>

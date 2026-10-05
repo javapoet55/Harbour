@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, within } from '@testing-library/react-native';
-import { useWindowDimensions } from 'react-native';
+import { StyleSheet, useWindowDimensions } from 'react-native';
 
 import { WellnessTabButton } from '../../../components/WellnessTabButton';
 import { WellnessChooser } from '../WellnessChooser';
@@ -77,6 +77,11 @@ describe('module guides', () => {
     await fireEvent.press(screen.getByTestId('module-guide-home'));
     expect(onContinue).toHaveBeenCalledTimes(1);
     expect(onHome).toHaveBeenCalledTimes(2);
+  });
+
+  it('draws "Back to Home" in the guide\'s ink, not the module colour (the outer foregroundStyle beats the tint)', async () => {
+    await render(<WellnessModuleGuide kind="shopping" onContinue={jest.fn()} onHome={jest.fn()} />);
+    expect(StyleSheet.flatten(screen.getByText('Back to Home').props.style).color).toBe('#0A0A30');
   });
 
   it('stacks each step\'s picture under its text at an accessibility text size', async () => {

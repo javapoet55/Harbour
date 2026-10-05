@@ -1266,6 +1266,15 @@ describe('Choose Festivals', () => {
     expect(screen.getByText('Find your next celebration')).toBeTruthy();
   });
 
+  it('draws the region cards on the grouped surface, with "All regions" in ink', async () => {
+    await render(<ChooseFestivals />);
+    // `.secondarySystemGroupedBackground` is white in light mode, not the grouped grey.
+    expect(StyleSheet.flatten(screen.getByTestId('festival-region-Global').props.style).backgroundColor).toBe('#FFFFFF');
+    await fireEvent.press(screen.getByTestId('festival-region-India'));
+    // A plain Button under `.foregroundStyle(Color.nexdoInk)`, not the accent.
+    expect(StyleSheet.flatten(screen.getByText('All regions').props.style).color).toBe('#080F2E');
+  });
+
   it('opens the editor with a "<name> Wishes" festival', async () => {
     await render(<ChooseFestivals />);
     await fireEvent.press(screen.getByTestId('festival-choice-Diwali'));

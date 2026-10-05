@@ -54,7 +54,9 @@ export function ListSettingsSheet({ visible, list, onSave, onClose }: { visible:
       setPage('settings');
     }
   }
-  const back = { title: 'Back', onPress: () => setPage('settings'), testID: 'list-settings-back' };
+  // A push inside the sheet's own `NavigationStack` in Swift: the system back, an ink chevron on glass
+  // (`shopping-store-hours`, `shopping-stores-results`).
+  const back = { title: 'Back', icon: 'back' as const, onPress: () => setPage('settings'), testID: 'list-settings-back' };
   return (
     <MomentSheet
       visible={visible}

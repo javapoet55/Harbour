@@ -651,11 +651,12 @@ export default function TaskAction() {
 type ButtonProps = { label: string; onPress: () => void; disabled: boolean; testID: string };
 
 /** A plain `Button` in the screen's tint. */
+/** A plain `Button` under the screen's `.foregroundStyle(Color.nexdoInk)` (TaskActionView.swift:239): ink, not the tint. */
 function LinkButton({ label, onPress, disabled, testID }: ButtonProps) {
   const theme = useTheme({ elevated: true });
   return (
     <Pressable accessibilityLabel={label} accessibilityRole="button" accessibilityState={{ disabled }} disabled={disabled} onPress={onPress} testID={testID}>
-      <Text style={[theme.typography.body, { color: theme.colors.link }]}>{label}</Text>
+      <Text style={[theme.typography.body, { color: theme.colors.ink }]}>{label}</Text>
     </Pressable>
   );
 }

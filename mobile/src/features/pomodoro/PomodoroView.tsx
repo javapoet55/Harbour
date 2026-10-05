@@ -117,13 +117,13 @@ export function PomodoroView({ store, owner, onTasks, onClose, now = Date.now }:
       <ScrollView contentContainerStyle={[styles.content, { paddingTop: 16 + insets.top, paddingBottom: 16 + insets.bottom }]} keyboardShouldPersistTaps="handled">
         <View style={styles.header}>
           <Pressable accessibilityLabel="Pomodoro dashboard" accessibilityRole="button" onPress={() => setShowingDashboard(true)} style={styles.circleButton} testID="pomodoro-open-dashboard">
-            <Ionicons color={INDIGO} name="chevron-back" size={20} />
+            <Ionicons color={INK} name="chevron-back" size={20} />
           </Pressable>
           <Text accessibilityRole="header" style={styles.title2}>
             {current ? '' : 'Pomodoro'}
           </Text>
           <Pressable accessibilityLabel="Session history" accessibilityRole="button" onPress={() => setHistory(true)} style={styles.circleButton} testID="pomodoro-open-history">
-            <Ionicons color={INDIGO} name="time-outline" size={20} />
+            <Ionicons color={INK} name="time-outline" size={20} />
           </Pressable>
         </View>
         {current ? (
@@ -139,7 +139,7 @@ export function PomodoroView({ store, owner, onTasks, onClose, now = Date.now }:
           <View style={styles.sync}>
             <Text style={[styles.caption, { color: SECONDARY }]}>{state.syncMessage}</Text>
             <Pressable accessibilityRole="button" disabled={state.syncing} onPress={() => void store.getState().restore()} testID="pomodoro-retry-sync">
-              <Text style={[styles.body, { color: INDIGO, opacity: state.syncing ? 0.4 : 1 }]}>Retry sync</Text>
+              <Text style={[styles.body, { color: INK, opacity: state.syncing ? 0.4 : 1 }]}>Retry sync</Text>
             </Pressable>
           </View>
         ) : null}
@@ -358,7 +358,7 @@ function Completion({ session, onAnother, onTasks }: { session: PomodoroSession;
       </View>
       <Primary onPress={onAnother} testID="pomodoro-another" title="Start Another Session" />
       <Pressable accessibilityRole="button" onPress={onTasks} style={[styles.secondary, { backgroundColor: withAlpha(PURPLE, 0.07) }]} testID="pomodoro-back-to-tasks">
-        <Text style={[styles.headline, { color: INDIGO }]}>Back to Tasks</Text>
+        <Text style={[styles.headline, { color: INK }]}>Back to Tasks</Text>
       </Pressable>
     </View>
   );

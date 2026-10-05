@@ -28,11 +28,41 @@ const slack = StyleSheet.create({
   android: { paddingHorizontal: 1, marginHorizontal: -1 },
 });
 
+type Flat = Record<string, unknown>;
+const side = (flat: Flat, keys: string[]): number | null => {
+  for (const key of keys) {
+    const value = flat[key];
+    if (value === undefined) continue;
+    return typeof value === 'number' ? value : null;
+  }
+  return 0;
+};
+
+/**
+ * The slack ADDED to the horizontal padding and margin the caller set, on each side. React Native's
+ * `paddingHorizontal` / `marginHorizontal` beat the `padding` / `margin` shorthand whatever the order, so
+ * the plain slack silently wiped a caller's `padding: 16` down to 1 (the Add Food note sat on the card's
+ * edge). A side set in percent or `auto` keeps the caller's value and gets no slack.
+ */
+function slackFor(style: TextProps['style']) {
+  const flat = (StyleSheet.flatten(style) ?? {}) as Flat;
+  const has = ['padding', 'paddingHorizontal', 'paddingLeft', 'paddingRight', 'paddingStart', 'paddingEnd', 'margin', 'marginHorizontal', 'marginLeft', 'marginRight', 'marginStart', 'marginEnd'].some(
+    (key) => flat[key] !== undefined,
+  );
+  if (!has) return slack.android;
+  const padLeft = side(flat, ['paddingStart', 'paddingLeft', 'paddingHorizontal', 'padding']);
+  const padRight = side(flat, ['paddingEnd', 'paddingRight', 'paddingHorizontal', 'padding']);
+  const marLeft = side(flat, ['marginStart', 'marginLeft', 'marginHorizontal', 'margin']);
+  const marRight = side(flat, ['marginEnd', 'marginRight', 'marginHorizontal', 'margin']);
+  if (padLeft === null || padRight === null || marLeft === null || marRight === null) return null;
+  return { paddingStart: padLeft + 1, paddingEnd: padRight + 1, marginStart: marLeft - 1, marginEnd: marRight - 1 };
+}
+
 export function Text({ variant = 'body', tone = 'ink', style, ...rest }: TextProps) {
   const theme = useTheme();
   return (
     <RNText
-      style={[theme.typography[variant], { color: theme.colors[tone] }, Platform.OS === 'android' && slack.android, style]}
+      style={[theme.typography[variant], { color: theme.colors[tone] }, style, Platform.OS === 'android' && slackFor(style)]}
       {...rest}
     />
   );

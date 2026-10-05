@@ -107,8 +107,9 @@ export function TodayActionsView({
               <View style={styles.pager} testID="today-actions-pager">
                 <View style={styles.row}>
                   <Text style={[styles.headline, styles.grow, { color: theme.colors.ink }]}>{`${due.length} Actions need attention`}</Text>
+                  {/* The pager is in `ActionGlass` too (TodayActionsView.swift:51): its buttons are ink. */}
                   <Pressable accessibilityLabel="View all" accessibilityRole="button" onPress={onViewAll} testID="today-actions-view-all-due">
-                    <Text style={[theme.typography.body, { color: theme.colors.link }]}>View all</Text>
+                    <Text style={[theme.typography.body, { color: theme.colors.ink }]}>View all</Text>
                   </Pressable>
                 </View>
                 <View style={styles.row}>
@@ -178,7 +179,8 @@ function PagerButton({
   trailingIcon?: boolean;
 }) {
   const theme = useTheme();
-  const colour = disabled ? theme.colors.placeholder : theme.colors.link;
+  // `ActionGlass`'s `.foregroundStyle(Color.nexdoInk)` (`today-action-card-contact`): ink, dimmed when disabled.
+  const colour = disabled ? theme.colors.placeholder : theme.colors.ink;
   const glyph = <TaskSymbol color={colour} name={icon} size={13} />;
   return (
     <Pressable
@@ -386,8 +388,9 @@ export function ActionNeededCard({
           style={[styles.bordered, { backgroundColor: withAlpha(brand.nexdoIndigo, 0.18) }]}
           testID="today-actions-dismiss"
         >
-          <TaskSymbol color={theme.colors.link} name="xmark" size={15} />
-          <Text style={[theme.typography.body, { color: theme.colors.link }]}>Dismiss</Text>
+          {/* `.bordered` under `ActionGlass`'s `.foregroundStyle(Color.nexdoInk)` (TodayActionsView.swift:90): ink. */}
+          <TaskSymbol color={theme.colors.ink} name="xmark" size={15} />
+          <Text style={[theme.typography.body, { color: theme.colors.ink }]}>Dismiss</Text>
         </Pressable>
       </View>
     </View>
@@ -419,8 +422,9 @@ export function SnoozeMenu({ action }: { action: StoredTaskAction }) {
         style={[styles.bordered, { backgroundColor: withAlpha(brand.nexdoIndigo, 0.18) }]}
         testID="today-actions-snooze"
       >
-        <TaskSymbol color={theme.colors.link} name="clock" size={15} />
-        <Text style={[theme.typography.body, { color: theme.colors.link }]}>Remind later</Text>
+        {/* Ink, as Dismiss: the action card's `.foregroundStyle(Color.nexdoInk)` (`today-action-card-contact`). */}
+        <TaskSymbol color={theme.colors.ink} name="clock" size={15} />
+        <Text style={[theme.typography.body, { color: theme.colors.ink }]}>Remind later</Text>
       </Pressable>
 
       <Modal animationType="fade" onRequestClose={() => setOpen(false)} transparent visible={open}>

@@ -2,11 +2,13 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import * as Crypto from 'expo-crypto';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { Alert, Keyboard, Modal, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { Alert, Keyboard, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 
 import type { GroceryItem, GroceryList, ShoppingAlternative, ShoppingOfferMatch } from '../../../src/api/shopping';
 import { swapAdding, swapReplacing } from '../../../src/features/shopping/productFacts';
 import { KeyboardAwareScrollView } from '../../../src/components/keyboard';
+import { GlassCircle } from '../../../src/components/PushedHeader';
+import { PopoverMenu, usePopoverMenu, type PopoverItem } from '../../../src/features/moments/form';
 import { withAlpha } from '../../../src/components/SignInBackdrop';
 import { Text } from '../../../src/components/Text';
 import { TodayBackdrop } from '../../../src/components/TodayShell';
@@ -66,7 +68,8 @@ export default function ShoppingDetailScreen() {
   const [parseBusy, setParseBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = useState('All');
-  const [menu, setMenu] = useState(false);
+  const menuAnchor = useRef<View>(null);
+  const menu = usePopoverMenu(menuAnchor);
   const [barHeight, setBarHeight] = useState(72);
   const quickField = useRef<TextInput>(null);
   // `onUpdate: { list = $0 }` (:310, :329): a screen pushed from here (offers, offer details) saves the
@@ -240,17 +243,17 @@ export default function ShoppingDetailScreen() {
 
   const message = error ?? storeError;
   /** The options `Menu` (:342-352). */
-  const menuItems: { title: string; onPress: () => void; disabled?: boolean; destructive?: boolean; testID: string }[] = [
-    { title: 'Share list', onPress: () => setSharing(true), testID: 'list-menu-share' },
-    { title: 'List settings', onPress: () => setSettings(true), disabled: readOnly, testID: 'list-menu-settings' },
-    { title: 'Copy list', onPress: () => setCopy(true), testID: 'list-menu-copy' },
+  const menuItems: PopoverItem[] = [
+    { key: 'share', title: 'Share list', icon: 'share-outline', onPress: () => setSharing(true), testID: 'list-menu-share' },
+    { key: 'settings', title: 'List settings', onPress: () => setSettings(true), disabled: readOnly, testID: 'list-menu-settings' },
+    { key: 'copy', title: 'Copy list', onPress: () => setCopy(true), testID: 'list-menu-copy' },
     ...(readOnly
       ? []
       : [
-          { title: 'Select All', onPress: () => setAllChecked(true), disabled: left === 0, testID: 'list-menu-select-all' },
-          { title: 'Unselect All', onPress: () => setAllChecked(false), disabled: left === list.items.length, testID: 'list-menu-unselect-all' },
+          { key: 'select', title: 'Select All', onPress: () => setAllChecked(true), disabled: left === 0, testID: 'list-menu-select-all' },
+          { key: 'unselect', title: 'Unselect All', onPress: () => setAllChecked(false), disabled: left === list.items.length, testID: 'list-menu-unselect-all' },
         ]),
-    { title: 'Delete list', onPress: confirmDelete, destructive: true, testID: 'list-menu-delete' },
+    { key: 'delete', title: 'Delete list', onPress: confirmDelete, destructive: true, testID: 'list-menu-delete' },
   ];
 
   const storeName = (list.storeName ?? '').trim();
@@ -281,9 +284,14 @@ export default function ShoppingDetailScreen() {
             </View>
           ),
           headerRight: () => (
-            <Pressable accessibilityRole="button" accessibilityLabel="List options" onPress={() => setMenu(true)} hitSlop={8} testID="list-options">
-              <Ionicons name="ellipsis-horizontal" size={22} color={theme.colors.link} />
-            </Pressable>
+            // iOS 26 puts a toolbar item on a glass circle (`shopping-detail-store`), as every other pushed bar here.
+            <View collapsable={false} ref={menuAnchor}>
+              <Pressable accessibilityRole="button" accessibilityLabel="List options" onPress={menu.open} hitSlop={8} testID="list-options">
+                <GlassCircle>
+                  <Ionicons name="ellipsis-horizontal" size={22} color={theme.colors.link} />
+                </GlassCircle>
+              </Pressable>
+            </View>
           ),
         }}
       />
@@ -480,30 +488,18 @@ export default function ShoppingDetailScreen() {
 
       <ShoppingActionBar busy={busy} onComplete={onComplete} onRecommendations={() => setRecommendations(true)} onHeight={setBarHeight} />
 
-      {/* The options `Menu` (:287-292). */}
-      <Modal animationType="fade" transparent visible={menu} onRequestClose={() => setMenu(false)}>
-        <Pressable style={styles.menuScrim} onPress={() => setMenu(false)}>
-          <View style={[styles.menu, { backgroundColor: theme.colors.surface }]}>
-            {menuItems.map((entry) => (
-              <Pressable
-                key={entry.testID}
-                accessibilityRole="button"
-                accessibilityState={{ disabled: entry.disabled ?? false }}
-                disabled={entry.disabled}
-                onPress={() => {
-                  setMenu(false);
-                  Keyboard.dismiss();
-                  entry.onPress();
-                }}
-                style={styles.menuRow}
-                testID={entry.testID}
-              >
-                <Text style={[textStyles.body, { color: entry.destructive ? theme.colors.danger : entry.disabled ? theme.colors.placeholder : theme.colors.label }]}>{entry.title}</Text>
-              </Pressable>
-            ))}
-          </View>
-        </Pressable>
-      </Modal>
+      {/* The options `Menu` (:342-352): the shared popover, anchored to "…", with no dimming (UI-parity pass 2). */}
+      <PopoverMenu
+        items={menuItems.map((entry) => ({
+          ...entry,
+          onPress: () => {
+            Keyboard.dismiss();
+            entry.onPress();
+          },
+        }))}
+        menu={menu}
+        testID="list-menu"
+      />
 
       <ItemEditorSheet item={item} onSave={(updated) => void save(upserted(list, updated))} onClose={() => setItem(null)} />
       <ItemEditorSheet
@@ -585,12 +581,18 @@ function ShortcutCard({ title, icon, color, disabled = false, onPress, testID }:
  * offers; it names the chosen offer while that offer is still among them.
  */
 function OfferBadge({ itemId, name, chosen, matches, onPress }: { itemId: string; name: string; chosen: GroceryItem['chosenOffer']; matches: ShoppingOfferMatch[] | undefined; onPress: () => void }) {
+  const theme = useTheme();
   const itemOffers = (matches ?? []).filter((match) => match.itemId === itemId && ['matching', 'available', 'alternative'].includes(match.category));
   if (itemOffers.length === 0) return null;
   return (
-    <Pressable accessibilityLabel={`Offers for ${name}`} accessibilityRole="button" onPress={onPress} style={[styles.badge, { backgroundColor: withAlpha(brand.nexdoBlue, 0.08) }]} testID={`offer-badge-${itemId}`}>
-      <Ionicons color={brand.nexdoBlue} name="pricetag-outline" size={12} />
-      <Text style={[styles.badgeText, { color: brand.nexdoBlue }]}>{offerBadge(itemOffers, currentChoice(itemOffers, chosen))}</Text>
+    // A `NavigationLink` in a `List` row: the capsule, and the row's disclosure chevron at the trailing edge
+    // (`shopping-detail-offer-badges`).
+    <Pressable accessibilityLabel={`Offers for ${name}`} accessibilityRole="button" onPress={onPress} style={styles.badgeRow} testID={`offer-badge-${itemId}`}>
+      <View style={[styles.badge, { backgroundColor: withAlpha(brand.nexdoBlue, 0.08) }]}>
+        <Ionicons color={brand.nexdoBlue} name="pricetag-outline" size={12} />
+        <Text style={[styles.badgeText, { color: brand.nexdoBlue }]}>{offerBadge(itemOffers, currentChoice(itemOffers, chosen))}</Text>
+      </View>
+      <Ionicons color={theme.colors.secondaryLabel} name="chevron-forward" size={14} />
     </Pressable>
   );
 }
@@ -615,7 +617,8 @@ const styles = StyleSheet.create({
   shortcut: { flex: 1, gap: 6, padding: 10, borderRadius: 18 },
   shortcutTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   shortcutIcon: { width: 30, height: 30, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
-  badge: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', gap: 5, paddingHorizontal: 10, paddingVertical: 7, borderRadius: 999, marginTop: 6 },
+  badgeRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 6 },
+  badge: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 7, borderRadius: 999 },
   badgeText: { fontSize: 12, lineHeight: 16, fontWeight: '600' },
   // `.padding(.horizontal, 10).padding(.vertical, 6).frame(minHeight: 54)`, radius 18, 1 pt stroke,
   // `.shadow(color: nexdoInk.opacity(0.07), radius: 8, y: 3)`.
@@ -661,7 +664,4 @@ const styles = StyleSheet.create({
   emptyTitle: { fontSize: 22, lineHeight: 28, fontWeight: '700', marginTop: 8 },
   errorCard: { marginTop: 20 },
   errorRow: { minHeight: 52, paddingHorizontal: 16, paddingVertical: 12, justifyContent: 'center' },
-  menuScrim: { flex: 1, backgroundColor: 'rgba(0,0,0,0.2)', alignItems: 'flex-end', paddingTop: 90, paddingRight: 16 },
-  menu: { borderRadius: 14, minWidth: 220, paddingVertical: 4 },
-  menuRow: { minHeight: 48, paddingHorizontal: 16, justifyContent: 'center' },
 });

@@ -1470,3 +1470,102 @@ Deviations from Swift, Android-only or not:
   a sheet titled "Remind later", where Swift shows a compact `DatePicker`.
 - **Today, Previous / Next** are tinted capsules (`.bordered`); "Choose contact or enter details" keeps
   Swift's fixed lavender and ink, because the card it sits on (`glassSolid`) stays light in dark mode too.
+
+## 28. UI-parity pass 3: Phase 12 on the phone (2026-10-05)
+
+Every ticked §22 row checked on a OnePlus CPH2691 (Android 16, 360 dp wide) against the Mac's iPhone
+captures; results row by row in `docs/reference/PARITY.md` "UI-parity pass 3". Fixes, Android-only or not:
+
+- **Module guides: "Back to Home" is ink.** Swift's outer `.foregroundStyle(ink)` beats the `.tint`; it was
+  the module colour. Both platforms.
+- **Pomodoro cards lose `elevation` (Android only; iOS ignores it).** Android draws an elevation shadow at
+  its own strength in `shadowColor` and ignores `shadowOpacity`, so Swift's 6% blue shadow became a blue
+  ring, and the 92% white card let the shadow show through as a grey inner panel. The 1pt stroke carries
+  the edge, as Swift's barely visible shadow does.
+- **Pomodoro chart minute labels sit on their grid lines.** They were spread evenly top to bottom, but the
+  domain is 1.3× the tallest bar, so "6m" sat ~20 dp above its line. Both platforms.
+- **Pomodoro trend chart: the picked bar's label sits on the bar** (`.annotation(position: .top)`), not at
+  the top of the chart. Both platforms.
+- **Pomodoro timer ring has no seams.** The ring's 180 segments overlap to close their gaps; the fading end
+  of Swift's gradient is translucent, so every overlap doubled up into a visible stripe. Each segment is now
+  its colour flattened over the 22% track on white. Both platforms.
+- **Pomodoro plain buttons are ink.** "Back to Tasks", "Retry sync" and the bar's back, history and "…"
+  glyphs were indigo; Swift's `.foregroundStyle(ink).tint(.indigo)` draws them in the ink. Both platforms.
+- **Pomodoro menu glyphs.** `PopoverItem` takes an optional leading `icon` (+ `iconColor`), for
+  `Button(_:systemImage:)`; the dashboard's Refresh and About these metrics use it. Callers without one are
+  unchanged.
+- **Pomodoro session details** sit below the status bar on Android (a `pageSheet` `Modal` is full screen
+  there) and title their section as written ("Focus time"), as iOS 26 does.
+- **Pomodoro keeps a dark status bar in dark mode**, as the chooser and guides do (§23): the dashboard is
+  `.preferredColorScheme(.light)` and the timer is drawn light, so white icons vanished.
+- **Pomodoro period chips are single-line.** After a reload "This Week" drew as "This" even with `Text`'s
+  1 dp slack (3 px at this phone's density): this phone's variable system font let the draw pass break at
+  the space. `numberOfLines={1}` keeps Android's layout on one line.
+- **Text's Android slack adds to the caller's padding and margin (shared, Android only).** `Text` gives every
+  label one device pixel each side (§ global fix 6) as `paddingHorizontal: 1` / `marginHorizontal: -1`, and
+  React Native lets the axis props beat the `padding` / `margin` shorthand whatever the order, so a label
+  styled `padding: 16` lost its horizontal padding. It now reads the caller's sides and adds the pixel to
+  them; a side in percent or `auto` is left as the caller set it.
+- **Calorie Tracker plain buttons and glyphs are ink**, as Pomodoro's: text buttons, the bar's back and close,
+  the day chevrons, the Add-to-log circles, the summary icons and View Insights. Pickers and switches keep
+  the system indigo (`.tint(.indigo)` on those controls).
+- **Calorie Tracker numbers are grouped** ("2,000 kcal", goal fields "1,000") as SwiftUI's localized
+  `Text("\(n)")` and `.number` print them; strings Swift builds as plain `String`s (the chart's
+  accessibility label, the Insights averages) stay ungrouped, as in Swift.
+- **Calorie ring gradient follows the ring's rotation.** Swift strokes the gradient and then rotates the
+  ring −90°, so the gradient turns too; the arc runs teal at 12 o'clock to blue at 3 o'clock.
+- **Calorie charts centre their bars** in the 155-tall frame; **the robot art is full width** (centred);
+  **the Stepper is a capsule**; **cards lose `elevation`** (Android only, as Pomodoro's); the setup's Time zone
+  and Agent voice pickers show only their value, as Swift's.
+- **Add Food** sits below the status bar on Android and titles its section "Food" / "Sample meal".
+- **Calorie Tracker keeps a dark status bar in dark mode** (`FixedLightStatusBar`).
+- **A disabled `FormToggle` dims only its switch** (shared). The row and the switch were both at 40%, so the
+  switch was dimmed twice and the label greyed out, where iOS keeps a disabled Toggle's label at full colour.
+  **A disabled `IOSSwitch` thumb has no `elevation`** (Android only): Android drew the shadow at full strength
+  through the translucent thumb as a grey smudge.
+- **Review schedule stacks its two buttons when a label wraps.** Swift's `ViewThatFits` measures each button
+  at its one-line width; at 360 dp "Confirm Schedule" needs two lines at half the row, so the pair stacks,
+  each full width. Detected from the laid-out line count (`onTextLayout`).
+- **Schedule confirmed's bar takes the page colour** (`#F7FAFF`) instead of showing the Moments backdrop.
+- **Choose Festivals region cards**: the radio mark sits over the card's top-right corner instead of taking
+  its own column, so "celebrations" keeps its width at 360 dp (Android broke it mid-word); the cards are white
+  (`.secondarySystemGroupedBackground`); "All regions" is ink.
+- **Ink, not the tint, under an outer `.foregroundStyle`**: the Manage Moment info glyph and the calling
+  guide's "Back to settings".
+- **A module's first screen has the tinted back** (Important Moments, My Lists): Swift leaves the module with
+  a toolbar `Button`, which takes the root's indigo tint; pushes deeper keep the system back in ink.
+- **My Lists draws its large title** as content (`headerLargeTitle` is iOS-only).
+- **Shopping Detail's options menu is the shared popover** (anchored, no dimming, the Share glyph);
+  `PopoverItem` gains `disabled`, drawn in `.tertiaryLabel`, and a glyph column is kept for every item when
+  any item has one. Offer badges carry the row's disclosure chevron.
+- **Glass circles** on the Shopping "…", the alternatives sheets' xmark, and Item Details' back and star (ink).
+- **Item editor's large title** is pulled up into the bar on iOS only; on Android the bar sits above it.
+- **Weekly email**: Time is a captioned box with a pill (`ClockField variant="pill"`), and a `DateField` with
+  an empty label draws only its pill, at the leading edge.
+- **List Settings' pages have the system back** (`SheetButton` `icon: 'back'`): an ink chevron on a glass
+  circle, as a push inside Swift's sheet `NavigationStack`, so the title stays centred.
+- **`arrow.up.left` points up-left** (`TaskSymbol` turns Ionicons' up arrow −45°): Ask's suggestion rows.
+- **Ask landing: two cards per row on narrow phones.** 48.8% + gap + 48.8% overflowed below ~330 dp and the
+  grid fell to one column; 45% with `flexGrow` fits any phone.
+- **`FittedText` measures explicit lines and keeps the ellipsis** (shared): a label with a line break must
+  fit line by line; `adjustsFontSizeToFit` is iOS-only now, because on Android it fitted nothing and
+  switched off the trailing ellipsis, so a label too wide at the minimum scale was clipped silently.
+- **Ask landing in dark mode** sits on white with a dark status bar: it keeps its fixed light text (§24),
+  which was invisible on the dark page behind its translucent gradient.
+- **No `elevation` under translucent cards** on Help, Event Details and the brief section pages (Android
+  only): it showed through as a lighter inner panel. iOS keeps Swift's faint shadow.
+- **`GradientButton gradient="save"`** draws `NexdoTheme.saveGradient` (blue → indigo → magenta), which
+  `NexdoGradientButtonStyle` uses: Feedback's Submit and Change password. Auth keeps the brand gradient.
+- **`StatusBarScrim`** (Android only) on Today and Calendar: the page's own backdrop, cut to the status-bar
+  height and drawn over the scroll, so scrolled text no longer runs through the clock. iOS 26 does this with
+  its scroll-edge effect.
+- **A hairline instead of a shadow** on Help, Event Details and the brief section cards (Android only):
+  without the elevation (above) the near-white cards vanished into the page's white end.
+- **Event Details' "…" menu** carries Swift's glyphs.
+- **Task Details has no stack bar** (both platforms): Swift hides it and closes with the header's xmark; the
+  bar's Close duplicated it. Android insets the content below the status bar.
+- **Nexdo Action's link buttons are ink** (`.foregroundStyle(Color.nexdoInk)`), and **Contact details** has a
+  large title over the form instead of a bar title.
+- **Today's action card and pager buttons are ink** (`ActionGlass`'s `.foregroundStyle(Color.nexdoInk)`);
+  **"Find my next task"** draws the save gradient (`NexdoGradientButtonStyle`).
+

@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
-import { Alert } from 'react-native';
+import { Alert, StyleSheet, type StyleProp, type ViewStyle } from 'react-native';
 
 const mockPost = jest.fn();
 jest.mock('../../../api/moments', () => ({
@@ -78,6 +78,10 @@ describe('Connect me on the day', () => {
     await waitFor(() => expect(screen.getByText('Verify your number first so Sam sees it’s you.')).toBeTruthy());
     // Unverified: disabled, as Swift draws it, with no reason at the switch (§22 "For the team").
     expect(screen.getByTestId('connect-toggle-a').props.accessibilityState).toMatchObject({ disabled: true });
+    // Only the switch dims; its label stays at full colour (`moment-connect-section`).
+    type Node = { props: { style?: StyleProp<ViewStyle> }; parent: Node | null };
+    const dimmed = (node: Node | null): boolean => (node ? StyleSheet.flatten(node.props.style)?.opacity === 0.4 || dimmed(node.parent) : false);
+    expect(dimmed(screen.getByText('Connect me to Sam') as unknown as Node)).toBe(false);
     expect(screen.getByText('Add Lee’s phone number with its country code (for example +91 98765 43210) to use this.')).toBeTruthy();
     expect(screen.getByText('This moment has already passed.')).toBeTruthy();
     expect(screen.queryByTestId('connect-now-a')).toBeNull();

@@ -132,7 +132,7 @@ export function WellnessModuleGuide({ kind, onContinue, onHome }: { kind: Wellne
           </LinearGradient>
         </Pressable>
         <Pressable accessibilityRole="button" onPress={onHome} style={styles.home} testID="module-guide-home">
-          <Text style={[styles.headline, { color: guide.color }]}>Back to Home</Text>
+          <Text style={[styles.headline, { color: INK }]}>Back to Home</Text>
         </Pressable>
       </ScrollView>
     </View>

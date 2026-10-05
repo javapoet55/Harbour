@@ -93,6 +93,8 @@ describe('My Lists', () => {
   it('shows Create New List and the recent lists, and opens one', async () => {
     load([list(), list({ id: 'l2', title: 'Costco Shopping List', completedAt: '2026-09-18T10:00:00Z', items: [item()] })]);
     await render(<MyLists />);
+    // `.navigationTitle("My Lists")` is a large title, drawn as content (`shopping-lists-v2`).
+    expect(screen.getByRole('header', { name: 'My Lists' })).toBeTruthy();
     expect(screen.getByText('Create New List')).toBeTruthy();
     expect(screen.getByText('Recent Lists')).toBeTruthy();
     expect(screen.getByText('2 items')).toBeTruthy();
@@ -407,6 +409,13 @@ describe('List detail', () => {
       'list-menu-delete',
     ]);
     expect(screen.getByTestId('list-menu-select-all').props.accessibilityState.disabled).toBe(true);
+    // `Label("Share list", systemImage: "square.and.arrow.up")`: the only item with a glyph.
+    const glyphs = (node: { props: { name?: string }; children: unknown[] }): string[] => [
+      ...(node.props.name ? [node.props.name] : []),
+      ...node.children.flatMap((child) => (typeof child === 'object' && child ? glyphs(child as typeof node) : [])),
+    ];
+    expect(glyphs(screen.getByTestId('list-menu-share') as never)).toEqual(['share-outline']);
+    expect(glyphs(screen.getByTestId('list-menu-copy') as never)).toEqual([]);
     expect(screen.queryByText('Edit')).toBeNull();
     await fireEvent.press(screen.getByTestId('list-menu-unselect-all'));
     await waitFor(() => expect(screen.getByTestId('list-counts').props.children).toBe('0 added · 1 item'));
