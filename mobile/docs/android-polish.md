@@ -1365,3 +1365,42 @@ Swift, Android-only or not:
   only for an all-day event).
 - **An empty day** in Schedule mode is a disclosure row with a chevron, as Swift's; Week and Month always
   show their day.
+
+## 25. Phase 12 Run E: Moments (2026-10-05)
+
+JavaScript only; no new build needed. The screens are listed in `docs/IOS_TO_REACT_NATIVE.md` §22 "Run E".
+Deviations from Swift, Android-only or not:
+
+- **Chips and capsules in dark mode.** The Today / Tomorrow / This Week / Later chips, the Manage Moments
+  tabs and the Messages / Email / Copy / Share delivery tags keep Swift's light look (8% indigo, indigo
+  text; filled indigo or the brand gradient when chosen). In dark mode an unchosen one's label is the
+  `link` token, on that colour at 16%, as every other dark-mode tappable (§6).
+- **The time zone menu lists each zone once, by its current name.** ICU spells India `Asia/Calcutta`; the
+  menu shows `Asia/Kolkata` and a stored `Asia/Calcutta` selects it. Swift's row is blank for India (§22
+  "For the team"); this is the fix, not a copy.
+- **Edit Moment** is the shared form sheet (`MomentSheet`) with Cancel and Save in its bar; Type is a menu
+  of the four greeting-card occasions; the date is the shared date field.
+- **Prepare reminder** is a menu in the Send time card (None, 1/4/8 hours, 1/3/7/14 days before), as
+  Swift's `Picker`.
+- **Connect me on the day.** The call time is `ClockField` with `hourCycle="h12"` and the form-row look
+  ("9:00 AM", hour, minute and AM/PM wheels), not a native time picker; the value stays `HH:mm` as the
+  server wants it. The time zone is the same menu as above. Errors and notices are one alert titled
+  "Connect me on the day", with OK, as Swift.
+- **Show my number.** The code is drawn in the platform monospace face (`monospace` on Android, Menlo on
+  iOS) for Swift's `.monospaced` design; the status is polled every 3 s, 60 times at most, and stops when
+  the sheet closes.
+- **How It Works** is its own full-height sheet in Swift's FIXED light design (it never follows dark
+  mode), with the round glass back button; the four pictures are `moment-calling-pack`'s regions cut once
+  into `assets/moments/` (176 KB). The title wraps where Swift truncates it.
+- **Review schedule, Send now, Edit date & time, Edit recipient and Schedule confirmed** keep Swift's fixed
+  light `ScheduleDesign` in both modes. A `FixedScheme scheme="light"` around them makes the shared date
+  pill and fields light too. On Android each sheet is the rounded shape over a dimmed page that
+  `MomentSheet` draws. Edit date & time uses the shared date field (month grid, hour and minute wheels)
+  where Swift shows a wheel `DatePicker`; Send Now and Confirm Schedule sit side by side and wrap to a
+  column when they do not fit (`ViewThatFits`).
+- **Send Now on Android.** The SMS intent cannot report whether the person tapped Send — `expo-sms`
+  answers `unknown` — so each opened wish is recorded `opened` ("delivery not confirmed"), as Choose
+  Delivery does. iOS records `sent` only for a confirmed send, as Swift. A cancelled composer records
+  nothing on either.
+- **Schedule confirmed** has no back button, as Swift (`navigationBarBackButtonHidden`), and the back
+  gesture is off: Done is the way out.

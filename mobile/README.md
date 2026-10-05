@@ -190,27 +190,37 @@ Use a test moment named `Parity …`, as the iPhone captures did. Never confirm 
 
 79. Today → **Moments**. The page is titled **Important Moments**, with Upcoming / Scheduled / Sent as a
     gradient control, the search field and the type menu, the summary card ("N upcoming moments",
-    wishes scheduled, wishes needing review) with **Manage** and **Create New**, then This Week / Next
-    Week / This Month / Next Month / Later.
+    wishes scheduled, wishes needing review) with **Manage** and **Create New**, then the date chips
+    **Today (n)** / **Tomorrow** / **This Week** / **Later**, Today chosen first (Phase 12). Each chip
+    shows its own moments, or "No moments today" (… tomorrow, … this week, … later). A birthday group
+    with scheduled wishes shows "2 scheduled @ 8:00 AM" badges and a gear in its top-right corner.
 80. The type menu offers All, Birthday, Anniversary, Festival, Get Well Soon, Custom. Search a title.
 81. **Scheduled** shows each wish card and the delivery menu (All / Automatic / Confirmation / Action
     needed). **Sent** shows delivered, copied and shared wishes. An empty Sent tab shows no message —
     the iPhone does the same.
-82. **Manage** → **Manage Moments**. Open a birthday: **Manage Moment** with the header card (icon,
-    name, type, the **Active** switch, "Send date · …") and the four steps.
-83. Details: rename the moment, then tap **Contacts**. It saves first — "Moment changes saved." — and
-    only then moves. Rename again and tap the back chevron: **Discard unsaved changes?**
+82. **Manage** → **Manage Moments**: tabs **Scheduled (n)** / **Need Review** / **Ready to Schedule**,
+    Scheduled first, each row with its "Scheduled: …" or "Date: …" line. Open a birthday: **Manage
+    Moment** with the header card (icon, name, type, the **Active** switch, the moment's date) and the
+    three steps **Contacts** / **Message** / **Schedule**, opening on Contacts.
+83. Contacts: change a recipient, then **Save Changes**: "Moment changes saved." and it moves on to
+    **Message** by itself. Change something and tap the back chevron: **Discard unsaved changes?**
 84. Contacts: **Add Contact** opens the phone's contact picker (one person each time), then **Choose
     delivery address**. **Enter recipient manually** opens **Add Contact**; **Add recipient** stays
     greyed until there is a name and a phone or an email.
-85. Wish Message: change the tone, edit the text (the counter reads n/500), tap **Regenerate** — it asks
+85. Message (titled **Wish Message**): change the tone, edit the text (the counter reads n/500), tap **Regenerate** — it asks
     first once you have edited. **Personalize** opens its sheet. **Save Message** → "Message approved
     and saved. Nothing has been sent."
 86. Greeting Card: **Create AI Greeting Card** opens the editor. Each generation is a paid AI call — do
     it once. **Use This Card**, then **Share Card**: the share sheet receives the artwork image.
-87. Schedule: tap **Schedule Wish** with unsaved changes — "Save changes first." appears in red under
-    the button. Save, then **Schedule Wish** → **Review schedule** → **Confirm Schedule** → **Schedule
-    confirmed** with confetti. **Done** returns to Important Moments.
+87. Schedule: the **Moment** card with **Edit** (Edit Moment: name, type, date, Repeat), **Send time**
+    with the time zone (India reads Asia/Kolkata, never blank) and **Prepare reminder** (None, 1/4/8 hours,
+    1/3/7/14 days), **Delivery** as Messages / Email / Copy / Share capsules, and **Connect me on the
+    day**. Do NOT tap **Verify my number** with a number you do not own: Twilio calls it. Tap **Schedule
+    Wish** with unsaved changes — "Save changes first." appears in red under the button. Save, then
+    **Schedule Wish** → **Review schedule** (the wish, **Scheduled for** and each recipient, each with
+    **Edit**) → **Confirm Schedule** → **Schedule confirmed!** with the green check and confetti, and no
+    back button. **Done** returns to Important Moments. **Send Now** sends the email at once and opens
+    Messages: only try it with your own address and number.
 88. **Create New**: the type menu, the automatic title, the date (a past date is accepted, as on the
     iPhone), the February 29 note. **Save** is greyed while the title is empty. A new birthday opens
     straight into Manage Moment.
