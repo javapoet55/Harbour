@@ -109,33 +109,49 @@ beforeEach(() => {
 });
 
 describe('Important Moments list', () => {
-  it('shows the summary card, the weekly buckets and a greeting-card group', async () => {
-    const day = future(2);
+  // Phase 12: the date chips replace the weekly buckets (ImportantMomentsView.swift:256-281).
+  it('shows the summary card, the date chips with Today first, and a greeting-card group', async () => {
+    const today = future(0);
     const encoded = settings({ groupID: 'g', baseMessage: 'Hi', approvedAt: '2030-01-01T00:00:00Z' });
     load([
-      moment({ id: 'a', type: 'festival', title: 'Diwali', firstName: 'A', occurrenceDate: day, nextOccurrence: day, festivalSettings: encoded }),
-      moment({ id: 'b', type: 'festival', title: 'Diwali', firstName: 'B', occurrenceDate: day, nextOccurrence: day, festivalSettings: encoded }),
-      moment({ id: 'c', type: 'custom', title: 'Team lunch', occurrenceDate: future(3), nextOccurrence: future(3) }),
+      moment({ id: 'a', type: 'festival', title: 'Diwali', firstName: 'A', occurrenceDate: today, nextOccurrence: today, festivalSettings: encoded }),
+      moment({ id: 'b', type: 'festival', title: 'Diwali', firstName: 'B', occurrenceDate: today, nextOccurrence: today, festivalSettings: encoded }),
+      moment({ id: 'c', type: 'custom', title: 'Team lunch', occurrenceDate: future(1), nextOccurrence: future(1) }),
     ]);
     await render(<ImportantMoments />);
     expect(screen.getByText('2 upcoming moments')).toBeTruthy();
     expect(screen.getByText('0 wishes scheduled')).toBeTruthy();
     expect(screen.getByText('1 wish needs review')).toBeTruthy();
     expect(screen.getByText('2 ready to schedule')).toBeTruthy();
+    // Each chip counts the groups it would show; Today is selected first.
+    expect(screen.getByText('Today (1)')).toBeTruthy();
+    expect(screen.getByText('Tomorrow (1)')).toBeTruthy();
+    expect(screen.getByTestId('moments-period-Today').props.accessibilityState).toEqual({ selected: true });
     expect(screen.getByText('Ready to schedule')).toBeTruthy();
-    expect(screen.getByText('Create a personal wish')).toBeTruthy();
+    // Tomorrow's custom moment is not on Today.
+    expect(screen.queryByText('Create a personal wish')).toBeNull();
     await fireEvent.press(screen.getByTestId('festival-manage-a'));
     expect(mockPush).toHaveBeenCalledWith({ pathname: '/wellness/moments/manage', params: { ids: 'a,b' } });
+    await fireEvent.press(screen.getByTestId('moments-period-Tomorrow'));
+    expect(screen.queryByText('Diwali')).toBeNull();
+    expect(screen.getByText('Create a personal wish')).toBeTruthy();
     await fireEvent.press(screen.getByLabelText('Create wish'));
     expect(mockPush).toHaveBeenLastCalledWith({ pathname: '/wellness/moments/review', params: { id: 'c' } });
     await waitFor(() => expect(mockSnapshot).toHaveBeenCalled());
   });
 
-  it('shows the empty state, and no message on an empty Sent tab when moments exist', async () => {
+  // `ContentUnavailableView("No moments \(…)")` (:279-281) replaced "No moments yet".
+  it('shows the chosen chip’s empty state', async () => {
     load([]);
     await render(<ImportantMoments />);
-    expect(screen.getByText('No moments yet')).toBeTruthy();
-    expect(screen.getByText('Add a moment manually, or select contacts and calendars in Settings.')).toBeTruthy();
+    expect(screen.getByText('No moments today')).toBeTruthy();
+    expect(screen.getByText('Choose another date filter or add a moment.')).toBeTruthy();
+    expect(screen.queryByText('No moments yet')).toBeNull();
+    for (const [chip, title] of [['Tomorrow', 'No moments tomorrow'], ['This Week', 'No moments this week'], ['Later', 'No moments later']]) {
+      expect(screen.getByText(`${chip} (0)`)).toBeTruthy();
+      await fireEvent.press(screen.getByTestId(`moments-period-${chip}`));
+      expect(screen.getByText(title)).toBeTruthy();
+    }
     await fireEvent.press(screen.getByTestId('moments-add'));
     expect(mockPush).toHaveBeenCalledWith({ pathname: '/wellness/moments/editor', params: { done: 'list' } });
   });
@@ -176,13 +192,40 @@ describe('Important Moments list', () => {
     expect(screen.getByText('No scheduled wishes')).toBeTruthy();
   });
 
-  it('keeps "No moments yet" on Upcoming only', async () => {
+  it('keeps the date chips and their empty state on Upcoming only', async () => {
     load([]);
     await render(<ImportantMoments />);
-    expect(screen.getByTestId('moments-empty')).toBeTruthy();
+    expect(screen.getByTestId('moments-period-empty')).toBeTruthy();
     await fireEvent.press(screen.getByTestId('moments-tab-Scheduled'));
-    expect(screen.queryByTestId('moments-empty')).toBeNull();
+    expect(screen.queryByTestId('moments-period-empty')).toBeNull();
+    expect(screen.queryByTestId('moments-periods')).toBeNull();
     expect(screen.getByText('No scheduled wishes')).toBeTruthy();
+  });
+
+  // `MomentScheduleSummary` badges, one per send time (ImportantMomentsView.swift:148-150).
+  it('badges a group’s scheduled wishes by send time, and keeps the gear on the card', async () => {
+    const day = future(0);
+    const encoded = settings({ groupID: 'g', baseMessage: 'Hi', approvedAt: '2030-01-01T00:00:00Z' });
+    const scheduled = (id: string, time: string) => [draft({ id: `d${id}`, momentID: id, plans: [plan({ id: `p${id}`, draftID: `d${id}`, scheduledAtUTC: `${day}T${time}:00.000Z` })] })];
+    load([
+      moment({ id: 'a', type: 'birthday', title: 'Sam’s Birthday', firstName: 'A', occurrenceDate: day, nextOccurrence: day, festivalSettings: encoded, drafts: scheduled('a', '23:58') }),
+      moment({ id: 'b', type: 'birthday', title: 'Sam’s Birthday', firstName: 'B', occurrenceDate: day, nextOccurrence: day, festivalSettings: encoded, drafts: scheduled('b', '23:58') }),
+      moment({ id: 'c', type: 'birthday', title: 'Sam’s Birthday', firstName: 'C', occurrenceDate: day, nextOccurrence: day, festivalSettings: encoded, drafts: scheduled('c', '23:59') }),
+    ]);
+    await render(<ImportantMoments />);
+    expect(screen.getByText('2 scheduled @ 11:58 PM')).toBeTruthy();
+    expect(screen.getByText('1 scheduled @ 11:59 PM')).toBeTruthy();
+    expect(screen.getByLabelText('Manage Sam’s Birthday')).toBeTruthy();
+  });
+
+  it('puts a moment beyond this week under Later only', async () => {
+    const later = future(9);
+    load([moment({ id: 'l', type: 'custom', title: 'Far lunch', occurrenceDate: later, nextOccurrence: later })]);
+    await render(<ImportantMoments />);
+    expect(screen.getByText('Later (1)')).toBeTruthy();
+    expect(screen.getByText('This Week (0)')).toBeTruthy();
+    await fireEvent.press(screen.getByTestId('moments-period-Later'));
+    expect(screen.getByText('Far lunch')).toBeTruthy();
   });
 
   it('lists wishes on the Scheduled tab and filters them by delivery', async () => {
@@ -270,42 +313,45 @@ describe('Manage Moment', () => {
     }),
   ];
 
-  /** docs/android-polish.md §9: the four steps share one size, each as wide as its label. */
-  it('draws the four steps at one size on Android, dropping together when they do not fit', async () => {
+  /** docs/android-polish.md §9: the three steps share one size, each as wide as its label. */
+  it('draws the three steps at one size on Android, dropping together when they do not fit', async () => {
     jest.replaceProperty(Platform, 'OS', 'android');
     load(group());
     mockParams = { ids: 'a' };
     await render(<ManageMoment />);
-    const tabs = ['Details', 'Contacts', 'Wish Message', 'Schedule'];
+    const tabs = ['Contacts', 'Message', 'Schedule'];
     const size = (tab: string) => StyleSheet.flatten(within(screen.getByTestId(`festival-tab-${tab}`)).getByText(tab).props.style).fontSize;
     const layout = (width: number) => ({ nativeEvent: { layout: { x: 0, y: 0, width, height: 64 } } });
 
     // No per-tab shrink: each label is one line of plain text, not a FitText.
     for (const tab of tabs) expect(within(screen.getByTestId(`festival-tab-${tab}`)).getByText(tab).props.numberOfLines).toBe(1);
 
-    // "Wish Message" is the long one; on a 360dp-wide row they only fit a step down — all four.
-    await fireEvent(screen.getByTestId('festival-tabs'), 'layout', layout(360));
-    for (const [index, width] of [50, 66, 98, 66].entries()) {
+    // Three short labels fit a 360dp row at full size, and drop a step together on a narrow one.
+    for (const [index, width] of [66, 62, 66].entries()) {
       await fireEvent(screen.getByTestId(`festival-tabs-measure-${index}`, { includeHiddenElements: true }), 'layout', layout(width));
     }
-    expect(tabs.map(size)).toEqual([13, 13, 13, 13]);
+    await fireEvent(screen.getByTestId('festival-tabs'), 'layout', layout(360));
+    expect(tabs.map(size)).toEqual([15, 15, 15]);
+    await fireEvent(screen.getByTestId('festival-tabs'), 'layout', layout(200));
+    expect(tabs.map(size)).toEqual([13, 13, 13]);
 
-    // The selected step keeps its filled indigo pill, and a tab still switches the step.
-    expect(StyleSheet.flatten(screen.getByTestId('festival-tab-Details').props.style).backgroundColor).toBe('#3D29F0');
-    await fireEvent.press(screen.getByTestId('festival-tab-Contacts'));
+    // Contacts is the first step, on the filled indigo pill, and a tab still switches the step.
     expect(StyleSheet.flatten(screen.getByTestId('festival-tab-Contacts').props.style).backgroundColor).toBe('#3D29F0');
+    await fireEvent.press(screen.getByTestId('festival-tab-Message'));
+    expect(StyleSheet.flatten(screen.getByTestId('festival-tab-Message').props.style).backgroundColor).toBe('#3D29F0');
     jest.restoreAllMocks();
   });
 
-  it('shows the header card, the four steps and the in-content section title', async () => {
+  it('opens on Contacts, with the header card, the three steps and the in-content section title', async () => {
     load(group());
     mockParams = { ids: 'a' };
     await render(<ManageMoment />);
-    expect(screen.getByText('Moment Details')).toBeTruthy();
-    for (const tab of ['Details', 'Contacts', 'Wish Message', 'Schedule']) expect(screen.getByTestId(`festival-tab-${tab}`)).toBeTruthy();
+    expect(screen.getByText('Recipients')).toBeTruthy();
+    for (const tab of ['Contacts', 'Message', 'Schedule']) expect(screen.getByTestId(`festival-tab-${tab}`)).toBeTruthy();
+    for (const old of ['Details', 'Wish Message']) expect(screen.queryByTestId(`festival-tab-${old}`)).toBeNull();
     expect(screen.getByText('Active')).toBeTruthy();
-    // The header reads the occasion date, not the delivery date (ManageFestivalView.swift:114).
-    expect(screen.getByText(`Moment date · ${sendDayLabel(momentDate(day, 'UTC'), 'UTC')}`)).toBeTruthy();
+    // The header reads the moment's own date, not the delivery date (ManageFestivalView.swift:155).
+    expect(within(screen.getByTestId('festival-send-date')).getByText(sendDayLabel(momentDate(day, 'UTC'), 'UTC'))).toBeTruthy();
   });
 
   // The header used to show the delivery date. A draft send date moves delivery to another day
@@ -326,8 +372,8 @@ describe('Manage Moment', () => {
     ]);
     mockParams = { ids: 'a' };
     await render(<ManageMoment />);
-    expect(screen.getByText(`Moment date · ${sendDayLabel(momentDate(day, 'UTC'), 'UTC')}`)).toBeTruthy();
-    expect(screen.queryByText(`Moment date · ${sendDayLabel(momentDate(delivery, 'UTC'), 'UTC')}`)).toBeNull();
+    expect(within(screen.getByTestId('festival-send-date')).getByText(sendDayLabel(momentDate(day, 'UTC'), 'UTC'))).toBeTruthy();
+    expect(within(screen.getByTestId('festival-send-date')).queryByText(sendDayLabel(momentDate(delivery, 'UTC'), 'UTC'))).toBeNull();
   });
 
   it('changes step without saving when nothing changed, and shows the recipients', async () => {
@@ -356,7 +402,7 @@ describe('Manage Moment', () => {
     mockParams = { ids: 'a' };
     const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
     await render(<ManageMoment />);
-    await fireEvent.press(screen.getByTestId('festival-tab-Wish Message'));
+    await fireEvent.press(screen.getByTestId('festival-tab-Message'));
     await fireEvent.changeText(screen.getByTestId('festival-message'), 'Hello');
     expect(screen.getByText('5/500')).toBeTruthy();
     await fireEvent.press(screen.getByTestId('festival-regenerate'));
@@ -371,7 +417,7 @@ describe('Manage Moment', () => {
       load(group({ baseMessage: 'Old wish' }));
       mockParams = { ids: 'a' };
       await render(<ManageMoment />);
-      await fireEvent.press(screen.getByTestId('festival-tab-Wish Message'));
+      await fireEvent.press(screen.getByTestId('festival-tab-Message'));
       await fireEvent.press(screen.getByTestId('festival-ai'));
     }
     const regenerate = () => screen.getByTestId('festival-regenerate');
@@ -564,7 +610,7 @@ describe('Manage Moment', () => {
     load(group());
     mockParams = { ids: 'a' };
     await render(<ManageMoment />);
-    await fireEvent.press(screen.getByTestId('festival-tab-Wish Message'));
+    await fireEvent.press(screen.getByTestId('festival-tab-Message'));
     const save = () => screen.getByTestId('festival-save-message').props.accessibilityState.disabled;
 
     await fireEvent.changeText(screen.getByTestId('festival-message'), 'Happy birthday!');
@@ -592,7 +638,7 @@ describe('Manage Moment', () => {
     load(group({ baseMessage: '' }));
     mockParams = { ids: 'a' };
     await render(<ManageMoment />);
-    await fireEvent.press(screen.getByTestId('festival-tab-Wish Message'));
+    await fireEvent.press(screen.getByTestId('festival-tab-Message'));
     const editor = screen.getByTestId('festival-message');
     expect(editor.props.value).toBe('');
     expect(editor.props.placeholder).toBe('Sam’s Birthday! Sending you warm wishes on your special day.');
@@ -616,7 +662,7 @@ describe('Manage Moment', () => {
     mockParams = { ids: 'a' };
     const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
     await render(<ManageMoment />);
-    await fireEvent.press(screen.getByTestId('festival-tab-Wish Message'));
+    await fireEvent.press(screen.getByTestId('festival-tab-Message'));
     await fireEvent.changeText(screen.getByTestId('festival-message'), 'Sam, many happy returns!');
     await fireEvent.press(screen.getByTestId('festival-save-message'));
 
@@ -633,8 +679,9 @@ describe('Manage Moment', () => {
     mockParams = { ids: 'a' };
     const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
     await render(<ManageMoment />);
-    await fireEvent.changeText(screen.getByTestId('festival-name'), 'Sam’s 30th');
-    await fireEvent.press(screen.getByTestId('festival-save'));
+    await fireEvent.press(screen.getByTestId('festival-tab-Schedule'));
+    await fireEvent.press(screen.getByTestId('moment-repeat-yearly'));
+    await fireEvent.press(screen.getByTestId('festival-schedule-save'));
 
     expect(alert).toHaveBeenCalledWith('Save changes to scheduled wishes?', expect.any(String), expect.any(Array), expect.anything());
   });
@@ -647,7 +694,7 @@ describe('Manage Moment', () => {
     await fireEvent.press(screen.getByTestId('festival-back'));
     expect(mockBack).toHaveBeenCalledTimes(1);
     expect(alert).not.toHaveBeenCalled();
-    await fireEvent.changeText(screen.getByTestId('festival-name'), 'Renamed');
+    await fireEvent.press(screen.getByTestId('recipient-select-k1'));
     await fireEvent.press(screen.getByTestId('festival-back'));
     expect(alert).toHaveBeenCalledWith('Discard unsaved changes?', undefined, expect.any(Array));
     expect(mockBack).toHaveBeenCalledTimes(1);
@@ -680,7 +727,7 @@ describe('Create Moment', () => {
     await render(<MomentEditor />);
     await fireEvent.changeText(screen.getByTestId('moment-first-name'), 'Kate');
     await fireEvent.press(screen.getByTestId('moment-save'));
-    await waitFor(() => expect(screen.getByText('Moment Details')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('Recipients')).toBeTruthy());
     expect(mockPost).toHaveBeenCalledWith('save', expect.objectContaining({ type: 'birthday', title: 'Kate’s Birthday', firstName: 'Kate', source: 'manual' }), undefined);
   });
 
@@ -1361,7 +1408,7 @@ describe('Recipients on Android', () => {
     expect(rowText(1)).toEqual(['Ravi Kumar', 'Email · r••••@example.com', 'Edit', 'Remove']);
 
     await fireEvent.press(screen.getByTestId('moment-save'));
-    await waitFor(() => expect(screen.getByText('Moment Details')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('Recipients')).toBeTruthy());
 
     // The moment is created for the first person (phone as digits with its +), then everyone is saved in one festivalSave.
     const operations = mockPost.mock.calls.map(([operation]) => operation);
@@ -1404,7 +1451,7 @@ describe('Recipients on Android', () => {
     const first = mockPost.mock.calls.find(([operation]) => operation === 'festivalSave')![1];
 
     await fireEvent.press(screen.getByTestId('moment-save'));
-    await waitFor(() => expect(screen.getByText('Moment Details')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('Recipients')).toBeTruthy());
     const operations = mockPost.mock.calls.map(([operation]) => operation).filter((operation) => operation === 'save' || operation === 'festivalSave');
     expect(operations).toEqual(['save', 'festivalSave', 'festivalSave']);
     const retried = mockPost.mock.calls.filter(([operation]) => operation === 'festivalSave')[1][1];
@@ -1645,6 +1692,9 @@ describe('Recipients on Android', () => {
       await saveChanges();
       await waitFor(() => expect(mockPost).toHaveBeenCalledWith('festivalSave', expect.anything(), undefined));
       expect(screen.queryByTestId('festival-error')).toBeNull();
+      // A successful Save Changes goes on to the next step (Phase 12, `prepareNextTabAfterSave`).
+      await waitFor(() => expect(screen.getByText('Wish Message')).toBeTruthy());
+      await fireEvent.press(screen.getByTestId('festival-tab-Contacts'));
 
       // Kate's card loses the email the recipient was given from it.
       (Contacts.getContactByIdAsync as jest.Mock).mockResolvedValue({ ...KATE, emails: [{ email: 'kate@new.com' }] });
@@ -1676,5 +1726,111 @@ describe('Recipients on Android', () => {
     expect(screen.getByTestId('moment-first-name')).toBeTruthy();
     expect(screen.queryByTestId('moment-enter-recipient')).toBeNull();
     expect(isDisabled('moment-save')).toBe(false);
+  });
+});
+
+/** Phase 12: Details folded into Schedule, and Edit Moment (ManageFestivalView.swift:162-347). */
+describe('Manage Moment, the Schedule step', () => {
+  const day = future(20);
+  const birthday = (extra: Partial<ImportantMoment> = {}, settingsOverrides: Record<string, unknown> = {}) =>
+    moment({
+      id: 'a',
+      type: 'birthday',
+      title: 'Sam’s Birthday',
+      firstName: 'Sam',
+      phone: '+15555550100',
+      email: 'sam@example.com',
+      occurrenceDate: day,
+      nextOccurrence: day,
+      sourceKey: 'birthday:g:k1',
+      festivalSettings: settings({ groupID: 'g', channels: { k1: 'messages' }, ...settingsOverrides }),
+      ...extra,
+    });
+  async function openSchedule(moments: ImportantMoment[] = [birthday()]) {
+    load(moments);
+    mockParams = { ids: 'a' };
+    await render(<ManageMoment />);
+    await fireEvent.press(screen.getByTestId('festival-tab-Schedule'));
+  }
+  afterEach(() => jest.restoreAllMocks());
+
+  it('shows the moment, send time with the prepare reminder, delivery tags and the reminder note', async () => {
+    await openSchedule();
+    const card = within(screen.getByTestId('festival-moment'));
+    expect(card.getByText('Sam’s Birthday')).toBeTruthy();
+    expect(card.getByText('Birthday')).toBeTruthy();
+    expect(card.getByText(sendDayLabel(momentDate(day, 'UTC'), 'UTC'))).toBeTruthy();
+    expect(screen.getByText('Repeats on this date each year.\nReview and schedule each wish separately.')).toBeTruthy();
+    expect(screen.getByText('Reminds you to review the wish. Nothing is sent.')).toBeTruthy();
+    expect(screen.getByLabelText('Prepare reminder, 1 day before')).toBeTruthy();
+    expect(screen.getByLabelText('Messages for Sam').props.accessibilityState).toEqual({ selected: true });
+    expect(screen.getByLabelText('Email for Sam')).toBeTruthy();
+    expect(screen.getByLabelText('Copy / Share for Sam')).toBeTruthy();
+    expect(screen.getByText('At the scheduled time, we’ll remind you to send manual wishes. For Messages, open the prepared wish and tap Send. Only email marked automatic sends for you.')).toBeTruthy();
+    expect(screen.getByTestId('moment-send-reminder')).toBeTruthy();
+    expect(screen.queryByText('Send if app is closed')).toBeNull();
+    // Schedule shows no notices; nothing to connect while Messages is chosen.
+    expect(screen.queryByTestId('festival-connect-email')).toBeNull();
+  });
+
+  it('offers hours or days for the prepare reminder and saves the choice', async () => {
+    await openSchedule();
+    await fireEvent.press(screen.getByTestId('moment-prepare-reminder'));
+    for (const value of [0, 60, 240, 480, 1440, 4320, 10080, 20160]) expect(screen.getByTestId(`moment-prepare-reminder-${value}`)).toBeTruthy();
+    await fireEvent.press(screen.getByTestId('moment-prepare-reminder-240'));
+    expect(screen.getByLabelText('Prepare reminder, 4 hours before')).toBeTruthy();
+    await fireEvent.press(screen.getByTestId('festival-schedule-save'));
+    await waitFor(() => expect(mockPost).toHaveBeenCalledWith('festivalSave', expect.objectContaining({ settings: expect.objectContaining({ prepareHours: 4, prepareDays: 0 }) }), undefined));
+  });
+
+  it('switches a recipient’s channel with the tags, and offers to connect email for Email', async () => {
+    await openSchedule();
+    await fireEvent.press(screen.getByLabelText('Email for Sam'));
+    expect(screen.getByLabelText('Email for Sam').props.accessibilityState).toEqual({ selected: true });
+    expect(screen.getByLabelText('Messages for Sam').props.accessibilityState).toEqual({ selected: false });
+    expect(screen.getByText('You send at the scheduled time')).toBeTruthy();
+    await fireEvent.press(screen.getByTestId('festival-connect-email'));
+    expect(mockPush).toHaveBeenCalledWith('/wellness/moments/settings');
+  });
+
+  it('edits the moment in Edit Moment, saving a new occasion type', async () => {
+    await openSchedule();
+    await fireEvent.press(screen.getByTestId('moment-edit'));
+    expect(screen.getByText('Review and schedule each wish separately. Repeating a moment does not automatically send future wishes.')).toBeTruthy();
+    expect(screen.getByTestId('festival-name').props.value).toBe('Sam’s Birthday');
+    await fireEvent.changeText(screen.getByTestId('festival-name'), 'Sam & Lee');
+    await fireEvent.press(screen.getByTestId('moment-edit-type'));
+    // Custom moments are not managed here, so they are not offered.
+    expect(screen.queryByTestId('moment-edit-type-custom')).toBeNull();
+    await fireEvent.press(screen.getByTestId('moment-edit-type-anniversary'));
+    await fireEvent.press(screen.getByTestId('moment-edit-save'));
+    await waitFor(() => expect(mockPost).toHaveBeenCalledWith('festivalSave', expect.objectContaining({ type: 'anniversary', title: 'Sam & Lee' }), undefined));
+  });
+
+  it('asks before Edit Moment cancels scheduled wishes, and Keep schedules sends nothing', async () => {
+    const scheduled = birthday({ drafts: [draft({ momentID: 'a', plans: [plan({ status: 'SCHEDULED' })] })] }, { baseMessage: 'Hi', approvedAt: '2030-08-30T00:00:00Z' });
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    await openSchedule([scheduled]);
+    await fireEvent.press(screen.getByTestId('moment-edit'));
+    await fireEvent.press(screen.getByTestId('moment-edit-repeat'));
+    await fireEvent.press(screen.getByTestId('moment-edit-save'));
+    expect(alert).toHaveBeenCalledWith('Save changes to scheduled wishes?', 'Saving these changes cancels existing schedules. Review and schedule the updated wishes again.', expect.any(Array));
+    const buttons = alert.mock.calls.find(([title]) => title === 'Save changes to scheduled wishes?')![2] as { text: string; onPress?: () => void }[];
+    buttons.find((button) => button.text === 'Keep schedules')?.onPress?.();
+    expect(mockPost).not.toHaveBeenCalledWith('festivalSave', expect.anything(), undefined);
+    // Cancel schedules and save goes through with cancelSchedules.
+    await act(async () => buttons.find((button) => button.text === 'Cancel schedules and save')?.onPress?.());
+    await waitFor(() => expect(mockPost).toHaveBeenCalledWith('festivalSave', expect.objectContaining({ yearly: true, cancelSchedules: true }), undefined));
+  });
+
+  it('goes on from Contacts to Message after Save Changes', async () => {
+    load([birthday()]);
+    mockParams = { ids: 'a' };
+    await render(<ManageMoment />);
+    await fireEvent.press(screen.getByTestId('recipient-edit-k1'));
+    await fireEvent.changeText(screen.getByTestId('recipient-name-k1'), 'Sammy');
+    await fireEvent.press(screen.getByTestId('festival-save'));
+    await waitFor(() => expect(screen.getByText('Wish Message')).toBeTruthy());
+    expect(screen.getByTestId('festival-tab-Message').props.accessibilityState).toEqual({ selected: true });
   });
 });

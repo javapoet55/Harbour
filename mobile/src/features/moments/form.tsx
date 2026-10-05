@@ -9,7 +9,7 @@ import { withAlpha } from '../../components/SignInBackdrop';
 import { Text } from '../../components/Text';
 import { androidGroup, androidLabel, androidPill, androidSeparator, FieldGroupContext, isAndroid, textStyles, useTheme } from '../../theme';
 import { KEYBOARD_DONE_BAR_HEIGHT } from './components';
-import { mediumDate, momentDay, momentStartOfDay, shortTimeIn, wallParts, zonedInstant } from './dates';
+import { canonicalZone, mediumDate, momentDay, momentStartOfDay, shortTimeIn, wallParts, zonedInstant } from './dates';
 
 /**
  * SwiftUI `Form` pieces with the iOS 26 inset-grouped metrics the rest of the app measured (style map
@@ -437,6 +437,9 @@ const FALLBACK_ZONES = [
 /**
  * `TimeZone.knownTimeZoneIdentifiers`. Hermes may not implement `Intl.supportedValuesOf`, in which
  * case a list of the major zones stands in, always including the zone already chosen.
+ *
+ * Every entry is its CURRENT name (`canonicalZone`): ICU lists India as `Asia/Calcutta` while the phone
+ * reports `Asia/Kolkata`, and the list holds one row for the two, `Asia/Kolkata`.
  */
 export function knownTimeZones(include: string[] = []): string[] {
   let zones: string[] = [];
@@ -447,13 +450,17 @@ export function knownTimeZones(include: string[] = []): string[] {
     zones = [];
   }
   if (zones.length === 0) zones = FALLBACK_ZONES;
-  return [...new Set([...zones, ...include.filter(Boolean)])].sort();
+  return [...new Set([...zones, ...include.filter(Boolean)].map(canonicalZone))].sort();
 }
 
-/** `Picker("Time zone", selection:)` over every known identifier. */
+/**
+ * `Picker("Time zone", selection:)` over every known identifier. A legacy spelling of the chosen zone
+ * selects its row (`Asia/Calcutta` shows as `Asia/Kolkata`), so the row is never blank; the value is
+ * only rewritten when the person picks a zone.
+ */
 export function ZonePicker({ value, onChange, testID = 'zone-picker', hideLabel = false, label = 'Time zone', format }: { value: string; onChange: (next: string) => void; testID?: string; hideLabel?: boolean; label?: string; format?: (zone: string) => string }) {
   const options = knownTimeZones([value]).map((zone) => ({ value: zone, title: format ? format(zone) : zone }));
-  return <MenuPicker hideLabel={hideLabel} label={label} onChange={onChange} options={options} testID={testID} value={value} />;
+  return <MenuPicker hideLabel={hideLabel} label={label} onChange={onChange} options={options} testID={testID} value={canonicalZone(value)} />;
 }
 
 /** `TimeZone.localizedName(for: .generic, locale: .current)` — "Pacific Time". */

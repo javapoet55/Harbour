@@ -133,6 +133,8 @@ export type MomentOperation =
   | 'festivalCatalog'
   | 'greetingArtwork'
   | 'greetingCardSave'
+  // Phase 12: Send Now on Review schedule (`sendImmediately`, ManageFestivalModel.swift:337-354).
+  | 'sendGreetingNow'
   // Phase 12: "Connect me on the day" (features/moments/connectCall.ts).
   | 'connectStatus'
   | 'connectPreview'

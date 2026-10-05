@@ -14,7 +14,7 @@ beforeEach(() => {
 });
 
 describe('buildMomentReminders', () => {
-  it('schedules one festival prepare reminder per group at 08:00 in the festival’s zone', () => {
+  it('schedules one prepare reminder per group, days before 08:00 in the moment’s zone', () => {
     const encoded = settings({ groupID: 'diwali', prepareDays: 7 });
     const reminders = buildMomentReminders(
       [
@@ -25,7 +25,41 @@ describe('buildMomentReminders', () => {
       ],
       NOW,
     );
-    expect(reminders).toEqual([{ id: 'a', at: Date.parse('2030-10-13T02:30:00Z'), body: 'Review your festival wish.' }]);
+    expect(reminders).toEqual([{ id: 'a', at: Date.parse('2030-10-13T02:30:00Z'), body: 'Review your upcoming wish.' }]);
+  });
+
+  // Phase 12 (ImportantMomentsStore.swift:195-207): every occasion, hours or days, before the actual send.
+  it('reminds for any occasion, hours before the scheduled send', () => {
+    const reminders = buildMomentReminders(
+      [
+        moment({
+          id: 'bday',
+          type: 'birthday',
+          occurrenceDate: '2030-09-20',
+          nextOccurrence: '2030-09-20',
+          festivalSettings: settings({ groupID: 'b', prepareDays: 0, prepareHours: 4 }),
+          drafts: [draft({ id: 'd', plans: [plan({ id: 'p', draftID: 'd', scheduledAtUTC: '2030-09-20T10:00:00Z' })] })],
+        }),
+      ],
+      NOW,
+    );
+    expect(reminders).toContainEqual({ id: 'bday', at: Date.parse('2030-09-20T06:00:00Z'), body: 'Review your upcoming wish.' });
+  });
+
+  it('counts back from a draft send time on the day when nothing is scheduled yet', () => {
+    const reminders = buildMomentReminders(
+      [
+        moment({
+          id: 'anniv',
+          type: 'anniversary',
+          occurrenceDate: '2030-09-20',
+          nextOccurrence: '2030-09-20',
+          festivalSettings: settings({ groupID: 'a', prepareDays: 1, prepareHours: 0, draftSendDate: '2030-09-20T18:30:00.000Z' }),
+        }),
+      ],
+      NOW,
+    );
+    expect(reminders).toEqual([{ id: 'anniv', at: Date.parse('2030-09-19T18:30:00Z'), body: 'Review your upcoming wish.' }]);
   });
 
   it('adds a ready alert for wishes YOU send, never for automatic email, and a one-hour warning', () => {

@@ -5,6 +5,7 @@ import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, T
 import { LinearGradient } from 'expo-linear-gradient';
 
 import type { ImportantMoment, WishDeliveryPlan } from '../../../src/api/moments';
+import { withAlpha } from '../../../src/components/SignInBackdrop';
 import { Text } from '../../../src/components/Text';
 import { TodayBackdrop } from '../../../src/components/TodayShell';
 import { GlassCapsule, GlassCircle } from '../../../src/components/PushedHeader';
@@ -16,9 +17,8 @@ import {
   MomentSegments,
   MomentStatusBadge,
   systemColors,
-  title1,
 } from '../../../src/features/moments/components';
-import { momentDate, momentLabel, momentRelative, sendDayLabel, shortTime, UPCOMING_GROUPS } from '../../../src/features/moments/dates';
+import { momentDate, momentLabel, momentRelative, sendDayLabel, shortTime, UPCOMING_FILTERS, upcomingFilterEmptyTitle, upcomingFilterIncludes, type UpcomingFilter } from '../../../src/features/moments/dates';
 import {
   capitalized,
   DELIVERY_FILTERS,
@@ -29,13 +29,13 @@ import {
   planDate,
   planStatusLabel,
   readyToSchedule,
+  scheduleSummaryLabels,
   sortedPlans,
   supportsGreetingCard,
   tabPlans,
   TYPE_FILTERS,
   typeLabel,
   upcomingDelivery,
-  upcomingGroup,
   latestDraft,
   type MomentDisplayGroup,
   type MomentsTab,
@@ -46,15 +46,25 @@ import { routedDestination } from '../../../src/features/moments/useMomentsLifec
 import { brand, linearGradientStops, textStyles, useTheme } from '../../../src/theme';
 
 const GRADIENT = linearGradientStops([brand.nexdoMagenta, brand.nexdoIndigo, brand.nexdoBlue]);
+const ADD_MOMENT_BLUE = '#1877F2';
+
+/**
+ * An unselected date chip: `Color.nexdoIndigo.opacity(0.08)`. In dark mode the label is the `link`
+ * token (docs/android-polish.md), and the fill is that colour at 16% so the chip still reads as one.
+ */
+function chipFill(theme: ReturnType<typeof useTheme>): string {
+  return theme.scheme === 'dark' ? withAlpha(theme.colors.link, 0.16) : withAlpha(brand.nexdoIndigo, 0.08);
+}
 
 function manageHref(group: MomentDisplayGroup) {
   return { pathname: '/wellness/moments/manage' as const, params: { ids: group.moments.map((moment) => moment.id).join(',') } };
 }
 
 /**
- * `ImportantMomentsView` (ios/App/ImportantMomentsView.swift:208-307): Upcoming / Scheduled / Sent,
- * search and the type filter, the summary card with Manage and Create New, the weekly buckets, and the
- * wish cards on the other two tabs.
+ * `ImportantMomentsView` (ios/App/ImportantMomentsView.swift:209-324): Upcoming / Scheduled / Sent,
+ * search and the type filter, the summary card with Manage and Create New, and on Upcoming the date
+ * chips — Today / Tomorrow / This Week / Later, Today first (Phase 12, `MomentUpcomingFilter`) — with
+ * the moments that fall in the chosen one; the wish cards on the other two tabs.
  *
  * `routed` is `MomentRoutedView` (`:574-594`): a notification opened this screen, so it carries a
  * leading Close and pushes the moment's detail once.
@@ -70,6 +80,8 @@ export default function ImportantMomentsScreen() {
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<string>('All');
   const [deliveryFilter, setDeliveryFilter] = useState<string>('All');
+  // `@State private var upcomingFilter: MomentUpcomingFilter = .today` (:216)
+  const [upcomingFilter, setUpcomingFilter] = useState<UpcomingFilter>('Today');
   const [now] = useState(() => Date.now());
 
   // `.task { await store.prepareDefaultReminders(); await store.refresh() }`. SwiftUI re-runs `.task`
@@ -184,24 +196,42 @@ export default function ImportantMomentsScreen() {
                 </View>
               </View>
             </MomentCard>
-            {UPCOMING_GROUPS.map((group) => {
-              const items = displayed.filter((moment) => upcomingGroup(moment, now) === group);
-              if (items.length === 0) return null;
-              return (
-                <View key={group} style={styles.bucket}>
-                  <Text style={[title1, styles.bold, styles.bucketTitle, { color: theme.colors.label }]}>{group}</Text>
-                  {displayGroups(items).map((entry) => {
-                    const first = entry.moments[0];
-                    if (!first) return null;
-                    return supportsGreetingCard(first) ? (
-                      <FestivalGroupCard key={entry.id} group={entry} onManage={() => router.push(manageHref(entry))} now={now} />
-                    ) : (
-                      <UpcomingMomentRow key={entry.id} moment={first} now={now} />
-                    );
-                  })}
-                </View>
+            {/* The date chips (:256-269): "Today (2)" — each counts the groups it would show. */}
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips} testID="moments-periods">
+              {UPCOMING_FILTERS.map((period) => {
+                const count = displayGroups(displayed.filter((moment) => upcomingFilterIncludes(period, moment.nextOccurrence, moment.timeZoneID, now))).length;
+                const active = upcomingFilter === period;
+                return (
+                  <Pressable
+                    key={period}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: active }}
+                    onPress={() => setUpcomingFilter(period)}
+                    style={[styles.chip, { backgroundColor: active ? brand.nexdoIndigo : chipFill(theme) }]}
+                    testID={`moments-period-${period}`}
+                  >
+                    <Text style={[styles.chipLabel, { color: active ? '#FFFFFF' : theme.colors.link }]}>{`${period} (${count})`}</Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+            {displayGroups(displayed.filter((moment) => upcomingFilterIncludes(upcomingFilter, moment.nextOccurrence, moment.timeZoneID, now))).map((entry) => {
+              const first = entry.moments[0];
+              if (!first) return null;
+              return supportsGreetingCard(first) ? (
+                <FestivalGroupCard key={entry.id} group={entry} onManage={() => router.push(manageHref(entry))} now={now} />
+              ) : (
+                <UpcomingMomentRow key={entry.id} moment={first} now={now} />
               );
             })}
+            {/* `ContentUnavailableView("No moments \(…)")` (:279-281), for the chosen chip. */}
+            {!displayed.some((moment) => upcomingFilterIncludes(upcomingFilter, moment.nextOccurrence, moment.timeZoneID, now)) ? (
+              <View style={styles.empty} testID="moments-period-empty">
+                <Ionicons name="gift-outline" size={44} color={theme.colors.secondaryLabel} />
+                <Text style={[textStyles.title2, styles.bold, { color: theme.colors.label }]}>{upcomingFilterEmptyTitle(upcomingFilter)}</Text>
+                <Text style={[textStyles.subheadline, styles.center, { color: theme.colors.secondaryLabel }]}>Choose another date filter or add a moment.</Text>
+              </View>
+            ) : null}
           </>
         ) : (
           <>
@@ -233,14 +263,6 @@ export default function ImportantMomentsScreen() {
           </>
         )}
 
-        {/* "No moments yet" belongs to Upcoming only (:293). */}
-        {tab === 'Upcoming' && displayed.length === 0 ? (
-          <View style={styles.empty} testID="moments-empty">
-            <Ionicons name="gift-outline" size={44} color={theme.colors.secondaryLabel} />
-            <Text style={[textStyles.title2, styles.bold, { color: theme.colors.label }]}>No moments yet</Text>
-            <Text style={[textStyles.subheadline, styles.center, { color: theme.colors.secondaryLabel }]}>Add a moment manually, or select contacts and calendars in Settings.</Text>
-          </View>
-        ) : null}
         {error ? (
           <>
             <Text style={[textStyles.body, { color: theme.colors.danger }]} testID="moments-error">
@@ -257,7 +279,8 @@ export default function ImportantMomentsScreen() {
           accessibilityRole="button"
           accessibilityLabel="Add Moment"
           onPress={() => router.push({ pathname: '/wellness/moments/editor', params: { done: 'list' } })}
-          style={[styles.addButton, { backgroundColor: theme.colors.tint }]}
+          // `.tint(Color(red: 24/255, green: 119/255, blue: 242/255))` (:310), the same in both modes.
+          style={[styles.addButton, { backgroundColor: ADD_MOMENT_BLUE }]}
           testID="moments-add"
         >
           <Ionicons name="add" size={20} color="#FFFFFF" />
@@ -328,11 +351,16 @@ function UpcomingMomentRow({ moment, now }: { moment: ImportantMoment; now: numb
   );
 }
 
-/** `FestivalGroupCard` (ImportantMomentsView.swift:121-165): every greeting-card occasion, one card per group. */
+/**
+ * `FestivalGroupCard` (ImportantMomentsView.swift:121-165): every greeting-card occasion, one card per
+ * group. Phase 12: the gear sits over the top-right corner (`.overlay(alignment: .topTrailing)`) with the
+ * title padded clear of it, the date is bold, and the scheduled wishes show one badge per send time
+ * ("2 scheduled @ 8:00 AM", `MomentScheduleSummary`).
+ */
 function FestivalGroupCard({ group, onManage, now }: { group: MomentDisplayGroup; onManage: () => void; now: number }) {
   const theme = useTheme();
   const moment = group.moments[0];
-  const scheduledCount = group.moments.filter((item) => item.enabled && upcomingDelivery(item) !== undefined).length;
+  const scheduledPlans = group.moments.filter((item) => item.enabled).flatMap((item) => upcomingDelivery(item) ?? []);
   const reviewCount = group.moments.filter(needsWishReview).length;
   const readyCount = group.moments.filter(readyToSchedule).length;
   const active = group.moments.filter((item) => item.enabled).length;
@@ -342,14 +370,9 @@ function FestivalGroupCard({ group, onManage, now }: { group: MomentDisplayGroup
         <View style={styles.rowTop}>
           <MomentIconTile type={moment.type} title={moment.title} />
           <View style={styles.rowText}>
-            <View style={styles.titleRow}>
-              <Text style={[styles.title3, styles.grow, { color: theme.colors.label }]}>{moment.title}</Text>
-              <Pressable accessibilityRole="button" accessibilityLabel={`Manage ${moment.title}`} onPress={onManage} style={styles.gear} testID={`festival-manage-${moment.id}`}>
-                <Ionicons name="settings-outline" size={20} color={theme.colors.link} />
-              </Pressable>
-            </View>
+            <Text style={[styles.title3, styles.gearClearance, { color: theme.colors.label }]}>{moment.title}</Text>
             <Text style={[styles.subheadline, { color: theme.colors.secondaryLabel }]}>{`${typeLabel(moment.type)} · ${momentRelative(moment.nextOccurrence, moment.timeZoneID, now)}`}</Text>
-            <Text style={[styles.subheadline, { color: theme.colors.secondaryLabel }]} testID={`festival-date-${moment.id}`}>
+            <Text style={[styles.subheadline, styles.bold, { color: theme.colors.secondaryLabel }]} testID={`festival-date-${moment.id}`}>
               {sendDayLabel(momentDate(moment.nextOccurrence, moment.timeZoneID, now), moment.timeZoneID)}
             </Text>
             {reviewCount > 0 ? (
@@ -360,7 +383,12 @@ function FestivalGroupCard({ group, onManage, now }: { group: MomentDisplayGroup
               />
             ) : null}
             {readyCount > 0 ? <MomentStatusBadge title={readyCount === active ? 'Ready to schedule' : `${readyCount} ready to schedule`} color={systemColors.blue} icon="time-outline" /> : null}
-            {scheduledCount > 0 ? <MomentStatusBadge title={`${scheduledCount} scheduled`} color={systemColors.blue} icon="time-outline" /> : null}
+            {scheduleSummaryLabels(scheduledPlans).map((label) => (
+              <MomentStatusBadge key={label} title={label} color={systemColors.blue} icon="time-outline" />
+            ))}
+            <Pressable accessibilityRole="button" accessibilityLabel={`Manage ${moment.title}`} onPress={onManage} style={styles.gear} testID={`festival-manage-${moment.id}`}>
+              <Ionicons name="settings-outline" size={20} color={theme.colors.link} />
+            </Pressable>
           </View>
         </View>
       </MomentCard>
@@ -403,13 +431,15 @@ const styles = StyleSheet.create({
   title3: { ...textStyles.title3, fontWeight: '700' },
   subheadline: { ...textStyles.subheadline },
   bold: { fontWeight: '700' },
-  bucket: { gap: 16 },
-  bucketTitle: { marginTop: 8 },
   rowTop: { flexDirection: 'row', alignItems: 'flex-start', gap: 14 },
   rowText: { flex: 1, gap: 8 },
-  titleRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
-  grow: { flex: 1 },
-  gear: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', marginTop: -10 },
+  // `.overlay(alignment: .topTrailing)` on the text column; the title keeps `.padding(.trailing, 44)`.
+  gear: { position: 'absolute', top: -10, right: 0, width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  gearClearance: { paddingRight: 44 },
+  // `HStack(spacing: 8)` of chips, each `.padding(.horizontal, 16).frame(minHeight: 44)`.
+  chips: { flexDirection: 'row', gap: 8 },
+  chip: { minHeight: 44, paddingHorizontal: 16, borderRadius: 999, justifyContent: 'center' },
+  chipLabel: { ...textStyles.subheadline, fontWeight: '700' },
   link: { flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start' },
   reviewButtonWrap: { alignSelf: 'flex-start' },
   reviewButton: { paddingHorizontal: 22, paddingVertical: 10, borderRadius: 12 },

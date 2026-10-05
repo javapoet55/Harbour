@@ -1,6 +1,6 @@
 import type { MessageComposeOutcome } from '../../actions/composers';
 import type { FestivalCatalogEntry, ImportantMoment, MomentInput, PlanAction, WishDeliveryPlan, WishDraft } from '../../api/moments';
-import { deviceZone, momentDate, momentDay, parseInstant, upcomingGroupFor, zonedInstant, type UpcomingGroup } from './dates';
+import { addDays, deviceZone, keepTimeOnDay, momentDate, momentDay, parseInstant, sendDayLabel, shortTimeIn, upcomingGroupFor, zonedInstant, zoneAbbreviation, type UpcomingGroup } from './dates';
 
 /**
  * The pure Important Moments model: `ImportantMoment.swift`, `FestivalManagement.swift`,
@@ -160,6 +160,8 @@ export function momentIcon(type: string): string {
 export type FestivalSettings = {
   groupID: string;
   prepareDays: number;
+  /** Phase 12: a same-day preparation reminder, 1, 4 or 8 hours before; 0 when `prepareDays` is used. */
+  prepareHours: number;
   catalogID: string;
   catalogManaged: boolean;
   baseMessage: string;
@@ -188,7 +190,9 @@ export type FestivalSettings = {
 export function newFestivalSettings(groupID: string): FestivalSettings {
   return {
     groupID,
-    prepareDays: 7,
+    // `public var prepareDays = 1` (FestivalManagement.swift:6). Was 7, Swift's value before d76f460.
+    prepareDays: 1,
+    prepareHours: 0,
     catalogID: '',
     catalogManaged: false,
     baseMessage: '',
@@ -242,6 +246,8 @@ export function readFestivalSettings(raw: string | null | undefined): FestivalSe
   return {
     groupID,
     prepareDays: value('prepareDays', 'number', defaults.prepareDays),
+    // `prepareHours = value(.prepareHours, 0)`: absent from settings saved before Phase 12.
+    prepareHours: value('prepareHours', 'number', 0),
     catalogID: value('catalogID', 'string', defaults.catalogID),
     catalogManaged: value('catalogManaged', 'boolean', defaults.catalogManaged),
     baseMessage: value('baseMessage', 'string', defaults.baseMessage),
@@ -749,3 +755,117 @@ export function momentForPlan(moments: ImportantMoment[], plan: Pick<WishDeliver
 }
 
 export { momentDate };
+
+/**
+ * `MomentScheduleSummary.labels(plans:)` (ImportantMoment.swift:116-129): one badge per distinct send
+ * time, soonest first — "2 scheduled @ 8:00 AM". The zone's abbreviation is added only when the plans
+ * span more than one zone.
+ */
+export function scheduleSummaryLabels(plans: WishDeliveryPlan[], locale?: string): string[] {
+  const multipleZones = new Set(plans.map((plan) => plan.timeZoneID)).size > 1;
+  const labels = [...plans]
+    .sort((a, b) => planDate(a) - planDate(b))
+    .map((plan) => shortTimeIn(planDate(plan), plan.timeZoneID, locale) + (multipleZones ? ` ${zoneAbbreviation(planDate(plan), plan.timeZoneID)}` : ''));
+  const ordered: string[] = [];
+  for (const label of labels) if (!ordered.includes(label)) ordered.push(label);
+  return ordered.map((label) => `${labels.filter((item) => item === label).length} scheduled @ ${label}`);
+}
+
+/**
+ * `MomentManagementFilter` (ImportantMoment.swift:198-210): the Manage Moments tabs. A group with
+ * several recipients can sit under more than one, because each recipient has its own stage.
+ */
+export const MANAGEMENT_FILTERS = ['Scheduled', 'Need Review', 'Ready to Schedule'] as const;
+export type ManagementFilter = (typeof MANAGEMENT_FILTERS)[number];
+
+export function managementFilterIncludes(filter: ManagementFilter, group: MomentDisplayGroup): boolean {
+  return group.moments.some((moment) => {
+    switch (filter) {
+      case 'Scheduled':
+        return upcomingDelivery(moment) !== undefined;
+      case 'Need Review':
+        return needsWishReview(moment) || !moment.enabled;
+      case 'Ready to Schedule':
+        return readyToSchedule(moment);
+    }
+  });
+}
+
+/**
+ * `managementDate(_:)` (ManageFestivalView.swift:18-22): the latest of each recipient's scheduled send,
+ * or its occasion when nothing is scheduled.
+ */
+export function managementDate(group: MomentDisplayGroup, now: number = Date.now()): number {
+  const dates = group.moments.map((moment) => {
+    const plan = upcomingDelivery(moment);
+    return plan ? planDate(plan) : momentDate(moment.nextOccurrence, moment.timeZoneID, now);
+  });
+  return dates.length === 0 ? -Infinity : Math.max(...dates);
+}
+
+/** `groups` (ManageFestivalView.swift:9-17): non-archived groups, LATEST first, then by id. */
+export function managementGroups(moments: ImportantMoment[], now: number = Date.now()): MomentDisplayGroup[] {
+  return displayGroups(moments.filter((moment) => !isArchived(moment))).sort((left, right) => {
+    const a = managementDate(left, now);
+    const b = managementDate(right, now);
+    return a === b ? (left.id < right.id ? -1 : left.id > right.id ? 1 : 0) : b - a;
+  });
+}
+
+/**
+ * The date lines on a Manage Moments row (ManageFestivalView.swift:61-69): "Scheduled: Tue, Oct 6,
+ * 2026" for a recipient with a wish on the way, "Date: …" otherwise, each distinct line once.
+ */
+export function managementDateLabels(group: MomentDisplayGroup, now: number = Date.now()): string[] {
+  const labels: string[] = [];
+  for (const moment of group.moments) {
+    const plan = upcomingDelivery(moment);
+    const label = plan
+      ? `Scheduled: ${sendDayLabel(planDate(plan), plan.timeZoneID)}`
+      : `Date: ${sendDayLabel(momentDate(moment.nextOccurrence, moment.timeZoneID, now), moment.timeZoneID)}`;
+    if (!labels.includes(label)) labels.push(label);
+  }
+  return labels;
+}
+
+/**
+ * `preparationMinutes` (FestivalManagement.swift:171-174): the Prepare reminder as one value — hours
+ * when set, else days.
+ */
+export function preparationMinutes(settings: Pick<FestivalSettings, 'prepareDays' | 'prepareHours'>): number {
+  return settings.prepareHours > 0 ? settings.prepareHours * 60 : settings.prepareDays * 1440;
+}
+
+/** The setter: under a day is hours (and no days), a day or more is days (and no hours). */
+export function withPreparationMinutes<T extends Pick<FestivalSettings, 'prepareDays' | 'prepareHours'>>(settings: T, minutes: number): T {
+  return { ...settings, prepareHours: minutes < 1440 ? Math.floor(minutes / 60) : 0, prepareDays: minutes >= 1440 ? Math.floor(minutes / 1440) : 0 };
+}
+
+/**
+ * `preparationDate(occurrence:zone:)` (:175-181): when to remind — hours before the send itself, or
+ * whole calendar days before it in the moment's zone. `null` when no reminder is set.
+ */
+export function preparationDate(settings: Pick<FestivalSettings, 'prepareDays' | 'prepareHours'>, occurrence: number, zone: string): number | null {
+  if (preparationMinutes(settings) <= 0) return null;
+  if (settings.prepareHours > 0) return occurrence - settings.prepareHours * 3_600_000;
+  // `calendar.date(byAdding: .day, …)` keeps the wall time; `addDays` alone answers midnight.
+  return keepTimeOnDay(occurrence, momentDay(addDays(occurrence, -settings.prepareDays, zone), zone), zone);
+}
+
+/** The Prepare reminder picker's choices (ManageFestivalView.swift:179-186). */
+export const PREPARATION_CHOICES: { value: number; title: string }[] = [
+  { value: 0, title: 'None' },
+  ...[1, 4, 8].map((hours) => ({ value: hours * 60, title: `${hours} hour${hours === 1 ? '' : 's'} before` })),
+  ...[1, 3, 7, 14].map((days) => ({ value: days * 1440, title: `${days} day${days === 1 ? '' : 's'} before` })),
+];
+
+/**
+ * `ManagedFestivalRecipient.storedKey(sourceKey:groupID:momentID:)` (MomentRecipients.swift:172-178):
+ * the recipient's settings key inside `<type>:<group>:<key>`. Read from any type prefix, so a moment
+ * whose occasion was changed keeps its recipients' channels and selection.
+ */
+export function storedRecipientKey(sourceKey: string, groupID: string, momentID: string): string {
+  const prefix = sourceKey.split(':')[0] ?? '';
+  const groupPrefix = `${prefix}:${groupID}:`;
+  return sourceKey.startsWith(groupPrefix) ? sourceKey.slice(groupPrefix.length) : momentID;
+}

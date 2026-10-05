@@ -2125,7 +2125,7 @@ It follows the Phase 11 method: each view was traced from `RootView` to check it
 captured from a Debug build of the Swift app against `https://app-dev.nexdoapp.com`. The captures, how
 they were taken, and the test data are indexed in `mobile/docs/reference/README.md`, "Phase 12".
 
-**Totals: 180 captures, 48 screens (27 new, 21 changed), 9 unmounted entries** (5 that are new since
+**Totals: 180 captures, 49 screens (27 new, 22 changed), 9 unmounted entries** (5 that are new since
 `8c36d98`, plus 4 carried over from Phase 11). Line numbers below are as
 of `dcb8310`; paths are relative to `ios/App/` unless they start with `Sources/` or `src/`.
 
@@ -2184,16 +2184,17 @@ screens are listed again under "Changed screens".
 | [ ] | Task agent: location, business results, outreach draft — new | `TaskAgentCard.swift:4` (`:59-180`), inline in Task Details (`TaskDetailsView.swift:39`) | Task Details of a task the server marks eligible (e.g. "Call electrician") | `GET`/`POST /api/tasks/{id}/agent` | component in `app/task/[id].tsx` *(to build)* | `task-agent-location`, `task-agent-results`, `-reviews`, `-services`, `-scrolled-1`, `-scrolled-2`, `task-agent-outreach-draft` |
 | [ ] | Nexdo Action contact screen — **changed** | `TaskActionView.swift:101` (`:146-305`) | Task card **Call**/**Message** pill, Today action card | on device | `app/action/[id].tsx` | `task-action-error-no-contact`, `task-action-contact-details` |
 | [ ] | Today action cards and queue — **changed** (business candidate card) | `TodayActionsView.swift:10` (`:27-85`), card `:96`, queue `:287` | Today | `GET /api/tasks/{id}/agent` | `app/(tabs)/(today)/today/index.tsx`, `app/action/queue.tsx` | `today-v2`, `-dark`, `today-action-card-contact`, `today-action-card-business`, `today-action-queue` |
-| [ ] | Important Moments with date filters (Today / Tomorrow / This Week / Later) — **changed** | `ImportantMomentsView.swift:209` (`:221-324`; default filter Today, `:216`) | Wellness → Moments → Got it! | `GET /api/moments` | `app/wellness/moments/index.tsx` | `moments-date-filter-today-empty`, `-tomorrow`, `-this-week`, `-later-scrolled`, `moments-scheduled-v2` |
-| [ ] | Manage Moments tabs (Scheduled / Need Review / Ready to Schedule) — new | `ManageFestivalView.swift:4` (`MomentsManagementEntry`, `:23-87`) | Summary card → **Manage** (`ImportantMomentsView.swift:315`) | `GET /api/moments` | `app/wellness/moments/manage-list.tsx` | `moments-manage-tabs-scheduled-empty`, `-scheduled`, `-scheduled-dark`, `-need-review`, `-ready` |
-| [ ] | Create Moment — **changed** (time zone, manual recipient) | `MomentEditor.swift` | Summary card → **Create New** | `POST /api/moments` `festivalSave` | `app/wellness/moments/editor.tsx` | `moment-create-v2`, `-filled` |
-| [ ] | Manage Moment, three tabs (Contacts / Message / Schedule) — **changed** (was four) | `ManageFestivalView.swift:89` (`:109-140`) | Card gear, a Manage row, or after Create | `POST /api/moments` `festivalSave`, `schedule` | `app/wellness/moments/manage.tsx` (`ManageMomentView`) | `moment-manage-v2-contacts`, `-message`, `-message-scrolled`, `-message-saved`, `-schedule`, `-schedule-delivery` |
-| [ ] | Connect me on the day — new | `MomentConnectCall.swift:168` (`MomentConnectSection`, `:186-207`) | Manage Moment → Schedule (inline, `ManageFestivalView.swift:237`) | `POST /api/moments` `connectStatus` / `connectPreview` / `connectSave` / `connectNow` | section in `ManageMomentView` (`app/wellness/moments/manage.tsx`) *(to build)* | `moment-connect-section` |
-| [ ] | Verify caller ID ("Show my number") — new | `MomentConnectCall.swift:306` (`:317-357`) | Connect section → **Verify my number** | `callerIdStart` / `callerIdStatus` / `callerIdRemove` | sheet in `ManageMomentView` *(to build)* | `moment-caller-id-sheet` |
-| [ ] | How it works (calling guide) — new | `MomentConnectCall.swift:381` (`:385-428`) | Connect section → **How it works** | none | sheet in `ManageMomentView` *(to build)* | `moment-calling-guide`, `-scrolled` |
-| [ ] | Review schedule — **changed** (Send Now) | `ManageFestivalView.swift:428` (`FestivalScheduleReview`, `:448-539`) | Schedule tab → **Schedule Wish** | `schedule` | sheet in `ManageMomentView` (`app/wellness/moments/manage.tsx`) | `moment-schedule-review-v2` |
-| [ ] | Send now — new | `ManageFestivalView.swift:488-536` | Review schedule → **Send Now** | `sendGreetingNow` | sheet in `ManageMomentView` *(to build)* | `moment-send-now-confirm` |
-| [ ] | Schedule confirmed — **changed** | `ManageFestivalView.swift:348` (`:362-386`) | Review → **Confirm Schedule** | — | in `ManageMomentView` (`app/wellness/moments/manage.tsx`) | `moment-schedule-success-v2` |
+| [x] `f6c3829` | Important Moments with date filters (Today / Tomorrow / This Week / Later) — **changed** | `ImportantMomentsView.swift:209` (`:221-324`; default filter Today, `:216`) | Wellness → Moments → Got it! | `GET /api/moments` | `app/wellness/moments/index.tsx` | `moments-date-filter-today-empty`, `-tomorrow`, `-this-week`, `-later-scrolled`, `moments-scheduled-v2` |
+| [x] `16c0536` | Manage Moments tabs (Scheduled / Need Review / Ready to Schedule) — new | `ManageFestivalView.swift:4` (`MomentsManagementEntry`, `:23-87`) | Summary card → **Manage** (`ImportantMomentsView.swift:315`) | `GET /api/moments` | `app/wellness/moments/manage-list.tsx` | `moments-manage-tabs-scheduled-empty`, `-scheduled`, `-scheduled-dark`, `-need-review`, `-ready` |
+| [x] `ca8324b` (time zone; manual recipient was already built) | Create Moment — **changed** (time zone, manual recipient) | `MomentEditor.swift` | Summary card → **Create New** | `POST /api/moments` `festivalSave` | `app/wellness/moments/editor.tsx` (`MomentEditorView`) | `moment-create-v2`, `-filled` |
+| [ ] | Choose Festivals — **changed** (hero, region cards, festival list; missed by the reference pass) | `MomentEditor.swift:306` (`MomentFestivalView`, `:330-357`…) | Moments settings → Choose festivals | none | `app/wellness/moments/festivals.tsx` (exists; rebuild) | — (not captured) |
+| [x] `9c3dee0` | Manage Moment, three tabs (Contacts / Message / Schedule) — **changed** (was four) | `ManageFestivalView.swift:89` (`:109-140`) | Card gear, a Manage row, or after Create | `POST /api/moments` `festivalSave`, `schedule` | `app/wellness/moments/manage.tsx` (`ManageMomentView`, with `MomentDetailsSheet`) | `moment-manage-v2-contacts`, `-message`, `-message-scrolled`, `-message-saved`, `-schedule`, `-schedule-delivery` |
+| [x] `8962288`, `0927e9d` | Connect me on the day — new | `MomentConnectCall.swift:168` (`MomentConnectSection`, `:186-207`) | Manage Moment → Schedule (inline, `ManageFestivalView.swift:237`) | `POST /api/moments` `connectStatus` / `connectPreview` / `connectSave` / `connectNow` | `MomentConnectSection` (`src/features/moments/MomentConnectSection.tsx`) on the Schedule step | `moment-connect-section` |
+| [x] `8962288` | Verify caller ID ("Show my number") — new | `MomentConnectCall.swift:306` (`:317-357`) | Connect section → **Verify my number** | `callerIdStart` / `callerIdStatus` / `callerIdRemove` | `CallerIDVerificationSheet` in `MomentConnectSection.tsx` | `moment-caller-id-sheet` |
+| [x] `8962288`, `0927e9d` | How it works (calling guide) — new | `MomentConnectCall.swift:381` (`:385-428`) | Connect section → **How it works** | none | `MomentCallingGuide` in `MomentConnectSection.tsx`; art in `assets/moments/` | `moment-calling-guide`, `-scrolled` |
+| [x] `4cc3d77` | Review schedule — **changed** (Send Now) | `ManageFestivalView.swift:428` (`FestivalScheduleReview`, `:448-539`) | Schedule tab → **Schedule Wish** | `schedule` | `ScheduleReviewSheet` (`src/features/moments/ScheduleReview.tsx`) | `moment-schedule-review-v2` |
+| [x] `4cc3d77` | Send now — new | `ManageFestivalView.swift:488-536` | Review schedule → **Send Now** | `sendGreetingNow` | sheet in `ScheduleReviewSheet` | `moment-send-now-confirm` |
+| [x] `4cc3d77` | Schedule confirmed — **changed** | `ManageFestivalView.swift:348` (`:362-386`) | Review → **Confirm Schedule** | — | `ScheduleSuccess` in `ScheduleReview.tsx`, shown by `manage.tsx` | `moment-schedule-success-v2` |
 | [x] `224ba48` as `app/wellness/shopping/index.tsx` (`StoreBrandLogo.tsx`) | My Lists with store logos — **changed** | `ShoppingViews.swift:78` (`:82-136`); `StoreBrandLogo.swift:11` | Wellness → Shopping List → Got it! | `GET /api/shopping`, `GET /api/shopping/store-brand` | `app/wellness/shopping/index.tsx` | `shopping-lists-v2` |
 | [x] `224ba48` in `NewListSheet` (`src/features/shopping/sheets.tsx`) | New List ("Create List & Add Store") — **changed** | `ShoppingViews.swift:142` (`:153-188`) | **Create New List** | `POST /api/shopping` `create` | `NewListSheet` (`src/features/shopping/sheets.tsx`) in `app/wellness/shopping/index.tsx` | `shopping-new-list-v2` |
 | [x] `224ba48` as `ListSettingsSheet` (`src/features/shopping/ListSettings.tsx`) | List Settings with store — **changed** | `ShoppingViews.swift:642` (`:652-682`) | After create, or ⋯ → List settings | `save` | `ListSettingsSheet` in `app/wellness/shopping/[id].tsx` | `shopping-list-settings-store`, `-filled` |
@@ -2724,6 +2725,56 @@ wide); 10 files, 245 KB.
 needs no permission. Deviations are in `mobile/docs/android-polish.md` §24; the Swift issues found are under
 "For the team" below.
 
+### Run E: Moments (Mac)
+
+The ten open Moments rows, built on `rn-phase-12-mac` from the Swift source at `dcb8310` and the
+reference captures, on Windows' part 1 connect-call model. One commit per screen group:
+
+| Rows | Swift | RN | Commit |
+| --- | --- | --- | --- |
+| Create Moment: time zone | `MomentEditor.swift:44`; `ManageFestivalView.swift:187` | `knownTimeZones` / `ZonePicker` (`src/features/moments/form.tsx`), `canonicalZone` (`dates.ts`) | `ca8324b` |
+| Important Moments date filters | `ImportantMomentsView.swift:216-281`; `MomentUpcomingFilter`, `MomentScheduleSummary` (`ImportantMoment.swift:99-129`) | `app/wellness/moments/index.tsx`; `upcomingFilterIncludes` (`dates.ts`), `scheduleSummaryLabels` (`domain.ts`) | `f6c3829` |
+| Manage Moments tabs | `ManageFestivalView.swift:4-88`; `MomentManagementFilter` (`ImportantMoment.swift:198-210`) | `app/wellness/moments/manage-list.tsx`; `managementFilterIncludes`, `managementGroups`, `managementDateLabels` (`domain.ts`) | `16c0536` |
+| Manage Moment, three tabs; Edit Moment; Prepare reminder | `ManageFestivalView.swift:89-347`; `ManageFestivalModel.swift`; `FestivalManagement.swift:171-181`; `ImportantMomentsStore.swift:195-207` | `ManageMomentView.tsx` (`MomentDetailsSheet`, `DeliveryTag`), `manageModel.ts`, `notifications.ts`, `domain.ts` | `9c3dee0` |
+| Connect me on the day, Verify caller ID, How it works | `MomentConnectCall.swift:166-444` | `MomentConnectSection.tsx`; art `assets/moments/calling-*.png` | `8962288`, `0927e9d` |
+| Review schedule with Send Now, Send now, Schedule confirmed | `ManageFestivalView.swift:348-634`; `sendImmediately` (`ManageFestivalModel.swift:336-354`) | `ScheduleReview.tsx`, `manageModel.ts` (`sendImmediately`, `saveRecipient`) | `4cc3d77` |
+
+**Swift bugs not copied** (kept on "For the team"): the blank India time zone (both spellings are one
+zone, and `Asia/Kolkata` is listed once), and the calling guide's truncated title (it wraps).
+
+**Kept as Swift, noted:** the "Connect me to …" switch for an unverified number is disabled with no
+reason beside it — the Swift source has text only for a missing phone and a past day, and both are shown.
+
+**Also corrected in RN, not Swift bugs:** a new moment's Prepare reminder defaulted to 7 days, Swift's
+value before `d76f460` (now 1, as Swift); and the "days before" reminder came out at midnight because
+`addDays` answers midnight, where Swift's `calendar.date(byAdding: .day, …)` keeps the time of day.
+
+**What changed in shared code:** `FixedScheme` (`src/theme/scheme.tsx`) pins a subtree to one colour
+scheme, so the fixed-light Review schedule and Schedule confirmed draw their date pill and fields light
+too; `GlassCircle` already took a `scheme` (prep). `sendGreetingNow` joined `MomentOperation`.
+
+**Native modules and permissions: none new.** Send Now uses the installed `expo-sms`
+(`openMessages`, `canSendMessage`); the call time uses `ClockField`; the four guide pictures are
+176 KB in `assets/moments/`.
+
+**Never a real call, text or email in testing:** every server answer and the Messages composer are
+mocked (`connectSection.test.tsx`, `scheduleReview.test.tsx`); "Call me to verify", "Connect now" and
+Send Now only post to the mocked `/api/moments`.
+
+**Not in this run:**
+- **Choose Festivals** was redesigned in Swift (`MomentFestivalView`, a hero, region cards and a festival
+  list); the reference pass missed it. A row is now in the inventory, unticked.
+- **The notification inbox** (`showingNotificationInbox`, `ImportantMomentsView.swift:599-607`): a tapped
+  Moments notification whose moment is gone now opens the Moments list in a sheet, and `routedPlanID`
+  opens the tapped plan. RN still opens `/wellness/moments` with `routed`.
+
+**Tests:** 147 suites, 2,144 tests — 5 suites and 60 tests more than the branch point (142, 2,084); the
+existing Moments tests were rewritten to the three-step screen and the date chips. `tsc` and eslint clean. New:
+`zones.test.tsx`, `upcoming.test.ts` (Swift's `momentDateFiltersRespectLocalDaysAndWeekBoundaries` and
+`momentScheduleBadgesGroupMatchingTimes`), `manageList.test.tsx`, `connectSection.test.tsx`,
+`scheduleReview.test.tsx`; ports of `preparationRemindersSupportHoursAndLegacyDays` and
+`editedOccasionKeepsOriginalRecipientSettingKeys`. Android deviations: `mobile/docs/android-polish.md` §25.
+
 ### Run F: Shopping (Windows)
 
 Built from the Swift source (`git diff 8c36d98 HEAD` on the Shopping files) and the Mac's `shopping-*`
@@ -2773,7 +2824,7 @@ product names sent with the session, `lookup_food` the only tool, Swift's copy a
 **Native modules and permissions: none new.** The camera and approximate location were already declared
 (Phase 11 Run C; weather). Images: `assets/grocery/mango.png` (256 px), `assets/alternatives/` (five milk
 cartons and six bread crops from `alternatives-design-pack`), `assets/share-list/` (eight icons, the plane
-150 px wide). Deviations are in `mobile/docs/android-polish.md` §25.
+150 px wide). Deviations are in `mobile/docs/android-polish.md` §26.
 
 ### For the team
 
@@ -2867,7 +2918,8 @@ first, unchanged; the Mac reference pass’s items follow, with their captures.
   this Mac that is `Asia/Kolkata`, which the list does not contain (it has the legacy
   `Asia/Calcutta`), so no row matches. Review schedule still shows "Asia/Kolkata", so the value is
   kept; only the picker is blank. Any canonical zone the list spells the old way (for example
-  `Europe/Kyiv`) is affected.
+  `Europe/Kyiv`) is affected. **RN does not copy it** (Run E, `ca8324b`): its zone lists name every
+  zone by its current name, so `Asia/Kolkata` is listed once and a stored `Asia/Calcutta` selects it.
 - **Offer dates are shown in the phone's time zone.** `offerDate` (`ShoppingOffersView.swift:132-136`)
   formats `expiresAt` in the device zone. A Safeway offer ending 6 Oct in California reads "Valid
   through 7 Oct 2026" in India (`shopping-offer-detail`).
@@ -2882,11 +2934,14 @@ first, unchanged; the Mac reference pass’s items follow, with their captures.
 - **Event Details always shows both Mark Complete and Mark Incomplete**
   (`CalendarEventDetailsView.swift:44-45`; the ⋯ menu at `:86` shows the right one). On delete
   with warnings, the alert binding and its OK button both call `dismiss()` (`:97`).
-- **"Connect me to …" is disabled with no reason given.** The switch is
-  `.disabled(!model.verified || …)` (`MomentConnectCall.swift:237`) but is drawn like an enabled off
-  switch; nothing says to verify the number first.
+- **"Connect me to …" is disabled with no reason given for an unverified number.** The switch is
+  `.disabled(!model.verified || state.recipientPhone == nil || state.passed)` (`MomentConnectCall.swift:237`).
+  Swift explains the last two under the switch ("Add …’s phone number with its country code…", "This
+  moment has already passed."), but not the first: only the caller-ID card above says "Verify your number
+  first…". RN (Run E) shows Swift's two captions and leaves the unverified switch as Swift draws it, since
+  the source has no text for it; a reason at the switch is for Swift to add.
 - **The calling guide title is cut off**: "We call for you on s…" (`MomentConnectCall.swift:393`,
-  `moment-calling-guide`).
+  `moment-calling-guide`). RN wraps it (Run E).
 - **Pomodoro labels**: the third tab reads "Insights" until it is selected, then "Categories"
   (`PomodoroDashboard.swift:81`). The completion screen says **Back to Tasks** even when Pomodoro was
   opened from Wellness (`PomodoroView.swift:174`).
@@ -2920,3 +2975,15 @@ first, unchanged; the Mac reference pass’s items follow, with their captures.
   does not handle `ZodError` (`src/app/api/moments/route.ts:15`). *(From reading the code; not seen on screen.)*
 - Item Alternatives no longer falls back to local suggestions on error, so any server failure is
   shown to the user. *(From reading the code; not seen on screen.)*
+- **Schedule confirmed lists send times in text order, not time order.** `sendTimes` sorts the formatted
+  labels (`ManageFestivalView.swift:359-361`), so "10 Oct 2026 at 8:00 AM" comes before "6 Oct 2026 at
+  8:00 AM" when a group has several. RN copies it (Run E).
+- **A yearly moment now shows its stored year in Manage Moment.** The model reads `occurrenceDate`
+  (`ManageFestivalModel.swift:92`), so a birthday saved with the birth year shows that year in the header,
+  the Moment card and Edit Moment ("Thu, Oct 6, 1990"), not this year's occasion. RN copies it.
+- **"This Week" starts on a different day in different modules.** Moments' date chips use
+  `Calendar.current` (Sunday-first on an en-US phone, `ImportantMoment.swift:99-115`); Pomodoro and the
+  Calorie Tracker use Monday-first weeks. RN copies each.
+- **Send Now refuses everyone when Messages is unavailable.** `sendNow()` checks `canSendText()` if ANY
+  recipient has a phone (`ManageFestivalView.swift:546`), so on a device without Messages a recipient set to
+  Email is not sent either. RN copies it. *(From reading the code.)*

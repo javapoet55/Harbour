@@ -28,7 +28,12 @@ import {
   OPENED_UNCONFIRMED,
   planEditable,
   planStatusLabel,
+  newFestivalSettings,
+  preparationDate,
+  preparationMinutes,
   readFestivalSettings,
+  storedRecipientKey,
+  withPreparationMinutes,
   readyToSchedule,
   recipientInitials,
   sortedPlans,
@@ -225,7 +230,8 @@ describe('FestivalSettings.read', () => {
     // Mistyped falls back to its default rather than taking the whole object down.
     expect(read?.imageAspect).toBe('Portrait');
     expect(read?.tone).toBe('Warm');
-    expect(read?.prepareDays).toBe(7);
+    // Swift's default since d76f460 (FestivalManagement.swift:6).
+    expect(read?.prepareDays).toBe(1);
     expect(read?.includeImage).toBe(false);
     expect(read?.cardGreeting).toBeNull();
     // A fresh moment's settings still round-trip unchanged.
@@ -565,5 +571,38 @@ describe('recipient sheet rules (iOS RecipientDraft)', () => {
     expect(maskedAddresses({ phone: '+15550101234', email: 'asha@example.com' })).toBe('Mobile · ••• ••• 1234 · Email · a••••@example.com');
     expect(maskedAddresses({ phone: '+15550101234', email: '' })).toBe('Mobile · ••• ••• 1234');
     expect(maskedAddresses({ phone: '', email: 'asha@example.com' })).toBe('Email · a••••@example.com');
+  });
+});
+
+// preparationRemindersSupportHoursAndLegacyDays (ImportantMomentTests.swift)
+describe('preparation reminder', () => {
+  it('reads legacy days, stores hours and days exclusively, and dates the reminder', () => {
+    const legacy = readFestivalSettings('{"groupID":"test","prepareDays":3}')!;
+    expect(preparationMinutes(legacy)).toBe(4320);
+    const instant = Date.parse('2026-11-01T12:00:00Z');
+    for (const hours of [1, 4, 8]) {
+      const next = withPreparationMinutes(legacy, hours * 60);
+      expect(next.prepareDays).toBe(0);
+      const restored = readFestivalSettings(JSON.stringify(next))!;
+      expect(preparationDate(restored, instant, 'America/Los_Angeles')).toBe(instant - hours * 3_600_000);
+    }
+    expect(preparationDate(withPreparationMinutes(legacy, 0), instant, 'UTC')).toBeNull();
+    const day = withPreparationMinutes(legacy, 1440);
+    expect(day.prepareHours).toBe(0);
+    expect(day.prepareDays).toBe(1);
+  });
+
+  it('defaults new settings to one day, as Swift', () => {
+    expect(preparationMinutes(newFestivalSettings('g'))).toBe(1440);
+  });
+});
+
+// editedOccasionKeepsOriginalRecipientSettingKeys (MomentRecipientsTests.swift)
+describe('storedRecipientKey', () => {
+  it('keeps a recipient’s key across an occasion change', () => {
+    expect(storedRecipientKey('festival:group:contact:123', 'group', 'row')).toBe('contact:123');
+    expect(storedRecipientKey('birthday:group:contact', 'group', 'row')).toBe('contact');
+    expect(storedRecipientKey('manual', 'group', 'row')).toBe('row');
+    expect(storedRecipientKey('festival:other:contact', 'group', 'row')).toBe('row');
   });
 });

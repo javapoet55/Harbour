@@ -283,7 +283,7 @@ describe('writing a wish', () => {
     // A tab change auto-saves, so it waits too, and leaves no pending tab behind.
     await model.getState().changeTab('Schedule');
     expect(saves()).toHaveLength(0);
-    expect(model.getState()).toMatchObject({ tab: 'Details', pendingTab: null, busy: false });
+    expect(model.getState()).toMatchObject({ tab: 'Contacts', pendingTab: null, busy: false });
     expect(model.getState().settings.approvedAt).toBeNull();
 
     reply.resolve({ draft: draft({ body: 'A new wish' }), usedAI: true });
@@ -315,11 +315,12 @@ describe('writing a wish', () => {
 });
 
 describe('tab changes auto-save', () => {
-  it('changes tab straight away when nothing is dirty', async () => {
+  it('opens on Contacts and changes tab straight away when nothing is dirty', async () => {
     const h = harness(festivalGroup());
     const model = createManageModel({ id: 'g', moments: festivalGroup() }, h.deps);
-    await model.getState().changeTab('Contacts');
     expect(model.getState().tab).toBe('Contacts');
+    await model.getState().changeTab('Schedule');
+    expect(model.getState().tab).toBe('Schedule');
     expect(h.post).not.toHaveBeenCalled();
   });
 
@@ -329,22 +330,22 @@ describe('tab changes auto-save', () => {
     const model = createManageModel({ id: 'g', moments: festivalGroup() }, h.deps);
     model.getState().setTitle('Diwali 2030');
     h.setSnapshot(festivalGroup().map((item) => ({ ...item, title: 'Diwali 2030' })));
-    await model.getState().changeTab('Wish Message');
+    await model.getState().changeTab('Message');
     expect(h.post).toHaveBeenCalledWith('festivalSave', expect.objectContaining({ ids: ['a', 'b'], title: 'Diwali 2030', cancelSchedules: false }), undefined);
-    expect(model.getState().tab).toBe('Wish Message');
+    expect(model.getState().tab).toBe('Message');
     expect(model.getState().notice).toBe('Moment changes saved.');
     expect(isDirty(model.getState())).toBe(false);
   });
 
-  // ManageFestivalModel.swift:117: a failed ordinary save shows the error and keeps the edits,
-  // but does not trap you on the tab you were leaving.
-  it('a failed save keeps the edits and the error, and still moves between steps', async () => {
+  // Phase 12 (ManageFestivalModel.swift:224): a failed save shows the error, keeps the edits and STAYS
+  // on the step, where the error belongs. It used to move on regardless.
+  it('a failed save keeps the edits and the error, and stays on the step', async () => {
     const h = harness(festivalGroup());
     await h.store.getState().activate('u');
     const model = createManageModel({ id: 'g', moments: festivalGroup() }, h.deps);
     model.getState().setTitle('');
     await model.getState().changeTab('Schedule');
-    expect(model.getState().tab).toBe('Schedule');
+    expect(model.getState().tab).toBe('Contacts');
     expect(model.getState().error).toBe('Enter a moment name of 1–150 characters.');
     expect(model.getState().pendingTab).toBeNull();
     // The edit is still in memory, so it can be corrected rather than retyped.
@@ -358,13 +359,13 @@ describe('tab changes auto-save', () => {
     const model = createManageModel({ id: 'g', moments: festivalGroup() }, h.deps);
     model.getState().setYearly(true);
     h.post.mockRejectedValueOnce(new ApiError({ status: 409, message: 'Existing schedules must be cancelled before saving changes. Review and schedule again.' }));
-    await model.getState().changeTab('Contacts');
+    await model.getState().changeTab('Message');
     expect(model.getState().needsScheduleConfirmation).toBe(true);
-    expect(model.getState().tab).toBe('Details');
-    expect(model.getState().pendingTab).toBe('Contacts');
+    expect(model.getState().tab).toBe('Contacts');
+    expect(model.getState().pendingTab).toBe('Message');
     await model.getState().save(true);
     expect(h.post).toHaveBeenLastCalledWith('festivalSave', expect.objectContaining({ cancelSchedules: true }), undefined);
-    expect(model.getState().tab).toBe('Contacts');
+    expect(model.getState().tab).toBe('Message');
     expect(model.getState().notice).toBe('Changes saved. Review and schedule your updated wish again.');
   });
 
@@ -871,5 +872,125 @@ describe('greeting card image', () => {
     const { h, model } = await withCard();
     await model.getState().loadStoredCard();
     expect(h.cards.fetch).not.toHaveBeenCalled();
+  });
+});
+
+/** Phase 12: Manage Moment as three steps (ManageFestivalModel.swift). */
+describe('Phase 12 manager', () => {
+  async function opened(moments = festivalGroup(), uuid?: () => string) {
+    const h = harness(moments);
+    if (uuid) h.deps.uuid = uuid;
+    await h.store.getState().activate('u');
+    return { h, model: createManageModel({ id: 'g', moments }, h.deps) };
+  }
+
+  it('goes on to the next step after a save, and after a save with nothing to change', async () => {
+    const { h, model } = await opened();
+    model.getState().prepareNextTabAfterSave();
+    await model.getState().save();
+    expect(model.getState()).toMatchObject({ tab: 'Message', pendingTab: null, notice: 'No changes to save. Your existing schedule is unchanged.' });
+    model.getState().setMessage('Happy Diwali, Asha!');
+    model.getState().prepareNextTabAfterSave();
+    h.setSnapshot(festivalGroup());
+    await model.getState().approve();
+    expect(model.getState().tab).toBe('Schedule');
+    // Schedule is the last step: a save there stays.
+    model.getState().prepareNextTabAfterSave();
+    expect(model.getState().pendingTab).toBeNull();
+  });
+
+  it('clears the next step when approval is refused', async () => {
+    const { model } = await opened();
+    model.getState().setMessage('');
+    model.getState().showTab('Message');
+    model.getState().prepareNextTabAfterSave();
+    await model.getState().approve();
+    expect(model.getState()).toMatchObject({ tab: 'Message', pendingTab: null });
+    expect(model.getState().error).not.toBeNull();
+  });
+
+  it('keeps the moment’s calendar day when the time zone changes, without moving the send time', async () => {
+    const { model } = await opened();
+    const send = model.getState().sendDate;
+    model.getState().setZone('Asia/Kolkata');
+    expect(new Date(model.getState().date).toISOString()).toBe('2030-09-19T18:30:00.000Z');
+    expect(model.getState().sendDate).toBe(send);
+    expect(isDirty(model.getState())).toBe(true);
+  });
+
+  it('reads the moment’s own date, not the next occurrence', async () => {
+    const yearly = festivalGroup().map((item) => ({ ...item, occurrenceDate: '1990-09-20', nextOccurrence: '2030-09-20', yearly: true }));
+    const { model } = await opened(yearly);
+    expect(new Date(model.getState().date).toISOString()).toBe('1990-09-20T00:00:00.000Z');
+  });
+
+  it('treats a changed occasion as a delivery change and saves the new type', async () => {
+    const { h, model } = await opened();
+    model.getState().setType('anniversary');
+    expect(isDirty(model.getState())).toBe(true);
+    expect(pendingChange(model.getState())).toBe('delivery');
+    h.setSnapshot(festivalGroup().map((item) => ({ ...item, type: 'anniversary', sourceKey: item.sourceKey.replace('festival:', 'anniversary:') })));
+    await model.getState().save();
+    expect(h.post).toHaveBeenCalledWith('festivalSave', expect.objectContaining({ type: 'anniversary', ids: ['a', 'b'] }), undefined);
+    // The recipients kept their keys and moments across the type change.
+    expect(model.getState().recipients.map((recipient) => [recipient.key, recipient.momentID])).toEqual([
+      ['ka', 'a'],
+      ['kb', 'b'],
+    ]);
+    expect(isDirty(model.getState())).toBe(false);
+  });
+
+  it('keys a recipient whose stored prefix is another type', async () => {
+    const changed = festivalGroup().map((item) => ({ ...item, type: 'birthday' }));
+    const { model } = await opened(changed);
+    expect(model.getState().recipients.map((recipient) => recipient.key)).toEqual(['ka', 'kb']);
+  });
+
+  it('stores an hours-before prepare reminder', async () => {
+    const { h, model } = await opened();
+    model.getState().updateSettings({ prepareDays: 0, prepareHours: 4 });
+    await model.getState().save();
+    const sent = h.post.mock.calls.find(([operation]) => operation === 'festivalSave')![1] as { settings: { prepareDays: number; prepareHours: number } };
+    expect(sent.settings).toMatchObject({ prepareDays: 0, prepareHours: 4 });
+  });
+
+  describe('Send Now (`sendImmediately`)', () => {
+    const both = () => festivalGroup().map((item) => ({ ...item, enabled: true, festivalSettings: groupSettings({ selected: { ka: true, kb: true } }) }));
+
+    it('sends each selected recipient their own wish, approved, with an operation id', async () => {
+      let next = 0;
+      const { h, model } = await opened(both(), () => `OP-${++next}`);
+      h.post.mockImplementation(async (operation: string, input: unknown) => {
+        const body = input as { momentID: string };
+        return (operation === 'sendGreetingNow' ? { plans: [plan({ id: `p-${body.momentID}`, channel: 'messages' })] } : { ok: true }) as never;
+      });
+      const plans = await model.getState().sendImmediately();
+      expect(plans?.map((item) => item.id)).toEqual(['p-a', 'p-b']);
+      const sends = h.post.mock.calls.filter(([operation]) => operation === 'sendGreetingNow').map(([, input]) => input);
+      expect(sends).toEqual([
+        { momentID: 'a', body: deliveryMessage(model.getState(), model.getState().recipients[0]), operationID: 'OP-1', approved: true },
+        { momentID: 'b', body: deliveryMessage(model.getState(), model.getState().recipients[1]), operationID: 'OP-2', approved: true },
+      ]);
+    });
+
+    it('reuses each recipient’s operation id on a retry, so nothing is sent twice', async () => {
+      let next = 0;
+      const { h, model } = await opened(both(), () => `OP-${++next}`);
+      h.post.mockRejectedValueOnce(new Error('Network down'));
+      expect(await model.getState().sendImmediately()).toBeNull();
+      expect(model.getState().error).toBe('Network down');
+      h.post.mockImplementation(async (operation: string) => (operation === 'sendGreetingNow' ? { plans: [] } : { ok: true }) as never);
+      await model.getState().sendImmediately();
+      const ids = h.post.mock.calls.filter(([operation]) => operation === 'sendGreetingNow').map(([, input]) => (input as { operationID: string }).operationID);
+      expect(ids).toEqual(['OP-1', 'OP-1', 'OP-2']);
+    });
+
+    it('asks to save recipients first when one has no moment yet', async () => {
+      const { h, model } = await opened(both());
+      h.post.mockImplementation(async (operation: string) => (operation === 'sendGreetingNow' ? { plans: [] } : { ok: true }) as never);
+      model.getState().setRecipients([...model.getState().recipients, { key: 'new', name: 'New', phone: '+15550100', email: '', selected: true, contactIdentifier: '' }]);
+      expect(await model.getState().sendImmediately()).toBeNull();
+      expect(model.getState().error).toBe('Save recipients first.');
+    });
   });
 });
