@@ -1,6 +1,7 @@
 import type { Prisma } from '@/generated/prisma';
 import { prisma } from './db';
 import { rangeForNextNDays, startOfLocalDay, tzToday, ymd, zonedDateTime } from '@/lib/time';
+import { withoutTaskMirrors } from '@/lib/schedule-intelligence';
 
 const openStatuses = ['INBOX', 'PLANNED', 'IN_PROGRESS', 'WAITING'];
 
@@ -86,7 +87,19 @@ export async function snapshotForRange(userId: string, timeZone: string, days: n
     listEventsInRange(userId, range.start, range.end),
     overdueTasks(userId, timeZone, now),
   ]);
-  return { range, tasks, events, overdue };
+  // Calendar sync stores a provider mirror of each exported task. The agenda
+  // displays the task itself, so it must not also display that linked event.
+  // Include terminal/deleted links even when their tasks are outside this range.
+  const linkedTasks = events.length ? await prisma.task.findMany({
+    where: { userId, OR: [
+      { calendarEventId: { in: events.map((event) => event.id) } },
+      { calendarEventId: null, externalEventId: { in: events.flatMap((event) => event.externalId ? [event.externalId] : []) } },
+    ] },
+  }) : [];
+  const visibleEvents = withoutTaskMirrors(events, linkedTasks.map((task) => ({
+    ...task, status: task.deletedAt ? 'CANCELLED' : task.status,
+  })));
+  return { range, tasks, events: visibleEvents, overdue };
 }
 
 export function taskWhereForUser(userId: string): Prisma.TaskWhereInput {
