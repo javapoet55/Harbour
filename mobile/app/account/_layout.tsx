@@ -19,6 +19,7 @@ export default function AccountLayout() {
       {/* Phase 12 Run A: pushed from the Account menu (ProfileView.swift:66-69). */}
       <Stack.Screen name="help" />
       <Stack.Screen name="feedback" />
+      <Stack.Screen name="change-password" />
     </Stack>
   );
 }

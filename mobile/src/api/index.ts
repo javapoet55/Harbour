@@ -280,5 +280,13 @@ export const endpoints = {
   deleteAccount: (client: ApiClient = getApi()) => client.del<{ ok: boolean }>('/api/account'),
 
   logout: (client: ApiClient = getApi()) => client.post<{ ok: boolean }>('/api/auth/logout', undefined, { signedOutOn401: false }),
+  /**
+   * `AppModel.changePassword` (NexdoApp.swift:859-864): `POST /api/auth/change-password`. The server
+   * checks the current password, saves the new one and clears the session cookie
+   * (src/app/api/auth/change-password/route.ts); 400s carry its message ("Your current password is
+   * incorrect.", "Choose a different new password.", …).
+   */
+  changePassword: (input: { currentPassword: string; newPassword: string; confirmPassword: string }, client: ApiClient = getApi()) =>
+    client.post<{ ok: true }>('/api/auth/change-password', input),
   me: (client: ApiClient = getApi()) => client.get<ProfileResponse>('/api/me'),
 };

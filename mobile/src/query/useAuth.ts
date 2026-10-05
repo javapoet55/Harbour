@@ -150,3 +150,21 @@ export function useSignOut({ beforeSessionEnds }: { beforeSessionEnds?: () => Pr
     },
   });
 }
+
+/**
+ * `AppModel.changePassword(current:new:confirmation:)` (NexdoApp.swift:859-864): change the password,
+ * then `reset()` — the app signs out locally (the server has already cleared the session) and the
+ * user signs in again with the new password. A failure leaves the session alone and is thrown.
+ */
+export function useChangePassword({ beforeSessionEnds }: { beforeSessionEnds?: () => Promise<void> } = {}) {
+  const queryClient = useQueryClient();
+  return useMutation<void, Error, { current: string; next: string; confirmation: string }>({
+    mutationFn: async ({ current, next, confirmation }) => {
+      await endpoints.changePassword({ currentPassword: current, newPassword: next, confirmPassword: confirmation });
+      await beforeSessionEnds?.().catch(() => undefined);
+      useSession.getState().clear();
+      queryClient.clear();
+      queryClient.setQueryData(queryKeys.me(), null);
+    },
+  });
+}
