@@ -6,6 +6,7 @@ import {
   desiredNotifications,
   NOTIFICATION_LIMIT,
   reconcileActions,
+  releaseActions,
   transition,
   waitingBeforeItsTime,
   type StoredTaskAction,
@@ -50,6 +51,8 @@ export type CoordinatorState = {
   pending: Pending | null;
   /** Bumped on every owner change so a late schedule from the old account is discarded (`:30`). */
   generation: number;
+  /** `openScreens` (`:36`): how many Action screens are showing each action. */
+  openScreens: Record<string, number>;
 };
 
 type CoordinatorStore = CoordinatorState & {
@@ -65,6 +68,8 @@ type CoordinatorStore = CoordinatorState & {
   snooze: (id: string, until?: number) => void;
   dismiss: (id: string) => void;
   release: (id: string) => void;
+  screenOpened: (id: string) => void;
+  screenClosed: (id: string) => void;
   clearRoute: () => void;
   retryNotifications: () => void;
   /** Test seam: replaces the whole state without touching disk. */
@@ -79,6 +84,7 @@ const EMPTY: CoordinatorState = {
   notice: null,
   pending: null,
   generation: 0,
+  openScreens: {},
 };
 
 /** `snooze(_:)` with no date (TaskActionCoordinator.swift:111-113). */
@@ -121,17 +127,12 @@ export const useCoordinator = create<CoordinatorStore>()((set, get) => ({
     if (owner === null) return;
 
     const now = Date.now();
-    const opened = get().route;
+    const route = get().route;
     // A changed task date rebuilds its action as `pending` at the new time (reconcileActions). An
-    // action opened before its time and left without a choice returns to `scheduled` — unless its
-    // Action screen is open right now — so its reminder is not skipped.
-    const actions = reconcileActions({
-      previous: get().actions,
-      tasks,
-      now,
-      timeZone,
-      newId: () => randomUUID(),
-    }).map((action) => (opened?.id !== action.id && waitingBeforeItsTime(action, now) ? transition(action, 'scheduled', now).action : action));
+    // action opened before its time and left without a choice returns to `scheduled` — unless an
+    // Action screen for it is open, or it is routed — so its reminder is not skipped (`:64-65`).
+    const open = new Set([...Object.keys(get().openScreens), ...(route ? [route.id] : [])]);
+    const actions = releaseActions(reconcileActions({ previous: get().actions, tasks, now, timeZone, newId: () => randomUUID() }), open, now);
     set({ actions });
     await persist(set, get);
     void schedule(set, get);
@@ -144,8 +145,8 @@ export const useCoordinator = create<CoordinatorStore>()((set, get) => ({
     }
 
     // `if let route, !actions.contains(where: { $0.id == route.id }) { self.route = nil }`
-    const route = get().route;
-    if (route && !get().actions.some((action) => action.id === route.id)) set({ route: null });
+    const routed = get().route;
+    if (routed && !get().actions.some((action) => action.id === routed.id)) set({ route: null });
   },
 
   actionForTask: (taskId) => get().actions.find((action) => action.taskId === taskId),
@@ -231,6 +232,26 @@ export const useCoordinator = create<CoordinatorStore>()((set, get) => ({
   release: (id) => {
     const action = get().actions.find((item) => item.id === id);
     if (action && waitingBeforeItsTime(action, Date.now())) get().transitionTo(id, 'scheduled');
+  },
+
+  /** `screenOpened(_:)` (TaskActionCoordinator.swift:80). */
+  screenOpened: (id) => set((state) => ({ openScreens: { ...state.openScreens, [id]: (state.openScreens[id] ?? 0) + 1 } })),
+
+  /**
+   * `screenClosed(_:)` (TaskActionCoordinator.swift:81-89): once the last screen for an action closes
+   * with no choice made and the reminder still ahead, the action goes back to `scheduled`; a routed
+   * action, or one whose time has arrived, keeps waiting for a choice.
+   */
+  screenClosed: (id) => {
+    const remaining = (get().openScreens[id] ?? 1) - 1;
+    set((state) => {
+      const openScreens = { ...state.openScreens };
+      if (remaining > 0) openScreens[id] = remaining;
+      else delete openScreens[id];
+      return { openScreens };
+    });
+    if (remaining > 0 || get().route?.id === id) return;
+    get().release(id);
   },
 
   clearRoute: () => set({ route: null }),

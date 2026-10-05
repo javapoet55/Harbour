@@ -1,6 +1,6 @@
-import { contactSearchName } from '../../src/lib/taskActionDetector';
-import { router, useLocalSearchParams } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -15,20 +15,39 @@ import {
   placeCall,
   type ActionComposeResult,
 } from '../../src/actions/composers';
-import { resolveContacts, type ActionAddress, type ActionContact } from '../../src/actions/contacts';
+import {
+  businessActionContact,
+  manualActionContact,
+  resolveContacts,
+  selectedActionContact,
+  type ActionAddress,
+  type ActionContact,
+} from '../../src/actions/contacts';
 import { ACTION_ERRORS } from '../../src/actions/errors';
+import { taskAgentApi, type TaskAgentRun } from '../../src/api/taskAgent';
+import { ActionContactDetailsSheet } from '../../src/components/ActionContactDetailsSheet';
 import { TaskSymbol } from '../../src/components/TaskSymbol';
 import { Text } from '../../src/components/Text';
 import { withAlpha } from '../../src/components/SignInBackdrop';
+import { pickContact } from '../../src/features/moments/device';
+import { actionChannels, type TaskActionRecipient } from '../../src/lib/actionNeeded';
+import { contactSearchName } from '../../src/lib/taskActionDetector';
 import { isDone } from '../../src/lib/taskQuery';
 import type { TaskActionChannel } from '../../src/lib/taskAction';
+import { queryKeys } from '../../src/query/keys';
 import { useCompleteTask, useTasks } from '../../src/query/useTasks';
+import { useSession } from '../../src/store/session';
 import { brand, useTheme } from '../../src/theme';
 
 /**
- * `TaskActionView` (ios/App/TaskActionView.swift:101), **body `:133-236`**, read top to bottom.
+ * `TaskActionView` (ios/App/TaskActionView.swift:101-429), **body `:146-232`**, read top to bottom.
  *
- * Children followed: none of its own — the two composers it presents (`ActionMessageComposer` and
+ * Phase 12: the screen works out who to contact as it opens (`loadDestination`, `:322-350`) — typed
+ * details, then a business chosen from the task's research, then the person in Contacts — and only
+ * offers the channels that recipient can take. "Choose contact" opens the system picker and "Enter
+ * contact details" a small form; a business task sends the person to Task Details to choose one.
+ *
+ * Children followed: the two composers it presents (`ActionMessageComposer` and
  * `ActionEmailComposer`, TaskActionComposers.swift:22 and `:42`) are `UIViewControllerRepresentable`
  * wrappers around the SYSTEM composers, which `expo-sms` and `expo-mail-composer` open directly;
  * see `src/actions/composers.ts`.
@@ -36,8 +55,6 @@ import { brand, useTheme } from '../../src/theme';
  * Reached three ways, all through the coordinator's `route`: a reminder notification (tap or one of
  * its four buttons), the Today action card, and the action queue.
  */
-const CHANNELS: TaskActionChannel[] = ['call', 'message', 'email'];
-
 export default function TaskAction() {
   // A `.sheet` at `.presentationDetents([.large])` (TaskActionView.swift:222), so the backgrounds
   // resolve one level up (style map section 3).
@@ -49,10 +66,16 @@ export default function TaskAction() {
 
   const coordinator = useCoordinator();
   const tasks = useTasks();
-  // `model.changeTaskStatus(task, status: "COMPLETED")` (TaskActionView.swift:177). The schedule
+  const queryClient = useQueryClient();
+  const owner = useSession((state) => state.profile?.id) ?? '';
+  // `model.changeTaskStatus(task, status: "COMPLETED")` (TaskActionView.swift:197). The schedule
   // warning cannot apply to a completion, so the conflict handler is a no-op.
   const complete = useCompleteTask({ onConflict: () => undefined });
 
+  const [checking, setChecking] = useState(true);
+  const [checkFailed, setCheckFailed] = useState(false);
+  const [businessFlow, setBusinessFlow] = useState(false);
+  const [businessRun, setBusinessRun] = useState<TaskAgentRun | null>(null);
   const [channel, setChannel] = useState<TaskActionChannel | null>(null);
   const [contacts, setContacts] = useState<ActionContact[]>([]);
   const [contact, setContact] = useState<ActionContact | null>(null);
@@ -60,37 +83,144 @@ export default function TaskAction() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [receipt, setReceipt] = useState<string | null>(null);
+  const [enteringDetails, setEnteringDetails] = useState<TaskActionRecipient | null>(null);
   const started = useRef(false);
+  // `businessDraft` and `businessFlow` are read by handlers that run before a re-render.
+  const businessDraft = useRef<string | null>(null);
+  const businessFlowRef = useRef(false);
+  // Swift cancels the `.task` when the view goes; a newer load supersedes an older one.
+  const loads = useRef(0);
+  const mounted = useRef(true);
+  const showingTask = useRef(false);
 
   const action = coordinator.actions.find((item) => item.id === actionID);
   const task = tasks.data?.tasks.find((item) => item.id === action?.taskId);
   const usable = task ? !isDone(task) && task.status !== 'CANCELLED' : false;
+  const usableRef = useRef(usable);
+  useEffect(() => {
+    usableRef.current = usable;
+  }, [usable]);
 
-  /** `.onDisappear { if isRoutedAction { coordinator.route = nil } }` (`:225-228`). */
-  // Leaving without a choice before the reminder time puts the action back on its schedule (`release`).
-  useEffect(
-    () => () => {
+  const currentAction = () => useCoordinator.getState().actions.find((item) => item.id === actionID);
+  const setFlow = (value: boolean) => {
+    businessFlowRef.current = value;
+    setBusinessFlow(value);
+  };
+
+  /**
+   * `.onAppear { coordinator.screenOpened(actionID) }` and `.onDisappear { if isRoutedAction {
+   * coordinator.route = nil }; coordinator.screenClosed(actionID) }` (`:291-296`): leaving without a
+   * choice before the reminder time puts the action back on its schedule.
+   */
+  useEffect(() => {
+    mounted.current = true;
+    useCoordinator.getState().screenOpened(actionID);
+    return () => {
+      mounted.current = false;
+      loads.current += 1;
       if (useCoordinator.getState().route?.id === actionID) useCoordinator.getState().clearRoute();
-      useCoordinator.getState().release(actionID);
-    },
-    [actionID],
-  );
+      useCoordinator.getState().screenClosed(actionID);
+    };
+  }, [actionID]);
 
+  /** `closeAction()` (`:425-428`). */
   const closeAction = () => {
     if (useCoordinator.getState().route?.id === actionID) useCoordinator.getState().clearRoute();
-    useCoordinator.getState().release(actionID);
     router.back();
   };
 
-  /** `resolve(_:)` (TaskActionView.swift:242-256). */
-  const resolve = async (option: TaskActionChannel) => {
-    const current = useCoordinator.getState().actions.find((item) => item.id === actionID);
-    if (!current || !usable || busy) return;
+  /**
+   * `loadDestination()` (TaskActionView.swift:322-350): typed details first; with no saved contact, the
+   * task's business research decides whether this is a business; otherwise the person in Contacts.
+   * Resolves to the recipient found, so the caller can continue with it before the next render.
+   */
+  const loadDestination = async (): Promise<ActionContact | null> => {
+    const current = currentAction();
+    if (!current || !usableRef.current) {
+      setChecking(false);
+      return null;
+    }
+    const load = ++loads.current;
+    const live = () => mounted.current && load === loads.current && usableRef.current;
+    setChecking(true);
+    setCheckFailed(false);
+    setError(null);
+    setContact(null);
+    businessDraft.current = null;
+    setContacts([]);
+    setAddresses([]);
+    try {
+      if (current.manualRecipient) {
+        setFlow(false);
+        const typed = manualActionContact(current.manualRecipient);
+        setContact(typed);
+        return typed;
+      }
+      if (!current.contactIdentifier) {
+        let response;
+        try {
+          // `model.loadTaskAgent` — through the shared query, so Task Details and Today see it too.
+          response = await queryClient.fetchQuery({
+            queryKey: queryKeys.taskAgent.task(owner, current.taskId),
+            queryFn: () => taskAgentApi.load(current.taskId),
+            staleTime: 0,
+          });
+        } catch {
+          if (live()) setCheckFailed(true);
+          return null;
+        }
+        if (!live()) return null;
+        setBusinessRun(response.run);
+        const business = current.businessCandidateID != null || response.intent?.eligible === true || response.run != null;
+        setFlow(business);
+        if (business) {
+          const selected = response.run?.candidates.find((candidate) => candidate.id === current.businessCandidateID);
+          if (!selected) return null;
+          const value = businessActionContact(selected);
+          setContact(value);
+          businessDraft.current = selected.draft;
+          return value;
+        }
+      }
+      setFlow(false);
+      const cached = current.contactIdentifier ? useCoordinator.getState().resolvedContacts[current.contactIdentifier] : undefined;
+      if (cached) {
+        setContact(cached);
+        return cached;
+      }
+      try {
+        const matches = await resolveContacts({ name: contactSearchName(current.contactName), identifier: current.contactIdentifier, fallbackName: current.contactName });
+        if (!live()) return null;
+        if (matches.length === 1) {
+          setContact(matches[0]);
+          useCoordinator.getState().remember(matches[0]);
+          useCoordinator.getState().update(actionID, (item) => ({ ...item, contactIdentifier: matches[0].id }));
+          return matches[0];
+        }
+        setContacts(matches);
+      } catch {
+        // Every lookup failure, Contacts access included, reads the same (`:349`; §22 "For the team").
+        if (live()) setError('No contact selected. Choose a contact or enter details below.');
+      }
+      return null;
+    } finally {
+      if (load === loads.current && mounted.current) setChecking(false);
+    }
+  };
+
+  /** `resolve(_:)` (TaskActionView.swift:353-367): a known recipient goes straight to `choose`. */
+  const resolve = async (option: TaskActionChannel, known: ActionContact | null = contact) => {
+    const current = currentAction();
+    if (!current || !usableRef.current || busy) return;
     setChannel(option);
     setContacts([]);
     setAddresses([]);
     setError(null);
     setReceipt(null);
+    if (known) {
+      choose(known, option);
+      return;
+    }
     setBusy(true);
     useCoordinator.getState().transitionTo(actionID, 'awaitingApproval');
     try {
@@ -100,6 +230,7 @@ export default function TaskAction() {
         identifier: current.contactIdentifier,
         fallbackName: current.contactName,
       });
+      if (!mounted.current) return;
       if (matches.length === 1) choose(matches[0], option);
       else setContacts(matches);
     } catch (cause) {
@@ -109,30 +240,34 @@ export default function TaskAction() {
     }
   };
 
-  /** `choose(_:)` (TaskActionView.swift:257-265). */
+  /** `choose(_:)` (TaskActionView.swift:368-379): with no channel yet, only the recipient is set. */
   const choose = (value: ActionContact, option: TaskActionChannel | null = channel) => {
-    if (!usable) return;
+    if (!usableRef.current) return;
     setContact(value);
     setContacts([]);
-    useCoordinator.getState().remember(value);
-    useCoordinator.getState().update(actionID, (item) => ({ ...item, contactIdentifier: value.id }));
+    setError(null);
+    if (!businessFlowRef.current && !currentAction()?.manualRecipient) {
+      useCoordinator.getState().remember(value);
+      useCoordinator.getState().update(actionID, (item) => ({ ...item, contactIdentifier: value.id }));
+    }
+    if (!option) return;
     const list = option === 'email' ? value.emails : value.phones;
     if (list.length === 0) setError(option === 'email' ? ACTION_ERRORS.noEmail : ACTION_ERRORS.noPhone);
     else if (list.length === 1) void prepare(list[0], value, option);
     else setAddresses(list);
   };
 
-  /** `prepare(_:)` (TaskActionView.swift:266-275). */
+  /** `prepare(_:)` (TaskActionView.swift:380-390). */
   const prepare = async (address: ActionAddress, person: ActionContact | null = contact, option: TaskActionChannel | null = channel) => {
-    const current = useCoordinator.getState().actions.find((item) => item.id === actionID);
-    if (!usable || !option || !current || !person) return;
+    const current = currentAction();
+    if (!usableRef.current || !option || !current || !person) return;
     setAddresses([]);
 
     if (option === 'call') {
-      // `.confirmationDialog("Call <name>?", …)` (`:213-216`).
+      // `.confirmationDialog("Call <name>?", …)` (`:239-243`).
       Alert.alert(`Call ${person.name}?`, address.value, [
-        { text: 'Cancel', style: 'cancel' },
         { text: 'Call', onPress: () => void call(address) },
+        { text: 'Cancel', style: 'cancel' },
       ]);
       return;
     }
@@ -147,14 +282,14 @@ export default function TaskAction() {
 
     const result =
       option === 'message'
-        ? await composeMessage({ recipient: address.value, body: messageBody({ name: person.name, context: current.context }) })
+        ? await composeMessage({ recipient: address.value, body: businessDraft.current ?? messageBody({ name: person.name, context: current.context }) })
         : await composeEmail(emailDraft({ recipient: address.value, name: person.name, context: current.context }));
     finishCompose(result);
   };
 
-  /** `placeCall()` (TaskActionView.swift:276-295). */
+  /** `placeCall()` (TaskActionView.swift:391-407). */
   const call = async (address: ActionAddress) => {
-    if (!usable) return;
+    if (!usableRef.current) return;
     if (!useCoordinator.getState().approveExecution(actionID)) return;
     try {
       const accepted = await placeCall(address.value);
@@ -169,7 +304,7 @@ export default function TaskAction() {
     }
   };
 
-  /** `finishCompose(_:)` (TaskActionView.swift:296-309). */
+  /** `finishCompose(_:)` (TaskActionView.swift:408-424). */
   const finishCompose = (result: ActionComposeResult) => {
     if (result === 'submitted') {
       useCoordinator.getState().transitionTo(actionID, 'completed');
@@ -185,29 +320,95 @@ export default function TaskAction() {
     setReceipt(result === 'saved' ? 'Draft saved. Nothing was sent.' : 'Cancelled. Nothing was sent.');
   };
 
+  /** `resumeSelectedChannel()` (`:303-307`): after a pick or the form, carry on with the channel. */
+  const resumeSelectedChannel = (picked: ActionContact) => {
+    const option = channel ?? (startSelectedAction ? preferred : null);
+    if (option) void resolve(option, picked);
+  };
+
+  /** The picker's `selected` (`:261-268`). Cancelling it changes nothing. */
+  const chooseFromContacts = async () => {
+    let picked;
+    try {
+      picked = await pickContact();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+      return;
+    }
+    if (!picked || !mounted.current) return;
+    const value = selectedActionContact(picked);
+    setError(null);
+    setFlow(false);
+    businessDraft.current = null;
+    useCoordinator.getState().update(actionID, (item) => ({ ...item, manualRecipient: null, businessCandidateID: null }));
+    setContact(value);
+    setContacts([]);
+    setAddresses([]);
+    useCoordinator.getState().remember(value);
+    useCoordinator.getState().update(actionID, (item) => ({ ...item, contactIdentifier: value.id }));
+    resumeSelectedChannel(value);
+  };
+
+  /** The form's Save (`:279-284`). */
+  const saveDetails = (recipient: TaskActionRecipient) => {
+    useCoordinator.getState().update(actionID, (item) => ({ ...item, manualRecipient: recipient, contactIdentifier: null, businessCandidateID: null }));
+    const value = manualActionContact(recipient);
+    setContact(value);
+    setContacts([]);
+    setAddresses([]);
+    setError(null);
+    setEnteringDetails(null);
+    resumeSelectedChannel(value);
+  };
+
+  /** `showingTask = true`: Task Details, where the business research lives. */
+  const openTask = () => {
+    const current = currentAction();
+    if (!current) return;
+    showingTask.current = true;
+    router.push({ pathname: '/task/[id]', params: { id: current.taskId } });
+  };
+
   /**
-   * `.task { await model.refreshTasks(); … transition(to: .awaitingApproval); if startSelectedAction,
-   * let preferred { resolve(preferred) } }` (TaskActionView.swift:229-235).
-   *
-   * The ref makes it run once, which is what `.task` does for a given view identity; re-running on a
-   * later render is therefore a no-op, so `resolve` can stay in the dependency list honestly.
+   * `.sheet(isPresented: $showingTask, onDismiss: { await loadDestination(); if startSelectedAction,
+   * let preferred, contact != nil { resolve(preferred) } })` (`:257-259`): back from Task Details.
    */
+  const loadRef = useRef(loadDestination);
   const resolveRef = useRef(resolve);
   useEffect(() => {
+    loadRef.current = loadDestination;
     resolveRef.current = resolve;
   });
+  useFocusEffect(
+    useCallback(() => {
+      if (!showingTask.current) return;
+      showingTask.current = false;
+      void loadRef.current().then((found) => {
+        if (startSelectedAction && preferred && found) void resolveRef.current(preferred, found);
+      });
+    }, [startSelectedAction, preferred]),
+  );
 
+  /**
+   * `.task { await model.refreshTasks(); guard usable, !Task.isCancelled; transition(to:
+   * .awaitingApproval); await loadDestination(); if startSelectedAction, let preferred, contact != nil
+   * { resolve(preferred) } }` (TaskActionView.swift:297-302). Runs once, as `.task` does for one view.
+   */
   useEffect(() => {
     if (started.current || !action || !usable) return;
     started.current = true;
     // `.task` runs after the view is on screen, so this is deferred rather than run during the commit.
     const timer = setTimeout(() => {
+      if (!mounted.current) return;
       useCoordinator.getState().transitionTo(actionID, 'awaitingApproval');
-      if (startSelectedAction && preferred) void resolveRef.current(preferred);
+      void loadRef.current().then((found) => {
+        if (startSelectedAction && preferred && found && mounted.current) void resolveRef.current(preferred, found);
+      });
     }, 0);
     return () => clearTimeout(timer);
   }, [action, usable, actionID, startSelectedAction, preferred]);
 
+  const channels = actionChannels((contact?.phones.length ?? 0) > 0, (contact?.emails.length ?? 0) > 0);
   return (
     <SafeAreaView edges={['top', 'left', 'right', 'bottom']} style={[styles.fill, { backgroundColor: theme.colors.background }]}>
       {/* `.navigationTitle("Nexdo Action")` with a leading Close (TaskActionView.swift:206-208). */}
@@ -224,27 +425,74 @@ export default function TaskAction() {
         {action && usable ? (
           <>
             <Text style={[styles.title2, { color: theme.colors.ink }]} testID="action-title">
-              {`Time to contact ${action.contactName}`}
+              {`Contact ${contact?.name ?? action.contactName}`}
             </Text>
-            <Text style={[theme.typography.body, { color: theme.colors.secondary }]}>How would you like to get in touch?</Text>
 
-            {CHANNELS.map((option) => (
-              <Pressable
-                accessibilityLabel={`${channelTitle(option)} ${action.contactName}`}
-                accessibilityRole="button"
-                accessibilityState={{ disabled: busy }}
-                disabled={busy}
-                key={option}
-                onPress={() => void resolve(option)}
-                style={[styles.channel, { backgroundColor: withAlpha(brand.nexdoIndigo, 0.08) }]}
-                testID={`action-${option}`}
-              >
-                {/* A `Label` spaces its glyph from its title by 6, not by the row's own 8. */}
-                <TaskSymbol color={theme.colors.ink} name={channelIcon(option)} size={17} />
-                <Text style={[theme.typography.body, styles.grow, { color: theme.colors.ink }]}>{channelTitle(option)}</Text>
-                {(channel ?? preferred) === option ? <TaskSymbol color={theme.colors.ink} name="checkmark" size={17} /> : null}
-              </Pressable>
-            ))}
+            {checking ? (
+              <View style={styles.progress} testID="action-checking">
+                <ActivityIndicator color={theme.colors.link} size="small" />
+                <Text style={[theme.typography.body, { color: theme.colors.secondary }]}>Checking next action…</Text>
+              </View>
+            ) : checkFailed ? (
+              <>
+                <Text style={[theme.typography.body, { color: theme.colors.ink }]}>Couldn’t check this task. Please retry.</Text>
+                <LinkButton disabled={busy} label="Retry" onPress={() => void loadDestination()} testID="action-retry" />
+              </>
+            ) : businessFlow && !contact ? (
+              <>
+                <Text style={[theme.typography.body, { color: theme.colors.secondary }]}>Choose a business before calling or sending a message.</Text>
+                <ProminentButton disabled={busy} label={(businessRun?.candidates.length ?? 0) > 0 ? 'Choose a business' : 'Find businesses'} onPress={openTask} testID="action-choose-business" />
+              </>
+            ) : (
+              <>
+                <Text style={[theme.typography.body, { color: theme.colors.secondary }]} testID="action-prompt">
+                  {contact ? `Choose how to contact ${contact.name}.` : 'Choose a contact or enter a phone number or email address.'}
+                </Text>
+                {channels.map((option) => (
+                  <Pressable
+                    accessibilityLabel={`${channelTitle(option)} ${action.contactName}`}
+                    accessibilityRole="button"
+                    accessibilityState={{ disabled: busy }}
+                    disabled={busy}
+                    key={option}
+                    onPress={() => void resolve(option)}
+                    style={[styles.channel, { backgroundColor: withAlpha(brand.nexdoIndigo, 0.08) }]}
+                    testID={`action-${option}`}
+                  >
+                    {/* A `Label` spaces its glyph from its title by 6, not by the row's own 8. */}
+                    <TaskSymbol color={theme.colors.ink} name={channelIcon(option)} size={17} />
+                    <Text style={[theme.typography.body, styles.grow, { color: theme.colors.ink }]}>{channelTitle(option)}</Text>
+                    {(channel ?? preferred) === option ? <TaskSymbol color={theme.colors.ink} name="checkmark" size={17} /> : null}
+                  </Pressable>
+                ))}
+              </>
+            )}
+
+            {/* The recipient buttons (`:175-188`). */}
+            {!checking && !checkFailed ? (
+              businessFlow ? (
+                <>
+                  {contact ? <LinkButton disabled={busy} label="Change business" onPress={openTask} testID="action-change-business" /> : null}
+                  <LinkButton disabled={busy} label="Choose someone from Contacts" onPress={() => void chooseFromContacts()} testID="action-pick-contact" />
+                </>
+              ) : (
+                <>
+                  <ProminentButton disabled={busy} label="Choose contact" onPress={() => void chooseFromContacts()} testID="action-pick-contact" />
+                  <LinkButton
+                    disabled={busy}
+                    label="Enter contact details"
+                    onPress={() =>
+                      setEnteringDetails({
+                        name: contact?.name ?? action.contactName,
+                        phone: contact?.phones[0]?.value ?? '',
+                        email: contact?.emails[0]?.value ?? '',
+                      })
+                    }
+                    testID="action-enter-details"
+                  />
+                </>
+              )
+            ) : null}
 
             {busy ? (
               // `ProgressView("Finding contact…")` puts its label under the spinner.
@@ -360,25 +608,6 @@ export default function TaskAction() {
               <Text style={[theme.typography.body, { color: theme.colors.ink }]}>Dismiss</Text>
             </Pressable>
 
-            {action.contactIdentifier ? (
-              <Pressable
-                accessibilityLabel="Choose a different contact"
-                accessibilityRole="button"
-                accessibilityState={{ disabled: busy }}
-                disabled={busy}
-                onPress={() => {
-                  useCoordinator.getState().update(actionID, (item) => ({ ...item, contactIdentifier: null }));
-                  setContact(null);
-                  setContacts([]);
-                  setAddresses([]);
-                  if (channel) void resolve(channel);
-                }}
-                testID="action-change-contact"
-              >
-                <Text style={[styles.subheadline, { color: theme.colors.link }]}>Choose a different contact</Text>
-              </Pressable>
-            ) : null}
-
             {coordinator.notice !== null ? (
               <>
                 <Text style={[styles.caption, { color: '#FF9500' }]} testID="action-notice">
@@ -411,7 +640,41 @@ export default function TaskAction() {
           </View>
         )}
       </ScrollView>
+
+      {enteringDetails ? (
+        <ActionContactDetailsSheet initial={enteringDetails} onCancel={() => setEnteringDetails(null)} onSave={saveDetails} visible />
+      ) : null}
     </SafeAreaView>
+  );
+}
+
+type ButtonProps = { label: string; onPress: () => void; disabled: boolean; testID: string };
+
+/** A plain `Button` in the screen's tint. */
+function LinkButton({ label, onPress, disabled, testID }: ButtonProps) {
+  const theme = useTheme({ elevated: true });
+  return (
+    <Pressable accessibilityLabel={label} accessibilityRole="button" accessibilityState={{ disabled }} disabled={disabled} onPress={onPress} testID={testID}>
+      <Text style={[theme.typography.body, { color: theme.colors.link }]}>{label}</Text>
+    </Pressable>
+  );
+}
+
+/** `.buttonStyle(.borderedProminent)`: a filled capsule in the tint. */
+function ProminentButton({ label, onPress, disabled, testID }: ButtonProps) {
+  const theme = useTheme({ elevated: true });
+  return (
+    <Pressable
+      accessibilityLabel={label}
+      accessibilityRole="button"
+      accessibilityState={{ disabled }}
+      disabled={disabled}
+      onPress={onPress}
+      style={[styles.prominent, { backgroundColor: theme.colors.tint }]}
+      testID={testID}
+    >
+      <Text style={[theme.typography.body, styles.semibold, { color: theme.colors.onTint }]}>{label}</Text>
+    </Pressable>
   );
 }
 
@@ -444,7 +707,9 @@ const styles = StyleSheet.create({
 
   // `VStack(alignment: .leading, spacing: 18).padding(20)`
   scroll: { padding: 20, gap: 18 },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  semibold: { fontWeight: '600' },
+  // `.borderedProminent` at the regular size: a capsule, 7/14 padding.
+  prominent: { alignSelf: 'flex-start', borderRadius: 999, paddingHorizontal: 14, paddingVertical: 7, minHeight: 44, justifyContent: 'center' },
   // A `ProgressView` with a label stacks the label under the spinner.
   progress: { alignItems: 'center', gap: 8 },
   // `.padding(14).frame(maxWidth: .infinity)` with corner radius 14; a `Label` spaces by 6.

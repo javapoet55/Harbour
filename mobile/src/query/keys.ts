@@ -18,6 +18,11 @@ export const queryKeys = {
     range: (from: string, to: string) => ['agenda', from, to] as const,
   },
   weather: () => ['weather'] as const,
+  /** A task's business research (`loadTaskAgent`, ios/App/NexdoApp.swift:553), per account. */
+  taskAgent: {
+    all: (ownerId: string) => ['task-agent', ownerId] as const,
+    task: (ownerId: string, taskId: string) => ['task-agent', ownerId, taskId] as const,
+  },
   /** `AppModel.voiceUsage` (ios/App/NexdoApp.swift:16), per account like Swift's owner check. */
   voiceUsage: (ownerId: string) => ['voice-usage', ownerId] as const,
   scheduleIntelligence: () => ['schedule-intelligence'] as const,
