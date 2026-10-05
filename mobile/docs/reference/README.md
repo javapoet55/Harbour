@@ -339,6 +339,7 @@ capture is kept and is superseded by the `-v2` one.
 | Today | `today-v2`, `today-v2-dark`, `today-action-card-contact`, `today-action-card-business`, `today-action-queue` |
 | Tasks and actions | `tasks-v2-empty`, `tasks-search`, `tasks-search-results`, `tasks-search-empty`, `tasks-search-keyboard`, `task-details-v2`, `task-details-v2-scrolled`, `task-agent-location`, `task-agent-results`, `task-agent-results-reviews`, `task-agent-results-services`, `task-agent-results-scrolled-1`, `task-agent-results-scrolled-2`, `task-agent-outreach-draft`, `task-action-error-no-contact`, `task-action-contact-details` |
 | Moments | `moments-date-filter-today-empty`, `moments-date-filter-tomorrow`, `moments-date-filter-this-week`, `moments-date-filter-later-scrolled`, `moments-scheduled-v2`, `moments-manage-tabs-scheduled-empty`, `moments-manage-tabs-scheduled`, `moments-manage-tabs-scheduled-dark`, `moments-manage-tabs-need-review`, `moments-manage-tabs-ready`, `moment-create-v2`, `moment-create-v2-filled`, `moment-manage-v2-contacts`, `moment-manage-v2-message`, `moment-manage-v2-message-scrolled`, `moment-manage-v2-message-saved`, `moment-manage-v2-schedule`, `moment-manage-v2-schedule-delivery`, `moment-connect-section`, `moment-caller-id-sheet`, `moment-calling-guide`, `moment-calling-guide-scrolled`, `moment-schedule-review-v2`, `moment-send-now-confirm`, `moment-schedule-success-v2` |
+| Choose Festivals (added in Run B; missed by the pass) | `festivals-v2`, `festivals-v2-scrolled`, `festivals-v2-bottom`, `festivals-v2-region-india`, `festivals-v2-region-india-scrolled`, `festivals-v2-region-india-dark` |
 | Shopping: lists and stores | `shopping-lists-v2`, `shopping-new-list-v2`, `shopping-list-settings-store`, `shopping-list-settings-store-filled`, `shopping-stores-empty`, `shopping-stores-results`, `shopping-store-hours-empty`, `shopping-store-hours`, `shopping-detail-store-empty`, `shopping-detail-store`, `shopping-detail-offer-badges`, `shopping-detail-options-menu-v2` |
 | Shopping: offers | `shopping-offers-available`, `shopping-offers-matching-empty`, `shopping-offers-alternatives`, `shopping-offers-store-menu`, `shopping-offers-item`, `shopping-offer-detail`, `shopping-offer-detail-selected` |
 | Shopping: alternatives | `shopping-alternatives-v2-loading`, `shopping-alternatives-v2`, `shopping-alternatives-v2-scrolled`, `shopping-alternatives-why`, `shopping-alternatives-goal-picker`, `shopping-alternatives-goal-picker-selected`, `shopping-alternatives-filtered`, `shopping-alternative-details`, `shopping-alternative-details-scrolled`, `shopping-alternative-details-bottom`, `shopping-alternatives-replace-confirm`, `shopping-alternatives-replaced` |
@@ -355,6 +356,7 @@ capture is kept and is superseded by the `-v2` one.
 | `shopping-item-editor*`, `shopping-share-list*` | `shopping-item-editor-v2*`, `shopping-share-list-v2*` |
 | `shopping-detail-redesign-options-menu` | `shopping-detail-options-menu-v2` |
 | `moment-create-*`, `moment-manage-*` (four tabs), `moment-manage-schedule-confirm`, `moment-schedule-success` | the `moment-create-v2*`, `moment-manage-v2-*`, `moment-schedule-review-v2` and `moment-schedule-success-v2` captures. Manage Moment has three tabs now |
+| `moments-festivals`, `moments-festivals-india`, `moments-festivals-region-menu`, `moments-festivals-dark` | the `festivals-v2*` captures: Choose Festivals is a hero, region cards and a festival list now, not a region menu |
 | `moments-default`, `moments-scheduled`, `moments-manage-list` | `moments-date-filter-*`, `moments-scheduled-v2`, `moments-manage-tabs-*` |
 | `account-default` | `account-v2` |
 | `account-settings-calendars-empty` | still current for an account with no calendar; `account-settings-calendar-connected` adds the connected state |
@@ -375,6 +377,7 @@ capture is kept and is superseded by the `-v2` one.
 | Share sheet, store logo | The system share sheet is not Nexdo UI. Safeway returned no logo, so `shopping-lists-v2` shows the cart fallback |
 | Pomodoro from a notification | Same `PomodoroView` as the captured timer, presented from `RootView.swift:219-223` |
 | Unmounted views | Listed in §22; not built |
+| Choose Festivals, empty or error | **Does not exist.** The festivals are a fixed list in the view (`MomentEditor.swift:310-316`); nothing loads, so there is nothing to fail or be empty |
 
 ### Global patterns introduced by Phase 12
 
