@@ -125,3 +125,20 @@ describe('reminder notification routing is unaffected by the move', () => {
     expect(exists('(tabs)/action/[id].tsx')).toBe(false);
   });
 });
+
+/**
+ * Phase 12 Run C: the Wellness chooser, guides and Pomodoro are `.fullScreenCover`s over the tabs
+ * (RootView.swift:212-223), so they live OUTSIDE `(tabs)`. The `(tabs)/wellness` route only exists to
+ * draw the centre button, and forwards to the cover.
+ */
+describe('Wellness covers', () => {
+  it.each(['wellness/index.tsx', 'wellness/guide/[kind].tsx', 'wellness/pomodoro.tsx', 'wellness/calories.tsx'])('%s is a cover outside the tabs', (file) => {
+    expect(exists(file)).toBe(true);
+    expect(file.startsWith('(tabs)/')).toBe(false);
+  });
+
+  it('the centre tab route forwards to the chooser', () => {
+    expect(exists('(tabs)/wellness.tsx')).toBe(true);
+    expect(fs.readFileSync(path.join(APP, '(tabs)/wellness.tsx'), 'utf8')).toContain('<Redirect href="/wellness" />');
+  });
+});

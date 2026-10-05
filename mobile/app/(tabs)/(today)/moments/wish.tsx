@@ -16,7 +16,7 @@ import { WishEmailConfirmation } from '../../../../src/features/moments/WishEmai
 import { textStyles, useTheme } from '../../../../src/theme';
 
 /**
- * `WishPlanView` (ios/App/ImportantMomentsView.swift:495-551): one wish's delivery, always read back
+ * `WishPlanView` (ios/App/ImportantMomentsView.swift:519-583): one wish's delivery, always read back
  * from the latest snapshot (`current`). Edit Schedule, "Review & Open Messages" for a Messages wish
  * awaiting you, "Send email now", Retry for a failed automatic email, and Cancel behind a
  * confirmation; for a "Check Sent mail" email, "I found it in Sent mail" / "It wasn't sent"; for a
@@ -74,12 +74,25 @@ export default function WishDetailsScreen() {
               ? 'This wish will not be sent.'
               : current.automaticDelivery && current.status === 'SCHEDULED'
                 ? 'Approved email will send automatically at the scheduled time.'
-                : 'Review the delivery status below.'}
+                : current.status === 'AWAITING_CONFIRMATION' && current.channel === 'messages'
+                  ? 'Your wish and schedule are saved. Open Messages and tap Send when you are ready; Messages wishes are not sent automatically.'
+                  : 'Review the delivery status below.'}
         </Text>
         <View style={styles.stretch}>
           <MomentCard>
             <Text style={[textStyles.title2, styles.bold, { color: theme.colors.label }]}>{current.subject}</Text>
-            <Text style={[textStyles.body, { color: theme.colors.label }]}>{current.recipient}</Text>
+            {/* `Label(current.recipient, systemImage:)` (:537): phone.fill, envelope.fill or person.fill. */}
+            <View style={styles.label}>
+              <Ionicons
+                name={current.channel === 'messages' ? 'call' : current.channel === 'email' ? 'mail' : 'person'}
+                size={17}
+                color={theme.colors.link}
+                accessibilityElementsHidden
+                importantForAccessibility="no-hide-descendants"
+                testID="wish-recipient-icon"
+              />
+              <Text style={[textStyles.body, styles.labelText, { color: theme.colors.label }]}>{current.recipient}</Text>
+            </View>
             <View style={[styles.divider, { backgroundColor: theme.colors.separator }]} />
             <LabeledValue label="Delivery" value={capitalized(current.channel)} />
             <LabeledValue label="Send time" value={momentLabel(planDate(current), current.timeZoneID)} />
@@ -87,7 +100,11 @@ export default function WishDetailsScreen() {
             <LabeledValue label="Reminder" value={current.reminderOffset === 60 ? '1 hour before' : 'At scheduled time'} />
             <LabeledValue label="Repeat" value={current.repeatYearly ? 'Yearly' : 'Once'} />
             <Text style={[textStyles.body, styles.body, { color: theme.colors.label }]}>{current.body}</Text>
-            {current.lastError ? <ErrorText>{current.lastError}</ErrorText> : null}
+            {current.status === 'EXPIRED' ? (
+              <ErrorText>This wish expired 24 hours after its scheduled send time because delivery was not confirmed. Create a new wish to send it.</ErrorText>
+            ) : current.lastError ? (
+              <ErrorText>{current.lastError}</ErrorText>
+            ) : null}
           </MomentCard>
         </View>
         {planEditable(current) ? (
@@ -123,9 +140,17 @@ export default function WishDetailsScreen() {
         ) : null}
         {current.status === 'UNCERTAIN' ? (
           <>
-            <Text style={[textStyles.body, { color: theme.colors.label }]}>Check the Sent folder in Gmail, then tell Nexdo what happened.</Text>
+            {/* :557-561 — a secondary footnote, a `.bordered` "found it", and a plain "wasn't sent". */}
+            <Text style={[textStyles.footnote, styles.center, { color: theme.colors.secondaryLabel }]}>Check the Sent folder in Gmail, then tell Nexdo what happened.</Text>
             <BorderedButton centered title="I found it in Sent mail" onPress={() => void momentsStore.getState().perform(() => momentsStore.getState().planAction(current, 'sent'))} testID="wish-uncertain-sent" />
-            <BorderedButton centered title="It wasn't sent" onPress={() => void momentsStore.getState().perform(() => momentsStore.getState().planAction(current, 'failed'))} testID="wish-uncertain-failed" />
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="It wasn't sent"
+              onPress={() => void momentsStore.getState().perform(() => momentsStore.getState().planAction(current, 'failed'))}
+              testID="wish-uncertain-failed"
+            >
+              <Text style={[textStyles.body, { color: theme.colors.link }]}>It wasn&apos;t sent</Text>
+            </Pressable>
           </>
         ) : null}
         {HISTORY_STATUSES.includes(current.status) ? (
@@ -199,6 +224,9 @@ const styles = StyleSheet.create({
   center: { textAlign: 'center' },
   bold: { fontWeight: '700' },
   divider: { height: StyleSheet.hairlineWidth },
+  // SwiftUI `Label`: the icon, then the title, centred on one line.
+  label: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  labelText: { flexShrink: 1 },
   body: { marginTop: 8 },
   // Just under the sheet's bar (FormScroll's top padding is 3 since UI-parity pass 2).
   sheetTitle: { marginHorizontal: 16, marginTop: 4 },

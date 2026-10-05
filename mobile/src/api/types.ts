@@ -203,12 +203,21 @@ export type TasksResponse = {
 // MARK: Calendar and agenda
 
 /** Matches the web `AgendaEvent`. */
+/** `CalendarEvent` (ios/Sources/NexdoCore/Models.swift:91-103). Phase 12 adds the detail fields. */
 export type CalendarEvent = {
   id: string;
   title: string;
   startAt: string;
   endAt: string;
   allDay?: boolean | null;
+  notes?: string | null;
+  location?: string | null;
+  timeZone?: string | null;
+  /** `"harbor"` for events made in Nexdo, else the provider (`"google"`, …). */
+  source?: string | null;
+  connectionId?: string | null;
+  /** Set by Mark Complete (`PATCH /api/calendar/events/{id} { completed }`); never pushed to the provider. */
+  completedAt?: string | null;
 };
 
 export type Agenda = {

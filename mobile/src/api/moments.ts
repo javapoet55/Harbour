@@ -132,7 +132,15 @@ export type MomentOperation =
   | 'festivalDelete'
   | 'festivalCatalog'
   | 'greetingArtwork'
-  | 'greetingCardSave';
+  | 'greetingCardSave'
+  // Phase 12: "Connect me on the day" (features/moments/connectCall.ts).
+  | 'connectStatus'
+  | 'connectPreview'
+  | 'connectSave'
+  | 'connectNow'
+  | 'callerIdStart'
+  | 'callerIdStatus'
+  | 'callerIdRemove';
 
 /**
  * The `action` accepted by the `plan` operation (service.ts `changePlan`).

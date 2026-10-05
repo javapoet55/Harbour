@@ -1,4 +1,3 @@
-import { signupChallenge } from '../lib/signupChallenge';
 import { useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query';
 
 import { endpoints, isApiError, type Profile } from '../api';
@@ -72,12 +71,13 @@ export function useSignIn() {
 
 /**
  * `AppModel.register` (NexdoApp.swift:170–182). A server that does not require verification starts the
- * session at registration, so that branch signs in instead of routing to the verify screen.
+ * session at registration, so that branch signs in instead of routing to the verify screen. The
+ * security check runs before this, on the screen (`signupChallenge`), as `SignUpView.create()` does.
  */
 export function useSignUp() {
-  return useMutation<PendingVerification | null, Error, { name: string; email: string; password: string }>({
-    mutationFn: async ({ name, email, password }) => {
-      const response = await endpoints.register(name, email, password, undefined, await signupChallenge());
+  return useMutation<PendingVerification | null, Error, { name: string; email: string; password: string; turnstileToken?: string }>({
+    mutationFn: async ({ name, email, password, turnstileToken }) => {
+      const response = await endpoints.register(name, email, password, undefined, turnstileToken);
       if (response.emailVerificationRequired !== true) return null;
       return { ...(response.verificationProof ? { verificationProof: response.verificationProof } : {}), email: response.email, reason: response.emailSent === false ? 'codeNotSent' : 'codeSent' };
     },

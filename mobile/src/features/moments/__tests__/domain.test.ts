@@ -129,7 +129,7 @@ describe('plans', () => {
   // the same way Copy and Share do rather than claiming it was sent or failed.
   it('distinguishes an opened Messages wish from one still awaiting the composer', () => {
     expect(planStatusLabel(plan({ status: 'AWAITING_CONFIRMATION', lastError: OPENED_UNCONFIRMED }))).toBe('Opened — delivery not confirmed');
-    expect(planStatusLabel(plan({ status: 'AWAITING_CONFIRMATION', lastError: 'Something else went wrong.' }))).toBe('Confirmation required');
+    expect(planStatusLabel(plan({ status: 'AWAITING_CONFIRMATION', lastError: 'Something else went wrong.' }))).toBe('Scheduled — manual send');
   });
 
   it.each([
@@ -141,9 +141,21 @@ describe('plans', () => {
     expect(composerPlanAction(outcome)).toBe(expected);
   });
 
+  // `statusLabel(now:)` (ImportantMoment.swift:37-44): a wish you deliver yourself reads by its date and channel.
+  it('labels a wish awaiting you by whether its time has come, and how it goes out', () => {
+    const now = Date.parse('2030-09-20T08:00:00.000Z');
+    const due = { status: 'AWAITING_CONFIRMATION', scheduledAtUTC: '2030-09-20T08:00:00.000Z' };
+    expect(planStatusLabel(plan({ ...due, scheduledAtUTC: '2030-09-20T08:00:01.000Z' }), now)).toBe('Scheduled — manual send');
+    expect(planStatusLabel(plan({ ...due, channel: 'messages' }), now)).toBe('Ready to send');
+    expect(planStatusLabel(plan({ ...due, channel: 'email' }), now)).toBe('Ready to send');
+    expect(planStatusLabel(plan({ ...due, channel: 'copy' }), now)).toBe('Ready to copy');
+    expect(planStatusLabel(plan({ ...due, channel: 'share' }), now)).toBe('Ready to share');
+    expect(planStatusLabel(plan({ ...due, lastError: OPENED_UNCONFIRMED }), now)).toBe('Opened — delivery not confirmed');
+  });
+
   it('labels every status', () => {
     expect(planStatusLabel(plan({ status: 'SCHEDULED' }))).toBe('Auto-send scheduled');
-    expect(planStatusLabel(plan({ status: 'AWAITING_CONFIRMATION' }))).toBe('Confirmation required');
+    expect(planStatusLabel(plan({ status: 'AWAITING_CONFIRMATION' }))).toBe('Scheduled — manual send');
     expect(planStatusLabel(plan({ status: 'SHARED' }))).toBe('Shared — delivery not confirmed');
     expect(planStatusLabel(plan({ status: 'UNCERTAIN' }))).toBe('Check Sent mail');
     expect(planStatusLabel(plan({ status: 'CANCELLED' }))).toBe('Cancelled');
@@ -423,6 +435,21 @@ describe('titles, greetings and signatures', () => {
     expect(greetingMessage('Have a great day, sam.', 'birthday', 'Sam')).toBe('Have a great day, sam.');
     expect(greetingMessage('Samantha, have fun.', 'birthday', 'Sam')).toBe('Happy Birthday, Sam! Samantha, have fun.');
     expect(greetingMessage('Rest up.', 'getWellSoon', 'Sam')).toBe('Get well soon, Sam! Rest up.');
+  });
+
+  /**
+   * fac34ed (MomentGreeting.swift:17, :44-52): "Happy Birthday, Visakan!" is the form the product writes,
+   * so a comma ends an opening too, and the name riding inside it is dropped — shared to Sam it must not
+   * become "Happy Birthday, Sam! Happy Birthday, Visakan! …" or carry Visakan's name.
+   */
+  it('takes the name out of a "Happy Birthday, Name!" opening before naming the new recipient', () => {
+    expect(greetingMessage('Happy Birthday, Visakan! Have a great day.', 'birthday', 'Sam')).toBe('Happy Birthday, Sam! Have a great day.');
+    expect(greetingMessage('Happy Birthday, Visakan!', 'birthday', 'Sam')).toBe('Happy Birthday, Sam!');
+    expect(greetingMessage('Happy Anniversary, Mom and Dad! Love you.', 'birthday', 'Sam')).toBe('Happy Anniversary, Sam! Love you.');
+    // A lower-case phrase after the comma is prose, not a name, and stays.
+    expect(greetingMessage('Happy Birthday, have a great day!', 'birthday', 'Sam')).toBe('Happy Birthday, Sam! have a great day!');
+    // Swift trims spaces, not line breaks, after the name (the server's trimStart differs; see §22).
+    expect(greetingMessage('Happy Birthday, Visakan!\nHave fun', 'birthday', 'Sam')).toBe('Happy Birthday, Sam! \nHave fun');
   });
 
   /**

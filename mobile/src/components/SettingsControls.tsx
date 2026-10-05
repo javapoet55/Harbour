@@ -1,8 +1,8 @@
-import { Children, Fragment, isValidElement, useRef, useState, type ReactNode } from 'react';
+import { Children, Fragment, isValidElement, useContext, useRef, useState, type ReactNode } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 
-import { formatClock, parseClock } from '../lib/profileSettings';
-import { androidField, androidGroup, androidLabel, androidSeparator, brand, isAndroid, useTheme } from '../theme';
+import { clockLabel, formatClock, parseClock, type ClockHourCycle } from '../lib/profileSettings';
+import { androidField, androidGroup, androidLabel, androidPill, androidSeparator, brand, FieldGroupContext, isAndroid, useTheme } from '../theme';
 import { IOSSwitch } from './IOSSwitch';
 import { SegmentRow } from './SegmentRow';
 import { withAlpha } from './SignInBackdrop';
@@ -357,27 +357,99 @@ export function SettingsHours({
  * force its own presentation (an Android dialog) rather than the compact field-plus-wheel SwiftUI
  * shows, and this phase already needs a rebuild for three other native modules. Hours and minutes are
  * two scrollable columns, so every minute Swift allows is reachable.
+ *
+ * The value is always `"HH:mm"`. By default it is Account's working-hours field, unchanged: a caption
+ * over a bordered field showing the value as stored, with 24-hour wheels. Two options serve the other
+ * screens' `.hourAndMinute` pickers (Phase 12 Run C):
+ *
+ * - `hourCycle="h12"` shows "8:00 PM", as Swift's compact picker does, with 1–12 and AM/PM wheels;
+ * - `variant="formRow"` lays it out as a form row — the label on the left, the value in a grey pill on
+ *   the right — matching the Moments form's `DateField` pill (and its Android field chrome).
  */
 export function ClockField({
   label,
   value,
   onChange,
   testID,
+  hourCycle = 'h23',
+  variant = 'settings',
 }: {
   label: string;
   value: string;
   onChange: (next: string) => void;
   testID: string;
+  hourCycle?: ClockHourCycle;
+  variant?: 'settings' | 'formRow';
 }) {
   const theme = useTheme();
   const [open, setOpen] = useState(false);
+  const pillChrome = androidPill(theme, useContext(FieldGroupContext));
   const { hour, minute } = parseClock(value);
+  const shown = clockLabel(value, hourCycle);
+  const twelve = hourCycle === 'h12';
+  const afternoon = hour % 24 >= 12;
+
+  const wheels = twelve ? (
+    <>
+      {/* 12, 1, 2 … 11 — the hour within the half of the day; AM/PM picks the half. */}
+      <Wheel
+        labels={Array.from({ length: 12 }, (_, index) => String(index === 0 ? 12 : index))}
+        onSelect={(next) => onChange(formatClock(next + (afternoon ? 12 : 0), minute))}
+        selected={hour % 12}
+        testIDPrefix={`${testID}-hour`}
+      />
+      <Wheel labels={MINUTE_LABELS} onSelect={(next) => onChange(formatClock(hour, next))} selected={minute} testIDPrefix={`${testID}-minute`} />
+      <Wheel
+        labels={['AM', 'PM']}
+        onSelect={(next) => onChange(formatClock((hour % 12) + (next === 1 ? 12 : 0), minute))}
+        selected={afternoon ? 1 : 0}
+        testIDPrefix={`${testID}-period`}
+      />
+    </>
+  ) : (
+    <>
+      <Wheel labels={HOUR_LABELS} onSelect={(next) => onChange(formatClock(next, minute))} selected={hour} testIDPrefix={`${testID}-hour`} />
+      <Wheel labels={MINUTE_LABELS} onSelect={(next) => onChange(formatClock(hour, next))} selected={minute} testIDPrefix={`${testID}-minute`} />
+    </>
+  );
+
+  const picker = (
+    <Modal animationType="fade" onRequestClose={() => setOpen(false)} transparent visible={open}>
+      <Pressable onPress={() => setOpen(false)} style={styles.scrim}>
+        <View style={[styles.menu, { backgroundColor: theme.colors.surface }]}>
+          <Text style={[styles.headline, styles.menuTitle, { color: theme.colors.ink }]}>{label}</Text>
+          <View style={styles.wheels}>{wheels}</View>
+          <Pressable accessibilityRole="button" onPress={() => setOpen(false)} style={styles.menuRow} testID={`${testID}-done`}>
+            <Text style={[theme.typography.body, { color: theme.colors.link }]}>Done</Text>
+          </Pressable>
+        </View>
+      </Pressable>
+    </Modal>
+  );
+
+  if (variant === 'formRow') {
+    return (
+      <View style={styles.clockRow}>
+        <Text style={[theme.typography.body, styles.clockRowLabel, { color: theme.colors.label }]}>{label}</Text>
+        <Pressable
+          accessibilityLabel={`${label}, ${shown}`}
+          accessibilityRole="button"
+          onPress={() => setOpen(true)}
+          style={[styles.clockPill, { backgroundColor: withAlpha('#767680', 0.12) }, pillChrome]}
+          testID={testID}
+        >
+          <Text style={[theme.typography.body, { color: theme.colors.label }]}>{shown}</Text>
+        </Pressable>
+        {picker}
+      </View>
+    );
+  }
 
   return (
     <View style={styles.clockGroup}>
       <Text style={[styles.caption, { color: theme.colors.secondary }, androidLabel(theme)]}>{label}</Text>
       <Pressable
-        accessibilityLabel={`${label}, ${value}`}
+        accessibilityLabel={`${label}, ${shown}`}
         accessibilityRole="button"
         onPress={() => setOpen(true)}
         style={[
@@ -388,44 +460,23 @@ export function ClockField({
         ]}
         testID={testID}
       >
-        <Text style={[theme.typography.body, { color: theme.colors.ink }]}>{value}</Text>
+        <Text style={[theme.typography.body, { color: theme.colors.ink }]}>{shown}</Text>
       </Pressable>
-
-      <Modal animationType="fade" onRequestClose={() => setOpen(false)} transparent visible={open}>
-        <Pressable onPress={() => setOpen(false)} style={styles.scrim}>
-          <View style={[styles.menu, { backgroundColor: theme.colors.surface }]}>
-            <Text style={[styles.headline, styles.menuTitle, { color: theme.colors.ink }]}>{label}</Text>
-            <View style={styles.wheels}>
-              <Wheel
-                count={24}
-                onSelect={(next) => onChange(formatClock(next, minute))}
-                selected={hour}
-                testIDPrefix={`${testID}-hour`}
-              />
-              <Wheel
-                count={60}
-                onSelect={(next) => onChange(formatClock(hour, next))}
-                selected={minute}
-                testIDPrefix={`${testID}-minute`}
-              />
-            </View>
-            <Pressable accessibilityRole="button" onPress={() => setOpen(false)} style={styles.menuRow} testID={`${testID}-done`}>
-              <Text style={[theme.typography.body, { color: theme.colors.link }]}>Done</Text>
-            </Pressable>
-          </View>
-        </Pressable>
-      </Modal>
+      {picker}
     </View>
   );
 }
 
+const HOUR_LABELS = Array.from({ length: 24 }, (_, index) => String(index).padStart(2, '0'));
+const MINUTE_LABELS = Array.from({ length: 60 }, (_, index) => String(index).padStart(2, '0'));
+
 function Wheel({
-  count,
+  labels,
   selected,
   onSelect,
   testIDPrefix,
 }: {
-  count: number;
+  labels: string[];
   selected: number;
   onSelect: (next: number) => void;
   testIDPrefix: string;
@@ -433,7 +484,7 @@ function Wheel({
   const theme = useTheme();
   return (
     <ScrollView style={styles.wheel}>
-      {Array.from({ length: count }, (_, index) => (
+      {labels.map((label, index) => (
         <Pressable
           accessibilityRole="button"
           accessibilityState={{ selected: index === selected }}
@@ -443,7 +494,7 @@ function Wheel({
           testID={`${testIDPrefix}-${index}`}
         >
           <Text style={[theme.typography.body, { color: index === selected ? theme.colors.link : theme.colors.ink }]}>
-            {String(index).padStart(2, '0')}
+            {label}
           </Text>
         </Pressable>
       ))}
@@ -555,6 +606,10 @@ const styles = StyleSheet.create({
   wheels: { flexDirection: 'row', gap: 12, paddingHorizontal: 16, height: 220 },
   wheel: { flex: 1 },
   wheelRow: { minHeight: 40, justifyContent: 'center', alignItems: 'center' },
+  // `variant="formRow"`: the Moments form's `DateField` row and pill (form.tsx `inline`, `datePill`).
+  clockRow: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 24 },
+  clockRowLabel: { flex: 1 },
+  clockPill: { borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6 },
 
   sliderRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   sliderTrackArea: { flex: 1, height: 36, justifyContent: 'center' },

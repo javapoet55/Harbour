@@ -65,7 +65,7 @@ export type TaskListSnapshot = {
 /** `Date.distantFuture`, the sort key Swift gives an unscheduled task (TaskQuery.swift:97). */
 export const DISTANT_FUTURE = 64092211200000;
 
-type Interval = { start: number; end: number };
+export type Interval = { start: number; end: number };
 
 /** `task.isDone` (Models.swift:47). */
 export function isDone(task: NexdoTask): boolean {
@@ -131,7 +131,7 @@ export function addDays(at: number, days: number, timeZone: string): number {
 }
 
 /** The day interval containing `at`: `calendar.dateInterval(of: .day, for:)`. */
-function dayInterval(at: number, timeZone: string): Interval {
+export function dayInterval(at: number, timeZone: string): Interval {
   const start = startOfDay(at, timeZone);
   return { start, end: addDays(start, 1, timeZone) };
 }
@@ -140,7 +140,7 @@ function dayInterval(at: number, timeZone: string): Interval {
  * The week interval containing `at`. Swift sets `firstWeekday = 2` (TaskQuery.swift:76), so weeks run
  * Monday to Sunday regardless of the device locale.
  */
-function weekInterval(at: number, timeZone: string): Interval {
+export function weekInterval(at: number, timeZone: string): Interval {
   const start = startOfDay(at, timeZone);
   const [year, month, day] = dayKey(start, timeZone).split('-').map(Number);
   const weekday = new Date(Date.UTC(year, month - 1, day)).getUTCDay(); // 0 = Sunday
@@ -150,7 +150,7 @@ function weekInterval(at: number, timeZone: string): Interval {
 }
 
 /** The month interval containing `at`. */
-function monthInterval(at: number, timeZone: string): Interval {
+export function monthInterval(at: number, timeZone: string): Interval {
   const [year, month] = dayKey(at, timeZone).split('-').map(Number);
   const start = startOfDay(Date.UTC(year, month - 1, 1, 12), timeZone);
   const end = startOfDay(Date.UTC(month === 12 ? year + 1 : year, month === 12 ? 0 : month, 1, 12), timeZone);

@@ -182,14 +182,20 @@ describe('calendarEventMatches', () => {
     ).toBe(false);
   });
 
-  it('treats an event as complete only once its END has passed', () => {
-    // Ends 08:00 local, before now (09:00).
-    const past = event({ id: 'past', startAt: atLocal('2026-09-16', '07:00'), endAt: atLocal('2026-09-16', '08:00') });
-    // Ends 11:00, still ahead.
-    const ahead = event({ id: 'ahead' });
+  // Port of CalendarCompletionTests.completedCalendarEventsRespectSavedStatusAndSelectedDate.
+  it('counts an event as completed only once it is marked complete, on its own day', () => {
+    for (const completed of [false, true]) {
+      const item = event({ id: 'event', startAt: '2026-09-14T17:00:00Z', endAt: '2026-09-14T18:00:00Z', completedAt: completed ? '2026-09-14T19:00:00Z' : null });
+      const la = { timeZone: 'America/Los_Angeles', now: NOW };
+      expect(calendarEventMatches({ ...la, event: item, day: '2026-09-14', completedOnly: true })).toBe(completed);
+      expect(calendarEventMatches({ ...la, event: item, day: '2026-09-13', completedOnly: true })).toBe(false);
+      expect(calendarEventMatches({ ...la, event: item, day: '2026-09-14', completedOnly: false })).toBe(true);
+    }
+  });
 
-    expect(calendarEventMatches({ ...base, event: past, completedOnly: true })).toBe(true);
-    expect(calendarEventMatches({ ...base, event: ahead, completedOnly: true })).toBe(false);
+  it('does not treat an event whose end has passed as completed', () => {
+    const past = event({ id: 'past', startAt: atLocal('2026-09-16', '07:00'), endAt: atLocal('2026-09-16', '08:00') });
+    expect(calendarEventMatches({ ...base, event: past, completedOnly: true })).toBe(false);
   });
 });
 

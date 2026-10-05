@@ -198,7 +198,7 @@ describe('Important Moments list', () => {
     await render(<ImportantMoments />);
     await fireEvent.press(screen.getByTestId('moments-tab-Scheduled'));
     expect(screen.getByText('Sam’s Birthday')).toBeTruthy();
-    expect(screen.getByText('Confirmation required')).toBeTruthy();
+    expect(screen.getByText('Scheduled — manual send')).toBeTruthy();
     await fireEvent.press(screen.getByTestId('moments-delivery-filter'));
     await fireEvent.press(screen.getByTestId('moments-delivery-filter-Automatic'));
     expect(screen.queryByText('Sam’s Birthday')).toBeNull();
@@ -1036,13 +1036,57 @@ describe('Choose Delivery', () => {
 });
 
 describe('Wish details', () => {
+  // ImportantMomentsView.swift:534: a Messages wish never sends itself, and the subtitle says so.
+  it('tells you a Messages wish waits for you to tap Send', async () => {
+    load([moment({ drafts: [draft({ plans: [plan({ id: 'p1', channel: 'messages' })] })] })]);
+    mockParams = { planId: 'p1' };
+    await render(<WishDetails />);
+    expect(
+      screen.getByText('Your wish and schedule are saved. Open Messages and tap Send when you are ready; Messages wishes are not sent automatically.'),
+    ).toBeTruthy();
+  });
+
+  // ImportantMomentsView.swift:544-546: an expired wish always explains itself the same way; any other
+  // status shows the plan's own last error.
+  it('explains an expired wish with Swift\'s fixed text rather than its last error', async () => {
+    load([moment({ drafts: [draft({ plans: [plan({ id: 'p1', status: 'EXPIRED', lastError: 'Messages opened; delivery not confirmed.' })] })] })]);
+    mockParams = { planId: 'p1' };
+    await render(<WishDetails />);
+    expect(
+      screen.getByText('This wish expired 24 hours after its scheduled send time because delivery was not confirmed. Create a new wish to send it.'),
+    ).toBeTruthy();
+    expect(screen.queryByText('Messages opened; delivery not confirmed.')).toBeNull();
+  });
+
+  // ImportantMomentsView.swift:537: `Label(recipient, systemImage:)` — phone for Messages, envelope for
+  // email, a person otherwise.
+  it.each([
+    ['messages', 'call'],
+    ['email', 'mail'],
+    ['copy', 'person'],
+  ])('marks a %s recipient with the %s icon', async (channel, icon) => {
+    load([moment({ drafts: [draft({ plans: [plan({ id: 'p1', channel, recipient: 'sam@example.com' })] })] })]);
+    mockParams = { planId: 'p1' };
+    await render(<WishDetails />);
+    // The icon is decorative (hidden from screen readers); the recipient text is what is read.
+    expect(screen.getByTestId('wish-recipient-icon', { includeHiddenElements: true }).props.name).toBe(icon);
+    expect(screen.getByText('sam@example.com')).toBeTruthy();
+  });
+
+  it('keeps "Review the delivery status below." for a copy wish awaiting you', async () => {
+    load([moment({ drafts: [draft({ plans: [plan({ id: 'p1', channel: 'copy' })] })] })]);
+    mockParams = { planId: 'p1' };
+    await render(<WishDetails />);
+    expect(screen.getByText('Review the delivery status below.')).toBeTruthy();
+  });
+
   it('offers edit, open Messages and cancel for a Messages wish awaiting you', async () => {
     const item = moment({ drafts: [draft({ plans: [plan({ id: 'p1' })] })] });
     load([item]);
     mockParams = { planId: 'p1' };
     const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
     await render(<WishDetails />);
-    expect(screen.getByTestId('wish-title').props.children).toBe('Confirmation required');
+    expect(screen.getByTestId('wish-title').props.children).toBe('Scheduled — manual send');
     expect(screen.getByText('Review & Open Messages')).toBeTruthy();
     await fireEvent.press(screen.getByTestId('wish-cancel'));
     expect(alert).toHaveBeenCalledWith('Cancel this wish?', undefined, expect.any(Array));
@@ -1088,6 +1132,51 @@ describe('Wish details', () => {
     expect(screen.getByTestId('wish-uncertain-sent')).toBeTruthy();
     await fireEvent.press(screen.getByTestId('wish-uncertain-failed'));
     await waitFor(() => expect(mockPost).toHaveBeenCalledWith('plan', { id: 'p1', action: 'failed' }, undefined));
+  });
+
+  it('records "I found it in Sent mail" as sent', async () => {
+    load([moment({ drafts: [draft({ plans: [plan({ id: 'p1', channel: 'email', automaticDelivery: true, status: 'UNCERTAIN' })] })] })]);
+    mockParams = { planId: 'p1' };
+    await render(<WishDetails />);
+    await fireEvent.press(screen.getByTestId('wish-uncertain-sent'));
+    await waitFor(() => expect(mockPost).toHaveBeenCalledWith('plan', { id: 'p1', action: 'sent' }, undefined));
+  });
+
+  // ImportantMomentsView.swift:554: "Retry after reconnecting" only for a failed automatic email.
+  it('retries a failed automatic email, and offers no retry for a manual one', async () => {
+    load([
+      moment({
+        drafts: [
+          draft({
+            plans: [
+              plan({ id: 'p1', channel: 'email', automaticDelivery: true, status: 'FAILED' }),
+              plan({ id: 'p2', channel: 'messages', automaticDelivery: false, status: 'FAILED' }),
+            ],
+          }),
+        ],
+      }),
+    ]);
+    mockParams = { planId: 'p1' };
+    const view = await render(<WishDetails />);
+    await fireEvent.press(screen.getByTestId('wish-retry'));
+    await waitFor(() => expect(mockPost).toHaveBeenCalledWith('plan', { id: 'p1', action: 'retry' }, undefined));
+    await view.unmount();
+    mockParams = { planId: 'p2' };
+    await render(<WishDetails />);
+    expect(screen.queryByTestId('wish-retry')).toBeNull();
+  });
+
+  // ImportantMomentsView.swift:557-561: the prompt is a secondary footnote, "I found it in Sent mail" is
+  // `.bordered`, and "It wasn't sent" is a plain button — the safer answer is the one that stands out.
+  it('styles the "Check Sent mail" choices as Swift does', async () => {
+    load([moment({ drafts: [draft({ plans: [plan({ id: 'p1', channel: 'email', automaticDelivery: true, status: 'UNCERTAIN' })] })] })]);
+    mockParams = { planId: 'p1' };
+    await render(<WishDetails />);
+    const prompt = StyleSheet.flatten(screen.getByText('Check the Sent folder in Gmail, then tell Nexdo what happened.').props.style);
+    expect(prompt.fontSize).toBe(13);
+    expect(StyleSheet.flatten(screen.getByTestId('wish-uncertain-sent').props.style).backgroundColor).toBeDefined();
+    expect(StyleSheet.flatten(screen.getByTestId('wish-uncertain-failed').props.style ?? {}).backgroundColor).toBeUndefined();
+    expect(screen.getByLabelText("It wasn't sent")).toBeTruthy();
   });
 
   it('shows the scheduled confirmation and history actions', async () => {
@@ -1352,6 +1441,54 @@ describe('Recipients on Android', () => {
     await render(<MomentEditorView imported={imported} dismiss={jest.fn()} />);
     expect(rowText(0)).toEqual(['Kate', 'Mobile · ••• ••• 0200 · Email · k••••@example.com', 'Edit', 'Remove']);
     expect(isDisabled('moment-save')).toBe(false);
+  });
+
+  /** A saved festival opens its manager, which asks for the catalog. */
+  function serveCatalog() {
+    const saves = mockPost.getMockImplementation()!;
+    mockPost.mockImplementation(async (operation: string, ...rest: unknown[]) => (operation === 'festivalCatalog' ? { entries: [] } : saves(operation, ...rest)));
+  }
+
+  // fac34ed (MomentEditor.swift:129-135): re-importing a catalog festival keeps the saved group's id, so
+  // its recipients update in place instead of a second group of duplicates.
+  it('re-imports a saved catalog festival into its existing group', async () => {
+    jest.replaceProperty(Platform, 'OS', 'android');
+    const day = future(30);
+    const saved = moment({
+      id: 'diwali-1',
+      type: 'festival',
+      title: 'Diwali Wishes',
+      firstName: 'Asha',
+      occurrenceDate: day,
+      nextOccurrence: day,
+      source: 'festivalCatalog',
+      sourceKey: 'festival:diwali',
+      festivalSettings: settings({ groupID: 'SAVED-GROUP' }),
+    });
+    load([saved]);
+    serveSaves({ ...saved, id: 'new' });
+    serveCatalog();
+    const imported = { ...newMomentInput('festival:diwali', 'UTC'), type: 'festival', title: 'Diwali Wishes', yearly: false, source: 'festivalCatalog', occurrenceDate: day };
+    await render(<MomentEditorView imported={imported} dismiss={jest.fn()} />);
+    await addManually({ name: 'Ravi Kumar', email: 'ravi@example.com' });
+    await fireEvent.press(screen.getByTestId('moment-save'));
+    await waitFor(() => expect(mockPost.mock.calls.some(([operation]) => operation === 'festivalSave')).toBe(true));
+    const input = mockPost.mock.calls.find(([operation]) => operation === 'festivalSave')![1];
+    expect(input.settings.groupID).toBe('SAVED-GROUP');
+  });
+
+  it('starts a new group for a festival that was never imported', async () => {
+    jest.replaceProperty(Platform, 'OS', 'android');
+    const day = future(30);
+    load([]);
+    serveSaves(moment({ id: 'new', type: 'festival', title: 'Holi Wishes', occurrenceDate: day, nextOccurrence: day, source: 'festivalCatalog', sourceKey: 'festival:holi' }));
+    serveCatalog();
+    const imported = { ...newMomentInput('festival:holi', 'UTC'), type: 'festival', title: 'Holi Wishes', yearly: false, source: 'festivalCatalog', occurrenceDate: day };
+    await render(<MomentEditorView imported={imported} dismiss={jest.fn()} />);
+    await addManually({ name: 'Ravi Kumar', email: 'ravi@example.com' });
+    await fireEvent.press(screen.getByTestId('moment-save'));
+    await waitFor(() => expect(mockPost.mock.calls.some(([operation]) => operation === 'festivalSave')).toBe(true));
+    expect(mockPost.mock.calls.find(([operation]) => operation === 'festivalSave')![1].settings.groupID).toMatch(/^UUID-\d+$/);
   });
 
   it('edits and removes a row, and the first person names the moment', async () => {

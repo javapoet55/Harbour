@@ -370,7 +370,7 @@ capture is kept and is superseded by the `-v2` one.
 | Change password, server error | Submitting needs the real current password to be wrong for certain, and success signs the account out. The mismatch error and the confirmation are captured |
 | Task agent: business chosen, Messages draft sent | Choosing a business changes the real task and Messages would contact a real business |
 | Item Alternatives, error | Only on a server failure. Source: `ShoppingAlternativesView.swift:26-91` |
-| Stores Near You, no results | A nonsense area still returns stores (see §22 bug 17); a nonsense store name was not tried to completion |
+| Stores Near You, no results | A nonsense area still returns stores (see §22 "For the team", "Stores Near You ignores an unknown area"); a nonsense store name was not tried to completion |
 | Daily Brief section with **Call / Message** opening Messages | Needs a real contact on the task; the Nexdo Action screen's no-contact error is captured instead |
 | Share sheet, store logo | The system share sheet is not Nexdo UI. Safeway returned no logo, so `shopping-lists-v2` shows the cart fallback |
 | Pomodoro from a notification | Same `PomodoroView` as the captured timer, presented from `RootView.swift:219-223` |
@@ -403,7 +403,7 @@ These continue the list above (1–17).
     photo with AI?"). Consent is per session and can be withdrawn in Settings.
 25. **A sticky bottom action bar** (pattern 13) now also appears on Task Details (**Save changes** /
     **Mark complete**), Item Alternatives and the Calorie setup steps.
-26. **Wellness screens ignore dark mode** (§22 bug 1). Do not copy that: the RN port should theme
+26. **Wellness screens ignore dark mode** (§22 "For the team", "Wellness has no dark mode"). Do not copy that: the RN port should theme
     them like every other screen.
 
 ### Test data

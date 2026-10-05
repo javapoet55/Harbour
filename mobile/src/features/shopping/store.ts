@@ -43,7 +43,7 @@ export type ShoppingState = {
    * `alternatives(for:)` (ShoppingStore.swift:36-42). Never touches `busy` or `error`. A lost session
    * is rethrown; ANY other failure answers with the phone's own `localAlternatives(item)`.
    */
-  alternatives: (item: Pick<GroceryItem, 'name' | 'category' | 'quantity' | 'size'>) => Promise<ShoppingAlternativesResponse>;
+  alternatives: (item: Pick<GroceryItem, 'name' | 'category' | 'quantity' | 'size' | 'brand' | 'barcode'>) => Promise<ShoppingAlternativesResponse>;
   credential: () => Promise<TranscriptionSession>;
   setError: (error: string | null) => void;
   reset: () => void;
@@ -94,7 +94,15 @@ export function createShoppingStore(deps: ShoppingDeps) {
 
     async alternatives(item) {
       try {
-        return await deps.alternatives({ name: item.name, category: item.category, quantity: item.quantity, size: item.size });
+        // `ShoppingAlternativeInput` (ShoppingStore.swift:11) also carries the brand and barcode when known.
+        return await deps.alternatives({
+          name: item.name,
+          category: item.category,
+          quantity: item.quantity,
+          size: item.size,
+          ...(item.brand ? { brand: item.brand } : {}),
+          ...(item.barcode ? { barcode: item.barcode } : {}),
+        });
       } catch (error) {
         if (isApiError(error) && error.code === 'SIGNED_OUT') throw error;
         return localAlternatives(item);
