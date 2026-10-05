@@ -18,6 +18,43 @@ export function isValidZone(zone: string): boolean {
   }
 }
 
+/**
+ * Legacy IANA spellings and the current name of the same zone. ICU (Hermes's `Intl`, and iOS's
+ * `TimeZone.knownTimeZoneIdentifiers`) still lists several zones by their old link name — India is
+ * `Asia/Calcutta` there — while a phone reports the current one (`Asia/Kolkata`).
+ *
+ * NOT COPIED from Swift: its pickers match the device's `Asia/Kolkata` against a list that only holds
+ * `Asia/Calcutta`, so the Time zone row is blank for India (§22 "For the team"). Here both spellings
+ * are one zone.
+ */
+const ZONE_ALIASES: Record<string, string> = {
+  'Asia/Calcutta': 'Asia/Kolkata',
+  'Asia/Katmandu': 'Asia/Kathmandu',
+  'Asia/Saigon': 'Asia/Ho_Chi_Minh',
+  'Asia/Rangoon': 'Asia/Yangon',
+  'Asia/Dacca': 'Asia/Dhaka',
+  'Asia/Thimbu': 'Asia/Thimphu',
+  'Asia/Ulan_Bator': 'Asia/Ulaanbaatar',
+  'Europe/Kiev': 'Europe/Kyiv',
+  'America/Buenos_Aires': 'America/Argentina/Buenos_Aires',
+  'America/Godthab': 'America/Nuuk',
+  'Atlantic/Faeroe': 'Atlantic/Faroe',
+  'Pacific/Truk': 'Pacific/Chuuk',
+  'Pacific/Ponape': 'Pacific/Pohnpei',
+  'Pacific/Enderbury': 'Pacific/Kanton',
+};
+
+/** The current name of `zone` (`Asia/Calcutta` → `Asia/Kolkata`), when this runtime knows it; else `zone`. */
+export function canonicalZone(zone: string): string {
+  const current = ZONE_ALIASES[zone];
+  return current !== undefined && isValidZone(current) ? current : zone;
+}
+
+/** Whether two identifiers name the same zone, legacy spellings included. */
+export function sameZone(a: string, b: string): boolean {
+  return canonicalZone(a) === canonicalZone(b);
+}
+
 export function deviceZone(): string {
   return Intl.DateTimeFormat().resolvedOptions().timeZone;
 }
