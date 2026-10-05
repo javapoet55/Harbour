@@ -257,3 +257,49 @@ export function upcomingGroupFor(nextOccurrenceDay: string, zone: string, now: n
   if (occurrence >= monthStart && occurrence < nextMonthStart) return 'This Month';
   return 'Later';
 }
+
+/**
+ * `MomentUpcomingFilter` (ImportantMoment.swift:99-115): the date chips on the Upcoming tab. Each
+ * moment is judged in its OWN zone's calendar, across midnight and DST. The week is
+ * `Calendar.current`'s `.weekOfYear` — Sunday-first on the en-US reference device, as `upcomingGroupFor`.
+ *
+ * Later starts after this week AND after tomorrow, so a Sunday-evening "tomorrow" is never also Later.
+ */
+export const UPCOMING_FILTERS = ['Today', 'Tomorrow', 'This Week', 'Later'] as const;
+export type UpcomingFilter = (typeof UPCOMING_FILTERS)[number];
+
+export function upcomingFilterIncludes(filter: UpcomingFilter, day: string, zone: string, now: number = Date.now()): boolean {
+  const timeZone = safeZone(zone);
+  const today = startOfDay(now, timeZone);
+  const tomorrow = addDays(today, 1, timeZone);
+  const afterTomorrow = addDays(today, 2, timeZone);
+  const date = momentDate(day, timeZone, now);
+  const [y, m, d] = momentDay(today, timeZone).split('-').map(Number);
+  const weekday = new Date(Date.UTC(y, m - 1, d)).getUTCDay(); // 0 = Sunday
+  const weekEnd = addDays(addDays(today, -weekday, timeZone), 7, timeZone);
+  switch (filter) {
+    case 'Today':
+      return date >= today && date < tomorrow;
+    case 'Tomorrow':
+      return date >= tomorrow && date < afterTomorrow;
+    case 'This Week':
+      return date >= today && date < weekEnd;
+    case 'Later':
+      return date >= Math.max(weekEnd, afterTomorrow);
+  }
+}
+
+/** The empty state's wording: "No moments today", "… tomorrow", "… this week", "… later". */
+export function upcomingFilterEmptyTitle(filter: UpcomingFilter): string {
+  return `No moments ${filter === 'Later' ? 'later' : filter.toLowerCase()}`;
+}
+
+/** `TimeZone.abbreviation(for:)`: "PDT", "GMT+5:30". */
+export function zoneAbbreviation(at: number, zone: string): string {
+  try {
+    const parts = new Intl.DateTimeFormat('en-US', { timeZone: safeZone(zone), timeZoneName: 'short' }).formatToParts(new Date(at));
+    return parts.find((part) => part.type === 'timeZoneName')?.value ?? zone;
+  } catch {
+    return zone;
+  }
+}

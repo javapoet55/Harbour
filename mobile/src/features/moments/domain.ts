@@ -1,6 +1,6 @@
 import type { MessageComposeOutcome } from '../../actions/composers';
 import type { FestivalCatalogEntry, ImportantMoment, MomentInput, PlanAction, WishDeliveryPlan, WishDraft } from '../../api/moments';
-import { deviceZone, momentDate, momentDay, parseInstant, upcomingGroupFor, zonedInstant, type UpcomingGroup } from './dates';
+import { deviceZone, momentDate, momentDay, parseInstant, shortTimeIn, upcomingGroupFor, zonedInstant, zoneAbbreviation, type UpcomingGroup } from './dates';
 
 /**
  * The pure Important Moments model: `ImportantMoment.swift`, `FestivalManagement.swift`,
@@ -749,3 +749,18 @@ export function momentForPlan(moments: ImportantMoment[], plan: Pick<WishDeliver
 }
 
 export { momentDate };
+
+/**
+ * `MomentScheduleSummary.labels(plans:)` (ImportantMoment.swift:116-129): one badge per distinct send
+ * time, soonest first — "2 scheduled @ 8:00 AM". The zone's abbreviation is added only when the plans
+ * span more than one zone.
+ */
+export function scheduleSummaryLabels(plans: WishDeliveryPlan[], locale?: string): string[] {
+  const multipleZones = new Set(plans.map((plan) => plan.timeZoneID)).size > 1;
+  const labels = [...plans]
+    .sort((a, b) => planDate(a) - planDate(b))
+    .map((plan) => shortTimeIn(planDate(plan), plan.timeZoneID, locale) + (multipleZones ? ` ${zoneAbbreviation(planDate(plan), plan.timeZoneID)}` : ''));
+  const ordered: string[] = [];
+  for (const label of labels) if (!ordered.includes(label)) ordered.push(label);
+  return ordered.map((label) => `${labels.filter((item) => item === label).length} scheduled @ ${label}`);
+}

@@ -109,33 +109,49 @@ beforeEach(() => {
 });
 
 describe('Important Moments list', () => {
-  it('shows the summary card, the weekly buckets and a greeting-card group', async () => {
-    const day = future(2);
+  // Phase 12: the date chips replace the weekly buckets (ImportantMomentsView.swift:256-281).
+  it('shows the summary card, the date chips with Today first, and a greeting-card group', async () => {
+    const today = future(0);
     const encoded = settings({ groupID: 'g', baseMessage: 'Hi', approvedAt: '2030-01-01T00:00:00Z' });
     load([
-      moment({ id: 'a', type: 'festival', title: 'Diwali', firstName: 'A', occurrenceDate: day, nextOccurrence: day, festivalSettings: encoded }),
-      moment({ id: 'b', type: 'festival', title: 'Diwali', firstName: 'B', occurrenceDate: day, nextOccurrence: day, festivalSettings: encoded }),
-      moment({ id: 'c', type: 'custom', title: 'Team lunch', occurrenceDate: future(3), nextOccurrence: future(3) }),
+      moment({ id: 'a', type: 'festival', title: 'Diwali', firstName: 'A', occurrenceDate: today, nextOccurrence: today, festivalSettings: encoded }),
+      moment({ id: 'b', type: 'festival', title: 'Diwali', firstName: 'B', occurrenceDate: today, nextOccurrence: today, festivalSettings: encoded }),
+      moment({ id: 'c', type: 'custom', title: 'Team lunch', occurrenceDate: future(1), nextOccurrence: future(1) }),
     ]);
     await render(<ImportantMoments />);
     expect(screen.getByText('2 upcoming moments')).toBeTruthy();
     expect(screen.getByText('0 wishes scheduled')).toBeTruthy();
     expect(screen.getByText('1 wish needs review')).toBeTruthy();
     expect(screen.getByText('2 ready to schedule')).toBeTruthy();
+    // Each chip counts the groups it would show; Today is selected first.
+    expect(screen.getByText('Today (1)')).toBeTruthy();
+    expect(screen.getByText('Tomorrow (1)')).toBeTruthy();
+    expect(screen.getByTestId('moments-period-Today').props.accessibilityState).toEqual({ selected: true });
     expect(screen.getByText('Ready to schedule')).toBeTruthy();
-    expect(screen.getByText('Create a personal wish')).toBeTruthy();
+    // Tomorrow's custom moment is not on Today.
+    expect(screen.queryByText('Create a personal wish')).toBeNull();
     await fireEvent.press(screen.getByTestId('festival-manage-a'));
     expect(mockPush).toHaveBeenCalledWith({ pathname: '/wellness/moments/manage', params: { ids: 'a,b' } });
+    await fireEvent.press(screen.getByTestId('moments-period-Tomorrow'));
+    expect(screen.queryByText('Diwali')).toBeNull();
+    expect(screen.getByText('Create a personal wish')).toBeTruthy();
     await fireEvent.press(screen.getByLabelText('Create wish'));
     expect(mockPush).toHaveBeenLastCalledWith({ pathname: '/wellness/moments/review', params: { id: 'c' } });
     await waitFor(() => expect(mockSnapshot).toHaveBeenCalled());
   });
 
-  it('shows the empty state, and no message on an empty Sent tab when moments exist', async () => {
+  // `ContentUnavailableView("No moments \(…)")` (:279-281) replaced "No moments yet".
+  it('shows the chosen chip’s empty state', async () => {
     load([]);
     await render(<ImportantMoments />);
-    expect(screen.getByText('No moments yet')).toBeTruthy();
-    expect(screen.getByText('Add a moment manually, or select contacts and calendars in Settings.')).toBeTruthy();
+    expect(screen.getByText('No moments today')).toBeTruthy();
+    expect(screen.getByText('Choose another date filter or add a moment.')).toBeTruthy();
+    expect(screen.queryByText('No moments yet')).toBeNull();
+    for (const [chip, title] of [['Tomorrow', 'No moments tomorrow'], ['This Week', 'No moments this week'], ['Later', 'No moments later']]) {
+      expect(screen.getByText(`${chip} (0)`)).toBeTruthy();
+      await fireEvent.press(screen.getByTestId(`moments-period-${chip}`));
+      expect(screen.getByText(title)).toBeTruthy();
+    }
     await fireEvent.press(screen.getByTestId('moments-add'));
     expect(mockPush).toHaveBeenCalledWith({ pathname: '/wellness/moments/editor', params: { done: 'list' } });
   });
@@ -176,13 +192,40 @@ describe('Important Moments list', () => {
     expect(screen.getByText('No scheduled wishes')).toBeTruthy();
   });
 
-  it('keeps "No moments yet" on Upcoming only', async () => {
+  it('keeps the date chips and their empty state on Upcoming only', async () => {
     load([]);
     await render(<ImportantMoments />);
-    expect(screen.getByTestId('moments-empty')).toBeTruthy();
+    expect(screen.getByTestId('moments-period-empty')).toBeTruthy();
     await fireEvent.press(screen.getByTestId('moments-tab-Scheduled'));
-    expect(screen.queryByTestId('moments-empty')).toBeNull();
+    expect(screen.queryByTestId('moments-period-empty')).toBeNull();
+    expect(screen.queryByTestId('moments-periods')).toBeNull();
     expect(screen.getByText('No scheduled wishes')).toBeTruthy();
+  });
+
+  // `MomentScheduleSummary` badges, one per send time (ImportantMomentsView.swift:148-150).
+  it('badges a group’s scheduled wishes by send time, and keeps the gear on the card', async () => {
+    const day = future(0);
+    const encoded = settings({ groupID: 'g', baseMessage: 'Hi', approvedAt: '2030-01-01T00:00:00Z' });
+    const scheduled = (id: string, time: string) => [draft({ id: `d${id}`, momentID: id, plans: [plan({ id: `p${id}`, draftID: `d${id}`, scheduledAtUTC: `${day}T${time}:00.000Z` })] })];
+    load([
+      moment({ id: 'a', type: 'birthday', title: 'Sam’s Birthday', firstName: 'A', occurrenceDate: day, nextOccurrence: day, festivalSettings: encoded, drafts: scheduled('a', '23:58') }),
+      moment({ id: 'b', type: 'birthday', title: 'Sam’s Birthday', firstName: 'B', occurrenceDate: day, nextOccurrence: day, festivalSettings: encoded, drafts: scheduled('b', '23:58') }),
+      moment({ id: 'c', type: 'birthday', title: 'Sam’s Birthday', firstName: 'C', occurrenceDate: day, nextOccurrence: day, festivalSettings: encoded, drafts: scheduled('c', '23:59') }),
+    ]);
+    await render(<ImportantMoments />);
+    expect(screen.getByText('2 scheduled @ 11:58 PM')).toBeTruthy();
+    expect(screen.getByText('1 scheduled @ 11:59 PM')).toBeTruthy();
+    expect(screen.getByLabelText('Manage Sam’s Birthday')).toBeTruthy();
+  });
+
+  it('puts a moment beyond this week under Later only', async () => {
+    const later = future(9);
+    load([moment({ id: 'l', type: 'custom', title: 'Far lunch', occurrenceDate: later, nextOccurrence: later })]);
+    await render(<ImportantMoments />);
+    expect(screen.getByText('Later (1)')).toBeTruthy();
+    expect(screen.getByText('This Week (0)')).toBeTruthy();
+    await fireEvent.press(screen.getByTestId('moments-period-Later'));
+    expect(screen.getByText('Far lunch')).toBeTruthy();
   });
 
   it('lists wishes on the Scheduled tab and filters them by delivery', async () => {
