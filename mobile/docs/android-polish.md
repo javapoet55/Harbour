@@ -1470,3 +1470,34 @@ Deviations from Swift, Android-only or not:
   a sheet titled "Remind later", where Swift shows a compact `DatePicker`.
 - **Today, Previous / Next** are tinted capsules (`.bordered`); "Choose contact or enter details" keeps
   Swift's fixed lavender and ink, because the card it sits on (`glassSolid`) stays light in dark mode too.
+
+## 28. UI-parity pass 3: Phase 12 on the phone (2026-10-05)
+
+Every ticked §22 row checked on a OnePlus CPH2691 (Android 16, 360 dp wide) against the Mac's iPhone
+captures; results row by row in `docs/reference/PARITY.md` "UI-parity pass 3". Fixes, Android-only or not:
+
+- **Module guides: "Back to Home" is ink.** Swift's outer `.foregroundStyle(ink)` beats the `.tint`; it was
+  the module colour. Both platforms.
+- **Pomodoro cards lose `elevation` (Android only; iOS ignores it).** Android draws an elevation shadow at
+  its own strength in `shadowColor` and ignores `shadowOpacity`, so Swift's 6% blue shadow became a blue
+  ring, and the 92% white card let the shadow show through as a grey inner panel. The 1pt stroke carries
+  the edge, as Swift's barely visible shadow does.
+- **Pomodoro chart minute labels sit on their grid lines.** They were spread evenly top to bottom, but the
+  domain is 1.3× the tallest bar, so "6m" sat ~20 dp above its line. Both platforms.
+- **Pomodoro trend chart: the picked bar's label sits on the bar** (`.annotation(position: .top)`), not at
+  the top of the chart. Both platforms.
+- **Pomodoro timer ring has no seams.** The ring's 180 segments overlap to close their gaps; the fading end
+  of Swift's gradient is translucent, so every overlap doubled up into a visible stripe. Each segment is now
+  its colour flattened over the 22% track on white. Both platforms.
+- **Pomodoro plain buttons are ink.** "Back to Tasks", "Retry sync" and the bar's back, history and "…"
+  glyphs were indigo; Swift's `.foregroundStyle(ink).tint(.indigo)` draws them in the ink. Both platforms.
+- **Pomodoro menu glyphs.** `PopoverItem` takes an optional leading `icon` (+ `iconColor`), for
+  `Button(_:systemImage:)`; the dashboard's Refresh and About these metrics use it. Callers without one are
+  unchanged.
+- **Pomodoro session details** sit below the status bar on Android (a `pageSheet` `Modal` is full screen
+  there) and title their section as written ("Focus time"), as iOS 26 does.
+- **Pomodoro keeps a dark status bar in dark mode**, as the chooser and guides do (§23): the dashboard is
+  `.preferredColorScheme(.light)` and the timer is drawn light, so white icons vanished.
+- **Pomodoro period chips are single-line.** After a reload "This Week" drew as "This" even with `Text`'s
+  1 dp slack (3 px at this phone's density): this phone's variable system font let the draw pass break at
+  the space. `numberOfLines={1}` keeps Android's layout on one line.

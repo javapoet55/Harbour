@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
-import { Alert } from 'react-native';
+import { Alert, StyleSheet } from 'react-native';
 
 jest.mock('expo-keep-awake', () => ({ activateKeepAwakeAsync: jest.fn(async () => undefined), deactivateKeepAwake: jest.fn(async () => undefined) }));
 
@@ -91,6 +91,8 @@ describe('the dashboard', () => {
     const detail = within(screen.getByTestId('pomodoro-session-detail'));
     expect(detail.getByText('Session details')).toBeTruthy();
     expect(detail.getByText('Stopped early')).toBeTruthy();
+    // iOS 26 draws a Form Section header as written: "Study", not "STUDY".
+    expect(detail.getByText('Study')).toBeTruthy();
     expect(detail.getByText('25 min')).toBeTruthy();
     expect(detail.getByText('10 min')).toBeTruthy();
     await fireEvent.press(detail.getByTestId('pomodoro-session-done'));
@@ -122,6 +124,13 @@ describe('the dashboard', () => {
     const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
     await open(setup());
     await fireEvent.press(screen.getByTestId('pomodoro-dashboard-menu'));
+    // `Button(_:systemImage:)`: each item carries its glyph.
+    const glyphs = (node: { props: { name?: string }; children: unknown[] }): string[] => [
+      ...(node.props.name ? [node.props.name] : []),
+      ...node.children.flatMap((child) => (typeof child === 'object' && child ? glyphs(child as typeof node) : [])),
+    ];
+    expect(glyphs(screen.getByTestId('pomodoro-menu-refresh'))).toEqual(['refresh']);
+    expect(glyphs(screen.getByTestId('pomodoro-menu-about'))).toEqual(['information-circle-outline']);
     await fireEvent.press(screen.getByTestId('pomodoro-menu-about'));
     expect(alert).toHaveBeenCalledWith('Your focus metrics', expect.stringContaining('Focus time excludes pauses and breaks'), [{ text: 'Got it', style: 'cancel' }]);
     alert.mockRestore();
@@ -162,6 +171,8 @@ describe('the timer', () => {
     expect(screen.getByText('Your focus time has been saved.')).toBeTruthy();
     expect(within(screen.getByTestId('pomodoro-completion')).getByText('0')).toBeTruthy();
 
+    // A plain Button under `.foregroundStyle(ink).tint(.indigo)` draws in the ink (`pomodoro-complete`).
+    expect(StyleSheet.flatten(screen.getByText('Back to Tasks').props.style).color).toBe('#0D0A40');
     await fireEvent.press(screen.getByTestId('pomodoro-back-to-tasks'));
     expect(harness.onTasks).toHaveBeenCalled();
     await fireEvent.press(screen.getByTestId('pomodoro-another'));

@@ -1,7 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Modal, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Alert, Modal, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { withAlpha } from '../../components/SignInBackdrop';
@@ -118,21 +118,21 @@ export function PomodoroDashboard({ state, restore, initialTab = 'Overview', onC
             style={[styles.circleButton, { backgroundColor: withAlpha(INDIGO, 0.06) }]}
             testID="pomodoro-dashboard-back"
           >
-            <Ionicons color={INDIGO} name="chevron-back" size={20} />
+            <Ionicons color={INK} name="chevron-back" size={20} />
           </Pressable>
           <Text accessibilityRole="header" style={styles.title2}>
             {tab === 'Overview' ? 'Pomodoro' : tab}
           </Text>
           <View collapsable={false} ref={menuAnchor}>
             <Pressable accessibilityLabel="Dashboard options" accessibilityRole="button" onPress={menu.open} style={[styles.circleButton, { backgroundColor: withAlpha(INDIGO, 0.06) }]} testID="pomodoro-dashboard-menu">
-              <Ionicons color={INDIGO} name="ellipsis-horizontal" size={20} />
+              <Ionicons color={INK} name="ellipsis-horizontal" size={20} />
             </Pressable>
           </View>
         </View>
         <PopoverMenu
           items={[
-            { key: 'refresh', title: 'Refresh', onPress: () => void restore(), testID: 'pomodoro-menu-refresh' },
-            { key: 'about', title: 'About these metrics', onPress: definitions, testID: 'pomodoro-menu-about' },
+            { key: 'refresh', title: 'Refresh', icon: 'refresh', iconColor: INDIGO, onPress: () => void restore(), testID: 'pomodoro-menu-refresh' },
+            { key: 'about', title: 'About these metrics', icon: 'information-circle-outline', iconColor: INDIGO, onPress: definitions, testID: 'pomodoro-menu-about' },
           ]}
           menu={menu}
           testID="pomodoro-dashboard-options"
@@ -235,7 +235,7 @@ function PeriodPicker({ period, onChange }: { period: PomodoroPeriod; onChange: 
             style={[styles.period, { backgroundColor: on ? INDIGO : withAlpha(INDIGO, 0.05) }]}
             testID={`pomodoro-period-${item}`}
           >
-            <Text style={[styles.periodText, { color: on ? '#FFFFFF' : INK }]}>{POMODORO_PERIOD_TITLES[item]}</Text>
+            <Text numberOfLines={1} style={[styles.periodText, { color: on ? '#FFFFFF' : INK }]}>{POMODORO_PERIOD_TITLES[item]}</Text>
           </Pressable>
         );
       })}
@@ -457,7 +457,7 @@ function SessionDetail({
   return (
     <Modal animationType="slide" onRequestClose={onClose} presentationStyle="pageSheet" visible={session !== null}>
       {session ? (
-        <View style={[styles.sheet, { paddingBottom: insets.bottom }]} testID="pomodoro-session-detail">
+        <View style={[styles.sheet, { paddingTop: Platform.OS === 'android' ? insets.top : 0, paddingBottom: insets.bottom }]} testID="pomodoro-session-detail">
           <View style={styles.sheetBar}>
             <View style={styles.sheetSide} />
             <Text accessibilityRole="header" style={[styles.headline, styles.grow, styles.centered]}>
@@ -468,7 +468,7 @@ function SessionDetail({
             </Pressable>
           </View>
           <ScrollView contentContainerStyle={styles.form}>
-            <Text style={styles.sectionHeader}>{POMODORO_CATEGORY_TITLES[session.category].toUpperCase()}</Text>
+            <Text style={styles.sectionHeader}>{POMODORO_CATEGORY_TITLES[session.category]}</Text>
             <View style={styles.formCard}>
               {session.name !== '' ? <FormRow label={session.name} /> : null}
               <FormRow label="Status" value={sessionStatus(session)} />
@@ -534,7 +534,8 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.06,
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 4 },
-    elevation: 2,
+    // No `elevation`: Android draws it at its own strength in `shadowColor` (a blue ring here) and shows
+    // it through the 92% white fill. Swift's 6% shadow is barely visible; the 1pt stroke carries the edge.
   },
   focusHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
   focusIcon: { width: 48, height: 48, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
@@ -559,7 +560,8 @@ const styles = StyleSheet.create({
   sheetBar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, minHeight: 56 },
   sheetSide: { width: 64, alignItems: 'flex-end' },
   form: { padding: 16, gap: 8 },
-  sectionHeader: { fontSize: 13, lineHeight: 18, color: SECONDARY, marginLeft: 16, marginTop: 8 },
+  // iOS 26 draws a `Form` `Section("…")` header as written, row-sized and semibold (`pomodoro-session-detail`).
+  sectionHeader: { fontSize: 17, lineHeight: 22, fontWeight: '600', color: SECONDARY, marginLeft: 16, marginTop: 8 },
   formCard: { backgroundColor: '#FFFFFF', borderRadius: 10, overflow: 'hidden' },
   formRow: { flexDirection: 'row', alignItems: 'center', minHeight: 44, paddingHorizontal: 16, paddingVertical: 11 },
   formSeparator: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: 'rgba(60, 60, 67, 0.29)' },

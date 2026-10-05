@@ -1,5 +1,5 @@
 import { fireEvent, render, screen } from '@testing-library/react-native';
-import { View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
 import type { PomodoroBucket } from '../analytics';
 import { CategoryDonut, FocusChart, ProgressRing } from '../charts';
@@ -67,4 +67,21 @@ test('the donut shares its segments by time and shows its centre', async () => {
   expect(segments.filter((segment) => segment.props.color === '#34C759')).toHaveLength(60);
   expect(segments.filter((segment) => segment.props.color === '#FF9500')).toHaveLength(120);
   expect(screen.getByTestId('centre')).toBeTruthy();
+});
+
+test('the ring\'s segments are opaque, so their overlaps leave no seams', async () => {
+  const view = await ring(1);
+  const segments = view.getByTestId('pomodoro-ring').props.children[1] as { props: { color: string } }[];
+  expect(segments.every((segment) => segment.props.color.startsWith('rgb('))).toBe(true);
+  // The first stop is opaque purple; the last fades towards the 22% pink track on white.
+  expect(segments[0].props.color).toBe('rgb(175, 82, 222)');
+  expect(segments[179].props.color).toBe('rgb(255, 158, 177)');
+});
+
+test('each minute label sits on its own grid line, and the bar label on its bar', async () => {
+  // Tallest 25 min: the domain is 32.5, so the 30m line is below the top of the chart.
+  await render(<FocusChart breaks={false} buckets={buckets} onPick={jest.fn()} period="week" picked={null} testID="chart" zone={zone} />);
+  expect(StyleSheet.flatten(screen.getByText('30m').props.style)).toEqual(expect.objectContaining({ position: 'absolute', bottom: `${(30 / 32.5) * 100}%` }));
+  expect(StyleSheet.flatten(screen.getByText('0m').props.style).bottom).toBe('0%');
+  expect(StyleSheet.flatten(screen.getByTestId('chart-label').props.style).bottom).toBe(`${(25 / 32.5) * 100}%`);
 });

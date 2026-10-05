@@ -314,7 +314,17 @@ export function usePopoverMenu(anchor: { current: View | null }): MenuState {
   };
 }
 
-export type PopoverItem = { key: string; title: string; onPress: () => void; destructive?: boolean; checked?: boolean; testID?: string };
+/** `icon` is a `Button(_:systemImage:)` glyph, drawn leading in `iconColor` (the menu's tint). */
+export type PopoverItem = {
+  key: string;
+  title: string;
+  onPress: () => void;
+  destructive?: boolean;
+  checked?: boolean;
+  testID?: string;
+  icon?: keyof typeof Ionicons.glyphMap;
+  iconColor?: string;
+};
 
 /** Each key as given, with a repeat suffixed by its row (`#2`), so two items with one value still render. */
 export function uniqueKeys(keys: string[]): string[] {
@@ -364,6 +374,11 @@ export function PopoverMenu({ items, menu, showsChecks = false, testID }: { item
                 >
                   {showsChecks ? (
                     <View style={styles.menuCheck}>{item.checked ? <Ionicons name="checkmark" size={17} color={theme.colors.label} /> : null}</View>
+                  ) : null}
+                  {item.icon ? (
+                    <View style={styles.menuIcon}>
+                      <Ionicons color={item.destructive ? theme.colors.danger : (item.iconColor ?? theme.colors.label)} name={item.icon} size={20} />
+                    </View>
                   ) : null}
                   <Text numberOfLines={1} style={[textStyles.body, styles.grow, { color: item.destructive ? theme.colors.danger : theme.colors.label }]}>
                     {item.title}
@@ -646,6 +661,7 @@ const styles = StyleSheet.create({
   dialog: { borderRadius: 16, paddingVertical: 8, maxHeight: '80%' },
   menu: { position: 'absolute', borderRadius: 26, paddingVertical: MENU_PADDING, elevation: 12, shadowOpacity: 0.18, shadowRadius: 24, shadowOffset: { width: 0, height: 8 } },
   menuCheck: { width: 24, alignItems: 'center' },
+  menuIcon: { width: 24, alignItems: 'center', marginRight: 4 },
   menuRowPlain: { paddingLeft: 20 },
   calendarMenu: { paddingHorizontal: 12 },
   datePopover: { position: 'absolute', borderRadius: 26, paddingHorizontal: 12, paddingVertical: 10, elevation: 12, shadowOpacity: 0.18, shadowRadius: 24, shadowOffset: { width: 0, height: 8 } },

@@ -49,7 +49,7 @@ export function FocusChart({
       <View style={styles.chart}>
         <View style={styles.yAxis}>
           {labels.map((minutes) => (
-            <Text key={minutes} style={styles.axisText}>{`${minutes}m`}</Text>
+            <Text key={minutes} style={[styles.axisText, styles.yLabel, { bottom: `${(minutes / domain) * 100}%` }]}>{`${minutes}m`}</Text>
           ))}
         </View>
         <View style={styles.plot}>
@@ -73,7 +73,7 @@ export function FocusChart({
                   testID={`${testID}-bar-${index}`}
                 >
                   {!breaks && on && bucket.seconds > 0 ? (
-                    <View style={styles.annotation}>
+                    <View style={[styles.annotation, { bottom: focusHeight }]} testID={`${testID}-label`}>
                       <Text style={styles.annotationText}>{dashboardTime(bucket.seconds)}</Text>
                     </View>
                   ) : null}
@@ -135,24 +135,36 @@ export function Segment({ size, stroke, angle, length, color }: { size: number; 
   );
 }
 
-function mix(a: [number, number, number, number], b: [number, number, number, number], t: number): string {
-  const [r, g, bl, al] = a.map((value, index) => value + (b[index] - value) * t);
-  return `rgba(${Math.round(r)}, ${Math.round(g)}, ${Math.round(bl)}, ${al.toFixed(3)})`;
+type RGBA = [number, number, number, number];
+
+function mix(a: RGBA, b: RGBA, t: number): RGBA {
+  return a.map((value, index) => value + (b[index] - value) * t) as RGBA;
 }
 
 /** An `AngularGradient` of three stops, read at `t` (0…1 round the circle from the top). */
-function angular(stops: [number, number, number, number][], t: number): string {
+function angular(stops: RGBA[], t: number): RGBA {
   const scaled = t * (stops.length - 1);
   const index = Math.min(stops.length - 2, Math.floor(scaled));
   return mix(stops[index], stops[index + 1], scaled - index);
 }
 
-const FOCUS_STOPS: [number, number, number, number][] = [
+/**
+ * `color` drawn over the ring's 22% track on the white page, as one opaque colour. The segments overlap
+ * by a little to close their gaps, and translucent ones doubled up at every seam (visible stripes).
+ */
+function overTrack([r, g, b, a]: RGBA, track: string): string {
+  const [tr, tg, tb] = [1, 3, 5].map((start) => parseInt(track.slice(start, start + 2), 16));
+  const base = [tr, tg, tb].map((value) => 255 + (value - 255) * 0.22);
+  const [or, og, ob] = [r, g, b].map((value, index) => Math.round(base[index] + (value - base[index]) * a));
+  return `rgb(${or}, ${og}, ${ob})`;
+}
+
+const FOCUS_STOPS: RGBA[] = [
   [175, 82, 222, 1],
   [255, 45, 85, 1],
   [255, 45, 85, 0.3],
 ];
-const BREAK_STOPS: [number, number, number, number][] = [
+const BREAK_STOPS: RGBA[] = [
   [0, 122, 255, 1],
   [50, 173, 230, 1],
   [0, 122, 255, 0.3],
@@ -169,16 +181,17 @@ export function ProgressRing({ size, fraction, isBreak, children }: { size: numb
   const length = (2 * Math.PI * radius) / count + 1.2;
   const shown = Math.max(1, Math.round(Math.max(0.002, Math.min(1, fraction)) * count));
   const stops = isBreak ? BREAK_STOPS : FOCUS_STOPS;
+  const track = isBreak ? '#007AFF' : '#FF2D55';
   return (
     <View style={{ width: size, height: size }} testID="pomodoro-ring">
       <View
         style={[
           StyleSheet.absoluteFill,
-          { borderRadius: size / 2, borderWidth: stroke, borderColor: withAlpha(isBreak ? '#007AFF' : '#FF2D55', 0.22) },
+          { borderRadius: size / 2, borderWidth: stroke, borderColor: withAlpha(track, 0.22) },
         ]}
       />
       {Array.from({ length: shown }, (_, index) => (
-        <Segment key={index} angle={(index / count) * 360} color={angular(stops, index / count)} length={length} size={size} stroke={stroke} />
+        <Segment key={index} angle={(index / count) * 360} color={overTrack(angular(stops, index / count), track)} length={length} size={size} stroke={stroke} />
       ))}
       <View style={[StyleSheet.absoluteFill, styles.ringCenter]}>{children}</View>
     </View>
@@ -268,7 +281,10 @@ export function Confetti() {
 const styles = StyleSheet.create({
   chartBlock: { gap: 8, paddingTop: 8 },
   chart: { flexDirection: 'row', height: 170, gap: 6 },
-  yAxis: { justifyContent: 'space-between', alignItems: 'flex-end', paddingBottom: 0 },
+  // Each label sits on its own grid line (the top line is below the top: the domain is 1.3× the tallest bar).
+  // 24 wide plus the 6 gap is the x-axis's 30 inset.
+  yAxis: { width: 24 },
+  yLabel: { position: 'absolute', right: 0, marginBottom: -6.5 },
   axisText: { fontSize: 11, lineHeight: 13, color: '#575C80' },
   plot: { flex: 1 },
   gridLine: { position: 'absolute', left: 0, right: 0, height: 1 },
@@ -276,7 +292,8 @@ const styles = StyleSheet.create({
   column: { flex: 1, height: '100%', justifyContent: 'flex-end', alignItems: 'center' },
   pair: { flexDirection: 'row', alignItems: 'flex-end', height: '100%', width: '65%', gap: 1 },
   bar: { flex: 1, borderRadius: 4, minHeight: 0 },
-  annotation: { position: 'absolute', top: -4, zIndex: 1, backgroundColor: '#AF52DE', borderRadius: 999, paddingHorizontal: 5, paddingVertical: 2 },
+  // `.annotation(position: .top)`: just above the bar's top, not pinned to the chart's.
+  annotation: { position: 'absolute', marginBottom: 4, zIndex: 1, backgroundColor: '#AF52DE', borderRadius: 999, paddingHorizontal: 5, paddingVertical: 2 },
   annotationText: { fontSize: 11, lineHeight: 13, fontWeight: '700', color: '#FFFFFF' },
   xAxis: { flexDirection: 'row', marginLeft: 30 },
   xLabel: { flex: 1, textAlign: 'center' },
