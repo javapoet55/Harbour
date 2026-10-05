@@ -108,6 +108,20 @@ export const taskIcons = {
   'cart.fill': 'cart',
   ellipsis: 'ellipsis-horizontal',
   'play.fill': 'play',
+  // Account menu, Phase 12 Run A (ProfileView.swift:66-69).
+  'bubble.left.and.text.bubble.right': 'chatbubbles-outline',
+  'lock.rotation': 'lock-closed-outline',
+  // Feedback (FeedbackView.swift:33), Appointment details (CalendarEventDetailsView.swift), Daily Brief.
+  star: 'star-outline',
+  'star.fill': 'star',
+  trash: 'trash-outline',
+  link: 'link-outline',
+  location: 'location-outline',
+  'list.bullet': 'list-outline',
+  'xmark.circle': 'close-circle-outline',
+  'square.and.arrow.up': 'share-outline',
+  'arrow.up.circle.fill': 'arrow-up-circle',
+  pencil: 'pencil-outline',
 } satisfies Record<string, IoniconName>;
 
 export type TaskSymbolName = keyof typeof taskIcons;

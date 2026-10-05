@@ -98,10 +98,19 @@ export function FormField({
   align,
   bold = false,
   maxLength,
+  secureTextEntry,
+  textContentType,
+  autoComplete,
+  editable,
 }: {
   placeholder: string;
   value: string;
   onChangeText: (next: string) => void;
+  /** `SecureField` (Change password). */
+  secureTextEntry?: boolean;
+  textContentType?: 'password' | 'newPassword';
+  autoComplete?: 'current-password' | 'new-password';
+  editable?: boolean;
   keyboardType?: KeyboardTypeOptions;
   autoCapitalize?: 'none' | 'sentences' | 'words';
   autoCorrect?: boolean;
@@ -117,9 +126,13 @@ export function FormField({
     <TextInput
       accessibilityLabel={accessibilityLabel ?? placeholder}
       autoCapitalize={autoCapitalize}
+      autoComplete={autoComplete}
       autoCorrect={autoCorrect}
+      editable={editable}
       keyboardType={keyboardType}
       maxLength={maxLength}
+      secureTextEntry={secureTextEntry}
+      textContentType={textContentType}
       multiline={multiline}
       onChangeText={onChangeText}
       placeholder={placeholder}
