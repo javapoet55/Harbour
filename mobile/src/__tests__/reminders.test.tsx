@@ -406,7 +406,7 @@ describe('the action queue', () => {
     expect(screen.getByText('No actions today')).toBeTruthy();
   });
 
-  it('lists the action under Upcoming with its channel line', async () => {
+  it('lists the action under Upcoming, and a row opens its task', async () => {
     const id = await seedAction();
 
     await show(<ActionQueue />);
@@ -414,18 +414,8 @@ describe('the action queue', () => {
     await waitFor(() => expect(screen.getByTestId(`queue-action-${id}`)).toBeTruthy());
     expect(screen.getByText('Nexdo Actions')).toBeTruthy();
     expect(screen.getByText('Upcoming')).toBeTruthy();
-    expect(screen.getByText('Due now')).toBeTruthy();
-    // "Contact Damien" has no preferred channel, so Swift prints all three.
-    expect(screen.getByText('Call • Message • Email')).toBeTruthy();
-  });
 
-  it('opening a row asks the coordinator for that action', async () => {
-    const id = await seedAction();
-    await show(<ActionQueue />);
-    await waitFor(() => expect(screen.getByTestId(`queue-action-${id}`)).toBeTruthy());
-
-    fireEvent.press(screen.getByTestId(`queue-action-${id}`));
-
-    await waitFor(() => expect(useCoordinator.getState().route).toEqual({ id, preferred: null }));
+    await fireEvent.press(screen.getByTestId(`queue-action-${id}`));
+    expect(mockPush).toHaveBeenCalledWith('/task/t1');
   });
 });

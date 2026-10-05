@@ -14,10 +14,11 @@ import { useTasks } from '../../src/query/useTasks';
 import { useTheme } from '../../src/theme';
 
 /**
- * `ActionQueueSheet` (ios/App/TodayActionsView.swift:188), **body `:193-220`**.
+ * `ActionQueueSheet` (ios/App/TodayActionsView.swift:287-323).
  *
- * Children followed: `NextActionRow` (`:165`, body `:168-186`), in `src/components/TodayActions.tsx`,
- * and `TaskActionView` (`:216-218`), which is `app/action/[id].tsx`.
+ * Children followed: `NextActionRow` (`:264-285`), in `src/components/TodayActions.tsx`. Phase 12: a
+ * row opens that task's Task Details (`selectedTask`, `:319-321`), not the action screen, and a
+ * section with nothing in it is left out.
  *
  * Swift rebuilds the queue inside a `TimelineView(.periodic(from: .now, by: 60))`, so the relative
  * labels tick over once a minute; the interval below is that timeline.
@@ -76,6 +77,7 @@ export default function ActionQueue() {
         <ScrollView contentContainerStyle={styles.scroll}>
           {sections.map((section) => {
             const rows = all.filter((action) => ((notificationDate(action) ?? Number.POSITIVE_INFINITY) <= now) === section.due);
+            if (rows.length === 0) return null;
             return (
               <View key={section.title} style={styles.section}>
                 {/* `Section("Due now")` / `Section("Upcoming")` (`:198`). A `List` header on
@@ -86,10 +88,13 @@ export default function ActionQueue() {
                 <View style={[styles.card, { backgroundColor: theme.colors.surface }]}>
                   {rows.map((action, index) => (
                     <Pressable
+                      accessibilityHint="Open task details"
                       accessibilityRole="button"
                       key={action.id}
                       onPress={() => {
-                        useCoordinator.getState().open(action.id, action.preferredAction ?? null);
+                        // `selectedTask = model.tasks.first { $0.id == action.taskId }`: a task no longer
+                        // loaded opens nothing, as in Swift.
+                        if (tasks.data?.tasks.some((task) => task.id === action.taskId)) router.push(`/task/${action.taskId}`);
                       }}
                       style={styles.row}
                       testID={`queue-action-${action.id}`}
@@ -97,12 +102,6 @@ export default function ActionQueue() {
                       {/* A `List` row separator is `listSeparator` at 1pt, not a hairline `.separator`. */}
                       {index > 0 ? <View style={[styles.divider, { backgroundColor: theme.colors.listSeparator }]} /> : null}
                       <NextActionRow action={action} now={now} timeZone={timeZone} />
-                      {/* `action.preferredAction?.rawValue.capitalized ?? "Call • Message • Email"` (`:209`). */}
-                      <Text style={[styles.caption, { color: theme.colors.secondary }]}>
-                        {action.preferredAction
-                          ? action.preferredAction.charAt(0).toUpperCase() + action.preferredAction.slice(1)
-                          : 'Call • Message • Email'}
-                      </Text>
                     </Pressable>
                   ))}
                 </View>
@@ -119,7 +118,6 @@ const styles = StyleSheet.create({
   fill: { flex: 1 },
   grow: { flex: 1 },
   title2: { fontSize: 22, lineHeight: 28, fontWeight: '700' },
-  caption: { fontSize: 12, lineHeight: 16 },
   centred: { textAlign: 'center' },
   trailing: { textAlign: 'right' },
 

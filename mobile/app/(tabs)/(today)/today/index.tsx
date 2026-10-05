@@ -216,7 +216,14 @@ export default function Today() {
         {range === 1 ? (
           <TodayActionsView
             now={queueNow}
-            onOpen={(action, channel) => useCoordinator.getState().open(action.id, channel ?? action.preferredAction ?? null)}
+            // `TaskActionView(actionID:preferred: channel ?? preferredAction, startSelectedAction: channel != nil)`
+            // (TodayActionsView.swift:78-81): presented here directly, not through the coordinator's route.
+            onOpen={(action, channel) =>
+              router.push({
+                pathname: '/action/[id]',
+                params: { id: action.id, ...((channel ?? action.preferredAction) ? { preferred: channel ?? action.preferredAction } : {}), ...(channel ? { start: '1' } : {}) },
+              })
+            }
             onTask={(taskId) => router.push(`/task/${taskId}`)}
             onViewAll={() => router.push('/action/queue')}
             queue={queue}

@@ -46,6 +46,10 @@ export function notificationDate(action: TaskAction): number | null {
 
 export type TodayActionQueue = {
   primaryAction: TaskAction | null;
+  /** `dueActions` (TodayActionQueue.swift:6): every action whose time has come, in order. */
+  dueActions: TaskAction[];
+  /** `upcomingActions` (`:7-10`): `nextActions` without the due ones. */
+  upcomingActions: TaskAction[];
   nextActions: TaskAction[];
   laterActions: TaskAction[];
   overdueCount: number;
@@ -144,8 +148,11 @@ export function buildActionQueue({
     ...deferredTaskIds,
   ]);
 
+  const dueIds = new Set(due.map((action) => action.id));
   return {
     primaryAction,
+    dueActions: due,
+    upcomingActions: nextActions.filter((action) => !dueIds.has(action.id)),
     nextActions,
     laterActions,
     overdueCount,
