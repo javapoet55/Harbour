@@ -1,4 +1,5 @@
-jest.mock('../config', () => ({ getApiUrl: () => 'https://app.nexdo.test' }));
+// The configured URL as typed, with a trailing slash; the API client normalises it to the bare origin.
+jest.mock('../config', () => ({ getApiUrl: () => 'https://app.nexdo.test/' }));
 jest.mock('expo-crypto', () => ({ randomUUID: () => 'state-1234567890123456' }));
 jest.mock('expo-web-browser', () => ({ openAuthSessionAsync: jest.fn() }));
 const mockGet = jest.fn();
@@ -66,4 +67,11 @@ it('asks for the config through the API client, not a bare fetch', async () => {
   await signupChallenge();
   expect(mockGet).toHaveBeenCalledWith('/api/auth/signup-config', { signedOutOn401: false });
   expect(fetchMock).not.toHaveBeenCalled();
+});
+
+// `parts.path = "/signup-challenge"` on the API base URL, with `state` as a query item (NexdoApp.swift:178-181).
+it('opens the challenge page on the API origin, whatever the configured URL looks like', async () => {
+  (openAuthSessionAsync as jest.Mock).mockResolvedValue({ type: 'success', url: 'nexdo://signup-challenge?state=state-1234567890123456&token=token' });
+  await signupChallenge();
+  expect(openAuthSessionAsync).toHaveBeenCalledWith('https://app.nexdo.test/signup-challenge?state=state-1234567890123456', 'nexdo://signup-challenge');
 });

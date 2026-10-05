@@ -1,7 +1,6 @@
 import * as WebBrowser from 'expo-web-browser';
 import * as Crypto from 'expo-crypto';
 import { getApi } from '../api';
-import { getApiUrl } from '../config';
 import { beginOAuthSession, takeOAuthCallback, waitForOAuthCallback } from './oauthCallbacks';
 
 /**
@@ -14,17 +13,27 @@ export const SECURITY_CHECK_MESSAGE = 'Please complete the security check and tr
 /** `Config` (NexdoApp.swift:175). */
 type SignupConfig = { required: boolean; siteKey?: string };
 
+/**
+ * `signupChallengeURL(state:)` (NexdoApp.swift:178-181): the API origin with its path SET to
+ * `/signup-challenge` and `state` as a query item. `baseUrl` is the client's validated, normalised
+ * origin, so a trailing slash or stray path in the configured URL cannot change it.
+ */
+export function signupChallengeUrl(baseUrl: string, state: string): string {
+  return `${baseUrl}/signup-challenge?state=${encodeURIComponent(state)}`;
+}
+
 async function run(): Promise<string | undefined> {
   // `api.request(..., treatUnauthorizedAsSignedOut: false)` (NexdoApp.swift:176): the client's HTTPS
   // origin check, Accept header and default timeout; a 401 here is not a sign-out.
-  const config = await getApi().get<SignupConfig>('/api/auth/signup-config', { signedOutOn401: false });
+  const api = getApi();
+  const config = await api.get<SignupConfig>('/api/auth/signup-config', { signedOutOn401: false });
   if (!config.required) return undefined;
   if (!config.siteKey) throw new Error('Security check unavailable.');
   const state = Crypto.randomUUID();
   const end = beginOAuthSession('signup');
   takeOAuthCallback('signup');
   try {
-    const result = await WebBrowser.openAuthSessionAsync(`${getApiUrl()}/signup-challenge?state=${state}`, 'nexdo://signup-challenge');
+    const result = await WebBrowser.openAuthSessionAsync(signupChallengeUrl(api.baseUrl, state), 'nexdo://signup-challenge');
     const callback = result.type === 'success' ? result.url : await waitForOAuthCallback('signup', 500);
     const url = callback ? new URL(callback) : null;
     const token = url?.searchParams.get('token');
