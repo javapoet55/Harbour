@@ -85,3 +85,17 @@ export function showsOffersShortcut(snapshot: ShoppingOffersSnapshot | undefined
   const words = (storeName ?? '').toLowerCase().split(/[^\p{L}\p{N}]+/u);
   return words.includes('costco') || words.includes('safeway');
 }
+
+/**
+ * The last day of an offer, as the store states it — NOT Swift's `offerDate(expiresAt)`, which formats
+ * the end instant in the phone's zone and so shows a Safeway ad ending 6 Oct in California as "7 Oct"
+ * in India (§22 "For the team"). The server sends the end as an instant: 23:59:59 on the last day in
+ * the store's US zone (Costco, src/server/shopping/offers/costco.ts:6), or the ad's own end
+ * (Flipp `valid_to`). Every US zone is 4–11 hours behind UTC, so 12 hours before the end, in UTC, is
+ * always on the store's last day — whether the end is that day's 23:59:59 or the next midnight.
+ */
+export function offerEndDate(value: string, locale?: string): string {
+  const at = Date.parse(value);
+  if (Number.isNaN(at)) return value;
+  return new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeZone: 'UTC' }).format(new Date(at - 12 * 3_600_000));
+}

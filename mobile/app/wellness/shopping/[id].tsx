@@ -66,6 +66,10 @@ export default function ShoppingDetailScreen() {
   const [menu, setMenu] = useState(false);
   const [barHeight, setBarHeight] = useState(72);
   const quickField = useRef<TextInput>(null);
+  // `onUpdate: { list = $0 }` (:310, :329): a screen pushed from here (offers, offer details) saves the
+  // list; its newer revision replaces this copy when it lands in the store.
+  const stored = useShopping((state) => state.lists.find((value) => value.id === id) ?? null);
+  if (list && stored && stored.id === list.id && stored.revision > list.revision) setList(stored);
   const large = useAccessibilityTextSize();
   // `.task(id: "\(list.revision)-\(scenePhase)")` and the hours task (:357-377): `try?`, so failures stay quiet.
   const offers = useShoppingOffers(list?.id, { poll: true });

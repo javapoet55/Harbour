@@ -72,6 +72,10 @@ export default function WellnessLayout() {
       <Stack.Screen name="shopping/index" options={{ ...pushed, title: 'My Lists' }} />
       <Stack.Screen name="shopping/email" options={{ ...pushed, title: 'Schedule email' }} />
       <Stack.Screen name="shopping/[id]" options={{ ...pushed, title: 'Shopping List' }} />
+      {/* Run F: the offers screens push from Shopping Detail (ShoppingOffersView.swift:79, :118). The
+          screen's own title is set from its params. */}
+      <Stack.Screen name="shopping/offers" options={{ ...pushed, title: 'Offers for your list' }} />
+      <Stack.Screen name="shopping/offer" options={{ ...pushed, title: 'Offer details' }} />
     </Stack>
   );
 }
