@@ -1134,6 +1134,38 @@ describe('Wish details', () => {
     await waitFor(() => expect(mockPost).toHaveBeenCalledWith('plan', { id: 'p1', action: 'failed' }, undefined));
   });
 
+  it('records "I found it in Sent mail" as sent', async () => {
+    load([moment({ drafts: [draft({ plans: [plan({ id: 'p1', channel: 'email', automaticDelivery: true, status: 'UNCERTAIN' })] })] })]);
+    mockParams = { planId: 'p1' };
+    await render(<WishDetails />);
+    await fireEvent.press(screen.getByTestId('wish-uncertain-sent'));
+    await waitFor(() => expect(mockPost).toHaveBeenCalledWith('plan', { id: 'p1', action: 'sent' }, undefined));
+  });
+
+  // ImportantMomentsView.swift:554: "Retry after reconnecting" only for a failed automatic email.
+  it('retries a failed automatic email, and offers no retry for a manual one', async () => {
+    load([
+      moment({
+        drafts: [
+          draft({
+            plans: [
+              plan({ id: 'p1', channel: 'email', automaticDelivery: true, status: 'FAILED' }),
+              plan({ id: 'p2', channel: 'messages', automaticDelivery: false, status: 'FAILED' }),
+            ],
+          }),
+        ],
+      }),
+    ]);
+    mockParams = { planId: 'p1' };
+    const view = await render(<WishDetails />);
+    await fireEvent.press(screen.getByTestId('wish-retry'));
+    await waitFor(() => expect(mockPost).toHaveBeenCalledWith('plan', { id: 'p1', action: 'retry' }, undefined));
+    await view.unmount();
+    mockParams = { planId: 'p2' };
+    await render(<WishDetails />);
+    expect(screen.queryByTestId('wish-retry')).toBeNull();
+  });
+
   // ImportantMomentsView.swift:557-561: the prompt is a secondary footnote, "I found it in Sent mail" is
   // `.bordered`, and "It wasn't sent" is a plain button — the safer answer is the one that stands out.
   it('styles the "Check Sent mail" choices as Swift does', async () => {
