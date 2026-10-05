@@ -423,3 +423,16 @@ describe('Task detail on Android', () => {
     expect(flat('detail-footer')).toMatchObject({ backgroundColor: light.surface });
   });
 });
+
+/** `TaskDetailsView(task:initialSection:)` (TaskDetailsView.swift:9, :81-85), from the Daily Brief. */
+describe('Opening at a section', () => {
+  it('focuses Notes for "Add Note" and nothing otherwise', async () => {
+    await renderDetail();
+    expect(screen.getByTestId('detail-notes').props.autoFocus).toBe(false);
+    screen.unmount();
+
+    mockParams.mockReturnValue({ id: 't1', section: 'notes' });
+    await renderDetail();
+    expect(screen.getByTestId('detail-notes').props.autoFocus).toBe(true);
+  });
+});

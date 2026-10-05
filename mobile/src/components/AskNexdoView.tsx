@@ -2,20 +2,27 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Linking, Modal, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { ActivityIndicator, Keyboard, Linking, Modal, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { ASK_INTENTS, ASK_MAX_LENGTH, ASK_TEXT_EXAMPLES } from '../lib/askIntents';
+import { AskLanding } from '../features/ask/AskLanding';
+import { setBriefHandlers } from '../features/ask/briefHandlers';
+import { DailyBrief } from '../features/ask/DailyBrief';
+import { ASK_MAX_LENGTH, ASK_TEXT_EXAMPLES } from '../lib/askIntents';
 import { blockedTurn, policyGuardRefusal } from '../lib/assistantPolicy';
-import { spokenText } from '../lib/assistantPresentation';
+import { displaySections, spokenText } from '../lib/assistantPresentation';
+import { briefingIntent, briefStyle, visibleBriefSections } from '../lib/dailyBrief';
 import { SHOPPING_PROMPTS, shoppingPromptIcon, shoppingSubmission, type ShoppingRecommendationContext } from '../lib/shoppingRecommendations';
 import { speechChunks } from '../lib/speechText';
 import { useAsk } from '../query/useAssistant';
+import { useTasks } from '../query/useTasks';
 import { useAssistantStore } from '../store/assistant';
 import { useConsent } from '../store/consent';
+import { firstName } from '../store/lastSignedIn';
+import { useSession } from '../store/session';
 import { brand, linearGradientStops, useTheme } from '../theme';
 import { playSpeech, type SpeechPlayback } from '../voice/speech';
-import { AskEntryCards, AskExampleRow, AskSuggestionCard } from './AskParts';
+import { AskExampleRow } from './AskParts';
 import { AskResponse } from './AskResponse';
 import { KeyboardAvoidingView, KeyboardAwareScrollView } from './keyboard';
 import { withAlpha } from './SignInBackdrop';
@@ -23,20 +30,20 @@ import { TaskSymbol } from './TaskSymbol';
 import { Text } from './Text';
 
 /**
- * `AskNexdoView` (ios/App/AskNexdoView.swift:89-446). `body` is **AskNexdoView.swift:182-277**, read
- * top to bottom; the children it renders are `NexdoAISuggestionCard` (`:58`, in `AskParts.tsx`),
- * `AskResponseView` (ios/App/AskResponseView.swift:4, in `AskResponse.tsx`), and the private
- * `entryCards` / `entryCard` / `composer` / `field` / `controls` / `consentView` (`:277-375`).
+ * `AskNexdoView` (ios/App/AskNexdoView.swift:97-557). `body` is **AskNexdoView.swift:201-348**, read
+ * top to bottom; the children it renders are `AskAILandingView` (`AskLanding.tsx`), `DailyBriefView`
+ * (`DailyBrief.tsx`), `AskResponseView` (ios/App/AskResponseView.swift:4, in `AskResponse.tsx`), and
+ * the private `composer` / `field` / `controls` / `consentView` (`:419-484`).
  *
- * ONE view, three presentations, exactly as in Swift's `init(initialPrompt:startWithVoice:textPage:)`:
+ * - `textPage: false`, no turn — the Ask AI landing (`AskAILandingView`): four briefing cards, "Ask
+ *   by Voice" and a request field. It draws its own header and close.
+ * - a turn whose prompt was one of the four briefing queries, with no confirmation (`briefingIntent`,
+ *   `:194-199`) — the Daily Brief, with no header and no composer. Its close returns to the landing.
+ * - any other turn — the plain answer under the "Ask Nexdo" header, with the composer at the bottom.
+ * - `textPage: true` — the shopping page only, now that nothing opens "Free form Text".
+ * - with an `initialPrompt` — the field starts filled but nothing is sent.
  *
- * - `textPage: false` — the suggestions page. Five `NexdoAIIntent` cards, and the "Ask by Voice" /
- *   "Free form Text" pair pinned to the bottom. No composer.
- * - `textPage: true` — "Free form Text". A composer instead of the suggestion cards, three example
- *   prompts, and a bottom composer once there is an answer.
- * - either, with an `initialPrompt` — the composer starts filled but nothing is sent.
- *
- * There is NO message list. Swift shows one `model.turn` at a time and "Show suggestions" (`:246`)
+ * There is NO message list. Swift shows one `model.turn` at a time and "Show suggestions" (`:292`)
  * throws it away, so `useAssistantStore` holds exactly one turn.
  *
  * - `textPage: true` with a `shoppingContext` — Shopping Recommendations (global pattern 16), opened
@@ -56,17 +63,20 @@ export type AskNexdoViewProps = {
   onClose?: () => void;
 };
 
+/** The Daily Brief's fixed colours (DailyBriefView.swift:34, `.purple`, `.blue`). */
+const BRIEF_INK = '#0A0D38';
+const BRIEF_PURPLE = '#AF52DE';
+const BRIEF_BLUE = '#007AFF';
+
 /** `NexdoTheme.gradient`: magenta → indigo → blue, leading to trailing. */
 const INTRO_TILE = linearGradientStops([brand.nexdoMagenta, brand.nexdoIndigo, brand.nexdoBlue]);
 
 export function AskNexdoView({ textPage, initialPrompt = '', shoppingContext, onClose }: AskNexdoViewProps) {
-  // The suggestions page is a `.sheet` (RootView.swift:110), and iOS resolves `AskStyle.background`
-  // and `AskStyle.cardBackground` one level up inside one — #1C1C1E in dark mode, not black.
-  // "Free form Text" is a `.fullScreenCover` (AskNexdoView.swift:271), which does NOT elevate; Shopping
-  // Recommendations is a `.sheet` again (`shopping-ai-recommendations-sheet-dark`).
-  // `app/ask/_layout.tsx` sets the matching `contentStyle` on `index` only.
+  // Ask is a `.fullScreenCover` (RootView.swift:162), which does NOT elevate; Shopping
+  // Recommendations is a `.sheet` (`shopping-ai-recommendations-sheet-dark`), where iOS resolves
+  // `AskStyle.background` one level up — #1C1C1E in dark mode, not black.
   const presentedAsSheet = onClose !== undefined;
-  const theme = useTheme({ elevated: !textPage || presentedAsSheet });
+  const theme = useTheme({ elevated: presentedAsSheet });
   // `consentView` is always presented as a sheet (`:266`), whichever page opened it.
   const sheetTheme = useTheme({ elevated: true });
   const consent = useConsent();
@@ -85,7 +95,15 @@ export function AskNexdoView({ textPage, initialPrompt = '', shoppingContext, on
   const [readingSection, setReadingSection] = useState<number | null>(null);
   const [lastSpeechText, setLastSpeechText] = useState<string | null>(null);
   const [lastRequestWasVoice, setLastRequestWasVoice] = useState(false);
+  // `@FocusState composerFocused`: drives the keyboard's "Done" bar (`:322-332`).
+  const [typing, setTyping] = useState(false);
   const speech = useRef<SpeechPlayback | null>(null);
+  const tasks = useTasks().data?.tasks ?? [];
+  const profileName = useSession((state) => state.profile?.name ?? '');
+
+  // `briefingIntent` / `showsBriefing` (AskNexdoView.swift:194-199).
+  const brief = turn === null ? null : briefingIntent(lastAssistantPrompt, (turn.confirmation ?? null) !== null,shoppingContext !== undefined);
+  const briefSections = turn !== null && brief !== null ? visibleBriefSections(displaySections(turn), tasks) : [];
 
   const submitting = ask.isPending;
   // `blocked` (AskNexdoView.swift:148). Swift also ORs in `model.busy`, the app-wide "Updating…"
@@ -200,8 +218,9 @@ export function AskNexdoView({ textPage, initialPrompt = '', shoppingContext, on
     );
   }
 
-  /** The close button (AskNexdoView.swift:188-205). */
+  /** The close button (AskNexdoView.swift:207-214). */
   const close = () => {
+    setTyping(false);
     stopSpeech();
     setFailedQuery(null);
     setPendingQuery(null);
@@ -210,11 +229,46 @@ export function AskNexdoView({ textPage, initialPrompt = '', shoppingContext, on
     else router.back();
   };
 
+  /** The landing's close (`:255`): nothing to clear, there is no turn. */
+  const closeLanding = () => {
+    stopSpeech();
+    if (onClose) onClose();
+    else router.back();
+  };
+
+  /** The Daily Brief's close (`:262-271`): back to the landing, with the prompt forgotten too. */
+  const closeBrief = () => {
+    stopSpeech();
+    Keyboard.dismiss();
+    setTyping(false);
+    setPrompt('');
+    setFailedQuery(null);
+    setPendingQuery(null);
+    useAssistantStore.setState({ turn: null, lastAssistantPrompt: null });
+  };
+
+  /** `read:` (`:273-276`): the same section again stops it. */
+  const readSection = (index: number, text: string) => (readingSection === index ? stopSpeech() : speakAnswer(text, index));
+
+  const openVoice = () => {
+    stopSpeech();
+    router.push('/ask/voice');
+  };
+
+  // A section page calls back into this view (`ask: { request($0) }`, `read:`). Re-registered every
+  // render so it always holds the current closures.
+  useEffect(() => {
+    setBriefHandlers({ ask: (query) => request(query), read: readSection });
+  });
+  useEffect(() => () => setBriefHandlers(null), []);
+
   const field = (
     <TextInput
       accessibilityLabel="Ask Nexdo follow-up"
       multiline
+      onBlur={() => setTyping(false)}
       onChangeText={setPrompt}
+      onFocus={() => setTyping(true)}
       placeholder={shoppingContext ? 'Ask about this shopping list…' : 'Type your prompt…'}
       placeholderTextColor={theme.colors.placeholder}
       style={[
@@ -257,8 +311,8 @@ export function AskNexdoView({ textPage, initialPrompt = '', shoppingContext, on
           accessibilityState={{ disabled: blocked }}
           disabled={blocked}
           onPress={() => {
-            stopSpeech();
-            router.push('/ask/voice');
+            Keyboard.dismiss();
+            openVoice();
           }}
           style={[styles.micButton, { backgroundColor: blue }]}
           testID="ask-mic"
@@ -328,69 +382,109 @@ export function AskNexdoView({ textPage, initialPrompt = '', shoppingContext, on
     </View>
   );
 
+  const showsBriefing = brief !== null;
+  // `if !showsBriefing && (textPage || model.turn != nil)` (:203): the landing and the brief draw their own.
+  const showsHeader = !showsBriefing && (textPage || turn !== null);
+
   return (
     // A sheet's top edge sits below the status bar already, so only a route needs the top inset.
-    <SafeAreaView edges={presentedAsSheet ? ['left', 'right', 'bottom'] : ['top', 'left', 'right', 'bottom']} style={[styles.fill, { backgroundColor: theme.colors.background }]}>
-      {/* Android: the composer and entry cards ride up on the keyboard and the field scrolls into view.
+    <SafeAreaView
+      edges={presentedAsSheet ? ['left', 'right', 'bottom'] : ['top', 'left', 'right', 'bottom']}
+      style={[styles.fill, { backgroundColor: showsBriefing ? '#FFFFFF' : theme.colors.background }]}
+    >
+      {/* The brief's backdrop (`:305-309`): fixed light, under the safe areas too. */}
+      {showsBriefing ? (
+        <LinearGradient
+          colors={[withAlpha(BRIEF_PURPLE, 0.07), withAlpha(BRIEF_BLUE, 0.04), withAlpha(BRIEF_PURPLE, 0.05)]}
+          end={{ x: 1, y: 1 }}
+          start={{ x: 0, y: 0 }}
+          style={StyleSheet.absoluteFill}
+        />
+      ) : null}
+      {/* Android: the composer rides up on the keyboard and the field scrolls into view.
           iOS gets no behaviour here, exactly as before. */}
       <KeyboardAvoidingView style={styles.fill}>
-        {/* Header (AskNexdoView.swift:184-208). */}
-        <View style={styles.header}>
-          <Text accessibilityRole="header" style={[styles.title2, styles.bold, styles.grow, { color: theme.colors.ink }]}>
-            {shoppingContext ? 'Shopping Recommendations' : textPage ? 'Free form Text' : 'Ask Nexdo'}
-          </Text>
-          <Pressable
-            accessibilityHint="Closes Ask Nexdo"
-            accessibilityLabel="Close Ask Nexdo"
-            accessibilityRole="button"
-            onPress={close}
-            style={[styles.close, { backgroundColor: withAlpha(brand.nexdoBlue, 0.12), borderColor: withAlpha(brand.nexdoBlue, 0.22) }]}
-            testID="ask-close"
-          >
-            <TaskSymbol name="xmark" size={22} color={brand.nexdoBlue} />
-          </Pressable>
-        </View>
+        {/* Header (AskNexdoView.swift:203-227). */}
+        {showsHeader ? (
+          <View style={styles.header}>
+            <Text accessibilityRole="header" style={[styles.title2, styles.bold, styles.grow, { color: theme.colors.ink }]}>
+              {shoppingContext ? 'Shopping Recommendations' : textPage ? 'Free form Text' : 'Ask Nexdo'}
+            </Text>
+            <Pressable
+              accessibilityHint="Closes Ask Nexdo"
+              accessibilityLabel="Close Ask Nexdo"
+              accessibilityRole="button"
+              onPress={close}
+              style={[styles.close, { backgroundColor: withAlpha(brand.nexdoBlue, 0.12), borderColor: withAlpha(brand.nexdoBlue, 0.22) }]}
+              testID="ask-close"
+            >
+              <TaskSymbol name="xmark" size={22} color={brand.nexdoBlue} />
+            </Pressable>
+          </View>
+        ) : null}
 
-        <KeyboardAwareScrollView contentContainerStyle={styles.scroll} keyboardDismissMode="interactive" keyboardShouldPersistTaps="handled">
+        <KeyboardAwareScrollView
+          contentContainerStyle={[styles.scroll, turn === null && !textPage && styles.scrollFill]}
+          keyboardDismissMode="interactive"
+          keyboardShouldPersistTaps="handled"
+        >
           {turn === null ? (
-            <>
-              {/* `AskStyle.secondary` is `Color(uiColor: .secondaryLabel)` (`:51`), not nexdoSecondary. */}
-              {shoppingContext ? null : (
-                <Text style={[styles.subheadline, styles.tagline, { color: theme.colors.secondaryLabel }]}>Let’s make room for what matters.</Text>
-              )}
-
-              {textPage ? (
-                <>
-                  {shoppingContext ? (
-                    <ShoppingIntro context={shoppingContext} />
-                  ) : (
-                    <>
-                      {/* No `.foregroundStyle` in Swift (`:217`), so `Color.primary` — `.label`, not nexdoInk. */}
-                      <Text style={[styles.title2, styles.bold, { color: theme.colors.label }]}>What would you like help with?</Text>
-                      <Text style={[styles.subheadline, { color: theme.colors.secondaryLabel }]}>
-                        Type a question or tell Nexdo what to plan, create, or change.
-                      </Text>
-                    </>
-                  )}
-                  {field}
-                  <View style={styles.controlsRow}>{controls}</View>
-                  <Text style={[styles.headline, styles.tryHeading, { color: theme.colors.ink }]}>{shoppingContext ? 'Try asking about your list' : 'Try a prompt'}</Text>
-                  {(shoppingContext ? SHOPPING_PROMPTS : ASK_TEXT_EXAMPLES).map((example) => (
-                    <AskExampleRow
-                      key={example}
-                      example={example}
-                      disabled={blocked}
-                      icon={shoppingContext ? shoppingPromptIcon(example) : undefined}
-                      onPress={() => setPrompt(example)}
-                    />
-                  ))}
-                </>
-              ) : (
-                ASK_INTENTS.map((intent) => (
-                  <AskSuggestionCard key={intent.id} intent={intent} disabled={blocked} onPress={() => request(intent.query)} />
-                ))
-              )}
-            </>
+            textPage ? (
+              <>
+                {shoppingContext ? (
+                  <ShoppingIntro context={shoppingContext} />
+                ) : (
+                  <>
+                    {/* No `.foregroundStyle` in Swift (`:236`), so `Color.primary` — `.label`, not nexdoInk. */}
+                    <Text style={[styles.title2, styles.bold, { color: theme.colors.label }]}>What would you like help with?</Text>
+                    <Text style={[styles.subheadline, { color: theme.colors.secondaryLabel }]}>
+                      Type a question or tell Nexdo what to plan, create, or change.
+                    </Text>
+                  </>
+                )}
+                {field}
+                <View style={styles.controlsRow}>{controls}</View>
+                <Text style={[styles.headline, styles.tryHeading, { color: theme.colors.ink }]}>{shoppingContext ? 'Try asking about your list' : 'Try a prompt'}</Text>
+                {(shoppingContext ? SHOPPING_PROMPTS : ASK_TEXT_EXAMPLES).map((example) => (
+                  <AskExampleRow
+                    key={example}
+                    example={example}
+                    disabled={blocked}
+                    icon={shoppingContext ? shoppingPromptIcon(example) : undefined}
+                    onPress={() => setPrompt(example)}
+                  />
+                ))}
+              </>
+            ) : (
+              // `AskAILandingView` (`:253-256`), at least the viewport tall.
+              <AskLanding
+                busy={blocked}
+                onAsk={(query) => request(query)}
+                onClose={closeLanding}
+                onFocusChange={setTyping}
+                onPromptChange={setPrompt}
+                onVoice={openVoice}
+                prompt={prompt}
+                sendEnabled={validPrompt}
+              />
+            )
+          ) : brief !== null ? (
+            // `DailyBriefView` (`:259-276`).
+            <DailyBrief
+              busy={blocked}
+              intent={brief}
+              name={firstName(profileName) ?? 'there'}
+              onAsk={(query) => request(query)}
+              onClose={closeBrief}
+              onFocusChange={setTyping}
+              onOpenSection={(index) =>
+                router.push({ pathname: '/ask/brief/[index]', params: { index: String(index), title: briefStyle(briefSections[index]?.title ?? '').title } })
+              }
+              onPromptChange={setPrompt}
+              onVoice={openVoice}
+              prompt={prompt}
+              sections={briefSections}
+            />
           ) : (
             <>
               {lastAssistantPrompt !== null ? (
@@ -405,7 +499,7 @@ export function AskNexdoView({ textPage, initialPrompt = '', shoppingContext, on
               <AskResponse
                 busy={blocked}
                 onApprove={() => ask.mutate({ text: 'yes', accept: true })}
-                onReadLoud={(index, text) => (readingSection === index ? stopSpeech() : speakAnswer(text, index))}
+                onReadLoud={readSection}
                 onReject={() => ask.mutate({ text: 'no', accept: false })}
                 preparingSpeech={preparingSpeech}
                 readingSection={readingSection}
@@ -429,20 +523,10 @@ export function AskNexdoView({ textPage, initialPrompt = '', shoppingContext, on
             </>
           )}
 
-          {submitting ? (
-            // `ProgressView("Asking Nexdo…")` (`:250`) puts its label under the spinner.
-            <View style={styles.progress}>
-              <ActivityIndicator color={blue} size="small" />
-              <Text style={[theme.typography.body, styles.centred, { color: theme.colors.secondaryLabel }]} testID="ask-submitting">
-                Asking Nexdo…
-              </Text>
-            </View>
-          ) : null}
-
           {failedQuery !== null ? (
             <View style={styles.failure}>
-              {/* `.font(.subheadline)` on the VStack, no `.foregroundStyle` (`:252-256`). */}
-              <Text style={[styles.subheadline, { color: theme.colors.label }]} testID="ask-failed">
+              {/* `.font(.subheadline)` on the VStack, no `.foregroundStyle` (`:295-300`). */}
+              <Text style={[styles.subheadline, { color: showsBriefing ? BRIEF_INK : theme.colors.label }]} testID="ask-failed">
                 Nexdo couldn’t complete that request. Please try again.
               </Text>
               <Pressable
@@ -459,22 +543,36 @@ export function AskNexdoView({ textPage, initialPrompt = '', shoppingContext, on
           ) : null}
         </KeyboardAwareScrollView>
 
-        {/* `.safeAreaInset(edge: .bottom)` (AskNexdoView.swift:264). */}
-        {/* `if model.turn != nil && shoppingContext == nil { composer }` (:263). */}
-        {textPage ? (turn !== null && !shoppingContext ? composer : null) : (
-          <AskEntryCards
-            disabled={blocked}
-            onText={() => {
-              stopSpeech();
-              router.push('/ask/text');
-            }}
-            onVoice={() => {
-              stopSpeech();
-              router.push('/ask/voice');
-            }}
-          />
-        )}
+        {/* `.safeAreaInset(edge: .bottom)` (AskNexdoView.swift:320-335): the keyboard's "Done" bar, then
+            `if model.turn != nil && shoppingContext == nil && !showsBriefing { composer }`. */}
+        {typing ? (
+          <View style={[styles.doneBar, { backgroundColor: theme.colors.secondaryBackground }]}>
+            <Pressable
+              accessibilityLabel="Done"
+              accessibilityRole="button"
+              onPress={() => {
+                Keyboard.dismiss();
+                setTyping(false);
+              }}
+              style={styles.done}
+              testID="ask-keyboard-done"
+            >
+              <Text style={[theme.typography.body, styles.semibold, { color: theme.colors.link }]}>Done</Text>
+            </Pressable>
+          </View>
+        ) : null}
+        {turn !== null && !shoppingContext && !showsBriefing ? composer : null}
       </KeyboardAvoidingView>
+
+      {/* `ProgressView("Working on it…")` over everything (`:311-318`). */}
+      {submitting ? (
+        <View pointerEvents="none" style={styles.workingLayer}>
+          <View style={[styles.working, { backgroundColor: theme.scheme === 'dark' ? 'rgba(44, 44, 46, 0.94)' : 'rgba(242, 242, 247, 0.94)' }]} testID="ask-working">
+            <ActivityIndicator color={theme.colors.secondaryLabel} size="small" />
+            <Text style={[theme.typography.body, styles.centred, { color: theme.colors.secondaryLabel }]}>Working on it…</Text>
+          </View>
+        </View>
+      ) : null}
 
       {/* `consentView` in a `.sheet` with `[.medium, .large]` detents (AskNexdoView.swift:266-268, :348-364). */}
       <Modal
@@ -605,14 +703,18 @@ const styles = StyleSheet.create({
   close: { width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
 
   scroll: { paddingHorizontal: 20, paddingBottom: 20, gap: 10, alignItems: 'stretch' },
-  tagline: { paddingTop: 14, paddingBottom: 8 },
+  // The landing fills the viewport (`.frame(minHeight: viewport.size.height - 20)`).
+  scrollFill: { flexGrow: 1 },
   tryHeading: { paddingTop: 16 },
   controlsRow: { flexDirection: 'row', justifyContent: 'flex-end' },
 
   questionRow: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingTop: 16, paddingBottom: 2 },
   showSuggestions: { paddingVertical: 12 },
-  // A `ProgressView` with a label stacks the label under the spinner.
-  progress: { alignItems: 'center', gap: 8, paddingVertical: 16 },
+  // A `ProgressView` with a label stacks the label under the spinner; `.padding(24)` on `.regularMaterial`.
+  workingLayer: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' },
+  working: { alignItems: 'center', gap: 8, padding: 24, borderRadius: 20 },
+  doneBar: { flexDirection: 'row', justifyContent: 'flex-end', paddingHorizontal: 16 },
+  done: { minWidth: 60, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
   failure: { gap: 8, paddingVertical: 12 },
 
   composer: { paddingHorizontal: 20, paddingBottom: 12, gap: 14 },

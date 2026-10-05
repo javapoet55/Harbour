@@ -247,6 +247,7 @@ export function DetailTextInput({
   placeholder,
   accessibilityLabel,
   multiline = false,
+  autoFocus = false,
   testID,
 }: {
   value: string;
@@ -254,6 +255,7 @@ export function DetailTextInput({
   placeholder?: string;
   accessibilityLabel: string;
   multiline?: boolean;
+  autoFocus?: boolean;
   testID?: string;
 }) {
   const theme = useTheme();
@@ -267,6 +269,7 @@ export function DetailTextInput({
       onChangeText={onChangeText}
       onFocus={() => setFocused(true)}
       onBlur={() => setFocused(false)}
+      autoFocus={autoFocus}
       multiline={multiline}
       style={[
         theme.typography.body,

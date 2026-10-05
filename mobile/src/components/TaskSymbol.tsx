@@ -122,6 +122,10 @@ export const taskIcons = {
   'square.and.arrow.up': 'share-outline',
   'arrow.up.circle.fill': 'arrow-up-circle',
   pencil: 'pencil-outline',
+  // Ionicons has no crosshair-in-circle or keyboard glyph; these are the nearest.
+  scope: 'locate-outline',
+  keyboard: 'keypad-outline',
+  'arrow.up': 'arrow-up',
 } satisfies Record<string, IoniconName>;
 
 export type TaskSymbolName = keyof typeof taskIcons;

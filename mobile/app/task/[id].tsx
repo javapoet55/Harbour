@@ -1,11 +1,12 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { KeyboardAvoidingView, KeyboardAwareScrollView, NexdoLogoMark, TaskSymbol, Text } from '../../src/components';
+import type { ScrollTarget } from '../../src/components/keyboard';
 import { useCoordinator } from '../../src/actions/coordinator';
 import type { TasksResponse } from '../../src/api/types';
 import { ClarifyTaskActionCard } from '../../src/components/ClarifyTaskActionCard';
@@ -58,7 +59,11 @@ export default function TaskDetail() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const android = isAndroid();
-  const { id } = useLocalSearchParams<{ id: string }>();
+  // `section`: `TaskDetailsView(task:initialSection:)` (TaskDetailsView.swift:9, :81-85), from the Daily
+  // Brief's "Add Note" (focus Notes) and "Schedule" / "Reschedule" (scroll to SCHEDULE).
+  const { id, section } = useLocalSearchParams<{ id: string; section?: string }>();
+  const scroll = useRef<ScrollTarget | null>(null);
+  const scrolledToSection = useRef(false);
   const profile = useSession((state) => state.profile);
   const queryClient = useQueryClient();
   const task = useTask(id);
@@ -189,6 +194,7 @@ export default function TaskDetail() {
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="interactive"
         contentContainerStyle={[styles.scroll, android && styles.androidScroll]}
+        scrollRef={scroll}
       >
         {/* `TaskActionCard(task:)` (TaskDetailsView.swift:34). Its FIRST branch — a scheduled contact
             action — wins; the clarify card below is the fall-through (TaskActionView.swift:10, `:36`). */}
@@ -337,6 +343,12 @@ export default function TaskDetail() {
               : [styles.scheduleCard, { backgroundColor: theme.colors.background, borderColor: withAlpha(brand.nexdoIndigo, 0.16) }]
           }
           testID="detail-schedule"
+          onLayout={(event) => {
+            // `proxy.scrollTo("schedule", anchor: .center)`, once.
+            if (section !== 'schedule' || scrolledToSection.current) return;
+            scrolledToSection.current = true;
+            scroll.current?.scrollTo({ y: Math.max(0, event.nativeEvent.layout.y - 160), animated: true });
+          }}
         >
           <SectionLabel title="SCHEDULE" />
           {scheduleAt !== null ? (
@@ -446,6 +458,7 @@ export default function TaskDetail() {
             onChangeText={(notes) => set({ notes })}
             placeholder="Context, links, or anything you need to remember..."
             accessibilityLabel="Task notes"
+            autoFocus={section === 'notes'}
             multiline
             testID="detail-notes"
           />
