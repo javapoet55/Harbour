@@ -1236,14 +1236,39 @@ describe('Wish details', () => {
   });
 });
 
+/** Phase 12 redesign: `MomentFestivalView` (MomentEditor.swift:306-535), `festivals-v2*` captures. */
 describe('Choose Festivals', () => {
-  it('lists the India festivals once India is chosen', async () => {
+  it('lists every festival under the hero, in Swift’s region order', async () => {
     await render(<ChooseFestivals />);
-    expect(screen.queryByText('Diwali')).toBeNull();
-    await fireEvent.press(screen.getByTestId('festival-region'));
+    expect(screen.getByText('MOMENTS THAT MATTER')).toBeTruthy();
+    expect(screen.getByText('Make every\ncelebration count.')).toBeTruthy();
+    expect(screen.getByText('Explore by region')).toBeTruthy();
+    expect(screen.getByText('Find your next celebration')).toBeTruthy();
+    expect(screen.getByText('10 festivals to make your own')).toBeTruthy();
+    const order = screen.getAllByTestId(/^festival-choice-/).map((row) => row.props.testID.replace('festival-choice-', ''));
+    expect(order).toEqual(['New Year', 'International Friendship Day', 'Diwali', 'Holi', 'Eid', 'Pongal', 'Thanksgiving', 'Christmas', 'Lunar New Year', 'Mid-Autumn Festival']);
+    expect(screen.getByLabelText('India, 4 celebrations')).toBeTruthy();
+    expect(screen.getByText('You’ll review the date and recipients before saving. Festival dates can vary each year.')).toBeTruthy();
+    expect(screen.queryByTestId('festival-all-regions')).toBeNull();
+  });
+
+  it('filters by a region, and shows every region again from All regions or a second tap', async () => {
+    await render(<ChooseFestivals />);
     await fireEvent.press(screen.getByTestId('festival-region-India'));
-    for (const name of ['Diwali', 'Holi', 'Eid', 'Pongal']) expect(screen.getByText(name)).toBeTruthy();
-    await fireEvent.press(screen.getByTestId('festival-Diwali'));
+    expect(screen.getByTestId('festival-region-India').props.accessibilityState).toEqual({ selected: true });
+    expect(screen.getByText('Celebrate in India')).toBeTruthy();
+    expect(screen.getByText('4 festivals to make your own')).toBeTruthy();
+    expect(screen.getAllByTestId(/^festival-choice-/)).toHaveLength(4);
+    await fireEvent.press(screen.getByTestId('festival-all-regions'));
+    expect(screen.getAllByTestId(/^festival-choice-/)).toHaveLength(10);
+    await fireEvent.press(screen.getByTestId('festival-region-East Asia'));
+    await fireEvent.press(screen.getByTestId('festival-region-East Asia'));
+    expect(screen.getByText('Find your next celebration')).toBeTruthy();
+  });
+
+  it('opens the editor with a "<name> Wishes" festival', async () => {
+    await render(<ChooseFestivals />);
+    await fireEvent.press(screen.getByTestId('festival-choice-Diwali'));
     expect(mockPush).toHaveBeenCalledWith({ pathname: '/wellness/moments/editor', params: { imported: expect.stringContaining('"title":"Diwali Wishes"'), done: 'back' } });
   });
 });
