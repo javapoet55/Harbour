@@ -232,7 +232,7 @@ describe('the location step (TaskAgentCard.swift:67-87)', () => {
     await fireEvent.press(screen.getByTestId('agent-search'));
 
     await waitFor(() =>
-      expect(mockUpdate).toHaveBeenCalledWith('t1', { action: 'search', version: 3, key: 'location', answer: '94109', candidateId: null }),
+      expect(mockUpdate).toHaveBeenCalledWith('t1', { action: 'search', version: 3, key: 'location', answer: '94109', candidateId: undefined }),
     );
     expect(await screen.findByText('Finding the best business near your place…')).toBeTruthy();
   });
@@ -260,11 +260,21 @@ describe('the location step (TaskAgentCard.swift:67-87)', () => {
     mockLoad.mockResolvedValue(envelope(run({ question: { key: 'urgency', text: 'How soon?' }, slots: { location: '94582', budget: '', constraints: '' } })));
     mockUpdate.mockResolvedValue(envelope(run({ status: 'QUEUED', question: null, slots: { location: '94582', budget: '', constraints: '' } })));
     await renderCard();
-    await waitFor(() =>
-      expect(mockUpdate).toHaveBeenCalledWith('t1', { action: 'search', version: 3, key: null, answer: '94582', candidateId: null }),
-    );
+    await waitFor(() => expect(mockUpdate).toHaveBeenCalledWith('t1', { action: 'search', version: 3, answer: '94582' }));
     expect(mockUpdate).toHaveBeenCalledTimes(1);
     expect(screen.queryByText('How soon?')).toBeNull();
+  });
+
+  // No null leaves the card, so none can reach a zod `.optional()` on the route
+  // (src/app/api/tasks/[id]/agent/route.ts:7). api/taskAgent.test.ts checks the body it builds.
+  it('passes no null to the update for a search it sends on its own', async () => {
+    mockLoad.mockResolvedValue(envelope(run({ question: { key: 'preferences', text: 'Anything else?' }, slots: { location: '94582', budget: '', constraints: '' } })));
+    mockUpdate.mockResolvedValue(envelope(run({ status: 'QUEUED', question: null })));
+    await renderCard();
+    await waitFor(() => expect(mockUpdate).toHaveBeenCalled());
+    for (const [, input] of mockUpdate.mock.calls) {
+      expect(Object.values(input as Record<string, unknown>)).not.toContain(null);
+    }
   });
 });
 
@@ -404,7 +414,7 @@ describe('the outreach draft (TaskAgentCard.swift:324-368)', () => {
 
     await fireEvent.press(screen.getByLabelText('Save draft'));
     await waitFor(() =>
-      expect(mockUpdate).toHaveBeenCalledWith('t1', { action: 'saveDraft', version: 3, key: null, answer: 'Hi, are you free Friday?', candidateId: '0' }),
+      expect(mockUpdate).toHaveBeenCalledWith('t1', { action: 'saveDraft', version: 3, key: undefined, answer: 'Hi, are you free Friday?', candidateId: '0' }),
     );
   });
 

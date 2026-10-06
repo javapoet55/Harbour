@@ -177,7 +177,7 @@ export function TaskAgentCard({ taskId, onResearchAvailable, onFieldFocus, onFie
     if (autoSearched.current === key) return;
     autoSearched.current = key;
     autoSearch(
-      { action: 'search', version: run.version, key: null, answer: run.slots.location, candidateId: null },
+      { action: 'search', version: run.version, answer: run.slots.location },
       { onError: (cause) => setError(`Could not refresh task research. ${cause.message}`) },
     );
   }, [run, busy, autoSearch]);
@@ -193,7 +193,7 @@ export function TaskAgentCard({ taskId, onResearchAvailable, onFieldFocus, onFie
       setError(null);
     }
     mutation.mutate(
-      { action, version: run?.version ?? 0, key: options.key ?? null, answer: options.answer ?? null, candidateId: options.candidateId ?? null },
+      { action, version: run?.version ?? 0, key: options.key, answer: options.answer, candidateId: options.candidateId },
       {
         onSuccess: () => {
           setAnswer('');
