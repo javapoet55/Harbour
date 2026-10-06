@@ -51,15 +51,22 @@ export const taskAgentApi = {
   /** `GET /api/tasks/:id/agent`. */
   load: (taskId: string, client: ApiClient = getApi()) => client.get<TaskAgentEnvelope>(`/api/tasks/${encodeURIComponent(taskId)}/agent`),
 
-  /** `POST /api/tasks/:id/agent`; Swift always sends empty `budget` and `constraints`. */
+  /**
+   * `POST /api/tasks/:id/agent`; Swift always sends empty `budget` and `constraints`.
+   *
+   * `key`, `answer` and `candidateId` are ABSENT from the body when they are absent from the input,
+   * never null: the route validates them with zod `.optional()` and no `.nullable()` (route.ts:7), so
+   * a null is a 400 "Please enter a valid answer." Swift's `Codable` omits a nil field, which is why
+   * iOS never hit this; Android sent null and no search ever started.
+   */
   update: (taskId: string, input: TaskAgentUpdate, client: ApiClient = getApi()) =>
     client.post<TaskAgentEnvelope>(`/api/tasks/${encodeURIComponent(taskId)}/agent`, {
       action: input.action,
       version: input.version,
-      key: input.key ?? null,
-      answer: input.answer ?? null,
+      ...(input.key == null ? {} : { key: input.key }),
+      ...(input.answer == null ? {} : { answer: input.answer }),
       budget: '',
       constraints: '',
-      candidateId: input.candidateId ?? null,
+      ...(input.candidateId == null ? {} : { candidateId: input.candidateId }),
     }),
 };

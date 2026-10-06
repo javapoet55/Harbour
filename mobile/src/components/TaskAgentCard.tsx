@@ -130,6 +130,9 @@ export function TaskAgentCard({ taskId, onResearchAvailable, onFieldFocus, onFie
   const [searchRequestPending, setSearchRequestPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const autoSearched = useRef<string | null>(null);
+  // An update that failed keeps its message until the next action, so a 400 is never wiped by the
+  // reload that follows it — which would leave the retired-question step showing a bare spinner.
+  const actionFailed = useRef(false);
 
   const envelope = query.data;
   const run = envelope?.run ?? null;
@@ -142,7 +145,7 @@ export function TaskAgentCard({ taskId, onResearchAvailable, onFieldFocus, onFie
   const [seenDataAt, setSeenDataAt] = useState(query.dataUpdatedAt);
   if (query.dataUpdatedAt !== seenDataAt) {
     setSeenDataAt(query.dataUpdatedAt);
-    if (!busy) setError(null);
+    if (!busy && !actionFailed.current) setError(null);
   }
   const [seenErrorAt, setSeenErrorAt] = useState(0);
   if (query.isError && query.errorUpdatedAt !== seenErrorAt) {
@@ -177,14 +180,20 @@ export function TaskAgentCard({ taskId, onResearchAvailable, onFieldFocus, onFie
     if (autoSearched.current === key) return;
     autoSearched.current = key;
     autoSearch(
-      { action: 'search', version: run.version, key: null, answer: run.slots.location, candidateId: null },
-      { onError: (cause) => setError(`Could not refresh task research. ${cause.message}`) },
+      { action: 'search', version: run.version, answer: run.slots.location },
+      {
+        onError: (cause) => {
+          actionFailed.current = true;
+          setError(`Could not refresh task research. ${cause.message}`);
+        },
+      },
     );
   }, [run, busy, autoSearch]);
 
   /** `act(_:key:answer:candidateID:)` (TaskAgentCard.swift:489-501). */
   const act = (action: TaskAgentAction, options: { key?: string; answer?: string; candidateId?: string } = {}) => {
     if (run === null && action !== 'prepare') return;
+    actionFailed.current = false;
     setBusy(true);
     const searching = action === 'search' || action === 'resume' || action === 'retry';
     setSearchRequestPending(searching);
@@ -193,13 +202,16 @@ export function TaskAgentCard({ taskId, onResearchAvailable, onFieldFocus, onFie
       setError(null);
     }
     mutation.mutate(
-      { action, version: run?.version ?? 0, key: options.key ?? null, answer: options.answer ?? null, candidateId: options.candidateId ?? null },
+      { action, version: run?.version ?? 0, key: options.key, answer: options.answer, candidateId: options.candidateId },
       {
         onSuccess: () => {
           setAnswer('');
           setError(null);
         },
-        onError: (cause) => setError(cause.message),
+        onError: (cause) => {
+          actionFailed.current = true;
+          setError(cause.message);
+        },
         onSettled: () => {
           setBusy(false);
           setSearchRequestPending(false);
@@ -824,6 +836,7 @@ export function TaskAgentCard({ taskId, onResearchAvailable, onFieldFocus, onFie
           title="Retry business search"
           color={colors.indigo}
           onPress={() => {
+            actionFailed.current = false;
             setError(null);
             void query.refetch();
           }}

@@ -1,10 +1,11 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import * as Clipboard from 'expo-clipboard';
 import * as SMS from 'expo-sms';
 import { Alert, Linking } from 'react-native';
 
 import { useCoordinator } from '../actions/coordinator';
+import { ApiError } from '../api/client';
 import type { TaskAgentCandidate, TaskAgentEnvelope, TaskAgentRun } from '../api/taskAgent';
 import type { StoredTaskAction } from '../lib/taskAction';
 import { capitalizedWords, inlineWarnings, reviewCountText, runControls, stars, statusTitle } from '../lib/taskAgent';
@@ -232,7 +233,7 @@ describe('the location step (TaskAgentCard.swift:67-87)', () => {
     await fireEvent.press(screen.getByTestId('agent-search'));
 
     await waitFor(() =>
-      expect(mockUpdate).toHaveBeenCalledWith('t1', { action: 'search', version: 3, key: 'location', answer: '94109', candidateId: null }),
+      expect(mockUpdate).toHaveBeenCalledWith('t1', { action: 'search', version: 3, key: 'location', answer: '94109', candidateId: undefined }),
     );
     expect(await screen.findByText('Finding the best business near your place…')).toBeTruthy();
   });
@@ -260,11 +261,66 @@ describe('the location step (TaskAgentCard.swift:67-87)', () => {
     mockLoad.mockResolvedValue(envelope(run({ question: { key: 'urgency', text: 'How soon?' }, slots: { location: '94582', budget: '', constraints: '' } })));
     mockUpdate.mockResolvedValue(envelope(run({ status: 'QUEUED', question: null, slots: { location: '94582', budget: '', constraints: '' } })));
     await renderCard();
-    await waitFor(() =>
-      expect(mockUpdate).toHaveBeenCalledWith('t1', { action: 'search', version: 3, key: null, answer: '94582', candidateId: null }),
-    );
+    await waitFor(() => expect(mockUpdate).toHaveBeenCalledWith('t1', { action: 'search', version: 3, answer: '94582' }));
     expect(mockUpdate).toHaveBeenCalledTimes(1);
     expect(screen.queryByText('How soon?')).toBeNull();
+  });
+
+  // No null leaves the card, so none can reach a zod `.optional()` on the route
+  // (src/app/api/tasks/[id]/agent/route.ts:7). api/taskAgent.test.ts checks the body it builds.
+  it('passes no null to the update for a search it sends on its own', async () => {
+    mockLoad.mockResolvedValue(envelope(run({ question: { key: 'preferences', text: 'Anything else?' }, slots: { location: '94582', budget: '', constraints: '' } })));
+    mockUpdate.mockResolvedValue(envelope(run({ status: 'QUEUED', question: null })));
+    await renderCard();
+    await waitFor(() => expect(mockUpdate).toHaveBeenCalled());
+    for (const [, input] of mockUpdate.mock.calls) {
+      expect(Object.values(input as Record<string, unknown>)).not.toContain(null);
+    }
+  });
+});
+
+describe('a 400 from the route (TaskAgentCard.swift:489-501)', () => {
+  it('shows the server’s message instead of the spinner when a search is refused', async () => {
+    mockLoad.mockResolvedValue(envelope(run({ slots: { location: '94582', budget: '', constraints: '' } })));
+    mockUpdate.mockRejectedValue(new ApiError({ status: 400, message: 'Please enter a valid answer.' }));
+    await renderCard();
+    await fireEvent.press(await screen.findByLabelText('Use 94582'));
+    expect(await screen.findByTestId('agent-message')).toHaveTextContent('Please enter a valid answer.');
+    expect(screen.queryByText('Finding the best business near your place…')).toBeNull();
+  });
+
+  it('keeps the message through the reload that follows, rather than returning to a bare spinner', async () => {
+    // A run left at a retired question searches on its own (`:154-159`); nothing is tapped here, so a
+    // 400 that is cleared by the next load would leave the step spinning with nothing said.
+    // A fresh object per call, as each poll's JSON is: react-query only advances `dataUpdatedAt` then.
+    const retired = () => run({ question: { key: 'urgency', text: 'How soon?' }, slots: { location: '94582', budget: '', constraints: '' } });
+    mockLoad.mockImplementation(async () => envelope(retired()));
+    mockUpdate.mockRejectedValue(new ApiError({ status: 400, message: 'Please enter a valid answer.' }));
+    const { queryClient } = await renderCard();
+    // The auto-search path prefixes the server's own sentence, which stays visible either way.
+    const message = 'Could not refresh task research. Please enter a valid answer.';
+    expect(await screen.findByTestId('agent-message')).toHaveTextContent(message);
+
+    const loadsBefore = mockLoad.mock.calls.length;
+    await act(async () => {
+      await queryClient.refetchQueries();
+    });
+    expect(mockLoad.mock.calls.length).toBeGreaterThan(loadsBefore);
+    expect(screen.getByTestId('agent-message')).toHaveTextContent(message);
+    expect(screen.queryByText('Finding the best business near your place…')).toBeNull();
+    expect(screen.getByTestId('agent-retry-search')).toBeTruthy();
+  });
+
+  it('clears the message once a later action succeeds', async () => {
+    mockLoad.mockResolvedValue(envelope(run({ slots: { location: '94582', budget: '', constraints: '' } })));
+    mockUpdate.mockRejectedValueOnce(new ApiError({ status: 400, message: 'Please enter a valid answer.' }));
+    await renderCard();
+    await fireEvent.press(await screen.findByLabelText('Use 94582'));
+    expect(await screen.findByTestId('agent-message')).toHaveTextContent('Please enter a valid answer.');
+
+    mockUpdate.mockResolvedValue(envelope(run({ status: 'QUEUED', question: null })));
+    await fireEvent.press(screen.getByLabelText('Use 94582'));
+    await waitFor(() => expect(screen.queryByTestId('agent-message')).toBeNull());
   });
 });
 
@@ -404,7 +460,7 @@ describe('the outreach draft (TaskAgentCard.swift:324-368)', () => {
 
     await fireEvent.press(screen.getByLabelText('Save draft'));
     await waitFor(() =>
-      expect(mockUpdate).toHaveBeenCalledWith('t1', { action: 'saveDraft', version: 3, key: null, answer: 'Hi, are you free Friday?', candidateId: '0' }),
+      expect(mockUpdate).toHaveBeenCalledWith('t1', { action: 'saveDraft', version: 3, key: undefined, answer: 'Hi, are you free Friday?', candidateId: '0' }),
     );
   });
 
