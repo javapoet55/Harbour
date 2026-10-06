@@ -91,6 +91,7 @@ The focus session strip (`FocusSessionStrip`, `ios/App/FocusSessionStrip.swift:2
 
 Corrections made during Phase 3, kept here so later phases do not repeat the mistake:
 
+
 - Screens 15-17 and the filter sheet are all inside `RootView.swift`. There is no `TaskListView.swift`,
   `TaskEditorView.swift` or `TaskFilterSheet.swift`.
 - Screen 18 is both the detail AND the edit screen; there is no separate task editor for an existing task.

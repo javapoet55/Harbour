@@ -22,4 +22,5 @@ async function healthHandlerDELETE() {
   }
 }
 
+
 export const DELETE = healthRoute('DELETE /api/account', healthHandlerDELETE);
