@@ -1,10 +1,11 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import * as Clipboard from 'expo-clipboard';
 import * as SMS from 'expo-sms';
 import { Alert, Linking } from 'react-native';
 
 import { useCoordinator } from '../actions/coordinator';
+import { ApiError } from '../api/client';
 import type { TaskAgentCandidate, TaskAgentEnvelope, TaskAgentRun } from '../api/taskAgent';
 import type { StoredTaskAction } from '../lib/taskAction';
 import { capitalizedWords, inlineWarnings, reviewCountText, runControls, stars, statusTitle } from '../lib/taskAgent';
@@ -275,6 +276,51 @@ describe('the location step (TaskAgentCard.swift:67-87)', () => {
     for (const [, input] of mockUpdate.mock.calls) {
       expect(Object.values(input as Record<string, unknown>)).not.toContain(null);
     }
+  });
+});
+
+describe('a 400 from the route (TaskAgentCard.swift:489-501)', () => {
+  it('shows the server’s message instead of the spinner when a search is refused', async () => {
+    mockLoad.mockResolvedValue(envelope(run({ slots: { location: '94582', budget: '', constraints: '' } })));
+    mockUpdate.mockRejectedValue(new ApiError({ status: 400, message: 'Please enter a valid answer.' }));
+    await renderCard();
+    await fireEvent.press(await screen.findByLabelText('Use 94582'));
+    expect(await screen.findByTestId('agent-message')).toHaveTextContent('Please enter a valid answer.');
+    expect(screen.queryByText('Finding the best business near your place…')).toBeNull();
+  });
+
+  it('keeps the message through the reload that follows, rather than returning to a bare spinner', async () => {
+    // A run left at a retired question searches on its own (`:154-159`); nothing is tapped here, so a
+    // 400 that is cleared by the next load would leave the step spinning with nothing said.
+    // A fresh object per call, as each poll's JSON is: react-query only advances `dataUpdatedAt` then.
+    const retired = () => run({ question: { key: 'urgency', text: 'How soon?' }, slots: { location: '94582', budget: '', constraints: '' } });
+    mockLoad.mockImplementation(async () => envelope(retired()));
+    mockUpdate.mockRejectedValue(new ApiError({ status: 400, message: 'Please enter a valid answer.' }));
+    const { queryClient } = await renderCard();
+    // The auto-search path prefixes the server's own sentence, which stays visible either way.
+    const message = 'Could not refresh task research. Please enter a valid answer.';
+    expect(await screen.findByTestId('agent-message')).toHaveTextContent(message);
+
+    const loadsBefore = mockLoad.mock.calls.length;
+    await act(async () => {
+      await queryClient.refetchQueries();
+    });
+    expect(mockLoad.mock.calls.length).toBeGreaterThan(loadsBefore);
+    expect(screen.getByTestId('agent-message')).toHaveTextContent(message);
+    expect(screen.queryByText('Finding the best business near your place…')).toBeNull();
+    expect(screen.getByTestId('agent-retry-search')).toBeTruthy();
+  });
+
+  it('clears the message once a later action succeeds', async () => {
+    mockLoad.mockResolvedValue(envelope(run({ slots: { location: '94582', budget: '', constraints: '' } })));
+    mockUpdate.mockRejectedValueOnce(new ApiError({ status: 400, message: 'Please enter a valid answer.' }));
+    await renderCard();
+    await fireEvent.press(await screen.findByLabelText('Use 94582'));
+    expect(await screen.findByTestId('agent-message')).toHaveTextContent('Please enter a valid answer.');
+
+    mockUpdate.mockResolvedValue(envelope(run({ status: 'QUEUED', question: null })));
+    await fireEvent.press(screen.getByLabelText('Use 94582'));
+    await waitFor(() => expect(screen.queryByTestId('agent-message')).toBeNull());
   });
 });
 
