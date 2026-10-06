@@ -1,3 +1,4 @@
+import { NextRequest } from 'next/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -127,5 +128,114 @@ describe('calendar OAuth callback redirects', () => {
     expectSettingsRedirect(await callback('http://0.0.0.0:8080', 'unknown'), 'unsupported');
     expect(mocks.verifyOAuthState).not.toHaveBeenCalled();
     expect(mocks.connectCalendar).not.toHaveBeenCalled();
+  });
+});
+
+describe('the request object the production server passes', () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    mocks.verifyOAuthState.mockResolvedValue('user-1');
+    mocks.isNativeOAuthState.mockResolvedValue(false);
+    mocks.connectCalendar.mockResolvedValue({ id: 'calendar-1' });
+    mocks.syncConnection.mockResolvedValue(undefined);
+  });
+
+  const target = (provider: string, query: string) => `${productionOrigin}/api/calendar/oauth/${provider}/callback${query}`;
+  const ctx = (provider: string) => ({ params: Promise.resolve({ provider }) });
+
+  // The App Router hands the route a NextRequest, not the plain Request every test above builds.
+  it('connects when given a real NextRequest', async () => {
+    const request = new NextRequest(target('google', '?code=test-code&state=test-state'), {
+      headers: { cookie: 'calendar-oauth-google=test-state' },
+    });
+    expectSettingsRedirect(await GET(request, ctx('google')), 'google-connected');
+    expect(mocks.connectCalendar).toHaveBeenCalledWith('google', 'user-1', 'test-code');
+  });
+
+  it('still refuses a mismatched cookie on a real NextRequest', async () => {
+    const request = new NextRequest(target('google', '?code=test-code&state=test-state'), {
+      headers: { cookie: 'calendar-oauth-google=wrong' },
+    });
+    expectSettingsRedirect(await GET(request, ctx('google')), 'error');
+    expect(mocks.connectCalendar).not.toHaveBeenCalled();
+  });
+
+  /**
+   * What actually broke production: the route used to read the cookie through
+   * `new NextRequest(req)`, and on Next 16 the request the server hands the route cannot be used to
+   * construct another one -- "Cannot read private member #state from an object whose class did not
+   * declare it" -- so every connect threw before reaching the try block and answered 500.
+   *
+   * A locally built NextRequest re-wraps without complaint, which is why the suite stayed green. This
+   * stands in for the production object: `instanceof Request` holds, as it does for a Request from
+   * another realm, but it carries none of the internal state `new Request(input)` copies out. Reading
+   * the `Cookie` header off it, which is all the route does now, works regardless.
+   */
+  function unwrappableRequest(provider: string, query: string, cookie: string): Request {
+    const request = Object.create(Request.prototype) as Request;
+    Object.defineProperty(request, 'url', { value: target(provider, query) });
+    Object.defineProperty(request, 'headers', { value: new Headers({ cookie }) });
+    return request;
+  }
+
+  it('cannot be re-wrapped, which is the production failure', () => {
+    const request = unwrappableRequest('google', '?code=test-code&state=test-state', 'calendar-oauth-google=test-state');
+    expect(request).toBeInstanceOf(Request);
+    expect(() => new NextRequest(request)).toThrow();
+    expect(request.headers.get('cookie')).toBe('calendar-oauth-google=test-state');
+  });
+
+  it('connects on a request that cannot be re-wrapped', async () => {
+    const request = unwrappableRequest('google', '?code=test-code&state=test-state', 'calendar-oauth-google=test-state');
+    expectSettingsRedirect(await GET(request, ctx('google')), 'google-connected');
+    expect(mocks.connectCalendar).toHaveBeenCalledWith('google', 'user-1', 'test-code');
+  });
+
+  it('refuses a mismatched cookie on a request that cannot be re-wrapped', async () => {
+    const request = unwrappableRequest('google', '?code=test-code&state=test-state', 'calendar-oauth-google=wrong');
+    expectSettingsRedirect(await GET(request, ctx('google')), 'error');
+    expect(mocks.connectCalendar).not.toHaveBeenCalled();
+  });
+
+  it('also connects Outlook on a request that cannot be re-wrapped', async () => {
+    const request = unwrappableRequest('microsoft', '?code=test-code&state=test-state', 'calendar-oauth-microsoft=test-state');
+    expectSettingsRedirect(await GET(request, ctx('microsoft')), 'microsoft-connected');
+    expect(mocks.verifyOAuthState).toHaveBeenCalledWith('test-state', 'microsoft');
+  });
+});
+
+describe('reading the browser-binding cookie', () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    mocks.verifyOAuthState.mockResolvedValue('user-1');
+    mocks.isNativeOAuthState.mockResolvedValue(false);
+    mocks.connectCalendar.mockResolvedValue({ id: 'calendar-1' });
+    mocks.syncConnection.mockResolvedValue(undefined);
+  });
+
+  // Each header is matched against what `NextRequest(...).cookies.get()` returns for it, so the
+  // comparison the route makes is the one it made before, down to the edge cases.
+  it.each([
+    ['the only cookie', 'calendar-oauth-google=test-state', true],
+    ['among others', 'session=abc; calendar-oauth-google=test-state; theme=dark', true],
+    ['with no space after the semicolon', 'session=abc;calendar-oauth-google=test-state', true],
+    ['with extra leading spaces', 'session=abc;   calendar-oauth-google=test-state', true],
+    ['repeated, last value winning', 'calendar-oauth-google=wrong; calendar-oauth-google=test-state', true],
+    ['repeated, last value losing', 'calendar-oauth-google=test-state; calendar-oauth-google=wrong', false],
+    ['a prefix of the name only', 'calendar-oauth-googlex=test-state', false],
+    ['a suffix of the name only', 'xcalendar-oauth-google=test-state', false],
+    ['an empty value', 'calendar-oauth-google=', false],
+    ['the name with no value', 'calendar-oauth-google', false],
+    ['a space before the equals', 'calendar-oauth-google =test-state', false],
+    ['a space after the equals', 'calendar-oauth-google= test-state', false],
+    ['no cookie header at all', '', false],
+    ['another provider’s cookie', 'calendar-oauth-microsoft=test-state', false],
+  ])('%s: connects=%s', async (_name, cookie, connects) => {
+    const request = new NextRequest(`${productionOrigin}/api/calendar/oauth/google/callback?code=test-code&state=test-state`, {
+      headers: cookie === '' ? {} : { cookie },
+    });
+    // The parser the route uses must agree with the one it replaced on every header above.
+    expect(request.cookies.get('calendar-oauth-google')?.value === 'test-state').toBe(connects);
+    expectSettingsRedirect(await GET(request, { params: Promise.resolve({ provider: 'google' }) }), connects ? 'google-connected' : 'error');
   });
 });
