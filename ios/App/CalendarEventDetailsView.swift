@@ -98,7 +98,9 @@ struct CalendarEventDetailsView: View {
             .confirmationDialog("Delete this event?", isPresented: $deleting, titleVisibility: .visible) {
                 Button("Delete Event", role: .destructive) { Task { await deleteEvent() } }
             }
-            .alert("Event Details", isPresented: Binding(get: { message != nil }, set: { if !$0 { message = nil; if deleted { dismiss() } } })) { Button("OK") { message = nil; if deleted { dismiss() } } } message: { Text(message ?? "") }
+            // The binding closes the screen after a delete; OK only clears the message. Both used to call
+            // dismiss(), so OK dismissed twice and could close the screen underneath as well.
+            .alert("Event Details", isPresented: Binding(get: { message != nil }, set: { if !$0 { message = nil; if deleted { dismiss() } } })) { Button("OK") { message = nil } } message: { Text(message ?? "") }
             .sheet(isPresented: $editing) { CalendarEventDetailsEditor(event: event) { body in try await update(body) } }
             .task {
                 #if DEBUG
