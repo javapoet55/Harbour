@@ -125,7 +125,8 @@ describe('Schedule Intelligence', () => {
     await renderCalendar();
     await waitFor(() => expect(screen.getByTestId('calendar-intelligence-heading')).toHaveTextContent('Review schedule conflicts'));
     expect(screen.getByTestId('calendar-conflicts')).toBeTruthy();
-    expect(screen.getByText('1 calendar commitments today · 7 hours 43 minutes of usable time remain')).toBeTruthy();
+    // Singular for one (iOS c8da5cb; Android ahead of iOS).
+    expect(screen.getByText('1 calendar commitment today · 7 hours 43 minutes of usable time remain')).toBeTruthy();
     expect(screen.queryByText('Protect the morning')).toBeNull();
     expect(screen.queryByText('An explanation Swift no longer shows.')).toBeNull();
   });

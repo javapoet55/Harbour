@@ -690,7 +690,8 @@ export default function Calendar() {
             </View>
             <Text style={[styles.caption, { color: theme.colors.secondary }]}>
               {/* `DurationDisplay.durationLabel(info.availableMinutes)` (`:260`) — "7 hours 43 minutes". */}
-              {`${today.appointments} calendar commitments today · ${durationLabel(today.availableMinutes)} of usable time remain`}
+              {/* Android ahead of iOS (iOS c8da5cb): "1 calendar commitment", singular. */}
+              {`${today.appointments} calendar commitment${today.appointments === 1 ? '' : 's'} today · ${durationLabel(today.availableMinutes)} of usable time remain`}
             </Text>
           </>
         ) : intelligence.isFetching || intelligence.isError ? null : (

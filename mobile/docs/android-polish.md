@@ -1755,3 +1755,4 @@ match". Logic fixes have a test that fails without them.
   1 min overdue". As `ActionTimeLabel` on fix/ios-bug-pass (bfedbd6, 0d7e89f): both round to the nearest minute,
   under a minute late is still "Due now", and from 48 hours an age reads "N days overdue" (`actionTimeLabel` in
   `TodayActions.tsx`).
+- **Android ahead of iOS: Calendar says "1 calendar commitment today", singular** (iOS c8da5cb) (`calendar.tsx`).
