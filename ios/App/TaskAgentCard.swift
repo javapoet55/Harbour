@@ -21,6 +21,9 @@ struct TaskAgentCard: View {
     @State private var busy = false
     @State private var searchRequestPending = false
     @State private var error: String?
+    /// A short confirmation ("Phone number copied."). Not an error: it neither reads as one nor hides the search spinner.
+    @State private var copyNotice: CopyNotice?
+    private struct CopyNotice: Equatable { let place: String; let text: String }
     @State private var loading = true
     @State private var refreshID = 0
     @State private var messageDraft: BusinessMessageDraft?
@@ -307,10 +310,11 @@ struct TaskAgentCard: View {
                 Text(candidate.phone.isEmpty ? "Phone unavailable" : candidate.phone).font(.subheadline)
                 Spacer(minLength: 0)
                 if !candidate.phone.isEmpty {
-                    Button { UIPasteboard.general.string = candidate.phone; error = "Phone number copied." } label: { Label("Copy", systemImage: "doc.on.doc") }
+                    Button { UIPasteboard.general.string = candidate.phone; confirmCopy("Phone number copied.", at: candidate.id + ":phone") } label: { Label("Copy", systemImage: "doc.on.doc") }
                         .buttonStyle(BusinessCompactButton())
                 }
             }
+            copyConfirmation(candidate.id + ":phone")
             if let website = candidate.website, let url = URL(string: website), url.scheme == "https" {
                 HStack {
                     Label("Website", systemImage: "globe").font(.subheadline)
@@ -339,8 +343,9 @@ struct TaskAgentCard: View {
                 HStack {
                     Button("Save draft") { focusedField = nil; act("saveDraft", answer: drafts[candidate.id] ?? candidate.draft, candidateID: candidate.id) }
                     Spacer()
-                    Button("Copy draft") { focusedField = nil; UIPasteboard.general.string = drafts[candidate.id] ?? candidate.draft; error = "Draft copied." }
+                    Button("Copy draft") { focusedField = nil; UIPasteboard.general.string = drafts[candidate.id] ?? candidate.draft; confirmCopy("Draft copied.", at: candidate.id + ":draft") }
                 }.font(.subheadline)
+                copyConfirmation(candidate.id + ":draft")
             } label: {
                 HStack(spacing: 10) {
                     Image(systemName: "doc.text").font(.title2).foregroundStyle(businessPurple)
@@ -485,6 +490,18 @@ struct TaskAgentCard: View {
     #if DEBUG
     private static let businessPreview = #"{"id": "preview", "status": "READY_FOR_REVIEW", "version": 0, "service": "plumber", "urgency": "flexible", "slots": {"location": "94582", "budget": "", "constraints": ""}, "steps": [], "warnings": ["Listings are not a license check or a guarantee of availability. Confirm service area, budget and requirements before choosing.", "Some businesses were hidden because at least 20 Google reviews could not be verified. Try a new search for more options."], "candidates": [{"id": "0", "googlePlaceId": "preview-0", "name": "Chase Rooter & Plumbing Inc.", "address": "3494 Camino Tassajara #108, Danville, CA 94506, USA", "phone": "(925) 567-9000", "website": "https://example.com", "reason": "Confirm services, licensing, price, and availability with the business.", "draft": "Hello, I’m looking for plumbing services near 94582. Could you provide a quote and your earliest availability? Thank you.", "evidence": [{"source": "Google", "url": "https://maps.google.com", "rating": 5, "reviews": 2309}], "feedback": [{"author": "Sample reviewer", "url": "https://maps.google.com", "rating": 5, "published": "a month ago", "text": "Arrived on time and explained the repair clearly. The work was completed efficiently, and the area was left clean. I appreciated the careful attention to detail and helpful communication throughout the visit."}]}, {"id": "1", "googlePlaceId": "preview-1", "name": "United Plumbing & Water Heaters", "address": "3494 Camino Tassajara #108, Danville, CA 94506, USA", "phone": "(925) 567-9000", "website": "https://example.com", "reason": "Confirm services, licensing, price, and availability with the business.", "draft": "Hello, I’m looking for plumbing services near 94582. Could you provide a quote and your earliest availability? Thank you.", "evidence": [{"source": "Google", "url": "https://maps.google.com", "rating": 5, "reviews": 1403}], "feedback": [{"author": "Sample reviewer", "url": "https://maps.google.com", "rating": 5, "published": "a month ago", "text": "Arrived on time and explained the repair clearly. The work was completed efficiently, and the area was left clean. I appreciated the careful attention to detail and helpful communication throughout the visit."}]}, {"id": "2", "googlePlaceId": "preview-2", "name": "Dependable Plumbing Solutions", "address": "3494 Camino Tassajara #108, Danville, CA 94506, USA", "phone": "(925) 567-9000", "website": "https://example.com", "reason": "Confirm services, licensing, price, and availability with the business.", "draft": "Hello, I’m looking for plumbing services near 94582. Could you provide a quote and your earliest availability? Thank you.", "evidence": [{"source": "Google", "url": "https://maps.google.com", "rating": 4.8, "reviews": 361}], "feedback": [{"author": "Sample reviewer", "url": "https://maps.google.com", "rating": 5, "published": "a month ago", "text": "Arrived on time and explained the repair clearly. The work was completed efficiently, and the area was left clean. I appreciated the careful attention to detail and helpful communication throughout the visit."}]}]}"#
     #endif
+
+    private func confirmCopy(_ text: String, at place: String) {
+        let notice = CopyNotice(place: place, text: text)
+        copyNotice = notice
+        Task { try? await Task.sleep(for: .seconds(2)); if copyNotice == notice { copyNotice = nil } }
+    }
+    @ViewBuilder private func copyConfirmation(_ place: String) -> some View {
+        if let copyNotice, copyNotice.place == place {
+            Label(copyNotice.text, systemImage: "checkmark.circle.fill").font(.caption).foregroundStyle(AgentStyle.green)
+                .accessibilityAddTraits(.updatesFrequently)
+        }
+    }
 
     private func act(_ action: String, key: String? = nil, answer: String? = nil, candidateID: String? = nil) {
         #if DEBUG
