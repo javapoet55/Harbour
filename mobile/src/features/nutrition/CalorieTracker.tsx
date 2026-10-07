@@ -14,7 +14,7 @@ import { clockLabel } from '../../lib/profileSettings';
 import { MenuPicker } from '../moments/form';
 import { CALORIE_AGENT } from '../wellness/art';
 import { FoodEditor, type FoodDraft } from './FoodEditor';
-import { chartValues, DEFAULT_VOICES, e164, goalsFrom, intake, MEALS, needsReview, NO_ANSWER_CHOICES, NUTRIENTS, nutritionDay, nutritionZone, zoneChoices } from './model';
+import { callNowNotice, chartValues, DEFAULT_VOICES, e164, goalsFrom, intake, MEALS, needsReview, NO_ANSWER_CHOICES, NUTRIENTS, nutritionDay, nutritionZone, zoneChoices } from './model';
 import { CalorieRing, Card, ChartBars, DateSelector, Feature, GRADIENT, IconTile, INK, Primary, ProgressBar, SECONDARY, Segmented, Stepper, Steps, styles as parts, SYSTEM_INDIGO, TextButton, type IconName } from './parts';
 import { SAMPLE_INTAKE } from './sample';
 import { useCalorieStore } from './useCalorieStore';
@@ -93,6 +93,8 @@ export function CalorieTracker({ live, onClose, now = Date.now, region = deviceR
   const [codeInput, setCodeInput] = useState('');
   const [codeSent, setCodeSent] = useState(false);
   const [editingPhone, setEditingPhone] = useState(false);
+  /** How the last code went out (`channel` in the server's answer). */
+  const [codeByText, setCodeByText] = useState(false);
   const [working, setWorking] = useState(false);
   const [period, setPeriod] = useState<Period>('Today');
   const [insightsTab, setInsightsTab] = useState<'Insights' | 'Recommendations'>('Insights');
@@ -380,7 +382,9 @@ export function CalorieTracker({ live, onClose, now = Date.now, region = deviceR
         </View>
       ) : (
         <>
-          <Text style={[parts.caption, { color: SECONDARY }]}>NexDo calls this number. First we&apos;ll call it once and read out a 6-digit code.</Text>
+          <Text style={[parts.caption, { color: SECONDARY }]}>
+            {codeSent && codeByText ? "NexDo calls this number. First we'll text it a 6-digit code." : "NexDo calls this number. First we'll call it once and read out a 6-digit code."}
+          </Text>
           <TextInput
             autoComplete="tel"
             keyboardType="phone-pad"
@@ -398,14 +402,25 @@ export function CalorieTracker({ live, onClose, now = Date.now, region = deviceR
               const number = e164(phoneInput, region);
               if (!number) return setNotice('Enter your mobile number with its country code, for example +1 650 555 0123.');
               void perform(async () => {
-                if (await store.sendCode(number)) {
-                  setCodeSent(true);
-                  setNotice(`Calling ${number} now. Answer to hear your 6-digit code.`);
+                // Android ahead of iOS: Swift always says it is calling (CalorieTrackerView.swift:590-595). The
+                // server sends the code by voice or SMS, and sends none for a number it has already verified.
+                const answer = await store.sendCode(number);
+                if (!answer) return;
+                if (answer.alreadyVerified) {
+                  setEditingPhone(false);
+                  setCodeSent(false);
+                  setCodeInput('');
+                  setNotice(`${number} is already verified.`);
+                  return;
                 }
+                const byText = answer.channel === 'sms';
+                setCodeByText(byText);
+                setCodeSent(true);
+                setNotice(byText ? `We’ve texted a 6-digit code to ${number}.` : `Calling ${number} now. Answer to hear your 6-digit code.`);
               });
             }}
             testID="calorie-send-code"
-            title={codeSent ? 'Call me again with a code' : 'Call me with a code'}
+            title={codeSent ? (codeByText ? 'Text me again with a code' : 'Call me again with a code') : 'Call me with a code'}
           />
           {codeSent ? (
             <>
@@ -520,7 +535,10 @@ export function CalorieTracker({ live, onClose, now = Date.now, region = deviceR
         <TextButton
           onPress={() =>
             void perform(async () => {
-              if (await store.callNow()) setNotice('Calling you now. Pick up to log today’s meals.');
+              // Android ahead of iOS: Swift drops the answer's `status` and always says it is calling
+              // (CalorieTrackerView.swift:643-644).
+              const status = await store.callNow();
+              if (status !== null) setNotice(callNowNotice(status));
             })
           }
           testID="calorie-call-now"
@@ -812,8 +830,11 @@ export function CalorieTracker({ live, onClose, now = Date.now, region = deviceR
         onSave={async (draft) => {
           const name = draft.name.trim();
           const kcal = Number.parseInt(draft.calories, 10) || 0;
+          // Any `kcal` is a manual correction on the server (source MANUAL, every nutrient cleared), so an
+          // edit sends it only when the value changed: renaming a food or moving its meal keeps its nutrients.
+          // Android ahead of iOS: Swift always sends it (CalorieTrackerView.swift:905).
           const saved = draft.entry
-            ? await store.update(draft.entry, { meal: draft.meal, description: name, kcal })
+            ? await store.update(draft.entry, { meal: draft.meal, description: name, ...(kcal !== draft.entry.kcal ? { kcal } : {}) })
             : await store.add({ meal: draft.meal, description: name, kcal });
           if (saved) setEditor(null);
         }}

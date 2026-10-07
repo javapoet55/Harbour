@@ -321,6 +321,57 @@ describe('live', () => {
     expect(title()).toBe('Create Agent');
   });
 
+  async function toPhoneCheck() {
+    await open(true);
+    await waitFor(() => expect(screen.getByTestId('calorie-status')).toHaveTextContent('Daily calls are off'));
+    await press('calorie-set-up');
+    await press('calorie-time-next');
+    await press('calorie-goals-next');
+    await fireEvent.changeText(screen.getByTestId('calorie-phone-input'), '(650) 555-0123');
+  }
+
+  it('phone check: a code sent by SMS says so, and offers to text again', async () => {
+    mockApi.settings.mockResolvedValue(settings());
+    mockApi.sendCode.mockResolvedValue({ sent: true, alreadyVerified: false, phoneVerified: false, channel: 'sms' });
+    await toPhoneCheck();
+    await press('calorie-send-code');
+    await waitFor(() => expect(lastAlert()[1]).toBe('We’ve texted a 6-digit code to +16505550123.'));
+    expect(screen.getByTestId('calorie-send-code')).toHaveTextContent('Text me again with a code');
+    expect(screen.getByText("NexDo calls this number. First we'll text it a 6-digit code.")).toBeTruthy();
+    expect(screen.getByTestId('calorie-code-input')).toBeTruthy();
+  });
+
+  it('phone check: an already verified number gets no code and shows as verified', async () => {
+    mockApi.settings.mockResolvedValueOnce(settings()).mockResolvedValue(settings({ phone: '+16505550123', phoneVerified: true }));
+    mockApi.sendCode.mockResolvedValue({ sent: false, alreadyVerified: true, phoneVerified: true, message: 'Already verified' });
+    await toPhoneCheck();
+    await press('calorie-send-code');
+    await waitFor(() => expect(lastAlert()[1]).toBe('+16505550123 is already verified.'));
+    expect(screen.queryByTestId('calorie-code-input')).toBeNull();
+    await waitFor(() => expect(screen.getByTestId('calorie-change-phone')).toBeTruthy());
+    expect(screen.getByTestId('calorie-turn-on').props.accessibilityState).toEqual({ disabled: false });
+  });
+
+  it.each([
+    ['dialing', 'Calling you now. Pick up to log today’s meals.'],
+    ['cancelled', 'The call was cancelled. Check that daily calls are on, then try again.'],
+    ['failed', 'The call could not be placed. Try again in a few minutes.'],
+    ['not_claimed', 'The call could not be placed. Try again in a few minutes.'],
+  ])('"Call me now to try it" reports the status of the call: %s', async (status, notice) => {
+    mockApi.settings.mockResolvedValue(settings({ phone: '+16505550123', phoneVerified: true }));
+    mockApi.saveSettings.mockImplementation(async (update) => settings({ ...update, phone: '+16505550123', phoneVerified: true }));
+    mockApi.callNow.mockResolvedValue({ callId: 'c1', status });
+    await open(true);
+    await waitFor(() => expect(screen.getByTestId('calorie-status')).toHaveTextContent('Daily calls are off'));
+    await press('calorie-set-up');
+    await press('calorie-time-next');
+    await press('calorie-goals-next');
+    await press('calorie-turn-on');
+    await waitFor(() => expect(title()).toBe('Daily Check-in'));
+    await press('calorie-call-now');
+    await waitFor(() => expect(lastAlert()[1]).toBe(notice));
+  });
+
   it('"Save without calls" saves and opens the dashboard; a failure shows the server\'s message', async () => {
     mockApi.settings.mockResolvedValue(settings());
     mockApi.saveSettings.mockRejectedValueOnce(new Error('Check the values and try again.')).mockResolvedValueOnce(settings());
@@ -428,6 +479,28 @@ describe('live', () => {
 
     await fireEvent.press(screen.getByLabelText('Remove Dal and rice'));
     await waitFor(() => expect(mockApi.deleteEntry).toHaveBeenCalledWith('e1'));
+  });
+
+  it('Edit sends kcal only when it changed, so a rename or a new meal keeps the nutrients', async () => {
+    mockApi.settings.mockResolvedValue(settings({ enabled: true }));
+    mockApi.updateEntry.mockResolvedValue({ entry: entry() });
+    await open(true);
+    await waitFor(() => expect(title()).toBe('Nutrition'));
+    await press('calorie-view-log');
+    await waitFor(() => expect(screen.getByText('Dal and rice')).toBeTruthy());
+
+    // A confirmed food opens the editor from its calories.
+    await fireEvent.press(screen.getByLabelText('Edit Dal and rice, 450 calories'));
+    await fireEvent.changeText(screen.getByTestId('calorie-editor-name'), 'Dal, rice and ghee');
+    await press('calorie-editor-save');
+    await waitFor(() => expect(mockApi.updateEntry).toHaveBeenLastCalledWith('e1', { meal: 'LUNCH', description: 'Dal, rice and ghee' }));
+    await waitFor(() => expect(screen.queryByTestId('calorie-food-editor')).toBeNull());
+
+    // The day reloads from the server, which still has the old name.
+    await fireEvent.press(await screen.findByLabelText('Edit Dal and rice, 450 calories'));
+    await fireEvent.changeText(screen.getByTestId('calorie-editor-calories'), '500');
+    await press('calorie-editor-save');
+    await waitFor(() => expect(mockApi.updateEntry).toHaveBeenLastCalledWith('e1', { meal: 'LUNCH', description: 'Dal and rice', kcal: 500 }));
   });
 
   it('the day moves back, never past today, and reloads', async () => {

@@ -156,8 +156,19 @@ export function difference(value: ShoppingComparison, nutrient: ShoppingNutrient
   const b = alternativeValue(value, nutrient);
   if (a === null || b === null) return { kind: 'unknown' };
   const delta = b - a;
-  if (Math.abs(delta) < 0.0001) return { kind: 'same' };
+  // Android ahead of iOS: Swift counts any change over 0.0001, so a fraction of a gram showed as "↑ 0 g" and
+  // earned "Higher protein". A change that rounds to 0 in the table (whole units) is the same.
+  if (Math.round(Math.abs(delta)) === 0) return { kind: 'same' };
   return delta < 0 ? { kind: 'lower', amount: -delta } : { kind: 'higher', amount: delta };
+}
+
+/**
+ * Android ahead of iOS: Swift lists whatever the server answers, which can include the item itself ("2% milk"
+ * for 2% milk). An alternative with the item's own name, ignoring case and spacing, is not offered.
+ */
+export function isOriginalItem(alternative: Pick<ShoppingAlternative, 'name'>, original: { name: string }): boolean {
+  const key = (name: string) => name.trim().replace(/\s+/g, ' ').toLowerCase();
+  return key(alternative.name) === key(original.name);
 }
 
 /** `ShoppingGoal`, in `allCases` order. */

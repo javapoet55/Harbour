@@ -1569,3 +1569,133 @@ captures; results row by row in `docs/reference/PARITY.md` "UI-parity pass 3". F
 - **Today's action card and pager buttons are ink** (`ActionGlass`'s `.foregroundStyle(Color.nexdoInk)`);
   **"Find my next task"** draws the save gradient (`NexdoGradientButtonStyle`).
 
+## 29. Android bug pass: the §22 "For the team" bugs fixed in RN first (2026-10-07)
+
+Bugs the RN app copied from Swift on purpose (`docs/IOS_TO_REACT_NATIVE.md` §22 "For the team"); the owner
+decided Android fixes them first. Every item here is **Android ahead of iOS**: the code is shared, so iOS RN
+gets the fix too, and the Swift app is to mirror it. Each fix has a test that fails without it.
+
+- **Android ahead of iOS: editing a logged food keeps its nutrients.** The food editor sent `kcal` on every
+  Save, and the server treats any `kcal` as a manual correction (source MANUAL, every macro and micronutrient
+  cleared), so renaming "Salmon" or moving it to another meal lost its protein and vitamin D. An edit now sends
+  `kcal` only when the number changed (`CalorieTracker.tsx`, `onSave`).
+- **Android ahead of iOS: Send Now checks Messages only for the recipients set to Messages.** With Messages
+  unavailable, any recipient with a phone stopped the whole send, so a recipient set to Email was not sent
+  either. Now only the recipients whose channel is Messages need it: the others are sent, the composer is not
+  opened on a device without one, and the error names who was left out ("Messages is not available on this
+  device. No greeting has been sent to Lee." — new text, Swift's sentence with the names added). When every
+  recipient needs Messages, Swift's message is unchanged (`ScheduleReview.tsx` `sendNow`,
+  `sendImmediately(skip)`).
+- **Android ahead of iOS: Send Now and Schedule confirmed wait for their sheet to close.** "Send email & open
+  Messages" started sending while the Send now sheet was still sliding away, so the Messages composer could
+  collide with it; and a confirmed schedule swapped the screen for Schedule confirmed under the open review
+  sheet. Both now wait for the sheet to be gone: `LightSheet` takes `onClosed`, which is the Modal's
+  `onDismiss` on iOS and, on Android (no `onDismiss`; the dialog is gone once the hide is committed), an
+  effect on the hide. The jest Modal mock now calls `onDismiss` when an iOS Modal hides, and a test can hold
+  those calls (`modalDismissals`, `jest.setup.js`).
+- **Android ahead of iOS: the task agent card's "Phone number copied." and "Draft copied." are confirmations.**
+  Swift puts them in `error`, so they read as errors, hid the search spinner while a run was searching, and
+  turned the retired-question step's spinner into "Retry search". They now have their own line
+  (`agent-notice`), in the same place and style, cleared by the next action or load (`TaskAgentCard.tsx`).
+- **Android ahead of iOS: the task agent card's search sends the key the question asks for.** The search button
+  always sent `key: "location"`; it now sends `question.key`. "Use …" still sends `location`, since it is only
+  shown for that question. Swift's dead `question.key == "urgency"` title test was never ported (the card
+  shows `question.text`), so there is nothing to remove in RN.
+- **Already right on Android: an agent action fires no extra GET.** Swift keys its polling task on the run's
+  status, so every action that changes it reloads at once. RN never copied that: the update writes its answer
+  into the shared query and React Query's `refetchInterval` only re-arms the 4 s timer. A test now pins it
+  (`TaskAgentCard.test.tsx`, "an action does not fire an extra load"); no code change.
+- **Android ahead of iOS: a NO_RESULTS or CANCELLED agent run offers "Search again".** Both were dead ends: Swift
+  offers nothing, and the server refused every action. The server now starts a new search from either
+  (`f12ef09`, on develop since this pass began), so the controls row offers "Search again", which sends `retry`
+  (`runControls` in `lib/taskAgent.ts`). A run cancelled because the task is no longer a business task is still
+  refused, and the card shows the server's message.
+- **Android ahead of iOS: the Calorie phone check says what the server did.** Swift always says it is calling and
+  shows the code field. The server sends the code by voice or SMS (`channel`) and sends none for a number it
+  has already verified (`alreadyVerified`). Now: by voice, Swift's words; by SMS, "We’ve texted a 6-digit code
+  to …", "Text me again with a code" and a caption that says it texts; already verified, "… is already
+  verified.", no code field, and the settings reload so the number shows verified (new text in each case).
+  Before the first send the app cannot know the channel, so the caption and the first button still say
+  "call" (`CalorieTracker.tsx`, `useCalorieStore.sendCode`, `useSendNutritionCode`).
+- **Android ahead of iOS: "Call me now to try it" reports the real status.** Swift drops the answer's `status` and
+  always says "Calling you now.". Now `dialing` keeps that text, `cancelled` says "The call was cancelled. Check
+  that daily calls are on, then try again." and `failed` / `not_claimed` say "The call could not be placed. Try
+  again in a few minutes." (new text; `callNowNotice` in `model.ts`).
+- **Android ahead of iOS: "Read aloud" on a brief section page says why it did nothing.** With OpenAI sharing
+  off, Ask sets its voice error, but that line is in the composer, which the brief hides, so nothing happened
+  on screen. The brief's `read` handler now answers that message and the section page shows it under the
+  items (`brief-detail-read-error`), in Ask's existing words ("Allow OpenAI sharing in Account to use Read
+  Loud."). A playback failure later on still shows only in Ask (`briefHandlers.ts`, `BriefSectionDetail.tsx`).
+- **Android ahead of iOS: Event Details shows Mark Complete or Mark Incomplete, whichever applies.** Swift's action
+  row always shows both; the row now shows Mark Incomplete for a completed event and Mark Complete otherwise,
+  as the ⋯ menu already did (`EventDetailsScreen.tsx`). The delete-with-warnings alert that dismisses twice
+  (same §22 item) is Swift-only: RN's alert dismisses once.
+- **Android ahead of iOS: Item Alternatives shows no zero differences.** Swift counts any change over 0.0001, so a
+  few tenths of a gram showed as "↑ 0 g" in the comparison table and earned a label such as "Higher protein"
+  (and passed that filter). A change that rounds to 0 at the table's whole units is now "= Same" and earns no
+  goal (`difference` in `productFacts.ts`).
+- **Android ahead of iOS: Item Alternatives does not offer the item itself.** The server's answer can include the
+  item ("2% milk" for 2% milk); an alternative with the item's own name, ignoring case and spacing, is left out,
+  and the empty states count only what is offered (`isOriginalItem` in `productFacts.ts`).
+- **Android ahead of iOS: Nexdo Action tells "no contact", "Contacts access refused" and "lookup failed" apart,
+  above the buttons.** Swift reads every lookup failure as "No contact selected. Choose a contact or enter
+  details below.", so the "Allow Nexdo to access Contacts in Settings, then try again." guidance never showed,
+  and the line sat under the buttons it calls "below". No match keeps Swift's text, refused access shows the
+  Contacts guidance, any other failure says "Couldn’t look up this contact. Choose a contact or enter details
+  below." (new text); the message line now sits above Choose contact / Enter contact details
+  (`app/action/[id].tsx`, `lookupMessage`).
+- **Android ahead of iOS: offline, a personal Nexdo Action does not need the business check.** With no saved
+  contact, Swift asks the task agent endpoint first and stops at "Couldn’t check this task" when that fails,
+  even for a plain "Call Asha". Now a failed check only stops a task whose business was already chosen; any
+  other task goes on to Contacts, and only when nobody is found (it may still be a business) does it ask for
+  the retry as before (`loadDestination`).
+- **Android ahead of iOS: Nexdo Action's Contact details form prefills the name, not the phrase.** With no contact
+  found it prefilled the task's words ("the plumber"); it now prefills the name as searched ("plumber",
+  `contactSearchName`).
+- **Android ahead of iOS: a contact picked for a Nexdo Action keeps its own labels.** Swift labels every picked
+  address "Phone" or "Email", so "Choose a phone number" listed "Phone: …" twice for a mobile and a work number.
+  A picked contact now maps as a contact found by name does ("mobile", "work"; "Phone" / "Email" only when
+  unlabelled) (`selectedActionContact`). Swift's email composer ignoring the business draft (same §22 item) does
+  not apply: a business has no email in RN or Swift (`businessActionContact`).
+- **Android ahead of iOS: a cancelled or failed research run does not make a person task a business task.**
+  Swift's Today card (and the Nexdo Action screen) counted any run, so a person task whose research was once
+  cancelled showed "Find a business to contact". A business is now a chosen business, an eligible task, or a
+  run that is not CANCELLED or FAILED (`isBusinessAction` in `lib/taskAgent.ts`, used by both screens so they
+  agree).
+- **Android ahead of iOS: Today's Dismiss and Remind later name the chosen recipient.** Their accessibility labels
+  read the task's `contactName` ("Dismiss the plumber action") after a business or person had been chosen; they
+  now use the chosen recipient ("Dismiss Ace Plumbing action"), as the card's title does (`TodayActions.tsx`,
+  `SnoozeMenu recipient`). The other Today card items in §22 (a queue row whose task is not loaded, overdue
+  minute rounding) were not in this pass.
+- **Android ahead of iOS: closing Tasks search restores the filters it reset.** Opening search sets All dates,
+  All time, All statuses and All priorities; Swift's close only clears the term, so the list stayed there. The
+  store now keeps the filters from before the search, and closing (the magnifier or the field's xmark) puts each
+  back unless it was changed during the search (`endSearch` in `lib/taskQuery.ts`, `useTaskQuery`).
+- **Android ahead of iOS: a Tasks section caption no longer repeats its title.** For any day but Today, Yesterday
+  and Tomorrow the title is already the date, and Swift drew it again underneath ("Friday, Sep 18" twice). The
+  caption is now left out when it equals the title (`tasks.tsx`).
+- **Android ahead of iOS: the Tasks row icon matches whole words.** Swift's keyword test is a substring test, so
+  "Recall the order" got the phone and "contactless" the phone too. A keyword now matches a whole word or the
+  word with a common ending (s, es, ed, ing, er, ers), so "Calling", "plumber" and "meetings" still match
+  (`taskIcon` in `TaskCard.tsx`).
+- **Android ahead of iOS: Schedule confirmed lists send times in time order.** Swift sorts the formatted labels, so
+  a group with several times listed "Oct 10" before "Oct 6"; the plans are now sorted by their instant before
+  labelling (`ScheduleSuccess`).
+- **Android ahead of iOS: a yearly moment shows this year's occurrence.** Manage Moment read the stored
+  `occurrenceDate`, so a birthday saved with the birth year read "Thu, Oct 6, 1990" in the header, the Moment
+  card and Edit Moment. A yearly moment stored in an earlier year now shows its day in this year (29 February
+  as the 28th in a common year); one stored for this year or later, and a one-off, show their own date. Edit
+  Moment opens on the shown date, and a Save that leaves the date alone keeps the stored date and year
+  (`shownMomentDate` in `dates.ts`).
+- **Android ahead of iOS: Feedback's keyboard can be put away, so the rating and Submit are reachable.** Swift's
+  form has no Done, no tap-outside and Return adds a line, so the keyboard covered the rating and Submit. The
+  shared `KeyboardDoneBar` capsule now rides on the keyboard, as on the Moments and Shopping forms (and
+  `FormScroll` already keeps the focused field clear of it); Return in the description still adds a line
+  (`FeedbackScreen.tsx`).
+- **Already right on Android: the list id is encoded in the offers and weekly email requests.** Swift's
+  `ShoppingOffersView` and `ShoppingEmailView` put `listId` in the query raw; RN's `shoppingOffersApi.offers` and
+  `shoppingEmailApi.get` already `encodeURIComponent` it. A test now pins both (`src/api/shoppingListId.test.ts`);
+  no code change.
+- **Android ahead of iOS: Stores Near You says "your phone’s Settings", not "iPhone Settings".** Now
+  "Location is unavailable. Enter a city or ZIP code, or allow location access in your
+  phone’s Settings." (`LOCATION_UNAVAILABLE` in `StorePages.tsx`).

@@ -207,6 +207,16 @@ describe('the action queue on Today', () => {
     expect(mockPush).toHaveBeenCalledWith('/task/t1');
   });
 
+  it.each(['CANCELLED', 'FAILED'])('a %s research run does not make a person task a business task', async (status) => {
+    mockAgent.mockResolvedValue({ run: { ...run([]), status }, intent: { eligible: false } });
+    await showDue();
+
+    await waitFor(() => expect(screen.getByTestId('today-actions-choose-contact')).toBeTruthy());
+    expect(screen.getByText('Time to contact Damien')).toBeTruthy();
+    expect(screen.queryByText('Find a business to contact')).toBeNull();
+    expect(screen.queryByTestId('today-actions-business')).toBeNull();
+  });
+
   it('asks to choose a business once the search has results', async () => {
     mockAgent.mockResolvedValue({ run: run([ACE]), intent: { eligible: true } });
     await showDue();
@@ -227,6 +237,19 @@ describe('the action queue on Today', () => {
     expect(screen.getByTestId('today-actions-message')).toBeTruthy();
     expect(screen.queryByTestId('today-actions-email')).toBeNull();
     expect(screen.getByText('Change business')).toBeTruthy();
+  });
+
+  it('names Dismiss and Remind later by the chosen recipient, not the task’s words', async () => {
+    mockAgent.mockResolvedValue({ run: run([ACE]), intent: { eligible: true } });
+    await seed([DUE_TASK]);
+    const id = useCoordinator.getState().actions[0].id;
+    useCoordinator.getState().update(id, (item) => ({ ...item, businessCandidateID: 'place-1' }));
+    mockTasks.mockResolvedValue({ tasks: [DUE_TASK], timeZone: ZONE });
+    await show([DUE_TASK]);
+
+    await waitFor(() => expect(screen.getByText('Time to contact Ace Plumbing')).toBeTruthy());
+    expect(screen.getByTestId('today-actions-dismiss').props.accessibilityLabel).toBe('Dismiss Ace Plumbing action');
+    expect(screen.getByTestId('today-actions-snooze').props.accessibilityLabel).toBe('Remind Ace Plumbing task later');
   });
 
   it('offers a retry when the task cannot be checked', async () => {

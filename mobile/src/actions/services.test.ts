@@ -4,7 +4,7 @@ import * as SMS from 'expo-sms';
 import { Linking } from 'react-native';
 
 import { canSendEmail, canSendMessage, composeEmail, composeMessage, composeMessageOutcome, emailDraft, messageBody, placeCall, telUrl } from './composers';
-import { resolveContacts, toActionContact } from './contacts';
+import { resolveContacts, selectedActionContact, toActionContact } from './contacts';
 
 const mockedContacts = Contacts as unknown as Record<string, jest.Mock>;
 const mockedSMS = SMS as unknown as Record<string, jest.Mock>;
@@ -99,6 +99,19 @@ describe('resolving a contact', () => {
     expect(mapped.name).toBe('Damien');
     expect(mapped.phones[0]).toMatchObject({ label: 'Phone', value: '5551234' });
     expect(mapped.emails[0]).toMatchObject({ label: 'Email', value: 'x@example.com' });
+  });
+
+  it('a picked contact keeps its own phone and email labels (Android ahead of iOS)', () => {
+    const picked = selectedActionContact({
+      id: 'c3',
+      name: 'Asha Rao',
+      phoneNumbers: [{ id: 'p1', label: 'mobile', number: '5551234' }, { id: 'p2', number: '5559876' }],
+      emails: [{ id: 'm1', label: 'work', email: 'asha@work.example' }],
+    } as never);
+    expect(picked).toMatchObject({ id: 'c3', name: 'Asha Rao' });
+    expect(picked.phones.map((phone) => phone.label)).toEqual(['mobile', 'Phone']);
+    expect(picked.emails[0]).toMatchObject({ label: 'work', value: 'asha@work.example' });
+    expect(selectedActionContact({ name: ' ', phoneNumbers: [], emails: [] } as never)).toMatchObject({ id: 'selected', name: 'Selected contact' });
   });
 
   it('drops entries with no value at all', () => {

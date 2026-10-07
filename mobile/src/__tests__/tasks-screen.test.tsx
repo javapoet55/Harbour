@@ -199,6 +199,17 @@ describe('Tasks screen', () => {
     await waitFor(() => expect(mockUpdateTask).toHaveBeenCalledWith('d', { status: 'PLANNED' }));
   });
 
+  it('captions a section with its date only when the title is not already the date', async () => {
+    mockTasks.mockResolvedValue({ tasks: [...FIXTURE, task({ id: 'e', title: 'Water the plants', startAt: atLocal('2026-09-18') })], timeZone: ZONE });
+    useTaskQuery.setState({ query: { ...DEFAULT_TASK_QUERY, date: 'All', historyRange: 'All time' } });
+    await renderTasks();
+
+    await waitFor(() => expect(screen.getByText('Water the plants')).toBeTruthy());
+    expect(screen.getAllByText('Friday, Sep 18')).toHaveLength(1);
+    // Today keeps its date underneath.
+    expect(screen.getByText('Wednesday, Sep 16')).toBeTruthy();
+  });
+
   it('prefixes a completed section with "Completed ·" only under the All status', async () => {
     useTaskQuery.setState({ query: { ...DEFAULT_TASK_QUERY, status: 'All' } });
     await renderTasks();
@@ -254,25 +265,29 @@ describe('Tasks screen search and redesign', () => {
     expect(screen.getByTestId('date-pill-All').props.accessibilityState.selected).toBe(true);
   });
 
-  it('a second press clears the term only, and the field closes', async () => {
+  it('a second press clears the term, restores the filters search reset, and the field closes', async () => {
     await renderTasks();
+    const before = useTaskQuery.getState().query;
     await fireEvent.press(screen.getByLabelText('Search tasks'));
     await fireEvent.changeText(searchInput()!, 'passport');
 
     const header = screen.getAllByLabelText('Search tasks').find((node) => node.props.placeholder === undefined);
     await fireEvent.press(header!);
 
-    expect(useTaskQuery.getState().query).toMatchObject({ search: '', date: 'All', historyRange: 'All time', status: 'All' });
+    // Android ahead of iOS: Swift leaves All / All time / All statuses behind.
+    expect(useTaskQuery.getState().query).toEqual({ ...before, search: '' });
+    expect(before.date).not.toBe('All');
     expect(searchInput()).toBeUndefined();
   });
 
-  it('the close button clears the term and closes the field', async () => {
+  it('the close button clears the term, restores the filters and closes the field', async () => {
     await renderTasks();
+    const before = useTaskQuery.getState().query;
     await fireEvent.press(screen.getByLabelText('Search tasks'));
     await fireEvent.changeText(searchInput()!, 'rent');
     await fireEvent.press(screen.getByLabelText('Close search'));
 
-    expect(useTaskQuery.getState().query.search).toBe('');
+    expect(useTaskQuery.getState().query).toEqual({ ...before, search: '' });
     expect(searchInput()).toBeUndefined();
   });
 

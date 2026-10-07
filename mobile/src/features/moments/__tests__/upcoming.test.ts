@@ -1,4 +1,4 @@
-import { upcomingFilterEmptyTitle, upcomingFilterIncludes, type UpcomingFilter } from '../dates';
+import { momentDate, shownMomentDate, upcomingFilterEmptyTitle, upcomingFilterIncludes, type UpcomingFilter } from '../dates';
 import { scheduleSummaryLabels } from '../domain';
 import { plan } from '../testFixtures';
 
@@ -53,5 +53,19 @@ describe('MomentScheduleSummary', () => {
     const labels = scheduleSummaryLabels([at('a', '2026-09-26T15:00:00Z'), plan({ id: 'b', scheduledAtUTC: '2026-09-26T15:00:00Z', timeZoneID: 'UTC' })], 'en-US');
     expect(labels).toHaveLength(2);
     expect(labels.every((label) => /scheduled @ \d+:\d\d\s?[AP]M \S+/.test(label))).toBe(true);
+  });
+});
+
+describe('shownMomentDate (Android ahead of iOS)', () => {
+  const now = Date.parse('2026-10-07T12:00:00Z');
+  const at = (day: string) => momentDate(day, 'UTC');
+  it('brings a yearly moment stored in an earlier year to this year', () => {
+    expect(shownMomentDate(at('1990-10-06'), true, 'UTC', now)).toBe(at('2026-10-06'));
+    expect(shownMomentDate(at('1992-02-29'), true, 'UTC', now)).toBe(at('2026-02-28'));
+  });
+  it('keeps a yearly moment stored for this year or later, and a one-off, as stored', () => {
+    expect(shownMomentDate(at('2027-01-09'), true, 'UTC', now)).toBe(at('2027-01-09'));
+    expect(shownMomentDate(at('2026-03-01'), true, 'UTC', now)).toBe(at('2026-03-01'));
+    expect(shownMomentDate(at('1990-10-06'), false, 'UTC', now)).toBe(at('1990-10-06'));
   });
 });

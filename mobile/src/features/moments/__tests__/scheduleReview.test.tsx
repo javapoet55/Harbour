@@ -1,5 +1,6 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
-import { StyleSheet, Text } from 'react-native';
+import { Platform, StyleSheet, Text } from 'react-native';
+import * as Notifications from 'expo-notifications';
 import * as SMS from 'expo-sms';
 
 const mockDismissTo = jest.fn();
@@ -20,7 +21,7 @@ import type { ImportantMoment, MomentsSnapshot, WishDeliveryPlan } from '../../.
 import { useAppearance } from '../../../store/appearance';
 import { FixedScheme, useTheme } from '../../../theme';
 import { momentLabel } from '../dates';
-import { MESSAGES_UNAVAILABLE, sendNowNotice } from '../ScheduleReview';
+import { MESSAGES_UNAVAILABLE, messagesUnavailableFor, ScheduleSuccess, sendNowNotice } from '../ScheduleReview';
 import { momentsStore } from '../store';
 import { draft, moment, plan, settings } from '../testFixtures';
 
@@ -31,11 +32,27 @@ import ManageMoment from '../../../../app/wellness/moments/manage';
  * answer and the Messages composer are mocked: nothing is sent.
  */
 
+/** jest.setup.js: iOS Modal dismissals, held while a test looks at the sheet sliding away. */
+const modalDismissals = (global as unknown as { modalDismissals: { hold: boolean; flush: () => void } }).modalDismissals;
+const settle = () => act(async () => {
+  for (let i = 0; i < 10; i += 1) await Promise.resolve();
+});
+
+let platform: { restore: () => void } | null = null;
+const onAndroid = () => {
+  platform = jest.replaceProperty(Platform, 'OS', 'android');
+};
+afterEach(() => {
+  platform?.restore();
+  platform = null;
+});
+
 const sms = SMS as unknown as { isAvailableAsync: jest.Mock; sendSMSAsync: jest.Mock };
 const DAY = new Date(Date.now() + 20 * 86_400_000).toISOString().slice(0, 10);
+const EMAIL_READY: Partial<MomentsSnapshot> = { emailAccount: { email: 'me@gmail.com', status: 'connected' }, emailConfigured: true, automaticEmailEnabled: true };
 const APPROVED = { groupID: 'g', baseMessage: 'Have a wonderful day!', approvedAt: '2030-08-30T00:00:00Z' };
 
-function person(id: string, name: string, extra: Partial<ImportantMoment> = {}, selected: Record<string, boolean> = {}) {
+function person(id: string, name: string, extra: Partial<ImportantMoment> = {}, selected: Record<string, boolean> = {}, channels: Record<string, string> = {}) {
   return moment({
     id,
     type: 'birthday',
@@ -45,13 +62,13 @@ function person(id: string, name: string, extra: Partial<ImportantMoment> = {}, 
     occurrenceDate: DAY,
     nextOccurrence: DAY,
     sourceKey: `birthday:g:${id}`,
-    festivalSettings: settings({ ...APPROVED, selected }),
+    festivalSettings: settings({ ...APPROVED, selected, channels }),
     ...extra,
   });
 }
 
-function load(moments: ImportantMoment[]) {
-  const snapshot: MomentsSnapshot = { moments, emailAccount: null, emailConfigured: false, automaticEmailEnabled: false };
+function load(moments: ImportantMoment[], extra: Partial<MomentsSnapshot> = {}) {
+  const snapshot: MomentsSnapshot = { moments, emailAccount: null, emailConfigured: false, automaticEmailEnabled: false, ...extra };
   mockSnapshot.mockResolvedValue(snapshot);
   momentsStore.setState({ snapshot, owner: 'owner', error: null, busy: false, loading: false });
 }
@@ -76,8 +93,8 @@ function serve(sendNowPlans: (momentID: string) => WishDeliveryPlan[] = () => []
 }
 const calls = (operation: string) => mockPost.mock.calls.filter(([name]) => name === operation).map(([, input]) => input);
 
-async function openReview(moments: ImportantMoment[]) {
-  load(moments);
+async function openReview(moments: ImportantMoment[], extra: Partial<MomentsSnapshot> = {}) {
+  load(moments, extra);
   mockParams = { ids: moments.map((item) => item.id).join(',') };
   await render(<ManageMoment />);
   await fireEvent.press(screen.getByTestId('festival-tab-Schedule'));
@@ -131,6 +148,27 @@ describe('Review schedule', () => {
     expect(screen.queryByText('Manage scheduled wish')).toBeNull();
     await fireEvent.press(screen.getByTestId('wish-primary'));
     expect(mockDismissTo).toHaveBeenCalledWith('/wellness/moments');
+  });
+
+  it('shows Schedule confirmed only once the review sheet has closed', async () => {
+    modalDismissals.hold = true;
+    await openReview([person('a', 'Sam')]);
+    await fireEvent.press(screen.getByTestId('wish-primary'));
+    await waitFor(() => expect(calls('schedule')).toHaveLength(1));
+    await settle();
+    // The review sheet is hidden but still sliding away: no success screen under it yet.
+    expect(screen.queryByText('Schedule confirmed!')).toBeNull();
+    await act(async () => modalDismissals.flush());
+    await waitFor(() => expect(screen.getByText('Schedule confirmed!')).toBeTruthy());
+  });
+
+  it('Android: shows Schedule confirmed once the hidden review sheet is committed', async () => {
+    onAndroid();
+    // Android reads the notification status before it schedules the wish's reminder.
+    jest.mocked(Notifications.getPermissionsAsync).mockResolvedValue({ granted: true, status: 'granted', canAskAgain: true } as never);
+    await openReview([person('a', 'Sam')]);
+    await fireEvent.press(screen.getByTestId('wish-primary'));
+    await waitFor(() => expect(screen.getByText('Schedule confirmed!')).toBeTruthy());
   });
 
   it('saves a recipient edited in the review before scheduling', async () => {
@@ -190,6 +228,37 @@ describe('Send now', () => {
     await waitFor(() => expect(screen.queryByText('Review schedule')).toBeNull());
   });
 
+  it('starts sending only once the Send now sheet has closed', async () => {
+    serve(email);
+    modalDismissals.hold = true;
+    await openReview([person('a', 'Sam', { email: 'sam@example.com' })]);
+    await fireEvent.press(screen.getByTestId('review-send-now'));
+    await fireEvent.press(screen.getByTestId('send-now-confirm'));
+    await settle();
+    expect(calls('sendGreetingNow')).toHaveLength(0);
+    expect(sms.isAvailableAsync).not.toHaveBeenCalled();
+    await act(async () => modalDismissals.flush());
+    await waitFor(() => expect(calls('sendGreetingNow')).toHaveLength(1));
+    await waitFor(() => expect(sms.sendSMSAsync).toHaveBeenCalled());
+  });
+
+  it('Cancel on the Send now sheet sends nothing once it has closed', async () => {
+    await openReview([person('a', 'Sam', { email: 'sam@example.com' })]);
+    await fireEvent.press(screen.getByTestId('review-send-now'));
+    await fireEvent.press(screen.getByTestId('send-now-cancel'));
+    await settle();
+    expect(calls('sendGreetingNow')).toHaveLength(0);
+  });
+
+  it('Android: sends once the hidden Send now sheet is committed', async () => {
+    onAndroid();
+    serve(email);
+    await openReview([person('a', 'Sam', { email: 'sam@example.com' })]);
+    await fireEvent.press(screen.getByTestId('review-send-now'));
+    await fireEvent.press(screen.getByTestId('send-now-confirm'));
+    await waitFor(() => expect(calls('sendGreetingNow')).toHaveLength(1));
+  });
+
   it('sends nothing when Messages is not available for a phone recipient', async () => {
     sms.isAvailableAsync.mockResolvedValue(false);
     await openReview([person('a', 'Sam')]);
@@ -199,11 +268,48 @@ describe('Send now', () => {
     expect(calls('sendGreetingNow')).toHaveLength(0);
   });
 
+  it('sends an Email recipient with a phone when Messages is not available, without opening the composer', async () => {
+    sms.isAvailableAsync.mockResolvedValue(false);
+    serve(email);
+    await openReview([person('a', 'Sam', { email: 'sam@example.com' }, {}, { a: 'email' })], EMAIL_READY);
+    await fireEvent.press(screen.getByTestId('review-send-now'));
+    await fireEvent.press(screen.getByTestId('send-now-confirm'));
+    await waitFor(() => expect(screen.getByTestId('review-send-now-notice').props.children).toBe('1 email sent. Messages still requires you to tap Send.'));
+    expect(calls('sendGreetingNow')).toEqual([expect.objectContaining({ momentID: 'a' })]);
+    expect(screen.queryByTestId('review-schedule-error')).toBeNull();
+    expect(sms.sendSMSAsync).not.toHaveBeenCalled();
+  });
+
+  it('with Messages unavailable, still sends the Email recipients and names the Messages ones left out', async () => {
+    sms.isAvailableAsync.mockResolvedValue(false);
+    serve(email);
+    const all = { a: true, b: true };
+    const channels = { a: 'email', b: 'messages' };
+    await openReview([person('a', 'Sam', { email: 'sam@example.com' }, all, channels), person('b', 'Lee', { phone: '+15555550101' }, all, channels)], EMAIL_READY);
+    await fireEvent.press(screen.getByTestId('review-send-now'));
+    await fireEvent.press(screen.getByTestId('send-now-confirm'));
+    await waitFor(() => expect(screen.getByTestId('review-schedule-error').props.children).toBe(messagesUnavailableFor(['Lee'])));
+    expect(messagesUnavailableFor(['Lee'])).toBe('Messages is not available on this device. No greeting has been sent to Lee.');
+    expect(calls('sendGreetingNow')).toEqual([expect.objectContaining({ momentID: 'a' })]);
+    expect(sms.sendSMSAsync).not.toHaveBeenCalled();
+  });
+
   it('words the notice for pending or failed email', () => {
     expect(sendNowNotice([plan({ channel: 'email', status: 'SENT' }), plan({ channel: 'email', status: 'FAILED' })])).toBe(
       '1 email sent. Some emails are pending or failed; check Scheduled wishes for their status. Messages still requires you to tap Send.',
     );
     expect(sendNowNotice([])).toBe('0 emails sent. Messages still requires you to tap Send.');
+  });
+});
+
+describe('Schedule confirmed', () => {
+  it('lists the send times in time order, not text order', async () => {
+    const at = (iso: string) => plan({ id: iso, scheduledAtUTC: iso, timeZoneID: 'UTC' });
+    await render(<ScheduleSuccess occasion="birthday" plans={[at('2030-10-10T08:00:00Z'), at('2030-10-06T08:00:00Z'), at('2030-10-10T08:00:00Z')]} wish={null} done={jest.fn()} />);
+    expect(screen.getAllByTestId('schedule-confirmed-date').map((node) => node.props.children)).toEqual([
+      momentLabel(Date.parse('2030-10-06T08:00:00Z'), 'UTC'),
+      momentLabel(Date.parse('2030-10-10T08:00:00Z'), 'UTC'),
+    ]);
   });
 });
 

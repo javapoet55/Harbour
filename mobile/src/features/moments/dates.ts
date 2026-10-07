@@ -81,6 +81,22 @@ export function momentDate(day: string, zone: string, now: number = Date.now()):
   return startOfDay(noon, safeZone(zone));
 }
 
+/**
+ * The date Manage Moment shows for a moment. Android ahead of iOS: Swift shows the stored `occurrenceDate`, so a
+ * birthday saved with the birth year read "Thu, Oct 6, 1990" (ManageFestivalModel.swift:92). A yearly moment
+ * stored in an earlier year shows its day in this year (29 February is the 28th in a common year); one stored
+ * for this year or later, and a one-off, show their own date. The stored date, and what Save sends, are
+ * unchanged.
+ */
+export function shownMomentDate(date: number, yearly: boolean, zone: string, now: number = Date.now()): number {
+  const year = momentDay(now, zone).slice(0, 4);
+  const stored = momentDay(date, zone);
+  if (!yearly || stored.slice(0, 4) >= year) return date;
+  const day = stored.slice(4);
+  const shown = momentDate(`${year}${day}`, zone, Number.NaN);
+  return Number.isNaN(shown) ? momentDate(`${year}-02-28`, zone, now) : shown;
+}
+
 /** Whole calendar days from `from` to `to`, both `yyyy-MM-dd`. */
 export function daysBetween(from: string, to: string): number {
   const parse = (value: string) => {

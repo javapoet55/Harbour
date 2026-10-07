@@ -1,6 +1,6 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import { Alert, Pressable, ScrollView, Share, StyleSheet, View, type ImageSourcePropType, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -53,7 +53,7 @@ function confirmConflict(conflict: ScheduleConflict) {
   ]);
 }
 
-export function BriefSectionDetail({ title, items, onBack, onAsk, onRead }: { title: string; items: string[]; onBack: () => void; onAsk: (query: string) => void; onRead: () => void }) {
+export function BriefSectionDetail({ title, items, onBack, onAsk, onRead }: { title: string; items: string[]; onBack: () => void; onAsk: (query: string) => void; onRead: () => string | null }) {
   const tasks = useTasks().data?.tasks ?? [];
   const complete = useCompleteTask({ onConflict: confirmConflict });
   const busy = complete.isPending;
@@ -61,6 +61,9 @@ export function BriefSectionDetail({ title, items, onBack, onAsk, onRead }: { ti
   const copy = briefDetailCopy(title, items.length);
   const anchor = useRef<View>(null);
   const menu = usePopoverMenu(anchor);
+  // Android ahead of iOS: Swift sets Ask's `voiceError`, which lives in the composer this page hides, so
+  // "Read aloud" with OpenAI sharing off did nothing on screen (AskNexdoView.swift:531, :333).
+  const [readError, setReadError] = useState<string | null>(null);
 
   return (
     <View style={styles.fill} testID="brief-detail">
@@ -86,7 +89,7 @@ export function BriefSectionDetail({ title, items, onBack, onAsk, onRead }: { ti
         </View>
         <PopoverMenu
           items={[
-            { key: 'read', title: 'Read aloud', onPress: onRead, testID: 'brief-detail-read' },
+            { key: 'read', title: 'Read aloud', onPress: () => setReadError(onRead()), testID: 'brief-detail-read' },
             { key: 'share', title: 'Share briefing', onPress: () => void Share.share({ message: items.join('\n\n') }), testID: 'brief-detail-share' },
           ]}
           menu={menu}
@@ -118,6 +121,11 @@ export function BriefSectionDetail({ title, items, onBack, onAsk, onRead }: { ti
           {failure ? (
             <Text style={[styles.subheadline, { color: briefColors.red }]} testID="brief-detail-error">
               {failure}
+            </Text>
+          ) : null}
+          {readError ? (
+            <Text style={[styles.subheadline, { color: briefColors.red }]} testID="brief-detail-read-error">
+              {readError}
             </Text>
           ) : null}
 

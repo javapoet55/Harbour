@@ -36,7 +36,7 @@ import { captureCard, GreetingCardCapture } from './cardCapture';
 import { MomentConnectSection } from './MomentConnectSection';
 import { ScheduleReviewSheet, ScheduleSuccess } from './ScheduleReview';
 import { CARD_NOT_ATTACHED, cardEncoder, encodeCard, encodeSmallerCard } from './cardImage';
-import { sendDayLabel } from './dates';
+import { sendDayLabel, shownMomentDate } from './dates';
 import { contactChoice, contactFullName, imageStorage, pickContact, validatePickedContacts, type ContactChoice } from './device';
 import { RecipientSheet, type RecipientSheetRequest } from './RecipientSheet';
 import { recordRecipient, updateContactLinks } from './contactLinks';
@@ -172,6 +172,8 @@ export function ManageMomentView({ group, onDone }: { group: MomentDisplayGroup;
   const [personalize, setPersonalize] = useState(false);
   const [imageSheet, setImageSheet] = useState(false);
   const [scheduleConfirm, setScheduleConfirm] = useState(false);
+  /** The review sheet is up or still sliding away; Schedule confirmed waits for it to go. */
+  const [reviewShown, setReviewShown] = useState(false);
   const [reviewKey, setReviewKey] = useState(0);
   // `momentEditor` (:97): Edit Moment, from the Moment card on Schedule.
   const [momentEditor, setMomentEditor] = useState(false);
@@ -372,11 +374,14 @@ export function ManageMomentView({ group, onDone }: { group: MomentDisplayGroup;
     else {
       // A fresh review each time (`FestivalScheduleReview.init`): the parent re-keys it.
       setReviewKey((key) => key + 1);
+      setReviewShown(true);
       setScheduleConfirm(true);
     }
   };
 
-  if (state.scheduleCompleted) {
+  // Android ahead of iOS: Swift's `confirm()` pushes the success screen before closing the review sheet
+  // (:607-608); here it follows once the sheet has closed.
+  if (state.scheduleCompleted && !reviewShown) {
     const firstSelected = selected[0];
     return (
       <ScheduleSuccess
@@ -462,7 +467,7 @@ export function ManageMomentView({ group, onDone }: { group: MomentDisplayGroup;
             <View testID="festival-send-date">
               {/* `Label(MomentDates.sendDayLabel(model.date, …), systemImage: "calendar")` (:155): the
                   moment's own date, which Edit Moment changes. */}
-              <IconLabel icon="calendar-outline" title={sendDayLabel(state.date, state.zone)} color={theme.colors.secondaryLabel} style={textStyles.subheadline} size={15} />
+              <IconLabel icon="calendar-outline" title={sendDayLabel(shownMomentDate(state.date, state.yearly, state.zone), state.zone)} color={theme.colors.secondaryLabel} style={textStyles.subheadline} size={15} />
             </View>
           </MomentCard>
 
@@ -705,7 +710,7 @@ export function ManageMomentView({ group, onDone }: { group: MomentDisplayGroup;
                       <Text style={[headline, { color: theme.colors.label }]}>{state.title}</Text>
                       <Secondary>{occasionLabel(state)}</Secondary>
                       <Text style={[textStyles.subheadline, { color: theme.colors.label }]} testID="festival-moment-date">
-                        {sendDayLabel(state.date, state.zone)}
+                        {sendDayLabel(shownMomentDate(state.date, state.yearly, state.zone), state.zone)}
                       </Text>
                     </View>
                     <Pressable
@@ -989,6 +994,7 @@ export function ManageMomentView({ group, onDone }: { group: MomentDisplayGroup;
           setScheduleConfirm(false);
           model.getState().setError(null);
         }}
+        onClosed={() => setReviewShown(false)}
       />
     </View>
   );
@@ -1143,10 +1149,12 @@ function MomentDetailsSheet({ model, visible, onClose }: { model: ManageModel; v
   const state = useStore(model);
   const [title, setTitle] = useState(state.title);
   const [type, setType] = useState(occasionType(state));
-  const [date, setDate] = useState(state.date);
+  // A yearly moment opens on this year's occurrence; left as it is, the stored date (and its year) is kept.
+  const [shown] = useState(() => shownMomentDate(state.date, state.yearly, state.zone));
+  const [date, setDate] = useState(shown);
   const [yearly, setYearly] = useState(state.yearly);
   const [error, setError] = useState<string | null>(null);
-  const changed = title !== state.title || type !== occasionType(state) || date !== state.date || yearly !== state.yearly;
+  const changed = title !== state.title || type !== occasionType(state) || date !== shown || yearly !== state.yearly;
   const fixedDate = state.settings.catalogManaged && type === 'festival';
 
   const commit = async (cancelSchedules: boolean) => {
@@ -1155,7 +1163,7 @@ function MomentDetailsSheet({ model, visible, onClose }: { model: ManageModel; v
     const restore = () => model.setState({ title: old.title, type: old.type, date: old.date, yearly: old.yearly, sendDate: old.sendDate, settings: old.settings });
     current.setTitle(title);
     current.setType(type);
-    current.setDate(date);
+    current.setDate(date === shown ? old.date : date);
     current.setYearly(yearly);
     if (type !== 'festival') current.updateSettings({ catalogManaged: false });
     await model.getState().save(cancelSchedules);

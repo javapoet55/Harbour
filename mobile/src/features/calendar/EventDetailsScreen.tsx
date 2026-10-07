@@ -17,7 +17,7 @@ import { eventCalendarName, eventDateText, eventEditable, eventStatus, openInCal
 /**
  * `CalendarEventDetailsView` (ios/App/CalendarEventDetailsView.swift), the Appointment details sheet
  * opened from a Calendar event row (CalendarView.swift:177-181). The event the row held shows at once and
- * is replaced by the server's copy (`.task`, :99-105). Mark Complete / Mark Incomplete work on every
+ * is replaced by the server's copy (`.task`, :99-105). Mark Complete or Mark Incomplete works on every
  * event; Edit and Delete only on Nexdo's own (`editable`). Every change reloads the agenda (`onChange`).
  *
  * DARK MODE: Swift's cards are fixed white (`.white.opacity(0.94)`) under adaptive ink — white on white
@@ -214,8 +214,10 @@ export function EventDetailsScreen({ id, fallbackTimeZone }: { id: string; fallb
             </View>
           </View>
           <View style={styles.actions}>
-            {action('Mark Complete', 'checkmark.circle.fill', green, () => setCompletion(true), 'event-details-complete')}
-            {action('Mark Incomplete', 'xmark.circle.fill', red, () => setCompletion(false), 'event-details-incomplete')}
+            {/* Android ahead of iOS: Swift shows both, whatever the state (CalendarEventDetailsView.swift:44-45); only the one that applies here, as its ⋯ menu does. */}
+            {completed
+              ? action('Mark Incomplete', 'xmark.circle.fill', red, () => setCompletion(false), 'event-details-incomplete')
+              : action('Mark Complete', 'checkmark.circle.fill', green, () => setCompletion(true), 'event-details-complete')}
             {action(taskAdded ? 'Added to Tasks' : 'Add to Tasks', 'calendar.badge.plus', indigo, add, 'event-details-add-task')}
           </View>
           <View>
