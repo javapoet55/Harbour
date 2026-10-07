@@ -1691,3 +1691,7 @@ gets the fix too, and the Swift app is to mirror it. Each fix has a test that fa
   shared `KeyboardDoneBar` capsule now rides on the keyboard, as on the Moments and Shopping forms (and
   `FormScroll` already keeps the focused field clear of it); Return in the description still adds a line
   (`FeedbackScreen.tsx`).
+- **Already right on Android: the list id is encoded in the offers and weekly email requests.** Swift's
+  `ShoppingOffersView` and `ShoppingEmailView` put `listId` in the query raw; RN's `shoppingOffersApi.offers` and
+  `shoppingEmailApi.get` already `encodeURIComponent` it. A test now pins both (`src/api/shoppingListId.test.ts`);
+  no code change.
