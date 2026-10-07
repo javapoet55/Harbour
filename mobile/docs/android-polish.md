@@ -1766,3 +1766,7 @@ match". Logic fixes have a test that fails without them.
 - **Android ahead of iOS: all four Account menu rows sit inside the card.** Only Change password had the card; Help,
   Feedback and "Edit profile and settings" sat bare on the background. The four share one card (iOS 6343e11)
   (`app/account/index.tsx`).
+- **Android ahead of iOS: the task agent card's "Show more" appears only for a review that is cut off.** It showed
+  under any review, however short. An invisible, unclamped copy of each review measures its lines
+  (`onTextLayout`), and "Show more" shows only past three lines, or to collapse an expanded one
+  (`TaskAgentCard.tsx`; fixed from code, needs a look on the phone).
