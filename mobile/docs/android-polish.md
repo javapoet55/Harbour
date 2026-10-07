@@ -1742,3 +1742,6 @@ match". Logic fixes have a test that fails without them.
   or tell us on your daily check-in call. We estimate calories and nutrition from the call." and step 2 "Personalize
   your daily calorie and macro targets."; the rest is unchanged (`WellnessModuleGuide.tsx`; new text, in §22's
   wording table).
+- **Android ahead of iOS: Shopping Recommendations promises no approval step.** The intro said "Suggestions only—your
+  list changes after you approve them.", but the answer has no approve or add control and never edits the list. It
+  now says "Suggestions only—your list is not changed." (`AskNexdoView.tsx`; new text, in §22's wording table).

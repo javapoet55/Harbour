@@ -556,7 +556,9 @@ describe('Shopping Recommendations', () => {
     expect(
       screen.getByText('Ask Nexdo to spot missing staples, suggest meal ideas, compare alternatives, or check quantities using the items already on this list.'),
     ).toBeTruthy();
-    expect(screen.getByText('Suggestions only—your list changes after you approve them.')).toBeTruthy();
+    // No approval step exists, so none is promised (Android ahead of iOS).
+    expect(screen.getByText('Suggestions only—your list is not changed.')).toBeTruthy();
+    expect(screen.queryByText(/approve/i)).toBeNull();
     expect(screen.getByTestId('ask-field').props.placeholder).toBe('Ask about this shopping list…');
     expect(screen.getByText('Get Recommendations')).toBeTruthy();
     expect(screen.getByLabelText('Get shopping recommendations').props.accessibilityState.disabled).toBe(true);
