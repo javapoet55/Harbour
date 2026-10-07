@@ -53,8 +53,11 @@ struct ShoppingAlternativesView: View {
                             .frame(maxWidth: .infinity, alignment: .leading).background(Color.nexdoBlue.opacity(0.06), in: RoundedRectangle(cornerRadius: 14))
                     }
                     if let error {
-                        Text(error).font(.subheadline).foregroundStyle(.red).accessibilityIdentifier("alternatives.error")
-                        Button("Try again") { retry += 1 }.frame(minHeight: 44)
+                        // No alternatives loaded: a clear state with Try again (Item Alternatives has no local fallback,
+                        // so this is the whole screen). With a result on screen, the error is a failed save and reloading
+                        // would not fix it.
+                        if result == nil { loadFailure(error) }
+                        else { Text(error).font(.subheadline).foregroundStyle(.red).accessibilityIdentifier("alternatives.error") }
                     }
                 }.padding(16)
             }.background { AlternativesBackdrop() }
@@ -187,6 +190,18 @@ struct ShoppingAlternativesView: View {
         } else { error = store.error ?? "Couldn’t save this change. Please try again." }
     }
     private func track(_ event: String) { NexdoAnalytics.logEvent(event, parameters: ["original_category": original.category, "goal": goal?.rawValue ?? "All"]) }
+    private func loadFailure(_ message: String) -> some View {
+        VStack(spacing: 12) {
+            Image(systemName: "exclamationmark.triangle.fill").font(.largeTitle).foregroundStyle(.orange)
+                .frame(width: 72, height: 72).background(Color.orange.opacity(0.1), in: Circle()).accessibilityHidden(true)
+            Text("Couldn’t load alternatives").font(.headline)
+            Text(message).font(.subheadline).foregroundStyle(Color.nexdoSecondary).multilineTextAlignment(.center)
+                .accessibilityIdentifier("alternatives.error")
+            Button { retry += 1 } label: { Label("Try again", systemImage: "arrow.clockwise").frame(maxWidth: .infinity) }
+                .buttonStyle(AlternativeBlueButtonStyle())
+        }.padding(20).frame(maxWidth: .infinity)
+            .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 20))
+    }
     @MainActor private func load() async {
         loading = true; error = nil; defer { loading = false }
         do { result = try await store.alternatives(for: original, refresh: retry > 0); try Task.checkCancellation(); track("shopping_alternatives_opened") }
