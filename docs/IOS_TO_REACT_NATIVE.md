@@ -3090,6 +3090,18 @@ first, unchanged; the Mac reference pass’s items follow, with their captures.
   every test file's due reminders from the shared test database. **Fixed on server `2ad6c94`**: test ticks
   are scoped to their own account.
 
+**iOS leftovers (`fix/leftovers-ios`), test code only:**
+- **NX-064:** the UI test `testFestivalImagePreviewAndSelection` swiped down six times at the top of the
+  Greeting Card sheet, which can dismiss it. **Fixed on iOS `b1fa919`**: it swipes only until the card's top
+  is below the bar and checks the sheet is still open; it passed 10 runs in a row on the iPhone 17 Pro
+  simulator.
+- **NX-065:** the Swift test `cacheKeepsDownloadedCardsBySHA256` failed while the Mac was locked: the cache
+  writes with complete file protection, which the Mac's data volume enforces, so the cached card could be
+  neither written nor read. **Fixed on iOS `2b12e36`**: the test's cache folder is on a small HFS+ disk image,
+  which has no protection classes; the app's protection level is unchanged. The app is not affected the same
+  way: it reads the cache only on the Manage Moment screen, while the phone is unlocked, and a failed write
+  only means the card is downloaded again.
+
 ### Android wording for iOS to match
 
 New text the Android bug passes wrote where `fix/ios-bug-pass` had no fix to copy. iOS to use the same strings.
