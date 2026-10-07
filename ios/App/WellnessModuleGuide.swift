@@ -29,8 +29,8 @@ struct WellnessModuleGuide: View {
         var steps: [(String,String)] {
             switch self {
             case .calories: [
-                ("Log your meals","Tell NexDo what you ate on your daily call, or add it to your food log. We estimate calories and nutrition for you."),
-                ("Set your goals","Set your daily calorie goal and the nutrient targets that fit you."),
+                ("Log your meals","Add what you eat to your food log, or tell us on your daily check-in call. We estimate calories and nutrition from the call."),
+                ("Set your goals","Personalize your daily calorie and macro targets."),
                 ("Track progress","See your daily intake, trends, and insights. Get tips to make healthier choices.")]
             case .pomodoro: [
                 ("Choose a focus session","Start a 25-minute focused work session. Customize the duration to fit your style."),
