@@ -919,6 +919,7 @@ describe('calendar connections', () => {
       new Date(addDays(startOfDay(Date.now(), ZONE), dayOffset, ZONE) + hour * 3_600_000).toISOString();
     const clock = (at: string) =>
       new Intl.DateTimeFormat('en-US', { timeZone: ZONE, hour: 'numeric', minute: '2-digit' }).format(new Date(at));
+    afterEach(() => jest.useRealTimers());
 
     it('says "Last synced just now" under a minute', async () => {
       mockConnections.mockResolvedValue({ connections: [{ ...GOOGLE, lastSyncedAt: ago(30_000) }] });
@@ -933,6 +934,8 @@ describe('calendar connections', () => {
     });
 
     it('gives the clock time for earlier today', async () => {
+      // 2 AM is only "earlier today" once the local day is past 2 AM, so the clock is frozen at 3 PM local.
+      jest.useFakeTimers({ now: startOfDay(Date.parse('2026-03-11T12:00:00Z'), ZONE) + 15 * 3_600_000, doNotFake: ['nextTick', 'setImmediate'] });
       const at = localAt(0, 2);
       mockConnections.mockResolvedValue({ connections: [{ ...GOOGLE, lastSyncedAt: at }] });
       await show(<Settings />);
