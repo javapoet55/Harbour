@@ -1670,3 +1670,6 @@ gets the fix too, and the Swift app is to mirror it. Each fix has a test that fa
   All time, All statuses and All priorities; Swift's close only clears the term, so the list stayed there. The
   store now keeps the filters from before the search, and closing (the magnifier or the field's xmark) puts each
   back unless it was changed during the search (`endSearch` in `lib/taskQuery.ts`, `useTaskQuery`).
+- **Android ahead of iOS: a Tasks section caption no longer repeats its title.** For any day but Today, Yesterday
+  and Tomorrow the title is already the date, and Swift drew it again underneath ("Friday, Sep 18" twice). The
+  caption is now left out when it equals the title (`tasks.tsx`).

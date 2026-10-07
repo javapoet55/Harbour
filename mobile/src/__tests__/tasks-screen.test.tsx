@@ -199,6 +199,17 @@ describe('Tasks screen', () => {
     await waitFor(() => expect(mockUpdateTask).toHaveBeenCalledWith('d', { status: 'PLANNED' }));
   });
 
+  it('captions a section with its date only when the title is not already the date', async () => {
+    mockTasks.mockResolvedValue({ tasks: [...FIXTURE, task({ id: 'e', title: 'Water the plants', startAt: atLocal('2026-09-18') })], timeZone: ZONE });
+    useTaskQuery.setState({ query: { ...DEFAULT_TASK_QUERY, date: 'All', historyRange: 'All time' } });
+    await renderTasks();
+
+    await waitFor(() => expect(screen.getByText('Water the plants')).toBeTruthy());
+    expect(screen.getAllByText('Friday, Sep 18')).toHaveLength(1);
+    // Today keeps its date underneath.
+    expect(screen.getByText('Wednesday, Sep 16')).toBeTruthy();
+  });
+
   it('prefixes a completed section with "Completed ·" only under the All status', async () => {
     useTaskQuery.setState({ query: { ...DEFAULT_TASK_QUERY, status: 'All' } });
     await renderTasks();
