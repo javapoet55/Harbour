@@ -3064,7 +3064,7 @@ first, unchanged; the Mac reference pass’s items follow, with their captures.
 - **Today card:** `isBusiness` is true whenever a run exists, even a cancelled one, so a person task that
   once had research shows "Find a business"; Dismiss and Remind later read `contactName`, not the chosen
   recipient; a queue row whose task is not loaded does nothing; overdue minutes truncate while future
-  minutes round up. **Fixed on Android `2f60eba` (a cancelled or failed run is not a business) and `84230ce` (Dismiss and Remind later name the chosen recipient); iOS to mirror. The minute rounding is fixed on Android `02ffdca` (both ways to the nearest minute, as iOS bfedbd6); the unloaded queue row is still open.** **Fixed on iOS `3b85885` and `3c3b036` (a cancelled or failed run is not a business), `77bc490` (chosen recipient), `b4fd9b6` (unloaded queue row) and `bfedbd6` (minute rounding).**
+  minutes round up. **Fixed on Android `2f60eba` (a cancelled or failed run is not a business) and `84230ce` (Dismiss and Remind later name the chosen recipient); iOS to mirror. The minute rounding is fixed on Android `02ffdca` (both ways to the nearest minute, as iOS bfedbd6), and the unloaded queue row on Android `86c5cfc` (it refetches the tasks and opens the task, or says "Task not available", as iOS b4fd9b6).** **Fixed on iOS `3b85885` and `3c3b036` (a cancelled or failed run is not a business), `77bc490` (chosen recipient), `b4fd9b6` (unloaded queue row) and `bfedbd6` (minute rounding).**
 - **Task agent card:** NO_RESULTS and CANCELLED runs are dead ends (no retry, search or cancel, and the
   server refuses resume and retry for them; **fixed on server `f12ef09`**: from either state `resume`,
   `retry` and `search` with a new area start a new search with a fresh retry budget); "Phone number copied." and "Draft copied." go into `error`,
@@ -3089,6 +3089,12 @@ first, unchanged; the Mac reference pass’s items follow, with their captures.
 - `src/server/task-lifecycle.integration.test.ts` failed on and off in the full run: `tickReminders` sent
   every test file's due reminders from the shared test database. **Fixed on server `2ad6c94`**: test ticks
   are scoped to their own account.
+
+**Leftovers (`fix/leftovers-android-server`):**
+- **Shopping alternatives, curated lists:** the tomato list matched "tomatoes" but not "tomato" (its pattern read
+  "tomatoe" plus an optional "s"), so a singular item got the generic Organic / Store-brand suggestions. **Fixed on
+  server `a04ec50`**: every curated pattern is matched against the name's singular words, and the check that keeps an
+  item out of its own alternatives uses the same rule.
 
 ### Android wording for iOS to match
 

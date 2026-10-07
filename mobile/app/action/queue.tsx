@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useCoordinator } from '../../src/actions/coordinator';
@@ -14,11 +14,12 @@ import { useTasks } from '../../src/query/useTasks';
 import { useTheme } from '../../src/theme';
 
 /**
- * `ActionQueueSheet` (ios/App/TodayActionsView.swift:287-323).
+ * `ActionQueueSheet` (ios/App/TodayActionsView.swift:291-340).
  *
  * Children followed: `NextActionRow` (`:264-285`), in `src/components/TodayActions.tsx`. Phase 12: a
  * row opens that task's Task Details (`selectedTask`, `:319-321`), not the action screen, and a
- * section with nothing in it is left out.
+ * section with nothing in it is left out. A row whose task is not loaded refreshes the tasks first
+ * (`open(_:)`, `:328-335`, iOS b4fd9b6).
  *
  * Swift rebuilds the queue inside a `TimelineView(.periodic(from: .now, by: 60))`, so the relative
  * labels tick over once a minute; the interval below is that timeline.
@@ -36,6 +37,16 @@ export default function ActionQueue() {
     const timer = setInterval(() => setNow(Date.now()), 60_000);
     return () => clearInterval(timer);
   }, []);
+
+  /**
+   * `open(_:)` (`:328-335`): a row whose task is not loaded yet refreshes the tasks before giving up;
+   * it used to do nothing at all. `.alert("Task not available")` (`:323-325`) if it is still missing.
+   */
+  const open = async (taskId: string) => {
+    const loaded = (list?: { tasks: { id: string }[] }) => list?.tasks.some((task) => task.id === taskId) ?? false;
+    if (loaded(tasks.data) || loaded((await tasks.refetch()).data)) router.push(`/task/${taskId}`);
+    else Alert.alert('Task not available', 'This task may have been completed, deleted or moved. Your task list has been refreshed.', [{ text: 'OK', style: 'cancel' }]);
+  };
 
   const timeZone = profile?.timeZone ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
   const queue = buildActionQueue({ actions, tasks: tasks.data?.tasks ?? [], now, timeZone });
@@ -91,11 +102,7 @@ export default function ActionQueue() {
                       accessibilityHint="Open task details"
                       accessibilityRole="button"
                       key={action.id}
-                      onPress={() => {
-                        // `selectedTask = model.tasks.first { $0.id == action.taskId }`: a task no longer
-                        // loaded opens nothing, as in Swift.
-                        if (tasks.data?.tasks.some((task) => task.id === action.taskId)) router.push(`/task/${action.taskId}`);
-                      }}
+                      onPress={() => void open(action.taskId)}
                       style={styles.row}
                       testID={`queue-action-${action.id}`}
                     >

@@ -27,6 +27,18 @@ describe('shopping alternatives', () => {
     expect(await names('Organic apples', 'Produce')).toEqual(['Store-brand apples', 'Family-size apples']);
     expect(await names('Whole milk', 'Dairy & Eggs')).toHaveLength(4);
   });
+  it('matches the curated lists by singular or plural names', async () => {
+    vi.stubEnv('OPENAI_API_KEY', '');
+    const names = async (name: string) => (await recommendShoppingAlternatives('user', { name, category: 'Produce' })).alternatives.map(item => item.name);
+    const tomatoes = ['Vine-ripened tomatoes', 'Plum tomatoes', 'Cherry tomatoes'];
+    expect(await names('tomato')).toEqual(tomatoes);
+    expect(await names('Tomatoes')).toEqual(tomatoes);
+    expect(await names('Roma tomato')).toEqual(tomatoes);
+    expect(await names('Vine ripened tomatoes')).toEqual(['Plum tomatoes', 'Cherry tomatoes']);
+    // The item is left out whichever form it is written in.
+    expect(await names('Cherry tomato')).toEqual(['Vine-ripened tomatoes', 'Plum tomatoes']);
+    expect(await names('plum tomato')).toEqual(['Vine-ripened tomatoes', 'Cherry tomatoes']);
+  });
   it('returns useful local alternatives when AI is unavailable', async () => {
     vi.stubEnv('OPENAI_API_KEY', '');
     const result = await recommendShoppingAlternatives('user', { name: 'Chicken breast', category: 'Meat & Seafood', quantity: '1', size: 'lb' });

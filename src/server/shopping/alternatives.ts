@@ -5,8 +5,21 @@ import { explain } from './food/explanation';
 export type ShoppingAlternative = { name: string; category: typeof categories[number]; quantity: string; size: string; reason: string; detail: string; facts?: FoodFacts; whyThisSwap?: string };
 export type ShoppingAlternatives = { alternatives: ShoppingAlternative[]; tip: string; usedAI: boolean; originalFacts?: FoodFacts };
 
+/** "tomatoes" → "tomato", "berries" → "berry", "peaches" → "peach", "apples" → "apple"; "hummus" and "glass" stay. */
+const singular = (word: string) => {
+  if (word.length > 4 && word.endsWith('ies')) return `${word.slice(0, -3)}y`;
+  if (word.length > 4 && /(?:o|ch|sh|x|ss)es$/.test(word)) return word.slice(0, -2);
+  if (word.length > 3 && word.endsWith('s') && !/(?:ss|us)$/.test(word)) return word.slice(0, -1);
+  return word;
+};
+
+/** A name as its singular words, ignoring case and punctuation: "Vine-ripened Tomatoes" is "vine ripened tomato". */
+const words = (name: string) => name.toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g, '').split(/[^a-z0-9%]+/)
+  .filter(Boolean).map(singular);
+
+// Each pattern is tested against `words(name)`, so it names the singular: "tomato" also matches "Tomatoes".
 const curated: Array<[RegExp, Omit<ShoppingAlternatives, 'usedAI'>]> = [
-  [/^(?:roma |vine[- ]ripened |plum |cherry )?tomatoes?$/i, { alternatives: [
+  [/^(?:roma |vine ripened |plum |cherry )?tomato$/, { alternatives: [
     { name: 'Vine-ripened tomatoes', category: 'Produce', quantity: '1', size: 'medium', reason: 'Suggested alternative', detail: 'Compare representative raw tomato nutrition' },
     { name: 'Plum tomatoes', category: 'Produce', quantity: '1', size: 'medium', reason: 'Suggested alternative', detail: 'Compare representative raw tomato nutrition' },
     { name: 'Cherry tomatoes', category: 'Produce', quantity: '1', size: 'package', reason: 'Suggested alternative', detail: 'Compare representative raw tomato nutrition' },
@@ -39,13 +52,13 @@ const curated: Array<[RegExp, Omit<ShoppingAlternatives, 'usedAI'>]> = [
 ];
 
 /** A name reduced to its words, ignoring case, punctuation, word order and plurals: "2% Milk" and "milk 2%" are one item. */
-const itemKey = (name: string) => name.toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g, '').split(/[^a-z0-9%]+/)
-  .filter(Boolean).map(w => (w.length > 3 && w.endsWith('s') ? w.slice(0, -1) : w)).sort().join(' ');
+const itemKey = (name: string) => words(name).sort().join(' ');
 
 function fallback(name: string, category: typeof categories[number], quantity: string, size: string): ShoppingAlternatives {
   // An item is never its own alternative: "2% milk" matches the milk list, which suggests "2% milk".
   const others = (list: ShoppingAlternative[]) => list.filter(item => itemKey(item.name) !== itemKey(name));
-  const match = curated.find(([pattern]) => pattern.test(name));
+  const phrase = words(name).join(' ');
+  const match = curated.find(([pattern]) => pattern.test(phrase));
   if (match) return { ...match[1], alternatives: others(match[1].alternatives), usedAI: false };
   const base = name.replace(/^organic\s+/i, '').trim();
   const alternatives: ShoppingAlternative[] = [
