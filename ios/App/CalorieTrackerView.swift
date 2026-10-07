@@ -902,7 +902,9 @@ struct CalorieTrackerView: View {
                         Task {
                             var saved = false
                             if let entry {
-                                saved = await store.update(entry, date: date, meal: chosenMeal, description: name, kcal: calories)
+                                // kcal only when it changed: the server reads a sent kcal as a manual correction
+                                // (source MANUAL), so a rename would otherwise have dropped the food's nutrients.
+                                saved = await store.update(entry, date: date, meal: chosenMeal, description: name, kcal: calories == entry.kcal ? nil : calories)
                             } else {
                                 saved = await store.add(date: date, meal: chosenMeal, description: name, kcal: calories)
                             }
