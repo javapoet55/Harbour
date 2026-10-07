@@ -812,8 +812,11 @@ export function CalorieTracker({ live, onClose, now = Date.now, region = deviceR
         onSave={async (draft) => {
           const name = draft.name.trim();
           const kcal = Number.parseInt(draft.calories, 10) || 0;
+          // Any `kcal` is a manual correction on the server (source MANUAL, every nutrient cleared), so an
+          // edit sends it only when the value changed: renaming a food or moving its meal keeps its nutrients.
+          // Android ahead of iOS: Swift always sends it (CalorieTrackerView.swift:905).
           const saved = draft.entry
-            ? await store.update(draft.entry, { meal: draft.meal, description: name, kcal })
+            ? await store.update(draft.entry, { meal: draft.meal, description: name, ...(kcal !== draft.entry.kcal ? { kcal } : {}) })
             : await store.add({ meal: draft.meal, description: name, kcal });
           if (saved) setEditor(null);
         }}

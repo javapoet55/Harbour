@@ -430,6 +430,28 @@ describe('live', () => {
     await waitFor(() => expect(mockApi.deleteEntry).toHaveBeenCalledWith('e1'));
   });
 
+  it('Edit sends kcal only when it changed, so a rename or a new meal keeps the nutrients', async () => {
+    mockApi.settings.mockResolvedValue(settings({ enabled: true }));
+    mockApi.updateEntry.mockResolvedValue({ entry: entry() });
+    await open(true);
+    await waitFor(() => expect(title()).toBe('Nutrition'));
+    await press('calorie-view-log');
+    await waitFor(() => expect(screen.getByText('Dal and rice')).toBeTruthy());
+
+    // A confirmed food opens the editor from its calories.
+    await fireEvent.press(screen.getByLabelText('Edit Dal and rice, 450 calories'));
+    await fireEvent.changeText(screen.getByTestId('calorie-editor-name'), 'Dal, rice and ghee');
+    await press('calorie-editor-save');
+    await waitFor(() => expect(mockApi.updateEntry).toHaveBeenLastCalledWith('e1', { meal: 'LUNCH', description: 'Dal, rice and ghee' }));
+    await waitFor(() => expect(screen.queryByTestId('calorie-food-editor')).toBeNull());
+
+    // The day reloads from the server, which still has the old name.
+    await fireEvent.press(await screen.findByLabelText('Edit Dal and rice, 450 calories'));
+    await fireEvent.changeText(screen.getByTestId('calorie-editor-calories'), '500');
+    await press('calorie-editor-save');
+    await waitFor(() => expect(mockApi.updateEntry).toHaveBeenLastCalledWith('e1', { meal: 'LUNCH', description: 'Dal and rice', kcal: 500 }));
+  });
+
   it('the day moves back, never past today, and reloads', async () => {
     mockApi.settings.mockResolvedValue(settings({ enabled: true }));
     await open(true);

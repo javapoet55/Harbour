@@ -1569,3 +1569,13 @@ captures; results row by row in `docs/reference/PARITY.md` "UI-parity pass 3". F
 - **Today's action card and pager buttons are ink** (`ActionGlass`'s `.foregroundStyle(Color.nexdoInk)`);
   **"Find my next task"** draws the save gradient (`NexdoGradientButtonStyle`).
 
+## 29. Android bug pass: the §22 "For the team" bugs fixed in RN first (2026-10-07)
+
+Bugs the RN app copied from Swift on purpose (`docs/IOS_TO_REACT_NATIVE.md` §22 "For the team"); the owner
+decided Android fixes them first. Every item here is **Android ahead of iOS**: the code is shared, so iOS RN
+gets the fix too, and the Swift app is to mirror it. Each fix has a test that fails without it.
+
+- **Android ahead of iOS: editing a logged food keeps its nutrients.** The food editor sent `kcal` on every
+  Save, and the server treats any `kcal` as a manual correction (source MANUAL, every macro and micronutrient
+  cleared), so renaming "Salmon" or moving it to another meal lost its protein and vitamin D. An edit now sends
+  `kcal` only when the number changed (`CalorieTracker.tsx`, `onSave`).
