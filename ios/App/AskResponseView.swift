@@ -111,7 +111,7 @@ private struct AskResponseCard<Content: View>: View {
                         HStack(spacing: 5) {
                             if preparing { ProgressView().controlSize(.mini) }
                             Image(systemName: reading ? "stop.fill" : "speaker.wave.2.fill")
-                            Text(reading ? "Stop" : "Read Loud")
+                            Text(reading ? "Stop" : "Read aloud")
                         }.font(.caption.weight(.semibold)).frame(minHeight: 44)
                     }.buttonStyle(.plain)
                         .accessibilityLabel(reading ? "Stop reading" : "Read \(title) aloud")
