@@ -181,7 +181,8 @@ struct TaskActionView: View {
                             } else {
                                 Button("Choose contact") { pickingContact = true }.buttonStyle(.borderedProminent)
                                 Button("Enter contact details") {
-                                    manualName = contact?.name ?? action.contactName
+                                    // The name as looked up ("plumber"), not as written in the task ("the plumber").
+                                    manualName = contact?.name ?? DeterministicTaskActionDetector.contactSearchName(action.contactName)
                                     manualPhone = contact?.phones.first?.value ?? ""
                                     manualEmail = contact?.emails.first?.value ?? ""
                                     enteringDetails = true
