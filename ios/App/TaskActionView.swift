@@ -179,7 +179,8 @@ struct TaskActionView: View {
                                 if contact != nil { Button("Change business") { showingTask = true } }
                                 Button("Choose someone from Contacts") { pickingContact = true }
                             } else {
-                                Button("Choose contact") { pickingContact = true }.buttonStyle(.borderedProminent)
+                                // White on the indigo fill: the screen's nexdoInk foreground made it black on dark indigo.
+                                Button("Choose contact") { pickingContact = true }.buttonStyle(.borderedProminent).foregroundStyle(.white)
                                 Button("Enter contact details") {
                                     // The name as looked up ("plumber"), not as written in the task ("the plumber").
                                     manualName = contact?.name ?? DeterministicTaskActionDetector.contactSearchName(action.contactName)
