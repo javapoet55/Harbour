@@ -264,7 +264,10 @@ import CryptoKit
         struct Response:Decodable,Sendable {let draft:WishDraft;let usedAI:Bool}
         let input=Input(momentID:first.id,tone:settings.tone,personalContext:settings.personalContext,festivalName:title)
         await wishGeneration.run {
-            do {let result:Response=try await wishGeneration.withTimeout{try await self.store.request("generate",input)};settings.baseMessage=result.draft.body;settings.manuallyEdited=false;notice=result.usedAI ? "AI draft ready for review.":"AI unavailable; an editable fallback draft is ready.";analytics.record(.generated)} catch {settings.baseMessage=FestivalValidation.fallback(name:title,tone:settings.tone,type:occasionType,firstName:fallbackFirstName);notice="Offline fallback — review before saving."}
+            do {let result:Response=try await wishGeneration.withTimeout{try await self.store.request("generate",input)};settings.baseMessage=result.draft.body;settings.manuallyEdited=false;notice=result.usedAI ? "AI draft ready for review.":"AI unavailable; an editable fallback draft is ready.";analytics.record(.generated)} catch {
+                // A 400 is the server refusing the request, with its own reason; it is not an offline failure to paper over.
+                if case APIError.server(400,let message)=error {self.error=message;return}
+                settings.baseMessage=FestivalValidation.fallback(name:title,tone:settings.tone,type:occasionType,firstName:fallbackFirstName);notice="Offline fallback — review before saving."}
         }
     }
     /// An approved message-only save keeps existing schedules; the server rewrites their text.
