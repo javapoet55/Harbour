@@ -396,6 +396,7 @@ private struct MomentCallingGuide: View {
                             .frame(width:76,height:76)
                         VStack(alignment:.leading,spacing:10) {
                             Text("We call for you on special days").font(.title.bold())
+                                .fixedSize(horizontal:false,vertical:true)   // wraps; it was cut to "We call for you on s…"
                             Text("NexDo makes the call at the time you choose and connects you with your loved ones.")
                                 .foregroundStyle(.secondary)
                         }
