@@ -487,7 +487,7 @@ struct ScheduleWishView: View {
             Text("Send date & time").font(.title.bold())
             MomentCard {
                 DatePicker("Date and time", selection: $date, in: Date()...).environment(\.timeZone, TimeZone(identifier: zone) ?? .current)
-                Picker("Time zone", selection: $zone) { ForEach(TimeZone.knownTimeZoneIdentifiers, id: \.self) { Text($0).tag($0) } }
+                Picker("Time zone", selection: Binding(get: { TimeZoneNames.canonical(zone) }, set: { zone = $0 })) { ForEach(TimeZoneNames.pickerIdentifiers(including: zone), id: \.self) { Text($0).tag($0) } }
             }
             MomentCard {
                 if channel == "email" {

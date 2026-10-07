@@ -78,7 +78,8 @@ struct PomodoroDashboard: View {
         HStack(spacing: 4) {
             ForEach(Tab.allCases, id: \.self) { item in
                 Button { tab = item; selectedDate = nil } label: {
-                    Text(item == .insights && tab == .insights ? "Categories" : item.rawValue).font(.subheadline.weight(.medium)).frame(maxWidth: .infinity).padding(.vertical, 12)
+                    // The label is always the tab's own name: "Insights" read "Categories" only while selected.
+                    Text(item.rawValue).font(.subheadline.weight(.medium)).frame(maxWidth: .infinity).padding(.vertical, 12)
                         .foregroundStyle(tab == item ? .white : ink)
                         .background { if tab == item { Capsule().fill(gradient) } else { Capsule().fill(.indigo.opacity(0.04)) } }
                 }.buttonStyle(.plain).accessibilityIdentifier("pomodoro-tab-" + item.rawValue.lowercased()).accessibilityAddTraits(tab == item ? .isSelected : [])

@@ -33,11 +33,24 @@ public struct PomodoroSession: Codable, Identifiable, Equatable, Sendable {
 
     public init(category: PomodoroCategory, name: String, durationMinutes: Int, autoBreak: Bool, playSound: Bool, keepAwake: Bool = true, now: Date = Date()) {
         id = UUID().uuidString
-        self.category = category; self.name = String(name.trimmingCharacters(in: .whitespacesAndNewlines).prefix(120))
+        self.category = category; self.name = Self.limitName(name.trimmingCharacters(in: .whitespacesAndNewlines))
         self.durationMinutes = min(120, max(1, durationMinutes)); self.autoBreak = autoBreak
         self.playSound = playSound; self.keepAwake = keepAwake
         startedAt = now.timeIntervalSince1970; updatedAt = startedAt
         deadline = startedAt + Double(self.durationMinutes * 60)
+    }
+    /// The server caps `name` at 120 code points, not 120 characters: an emoji family is one character but five
+    /// code points, so a name of them that `prefix(120)` kept was refused with 400 and never synced. Whole
+    /// characters are kept, so a cut never splits an emoji.
+    public static let nameLimit = 120
+    public static func limitName(_ name: String) -> String {
+        var used = 0, end = name.startIndex
+        for index in name.indices {
+            let scalars = name[index].unicodeScalars.count
+            guard used + scalars <= nameLimit else { break }
+            used += scalars; end = name.index(after: index)
+        }
+        return String(name[..<end])
     }
     public func remaining(at now: Date) -> Double {
         guard active else { return 0 }

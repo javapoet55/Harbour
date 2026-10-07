@@ -418,8 +418,7 @@ final class AppModel: ObservableObject {
             }
             async let agendaUpdate: Void = self.refreshAgenda(userID: userID, revision: revision)
             async let intelligenceUpdate: Void = self.refreshScheduleIntelligence()
-            async let weatherUpdate: Void = self.refreshWeather(userID: userID)
-            _ = await (agendaUpdate, intelligenceUpdate, weatherUpdate)
+            _ = await (agendaUpdate, intelligenceUpdate)
         }
     }
 
@@ -475,10 +474,6 @@ final class AppModel: ObservableObject {
         scheduleIntelligence = nil
     }
 
-    private func refreshWeather(userID: String) async {
-        do { _ = try await loadWeatherForecast(requestPermission: false) }
-        catch { if profile?.id == userID { weather = nil } }
-    }
     func loadWeatherForecast(requestPermission: Bool = true) async throws -> WeatherResponse {
         let userID = profile?.id
         do {

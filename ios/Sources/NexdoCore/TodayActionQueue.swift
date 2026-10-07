@@ -50,3 +50,22 @@ public struct TodayActionQueue: Sendable {
         switch value { case "CRITICAL": 3; case "HIGH": 2; case "LOW": 0; default: 1 }
     }
 }
+
+/// "in 5 min", "Due now", "1 hr 30 min overdue" for an action due `seconds` from now (negative: overdue).
+public enum ActionTimeLabel {
+    /// Both directions round to the nearest minute. Overdue ages used to truncate while future times rounded up,
+    /// so 90 seconds read "in 2 min" before the due time and "1 min overdue" after it.
+    public static func text(seconds: TimeInterval) -> String {
+        let minutes = Int((abs(seconds) / 60).rounded())
+        if seconds > 0 { return "in \(duration(minutes: max(1, minutes)))" }
+        if seconds > -60 { return "Due now" }
+        // Past 48 hours an age reads in whole days: "10 days overdue", not "257 hr 1 min overdue".
+        if minutes >= 48 * 60 { return "\(minutes / (24 * 60)) days overdue" }
+        return "\(duration(minutes: max(1, minutes))) overdue"
+    }
+    public static func duration(minutes: Int) -> String {
+        let hours = minutes / 60, remainder = minutes % 60
+        guard hours > 0 else { return "\(minutes) min" }
+        return remainder == 0 ? "\(hours) hr" : "\(hours) hr \(remainder) min"
+    }
+}

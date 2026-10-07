@@ -44,6 +44,11 @@ import CryptoKit
     @Published var catalog:[FestivalCatalogEntry]=[]
     @Published var savedPlans:[WishDeliveryPlan]=[]
     @Published var scheduleCompleted=false
+    /// The moment's stored day (yyyy-MM-dd) and the day shown for it; they differ for a yearly moment stored in an earlier year.
+    private var storedDay=""
+    private var shownDay=""
+    /// Set by schedule(); the view turns it into scheduleCompleted after the review sheet is dismissed.
+    @Published var scheduleSucceeded=false
     @Published var imageData:Data?
     /// The card saved on the server, shown when this device has no artwork (e.g. saved on another device).
     @Published var storedCardImage:Data?
@@ -89,7 +94,7 @@ import CryptoKit
     private var fingerprint:String { let state=[occasionType,title,MomentDates.day(date,zone:zone),zone,String(yearly),String(active),encoded(recipients),encoded(settings)];return state.joined(separator:"|") }
     init(group:MomentDisplayGroup,store:ImportantMomentsStore,imageService:(any FestivalImageGenerationService)?=nil,imageStorage:any FestivalImageStorageService=ProtectedFestivalImageStorage()) {
         self.store=store;self.originals=group.moments;self.imageService=imageService;self.imageStorage=imageStorage
-        let first=group.moments[0];occasionType=first.type;title=first.title;zone=first.timeZoneID;date=MomentDates.date(first.occurrenceDate,zone:first.timeZoneID);yearly=first.yearly;active=group.moments.contains(where: \.enabled)
+        let first=group.moments[0];occasionType=first.type;title=first.title;zone=first.timeZoneID;storedDay=first.occurrenceDate;shownDay=MomentDates.shownDay(first.occurrenceDate,yearly:first.yearly,zone:first.timeZoneID);date=MomentDates.date(shownDay,zone:first.timeZoneID);yearly=first.yearly;active=group.moments.contains(where: \.enabled)
         var saved=FestivalSettings.read(first.festivalSettings) ?? FestivalSettings()
         recipients=group.moments.filter(\.hasRecipient).map { m in
             let key=ManagedFestivalRecipient.storedKey(sourceKey:m.sourceKey,groupID:saved.groupID,momentID:m.id)
@@ -229,12 +234,16 @@ import CryptoKit
         if !recipients.isEmpty, let error=FestivalValidation.recipients(recipients,settings:settings){throw FestivalError.message(error)}
         try contactsService.validate(recipients)
         for r in recipients {settings.contactIDs[r.key]=r.contactIdentifier;settings.selected[r.key]=r.selected}
-        let input=FestivalSaveRequest(ids:originals.map(\.id),title:title,date:MomentDates.day(date,zone:zone),timeZoneID:zone,yearly:yearly,active:active,recipients:recipients,settings:settings,cancelSchedules:cancelSchedules,type:occasionType)
+        // A yearly moment shows this year's day; unless that day was edited, Save keeps the stored one (a birth year).
+        let day=MomentDates.day(date,zone:zone)
+        let savedDay=yearly && day==shownDay ? storedDay : day
+        let input=FestivalSaveRequest(ids:originals.map(\.id),title:title,date:savedDay,timeZoneID:zone,yearly:yearly,active:active,recipients:recipients,settings:settings,cancelSchedules:cancelSchedules,type:occasionType)
         let _:MomentOK=try await store.request("festivalSave",input)
         await store.refresh()
         let updated=store.moments.filter{!$0.isArchived && $0.type==occasionType && FestivalSettings.read($0.festivalSettings)?.groupID==settings.groupID}
         guard !updated.isEmpty else {throw FestivalError.message("Saved. Refresh Moments before continuing.")}
         originals=updated
+        storedDay=savedDay;shownDay=MomentDates.shownDay(savedDay,yearly:yearly,zone:zone)
         for i in recipients.indices {if let m=updated.first(where:{$0.id==recipients[i].momentID || $0.sourceKey=="\(occasionType):\(settings.groupID):\(recipients[i].key)"}){recipients[i].momentID=m.id}}
         if savedImageID != settings.imageID {imageStorage.delete(savedImageID)}
         for id in stagedImages where id != settings.imageID {imageStorage.delete(id)}
@@ -255,7 +264,10 @@ import CryptoKit
         struct Response:Decodable,Sendable {let draft:WishDraft;let usedAI:Bool}
         let input=Input(momentID:first.id,tone:settings.tone,personalContext:settings.personalContext,festivalName:title)
         await wishGeneration.run {
-            do {let result:Response=try await wishGeneration.withTimeout{try await self.store.request("generate",input)};settings.baseMessage=result.draft.body;settings.manuallyEdited=false;notice=result.usedAI ? "AI draft ready for review.":"AI unavailable; an editable fallback draft is ready.";analytics.record(.generated)} catch {settings.baseMessage=FestivalValidation.fallback(name:title,tone:settings.tone,type:occasionType,firstName:fallbackFirstName);notice="Offline fallback — review before saving."}
+            do {let result:Response=try await wishGeneration.withTimeout{try await self.store.request("generate",input)};settings.baseMessage=result.draft.body;settings.manuallyEdited=false;notice=result.usedAI ? "AI draft ready for review.":"AI unavailable; an editable fallback draft is ready.";analytics.record(.generated)} catch {
+                // A 400 is the server refusing the request, with its own reason; it is not an offline failure to paper over.
+                if case APIError.server(400,let message)=error {self.error=message;return}
+                settings.baseMessage=FestivalValidation.fallback(name:title,tone:settings.tone,type:occasionType,firstName:fallbackFirstName);notice="Offline fallback — review before saving."}
         }
     }
     /// An approved message-only save keeps existing schedules; the server rewrites their text.
@@ -334,12 +346,13 @@ import CryptoKit
         do {let _:MomentOK=try await store.request("festivalDelete",["ids":originals.map(\.id)]);imageStorage.delete(savedImageID);discardImageEdits();removeImage();await store.refresh();analytics.record(.deleted);return true}catch{self.error=error.localizedDescription;return false}
     }
     private var immediateOperationIDs:[String:String]=[:]
-    func sendImmediately() async -> [WishDeliveryPlan]? {
+    /// `only`: the recipient keys to send now; nil sends every selected recipient.
+    func sendImmediately(only keys:Set<String>?=nil) async -> [WishDeliveryPlan]? {
         guard !busy else{return nil}
         busy=true;error=nil;defer{busy=false}
         var plans:[WishDeliveryPlan]=[]
         do {
-            for recipient in selected {
+            for recipient in selected where keys?.contains(recipient.key) ?? true {
                 guard let momentID=recipient.momentID else{throw FestivalError.message("Save recipients first.")}
                 let operationID=immediateOperationIDs[recipient.key] ?? UUID().uuidString
                 immediateOperationIDs[recipient.key]=operationID
@@ -383,7 +396,8 @@ import CryptoKit
             }
             await store.refresh()
             originals=originals.map {original in store.moments.first(where:{$0.id==original.id}) ?? original}
-            notice="\(savedPlans.count) wishes scheduled. Messages requires confirmation.";scheduleCompleted=true;analytics.record(.scheduled)
+            // The success screen is pushed by the view once the review sheet has closed (scheduleCompleted).
+            notice="\(savedPlans.count) wishes scheduled. Messages requires confirmation.";scheduleSucceeded=true;analytics.record(.scheduled)
         } catch {self.error="\(savedPlans.count) scheduled. \(error.localizedDescription) Retry continues remaining recipients.";await store.refresh()}
     }
 }

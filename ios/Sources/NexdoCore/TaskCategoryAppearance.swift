@@ -52,3 +52,20 @@ private extension TaskCategoryAppearance.Kind {
         }
     }
 }
+
+/// The Tasks row icon for a title. A keyword matches a whole word, or the word with a common ending ("calls",
+/// "calling", "plumber", "meetings"); a plain substring test gave "recall" the phone. Same rule as Android (81d70f5).
+public enum TaskRowIcon {
+    public static func symbol(for title: String) -> String {
+        let words = title.lowercased().split(whereSeparator: { !($0.isLetter || $0.isNumber) }).map(String.init)
+        func has(_ stems: String...) -> Bool {
+            stems.contains { stem in words.contains { $0 == stem || ($0.hasPrefix(stem) && ["s", "es", "ed", "ing", "er", "ers"].contains(String($0.dropFirst(stem.count)))) } }
+        }
+        if has("email", "message") { return "envelope" }
+        if has("plumb", "repair", "handyman", "electrician") { return "wrench" }
+        if has("call", "contact") { return "phone" }
+        if has("laptop", "computer") { return "laptopcomputer" }
+        if has("meeting", "appointment") { return "calendar" }
+        return "doc.text"
+    }
+}

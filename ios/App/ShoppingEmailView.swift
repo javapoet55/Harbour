@@ -312,7 +312,7 @@ struct ShoppingEmailView: View {
     @MainActor private func load() async {
         busy = true; defer { busy = false }
         do {
-            let value: ShoppingEmailSnapshot = try await store.api.request("/api/shopping/email-schedule?listId=\(list.id)")
+            let value: ShoppingEmailSnapshot = try await store.api.request("/api/shopping/email-schedule?listId=\(URLQuery.value(list.id))")
             snapshot = value
             if !didLoadSchedule, let s = value.schedule {
                 if let date = s.pickupDate {

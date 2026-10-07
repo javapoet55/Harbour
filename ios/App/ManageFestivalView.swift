@@ -135,7 +135,11 @@ struct ManageFestivalView: View {
         .recipientSheets(action:$recipientAction,recipients:model.recipients){recipient,previous in model.saveRecipient(recipient,replacing:previous)}
         .sheet(isPresented:$personalize){personalization}
         .sheet(isPresented:$imageSheet){imageConfiguration}
-        .sheet(isPresented:$scheduleConfirm,onDismiss:{model.error=nil}){confirmation}
+        .sheet(isPresented:$scheduleConfirm,onDismiss:{
+            model.error=nil
+            // Push the success screen only once the review sheet is gone, not underneath it while it closes.
+            if model.scheduleSucceeded { model.scheduleSucceeded=false; model.scheduleCompleted=true }
+        }){confirmation}
         .sheet(isPresented:$momentEditor){MomentDetailsSheet(model:model)}
     }
     private var identity:some View {
@@ -184,7 +188,7 @@ struct ManageFestivalView: View {
         }.accessibilityIdentifier("moment-prepare-reminder")
         Text("Reminds you to review the wish. Nothing is sent.").font(.caption).foregroundStyle(.secondary)
     }}
-    private var zonePicker:some View {HStack{Text("Time zone");Spacer();Picker("Time zone",selection:$model.zone){ForEach(TimeZone.knownTimeZoneIdentifiers,id:\.self){id in Text(TimeZone(identifier:id)?.localizedName(for:.generic,locale:.current) ?? id).tag(id)}}.labelsHidden().accessibilityIdentifier("moment-time-zone")}}
+    private var zonePicker:some View {HStack{Text("Time zone");Spacer();Picker("Time zone",selection:Binding(get:{TimeZoneNames.canonical(model.zone)},set:{model.zone=$0})){ForEach(TimeZoneNames.pickerIdentifiers(including:model.zone),id:\.self){id in Text(TimeZone(identifier:id)?.localizedName(for:.generic,locale:.current) ?? id).tag(id)}}.labelsHidden().accessibilityIdentifier("moment-time-zone")}}
     private var recipients:some View {Group{
         Text("Recipients").font(.largeTitle.bold());Text("\(model.selected.count) selected").foregroundStyle(.secondary)
         if model.recipients.isEmpty {
@@ -356,8 +360,10 @@ private struct FestivalScheduleSuccess:View {
             plan.automaticDelivery ? "Will send automatically by email" : plan.channel == "messages" ? "We’ll remind you, the sender, to tap Send in Messages" : "We’ll remind you, the sender, to deliver your wish"
         })).sorted()
     }
+    /// In time order: sorting the formatted labels put "10 Oct 2026 at 8:00 AM" before "6 Oct 2026 at 8:00 AM" (as on Android, 2421880).
     private var sendTimes:[String] {
-        Array(Set(plans.map { MomentDates.label($0.date,zone:$0.timeZoneID) })).sorted()
+        var seen=Set<String>()
+        return plans.sorted{$0.date < $1.date}.map{MomentDates.label($0.date,zone:$0.timeZoneID)}.filter{seen.insert($0).inserted}
     }
     var body:some View {
         ZStack {
@@ -436,6 +442,8 @@ private struct FestivalScheduleReview:View {
     @State private var submitting=false
     @State private var showAllRecipients=false
     @State private var sendNowConfirmation=false
+    /// Send Now was confirmed; sending starts when the confirmation sheet has finished closing.
+    @State private var sendAfterConfirmation=false
     @State private var sendNowStarted=false
     @State private var immediateNotice:String?
     @State private var messagePlan:WishDeliveryPlan?
@@ -498,7 +506,10 @@ private struct FestivalScheduleReview:View {
                     recipientDraft=nil
                 } cancel:{recipientDraft=nil}
             }
-            .sheet(isPresented:$sendNowConfirmation) {
+            .sheet(isPresented:$sendNowConfirmation,onDismiss:{
+                // Start only after the sheet is gone, so the Messages composer is not presented while it closes.
+                if sendAfterConfirmation { sendAfterConfirmation=false; Task{await sendNow()} }
+            }) {
                 NavigationStack {
                     ScrollView {
                         VStack(alignment:.leading,spacing:18) {
@@ -514,7 +525,7 @@ private struct FestivalScheduleReview:View {
                         }.padding(20)
                     }
                     .safeAreaInset(edge:.bottom) {
-                        Button("Send email & open Messages") {sendNowConfirmation=false;Task{await sendNow()}}
+                        Button("Send email & open Messages") {sendAfterConfirmation=true;sendNowConfirmation=false}
                             .buttonStyle(ScheduleActionStyle()).padding().background(.regularMaterial)
                     }
                     .navigationTitle("Send now").navigationBarTitleDisplayMode(.inline)
@@ -543,7 +554,11 @@ private struct FestivalScheduleReview:View {
             .buttonStyle(ScheduleActionStyle(gradient:true)).accessibilityIdentifier("wish-primary")
     }
     @MainActor private func sendNow() async {
-        if recipients.contains(where:{!$0.phone.isEmpty}) && !MFMessageComposeViewController.canSendText() {
+        // Only recipients set to Messages need Messages on this device (as on Android, eea3609). Without it they are left
+        // out and named; everyone else is still sent, and no composer opens.
+        let canText = !recipients.contains(where:{!$0.phone.isEmpty}) || MFMessageComposeViewController.canSendText()
+        let skipped=canText ? [] : recipients.filter{!$0.phone.isEmpty && model.channel($0)=="messages"}
+        if !skipped.isEmpty && skipped.count == recipients.count {
             model.error="Messages is not available on this device. No greeting has been sent.";return
         }
         submitting=true;defer{submitting=false}
@@ -558,10 +573,13 @@ private struct FestivalScheduleReview:View {
             guard model.error == nil else{return}
         }
         sendNowStarted=true
-        guard let plans=await model.sendImmediately() else{return}
+        let skippedKeys=Set(skipped.map(\.key))
+        guard let plans=await model.sendImmediately(only:skipped.isEmpty ? nil : Set(recipients.map(\.key)).subtracting(skippedKeys)) else{return}
         let emails=plans.filter{$0.channel == "email"}
         let sent=emails.filter{$0.status == "SENT"}.count
         immediateNotice="\(sent) email\(sent == 1 ? "":"s") sent. " + (emails.count > sent ? "Some emails are pending or failed; check Scheduled wishes for their status. " : "") + "Messages still requires you to tap Send."
+        if !skipped.isEmpty { model.error="Messages is not available on this device. No greeting has been sent to \(skipped.map(\.name).joined(separator:", "))." }
+        guard canText else {return}
         messageQueue=plans.filter{$0.channel == "messages" && $0.status == "AWAITING_CONFIRMATION"}
         if !messageQueue.isEmpty {messagePlan=messageQueue.removeFirst()}
     }
@@ -605,7 +623,7 @@ private struct FestivalScheduleReview:View {
         if model.needsScheduleConfirmation { close();return }
         guard model.error == nil else {return}
         await model.schedule()
-        if model.scheduleCompleted { close() }
+        if model.scheduleSucceeded { close() }
     }
 }
 private struct ScheduleRecipientEditor:View {

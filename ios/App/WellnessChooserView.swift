@@ -7,7 +7,7 @@ struct WellnessChooserView: View {
     @EnvironmentObject private var model: AppModel
     @State private var destination: Destination?
     private enum Destination: String, Identifiable {
-        case calories, pomodoro, moments, shopping, insights, profile
+        case calories, pomodoro, moments, shopping
         var id: String { rawValue }
     }
     private let ink = Color(red: 0.035, green: 0.035, blue: 0.19)
@@ -36,6 +36,10 @@ struct WellnessChooserView: View {
             }.background(LinearGradient(colors: [Color(red: 0.98, green: 0.97, blue: 1), .white, Color(red: 0.94, green: 0.96, blue: 1)], startPoint: .topLeading, endPoint: .bottomTrailing))
                 .safeAreaInset(edge: .bottom, spacing: 0) { bottomBar }
                 .foregroundStyle(ink)
+                // A fixed light design: the artwork multiplies onto white and the surfaces are white, so
+                // adaptive text (nexdoSecondary, the footer) would turn light on light in dark mode. The
+                // modules this opens keep the system appearance: the cover is attached outside this scope.
+                .environment(\.colorScheme, .light)
         }
         .fullScreenCover(item: $destination) { target in
             if let guide = WellnessModuleGuide.Kind(rawValue:target.rawValue) {
@@ -49,14 +53,11 @@ struct WellnessChooserView: View {
             switch target {
             case .calories: CalorieTrackerView(api: model.profile == nil ? nil : model.momentAPI)
             case .pomodoro:
-                PomodoroView(api: model.momentAPI, owner: model.profile?.id ?? "preview", preview: model.profile == nil, onTasks: { destination = nil; onSelect(.tasks) })
+                PomodoroView(api: model.momentAPI, owner: model.profile?.id ?? "preview", preview: model.profile == nil)
             case .moments:
                 NavigationStack { ImportantMomentsView().toolbar { ToolbarItem(placement: .cancellationAction) { backButton } } }
             case .shopping:
                 WellnessShoppingDestination(api: model.momentAPI)
-            case .insights:
-                WellnessInsightsDestination()
-            case .profile: AccountView()
             }
     }
     private var backButton: some View { Button { destination = nil } label: { Label("Back", systemImage: "chevron.left") } }
@@ -147,16 +148,5 @@ private struct WellnessShoppingDestination: View {
     init(api: APIClient) { _store = StateObject(wrappedValue: ShoppingStore(api: api)) }
     var body: some View {
         NavigationStack { ShoppingHome(store: store).toolbar { ToolbarItem(placement: .cancellationAction) { Button("Back", systemImage: "chevron.left") { dismiss() } } } }
-    }
-}
-private struct WellnessInsightsDestination: View {
-    @Environment(\.dismiss) private var dismiss
-    @State private var prompt: String?
-    @State private var asking = false
-    var body: some View {
-        NavigationStack {
-            WeeklySummaryView(onPlanNextWeek: { prompt = $0; asking = true })
-                .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Back", systemImage: "chevron.left") { dismiss() } } }
-        }.fullScreenCover(isPresented: $asking) { AskNexdoView(initialPrompt: prompt ?? "") }
     }
 }

@@ -50,13 +50,40 @@ public struct TaskQuery {
     public var historyRange: TaskHistoryRange = .thisMonth
     public init() {}
 
+    /// The filters as they were when the search began; closing the search puts them back.
+    public private(set) var beforeSearch: SearchFilters?
+    public struct SearchFilters: Equatable {
+        public let date: TaskDateFilter, historyRange: TaskHistoryRange, status: String, priority: String
+    }
+
     /// Start a keyword search across all dates, priorities, and completion states.
     public mutating func beginSearch() {
+        if beforeSearch == nil { beforeSearch = SearchFilters(date: date, historyRange: historyRange, status: status, priority: priority) }
         date = .all
         historyRange = .allTime
         status = "All"
         priority = "All"
         search = ""
+    }
+
+    /// Closing search: clears the term and restores each filter beginSearch reset, unless it was changed during the
+    /// search. It used to clear the term only, leaving the list on All, All time and All statuses. Same rule as
+    /// Android's endSearch (2195885).
+    public mutating func endSearch() {
+        search = ""
+        guard let before = beforeSearch else { return }
+        if date == .all { date = before.date }
+        if historyRange == .allTime { historyRange = before.historyRange }
+        if status == "All" { status = before.status }
+        if priority == "All" { priority = before.priority }
+        beforeSearch = nil
+    }
+
+    /// Choosing a date chip. Moving to All from another chip narrows it to this month's open tasks, but not during a
+    /// search: Today then All used to reset a search's status to Open and hide its completed matches.
+    public mutating func selectDate(_ filter: TaskDateFilter, searching: Bool) {
+        if filter == .all && date != .all && !searching { historyRange = .thisMonth; status = "Open" }
+        date = filter
     }
 
     /// Creation schedules a task for today. Reveal it without stale search filters.
@@ -70,6 +97,7 @@ public struct TaskQuery {
         search = ""
         status = "Open"
         priority = "All"
+        beforeSearch = nil
     }
 
     public func sections(_ tasks: [NexdoTask], timeZone: String, now: Date = Date()) -> [TaskResultSection] {

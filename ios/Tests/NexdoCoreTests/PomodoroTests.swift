@@ -45,3 +45,16 @@ struct PomodoroTests {
         #expect(s.phase == .completed); #expect(s.breakSeconds == 20)
     }
 }
+
+@Test func sessionNamesAreCappedAt120CodePointsWithoutSplittingAnEmoji() {
+    #expect(PomodoroSession.limitName(String(repeating: "a", count: 130)).unicodeScalars.count == 120)
+    // 📚 is one code point: 120 fit, as on the server.
+    #expect(PomodoroSession.limitName(String(repeating: "📚", count: 121)) == String(repeating: "📚", count: 120))
+    // 👨‍👩‍👧 is one character but five code points: 24 fit (120), and the 25th is not cut in half.
+    let family = "👨‍👩‍👧"
+    #expect(PomodoroSession.limitName(String(repeating: family, count: 30)) == String(repeating: family, count: 24))
+    #expect(PomodoroSession.limitName("ab" + String(repeating: family, count: 24)) == "ab" + String(repeating: family, count: 23))
+    #expect(PomodoroSession.limitName("Deep work") == "Deep work")
+    let session = PomodoroSession(category: .focus, name: "  " + String(repeating: family, count: 30), durationMinutes: 25, autoBreak: true, playSound: false)
+    #expect(session.name.unicodeScalars.count <= 120)
+}

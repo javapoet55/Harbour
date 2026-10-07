@@ -113,3 +113,13 @@ private func alternative(_ metadata: ShoppingProductFacts? = nil) -> ShoppingAlt
         #expect(!goal.supported(by: alternative(), original: source))
     }
 }
+
+@Test func differencesThatRoundToZeroAreTheSameAndSupportNoGoal() {
+    // 8.3 g against 8 g shows as "8 g" both ways: no "↑ 0 g", and no "Higher protein" tag.
+    let comparison = ShoppingComparison(original: facts(), alternative: facts(protein: 8.3))
+    #expect(comparison.difference(.protein) == .same)
+    #expect(!ShoppingGoal.higherProtein.supported(by: alternative(facts(protein: 8.3)), original: facts()))
+    // Half a gram or more still shows and still counts.
+    #expect(ShoppingComparison(original: facts(), alternative: facts(protein: 8.6)).difference(.protein) == .higher(8.6 - 8))
+    #expect(ShoppingGoal.higherProtein.supported(by: alternative(facts(protein: 9)), original: facts()))
+}

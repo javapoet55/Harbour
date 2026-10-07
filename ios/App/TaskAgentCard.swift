@@ -12,17 +12,26 @@ struct TaskAgentCard: View {
     @State private var fallbackReason: String?
     @State private var run: TaskAgentRun?
     @State private var answer = ""
+    /// The area typed for "Search again"; nil shows the area last searched.
+    @State private var searchAgainArea: String?
     @State private var showingSearchNotices = false
     @State private var selectedBusiness: String?
     @State private var draftExpanded: Set<String> = []
     @State private var businessTabs: [String: Int] = [:]
     @State private var expandedReviews: Set<String> = []
+    @State private var truncatedReviews: [String: Bool] = [:]
     @State private var drafts: [String: String] = [:]
     @State private var busy = false
     @State private var searchRequestPending = false
     @State private var error: String?
+    /// A short confirmation ("Phone number copied."). Not an error: it neither reads as one nor hides the search spinner.
+    @State private var copyNotice: CopyNotice?
+    private struct CopyNotice: Equatable { let place: String; let text: String }
     @State private var loading = true
     @State private var refreshID = 0
+    /// The task and refresh the run was last fetched for. An action's POST returns the run, so a status change alone needs no GET.
+    @State private var loadedKey: String?
+    private var polling: Bool { ["QUEUED", "RUNNING"].contains(run?.status ?? "") }
     @State private var messageDraft: BusinessMessageDraft?
     @State private var messageNotice: String?
     private struct BusinessMessageDraft: Identifiable {
@@ -65,7 +74,7 @@ struct TaskAgentCard: View {
                     if run.candidates.isEmpty { Divider().overlay(Color.nexdoIndigo.opacity(0.08)) }
                     if findingBusinesses { searchProgress }
                     if !findingBusinesses, let question = run.question, !["urgency", "preferences"].contains(question.key) {
-                        Text(question.key == "urgency" ? "Ready to search nearby businesses" : question.text).font(.system(size: 16, weight: .semibold)).fixedSize(horizontal: false, vertical: true)
+                        Text(question.text).font(.system(size: 16, weight: .semibold)).fixedSize(horizontal: false, vertical: true)
                         if question.key == "discovery" {
                             HStack { Button("Find a professional") { act("answer", key: "discovery", answer: "yes") }; Spacer(); Button("Keep as a task") { act("cancel") } }
                         } else {
@@ -76,10 +85,10 @@ struct TaskAgentCard: View {
                                     .focused($focusedField, equals: .agentLocation)
                                     .onSubmit { focusedField = nil }
                                     .accessibilityLabel("City or ZIP code")
-                            }.padding(8).background(.white.opacity(0.85), in: RoundedRectangle(cornerRadius: 12))
+                            }.padding(8).background(AgentStyle.card, in: RoundedRectangle(cornerRadius: 12))
                                 .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.purple.opacity(0.65)))
                                 .id(TaskDetailsView.Field.agentLocation)
-                            Button { act("search", key: "location", answer: answer) } label: {
+                            Button { act("search", key: question.key, answer: answer) } label: {
                                 HStack(spacing: 12) { Image(systemName: "magnifyingglass"); Text(run.service == "plumber" ? "Search Plumbers" : "Search businesses"); Image(systemName: "arrow.right") }
                             }.buttonStyle(AgentSearchButton()).disabled(answer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                         }
@@ -96,13 +105,14 @@ struct TaskAgentCard: View {
                         businessCard(candidate, index: index)
                     }
 
+                    if ["NO_RESULTS", "CANCELLED"].contains(run.status) && !findingBusinesses { searchAgain(run) }
                     HStack {
                         if ["QUEUED", "RUNNING"].contains(run.status) { Button("Pause") { act("pause") } }
                         if ["PAUSED", "FAILED", "BLOCKED"].contains(run.status) { Button(run.status == "PAUSED" ? "Resume" : "Retry") { act(run.status == "PAUSED" ? "resume" : "retry") } }
                         if !["CANCELLED", "READY_FOR_REVIEW", "NO_RESULTS"].contains(run.status) { Button { act("cancel") } label: { Label("Cancel search", systemImage: "xmark").foregroundStyle(Color.nexdoSecondary) } }
                     }
                     if let error { Text(error).font(.caption).accessibilityAddTraits(.updatesFrequently) }
-                }.padding(run.candidates.isEmpty ? 18 : 0).background(LinearGradient(colors: [Color(red: 0.95, green: 0.92, blue: 1), Color(red: 0.92, green: 0.94, blue: 1), Color(red: 0.97, green: 0.98, blue: 1)], startPoint: .topLeading, endPoint: .bottomTrailing).opacity(run.candidates.isEmpty ? 1 : 0), in: RoundedRectangle(cornerRadius: 20))
+                }.padding(run.candidates.isEmpty ? 18 : 0).background(LinearGradient(colors: AgentStyle.washGradient, startPoint: .topLeading, endPoint: .bottomTrailing).opacity(run.candidates.isEmpty ? 1 : 0), in: RoundedRectangle(cornerRadius: 20))
                     .shadow(color: Color.nexdoIndigo.opacity(0.05), radius: 12, y: 5).disabled(busy)
             } else if eligible {
                 VStack(alignment: .leading, spacing: 12) {
@@ -134,12 +144,14 @@ struct TaskAgentCard: View {
         .alert("Messages", isPresented: Binding(get: { messageNotice != nil }, set: { if !$0 { messageNotice = nil } })) {
             Button("OK", role: .cancel) { messageNotice = nil }
         } message: { Text(messageNotice ?? "") }
-        .task(id: taskID + (run?.status ?? "") + String(refreshID)) {
+        // Keyed on polling, not the status: every action changed the status and fetched the run it had just received.
+        .task(id: "\(taskID)#\(refreshID)#\(polling)") {
             #if DEBUG
             if ProcessInfo.processInfo.arguments.contains("-agent-design-preview") {
                 let data = Data(#"{"id":"preview","status":"NEEDS_INPUT","version":0,"service":"plumber","urgency":"unknown","slots":{"location":"","budget":"","constraints":""},"steps":[],"candidates":[],"warnings":[],"question":{"key":"location","text":"Which city or ZIP code should I search?"}}"#.utf8)
                 var previewData = data
                 if ProcessInfo.processInfo.arguments.contains("-business-results-preview") { previewData = Data(Self.businessPreview.utf8) }
+                if ProcessInfo.processInfo.arguments.contains("-agent-no-results-preview") { previewData = Data(#"{"id":"preview","status":"NO_RESULTS","version":3,"service":"plumber","urgency":"flexible","slots":{"location":"94582","budget":"","constraints":""},"steps":[],"candidates":[],"warnings":[]}"#.utf8) }
                 run = try? JSONDecoder().decode(TaskAgentRun.self, from: previewData)
                 selectedBusiness = run?.candidates.first?.id
                 loading = false
@@ -147,8 +159,14 @@ struct TaskAgentCard: View {
                 return
             }
             #endif
+            let key = "\(taskID)#\(refreshID)"
+            // Fetch at once for a new task or a manual refresh; otherwise only poll while a search is running.
+            var fetchNow = loadedKey != key
+            if !fetchNow && !polling { return }
             loading = run == nil && !eligible
             while !Task.isCancelled {
+                if !fetchNow { do { try await Task.sleep(for: .seconds(4)) } catch { return } }
+                fetchNow = false
                 do {
                     var response = try await model.loadTaskAgent(taskID: taskID)
                     // Resume tasks left at the retired optional-question step.
@@ -166,6 +184,7 @@ struct TaskAgentCard: View {
                         fallbackReason = ["PROCUREMENT", "RESEARCH", "LOGISTICS"].contains(response.intent?.category ?? "") ? response.intent?.reason : nil
                         error = nil
                     }
+                    loadedKey = key
                     loading = false
                 } catch {
                     guard !Task.isCancelled else { return }
@@ -173,13 +192,12 @@ struct TaskAgentCard: View {
                     self.error = "Could not refresh task research. \(error.localizedDescription)"
                     return
                 }
-                guard let run, ["QUEUED", "RUNNING"].contains(run.status) else { return }
-                do { try await Task.sleep(for: .seconds(4)) } catch { return }
+                guard polling else { return }
             }
         }
     }
-    private let businessPurple = Color(red: 0.34, green: 0.08, blue: 1)
-    private let businessWash = Color(red: 0.96, green: 0.95, blue: 1)
+    private let businessPurple = AgentStyle.purple
+    private let businessWash = AgentStyle.wash
 
     private func businessCard(_ candidate: TaskAgentRun.Candidate, index: Int) -> some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -189,7 +207,7 @@ struct TaskAgentCard: View {
             } label: {
                 HStack(alignment: .center, spacing: 12) {
                     Text("\(index + 1)").font(.title3.bold()).foregroundStyle(businessPurple)
-                        .frame(width: 34, height: 34).background(Color(red: 0.93, green: 0.90, blue: 1), in: Circle())
+                        .frame(width: 34, height: 34).background(AgentStyle.badge, in: Circle())
                     VStack(alignment: .leading, spacing: 6) {
                         Text(candidate.name).font(.headline).foregroundStyle(Color.nexdoInk)
                             .fixedSize(horizontal: false, vertical: true)
@@ -203,13 +221,13 @@ struct TaskAgentCard: View {
             if selectedBusiness == candidate.id {
                 if index == 0 {
                     Label("Most reviewed", systemImage: "trophy.fill")
-                        .font(.caption.weight(.semibold)).foregroundStyle(Color(red: 0, green: 0.55, blue: 0.30))
+                        .font(.caption.weight(.semibold)).foregroundStyle(AgentStyle.green)
                         .padding(.horizontal, 10).padding(.vertical, 6)
                         .background(Color.green.opacity(0.09), in: Capsule())
                 }
                 businessDetails(candidate)
             }
-        }.padding(16).background(.white, in: RoundedRectangle(cornerRadius: 22))
+        }.padding(16).background(AgentStyle.card, in: RoundedRectangle(cornerRadius: 22))
             .shadow(color: Color.nexdoIndigo.opacity(0.07), radius: 12, y: 5)
     }
 
@@ -246,7 +264,7 @@ struct TaskAgentCard: View {
                             .font(.system(size: 11, weight: .semibold))
                             .frame(maxWidth: .infinity, minHeight: 38)
                             .foregroundStyle((businessTabs[candidate.id] ?? 0) == tab ? businessPurple : Color.nexdoSecondary)
-                            .background((businessTabs[candidate.id] ?? 0) == tab ? Color.white : Color.clear, in: Capsule())
+                            .background((businessTabs[candidate.id] ?? 0) == tab ? AgentStyle.card : Color.clear, in: Capsule())
                     }.buttonStyle(.plain)
                         .accessibilityAddTraits((businessTabs[candidate.id] ?? 0) == tab ? .isSelected : [])
                 }
@@ -278,7 +296,7 @@ struct TaskAgentCard: View {
                     }
                 } label: {
                     Label(action.businessCandidateID == candidate.id ? "Selected for this task" : "Choose this business", systemImage: action.businessCandidateID == candidate.id ? "checkmark.circle.fill" : "checkmark.circle")
-                }.buttonStyle(.borderedProminent).foregroundStyle(.white)
+                }.buttonStyle(.borderedProminent).foregroundStyle(.white).tint(Color(red: 0.34, green: 0.08, blue: 1)) // white text needs the strong purple in both modes
                     .accessibilityIdentifier("business.select.\(candidate.id)")
             }
             Divider().overlay(businessPurple.opacity(0.06))
@@ -307,10 +325,11 @@ struct TaskAgentCard: View {
                 Text(candidate.phone.isEmpty ? "Phone unavailable" : candidate.phone).font(.subheadline)
                 Spacer(minLength: 0)
                 if !candidate.phone.isEmpty {
-                    Button { UIPasteboard.general.string = candidate.phone; error = "Phone number copied." } label: { Label("Copy", systemImage: "doc.on.doc") }
+                    Button { UIPasteboard.general.string = candidate.phone; confirmCopy("Phone number copied.", at: candidate.id + ":phone") } label: { Label("Copy", systemImage: "doc.on.doc") }
                         .buttonStyle(BusinessCompactButton())
                 }
             }
+            copyConfirmation(candidate.id + ":phone")
             if let website = candidate.website, let url = URL(string: website), url.scheme == "https" {
                 HStack {
                     Label("Website", systemImage: "globe").font(.subheadline)
@@ -332,15 +351,16 @@ struct TaskAgentCard: View {
                     .lineLimit(5...)
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(12)
-                    .background(.white, in: RoundedRectangle(cornerRadius: 12))
+                    .background(AgentStyle.card, in: RoundedRectangle(cornerRadius: 12))
                     .focused($focusedField, equals: .agentDraft(candidate.id))
                     .id(TaskDetailsView.Field.agentDraft(candidate.id))
                     .accessibilityLabel("Draft for \(candidate.name)")
                 HStack {
                     Button("Save draft") { focusedField = nil; act("saveDraft", answer: drafts[candidate.id] ?? candidate.draft, candidateID: candidate.id) }
                     Spacer()
-                    Button("Copy draft") { focusedField = nil; UIPasteboard.general.string = drafts[candidate.id] ?? candidate.draft; error = "Draft copied." }
+                    Button("Copy draft") { focusedField = nil; UIPasteboard.general.string = drafts[candidate.id] ?? candidate.draft; confirmCopy("Draft copied.", at: candidate.id + ":draft") }
                 }.font(.subheadline)
+                copyConfirmation(candidate.id + ":draft")
             } label: {
                 HStack(spacing: 10) {
                     Image(systemName: "doc.text").font(.title2).foregroundStyle(businessPurple)
@@ -370,7 +390,7 @@ struct TaskAgentCard: View {
     private func businessReviews(_ candidate: TaskAgentRun.Candidate) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             if candidate.googlePlaceId != nil {
-                Text("Google Maps").font(.system(size: 14)).foregroundStyle(Color(red: 0.37, green: 0.37, blue: 0.37))
+                Text("Google Maps").font(.system(size: 14)).foregroundStyle(Color.nexdoSecondary)
                 Text("Customer feedback · Limited selection, newest first.").font(.caption)
                 if (candidate.feedback ?? []).isEmpty { Text("No written reviews available.").font(.caption) }
                 ForEach(candidate.feedback ?? [], id: \.url) { review in
@@ -383,7 +403,9 @@ struct TaskAgentCard: View {
                         Text("\(review.rating.map { String(format: "%.0f", $0) } ?? "—")/5 · \(review.published)").font(.caption)
                         Text(review.text).font(.subheadline)
                             .lineLimit(expandedReviews.contains(reviewID) ? nil : 3)
-                        if !review.text.isEmpty {
+                            .background { ReviewTruncation(text: review.text) { truncatedReviews[reviewID] = $0 } }
+                        // Only when three lines actually cut the review: "Show more" appeared under any review, however short.
+                        if !review.text.isEmpty && (truncatedReviews[reviewID] == true || expandedReviews.contains(reviewID)) {
                             Button(expandedReviews.contains(reviewID) ? "Show less" : "Show more") {
                                 if expandedReviews.contains(reviewID) { expandedReviews.remove(reviewID) }
                                 else { expandedReviews.insert(reviewID) }
@@ -419,7 +441,7 @@ struct TaskAgentCard: View {
                         .accessibilityLabel(showingSearchNotices ? "Hide search notices" : "Show search notices")
                         .accessibilityValue(showingSearchNotices ? "Expanded" : "Collapsed")
                 }
-            }.foregroundStyle(Color.nexdoIndigo)
+            }.foregroundStyle(AgentStyle.indigo)
             if showingSearchNotices {
                 ForEach(run.warnings.filter(isSearchNotice), id: \.self) { notice in
                     Text(notice).font(.caption).foregroundStyle(.secondary)
@@ -445,23 +467,42 @@ struct TaskAgentCard: View {
                     VStack(spacing: 0) {
                         Text("Businesses\nnear you!").font(.system(size: 11, weight: .medium, design: .rounded))
                             .multilineTextAlignment(.center).foregroundStyle(businessPurple).padding(10)
-                            .background(.white.opacity(0.9), in: RoundedRectangle(cornerRadius: 22)).rotationEffect(.degrees(-10))
+                            .background(AgentStyle.card.opacity(0.9), in: RoundedRectangle(cornerRadius: 22)).rotationEffect(.degrees(-10))
                         Image("business-search-hero").resizable().scaledToFit().frame(width: 105, height: 105).accessibilityHidden(true)
                     }.frame(width: 100)
                 }
             }
         }.padding(16)
-            .background(LinearGradient(colors: [Color(red: 0.95, green: 0.92, blue: 1), Color(red: 0.90, green: 0.94, blue: 1)], startPoint: .topLeading, endPoint: .bottomTrailing), in: RoundedRectangle(cornerRadius: 20))
+            .background(LinearGradient(colors: Array(AgentStyle.washGradient.prefix(2)), startPoint: .topLeading, endPoint: .bottomTrailing), in: RoundedRectangle(cornerRadius: 20))
     }
 
     @ViewBuilder private func assistantHeader(_ run: TaskAgentRun) -> some View {
         if !run.candidates.isEmpty { resultsHeader(run) } else {
         VStack(alignment: .leading, spacing: 10) {
-            Label("AI ASSISTANT", systemImage: "sparkles").font(.caption.weight(.bold)).tracking(2).foregroundStyle(Color.nexdoIndigo)
+            Label("AI ASSISTANT", systemImage: "sparkles").font(.caption.weight(.bold)).tracking(2).foregroundStyle(AgentStyle.indigo)
             Text(label).font(.system(size: 20, weight: .bold)).tracking(-0.6).fixedSize(horizontal: false, vertical: true)
             Text("\(run.service.prefix(1).uppercased() + run.service.dropFirst()) · \(run.slots.location.isEmpty ? "Location needed" : run.slots.location)").font(.subheadline)
         }
         }
+    }
+
+    /// After a search that found nothing, or a cancelled run. A plain retry only repeated the same failed search, so
+    /// "Search again" sends search with the area in the field, prefilled with the last one (as Android, 991de00).
+    @ViewBuilder private func searchAgain(_ run: TaskAgentRun) -> some View {
+        let area = Binding(get: { searchAgainArea ?? run.slots.location }, set: { searchAgainArea = $0 })
+        HStack(spacing: 12) {
+            Image(systemName: "mappin.circle.fill").font(.title2).foregroundStyle(Color.purple)
+                .frame(width: 36, height: 36).background(Color.purple.opacity(0.06), in: RoundedRectangle(cornerRadius: 12))
+            TextField("City or ZIP code", text: area).submitLabel(.done)
+                .focused($focusedField, equals: .agentLocation)
+                .onSubmit { focusedField = nil }
+                .accessibilityLabel("City or ZIP code")
+        }.padding(8).background(AgentStyle.card, in: RoundedRectangle(cornerRadius: 12))
+            .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.purple.opacity(0.65)))
+        let typed = area.wrappedValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        Button { act("search", key: "location", answer: typed); searchAgainArea = nil } label: {
+            HStack(spacing: 12) { Image(systemName: "magnifyingglass"); Text("Search again"); Image(systemName: "arrow.right") }
+        }.buttonStyle(AgentSearchButton()).disabled(typed.isEmpty).accessibilityIdentifier("agent-search-again")
     }
 
     private func searchIntroduction(_ run: TaskAgentRun) -> some View {
@@ -475,7 +516,7 @@ struct TaskAgentCard: View {
                 if !typeSize.isAccessibilitySize {
                     VStack(spacing: 0) {
                         Text("I’ll find the best options near you!").font(.system(size: 12, weight: .medium, design: .rounded)).multilineTextAlignment(.center)
-                            .foregroundStyle(Color.nexdoIndigo).padding(10).background(.white.opacity(0.65), in: RoundedRectangle(cornerRadius: 20)).rotationEffect(.degrees(-8))
+                            .foregroundStyle(AgentStyle.indigo).padding(10).background(AgentStyle.card.opacity(0.65), in: RoundedRectangle(cornerRadius: 20)).rotationEffect(.degrees(-8))
                         Image("agent-business-art").resizable().scaledToFit().frame(width: 94, height: 100).accessibilityHidden(true)
                     }.frame(width: 94)
                 }
@@ -483,8 +524,20 @@ struct TaskAgentCard: View {
     }
 
     #if DEBUG
-    private static let businessPreview = #"{"id": "preview", "status": "READY_FOR_REVIEW", "version": 0, "service": "plumber", "urgency": "flexible", "slots": {"location": "94582", "budget": "", "constraints": ""}, "steps": [], "warnings": ["Listings are not a license check or a guarantee of availability. Confirm service area, budget and requirements before choosing.", "Some businesses were hidden because at least 20 Google reviews could not be verified. Try a new search for more options."], "candidates": [{"id": "0", "googlePlaceId": "preview-0", "name": "Chase Rooter & Plumbing Inc.", "address": "3494 Camino Tassajara #108, Danville, CA 94506, USA", "phone": "(925) 567-9000", "website": "https://example.com", "reason": "Confirm services, licensing, price, and availability with the business.", "draft": "Hello, I’m looking for plumbing services near 94582. Could you provide a quote and your earliest availability? Thank you.", "evidence": [{"source": "Google", "url": "https://maps.google.com", "rating": 5, "reviews": 2309}], "feedback": [{"author": "Sample reviewer", "url": "https://maps.google.com", "rating": 5, "published": "a month ago", "text": "Arrived on time and explained the repair clearly. The work was completed efficiently, and the area was left clean. I appreciated the careful attention to detail and helpful communication throughout the visit."}]}, {"id": "1", "googlePlaceId": "preview-1", "name": "United Plumbing & Water Heaters", "address": "3494 Camino Tassajara #108, Danville, CA 94506, USA", "phone": "(925) 567-9000", "website": "https://example.com", "reason": "Confirm services, licensing, price, and availability with the business.", "draft": "Hello, I’m looking for plumbing services near 94582. Could you provide a quote and your earliest availability? Thank you.", "evidence": [{"source": "Google", "url": "https://maps.google.com", "rating": 5, "reviews": 1403}], "feedback": [{"author": "Sample reviewer", "url": "https://maps.google.com", "rating": 5, "published": "a month ago", "text": "Arrived on time and explained the repair clearly. The work was completed efficiently, and the area was left clean. I appreciated the careful attention to detail and helpful communication throughout the visit."}]}, {"id": "2", "googlePlaceId": "preview-2", "name": "Dependable Plumbing Solutions", "address": "3494 Camino Tassajara #108, Danville, CA 94506, USA", "phone": "(925) 567-9000", "website": "https://example.com", "reason": "Confirm services, licensing, price, and availability with the business.", "draft": "Hello, I’m looking for plumbing services near 94582. Could you provide a quote and your earliest availability? Thank you.", "evidence": [{"source": "Google", "url": "https://maps.google.com", "rating": 4.8, "reviews": 361}], "feedback": [{"author": "Sample reviewer", "url": "https://maps.google.com", "rating": 5, "published": "a month ago", "text": "Arrived on time and explained the repair clearly. The work was completed efficiently, and the area was left clean. I appreciated the careful attention to detail and helpful communication throughout the visit."}]}]}"#
+    private static let businessPreview = #"{"id": "preview", "status": "READY_FOR_REVIEW", "version": 0, "service": "plumber", "urgency": "flexible", "slots": {"location": "94582", "budget": "", "constraints": ""}, "steps": [], "warnings": ["Listings are not a license check or a guarantee of availability. Confirm service area, budget and requirements before choosing.", "Some businesses were hidden because at least 20 Google reviews could not be verified. Try a new search for more options."], "candidates": [{"id": "0", "googlePlaceId": "preview-0", "name": "Chase Rooter & Plumbing Inc.", "address": "3494 Camino Tassajara #108, Danville, CA 94506, USA", "phone": "(925) 567-9000", "website": "https://example.com", "reason": "Confirm services, licensing, price, and availability with the business.", "draft": "Hello, I’m looking for plumbing services near 94582. Could you provide a quote and your earliest availability? Thank you.", "evidence": [{"source": "Google", "url": "https://maps.google.com", "rating": 5, "reviews": 2309}], "feedback": [{"author": "Sample reviewer", "url": "https://maps.google.com", "rating": 5, "published": "a month ago", "text": "Arrived on time and explained the repair clearly. The work was completed efficiently, and the area was left clean. I appreciated the careful attention to detail and helpful communication throughout the visit."}]}, {"id": "1", "googlePlaceId": "preview-1", "name": "United Plumbing & Water Heaters", "address": "3494 Camino Tassajara #108, Danville, CA 94506, USA", "phone": "(925) 567-9000", "website": "https://example.com", "reason": "Confirm services, licensing, price, and availability with the business.", "draft": "Hello, I’m looking for plumbing services near 94582. Could you provide a quote and your earliest availability? Thank you.", "evidence": [{"source": "Google", "url": "https://maps.google.com", "rating": 5, "reviews": 1403}], "feedback": [{"author": "Sample reviewer", "url": "https://maps.google.com", "rating": 5, "published": "a month ago", "text": "Quick, friendly and fair."}]}, {"id": "2", "googlePlaceId": "preview-2", "name": "Dependable Plumbing Solutions", "address": "3494 Camino Tassajara #108, Danville, CA 94506, USA", "phone": "(925) 567-9000", "website": "https://example.com", "reason": "Confirm services, licensing, price, and availability with the business.", "draft": "Hello, I’m looking for plumbing services near 94582. Could you provide a quote and your earliest availability? Thank you.", "evidence": [{"source": "Google", "url": "https://maps.google.com", "rating": 4.8, "reviews": 361}], "feedback": [{"author": "Sample reviewer", "url": "https://maps.google.com", "rating": 5, "published": "a month ago", "text": "Arrived on time and explained the repair clearly. The work was completed efficiently, and the area was left clean. I appreciated the careful attention to detail and helpful communication throughout the visit."}]}]}"#
     #endif
+
+    private func confirmCopy(_ text: String, at place: String) {
+        let notice = CopyNotice(place: place, text: text)
+        copyNotice = notice
+        Task { try? await Task.sleep(for: .seconds(2)); if copyNotice == notice { copyNotice = nil } }
+    }
+    @ViewBuilder private func copyConfirmation(_ place: String) -> some View {
+        if let copyNotice, copyNotice.place == place {
+            Label(copyNotice.text, systemImage: "checkmark.circle.fill").font(.caption).foregroundStyle(AgentStyle.green)
+                .accessibilityAddTraits(.updatesFrequently)
+        }
+    }
 
     private func act(_ action: String, key: String? = nil, answer: String? = nil, candidateID: String? = nil) {
         #if DEBUG
@@ -513,9 +566,48 @@ private struct AgentSearchButton: ButtonStyle {
 
 private struct BusinessCompactButton: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label.font(.caption.weight(.semibold)).foregroundStyle(Color(red: 0.34, green: 0.08, blue: 1))
+        configuration.label.font(.caption.weight(.semibold)).foregroundStyle(AgentStyle.purple)
             .padding(.horizontal, 12).frame(minHeight: 36)
-            .background(Color(red: 0.96, green: 0.95, blue: 1), in: RoundedRectangle(cornerRadius: 12))
+            .background(AgentStyle.wash, in: RoundedRectangle(cornerRadius: 12))
             .opacity(configuration.isPressed ? 0.65 : 1)
     }
+}
+
+/// The agent card's palette. The light values are the original design; the dark ones keep the purple tint
+/// on dark surfaces, so the adaptive text drawn on them (nexdoInk, nexdoSecondary) stays readable.
+private enum AgentStyle {
+    private static func adaptive(_ light: UIColor, _ dark: UIColor) -> Color { Color(uiColor: UIColor { $0.userInterfaceStyle == .dark ? dark : light }) }
+    private static func rgb(_ r: CGFloat, _ g: CGFloat, _ b: CGFloat) -> UIColor { UIColor(red: r, green: g, blue: b, alpha: 1) }
+    static let card = Color(uiColor: .secondarySystemGroupedBackground)
+    static let indigo = adaptive(rgb(0.24, 0.16, 0.94), rgb(0.64, 0.60, 1)) // nexdoIndigo in light mode
+    static let purple = adaptive(rgb(0.34, 0.08, 1), rgb(0.74, 0.64, 1))
+    static let wash = adaptive(rgb(0.96, 0.95, 1), rgb(0.17, 0.15, 0.27))
+    static let badge = adaptive(rgb(0.93, 0.90, 1), rgb(0.24, 0.20, 0.38))
+    static let green = adaptive(rgb(0, 0.55, 0.30), rgb(0.40, 0.86, 0.58))
+    static let washGradient = [adaptive(rgb(0.95, 0.92, 1), rgb(0.16, 0.13, 0.27)), adaptive(rgb(0.92, 0.94, 1), rgb(0.12, 0.13, 0.25)), adaptive(rgb(0.97, 0.98, 1), rgb(0.10, 0.10, 0.17))]
+}
+
+/// Reports whether `text` needs more than three lines at the width it is given, by laying it out twice (clamped and
+/// unclamped) out of sight and comparing heights.
+private struct ReviewTruncation: View {
+    let text: String
+    let report: (Bool) -> Void
+    var body: some View {
+        GeometryReader { proxy in
+            let clamped = Text(text).font(.subheadline).lineLimit(3)
+            let full = Text(text).font(.subheadline).fixedSize(horizontal: false, vertical: true)
+            ZStack {
+                clamped.frame(width: proxy.size.width, alignment: .leading).background(GeometryReader { c in Color.clear.preference(key: ReviewHeights.self, value: [0: c.size.height]) })
+                full.frame(width: proxy.size.width, alignment: .leading).background(GeometryReader { f in Color.clear.preference(key: ReviewHeights.self, value: [1: f.size.height]) })
+            }
+            .hidden()
+            .onPreferenceChange(ReviewHeights.self) { heights in
+                if let c = heights[0], let f = heights[1] { report(f > c + 1) }
+            }
+        }
+    }
+}
+private struct ReviewHeights: PreferenceKey {
+    static let defaultValue: [Int: CGFloat] = [:]
+    static func reduce(value: inout [Int: CGFloat], nextValue: () -> [Int: CGFloat]) { value.merge(nextValue()) { $1 } }
 }

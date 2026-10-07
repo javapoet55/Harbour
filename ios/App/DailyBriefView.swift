@@ -27,9 +27,13 @@ struct DailyBriefView: View {
     let voice: () -> Void
     let read: (Int, String) -> Void
     let readingSection: Int?
+    /// Why Read aloud could not start (no OpenAI sharing, a voice failure). The composer that shows it elsewhere is hidden here.
+    var readError: String? = nil
     @Environment(\.dynamicTypeSize) private var typeSize
     @State private var selectedSection: SectionRoute?
-    private struct SectionRoute: Identifiable { let id: Int }
+    /// Keyed by the section's title, not its position: completing the last task a section names removes it from
+    /// visibleSections, and the page must keep its title rather than go blank or show the next section.
+    private struct SectionRoute: Identifiable { let id: String }
 
     private let ink = Color(red: 0.04, green: 0.05, blue: 0.22)
     private let secondary = Color(red: 0.30, green: 0.34, blue: 0.53)
@@ -68,6 +72,7 @@ struct DailyBriefView: View {
                 .background(.purple.opacity(0.07), in: RoundedRectangle(cornerRadius: 22))
                 .overlay(RoundedRectangle(cornerRadius: 22).stroke(.white, lineWidth: 1))
 
+            if let readError { ReadAloudError(message: readError) }
             ForEach(Array(visibleSections.enumerated()), id: \.offset) { index, section in
                 sectionCard(index, section)
             }
@@ -100,15 +105,15 @@ struct DailyBriefView: View {
         }.foregroundStyle(ink).buttonStyle(.plain).padding(.top, 18)
             .onAppear {
                 #if DEBUG
-                if ProcessInfo.processInfo.arguments.contains("-open-brief-detail"), !visibleSections.isEmpty { selectedSection = SectionRoute(id: 0) }
+                if ProcessInfo.processInfo.arguments.contains("-open-brief-detail"), !visibleSections.isEmpty { selectedSection = SectionRoute(id: visibleSections[0].title) }
                 #endif
             }
             .fullScreenCover(item: $selectedSection) { route in
-                if visibleSections.indices.contains(route.id) {
-                    BriefSectionDetailView(title: style(visibleSections[route.id].title).0,
-                        items: visibleSections[route.id].items, ask: ask,
-                        read: { read(route.id, visibleSections[route.id].items.joined(separator: "\n\n")) })
-                }
+                // A section that has emptied keeps its page: the title, "Nothing to report here today." and Back.
+                let index = visibleSections.firstIndex { $0.title == route.id }
+                BriefSectionDetailView(title: style(route.id).0,
+                    items: index.map { visibleSections[$0].items } ?? [], readError: readError, ask: ask,
+                    read: { if let index { read(index, visibleSections[index].items.joined(separator: "\n\n")) } })
             }
     }
 
@@ -165,14 +170,17 @@ struct DailyBriefView: View {
 
     private func sectionCard(_ index: Int, _ section: AssistantTurn.Section) -> some View {
         let (title, artwork, color) = style(section.title)
-        return Button { selectedSection = SectionRoute(id: index) } label: {
+        return Button { selectedSection = SectionRoute(id: section.title) } label: {
             HStack(spacing: 14) {
                 BriefArtwork(part: artwork).frame(width: 52, height: 52).accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 6) {
                     HStack(spacing: 8) {
                         Text(title).font(.headline).fixedSize(horizontal: false, vertical: true)
-                        Text("\(section.items.count)").font(.subheadline.bold()).foregroundStyle(color)
-                            .padding(6).background(color.opacity(0.12), in: Circle())
+                        let count = BriefContent.itemCount(section.items)
+                        if count > 0 {
+                            Text("\(count)").font(.subheadline.bold()).foregroundStyle(color)
+                                .padding(6).background(color.opacity(0.12), in: Circle())
+                        }
                     }
                     Text(section.items.first ?? "Nothing to report.").font(.subheadline).foregroundStyle(secondary).lineLimit(2)
                 }.frame(maxWidth: .infinity, alignment: .leading)
@@ -210,5 +218,16 @@ private struct BriefArtwork: View {
         if let image = Self.sprites[part] {
             Image(uiImage: image).resizable().scaledToFit().blendMode(.multiply)
         }
+    }
+}
+
+/// A Read aloud failure, shown where Read aloud was tapped.
+struct ReadAloudError: View {
+    let message: String
+    var body: some View {
+        Label(message, systemImage: "speaker.slash.fill").font(.subheadline).foregroundStyle(.red)
+            .frame(maxWidth: .infinity, alignment: .leading).fixedSize(horizontal: false, vertical: true)
+            .padding(12).background(Color.red.opacity(0.07), in: RoundedRectangle(cornerRadius: 16))
+            .accessibilityAddTraits(.updatesFrequently)
     }
 }

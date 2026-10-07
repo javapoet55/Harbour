@@ -28,7 +28,7 @@ struct HelpView: View {
                             .accessibilityLabel("Clear search").frame(minWidth: 32, minHeight: 44)
                     }
                 }.padding(.horizontal, 16).frame(minHeight: 56)
-                    .background(.white, in: RoundedRectangle(cornerRadius: 18))
+                    .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 18))
                     .overlay(RoundedRectangle(cornerRadius: 18).stroke(Color.nexdoIndigo.opacity(0.22)))
                 LazyVGrid(columns: [GridItem(.flexible())] + (typeSize.isAccessibilitySize ? [] : [GridItem(.flexible())]), spacing: 14) {
                     ForEach(HelpCategory.allCases) { item in categoryCard(item) }
@@ -118,7 +118,8 @@ struct HelpView: View {
 }
 private extension View {
     func helpCard() -> some View {
-        background(.white.opacity(0.95), in: RoundedRectangle(cornerRadius: 22))
+        // The system card surface: white in light mode, dark grey in dark mode, where nexdoInk turns white.
+        background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 22))
             .shadow(color: Color.nexdoIndigo.opacity(0.04), radius: 10, y: 4)
     }
 }
