@@ -68,7 +68,7 @@ struct TaskAgentCard: View {
                     if run.candidates.isEmpty { Divider().overlay(Color.nexdoIndigo.opacity(0.08)) }
                     if findingBusinesses { searchProgress }
                     if !findingBusinesses, let question = run.question, !["urgency", "preferences"].contains(question.key) {
-                        Text(question.key == "urgency" ? "Ready to search nearby businesses" : question.text).font(.system(size: 16, weight: .semibold)).fixedSize(horizontal: false, vertical: true)
+                        Text(question.text).font(.system(size: 16, weight: .semibold)).fixedSize(horizontal: false, vertical: true)
                         if question.key == "discovery" {
                             HStack { Button("Find a professional") { act("answer", key: "discovery", answer: "yes") }; Spacer(); Button("Keep as a task") { act("cancel") } }
                         } else {
