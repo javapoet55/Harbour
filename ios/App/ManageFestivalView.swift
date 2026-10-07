@@ -360,8 +360,10 @@ private struct FestivalScheduleSuccess:View {
             plan.automaticDelivery ? "Will send automatically by email" : plan.channel == "messages" ? "We’ll remind you, the sender, to tap Send in Messages" : "We’ll remind you, the sender, to deliver your wish"
         })).sorted()
     }
+    /// In time order: sorting the formatted labels put "10 Oct 2026 at 8:00 AM" before "6 Oct 2026 at 8:00 AM" (as on Android, 2421880).
     private var sendTimes:[String] {
-        Array(Set(plans.map { MomentDates.label($0.date,zone:$0.timeZoneID) })).sorted()
+        var seen=Set<String>()
+        return plans.sorted{$0.date < $1.date}.map{MomentDates.label($0.date,zone:$0.timeZoneID)}.filter{seen.insert($0).inserted}
     }
     var body:some View {
         ZStack {
