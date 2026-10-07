@@ -156,7 +156,9 @@ export function difference(value: ShoppingComparison, nutrient: ShoppingNutrient
   const b = alternativeValue(value, nutrient);
   if (a === null || b === null) return { kind: 'unknown' };
   const delta = b - a;
-  if (Math.abs(delta) < 0.0001) return { kind: 'same' };
+  // Android ahead of iOS: Swift counts any change over 0.0001, so a fraction of a gram showed as "↑ 0 g" and
+  // earned "Higher protein". A change that rounds to 0 in the table (whole units) is the same.
+  if (Math.round(Math.abs(delta)) === 0) return { kind: 'same' };
   return delta < 0 ? { kind: 'lower', amount: -delta } : { kind: 'higher', amount: delta };
 }
 

@@ -1629,3 +1629,7 @@ gets the fix too, and the Swift app is to mirror it. Each fix has a test that fa
   row always shows both; the row now shows Mark Incomplete for a completed event and Mark Complete otherwise,
   as the â‹¯ menu already did (`EventDetailsScreen.tsx`). The delete-with-warnings alert that dismisses twice
   (same Â§22 item) is Swift-only: RN's alert dismisses once.
+- **Android ahead of iOS: Item Alternatives shows no zero differences.** Swift counts any change over 0.0001, so a
+  few tenths of a gram showed as "â†‘ 0 g" in the comparison table and earned a label such as "Higher protein"
+  (and passed that filter). A change that rounds to 0 at the table's whole units is now "= Same" and earns no
+  goal (`difference` in `productFacts.ts`).

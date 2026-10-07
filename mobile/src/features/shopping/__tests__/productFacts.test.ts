@@ -47,6 +47,10 @@ test('nutrition compares lower, higher, same and unknown', () => {
   expect(difference(value, 'Sugar')).toEqual({ kind: 'same' });
   expect(difference(value, 'Calcium')).toEqual({ kind: 'unknown' });
   expect(difference(comparison(null, facts()), 'Total Fat')).toEqual({ kind: 'unknown' });
+  // A change that the table would show as "↑ 0 g" is the same, and earns no goal.
+  expect(difference(comparison(facts({ protein: 8 }), facts({ protein: 8.3 })), 'Protein')).toEqual({ kind: 'same' });
+  expect(goalSupported('Higher protein', alternative(facts({ protein: 8.3 })), facts({ protein: 8 }))).toBe(false);
+  expect(difference(comparison(facts({ protein: 8 }), facts({ protein: 8.6 })), 'Protein')).toEqual({ kind: 'higher', amount: expect.closeTo(0.6) });
 });
 
 test('nutrition normalises only compatible servings', () => {
