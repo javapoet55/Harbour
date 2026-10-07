@@ -117,7 +117,7 @@ export default function SettingsPage() {
             <input type="checkbox" checked={pref.voiceEnabled} onChange={(e) => setPref({ ...pref, voiceEnabled: e.target.checked })} />
             Enable spoken replies
           </label>
-          <p className="mt-2 text-xs text-[var(--muted)]">Transcripts are kept {pref.transcriptRetentionDays} days. Raw audio is not stored in this MVP.</p>
+          <p className="mt-2 text-xs text-[var(--muted)]">Transcripts are kept {pref.transcriptRetentionDays} days. Raw audio is not stored.</p>
           <div className="mt-4 border-t border-[var(--line)] pt-4">
             <label className="flex items-start gap-2 text-sm">
               <input className="mt-1" type="checkbox" checked={pref.personalizationEnabled} onChange={(e) => setPref({ ...pref, personalizationEnabled: e.target.checked })} />
@@ -162,7 +162,7 @@ export default function SettingsPage() {
               </div>
             ))}
           </div>
-          <p className="mt-3 text-xs text-[var(--muted)]">Export and account deletion are available from support in production. This demo account can be reset with <code>yarn db:reset</code>.</p>
+          <p className="mt-3 text-xs text-[var(--muted)]">To delete your account, contact support.</p>
           <a className="harbor-btn mt-3 inline-flex" href="/api/export" download="nexdo-export.json">Export my Nexdo data</a>
         </section>
       </div>

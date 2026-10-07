@@ -119,6 +119,41 @@ it('starts search directly from location without optional questions',async()=>{
  await expect(controlRun(user.id,problem.id,{action:'search',version:pending.version,answer:'94582'})).rejects.toThrow('INVALID_AGENT_TRANSITION');
 });
 
+it('searches again after a search with no results or a cancelled run',async()=>{
+ const {user,task}=await setup();const r=await ready(user.id,task.id);
+ await processRun(r.id,vi.fn(async()=>[]));
+ let run=(await ownedRun(user.id,task.id)).agentRun!;expect(run.status).toBe('NO_RESULTS');
+ // "Search again" with a new area, from NO_RESULTS.
+ const again=await controlRun(user.id,task.id,{action:'search',version:run.version,answer:'Santa Clara'});
+ expect(again).toMatchObject({status:'QUEUED',slots:{location:'Santa Clara'},candidates:[],warnings:[]});
+ expect(again.steps.every(s=>s.status==='pending')).toBe(true);
+ await processRun(again.id,vi.fn(async()=>[business(1)]));
+ expect((await ownedRun(user.id,task.id)).agentRun!.status).toBe('READY_FOR_REVIEW');
+ // Retry from a cancelled run, with the retry budget restored.
+ run=(await ownedRun(user.id,task.id)).agentRun!;
+ const cancelled=await controlRun(user.id,task.id,{action:'cancel',version:run.version});
+ await prisma.taskAgentRun.update({where:{id:run.id},data:{attempts:3}});
+ const retried=await controlRun(user.id,task.id,{action:'retry',version:cancelled.version});
+ expect(retried).toMatchObject({status:'QUEUED',candidates:[],slots:{location:'Santa Clara'}});
+ expect((await ownedRun(user.id,task.id)).agentRun!.attempts).toBe(0);
+ await processRun(retried.id,vi.fn(async()=>[]));
+ run=(await ownedRun(user.id,task.id)).agentRun!;expect(run.status).toBe('NO_RESULTS');
+ expect(await controlRun(user.id,task.id,{action:'resume',version:run.version})).toMatchObject({status:'QUEUED'});
+});
+
+it('keeps a run cancelled when its task is no longer a business task or is finished',async()=>{
+ const {user,task}=await setup();
+ await updateTask(user.id,task.id,{title:'Call mom'});
+ let run=(await ownedRun(user.id,task.id)).agentRun!;expect(run.status).toBe('CANCELLED');
+ for(const action of ['retry','resume'])await expect(controlRun(user.id,task.id,{action,version:run.version})).rejects.toThrow('INVALID_AGENT_TRANSITION');
+ await expect(controlRun(user.id,task.id,{action:'search',version:run.version,answer:'94582'})).rejects.toThrow('INVALID_AGENT_TRANSITION');
+ const done=await setup();const r=await ready(done.user.id,done.task.id);
+ await controlRun(done.user.id,done.task.id,{action:'cancel',version:r.version});
+ await prisma.task.update({where:{id:done.task.id},data:{status:'COMPLETED'}});
+ run=(await ownedRun(done.user.id,done.task.id)).agentRun!;
+ await expect(controlRun(done.user.id,done.task.id,{action:'retry',version:run.version})).rejects.toThrow('INVALID_AGENT_TRANSITION');
+});
+
 it('resumes a legacy preferences prompt directly without losing saved requirements',async()=>{
  const {user,task}=await setup('Find a handyman');
  const initial=(await ownedRun(user.id,task.id)).agentRun!;

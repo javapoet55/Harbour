@@ -282,10 +282,14 @@ describe('daily insight and one action', () => {
     expect(await executeTool(call.id, 'add_insight_items', {}, lookup)).toEqual({ added: ['Greek yogurt', 'Lentils'], listTitle: 'Weekend shop' });
   });
   it('adds the foods only once when two add requests land at the same time', async () => {
-    await prisma.foodLogEntry.create({ data: { userId: other, localDate: '2026-09-28', meal: 'LUNCH', description: 'rice', foodName: 'rice', kcal: 900, proteinG: 30, fiberG: 30, calciumMg: 1100, ironMg: 20, vitaminDIu: 900, source: 'USDA', status: 'CONFIRMED' } });
+    // A new week (Monday 28 Sep) needs three logged days of its own before it has an insight.
+    for (const d of ['2026-09-28', '2026-09-29', '2026-09-30']) {
+      await prisma.foodLogEntry.create({ data: { userId: other, localDate: d, meal: 'LUNCH', description: 'rice', foodName: 'rice', kcal: 900, proteinG: 30, fiberG: 30, calciumMg: 1100, ironMg: 20, vitaminDIu: 900, source: 'USDA', status: 'CONFIRMED' } });
+    }
     await prisma.shoppingItem.deleteMany({ where: { list: { userId: other }, name: { in: ['Greek yogurt', 'Lentils'] } } });
-    const insight = (await dailyInsight(other, '2026-09-28'))!;
-    const [a, b] = await Promise.all([handleInsight(other, '2026-09-28', insight.key, 'add'), handleInsight(other, '2026-09-28', insight.key, 'add')]);
+    const insight = (await dailyInsight(other, '2026-09-30'))!;
+    expect(insight).toMatchObject({ kind: 'GAP', nutrient: 'protein' });
+    const [a, b] = await Promise.all([handleInsight(other, '2026-09-30', insight.key, 'add'), handleInsight(other, '2026-09-30', insight.key, 'add')]);
     expect([...a.added, ...b.added].sort()).toEqual(['Greek yogurt', 'Lentils']);
     const list = await prisma.shoppingList.findFirstOrThrow({ where: { userId: other }, include: { items: true } });
     expect(list.items.filter(i => i.name === 'Greek yogurt')).toHaveLength(1);
@@ -337,6 +341,22 @@ describe('no answer, call-backs and the app food log', () => {
     expect(week).toMatchObject({ startDate: '2026-09-21', endDate: '2026-09-27', daysLogged: 1, calorieGoal: 1800 }); // Mon–Sun
     expect(week.daily.map(d => d.date)).toEqual(['2026-09-21', '2026-09-22', '2026-09-23', '2026-09-24', '2026-09-25', '2026-09-26', '2026-09-27']);
     expect(week.daily.find(d => d.date === '2026-09-27')?.kcal).toBe(25 + 210 + 650);
+  });
+  it('keeps the source and nutrients when an edit resends the same calorie value', async () => {
+    const salmon = await prisma.foodLogEntry.create({ data: {
+      userId, localDate: '2026-09-28', meal: 'DINNER', description: 'Salmon', foodName: 'Salmon', kcal: 412, proteinG: 39.9, fatG: 26.6,
+      vitaminDIu: 526, source: 'USDA', sourceRef: 'USDA:175167', status: 'CONFIRMED',
+    } });
+    // The apps' editor sends kcal on every save, even for a rename.
+    const renamed = await updateEntry(userId, salmon.id, { description: 'Grilled salmon', meal: 'DINNER', kcal: 412 });
+    expect(renamed).toMatchObject({ description: 'Grilled salmon', kcal: 412, source: 'USDA', proteinG: 39.9, fatG: 26.6, vitaminDIu: 526, status: 'CONFIRMED' });
+    expect((await prisma.foodLogEntry.findUniqueOrThrow({ where: { id: salmon.id } })).sourceRef).toBe('USDA:175167');
+    const flagged = await prisma.foodLogEntry.create({ data: {
+      userId, localDate: '2026-09-28', meal: 'LUNCH', description: 'rice', foodName: 'rice', kcal: 200, carbsG: 45, source: 'USDA', status: 'NEEDS_REVIEW', reviewReason: 'Portion guessed',
+    } });
+    expect(await updateEntry(userId, flagged.id, { meal: 'DINNER', kcal: 200 })).toMatchObject({ meal: 'DINNER', source: 'USDA', carbsG: 45, status: 'NEEDS_REVIEW', reviewReason: 'Portion guessed' });
+    // A changed value is still a manual correction.
+    expect(await updateEntry(userId, salmon.id, { kcal: 380 })).toMatchObject({ kcal: 380, source: 'MANUAL', proteinG: null, fatG: null, vitaminDIu: null, status: 'CONFIRMED' });
   });
   it('rate-limits "call me now" and respects the calling window', async () => {
     vi.useFakeTimers({ toFake: ['Date'] });

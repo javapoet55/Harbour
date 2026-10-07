@@ -36,12 +36,25 @@ it.each(['COMPLETED', 'CANCELLED'])('cancels all pending reminders on PATCH %s',
  expect((await patch(t.id, { status })).status).toBe(200);
  expect((await prisma.reminder.findMany({ where: { taskId: t.id } })).every(r => r.status === 'CANCELLED')).toBe(true);
  const push = vi.spyOn(pushProvider, 'send'); const email = vi.spyOn(emailProvider, 'send'); const sms = vi.spyOn(smsProvider, 'send');
- await tickReminders(now); expect(push).not.toHaveBeenCalled(); expect(email).not.toHaveBeenCalled(); expect(sms).not.toHaveBeenCalled();
+ await tickReminders(now, { userId }); expect(push).not.toHaveBeenCalled(); expect(email).not.toHaveBeenCalled(); expect(sms).not.toHaveBeenCalled();
 });
 it.each([{ status: 'COMPLETED' }, { status: 'CANCELLED' }, { deletedAt: now }])('suppresses legacy orphaned pending reminders for %j', async data => {
  const t = await task(data); await scheduleRequestedReminder(userId, t.id, now);
  const push = vi.spyOn(pushProvider, 'send'); const email = vi.spyOn(emailProvider, 'send'); const sms = vi.spyOn(smsProvider, 'send');
- await tickReminders(now); expect(push).not.toHaveBeenCalled(); expect(email).not.toHaveBeenCalled(); expect(sms).not.toHaveBeenCalled();
+ await tickReminders(now, { userId }); expect(push).not.toHaveBeenCalled(); expect(email).not.toHaveBeenCalled(); expect(sms).not.toHaveBeenCalled();
+});
+// Every test file shares one database, so an unscoped tick would send other files' due reminders and trip
+// the send spies above. The ticks here are scoped to this test's account.
+it('ticks only the reminders of the account it is scoped to', async () => {
+ const other = await prisma.user.create({ data: { name: 'Other file', email: `${randomUUID()}@taskbugs.test`, passwordHash: 'unused', preference: { create: { pushEnabled: true } } } });
+ try {
+  const t = await prisma.task.create({ data: { userId: other.id, title: 'Someone else', status: 'PLANNED' } });
+  await scheduleRequestedReminder(other.id, t.id, now);
+  const push = vi.spyOn(pushProvider, 'send');
+  expect(await tickReminders(now, { userId })).toMatchObject({ scanned: 0 });
+  expect(push).not.toHaveBeenCalled();
+  expect((await prisma.reminder.findFirstOrThrow({ where: { taskId: t.id } })).status).toBe('SCHEDULED');
+ } finally { await prisma.user.delete({ where: { id: other.id } }); }
 });
 it('copies context and resets subtasks, recreates defaults, and does not clone twice on retry', async () => {
  const tag = await prisma.tag.create({ data: { userId, name: 'repeat' } });
@@ -126,7 +139,7 @@ it('does not escalate after completion during an earlier channel attempt', async
    return { id: '', status: 'FAILED', reason: 'PUSH_NOT_REGISTERED' };
  });
  const email = vi.spyOn(emailProvider, 'send');
- await tickReminders(now);
+ await tickReminders(now, { userId });
  expect(email).not.toHaveBeenCalled();
  expect((await prisma.reminder.findFirstOrThrow({ where: { taskId: t.id } })).status).toBe('CANCELLED');
 });

@@ -64,9 +64,14 @@ export function reopenReminder(db: ReminderDb, id: string, fireAt: Date) {
   return db.reminder.update({ where: { id }, data: { fireAt, status: 'SCHEDULED', generation: { increment: 1 } } });
 }
 
-async function tickRemindersImpl(now = new Date()) {
+/**
+ * Sends every due reminder. `scope.userId` limits the tick to one account: tests share one database across
+ * parallel workers, and an unscoped tick there sends (and changes) other test files' reminders.
+ */
+async function tickRemindersImpl(now = new Date(), scope: { userId?: string } = {}) {
   const due = await prisma.reminder.findMany({
     where: {
+      ...(scope.userId ? { userId: scope.userId } : {}),
       fireAt: { lte: now },
       status: { in: ['SCHEDULED', 'QUEUED', 'RETRYING'] },
     },

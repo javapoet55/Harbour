@@ -40,25 +40,33 @@ export async function ownedRun(userId:string,taskId:string){
  const task=await prisma.task.findFirst({where:{id:taskId,userId,deletedAt:null},include:{agentRun:true}});
  if(!task)throw new Error('NOT_FOUND');return task;
 }
+/** Finished runs the user can search again from. A new search starts over: fresh steps, no results, and a full retry budget. */
+const SEARCH_AGAIN=['NO_RESULTS','CANCELLED'];
 export async function controlRun(userId:string,taskId:string,input:{action:string;version:number;key?:string;answer?:string;budget?:string;constraints?:string;candidateId?:string}){
  const task=await ownedRun(userId,taskId);const run=task.agentRun;if(!run)throw new Error('NOT_FOUND');
  if(run.version!==input.version)throw new Error('STALE_AGENT_RUN');
  const slots=JSON.parse(run.slotsJson) as AgentSlots;
  if(slots.urgency==='unknown')slots.urgency='flexible';
  let data:Prisma.TaskAgentRunUpdateManyMutationInput={version:{increment:1},leaseUntil:null,error:null};
+ const searchAgain=SEARCH_AGAIN.includes(run.status);
+ // A run cancelled because the task stopped being a business task stays cancelled.
+ if(searchAgain&&['resume','retry','search'].includes(input.action)&&!classifyTask(task.title,task.notes).eligible)throw new Error('INVALID_AGENT_TRANSITION');
+ const fresh={stepsJson:JSON.stringify(plan()),resultsJson:'[]',warningsJson:'[]',attempts:0};
  if(input.action==='cancel')data={...data,status:'CANCELLED'};
  else if(input.action==='pause'&&['QUEUED','RUNNING'].includes(run.status))data={...data,status:'PAUSED'};
  else if(['resume','retry'].includes(input.action)&&['PAUSED','FAILED','BLOCKED'].includes(run.status)){
   if(run.attempts>=3)throw new Error('AGENT_RETRY_LIMIT');
   data={...data,status:nextQuestion(slots)?'NEEDS_INPUT':'QUEUED',stepsJson:JSON.stringify(plan()),resultsJson:'[]',warningsJson:'[]'};
- }else if(input.action==='search'&&run.status==='NEEDS_INPUT'){
+ }else if(['resume','retry'].includes(input.action)&&searchAgain){
+  data={...data,...fresh,status:nextQuestion(slots)?'NEEDS_INPUT':'QUEUED',targetAt:new Date(Date.now()+(slots.urgency==='urgent'?5*60_000:48*3600_000))};
+ }else if(input.action==='search'&&(run.status==='NEEDS_INPUT'||searchAgain)){
   // Search confirms the supplied area and skips optional questions, but not discovery consent.
   if(slots.discoveryConfirmed===false)throw new Error('INVALID_AGENT_TRANSITION');
   const location=(input.answer??'').trim();
   if(!location||location.length>120)throw new Error('INVALID_INPUT');
   slots.location=location;slots.locationConfirmed=true;
   slots.preferencesConfirmed=true;
-  data={...data,slotsJson:JSON.stringify(slots),urgency:slots.urgency,status:'QUEUED',targetAt:new Date(Date.now()+(slots.urgency==='urgent'?5*60_000:48*3600_000))};
+  data={...data,...(searchAgain?fresh:{}),slotsJson:JSON.stringify(slots),urgency:slots.urgency,status:'QUEUED',targetAt:new Date(Date.now()+(slots.urgency==='urgent'?5*60_000:48*3600_000))};
  }else if(input.action==='answer'&&run.status==='NEEDS_INPUT'){
   const question=nextQuestion(slots);if(question?.key!==input.key)throw new Error('STALE_AGENT_RUN');
   if(input.key==='discovery'){if(input.answer!=='yes')throw new Error('INVALID_INPUT');slots.discoveryConfirmed=true;}

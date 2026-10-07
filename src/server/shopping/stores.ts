@@ -22,32 +22,73 @@ const resultSchema = z.object({ places: z.array(z.object({
   photos: z.array(z.object({ name: z.string() })).optional(),
 })).optional() });
 
+const point = z.object({ latitude: z.number(), longitude: z.number() });
+const areaSchema = z.object({ places: z.array(z.object({
+  types: z.array(z.string()).optional(), location: point.optional(), viewport: z.object({ low: point, high: point }).optional(),
+})).optional() });
+// Result types that name a place on the map — a city, ZIP, neighborhood, county, state or street address.
+// A country is left out: it is what a query that matched nothing else resolves to, and is no search area.
+const AREA_TYPES = new Set(['locality', 'sublocality', 'postal_code', 'postal_town', 'neighborhood', 'colloquial_area', 'administrative_area_level_1',
+  'administrative_area_level_2', 'administrative_area_level_3', 'street_address', 'route', 'premise', 'subpremise', 'intersection', 'plus_code']);
+const AREA_MARGIN_DEGREES = 0.25; // about 25 km of latitude around the area, so stores just outside its bounds still show
+
 const placesPost = (key: string, fieldMask: string, body: unknown) => fetch('https://places.googleapis.com/v1/places:searchText', {
   method: 'POST', cache: 'no-store', signal: AbortSignal.timeout(12000),
   headers: { 'Content-Type': 'application/json', 'X-Goog-Api-Key': key, 'X-Goog-FieldMask': fieldMask },
   body: JSON.stringify(body),
 });
 
+const unavailable = () => new MomentError('Store search is temporarily unavailable. Try again or enter the address manually.', 503);
+
+/**
+ * The map rectangle a typed area covers, widened by AREA_MARGIN_DEGREES, or null when Google cannot place it.
+ * Without this, "Safeway near Qzxqv Nowhere, USA" matched Safeways in other states.
+ */
+async function areaBounds(key: string, area: string) {
+  let response: Response;
+  try {
+    response = await placesPost(key, 'places.types,places.location,places.viewport', { textQuery: area, pageSize: 1, languageCode: 'en', regionCode: 'US' });
+  } catch { throw unavailable(); }
+  if (!response.ok) throw unavailable();
+  let data: z.infer<typeof areaSchema>;
+  try { data = areaSchema.parse(await response.json()); } catch { throw unavailable(); }
+  const place = data.places?.[0];
+  if (!place?.types?.some(t => AREA_TYPES.has(t))) return null;
+  const box = place.viewport ?? (place.location ? { low: place.location, high: place.location } : null);
+  if (!box) return null;
+  const lat = (box.low.latitude + box.high.latitude) / 2;
+  const lonMargin = Math.min(AREA_MARGIN_DEGREES / Math.max(Math.cos(lat * Math.PI / 180), 0.1), 10);
+  const clampLat = (v: number) => Math.max(-90, Math.min(90, v));
+  return {
+    low: { latitude: clampLat(box.low.latitude - AREA_MARGIN_DEGREES), longitude: Math.max(-180, box.low.longitude - lonMargin) },
+    high: { latitude: clampLat(box.high.latitude + AREA_MARGIN_DEGREES), longitude: Math.min(180, box.high.longitude + lonMargin) },
+  };
+}
+
+/** A typed area that Google cannot place answers `{ stores: [] }` rather than stores from somewhere else. */
 export async function searchShoppingStores(input: z.infer<typeof storeSearchInput>) {
   const p = storeSearchInput.parse(input);
   const key = process.env.GOOGLE_PLACES_API_KEY;
   if (!key) throw new MomentError('Store search is not configured yet. You can enter the address manually.', 503);
+  const bounds = !p.zip && p.area ? await areaBounds(key, p.area) : null;
+  if (!p.zip && p.area && !bounds) return { stores: [] };
   let response: Response;
   try {
     response = await placesPost(key, 'places.id,places.displayName,places.formattedAddress,places.addressComponents,places.businessStatus,places.attributions,places.location,places.websiteUri',
       { textQuery: `${p.name ? `${p.name} store` : "grocery stores"}${p.zip || p.area ? ` near ${p.zip || p.area}, USA` : ""}`,
         pageSize: 15, languageCode: 'en', regionCode: 'US',
+        ...(bounds ? { locationRestriction: { rectangle: bounds } } : {}),
         ...(!p.zip && !p.area ? { locationBias: { circle: { center: { latitude: p.latitude, longitude: p.longitude }, radius: 25000 } } } : {}),
       });
-  } catch { throw new MomentError('Store search is temporarily unavailable. Try again or enter the address manually.', 503); }
-  if (!response.ok) throw new MomentError('Store search is temporarily unavailable. Try again or enter the address manually.', 503);
+  } catch { throw unavailable(); }
+  if (!response.ok) throw unavailable();
   // A malformed body (non-JSON or an unexpected shape) is an upstream failure, not a client error —
   // without this it would surface as a 400 "invalid input" through the route's ZodError/SyntaxError handling.
   let data: z.infer<typeof resultSchema>;
   try {
     data = resultSchema.parse(await response.json());
   } catch {
-    throw new MomentError('Store search is temporarily unavailable. Try again or enter the address manually.', 503);
+    throw unavailable();
   }
   return { stores: (data.places ?? [])
     .filter(place => (!place.businessStatus || place.businessStatus === 'OPERATIONAL') && !!place.displayName?.text && !!place.formattedAddress)

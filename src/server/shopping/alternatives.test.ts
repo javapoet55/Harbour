@@ -17,6 +17,16 @@ describe('shopping alternatives', () => {
     expect(result.usedAI).toBe(false);
     expect(result.alternatives[0]).not.toHaveProperty('facts');
   });
+  it('never returns the item itself as an alternative', async () => {
+    vi.stubEnv('OPENAI_API_KEY', '');
+    const names = async (name: string, category?: string) => (await recommendShoppingAlternatives('user', { name, category })).alternatives.map(item => item.name);
+    expect(await names('2% milk', 'Dairy & Eggs')).toEqual(['Lactose-free milk', 'Unsweetened oat milk', 'Unsweetened soy milk']);
+    expect(await names('Milk 2%', 'Dairy & Eggs')).not.toContain('2% milk');
+    expect(await names('cherry tomatoes', 'Produce')).toEqual(['Vine-ripened tomatoes', 'Plum tomatoes']);
+    expect(await names('Brown Rice', 'Pantry')).toEqual(['Quinoa', 'Cauliflower rice']);
+    expect(await names('Organic apples', 'Produce')).toEqual(['Store-brand apples', 'Family-size apples']);
+    expect(await names('Whole milk', 'Dairy & Eggs')).toHaveLength(4);
+  });
   it('returns useful local alternatives when AI is unavailable', async () => {
     vi.stubEnv('OPENAI_API_KEY', '');
     const result = await recommendShoppingAlternatives('user', { name: 'Chicken breast', category: 'Meat & Seafood', quantity: '1', size: 'lb' });

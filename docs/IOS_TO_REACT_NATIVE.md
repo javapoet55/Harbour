@@ -2888,12 +2888,16 @@ first, unchanged; the Mac reference pass’s items follow, with their captures.
   (`src/server/moments/wish-message.ts`). "Happy Birthday, Visakan!\nHave fun" for Sam is "Happy Birthday,
   Sam! \nHave fun" on the phones and "Happy Birthday, Sam! Have fun" on the server, which rewrites pending
   plans, so the preview and the sent text can differ by that line break. RN follows Swift; one side should
-  change.
+  change. **Fixed on server `36fabf0`**: the server trims spaces and tabs only, as the apps do.
 - **Pomodoro session names: Swift caps characters, the server caps UTF-16 units.** `PomodoroSession.init`
   and the name field keep `prefix(120)` characters (`Pomodoro.swift:36`, `PomodoroView.swift:103`), but
   `pomodoroSchema` allows `name` up to 120 UTF-16 units (`src/server/pomodoro/sessions.ts:8`). A name of
   emoji or other astral characters passes on the phone and is refused with 400, so the session never
   syncs. RN caps at 120 UTF-16 units. Swift should match the server, or the server count characters.
+  **Checked on server `13c5b08`, no change needed**: the zod the server locks (4.5.4) already counts `.max()`
+  in code points, so 120 emoji pass and 121 are refused; the commit adds a test that pins it. Code points are
+  still not Swift's count: `prefix(120)` counts grapheme clusters, so a name of many multi-code-point emoji
+  (ZWJ families, flags) can fit on the phone and be refused here.
 - **A Pomodoro alert tapped while the Wellness chooser is open opens a second Pomodoro.** Swift's
   `openPomodoroNotification()` waits for the chooser to close (`RootView.swift:229`) and then presents
   `showingPomodoro` even if the user had already gone into Pomodoro from the chooser. RN treats an open
@@ -2916,11 +2920,14 @@ first, unchanged; the Mac reference pass’s items follow, with their captures.
   name or meal changed (`CalorieTrackerView.swift:905`), and the server treats any `kcal` as a manual
   correction: source MANUAL and every macro and micronutrient set to null (`src/server/nutrition/log.ts:91`).
   Renaming "Salmon" to "Grilled salmon" loses its protein, fat and vitamin D. Swift should send `kcal` only
-  when it changed, or the server keep nutrients when the value is the same.
+  when it changed, or the server keep nutrients when the value is the same. **Fixed on server `72bdca6`**: an
+  unchanged `kcal` keeps the source, nutrients and review status; only `confirm: true` confirms then.
 - **"This week" means the last seven days in the insight.** The insight's copy says "this week" ("Log N more
   days this week…", "… is running low this week", `src/server/nutrition/insights.ts:37`, `:65`) but it is
   computed over the 7 days ending on the date (`:31`, `:86`), while the summary and the Insights page's
-  "This Week" are the Monday–Sunday week. On a Wednesday the two disagree.
+  "This Week" are the Monday–Sunday week. On a Wednesday the two disagree. **Fixed on server `a32194b`**: the
+  insight reads the Monday–Sunday week containing the date, and the streak fallback now says "You logged N
+  days this week".
 - **The Calorie Tracker guide promises features the tracker does not have.** "Quickly add what you eat by
   search, scan, or voice" and "Choose a goal like maintain, lose, or gain" (`WellnessModuleGuide.swift:32-33`):
   there is no food search, barcode scan or in-app voice entry, and no maintain / lose / gain choice — only a
@@ -2979,7 +2986,8 @@ first, unchanged; the Mac reference pass’s items follow, with their captures.
   the first alternative was "2% milk" (`shopping-alternatives-v2`). Lactose-free milk passed the
   "Higher protein" filter and is tagged "Lower sugar · Higher protein", yet its table shows equal
   sugar and protein with "↑ 0 g" / "↓ 0 g" (`ShoppingAlternativesView.swift:454-455`;
-  `shopping-alternative-details`).
+  `shopping-alternative-details`). **Fixed on server `552128a`** for the item itself (a list can now hold one
+  fewer alternative). The zero differences are not changed.
 - **Brief counts are sentence counts.** The section badge and the detail subtitle count the AI's
   bullet sentences, so "Upcoming Deadlines 2" sits over "No deadlines appear to fall today", and the
   detail says "2 items to review" (`daily-brief`, `brief-section-detail`).
@@ -3009,7 +3017,8 @@ first, unchanged; the Mac reference pass’s items follow, with their captures.
 - **Share List** has no close button; only a swipe dismisses it.
 - **Calendar** says "1 calendar commitments today".
 - **Stores Near You ignores an unknown area**: "Qzxqv Nowhere" still returns Safeways in other
-  states rather than an empty result.
+  states rather than an empty result. **Fixed on server `79c85fa`**: an area Google cannot place answers
+  `{ stores: [] }`, and an area search is restricted to that area plus about 25 km.
 
 
 - `ShoppingAlternativeDetails` receives `initialTab` but never uses it; the tab is always
@@ -3025,6 +3034,7 @@ first, unchanged; the Mac reference pass’s items follow, with their captures.
   Windows item "The phone check always says “call”" above.
 - `/api/moments` turns invalid input into 500 "Request failed." instead of 400: its `failure()`
   does not handle `ZodError` (`src/app/api/moments/route.ts:15`). *(From reading the code; not seen on screen.)*
+  **Fixed on server `e0c266e`**: 400 `{ error: "Check the moment details and try again." }`.
 - Item Alternatives no longer falls back to local suggestions on error, so any server failure is
   shown to the user. *(From reading the code; not seen on screen.)*
 - **Schedule confirmed lists send times in text order, not time order.** `sendTimes` sorts the formatted
@@ -3056,7 +3066,8 @@ first, unchanged; the Mac reference pass’s items follow, with their captures.
   recipient; a queue row whose task is not loaded does nothing; overdue minutes truncate while future
   minutes round up.
 - **Task agent card:** NO_RESULTS and CANCELLED runs are dead ends (no retry, search or cancel, and the
-  server refuses resume and retry for them); "Phone number copied." and "Draft copied." go into `error`,
+  server refuses resume and retry for them; **fixed on server `f12ef09`**: from either state `resume`,
+  `retry` and `search` with a new area start a new search with a fresh retry budget); "Phone number copied." and "Draft copied." go into `error`,
   so they show as errors and hide the spinner; `TaskAgentCard.swift:68` tests `question.key ==
   "urgency"` after excluding it on `:67`; the search button always sends `key: "location"` (`:82`);
   "Show more" shows under any review, however short (`:386`); polling keys on the status, so every
@@ -3072,3 +3083,9 @@ first, unchanged; the Mac reference pass’s items follow, with their captures.
 - **Weather:** `AppModel.refreshWeather` still runs on every load and locates the device, but nothing
   shows the result; `TodayView` keeps an `adding` sheet nothing opens.
 
+**Server bug pass (`fix/server-bug-pass`), two items not listed above:**
+- The web Settings page showed developer text ("This demo account can be reset with `yarn db:reset`",
+  "in this MVP"). **Fixed on server `22be24c`.**
+- `src/server/task-lifecycle.integration.test.ts` failed on and off in the full run: `tickReminders` sent
+  every test file's due reminders from the shared test database. **Fixed on server `2ad6c94`**: test ticks
+  are scoped to their own account.
