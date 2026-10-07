@@ -131,19 +131,18 @@ function AccountSheet() {
         {/* 2. The Real-time Voice card (`:77`, card `:101-132`). */}
         <VoiceUsageCard usage={voiceUsage} />
 
-        {/* 3. Help, Feedback and "Edit profile and settings" (ProfileView.swift:66-68): plain rows. */}
-        <AccountMenuRow icon="questionmark.circle" onPress={() => router.push('/account/help')} testID="account-help" title="Help" />
-        <AccountMenuRow icon="bubble.left.and.text.bubble.right" onPress={() => router.push('/account/feedback')} testID="account-feedback" title="Feedback" />
-        <AccountMenuRow
-          icon="person.crop.circle"
-          onPress={() => router.push('/account/settings')}
-          testID="account-edit-profile"
-          title="Edit profile and settings"
-        />
-
-        {/* 4. "Change password" (`:69-70`) — the only row in a card: `.padding(8).profileCard()` sits on
-            this NavigationLink alone since 19eb8e4 removed the web rows' card (§22 "For the team"). */}
+        {/* 3-4. Help, Feedback, "Edit profile and settings" and "Change password" (ProfileView.swift:66-70) in one
+            card. Android ahead of iOS (iOS 6343e11): the `.padding(8).profileCard()` sat on Change password alone,
+            leaving the other three bare on the background. */}
         <ProfileCard style={styles.menuCard} testID="account-menu">
+          <AccountMenuRow icon="questionmark.circle" onPress={() => router.push('/account/help')} testID="account-help" title="Help" />
+          <AccountMenuRow icon="bubble.left.and.text.bubble.right" onPress={() => router.push('/account/feedback')} testID="account-feedback" title="Feedback" />
+          <AccountMenuRow
+            icon="person.crop.circle"
+            onPress={() => router.push('/account/settings')}
+            testID="account-edit-profile"
+            title="Edit profile and settings"
+          />
           <AccountMenuRow icon="lock.rotation" onPress={() => router.push('/account/change-password')} testID="account-change-password" title="Change password" />
         </ProfileCard>
 

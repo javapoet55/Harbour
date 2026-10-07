@@ -1763,3 +1763,6 @@ match". Logic fixes have a test that fails without them.
 - **Android ahead of iOS: Task Details in business mode has one way out on screen, Close.** Its header had Back and
   Close, which did the same thing. Close stays, as iOS now does; Back is gone (an empty slot keeps "Task Details"
   centred), and the system Back gesture still closes the page (`BusinessHeader` in `app/task/[id].tsx`).
+- **Android ahead of iOS: all four Account menu rows sit inside the card.** Only Change password had the card; Help,
+  Feedback and "Edit profile and settings" sat bare on the background. The four share one card (iOS 6343e11)
+  (`app/account/index.tsx`).
