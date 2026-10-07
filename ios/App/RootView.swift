@@ -225,6 +225,8 @@ private struct NexdoTabShell: View {
     private func openPomodoroNotification() {
         guard let pending = pomodoroRoute.owner, let owner = model.profile?.id else { return }
         guard pending == TaskActionCoordinator.ownerKey(owner) else { pomodoroRoute.owner = nil; return }
+        // Already in Pomodoro (from the Wellness chooser, say): that is where the alert leads, so it is handled.
+        if pomodoroRoute.isOpen { pomodoroRoute.owner = nil; return }
         if showingAsk { showingAsk = false; return }
         if showingWellness { return }
         pomodoroRoute.owner = nil

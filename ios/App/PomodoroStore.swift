@@ -5,6 +5,12 @@ import AudioToolbox
 @MainActor final class PomodoroNotificationRoute: ObservableObject {
     static let shared = PomodoroNotificationRoute()
     @Published var owner: String?
+    /// How many Pomodoro screens are on screen. An open Pomodoro answers a tapped alert by itself: opening
+    /// another one for it stacked a second Pomodoro over the first.
+    private(set) var openCount = 0
+    var isOpen: Bool { openCount > 0 }
+    func pomodoroAppeared() { openCount += 1; owner = nil }
+    func pomodoroDisappeared() { openCount = max(0, openCount - 1) }
 }
 
 @MainActor final class PomodoroStore: ObservableObject {

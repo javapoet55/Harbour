@@ -58,6 +58,7 @@ struct PomodoroView: View {
         }
         }
         .foregroundStyle(ink).tint(.indigo)
+        .onAppear { PomodoroNotificationRoute.shared.pomodoroAppeared() }
         .task { visible = true; await store.restore(); updateAwake() }
         .onReceive(clock) { _ in store.tick() }
         .onChange(of: showingDashboard) { _, _ in updateAwake() }
@@ -67,7 +68,7 @@ struct PomodoroView: View {
             updateAwake()
             if value == .active { store.tick(); Task { await store.restore() } }
         }
-        .onDisappear { visible = false; UIApplication.shared.isIdleTimerDisabled = false }
+        .onDisappear { visible = false; UIApplication.shared.isIdleTimerDisabled = false; PomodoroNotificationRoute.shared.pomodoroDisappeared() }
         .confirmationDialog("Stop this focus session?", isPresented: $stopping, titleVisibility: .visible) {
             Button("Stop session", role: .destructive) { store.mutate { $0.stop(at: Date()) } }
         } message: { Text("Your time so far will be saved in session history.") }
