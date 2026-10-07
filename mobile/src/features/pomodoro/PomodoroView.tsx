@@ -37,8 +37,11 @@ export const KEEP_AWAKE_TAG = 'pomodoro-focus';
 export type PomodoroViewProps = {
   store: PomodoroStoreApi;
   owner: string | null;
-  /** "Back to Tasks" (`onTasks(); dismiss()`). */
-  onTasks: () => void;
+  /**
+   * "Back to Tasks" (`onTasks(); dismiss()`). Android ahead of iOS (iOS f6d6452): opened from Wellness there is no
+   * Tasks to go back to, so without `onTasks` the button says "Done" and only closes Pomodoro.
+   */
+  onTasks?: () => void;
   /** `dismiss()` from the dashboard's close button. */
   onClose: () => void;
   now?: () => number;
@@ -130,7 +133,7 @@ export function PomodoroView({ store, owner, onTasks, onClose, now = Date.now }:
           isActive(current) ? (
             <Timer compact={height < 740} now={at} onStop={confirmStop} session={current} store={store} />
           ) : (
-            <Completion onAnother={() => store.getState().newSession()} onTasks={onTasks} session={current} />
+            <Completion onAnother={() => store.getState().newSession()} onTasks={onTasks} onDone={onClose} session={current} />
           )
         ) : (
           <Setup onStart={(input) => store.getState().start(input)} />
@@ -328,7 +331,7 @@ function Timer({ session, compact, now, store, onStop }: { session: PomodoroSess
 }
 
 /** `completion(_:)` (:164-177). */
-function Completion({ session, onAnother, onTasks }: { session: PomodoroSession; onAnother: () => void; onTasks: () => void }) {
+function Completion({ session, onAnother, onTasks, onDone }: { session: PomodoroSession; onAnother: () => void; onTasks?: () => void; onDone: () => void }) {
   const completed = session.phase === 'completed';
   return (
     <View style={styles.completion} testID="pomodoro-completion">
@@ -357,8 +360,13 @@ function Completion({ session, onAnother, onTasks }: { session: PomodoroSession;
         </View>
       </View>
       <Primary onPress={onAnother} testID="pomodoro-another" title="Start Another Session" />
-      <Pressable accessibilityRole="button" onPress={onTasks} style={[styles.secondary, { backgroundColor: withAlpha(PURPLE, 0.07) }]} testID="pomodoro-back-to-tasks">
-        <Text style={[styles.headline, { color: INK }]}>Back to Tasks</Text>
+      <Pressable
+        accessibilityRole="button"
+        onPress={onTasks ?? onDone}
+        style={[styles.secondary, { backgroundColor: withAlpha(PURPLE, 0.07) }]}
+        testID={onTasks ? 'pomodoro-back-to-tasks' : 'pomodoro-done'}
+      >
+        <Text style={[styles.headline, { color: INK }]}>{onTasks ? 'Back to Tasks' : 'Done'}</Text>
       </Pressable>
     </View>
   );

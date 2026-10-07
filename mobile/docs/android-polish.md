@@ -1745,3 +1745,8 @@ match". Logic fixes have a test that fails without them.
 - **Android ahead of iOS: Shopping Recommendations promises no approval step.** The intro said "Suggestions only—your
   list changes after you approve them.", but the answer has no approve or add control and never edits the list. It
   now says "Suggestions only—your list is not changed." (`AskNexdoView.tsx`; new text, in §22's wording table).
+- **Android ahead of iOS: Pomodoro's labels.** The third tab read "Insights" until selected, then "Categories"; it is
+  always "Insights" (iOS ae4e5f2). The completion screen said "Back to Tasks" even when Pomodoro was opened from
+  Wellness; there it now says "Done" and only closes Pomodoro, back to the chooser, and "Back to Tasks" stays for
+  the only other entrance, a tapped Pomodoro alert (iOS f6d6452 wording) (`PomodoroDashboard.tsx`,
+  `PomodoroView.tsx`, `app/wellness/pomodoro.tsx`).
