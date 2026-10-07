@@ -1661,3 +1661,8 @@ gets the fix too, and the Swift app is to mirror it. Each fix has a test that fa
   cancelled showed "Find a business to contact". A business is now a chosen business, an eligible task, or a
   run that is not CANCELLED or FAILED (`isBusinessAction` in `lib/taskAgent.ts`, used by both screens so they
   agree).
+- **Android ahead of iOS: Today's Dismiss and Remind later name the chosen recipient.** Their accessibility labels
+  read the task's `contactName` ("Dismiss the plumber action") after a business or person had been chosen; they
+  now use the chosen recipient ("Dismiss Ace Plumbing action"), as the card's title does (`TodayActions.tsx`,
+  `SnoozeMenu recipient`). The other Today card items in Â§22 (a queue row whose task is not loaded, overdue
+  minute rounding) were not in this pass.

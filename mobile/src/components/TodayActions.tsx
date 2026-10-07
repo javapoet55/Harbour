@@ -381,9 +381,10 @@ export function ActionNeededCard({
       ) : null}
 
       <View style={channelRow}>
-        <SnoozeMenu action={action} />
+        {/* Android ahead of iOS: Swift names these by the task's `contactName`, not the recipient chosen since. */}
+        <SnoozeMenu action={action} recipient={contact?.name ?? action.contactName} />
         <Pressable
-          accessibilityLabel={`Dismiss ${action.contactName} action`}
+          accessibilityLabel={`Dismiss ${contact?.name ?? action.contactName} action`}
           accessibilityRole="button"
           onPress={() => useCoordinator.getState().dismiss(action.id)}
           style={[styles.bordered, { backgroundColor: withAlpha(brand.nexdoIndigo, 0.18) }]}
@@ -406,8 +407,8 @@ export function ActionNeededCard({
 const CHOOSE_CONTACT_FILL = 'rgb(224, 219, 250)';
 const CHOOSE_CONTACT_INK = '#000016';
 
-/** `SnoozeMenu` (TodayActionsView.swift:228-262): fixed delays, or "Choose time…". */
-export function SnoozeMenu({ action }: { action: StoredTaskAction }) {
+/** `SnoozeMenu` (TodayActionsView.swift:228-262): fixed delays, or "Choose time…". `recipient` names the button. */
+export function SnoozeMenu({ action, recipient = action.contactName }: { action: StoredTaskAction; recipient?: string }) {
   const theme = useTheme();
   const [open, setOpen] = useState(false);
   // `@State date = Date().addingTimeInterval(900)`; null while the picker is closed.
@@ -417,7 +418,7 @@ export function SnoozeMenu({ action }: { action: StoredTaskAction }) {
   return (
     <>
       <Pressable
-        accessibilityLabel={`Remind ${action.contactName} task later`}
+        accessibilityLabel={`Remind ${recipient} task later`}
         accessibilityRole="button"
         onPress={() => setOpen(true)}
         style={[styles.bordered, { backgroundColor: withAlpha(brand.nexdoIndigo, 0.18) }]}
