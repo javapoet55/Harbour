@@ -250,7 +250,7 @@ struct TaskActionView: View {
                         .ignoresSafeArea()
                         .interactiveDismissDisabled()
                 } else {
-                    ActionEmailComposer(draft: emailService.draft(recipient: draft.recipient, name: draft.name, context: draft.context), finished: finishCompose)
+                    ActionEmailComposer(draft: emailService.draft(recipient: draft.recipient, name: draft.name, context: draft.context, body: draft.body), finished: finishCompose)
                         .ignoresSafeArea()
                         .interactiveDismissDisabled()
                 }

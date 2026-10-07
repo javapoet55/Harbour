@@ -10,13 +10,15 @@ struct ActionEmailDraft {
 /// Future Gmail/Outlook delivery implementations can replace this draft service.
 @MainActor protocol TaskActionEmailService {
     var canCompose: Bool { get }
-    func draft(recipient: String, name: String, context: String?) -> ActionEmailDraft
+    /// `body`: a prepared message, such as the business outreach draft, used as the email's body when present.
+    func draft(recipient: String, name: String, context: String?, body: String?) -> ActionEmailDraft
 }
 struct NativeTaskActionEmailService: TaskActionEmailService {
     var canCompose: Bool { MFMailComposeViewController.canSendMail() }
-    func draft(recipient: String, name: String, context: String?) -> ActionEmailDraft {
-        ActionEmailDraft(recipient: recipient, subject: context.map { "Follow-up: \($0)" } ?? "Following up",
-            body: "Hi \(name),\n\n" + (context.map { "Just following up regarding \($0)." } ?? "Just checking in.") + "\n\nThanks.")
+    func draft(recipient: String, name: String, context: String?, body: String?) -> ActionEmailDraft {
+        let prepared = body?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return ActionEmailDraft(recipient: recipient, subject: context.map { "Follow-up: \($0)" } ?? "Following up",
+            body: prepared.isEmpty ? "Hi \(name),\n\n" + (context.map { "Just following up regarding \($0)." } ?? "Just checking in.") + "\n\nThanks." : prepared)
     }
 }
 struct ActionMessageComposer: UIViewControllerRepresentable {
