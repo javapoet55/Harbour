@@ -138,7 +138,7 @@ export function TaskAgentCard({ taskId, onResearchAvailable, onFieldFocus, onFie
   const autoSearched = useRef<string | null>(null);
   // An update that failed keeps its message until the next action, so a 400 is never wiped by the
   // reload that follows it — which would leave the retired-question step showing a bare spinner.
-  const actionFailed = useRef(false);
+  const [actionFailed, setActionFailed] = useState(false);
 
   const envelope = query.data;
   const run = envelope?.run ?? null;
@@ -151,7 +151,7 @@ export function TaskAgentCard({ taskId, onResearchAvailable, onFieldFocus, onFie
   const [seenDataAt, setSeenDataAt] = useState(query.dataUpdatedAt);
   if (query.dataUpdatedAt !== seenDataAt) {
     setSeenDataAt(query.dataUpdatedAt);
-    if (!busy && !actionFailed.current) setError(null);
+    if (!busy && !actionFailed) setError(null);
     setNotice(null);
   }
   const [seenErrorAt, setSeenErrorAt] = useState(0);
@@ -190,7 +190,7 @@ export function TaskAgentCard({ taskId, onResearchAvailable, onFieldFocus, onFie
       { action: 'search', version: run.version, answer: run.slots.location },
       {
         onError: (cause) => {
-          actionFailed.current = true;
+          setActionFailed(true);
           setError(`Could not refresh task research. ${cause.message}`);
         },
       },
@@ -200,7 +200,7 @@ export function TaskAgentCard({ taskId, onResearchAvailable, onFieldFocus, onFie
   /** `act(_:key:answer:candidateID:)` (TaskAgentCard.swift:489-501). */
   const act = (action: TaskAgentAction, options: { key?: string; answer?: string; candidateId?: string } = {}) => {
     if (run === null && action !== 'prepare') return;
-    actionFailed.current = false;
+    setActionFailed(false);
     setNotice(null);
     setBusy(true);
     const searching = action === 'search' || action === 'resume' || action === 'retry';
@@ -218,7 +218,7 @@ export function TaskAgentCard({ taskId, onResearchAvailable, onFieldFocus, onFie
           setError(null);
         },
         onError: (cause) => {
-          actionFailed.current = true;
+          setActionFailed(true);
           setError(cause.message);
         },
         onSettled: () => {
@@ -868,7 +868,7 @@ export function TaskAgentCard({ taskId, onResearchAvailable, onFieldFocus, onFie
           title="Retry business search"
           color={colors.indigo}
           onPress={() => {
-            actionFailed.current = false;
+            setActionFailed(false);
             setError(null);
             void query.refetch();
           }}
