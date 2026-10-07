@@ -166,7 +166,7 @@ struct ActionNeededCard: View {
                         }.frame(maxWidth: .infinity, minHeight: 76)
                             .foregroundStyle(channel == .call ? Color.green : channel == .message ? Color.nexdoBlue : Color.purple)
                             .background((channel == .call ? Color.green : channel == .message ? Color.nexdoBlue : Color.purple).opacity(0.13), in: RoundedRectangle(cornerRadius: 16))
-                    }.buttonStyle(.plain).accessibilityLabel("\(channel.rawValue.capitalized) \(action.contactName)")
+                    }.buttonStyle(.plain).accessibilityLabel("\(channel.rawValue.capitalized) \(contact?.name ?? action.contactName)")
                         .accessibilityIdentifier("today.actions.\(channel.rawValue)")
                 }
             }
@@ -196,10 +196,11 @@ struct ActionNeededCard: View {
             }
 
             layout {
-                SnoozeMenu(action: action)
+                // The chosen recipient's name, as the card shows it, not the name the task was written with.
+                SnoozeMenu(action: action, name: contact?.name ?? action.contactName)
                 Button { coordinator.dismiss(action.id) } label: {
                     Label("Dismiss", systemImage: "xmark").frame(maxWidth: .infinity, minHeight: 44)
-                }.buttonStyle(.bordered).accessibilityLabel("Dismiss \(action.contactName) action")
+                }.buttonStyle(.bordered).accessibilityLabel("Dismiss \(contact?.name ?? action.contactName) action")
                     .accessibilityIdentifier("today.actions.dismiss")
             }
         }.padding(18).modifier(ActionGlass())
@@ -230,6 +231,7 @@ struct ActionNeededCard: View {
 
 struct SnoozeMenu: View {
     let action: TaskAction
+    let name: String
     @State private var choosing = false
     @State private var date = Date().addingTimeInterval(900)
     var body: some View {
@@ -242,7 +244,7 @@ struct SnoozeMenu: View {
             Button("Choose time…") { date = Date().addingTimeInterval(900); choosing = true }
         } label: {
             Label("Remind later", systemImage: "clock").frame(maxWidth: .infinity, minHeight: 44)
-        }.buttonStyle(.bordered).accessibilityLabel("Remind \(action.contactName) task later")
+        }.buttonStyle(.bordered).accessibilityLabel("Remind \(name) task later")
             .accessibilityIdentifier("today.actions.snooze")
             .sheet(isPresented: $choosing) {
                 NavigationStack {
