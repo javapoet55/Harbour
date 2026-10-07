@@ -42,7 +42,11 @@ import Testing
     // Several separators after the opening are consumed; line breaks later in the wish are kept.
     #expect(MomentGreeting.message("Happy Birthday!!\n\nCake at seven.\nSee you!", type: "birthday", firstName: "Asha") == "Happy Birthday, Asha! Cake at seven.\nSee you!")
     #expect(MomentGreeting.message("  best WISHES. 🎉 Enjoy  ", type: "birthday", firstName: "Asha") == "Best wishes, Asha! 🎉 Enjoy")
-    #expect(MomentGreeting.message("Happy Birthday, dear friend", type: "birthday", firstName: "Asha") == "Happy Birthday, Asha! Happy Birthday, dear friend")
+    // The opening is reused, never repeated: the comma marks a name slot, and "dear friend" is not a capitalized name
+    // ending in "!", so it stays. Same output as the server's greetingMessage (src/server/moments/wish-message.ts).
+    #expect(MomentGreeting.message("Happy Birthday, dear friend", type: "birthday", firstName: "Asha") == "Happy Birthday, Asha! dear friend")
+    // After a dropped name only spaces and tabs are trimmed, so a line break is kept, as the server now does (36fabf0).
+    #expect(MomentGreeting.message("Happy Birthday, Visakan!\nHave fun", type: "birthday", firstName: "Sam") == "Happy Birthday, Sam! \nHave fun")
 }
 
 // 4. Birthday and anniversary fallbacks match src/server/moments/domain.ts `fallback`.
