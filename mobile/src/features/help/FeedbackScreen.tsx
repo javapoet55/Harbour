@@ -10,6 +10,7 @@ import { Text } from '../../components/Text';
 import { FEEDBACK_DESCRIPTION_LIMIT, FEEDBACK_THANKS, FEEDBACK_TITLE_LIMIT, feedbackCounter, feedbackValid, starLabel, starsCaption } from '../../lib/feedback';
 import { useSubmitFeedback } from '../../query/useFeedback';
 import { useTheme } from '../../theme';
+import { KeyboardDoneBar } from '../moments/components';
 import { FormField, FormRow, FormScroll, FormSection, FormText } from '../moments/form';
 
 /**
@@ -116,6 +117,10 @@ export function FeedbackScreen({ onDone }: { onDone: () => void }) {
           </FormRow>
         </FormSection>
       </FormScroll>
+      {/* Android ahead of iOS: Swift's form has no way to put the keyboard away (no Done, no tap outside, and
+          Return adds a line), so the rating and Submit stay covered. The shared Done capsule rides on the
+          keyboard, as on the Moments and Shopping forms. */}
+      <KeyboardDoneBar testID="feedback-keyboard-done" />
     </SafeAreaView>
   );
 }

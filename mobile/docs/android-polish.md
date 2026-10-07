@@ -1686,3 +1686,8 @@ gets the fix too, and the Swift app is to mirror it. Each fix has a test that fa
   as the 28th in a common year); one stored for this year or later, and a one-off, show their own date. Edit
   Moment opens on the shown date, and a Save that leaves the date alone keeps the stored date and year
   (`shownMomentDate` in `dates.ts`).
+- **Android ahead of iOS: Feedback's keyboard can be put away, so the rating and Submit are reachable.** Swift's
+  form has no Done, no tap-outside and Return adds a line, so the keyboard covered the rating and Submit. The
+  shared `KeyboardDoneBar` capsule now rides on the keyboard, as on the Moments and Shopping forms (and
+  `FormScroll` already keeps the focused field clear of it); Return in the description still adds a line
+  (`FeedbackScreen.tsx`).

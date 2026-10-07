@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
-import { Alert } from 'react-native';
+import { Alert, DeviceEventEmitter, Keyboard } from 'react-native';
 
 const mockSubmit = jest.fn();
 jest.mock('../../../api/feedback', () => ({ feedbackApi: { submit: (...args: unknown[]) => mockSubmit(...args) } }));
@@ -98,6 +98,22 @@ describe('Feedback', () => {
   }
   afterEach(() => client.clear());
   beforeEach(() => mockSubmit.mockReset());
+
+  it('puts the keyboard away with Done, so the rating and Submit can be reached', async () => {
+    const dismiss = jest.spyOn(Keyboard, 'dismiss');
+    await open();
+    expect(screen.queryByTestId('feedback-keyboard-done')).toBeNull();
+    await act(async () => {
+      DeviceEventEmitter.emit('keyboardDidShow', { endCoordinates: { height: 300, screenX: 0, screenY: 500, width: 400 } });
+    });
+    await fireEvent.press(screen.getByTestId('feedback-keyboard-done'));
+    expect(dismiss).toHaveBeenCalled();
+    await act(async () => {
+      DeviceEventEmitter.emit('keyboardDidHide', { endCoordinates: { height: 0, screenX: 0, screenY: 800, width: 400 } });
+    });
+    expect(screen.queryByTestId('feedback-keyboard-done')).toBeNull();
+    dismiss.mockRestore();
+  });
 
   it('needs a title, a description and a rating; counts in UTF-16 units', async () => {
     await open();
