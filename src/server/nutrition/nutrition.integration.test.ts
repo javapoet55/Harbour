@@ -282,10 +282,14 @@ describe('daily insight and one action', () => {
     expect(await executeTool(call.id, 'add_insight_items', {}, lookup)).toEqual({ added: ['Greek yogurt', 'Lentils'], listTitle: 'Weekend shop' });
   });
   it('adds the foods only once when two add requests land at the same time', async () => {
-    await prisma.foodLogEntry.create({ data: { userId: other, localDate: '2026-09-28', meal: 'LUNCH', description: 'rice', foodName: 'rice', kcal: 900, proteinG: 30, fiberG: 30, calciumMg: 1100, ironMg: 20, vitaminDIu: 900, source: 'USDA', status: 'CONFIRMED' } });
+    // A new week (Monday 28 Sep) needs three logged days of its own before it has an insight.
+    for (const d of ['2026-09-28', '2026-09-29', '2026-09-30']) {
+      await prisma.foodLogEntry.create({ data: { userId: other, localDate: d, meal: 'LUNCH', description: 'rice', foodName: 'rice', kcal: 900, proteinG: 30, fiberG: 30, calciumMg: 1100, ironMg: 20, vitaminDIu: 900, source: 'USDA', status: 'CONFIRMED' } });
+    }
     await prisma.shoppingItem.deleteMany({ where: { list: { userId: other }, name: { in: ['Greek yogurt', 'Lentils'] } } });
-    const insight = (await dailyInsight(other, '2026-09-28'))!;
-    const [a, b] = await Promise.all([handleInsight(other, '2026-09-28', insight.key, 'add'), handleInsight(other, '2026-09-28', insight.key, 'add')]);
+    const insight = (await dailyInsight(other, '2026-09-30'))!;
+    expect(insight).toMatchObject({ kind: 'GAP', nutrient: 'protein' });
+    const [a, b] = await Promise.all([handleInsight(other, '2026-09-30', insight.key, 'add'), handleInsight(other, '2026-09-30', insight.key, 'add')]);
     expect([...a.added, ...b.added].sort()).toEqual(['Greek yogurt', 'Lentils']);
     const list = await prisma.shoppingList.findFirstOrThrow({ where: { userId: other }, include: { items: true } });
     expect(list.items.filter(i => i.name === 'Greek yogurt')).toHaveLength(1);

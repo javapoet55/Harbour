@@ -2,7 +2,8 @@ import { randomUUID } from 'node:crypto';
 import { prisma } from '@/server/db';
 import { categoryFor } from '@/server/shopping/domain';
 import { NutritionError } from './errors';
-import { dateRange, isLocalDate, localDateIn } from './time';
+import { mondayOf } from './log';
+import { dateRangeFrom, isLocalDate, localDateIn } from './time';
 
 /**
  * One factual observation a day, with at most one action. Insights only ever suggest *adding* foods toward
@@ -26,9 +27,12 @@ export type Insight = {
 
 type Entry = { localDate: string; meal: string; kcal: number } & Record<Field, number | null>;
 
-/** Pure: pick the day's insight from up to 7 days of entries ending on `date`. Exported for tests. */
+/** The Monday–Sunday week containing `date`: the copy's "this week", and the same week as the summary (periodSummary). */
+const weekOf = (date: string) => dateRangeFrom(mondayOf(date), INSIGHT_RULES.windowDays);
+
+/** Pure: pick the day's insight from the entries of the week containing `date`. Exported for tests. */
 export function chooseInsight(date: string, entries: Entry[], goals: Record<string, number>, onList: Set<string>): Omit<Insight, 'state' | 'listTitle'> | null {
-  const days = dateRange(date, INSIGHT_RULES.windowDays);
+  const days = weekOf(date);
   const byDay = new Map(days.map(d => [d, entries.filter(e => e.localDate === d)]));
   const logged = days.filter(d => (byDay.get(d)?.length ?? 0) > 0);
   if (logged.length === 0) return null;
@@ -67,9 +71,10 @@ export function chooseInsight(date: string, entries: Entry[], goals: Record<stri
       nutrient: top.n.key, items,
     };
   }
+  // The run of logged days ending on `date`, within the week.
   let streak = 0;
-  for (let i = days.length - 1; i >= 0 && (byDay.get(days[i])?.length ?? 0) > 0; i--) streak++;
-  return { key: `${date}:streak`, kind: 'STREAK', title: 'Nicely consistent', text: streak >= 2 ? `You’ve logged ${streak} days in a row and stayed close to your nutrient goals.` : `You logged ${logged.length} of the last 7 days and stayed close to your nutrient goals.`, nutrient: null, items: [] };
+  for (let i = days.indexOf(date); i >= 0 && (byDay.get(days[i])?.length ?? 0) > 0; i--) streak++;
+  return { key: `${date}:streak`, kind: 'STREAK', title: 'Nicely consistent', text: streak >= 2 ? `You’ve logged ${streak} days in a row and stayed close to your nutrient goals.` : `You logged ${logged.length} days this week and stayed close to your nutrient goals.`, nutrient: null, items: [] };
 }
 const joinList = (items: string[]) => items.length <= 1 ? items.join('') : `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}`;
 
@@ -83,9 +88,9 @@ export async function dailyInsight(userId: string, date: string): Promise<Insigh
   if (!isLocalDate(date)) throw new NutritionError('INVALID_INPUT');
   const settings = await prisma.nutritionCallSettings.findUnique({ where: { userId } });
   if (settings && !settings.insightsEnabled) return null;
-  const days = dateRange(date, INSIGHT_RULES.windowDays);
+  const days = weekOf(date);
   const entries = await prisma.foodLogEntry.findMany({
-    where: { userId, localDate: { gte: days[0], lte: date } },
+    where: { userId, localDate: { gte: days[0], lte: days[days.length - 1] } },
     select: { localDate: true, meal: true, kcal: true, proteinG: true, fiberG: true, calciumMg: true, ironMg: true, vitaminDIu: true },
   });
   const goals = settings?.goalsJson ? JSON.parse(settings.goalsJson) as Record<string, number> : {};
