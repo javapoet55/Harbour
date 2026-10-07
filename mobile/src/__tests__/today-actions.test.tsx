@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
-import { StyleSheet } from 'react-native';
+import { Alert, StyleSheet } from 'react-native';
 
 import { palettes } from '../theme';
 
@@ -53,6 +53,7 @@ import Today from '../../app/(tabs)/(today)/today/index';
 import ActionQueue from '../../app/action/queue';
 import { actionDurationLabel, actionTimeLabel } from '../components/TodayActions';
 import type { StoredTaskAction } from '../lib/taskAction';
+import * as queueLib from '../lib/todayActionQueue';
 
 const ZONE = 'America/Los_Angeles';
 const OWNER = 'user-1';
@@ -417,12 +418,13 @@ describe('action time labels', () => {
 
 /** `ActionQueueSheet` (TodayActionsView.swift:287-323). */
 describe('the action queue sheet', () => {
-  async function showQueue(tasks: NexdoTask[]) {
+  /** `loaded` is the task list the app has; the actions come from `tasks`. */
+  async function showQueue(tasks: NexdoTask[], loaded = tasks) {
     await seed(tasks);
     // The sheet's own tasks query refetches; an empty answer would empty the queue mid-test.
-    mockTasks.mockResolvedValue({ tasks, timeZone: ZONE });
+    mockTasks.mockResolvedValue({ tasks: loaded, timeZone: ZONE });
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
-    queryClient.setQueryData(queryKeys.tasks.all(), { tasks, timeZone: ZONE });
+    queryClient.setQueryData(queryKeys.tasks.all(), { tasks: loaded, timeZone: ZONE });
     queryClient.setQueryData(queryKeys.me(), { id: OWNER, name: 'Ada', email: 'a@b.c', timeZone: ZONE });
     await render(
       <QueryClientProvider client={queryClient}>
@@ -444,5 +446,46 @@ describe('the action queue sheet', () => {
     await fireEvent.press(screen.getByTestId(`queue-action-${id}`));
     expect(mockPush).toHaveBeenCalledWith('/task/t2');
     expect(useCoordinator.getState().route).toBeNull();
+  });
+
+  /**
+   * `open(_:)` (TodayActionsView.swift:328-335, iOS b4fd9b6): a row whose task is not loaded refreshes
+   * the tasks before giving up. The sheet builds its rows from the loaded list, so the spy stands in
+   * for a row that arrived ahead of its task.
+   */
+  describe('a row whose task is not loaded', () => {
+    let alert: jest.SpyInstance;
+    beforeEach(async () => {
+      alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+      const build = queueLib.buildActionQueue;
+      jest.spyOn(queueLib, 'buildActionQueue').mockImplementation((input) => build({ ...input, tasks: [LATER_TASK] }));
+      await showQueue([LATER_TASK], []);
+    });
+    afterEach(() => jest.restoreAllMocks());
+
+    it('refreshes the tasks and opens it', async () => {
+      const id = useCoordinator.getState().actions[0].id;
+      await waitFor(() => expect(mockTasks).toHaveBeenCalled());
+      mockTasks.mockClear();
+      mockTasks.mockResolvedValue({ tasks: [LATER_TASK], timeZone: ZONE });
+
+      await fireEvent.press(screen.getByTestId(`queue-action-${id}`));
+      await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/task/t2'));
+      expect(mockTasks).toHaveBeenCalledTimes(1);
+      expect(alert).not.toHaveBeenCalled();
+    });
+
+    it('says the task is not available when the refresh does not have it either', async () => {
+      const id = useCoordinator.getState().actions[0].id;
+      await waitFor(() => expect(mockTasks).toHaveBeenCalled());
+
+      await fireEvent.press(screen.getByTestId(`queue-action-${id}`));
+      await waitFor(() =>
+        expect(alert).toHaveBeenCalledWith('Task not available', 'This task may have been completed, deleted or moved. Your task list has been refreshed.', [
+          { text: 'OK', style: 'cancel' },
+        ]),
+      );
+      expect(mockPush).not.toHaveBeenCalled();
+    });
   });
 });

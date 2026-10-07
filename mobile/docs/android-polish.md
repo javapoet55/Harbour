@@ -1799,3 +1799,15 @@ match". Logic fixes have a test that fails without them.
 - **The Ask answer's read button says "Read aloud", as iOS 5ed717c.** It said "Read Loud"; "Stop" while reading is
   unchanged, and so is its accessibility label ("Read <section> aloud"). This replaces the note above that the button
   still read "Read Loud" (`AskResponse.tsx`).
+
+## 31. Leftovers: the unloaded queue row (2026-10-07)
+
+The last Android item in `docs/IOS_TO_REACT_NATIVE.md` §22 (Run B, Today card), ported from iOS b4fd9b6 with its
+wording.
+
+- **A Nexdo Actions row whose task is not loaded refreshes the tasks and opens it.** The row looked its task up in
+  the loaded list and did nothing when it was not there. It now refetches the tasks and opens Task Details, or, if
+  the task is still missing, says "Task not available" / "This task may have been completed, deleted or moved. Your
+  task list has been refreshed." with OK (`open` in `app/action/queue.tsx`). The sheet builds its rows from the same
+  loaded list, so on Android a row normally arrives with its task; the test injects a row ahead of its task to cover
+  the gap (fixed from code, not seen on device).
