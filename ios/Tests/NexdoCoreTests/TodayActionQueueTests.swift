@@ -119,3 +119,10 @@ private func queue(_ pairs: [(TaskAction, NexdoTask)], now: Date = queueNow) -> 
     #expect(ActionTimeLabel.text(seconds: -(90 * 60 + 40)) == "1 hr 31 min overdue")
     #expect(ActionTimeLabel.text(seconds: 2 * 3600) == "in 2 hr")
 }
+
+@Test func overdueAgesPast48HoursReadInDays() {
+    #expect(ActionTimeLabel.text(seconds: -(257 * 3600 + 60)) == "10 days overdue")
+    #expect(ActionTimeLabel.text(seconds: -(48 * 3600)) == "2 days overdue")
+    #expect(ActionTimeLabel.text(seconds: -(47 * 3600 + 59 * 60)) == "47 hr 59 min overdue")
+    #expect(ActionTimeLabel.text(seconds: 72 * 3600) == "in 72 hr")
+}

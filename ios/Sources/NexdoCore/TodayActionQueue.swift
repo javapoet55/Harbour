@@ -59,6 +59,8 @@ public enum ActionTimeLabel {
         let minutes = Int((abs(seconds) / 60).rounded())
         if seconds > 0 { return "in \(duration(minutes: max(1, minutes)))" }
         if seconds > -60 { return "Due now" }
+        // Past 48 hours an age reads in whole days: "10 days overdue", not "257 hr 1 min overdue".
+        if minutes >= 48 * 60 { return "\(minutes / (24 * 60)) days overdue" }
         return "\(duration(minutes: max(1, minutes))) overdue"
     }
     public static func duration(minutes: Int) -> String {
