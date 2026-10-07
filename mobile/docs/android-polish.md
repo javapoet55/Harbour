@@ -1731,3 +1731,8 @@ match". Logic fixes have a test that fails without them.
   card, "No stores found near <area>" (or "near you") and "Check the city or ZIP code, or try a nearby one." ("…
   and the store name, or try a nearby area." with a store name); before any area or location the prompt shows; and
   nothing shows while a search is pending (`StorePages.tsx`).
+- **Android ahead of iOS: Item Alternatives shows a clear error state with Try again.** A load that failed before
+  any result showed one red line and a small "Try again". As iOS 3400481: a card with a warning glyph, "Couldn’t
+  load alternatives", the reason and a full-width Try again; with alternatives already on screen the error is a
+  failed save, which a reload would not fix, so it stays an inline message without Try again
+  (`AlternativesSheet.tsx`). The local fallback stays removed (a product decision; open).

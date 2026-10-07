@@ -237,7 +237,7 @@ function Backdrop() {
 }
 
 /** `AlternativeBlueButtonStyle` (:8-15). */
-function BlueButton({ title, onPress, disabled = false, testID }: { title: string; onPress: () => void; disabled?: boolean; testID: string }) {
+function BlueButton({ title, onPress, disabled = false, icon, testID }: { title: string; onPress: () => void; disabled?: boolean; icon?: keyof typeof Ionicons.glyphMap; testID: string }) {
   return (
     <Pressable
       accessibilityLabel={title}
@@ -245,9 +245,10 @@ function BlueButton({ title, onPress, disabled = false, testID }: { title: strin
       accessibilityState={{ disabled }}
       disabled={disabled}
       onPress={onPress}
-      style={[styles.blue, { backgroundColor: BLUE, opacity: disabled ? 0.4 : 1 }]}
+      style={[styles.blue, icon && styles.blueRow, { backgroundColor: BLUE, opacity: disabled ? 0.4 : 1 }]}
       testID={testID}
     >
+      {icon ? <Ionicons color="#FFFFFF" name={icon} size={17} /> : null}
       <Text style={[styles.headline, { color: '#FFFFFF' }]}>{title}</Text>
     </Pressable>
   );
@@ -601,15 +602,26 @@ function AlternativesBody({ list, original, onClose, onReplace, onAdd, onFavorit
             </View>
           </>
         ) : null}
-        {error ? (
-          <>
-            <Text style={[textStyles.subheadline, { color: theme.colors.danger }]} testID="alternatives.error">
+        {/* Android ahead of iOS (iOS 3400481): with nothing loaded, a clear state with Try again (there is no local
+            fallback, so this is the whole screen); with alternatives on screen the error is a failed save, which a
+            reload would not fix, so it stays an inline message. */}
+        {error && !result ? (
+          <View style={[styles.loadFailure, { backgroundColor: theme.colors.surface }]} testID="alternatives.loadFailure">
+            <View accessible={false} importantForAccessibility="no-hide-descendants" style={[styles.loadFailureIcon, { backgroundColor: withAlpha(systemColors.orange, 0.1) }]}>
+              <Ionicons color={systemColors.orange} name="warning" size={34} />
+            </View>
+            <Text style={[styles.headline, { color: theme.colors.ink }]}>Couldn’t load alternatives</Text>
+            <Text style={[textStyles.subheadline, styles.textCenter, { color: theme.colors.secondary }]} testID="alternatives.error">
               {error}
             </Text>
-            <Pressable accessibilityRole="button" onPress={() => setRetry((value) => value + 1)} style={styles.minHeight} testID="alternatives-retry">
-              <Text style={[textStyles.body, { color: theme.colors.link }]}>Try again</Text>
-            </Pressable>
-          </>
+            <View style={styles.fullWidth}>
+              <BlueButton icon="refresh" onPress={() => setRetry((value) => value + 1)} testID="alternatives-retry" title="Try again" />
+            </View>
+          </View>
+        ) : error ? (
+          <Text style={[textStyles.subheadline, { color: theme.colors.danger }]} testID="alternatives.error">
+            {error}
+          </Text>
         ) : null}
       </ScrollView>
       {/* "View in Cart (N)" (:66-70). */}
@@ -1171,6 +1183,11 @@ const styles = StyleSheet.create({
   cartBar: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: 16, paddingTop: 16 },
   cartButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 52, borderRadius: 16 },
   blue: { minHeight: 52, paddingHorizontal: 16, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+  blueRow: { flexDirection: 'row', gap: 8 },
+  loadFailure: { alignItems: 'center', gap: 12, padding: 20, borderRadius: 20 },
+  loadFailureIcon: { width: 72, height: 72, borderRadius: 36, alignItems: 'center', justifyContent: 'center' },
+  textCenter: { textAlign: 'center' },
+  fullWidth: { alignSelf: 'stretch' },
   panelContent: { padding: 24, gap: 22 },
   panelFooter: { paddingHorizontal: 20, paddingTop: 12 },
   confirm: { alignItems: 'center', gap: 18 },

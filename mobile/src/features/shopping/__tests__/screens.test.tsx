@@ -737,6 +737,10 @@ describe('Item Alternatives', () => {
       throw new ApiError({ status: 0, code: 'NETWORK', message: 'The network connection was lost.' });
     });
     await waitFor(() => expect(screen.getByTestId('alternatives.error')).toHaveTextContent('The network connection was lost.'));
+    // Nothing loaded: iOS 3400481's state, a title over the reason and a full-width Try again (Android ahead of iOS).
+    expect(screen.getByTestId('alternatives.loadFailure')).toBeTruthy();
+    expect(screen.getByText('Couldn’t load alternatives')).toBeTruthy();
+    expect(screen.getByLabelText('Try again')).toBeTruthy();
     expect(screen.queryByText('Organic 2% milk')).toBeNull();
     mockAlternatives.mockResolvedValueOnce(ANSWER);
     await fireEvent.press(screen.getByTestId('alternatives-retry'));
