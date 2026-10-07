@@ -102,6 +102,7 @@ struct TaskAgentCard: View {
                         businessCard(candidate, index: index)
                     }
 
+                    if ["NO_RESULTS", "CANCELLED"].contains(run.status) && !findingBusinesses { searchAgain(run) }
                     HStack {
                         if ["QUEUED", "RUNNING"].contains(run.status) { Button("Pause") { act("pause") } }
                         if ["PAUSED", "FAILED", "BLOCKED"].contains(run.status) { Button(run.status == "PAUSED" ? "Resume" : "Retry") { act(run.status == "PAUSED" ? "resume" : "retry") } }
@@ -147,6 +148,7 @@ struct TaskAgentCard: View {
                 let data = Data(#"{"id":"preview","status":"NEEDS_INPUT","version":0,"service":"plumber","urgency":"unknown","slots":{"location":"","budget":"","constraints":""},"steps":[],"candidates":[],"warnings":[],"question":{"key":"location","text":"Which city or ZIP code should I search?"}}"#.utf8)
                 var previewData = data
                 if ProcessInfo.processInfo.arguments.contains("-business-results-preview") { previewData = Data(Self.businessPreview.utf8) }
+                if ProcessInfo.processInfo.arguments.contains("-agent-no-results-preview") { previewData = Data(#"{"id":"preview","status":"NO_RESULTS","version":3,"service":"plumber","urgency":"flexible","slots":{"location":"94582","budget":"","constraints":""},"steps":[],"candidates":[],"warnings":[]}"#.utf8) }
                 run = try? JSONDecoder().decode(TaskAgentRun.self, from: previewData)
                 selectedBusiness = run?.candidates.first?.id
                 loading = false
@@ -476,6 +478,33 @@ struct TaskAgentCard: View {
             Text(label).font(.system(size: 20, weight: .bold)).tracking(-0.6).fixedSize(horizontal: false, vertical: true)
             Text("\(run.service.prefix(1).uppercased() + run.service.dropFirst()) · \(run.slots.location.isEmpty ? "Location needed" : run.slots.location)").font(.subheadline)
         }
+        }
+    }
+
+    /// After a search that found nothing, or a cancelled run: the server starts a new search for retry (and for
+    /// search with a new area), so neither is a dead end. No results usually means trying another area.
+    @ViewBuilder private func searchAgain(_ run: TaskAgentRun) -> some View {
+        if run.status == "NO_RESULTS" {
+            Text("Try a nearby city or ZIP code, or search \(run.slots.location.isEmpty ? "again" : run.slots.location) again.")
+                .font(.subheadline).foregroundStyle(Color.nexdoSecondary).fixedSize(horizontal: false, vertical: true)
+            HStack(spacing: 12) {
+                Image(systemName: "mappin.circle.fill").font(.title2).foregroundStyle(Color.purple)
+                    .frame(width: 36, height: 36).background(Color.purple.opacity(0.06), in: RoundedRectangle(cornerRadius: 12))
+                TextField(run.slots.location.isEmpty ? "City or ZIP code" : run.slots.location, text: $answer).submitLabel(.done)
+                    .focused($focusedField, equals: .agentLocation)
+                    .onSubmit { focusedField = nil }
+                    .accessibilityLabel("City or ZIP code")
+            }.padding(8).background(AgentStyle.card, in: RoundedRectangle(cornerRadius: 12))
+                .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.purple.opacity(0.65)))
+            let area = answer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? run.slots.location : answer
+            Button { act("search", key: "location", answer: area) } label: {
+                HStack(spacing: 12) { Image(systemName: "magnifyingglass"); Text("Search again"); Image(systemName: "arrow.right") }
+            }.buttonStyle(AgentSearchButton()).disabled(area.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .accessibilityIdentifier("agent-search-again")
+        } else {
+            Button { act("retry") } label: {
+                HStack(spacing: 12) { Image(systemName: "magnifyingglass"); Text("Search again"); Image(systemName: "arrow.right") }
+            }.buttonStyle(AgentSearchButton()).accessibilityIdentifier("agent-search-again")
         }
     }
 
