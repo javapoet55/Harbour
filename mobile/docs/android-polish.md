@@ -1597,3 +1597,7 @@ gets the fix too, and the Swift app is to mirror it. Each fix has a test that fa
   Swift puts them in `error`, so they read as errors, hid the search spinner while a run was searching, and
   turned the retired-question step's spinner into "Retry search". They now have their own line
   (`agent-notice`), in the same place and style, cleared by the next action or load (`TaskAgentCard.tsx`).
+- **Android ahead of iOS: the task agent card's search sends the key the question asks for.** The search button
+  always sent `key: "location"`; it now sends `question.key`. "Use â€¦" still sends `location`, since it is only
+  shown for that question. Swift's dead `question.key == "urgency"` title test was never ported (the card
+  shows `question.text`), so there is nothing to remove in RN.

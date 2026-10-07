@@ -729,7 +729,8 @@ export function TaskAgentCard({ taskId, onResearchAvailable, onFieldFocus, onFie
               leading="search-outline"
               trailing="arrow-forward"
               disabled={answer.trim().length === 0}
-              onPress={() => act('search', { key: 'location', answer })}
+              // Android ahead of iOS: Swift always sends `key: "location"` (:82); this sends the question's own key.
+              onPress={() => act('search', { key: question.key, answer })}
               testID="agent-search"
             />
           </>

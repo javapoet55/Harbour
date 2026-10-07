@@ -238,6 +238,16 @@ describe('the location step (TaskAgentCard.swift:67-87)', () => {
     expect(await screen.findByText('Finding the best business near your place…')).toBeTruthy();
   });
 
+  it('sends the key the question asks for, not always "location"', async () => {
+    mockLoad.mockResolvedValue(envelope(run({ question: { key: 'area', text: 'Which neighbourhood should I search?' } })));
+    mockUpdate.mockResolvedValue(envelope(run({ status: 'QUEUED', question: null })));
+    await renderCard();
+    expect(await screen.findByText('Which neighbourhood should I search?')).toBeTruthy();
+    await fireEvent.changeText(screen.getByLabelText('City or ZIP code'), 'Mission');
+    await fireEvent.press(screen.getByTestId('agent-search'));
+    await waitFor(() => expect(mockUpdate).toHaveBeenCalledWith('t1', expect.objectContaining({ action: 'search', key: 'area', answer: 'Mission' })));
+  });
+
   it('labels the search for other services and offers the known location', async () => {
     mockLoad.mockResolvedValue(envelope(run({ service: 'electrician', slots: { location: 'San Francisco', budget: '', constraints: '' } })));
     mockUpdate.mockResolvedValue(envelope(run({ status: 'CANCELLED', question: null })));
