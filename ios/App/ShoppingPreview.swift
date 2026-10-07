@@ -82,6 +82,18 @@ final class ShoppingPreviewProtocol:URLProtocol,@unchecked Sendable {
                 if operation=="delete"{Self.lists.remove(at:index);response=[:]}
             }
         }
+        if request.url?.path == "/api/shopping/stores" {
+            // Debug-only visual fixture: an area with "nowhere" in it matches no stores, as an unknown area does on the server.
+            var body=request.httpBody
+            if body == nil, let stream=request.httpBodyStream {
+                stream.open();defer{stream.close()}
+                var data=Data();var buffer=[UInt8](repeating:0,count:4096)
+                while stream.hasBytesAvailable {let n=stream.read(&buffer,maxLength:buffer.count);if n<=0{break};data.append(buffer,count:n)}
+                body=data
+            }
+            let area=((body.flatMap{try? JSONSerialization.jsonObject(with:$0)} as? [String:Any])?["area"] as? String) ?? ""
+            response = ["stores": area.lowercased().contains("nowhere") ? [] : [["id":"preview-store","name":"Sample Market","address":"100 Main Street, San Ramon, CA 94582, USA","zip":"94582","distanceKm":NSNull(),"attributions":[]]]]
+        }
         if request.url?.path == "/api/shopping/email-schedule" {
             // Debug-only visual fixture; never uses a real account or sends email.
             response = ["available": true, "account": ["email": "demo@example.com", "status": "connected"],

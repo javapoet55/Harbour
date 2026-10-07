@@ -704,6 +704,8 @@ private struct ShoppingStoreFinder:View {
     @State private var locationBusy=false
     @State private var locationProvider=WeatherLocationProvider()
     @State private var searchRevision=0
+    /// The search key whose request came back, so "no stores" is only said about a finished search.
+    @State private var completedKey:String?
     private var searchKey:String { "\(name)|\(area)|\(latitude ?? 0)|\(longitude ?? 0)|\(searchRevision)" }
     var body:some View {
         ScrollView {
@@ -723,8 +725,11 @@ private struct ShoppingStoreFinder:View {
                     Button("Try again"){searchRevision += 1}
                 }
                 if !searchBusy && searchError == nil && suggestions.isEmpty {
-                    Label(area.isEmpty && latitude == nil ? "Enter a city or ZIP code, or use your location to find grocery stores.":"No stores found. Try another location or store name.",systemImage:"storefront")
-                        .foregroundStyle(Color.nexdoSecondary).padding()
+                    if completedKey == searchKey { noStores }
+                    else if area.isEmpty && latitude == nil {
+                        Label("Enter a city or ZIP code, or use your location to find grocery stores.",systemImage:"storefront")
+                            .foregroundStyle(Color.nexdoSecondary).padding()
+                    }
                 }
                 ForEach(suggestions) { suggestion in
                     HStack(alignment:.top,spacing:12) {
@@ -751,6 +756,20 @@ private struct ShoppingStoreFinder:View {
             .task {if area.isEmpty {await useLocation(requestPermission:false)}}
             .task(id:searchKey){await findStores()}
     }
+    /// A finished search with no stores, including an area the server cannot place (it answers an empty list).
+    private var noStores:some View {
+        let place=area.trimmingCharacters(in:.whitespacesAndNewlines)
+        let named=name.trimmingCharacters(in:.whitespacesAndNewlines)
+        return VStack(spacing:10) {
+            Image(systemName:"storefront").font(.largeTitle).foregroundStyle(Color.nexdoIndigo)
+                .frame(width:72,height:72).background(Color.nexdoIndigo.opacity(0.08),in:Circle())
+            Text(place.isEmpty ? "No stores found near you" : "No stores found near \(place)").font(.headline).foregroundStyle(Color.nexdoInk).multilineTextAlignment(.center)
+            Text(named.isEmpty ? "Check the city or ZIP code, or try a nearby one." : "Check the city or ZIP code and the store name, or try a nearby area.")
+                .font(.subheadline).foregroundStyle(Color.nexdoSecondary).multilineTextAlignment(.center)
+        }.padding(20).frame(maxWidth:.infinity)
+            .background(Color(uiColor:.secondarySystemGroupedBackground),in:RoundedRectangle(cornerRadius:20))
+            .accessibilityElement(children:.combine).accessibilityIdentifier("stores-none-found")
+    }
     private func searchField(_ title:String,text:Binding<String>,icon:String)->some View {
         HStack {
             Image(systemName:icon).foregroundStyle(Color.nexdoIndigo)
@@ -767,7 +786,7 @@ private struct ShoppingStoreFinder:View {
         } catch {if requestPermission {searchError="Location is unavailable. Enter a city or ZIP code, or allow location access in iPhone Settings."}}
     }
     private func findStores() async {
-        suggestions=[];searchError=nil;searchBusy=false
+        suggestions=[];searchError=nil;searchBusy=false;completedKey=nil
         let key=searchKey
         let query=name.trimmingCharacters(in:.whitespacesAndNewlines)
         let region=area.trimmingCharacters(in:.whitespacesAndNewlines)
@@ -780,7 +799,7 @@ private struct ShoppingStoreFinder:View {
             struct Results:Decodable,Sendable {let stores:[ShoppingStoreSuggestion]}
             let result:Results=try await store.api.request("/api/shopping/stores",method:"POST",body:JSONSerialization.data(withJSONObject:body))
             try Task.checkCancellation();guard key==searchKey else{return}
-            suggestions=result.stores;searchBusy=false
+            suggestions=result.stores;searchBusy=false;completedKey=key
         } catch {
             guard !Task.isCancelled,key==searchKey else{return}
             searchBusy=false;searchError=error.localizedDescription
