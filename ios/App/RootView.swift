@@ -1908,7 +1908,8 @@ struct TasksView: View {
                                 .frame(width: 36, height: 40)
                             VStack(alignment: .leading, spacing: 2) {
                             Text(group.isDone && model.taskQuery.status == "All" ? "Completed · \(sectionTitle(group.date))" : sectionTitle(group.date)).font(.title3.bold()).foregroundStyle(Color.nexdoInk).accessibilityHeading(.h2)
-                            if group.date != .distantFuture {
+                            // Only under Today, Yesterday and Tomorrow: any other day's title is already the date (as on Android, ca4d583).
+                            if group.date != .distantFuture && sectionDate(group.date) != sectionTitle(group.date) {
                                 Text(sectionDate(group.date))
                                     .font(.caption).foregroundStyle(Color.nexdoSecondary)
                             }
