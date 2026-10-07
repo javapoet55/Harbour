@@ -183,12 +183,23 @@ export function StoreFinderPage({ initialArea, onSelect }: { initialArea: string
             </Pressable>
           </>
         ) : null}
-        {!searchBusy && searchError === null && suggestions.length === 0 ? (
+        {/* Android ahead of iOS (iOS 118ede8): "no stores" is said only about a search that came back empty, as a
+            card; before any area or location the prompt shows, and nothing shows while a search is pending (the
+            600 ms wait used to flash "No stores found" before every result). */}
+        {current !== null && current.error === null && suggestions.length === 0 ? (
+          <View style={[styles.noStores, { backgroundColor: theme.colors.surface }]} testID="stores-none-found">
+            <View style={[styles.noStoresIcon, { backgroundColor: withAlpha(brand.nexdoIndigo, 0.08) }]}>
+              <Ionicons color={theme.colors.link} name="storefront" size={34} />
+            </View>
+            <Text style={[headline, styles.centered, { color: theme.colors.ink }]}>{area.trim() === '' ? 'No stores found near you' : `No stores found near ${area.trim()}`}</Text>
+            <Text style={[textStyles.subheadline, styles.centered, { color: theme.colors.secondary }]}>
+              {name.trim() === '' ? 'Check the city or ZIP code, or try a nearby one.' : 'Check the city or ZIP code and the store name, or try a nearby area.'}
+            </Text>
+          </View>
+        ) : !searchBusy && searchError === null && suggestions.length === 0 && area === '' && location === null ? (
           <View style={styles.emptyRow} testID="stores-empty">
             <Ionicons color={theme.colors.secondary} name="storefront-outline" size={20} />
-            <Text style={[textStyles.body, styles.grow, { color: theme.colors.secondary }]}>
-              {area === '' && location === null ? 'Enter a city or ZIP code, or use your location to find grocery stores.' : 'No stores found. Try another location or store name.'}
-            </Text>
+            <Text style={[textStyles.body, styles.grow, { color: theme.colors.secondary }]}>Enter a city or ZIP code, or use your location to find grocery stores.</Text>
           </View>
         ) : null}
         {suggestions.map((suggestion) => (
@@ -302,6 +313,8 @@ const styles = StyleSheet.create({
   progress: { alignItems: 'center', gap: 8, padding: 16 },
   progressRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   emptyRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, padding: 16 },
+  noStores: { alignItems: 'center', gap: 10, padding: 20, borderRadius: 20 },
+  noStoresIcon: { width: 72, height: 72, borderRadius: 36, alignItems: 'center', justifyContent: 'center' },
   storeCard: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, padding: 14, borderRadius: 20 },
   storeIcon: { width: 48, height: 56, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   storeText: { gap: 5, alignItems: 'flex-start' },

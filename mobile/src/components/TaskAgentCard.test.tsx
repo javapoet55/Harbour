@@ -449,6 +449,12 @@ describe('the shortlist', () => {
     await fireEvent.press(await screen.findByTestId('agent-tab-0-1'));
     expect(screen.getByText('Google Maps')).toBeTruthy();
     expect(screen.getByText('5/5 · a month ago')).toBeTruthy();
+    // A review that fits in 3 lines has no "Show more" (Android ahead of iOS).
+    const measure = screen.getByTestId('agent-review-measure-0https://maps.google.com/review-0', { includeHiddenElements: true });
+    await act(async () => measure.props.onTextLayout({ nativeEvent: { lines: [{}, {}] } }));
+    expect(screen.queryByLabelText('Show more of Sample reviewer’s review')).toBeNull();
+    // One cut off at 3 lines has it.
+    await act(async () => measure.props.onTextLayout({ nativeEvent: { lines: [{}, {}, {}, {}, {}] } }));
     await fireEvent.press(screen.getByLabelText('Show more of Sample reviewer’s review'));
     expect(screen.getByLabelText('Show less of Sample reviewer’s review')).toBeTruthy();
     await fireEvent.press(screen.getByLabelText('Read review on Google Maps'));

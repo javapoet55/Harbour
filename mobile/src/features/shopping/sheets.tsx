@@ -176,7 +176,8 @@ function Choice({ title, subtitle, icon, selected, disabled = false, onPress, te
  */
 export function ShareListSheet({ visible, list, onUpdate, onClose, onWeeklyEmail }: { visible: boolean; list: GroceryList; onUpdate: (list: GroceryList) => void; onClose: () => void; onWeeklyEmail: () => void }) {
   return (
-    <MomentSheet visible={visible} title="" onRequestClose={onClose} testID="share-list-sheet">
+    // Android ahead of iOS (iOS 6e17c47): a Done button, a way out besides swiping the sheet down.
+    <MomentSheet visible={visible} title="" onRequestClose={onClose} right={{ title: 'Done', onPress: onClose, bold: true, testID: 'shopping-share-done' }} testID="share-list-sheet">
       {visible ? <ShareListBody initial={list} onUpdate={onUpdate} onWeeklyEmail={onWeeklyEmail} /> : null}
     </MomentSheet>
   );

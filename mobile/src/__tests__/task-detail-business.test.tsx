@@ -94,9 +94,9 @@ describe('Task Details with business research', () => {
     await renderDetail(eligible);
     expect(await screen.findByText('TASK INFORMATION')).toBeTruthy();
 
-    // Header: Back | Task Details | Close.
+    // Header: Task Details | Close. The duplicate Back is gone (Android ahead of iOS); system Back still closes.
     expect(screen.getByTestId('detail-business-header')).toBeTruthy();
-    expect(screen.getByLabelText('Back')).toBeTruthy();
+    expect(screen.queryByLabelText('Back')).toBeNull();
     expect(screen.getByRole('header', { name: 'Task Details' })).toBeTruthy();
     expect(screen.getByLabelText('Close task details')).toBeTruthy();
     expect(screen.queryByText('TASK DETAILS')).toBeNull();
@@ -159,11 +159,11 @@ describe('Task Details with business research', () => {
     expect(screen.getByLabelText('Save task changes').props.accessibilityState).toMatchObject({ disabled: false });
   });
 
-  it('Back and Close both dismiss', async () => {
+  it('Close dismisses; there is no second button that does the same', async () => {
     await renderDetail(eligible);
-    await fireEvent.press(await screen.findByLabelText('Back'));
-    await fireEvent.press(screen.getByLabelText('Close task details'));
-    expect(mockBack).toHaveBeenCalledTimes(2);
+    await fireEvent.press(await screen.findByLabelText('Close task details'));
+    expect(mockBack).toHaveBeenCalledTimes(1);
+    expect(screen.queryByTestId('detail-back')).toBeNull();
   });
 
   it('hides the footer while the agent’s location field has focus', async () => {

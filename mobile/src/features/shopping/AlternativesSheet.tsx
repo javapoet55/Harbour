@@ -237,7 +237,7 @@ function Backdrop() {
 }
 
 /** `AlternativeBlueButtonStyle` (:8-15). */
-function BlueButton({ title, onPress, disabled = false, testID }: { title: string; onPress: () => void; disabled?: boolean; testID: string }) {
+function BlueButton({ title, onPress, disabled = false, icon, testID }: { title: string; onPress: () => void; disabled?: boolean; icon?: keyof typeof Ionicons.glyphMap; testID: string }) {
   return (
     <Pressable
       accessibilityLabel={title}
@@ -245,9 +245,10 @@ function BlueButton({ title, onPress, disabled = false, testID }: { title: strin
       accessibilityState={{ disabled }}
       disabled={disabled}
       onPress={onPress}
-      style={[styles.blue, { backgroundColor: BLUE, opacity: disabled ? 0.4 : 1 }]}
+      style={[styles.blue, icon && styles.blueRow, { backgroundColor: BLUE, opacity: disabled ? 0.4 : 1 }]}
       testID={testID}
     >
+      {icon ? <Ionicons color="#FFFFFF" name={icon} size={17} /> : null}
       <Text style={[styles.headline, { color: '#FFFFFF' }]}>{title}</Text>
     </Pressable>
   );
@@ -437,7 +438,7 @@ function AlternativesBody({ list, original, onClose, onReplace, onAdd, onFavorit
                 <Ionicons color={BLUE} name="swap-horizontal" size={34} />
               </View>
               <Text style={[styles.title2, { color: theme.colors.ink }]}>Replace item?</Text>
-              <Text style={[textStyles.body, styles.center, { color: theme.colors.secondary }]}>{`Replace “${original.name}” with “${panel.alternative.name}”? `}</Text>
+              <Text style={[textStyles.body, styles.center, { color: theme.colors.secondary }]}>{`Replace “${original.name}” with “${panel.alternative.name}”?`}</Text>
               <View style={[styles.surface, { backgroundColor: theme.colors.surface, borderColor: withAlpha(brand.nexdoIndigo, 0.1) }]}>
                 <ReplacementItem amount={amountLabel(original)} item={original} />
                 <Ionicons color={BLUE} name="arrow-down" size={17} style={styles.selfCenter} />
@@ -601,15 +602,26 @@ function AlternativesBody({ list, original, onClose, onReplace, onAdd, onFavorit
             </View>
           </>
         ) : null}
-        {error ? (
-          <>
-            <Text style={[textStyles.subheadline, { color: theme.colors.danger }]} testID="alternatives.error">
+        {/* Android ahead of iOS (iOS 3400481): with nothing loaded, a clear state with Try again (there is no local
+            fallback, so this is the whole screen); with alternatives on screen the error is a failed save, which a
+            reload would not fix, so it stays an inline message. */}
+        {error && !result ? (
+          <View style={[styles.loadFailure, { backgroundColor: theme.colors.surface }]} testID="alternatives.loadFailure">
+            <View accessible={false} importantForAccessibility="no-hide-descendants" style={[styles.loadFailureIcon, { backgroundColor: withAlpha(systemColors.orange, 0.1) }]}>
+              <Ionicons color={systemColors.orange} name="warning" size={34} />
+            </View>
+            <Text style={[styles.headline, { color: theme.colors.ink }]}>Couldn’t load alternatives</Text>
+            <Text style={[textStyles.subheadline, styles.textCenter, { color: theme.colors.secondary }]} testID="alternatives.error">
               {error}
             </Text>
-            <Pressable accessibilityRole="button" onPress={() => setRetry((value) => value + 1)} style={styles.minHeight} testID="alternatives-retry">
-              <Text style={[textStyles.body, { color: theme.colors.link }]}>Try again</Text>
-            </Pressable>
-          </>
+            <View style={styles.fullWidth}>
+              <BlueButton icon="refresh" onPress={() => setRetry((value) => value + 1)} testID="alternatives-retry" title="Try again" />
+            </View>
+          </View>
+        ) : error ? (
+          <Text style={[textStyles.subheadline, { color: theme.colors.danger }]} testID="alternatives.error">
+            {error}
+          </Text>
         ) : null}
       </ScrollView>
       {/* "View in Cart (N)" (:66-70). */}
@@ -803,16 +815,14 @@ function SuccessScreen({ visible, original, replacement, onClose }: { visible: b
           <LinearGradient colors={[systemColors.green, withAlpha(systemColors.green, 0.75)]} end={{ x: 1, y: 1 }} start={{ x: 0, y: 0 }} style={styles.successMark}>
             <Ionicons color="#FFFFFF" name="checkmark" size={42} />
           </LinearGradient>
-          <Text style={[styles.title, { color: theme.colors.ink }]} testID="alternatives.success">
+          {/* Centred, as Swift's VStack centres it (ShoppingAlternativesDesign.swift:115); the column stretches. */}
+          <Text style={[styles.title, styles.center, { color: theme.colors.ink }]} testID="alternatives.success">
             Item replaced!
           </Text>
           <Text style={[textStyles.body, styles.center, { color: theme.colors.secondary }]}>{`${original} has been replaced with ${replacement}.`}</Text>
           <View style={styles.grow} />
+          {/* One button (Android ahead of iOS, iOS 77c3d93): Done and View in Cart both only closed this screen. */}
           <BlueButton onPress={onClose} testID="alternatives-success-done" title="Done" />
-          <Pressable accessibilityRole="button" onPress={onClose} style={[styles.bordered, styles.cartAgain, { backgroundColor: withAlpha(BLUE, 0.12) }]} testID="alternatives-success-cart">
-            <Ionicons color={BLUE} name="cart-outline" size={18} />
-            <Text style={[textStyles.body, { color: BLUE }]}>View in Cart</Text>
-          </Pressable>
         </View>
       </SafeAreaView>
     </Modal>
@@ -1171,6 +1181,11 @@ const styles = StyleSheet.create({
   cartBar: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: 16, paddingTop: 16 },
   cartButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 52, borderRadius: 16 },
   blue: { minHeight: 52, paddingHorizontal: 16, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+  blueRow: { flexDirection: 'row', gap: 8 },
+  loadFailure: { alignItems: 'center', gap: 12, padding: 20, borderRadius: 20 },
+  loadFailureIcon: { width: 72, height: 72, borderRadius: 36, alignItems: 'center', justifyContent: 'center' },
+  textCenter: { textAlign: 'center' },
+  fullWidth: { alignSelf: 'stretch' },
   panelContent: { padding: 24, gap: 22 },
   panelFooter: { paddingHorizontal: 20, paddingTop: 12 },
   confirm: { alignItems: 'center', gap: 18 },
@@ -1194,7 +1209,6 @@ const styles = StyleSheet.create({
   divider: { height: StyleSheet.hairlineWidth },
   success: { flex: 1, alignItems: 'stretch', gap: 24, padding: 28, paddingBottom: 48 },
   successMark: { width: 94, height: 94, borderRadius: 47, alignItems: 'center', justifyContent: 'center', alignSelf: 'center' },
-  cartAgain: { minHeight: 48 },
   details: { padding: 18, gap: 24, paddingBottom: 40 },
   row12: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
   column12: { gap: 12 },

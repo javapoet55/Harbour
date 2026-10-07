@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
 import { StyleSheet } from 'react-native';
 
 import type { AssistantTurn, NexdoTask } from '../api';
@@ -266,6 +266,9 @@ describe('an answer', () => {
     expect(screen.getByText('Ship the deck')).toBeTruthy();
     expect(screen.queryByText('Call Damien')).toBeNull();
     expect(screen.getByText('Show 1 more')).toBeTruthy();
+    // Each section reads aloud, as iOS 5ed717c names the button.
+    expect(within(screen.getByTestId('ask-section-0-read')).getByText('Read aloud')).toBeTruthy();
+    expect(screen.queryByText('Read Loud')).toBeNull();
     // The composer is back once there is an answer, and the landing field is gone.
     expect(screen.getByTestId('ask-field')).toBeTruthy();
     expect(screen.queryByTestId('ask-landing-field')).toBeNull();
@@ -459,7 +462,23 @@ describe('the Daily Brief', () => {
     await act(async () => {
       message = briefHandlers()?.read(0, 'Send the report by 4 PM.');
     });
-    expect(message).toBe('Allow OpenAI sharing in Account to use Read Loud.');
+    expect(message).toBe('Allow OpenAI sharing in Account to use Read aloud.');
+  });
+
+  it('counts items in the section badges, not "nothing" bullets, and hides a zero badge', async () => {
+    const answer = turn({
+      visual: {
+        summary: 'Your daily brief',
+        sections: [
+          { title: 'Deadlines', items: ['Send the report by 4 PM.', 'No other deadlines appear to fall today.'] },
+          { title: 'Next move', items: ['Nothing else needs a decision today.'] },
+        ],
+      },
+    });
+    await openBrief(0, answer);
+    await waitFor(() => expect(screen.getByText('Upcoming Deadlines')).toBeTruthy());
+    expect(screen.getByTestId('brief-count-0')).toHaveTextContent('1');
+    expect(screen.queryByTestId('brief-count-1')).toBeNull();
   });
 
   it('lets a section page ask through it', async () => {
@@ -540,7 +559,9 @@ describe('Shopping Recommendations', () => {
     expect(
       screen.getByText('Ask Nexdo to spot missing staples, suggest meal ideas, compare alternatives, or check quantities using the items already on this list.'),
     ).toBeTruthy();
-    expect(screen.getByText('Suggestions only—your list changes after you approve them.')).toBeTruthy();
+    // No approval step exists, so none is promised (Android ahead of iOS).
+    expect(screen.getByText('Suggestions only—your list is not changed.')).toBeTruthy();
+    expect(screen.queryByText(/approve/i)).toBeNull();
     expect(screen.getByTestId('ask-field').props.placeholder).toBe('Ask about this shopping list…');
     expect(screen.getByText('Get Recommendations')).toBeTruthy();
     expect(screen.getByLabelText('Get shopping recommendations').props.accessibilityState.disabled).toBe(true);

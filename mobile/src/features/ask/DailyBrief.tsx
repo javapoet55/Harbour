@@ -6,7 +6,7 @@ import { TaskSymbol } from '../../components/TaskSymbol';
 import { Text } from '../../components/Text';
 import type { AssistantSection } from '../../lib/assistantPresentation';
 import { ASK_MAX_LENGTH, askIntent, type AskIntentId } from '../../lib/askIntents';
-import { briefCopy, briefStyle, type BriefArtworkPart, type BriefTone } from '../../lib/dailyBrief';
+import { briefCopy, briefItemCount, briefStyle, type BriefArtworkPart, type BriefTone } from '../../lib/dailyBrief';
 import { inputText, palettes } from '../../theme';
 import { swiftColors } from '../wellness/style';
 import { useAccessibilityTextSize } from '../wellness/useAccessibilityTextSize';
@@ -146,9 +146,12 @@ export function DailyBrief({
             <View style={[styles.grow, styles.sectionText]}>
               <View style={styles.sectionTitleRow}>
                 <Text style={[styles.headline, styles.shrink, { color: briefInk }]}>{style.title}</Text>
-                <View style={[styles.count, { backgroundColor: withAlpha(tone, 0.12) }]}>
-                  <Text style={[styles.subheadline, styles.bold, { color: tone }]}>{String(section.items.length)}</Text>
-                </View>
+                {/* Android ahead of iOS: the badge counts items, not "nothing" bullets, and is hidden at zero (9f32f13). */}
+                {briefItemCount(section.items) > 0 ? (
+                  <View style={[styles.count, { backgroundColor: withAlpha(tone, 0.12) }]} testID={`brief-count-${index}`}>
+                    <Text style={[styles.subheadline, styles.bold, { color: tone }]}>{String(briefItemCount(section.items))}</Text>
+                  </View>
+                ) : null}
               </View>
               <Text numberOfLines={2} style={[styles.subheadline, { color: briefSecondary }]}>
                 {section.items[0] ?? 'Nothing to report.'}

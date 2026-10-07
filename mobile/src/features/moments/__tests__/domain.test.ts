@@ -111,6 +111,9 @@ describe('MomentDates', () => {
     const now = momentDate('2026-09-16', 'America/Los_Angeles');
     const zone = 'America/Los_Angeles';
     expect(upcomingGroupFor('2026-09-17', zone, now)).toBe('This Week');
+    // Weeks start on Monday (Android ahead of iOS): Sunday the 20th is this week, Monday the 21st next.
+    expect(upcomingGroupFor('2026-09-20', zone, now)).toBe('This Week');
+    expect(upcomingGroupFor('2026-09-21', zone, now)).toBe('Next Week');
     expect(upcomingGroupFor('2026-09-23', zone, now)).toBe('Next Week');
     expect(upcomingGroupFor('2026-09-30', zone, now)).toBe('This Month');
     expect(upcomingGroupFor('2026-10-20', zone, now)).toBe('Next Month');

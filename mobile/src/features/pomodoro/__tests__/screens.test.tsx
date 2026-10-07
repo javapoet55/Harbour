@@ -108,11 +108,13 @@ describe('the dashboard', () => {
     expect(screen.getByText('Start a focus session to build your history.')).toBeTruthy();
   });
 
-  it('shows each category\'s share on Insights, which reads "Categories" while selected', async () => {
+  it('shows each category\'s share on Insights, which keeps its name while selected', async () => {
     clock = Date.parse('2026-09-24T18:00:00Z'); // a Thursday, so the week holds both sessions
     await open(setup({ sessions: [finished(2 * 3_600_000, 'reading'), finished(3_600_000, 'coding'), finished(4 * 3_600_000, 'coding')], currentID: null, synced: {} }));
     await fireEvent.press(screen.getByTestId('pomodoro-tab-insights'));
-    expect(screen.getByText('Categories')).toBeTruthy();
+    // Android ahead of iOS (iOS ae4e5f2): the tab reads "Insights", not "Categories".
+    expect(within(screen.getByTestId('pomodoro-tab-insights')).getByText('Insights')).toBeTruthy();
+    expect(screen.queryByText('Categories')).toBeNull();
     expect(screen.getByText('Time by Category')).toBeTruthy();
     expect(screen.getByText('Focus Trend')).toBeTruthy();
     expect(within(screen.getByTestId('pomodoro-share-coding')).getByText('67%')).toBeTruthy();
@@ -138,6 +140,25 @@ describe('the dashboard', () => {
 });
 
 describe('the timer', () => {
+  it('opened from Wellness, the completion button says Done and closes Pomodoro (Android ahead of iOS)', async () => {
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    const harness = setup();
+    await render(<PomodoroView now={() => clock} onClose={harness.onClose} owner="u1" store={harness.store} />);
+    await act(async () => {
+      await Promise.resolve();
+    });
+    await fireEvent.press(screen.getByTestId('pomodoro-dashboard-start'));
+    await fireEvent.press(screen.getByTestId('pomodoro-start'));
+    await fireEvent.press(screen.getByLabelText('Stop'));
+    const stopButton = (alert.mock.calls[0][2] as { text: string; onPress?: () => void }[]).find((button) => button.text === 'Stop session')!;
+    await act(async () => stopButton.onPress?.());
+    expect(screen.queryByText('Back to Tasks')).toBeNull();
+    await fireEvent.press(screen.getByTestId('pomodoro-done'));
+    expect(screen.getByText('Done')).toBeTruthy();
+    expect(harness.onClose).toHaveBeenCalled();
+    alert.mockRestore();
+  });
+
   it('starts a session from setup, keeps the screen awake, pauses and stops into the completion card', async () => {
     const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
     const harness = setup();

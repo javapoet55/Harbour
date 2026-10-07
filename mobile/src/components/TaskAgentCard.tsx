@@ -128,6 +128,8 @@ export function TaskAgentCard({ taskId, onResearchAvailable, onFieldFocus, onFie
   const [draftExpanded, setDraftExpanded] = useState<Set<string>>(new Set());
   const [businessTabs, setBusinessTabs] = useState<Record<string, number>>({});
   const [expandedReviews, setExpandedReviews] = useState<Set<string>>(new Set());
+  /** Each review's full line count, measured unclamped, so "Show more" appears only for a review cut off at 3 lines. */
+  const [reviewLines, setReviewLines] = useState<Record<string, number>>({});
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const [searchRequestPending, setSearchRequestPending] = useState(false);
@@ -440,6 +442,8 @@ export function TaskAgentCard({ taskId, onResearchAvailable, onFieldFocus, onFie
           const reviewId = candidate.id + review.url;
           const expanded = expandedReviews.has(reviewId);
           const toggleLabel = expanded ? 'Show less' : 'Show more';
+          // Android ahead of iOS: Swift shows "Show more" under any review, however short (:386).
+          const truncated = (reviewLines[reviewId] ?? 0) > 3;
           return (
             <View key={review.url} style={styles.review}>
               <View style={styles.reviewAuthor}>
@@ -449,10 +453,26 @@ export function TaskAgentCard({ taskId, onResearchAvailable, onFieldFocus, onFie
                   : <Text style={[styles.body, { color: theme.colors.ink }]}>{review.author}</Text>}
               </View>
               <Text style={[styles.caption, { color: theme.colors.ink }]}>{reviewLine(review.rating, review.published)}</Text>
-              <Text numberOfLines={expanded ? undefined : 3} style={[styles.subheadline, { color: theme.colors.ink }]}>
-                {review.text}
-              </Text>
-              {review.text.length > 0 ? (
+              <View>
+                <Text numberOfLines={expanded ? undefined : 3} style={[styles.subheadline, { color: theme.colors.ink }]}>
+                  {review.text}
+                </Text>
+                {/* An invisible, unclamped copy over the same width: its line count decides "Show more". */}
+                <Text
+                  accessibilityElementsHidden
+                  importantForAccessibility="no-hide-descendants"
+                  onTextLayout={(event) => {
+                    const lines = event.nativeEvent.lines.length;
+                    setReviewLines((current) => (current[reviewId] === lines ? current : { ...current, [reviewId]: lines }));
+                  }}
+                  pointerEvents="none"
+                  style={[styles.subheadline, styles.measure]}
+                  testID={`agent-review-measure-${reviewId}`}
+                >
+                  {review.text}
+                </Text>
+              </View>
+              {truncated || expanded ? (
                 <Pressable
                   accessibilityRole="button"
                   accessibilityLabel={`${toggleLabel} of ${review.author}’s review`}
@@ -1069,6 +1089,7 @@ const styles = StyleSheet.create({
   phoneRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   compact: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 12, minHeight: 36, borderRadius: 12 },
   review: { gap: 6, paddingVertical: 6 },
+  measure: { position: 'absolute', top: 0, left: 0, right: 0, opacity: 0 },
   reviewAuthor: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   avatar: { width: 32, height: 32, borderRadius: 16 },
   prominent: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', gap: 8, paddingHorizontal: 14, minHeight: 44, borderRadius: 999 },

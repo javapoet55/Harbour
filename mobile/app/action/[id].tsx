@@ -222,36 +222,19 @@ export default function TaskAction() {
     }
   };
 
-  /** `resolve(_:)` (TaskActionView.swift:353-367): a known recipient goes straight to `choose`. */
-  const resolve = async (option: TaskActionChannel, known: ActionContact | null = contact) => {
-    const current = currentAction();
-    if (!current || !usableRef.current || busy) return;
+  /**
+   * `resolve(_:)` (TaskActionView.swift:353-367): a known recipient goes straight to `choose`. Android ahead of iOS:
+   * Swift's Contacts search for an unknown recipient is gone. Every caller has a recipient (the channel buttons
+   * exist only once there is one), so that path could not be reached (§22 "For the team").
+   */
+  const resolve = (option: TaskActionChannel, known: ActionContact | null = contact) => {
+    if (!currentAction() || !usableRef.current || busy || !known) return;
     setChannel(option);
     setContacts([]);
     setAddresses([]);
     setError(null);
     setReceipt(null);
-    if (known) {
-      choose(known, option);
-      return;
-    }
-    setBusy(true);
-    useCoordinator.getState().transitionTo(actionID, 'awaitingApproval');
-    try {
-      const matches = await resolveContacts({
-        // "the plumber" is searched as "plumber"; the fallback keeps the name as the task wrote it.
-        name: contactSearchName(current.contactName),
-        identifier: current.contactIdentifier,
-        fallbackName: current.contactName,
-      });
-      if (!mounted.current) return;
-      if (matches.length === 1) choose(matches[0], option);
-      else setContacts(matches);
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
-    } finally {
-      setBusy(false);
-    }
+    choose(known, option);
   };
 
   /** `choose(_:)` (TaskActionView.swift:368-379): with no channel yet, only the recipient is set. */
@@ -514,14 +497,6 @@ export default function TaskAction() {
                   />
                 </>
               )
-            ) : null}
-
-            {busy ? (
-              // `ProgressView("Finding contact…")` puts its label under the spinner.
-              <View style={styles.progress}>
-                <ActivityIndicator color={theme.colors.link} size="small" />
-                <Text style={[theme.typography.body, { color: theme.colors.secondary }]}>Finding contact…</Text>
-              </View>
             ) : null}
 
             {contacts.length > 0 ? (

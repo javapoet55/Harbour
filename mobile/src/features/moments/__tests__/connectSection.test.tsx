@@ -76,8 +76,11 @@ describe('Connect me on the day', () => {
     const old = moment({ id: 'c', firstName: 'Ana', phone: '+15555550111' });
     await render(<MomentConnectSection moments={[SAM, lee, old]} />);
     await waitFor(() => expect(screen.getByText('Verify your number first so Sam sees it’s you.')).toBeTruthy());
-    // Unverified: disabled, as Swift draws it, with no reason at the switch (§22 "For the team").
+    // Unverified: disabled, and now says why at the switch (iOS 15e82f7; Android ahead of iOS).
     expect(screen.getByTestId('connect-toggle-a').props.accessibilityState).toMatchObject({ disabled: true });
+    expect(screen.getByTestId('connect-needs-verified-a')).toHaveTextContent('Verify your phone number above to turn this on.');
+    // A passed moment gives only its own reason.
+    expect(screen.queryByTestId('connect-needs-verified-c')).toBeNull();
     // Only the switch dims; its label stays at full colour (`moment-connect-section`).
     type Node = { props: { style?: StyleProp<ViewStyle> }; parent: Node | null };
     const dimmed = (node: Node | null): boolean => (node ? StyleSheet.flatten(node.props.style)?.opacity === 0.4 || dimmed(node.parent) : false);
@@ -85,6 +88,13 @@ describe('Connect me on the day', () => {
     expect(screen.getByText('Add Lee’s phone number with its country code (for example +91 98765 43210) to use this.')).toBeTruthy();
     expect(screen.getByText('This moment has already passed.')).toBeTruthy();
     expect(screen.queryByTestId('connect-now-a')).toBeNull();
+  });
+
+  it('says nothing about verifying once the number is verified', async () => {
+    serve({ connectStatus: status(VERIFIED, [state()]) });
+    await render(<MomentConnectSection moments={[SAM]} />);
+    await waitFor(() => expect(screen.getByTestId('connect-toggle-a')).toBeTruthy());
+    expect(screen.queryByTestId('connect-needs-verified-a')).toBeNull();
   });
 
   it('turns a call on, previews it after the edits settle, and saves it', async () => {

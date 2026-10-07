@@ -9,7 +9,7 @@ import type { NexdoTask } from '../../api';
 import { withAlpha } from '../../components/SignInBackdrop';
 import { TaskSymbol, type TaskSymbolName } from '../../components/TaskSymbol';
 import { Text } from '../../components/Text';
-import { briefDetailCopy, briefHelpQuery, briefTask } from '../../lib/dailyBrief';
+import { briefDetailCopy, briefHelpQuery, briefItemCount, briefTask } from '../../lib/dailyBrief';
 import type { TaskActionChannel } from '../../lib/todayActionQueue';
 import { useMinuteTick } from '../../lib/useMinuteTick';
 import { isConflictCancelled, isStaleWrite, useCompleteTask, useTasks, type ScheduleConflict } from '../../query/useTasks';
@@ -58,7 +58,8 @@ export function BriefSectionDetail({ title, items, onBack, onAsk, onRead }: { ti
   const complete = useCompleteTask({ onConflict: confirmConflict });
   const busy = complete.isPending;
   const failure = complete.error && !isStaleWrite(complete.error) && !isConflictCancelled(complete.error) ? complete.error.message : null;
-  const copy = briefDetailCopy(title, items.length);
+  // Android ahead of iOS: counts items, not "nothing" bullets (9f32f13 on fix/ios-bug-pass).
+  const copy = briefDetailCopy(title, briefItemCount(items));
   const anchor = useRef<View>(null);
   const menu = usePopoverMenu(anchor);
   // Android ahead of iOS: Swift sets Ask's `voiceError`, which lives in the composer this page hides, so

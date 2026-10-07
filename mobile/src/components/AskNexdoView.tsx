@@ -132,7 +132,7 @@ export function AskNexdoView({ textPage, initialPrompt = '', shoppingContext, on
    */
   const speakAnswer = (text?: string, section: number | null = null): string | null => {
     if (!consent.ai) {
-      const message = 'Allow OpenAI sharing in Account to use Read Loud.';
+      const message = 'Allow OpenAI sharing in Account to use Read aloud.';
       setVoiceError(message);
       return message;
     }
@@ -676,7 +676,8 @@ function ShoppingIntro({ context }: { context: ShoppingRecommendationContext }) 
       </Text>
       <View style={styles.introNote}>
         <Ionicons name="shield-checkmark" size={17} color="#34C759" />
-        <Text style={[styles.caption, styles.medium, styles.grow, { color: theme.colors.secondary }]}>Suggestions only—your list changes after you approve them.</Text>
+        {/* Android ahead of iOS: there is no approve step and the answer never edits the list (§22 "For the team"). */}
+        <Text style={[styles.caption, styles.medium, styles.grow, { color: theme.colors.secondary }]}>Suggestions only—your list is not changed.</Text>
       </View>
     </LinearGradient>
   );

@@ -388,11 +388,30 @@ describe('action time labels', () => {
     expect(actionDurationLabel(15_421)).toBe('257 hr 1 min');
   });
 
-  it('rounds the future up, truncates the past, and calls the last minute "Due now"', () => {
+  it('calls the last minute "Due now"', () => {
     expect(actionTimeLabel(at(30_000), NOW)).toBe('in 1 min');
     expect(actionTimeLabel(at(61 * 60_000), NOW)).toBe('in 1 hr 1 min');
     expect(actionTimeLabel(at(-59_000), NOW)).toBe('Due now');
-    expect(actionTimeLabel(at(-(257 * 60 + 1) * 60_000 - 30_000), NOW)).toBe('257 hr 1 min overdue');
+  });
+
+  // Ported from actionTimesRoundTheSameWayBeforeAndAfterTheDueTime and overdueAgesPast48HoursReadInDays
+  // (fix/ios-bug-pass bfedbd6, 0d7e89f). Android ahead of iOS.
+  it('rounds overdue and upcoming minutes the same way', () => {
+    expect(actionTimeLabel(at(90_000), NOW)).toBe('in 2 min');
+    expect(actionTimeLabel(at(-90_000), NOW)).toBe('2 min overdue');
+    expect(actionTimeLabel(at(80_000), NOW)).toBe('in 1 min');
+    expect(actionTimeLabel(at(-80_000), NOW)).toBe('1 min overdue');
+    expect(actionTimeLabel(at(20_000), NOW)).toBe('in 1 min');
+    expect(actionTimeLabel(at(-20_000), NOW)).toBe('Due now');
+    expect(actionTimeLabel(at(-(90 * 60 + 40) * 1000), NOW)).toBe('1 hr 31 min overdue');
+    expect(actionTimeLabel(at(2 * 3_600_000), NOW)).toBe('in 2 hr');
+  });
+
+  it('reads overdue ages past 48 hours in days', () => {
+    expect(actionTimeLabel(at(-(257 * 3600 + 60) * 1000), NOW)).toBe('10 days overdue');
+    expect(actionTimeLabel(at(-48 * 3_600_000), NOW)).toBe('2 days overdue');
+    expect(actionTimeLabel(at(-(47 * 3600 + 59 * 60) * 1000), NOW)).toBe('47 hr 59 min overdue');
+    expect(actionTimeLabel(at(72 * 3_600_000), NOW)).toBe('in 72 hr');
   });
 });
 

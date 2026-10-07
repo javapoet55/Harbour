@@ -1704,3 +1704,98 @@ gets the fix too, and the Swift app is to mirror it. Each fix has a test that fa
 - **Android ahead of iOS: Stores Near You says "your phone’s Settings", not "iPhone Settings".** Now
   "Location is unavailable. Enter a city or ZIP code, or allow location access in your
   phone’s Settings." (`LOCATION_UNAVAILABLE` in `StorePages.tsx`).
+
+## 30. Android bug pass 2: the remaining §22 items (2026-10-07)
+
+The rest of `docs/IOS_TO_REACT_NATIVE.md` §22 "For the team", fixed in RN first. Every item is **Android ahead of
+iOS**: the code is shared, so iOS RN gets it too, and the Swift app is to mirror it. Where `fix/ios-bug-pass`
+already had the fix, its Swift wording is copied; any other new text is listed in §22 "Android wording for iOS to
+match". Logic fixes have a test that fails without them.
+
+- **Android ahead of iOS: Moments weeks start on Monday.** The date chips (This Week, Later) and the Upcoming
+  groups (This Week, Next Week) used Swift's `Calendar.current` week, Sunday-first on en-US, while Pomodoro and the
+  Calorie Tracker are Monday-first. Both now start on Monday, so a Sunday moment is "this week" (`daysSinceMonday`
+  in `features/moments/dates.ts`).
+- **Android ahead of iOS: Daily Brief section counts count items, not "nothing" bullets.** The badge and the page
+  subtitle counted every bullet, so "Upcoming Deadlines 2" sat over "No deadlines appear to fall today". Ported from
+  iOS 9f32f13: a bullet that only says there is nothing ("No …", "None.", "Nothing …", "There are no …", "You have
+  no …") is shown but not counted; the badge is hidden at zero and the page says "Nothing to review" / "Nothing to
+  focus on" (iOS wording) (`briefItemCount` in `lib/dailyBrief.ts`).
+- **Android ahead of iOS: "Connect me" says at the switch when the number is unverified.** The switch was disabled
+  with no reason for an unverified caller ID; only the card above said to verify. It now says "Verify your phone
+  number above to turn this on." in orange under the switch while the number is unverified and the moment has not
+  passed (iOS 15e82f7 wording and condition) (`MomentConnectSection.tsx`).
+- **Android ahead of iOS: Stores Near You says "no stores" only about a finished search.** An empty result shared
+  the grey "No stores found. Try another location or store name." line with "no search yet", and it showed during
+  the 600 ms wait too, so it flashed before every result. As iOS 118ede8: a search that came back empty shows a
+  card, "No stores found near <area>" (or "near you") and "Check the city or ZIP code, or try a nearby one." ("…
+  and the store name, or try a nearby area." with a store name); before any area or location the prompt shows; and
+  nothing shows while a search is pending (`StorePages.tsx`).
+- **Android ahead of iOS: Item Alternatives shows a clear error state with Try again.** A load that failed before
+  any result showed one red line and a small "Try again". As iOS 3400481: a card with a warning glyph, "Couldn’t
+  load alternatives", the reason and a full-width Try again; with alternatives already on screen the error is a
+  failed save, which a reload would not fix, so it stays an inline message without Try again
+  (`AlternativesSheet.tsx`). The local fallback stays removed (a product decision; open).
+- **Android ahead of iOS: the Calorie Tracker guide promises only what the tracker does.** "Quickly add what you eat
+  by search, scan, or voice" and "Choose a goal like maintain, lose, or gain" described a food search, a barcode
+  scan, in-app voice entry and a goal type that do not exist. Step 1 now reads "Add what you eat to your food log,
+  or tell us on your daily check-in call. We estimate calories and nutrition from the call." and step 2 "Personalize
+  your daily calorie and macro targets."; the rest is unchanged (`WellnessModuleGuide.tsx`; new text, in §22's
+  wording table).
+- **Android ahead of iOS: Shopping Recommendations promises no approval step.** The intro said "Suggestions only—your
+  list changes after you approve them.", but the answer has no approve or add control and never edits the list. It
+  now says "Suggestions only—your list is not changed." (`AskNexdoView.tsx`; new text, in §22's wording table).
+- **Android ahead of iOS: Pomodoro's labels.** The third tab read "Insights" until selected, then "Categories"; it is
+  always "Insights" (iOS ae4e5f2). The completion screen said "Back to Tasks" even when Pomodoro was opened from
+  Wellness; there it now says "Done" and only closes Pomodoro, back to the chooser, and "Back to Tasks" stays for
+  the only other entrance, a tapped Pomodoro alert (iOS f6d6452 wording) (`PomodoroDashboard.tsx`,
+  `PomodoroView.tsx`, `app/wellness/pomodoro.tsx`).
+- **Android ahead of iOS: Today action times round one way and read in days past 48 hours.** Future times rounded
+  up and overdue ages truncated (90 seconds: "in 2 min" before, "1 min overdue" after), and old actions read "257 hr
+  1 min overdue". As `ActionTimeLabel` on fix/ios-bug-pass (bfedbd6, 0d7e89f): both round to the nearest minute,
+  under a minute late is still "Due now", and from 48 hours an age reads "N days overdue" (`actionTimeLabel` in
+  `TodayActions.tsx`).
+- **Android ahead of iOS: Calendar says "1 calendar commitment today", singular** (iOS c8da5cb) (`calendar.tsx`).
+- **Android ahead of iOS: the Replace confirmation ends at its question mark**, without the trailing space (iOS
+  6129004) (`AlternativesSheet.tsx`).
+- **Android ahead of iOS: "Item replaced!" keeps one button.** Done and View in Cart both only closed the screen;
+  Done stays (iOS 77c3d93) (`AlternativesSheet.tsx`).
+- **Android ahead of iOS: Task Details in business mode has one way out on screen, Close.** Its header had Back and
+  Close, which did the same thing. Close stays, as iOS now does; Back is gone (an empty slot keeps "Task Details"
+  centred), and the system Back gesture still closes the page (`BusinessHeader` in `app/task/[id].tsx`).
+- **Android ahead of iOS: all four Account menu rows sit inside the card.** Only Change password had the card; Help,
+  Feedback and "Edit profile and settings" sat bare on the background. The four share one card (iOS 6343e11)
+  (`app/account/index.tsx`).
+- **Android ahead of iOS: the task agent card's "Show more" appears only for a review that is cut off.** It showed
+  under any review, however short. An invisible, unclamped copy of each review measures its lines
+  (`onTextLayout`), and "Show more" shows only past three lines, or to collapse an expanded one
+  (`TaskAgentCard.tsx`; fixed from code, needs a look on the phone).
+- **Android ahead of iOS: Today then All during a Tasks search keeps the search's status.** Choosing All after
+  another chip narrows to this month's open tasks; during a search that reset the search's All status to Open, so
+  completed matches disappeared. As `TaskQuery.selectDate` on fix/ios-bug-pass (7fbc8f9), the narrowing is skipped
+  while a search is open (`selectDate` in `lib/taskQuery.ts`, `tasks.tsx`).
+- **Android ahead of iOS: Nexdo Action's unreachable Contacts search is gone.** `resolve()` kept Swift's search for
+  an unknown recipient, but every caller has one (the channel buttons exist only once there is a recipient), so it
+  could not run; its "Finding contact…" spinner could only have shown, wrongly, while completing the task. Both are
+  removed; no behaviour change, so no new test (`app/action/[id].tsx`).
+- **Already right on Android: Nexdo Action's "Choose contact" is white on its indigo fill.** Swift drew it black on
+  dark indigo (the screen's ink foreground); RN's `ProminentButton` already uses `onTint` (#FFFFFF) on `tint` (indigo)
+  in both palettes, as iOS a2c1699 now does. A test pins it in day and night; no code change (fixed from code, not
+  yet seen on device).
+- **Android ahead of iOS: during a Tasks search the tab bar does not sit above the keyboard.** iOS's bar rode up
+  with the keyboard (iOS ac9c619 now keeps it under on Tasks). On Android edge to edge should already keep the window
+  from resizing, but that varies by version and OEM, so the Tasks tab sets `tabBarHideOnKeyboard`: the bar is hidden
+  while the keyboard is up; other tabs are unchanged (`app/(tabs)/_layout.tsx`; fixed from code, not yet seen on
+  device).
+- **Android ahead of iOS: Share List has a Done button.** It had no close button; only a swipe (or the system Back)
+  closed it. A bold Done in the sheet's bar closes it (iOS 6e17c47 wording) (`ShareListSheet` in `sheets.tsx`; fixed
+  from code, not yet seen on device).
+- **"Item replaced!" is centred, as in Swift** (found on the phone during this pass). The success column stretches
+  its children, so the title sat at the left while the message under it was centred; Swift's VStack centres both
+  (`AlternativesSheet.tsx`).
+- **The Read aloud consent message says "Read aloud", as iOS 29c0f0b.** With OpenAI sharing off, reading an answer
+  or a brief section said "Allow OpenAI sharing in Account to use Read Loud."; it now says "…to use Read aloud."
+  The Ask answer's own button still reads "Read Loud", as on iOS (`AskNexdoView.tsx`).
+- **The Ask answer's read button says "Read aloud", as iOS 5ed717c.** It said "Read Loud"; "Stop" while reading is
+  unchanged, and so is its accessibility label ("Read <section> aloud"). This replaces the note above that the button
+  still read "Read Loud" (`AskResponse.tsx`).

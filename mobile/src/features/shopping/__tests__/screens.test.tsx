@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import React from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
-import { Alert, AppState, Platform, Share } from 'react-native';
+import { Alert, AppState, Platform, Share, StyleSheet } from 'react-native';
 
 const mockPush = jest.fn();
 const mockBack = jest.fn();
@@ -678,7 +678,8 @@ describe('Item Alternatives', () => {
     await waitFor(() => expect(screen.getByTestId('alternatives.select.Lactose-free milk')).toBeTruthy());
     await fireEvent.press(screen.getByTestId('alternatives.select.Lactose-free milk'));
     expect(screen.getByText('Replace item?')).toBeTruthy();
-    expect(screen.getByText('Replace “2% milk” with “Lactose-free milk”? ')).toBeTruthy();
+    // Ends at the question mark (iOS 6129004; Android ahead of iOS).
+    expect(screen.getByText('Replace “2% milk” with “Lactose-free milk”?')).toBeTruthy();
     expect(mockPost).not.toHaveBeenCalled();
     await fireEvent.press(screen.getByTestId('alternatives.confirm'));
     await waitFor(() => expect(screen.getByTestId('alternatives.success')).toBeTruthy());
@@ -686,6 +687,11 @@ describe('Item Alternatives', () => {
     expect(envelope).toMatchObject({ operation: 'save', id: 'l1', revision: 7 });
     expect(envelope.input.items[1]).toMatchObject({ id: 'milk2', name: 'Lactose-free milk', quantity: '1', size: '', notes: 'organic only', checked: true, brand: 'Stater Bros', barcode: '0123456789012', imageData: null });
     expect(screen.getByText('2% milk has been replaced with Lactose-free milk.')).toBeTruthy();
+    // The title is centred, as in Swift.
+    expect(StyleSheet.flatten(screen.getByTestId('alternatives.success').props.style).textAlign).toBe('center');
+    // One button: Done (iOS 77c3d93; Android ahead of iOS).
+    expect(screen.queryByTestId('alternatives-success-cart')).toBeNull();
+    expect(screen.queryByText('View in Cart')).toBeNull();
     await fireEvent.press(screen.getByTestId('alternatives-success-done'));
     await waitFor(() => expect(screen.queryByTestId('alternatives-original')).toBeNull());
   });
@@ -737,6 +743,10 @@ describe('Item Alternatives', () => {
       throw new ApiError({ status: 0, code: 'NETWORK', message: 'The network connection was lost.' });
     });
     await waitFor(() => expect(screen.getByTestId('alternatives.error')).toHaveTextContent('The network connection was lost.'));
+    // Nothing loaded: iOS 3400481's state, a title over the reason and a full-width Try again (Android ahead of iOS).
+    expect(screen.getByTestId('alternatives.loadFailure')).toBeTruthy();
+    expect(screen.getByText('Couldn’t load alternatives')).toBeTruthy();
+    expect(screen.getByLabelText('Try again')).toBeTruthy();
     expect(screen.queryByText('Organic 2% milk')).toBeNull();
     mockAlternatives.mockResolvedValueOnce(ANSWER);
     await fireEvent.press(screen.getByTestId('alternatives-retry'));

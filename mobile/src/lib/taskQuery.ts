@@ -271,6 +271,16 @@ export function beginSearch(query: TaskQuery): TaskQuery {
   return { ...query, ...SEARCH_FILTERS, search: '' };
 }
 
+/**
+ * Choosing a date chip (RootView.swift:1789). Moving to All from another chip narrows it to this month's open tasks,
+ * but not during a search. Android ahead of iOS, as `TaskQuery.selectDate` on fix/ios-bug-pass (7fbc8f9): Today then
+ * All used to reset a search's status to Open and hide its completed matches.
+ */
+export function selectDate(query: TaskQuery, date: TaskDateFilter, searching: boolean): TaskQuery {
+  if (date === 'All' && query.date !== 'All' && !searching) return { ...query, date, historyRange: 'This Month', status: 'Open' };
+  return { ...query, date };
+}
+
 /** The filters `beginSearch` resets, at the values it sets. */
 const SEARCH_FILTERS = { date: 'All', historyRange: 'All time', status: 'All', priority: 'All' } as const satisfies Partial<TaskQuery>;
 export type SearchFilters = Pick<TaskQuery, keyof typeof SEARCH_FILTERS>;

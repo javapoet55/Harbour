@@ -165,9 +165,9 @@ describe('the Account sheet', () => {
     expect(screen.getByText('Sign out')).toBeTruthy();
     // 19eb8e4 removed the web rows and the second Settings row.
     for (const gone of ['Inbox', 'Waiting For', 'AI Planner', 'Insights', 'Notifications', 'Settings']) expect(screen.queryByText(gone)).toBeNull();
-    // Only Change password sits in the card (`.padding(8).profileCard()` on that link alone).
     expect(within(screen.getByTestId('account-menu')).getByText('Change password')).toBeTruthy();
-    expect(within(screen.getByTestId('account-menu')).queryByText('Help')).toBeNull();
+    // All four rows share the card (iOS 6343e11; Android ahead of iOS).
+    for (const title of ['Help', 'Feedback', 'Edit profile and settings']) expect(within(screen.getByTestId('account-menu')).getByText(title)).toBeTruthy();
   });
 
   it('reloads the profile each time it opens', async () => {

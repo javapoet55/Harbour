@@ -138,7 +138,8 @@ export function PomodoroDashboard({ state, restore, initialTab = 'Overview', onC
           testID="pomodoro-dashboard-options"
         />
 
-        {/* `tabs` (:82-91): "Insights" reads "Categories" while it is selected. */}
+        {/* `tabs` (:82-91). Android ahead of iOS (iOS ae4e5f2): each tab keeps its own name; "Insights" used to read
+            "Categories" while selected. */}
         <View style={styles.tabs}>
           {TABS.map((item) => {
             const on = tab === item;
@@ -156,7 +157,7 @@ export function PomodoroDashboard({ state, restore, initialTab = 'Overview', onC
               >
                 {on ? (
                   <LinearGradient colors={GRADIENT} start={{ x: 0, y: 0.5 }} end={{ x: 1, y: 0.5 }} style={styles.tab}>
-                    <Text style={[styles.tabText, { color: '#FFFFFF' }]}>{item === 'Insights' ? 'Categories' : item}</Text>
+                    <Text style={[styles.tabText, { color: '#FFFFFF' }]}>{item}</Text>
                   </LinearGradient>
                 ) : (
                   <View style={[styles.tab, { backgroundColor: withAlpha(INDIGO, 0.04) }]}>

@@ -228,7 +228,37 @@ describe('List Settings', () => {
     await act(async () => {
       jest.advanceTimersByTime(600);
     });
-    await waitFor(() => expect(screen.getByText('No stores found. Try another location or store name.')).toBeTruthy());
+    // A search that came back empty: iOS 118ede8's card (Android ahead of iOS).
+    await waitFor(() => expect(screen.getByTestId('stores-none-found')).toBeTruthy());
+    expect(screen.getByText('No stores found near Oakland')).toBeTruthy();
+    expect(screen.getByText('Check the city or ZIP code, or try a nearby one.')).toBeTruthy();
+    jest.useRealTimers();
+  });
+
+  it('says nothing about "no stores" while a search is waiting to start or running', async () => {
+    jest.useFakeTimers();
+    let answer: (value: unknown) => void = () => undefined;
+    mockSearch.mockImplementation(() => new Promise((resolve) => (answer = resolve)));
+    await open(list());
+    await fireEvent.press(screen.getByTestId('shopping-add-store'));
+    await act(async () => {
+      jest.runOnlyPendingTimers();
+    });
+    await fireEvent.changeText(screen.getByTestId('stores-area'), 'Qzxqv Nowhere');
+    // Typed, inside the 600 ms wait: no empty state at all.
+    expect(screen.queryByTestId('stores-empty')).toBeNull();
+    expect(screen.queryByTestId('stores-none-found')).toBeNull();
+    await act(async () => {
+      jest.advanceTimersByTime(600);
+    });
+    expect(screen.queryByTestId('stores-none-found')).toBeNull();
+    await fireEvent.changeText(screen.getByTestId('stores-name'), 'Safeway');
+    await act(async () => {
+      jest.advanceTimersByTime(600);
+    });
+    await act(async () => answer({ stores: [] }));
+    await waitFor(() => expect(screen.getByText('No stores found near Qzxqv Nowhere')).toBeTruthy());
+    expect(screen.getByText('Check the city or ZIP code and the store name, or try a nearby area.')).toBeTruthy();
     jest.useRealTimers();
   });
 

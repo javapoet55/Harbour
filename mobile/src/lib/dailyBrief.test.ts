@@ -2,6 +2,7 @@ import type { NexdoTask } from '../api';
 import {
   briefDetailCopy,
   briefHelpQuery,
+  briefItemCount,
   briefIsUseful,
   briefingIntent,
   briefStyle,
@@ -107,6 +108,21 @@ describe('the section page copy', () => {
     expect(briefDetailCopy('Top Priorities', 1)).toEqual({ priority: true, subtitle: '1 item to focus on', heading: 'Focus on what matters' });
     expect(briefDetailCopy('Upcoming Deadlines', 2)).toEqual({ priority: false, subtitle: '2 items to review', heading: 'Your upcoming deadlines' });
     expect(briefDetailCopy('AI Response', 1).heading).toBe('Your AI response');
+    expect(briefDetailCopy('Upcoming Deadlines', 0).subtitle).toBe('Nothing to review');
+    expect(briefDetailCopy('Top Priorities', 0).subtitle).toBe('Nothing to focus on');
     expect(briefHelpQuery('Upcoming Deadlines', ['a', 'b'])).toBe('Help me with these upcoming deadlines:\na\nb');
+  });
+});
+
+// Ported from briefSectionsCountItemsNotNothingStatements (fix/ios-bug-pass 9f32f13). Android ahead of iOS.
+describe('briefItemCount', () => {
+  it('leaves out bullets that only say there is nothing', () => {
+    expect(briefItemCount(['Send the report by 4 PM.', 'No deadlines appear to fall today.'])).toBe(1);
+    expect(briefItemCount(['No deadlines appear to fall today.', 'There are no other deadlines this week.'])).toBe(0);
+    expect(briefItemCount(['You have no conflicts today.', 'Nothing else needs a decision.'])).toBe(0);
+    expect(briefItemCount(['1. Contact gutter technician is overdue. Tackle it first.', '2) Review the plumbing quote.'])).toBe(2);
+    // A bullet that only starts with a word beginning "no" still counts.
+    expect(briefItemCount(['Notify Asha about the venue.', 'Nova Plumbing replied.', 'Nonetheless, call the bank.'])).toBe(3);
+    expect(briefItemCount(['There’s no rush on the invoice.'])).toBe(0);
   });
 });

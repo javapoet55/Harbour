@@ -712,24 +712,16 @@ const SYSTEM_GREEN = '#34C759';
 const SYSTEM_ORANGE = '#FF9500';
 
 /**
- * The business-mode header (TaskDetailsView.swift:118-131): Back and Close both dismiss, in 42pt
- * circles of indigo at 4% with a 12% ring, around a centred "Task Details".
+ * The business-mode header (TaskDetailsView.swift:118-131): Close in a 42pt circle of indigo at 4% with a 12%
+ * ring, beside a centred "Task Details". Android ahead of iOS, as iOS now does: Swift also drew a Back that did the
+ * same as Close; it is gone, and the system Back still closes the page.
  */
 function BusinessHeader({ theme, blocked, onClose }: { theme: Theme; blocked: boolean; onClose: () => void }) {
   const circle = [styles.headerCircle, { backgroundColor: withAlpha(brand.nexdoIndigo, 0.04), borderColor: withAlpha(brand.nexdoIndigo, 0.12) }];
   return (
     <View style={styles.businessHeader} testID="detail-business-header">
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Back"
-        accessibilityState={{ disabled: blocked }}
-        disabled={blocked}
-        onPress={onClose}
-        style={circle}
-        testID="detail-back"
-      >
-        <TaskSymbol name="chevron.left" size={20} color={theme.colors.link} />
-      </Pressable>
+      {/* Where Back was: an empty slot as wide as Close, so the title stays centred. */}
+      <View style={styles.headerCircleSlot} />
       <Text accessibilityRole="header" style={[styles.businessTitle, { color: theme.colors.ink }]}>
         Task Details
       </Text>
@@ -864,6 +856,7 @@ const styles = StyleSheet.create({
   // Business header: `.padding(.horizontal, 20).padding(.vertical, 14)`, 42pt circles, `.headline`.
   businessHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 14 },
   headerCircle: { width: 42, height: 42, borderRadius: 21, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  headerCircleSlot: { width: 42, height: 42 },
   businessTitle: { fontSize: 17, lineHeight: 22, fontWeight: '600' },
   // `agentTaskInformation`: `VStack(spacing: 12)`, the eyebrow `.caption.weight(.bold).tracking(1.8)`.
   information: { gap: 12 },
