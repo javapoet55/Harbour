@@ -38,16 +38,22 @@ const curated: Array<[RegExp, Omit<ShoppingAlternatives, 'usedAI'>]> = [
   ], tip: 'Brown rice is the closest whole-grain swap for everyday meals.' }],
 ];
 
+/** A name reduced to its words, ignoring case, punctuation, word order and plurals: "2% Milk" and "milk 2%" are one item. */
+const itemKey = (name: string) => name.toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g, '').split(/[^a-z0-9%]+/)
+  .filter(Boolean).map(w => (w.length > 3 && w.endsWith('s') ? w.slice(0, -1) : w)).sort().join(' ');
+
 function fallback(name: string, category: typeof categories[number], quantity: string, size: string): ShoppingAlternatives {
+  // An item is never its own alternative: "2% milk" matches the milk list, which suggests "2% milk".
+  const others = (list: ShoppingAlternative[]) => list.filter(item => itemKey(item.name) !== itemKey(name));
   const match = curated.find(([pattern]) => pattern.test(name));
-  if (match) return { ...match[1], usedAI: false };
+  if (match) return { ...match[1], alternatives: others(match[1].alternatives), usedAI: false };
   const base = name.replace(/^organic\s+/i, '').trim();
   const alternatives: ShoppingAlternative[] = [
     { name: `Organic ${base}`, category, quantity, size, reason: 'Organic option', detail: 'A comparable certified-organic choice' },
     { name: `Store-brand ${base}`, category, quantity, size, reason: 'Budget-friendly', detail: 'A similar option that may cost less' },
     { name: `Family-size ${base}`, category, quantity, size: size || 'large pack', reason: 'Larger package', detail: 'Useful when you need more servings' },
   ];
-  return { alternatives, tip: `Compare unit prices and package sizes before replacing ${base}.`, usedAI: false };
+  return { alternatives: others(alternatives), tip: `Compare unit prices and package sizes before replacing ${base}.`, usedAI: false };
 }
 
 export async function recommendShoppingAlternatives(_userId: string, input: FoodQuery & { category?: string; quantity?: string; goal?: string }): Promise<ShoppingAlternatives> {
