@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
 import { StyleSheet } from 'react-native';
 
 import type { AssistantTurn, NexdoTask } from '../api';
@@ -266,6 +266,9 @@ describe('an answer', () => {
     expect(screen.getByText('Ship the deck')).toBeTruthy();
     expect(screen.queryByText('Call Damien')).toBeNull();
     expect(screen.getByText('Show 1 more')).toBeTruthy();
+    // Each section reads aloud, as iOS 5ed717c names the button.
+    expect(within(screen.getByTestId('ask-section-0-read')).getByText('Read aloud')).toBeTruthy();
+    expect(screen.queryByText('Read Loud')).toBeNull();
     // The composer is back once there is an answer, and the landing field is gone.
     expect(screen.getByTestId('ask-field')).toBeTruthy();
     expect(screen.queryByTestId('ask-landing-field')).toBeNull();

@@ -1796,3 +1796,6 @@ match". Logic fixes have a test that fails without them.
 - **The Read aloud consent message says "Read aloud", as iOS 29c0f0b.** With OpenAI sharing off, reading an answer
   or a brief section said "Allow OpenAI sharing in Account to use Read Loud."; it now says "…to use Read aloud."
   The Ask answer's own button still reads "Read Loud", as on iOS (`AskNexdoView.tsx`).
+- **The Ask answer's read button says "Read aloud", as iOS 5ed717c.** It said "Read Loud"; "Stop" while reading is
+  unchanged, and so is its accessibility label ("Read <section> aloud"). This replaces the note above that the button
+  still read "Read Loud" (`AskResponse.tsx`).

@@ -22,7 +22,7 @@ export type AskResponseProps = {
   readingSection: number | null;
   /** `preparingSpeech`: the audio for `readingSection` has been requested but is not playing yet. */
   preparingSpeech: boolean;
-  /** `readLoud`. Omitted means no Read Loud control on any card. */
+  /** `readLoud`. Omitted means no Read aloud control on any card. */
   onReadLoud?: (section: number, text: string) => void;
   /** `model.busy`: disables the confirmation buttons while a request is in flight. */
   busy: boolean;
@@ -208,7 +208,7 @@ export function AskResponseCard({
           >
             {preparing ? <ActivityIndicator size="small" color={blue} /> : null}
             <TaskSymbol name={reading ? 'stop.fill' : 'speaker.wave.2.fill'} size={13} color={blue} />
-            <Text style={[styles.caption, styles.semibold, { color: blue }]}>{reading ? 'Stop' : 'Read Loud'}</Text>
+            <Text style={[styles.caption, styles.semibold, { color: blue }]}>{reading ? 'Stop' : 'Read aloud'}</Text>
           </Pressable>
         ) : null}
       </View>
