@@ -5,7 +5,8 @@
  */
 export type BriefHandlers = {
   ask: (query: string) => void;
-  read: (index: number, text: string) => void;
+  /** Answers the message when reading cannot start (OpenAI sharing off), for the page to show; else `null`. */
+  read: (index: number, text: string) => string | null;
 };
 
 let current: BriefHandlers | null = null;

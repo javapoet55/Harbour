@@ -1620,3 +1620,8 @@ gets the fix too, and the Swift app is to mirror it. Each fix has a test that fa
   always says "Calling you now.". Now `dialing` keeps that text, `cancelled` says "The call was cancelled. Check
   that daily calls are on, then try again." and `failed` / `not_claimed` say "The call could not be placed. Try
   again in a few minutes." (new text; `callNowNotice` in `model.ts`).
+- **Android ahead of iOS: "Read aloud" on a brief section page says why it did nothing.** With OpenAI sharing
+  off, Ask sets its voice error, but that line is in the composer, which the brief hides, so nothing happened
+  on screen. The brief's `read` handler now answers that message and the section page shows it under the
+  items (`brief-detail-read-error`), in Ask's existing words ("Allow OpenAI sharing in Account to use Read
+  Loud."). A playback failure later on still shows only in Ask (`briefHandlers.ts`, `BriefSectionDetail.tsx`).

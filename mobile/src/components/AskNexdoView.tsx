@@ -126,14 +126,18 @@ export function AskNexdoView({ textPage, initialPrompt = '', shoppingContext, on
   // `.onDisappear { if !showingVoice { requestTask?.cancel(); stopSpeech() } }` (AskNexdoView.swift:274).
   useEffect(() => () => speech.current?.stop(), []);
 
-  /** `speakAnswer(text:section:)` (AskNexdoView.swift:420-426) and `speakChunks` (`:428-445`). */
-  const speakAnswer = (text?: string, section: number | null = null) => {
+  /**
+   * `speakAnswer(text:section:)` (AskNexdoView.swift:420-426) and `speakChunks` (`:428-445`). Answers the
+   * message when reading cannot start, so a brief section page, which hides the composer, can show it.
+   */
+  const speakAnswer = (text?: string, section: number | null = null): string | null => {
     if (!consent.ai) {
-      setVoiceError('Allow OpenAI sharing in Account to use Read Loud.');
-      return;
+      const message = 'Allow OpenAI sharing in Account to use Read Loud.';
+      setVoiceError(message);
+      return message;
     }
     const body = text ?? (turn ? spokenText(turn) : '');
-    if (body.length === 0) return;
+    if (body.length === 0) return null;
 
     stopSpeech();
     setVoiceError(null);
@@ -151,6 +155,7 @@ export function AskNexdoView({ textPage, initialPrompt = '', shoppingContext, on
         setVoiceError(`Your answer is ready to read. ${message}`);
       },
     });
+    return null;
   };
 
   /** `request(_:speakResponse:)` (AskNexdoView.swift:377-409). */
@@ -238,7 +243,11 @@ export function AskNexdoView({ textPage, initialPrompt = '', shoppingContext, on
   };
 
   /** `read:` (`:273-276`): the same section again stops it. */
-  const readSection = (index: number, text: string) => (readingSection === index ? stopSpeech() : speakAnswer(text, index));
+  const readSection = (index: number, text: string): string | null => {
+    if (readingSection !== index) return speakAnswer(text, index);
+    stopSpeech();
+    return null;
+  };
 
   const openVoice = () => {
     stopSpeech();
