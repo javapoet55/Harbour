@@ -404,8 +404,8 @@ describe('the action screen', () => {
     await waitFor(() => expect(screen.getByText('Choose how to contact Asha Rao.')).toBeTruthy());
     const stored = useCoordinator.getState().actions[0];
     expect(stored).toMatchObject({ contactIdentifier: 'c9', businessCandidateID: null, manualRecipient: null });
-    // The picked number keeps Swift's fixed label.
-    expect(useCoordinator.getState().resolvedContacts.c9.phones[0].label).toBe('Phone');
+    // The picked number keeps its own label (Android ahead of iOS; Swift fixes it to "Phone").
+    expect(useCoordinator.getState().resolvedContacts.c9.phones[0].label).toBe('mobile');
   });
 
   it('shows the unavailable state when the task is gone', async () => {

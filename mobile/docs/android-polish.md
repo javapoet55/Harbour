@@ -1651,3 +1651,8 @@ gets the fix too, and the Swift app is to mirror it. Each fix has a test that fa
 - **Android ahead of iOS: Nexdo Action's Contact details form prefills the name, not the phrase.** With no contact
   found it prefilled the task's words ("the plumber"); it now prefills the name as searched ("plumber",
   `contactSearchName`).
+- **Android ahead of iOS: a contact picked for a Nexdo Action keeps its own labels.** Swift labels every picked
+  address "Phone" or "Email", so "Choose a phone number" listed "Phone: â€¦" twice for a mobile and a work number.
+  A picked contact now maps as a contact found by name does ("mobile", "work"; "Phone" / "Email" only when
+  unlabelled) (`selectedActionContact`). Swift's email composer ignoring the business draft (same Â§22 item) does
+  not apply: a business has no email in RN or Swift (`businessActionContact`).
