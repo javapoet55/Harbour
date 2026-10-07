@@ -101,7 +101,7 @@ struct PomodoroView: View {
                     .padding(12)
                     .background(.white, in: RoundedRectangle(cornerRadius: 14))
                     .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(Color.nexdoIndigo.opacity(0.5), lineWidth: 1.5).allowsHitTesting(false))
-                    .onChange(of: name) { _, value in name = String(value.prefix(120)) }
+                    .onChange(of: name) { _, value in let limited = PomodoroSession.limitName(value); if limited != value { name = limited } }
                     .accessibilityLabel("Session name (optional)").accessibilityIdentifier("pomodoro-name")
             }
             VStack(alignment: .leading, spacing: 8) {
