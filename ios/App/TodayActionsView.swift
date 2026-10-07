@@ -343,15 +343,5 @@ private func actionIcon(_ channel: TaskActionChannel) -> String {
     switch channel { case .call: "phone.fill"; case .message: "message.fill"; case .email: "envelope.fill" }
 }
 private func actionTimeLabel(_ action: TaskAction, now: Date) -> String {
-    let seconds = (action.notificationDate ?? now).timeIntervalSince(now)
-    if seconds > 0 { return "in \(actionDurationLabel(minutes: max(1, Int(ceil(seconds / 60)))))" }
-    if seconds > -60 { return "Due now" }
-    return "\(actionDurationLabel(minutes: Int(-seconds / 60))) overdue"
-}
-
-private func actionDurationLabel(minutes: Int) -> String {
-    let hours = minutes / 60
-    let remainder = minutes % 60
-    guard hours > 0 else { return "\(minutes) min" }
-    return remainder == 0 ? "\(hours) hr" : "\(hours) hr \(remainder) min"
+    ActionTimeLabel.text(seconds: (action.notificationDate ?? now).timeIntervalSince(now))
 }
