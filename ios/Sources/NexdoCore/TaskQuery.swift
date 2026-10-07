@@ -79,6 +79,13 @@ public struct TaskQuery {
         beforeSearch = nil
     }
 
+    /// Choosing a date chip. Moving to All from another chip narrows it to this month's open tasks, but not during a
+    /// search: Today then All used to reset a search's status to Open and hide its completed matches.
+    public mutating func selectDate(_ filter: TaskDateFilter, searching: Bool) {
+        if filter == .all && date != .all && !searching { historyRange = .thisMonth; status = "Open" }
+        date = filter
+    }
+
     /// Creation schedules a task for today. Reveal it without stale search filters.
     public mutating func revealCreatedTask(scheduledAt: Date? = nil, timeZone: String = TimeZone.current.identifier, now: Date = Date()) {
         var calendar = Calendar(identifier: .gregorian)

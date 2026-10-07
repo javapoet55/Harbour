@@ -1864,8 +1864,7 @@ struct TasksView: View {
                 let selected = model.taskQuery.date == filter
                 Button {
                     searchFocused = false
-                    if filter == .all && model.taskQuery.date != .all { model.taskQuery.historyRange = .thisMonth; model.taskQuery.status = "Open" }
-                    model.taskQuery.date = filter
+                    model.taskQuery.selectDate(filter, searching: searching || !model.taskQuery.search.isEmpty)
                 } label: {
                     HStack(spacing: 5) {
                         Text(filter.rawValue)

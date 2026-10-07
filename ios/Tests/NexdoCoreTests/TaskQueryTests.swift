@@ -266,3 +266,12 @@ private func fixture(_ id: String, due: String?, status: String = "PLANNED", not
     #expect(plain.date == .tomorrow && plain.status == "Open")
 }
 
+@Test func todayThenAllDuringASearchKeepsItsStatus() {
+    var query = TaskQuery()
+    query.beginSearch(); query.search = "report"
+    query.selectDate(.today, searching: true); query.selectDate(.all, searching: true)
+    #expect(query.status == "All" && query.historyRange == .allTime)
+    var browsing = TaskQuery(); browsing.status = "All"
+    browsing.selectDate(.all, searching: false)
+    #expect(browsing.status == "Open" && browsing.historyRange == .thisMonth)
+}
