@@ -119,9 +119,9 @@ struct ActionNeededCard: View {
         if let manual = action.manualRecipient { return .manual(manual) }
         return action.contactIdentifier.flatMap { coordinator.resolvedContacts[$0] }
     }
-    // A cancelled run is not a business task by itself: "Keep as a task" cancels it, and so does a title edit that makes
+    // A cancelled or failed run is not a business task by itself (as on Android, 2f60eba): "Keep as a task" cancels it, and so does a title edit that makes
     // the task personal. Counting any run made those tasks ask to "Find a business".
-    private var isBusiness: Bool { if action.manualRecipient != nil || action.contactIdentifier != nil { return false }; return action.businessCandidateID != nil || envelope?.intent?.eligible == true || (envelope?.run.map { $0.status != "CANCELLED" } ?? false) }
+    private var isBusiness: Bool { if action.manualRecipient != nil || action.contactIdentifier != nil { return false }; return action.businessCandidateID != nil || envelope?.intent?.eligible == true || (envelope?.run.map { !["CANCELLED", "FAILED"].contains($0.status) } ?? false) }
     private var state: ActionNeededState {
         .resolve(loaded: loaded, failed: failed, business: isBusiness, hasResults: !(envelope?.run?.candidates.isEmpty ?? true), hasRecipient: contact != nil, hasPhone: !(contact?.phones.isEmpty ?? true), hasEmail: !(contact?.emails.isEmpty ?? true))
     }
