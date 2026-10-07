@@ -1725,3 +1725,9 @@ match". Logic fixes have a test that fails without them.
   with no reason for an unverified caller ID; only the card above said to verify. It now says "Verify your phone
   number above to turn this on." in orange under the switch while the number is unverified and the moment has not
   passed (iOS 15e82f7 wording and condition) (`MomentConnectSection.tsx`).
+- **Android ahead of iOS: Stores Near You says "no stores" only about a finished search.** An empty result shared
+  the grey "No stores found. Try another location or store name." line with "no search yet", and it showed during
+  the 600 ms wait too, so it flashed before every result. As iOS 118ede8: a search that came back empty shows a
+  card, "No stores found near <area>" (or "near you") and "Check the city or ZIP code, or try a nearby one." ("…
+  and the store name, or try a nearby area." with a store name); before any area or location the prompt shows; and
+  nothing shows while a search is pending (`StorePages.tsx`).
