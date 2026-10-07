@@ -52,6 +52,11 @@ export default function TabsLayout() {
         options={{
           title: 'Tasks',
           tabBarIcon: ({ color }) => <TaskSymbol name="checkmark.circle" size={22} color={String(color)} />,
+          // Android ahead of iOS (iOS ac9c619 keeps it under the keyboard on Tasks): the bar must not ride up above
+          // the keyboard during a search. Edge to edge should already stop that, but whether the window resizes
+          // varies by Android version and OEM, so the bar is hidden while the keyboard is up. Fixed from code, not
+          // yet seen on device.
+          tabBarHideOnKeyboard: true,
         }}
       />
       {/* The centre Wellness button sits between Tasks and Ask AI (RootView.swift:172-182) and opens the

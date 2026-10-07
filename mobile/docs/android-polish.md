@@ -1782,3 +1782,8 @@ match". Logic fixes have a test that fails without them.
   dark indigo (the screen's ink foreground); RN's `ProminentButton` already uses `onTint` (#FFFFFF) on `tint` (indigo)
   in both palettes, as iOS a2c1699 now does. A test pins it in day and night; no code change (fixed from code, not
   yet seen on device).
+- **Android ahead of iOS: during a Tasks search the tab bar does not sit above the keyboard.** iOS's bar rode up
+  with the keyboard (iOS ac9c619 now keeps it under on Tasks). On Android edge to edge should already keep the window
+  from resizing, but that varies by version and OEM, so the Tasks tab sets `tabBarHideOnKeyboard`: the bar is hidden
+  while the keyboard is up; other tabs are unchanged (`app/(tabs)/_layout.tsx`; fixed from code, not yet seen on
+  device).
