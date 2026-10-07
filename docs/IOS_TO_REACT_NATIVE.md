@@ -2946,7 +2946,7 @@ first, unchanged; the Mac reference pass’s items follow, with their captures.
   title and says "Nothing to report here today." **Fixed on iOS `7259130`.**
 - **"Read aloud" on a brief page can fail silently.** With OpenAI sharing off, `speakAnswer` sets
   `voiceError` (`AskNexdoView.swift:531`), but the message lives in `composer`, which the brief hides
-  (`:333`). Nothing happens on screen. RN copies Swift. **Fixed on Android `8c595da`; iOS to mirror.** **Fixed on iOS `18e1c32`** (message kept as "Read Loud" for parity in `0728ddb`).
+  (`:333`). Nothing happens on screen. RN copies Swift. **Fixed on Android `8c595da`; iOS to mirror.** **Fixed on iOS `18e1c32`**; the message reads "…to use Read aloud." since `29c0f0b` (Android to match).
 - **Unreachable Ask code.** Nothing mounts `NexdoAISuggestionCard`, `entryCards` or "Free form Text"
   (`showingText`, `AskNexdoView.swift:341`) any more, `AskAILandingView.select` keeps Shopping, Moments and
   typing cases for cards 5-7 when there are four cards, and the `planTomorrow` intent has no entry. Not
@@ -3126,7 +3126,7 @@ iOS copied exactly are marked "(Android)".
 | Share List | — | "Done" button in the toolbar | `6e17c47` |
 | Task Details, business mode | "Back" and "Close task details" buttons | "Close task details" only | `12edf0f` |
 | Ask AI, landing and entry cards (unreachable) | "Free form Text", "Type your prompt" | — (deleted) | `8185321` |
+| Daily Brief and Ask, Read aloud with OpenAI sharing off | "Allow OpenAI sharing in Account to use Read Loud." | "Allow OpenAI sharing in Account to use Read aloud." (Android to match) | `29c0f0b` |
 
-Unchanged on purpose: "Phone number copied." and "Draft copied." (now a confirmation, not an error); "Allow OpenAI
-sharing in Account to use Read Loud." (now shown on the brief, wording kept for parity; "Read aloud" is the
-button's name, a product decision); "…allow location access in iPhone Settings." on iOS.
+Unchanged on purpose: "Phone number copied." and "Draft copied." (now a confirmation, not an error); "…allow location access in iPhone
+Settings." on iOS. The Ask answer's own button still reads "Read Loud" (`AskResponseView.swift:114`).
