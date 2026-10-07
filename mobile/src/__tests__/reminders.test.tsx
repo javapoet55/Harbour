@@ -358,6 +358,17 @@ describe('the action screen', () => {
     expect(screen.getByTestId('action-call')).toBeTruthy();
   });
 
+  it('prefills the form with the name as searched, not the phrase ("the plumber")', async () => {
+    const id = await seedAction();
+    useCoordinator.getState().update(id, (item) => ({ ...item, contactName: 'the plumber' }));
+    mockResolve.mockRejectedValue(new TaskActionError('noContact'));
+    mockParams = { id };
+    await show(<TaskActionScreen />);
+    await waitFor(() => expect(screen.getByText('Enter contact details')).toBeTruthy());
+    await fireEvent.press(screen.getByText('Enter contact details'));
+    expect(screen.getByTestId('contact-details-name').props.value).toBe('plumber');
+  });
+
   it('closes the form on Cancel without saving', async () => {
     await open();
     await waitFor(() => expect(screen.getByText('Enter contact details')).toBeTruthy());

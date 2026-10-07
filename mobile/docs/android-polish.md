@@ -1648,3 +1648,6 @@ gets the fix too, and the Swift app is to mirror it. Each fix has a test that fa
   even for a plain "Call Asha". Now a failed check only stops a task whose business was already chosen; any
   other task goes on to Contacts, and only when nobody is found (it may still be a business) does it ask for
   the retry as before (`loadDestination`).
+- **Android ahead of iOS: Nexdo Action's Contact details form prefills the name, not the phrase.** With no contact
+  found it prefilled the task's words ("the plumber"); it now prefills the name as searched ("plumber",
+  `contactSearchName`).

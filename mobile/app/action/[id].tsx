@@ -503,7 +503,8 @@ export default function TaskAction() {
                     label="Enter contact details"
                     onPress={() =>
                       setEnteringDetails({
-                        name: contact?.name ?? action.contactName,
+                        // Android ahead of iOS: Swift prefills the raw phrase ("the plumber"); this is the name as searched.
+                        name: contact?.name ?? contactSearchName(action.contactName),
                         phone: contact?.phones[0]?.value ?? '',
                         email: contact?.emails[0]?.value ?? '',
                       })
