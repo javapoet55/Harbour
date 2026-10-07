@@ -162,9 +162,12 @@ public extension ImportantMoment {
         return latest?.status == "READY" && !(latest?.plans?.contains { ["SENT","COPIED","SHARED"].contains($0.status) } ?? false)
     }
     var needsWishReview: Bool { enabled && upcomingDelivery == nil && !readyToSchedule }
-    func upcomingGroup(now: Date = Date()) -> MomentUpcomingGroup {
-        var calendar = Calendar.current
+    func upcomingGroup(now: Date = Date(), calendar input: Calendar = .current) -> MomentUpcomingGroup {
+        var calendar = input
         calendar.timeZone = TimeZone(identifier: timeZoneID) ?? .current
+        // Monday-first, like the "This Week" chip (MomentUpcomingFilter), Pomodoro and the Calorie Tracker, so the chip and
+        // the "This Week" section agree on an en-US phone, whose Calendar.current is Sunday-first.
+        calendar.firstWeekday = 2
         let occurrence = MomentDates.date(nextOccurrence, zone: timeZoneID)
         if let week = calendar.dateInterval(of: .weekOfYear, for: now),
            occurrence >= week.start && occurrence < week.end { return .thisWeek }
