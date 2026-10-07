@@ -1774,3 +1774,7 @@ match". Logic fixes have a test that fails without them.
   another chip narrows to this month's open tasks; during a search that reset the search's All status to Open, so
   completed matches disappeared. As `TaskQuery.selectDate` on fix/ios-bug-pass (7fbc8f9), the narrowing is skipped
   while a search is open (`selectDate` in `lib/taskQuery.ts`, `tasks.tsx`).
+- **Android ahead of iOS: Nexdo Action's unreachable Contacts search is gone.** `resolve()` kept Swift's search for
+  an unknown recipient, but every caller has one (the channel buttons exist only once there is a recipient), so it
+  could not run; its "Finding contact…" spinner could only have shown, wrongly, while completing the task. Both are
+  removed; no behaviour change, so no new test (`app/action/[id].tsx`).
