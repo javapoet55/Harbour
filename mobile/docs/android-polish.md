@@ -1625,3 +1625,7 @@ gets the fix too, and the Swift app is to mirror it. Each fix has a test that fa
   on screen. The brief's `read` handler now answers that message and the section page shows it under the
   items (`brief-detail-read-error`), in Ask's existing words ("Allow OpenAI sharing in Account to use Read
   Loud."). A playback failure later on still shows only in Ask (`briefHandlers.ts`, `BriefSectionDetail.tsx`).
+- **Android ahead of iOS: Event Details shows Mark Complete or Mark Incomplete, whichever applies.** Swift's action
+  row always shows both; the row now shows Mark Incomplete for a completed event and Mark Complete otherwise,
+  as the â‹¯ menu already did (`EventDetailsScreen.tsx`). The delete-with-warnings alert that dismisses twice
+  (same Â§22 item) is Swift-only: RN's alert dismisses once.
