@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import React from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
-import { Alert, AppState, Platform, Share } from 'react-native';
+import { Alert, AppState, Platform, Share, StyleSheet } from 'react-native';
 
 const mockPush = jest.fn();
 const mockBack = jest.fn();
@@ -687,6 +687,8 @@ describe('Item Alternatives', () => {
     expect(envelope).toMatchObject({ operation: 'save', id: 'l1', revision: 7 });
     expect(envelope.input.items[1]).toMatchObject({ id: 'milk2', name: 'Lactose-free milk', quantity: '1', size: '', notes: 'organic only', checked: true, brand: 'Stater Bros', barcode: '0123456789012', imageData: null });
     expect(screen.getByText('2% milk has been replaced with Lactose-free milk.')).toBeTruthy();
+    // The title is centred, as in Swift.
+    expect(StyleSheet.flatten(screen.getByTestId('alternatives.success').props.style).textAlign).toBe('center');
     // One button: Done (iOS 77c3d93; Android ahead of iOS).
     expect(screen.queryByTestId('alternatives-success-cart')).toBeNull();
     expect(screen.queryByText('View in Cart')).toBeNull();

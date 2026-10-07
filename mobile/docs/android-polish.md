@@ -1790,3 +1790,6 @@ match". Logic fixes have a test that fails without them.
 - **Android ahead of iOS: Share List has a Done button.** It had no close button; only a swipe (or the system Back)
   closed it. A bold Done in the sheet's bar closes it (iOS 6e17c47 wording) (`ShareListSheet` in `sheets.tsx`; fixed
   from code, not yet seen on device).
+- **"Item replaced!" is centred, as in Swift** (found on the phone during this pass). The success column stretches
+  its children, so the title sat at the left while the message under it was centred; Swift's VStack centres both
+  (`AlternativesSheet.tsx`).

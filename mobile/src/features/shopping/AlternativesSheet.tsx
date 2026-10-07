@@ -815,7 +815,8 @@ function SuccessScreen({ visible, original, replacement, onClose }: { visible: b
           <LinearGradient colors={[systemColors.green, withAlpha(systemColors.green, 0.75)]} end={{ x: 1, y: 1 }} start={{ x: 0, y: 0 }} style={styles.successMark}>
             <Ionicons color="#FFFFFF" name="checkmark" size={42} />
           </LinearGradient>
-          <Text style={[styles.title, { color: theme.colors.ink }]} testID="alternatives.success">
+          {/* Centred, as Swift's VStack centres it (ShoppingAlternativesDesign.swift:115); the column stretches. */}
+          <Text style={[styles.title, styles.center, { color: theme.colors.ink }]} testID="alternatives.success">
             Item replaced!
           </Text>
           <Text style={[textStyles.body, styles.center, { color: theme.colors.secondary }]}>{`${original} has been replaced with ${replacement}.`}</Text>
