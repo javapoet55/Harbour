@@ -1760,3 +1760,6 @@ match". Logic fixes have a test that fails without them.
   6129004) (`AlternativesSheet.tsx`).
 - **Android ahead of iOS: "Item replaced!" keeps one button.** Done and View in Cart both only closed the screen;
   Done stays (iOS 77c3d93) (`AlternativesSheet.tsx`).
+- **Android ahead of iOS: Task Details in business mode has one way out on screen, Close.** Its header had Back and
+  Close, which did the same thing. Close stays, as iOS now does; Back is gone (an empty slot keeps "Task Details"
+  centred), and the system Back gesture still closes the page (`BusinessHeader` in `app/task/[id].tsx`).
