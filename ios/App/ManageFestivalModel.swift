@@ -44,6 +44,9 @@ import CryptoKit
     @Published var catalog:[FestivalCatalogEntry]=[]
     @Published var savedPlans:[WishDeliveryPlan]=[]
     @Published var scheduleCompleted=false
+    /// The moment's stored day (yyyy-MM-dd) and the day shown for it; they differ for a yearly moment stored in an earlier year.
+    private var storedDay=""
+    private var shownDay=""
     /// Set by schedule(); the view turns it into scheduleCompleted after the review sheet is dismissed.
     @Published var scheduleSucceeded=false
     @Published var imageData:Data?
@@ -91,7 +94,7 @@ import CryptoKit
     private var fingerprint:String { let state=[occasionType,title,MomentDates.day(date,zone:zone),zone,String(yearly),String(active),encoded(recipients),encoded(settings)];return state.joined(separator:"|") }
     init(group:MomentDisplayGroup,store:ImportantMomentsStore,imageService:(any FestivalImageGenerationService)?=nil,imageStorage:any FestivalImageStorageService=ProtectedFestivalImageStorage()) {
         self.store=store;self.originals=group.moments;self.imageService=imageService;self.imageStorage=imageStorage
-        let first=group.moments[0];occasionType=first.type;title=first.title;zone=first.timeZoneID;date=MomentDates.date(first.occurrenceDate,zone:first.timeZoneID);yearly=first.yearly;active=group.moments.contains(where: \.enabled)
+        let first=group.moments[0];occasionType=first.type;title=first.title;zone=first.timeZoneID;storedDay=first.occurrenceDate;shownDay=MomentDates.shownDay(first.occurrenceDate,yearly:first.yearly,zone:first.timeZoneID);date=MomentDates.date(shownDay,zone:first.timeZoneID);yearly=first.yearly;active=group.moments.contains(where: \.enabled)
         var saved=FestivalSettings.read(first.festivalSettings) ?? FestivalSettings()
         recipients=group.moments.filter(\.hasRecipient).map { m in
             let key=ManagedFestivalRecipient.storedKey(sourceKey:m.sourceKey,groupID:saved.groupID,momentID:m.id)
@@ -231,12 +234,16 @@ import CryptoKit
         if !recipients.isEmpty, let error=FestivalValidation.recipients(recipients,settings:settings){throw FestivalError.message(error)}
         try contactsService.validate(recipients)
         for r in recipients {settings.contactIDs[r.key]=r.contactIdentifier;settings.selected[r.key]=r.selected}
-        let input=FestivalSaveRequest(ids:originals.map(\.id),title:title,date:MomentDates.day(date,zone:zone),timeZoneID:zone,yearly:yearly,active:active,recipients:recipients,settings:settings,cancelSchedules:cancelSchedules,type:occasionType)
+        // A yearly moment shows this year's day; unless that day was edited, Save keeps the stored one (a birth year).
+        let day=MomentDates.day(date,zone:zone)
+        let savedDay=yearly && day==shownDay ? storedDay : day
+        let input=FestivalSaveRequest(ids:originals.map(\.id),title:title,date:savedDay,timeZoneID:zone,yearly:yearly,active:active,recipients:recipients,settings:settings,cancelSchedules:cancelSchedules,type:occasionType)
         let _:MomentOK=try await store.request("festivalSave",input)
         await store.refresh()
         let updated=store.moments.filter{!$0.isArchived && $0.type==occasionType && FestivalSettings.read($0.festivalSettings)?.groupID==settings.groupID}
         guard !updated.isEmpty else {throw FestivalError.message("Saved. Refresh Moments before continuing.")}
         originals=updated
+        storedDay=savedDay;shownDay=MomentDates.shownDay(savedDay,yearly:yearly,zone:zone)
         for i in recipients.indices {if let m=updated.first(where:{$0.id==recipients[i].momentID || $0.sourceKey=="\(occasionType):\(settings.groupID):\(recipients[i].key)"}){recipients[i].momentID=m.id}}
         if savedImageID != settings.imageID {imageStorage.delete(savedImageID)}
         for id in stagedImages where id != settings.imageID {imageStorage.delete(id)}

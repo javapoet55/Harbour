@@ -197,3 +197,13 @@ import Testing
     #expect(settings.prepareHours == 0)
     #expect(settings.prepareDays == 1)
 }
+
+@Test func aYearlyMomentShowsThisYearsOccurrence() {
+    let now = ISO8601DateFormatter().date(from: "2026-10-07T12:00:00Z")!
+    #expect(MomentDates.shownDay("1990-10-06", yearly: true, zone: "UTC", now: now) == "2026-10-06")
+    #expect(MomentDates.shownDay("1992-02-29", yearly: true, zone: "UTC", now: now) == "2026-02-28")
+    #expect(MomentDates.shownDay("2027-03-01", yearly: true, zone: "UTC", now: now) == "2027-03-01")
+    #expect(MomentDates.shownDay("1990-10-06", yearly: false, zone: "UTC", now: now) == "1990-10-06")
+    let leapYear = ISO8601DateFormatter().date(from: "2028-01-07T12:00:00Z")!
+    #expect(MomentDates.shownDay("1992-02-29", yearly: true, zone: "UTC", now: leapYear) == "2028-02-29")
+}

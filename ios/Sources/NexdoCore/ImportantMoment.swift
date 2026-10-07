@@ -65,6 +65,17 @@ public enum MomentDates {
         return days == 0 ? "Today" : days == 1 ? "Tomorrow" : days > 1 ? "In \(days) days" : "Past moment"
     }
     public static func label(_ date: Date, zone: String) -> String { let f = DateFormatter(); f.dateStyle = .medium; f.timeStyle = .short; f.timeZone = TimeZone(identifier: zone); return f.string(from: date) }
+    /// The day Manage Moment shows for a moment stored on `stored` (yyyy-MM-dd). A yearly moment stored in an earlier
+    /// year shows that day in this year (29 February is the 28th in a common year), so a birthday saved with the birth
+    /// year reads as this year's occasion, not "Thu, Oct 6, 1990". A one-off, or one stored for this year or later,
+    /// shows its own day. Same rule as Android's shownMomentDate (2801355); the stored day is not changed.
+    public static func shownDay(_ stored: String, yearly: Bool, zone: String, now: Date = Date()) -> String {
+        let year = String(day(now, zone: zone).prefix(4))
+        guard yearly, stored.count == 10, String(stored.prefix(4)) < year else { return stored }
+        let monthDay = String(stored.suffix(5))
+        let leap = Int(year).map { $0 % 4 == 0 && ($0 % 100 != 0 || $0 % 400 == 0) } ?? false
+        return year + "-" + (monthDay == "02-29" && !leap ? "02-28" : monthDay)
+    }
     public static func parseInstant(_ value: String) -> Date? { let f = ISO8601DateFormatter(); f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]; return f.date(from: value) }
     public static func day(_ date: Date, zone: String) -> String { let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX"); f.timeZone = TimeZone(identifier: zone); f.dateFormat = "yyyy-MM-dd"; return f.string(from: date) }
     public static func date(_ day: String, zone: String) -> Date { let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX"); f.timeZone = TimeZone(identifier: zone); f.dateFormat = "yyyy-MM-dd"; return f.date(from: day) ?? Date() }
