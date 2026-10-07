@@ -1605,10 +1605,11 @@ gets the fix too, and the Swift app is to mirror it. Each fix has a test that fa
   status, so every action that changes it reloads at once. RN never copied that: the update writes its answer
   into the shared query and React Query's `refetchInterval` only re-arms the 4 s timer. A test now pins it
   (`TaskAgentCard.test.tsx`, "an action does not fire an extra load"); no code change.
-- **Not fixed (needs the server): "Search again" after NO_RESULTS or CANCELLED.** `controlRun` accepts `search`
-  only for NEEDS_INPUT and `resume` / `retry` only for PAUSED, FAILED or BLOCKED, and `prepare` returns the
-  existing run unchanged (`src/server/task-agent/service.ts`), so the app has no request that starts a new
-  search for those runs.
+- **Android ahead of iOS: a NO_RESULTS or CANCELLED agent run offers "Search again".** Both were dead ends: Swift
+  offers nothing, and the server refused every action. The server now starts a new search from either
+  (`f12ef09`, on develop since this pass began), so the controls row offers "Search again", which sends `retry`
+  (`runControls` in `lib/taskAgent.ts`). A run cancelled because the task is no longer a business task is still
+  refused, and the card shows the server's message.
 - **Android ahead of iOS: the Calorie phone check says what the server did.** Swift always says it is calling and
   shows the code field. The server sends the code by voice or SMS (`channel`) and sends none for a number it
   has already verified (`alreadyVerified`). Now: by voice, Swift's words; by SMS, "Weâ€™ve texted a 6-digit code

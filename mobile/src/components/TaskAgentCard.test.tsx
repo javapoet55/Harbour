@@ -141,8 +141,8 @@ describe('the controls row (TaskAgentCard.swift:99-103)', () => {
     ['BLOCKED', ['Retry', 'Cancel search']],
     ['NEEDS_INPUT', ['Cancel search']],
     ['READY_FOR_REVIEW', []],
-    ['NO_RESULTS', []],
-    ['CANCELLED', []],
+    ['NO_RESULTS', ['Search again']],
+    ['CANCELLED', ['Search again']],
   ])('%s offers %j', (status, titles) => {
     expect(runControls(status).map((control) => control.title)).toEqual(titles);
   });
@@ -172,6 +172,15 @@ describe('the controls row (TaskAgentCard.swift:99-103)', () => {
       await new Promise((resolve) => setTimeout(resolve, 50));
     });
     expect(mockLoad).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(['NO_RESULTS', 'CANCELLED'])('a %s run offers Search again, which starts a new search', async (status) => {
+    mockLoad.mockResolvedValue(envelope(run({ status, question: null, slots: { location: '94109', budget: '', constraints: '' } })));
+    mockUpdate.mockResolvedValue(envelope(run({ status: 'QUEUED', version: 4, question: null, slots: { location: '94109', budget: '', constraints: '' } })));
+    await renderCard();
+    await fireEvent.press(await screen.findByLabelText('Search again'));
+    await waitFor(() => expect(mockUpdate).toHaveBeenCalledWith('t1', expect.objectContaining({ action: 'retry', version: 3 })));
+    expect(await screen.findByText('Research queued')).toBeTruthy();
   });
 
   it('retries a blocked run, and cancels', async () => {
