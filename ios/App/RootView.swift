@@ -1692,11 +1692,7 @@ struct TasksView: View {
             ZStack {
                 // Light: the original lilac-to-pink wash. Dark: the same tints over the system background, so
                 // the adaptive ink on it stays readable.
-                LinearGradient(colors: [
-                    Color(uiColor: UIColor { $0.userInterfaceStyle == .dark ? UIColor(red: 0.07, green: 0.07, blue: 0.12, alpha: 1) : UIColor(red: 0.973, green: 0.977, blue: 1, alpha: 1) }),
-                    Color(uiColor: UIColor { $0.userInterfaceStyle == .dark ? UIColor(red: 0.11, green: 0.06, blue: 0.10, alpha: 1) : UIColor(red: 1, green: 0.914, blue: 0.969, alpha: 1) }),
-                    Color(uiColor: .systemBackground),
-                ], startPoint: .topLeading, endPoint: .bottomTrailing)
+                LinearGradient(colors: [TasksBackdrop.top, TasksBackdrop.middle, Color(uiColor: .systemBackground)], startPoint: .topLeading, endPoint: .bottomTrailing)
                     .ignoresSafeArea()
                 VStack(alignment: .leading, spacing: 16) {
                     TodayTopBar(name: model.profile?.name ?? "", temperature: nil, showsWeather: false, add: nil, account: { account = true })
@@ -2277,6 +2273,13 @@ private struct TaskMetric: View {
         .padding(.vertical, 12)
         .background(Color(uiColor: .secondarySystemGroupedBackground).opacity(0.65), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
+}
+
+/// The Tasks backdrop's tints. Built here, outside any view: a dynamic color made inside a view's body is main-actor
+/// isolated, and SwiftUI resolves colors off the main thread, which stopped the app the first time it drew in light mode.
+private enum TasksBackdrop {
+    static let top = Color(uiColor: UIColor { $0.userInterfaceStyle == .dark ? UIColor(red: 0.07, green: 0.07, blue: 0.12, alpha: 1) : UIColor(red: 0.973, green: 0.977, blue: 1, alpha: 1) })
+    static let middle = Color(uiColor: UIColor { $0.userInterfaceStyle == .dark ? UIColor(red: 0.11, green: 0.06, blue: 0.10, alpha: 1) : UIColor(red: 1, green: 0.914, blue: 0.969, alpha: 1) })
 }
 
 enum TaskCreationStyle {
