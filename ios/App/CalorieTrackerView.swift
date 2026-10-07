@@ -597,23 +597,21 @@ struct CalorieTrackerView: View {
                     Button("Change") { editingPhone = true; codeSent = false; codeInput = "" }
                 }
             } else {
-                // The server picks the code's channel (call or text), so the copy waits for its answer.
-                Text("NexDo calls this number. First we'll send it a 6-digit code to confirm it's yours.").font(.caption).foregroundStyle(.secondary)
+                // The server picks the code's channel; until a code has gone by text, the copy says "call" (voice is the default).
+                Text(codeSent && codeChannel == "sms" ? "NexDo calls this number. First we'll text it a 6-digit code." : "NexDo calls this number. First we'll call it once and read out a 6-digit code.").font(.caption).foregroundStyle(.secondary)
                 TextField("Mobile number, e.g. +1 650 555 0123", text: $phoneInput)
                     .keyboardType(.phonePad).textContentType(.telephoneNumber).textFieldStyle(.roundedBorder)
-                Button(!codeSent ? "Send me a code" : codeChannel == "sms" ? "Text me another code" : "Call me again with a code") {
+                Button(!codeSent ? "Call me with a code" : codeChannel == "sms" ? "Text me again with a code" : "Call me again with a code") {
                     guard let number = CalorieStore.e164(phoneInput) else { notice = "Enter your mobile number with its country code, for example +1 650 555 0123."; return }
                     perform {
                         guard let result = await store.sendCode(to: number) else { return }
                         if result.alreadyVerified == true {
                             await store.loadSettings()
                             editingPhone = false; codeSent = false; codeInput = ""
-                            notice = "\(number) is already verified. No code is needed."
-                        } else if result.sent {
-                            codeSent = true; codeChannel = result.channel
-                            notice = result.channel == "sms" ? "Texting a 6-digit code to \(number)." : "Calling \(number) now. Answer to hear your 6-digit code."
+                            notice = "\(number) is already verified."
                         } else {
-                            notice = "The code could not be sent. Try again in a minute."
+                            codeSent = true; codeChannel = result.channel
+                            notice = result.channel == "sms" ? "We’ve texted a 6-digit code to \(number)." : "Calling \(number) now. Answer to hear your 6-digit code."
                         }
                     }
                 }
@@ -667,9 +665,9 @@ struct CalorieTrackerView: View {
                     perform {
                         switch await store.callNow() {
                         case "dialing": notice = "Calling you now. Pick up to log today’s meals."
-                        case "cancelled": notice = "NexDo didn’t call: daily calls need to be on, and calls are placed only during your calling hours."
-                        case "failed": notice = "The call could not be placed. Check your number and try again."
-                        case .some: notice = "A call is already on its way."
+                        // Same wording as Android (ff5ceb7); not_claimed reads as failed there too.
+                        case "cancelled": notice = "The call was cancelled. Check that daily calls are on, then try again."
+                        case .some: notice = "The call could not be placed. Try again in a few minutes."
                         case nil: break
                         }
                     }
