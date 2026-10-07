@@ -276,7 +276,7 @@ struct CalendarView: View {
                 } else {
                     Text("Your schedule today").font(.headline)
                 }
-                Text("\(info.appointments) calendar commitments today · \(DurationDisplay.durationLabel(info.availableMinutes)) of usable time remain")
+                Text("\(info.appointments) calendar commitment\(info.appointments == 1 ? "" : "s") today · \(DurationDisplay.durationLabel(info.availableMinutes)) of usable time remain")
                     .font(.caption).foregroundStyle(Color.nexdoSecondary)
             } else if !model.intelligenceLoading && model.intelligenceError == nil {
                 Text("Review your schedule").font(.headline)
