@@ -678,7 +678,8 @@ describe('Item Alternatives', () => {
     await waitFor(() => expect(screen.getByTestId('alternatives.select.Lactose-free milk')).toBeTruthy());
     await fireEvent.press(screen.getByTestId('alternatives.select.Lactose-free milk'));
     expect(screen.getByText('Replace item?')).toBeTruthy();
-    expect(screen.getByText('Replace “2% milk” with “Lactose-free milk”? ')).toBeTruthy();
+    // Ends at the question mark (iOS 6129004; Android ahead of iOS).
+    expect(screen.getByText('Replace “2% milk” with “Lactose-free milk”?')).toBeTruthy();
     expect(mockPost).not.toHaveBeenCalled();
     await fireEvent.press(screen.getByTestId('alternatives.confirm'));
     await waitFor(() => expect(screen.getByTestId('alternatives.success')).toBeTruthy());

@@ -1756,3 +1756,5 @@ match". Logic fixes have a test that fails without them.
   under a minute late is still "Due now", and from 48 hours an age reads "N days overdue" (`actionTimeLabel` in
   `TodayActions.tsx`).
 - **Android ahead of iOS: Calendar says "1 calendar commitment today", singular** (iOS c8da5cb) (`calendar.tsx`).
+- **Android ahead of iOS: the Replace confirmation ends at its question mark**, without the trailing space (iOS
+  6129004) (`AlternativesSheet.tsx`).

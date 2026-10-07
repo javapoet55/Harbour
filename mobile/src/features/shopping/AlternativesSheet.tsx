@@ -438,7 +438,7 @@ function AlternativesBody({ list, original, onClose, onReplace, onAdd, onFavorit
                 <Ionicons color={BLUE} name="swap-horizontal" size={34} />
               </View>
               <Text style={[styles.title2, { color: theme.colors.ink }]}>Replace item?</Text>
-              <Text style={[textStyles.body, styles.center, { color: theme.colors.secondary }]}>{`Replace “${original.name}” with “${panel.alternative.name}”? `}</Text>
+              <Text style={[textStyles.body, styles.center, { color: theme.colors.secondary }]}>{`Replace “${original.name}” with “${panel.alternative.name}”?`}</Text>
               <View style={[styles.surface, { backgroundColor: theme.colors.surface, borderColor: withAlpha(brand.nexdoIndigo, 0.1) }]}>
                 <ReplacementItem amount={amountLabel(original)} item={original} />
                 <Ionicons color={BLUE} name="arrow-down" size={17} style={styles.selfCenter} />
