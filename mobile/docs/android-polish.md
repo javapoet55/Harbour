@@ -1716,3 +1716,8 @@ match". Logic fixes have a test that fails without them.
   groups (This Week, Next Week) used Swift's `Calendar.current` week, Sunday-first on en-US, while Pomodoro and the
   Calorie Tracker are Monday-first. Both now start on Monday, so a Sunday moment is "this week" (`daysSinceMonday`
   in `features/moments/dates.ts`).
+- **Android ahead of iOS: Daily Brief section counts count items, not "nothing" bullets.** The badge and the page
+  subtitle counted every bullet, so "Upcoming Deadlines 2" sat over "No deadlines appear to fall today". Ported from
+  iOS 9f32f13: a bullet that only says there is nothing ("No …", "None.", "Nothing …", "There are no …", "You have
+  no …") is shown but not counted; the badge is hidden at zero and the page says "Nothing to review" / "Nothing to
+  focus on" (iOS wording) (`briefItemCount` in `lib/dailyBrief.ts`).

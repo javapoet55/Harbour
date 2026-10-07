@@ -115,12 +115,28 @@ export function briefStyle(raw: string): { title: string; artwork: BriefArtworkP
   return { title: capitalized(title), artwork: 'lightbulb', tone: 'green' };
 }
 
-/** The detail page's subtitle and heading (BriefSectionDetailView.swift:37, :52). */
+/**
+ * A bullet that says there is nothing ("No deadlines appear to fall today."): shown, but not an item to count.
+ * Android ahead of iOS: ported from `BriefContent.isEmptyStatement` on fix/ios-bug-pass (9f32f13).
+ */
+export function isEmptyBriefStatement(text: string): boolean {
+  const value = text.toLowerCase().trim().replace(/’/g, "'").replace(/^\d+[.)]\s*/, '');
+  return ['no ', 'none ', 'none.', 'nothing ', 'there are no ', 'there is no ', "there's no ", "there aren't any ", "there isn't any ", 'you have no ', "you don't have any ", 'you do not have any '].some(
+    (prefix) => value.startsWith(prefix),
+  );
+}
+
+/** What a section's badge and its page count: its items, leaving out bullets that only say there is nothing. */
+export function briefItemCount(items: string[]): number {
+  return items.filter((item) => !isEmptyBriefStatement(item)).length;
+}
+
+/** The detail page's subtitle and heading (BriefSectionDetailView.swift:37, :52). `count` is `briefItemCount`. */
 export function briefDetailCopy(title: string, count: number) {
   const priority = title === 'Top Priorities';
   return {
     priority,
-    subtitle: `${count} ${count === 1 ? 'item' : 'items'} to ${priority ? 'focus on' : 'review'}`,
+    subtitle: count === 0 ? `Nothing to ${priority ? 'focus on' : 'review'}` : `${count} ${count === 1 ? 'item' : 'items'} to ${priority ? 'focus on' : 'review'}`,
     heading: priority ? 'Focus on what matters' : `Your ${title === 'AI Response' ? 'AI response' : title.toLowerCase()}`,
   };
 }

@@ -462,6 +462,22 @@ describe('the Daily Brief', () => {
     expect(message).toBe('Allow OpenAI sharing in Account to use Read Loud.');
   });
 
+  it('counts items in the section badges, not "nothing" bullets, and hides a zero badge', async () => {
+    const answer = turn({
+      visual: {
+        summary: 'Your daily brief',
+        sections: [
+          { title: 'Deadlines', items: ['Send the report by 4 PM.', 'No other deadlines appear to fall today.'] },
+          { title: 'Next move', items: ['Nothing else needs a decision today.'] },
+        ],
+      },
+    });
+    await openBrief(0, answer);
+    await waitFor(() => expect(screen.getByText('Upcoming Deadlines')).toBeTruthy());
+    expect(screen.getByTestId('brief-count-0')).toHaveTextContent('1');
+    expect(screen.queryByTestId('brief-count-1')).toBeNull();
+  });
+
   it('lets a section page ask through it', async () => {
     await openBrief();
     mockAssistant.mockResolvedValue(turn());
