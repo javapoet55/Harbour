@@ -113,6 +113,8 @@ public enum MomentUpcomingFilter: String, CaseIterable, Sendable {
     public func includes(day: String, zone: String, now: Date = Date(), calendar input: Calendar = .current) -> Bool {
         var calendar=input
         calendar.timeZone=TimeZone(identifier:zone) ?? .current
+        // Monday-first, like Pomodoro and the Calorie Tracker; Calendar.current is Sunday-first on an en-US phone.
+        calendar.firstWeekday=2
         let today=calendar.startOfDay(for:now)
         let tomorrow=calendar.date(byAdding:.day,value:1,to:today)!
         let afterTomorrow=calendar.date(byAdding:.day,value:2,to:today)!
