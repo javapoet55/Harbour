@@ -340,7 +340,7 @@ struct AskNexdoView: View {
                 .font(.subheadline).foregroundStyle(Color.nexdoSecondary).fixedSize(horizontal:false,vertical:true)
             HStack(spacing:8){
                 Image(systemName:"checkmark.shield.fill").foregroundStyle(Color.green)
-                Text("Suggestions only—nothing is added to your list.").font(.caption.weight(.medium)).foregroundStyle(Color.nexdoSecondary)
+                Text("Suggestions only—your list is not changed.").font(.caption.weight(.medium)).foregroundStyle(Color.nexdoSecondary)
             }
         }.padding(16).frame(maxWidth:.infinity,alignment:.leading)
             .background(LinearGradient(colors:[Color.nexdoBlue.opacity(0.10),Color.nexdoMagenta.opacity(0.07)],startPoint:.topLeading,endPoint:.bottomTrailing),in:RoundedRectangle(cornerRadius:20,style:.continuous))
