@@ -82,7 +82,7 @@ struct TaskAgentCard: View {
                             }.padding(8).background(AgentStyle.card, in: RoundedRectangle(cornerRadius: 12))
                                 .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.purple.opacity(0.65)))
                                 .id(TaskDetailsView.Field.agentLocation)
-                            Button { act("search", key: "location", answer: answer) } label: {
+                            Button { act("search", key: question.key, answer: answer) } label: {
                                 HStack(spacing: 12) { Image(systemName: "magnifyingglass"); Text(run.service == "plumber" ? "Search Plumbers" : "Search businesses"); Image(systemName: "arrow.right") }
                             }.buttonStyle(AgentSearchButton()).disabled(answer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                         }
