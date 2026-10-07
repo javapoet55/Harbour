@@ -160,7 +160,8 @@ struct CalendarEventDetailsView: View {
 
 private extension View {
     func eventCard() -> some View {
-        background(.white.opacity(0.94), in: RoundedRectangle(cornerRadius: 26))
+        // The system card surface: white in light mode, dark grey in dark mode, where nexdoInk turns white.
+        background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 26))
             .shadow(color: .indigo.opacity(0.035), radius: 14, y: 6)
     }
 }
