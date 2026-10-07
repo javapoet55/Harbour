@@ -1695,3 +1695,6 @@ gets the fix too, and the Swift app is to mirror it. Each fix has a test that fa
   `ShoppingOffersView` and `ShoppingEmailView` put `listId` in the query raw; RN's `shoppingOffersApi.offers` and
   `shoppingEmailApi.get` already `encodeURIComponent` it. A test now pins both (`src/api/shoppingListId.test.ts`);
   no code change.
+- **Android ahead of iOS: Stores Near You says "your phoneâ€™s Settings", not "iPhone Settings".** The only wording
+  change in this pass: "Location is unavailable. Enter a city or ZIP code, or allow location access in your
+  phoneâ€™s Settings." (`LOCATION_UNAVAILABLE` in `StorePages.tsx`).

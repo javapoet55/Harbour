@@ -217,7 +217,7 @@ describe('List Settings', () => {
     expect(screen.getByText('Enter a city or ZIP code, or use your location to find grocery stores.')).toBeTruthy();
     // Asked for, the location is refused: Swift's message.
     await fireEvent.press(screen.getByTestId('stores-use-location'));
-    await waitFor(() => expect(screen.getByTestId('stores-error')).toHaveTextContent('Location is unavailable. Enter a city or ZIP code, or allow location access in iPhone Settings.'));
+    await waitFor(() => expect(screen.getByTestId('stores-error')).toHaveTextContent('Location is unavailable. Enter a city or ZIP code, or allow location access in your phone’s Settings.'));
     mockSearch.mockRejectedValueOnce(new Error('Please wait a minute before searching again.')).mockResolvedValueOnce({ stores: [] });
     await fireEvent.changeText(screen.getByTestId('stores-area'), 'Oakland');
     await act(async () => {
