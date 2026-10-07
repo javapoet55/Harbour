@@ -7,7 +7,7 @@ struct WellnessChooserView: View {
     @EnvironmentObject private var model: AppModel
     @State private var destination: Destination?
     private enum Destination: String, Identifiable {
-        case calories, pomodoro, moments, shopping, insights, profile
+        case calories, pomodoro, moments, shopping
         var id: String { rawValue }
     }
     private let ink = Color(red: 0.035, green: 0.035, blue: 0.19)
@@ -58,9 +58,6 @@ struct WellnessChooserView: View {
                 NavigationStack { ImportantMomentsView().toolbar { ToolbarItem(placement: .cancellationAction) { backButton } } }
             case .shopping:
                 WellnessShoppingDestination(api: model.momentAPI)
-            case .insights:
-                WellnessInsightsDestination()
-            case .profile: AccountView()
             }
     }
     private var backButton: some View { Button { destination = nil } label: { Label("Back", systemImage: "chevron.left") } }
@@ -151,16 +148,5 @@ private struct WellnessShoppingDestination: View {
     init(api: APIClient) { _store = StateObject(wrappedValue: ShoppingStore(api: api)) }
     var body: some View {
         NavigationStack { ShoppingHome(store: store).toolbar { ToolbarItem(placement: .cancellationAction) { Button("Back", systemImage: "chevron.left") { dismiss() } } } }
-    }
-}
-private struct WellnessInsightsDestination: View {
-    @Environment(\.dismiss) private var dismiss
-    @State private var prompt: String?
-    @State private var asking = false
-    var body: some View {
-        NavigationStack {
-            WeeklySummaryView(onPlanNextWeek: { prompt = $0; asking = true })
-                .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Back", systemImage: "chevron.left") { dismiss() } } }
-        }.fullScreenCover(isPresented: $asking) { AskNexdoView(initialPrompt: prompt ?? "") }
     }
 }
