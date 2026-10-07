@@ -481,31 +481,12 @@ struct TaskAgentCard: View {
         }
     }
 
-    /// After a search that found nothing, or a cancelled run: the server starts a new search for retry (and for
-    /// search with a new area), so neither is a dead end. No results usually means trying another area.
-    @ViewBuilder private func searchAgain(_ run: TaskAgentRun) -> some View {
-        if run.status == "NO_RESULTS" {
-            Text("Try a nearby city or ZIP code, or search \(run.slots.location.isEmpty ? "again" : run.slots.location) again.")
-                .font(.subheadline).foregroundStyle(Color.nexdoSecondary).fixedSize(horizontal: false, vertical: true)
-            HStack(spacing: 12) {
-                Image(systemName: "mappin.circle.fill").font(.title2).foregroundStyle(Color.purple)
-                    .frame(width: 36, height: 36).background(Color.purple.opacity(0.06), in: RoundedRectangle(cornerRadius: 12))
-                TextField(run.slots.location.isEmpty ? "City or ZIP code" : run.slots.location, text: $answer).submitLabel(.done)
-                    .focused($focusedField, equals: .agentLocation)
-                    .onSubmit { focusedField = nil }
-                    .accessibilityLabel("City or ZIP code")
-            }.padding(8).background(AgentStyle.card, in: RoundedRectangle(cornerRadius: 12))
-                .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.purple.opacity(0.65)))
-            let area = answer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? run.slots.location : answer
-            Button { act("search", key: "location", answer: area) } label: {
-                HStack(spacing: 12) { Image(systemName: "magnifyingglass"); Text("Search again"); Image(systemName: "arrow.right") }
-            }.buttonStyle(AgentSearchButton()).disabled(area.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                .accessibilityIdentifier("agent-search-again")
-        } else {
-            Button { act("retry") } label: {
-                HStack(spacing: 12) { Image(systemName: "magnifyingglass"); Text("Search again"); Image(systemName: "arrow.right") }
-            }.buttonStyle(AgentSearchButton()).accessibilityIdentifier("agent-search-again")
-        }
+    /// After a search that found nothing, or a cancelled run: the server starts a new search for retry, so neither is a
+    /// dead end. Same control as Android (57698fd).
+    private func searchAgain(_ run: TaskAgentRun) -> some View {
+        Button { act("retry") } label: {
+            HStack(spacing: 12) { Image(systemName: "magnifyingglass"); Text("Search again"); Image(systemName: "arrow.right") }
+        }.buttonStyle(AgentSearchButton()).accessibilityIdentifier("agent-search-again")
     }
 
     private func searchIntroduction(_ run: TaskAgentRun) -> some View {
