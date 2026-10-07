@@ -6,6 +6,7 @@ import { palettes } from '../theme';
 
 import type { NexdoTask } from '../api';
 import { useCoordinator, scheduledWork } from '../actions/coordinator';
+import { TaskActionError } from '../actions/errors';
 import { addDays, startOfDay } from '../lib/taskQuery';
 import { queryKeys } from '../query/keys';
 import { useSession } from '../store/session';
@@ -205,7 +206,7 @@ describe('the action screen', () => {
   });
 
   it('says "No contact selected" and offers no channel when nobody matches', async () => {
-    mockResolve.mockRejectedValue(new Error('No matching contact'));
+    mockResolve.mockRejectedValue(new TaskActionError('noContact'));
     await open();
 
     await waitFor(() => expect(screen.getByTestId('action-error')).toHaveTextContent('No contact selected. Choose a contact or enter details below.'));
@@ -213,6 +214,22 @@ describe('the action screen', () => {
     expect(screen.getByText('Choose a contact or enter a phone number or email address.')).toBeTruthy();
     expect(screen.queryByTestId('action-call')).toBeNull();
     expect(screen.queryByTestId('action-email')).toBeNull();
+  });
+
+  it('tells a refused Contacts access and a failed lookup apart from "no contact", above the buttons', async () => {
+    mockResolve.mockRejectedValue(new TaskActionError('contactsDenied'));
+    await open();
+    await waitFor(() => expect(screen.getByTestId('action-error')).toHaveTextContent('Allow Nexdo to access Contacts in Settings, then try again.'));
+    // The message says "below", so it sits above Choose contact and Enter contact details.
+    const tree = JSON.stringify(screen.toJSON());
+    expect(tree.indexOf('"action-error"')).toBeLessThan(tree.indexOf('"action-pick-contact"'));
+    expect(tree.indexOf('"action-error"')).toBeLessThan(tree.indexOf('"action-enter-details"'));
+  });
+
+  it('says a lookup failed when Contacts could not be searched', async () => {
+    mockResolve.mockRejectedValue(new Error('Contacts store unavailable'));
+    await open();
+    await waitFor(() => expect(screen.getByTestId('action-error')).toHaveTextContent('Couldn’t look up this contact. Choose a contact or enter details below.'));
   });
 
   it('asks which person when the name matches more than one, then waits for a channel', async () => {
@@ -256,6 +273,26 @@ describe('the action screen', () => {
     mockResolve.mockResolvedValue([DAMIEN]);
     await fireEvent.press(screen.getByTestId('action-retry'));
     await waitFor(() => expect(screen.getByText('Choose how to contact Damien Hall.')).toBeTruthy());
+  });
+
+  it('offline, a personal task found in Contacts carries on without the business check', async () => {
+    mockAgent.mockRejectedValueOnce(new Error('offline'));
+    mockResolve.mockResolvedValue([DAMIEN]);
+    await open();
+    await waitFor(() => expect(screen.getByText('Choose how to contact Damien Hall.')).toBeTruthy());
+    expect(screen.queryByText('Couldn’t check this task. Please retry.')).toBeNull();
+    expect(screen.getByTestId('action-call')).toBeTruthy();
+  });
+
+  it('offline, a task with a chosen business still asks for a retry', async () => {
+    const id = await seedAction();
+    useCoordinator.getState().update(id, (item) => ({ ...item, businessCandidateID: 'place-1' }));
+    mockAgent.mockRejectedValueOnce(new Error('offline'));
+    mockResolve.mockResolvedValue([DAMIEN]);
+    mockParams = { id };
+    await show(<TaskActionScreen />);
+    await waitFor(() => expect(screen.getByText('Couldn’t check this task. Please retry.')).toBeTruthy());
+    expect(mockResolve).not.toHaveBeenCalled();
   });
 
   it('sends a business task to Task Details to choose a business', async () => {
@@ -321,6 +358,17 @@ describe('the action screen', () => {
     expect(screen.getByTestId('action-call')).toBeTruthy();
   });
 
+  it('prefills the form with the name as searched, not the phrase ("the plumber")', async () => {
+    const id = await seedAction();
+    useCoordinator.getState().update(id, (item) => ({ ...item, contactName: 'the plumber' }));
+    mockResolve.mockRejectedValue(new TaskActionError('noContact'));
+    mockParams = { id };
+    await show(<TaskActionScreen />);
+    await waitFor(() => expect(screen.getByText('Enter contact details')).toBeTruthy());
+    await fireEvent.press(screen.getByText('Enter contact details'));
+    expect(screen.getByTestId('contact-details-name').props.value).toBe('plumber');
+  });
+
   it('closes the form on Cancel without saving', async () => {
     await open();
     await waitFor(() => expect(screen.getByText('Enter contact details')).toBeTruthy());
@@ -356,8 +404,8 @@ describe('the action screen', () => {
     await waitFor(() => expect(screen.getByText('Choose how to contact Asha Rao.')).toBeTruthy());
     const stored = useCoordinator.getState().actions[0];
     expect(stored).toMatchObject({ contactIdentifier: 'c9', businessCandidateID: null, manualRecipient: null });
-    // The picked number keeps Swift's fixed label.
-    expect(useCoordinator.getState().resolvedContacts.c9.phones[0].label).toBe('Phone');
+    // The picked number keeps its own label (Android ahead of iOS; Swift fixes it to "Phone").
+    expect(useCoordinator.getState().resolvedContacts.c9.phones[0].label).toBe('mobile');
   });
 
   it('shows the unavailable state when the task is gone', async () => {

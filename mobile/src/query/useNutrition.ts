@@ -104,9 +104,19 @@ export function useVerifyNutritionCode() {
   return useSettingsMutation((code: string) => nutritionApi.verifyCode(code));
 }
 
-/** `sendCode(to:)` (`:154-157`). Pass an E.164 number (`e164` in features/nutrition/model.ts). */
+/**
+ * `sendCode(to:)` (`:154-157`). Pass an E.164 number (`e164` in features/nutrition/model.ts). A number the
+ * server already has verified gets no code (`alreadyVerified`), so the settings are reloaded to show it.
+ */
 export function useSendNutritionCode() {
-  return useMutation({ mutationFn: (phone: string) => nutritionApi.sendCode(phone) });
+  const owner = useOwner();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (phone: string) => nutritionApi.sendCode(phone),
+    onSuccess: (answer) => {
+      if (answer.alreadyVerified) void queryClient.invalidateQueries({ queryKey: queryKeys.nutrition.settings(owner) });
+    },
+  });
 }
 
 /** `callNow()` (`:164-167`). */

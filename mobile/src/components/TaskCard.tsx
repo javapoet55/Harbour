@@ -39,16 +39,19 @@ export type TaskIcon = { symbol: keyof typeof TASK_ICON_GLYPH; tint: TaskIconTin
 
 /**
  * `TasksView.taskIcon(_:)` (ios/App/RootView.swift:1959-1967): a glyph and tint from keywords in the
- * lowercased title, first match wins. Swift's `contains` is a plain substring test, so "recall"
- * matches "call" there too.
+ * lowercased title, first match wins. Android ahead of iOS: Swift's `contains` is a plain substring test,
+ * so "recall" got the phone; here a keyword matches a whole word, or the word with a common ending
+ * ("calls", "calling", "plumber", "meetings").
  */
 export function taskIcon(task: Pick<NexdoTask, 'title'>): TaskIcon {
-  const title = task.title.toLowerCase();
-  if (title.includes('email') || title.includes('message')) return { symbol: 'envelope', tint: 'pink' };
-  if (['plumb', 'repair', 'handyman', 'electrician'].some((word) => title.includes(word))) return { symbol: 'wrench', tint: 'nexdoBlue' };
-  if (title.includes('call') || title.includes('contact')) return { symbol: 'phone', tint: 'green' };
-  if (title.includes('laptop') || title.includes('computer')) return { symbol: 'laptopcomputer', tint: 'orange' };
-  if (title.includes('meeting') || title.includes('appointment')) return { symbol: 'calendar', tint: 'purple' };
+  const words = task.title.toLowerCase().match(/[a-z0-9]+/g) ?? [];
+  const has = (...stems: string[]) =>
+    stems.some((stem) => words.some((word) => word === stem || (word.startsWith(stem) && ['s', 'es', 'ed', 'ing', 'er', 'ers'].includes(word.slice(stem.length)))));
+  if (has('email', 'message')) return { symbol: 'envelope', tint: 'pink' };
+  if (has('plumb', 'repair', 'handyman', 'electrician')) return { symbol: 'wrench', tint: 'nexdoBlue' };
+  if (has('call', 'contact')) return { symbol: 'phone', tint: 'green' };
+  if (has('laptop', 'computer')) return { symbol: 'laptopcomputer', tint: 'orange' };
+  if (has('meeting', 'appointment')) return { symbol: 'calendar', tint: 'purple' };
   return { symbol: 'doc.text', tint: 'nexdoBlue' };
 }
 

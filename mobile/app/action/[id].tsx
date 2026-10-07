@@ -23,8 +23,8 @@ import {
   type ActionAddress,
   type ActionContact,
 } from '../../src/actions/contacts';
-import { ACTION_ERRORS } from '../../src/actions/errors';
-import { taskAgentApi, type TaskAgentRun } from '../../src/api/taskAgent';
+import { ACTION_ERRORS, TaskActionError } from '../../src/actions/errors';
+import { taskAgentApi, type TaskAgentEnvelope, type TaskAgentRun } from '../../src/api/taskAgent';
 import { ActionContactDetailsSheet } from '../../src/components/ActionContactDetailsSheet';
 import { TaskSymbol } from '../../src/components/TaskSymbol';
 import { Text } from '../../src/components/Text';
@@ -32,6 +32,7 @@ import { withAlpha } from '../../src/components/SignInBackdrop';
 import { pickContact } from '../../src/features/moments/device';
 import { actionChannels, type TaskActionRecipient } from '../../src/lib/actionNeeded';
 import { contactSearchName } from '../../src/lib/taskActionDetector';
+import { isBusinessAction } from '../../src/lib/taskAgent';
 import { isDone } from '../../src/lib/taskQuery';
 import type { TaskActionChannel } from '../../src/lib/taskAction';
 import { queryKeys } from '../../src/query/keys';
@@ -156,8 +157,10 @@ export default function TaskAction() {
         setContact(typed);
         return typed;
       }
+      // The business check could not load: a person found in Contacts still carries on.
+      let unchecked = false;
+      let response: TaskAgentEnvelope | undefined;
       if (!current.contactIdentifier) {
-        let response;
         try {
           // `model.loadTaskAgent` — through the shared query, so Task Details and Today see it too.
           response = await queryClient.fetchQuery({
@@ -166,12 +169,20 @@ export default function TaskAction() {
             staleTime: 0,
           });
         } catch {
-          if (live()) setCheckFailed(true);
-          return null;
+          // Android ahead of iOS: Swift stops here, so offline a plain "Call Asha" read "Couldn’t check this
+          // task" although no business is involved. Only a task with a chosen business needs the check.
+          if (!live()) return null;
+          if (current.businessCandidateID != null) {
+            setCheckFailed(true);
+            return null;
+          }
+          unchecked = true;
         }
+      }
+      if (response) {
         if (!live()) return null;
         setBusinessRun(response.run);
-        const business = current.businessCandidateID != null || response.intent?.eligible === true || response.run != null;
+        const business = isBusinessAction(response, current.businessCandidateID);
         setFlow(business);
         if (business) {
           const selected = response.run?.candidates.find((candidate) => candidate.id === current.businessCandidateID);
@@ -197,10 +208,13 @@ export default function TaskAction() {
           useCoordinator.getState().update(actionID, (item) => ({ ...item, contactIdentifier: matches[0].id }));
           return matches[0];
         }
-        setContacts(matches);
-      } catch {
-        // Every lookup failure, Contacts access included, reads the same (`:349`; §22 "For the team").
-        if (live()) setError('No contact selected. Choose a contact or enter details below.');
+        // Nobody found and no business check: it may be a business task, so ask for a retry as before.
+        if (unchecked && matches.length === 0) setCheckFailed(true);
+        else setContacts(matches);
+      } catch (cause) {
+        if (!live()) return null;
+        if (unchecked) setCheckFailed(true);
+        else setError(lookupMessage(cause));
       }
       return null;
     } finally {
@@ -468,6 +482,13 @@ export default function TaskAction() {
               </>
             )}
 
+            {/* Above the recipient buttons, which its "Choose a contact or enter details below." points to. */}
+            {error !== null ? (
+              <Text style={[theme.typography.body, { color: theme.colors.danger }]} testID="action-error">
+                {error}
+              </Text>
+            ) : null}
+
             {/* The recipient buttons (`:175-188`). */}
             {!checking && !checkFailed ? (
               businessFlow ? (
@@ -483,7 +504,8 @@ export default function TaskAction() {
                     label="Enter contact details"
                     onPress={() =>
                       setEnteringDetails({
-                        name: contact?.name ?? action.contactName,
+                        // Android ahead of iOS: Swift prefills the raw phrase ("the plumber"); this is the name as searched.
+                        name: contact?.name ?? contactSearchName(action.contactName),
                         phone: contact?.phones[0]?.value ?? '',
                         email: contact?.emails[0]?.value ?? '',
                       })
@@ -542,11 +564,6 @@ export default function TaskAction() {
               </>
             ) : null}
 
-            {error !== null ? (
-              <Text style={[theme.typography.body, { color: theme.colors.danger }]} testID="action-error">
-                {error}
-              </Text>
-            ) : null}
             {/* `.foregroundStyle(.secondary)` (TaskActionView.swift:173). */}
             {receipt !== null ? (
               <Text style={[theme.typography.body, { color: theme.colors.secondaryLabel }]} testID="action-receipt">
@@ -646,6 +663,16 @@ export default function TaskAction() {
       ) : null}
     </SafeAreaView>
   );
+}
+
+/**
+ * Android ahead of iOS: Swift reads every lookup failure, Contacts access refused included, as "No contact
+ * selected…" (TaskActionView.swift:349), so the Contacts guidance never shows. Each now says what happened.
+ */
+function lookupMessage(cause: unknown): string {
+  if (cause instanceof TaskActionError && cause.code === 'contactsDenied') return ACTION_ERRORS.contactsDenied;
+  if (cause instanceof TaskActionError && cause.code === 'noContact') return 'No contact selected. Choose a contact or enter details below.';
+  return 'Couldn’t look up this contact. Choose a contact or enter details below.';
 }
 
 type ButtonProps = { label: string; onPress: () => void; disabled: boolean; testID: string };

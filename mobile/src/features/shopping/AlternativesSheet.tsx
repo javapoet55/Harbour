@@ -24,6 +24,7 @@ import {
   difference,
   goalSupported,
   hasSource,
+  isOriginalItem,
   nutrientUnit,
   nutrientValue,
   SHOPPING_GOALS,
@@ -321,7 +322,8 @@ function AlternativesBody({ list, original, onClose, onReplace, onAdd, onFavorit
   const savedOriginal = list.items.find((item) => item.id === original.id) ?? original;
   const cartCount = list.items.some((item) => item.id === original.id) ? list.items.length : 0;
   const originalFacts = result?.originalFacts ?? null;
-  const visible = (result?.alternatives ?? []).filter((item) => goal === null || goalSupported(goal, item, originalFacts));
+  const offered = (result?.alternatives ?? []).filter((item) => !isOriginalItem(item, original));
+  const visible = offered.filter((item) => goal === null || goalSupported(goal, item, originalFacts));
 
   // `.task(id: retry) { await load() }` (:93): a retry skips the cache.
   const loadedFor = useRef(-1);
@@ -551,7 +553,7 @@ function AlternativesBody({ list, original, onClose, onReplace, onAdd, onFavorit
                 </Pressable>
               </View>
             ) : null}
-            {visible.length === 0 ? <EmptyState filtered={result.alternatives.length > 0} onAction={() => (result.alternatives.length > 0 ? setGoal(null) : onClose())} original={original} /> : null}
+            {visible.length === 0 ? <EmptyState filtered={offered.length > 0} onAction={() => (offered.length > 0 ? setGoal(null) : onClose())} original={original} /> : null}
             {visible.map((item) => {
               const id = alternativeId(item);
               const labels = SHOPPING_GOALS.filter((value) => goalSupported(value, item, originalFacts)).slice(0, 2);

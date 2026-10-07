@@ -175,6 +175,16 @@ it('the options menu reads the section aloud or shares it', async () => {
   share.mockRestore();
 });
 
+it('shows why Read aloud did nothing, since this page hides the Ask composer', async () => {
+  read.mockReturnValueOnce('Allow OpenAI sharing in Account to use Read Loud.');
+  await open('1');
+  await waitFor(() => expect(screen.getByRole('header')).toHaveTextContent('Next Move'));
+  expect(screen.queryByTestId('brief-detail-read-error')).toBeNull();
+  await fireEvent.press(screen.getByLabelText('Briefing options'));
+  await fireEvent.press(screen.getByTestId('brief-detail-read'));
+  expect(screen.getByTestId('brief-detail-read-error')).toHaveTextContent('Allow OpenAI sharing in Account to use Read Loud.');
+});
+
 it('a section that has gone keeps its title over an empty page; Back goes back', async () => {
   // No open task names a priority line any more, so the priorities section is gone.
   await open('5', []);

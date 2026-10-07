@@ -37,6 +37,16 @@ export function e164(raw: string, region: string | null | undefined): string | n
   return null;
 }
 
+/**
+ * What "Call me now to try it" says for the call's `status` (`POST /api/nutrition/call-now`). `cancelled`: the
+ * server found calls off, the number unverified or the time outside the call window when it came to dial.
+ */
+export function callNowNotice(status: string): string {
+  if (status === 'dialing') return 'Calling you now. Pick up to log today’s meals.';
+  if (status === 'cancelled') return 'The call was cancelled. Check that daily calls are on, then try again.';
+  return 'The call could not be placed. Try again in a few minutes.';
+}
+
 /** The nutrient rows (CalorieTrackerView.swift:283-286), in Swift's order. Omega-3 is not tracked yet. */
 export const NUTRIENTS = [
   { label: 'Protein', unit: 'g', goal: 150 },

@@ -2912,16 +2912,16 @@ first, unchanged; the Mac reference pass’s items follow, with their captures.
   the code by voice or SMS (`NUTRITION_PHONE_CODE_CHANNEL`, returned as `channel`), and for a number that is
   already verified answers `sent: false, alreadyVerified: true` without calling
   (`src/server/nutrition/settings.ts:90`, `:113`); Swift ignores both, shows "Calling…" and the code field.
-  RN copies Swift.
+  RN copies Swift. **Fixed on Android `abbc189`; iOS to mirror.**
 - **"Call me now to try it" always says "Calling you now."** `callNow()` decodes `CallStarted` and drops
   its `status` (`CalorieTrackerView.swift:164-167`, `:643-644`); the server answers 202 with `cancelled`
-  when calls are off, or `failed` / `not_claimed`. RN copies Swift.
+  when calls are off, or `failed` / `not_claimed`. RN copies Swift. **Fixed on Android `ff5ceb7`; iOS to mirror.**
 - **Editing a logged food wipes its nutrients.** The editor's Save always sends `kcal`, even when only the
   name or meal changed (`CalorieTrackerView.swift:905`), and the server treats any `kcal` as a manual
   correction: source MANUAL and every macro and micronutrient set to null (`src/server/nutrition/log.ts:91`).
   Renaming "Salmon" to "Grilled salmon" loses its protein, fat and vitamin D. Swift should send `kcal` only
   when it changed, or the server keep nutrients when the value is the same. **Fixed on server `72bdca6`**: an
-  unchanged `kcal` keeps the source, nutrients and review status; only `confirm: true` confirms then.
+  unchanged `kcal` keeps the source, nutrients and review status; only `confirm: true` confirms then. **Fixed on Android `89d1a96` too (an edit sends `kcal` only when it changed); iOS to mirror.**
 - **"This week" means the last seven days in the insight.** The insight's copy says "this week" ("Log N more
   days this week…", "… is running low this week", `src/server/nutrition/insights.ts:37`, `:65`) but it is
   computed over the 7 days ending on the date (`:31`, `:86`), while the summary and the Insights page's
@@ -2946,7 +2946,7 @@ first, unchanged; the Mac reference pass’s items follow, with their captures.
   title and says "Nothing to report here today."
 - **"Read aloud" on a brief page can fail silently.** With OpenAI sharing off, `speakAnswer` sets
   `voiceError` (`AskNexdoView.swift:531`), but the message lives in `composer`, which the brief hides
-  (`:333`). Nothing happens on screen. RN copies Swift.
+  (`:333`). Nothing happens on screen. RN copies Swift. **Fixed on Android `8c595da`; iOS to mirror.**
 - **Unreachable Ask code.** Nothing mounts `NexdoAISuggestionCard`, `entryCards` or "Free form Text"
   (`showingText`, `AskNexdoView.swift:341`) any more, `AskAILandingView.select` keeps Shopping, Moments and
   typing cases for cards 5-7 when there are four cards, and the `planTomorrow` intent has no entry. Not
@@ -2961,7 +2961,7 @@ first, unchanged; the Mac reference pass’s items follow, with their captures.
 - **"Item replaced!" has two buttons that do the same thing**: Done and View in Cart both close
   (`ShoppingAlternativesDesign.swift:118-119`). RN copies them.
 - **Stores Near You tells Android users about iPhone Settings**: "…allow location access in iPhone
-  Settings." (`ShoppingViews.swift:767`). Copied unchanged per the parity rule; worth a neutral wording.
+  Settings." (`ShoppingViews.swift:767`). Copied unchanged per the parity rule; worth a neutral wording. **Fixed on Android `2298b72`; iOS to mirror.**
 - **Analytics.** Item Alternatives logs `shopping_alternatives_opened`, `alternative_viewed`, goal and
   replace events (`ShoppingAlternativesView.swift:189-192`); RN sends none while Firebase Analytics stays
   deferred (§21).
@@ -2987,13 +2987,13 @@ first, unchanged; the Mac reference pass’s items follow, with their captures.
   "Higher protein" filter and is tagged "Lower sugar · Higher protein", yet its table shows equal
   sugar and protein with "↑ 0 g" / "↓ 0 g" (`ShoppingAlternativesView.swift:454-455`;
   `shopping-alternative-details`). **Fixed on server `552128a`** for the item itself (a list can now hold one
-  fewer alternative). The zero differences are not changed.
+  fewer alternative). The zero differences are not changed. **Fixed on Android `5b0336d` (the item itself, also left out on the phone) and `c913666` (zero differences); iOS to mirror.**
 - **Brief counts are sentence counts.** The section badge and the detail subtitle count the AI's
   bullet sentences, so "Upcoming Deadlines 2" sits over "No deadlines appear to fall today", and the
   detail says "2 items to review" (`daily-brief`, `brief-section-detail`).
 - **Event Details always shows both Mark Complete and Mark Incomplete**
   (`CalendarEventDetailsView.swift:44-45`; the ⋯ menu at `:86` shows the right one). On delete
-  with warnings, the alert binding and its OK button both call `dismiss()` (`:97`).
+  with warnings, the alert binding and its OK button both call `dismiss()` (`:97`). **Fixed on Android `899c3e8` (one completion action); iOS to mirror. The double `dismiss()` is Swift-only: RN closes once.**
 - **"Connect me to …" is disabled with no reason given for an unverified number.** The switch is
   `.disabled(!model.verified || state.recipientPhone == nil || state.passed)` (`MomentConnectCall.swift:237`).
   Swift explains the last two under the switch ("Add …’s phone number with its country code…", "This
@@ -3010,7 +3010,7 @@ first, unchanged; the Mac reference pass’s items follow, with their captures.
 - **"Choose contact"** on the Nexdo Action screen is black text on a dark indigo button
   (`TaskActionView.swift:180`, `task-action-error-no-contact`).
 - **Feedback has no way to dismiss the keyboard**: no Done accessory, no tap-outside, and Return
-  adds a newline, so the rating and **Submit** are covered until you scroll.
+  adds a newline, so the rating and **Submit** are covered until you scroll. **Fixed on Android `27841b1` (a Done capsule on the keyboard); iOS to mirror.**
 - **Tasks search**: the tab bar rides up above the keyboard (`tasks-search-keyboard`).
 - **Shopping Recommendations** promises "your list changes after you approve them", but the answer
   has no approve or add control (`AskNexdoView.swift:380`, `shopping-recommendations-v2-answer`).
@@ -3024,14 +3024,14 @@ first, unchanged; the Mac reference pass’s items follow, with their captures.
 - `ShoppingAlternativeDetails` receives `initialTab` but never uses it; the tab is always
   Nutrition (`ShoppingAlternativesView.swift:267`, `:274`). *(From reading the code; not seen on screen.)*
 - `ShoppingOffersView` (`:85`) and `ShoppingEmailView` (`:315`) put `listId` in the query without
-  percent-encoding; `ShoppingViews.swift:363` encodes it. *(From reading the code; not seen on screen.)*
+  percent-encoding; `ShoppingViews.swift:363` encodes it. *(From reading the code; not seen on screen.)* **Already right on Android (RN encodes it); pinned by `6686a11`. iOS to mirror.**
 - Send Now (`ManageFestivalView.swift:501-536`) starts `sendNow()` while its confirmation sheet is
   still dismissing, so the Messages sheet can collide with it. `confirm()` pushes the success
-  screen before closing the review sheet (`:607-608`). *(From reading the code; not seen on screen.)*
+  screen before closing the review sheet (`:607-608`). *(From reading the code; not seen on screen.)* **Fixed on Android `1ab425a`; iOS to mirror.**
 - `POST /api/nutrition/phone` `start` can answer `{ sent: false, alreadyVerified: true }` or send
   the code by SMS; the app always says it is calling and waits for a code
   (`CalorieTrackerView.swift:595`). *(From reading the code; not seen on screen.)* Same issue as the
-  Windows item "The phone check always says “call”" above.
+  Windows item "The phone check always says “call”" above. **Fixed on Android `abbc189`; iOS to mirror.**
 - `/api/moments` turns invalid input into 500 "Request failed." instead of 400: its `failure()`
   does not handle `ZodError` (`src/app/api/moments/route.ts:15`). *(From reading the code; not seen on screen.)*
   **Fixed on server `e0c266e`**: 400 `{ error: "Check the moment details and try again." }`.
@@ -3039,46 +3039,46 @@ first, unchanged; the Mac reference pass’s items follow, with their captures.
   shown to the user. *(From reading the code; not seen on screen.)*
 - **Schedule confirmed lists send times in text order, not time order.** `sendTimes` sorts the formatted
   labels (`ManageFestivalView.swift:359-361`), so "10 Oct 2026 at 8:00 AM" comes before "6 Oct 2026 at
-  8:00 AM" when a group has several. RN copies it (Run E).
+  8:00 AM" when a group has several. RN copies it (Run E). **Fixed on Android `2421880`; iOS to mirror.**
 - **A yearly moment now shows its stored year in Manage Moment.** The model reads `occurrenceDate`
   (`ManageFestivalModel.swift:92`), so a birthday saved with the birth year shows that year in the header,
-  the Moment card and Edit Moment ("Thu, Oct 6, 1990"), not this year's occasion. RN copies it.
+  the Moment card and Edit Moment ("Thu, Oct 6, 1990"), not this year's occasion. RN copies it. **Fixed on Android `2801355`; iOS to mirror.**
 - **"This Week" starts on a different day in different modules.** Moments' date chips use
   `Calendar.current` (Sunday-first on an en-US phone, `ImportantMoment.swift:99-115`); Pomodoro and the
   Calorie Tracker use Monday-first weeks. RN copies each.
 - **Send Now refuses everyone when Messages is unavailable.** `sendNow()` checks `canSendText()` if ANY
   recipient has a phone (`ManageFestivalView.swift:546`), so on a device without Messages a recipient set to
-  Email is not sent either. RN copies it. *(From reading the code.)*
+  Email is not sent either. RN copies it. *(From reading the code.)* **Fixed on Android `eea3609`; iOS to mirror.**
 
 **From Run B (Swift, report only; RN copies Swift unless noted):**
 - **Nexdo Action, contact lookup:** every lookup failure, Contacts access refused included, reads "No
   contact selected. Choose a contact or enter details below.", so the "Allow Nexdo to access Contacts"
-  guidance never shows; and the error sits *under* the buttons it calls "below".
+  guidance never shows; and the error sits *under* the buttons it calls "below". **Fixed on Android `642a4ef`; iOS to mirror.**
 - **Nexdo Action, personal tasks:** a plain "Call Asha" with no saved contact asks the agent endpoint
-  first, so offline it shows "Couldn’t check this task" although no business is involved.
+  first, so offline it shows "Couldn’t check this task" although no business is involved. **Fixed on Android `4ab1090`; iOS to mirror.**
 - **Nexdo Action, dead code:** with no recipient there are no channel buttons, so `resolve()`'s Contacts
   search can no longer be reached from the screen.
 - **Nexdo Action, details form and composer:** the form prefills the raw name ("the plumber"), not the
   search form; the email composer ignores the business draft; picked contacts lose their own phone and
-  email labels (always "Phone" / "Email").
+  email labels (always "Phone" / "Email"). **Fixed on Android `21d91e7` (the form prefills the searched name) and `72aeaf4` (picked contacts keep their labels); iOS to mirror. The composer item does not arise in RN: a business has no email address there.**
 - **Today card:** `isBusiness` is true whenever a run exists, even a cancelled one, so a person task that
   once had research shows "Find a business"; Dismiss and Remind later read `contactName`, not the chosen
   recipient; a queue row whose task is not loaded does nothing; overdue minutes truncate while future
-  minutes round up.
+  minutes round up. **Fixed on Android `2f60eba` (a cancelled or failed run is not a business) and `84230ce` (Dismiss and Remind later name the chosen recipient); iOS to mirror. The unloaded queue row and the minute rounding are still open.**
 - **Task agent card:** NO_RESULTS and CANCELLED runs are dead ends (no retry, search or cancel, and the
   server refuses resume and retry for them; **fixed on server `f12ef09`**: from either state `resume`,
   `retry` and `search` with a new area start a new search with a fresh retry budget); "Phone number copied." and "Draft copied." go into `error`,
   so they show as errors and hide the spinner; `TaskAgentCard.swift:68` tests `question.key ==
   "urgency"` after excluding it on `:67`; the search button always sends `key: "location"` (`:82`);
   "Show more" shows under any review, however short (`:386`); polling keys on the status, so every
-  action fires an extra GET.
+  action fires an extra GET. **Fixed on Android `73a8cc2` (the copy confirmations are not errors), `e7450f1` (search sends the question's key) and `57698fd` (NO_RESULTS and CANCELLED offer "Search again"); iOS to mirror. The urgency test was never ported, and RN never fired the extra GET (pinned by `df68a14`). "Show more" is still open.**
 - **Task agent and Tasks tab, dark mode:** the agent cards, the Task Information card, the Tasks
   background and the white 65% section headers are fixed light under adaptive ink — white on white in
   dark mode. RN uses the theme surface in dark (android-polish §27).
 - **Tasks search:** closing search never restores the filters it reset (All, All time, All statuses);
   during a search, Today then All resets the status to Open and hides completed matches; a section
   caption repeats its title ("Friday, Sep 18" twice) for any day but Today, Yesterday and Tomorrow;
-  `taskIcon` matches substrings, so "recall" gets the phone icon.
+  `taskIcon` matches substrings, so "recall" gets the phone icon. **Fixed on Android `2195885` (closing restores the filters), `ca4d583` (no repeated caption) and `81d70f5` (`taskIcon` matches whole words); iOS to mirror. Today then All resetting the status is still open.**
 - **Task Details, business mode:** the header has Back and Close, which do the same thing.
 - **Weather:** `AppModel.refreshWeather` still runs on every load and locates the device, but nothing
   shows the result; `TodayView` keeps an `adding` sheet nothing opens.

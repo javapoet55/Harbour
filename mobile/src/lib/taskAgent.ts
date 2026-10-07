@@ -45,6 +45,17 @@ export function hasBusinessResearch(envelope: TaskAgentEnvelope | null | undefin
   return envelope?.intent?.eligible === true || (envelope?.run ?? null) !== null;
 }
 
+/**
+ * Whether a contact action with no saved person is for a business (TodayActionsView.swift:113-123,
+ * TaskActionView.swift:331): a business already chosen, an eligible task, or research under way. Android
+ * ahead of iOS: Swift counts any run, so a person task whose research was once cancelled (or failed) still
+ * asked to "Find a business"; a cancelled or failed run no longer counts.
+ */
+export function isBusinessAction(envelope: TaskAgentEnvelope | null | undefined, businessCandidateID: string | null | undefined): boolean {
+  const run = envelope?.run ?? null;
+  return businessCandidateID != null || envelope?.intent?.eligible === true || (run !== null && !['CANCELLED', 'FAILED'].includes(run.status));
+}
+
 /** `fallbackReason` (TaskAgentCard.swift:166). */
 export function fallbackReason(envelope: TaskAgentEnvelope | null | undefined): string | null {
   const category = envelope?.intent?.category ?? '';
@@ -77,9 +88,14 @@ export function inlineWarnings(warnings: string[]): string[] {
 
 export type RunControl = { title: string; action: 'pause' | 'resume' | 'retry' | 'cancel' };
 
-/** The controls row (TaskAgentCard.swift:99-103), in Swift's order. */
+/**
+ * The controls row (TaskAgentCard.swift:99-103), in Swift's order. Android ahead of iOS: NO_RESULTS and
+ * CANCELLED were dead ends in Swift; the server now starts a new search from either (`retry`, f12ef09), so
+ * they offer "Search again".
+ */
 export function runControls(status: string): RunControl[] {
   const controls: RunControl[] = [];
+  if (['NO_RESULTS', 'CANCELLED'].includes(status)) controls.push({ title: 'Search again', action: 'retry' });
   if (SEARCHING_STATUSES.includes(status)) controls.push({ title: 'Pause', action: 'pause' });
   if (['PAUSED', 'FAILED', 'BLOCKED'].includes(status)) {
     controls.push(status === 'PAUSED' ? { title: 'Resume', action: 'resume' } : { title: 'Retry', action: 'retry' });

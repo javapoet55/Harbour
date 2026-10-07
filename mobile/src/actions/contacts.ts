@@ -106,18 +106,13 @@ export function toActionContact(contact: Contacts.ExistingContact, fallbackName:
   };
 }
 
-/** `ActionContact.selected(_:)` (TaskActionContacts.swift:52-57): Swift labels every picked address "Phone" or "Email". */
+/**
+ * `ActionContact.selected(_:)` (TaskActionContacts.swift:52-57). Android ahead of iOS: Swift labels every
+ * picked address "Phone" or "Email"; a picked contact keeps its own labels ("mobile", "work"), as a contact
+ * found by name does, falling back to "Phone" / "Email" only when it has none.
+ */
 export function selectedActionContact(contact: Contacts.ExistingContact): ActionContact {
-  return {
-    id: contact.id ?? 'selected',
-    name: contact.name && contact.name.trim().length > 0 ? contact.name : 'Selected contact',
-    phones: (contact.phoneNumbers ?? [])
-      .map((entry, index) => ({ id: entry.id ?? `phone-${index}`, label: 'Phone', value: entry.number ?? '' }))
-      .filter((address) => address.value.length > 0),
-    emails: (contact.emails ?? [])
-      .map((entry, index) => ({ id: entry.id ?? `email-${index}`, label: 'Email', value: entry.email ?? '' }))
-      .filter((address) => address.value.length > 0),
-  };
+  return { ...toActionContact(contact, 'Selected contact'), id: contact.id ?? 'selected' };
 }
 
 /** `ActionContact.manual(_:)` (TaskActionContacts.swift:58-62): details the person typed. */

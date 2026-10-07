@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { StyleSheet } from 'react-native';
 
 import type { AssistantTurn, NexdoTask } from '../api';
@@ -448,6 +448,18 @@ describe('the Daily Brief', () => {
     await fireEvent.press(screen.getByTestId('ask-card-0'));
     await waitFor(() => expect(screen.getByTestId('ask-confirmation')).toBeTruthy());
     expect(screen.queryByTestId('daily-brief')).toBeNull();
+  });
+
+  it('tells a section page why it cannot read aloud when OpenAI sharing is off', async () => {
+    await openBrief();
+    await act(async () => {
+      useConsent.setState({ ai: false, voice: false });
+    });
+    let message: string | null | undefined;
+    await act(async () => {
+      message = briefHandlers()?.read(0, 'Send the report by 4 PM.');
+    });
+    expect(message).toBe('Allow OpenAI sharing in Account to use Read Loud.');
   });
 
   it('lets a section page ask through it', async () => {

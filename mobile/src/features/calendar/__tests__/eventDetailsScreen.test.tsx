@@ -85,7 +85,8 @@ describe('Event Details', () => {
     expect(screen.getByTestId('event-details-location')).toHaveTextContent('Location' + 'MG Road');
     expect(screen.getByTestId('event-details-notes')).toHaveTextContent('Bring the forms.');
     expect(screen.getByLabelText('Mark Complete')).toBeTruthy();
-    expect(screen.getByLabelText('Mark Incomplete')).toBeTruthy();
+    // Only the completion action that applies (Android ahead of iOS).
+    expect(screen.queryByLabelText('Mark Incomplete')).toBeNull();
     expect(screen.getByLabelText('Add to Tasks')).toBeTruthy();
     expect(screen.getByTestId('event-details-delete')).toBeTruthy();
   });
@@ -110,6 +111,9 @@ describe('Event Details', () => {
     await waitFor(() => expect(screen.getByTestId('event-details-status')).toHaveTextContent('Completed'));
     expect(mockApi.setCompleted).toHaveBeenCalledWith('e1', true);
     expect(StyleSheet.flatten(screen.getByTestId('event-details-title').props.style)).toMatchObject({ textDecorationLine: 'line-through' });
+    // A completed event offers Mark Incomplete in place of Mark Complete.
+    expect(screen.getByTestId('event-details-incomplete')).toBeTruthy();
+    expect(screen.queryByTestId('event-details-complete')).toBeNull();
   });
 
   it('the "…" menu toggles completion; Mark Incomplete sends false', async () => {

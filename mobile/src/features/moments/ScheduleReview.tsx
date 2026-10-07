@@ -1,7 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Stack } from 'expo-router';
-import { useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { ActivityIndicator, Modal, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useStore } from 'zustand';
@@ -109,10 +109,13 @@ function LightSheet({
   background = SCHEDULE_BACKGROUND,
   children,
   testID,
+  onClosed,
 }: {
   visible: boolean;
   title: string;
   onClose: () => void;
+  /** Called once the hidden sheet has gone: iOS's `onDismiss`, after the slide; Android has none, and its dialog is gone once the hide is committed. */
+  onClosed?: () => void;
   trailing?: { title?: string; close?: boolean; onPress: () => void; disabled?: boolean; testID: string };
   footer?: ReactNode;
   background?: string;
@@ -121,8 +124,13 @@ function LightSheet({
 }) {
   const insets = useSafeAreaInsets();
   const android = Platform.OS === 'android';
+  const shown = useRef(visible);
+  useEffect(() => {
+    if (android && shown.current && !visible) onClosed?.();
+    shown.current = visible;
+  }, [android, visible, onClosed]);
   return (
-    <Modal animationType="slide" onRequestClose={onClose} presentationStyle={android ? undefined : 'pageSheet'} statusBarTranslucent transparent={android} visible={visible}>
+    <Modal animationType="slide" onDismiss={android ? undefined : onClosed} onRequestClose={onClose} presentationStyle={android ? undefined : 'pageSheet'} statusBarTranslucent transparent={android} visible={visible}>
       <FixedScheme scheme="light">
         {android ? <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.dim]} /> : null}
         <View style={[styles.sheet, { backgroundColor: background, marginTop: android ? insets.top + 8 : 0 }, android && styles.sheetShape]} testID={testID}>
@@ -179,6 +187,10 @@ function ReviewRow({ icon, color, label, value, detail, onEdit, disabled, testID
 }
 
 export const MESSAGES_UNAVAILABLE = 'Messages is not available on this device. No greeting has been sent.';
+/** Send Now with Messages unavailable: the recipients set to Messages that were left out. */
+export function messagesUnavailableFor(names: string[]): string {
+  return `Messages is not available on this device. No greeting has been sent to ${names.join(', ')}.`;
+}
 export const MESSAGES_FAILED = 'Messages could not send this greeting. Use Continue Send Now to try again.';
 
 /** The Send Now notice (`:564`): what went out, and that Messages still waits for you. */
@@ -192,7 +204,7 @@ export function sendNowNotice(plans: WishDeliveryPlan[]): string {
  * `FestivalScheduleReview` (:428-610): the date and every recipient, each editable, before Confirm
  * Schedule — or Send Now, which asks once more ("Send now") and then sends.
  */
-export function ScheduleReviewSheet({ model, visible, onClose }: { model: ManageModel; visible: boolean; onClose: () => void }) {
+export function ScheduleReviewSheet({ model, visible, onClose, onClosed }: { model: ManageModel; visible: boolean; onClose: () => void; onClosed?: () => void }) {
   const state = useStore(model);
   // `@State` copies taken when the sheet opens; the parent re-keys the sheet on each opening.
   const [date, setDate] = useState(state.sendDate);
@@ -206,6 +218,8 @@ export function ScheduleReviewSheet({ model, visible, onClose }: { model: Manage
   const [showAll, setShowAll] = useState(false);
   const [sendNowConfirmation, setSendNowConfirmation] = useState(false);
   const [sendNowStarted, setSendNowStarted] = useState(false);
+  /** "Send email & open Messages" was tapped: the send starts once its sheet has closed. */
+  const sendAfterClose = useRef(false);
   const [immediateNotice, setImmediateNotice] = useState<string | null>(null);
   const [openedAt] = useState(() => Date.now());
   const composing = useRef(false);
@@ -275,9 +289,15 @@ export function ScheduleReviewSheet({ model, visible, onClose }: { model: Manage
     }
   };
 
-  /** `sendNow()` (:545-567). */
+  /**
+   * `sendNow()` (:545-567). Android ahead of iOS: Swift refuses everyone when Messages is unavailable and
+   * any recipient has a phone. Here only the recipients whose channel is Messages need it; the rest are
+   * still sent, and nothing opens the composer on a device that has none.
+   */
   const sendNow = async () => {
-    if (recipients.some((recipient) => recipient.phone !== '') && !(await canSendMessage())) {
+    const messagesAvailable = !recipients.some((recipient) => recipient.phone !== '') || (await canSendMessage());
+    const skipped = messagesAvailable ? [] : recipients.filter((recipient) => recipient.phone !== '' && recipientChannel(model.getState(), recipient) === 'messages');
+    if (skipped.length > 0 && skipped.length === recipients.length) {
       model.getState().setError(MESSAGES_UNAVAILABLE);
       return;
     }
@@ -287,13 +307,14 @@ export function ScheduleReviewSheet({ model, visible, onClose }: { model: Manage
       model.getState().setError(null);
       if (!sendNowStarted && !(await prepare())) return;
       setSendNowStarted(true);
-      plans = await model.getState().sendImmediately();
+      plans = await model.getState().sendImmediately(skipped.map((recipient) => recipient.key));
       if (!plans) return;
       setImmediateNotice(sendNowNotice(plans));
+      if (skipped.length > 0) model.getState().setError(messagesUnavailableFor(skipped.map((recipient) => recipient.name)));
     } finally {
       setSubmitting(false);
     }
-    await composeQueue(plans.filter((plan) => plan.channel === 'messages' && plan.status === 'AWAITING_CONFIRMATION'));
+    if (messagesAvailable) await composeQueue(plans.filter((plan) => plan.channel === 'messages' && plan.status === 'AWAITING_CONFIRMATION'));
   };
 
   const visibleRecipients = showAll ? recipients : recipients.slice(0, 2);
@@ -305,6 +326,7 @@ export function ScheduleReviewSheet({ model, visible, onClose }: { model: Manage
         title=""
         onClose={() => !submitting && close()}
         trailing={{ title: 'Cancel', onPress: close, disabled: submitting, testID: 'review-cancel' }}
+        onClosed={onClosed}
         testID="schedule-review"
       >
         <View style={styles.reviewBody} pointerEvents={submitting ? 'none' : 'auto'}>
@@ -416,12 +438,19 @@ export function ScheduleReviewSheet({ model, visible, onClose }: { model: Manage
         onClose={() => setSendNowConfirmation(false)}
         background="#FFFFFF"
         trailing={{ title: 'Cancel', onPress: () => setSendNowConfirmation(false), testID: 'send-now-cancel' }}
+        // Android ahead of iOS: Swift starts `sendNow()` while this sheet is still dismissing (:501-536), so
+        // the Messages composer can collide with it. The send starts once the sheet has closed.
+        onClosed={() => {
+          if (!sendAfterClose.current) return;
+          sendAfterClose.current = false;
+          void sendNow();
+        }}
         footer={
           <ActionButton
             title="Send email & open Messages"
             onPress={() => {
+              sendAfterClose.current = true;
               setSendNowConfirmation(false);
-              void sendNow();
             }}
             testID="send-now-confirm"
           />
@@ -506,7 +535,9 @@ export function ScheduleSuccess({
       ),
     ),
   ].sort();
-  const times = [...new Set(plans.map((plan) => momentLabel(planDate(plan), plan.timeZoneID)))].sort();
+  // Android ahead of iOS: Swift sorts the formatted labels (:359-361), so "10 Oct" came before "6 Oct"; these
+  // are in time order.
+  const times = [...new Set([...plans].sort((a, b) => planDate(a) - planDate(b)).map((plan) => momentLabel(planDate(plan), plan.timeZoneID)))];
   return (
     <FixedScheme scheme="light">
       <View style={[styles.fill, { backgroundColor: SCHEDULE_BACKGROUND }]} onLayout={(event) => setSize(event.nativeEvent.layout)} testID="schedule-success">

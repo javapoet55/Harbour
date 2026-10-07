@@ -199,8 +199,9 @@ export type ManageState = {
   /**
    * `sendImmediately()`: Send Now. One `sendGreetingNow` per selected recipient, each with an
    * operation id kept for retries, answering every plan created — or `null` with the error set.
+   * `skip` names recipients (by key) left out of this send.
    */
-  sendImmediately(): Promise<WishDeliveryPlan[] | null>;
+  sendImmediately(skip?: string[]): Promise<WishDeliveryPlan[] | null>;
 };
 
 export type ManageModel = StoreApi<ManageState>;
@@ -1060,12 +1061,12 @@ export function createManageModel(group: MomentDisplayGroup, deps: ManageDeps): 
         }
       },
 
-      async sendImmediately() {
+      async sendImmediately(skip = []) {
         if (isBusy()) return null;
         set({ busy: true, error: null });
         const plans: WishDeliveryPlan[] = [];
         try {
-          for (const recipient of selectedRecipients(get())) {
+          for (const recipient of selectedRecipients(get()).filter((item) => !skip.includes(item.key))) {
             if (!recipient.momentID) throw new ManageError('Save recipients first.');
             const operationID = immediateOperationIDs[recipient.key] ?? deps.uuid();
             immediateOperationIDs[recipient.key] = operationID;

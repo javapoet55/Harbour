@@ -141,8 +141,8 @@ describe('the controls row (TaskAgentCard.swift:99-103)', () => {
     ['BLOCKED', ['Retry', 'Cancel search']],
     ['NEEDS_INPUT', ['Cancel search']],
     ['READY_FOR_REVIEW', []],
-    ['NO_RESULTS', []],
-    ['CANCELLED', []],
+    ['NO_RESULTS', ['Search again']],
+    ['CANCELLED', ['Search again']],
   ])('%s offers %j', (status, titles) => {
     expect(runControls(status).map((control) => control.title)).toEqual(titles);
   });
@@ -159,6 +159,28 @@ describe('the controls row (TaskAgentCard.swift:99-103)', () => {
     await waitFor(() => expect(mockUpdate).toHaveBeenCalledWith('t1', expect.objectContaining({ action: 'pause', version: 3 })));
     expect(await screen.findByText('Research paused')).toBeTruthy();
     expect(screen.getByLabelText('Resume')).toBeTruthy();
+  });
+
+  it('an action does not fire an extra load: the update answers the new run', async () => {
+    mockLoad.mockResolvedValue(envelope(run()));
+    mockUpdate.mockResolvedValue(envelope(run({ status: 'QUEUED', version: 4, question: null, slots: { location: '94109', budget: '', constraints: '' } })));
+    await renderCard();
+    await fireEvent.changeText(await screen.findByLabelText('City or ZIP code'), '94109');
+    await fireEvent.press(screen.getByTestId('agent-search'));
+    expect(await screen.findByText('Research queued')).toBeTruthy();
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+    expect(mockLoad).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(['NO_RESULTS', 'CANCELLED'])('a %s run offers Search again, which starts a new search', async (status) => {
+    mockLoad.mockResolvedValue(envelope(run({ status, question: null, slots: { location: '94109', budget: '', constraints: '' } })));
+    mockUpdate.mockResolvedValue(envelope(run({ status: 'QUEUED', version: 4, question: null, slots: { location: '94109', budget: '', constraints: '' } })));
+    await renderCard();
+    await fireEvent.press(await screen.findByLabelText('Search again'));
+    await waitFor(() => expect(mockUpdate).toHaveBeenCalledWith('t1', expect.objectContaining({ action: 'retry', version: 3 })));
+    expect(await screen.findByText('Research queued')).toBeTruthy();
   });
 
   it('retries a blocked run, and cancels', async () => {
@@ -236,6 +258,16 @@ describe('the location step (TaskAgentCard.swift:67-87)', () => {
       expect(mockUpdate).toHaveBeenCalledWith('t1', { action: 'search', version: 3, key: 'location', answer: '94109', candidateId: undefined }),
     );
     expect(await screen.findByText('Finding the best business near your place…')).toBeTruthy();
+  });
+
+  it('sends the key the question asks for, not always "location"', async () => {
+    mockLoad.mockResolvedValue(envelope(run({ question: { key: 'area', text: 'Which neighbourhood should I search?' } })));
+    mockUpdate.mockResolvedValue(envelope(run({ status: 'QUEUED', question: null })));
+    await renderCard();
+    expect(await screen.findByText('Which neighbourhood should I search?')).toBeTruthy();
+    await fireEvent.changeText(screen.getByLabelText('City or ZIP code'), 'Mission');
+    await fireEvent.press(screen.getByTestId('agent-search'));
+    await waitFor(() => expect(mockUpdate).toHaveBeenCalledWith('t1', expect.objectContaining({ action: 'search', key: 'area', answer: 'Mission' })));
   });
 
   it('labels the search for other services and offers the known location', async () => {
@@ -412,6 +444,28 @@ describe('the shortlist', () => {
     await fireEvent.press(await screen.findByTestId('agent-copy-phone-0'));
     expect(Clipboard.setStringAsync).toHaveBeenCalledWith('(925) 567-9000');
     expect(screen.getByText('Phone number copied.')).toBeTruthy();
+  });
+
+  it('says "Phone number copied." as a confirmation, not an error: the search spinner stays', async () => {
+    mockLoad.mockResolvedValue(envelope(ready({ status: 'RUNNING' })));
+    await renderCard();
+    await fireEvent.press(await screen.findByTestId('agent-copy-phone-0'));
+    expect(screen.getByTestId('agent-notice').props.children).toBe('Phone number copied.');
+    expect(screen.queryByTestId('agent-message')).toBeNull();
+    expect(screen.getByText('Finding the best business near your place…')).toBeTruthy();
+  });
+
+  it('says "Draft copied." as a confirmation, and the next action clears it', async () => {
+    mockLoad.mockResolvedValue(envelope(ready()));
+    mockUpdate.mockResolvedValue(envelope(ready()));
+    await renderCard();
+    await fireEvent.press(await screen.findByTestId('agent-draft-toggle-0'));
+    await fireEvent.press(screen.getByLabelText('Copy draft'));
+    expect(screen.getByTestId('agent-notice').props.children).toBe('Draft copied.');
+    expect(screen.queryByTestId('agent-message')).toBeNull();
+    await fireEvent.press(screen.getByLabelText('Save draft'));
+    await waitFor(() => expect(mockUpdate).toHaveBeenCalled());
+    expect(screen.queryByTestId('agent-notice')).toBeNull();
   });
 
   it('chooses a business for the stored action', async () => {

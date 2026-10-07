@@ -60,6 +60,7 @@ export default function Tasks() {
   const [conflict, setConflict] = useState<ScheduleConflict | null>(null);
   const [rangeOpen, setRangeOpen] = useState(false);
   const beginSearch = useTaskQuery((state) => state.beginSearch);
+  const endSearch = useTaskQuery((state) => state.endSearch);
   // `@FocusState private var searchFocused` (RootView.swift:1672).
   const searchField = useRef<TextInput>(null);
 
@@ -96,12 +97,12 @@ export default function Tasks() {
   };
 
   // The magnifier (RootView.swift:1792-1797): opening a search resets the filters to every date,
-  // status and priority (`beginSearch`); closing it clears the term only.
+  // status and priority (`beginSearch`); closing it clears the term and restores them (`endSearch`).
   const toggleSearch = () => {
     const next = !searching;
     setSearching(next);
     if (next) beginSearch();
-    else setQuery({ search: '' });
+    else endSearch();
     if (next) setTimeout(() => searchField.current?.focus(), 0);
     else searchField.current?.blur();
   };
@@ -191,7 +192,7 @@ export default function Tasks() {
                   accessibilityRole="button"
                   accessibilityLabel="Close search"
                   onPress={() => {
-                    setQuery({ search: '' });
+                    endSearch();
                     setSearching(false);
                     searchField.current?.blur();
                   }}
@@ -316,30 +317,32 @@ export default function Tasks() {
                   />
                 ) : null}
 
-                {view.sections.map((section) => (
-                  <View key={section.id} style={styles.section}>
-                    <SectionHeader
-                      title={
-                        section.isDone && query.status === 'All'
-                          ? `Completed · ${sectionTitle(section.date, zone)}`
-                          : sectionTitle(section.date, zone)
-                      }
-                      date={sectionDateLabel(section.date, zone)}
-                      count={section.tasks.length}
-                    />
-                    {section.tasks.map((task) => (
-                      <TaskCard
-                        key={task.id}
-                        task={task}
-                        timeZone={zone}
-                        project={projects.data?.projects.find((item) => item.id === task.projectId)}
-                        busy={busy}
-                        onToggle={() => complete.mutate(task)}
-                        onOpen={() => router.push(`/task/${task.id}`)}
+                {view.sections.map((section) => {
+                  const title = sectionTitle(section.date, zone);
+                  const date = sectionDateLabel(section.date, zone);
+                  return (
+                    <View key={section.id} style={styles.section}>
+                      <SectionHeader
+                        title={section.isDone && query.status === 'All' ? `Completed · ${title}` : title}
+                        // Android ahead of iOS: Swift repeats a plain day's title as its caption ("Friday, Sep 18"
+                        // twice); the caption is drawn only under Today, Yesterday and Tomorrow.
+                        date={date === title ? null : date}
+                        count={section.tasks.length}
                       />
-                    ))}
-                  </View>
-                ))}
+                      {section.tasks.map((task) => (
+                        <TaskCard
+                          key={task.id}
+                          task={task}
+                          timeZone={zone}
+                          project={projects.data?.projects.find((item) => item.id === task.projectId)}
+                          busy={busy}
+                          onToggle={() => complete.mutate(task)}
+                          onOpen={() => router.push(`/task/${task.id}`)}
+                        />
+                      ))}
+                    </View>
+                  );
+                })}
               </>
             )}
           </ScrollView>

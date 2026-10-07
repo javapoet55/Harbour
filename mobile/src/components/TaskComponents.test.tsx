@@ -121,6 +121,15 @@ describe('taskIcon', () => {
     expect(taskIcon({ title })).toEqual({ symbol, tint });
   });
 
+  it('matches whole words, with common endings, not any substring (Android ahead of iOS)', () => {
+    expect(taskIcon({ title: 'Recall the order' }).symbol).toBe('doc.text');
+    expect(taskIcon({ title: 'Read the contactless card terms' }).symbol).toBe('doc.text');
+    expect(taskIcon({ title: 'Calling the bank' }).symbol).toBe('phone');
+    expect(taskIcon({ title: 'Find a plumber' }).symbol).toBe('wrench');
+    expect(taskIcon({ title: 'Two meetings with HR' }).symbol).toBe('calendar');
+    expect(taskIcon({ title: 'Answer emails' }).symbol).toBe('envelope');
+  });
+
   it('checks the keywords in Swift order: email before call', () => {
     expect(taskIcon({ title: 'Email to call back' }).symbol).toBe('envelope');
   });
