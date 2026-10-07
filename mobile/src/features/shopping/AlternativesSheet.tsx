@@ -820,11 +820,8 @@ function SuccessScreen({ visible, original, replacement, onClose }: { visible: b
           </Text>
           <Text style={[textStyles.body, styles.center, { color: theme.colors.secondary }]}>{`${original} has been replaced with ${replacement}.`}</Text>
           <View style={styles.grow} />
+          {/* One button (Android ahead of iOS, iOS 77c3d93): Done and View in Cart both only closed this screen. */}
           <BlueButton onPress={onClose} testID="alternatives-success-done" title="Done" />
-          <Pressable accessibilityRole="button" onPress={onClose} style={[styles.bordered, styles.cartAgain, { backgroundColor: withAlpha(BLUE, 0.12) }]} testID="alternatives-success-cart">
-            <Ionicons color={BLUE} name="cart-outline" size={18} />
-            <Text style={[textStyles.body, { color: BLUE }]}>View in Cart</Text>
-          </Pressable>
         </View>
       </SafeAreaView>
     </Modal>
@@ -1211,7 +1208,6 @@ const styles = StyleSheet.create({
   divider: { height: StyleSheet.hairlineWidth },
   success: { flex: 1, alignItems: 'stretch', gap: 24, padding: 28, paddingBottom: 48 },
   successMark: { width: 94, height: 94, borderRadius: 47, alignItems: 'center', justifyContent: 'center', alignSelf: 'center' },
-  cartAgain: { minHeight: 48 },
   details: { padding: 18, gap: 24, paddingBottom: 40 },
   row12: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
   column12: { gap: 12 },

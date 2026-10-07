@@ -1758,3 +1758,5 @@ match". Logic fixes have a test that fails without them.
 - **Android ahead of iOS: Calendar says "1 calendar commitment today", singular** (iOS c8da5cb) (`calendar.tsx`).
 - **Android ahead of iOS: the Replace confirmation ends at its question mark**, without the trailing space (iOS
   6129004) (`AlternativesSheet.tsx`).
+- **Android ahead of iOS: "Item replaced!" keeps one button.** Done and View in Cart both only closed the screen;
+  Done stays (iOS 77c3d93) (`AlternativesSheet.tsx`).

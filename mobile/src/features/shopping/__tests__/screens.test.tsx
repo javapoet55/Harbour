@@ -687,6 +687,9 @@ describe('Item Alternatives', () => {
     expect(envelope).toMatchObject({ operation: 'save', id: 'l1', revision: 7 });
     expect(envelope.input.items[1]).toMatchObject({ id: 'milk2', name: 'Lactose-free milk', quantity: '1', size: '', notes: 'organic only', checked: true, brand: 'Stater Bros', barcode: '0123456789012', imageData: null });
     expect(screen.getByText('2% milk has been replaced with Lactose-free milk.')).toBeTruthy();
+    // One button: Done (iOS 77c3d93; Android ahead of iOS).
+    expect(screen.queryByTestId('alternatives-success-cart')).toBeNull();
+    expect(screen.queryByText('View in Cart')).toBeNull();
     await fireEvent.press(screen.getByTestId('alternatives-success-done'));
     await waitFor(() => expect(screen.queryByTestId('alternatives-original')).toBeNull());
   });
