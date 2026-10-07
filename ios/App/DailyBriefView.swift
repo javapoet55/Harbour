@@ -29,7 +29,9 @@ struct DailyBriefView: View {
     let readingSection: Int?
     @Environment(\.dynamicTypeSize) private var typeSize
     @State private var selectedSection: SectionRoute?
-    private struct SectionRoute: Identifiable { let id: Int }
+    /// Keyed by the section's title, not its position: completing the last task a section names removes it from
+    /// visibleSections, and the page must keep its title rather than go blank or show the next section.
+    private struct SectionRoute: Identifiable { let id: String }
 
     private let ink = Color(red: 0.04, green: 0.05, blue: 0.22)
     private let secondary = Color(red: 0.30, green: 0.34, blue: 0.53)
@@ -100,15 +102,15 @@ struct DailyBriefView: View {
         }.foregroundStyle(ink).buttonStyle(.plain).padding(.top, 18)
             .onAppear {
                 #if DEBUG
-                if ProcessInfo.processInfo.arguments.contains("-open-brief-detail"), !visibleSections.isEmpty { selectedSection = SectionRoute(id: 0) }
+                if ProcessInfo.processInfo.arguments.contains("-open-brief-detail"), !visibleSections.isEmpty { selectedSection = SectionRoute(id: visibleSections[0].title) }
                 #endif
             }
             .fullScreenCover(item: $selectedSection) { route in
-                if visibleSections.indices.contains(route.id) {
-                    BriefSectionDetailView(title: style(visibleSections[route.id].title).0,
-                        items: visibleSections[route.id].items, ask: ask,
-                        read: { read(route.id, visibleSections[route.id].items.joined(separator: "\n\n")) })
-                }
+                // A section that has emptied keeps its page: the title, "Nothing to report here today." and Back.
+                let index = visibleSections.firstIndex { $0.title == route.id }
+                BriefSectionDetailView(title: style(route.id).0,
+                    items: index.map { visibleSections[$0].items } ?? [], ask: ask,
+                    read: { if let index { read(index, visibleSections[index].items.joined(separator: "\n\n")) } })
             }
     }
 
@@ -165,7 +167,7 @@ struct DailyBriefView: View {
 
     private func sectionCard(_ index: Int, _ section: AssistantTurn.Section) -> some View {
         let (title, artwork, color) = style(section.title)
-        return Button { selectedSection = SectionRoute(id: index) } label: {
+        return Button { selectedSection = SectionRoute(id: section.title) } label: {
             HStack(spacing: 14) {
                 BriefArtwork(part: artwork).frame(width: 52, height: 52).accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 6) {
