@@ -810,6 +810,7 @@ private struct ShoppingShare:View {
     @ObservedObject var store:ShoppingStore
     @State var list:GroceryList
     let onUpdate:(GroceryList)->Void
+    @Environment(\.dismiss) private var dismiss
     @State private var url:URL?
     var body:some View{NavigationStack{List{
         Section{Label(list.title,systemImage:"cart.fill");Text(GroceryList.itemCount(list.items.count))}
@@ -821,7 +822,9 @@ private struct ShoppingShare:View {
             else{Button("Create Share Link"){Task{if let saved=await store.action("share",list:list,input:[String:String]()){list=saved;onUpdate(saved);updateURL()}}}.disabled(store.busy)}
         }
         if let error=store.error{Text(error).foregroundStyle(.red)}
-    }.navigationTitle("Share List").task{updateURL()}}}
+    }.navigationTitle("Share List").task{updateURL()}
+        // A way out besides swiping the sheet down.
+        .toolbar{ToolbarItem(placement:.confirmationAction){Button("Done"){dismiss()}.accessibilityIdentifier("shopping-share-done")}}}}
     private func updateURL() {
         guard let token = list.shareToken else { url = nil; return }
         // Encode the same secret compactly; sharing again never creates a new token.
