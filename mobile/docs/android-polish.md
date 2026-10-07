@@ -1656,3 +1656,8 @@ gets the fix too, and the Swift app is to mirror it. Each fix has a test that fa
   A picked contact now maps as a contact found by name does ("mobile", "work"; "Phone" / "Email" only when
   unlabelled) (`selectedActionContact`). Swift's email composer ignoring the business draft (same Â§22 item) does
   not apply: a business has no email in RN or Swift (`businessActionContact`).
+- **Android ahead of iOS: a cancelled or failed research run does not make a person task a business task.**
+  Swift's Today card (and the Nexdo Action screen) counted any run, so a person task whose research was once
+  cancelled showed "Find a business to contact". A business is now a chosen business, an eligible task, or a
+  run that is not CANCELLED or FAILED (`isBusinessAction` in `lib/taskAgent.ts`, used by both screens so they
+  agree).

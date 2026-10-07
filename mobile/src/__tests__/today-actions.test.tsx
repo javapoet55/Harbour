@@ -207,6 +207,16 @@ describe('the action queue on Today', () => {
     expect(mockPush).toHaveBeenCalledWith('/task/t1');
   });
 
+  it.each(['CANCELLED', 'FAILED'])('a %s research run does not make a person task a business task', async (status) => {
+    mockAgent.mockResolvedValue({ run: { ...run([]), status }, intent: { eligible: false } });
+    await showDue();
+
+    await waitFor(() => expect(screen.getByTestId('today-actions-choose-contact')).toBeTruthy());
+    expect(screen.getByText('Time to contact Damien')).toBeTruthy();
+    expect(screen.queryByText('Find a business to contact')).toBeNull();
+    expect(screen.queryByTestId('today-actions-business')).toBeNull();
+  });
+
   it('asks to choose a business once the search has results', async () => {
     mockAgent.mockResolvedValue({ run: run([ACE]), intent: { eligible: true } });
     await showDue();

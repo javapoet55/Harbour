@@ -32,6 +32,7 @@ import { withAlpha } from '../../src/components/SignInBackdrop';
 import { pickContact } from '../../src/features/moments/device';
 import { actionChannels, type TaskActionRecipient } from '../../src/lib/actionNeeded';
 import { contactSearchName } from '../../src/lib/taskActionDetector';
+import { isBusinessAction } from '../../src/lib/taskAgent';
 import { isDone } from '../../src/lib/taskQuery';
 import type { TaskActionChannel } from '../../src/lib/taskAction';
 import { queryKeys } from '../../src/query/keys';
@@ -181,7 +182,7 @@ export default function TaskAction() {
       if (response) {
         if (!live()) return null;
         setBusinessRun(response.run);
-        const business = current.businessCandidateID != null || response.intent?.eligible === true || response.run != null;
+        const business = isBusinessAction(response, current.businessCandidateID);
         setFlow(business);
         if (business) {
           const selected = response.run?.candidates.find((candidate) => candidate.id === current.businessCandidateID);

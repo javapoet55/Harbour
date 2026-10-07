@@ -7,6 +7,7 @@ import { useCoordinator } from '../actions/coordinator';
 import { businessActionContact, manualActionContact, resolveContactsSilently, type ActionContact } from '../actions/contacts';
 import { DateField } from '../features/moments/form';
 import { resolveActionNeeded } from '../lib/actionNeeded';
+import { isBusinessAction } from '../lib/taskAgent';
 import type { StoredTaskAction, TaskActionChannel } from '../lib/taskAction';
 import { notificationDate } from '../lib/taskAction';
 import { contactSearchName } from '../lib/taskActionDetector';
@@ -235,7 +236,7 @@ export function ActionNeededCard({
   const isBusiness =
     action.manualRecipient || action.contactIdentifier
       ? false
-      : action.businessCandidateID != null || envelope?.intent?.eligible === true || envelope?.run != null;
+      : isBusinessAction(envelope, action.businessCandidateID);
   const state = resolveActionNeeded({
     loaded: agent.isSuccess,
     failed: agent.isError,
