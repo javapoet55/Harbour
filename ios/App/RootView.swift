@@ -1800,7 +1800,7 @@ struct TasksView: View {
                 headerButton("magnifyingglass", label: "Search tasks") {
                     searching.toggle()
                     if searching { model.taskQuery.beginSearch() }
-                    else { model.taskQuery.search = "" }
+                    else { model.taskQuery.endSearch() }
                     searchFocused = searching
                 }
             }
@@ -1822,7 +1822,7 @@ struct TasksView: View {
             TextField("Search your tasks", text: $model.taskQuery.search)
                 .focused($searchFocused).submitLabel(.search).autocorrectionDisabled()
                 .accessibilityLabel("Search tasks")
-            Button { model.taskQuery.search = ""; searching = false; searchFocused = false } label: {
+            Button { model.taskQuery.endSearch(); searching = false; searchFocused = false } label: {
                 Image(systemName: "xmark.circle.fill").frame(width: 44, height: 44)
             }.accessibilityLabel("Close search")
         }.padding(.leading, 14).background(.background.opacity(0.85), in: RoundedRectangle(cornerRadius: 16))
