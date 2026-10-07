@@ -43,12 +43,19 @@ export function actionDurationLabel(minutes: number): string {
   return remainder === 0 ? `${hours} hr` : `${hours} hr ${remainder} min`;
 }
 
-/** `actionTimeLabel(_:now:)` (TodayActionsView.swift:328-333). */
+/**
+ * `actionTimeLabel(_:now:)` (TodayActionsView.swift:328-333). Android ahead of iOS, as `ActionTimeLabel` on
+ * fix/ios-bug-pass (bfedbd6, 0d7e89f): both directions round to the nearest minute (future times rounded up and
+ * overdue ages truncated, so 90 seconds read "in 2 min" before and "1 min overdue" after), and past 48 hours an age
+ * reads in whole days ("10 days overdue", not "257 hr 1 min overdue").
+ */
 export function actionTimeLabel(action: StoredTaskAction, now: number): string {
   const seconds = ((notificationDate(action) ?? now) - now) / 1000;
-  if (seconds > 0) return `in ${actionDurationLabel(Math.max(1, Math.ceil(seconds / 60)))}`;
+  const minutes = Math.round(Math.abs(seconds) / 60);
+  if (seconds > 0) return `in ${actionDurationLabel(Math.max(1, minutes))}`;
   if (seconds > -60) return 'Due now';
-  return `${actionDurationLabel(Math.trunc(-seconds / 60))} overdue`;
+  if (minutes >= 48 * 60) return `${Math.floor(minutes / (24 * 60))} days overdue`;
+  return `${actionDurationLabel(Math.max(1, minutes))} overdue`;
 }
 
 function timeLabel(at: number, timeZone: string): string {

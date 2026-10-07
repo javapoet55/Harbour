@@ -1750,3 +1750,8 @@ match". Logic fixes have a test that fails without them.
   Wellness; there it now says "Done" and only closes Pomodoro, back to the chooser, and "Back to Tasks" stays for
   the only other entrance, a tapped Pomodoro alert (iOS f6d6452 wording) (`PomodoroDashboard.tsx`,
   `PomodoroView.tsx`, `app/wellness/pomodoro.tsx`).
+- **Android ahead of iOS: Today action times round one way and read in days past 48 hours.** Future times rounded
+  up and overdue ages truncated (90 seconds: "in 2 min" before, "1 min overdue" after), and old actions read "257 hr
+  1 min overdue". As `ActionTimeLabel` on fix/ios-bug-pass (bfedbd6, 0d7e89f): both round to the nearest minute,
+  under a minute late is still "Due now", and from 48 hours an age reads "N days overdue" (`actionTimeLabel` in
+  `TodayActions.tsx`).
