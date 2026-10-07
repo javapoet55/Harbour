@@ -41,8 +41,12 @@ struct CalendarEventDetailsView: View {
                             }
                         }
                         HStack(alignment: .top, spacing: 10) {
-                            action("Mark Complete", icon: "checkmark.circle.fill", color: .green) { await setCompletion(true) }
-                            action("Mark Incomplete", icon: "xmark.circle.fill", color: .red) { await setCompletion(false) }
+                            // One of the two, like the ⋯ menu: completing a completed event does nothing.
+                            if event.completedAt == nil {
+                                action("Mark Complete", icon: "checkmark.circle.fill", color: .green) { await setCompletion(true) }
+                            } else {
+                                action("Mark Incomplete", icon: "xmark.circle.fill", color: .red) { await setCompletion(false) }
+                            }
                             action(taskAdded ? "Added to Tasks" : "Add to Tasks", icon: "calendar.badge.plus", color: .indigo) { await addTask() }
                         }
                         VStack(spacing: 0) {
