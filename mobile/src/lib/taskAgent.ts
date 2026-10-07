@@ -86,16 +86,19 @@ export function inlineWarnings(warnings: string[]): string[] {
   return warnings.filter((warning) => !warning.startsWith('Yelp is not connected.') && !isSearchNotice(warning));
 }
 
-export type RunControl = { title: string; action: 'pause' | 'resume' | 'retry' | 'cancel' };
+export type RunControl = { title: string; action: 'pause' | 'resume' | 'retry' | 'cancel' | 'search' };
+
+/** Finished runs the server starts a new search from (f12ef09). */
+export const SEARCH_AGAIN_STATUSES = ['NO_RESULTS', 'CANCELLED'];
 
 /**
  * The controls row (TaskAgentCard.swift:99-103), in Swift's order. Android ahead of iOS: NO_RESULTS and
- * CANCELLED were dead ends in Swift; the server now starts a new search from either (`retry`, f12ef09), so
- * they offer "Search again".
+ * CANCELLED were dead ends in Swift; the server now starts a new search from either (f12ef09), so they offer
+ * "Search again". It sends `search` with the area in the card's field, so the area can be changed.
  */
 export function runControls(status: string): RunControl[] {
   const controls: RunControl[] = [];
-  if (['NO_RESULTS', 'CANCELLED'].includes(status)) controls.push({ title: 'Search again', action: 'retry' });
+  if (SEARCH_AGAIN_STATUSES.includes(status)) controls.push({ title: 'Search again', action: 'search' });
   if (SEARCHING_STATUSES.includes(status)) controls.push({ title: 'Pause', action: 'pause' });
   if (['PAUSED', 'FAILED', 'BLOCKED'].includes(status)) {
     controls.push(status === 'PAUSED' ? { title: 'Resume', action: 'resume' } : { title: 'Retry', action: 'retry' });

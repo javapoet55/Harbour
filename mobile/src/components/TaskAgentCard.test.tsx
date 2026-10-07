@@ -174,13 +174,34 @@ describe('the controls row (TaskAgentCard.swift:99-103)', () => {
     expect(mockLoad).toHaveBeenCalledTimes(1);
   });
 
-  it.each(['NO_RESULTS', 'CANCELLED'])('a %s run offers Search again, which starts a new search', async (status) => {
+  it.each(['NO_RESULTS', 'CANCELLED'])('a %s run offers Search again in the last area, which starts a new search', async (status) => {
     mockLoad.mockResolvedValue(envelope(run({ status, question: null, slots: { location: '94109', budget: '', constraints: '' } })));
     mockUpdate.mockResolvedValue(envelope(run({ status: 'QUEUED', version: 4, question: null, slots: { location: '94109', budget: '', constraints: '' } })));
     await renderCard();
-    await fireEvent.press(await screen.findByLabelText('Search again'));
-    await waitFor(() => expect(mockUpdate).toHaveBeenCalledWith('t1', expect.objectContaining({ action: 'retry', version: 3 })));
+    expect((await screen.findByLabelText('City or ZIP code')).props.value).toBe('94109');
+    await fireEvent.press(screen.getByLabelText('Search again'));
+    await waitFor(() => expect(mockUpdate).toHaveBeenCalledWith('t1', expect.objectContaining({ action: 'search', version: 3, answer: '94109' })));
     expect(await screen.findByText('Research queued')).toBeTruthy();
+  });
+
+  it('from a NO_RESULTS run, Search again searches the area typed in its place', async () => {
+    mockLoad.mockResolvedValue(envelope(run({ status: 'NO_RESULTS', question: null, slots: { location: 'Qzxqv Nowhere', budget: '', constraints: '' } })));
+    mockUpdate.mockResolvedValue(envelope(run({ status: 'QUEUED', version: 4, question: null, slots: { location: '10001', budget: '', constraints: '' } })));
+    await renderCard();
+    const field = await screen.findByLabelText('City or ZIP code');
+    expect(field.props.value).toBe('Qzxqv Nowhere');
+    await fireEvent.changeText(field, '  10001 ');
+    await fireEvent.press(screen.getByLabelText('Search again'));
+    await waitFor(() => expect(mockUpdate).toHaveBeenCalledWith('t1', expect.objectContaining({ action: 'search', version: 3, answer: '10001' })));
+  });
+
+  it('Search again waits for an area', async () => {
+    mockLoad.mockResolvedValue(envelope(run({ status: 'NO_RESULTS', question: null, slots: { location: 'Qzxqv Nowhere', budget: '', constraints: '' } })));
+    await renderCard();
+    await fireEvent.changeText(await screen.findByLabelText('City or ZIP code'), '   ');
+    expect(screen.getByTestId('agent-search-again').props.accessibilityState).toMatchObject({ disabled: true });
+    await fireEvent.press(screen.getByLabelText('Search again'));
+    expect(mockUpdate).not.toHaveBeenCalled();
   });
 
   it('retries a blocked run, and cancels', async () => {
