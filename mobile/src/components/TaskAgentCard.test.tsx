@@ -161,6 +161,19 @@ describe('the controls row (TaskAgentCard.swift:99-103)', () => {
     expect(screen.getByLabelText('Resume')).toBeTruthy();
   });
 
+  it('an action does not fire an extra load: the update answers the new run', async () => {
+    mockLoad.mockResolvedValue(envelope(run()));
+    mockUpdate.mockResolvedValue(envelope(run({ status: 'QUEUED', version: 4, question: null, slots: { location: '94109', budget: '', constraints: '' } })));
+    await renderCard();
+    await fireEvent.changeText(await screen.findByLabelText('City or ZIP code'), '94109');
+    await fireEvent.press(screen.getByTestId('agent-search'));
+    expect(await screen.findByText('Research queued')).toBeTruthy();
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+    expect(mockLoad).toHaveBeenCalledTimes(1);
+  });
+
   it('retries a blocked run, and cancels', async () => {
     mockLoad.mockResolvedValue(envelope(run({ status: 'BLOCKED', question: null })));
     mockUpdate.mockResolvedValue(envelope(run({ status: 'CANCELLED', question: null })));

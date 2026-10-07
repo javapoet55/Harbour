@@ -1601,3 +1601,11 @@ gets the fix too, and the Swift app is to mirror it. Each fix has a test that fa
   always sent `key: "location"`; it now sends `question.key`. "Use â€¦" still sends `location`, since it is only
   shown for that question. Swift's dead `question.key == "urgency"` title test was never ported (the card
   shows `question.text`), so there is nothing to remove in RN.
+- **Already right on Android: an agent action fires no extra GET.** Swift keys its polling task on the run's
+  status, so every action that changes it reloads at once. RN never copied that: the update writes its answer
+  into the shared query and React Query's `refetchInterval` only re-arms the 4 s timer. A test now pins it
+  (`TaskAgentCard.test.tsx`, "an action does not fire an extra load"); no code change.
+- **Not fixed (needs the server): "Search again" after NO_RESULTS or CANCELLED.** `controlRun` accepts `search`
+  only for NEEDS_INPUT and `resume` / `retry` only for PAUSED, FAILED or BLOCKED, and `prepare` returns the
+  existing run unchanged (`src/server/task-agent/service.ts`), so the app has no request that starts a new
+  search for those runs.
