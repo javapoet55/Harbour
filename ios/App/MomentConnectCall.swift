@@ -200,7 +200,7 @@ struct MomentConnectSection: View {
         .task { await model.load(momentIDs: moments.map(\.id)) }
         .onChange(of: moments.map(\.id)) { _, ids in Task { await model.load(momentIDs: ids) } }
         .sheet(isPresented: $verifying) { CallerIDVerificationSheet(model: model) }
-        .sheet(isPresented: $showingHowItWorks) { MomentCallingGuide() }
+        .sheet(isPresented: $showingHowItWorks) { MomentCallingGuide().presentationBackground(.white) }
         .alert("Connect me on the day", isPresented: Binding(get: { model.error != nil || model.notice != nil }, set: { if !$0 { model.error = nil; model.notice = nil } })) {
             Button("OK", role: .cancel) { model.error = nil; model.notice = nil }
         } message: { Text(model.error ?? model.notice ?? "") }
@@ -431,6 +431,9 @@ private struct MomentCallingGuide: View {
                 Button("Back",systemImage:"chevron.left") { dismiss() }
             } }
         }.tint(.nexdoIndigo)
+            // A fixed light design (dark ink, white step cards, artwork drawn for white), like the Wellness guides; in dark
+            // mode its header and intro were dark ink on a dark sheet.
+            .environment(\.colorScheme, .light)
     }
     private func step(_ number:Int,title:String,text:String,rect:CGRect) -> some View {
         HStack(alignment:.top,spacing:10) {
