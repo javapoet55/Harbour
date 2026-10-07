@@ -80,16 +80,20 @@ export const entryPatch = z.object({
   confirm: z.literal(true).optional(),
 }).strict();
 
-/** User edits from the food log. Editing the calorie value makes it a manual value; confirming clears the review flag. */
+/**
+ * User edits from the food log. Changing the calorie value makes it a manual value; confirming clears the review flag.
+ * The apps' editor sends kcal on every save, so a kcal equal to the stored one is no correction: the source and nutrients stay.
+ */
 export async function updateEntry(userId: string, id: string, raw: unknown) {
   const patch = entryPatch.parse(raw);
   const existing = await prisma.foodLogEntry.findFirst({ where: { id, userId } });
   if (!existing) throw new NutritionError('NOT_FOUND');
+  const kcalChanged = patch.kcal !== undefined && patch.kcal !== existing.kcal;
   const e = await prisma.foodLogEntry.update({ where: { id }, data: {
     ...(patch.meal ? { meal: patch.meal } : {}),
     ...(patch.description ? { description: patch.description } : {}),
-    ...(patch.kcal !== undefined ? { kcal: patch.kcal, source: 'MANUAL', sourceRef: null, proteinG: null, carbsG: null, fatG: null, fiberG: null, calciumMg: null, ironMg: null, vitaminDIu: null } : {}),
-    ...(patch.confirm || patch.kcal !== undefined ? { status: 'CONFIRMED', reviewReason: null } : {}),
+    ...(kcalChanged ? { kcal: patch.kcal, source: 'MANUAL', sourceRef: null, proteinG: null, carbsG: null, fatG: null, fiberG: null, calciumMg: null, ironMg: null, vitaminDIu: null } : {}),
+    ...(patch.confirm || kcalChanged ? { status: 'CONFIRMED', reviewReason: null } : {}),
   } });
   return publicEntry(e);
 }

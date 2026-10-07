@@ -338,6 +338,22 @@ describe('no answer, call-backs and the app food log', () => {
     expect(week.daily.map(d => d.date)).toEqual(['2026-09-21', '2026-09-22', '2026-09-23', '2026-09-24', '2026-09-25', '2026-09-26', '2026-09-27']);
     expect(week.daily.find(d => d.date === '2026-09-27')?.kcal).toBe(25 + 210 + 650);
   });
+  it('keeps the source and nutrients when an edit resends the same calorie value', async () => {
+    const salmon = await prisma.foodLogEntry.create({ data: {
+      userId, localDate: '2026-09-28', meal: 'DINNER', description: 'Salmon', foodName: 'Salmon', kcal: 412, proteinG: 39.9, fatG: 26.6,
+      vitaminDIu: 526, source: 'USDA', sourceRef: 'USDA:175167', status: 'CONFIRMED',
+    } });
+    // The apps' editor sends kcal on every save, even for a rename.
+    const renamed = await updateEntry(userId, salmon.id, { description: 'Grilled salmon', meal: 'DINNER', kcal: 412 });
+    expect(renamed).toMatchObject({ description: 'Grilled salmon', kcal: 412, source: 'USDA', proteinG: 39.9, fatG: 26.6, vitaminDIu: 526, status: 'CONFIRMED' });
+    expect((await prisma.foodLogEntry.findUniqueOrThrow({ where: { id: salmon.id } })).sourceRef).toBe('USDA:175167');
+    const flagged = await prisma.foodLogEntry.create({ data: {
+      userId, localDate: '2026-09-28', meal: 'LUNCH', description: 'rice', foodName: 'rice', kcal: 200, carbsG: 45, source: 'USDA', status: 'NEEDS_REVIEW', reviewReason: 'Portion guessed',
+    } });
+    expect(await updateEntry(userId, flagged.id, { meal: 'DINNER', kcal: 200 })).toMatchObject({ meal: 'DINNER', source: 'USDA', carbsG: 45, status: 'NEEDS_REVIEW', reviewReason: 'Portion guessed' });
+    // A changed value is still a manual correction.
+    expect(await updateEntry(userId, salmon.id, { kcal: 380 })).toMatchObject({ kcal: 380, source: 'MANUAL', proteinG: null, fatG: null, vitaminDIu: null, status: 'CONFIRMED' });
+  });
   it('rate-limits "call me now" and respects the calling window', async () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(new Date('2026-10-05T03:00:00Z'));
