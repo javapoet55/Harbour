@@ -12,6 +12,8 @@ struct TaskAgentCard: View {
     @State private var fallbackReason: String?
     @State private var run: TaskAgentRun?
     @State private var answer = ""
+    /// The area typed for "Search again"; nil shows the area last searched.
+    @State private var searchAgainArea: String?
     @State private var showingSearchNotices = false
     @State private var selectedBusiness: String?
     @State private var draftExpanded: Set<String> = []
@@ -484,12 +486,23 @@ struct TaskAgentCard: View {
         }
     }
 
-    /// After a search that found nothing, or a cancelled run: the server starts a new search for retry, so neither is a
-    /// dead end. Same control as Android (57698fd).
-    private func searchAgain(_ run: TaskAgentRun) -> some View {
-        Button { act("retry") } label: {
+    /// After a search that found nothing, or a cancelled run. A plain retry only repeated the same failed search, so
+    /// "Search again" sends search with the area in the field, prefilled with the last one (as Android, 991de00).
+    @ViewBuilder private func searchAgain(_ run: TaskAgentRun) -> some View {
+        let area = Binding(get: { searchAgainArea ?? run.slots.location }, set: { searchAgainArea = $0 })
+        HStack(spacing: 12) {
+            Image(systemName: "mappin.circle.fill").font(.title2).foregroundStyle(Color.purple)
+                .frame(width: 36, height: 36).background(Color.purple.opacity(0.06), in: RoundedRectangle(cornerRadius: 12))
+            TextField("City or ZIP code", text: area).submitLabel(.done)
+                .focused($focusedField, equals: .agentLocation)
+                .onSubmit { focusedField = nil }
+                .accessibilityLabel("City or ZIP code")
+        }.padding(8).background(AgentStyle.card, in: RoundedRectangle(cornerRadius: 12))
+            .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.purple.opacity(0.65)))
+        let typed = area.wrappedValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        Button { act("search", key: "location", answer: typed); searchAgainArea = nil } label: {
             HStack(spacing: 12) { Image(systemName: "magnifyingglass"); Text("Search again"); Image(systemName: "arrow.right") }
-        }.buttonStyle(AgentSearchButton()).accessibilityIdentifier("agent-search-again")
+        }.buttonStyle(AgentSearchButton()).disabled(typed.isEmpty).accessibilityIdentifier("agent-search-again")
     }
 
     private func searchIntroduction(_ run: TaskAgentRun) -> some View {
