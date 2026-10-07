@@ -1954,13 +1954,14 @@ struct TasksView: View {
     }
 
     private func taskIcon(_ task: NexdoTask) -> (String, Color) {
-        let title = task.title.lowercased()
-        if title.contains("email") || title.contains("message") { return ("envelope", .pink) }
-        if ["plumb", "repair", "handyman", "electrician"].contains(where: title.contains) { return ("wrench", .nexdoBlue) }
-        if title.contains("call") || title.contains("contact") { return ("phone", .green) }
-        if title.contains("laptop") || title.contains("computer") { return ("laptopcomputer", .orange) }
-        if title.contains("meeting") || title.contains("appointment") { return ("calendar", .purple) }
-        return ("doc.text", .nexdoBlue)
+        let symbol = TaskRowIcon.symbol(for: task.title)
+        switch symbol {
+        case "envelope": return (symbol, .pink)
+        case "phone": return (symbol, .green)
+        case "laptopcomputer": return (symbol, .orange)
+        case "calendar": return (symbol, .purple)
+        default: return (symbol, .nexdoBlue)
+        }
     }
 
     private func sectionDate(_ date: Date) -> String {
