@@ -98,6 +98,8 @@ struct WellnessModuleGuide: View {
                 Button("Back",systemImage:"chevron.left",action:onHome)
             } }
         }.tint(kind.color).accessibilityIdentifier("module-guide-\(kind.rawValue)")
+            // Fixed light design, like the Wellness chooser: white cards and artwork drawn for white.
+            .environment(\.colorScheme, .light)
     }
     private func step(_ index:Int) -> some View {
         HStack(alignment:.top,spacing:10) {

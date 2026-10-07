@@ -36,6 +36,10 @@ struct WellnessChooserView: View {
             }.background(LinearGradient(colors: [Color(red: 0.98, green: 0.97, blue: 1), .white, Color(red: 0.94, green: 0.96, blue: 1)], startPoint: .topLeading, endPoint: .bottomTrailing))
                 .safeAreaInset(edge: .bottom, spacing: 0) { bottomBar }
                 .foregroundStyle(ink)
+                // A fixed light design: the artwork multiplies onto white and the surfaces are white, so
+                // adaptive text (nexdoSecondary, the footer) would turn light on light in dark mode. The
+                // modules this opens keep the system appearance: the cover is attached outside this scope.
+                .environment(\.colorScheme, .light)
         }
         .fullScreenCover(item: $destination) { target in
             if let guide = WellnessModuleGuide.Kind(rawValue:target.rawValue) {
