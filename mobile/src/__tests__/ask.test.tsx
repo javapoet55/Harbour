@@ -459,7 +459,7 @@ describe('the Daily Brief', () => {
     await act(async () => {
       message = briefHandlers()?.read(0, 'Send the report by 4 PM.');
     });
-    expect(message).toBe('Allow OpenAI sharing in Account to use Read Loud.');
+    expect(message).toBe('Allow OpenAI sharing in Account to use Read aloud.');
   });
 
   it('counts items in the section badges, not "nothing" bullets, and hides a zero badge', async () => {

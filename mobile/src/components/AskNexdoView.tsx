@@ -132,7 +132,7 @@ export function AskNexdoView({ textPage, initialPrompt = '', shoppingContext, on
    */
   const speakAnswer = (text?: string, section: number | null = null): string | null => {
     if (!consent.ai) {
-      const message = 'Allow OpenAI sharing in Account to use Read Loud.';
+      const message = 'Allow OpenAI sharing in Account to use Read aloud.';
       setVoiceError(message);
       return message;
     }

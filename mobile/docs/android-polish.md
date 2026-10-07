@@ -1793,3 +1793,6 @@ match". Logic fixes have a test that fails without them.
 - **"Item replaced!" is centred, as in Swift** (found on the phone during this pass). The success column stretches
   its children, so the title sat at the left while the message under it was centred; Swift's VStack centres both
   (`AlternativesSheet.tsx`).
+- **The Read aloud consent message says "Read aloud", as iOS 29c0f0b.** With OpenAI sharing off, reading an answer
+  or a brief section said "Allow OpenAI sharing in Account to use Read Loud."; it now says "…to use Read aloud."
+  The Ask answer's own button still reads "Read Loud", as on iOS (`AskNexdoView.tsx`).

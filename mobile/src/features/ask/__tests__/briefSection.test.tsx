@@ -176,13 +176,13 @@ it('the options menu reads the section aloud or shares it', async () => {
 });
 
 it('shows why Read aloud did nothing, since this page hides the Ask composer', async () => {
-  read.mockReturnValueOnce('Allow OpenAI sharing in Account to use Read Loud.');
+  read.mockReturnValueOnce('Allow OpenAI sharing in Account to use Read aloud.');
   await open('1');
   await waitFor(() => expect(screen.getByRole('header')).toHaveTextContent('Next Move'));
   expect(screen.queryByTestId('brief-detail-read-error')).toBeNull();
   await fireEvent.press(screen.getByLabelText('Briefing options'));
   await fireEvent.press(screen.getByTestId('brief-detail-read'));
-  expect(screen.getByTestId('brief-detail-read-error')).toHaveTextContent('Allow OpenAI sharing in Account to use Read Loud.');
+  expect(screen.getByTestId('brief-detail-read-error')).toHaveTextContent('Allow OpenAI sharing in Account to use Read aloud.');
 });
 
 it('a section that has gone keeps its title over an empty page; Back goes back', async () => {
