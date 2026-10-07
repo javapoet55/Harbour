@@ -1686,7 +1686,13 @@ struct TasksView: View {
         let snapshot = model.taskQuery.snapshot(model.tasks, timeZone: zone)
         NavigationStack {
             ZStack {
-                LinearGradient(colors: [Color(red: 0.973, green: 0.977, blue: 1), Color(red: 1, green: 0.914, blue: 0.969), .white], startPoint: .topLeading, endPoint: .bottomTrailing)
+                // Light: the original lilac-to-pink wash. Dark: the same tints over the system background, so
+                // the adaptive ink on it stays readable.
+                LinearGradient(colors: [
+                    Color(uiColor: UIColor { $0.userInterfaceStyle == .dark ? UIColor(red: 0.07, green: 0.07, blue: 0.12, alpha: 1) : UIColor(red: 0.973, green: 0.977, blue: 1, alpha: 1) }),
+                    Color(uiColor: UIColor { $0.userInterfaceStyle == .dark ? UIColor(red: 0.11, green: 0.06, blue: 0.10, alpha: 1) : UIColor(red: 1, green: 0.914, blue: 0.969, alpha: 1) }),
+                    Color(uiColor: .systemBackground),
+                ], startPoint: .topLeading, endPoint: .bottomTrailing)
                     .ignoresSafeArea()
                 VStack(alignment: .leading, spacing: 16) {
                     TodayTopBar(name: model.profile?.name ?? "", temperature: nil, showsWeather: false, add: nil, account: { account = true })
@@ -1908,7 +1914,7 @@ struct TasksView: View {
                             }
                             Spacer()
                             Text("\(group.tasks.count) \(group.tasks.count == 1 ? "task" : "tasks")").font(.subheadline).foregroundStyle(Color.nexdoSecondary)
-                        }.padding(12).background(Color.white.opacity(0.65), in: RoundedRectangle(cornerRadius: 16))
+                        }.padding(12).background(Color(uiColor: .secondarySystemGroupedBackground).opacity(0.65), in: RoundedRectangle(cornerRadius: 16))
                         ForEach(group.tasks) { task in taskCard(task) }
                     }
             }
@@ -2247,7 +2253,7 @@ private struct TasksHero: View {
         }
         .padding(22)
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 26, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 26, style: .continuous).stroke(Color.white.opacity(0.9)))
+        .overlay(RoundedRectangle(cornerRadius: 26, style: .continuous).stroke(Color(uiColor: .secondarySystemGroupedBackground).opacity(0.9)))
         .shadow(color: Color.nexdoIndigo.opacity(0.08), radius: 22, y: 10)
     }
 }
@@ -2264,7 +2270,7 @@ private struct TaskMetric: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 12)
-        .background(Color.white.opacity(0.65), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .background(Color(uiColor: .secondarySystemGroupedBackground).opacity(0.65), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 }
 
