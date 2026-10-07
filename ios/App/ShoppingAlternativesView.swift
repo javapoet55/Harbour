@@ -167,7 +167,7 @@ struct ShoppingAlternativesView: View {
             Spacer(minLength: 12)
             Image(systemName: "arrow.left.arrow.right").font(.largeTitle).foregroundStyle(Color.nexdoBlue).frame(width: 78, height: 78).background(Color.nexdoBlue.opacity(0.08), in: Circle())
             Text("Replace item?").font(.title2.bold())
-            Text("Replace “\(original.name)” with “\(item.name)”? ").foregroundStyle(Color.nexdoSecondary).multilineTextAlignment(.center)
+            Text("Replace “\(original.name)” with “\(item.name)”?").foregroundStyle(Color.nexdoSecondary).multilineTextAlignment(.center)
             VStack(spacing: 10) {
                 replacementItem(original)
                 Image(systemName: "arrow.down").foregroundStyle(Color.nexdoBlue)
