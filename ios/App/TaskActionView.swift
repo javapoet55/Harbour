@@ -321,7 +321,9 @@ struct TaskActionView: View {
         checking = true; checkFailed = false; error = nil; contact = nil; businessDraft = nil; contacts = []; addresses = []
         defer { checking = false }
         if let recipient = action.manualRecipient { businessFlow = false; contact = .manual(recipient); return }
-        if action.contactIdentifier == nil {
+        // A person ("Call Asha") needs no business search: go straight to Contacts. Asking the agent first made a
+        // personal task fail offline with "Couldn't check this task".
+        if action.contactIdentifier == nil && (action.businessCandidateID != nil || !DeterministicTaskActionDetector.isPersonalName(action.contactName)) {
             do {
                 let response = try await model.loadTaskAgent(taskID: action.taskId)
                 guard !Task.isCancelled, usable else { return }

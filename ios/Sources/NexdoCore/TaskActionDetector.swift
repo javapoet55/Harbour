@@ -41,6 +41,24 @@ public struct DeterministicTaskActionDetector: TaskActionDetector {
         return stripped.isEmpty ? trimmed : stripped
     }
 
+    /// Whether `name` reads as a person ("Asha", "Mom", "Ravi Kumar") rather than a business or a role ("the
+    /// plumber", "a dentist", "Bob's Plumbing", "City Dental"). A person's task needs no business search, so the
+    /// action goes straight to Contacts instead of asking the task agent first (which failed offline for "Call Asha").
+    /// Anything unclear counts as a business, which keeps the business check.
+    public static func isPersonalName(_ name: String) -> Bool {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, contactSearchName(trimmed) == trimmed else { return false }
+        let words = trimmed.split(whereSeparator: { $0 == " " || $0 == "-" }).map(String.init)
+        guard (1...3).contains(words.count), !trimmed.contains(where: \.isNumber),
+              words.allSatisfy({ $0.first?.isUppercase == true }) else { return false }
+        let lower = trimmed.lowercased()
+        return !businessWords.contains { lower.contains($0) }
+    }
+    private static let businessWords = ["plumb", "electric", "clean", "repair", "service", "shop", "store", "market", "clinic", "dental",
+        "dentist", "doctor", "hospital", "salon", "spa", "garage", "auto", "mechanic", "contractor", "handyman", "roof", "gutter", "pest",
+        "movers", "moving", "landscap", "lawn", "pharmacy", "bank", "insurance", "office", "company", "inc", "llc", "ltd", "corp",
+        "'s ", "’s ", "&", " and "]
+
     private func parseTime(_ value: String, now: Date, timeZone: TimeZone) -> Date? {
         var calendar = Calendar(identifier: .gregorian); calendar.timeZone = timeZone
         let lower = value.lowercased()
