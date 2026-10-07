@@ -62,11 +62,13 @@ struct AccountView: View {
                         }
                     }.padding(.vertical, 8)
                     voiceUsageCard
-                    NavigationLink { HelpView() } label: { menuRow("Help", "questionmark.circle") }
-                    NavigationLink { FeedbackView() } label: { menuRow("Feedback", "bubble.left.and.text.bubble.right") }
-                    NavigationLink { ProfileSettingsView() } label: { menuRow("Edit profile and settings", "person.crop.circle") }
-                    NavigationLink { ChangePasswordView() } label: { menuRow("Change password", "lock.rotation") }
-                        .padding(8).profileCard()
+                    // One card for all four rows; the modifiers sat on Change password alone, leaving the others bare.
+                    VStack(spacing: 0) {
+                        NavigationLink { HelpView() } label: { menuRow("Help", "questionmark.circle") }
+                        NavigationLink { FeedbackView() } label: { menuRow("Feedback", "bubble.left.and.text.bubble.right") }
+                        NavigationLink { ProfileSettingsView() } label: { menuRow("Edit profile and settings", "person.crop.circle") }
+                        NavigationLink { ChangePasswordView() } label: { menuRow("Change password", "lock.rotation") }
+                    }.padding(8).profileCard()
                     Button("Sign out", role: .destructive) { confirmsSignOut = true }
                         .frame(maxWidth: .infinity, minHeight: 46).background(.background, in: RoundedRectangle(cornerRadius: 14))
                         .disabled(model.busy)
