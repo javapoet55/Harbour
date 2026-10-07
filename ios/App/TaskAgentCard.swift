@@ -17,6 +17,7 @@ struct TaskAgentCard: View {
     @State private var draftExpanded: Set<String> = []
     @State private var businessTabs: [String: Int] = [:]
     @State private var expandedReviews: Set<String> = []
+    @State private var truncatedReviews: [String: Bool] = [:]
     @State private var drafts: [String: String] = [:]
     @State private var busy = false
     @State private var searchRequestPending = false
@@ -400,7 +401,9 @@ struct TaskAgentCard: View {
                         Text("\(review.rating.map { String(format: "%.0f", $0) } ?? "—")/5 · \(review.published)").font(.caption)
                         Text(review.text).font(.subheadline)
                             .lineLimit(expandedReviews.contains(reviewID) ? nil : 3)
-                        if !review.text.isEmpty {
+                            .background { ReviewTruncation(text: review.text) { truncatedReviews[reviewID] = $0 } }
+                        // Only when three lines actually cut the review: "Show more" appeared under any review, however short.
+                        if !review.text.isEmpty && (truncatedReviews[reviewID] == true || expandedReviews.contains(reviewID)) {
                             Button(expandedReviews.contains(reviewID) ? "Show less" : "Show more") {
                                 if expandedReviews.contains(reviewID) { expandedReviews.remove(reviewID) }
                                 else { expandedReviews.insert(reviewID) }
@@ -508,7 +511,7 @@ struct TaskAgentCard: View {
     }
 
     #if DEBUG
-    private static let businessPreview = #"{"id": "preview", "status": "READY_FOR_REVIEW", "version": 0, "service": "plumber", "urgency": "flexible", "slots": {"location": "94582", "budget": "", "constraints": ""}, "steps": [], "warnings": ["Listings are not a license check or a guarantee of availability. Confirm service area, budget and requirements before choosing.", "Some businesses were hidden because at least 20 Google reviews could not be verified. Try a new search for more options."], "candidates": [{"id": "0", "googlePlaceId": "preview-0", "name": "Chase Rooter & Plumbing Inc.", "address": "3494 Camino Tassajara #108, Danville, CA 94506, USA", "phone": "(925) 567-9000", "website": "https://example.com", "reason": "Confirm services, licensing, price, and availability with the business.", "draft": "Hello, I’m looking for plumbing services near 94582. Could you provide a quote and your earliest availability? Thank you.", "evidence": [{"source": "Google", "url": "https://maps.google.com", "rating": 5, "reviews": 2309}], "feedback": [{"author": "Sample reviewer", "url": "https://maps.google.com", "rating": 5, "published": "a month ago", "text": "Arrived on time and explained the repair clearly. The work was completed efficiently, and the area was left clean. I appreciated the careful attention to detail and helpful communication throughout the visit."}]}, {"id": "1", "googlePlaceId": "preview-1", "name": "United Plumbing & Water Heaters", "address": "3494 Camino Tassajara #108, Danville, CA 94506, USA", "phone": "(925) 567-9000", "website": "https://example.com", "reason": "Confirm services, licensing, price, and availability with the business.", "draft": "Hello, I’m looking for plumbing services near 94582. Could you provide a quote and your earliest availability? Thank you.", "evidence": [{"source": "Google", "url": "https://maps.google.com", "rating": 5, "reviews": 1403}], "feedback": [{"author": "Sample reviewer", "url": "https://maps.google.com", "rating": 5, "published": "a month ago", "text": "Arrived on time and explained the repair clearly. The work was completed efficiently, and the area was left clean. I appreciated the careful attention to detail and helpful communication throughout the visit."}]}, {"id": "2", "googlePlaceId": "preview-2", "name": "Dependable Plumbing Solutions", "address": "3494 Camino Tassajara #108, Danville, CA 94506, USA", "phone": "(925) 567-9000", "website": "https://example.com", "reason": "Confirm services, licensing, price, and availability with the business.", "draft": "Hello, I’m looking for plumbing services near 94582. Could you provide a quote and your earliest availability? Thank you.", "evidence": [{"source": "Google", "url": "https://maps.google.com", "rating": 4.8, "reviews": 361}], "feedback": [{"author": "Sample reviewer", "url": "https://maps.google.com", "rating": 5, "published": "a month ago", "text": "Arrived on time and explained the repair clearly. The work was completed efficiently, and the area was left clean. I appreciated the careful attention to detail and helpful communication throughout the visit."}]}]}"#
+    private static let businessPreview = #"{"id": "preview", "status": "READY_FOR_REVIEW", "version": 0, "service": "plumber", "urgency": "flexible", "slots": {"location": "94582", "budget": "", "constraints": ""}, "steps": [], "warnings": ["Listings are not a license check or a guarantee of availability. Confirm service area, budget and requirements before choosing.", "Some businesses were hidden because at least 20 Google reviews could not be verified. Try a new search for more options."], "candidates": [{"id": "0", "googlePlaceId": "preview-0", "name": "Chase Rooter & Plumbing Inc.", "address": "3494 Camino Tassajara #108, Danville, CA 94506, USA", "phone": "(925) 567-9000", "website": "https://example.com", "reason": "Confirm services, licensing, price, and availability with the business.", "draft": "Hello, I’m looking for plumbing services near 94582. Could you provide a quote and your earliest availability? Thank you.", "evidence": [{"source": "Google", "url": "https://maps.google.com", "rating": 5, "reviews": 2309}], "feedback": [{"author": "Sample reviewer", "url": "https://maps.google.com", "rating": 5, "published": "a month ago", "text": "Arrived on time and explained the repair clearly. The work was completed efficiently, and the area was left clean. I appreciated the careful attention to detail and helpful communication throughout the visit."}]}, {"id": "1", "googlePlaceId": "preview-1", "name": "United Plumbing & Water Heaters", "address": "3494 Camino Tassajara #108, Danville, CA 94506, USA", "phone": "(925) 567-9000", "website": "https://example.com", "reason": "Confirm services, licensing, price, and availability with the business.", "draft": "Hello, I’m looking for plumbing services near 94582. Could you provide a quote and your earliest availability? Thank you.", "evidence": [{"source": "Google", "url": "https://maps.google.com", "rating": 5, "reviews": 1403}], "feedback": [{"author": "Sample reviewer", "url": "https://maps.google.com", "rating": 5, "published": "a month ago", "text": "Quick, friendly and fair."}]}, {"id": "2", "googlePlaceId": "preview-2", "name": "Dependable Plumbing Solutions", "address": "3494 Camino Tassajara #108, Danville, CA 94506, USA", "phone": "(925) 567-9000", "website": "https://example.com", "reason": "Confirm services, licensing, price, and availability with the business.", "draft": "Hello, I’m looking for plumbing services near 94582. Could you provide a quote and your earliest availability? Thank you.", "evidence": [{"source": "Google", "url": "https://maps.google.com", "rating": 4.8, "reviews": 361}], "feedback": [{"author": "Sample reviewer", "url": "https://maps.google.com", "rating": 5, "published": "a month ago", "text": "Arrived on time and explained the repair clearly. The work was completed efficiently, and the area was left clean. I appreciated the careful attention to detail and helpful communication throughout the visit."}]}]}"#
     #endif
 
     private func confirmCopy(_ text: String, at place: String) {
@@ -569,4 +572,29 @@ private enum AgentStyle {
     static let badge = adaptive(rgb(0.93, 0.90, 1), rgb(0.24, 0.20, 0.38))
     static let green = adaptive(rgb(0, 0.55, 0.30), rgb(0.40, 0.86, 0.58))
     static let washGradient = [adaptive(rgb(0.95, 0.92, 1), rgb(0.16, 0.13, 0.27)), adaptive(rgb(0.92, 0.94, 1), rgb(0.12, 0.13, 0.25)), adaptive(rgb(0.97, 0.98, 1), rgb(0.10, 0.10, 0.17))]
+}
+
+/// Reports whether `text` needs more than three lines at the width it is given, by laying it out twice (clamped and
+/// unclamped) out of sight and comparing heights.
+private struct ReviewTruncation: View {
+    let text: String
+    let report: (Bool) -> Void
+    var body: some View {
+        GeometryReader { proxy in
+            let clamped = Text(text).font(.subheadline).lineLimit(3)
+            let full = Text(text).font(.subheadline).fixedSize(horizontal: false, vertical: true)
+            ZStack {
+                clamped.frame(width: proxy.size.width, alignment: .leading).background(GeometryReader { c in Color.clear.preference(key: ReviewHeights.self, value: [0: c.size.height]) })
+                full.frame(width: proxy.size.width, alignment: .leading).background(GeometryReader { f in Color.clear.preference(key: ReviewHeights.self, value: [1: f.size.height]) })
+            }
+            .hidden()
+            .onPreferenceChange(ReviewHeights.self) { heights in
+                if let c = heights[0], let f = heights[1] { report(f > c + 1) }
+            }
+        }
+    }
+}
+private struct ReviewHeights: PreferenceKey {
+    static let defaultValue: [Int: CGFloat] = [:]
+    static func reduce(value: inout [Int: CGFloat], nextValue: () -> [Int: CGFloat]) { value.merge(nextValue()) { $1 } }
 }
