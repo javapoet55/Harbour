@@ -1,5 +1,6 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
-import { StyleSheet, Text } from 'react-native';
+import { Platform, StyleSheet, Text } from 'react-native';
+import * as Notifications from 'expo-notifications';
 import * as SMS from 'expo-sms';
 
 const mockDismissTo = jest.fn();
@@ -30,6 +31,21 @@ import ManageMoment from '../../../../app/wellness/moments/manage';
  * Review schedule, Send now and Schedule confirmed (ManageFestivalView.swift:348-634). Every server
  * answer and the Messages composer are mocked: nothing is sent.
  */
+
+/** jest.setup.js: iOS Modal dismissals, held while a test looks at the sheet sliding away. */
+const modalDismissals = (global as unknown as { modalDismissals: { hold: boolean; flush: () => void } }).modalDismissals;
+const settle = () => act(async () => {
+  for (let i = 0; i < 10; i += 1) await Promise.resolve();
+});
+
+let platform: { restore: () => void } | null = null;
+const onAndroid = () => {
+  platform = jest.replaceProperty(Platform, 'OS', 'android');
+};
+afterEach(() => {
+  platform?.restore();
+  platform = null;
+});
 
 const sms = SMS as unknown as { isAvailableAsync: jest.Mock; sendSMSAsync: jest.Mock };
 const DAY = new Date(Date.now() + 20 * 86_400_000).toISOString().slice(0, 10);
@@ -134,6 +150,27 @@ describe('Review schedule', () => {
     expect(mockDismissTo).toHaveBeenCalledWith('/wellness/moments');
   });
 
+  it('shows Schedule confirmed only once the review sheet has closed', async () => {
+    modalDismissals.hold = true;
+    await openReview([person('a', 'Sam')]);
+    await fireEvent.press(screen.getByTestId('wish-primary'));
+    await waitFor(() => expect(calls('schedule')).toHaveLength(1));
+    await settle();
+    // The review sheet is hidden but still sliding away: no success screen under it yet.
+    expect(screen.queryByText('Schedule confirmed!')).toBeNull();
+    await act(async () => modalDismissals.flush());
+    await waitFor(() => expect(screen.getByText('Schedule confirmed!')).toBeTruthy());
+  });
+
+  it('Android: shows Schedule confirmed once the hidden review sheet is committed', async () => {
+    onAndroid();
+    // Android reads the notification status before it schedules the wish's reminder.
+    jest.mocked(Notifications.getPermissionsAsync).mockResolvedValue({ granted: true, status: 'granted', canAskAgain: true } as never);
+    await openReview([person('a', 'Sam')]);
+    await fireEvent.press(screen.getByTestId('wish-primary'));
+    await waitFor(() => expect(screen.getByText('Schedule confirmed!')).toBeTruthy());
+  });
+
   it('saves a recipient edited in the review before scheduling', async () => {
     await openReview([person('a', 'Sam')]);
     await fireEvent.press(screen.getByTestId('review-edit-recipient-a'));
@@ -189,6 +226,37 @@ describe('Send now', () => {
     expect(screen.getByTestId('review-edit-date').props.accessibilityState).toMatchObject({ disabled: true });
     await fireEvent.press(screen.getByTestId('review-done'));
     await waitFor(() => expect(screen.queryByText('Review schedule')).toBeNull());
+  });
+
+  it('starts sending only once the Send now sheet has closed', async () => {
+    serve(email);
+    modalDismissals.hold = true;
+    await openReview([person('a', 'Sam', { email: 'sam@example.com' })]);
+    await fireEvent.press(screen.getByTestId('review-send-now'));
+    await fireEvent.press(screen.getByTestId('send-now-confirm'));
+    await settle();
+    expect(calls('sendGreetingNow')).toHaveLength(0);
+    expect(sms.isAvailableAsync).not.toHaveBeenCalled();
+    await act(async () => modalDismissals.flush());
+    await waitFor(() => expect(calls('sendGreetingNow')).toHaveLength(1));
+    await waitFor(() => expect(sms.sendSMSAsync).toHaveBeenCalled());
+  });
+
+  it('Cancel on the Send now sheet sends nothing once it has closed', async () => {
+    await openReview([person('a', 'Sam', { email: 'sam@example.com' })]);
+    await fireEvent.press(screen.getByTestId('review-send-now'));
+    await fireEvent.press(screen.getByTestId('send-now-cancel'));
+    await settle();
+    expect(calls('sendGreetingNow')).toHaveLength(0);
+  });
+
+  it('Android: sends once the hidden Send now sheet is committed', async () => {
+    onAndroid();
+    serve(email);
+    await openReview([person('a', 'Sam', { email: 'sam@example.com' })]);
+    await fireEvent.press(screen.getByTestId('review-send-now'));
+    await fireEvent.press(screen.getByTestId('send-now-confirm'));
+    await waitFor(() => expect(calls('sendGreetingNow')).toHaveLength(1));
   });
 
   it('sends nothing when Messages is not available for a phone recipient', async () => {

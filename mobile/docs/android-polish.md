@@ -1586,3 +1586,10 @@ gets the fix too, and the Swift app is to mirror it. Each fix has a test that fa
   device. No greeting has been sent to Lee." â€” new text, Swift's sentence with the names added). When every
   recipient needs Messages, Swift's message is unchanged (`ScheduleReview.tsx` `sendNow`,
   `sendImmediately(skip)`).
+- **Android ahead of iOS: Send Now and Schedule confirmed wait for their sheet to close.** "Send email & open
+  Messages" started sending while the Send now sheet was still sliding away, so the Messages composer could
+  collide with it; and a confirmed schedule swapped the screen for Schedule confirmed under the open review
+  sheet. Both now wait for the sheet to be gone: `LightSheet` takes `onClosed`, which is the Modal's
+  `onDismiss` on iOS and, on Android (no `onDismiss`; the dialog is gone once the hide is committed), an
+  effect on the hide. The jest Modal mock now calls `onDismiss` when an iOS Modal hides, and a test can hold
+  those calls (`modalDismissals`, `jest.setup.js`).

@@ -1,7 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Stack } from 'expo-router';
-import { useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { ActivityIndicator, Modal, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useStore } from 'zustand';
@@ -109,10 +109,13 @@ function LightSheet({
   background = SCHEDULE_BACKGROUND,
   children,
   testID,
+  onClosed,
 }: {
   visible: boolean;
   title: string;
   onClose: () => void;
+  /** Called once the hidden sheet has gone: iOS's `onDismiss`, after the slide; Android has none, and its dialog is gone once the hide is committed. */
+  onClosed?: () => void;
   trailing?: { title?: string; close?: boolean; onPress: () => void; disabled?: boolean; testID: string };
   footer?: ReactNode;
   background?: string;
@@ -121,8 +124,13 @@ function LightSheet({
 }) {
   const insets = useSafeAreaInsets();
   const android = Platform.OS === 'android';
+  const shown = useRef(visible);
+  useEffect(() => {
+    if (android && shown.current && !visible) onClosed?.();
+    shown.current = visible;
+  }, [android, visible, onClosed]);
   return (
-    <Modal animationType="slide" onRequestClose={onClose} presentationStyle={android ? undefined : 'pageSheet'} statusBarTranslucent transparent={android} visible={visible}>
+    <Modal animationType="slide" onDismiss={android ? undefined : onClosed} onRequestClose={onClose} presentationStyle={android ? undefined : 'pageSheet'} statusBarTranslucent transparent={android} visible={visible}>
       <FixedScheme scheme="light">
         {android ? <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.dim]} /> : null}
         <View style={[styles.sheet, { backgroundColor: background, marginTop: android ? insets.top + 8 : 0 }, android && styles.sheetShape]} testID={testID}>
@@ -196,7 +204,7 @@ export function sendNowNotice(plans: WishDeliveryPlan[]): string {
  * `FestivalScheduleReview` (:428-610): the date and every recipient, each editable, before Confirm
  * Schedule — or Send Now, which asks once more ("Send now") and then sends.
  */
-export function ScheduleReviewSheet({ model, visible, onClose }: { model: ManageModel; visible: boolean; onClose: () => void }) {
+export function ScheduleReviewSheet({ model, visible, onClose, onClosed }: { model: ManageModel; visible: boolean; onClose: () => void; onClosed?: () => void }) {
   const state = useStore(model);
   // `@State` copies taken when the sheet opens; the parent re-keys the sheet on each opening.
   const [date, setDate] = useState(state.sendDate);
@@ -210,6 +218,8 @@ export function ScheduleReviewSheet({ model, visible, onClose }: { model: Manage
   const [showAll, setShowAll] = useState(false);
   const [sendNowConfirmation, setSendNowConfirmation] = useState(false);
   const [sendNowStarted, setSendNowStarted] = useState(false);
+  /** "Send email & open Messages" was tapped: the send starts once its sheet has closed. */
+  const sendAfterClose = useRef(false);
   const [immediateNotice, setImmediateNotice] = useState<string | null>(null);
   const [openedAt] = useState(() => Date.now());
   const composing = useRef(false);
@@ -316,6 +326,7 @@ export function ScheduleReviewSheet({ model, visible, onClose }: { model: Manage
         title=""
         onClose={() => !submitting && close()}
         trailing={{ title: 'Cancel', onPress: close, disabled: submitting, testID: 'review-cancel' }}
+        onClosed={onClosed}
         testID="schedule-review"
       >
         <View style={styles.reviewBody} pointerEvents={submitting ? 'none' : 'auto'}>
@@ -427,12 +438,19 @@ export function ScheduleReviewSheet({ model, visible, onClose }: { model: Manage
         onClose={() => setSendNowConfirmation(false)}
         background="#FFFFFF"
         trailing={{ title: 'Cancel', onPress: () => setSendNowConfirmation(false), testID: 'send-now-cancel' }}
+        // Android ahead of iOS: Swift starts `sendNow()` while this sheet is still dismissing (:501-536), so
+        // the Messages composer can collide with it. The send starts once the sheet has closed.
+        onClosed={() => {
+          if (!sendAfterClose.current) return;
+          sendAfterClose.current = false;
+          void sendNow();
+        }}
         footer={
           <ActionButton
             title="Send email & open Messages"
             onPress={() => {
+              sendAfterClose.current = true;
               setSendNowConfirmation(false);
-              void sendNow();
             }}
             testID="send-now-confirm"
           />

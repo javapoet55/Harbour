@@ -236,6 +236,36 @@ afterEach(async () => {
   await new Promise((resolve) => realSetTimeout(resolve, 0));
 });
 
+// iOS's Modal calls `onDismiss` once it has finished sliding away; the preset's mock never calls it. This one
+// calls it when an iOS Modal is hidden (Android has no `onDismiss`). A test that needs to see what happens
+// while the sheet is still sliding away sets `modalDismissals.hold = true` and later calls `flush()`.
+global.modalDismissals = {
+  hold: false,
+  pending: [],
+  flush() {
+    for (const dismissed of this.pending.splice(0)) dismissed();
+  },
+};
+afterEach(() => {
+  global.modalDismissals.hold = false;
+  global.modalDismissals.pending = [];
+});
+jest.mock('react-native/Libraries/Modal/Modal', () => {
+  const PresetModal = jest.requireActual('@react-native/jest-preset/jest/mocks/Modal').default;
+  return {
+    __esModule: true,
+    default: class Modal extends PresetModal {
+      componentDidUpdate(previous) {
+        super.componentDidUpdate?.(previous);
+        if (previous.visible === false || this.props.visible !== false || !this.props.onDismiss) return;
+        if (require('react-native').Platform.OS !== 'ios') return;
+        if (global.modalDismissals.hold) global.modalDismissals.pending.push(this.props.onDismiss);
+        else this.props.onDismiss();
+      }
+    },
+  };
+});
+
 // expo-location is native. Shopping's store search reads it (StorePages.tsx); suites that exercise it mock it again.
 jest.mock('expo-location', () => ({
   Accuracy: { Lowest: 1, Low: 2, Balanced: 3, High: 4, Highest: 5, BestForNavigation: 6 },

@@ -172,6 +172,8 @@ export function ManageMomentView({ group, onDone }: { group: MomentDisplayGroup;
   const [personalize, setPersonalize] = useState(false);
   const [imageSheet, setImageSheet] = useState(false);
   const [scheduleConfirm, setScheduleConfirm] = useState(false);
+  /** The review sheet is up or still sliding away; Schedule confirmed waits for it to go. */
+  const [reviewShown, setReviewShown] = useState(false);
   const [reviewKey, setReviewKey] = useState(0);
   // `momentEditor` (:97): Edit Moment, from the Moment card on Schedule.
   const [momentEditor, setMomentEditor] = useState(false);
@@ -372,11 +374,14 @@ export function ManageMomentView({ group, onDone }: { group: MomentDisplayGroup;
     else {
       // A fresh review each time (`FestivalScheduleReview.init`): the parent re-keys it.
       setReviewKey((key) => key + 1);
+      setReviewShown(true);
       setScheduleConfirm(true);
     }
   };
 
-  if (state.scheduleCompleted) {
+  // Android ahead of iOS: Swift's `confirm()` pushes the success screen before closing the review sheet
+  // (:607-608); here it follows once the sheet has closed.
+  if (state.scheduleCompleted && !reviewShown) {
     const firstSelected = selected[0];
     return (
       <ScheduleSuccess
@@ -989,6 +994,7 @@ export function ManageMomentView({ group, onDone }: { group: MomentDisplayGroup;
           setScheduleConfirm(false);
           model.getState().setError(null);
         }}
+        onClosed={() => setReviewShown(false)}
       />
     </View>
   );
