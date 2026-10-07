@@ -1770,3 +1770,7 @@ match". Logic fixes have a test that fails without them.
   under any review, however short. An invisible, unclamped copy of each review measures its lines
   (`onTextLayout`), and "Show more" shows only past three lines, or to collapse an expanded one
   (`TaskAgentCard.tsx`; fixed from code, needs a look on the phone).
+- **Android ahead of iOS: Today then All during a Tasks search keeps the search's status.** Choosing All after
+  another chip narrows to this month's open tasks; during a search that reset the search's All status to Open, so
+  completed matches disappeared. As `TaskQuery.selectDate` on fix/ios-bug-pass (7fbc8f9), the narrowing is skipped
+  while a search is open (`selectDate` in `lib/taskQuery.ts`, `tasks.tsx`).

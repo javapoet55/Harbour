@@ -11,6 +11,7 @@ import {
   DATE_FILTER_EMPTY_TITLE,
   TASK_DATE_FILTERS,
   TASK_HISTORY_RANGES,
+  selectDate,
   snapshot,
   type TaskDateFilter,
   type TaskHistoryRange,
@@ -55,6 +56,7 @@ export default function Tasks() {
   // `model.taskQuery` (NexdoApp.swift): shared with the filter sheet, which is its own route.
   const query = useTaskQuery((state) => state.query);
   const setQuery = useTaskQuery((state) => state.setQuery);
+  const replaceQuery = useTaskQuery((state) => state.replace);
   const [showingProjects, setShowingProjects] = useState(false);
   const [searching, setSearching] = useState(false);
   const [conflict, setConflict] = useState<ScheduleConflict | null>(null);
@@ -87,14 +89,8 @@ export default function Tasks() {
     ]);
   }
 
-  const setDate = (date: TaskDateFilter) => {
-    // RootView.swift:1789 — switching to All resets the history range and the status filter.
-    if (date === 'All' && query.date !== 'All') {
-      setQuery({ date, historyRange: 'This Month', status: 'Open' });
-      return;
-    }
-    setQuery({ date });
-  };
+  // RootView.swift:1789 — switching to All resets the history range and the status filter, except during a search.
+  const setDate = (date: TaskDateFilter) => replaceQuery(selectDate(query, date, searching || query.search.length > 0));
 
   // The magnifier (RootView.swift:1792-1797): opening a search resets the filters to every date,
   // status and priority (`beginSearch`); closing it clears the term and restores them (`endSearch`).

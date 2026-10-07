@@ -280,6 +280,16 @@ describe('Tasks screen search and redesign', () => {
     expect(searchInput()).toBeUndefined();
   });
 
+  it('Today then All during a search keeps the search status, so completed matches stay (Android ahead of iOS)', async () => {
+    await renderTasks();
+    await fireEvent.press(screen.getByLabelText('Search tasks'));
+    await fireEvent.changeText(searchInput()!, 'rent');
+    await fireEvent.press(screen.getByTestId('date-pill-Today'));
+    await fireEvent.press(screen.getByTestId('date-pill-All'));
+    expect(useTaskQuery.getState().query).toMatchObject({ date: 'All', status: 'All' });
+    await waitFor(() => expect(screen.getByText('Pay the rent')).toBeTruthy());
+  });
+
   it('the close button clears the term, restores the filters and closes the field', async () => {
     await renderTasks();
     const before = useTaskQuery.getState().query;

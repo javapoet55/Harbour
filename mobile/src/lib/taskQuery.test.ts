@@ -4,6 +4,7 @@ import {
   DISTANT_FUTURE,
   addDays,
   beginSearch,
+  selectDate,
   dayKey,
   historyInterval,
   revealCreatedTask,
@@ -355,5 +356,16 @@ describe('All time and search (TaskQuery.swift:24-60, :110-111)', () => {
     const tasks = [task({ id: 'later', title: 'Sink', startAt: atLocal('2026-10-20') })];
     const counts = snapshot(query({ date: 'Today', search: 'sink', historyRange: 'All time' }), tasks, ZONE, NOW).counts;
     expect(counts).toEqual({ Today: 0, Tomorrow: 0, 'This Week': 0, All: 1 });
+  });
+});
+
+// Ported from todayThenAllDuringASearchKeepsItsStatus (fix/ios-bug-pass 7fbc8f9). Android ahead of iOS.
+describe('selectDate', () => {
+  it('Today then All during a search keeps its status; outside a search All still narrows', () => {
+    let searchQuery = { ...beginSearch(DEFAULT_TASK_QUERY), search: 'report' };
+    searchQuery = selectDate(selectDate(searchQuery, 'Today', true), 'All', true);
+    expect(searchQuery).toMatchObject({ date: 'All', status: 'All', historyRange: 'All time' });
+    const browsing = selectDate({ ...DEFAULT_TASK_QUERY, status: 'All' }, 'All', false);
+    expect(browsing).toMatchObject({ date: 'All', status: 'Open', historyRange: 'This Month' });
   });
 });
