@@ -12,8 +12,6 @@ struct AskAILandingView: View {
     let voice: () -> Void
     let close: () -> Void
     @FocusState.Binding var typing: Bool
-    @State private var destination: Destination?
-    enum Destination: String, Identifiable { case shopping, moments; var id: String { rawValue } }
 
     private let cards: [(String, String, String, Color)] = [
         ("My Daily Brief", "Priorities and\nyour next move", "calendar", .blue),
@@ -75,14 +73,6 @@ struct AskAILandingView: View {
         }
         .foregroundStyle(Color.nexdoInk)
         .background { LinearGradient(colors: [.cyan.opacity(0.08), .purple.opacity(0.06), Color(uiColor: .systemBackground)], startPoint: .topLeading, endPoint: .bottomTrailing).ignoresSafeArea() }
-        .sheet(item: $destination) { destination in
-            NavigationStack {
-                Group {
-                    if destination == .moments { ImportantMomentsView() }
-                    else { AskShoppingDestination(api: model.momentAPI) }
-                }.toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Done") { self.destination = nil } } }
-            }
-        }
     }
     private func pastel(_ color: Color) -> LinearGradient { LinearGradient(colors: [color.opacity(0.10), color.opacity(0.045)], startPoint: .topLeading, endPoint: .bottomTrailing) }
     private func card(_ index: Int) -> some View {
@@ -103,20 +93,8 @@ struct AskAILandingView: View {
     private var waveform: some View {
         HStack(spacing: 4) { ForEach(0..<7) { index in Capsule().fill(Color.nexdoIndigo.opacity(0.09)).frame(width: 4, height: CGFloat(12 + (3 - abs(3 - index)) * 9)) } }.accessibilityHidden(true)
     }
-    private func select(_ index: Int) {
-        switch index {
-        case 5: destination = .shopping
-        case 6: destination = .moments
-        case 7: typing = true
-        default: ask(NexdoAIIntent.allCases[index].query)
-        }
-    }
-}
-
-private struct AskShoppingDestination: View {
-    @StateObject private var store: ShoppingStore
-    init(api: APIClient) { _store = StateObject(wrappedValue: ShoppingStore(api: api)) }
-    var body: some View { ShoppingHome(store: store) }
+    /// The four cards are the four intents, in order. (Cases for cards 5–7, Shopping, Moments and typing, had no card.)
+    private func select(_ index: Int) { ask(NexdoAIIntent.allCases[index].query) }
 }
 
 /// Custom scalable brand illustration, rather than a tinted system icon.

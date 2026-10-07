@@ -2,7 +2,7 @@ import SwiftUI
 
 /// Stable entry actions routed through the existing conversational assistant.
 enum NexdoAIIntent: String, CaseIterable, Identifiable {
-    case dailyBriefing, topFocusTasks, deadlinesAndRisks, findScheduleTime, planTomorrow
+    case dailyBriefing, topFocusTasks, deadlinesAndRisks, findScheduleTime
     var id: String { rawValue }
     var title: String {
         switch self {
@@ -10,7 +10,6 @@ enum NexdoAIIntent: String, CaseIterable, Identifiable {
         case .topFocusTasks: "Pick my Top 3 focus tasks"
         case .deadlinesAndRisks: "Show deadlines and risks"
         case .findScheduleTime: "Find time in my schedule"
-        case .planTomorrow: "Help me plan tomorrow"
         }
     }
     var detail: String {
@@ -19,7 +18,6 @@ enum NexdoAIIntent: String, CaseIterable, Identifiable {
         case .topFocusTasks: "Ranked by urgency, effort, and completion risk"
         case .deadlinesAndRisks: "See what is due in the next 5 days"
         case .findScheduleTime: "Surface open time around calendar commitments"
-        case .planTomorrow: "Check whether tomorrow has enough capacity"
         }
     }
     var icon: String {
@@ -28,7 +26,6 @@ enum NexdoAIIntent: String, CaseIterable, Identifiable {
         case .topFocusTasks: "target"
         case .deadlinesAndRisks: "alarm"
         case .findScheduleTime: "calendar.badge.clock"
-        case .planTomorrow: "sunrise"
         }
     }
     var query: String {
@@ -37,7 +34,6 @@ enum NexdoAIIntent: String, CaseIterable, Identifiable {
         case .topFocusTasks: "Pick my top 3 focus tasks, ranked by urgency, estimated effort, and impact."
         case .deadlinesAndRisks: "Show upcoming deadlines in the next 5 days, overdue work, conflicts, overloaded days, and high-priority unfinished tasks."
         case .findScheduleTime: "Find practical free time in my schedule around my calendar commitments using my availability."
-        case .planTomorrow: "Do I have enough time to finish everything tomorrow? Consider tasks, events, deadlines, and estimated durations."
         }
     }
 }
@@ -53,37 +49,6 @@ enum AskStyle {
     static let background = Color(uiColor: .systemBackground)
     static let cardBackground = Color(uiColor: .secondarySystemBackground)
     static let separator = Color(uiColor: .separator)
-}
-
-struct NexdoAISuggestionCard: View {
-    let intent: NexdoAIIntent
-    let action: () -> Void
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 12) {
-                Image(systemName: intent.icon)
-                    .font(.body)
-                    .frame(width: 36, height: 36)
-                    .background(AskStyle.blue.opacity(0.16), in: RoundedRectangle(cornerRadius: 12))
-                    .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(intent.title).font(.subheadline.weight(.semibold))
-                    Text(intent.detail).font(.caption).foregroundStyle(AskStyle.secondary)
-                }.frame(maxWidth: .infinity, alignment: .leading)
-                Image(systemName: "chevron.right").font(.caption).foregroundStyle(AskStyle.secondary).accessibilityHidden(true)
-            }
-            .foregroundStyle(AskStyle.ink)
-            .padding(12)
-            .frame(maxWidth: .infinity, minHeight: 62, alignment: .leading)
-            .background(AskStyle.cardBackground, in: RoundedRectangle(cornerRadius: 16))
-            .overlay(RoundedRectangle(cornerRadius: 16).stroke(AskStyle.blue.opacity(0.28)))
-            .contentShape(RoundedRectangle(cornerRadius: 16))
-        }
-        .buttonStyle(.plain)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(intent.title + ". " + intent.detail)
-        .accessibilityAddTraits(.isButton)
-    }
 }
 
 struct ShoppingRecommendationContext:Encodable,Sendable {
@@ -104,7 +69,6 @@ struct AskNexdoView: View {
     @State private var pendingQuery: String?
     @State private var showConsent = false
     @State private var showingVoice = false
-    @State private var showingText = false
     @State private var voiceError: String?
     @State private var preparingSpeech = false
     @State private var readingSection: Int?
@@ -338,7 +302,6 @@ struct AskNexdoView: View {
             consentView.presentationDetents([.medium, .large])
         }
         .fullScreenCover(isPresented: $showingVoice) { AddTaskByVoiceView(askMode: true) }
-        .fullScreenCover(isPresented: $showingText) { AskNexdoView(textPage: true) }
         .onAppear {
             if startWithVoice && !openedInitialVoice { openedInitialVoice = true; showingVoice = true }
         }
@@ -382,38 +345,6 @@ struct AskNexdoView: View {
         }.padding(16).frame(maxWidth:.infinity,alignment:.leading)
             .background(LinearGradient(colors:[Color.nexdoBlue.opacity(0.10),Color.nexdoMagenta.opacity(0.07)],startPoint:.topLeading,endPoint:.bottomTrailing),in:RoundedRectangle(cornerRadius:20,style:.continuous))
             .overlay(RoundedRectangle(cornerRadius:20,style:.continuous).stroke(Color.nexdoIndigo.opacity(0.12)))
-    }
-
-    private var entryCards: some View {
-        let layout = typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(spacing: 12)) : AnyLayout(HStackLayout(spacing: 12))
-        return layout {
-            entryCard("Ask by Voice", detail: "Tap and speak", icon: "mic.fill", voice: true) {
-                stopSpeech(); showingVoice = true
-            }
-            entryCard("Free form Text", detail: "Type your prompt", icon: "text.bubble", voice: false) {
-                stopSpeech(); showingText = true
-            }
-        }
-        .padding(16)
-        .background(LinearGradient(colors: [Color.nexdoMagenta.opacity(0.05), Color.nexdoIndigo.opacity(0.03)], startPoint: .leading, endPoint: .trailing))
-        .padding(.horizontal, 16).padding(.vertical, 14)
-        .background(AskStyle.background)
-    }
-    private func entryCard(_ title: String, detail: String, icon: String, voice: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            HStack(spacing: 8) {
-                Image(systemName: icon).font(.title2).foregroundStyle(voice ? Color.white : Color.nexdoIndigo)
-                    .frame(width: 40, height: 40)
-                    .background(voice ? AnyShapeStyle(LinearGradient(colors: [.nexdoIndigo, .nexdoBlue], startPoint: .leading, endPoint: .trailing)) : AnyShapeStyle(Color.nexdoMagenta.opacity(0.08)), in: Circle())
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(title).font(.footnote.weight(.semibold)).lineLimit(1).minimumScaleFactor(0.75)
-                    Text(detail).font(.caption).foregroundStyle(.secondary).lineLimit(1).minimumScaleFactor(0.75)
-                }
-                Spacer(minLength: 0)
-            }.foregroundStyle(Color.nexdoInk).padding(12).frame(maxWidth: .infinity, minHeight: 76)
-                .background(voice ? Color.nexdoIndigo.opacity(0.05) : AskStyle.background, in: RoundedRectangle(cornerRadius: 20))
-                .overlay(RoundedRectangle(cornerRadius: 20).stroke(Color.nexdoIndigo.opacity(0.14)))
-        }.buttonStyle(.plain).disabled(blocked)
     }
 
     private var composer: some View {
