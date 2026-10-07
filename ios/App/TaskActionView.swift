@@ -149,6 +149,8 @@ struct TaskActionView: View {
                 VStack(alignment: .leading, spacing: 18) {
                     if let action, usable {
                         Text("Contact \(contact?.name ?? action.contactName)").font(.title2.bold())
+                        // Above the buttons it refers to ("…or enter details below").
+                        if let error { Text(error).foregroundStyle(.red).accessibilityIdentifier("taskAction.error") }
                         if checking { ProgressView("Checking next action…") }
                         else if checkFailed {
                             Text("Couldn’t check this task. Please retry.")
@@ -206,7 +208,6 @@ struct TaskActionView: View {
                                     .padding(.vertical, 8).accessibilityIdentifier("taskAction.address.\(address.id)")
                             }
                         }
-                        if let error { Text(error).foregroundStyle(.red).accessibilityIdentifier("taskAction.error") }
                         if let receipt { Text(receipt).foregroundStyle(.secondary).accessibilityIdentifier("taskAction.receipt") }
                         if action.status == .executing || action.status == .completed {
                             Button("Mark task complete") {
@@ -343,7 +344,15 @@ struct TaskActionView: View {
                 contact = matches[0]; coordinator.remember(matches[0])
                 coordinator.update(actionID) { $0.contactIdentifier = matches[0].id }
             } else { contacts = matches }
-        } catch { self.error = "No contact selected. Choose a contact or enter details below." }
+        } catch { self.error = lookupFailure(error, name: action.contactName) }
+    }
+    /// What went wrong finding the contact, so "Allow Nexdo to access Contacts" reaches someone who refused it.
+    private func lookupFailure(_ error: Error, name: String) -> String {
+        switch error as? TaskActionServiceError {
+        case .contactsDenied: "Nexdo can’t look in your Contacts because access is off. Allow Contacts for Nexdo in Settings, or enter the details below."
+        case .noContact: "No contact named “\(DeterministicTaskActionDetector.contactSearchName(name))” was found. Choose a contact or enter the details below."
+        default: "Contacts couldn’t be searched right now. Choose a contact or enter the details below."
+        }
     }
 
     private func title(_ channel: TaskActionChannel) -> String { switch channel { case .call: "Call"; case .message: "Message"; case .email: "Email" } }
@@ -362,7 +371,7 @@ struct TaskActionView: View {
                 let matches = try await resolver.resolve(name: DeterministicTaskActionDetector.contactSearchName(action.contactName), identifier: action.contactIdentifier)
                 guard !Task.isCancelled, usable, self.action?.id == action.id else { return }
                 if matches.count == 1 { choose(matches[0]) } else { contacts = matches }
-            } catch { self.error = error.localizedDescription }
+            } catch { self.error = lookupFailure(error, name: action.contactName) }
         }
     }
     private func choose(_ value: ActionContact) {
