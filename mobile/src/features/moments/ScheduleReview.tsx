@@ -179,6 +179,10 @@ function ReviewRow({ icon, color, label, value, detail, onEdit, disabled, testID
 }
 
 export const MESSAGES_UNAVAILABLE = 'Messages is not available on this device. No greeting has been sent.';
+/** Send Now with Messages unavailable: the recipients set to Messages that were left out. */
+export function messagesUnavailableFor(names: string[]): string {
+  return `Messages is not available on this device. No greeting has been sent to ${names.join(', ')}.`;
+}
 export const MESSAGES_FAILED = 'Messages could not send this greeting. Use Continue Send Now to try again.';
 
 /** The Send Now notice (`:564`): what went out, and that Messages still waits for you. */
@@ -275,9 +279,15 @@ export function ScheduleReviewSheet({ model, visible, onClose }: { model: Manage
     }
   };
 
-  /** `sendNow()` (:545-567). */
+  /**
+   * `sendNow()` (:545-567). Android ahead of iOS: Swift refuses everyone when Messages is unavailable and
+   * any recipient has a phone. Here only the recipients whose channel is Messages need it; the rest are
+   * still sent, and nothing opens the composer on a device that has none.
+   */
   const sendNow = async () => {
-    if (recipients.some((recipient) => recipient.phone !== '') && !(await canSendMessage())) {
+    const messagesAvailable = !recipients.some((recipient) => recipient.phone !== '') || (await canSendMessage());
+    const skipped = messagesAvailable ? [] : recipients.filter((recipient) => recipient.phone !== '' && recipientChannel(model.getState(), recipient) === 'messages');
+    if (skipped.length > 0 && skipped.length === recipients.length) {
       model.getState().setError(MESSAGES_UNAVAILABLE);
       return;
     }
@@ -287,13 +297,14 @@ export function ScheduleReviewSheet({ model, visible, onClose }: { model: Manage
       model.getState().setError(null);
       if (!sendNowStarted && !(await prepare())) return;
       setSendNowStarted(true);
-      plans = await model.getState().sendImmediately();
+      plans = await model.getState().sendImmediately(skipped.map((recipient) => recipient.key));
       if (!plans) return;
       setImmediateNotice(sendNowNotice(plans));
+      if (skipped.length > 0) model.getState().setError(messagesUnavailableFor(skipped.map((recipient) => recipient.name)));
     } finally {
       setSubmitting(false);
     }
-    await composeQueue(plans.filter((plan) => plan.channel === 'messages' && plan.status === 'AWAITING_CONFIRMATION'));
+    if (messagesAvailable) await composeQueue(plans.filter((plan) => plan.channel === 'messages' && plan.status === 'AWAITING_CONFIRMATION'));
   };
 
   const visibleRecipients = showAll ? recipients : recipients.slice(0, 2);

@@ -20,7 +20,7 @@ import type { ImportantMoment, MomentsSnapshot, WishDeliveryPlan } from '../../.
 import { useAppearance } from '../../../store/appearance';
 import { FixedScheme, useTheme } from '../../../theme';
 import { momentLabel } from '../dates';
-import { MESSAGES_UNAVAILABLE, sendNowNotice } from '../ScheduleReview';
+import { MESSAGES_UNAVAILABLE, messagesUnavailableFor, sendNowNotice } from '../ScheduleReview';
 import { momentsStore } from '../store';
 import { draft, moment, plan, settings } from '../testFixtures';
 
@@ -33,9 +33,10 @@ import ManageMoment from '../../../../app/wellness/moments/manage';
 
 const sms = SMS as unknown as { isAvailableAsync: jest.Mock; sendSMSAsync: jest.Mock };
 const DAY = new Date(Date.now() + 20 * 86_400_000).toISOString().slice(0, 10);
+const EMAIL_READY: Partial<MomentsSnapshot> = { emailAccount: { email: 'me@gmail.com', status: 'connected' }, emailConfigured: true, automaticEmailEnabled: true };
 const APPROVED = { groupID: 'g', baseMessage: 'Have a wonderful day!', approvedAt: '2030-08-30T00:00:00Z' };
 
-function person(id: string, name: string, extra: Partial<ImportantMoment> = {}, selected: Record<string, boolean> = {}) {
+function person(id: string, name: string, extra: Partial<ImportantMoment> = {}, selected: Record<string, boolean> = {}, channels: Record<string, string> = {}) {
   return moment({
     id,
     type: 'birthday',
@@ -45,13 +46,13 @@ function person(id: string, name: string, extra: Partial<ImportantMoment> = {}, 
     occurrenceDate: DAY,
     nextOccurrence: DAY,
     sourceKey: `birthday:g:${id}`,
-    festivalSettings: settings({ ...APPROVED, selected }),
+    festivalSettings: settings({ ...APPROVED, selected, channels }),
     ...extra,
   });
 }
 
-function load(moments: ImportantMoment[]) {
-  const snapshot: MomentsSnapshot = { moments, emailAccount: null, emailConfigured: false, automaticEmailEnabled: false };
+function load(moments: ImportantMoment[], extra: Partial<MomentsSnapshot> = {}) {
+  const snapshot: MomentsSnapshot = { moments, emailAccount: null, emailConfigured: false, automaticEmailEnabled: false, ...extra };
   mockSnapshot.mockResolvedValue(snapshot);
   momentsStore.setState({ snapshot, owner: 'owner', error: null, busy: false, loading: false });
 }
@@ -76,8 +77,8 @@ function serve(sendNowPlans: (momentID: string) => WishDeliveryPlan[] = () => []
 }
 const calls = (operation: string) => mockPost.mock.calls.filter(([name]) => name === operation).map(([, input]) => input);
 
-async function openReview(moments: ImportantMoment[]) {
-  load(moments);
+async function openReview(moments: ImportantMoment[], extra: Partial<MomentsSnapshot> = {}) {
+  load(moments, extra);
   mockParams = { ids: moments.map((item) => item.id).join(',') };
   await render(<ManageMoment />);
   await fireEvent.press(screen.getByTestId('festival-tab-Schedule'));
@@ -197,6 +198,32 @@ describe('Send now', () => {
     await fireEvent.press(screen.getByTestId('send-now-confirm'));
     await waitFor(() => expect(screen.getByTestId('review-schedule-error').props.children).toBe(MESSAGES_UNAVAILABLE));
     expect(calls('sendGreetingNow')).toHaveLength(0);
+  });
+
+  it('sends an Email recipient with a phone when Messages is not available, without opening the composer', async () => {
+    sms.isAvailableAsync.mockResolvedValue(false);
+    serve(email);
+    await openReview([person('a', 'Sam', { email: 'sam@example.com' }, {}, { a: 'email' })], EMAIL_READY);
+    await fireEvent.press(screen.getByTestId('review-send-now'));
+    await fireEvent.press(screen.getByTestId('send-now-confirm'));
+    await waitFor(() => expect(screen.getByTestId('review-send-now-notice').props.children).toBe('1 email sent. Messages still requires you to tap Send.'));
+    expect(calls('sendGreetingNow')).toEqual([expect.objectContaining({ momentID: 'a' })]);
+    expect(screen.queryByTestId('review-schedule-error')).toBeNull();
+    expect(sms.sendSMSAsync).not.toHaveBeenCalled();
+  });
+
+  it('with Messages unavailable, still sends the Email recipients and names the Messages ones left out', async () => {
+    sms.isAvailableAsync.mockResolvedValue(false);
+    serve(email);
+    const all = { a: true, b: true };
+    const channels = { a: 'email', b: 'messages' };
+    await openReview([person('a', 'Sam', { email: 'sam@example.com' }, all, channels), person('b', 'Lee', { phone: '+15555550101' }, all, channels)], EMAIL_READY);
+    await fireEvent.press(screen.getByTestId('review-send-now'));
+    await fireEvent.press(screen.getByTestId('send-now-confirm'));
+    await waitFor(() => expect(screen.getByTestId('review-schedule-error').props.children).toBe(messagesUnavailableFor(['Lee'])));
+    expect(messagesUnavailableFor(['Lee'])).toBe('Messages is not available on this device. No greeting has been sent to Lee.');
+    expect(calls('sendGreetingNow')).toEqual([expect.objectContaining({ momentID: 'a' })]);
+    expect(sms.sendSMSAsync).not.toHaveBeenCalled();
   });
 
   it('words the notice for pending or failed email', () => {

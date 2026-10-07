@@ -1579,3 +1579,10 @@ gets the fix too, and the Swift app is to mirror it. Each fix has a test that fa
   Save, and the server treats any `kcal` as a manual correction (source MANUAL, every macro and micronutrient
   cleared), so renaming "Salmon" or moving it to another meal lost its protein and vitamin D. An edit now sends
   `kcal` only when the number changed (`CalorieTracker.tsx`, `onSave`).
+- **Android ahead of iOS: Send Now checks Messages only for the recipients set to Messages.** With Messages
+  unavailable, any recipient with a phone stopped the whole send, so a recipient set to Email was not sent
+  either. Now only the recipients whose channel is Messages need it: the others are sent, the composer is not
+  opened on a device without one, and the error names who was left out ("Messages is not available on this
+  device. No greeting has been sent to Lee." â€” new text, Swift's sentence with the names added). When every
+  recipient needs Messages, Swift's message is unchanged (`ScheduleReview.tsx` `sendNow`,
+  `sendImmediately(skip)`).
