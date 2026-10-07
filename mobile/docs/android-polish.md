@@ -1680,3 +1680,9 @@ gets the fix too, and the Swift app is to mirror it. Each fix has a test that fa
 - **Android ahead of iOS: Schedule confirmed lists send times in time order.** Swift sorts the formatted labels, so
   a group with several times listed "Oct 10" before "Oct 6"; the plans are now sorted by their instant before
   labelling (`ScheduleSuccess`).
+- **Android ahead of iOS: a yearly moment shows this year's occurrence.** Manage Moment read the stored
+  `occurrenceDate`, so a birthday saved with the birth year read "Thu, Oct 6, 1990" in the header, the Moment
+  card and Edit Moment. A yearly moment stored in an earlier year now shows its day in this year (29 February
+  as the 28th in a common year); one stored for this year or later, and a one-off, show their own date. Edit
+  Moment opens on the shown date, and a Save that leaves the date alone keeps the stored date and year
+  (`shownMomentDate` in `dates.ts`).

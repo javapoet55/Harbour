@@ -1827,6 +1827,21 @@ describe('Manage Moment, the Schedule step', () => {
     expect(mockPush).toHaveBeenCalledWith('/wellness/moments/settings');
   });
 
+  it('a yearly moment stored with an earlier year shows this year’s occurrence, and Save keeps the stored year', async () => {
+    const thisYear = `${new Date().getUTCFullYear()}-10-06`;
+    await openSchedule([birthday({ occurrenceDate: '1990-10-06', yearly: true })]);
+    const label = sendDayLabel(momentDate(thisYear, 'UTC'), 'UTC');
+    expect(within(screen.getByTestId('festival-moment')).getByText(label)).toBeTruthy();
+    expect(within(screen.getByTestId('festival-send-date')).getByText(label)).toBeTruthy();
+    expect(screen.queryByText(sendDayLabel(momentDate('1990-10-06', 'UTC'), 'UTC'))).toBeNull();
+
+    await fireEvent.press(screen.getByTestId('moment-edit'));
+    expect(screen.getByTestId('moment-edit-date')).toHaveTextContent(new RegExp(`${new Date().getUTCFullYear()}`));
+    await fireEvent.changeText(screen.getByTestId('festival-name'), 'Sam’s big day');
+    await fireEvent.press(screen.getByTestId('moment-edit-save'));
+    await waitFor(() => expect(mockPost).toHaveBeenCalledWith('festivalSave', expect.objectContaining({ title: 'Sam’s big day', date: '1990-10-06' }), undefined));
+  });
+
   it('edits the moment in Edit Moment, saving a new occasion type', async () => {
     await openSchedule();
     await fireEvent.press(screen.getByTestId('moment-edit'));
