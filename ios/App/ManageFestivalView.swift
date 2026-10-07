@@ -184,7 +184,7 @@ struct ManageFestivalView: View {
         }.accessibilityIdentifier("moment-prepare-reminder")
         Text("Reminds you to review the wish. Nothing is sent.").font(.caption).foregroundStyle(.secondary)
     }}
-    private var zonePicker:some View {HStack{Text("Time zone");Spacer();Picker("Time zone",selection:$model.zone){ForEach(TimeZone.knownTimeZoneIdentifiers,id:\.self){id in Text(TimeZone(identifier:id)?.localizedName(for:.generic,locale:.current) ?? id).tag(id)}}.labelsHidden().accessibilityIdentifier("moment-time-zone")}}
+    private var zonePicker:some View {HStack{Text("Time zone");Spacer();Picker("Time zone",selection:Binding(get:{TimeZoneNames.canonical(model.zone)},set:{model.zone=$0})){ForEach(TimeZoneNames.pickerIdentifiers(including:model.zone),id:\.self){id in Text(TimeZone(identifier:id)?.localizedName(for:.generic,locale:.current) ?? id).tag(id)}}.labelsHidden().accessibilityIdentifier("moment-time-zone")}}
     private var recipients:some View {Group{
         Text("Recipients").font(.largeTitle.bold());Text("\(model.selected.count) selected").foregroundStyle(.secondary)
         if model.recipients.isEmpty {

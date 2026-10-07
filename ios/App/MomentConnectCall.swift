@@ -252,9 +252,9 @@ struct MomentConnectSection: View {
                         Text("Time zone")
                         Spacer()
                         Picker("Time zone", selection: Binding(
-                            get: { draft.timeZone },
+                            get: { TimeZoneNames.canonical(draft.timeZone) },
                             set: { zone in model.drafts[moment.id]?.timeZone = zone; schedulePreview(moment.id) })) {
-                            ForEach(TimeZone.knownTimeZoneIdentifiers, id: \.self) { id in
+                            ForEach(TimeZoneNames.pickerIdentifiers(including: draft.timeZone), id: \.self) { id in
                                 Text(TimeZone(identifier: id)?.localizedName(for: .generic, locale: .current) ?? id).tag(id)
                             }
                         }.labelsHidden().accessibilityIdentifier("connect-zone-\(moment.id)")
