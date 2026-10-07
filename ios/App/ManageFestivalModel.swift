@@ -44,6 +44,8 @@ import CryptoKit
     @Published var catalog:[FestivalCatalogEntry]=[]
     @Published var savedPlans:[WishDeliveryPlan]=[]
     @Published var scheduleCompleted=false
+    /// Set by schedule(); the view turns it into scheduleCompleted after the review sheet is dismissed.
+    @Published var scheduleSucceeded=false
     @Published var imageData:Data?
     /// The card saved on the server, shown when this device has no artwork (e.g. saved on another device).
     @Published var storedCardImage:Data?
@@ -383,7 +385,8 @@ import CryptoKit
             }
             await store.refresh()
             originals=originals.map {original in store.moments.first(where:{$0.id==original.id}) ?? original}
-            notice="\(savedPlans.count) wishes scheduled. Messages requires confirmation.";scheduleCompleted=true;analytics.record(.scheduled)
+            // The success screen is pushed by the view once the review sheet has closed (scheduleCompleted).
+            notice="\(savedPlans.count) wishes scheduled. Messages requires confirmation.";scheduleSucceeded=true;analytics.record(.scheduled)
         } catch {self.error="\(savedPlans.count) scheduled. \(error.localizedDescription) Retry continues remaining recipients.";await store.refresh()}
     }
 }

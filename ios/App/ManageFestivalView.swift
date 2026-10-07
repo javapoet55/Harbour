@@ -135,7 +135,11 @@ struct ManageFestivalView: View {
         .recipientSheets(action:$recipientAction,recipients:model.recipients){recipient,previous in model.saveRecipient(recipient,replacing:previous)}
         .sheet(isPresented:$personalize){personalization}
         .sheet(isPresented:$imageSheet){imageConfiguration}
-        .sheet(isPresented:$scheduleConfirm,onDismiss:{model.error=nil}){confirmation}
+        .sheet(isPresented:$scheduleConfirm,onDismiss:{
+            model.error=nil
+            // Push the success screen only once the review sheet is gone, not underneath it while it closes.
+            if model.scheduleSucceeded { model.scheduleSucceeded=false; model.scheduleCompleted=true }
+        }){confirmation}
         .sheet(isPresented:$momentEditor){MomentDetailsSheet(model:model)}
     }
     private var identity:some View {
@@ -436,6 +440,8 @@ private struct FestivalScheduleReview:View {
     @State private var submitting=false
     @State private var showAllRecipients=false
     @State private var sendNowConfirmation=false
+    /// Send Now was confirmed; sending starts when the confirmation sheet has finished closing.
+    @State private var sendAfterConfirmation=false
     @State private var sendNowStarted=false
     @State private var immediateNotice:String?
     @State private var messagePlan:WishDeliveryPlan?
@@ -498,7 +504,10 @@ private struct FestivalScheduleReview:View {
                     recipientDraft=nil
                 } cancel:{recipientDraft=nil}
             }
-            .sheet(isPresented:$sendNowConfirmation) {
+            .sheet(isPresented:$sendNowConfirmation,onDismiss:{
+                // Start only after the sheet is gone, so the Messages composer is not presented while it closes.
+                if sendAfterConfirmation { sendAfterConfirmation=false; Task{await sendNow()} }
+            }) {
                 NavigationStack {
                     ScrollView {
                         VStack(alignment:.leading,spacing:18) {
@@ -514,7 +523,7 @@ private struct FestivalScheduleReview:View {
                         }.padding(20)
                     }
                     .safeAreaInset(edge:.bottom) {
-                        Button("Send email & open Messages") {sendNowConfirmation=false;Task{await sendNow()}}
+                        Button("Send email & open Messages") {sendAfterConfirmation=true;sendNowConfirmation=false}
                             .buttonStyle(ScheduleActionStyle()).padding().background(.regularMaterial)
                     }
                     .navigationTitle("Send now").navigationBarTitleDisplayMode(.inline)
@@ -605,7 +614,7 @@ private struct FestivalScheduleReview:View {
         if model.needsScheduleConfirmation { close();return }
         guard model.error == nil else {return}
         await model.schedule()
-        if model.scheduleCompleted { close() }
+        if model.scheduleSucceeded { close() }
     }
 }
 private struct ScheduleRecipientEditor:View {
