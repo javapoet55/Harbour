@@ -42,6 +42,14 @@ describe('shareUrl', () => {
 });
 
 describe('Share List', () => {
+  it('has a Done button that closes it, besides swiping (Android ahead of iOS)', async () => {
+    const onClose = jest.fn();
+    await render(<ShareListSheet list={list()} onClose={onClose} onUpdate={jest.fn()} onWeeklyEmail={jest.fn()} visible />);
+    await fireEvent.press(screen.getByTestId('shopping-share-done'));
+    expect(onClose).toHaveBeenCalled();
+    expect(screen.getByText('Done')).toBeTruthy();
+  });
+
   it('offers the weekly email to the store manager under Scheduled sharing', async () => {
     const onWeeklyEmail = jest.fn();
     await render(<ShareListSheet list={list()} onClose={jest.fn()} onUpdate={jest.fn()} onWeeklyEmail={onWeeklyEmail} visible />);

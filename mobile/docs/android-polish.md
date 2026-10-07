@@ -1787,3 +1787,6 @@ match". Logic fixes have a test that fails without them.
   from resizing, but that varies by version and OEM, so the Tasks tab sets `tabBarHideOnKeyboard`: the bar is hidden
   while the keyboard is up; other tabs are unchanged (`app/(tabs)/_layout.tsx`; fixed from code, not yet seen on
   device).
+- **Android ahead of iOS: Share List has a Done button.** It had no close button; only a swipe (or the system Back)
+  closed it. A bold Done in the sheet's bar closes it (iOS 6e17c47 wording) (`ShareListSheet` in `sheets.tsx`; fixed
+  from code, not yet seen on device).
