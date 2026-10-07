@@ -414,6 +414,28 @@ describe('the shortlist', () => {
     expect(screen.getByText('Phone number copied.')).toBeTruthy();
   });
 
+  it('says "Phone number copied." as a confirmation, not an error: the search spinner stays', async () => {
+    mockLoad.mockResolvedValue(envelope(ready({ status: 'RUNNING' })));
+    await renderCard();
+    await fireEvent.press(await screen.findByTestId('agent-copy-phone-0'));
+    expect(screen.getByTestId('agent-notice').props.children).toBe('Phone number copied.');
+    expect(screen.queryByTestId('agent-message')).toBeNull();
+    expect(screen.getByText('Finding the best business near your place…')).toBeTruthy();
+  });
+
+  it('says "Draft copied." as a confirmation, and the next action clears it', async () => {
+    mockLoad.mockResolvedValue(envelope(ready()));
+    mockUpdate.mockResolvedValue(envelope(ready()));
+    await renderCard();
+    await fireEvent.press(await screen.findByTestId('agent-draft-toggle-0'));
+    await fireEvent.press(screen.getByLabelText('Copy draft'));
+    expect(screen.getByTestId('agent-notice').props.children).toBe('Draft copied.');
+    expect(screen.queryByTestId('agent-message')).toBeNull();
+    await fireEvent.press(screen.getByLabelText('Save draft'));
+    await waitFor(() => expect(mockUpdate).toHaveBeenCalled());
+    expect(screen.queryByTestId('agent-notice')).toBeNull();
+  });
+
   it('chooses a business for the stored action', async () => {
     useCoordinator.getState().reset({ actions: [storedAction()] });
     mockLoad.mockResolvedValue(envelope(ready()));

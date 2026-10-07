@@ -129,6 +129,9 @@ export function TaskAgentCard({ taskId, onResearchAvailable, onFieldFocus, onFie
   const [busy, setBusy] = useState(false);
   const [searchRequestPending, setSearchRequestPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Android ahead of iOS: "Phone number copied." and "Draft copied." are confirmations. Swift puts them in
+  // `error`, so they read as errors and hide the search spinner; here they have their own line.
+  const [notice, setNotice] = useState<string | null>(null);
   const autoSearched = useRef<string | null>(null);
   // An update that failed keeps its message until the next action, so a 400 is never wiped by the
   // reload that follows it — which would leave the retired-question step showing a bare spinner.
@@ -146,6 +149,7 @@ export function TaskAgentCard({ taskId, onResearchAvailable, onFieldFocus, onFie
   if (query.dataUpdatedAt !== seenDataAt) {
     setSeenDataAt(query.dataUpdatedAt);
     if (!busy && !actionFailed.current) setError(null);
+    setNotice(null);
   }
   const [seenErrorAt, setSeenErrorAt] = useState(0);
   if (query.isError && query.errorUpdatedAt !== seenErrorAt) {
@@ -194,6 +198,7 @@ export function TaskAgentCard({ taskId, onResearchAvailable, onFieldFocus, onFie
   const act = (action: TaskAgentAction, options: { key?: string; answer?: string; candidateId?: string } = {}) => {
     if (run === null && action !== 'prepare') return;
     actionFailed.current = false;
+    setNotice(null);
     setBusy(true);
     const searching = action === 'search' || action === 'resume' || action === 'retry';
     setSearchRequestPending(searching);
@@ -399,7 +404,7 @@ export function TaskAgentCard({ taskId, onResearchAvailable, onFieldFocus, onFie
               colors={colors}
               onPress={() => {
                 void Clipboard.setStringAsync(candidate.phone);
-                setError('Phone number copied.');
+                setNotice('Phone number copied.');
               }}
               testID={`agent-copy-phone-${candidate.id}`}
             />
@@ -550,7 +555,7 @@ export function TaskAgentCard({ taskId, onResearchAvailable, onFieldFocus, onFie
                   onPress={() => {
                     Keyboard.dismiss();
                     void Clipboard.setStringAsync(draft);
-                    setError('Draft copied.');
+                    setNotice('Draft copied.');
                   }}
                   testID={`agent-copy-draft-${candidate.id}`}
                 />
@@ -788,6 +793,10 @@ export function TaskAgentCard({ taskId, onResearchAvailable, onFieldFocus, onFie
         {error !== null ? (
           <Text accessibilityLiveRegion="polite" style={[styles.caption, { color: theme.colors.ink }]} testID="agent-message">
             {error}
+          </Text>
+        ) : notice !== null ? (
+          <Text accessibilityLiveRegion="polite" style={[styles.caption, { color: theme.colors.ink }]} testID="agent-notice">
+            {notice}
           </Text>
         ) : null}
       </View>

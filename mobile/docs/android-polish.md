@@ -1593,3 +1593,7 @@ gets the fix too, and the Swift app is to mirror it. Each fix has a test that fa
   `onDismiss` on iOS and, on Android (no `onDismiss`; the dialog is gone once the hide is committed), an
   effect on the hide. The jest Modal mock now calls `onDismiss` when an iOS Modal hides, and a test can hold
   those calls (`modalDismissals`, `jest.setup.js`).
+- **Android ahead of iOS: the task agent card's "Phone number copied." and "Draft copied." are confirmations.**
+  Swift puts them in `error`, so they read as errors, hid the search spinner while a run was searching, and
+  turned the retired-question step's spinner into "Retry search". They now have their own line
+  (`agent-notice`), in the same place and style, cleared by the next action or load (`TaskAgentCard.tsx`).
