@@ -275,6 +275,26 @@ describe('the action screen', () => {
     await waitFor(() => expect(screen.getByText('Choose how to contact Damien Hall.')).toBeTruthy());
   });
 
+  it('offline, a personal task found in Contacts carries on without the business check', async () => {
+    mockAgent.mockRejectedValueOnce(new Error('offline'));
+    mockResolve.mockResolvedValue([DAMIEN]);
+    await open();
+    await waitFor(() => expect(screen.getByText('Choose how to contact Damien Hall.')).toBeTruthy());
+    expect(screen.queryByText('Couldn’t check this task. Please retry.')).toBeNull();
+    expect(screen.getByTestId('action-call')).toBeTruthy();
+  });
+
+  it('offline, a task with a chosen business still asks for a retry', async () => {
+    const id = await seedAction();
+    useCoordinator.getState().update(id, (item) => ({ ...item, businessCandidateID: 'place-1' }));
+    mockAgent.mockRejectedValueOnce(new Error('offline'));
+    mockResolve.mockResolvedValue([DAMIEN]);
+    mockParams = { id };
+    await show(<TaskActionScreen />);
+    await waitFor(() => expect(screen.getByText('Couldn’t check this task. Please retry.')).toBeTruthy());
+    expect(mockResolve).not.toHaveBeenCalled();
+  });
+
   it('sends a business task to Task Details to choose a business', async () => {
     mockAgent.mockResolvedValue({ run: run([ACE]), intent: { eligible: true } });
     await open();

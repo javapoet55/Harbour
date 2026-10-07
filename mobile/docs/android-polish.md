@@ -1643,3 +1643,8 @@ gets the fix too, and the Swift app is to mirror it. Each fix has a test that fa
   Contacts guidance, any other failure says "Couldnâ€™t look up this contact. Choose a contact or enter details
   below." (new text); the message line now sits above Choose contact / Enter contact details
   (`app/action/[id].tsx`, `lookupMessage`).
+- **Android ahead of iOS: offline, a personal Nexdo Action does not need the business check.** With no saved
+  contact, Swift asks the task agent endpoint first and stops at "Couldnâ€™t check this task" when that fails,
+  even for a plain "Call Asha". Now a failed check only stops a task whose business was already chosen; any
+  other task goes on to Contacts, and only when nobody is found (it may still be a business) does it ask for
+  the retry as before (`loadDestination`).
