@@ -631,7 +631,9 @@ describe('Item Alternatives', () => {
     await act(async () => answer(ANSWER));
     expect(screen.getByTestId('alternatives-original')).toHaveTextContent(/2% milk1Original Item/);
     expect(screen.getByText('AI Recommended Alternatives')).toBeTruthy();
-    expect(screen.getAllByText('Suggested alternative')).toHaveLength(2);
+    // The answer's "2% milk" is the item itself and is not offered (Android ahead of iOS).
+    expect(screen.queryByTestId('alternative-row-2% milk')).toBeNull();
+    expect(screen.getAllByText('Suggested alternative')).toHaveLength(1);
     expect(screen.getByText('Lower sugar · Lactose-free')).toBeTruthy();
     expect(screen.getByText('67 cal · 3g protein · 4g fat · 5g carbs · per 100 g')).toBeTruthy();
     expect(screen.getByText('Nutrition details unavailable')).toBeTruthy();
@@ -720,9 +722,11 @@ describe('Item Alternatives', () => {
   });
 
   it('refuses to add an alternative already in the cart', async () => {
-    await open();
-    await waitFor(() => expect(screen.getByTestId('alternatives.details.2% milk')).toBeTruthy());
-    await fireEvent.press(screen.getByTestId('alternatives.details.2% milk'));
+    // "Parity milk" is the list's other item.
+    const inCart = { name: 'Parity milk', category: 'Dairy & Eggs', quantity: '2', size: 'bottles', reason: 'In cart', detail: 'Already listed', facts: null };
+    await open(async () => ({ ...ANSWER, alternatives: [...ANSWER.alternatives, inCart] }));
+    await waitFor(() => expect(screen.getByTestId('alternatives.details.Parity milk')).toBeTruthy());
+    await fireEvent.press(screen.getByTestId('alternatives.details.Parity milk'));
     await fireEvent.press(screen.getByTestId('alternative.detail.add'));
     await waitFor(() => expect(screen.getByTestId('alternative.saveError')).toHaveTextContent('This alternative is already in your cart.'));
     expect(mockPost).not.toHaveBeenCalled();

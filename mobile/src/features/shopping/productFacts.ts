@@ -162,6 +162,15 @@ export function difference(value: ShoppingComparison, nutrient: ShoppingNutrient
   return delta < 0 ? { kind: 'lower', amount: -delta } : { kind: 'higher', amount: delta };
 }
 
+/**
+ * Android ahead of iOS: Swift lists whatever the server answers, which can include the item itself ("2% milk"
+ * for 2% milk). An alternative with the item's own name, ignoring case and spacing, is not offered.
+ */
+export function isOriginalItem(alternative: Pick<ShoppingAlternative, 'name'>, original: { name: string }): boolean {
+  const key = (name: string) => name.trim().replace(/\s+/g, ' ').toLowerCase();
+  return key(alternative.name) === key(original.name);
+}
+
 /** `ShoppingGoal`, in `allCases` order. */
 export const SHOPPING_GOALS = [
   'Lower fat',

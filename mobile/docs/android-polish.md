@@ -1633,3 +1633,6 @@ gets the fix too, and the Swift app is to mirror it. Each fix has a test that fa
   few tenths of a gram showed as "â†‘ 0 g" in the comparison table and earned a label such as "Higher protein"
   (and passed that filter). A change that rounds to 0 at the table's whole units is now "= Same" and earns no
   goal (`difference` in `productFacts.ts`).
+- **Android ahead of iOS: Item Alternatives does not offer the item itself.** The server's answer can include the
+  item ("2% milk" for 2% milk); an alternative with the item's own name, ignoring case and spacing, is left out,
+  and the empty states count only what is offered (`isOriginalItem` in `productFacts.ts`).

@@ -6,6 +6,7 @@ import {
   difference,
   explanation,
   goalSupported,
+  isOriginalItem,
   matchLabel,
   nutrientValue,
   priceLabel,
@@ -177,4 +178,9 @@ describe('listInput sends what ShoppingInput and GroceryItem.encode send', () =>
     expect(input).toMatchObject({ storeName: 'Costco', storeZip: '94526' });
     expect(input).not.toHaveProperty('storePlaceId');
   });
+});
+
+it('does not offer the item itself as an alternative', () => {
+  expect(isOriginalItem({ name: ' 2%  Milk ' }, { name: '2% milk' })).toBe(true);
+  expect(isOriginalItem({ name: 'Lactose-free milk' }, { name: '2% milk' })).toBe(false);
 });
