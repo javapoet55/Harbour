@@ -443,7 +443,13 @@ import XCTest
         generate.tap()
         let use=app.buttons["Use This Card"]
         XCTAssertTrue(use.waitForExistence(timeout:10))
-        for _ in 0..<6 {app.swipeDown()}
+        // Scroll back only until the card's top is below the bar: a swipe down at the top of the sheet dismisses it.
+        let card=app.descendants(matching:.any).matching(identifier:"greeting-card-preview").firstMatch
+        let bar=app.navigationBars["Greeting Card"]
+        XCTAssertTrue(card.waitForExistence(timeout:5))
+        for _ in 0..<6 {if card.frame.minY>=bar.frame.maxY {break};app.swipeDown()}
+        XCTAssertTrue(bar.exists)
+        XCTAssertGreaterThanOrEqual(card.frame.minY,bar.frame.maxY)
         let preview=XCTAttachment(screenshot:app.screenshot());preview.name="Full greeting card preview";preview.lifetime = .keepAlways;add(preview)
         for _ in 0..<8 {if use.isHittable {break};app.swipeUp()}
         let shot=XCTAttachment(screenshot:app.screenshot());shot.name="Greeting card editor";shot.lifetime = .keepAlways;add(shot)

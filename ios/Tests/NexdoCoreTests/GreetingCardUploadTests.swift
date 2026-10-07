@@ -111,10 +111,41 @@ private actor Encoder {
     #expect(requests.first?.path == "/api/moments/m1/card")
 }
 
+/// A folder for one test where the cache's complete file protection has no effect. The Mac's data volume enforces
+/// it, so while the Mac is locked the cache can neither write nor read its files there; on macOS the folder is on
+/// a small HFS+ disk image, which has no protection classes.
+private struct UnprotectedFolder {
+    let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    var url: URL { root.appendingPathComponent("volume/GreetingCards", isDirectory: true) }
+    init() throws {
+        #if os(macOS)
+        let volume = root.appendingPathComponent("volume").path, image = root.appendingPathComponent("cards.dmg").path
+        try FileManager.default.createDirectory(atPath: volume, withIntermediateDirectories: true)
+        try Self.hdiutil("create", "-quiet", "-size", "1m", "-fs", "HFS+", "-volname", "GreetingCards", image)
+        try Self.hdiutil("attach", "-quiet", "-nobrowse", "-mountpoint", volume, image)
+        #endif
+    }
+    func remove() {
+        #if os(macOS)
+        try? Self.hdiutil("detach", "-quiet", "-force", root.appendingPathComponent("volume").path)
+        #endif
+        try? FileManager.default.removeItem(at: root)
+    }
+    #if os(macOS)
+    private static func hdiutil(_ arguments: String...) throws {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/hdiutil")
+        process.arguments = arguments
+        try process.run(); process.waitUntilExit()
+        guard process.terminationStatus == 0 else { throw CocoaError(.fileWriteUnknown, userInfo: ["hdiutil": arguments]) }
+    }
+    #endif
+}
+
 @Test func cacheKeepsDownloadedCardsBySHA256() async throws {
-    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-    defer { try? FileManager.default.removeItem(at: directory) }
-    let cache = GreetingCardCache(directory: directory)
+    let folder = try UnprotectedFolder()
+    defer { folder.remove() }
+    let cache = GreetingCardCache(directory: folder.url)
     let api = try client("download", [(200, "IMAGE:card-bytes")])
     let card = GreetingCardInfo(id: "c", mime: "image/jpeg", sha256: sha, createdAt: "", size: 10)
     #expect(try await cache.image(for: card, momentID: "m1", client: api) == Data("card-bytes".utf8))
