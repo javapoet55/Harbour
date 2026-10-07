@@ -85,6 +85,13 @@ describe('the resolved wish text', () => {
     expect(greetingMessage('Happy anniversary', 'birthday', 'Visakan')).toBe('Happy Anniversary, Visakan!');
   });
 
+  it('keeps a line break after a dropped name, as the apps do', () => {
+    expect(greetingMessage('Happy Birthday, Visakan!\nHave fun', 'birthday', 'Sam')).toBe('Happy Birthday, Sam! \nHave fun');
+    expect(greetingMessage('Happy Birthday, Visakan!\n\nHave fun', 'birthday', 'Sam')).toBe('Happy Birthday, Sam! \n\nHave fun');
+    // Spaces and tabs after the dropped name still go.
+    expect(greetingMessage('Happy Birthday, Visakan! \t Have fun', 'birthday', 'Sam')).toBe('Happy Birthday, Sam! Have fun');
+  });
+
   it('is unchanged when the message opens with the moment’s own greeting', () => {
     expect(greetingMessage('Happy Anniversary! Here’s to ten years.', 'anniversary', 'Asha')).toBe('Happy Anniversary, Asha! Here’s to ten years.');
     expect(greetingMessage('get well soon. Thinking of you.', 'getWellSoon', 'Asha')).toBe('Get well soon, Asha! Thinking of you.');

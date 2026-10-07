@@ -58,7 +58,9 @@ export function greetingMessage(body: string, type: string, firstName: string) {
     let rest = text.slice(at);
     // "Happy Birthday, Visakan! …": a comma after the opening means a name rides inside the greeting
     // itself — drop it (a capitalized phrase ending in '!') so it isn't sent to the new recipient.
-    if (comma) rest = rest.replace(/^\p{Lu}[^!.\n]{0,60}!/u, '').trimStart();
+    // Only spaces and tabs are trimmed after it, as the apps do (Swift's `.whitespaces`): a line break
+    // stays, so the text sent matches the preview.
+    if (comma) rest = rest.replace(/^\p{Lu}[^!.\n]{0,60}!/u, '').replace(/^[\p{Zs}\t]+/u, '');
     return `${opening}, ${firstName.trim()}!` + (rest ? ' ' + rest : '');
   }
   return `${greeting} ${text}`;
