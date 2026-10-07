@@ -1666,3 +1666,7 @@ gets the fix too, and the Swift app is to mirror it. Each fix has a test that fa
   now use the chosen recipient ("Dismiss Ace Plumbing action"), as the card's title does (`TodayActions.tsx`,
   `SnoozeMenu recipient`). The other Today card items in Â§22 (a queue row whose task is not loaded, overdue
   minute rounding) were not in this pass.
+- **Android ahead of iOS: closing Tasks search restores the filters it reset.** Opening search sets All dates,
+  All time, All statuses and All priorities; Swift's close only clears the term, so the list stayed there. The
+  store now keeps the filters from before the search, and closing (the magnifier or the field's xmark) puts each
+  back unless it was changed during the search (`endSearch` in `lib/taskQuery.ts`, `useTaskQuery`).

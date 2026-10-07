@@ -60,6 +60,7 @@ export default function Tasks() {
   const [conflict, setConflict] = useState<ScheduleConflict | null>(null);
   const [rangeOpen, setRangeOpen] = useState(false);
   const beginSearch = useTaskQuery((state) => state.beginSearch);
+  const endSearch = useTaskQuery((state) => state.endSearch);
   // `@FocusState private var searchFocused` (RootView.swift:1672).
   const searchField = useRef<TextInput>(null);
 
@@ -96,12 +97,12 @@ export default function Tasks() {
   };
 
   // The magnifier (RootView.swift:1792-1797): opening a search resets the filters to every date,
-  // status and priority (`beginSearch`); closing it clears the term only.
+  // status and priority (`beginSearch`); closing it clears the term and restores them (`endSearch`).
   const toggleSearch = () => {
     const next = !searching;
     setSearching(next);
     if (next) beginSearch();
-    else setQuery({ search: '' });
+    else endSearch();
     if (next) setTimeout(() => searchField.current?.focus(), 0);
     else searchField.current?.blur();
   };
@@ -191,7 +192,7 @@ export default function Tasks() {
                   accessibilityRole="button"
                   accessibilityLabel="Close search"
                   onPress={() => {
-                    setQuery({ search: '' });
+                    endSearch();
                     setSearching(false);
                     searchField.current?.blur();
                   }}

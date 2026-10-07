@@ -268,7 +268,30 @@ export function snapshot(query: TaskQuery, tasks: NexdoTask[], timeZone: string,
  * completion states. `earliestFirst` is left as it is.
  */
 export function beginSearch(query: TaskQuery): TaskQuery {
-  return { ...query, date: 'All', historyRange: 'All time', status: 'All', priority: 'All', search: '' };
+  return { ...query, ...SEARCH_FILTERS, search: '' };
+}
+
+/** The filters `beginSearch` resets, at the values it sets. */
+const SEARCH_FILTERS = { date: 'All', historyRange: 'All time', status: 'All', priority: 'All' } as const satisfies Partial<TaskQuery>;
+export type SearchFilters = Pick<TaskQuery, keyof typeof SEARCH_FILTERS>;
+
+export function searchFilters(query: TaskQuery): SearchFilters {
+  return { date: query.date, historyRange: query.historyRange, status: query.status, priority: query.priority };
+}
+
+/**
+ * Closing search. Android ahead of iOS: Swift only clears the term, so the list stays on All / All time / All
+ * statuses after a search. Each filter `beginSearch` reset goes back to what it was before, unless the person
+ * changed it during the search.
+ */
+export function endSearch(query: TaskQuery, before: SearchFilters | null): TaskQuery {
+  const restored: Partial<TaskQuery> = {};
+  if (before) {
+    for (const key of Object.keys(SEARCH_FILTERS) as (keyof SearchFilters)[]) {
+      if (query[key] === SEARCH_FILTERS[key]) Object.assign(restored, { [key]: before[key] });
+    }
+  }
+  return { ...query, ...restored, search: '' };
 }
 
 /**

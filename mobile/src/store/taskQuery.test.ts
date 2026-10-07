@@ -11,6 +11,15 @@ describe('useTaskQuery.beginSearch', () => {
     expect(useTaskQuery.getState().query).toMatchObject({ date: 'All', historyRange: 'All time', status: 'All', priority: 'All', search: '' });
   });
 
+  it('endSearch restores what beginSearch reset, but keeps a filter changed during the search', () => {
+    useTaskQuery.getState().setQuery({ date: 'Tomorrow', historyRange: 'Last Month', status: 'Completed', priority: 'HIGH' });
+    useTaskQuery.getState().beginSearch();
+    useTaskQuery.getState().setQuery({ search: 'rent', priority: 'LOW' });
+    useTaskQuery.getState().endSearch();
+    expect(useTaskQuery.getState().query).toMatchObject({ date: 'Tomorrow', historyRange: 'Last Month', status: 'Completed', priority: 'LOW', search: '' });
+    expect(useTaskQuery.getState().beforeSearch).toBeNull();
+  });
+
   it('leaves earliestFirst untouched', () => {
     useTaskQuery.getState().setQuery({ earliestFirst: false });
     useTaskQuery.getState().beginSearch();
