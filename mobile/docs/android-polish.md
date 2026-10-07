@@ -1636,3 +1636,10 @@ gets the fix too, and the Swift app is to mirror it. Each fix has a test that fa
 - **Android ahead of iOS: Item Alternatives does not offer the item itself.** The server's answer can include the
   item ("2% milk" for 2% milk); an alternative with the item's own name, ignoring case and spacing, is left out,
   and the empty states count only what is offered (`isOriginalItem` in `productFacts.ts`).
+- **Android ahead of iOS: Nexdo Action tells "no contact", "Contacts access refused" and "lookup failed" apart,
+  above the buttons.** Swift reads every lookup failure as "No contact selected. Choose a contact or enter
+  details below.", so the "Allow Nexdo to access Contacts in Settings, then try again." guidance never showed,
+  and the line sat under the buttons it calls "below". No match keeps Swift's text, refused access shows the
+  Contacts guidance, any other failure says "Couldnâ€™t look up this contact. Choose a contact or enter details
+  below." (new text); the message line now sits above Choose contact / Enter contact details
+  (`app/action/[id].tsx`, `lookupMessage`).

@@ -23,7 +23,7 @@ import {
   type ActionAddress,
   type ActionContact,
 } from '../../src/actions/contacts';
-import { ACTION_ERRORS } from '../../src/actions/errors';
+import { ACTION_ERRORS, TaskActionError } from '../../src/actions/errors';
 import { taskAgentApi, type TaskAgentRun } from '../../src/api/taskAgent';
 import { ActionContactDetailsSheet } from '../../src/components/ActionContactDetailsSheet';
 import { TaskSymbol } from '../../src/components/TaskSymbol';
@@ -198,9 +198,8 @@ export default function TaskAction() {
           return matches[0];
         }
         setContacts(matches);
-      } catch {
-        // Every lookup failure, Contacts access included, reads the same (`:349`; §22 "For the team").
-        if (live()) setError('No contact selected. Choose a contact or enter details below.');
+      } catch (cause) {
+        if (live()) setError(lookupMessage(cause));
       }
       return null;
     } finally {
@@ -468,6 +467,13 @@ export default function TaskAction() {
               </>
             )}
 
+            {/* Above the recipient buttons, which its "Choose a contact or enter details below." points to. */}
+            {error !== null ? (
+              <Text style={[theme.typography.body, { color: theme.colors.danger }]} testID="action-error">
+                {error}
+              </Text>
+            ) : null}
+
             {/* The recipient buttons (`:175-188`). */}
             {!checking && !checkFailed ? (
               businessFlow ? (
@@ -542,11 +548,6 @@ export default function TaskAction() {
               </>
             ) : null}
 
-            {error !== null ? (
-              <Text style={[theme.typography.body, { color: theme.colors.danger }]} testID="action-error">
-                {error}
-              </Text>
-            ) : null}
             {/* `.foregroundStyle(.secondary)` (TaskActionView.swift:173). */}
             {receipt !== null ? (
               <Text style={[theme.typography.body, { color: theme.colors.secondaryLabel }]} testID="action-receipt">
@@ -646,6 +647,16 @@ export default function TaskAction() {
       ) : null}
     </SafeAreaView>
   );
+}
+
+/**
+ * Android ahead of iOS: Swift reads every lookup failure, Contacts access refused included, as "No contact
+ * selected…" (TaskActionView.swift:349), so the Contacts guidance never shows. Each now says what happened.
+ */
+function lookupMessage(cause: unknown): string {
+  if (cause instanceof TaskActionError && cause.code === 'contactsDenied') return ACTION_ERRORS.contactsDenied;
+  if (cause instanceof TaskActionError && cause.code === 'noContact') return 'No contact selected. Choose a contact or enter details below.';
+  return 'Couldn’t look up this contact. Choose a contact or enter details below.';
 }
 
 type ButtonProps = { label: string; onPress: () => void; disabled: boolean; testID: string };

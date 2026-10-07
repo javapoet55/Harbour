@@ -6,6 +6,7 @@ import { palettes } from '../theme';
 
 import type { NexdoTask } from '../api';
 import { useCoordinator, scheduledWork } from '../actions/coordinator';
+import { TaskActionError } from '../actions/errors';
 import { addDays, startOfDay } from '../lib/taskQuery';
 import { queryKeys } from '../query/keys';
 import { useSession } from '../store/session';
@@ -205,7 +206,7 @@ describe('the action screen', () => {
   });
 
   it('says "No contact selected" and offers no channel when nobody matches', async () => {
-    mockResolve.mockRejectedValue(new Error('No matching contact'));
+    mockResolve.mockRejectedValue(new TaskActionError('noContact'));
     await open();
 
     await waitFor(() => expect(screen.getByTestId('action-error')).toHaveTextContent('No contact selected. Choose a contact or enter details below.'));
@@ -213,6 +214,22 @@ describe('the action screen', () => {
     expect(screen.getByText('Choose a contact or enter a phone number or email address.')).toBeTruthy();
     expect(screen.queryByTestId('action-call')).toBeNull();
     expect(screen.queryByTestId('action-email')).toBeNull();
+  });
+
+  it('tells a refused Contacts access and a failed lookup apart from "no contact", above the buttons', async () => {
+    mockResolve.mockRejectedValue(new TaskActionError('contactsDenied'));
+    await open();
+    await waitFor(() => expect(screen.getByTestId('action-error')).toHaveTextContent('Allow Nexdo to access Contacts in Settings, then try again.'));
+    // The message says "below", so it sits above Choose contact and Enter contact details.
+    const tree = JSON.stringify(screen.toJSON());
+    expect(tree.indexOf('"action-error"')).toBeLessThan(tree.indexOf('"action-pick-contact"'));
+    expect(tree.indexOf('"action-error"')).toBeLessThan(tree.indexOf('"action-enter-details"'));
+  });
+
+  it('says a lookup failed when Contacts could not be searched', async () => {
+    mockResolve.mockRejectedValue(new Error('Contacts store unavailable'));
+    await open();
+    await waitFor(() => expect(screen.getByTestId('action-error')).toHaveTextContent('Couldn’t look up this contact. Choose a contact or enter details below.'));
   });
 
   it('asks which person when the name matches more than one, then waits for a channel', async () => {
