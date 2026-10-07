@@ -226,7 +226,7 @@ struct TaskDetailsView: View {
                         ProjectAssignmentField(projectID: $draft.projectId)
                     }
                 }
-            }.font(.subheadline).padding(14).background(.white, in: RoundedRectangle(cornerRadius: 18))
+            }.font(.subheadline).padding(14).background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 18))
                 .overlay(RoundedRectangle(cornerRadius: 18).stroke(Color.nexdoIndigo.opacity(0.05)))
                 .shadow(color: Color.nexdoIndigo.opacity(0.04), radius: 10, y: 4)
         }
