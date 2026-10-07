@@ -32,6 +32,17 @@ public enum BriefContent {
         if value.isEmpty { return false }
         return !["none detected", "nothing to report", "no tasks", "no open focus", "no matching actionable", "no calendar appointment", "no hard,", "no conflicts", "no schedule conflicts", "there's no overloaded", "the main risk is drift", "the main live planning focus", "past contact and admin tasks", "task calendar link(s) changed outside", "their current calendar blocks are protected"].contains { value.contains($0) }
     }
+    /// A bullet that says there is nothing ("No deadlines appear to fall today."): shown, but not an item to count.
+    public static func isEmptyStatement(_ text: String) -> Bool {
+        let value = text.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: "’", with: "'")
+            .replacingOccurrences(of: "^\\d+[.)]\\s*", with: "", options: .regularExpression)
+        return ["no ", "none ", "none.", "nothing ", "there are no ", "there is no ", "there's no ", "there aren't any ", "there isn't any ",
+                "you have no ", "you don't have any ", "you do not have any "].contains { value.hasPrefix($0) }
+    }
+    /// What a section's badge and its page count: its items, leaving out bullets that only say there is nothing.
+    /// Counting every bullet put "Upcoming Deadlines 2" over "No deadlines appear to fall today".
+    public static func itemCount(_ items: [String]) -> Int { items.filter { !isEmptyStatement($0) }.count }
     public static func taskTitleMatches(_ title: String, text: String) -> Bool {
         let value = text.trimmingCharacters(in: .whitespacesAndNewlines)
             .replacingOccurrences(of: "^\\d+[.)]\\s*", with: "", options: .regularExpression)

@@ -35,7 +35,8 @@ struct BriefSectionDetailView: View {
                 }.accessibilityLabel("Back to briefing")
                 VStack(spacing: 4) {
                     Text(title).font(.title2.bold()).multilineTextAlignment(.center)
-                    Text("\(items.count) \(items.count == 1 ? "item" : "items") to \(isPriority ? "focus on" : "review")")
+                    let count = BriefContent.itemCount(items)
+                    Text(count == 0 ? "Nothing to \(isPriority ? "focus on" : "review")" : "\(count) \(count == 1 ? "item" : "items") to \(isPriority ? "focus on" : "review")")
                         .font(.subheadline).foregroundStyle(secondary)
                 }.frame(maxWidth: .infinity)
                 Menu {

@@ -176,8 +176,11 @@ struct DailyBriefView: View {
                 VStack(alignment: .leading, spacing: 6) {
                     HStack(spacing: 8) {
                         Text(title).font(.headline).fixedSize(horizontal: false, vertical: true)
-                        Text("\(section.items.count)").font(.subheadline.bold()).foregroundStyle(color)
-                            .padding(6).background(color.opacity(0.12), in: Circle())
+                        let count = BriefContent.itemCount(section.items)
+                        if count > 0 {
+                            Text("\(count)").font(.subheadline.bold()).foregroundStyle(color)
+                                .padding(6).background(color.opacity(0.12), in: Circle())
+                        }
                     }
                     Text(section.items.first ?? "Nothing to report.").font(.subheadline).foregroundStyle(secondary).lineLimit(2)
                 }.frame(maxWidth: .infinity, alignment: .leading)
