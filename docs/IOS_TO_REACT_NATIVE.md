@@ -2931,7 +2931,7 @@ first, unchanged; the Mac reference pass’s items follow, with their captures.
 - **The Calorie Tracker guide promises features the tracker does not have.** "Quickly add what you eat by
   search, scan, or voice" and "Choose a goal like maintain, lose, or gain" (`WellnessModuleGuide.swift:32-33`):
   there is no food search, barcode scan or in-app voice entry, and no maintain / lose / gain choice — only a
-  daily calorie number. Copied unchanged. **Fixed on iOS `bc484f6`.**
+  daily calorie number. Copied unchanged. **Fixed on iOS `bc484f6`, wording aligned with Android in `72da35b`.**
 
 - **Account: only Change password keeps the card.** In `ProfileView` the `.padding(8).profileCard()` now
   applies to the Change password row alone (`ProfileView.swift:68-69`); Help, Feedback and "Edit profile and
@@ -3013,7 +3013,7 @@ first, unchanged; the Mac reference pass’s items follow, with their captures.
   adds a newline, so the rating and **Submit** are covered until you scroll. **Fixed on Android `27841b1` (a Done capsule on the keyboard); iOS to mirror.** **Fixed on iOS `4400066`.**
 - **Tasks search**: the tab bar rides up above the keyboard (`tasks-search-keyboard`). **Fixed on iOS `ac9c619`.**
 - **Shopping Recommendations** promises "your list changes after you approve them", but the answer
-  has no approve or add control (`AskNexdoView.swift:380`, `shopping-recommendations-v2-answer`). **Fixed on iOS `baae5f6`.**
+  has no approve or add control (`AskNexdoView.swift:380`, `shopping-recommendations-v2-answer`). **Fixed on iOS `baae5f6`, wording aligned with Android in `ce430d3`.**
 - **Share List** has no close button; only a swipe dismisses it. **Fixed on iOS `6e17c47`.**
 - **Calendar** says "1 calendar commitments today". **Fixed on iOS `c8da5cb`.**
 - **Stores Near You ignores an unknown area**: "Qzxqv Nowhere" still returns Safeways in other
@@ -3045,7 +3045,7 @@ first, unchanged; the Mac reference pass’s items follow, with their captures.
   the Moment card and Edit Moment ("Thu, Oct 6, 1990"), not this year's occasion. RN copies it. **Fixed on Android `2801355`; iOS to mirror.** **Fixed on iOS `5ebe679`.**
 - **"This Week" starts on a different day in different modules.** Moments' date chips use
   `Calendar.current` (Sunday-first on an en-US phone, `ImportantMoment.swift:99-115`); Pomodoro and the
-  Calorie Tracker use Monday-first weeks. RN copies each. **Fixed on iOS `daff755`** (Moments uses Monday-first weeks).
+  Calorie Tracker use Monday-first weeks. RN copies each. **Fixed on iOS `daff755` (date chips) and `8a3e841` (Upcoming sections)**: Moments uses Monday-first weeks.
 - **Send Now refuses everyone when Messages is unavailable.** `sendNow()` checks `canSendText()` if ANY
   recipient has a phone (`ManageFestivalView.swift:546`), so on a device without Messages a recipient set to
   Email is not sent either. RN copies it. *(From reading the code.)* **Fixed on Android `eea3609`; iOS to mirror.** **Fixed on iOS `7f504bd`, aligned with Android in `51bb356`.**
@@ -3108,8 +3108,8 @@ iOS copied exactly are marked "(Android)".
 | Nexdo Action, contact lookup failed | "No contact selected. Choose a contact or enter details below." (or the raw error) | "Couldn’t look up this contact. Choose a contact or enter details below." (Android) | `cfa0f5a` |
 | Manage Moment, Send Now without Messages (some recipients set to Messages) | "Messages is not available on this device. No greeting has been sent." (and nobody was sent) | "Messages is not available on this device. No greeting has been sent to <names>." (Android) | `51bb356` |
 | Task agent card, NO_RESULTS or CANCELLED run | — | "Search again" button, under the existing "City or ZIP code" field (Android) | `762d629` |
-| Stores Near You, empty result | "No stores found. Try another location or store name." | "No stores found near <area>" (or "No stores found near you" for a location search) and "Check the city or ZIP code, or try a nearby one." ("…and the store name, or try a nearby area." when a store name was typed) | `118ede8` |
-| Daily Brief, section page with nothing to count | "0 items to focus on" / "0 items to review" | "Nothing to focus on" / "Nothing to review"; the section badge is hidden at zero | `9f32f13` |
+| Stores Near You, empty result | "No stores found. Try another location or store name." | "No stores found near <area>" (or "No stores found near you" for a location search) and "Check the city or ZIP code, or try a nearby one." ("…and the store name, or try a nearby area." when a store name was typed); nothing shows while a search is pending (matches Android `8356291`) | `118ede8` |
+| Daily Brief, section page with nothing to count | "0 items to focus on" / "0 items to review" | "Nothing to focus on" / "Nothing to review"; the section badge is hidden at zero (matches Android `4f07f47`) | `9f32f13` |
 | Manage Moment, Connect me, unverified number | — | "Verify your phone number above to turn this on." | `15e82f7` |
 | Item Alternatives, load failure | the error in red, then "Try again" | "Couldn’t load alternatives", the error, then a "Try again" button | `3400481` |
 | Nexdo Actions queue, task not loaded | — (the row did nothing) | Alert "Task not available": "This task may have been completed, deleted or moved. Your task list has been refreshed." | `b4fd9b6` |
@@ -3119,9 +3119,9 @@ iOS copied exactly are marked "(Android)".
 | Calendar summary, one appointment | "1 calendar commitments today · …" | "1 calendar commitment today · …" | `c8da5cb` |
 | Item Alternatives, Replace confirmation | "Replace “…” with “…”? " (trailing space) | "Replace “…” with “…”?" | `6129004` |
 | Item Alternatives, "Item replaced!" | "Done" and "View in Cart" | "Done" only | `77c3d93` |
-| Calorie Tracker guide, step 1 | "Quickly add what you eat by search, scan, or voice. We estimate calories and nutrition for you." | "Tell NexDo what you ate on your daily call, or add it to your food log. We estimate calories and nutrition for you." | `bc484f6` |
-| Calorie Tracker guide, step 2 | "Choose a goal like maintain, lose, or gain. Personalize your daily calorie and macro targets." | "Set your daily calorie goal and the nutrient targets that fit you." | `bc484f6` |
-| Ask AI, Shopping Recommendations answer | "Suggestions only—your list changes after you approve them." | "Suggestions only—nothing is added to your list." | `baae5f6` |
+| Calorie Tracker guide, step 1 | "Quickly add what you eat by search, scan, or voice. We estimate calories and nutrition for you." | "Add what you eat to your food log, or tell us on your daily check-in call. We estimate calories and nutrition from the call." (Android) | `bc484f6`, `72da35b` |
+| Calorie Tracker guide, step 2 | "Choose a goal like maintain, lose, or gain. Personalize your daily calorie and macro targets." | "Personalize your daily calorie and macro targets." (Android) | `bc484f6`, `72da35b` |
+| Ask AI, Shopping Recommendations answer | "Suggestions only—your list changes after you approve them." | "Suggestions only—your list is not changed." (Android) | `baae5f6`, `ce430d3` |
 | Feedback, keyboard | — | "Done" button on the keyboard | `4400066` |
 | Share List | — | "Done" button in the toolbar | `6e17c47` |
 | Task Details, business mode | "Back" and "Close task details" buttons | "Close task details" only | `12edf0f` |
