@@ -1704,3 +1704,15 @@ gets the fix too, and the Swift app is to mirror it. Each fix has a test that fa
 - **Android ahead of iOS: Stores Near You says "your phone’s Settings", not "iPhone Settings".** Now
   "Location is unavailable. Enter a city or ZIP code, or allow location access in your
   phone’s Settings." (`LOCATION_UNAVAILABLE` in `StorePages.tsx`).
+
+## 30. Android bug pass 2: the remaining §22 items (2026-10-07)
+
+The rest of `docs/IOS_TO_REACT_NATIVE.md` §22 "For the team", fixed in RN first. Every item is **Android ahead of
+iOS**: the code is shared, so iOS RN gets it too, and the Swift app is to mirror it. Where `fix/ios-bug-pass`
+already had the fix, its Swift wording is copied; any other new text is listed in §22 "Android wording for iOS to
+match". Logic fixes have a test that fails without them.
+
+- **Android ahead of iOS: Moments weeks start on Monday.** The date chips (This Week, Later) and the Upcoming
+  groups (This Week, Next Week) used Swift's `Calendar.current` week, Sunday-first on en-US, while Pomodoro and the
+  Calorie Tracker are Monday-first. Both now start on Monday, so a Sunday moment is "this week" (`daysSinceMonday`
+  in `features/moments/dates.ts`).

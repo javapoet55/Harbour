@@ -16,10 +16,12 @@ describe('MomentUpcomingFilter', () => {
     expect(matches('Today', '2026-09-27', 'Asia/Tokyo')).toBe(true);
   });
 
-  it('ends This Week on Saturday (a Sunday-first week) and starts Later after tomorrow', () => {
+  it('ends This Week on Sunday (a Monday-first week, Android ahead of iOS) and starts Later after it', () => {
     expect(matches('Tomorrow', '2026-09-27')).toBe(true);
     expect(matches('This Week', '2026-09-26')).toBe(true);
-    expect(matches('This Week', '2026-09-27')).toBe(false);
+    // Sunday the 27th is still this week; Swift's Sunday-first week put it in the next one.
+    expect(matches('This Week', '2026-09-27')).toBe(true);
+    expect(matches('This Week', '2026-09-28')).toBe(false);
     expect(matches('Later', '2026-09-27')).toBe(false);
     expect(matches('Later', '2026-09-28')).toBe(true);
     expect(matches('This Week', '2026-09-25')).toBe(false);

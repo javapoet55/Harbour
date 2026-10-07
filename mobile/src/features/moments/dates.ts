@@ -250,9 +250,14 @@ export { addDays };
  * checks, which is not the display order: "Next Month" is tested before "Next Week", so a
  * next-week occasion that falls in next month shows under Next Month.
  *
- * `Calendar.current` with the moment's zone: the week follows the device locale's first weekday,
- * which on the en-US reference device is Sunday.
+ * Android ahead of iOS: Swift uses `Calendar.current`, a Sunday-first week on the en-US reference device,
+ * while Pomodoro and the Calorie Tracker use Monday-first weeks. Moments' weeks start on Monday too.
  */
+/** Days since the Monday that starts the week holding this calendar date (0 on a Monday, 6 on a Sunday). */
+function daysSinceMonday(year: number, month: number, day: number): number {
+  return (new Date(Date.UTC(year, month - 1, day)).getUTCDay() + 6) % 7;
+}
+
 export const UPCOMING_GROUPS = ['This Week', 'Next Week', 'This Month', 'Next Month', 'Later'] as const;
 export type UpcomingGroup = (typeof UPCOMING_GROUPS)[number];
 
@@ -261,8 +266,7 @@ export function upcomingGroupFor(nextOccurrenceDay: string, zone: string, now: n
   const occurrence = momentDate(nextOccurrenceDay, timeZone, now);
   const today = startOfDay(now, timeZone);
   const [y, m, d] = momentDay(today, timeZone).split('-').map(Number);
-  const weekday = new Date(Date.UTC(y, m - 1, d)).getUTCDay(); // 0 = Sunday
-  const weekStart = addDays(today, -weekday, timeZone);
+  const weekStart = addDays(today, -daysSinceMonday(y, m, d), timeZone);
   const weekEnd = addDays(weekStart, 7, timeZone);
   if (occurrence >= weekStart && occurrence < weekEnd) return 'This Week';
   const monthStart = startOfDay(Date.UTC(y, m - 1, 1, 12), timeZone);
@@ -276,8 +280,8 @@ export function upcomingGroupFor(nextOccurrenceDay: string, zone: string, now: n
 
 /**
  * `MomentUpcomingFilter` (ImportantMoment.swift:99-115): the date chips on the Upcoming tab. Each
- * moment is judged in its OWN zone's calendar, across midnight and DST. The week is
- * `Calendar.current`'s `.weekOfYear` — Sunday-first on the en-US reference device, as `upcomingGroupFor`.
+ * moment is judged in its OWN zone's calendar, across midnight and DST. The week starts on Monday, as
+ * `upcomingGroupFor` (Android ahead of iOS: Swift's `.weekOfYear` is Sunday-first on en-US).
  *
  * Later starts after this week AND after tomorrow, so a Sunday-evening "tomorrow" is never also Later.
  */
@@ -291,8 +295,7 @@ export function upcomingFilterIncludes(filter: UpcomingFilter, day: string, zone
   const afterTomorrow = addDays(today, 2, timeZone);
   const date = momentDate(day, timeZone, now);
   const [y, m, d] = momentDay(today, timeZone).split('-').map(Number);
-  const weekday = new Date(Date.UTC(y, m - 1, d)).getUTCDay(); // 0 = Sunday
-  const weekEnd = addDays(addDays(today, -weekday, timeZone), 7, timeZone);
+  const weekEnd = addDays(addDays(today, -daysSinceMonday(y, m, d), timeZone), 7, timeZone);
   switch (filter) {
     case 'Today':
       return date >= today && date < tomorrow;
