@@ -552,11 +552,11 @@ private struct FestivalScheduleReview:View {
             .buttonStyle(ScheduleActionStyle(gradient:true)).accessibilityIdentifier("wish-primary")
     }
     @MainActor private func sendNow() async {
-        // Email goes out from the server; only text greetings need Messages on this device. Without it,
-        // recipients with an email are still sent, and those with only a phone number are skipped.
-        let canText=MFMessageComposeViewController.canSendText()
-        let textOnly=recipients.filter{$0.email.isEmpty && !$0.phone.isEmpty}
-        if !canText && !recipients.contains(where:{!$0.email.isEmpty}) {
+        // Only recipients set to Messages need Messages on this device (as on Android, eea3609). Without it they are left
+        // out and named; everyone else is still sent, and no composer opens.
+        let canText = !recipients.contains(where:{!$0.phone.isEmpty}) || MFMessageComposeViewController.canSendText()
+        let skipped=canText ? [] : recipients.filter{!$0.phone.isEmpty && model.channel($0)=="messages"}
+        if !skipped.isEmpty && skipped.count == recipients.count {
             model.error="Messages is not available on this device. No greeting has been sent.";return
         }
         submitting=true;defer{submitting=false}
@@ -571,22 +571,15 @@ private struct FestivalScheduleReview:View {
             guard model.error == nil else{return}
         }
         sendNowStarted=true
-        guard let plans=await model.sendImmediately(only:canText ? nil : Set(recipients.filter{!$0.email.isEmpty}.map(\.key))) else{return}
+        let skippedKeys=Set(skipped.map(\.key))
+        guard let plans=await model.sendImmediately(only:skipped.isEmpty ? nil : Set(recipients.map(\.key)).subtracting(skippedKeys)) else{return}
         let emails=plans.filter{$0.channel == "email"}
         let sent=emails.filter{$0.status == "SENT"}.count
-        let texts=plans.filter{$0.channel == "messages" && $0.status == "AWAITING_CONFIRMATION"}
-        if canText {
-            immediateNotice="\(sent) email\(sent == 1 ? "":"s") sent. " + (emails.count > sent ? "Some emails are pending or failed; check Scheduled wishes for their status. " : "") + "Messages still requires you to tap Send."
-            messageQueue=texts
-            if !messageQueue.isEmpty {messagePlan=messageQueue.removeFirst()}
-        } else {
-            // The server adds a text plan for every phone number; this device cannot open them, so they are cancelled
-            // rather than left waiting for a Send that cannot happen.
-            for plan in texts { try? await model.store.planAction(plan,action:"cancel") }
-            await model.store.refresh()
-            let skipped=textOnly.map(\.name).joined(separator:", ")
-            immediateNotice="\(sent) email\(sent == 1 ? "":"s") sent. " + (emails.count > sent ? "Some emails are pending or failed; check Scheduled wishes for their status. " : "") + "Messages is not available on this device, so no text greetings were sent" + (skipped.isEmpty ? "." : " (\(skipped) not sent).")
-        }
+        immediateNotice="\(sent) email\(sent == 1 ? "":"s") sent. " + (emails.count > sent ? "Some emails are pending or failed; check Scheduled wishes for their status. " : "") + "Messages still requires you to tap Send."
+        if !skipped.isEmpty { model.error="Messages is not available on this device. No greeting has been sent to \(skipped.map(\.name).joined(separator:", "))." }
+        guard canText else {return}
+        messageQueue=plans.filter{$0.channel == "messages" && $0.status == "AWAITING_CONFIRMATION"}
+        if !messageQueue.isEmpty {messagePlan=messageQueue.removeFirst()}
     }
     private func delivery(_ recipient:ManagedFestivalRecipient)->String {
         model.channel(recipient)=="email" ? (model.settings.automatic[recipient.key]==true ? "Email · Automatic send":"Email · Will be sent by you") : model.channel(recipient)=="messages" ? "Messages · Will be sent by you":"Copy / Share · Will be sent by you"
