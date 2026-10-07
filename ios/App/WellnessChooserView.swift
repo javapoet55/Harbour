@@ -53,7 +53,7 @@ struct WellnessChooserView: View {
             switch target {
             case .calories: CalorieTrackerView(api: model.profile == nil ? nil : model.momentAPI)
             case .pomodoro:
-                PomodoroView(api: model.momentAPI, owner: model.profile?.id ?? "preview", preview: model.profile == nil, onTasks: { destination = nil; onSelect(.tasks) })
+                PomodoroView(api: model.momentAPI, owner: model.profile?.id ?? "preview", preview: model.profile == nil)
             case .moments:
                 NavigationStack { ImportantMomentsView().toolbar { ToolbarItem(placement: .cancellationAction) { backButton } } }
             case .shopping:

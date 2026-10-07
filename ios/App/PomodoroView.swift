@@ -15,12 +15,14 @@ struct PomodoroView: View {
     @State private var history = false
     @State private var showingDashboard: Bool
     @State private var visible = false
-    private let onTasks: () -> Void
+    /// Where the completion button goes. Opened from Tasks (or an alert) it is "Back to Tasks"; opened from Wellness
+    /// there is no Tasks to go back to, so it is "Done" and only closes Pomodoro.
+    private let onTasks: (() -> Void)?
     private let clock = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
     private let ink = Color(red: 0.05, green: 0.04, blue: 0.25)
     private let gradient = LinearGradient(colors: [.purple, .indigo, .blue], startPoint: .leading, endPoint: .trailing)
 
-    init(api: APIClient, owner: String, preview: Bool = false, onTasks: @escaping () -> Void = {}) {
+    init(api: APIClient, owner: String, preview: Bool = false, onTasks: (() -> Void)? = nil) {
         _store = StateObject(wrappedValue: PomodoroStore(api: api, owner: owner, preview: preview))
         self.onTasks = onTasks
         _showingDashboard = State(initialValue: !preview || ProcessInfo.processInfo.arguments.contains("-pomodoro-dashboard-preview"))
@@ -172,7 +174,7 @@ struct PomodoroView: View {
             }.padding(16).background(.white, in: RoundedRectangle(cornerRadius: 20)).shadow(color: .indigo.opacity(0.06), radius: 10, y: 4)
             HStack(spacing: 14) { Image(systemName: session.category.icon).font(.title2).foregroundStyle(.purple); VStack(alignment: .leading, spacing: 5) { Text(session.category.title).bold(); if !session.name.isEmpty { Text(session.name).font(.subheadline) } }; Spacer() }.padding(18).background(.purple.opacity(0.07), in: RoundedRectangle(cornerRadius: 18))
             primary("Start Another Session") { store.newSession() }
-            Button("Back to Tasks") { onTasks(); dismiss() }.font(.headline).frame(maxWidth: .infinity).padding(16).background(.purple.opacity(0.07), in: RoundedRectangle(cornerRadius: 16))
+            Button(onTasks == nil ? "Done" : "Back to Tasks") { onTasks?(); dismiss() }.font(.headline).frame(maxWidth: .infinity).padding(16).background(.purple.opacity(0.07), in: RoundedRectangle(cornerRadius: 16))
         }
     }
     private func duration(_ seconds: Double) -> String { seconds < 60 ? "\(Int(seconds)) sec" : "\(Int(seconds) / 60) min" }
