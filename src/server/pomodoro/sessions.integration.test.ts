@@ -40,6 +40,13 @@ describe('durable Pomodoro sessions', () => {
     expect(new Set([...first.sessions, ...second.sessions].map(s => s.id)).size).toBe(105);
     expect((await listPomodoroPage(b, first.nextCursor!)).sessions).toEqual([]);
   });
+  // zod 4.5 measures .max() on strings in code points, so this holds without a custom check; the test pins it.
+  it('limits names to 120 characters, not 120 UTF-16 units', () => {
+    expect(pomodoroSchema.safeParse({ ...session(), name: '📚'.repeat(120) }).success).toBe(true); // 240 UTF-16 units
+    expect(pomodoroSchema.safeParse({ ...session(), name: 'a'.repeat(120) }).success).toBe(true);
+    expect(pomodoroSchema.safeParse({ ...session(), name: '📚'.repeat(121) }).success).toBe(false);
+    expect(pomodoroSchema.safeParse({ ...session(), name: 'a'.repeat(121) }).success).toBe(false);
+  });
   it('rejects invalid clocks, excessive durations and impossible totals', () => {
     expect(pomodoroSchema.safeParse({ ...session(), paused: true }).success).toBe(false);
     expect(pomodoroSchema.safeParse({ ...session(), durationMinutes: 121 }).success).toBe(false);
