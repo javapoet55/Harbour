@@ -82,7 +82,7 @@ struct ShoppingOffersView:View {
     }
     private func load() async {
         do {
-            let result:ShoppingOffersSnapshot=try await store.api.request("/api/shopping/offers?listId=\(list.id)");snapshot=result;error=nil
+            let result:ShoppingOffersSnapshot=try await store.api.request("/api/shopping/offers?listId=\(URLQuery.value(list.id))");snapshot=result;error=nil
             // Open on a tab that has offers; most items have no brand, so their offers are under Available.
             if !matches.contains(where:{$0.category==category}),let first=tabs.first(where:{tab in matches.contains{$0.category==tab.0}}) {category=first.0}
         }

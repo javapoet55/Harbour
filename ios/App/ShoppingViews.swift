@@ -360,7 +360,7 @@ struct ShoppingDetail:View {
             .task(id:"\(list.revision)-\(offersScenePhase)"){
                 guard offersScenePhase == .active else{return}
                 repeat {
-                    offers = try? await store.api.request("/api/shopping/offers?listId=\(list.id.addingPercentEncoding(withAllowedCharacters:.urlQueryAllowed) ?? list.id)")
+                    offers = try? await store.api.request("/api/shopping/offers?listId=\(URLQuery.value(list.id))")
                     do{try await Task.sleep(for:.seconds(60))}catch{return}
                 } while !Task.isCancelled
             }
