@@ -127,7 +127,6 @@ struct TaskActionView: View {
     @State private var receipt: String?
     @State private var confirmCall = false
     @State private var composer: Composer?
-    @State private var resolution: Task<Void, Never>?
     private let resolver: any TaskActionContactResolver = AppleTaskActionContacts()
     private let emailService: any TaskActionEmailService = NativeTaskActionEmailService()
     private struct Composer: Identifiable {
@@ -293,7 +292,6 @@ struct TaskActionView: View {
         .presentationDetents([.large]).presentationDragIndicator(.visible)
         .onAppear { coordinator.screenOpened(actionID) }
         .onDisappear {
-            resolution?.cancel()
             if isRoutedAction { coordinator.route = nil }
             coordinator.screenClosed(actionID)
         }
@@ -362,22 +360,12 @@ struct TaskActionView: View {
 
     private func title(_ channel: TaskActionChannel) -> String { switch channel { case .call: "Call"; case .message: "Message"; case .email: "Email" } }
     private func icon(_ channel: TaskActionChannel) -> String { switch channel { case .call: "phone"; case .message: "message"; case .email: "envelope" } }
+    /// Every caller has a recipient already (channel buttons exist only for one, and the other callers check), so this
+    /// only picks the address; the Contacts search it used to start when there was none could not be reached.
     private func resolve(_ option: TaskActionChannel) {
-        guard let action, usable, !busy else { return }
+        guard usable, !busy else { return }
         channel = option; contacts = []; addresses = []; error = nil; receipt = nil
-        if let contact { choose(contact); return }
-        busy = true
-        coordinator.update(actionID) { $0.transition(to: .awaitingApproval) }
-        resolution?.cancel()
-        resolution = Task {
-            defer { busy = false }
-            do {
-                // "the plumber" is looked up as "plumber"; the card and notification keep the name as written.
-                let matches = try await resolver.resolve(name: DeterministicTaskActionDetector.contactSearchName(action.contactName), identifier: action.contactIdentifier)
-                guard !Task.isCancelled, usable, self.action?.id == action.id else { return }
-                if matches.count == 1 { choose(matches[0]) } else { contacts = matches }
-            } catch { self.error = lookupFailure(error) }
-        }
+        if let contact { choose(contact) }
     }
     private func choose(_ value: ActionContact) {
         guard usable else { return }
