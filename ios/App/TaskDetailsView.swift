@@ -117,9 +117,8 @@ struct TaskDetailsView: View {
     @ViewBuilder private var header: some View {
         if hasBusinessResearch {
             HStack {
-                Button(action: closeTaskDetails) { Image(systemName: "chevron.left").font(.title3).frame(width: 42, height: 42) }
-                    .background(Color.nexdoIndigo.opacity(0.04), in: Circle()).overlay(Circle().stroke(Color.nexdoIndigo.opacity(0.12)))
-                    .accessibilityLabel("Back")
+                // Close only, as in the other header: Back did the same thing. The clear frame keeps the title centered.
+                Color.clear.frame(width: 42, height: 42).accessibilityHidden(true)
                 Spacer()
                 Text("Task Details").font(.headline)
                 Spacer()
