@@ -127,9 +127,8 @@ export function MomentConnectSection({ moments }: { moments: ImportantMoment[] }
             return (
               <MomentCard key={moment.id} testID={`connect-moment-${moment.id}`}>
                 {/*
-                  `.disabled(!model.verified || state.recipientPhone == nil || state.passed)` (:237). Swift gives
-                  a reason for the last two only; an unverified number has none at the switch — the card above
-                  says to verify. Kept as Swift draws it (§22 "For the team").
+                  `.disabled(!model.verified || state.recipientPhone == nil || state.passed)` (:237). Each reason has
+                  a caption under the switch; the unverified one is copied from iOS 15e82f7 (Android ahead of iOS).
                 */}
                 <FormToggle
                   label={`Connect me to ${name}`}
@@ -148,6 +147,11 @@ export function MomentConnectSection({ moments }: { moments: ImportantMoment[] }
                 ) : momentState.passed ? (
                   <Text style={[caption, { color: theme.colors.secondaryLabel }]} testID={`connect-passed-${moment.id}`}>
                     This moment has already passed.
+                  </Text>
+                ) : null}
+                {!verified && !momentState.passed ? (
+                  <Text style={[caption, { color: systemColors.orange }]} testID={`connect-needs-verified-${moment.id}`}>
+                    Verify your phone number above to turn this on.
                   </Text>
                 ) : null}
                 {draft.enabled ? (

@@ -1721,3 +1721,7 @@ match". Logic fixes have a test that fails without them.
   iOS 9f32f13: a bullet that only says there is nothing ("No …", "None.", "Nothing …", "There are no …", "You have
   no …") is shown but not counted; the badge is hidden at zero and the page says "Nothing to review" / "Nothing to
   focus on" (iOS wording) (`briefItemCount` in `lib/dailyBrief.ts`).
+- **Android ahead of iOS: "Connect me" says at the switch when the number is unverified.** The switch was disabled
+  with no reason for an unverified caller ID; only the card above said to verify. It now says "Verify your phone
+  number above to turn this on." in orange under the switch while the number is unverified and the moment has not
+  passed (iOS 15e82f7 wording and condition) (`MomentConnectSection.tsx`).
