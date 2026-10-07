@@ -352,6 +352,26 @@ describe('live', () => {
     expect(screen.getByTestId('calorie-turn-on').props.accessibilityState).toEqual({ disabled: false });
   });
 
+  it.each([
+    ['dialing', 'Calling you now. Pick up to log today’s meals.'],
+    ['cancelled', 'The call was cancelled. Check that daily calls are on, then try again.'],
+    ['failed', 'The call could not be placed. Try again in a few minutes.'],
+    ['not_claimed', 'The call could not be placed. Try again in a few minutes.'],
+  ])('"Call me now to try it" reports the status of the call: %s', async (status, notice) => {
+    mockApi.settings.mockResolvedValue(settings({ phone: '+16505550123', phoneVerified: true }));
+    mockApi.saveSettings.mockImplementation(async (update) => settings({ ...update, phone: '+16505550123', phoneVerified: true }));
+    mockApi.callNow.mockResolvedValue({ callId: 'c1', status });
+    await open(true);
+    await waitFor(() => expect(screen.getByTestId('calorie-status')).toHaveTextContent('Daily calls are off'));
+    await press('calorie-set-up');
+    await press('calorie-time-next');
+    await press('calorie-goals-next');
+    await press('calorie-turn-on');
+    await waitFor(() => expect(title()).toBe('Daily Check-in'));
+    await press('calorie-call-now');
+    await waitFor(() => expect(lastAlert()[1]).toBe(notice));
+  });
+
   it('"Save without calls" saves and opens the dashboard; a failure shows the server\'s message', async () => {
     mockApi.settings.mockResolvedValue(settings());
     mockApi.saveSettings.mockRejectedValueOnce(new Error('Check the values and try again.')).mockResolvedValueOnce(settings());

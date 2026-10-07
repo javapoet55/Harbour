@@ -14,7 +14,7 @@ import { clockLabel } from '../../lib/profileSettings';
 import { MenuPicker } from '../moments/form';
 import { CALORIE_AGENT } from '../wellness/art';
 import { FoodEditor, type FoodDraft } from './FoodEditor';
-import { chartValues, DEFAULT_VOICES, e164, goalsFrom, intake, MEALS, needsReview, NO_ANSWER_CHOICES, NUTRIENTS, nutritionDay, nutritionZone, zoneChoices } from './model';
+import { callNowNotice, chartValues, DEFAULT_VOICES, e164, goalsFrom, intake, MEALS, needsReview, NO_ANSWER_CHOICES, NUTRIENTS, nutritionDay, nutritionZone, zoneChoices } from './model';
 import { CalorieRing, Card, ChartBars, DateSelector, Feature, GRADIENT, IconTile, INK, Primary, ProgressBar, SECONDARY, Segmented, Stepper, Steps, styles as parts, SYSTEM_INDIGO, TextButton, type IconName } from './parts';
 import { SAMPLE_INTAKE } from './sample';
 import { useCalorieStore } from './useCalorieStore';
@@ -535,7 +535,10 @@ export function CalorieTracker({ live, onClose, now = Date.now, region = deviceR
         <TextButton
           onPress={() =>
             void perform(async () => {
-              if (await store.callNow()) setNotice('Calling you now. Pick up to log today’s meals.');
+              // Android ahead of iOS: Swift drops the answer's `status` and always says it is calling
+              // (CalorieTrackerView.swift:643-644).
+              const status = await store.callNow();
+              if (status !== null) setNotice(callNowNotice(status));
             })
           }
           testID="calorie-call-now"

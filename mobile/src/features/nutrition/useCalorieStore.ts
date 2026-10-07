@@ -2,6 +2,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 
 import type {
+  NutritionCallStarted,
   NutritionCodeSent,
   NutritionDay,
   NutritionEntry,
@@ -53,7 +54,8 @@ export type CalorieStore = {
   /** The server's answer — how the code went out, or that the number is already verified — or `null` after an error. */
   sendCode: (phone: string) => Promise<NutritionCodeSent | null>;
   verify: (code: string) => Promise<boolean>;
-  callNow: () => Promise<boolean>;
+  /** The call's `status` from the server (`dialing`, `cancelled`, `failed`, …), or `null` after an error. */
+  callNow: () => Promise<NutritionCallStarted['status'] | null>;
   add: (input: { meal: NutritionMeal; description: string; kcal: number }) => Promise<boolean>;
   update: (entry: NutritionEntry, change: { meal?: NutritionMeal; description?: string; kcal?: number; confirm?: boolean }) => Promise<boolean>;
   remove: (entry: NutritionEntry) => Promise<void>;
@@ -136,7 +138,7 @@ export function useCalorieStore({
       save: async () => true,
       sendCode: async () => ({ sent: true, channel: 'voice' }),
       verify: async () => true,
-      callNow: async () => true,
+      callNow: async () => 'dialing',
       add: async ({ meal, description, kcal }) => {
         setSample((current) =>
           recomputed({
@@ -187,7 +189,13 @@ export function useCalorieStore({
       return sent ? answer : null;
     },
     verify: (code) => attempt(() => verifyMutation.mutateAsync(code)),
-    callNow: () => attempt(() => callNowMutation.mutateAsync()),
+    callNow: async () => {
+      let status: NutritionCallStarted['status'] | null = null;
+      const placed = await attempt(async () => {
+        status = (await callNowMutation.mutateAsync()).status;
+      });
+      return placed ? status : null;
+    },
     add: (input) => attempt(() => addMutation.mutateAsync(input)),
     update: (entry, change) => {
       // `EntryPatch(meal:description:kcal:confirm: confirm ? true : nil)`

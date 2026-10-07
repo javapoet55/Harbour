@@ -1616,3 +1616,7 @@ gets the fix too, and the Swift app is to mirror it. Each fix has a test that fa
   verified.", no code field, and the settings reload so the number shows verified (new text in each case).
   Before the first send the app cannot know the channel, so the caption and the first button still say
   "call" (`CalorieTracker.tsx`, `useCalorieStore.sendCode`, `useSendNutritionCode`).
+- **Android ahead of iOS: "Call me now to try it" reports the real status.** Swift drops the answer's `status` and
+  always says "Calling you now.". Now `dialing` keeps that text, `cancelled` says "The call was cancelled. Check
+  that daily calls are on, then try again." and `failed` / `not_claimed` say "The call could not be placed. Try
+  again in a few minutes." (new text; `callNowNotice` in `model.ts`).
