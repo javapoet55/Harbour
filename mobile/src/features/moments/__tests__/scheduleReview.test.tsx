@@ -21,7 +21,7 @@ import type { ImportantMoment, MomentsSnapshot, WishDeliveryPlan } from '../../.
 import { useAppearance } from '../../../store/appearance';
 import { FixedScheme, useTheme } from '../../../theme';
 import { momentLabel } from '../dates';
-import { MESSAGES_UNAVAILABLE, messagesUnavailableFor, sendNowNotice } from '../ScheduleReview';
+import { MESSAGES_UNAVAILABLE, messagesUnavailableFor, ScheduleSuccess, sendNowNotice } from '../ScheduleReview';
 import { momentsStore } from '../store';
 import { draft, moment, plan, settings } from '../testFixtures';
 
@@ -299,6 +299,17 @@ describe('Send now', () => {
       '1 email sent. Some emails are pending or failed; check Scheduled wishes for their status. Messages still requires you to tap Send.',
     );
     expect(sendNowNotice([])).toBe('0 emails sent. Messages still requires you to tap Send.');
+  });
+});
+
+describe('Schedule confirmed', () => {
+  it('lists the send times in time order, not text order', async () => {
+    const at = (iso: string) => plan({ id: iso, scheduledAtUTC: iso, timeZoneID: 'UTC' });
+    await render(<ScheduleSuccess occasion="birthday" plans={[at('2030-10-10T08:00:00Z'), at('2030-10-06T08:00:00Z'), at('2030-10-10T08:00:00Z')]} wish={null} done={jest.fn()} />);
+    expect(screen.getAllByTestId('schedule-confirmed-date').map((node) => node.props.children)).toEqual([
+      momentLabel(Date.parse('2030-10-06T08:00:00Z'), 'UTC'),
+      momentLabel(Date.parse('2030-10-10T08:00:00Z'), 'UTC'),
+    ]);
   });
 });
 

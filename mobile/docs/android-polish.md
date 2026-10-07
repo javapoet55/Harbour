@@ -1677,3 +1677,6 @@ gets the fix too, and the Swift app is to mirror it. Each fix has a test that fa
   "Recall the order" got the phone and "contactless" the phone too. A keyword now matches a whole word or the
   word with a common ending (s, es, ed, ing, er, ers), so "Calling", "plumber" and "meetings" still match
   (`taskIcon` in `TaskCard.tsx`).
+- **Android ahead of iOS: Schedule confirmed lists send times in time order.** Swift sorts the formatted labels, so
+  a group with several times listed "Oct 10" before "Oct 6"; the plans are now sorted by their instant before
+  labelling (`ScheduleSuccess`).

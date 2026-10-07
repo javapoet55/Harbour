@@ -535,7 +535,9 @@ export function ScheduleSuccess({
       ),
     ),
   ].sort();
-  const times = [...new Set(plans.map((plan) => momentLabel(planDate(plan), plan.timeZoneID)))].sort();
+  // Android ahead of iOS: Swift sorts the formatted labels (:359-361), so "10 Oct" came before "6 Oct"; these
+  // are in time order.
+  const times = [...new Set([...plans].sort((a, b) => planDate(a) - planDate(b)).map((plan) => momentLabel(planDate(plan), plan.timeZoneID)))];
   return (
     <FixedScheme scheme="light">
       <View style={[styles.fill, { backgroundColor: SCHEDULE_BACKGROUND }]} onLayout={(event) => setSize(event.nativeEvent.layout)} testID="schedule-success">
