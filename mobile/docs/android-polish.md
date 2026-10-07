@@ -1610,6 +1610,11 @@ gets the fix too, and the Swift app is to mirror it. Each fix has a test that fa
   (`f12ef09`, on develop since this pass began), so the controls row offers "Search again", which sends `retry`
   (`runControls` in `lib/taskAgent.ts`). A run cancelled because the task is no longer a business task is still
   refused, and the card shows the server's message.
+- **Android ahead of iOS: "Search again" can search a new area.** On the phone, Search again re-ran the same
+  failed search: it sent `retry`, and the server repeats the stored area. A NO_RESULTS or CANCELLED run now shows
+  the existing "City or ZIP code" field, prefilled with the last area searched, and Search again sends `search`
+  with the area in the field (accepted from either state since f12ef09); it is disabled while the field is
+  empty. No new strings (`runControls`, `SEARCH_AGAIN_STATUSES` in `lib/taskAgent.ts`, `TaskAgentCard.tsx`).
 - **Android ahead of iOS: the Calorie phone check says what the server did.** Swift always says it is calling and
   shows the code field. The server sends the code by voice or SMS (`channel`) and sends none for a number it
   has already verified (`alreadyVerified`). Now: by voice, Swift's words; by SMS, "We’ve texted a 6-digit code

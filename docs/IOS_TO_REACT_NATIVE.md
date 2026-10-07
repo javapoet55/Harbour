@@ -3071,7 +3071,7 @@ first, unchanged; the Mac reference pass’s items follow, with their captures.
   so they show as errors and hide the spinner; `TaskAgentCard.swift:68` tests `question.key ==
   "urgency"` after excluding it on `:67`; the search button always sends `key: "location"` (`:82`);
   "Show more" shows under any review, however short (`:386`); polling keys on the status, so every
-  action fires an extra GET. **Fixed on Android `73a8cc2` (the copy confirmations are not errors), `e7450f1` (search sends the question's key) and `57698fd` (NO_RESULTS and CANCELLED offer "Search again"); iOS to mirror. The urgency test was never ported, and RN never fired the extra GET (pinned by `df68a14`). "Show more" is still open.**
+  action fires an extra GET. **Fixed on Android `73a8cc2` (the copy confirmations are not errors), `e7450f1` (search sends the question's key) and `57698fd` (NO_RESULTS and CANCELLED offer "Search again"), where the area can be changed (`991de00`: the "City or ZIP code" field, prefilled with the last area, and Search again sends `search` with it); iOS to mirror. The urgency test was never ported, and RN never fired the extra GET (pinned by `df68a14`). "Show more" is still open.**
 - **Task agent and Tasks tab, dark mode:** the agent cards, the Task Information card, the Tasks
   background and the white 65% section headers are fixed light under adaptive ink — white on white in
   dark mode. RN uses the theme surface in dark (android-polish §27).

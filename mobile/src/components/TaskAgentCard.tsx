@@ -24,6 +24,7 @@ import {
   reviewCountText,
   reviewLine,
   runControls,
+  SEARCH_AGAIN_STATUSES,
   serviceLine,
   stars,
   statusTitle,
@@ -120,6 +121,8 @@ export function TaskAgentCard({ taskId, onResearchAvailable, onFieldFocus, onFie
   const storedAction = useCoordinator((state) => state.actions.find((action) => action.taskId === taskId));
 
   const [answer, setAnswer] = useState('');
+  /** The area typed for "Search again"; `null` shows the area last searched. */
+  const [area, setArea] = useState<string | null>(null);
   const [showingSearchNotices, setShowingSearchNotices] = useState(false);
   const [selectedBusiness, setSelectedBusiness] = useState<string | null>(null);
   const [draftExpanded, setDraftExpanded] = useState<Set<string>>(new Set());
@@ -135,7 +138,7 @@ export function TaskAgentCard({ taskId, onResearchAvailable, onFieldFocus, onFie
   const autoSearched = useRef<string | null>(null);
   // An update that failed keeps its message until the next action, so a 400 is never wiped by the
   // reload that follows it — which would leave the retired-question step showing a bare spinner.
-  const actionFailed = useRef(false);
+  const [actionFailed, setActionFailed] = useState(false);
 
   const envelope = query.data;
   const run = envelope?.run ?? null;
@@ -148,7 +151,7 @@ export function TaskAgentCard({ taskId, onResearchAvailable, onFieldFocus, onFie
   const [seenDataAt, setSeenDataAt] = useState(query.dataUpdatedAt);
   if (query.dataUpdatedAt !== seenDataAt) {
     setSeenDataAt(query.dataUpdatedAt);
-    if (!busy && !actionFailed.current) setError(null);
+    if (!busy && !actionFailed) setError(null);
     setNotice(null);
   }
   const [seenErrorAt, setSeenErrorAt] = useState(0);
@@ -187,7 +190,7 @@ export function TaskAgentCard({ taskId, onResearchAvailable, onFieldFocus, onFie
       { action: 'search', version: run.version, answer: run.slots.location },
       {
         onError: (cause) => {
-          actionFailed.current = true;
+          setActionFailed(true);
           setError(`Could not refresh task research. ${cause.message}`);
         },
       },
@@ -197,7 +200,7 @@ export function TaskAgentCard({ taskId, onResearchAvailable, onFieldFocus, onFie
   /** `act(_:key:answer:candidateID:)` (TaskAgentCard.swift:489-501). */
   const act = (action: TaskAgentAction, options: { key?: string; answer?: string; candidateId?: string } = {}) => {
     if (run === null && action !== 'prepare') return;
-    actionFailed.current = false;
+    setActionFailed(false);
     setNotice(null);
     setBusy(true);
     const searching = action === 'search' || action === 'resume' || action === 'retry';
@@ -211,10 +214,11 @@ export function TaskAgentCard({ taskId, onResearchAvailable, onFieldFocus, onFie
       {
         onSuccess: () => {
           setAnswer('');
+          setArea(null);
           setError(null);
         },
         onError: (cause) => {
-          actionFailed.current = true;
+          setActionFailed(true);
           setError(cause.message);
         },
         onSettled: () => {
@@ -691,6 +695,28 @@ export function TaskAgentCard({ taskId, onResearchAvailable, onFieldFocus, onFie
     );
   };
 
+  /** The "City or ZIP code" field (TaskAgentCard.swift:72-79). */
+  const locationField = (value: string, onChange: (text: string) => void) => (
+    <View style={[styles.locationField, { backgroundColor: colors.field, borderColor: withAlpha(SYSTEM_PURPLE, 0.65) }]}>
+      <View style={[styles.locationIcon, { backgroundColor: withAlpha(SYSTEM_PURPLE, 0.06) }]}>
+        <Ionicons name="location" size={22} color={SYSTEM_PURPLE} />
+      </View>
+      <TextInput
+        accessibilityLabel="City or ZIP code"
+        placeholder="City or ZIP code"
+        placeholderTextColor={theme.colors.placeholder}
+        value={value}
+        onChangeText={onChange}
+        returnKeyType="done"
+        onSubmitEditing={() => Keyboard.dismiss()}
+        onFocus={() => onFieldFocus?.('agentLocation')}
+        onBlur={() => onFieldBlur?.('agentLocation')}
+        style={[styles.locationInput, { color: theme.colors.ink }]}
+        testID="agent-location"
+      />
+    </View>
+  );
+
   /** The location question (TaskAgentCard.swift:67-87). */
   const questionStep = (current: TaskAgentRun) => {
     const question = current.question;
@@ -706,24 +732,7 @@ export function TaskAgentCard({ taskId, onResearchAvailable, onFieldFocus, onFie
           </View>
         ) : (
           <>
-            <View style={[styles.locationField, { backgroundColor: colors.field, borderColor: withAlpha(SYSTEM_PURPLE, 0.65) }]}>
-              <View style={[styles.locationIcon, { backgroundColor: withAlpha(SYSTEM_PURPLE, 0.06) }]}>
-                <Ionicons name="location" size={22} color={SYSTEM_PURPLE} />
-              </View>
-              <TextInput
-                accessibilityLabel="City or ZIP code"
-                placeholder="City or ZIP code"
-                placeholderTextColor={theme.colors.placeholder}
-                value={answer}
-                onChangeText={setAnswer}
-                returnKeyType="done"
-                onSubmitEditing={() => Keyboard.dismiss()}
-                onFocus={() => onFieldFocus?.('agentLocation')}
-                onBlur={() => onFieldBlur?.('agentLocation')}
-                style={[styles.locationInput, { color: theme.colors.ink }]}
-                testID="agent-location"
-              />
-            </View>
+            {locationField(answer, setAnswer)}
             <GradientButton
               title={current.service === 'plumber' ? 'Search Plumbers' : 'Search businesses'}
               leading="search-outline"
@@ -750,6 +759,9 @@ export function TaskAgentCard({ taskId, onResearchAvailable, onFieldFocus, onFie
   /** The run body (TaskAgentCard.swift:62-106). */
   const runCard = (current: TaskAgentRun) => {
     const empty = current.candidates.length === 0;
+    // Android ahead of iOS: a NO_RESULTS or CANCELLED run can be searched again, in the same or a new area.
+    const searchAgain = !finding && SEARCH_AGAIN_STATUSES.includes(current.status);
+    const searchArea = area ?? current.slots.location;
     const retired = !finding && current.question && RETIRED_QUESTION_KEYS.includes(current.question.key);
     const body = (
       <View style={[styles.gap12, busy && styles.inert]}>
@@ -772,6 +784,7 @@ export function TaskAgentCard({ taskId, onResearchAvailable, onFieldFocus, onFie
           </Text>
         ))}
         {current.candidates.map(businessCard)}
+        {searchAgain ? locationField(searchArea, setArea) : null}
         <View style={styles.controls}>
           {runControls(current.status).map((control) =>
             control.action === 'cancel' ? (
@@ -786,6 +799,15 @@ export function TaskAgentCard({ taskId, onResearchAvailable, onFieldFocus, onFie
                 <Ionicons name="close" size={20} color={theme.colors.secondary} />
                 <Text style={[styles.body, { color: theme.colors.secondary }]}>{control.title}</Text>
               </Pressable>
+            ) : control.action === 'search' ? (
+              <TextButton
+                key={control.action}
+                title={control.title}
+                color={colors.indigo}
+                disabled={searchArea.trim().length === 0}
+                onPress={() => act('search', { answer: searchArea.trim() })}
+                testID="agent-search-again"
+              />
             ) : (
               <TextButton key={control.action} title={control.title} color={colors.indigo} onPress={() => act(control.action)} testID={`agent-${control.action}`} />
             ),
@@ -846,7 +868,7 @@ export function TaskAgentCard({ taskId, onResearchAvailable, onFieldFocus, onFie
           title="Retry business search"
           color={colors.indigo}
           onPress={() => {
-            actionFailed.current = false;
+            setActionFailed(false);
             setError(null);
             void query.refetch();
           }}
