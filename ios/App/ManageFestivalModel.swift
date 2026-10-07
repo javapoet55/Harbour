@@ -336,12 +336,13 @@ import CryptoKit
         do {let _:MomentOK=try await store.request("festivalDelete",["ids":originals.map(\.id)]);imageStorage.delete(savedImageID);discardImageEdits();removeImage();await store.refresh();analytics.record(.deleted);return true}catch{self.error=error.localizedDescription;return false}
     }
     private var immediateOperationIDs:[String:String]=[:]
-    func sendImmediately() async -> [WishDeliveryPlan]? {
+    /// `only`: the recipient keys to send now; nil sends every selected recipient.
+    func sendImmediately(only keys:Set<String>?=nil) async -> [WishDeliveryPlan]? {
         guard !busy else{return nil}
         busy=true;error=nil;defer{busy=false}
         var plans:[WishDeliveryPlan]=[]
         do {
-            for recipient in selected {
+            for recipient in selected where keys?.contains(recipient.key) ?? true {
                 guard let momentID=recipient.momentID else{throw FestivalError.message("Save recipients first.")}
                 let operationID=immediateOperationIDs[recipient.key] ?? UUID().uuidString
                 immediateOperationIDs[recipient.key]=operationID
