@@ -1609,3 +1609,10 @@ gets the fix too, and the Swift app is to mirror it. Each fix has a test that fa
   only for NEEDS_INPUT and `resume` / `retry` only for PAUSED, FAILED or BLOCKED, and `prepare` returns the
   existing run unchanged (`src/server/task-agent/service.ts`), so the app has no request that starts a new
   search for those runs.
+- **Android ahead of iOS: the Calorie phone check says what the server did.** Swift always says it is calling and
+  shows the code field. The server sends the code by voice or SMS (`channel`) and sends none for a number it
+  has already verified (`alreadyVerified`). Now: by voice, Swift's words; by SMS, "Weâ€™ve texted a 6-digit code
+  to â€¦", "Text me again with a code" and a caption that says it texts; already verified, "â€¦ is already
+  verified.", no code field, and the settings reload so the number shows verified (new text in each case).
+  Before the first send the app cannot know the channel, so the caption and the first button still say
+  "call" (`CalorieTracker.tsx`, `useCalorieStore.sendCode`, `useSendNutritionCode`).

@@ -321,6 +321,37 @@ describe('live', () => {
     expect(title()).toBe('Create Agent');
   });
 
+  async function toPhoneCheck() {
+    await open(true);
+    await waitFor(() => expect(screen.getByTestId('calorie-status')).toHaveTextContent('Daily calls are off'));
+    await press('calorie-set-up');
+    await press('calorie-time-next');
+    await press('calorie-goals-next');
+    await fireEvent.changeText(screen.getByTestId('calorie-phone-input'), '(650) 555-0123');
+  }
+
+  it('phone check: a code sent by SMS says so, and offers to text again', async () => {
+    mockApi.settings.mockResolvedValue(settings());
+    mockApi.sendCode.mockResolvedValue({ sent: true, alreadyVerified: false, phoneVerified: false, channel: 'sms' });
+    await toPhoneCheck();
+    await press('calorie-send-code');
+    await waitFor(() => expect(lastAlert()[1]).toBe('We’ve texted a 6-digit code to +16505550123.'));
+    expect(screen.getByTestId('calorie-send-code')).toHaveTextContent('Text me again with a code');
+    expect(screen.getByText("NexDo calls this number. First we'll text it a 6-digit code.")).toBeTruthy();
+    expect(screen.getByTestId('calorie-code-input')).toBeTruthy();
+  });
+
+  it('phone check: an already verified number gets no code and shows as verified', async () => {
+    mockApi.settings.mockResolvedValueOnce(settings()).mockResolvedValue(settings({ phone: '+16505550123', phoneVerified: true }));
+    mockApi.sendCode.mockResolvedValue({ sent: false, alreadyVerified: true, phoneVerified: true, message: 'Already verified' });
+    await toPhoneCheck();
+    await press('calorie-send-code');
+    await waitFor(() => expect(lastAlert()[1]).toBe('+16505550123 is already verified.'));
+    expect(screen.queryByTestId('calorie-code-input')).toBeNull();
+    await waitFor(() => expect(screen.getByTestId('calorie-change-phone')).toBeTruthy());
+    expect(screen.getByTestId('calorie-turn-on').props.accessibilityState).toEqual({ disabled: false });
+  });
+
   it('"Save without calls" saves and opens the dashboard; a failure shows the server\'s message', async () => {
     mockApi.settings.mockResolvedValue(settings());
     mockApi.saveSettings.mockRejectedValueOnce(new Error('Check the values and try again.')).mockResolvedValueOnce(settings());

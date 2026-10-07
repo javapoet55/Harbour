@@ -2,6 +2,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 
 import type {
+  NutritionCodeSent,
   NutritionDay,
   NutritionEntry,
   NutritionEntryPatch,
@@ -49,7 +50,8 @@ export type CalorieStore = {
   /** `store.loading`: the first settings load. */
   loading: boolean;
   save: (update: NutritionSettingsUpdate) => Promise<boolean>;
-  sendCode: (phone: string) => Promise<boolean>;
+  /** The server's answer — how the code went out, or that the number is already verified — or `null` after an error. */
+  sendCode: (phone: string) => Promise<NutritionCodeSent | null>;
   verify: (code: string) => Promise<boolean>;
   callNow: () => Promise<boolean>;
   add: (input: { meal: NutritionMeal; description: string; kcal: number }) => Promise<boolean>;
@@ -132,7 +134,7 @@ export function useCalorieStore({
       loading: false,
       // `guard let api else { return true }`: the preview saves nothing and calls nobody.
       save: async () => true,
-      sendCode: async () => true,
+      sendCode: async () => ({ sent: true, channel: 'voice' }),
       verify: async () => true,
       callNow: async () => true,
       add: async ({ meal, description, kcal }) => {
@@ -177,7 +179,13 @@ export function useCalorieStore({
     insight: insight.data ?? null,
     loading: settings.isLoading,
     save: (update) => attempt(() => saveSettings.mutateAsync(update)),
-    sendCode: (phone) => attempt(() => sendCodeMutation.mutateAsync(phone)),
+    sendCode: async (phone) => {
+      let answer: NutritionCodeSent | null = null;
+      const sent = await attempt(async () => {
+        answer = await sendCodeMutation.mutateAsync(phone);
+      });
+      return sent ? answer : null;
+    },
     verify: (code) => attempt(() => verifyMutation.mutateAsync(code)),
     callNow: () => attempt(() => callNowMutation.mutateAsync()),
     add: (input) => attempt(() => addMutation.mutateAsync(input)),

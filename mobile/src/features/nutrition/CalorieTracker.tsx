@@ -93,6 +93,8 @@ export function CalorieTracker({ live, onClose, now = Date.now, region = deviceR
   const [codeInput, setCodeInput] = useState('');
   const [codeSent, setCodeSent] = useState(false);
   const [editingPhone, setEditingPhone] = useState(false);
+  /** How the last code went out (`channel` in the server's answer). */
+  const [codeByText, setCodeByText] = useState(false);
   const [working, setWorking] = useState(false);
   const [period, setPeriod] = useState<Period>('Today');
   const [insightsTab, setInsightsTab] = useState<'Insights' | 'Recommendations'>('Insights');
@@ -380,7 +382,9 @@ export function CalorieTracker({ live, onClose, now = Date.now, region = deviceR
         </View>
       ) : (
         <>
-          <Text style={[parts.caption, { color: SECONDARY }]}>NexDo calls this number. First we&apos;ll call it once and read out a 6-digit code.</Text>
+          <Text style={[parts.caption, { color: SECONDARY }]}>
+            {codeSent && codeByText ? "NexDo calls this number. First we'll text it a 6-digit code." : "NexDo calls this number. First we'll call it once and read out a 6-digit code."}
+          </Text>
           <TextInput
             autoComplete="tel"
             keyboardType="phone-pad"
@@ -398,14 +402,25 @@ export function CalorieTracker({ live, onClose, now = Date.now, region = deviceR
               const number = e164(phoneInput, region);
               if (!number) return setNotice('Enter your mobile number with its country code, for example +1 650 555 0123.');
               void perform(async () => {
-                if (await store.sendCode(number)) {
-                  setCodeSent(true);
-                  setNotice(`Calling ${number} now. Answer to hear your 6-digit code.`);
+                // Android ahead of iOS: Swift always says it is calling (CalorieTrackerView.swift:590-595). The
+                // server sends the code by voice or SMS, and sends none for a number it has already verified.
+                const answer = await store.sendCode(number);
+                if (!answer) return;
+                if (answer.alreadyVerified) {
+                  setEditingPhone(false);
+                  setCodeSent(false);
+                  setCodeInput('');
+                  setNotice(`${number} is already verified.`);
+                  return;
                 }
+                const byText = answer.channel === 'sms';
+                setCodeByText(byText);
+                setCodeSent(true);
+                setNotice(byText ? `We’ve texted a 6-digit code to ${number}.` : `Calling ${number} now. Answer to hear your 6-digit code.`);
               });
             }}
             testID="calorie-send-code"
-            title={codeSent ? 'Call me again with a code' : 'Call me with a code'}
+            title={codeSent ? (codeByText ? 'Text me again with a code' : 'Call me again with a code') : 'Call me with a code'}
           />
           {codeSent ? (
             <>
