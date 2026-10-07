@@ -347,14 +347,15 @@ struct TaskActionView: View {
                 contact = matches[0]; coordinator.remember(matches[0])
                 coordinator.update(actionID) { $0.contactIdentifier = matches[0].id }
             } else { contacts = matches }
-        } catch { self.error = lookupFailure(error, name: action.contactName) }
+        } catch { self.error = lookupFailure(error) }
     }
     /// What went wrong finding the contact, so "Allow Nexdo to access Contacts" reaches someone who refused it.
-    private func lookupFailure(_ error: Error, name: String) -> String {
+    private func lookupFailure(_ error: Error) -> String {
+        // Same three messages as Android (642a4ef).
         switch error as? TaskActionServiceError {
-        case .contactsDenied: "Nexdo can’t look in your Contacts because access is off. Allow Contacts for Nexdo in Settings, or enter the details below."
-        case .noContact: "No contact named “\(DeterministicTaskActionDetector.contactSearchName(name))” was found. Choose a contact or enter the details below."
-        default: "Contacts couldn’t be searched right now. Choose a contact or enter the details below."
+        case .contactsDenied: TaskActionServiceError.contactsDenied.localizedDescription
+        case .noContact: "No contact selected. Choose a contact or enter details below."
+        default: "Couldn’t look up this contact. Choose a contact or enter details below."
         }
     }
 
@@ -374,7 +375,7 @@ struct TaskActionView: View {
                 let matches = try await resolver.resolve(name: DeterministicTaskActionDetector.contactSearchName(action.contactName), identifier: action.contactIdentifier)
                 guard !Task.isCancelled, usable, self.action?.id == action.id else { return }
                 if matches.count == 1 { choose(matches[0]) } else { contacts = matches }
-            } catch { self.error = lookupFailure(error, name: action.contactName) }
+            } catch { self.error = lookupFailure(error) }
         }
     }
     private func choose(_ value: ActionContact) {
