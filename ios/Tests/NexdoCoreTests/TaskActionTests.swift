@@ -139,3 +139,12 @@ private func reconcile(_ previous: [TaskAction], _ tasks: [NexdoTask]) -> [TaskA
     #expect(reconcile(actions, [actionTask(start: "2026-09-10T18:00:00Z")])[0].manualRecipient == actions[0].manualRecipient)
     #expect(reconcile(actions, [actionTask("Contact John at 10 AM")])[0].manualRecipient == nil)
 }
+
+@Test func personalNamesSkipTheBusinessCheckAndRolesDoNot() {
+    for name in ["Asha", "Mom", "Ravi Kumar", "Mary-Jane"] {
+        #expect(DeterministicTaskActionDetector.isPersonalName(name), "\(name)")
+    }
+    for name in ["the plumber", "a dentist", "my landlord", "plumber", "Bob's Plumbing", "City Dental", "Acme Inc", "Joe & Sons", "Unit 4", "", "Smith Family Home Office Team"] {
+        #expect(!DeterministicTaskActionDetector.isPersonalName(name), "\(name)")
+    }
+}

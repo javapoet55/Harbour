@@ -360,7 +360,7 @@ struct ShoppingDetail:View {
             .task(id:"\(list.revision)-\(offersScenePhase)"){
                 guard offersScenePhase == .active else{return}
                 repeat {
-                    offers = try? await store.api.request("/api/shopping/offers?listId=\(list.id.addingPercentEncoding(withAllowedCharacters:.urlQueryAllowed) ?? list.id)")
+                    offers = try? await store.api.request("/api/shopping/offers?listId=\(URLQuery.value(list.id))")
                     do{try await Task.sleep(for:.seconds(60))}catch{return}
                 } while !Task.isCancelled
             }
@@ -704,6 +704,8 @@ private struct ShoppingStoreFinder:View {
     @State private var locationBusy=false
     @State private var locationProvider=WeatherLocationProvider()
     @State private var searchRevision=0
+    /// The search key whose request came back, so "no stores" is only said about a finished search.
+    @State private var completedKey:String?
     private var searchKey:String { "\(name)|\(area)|\(latitude ?? 0)|\(longitude ?? 0)|\(searchRevision)" }
     var body:some View {
         ScrollView {
@@ -723,8 +725,11 @@ private struct ShoppingStoreFinder:View {
                     Button("Try again"){searchRevision += 1}
                 }
                 if !searchBusy && searchError == nil && suggestions.isEmpty {
-                    Label(area.isEmpty && latitude == nil ? "Enter a city or ZIP code, or use your location to find grocery stores.":"No stores found. Try another location or store name.",systemImage:"storefront")
-                        .foregroundStyle(Color.nexdoSecondary).padding()
+                    if completedKey == searchKey { noStores }
+                    else if area.isEmpty && latitude == nil {
+                        Label("Enter a city or ZIP code, or use your location to find grocery stores.",systemImage:"storefront")
+                            .foregroundStyle(Color.nexdoSecondary).padding()
+                    }
                 }
                 ForEach(suggestions) { suggestion in
                     HStack(alignment:.top,spacing:12) {
@@ -751,6 +756,20 @@ private struct ShoppingStoreFinder:View {
             .task {if area.isEmpty {await useLocation(requestPermission:false)}}
             .task(id:searchKey){await findStores()}
     }
+    /// A finished search with no stores, including an area the server cannot place (it answers an empty list).
+    private var noStores:some View {
+        let place=area.trimmingCharacters(in:.whitespacesAndNewlines)
+        let named=name.trimmingCharacters(in:.whitespacesAndNewlines)
+        return VStack(spacing:10) {
+            Image(systemName:"storefront").font(.largeTitle).foregroundStyle(Color.nexdoIndigo)
+                .frame(width:72,height:72).background(Color.nexdoIndigo.opacity(0.08),in:Circle())
+            Text(place.isEmpty ? "No stores found near you" : "No stores found near \(place)").font(.headline).foregroundStyle(Color.nexdoInk).multilineTextAlignment(.center)
+            Text(named.isEmpty ? "Check the city or ZIP code, or try a nearby one." : "Check the city or ZIP code and the store name, or try a nearby area.")
+                .font(.subheadline).foregroundStyle(Color.nexdoSecondary).multilineTextAlignment(.center)
+        }.padding(20).frame(maxWidth:.infinity)
+            .background(Color(uiColor:.secondarySystemGroupedBackground),in:RoundedRectangle(cornerRadius:20))
+            .accessibilityElement(children:.combine).accessibilityIdentifier("stores-none-found")
+    }
     private func searchField(_ title:String,text:Binding<String>,icon:String)->some View {
         HStack {
             Image(systemName:icon).foregroundStyle(Color.nexdoIndigo)
@@ -767,7 +786,7 @@ private struct ShoppingStoreFinder:View {
         } catch {if requestPermission {searchError="Location is unavailable. Enter a city or ZIP code, or allow location access in iPhone Settings."}}
     }
     private func findStores() async {
-        suggestions=[];searchError=nil;searchBusy=false
+        suggestions=[];searchError=nil;searchBusy=false;completedKey=nil
         let key=searchKey
         let query=name.trimmingCharacters(in:.whitespacesAndNewlines)
         let region=area.trimmingCharacters(in:.whitespacesAndNewlines)
@@ -780,7 +799,7 @@ private struct ShoppingStoreFinder:View {
             struct Results:Decodable,Sendable {let stores:[ShoppingStoreSuggestion]}
             let result:Results=try await store.api.request("/api/shopping/stores",method:"POST",body:JSONSerialization.data(withJSONObject:body))
             try Task.checkCancellation();guard key==searchKey else{return}
-            suggestions=result.stores;searchBusy=false
+            suggestions=result.stores;searchBusy=false;completedKey=key
         } catch {
             guard !Task.isCancelled,key==searchKey else{return}
             searchBusy=false;searchError=error.localizedDescription
@@ -791,6 +810,7 @@ private struct ShoppingShare:View {
     @ObservedObject var store:ShoppingStore
     @State var list:GroceryList
     let onUpdate:(GroceryList)->Void
+    @Environment(\.dismiss) private var dismiss
     @State private var url:URL?
     var body:some View{NavigationStack{List{
         Section{Label(list.title,systemImage:"cart.fill");Text(GroceryList.itemCount(list.items.count))}
@@ -802,7 +822,9 @@ private struct ShoppingShare:View {
             else{Button("Create Share Link"){Task{if let saved=await store.action("share",list:list,input:[String:String]()){list=saved;onUpdate(saved);updateURL()}}}.disabled(store.busy)}
         }
         if let error=store.error{Text(error).foregroundStyle(.red)}
-    }.navigationTitle("Share List").task{updateURL()}}}
+    }.navigationTitle("Share List").task{updateURL()}
+        // A way out besides swiping the sheet down.
+        .toolbar{ToolbarItem(placement:.confirmationAction){Button("Done"){dismiss()}.accessibilityIdentifier("shopping-share-done")}}}}
     private func updateURL() {
         guard let token = list.shareToken else { url = nil; return }
         // Encode the same secret compactly; sharing again never creates a new token.

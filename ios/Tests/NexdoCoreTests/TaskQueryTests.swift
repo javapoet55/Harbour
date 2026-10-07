@@ -248,3 +248,30 @@ private func fixture(_ id: String, due: String?, status: String = "PLANNED", not
     query.search = "sink"
     #expect(query.results(tasks,timeZone:"UTC",now:now).map(\.id) == ["sink future","sink open","sink done"])
 }
+
+@Test func closingSearchRestoresTheFiltersItReset() {
+    var query = TaskQuery()
+    query.date = .week; query.status = "Completed"; query.historyRange = .lastMonth
+    query.beginSearch(); query.search = "plumber"
+    #expect(query.date == .all && query.status == "All")
+    query.endSearch()
+    #expect(query.search.isEmpty)
+    #expect(query.date == .week && query.status == "Completed" && query.historyRange == .lastMonth && query.priority == "All")
+    // A filter changed during the search is kept.
+    query.beginSearch(); query.priority = "HIGH"; query.date = .today
+    query.endSearch()
+    #expect(query.priority == "HIGH" && query.date == .today && query.status == "Completed")
+    // Closing without a search open changes nothing but the term.
+    var plain = TaskQuery(); plain.date = .tomorrow; plain.endSearch()
+    #expect(plain.date == .tomorrow && plain.status == "Open")
+}
+
+@Test func todayThenAllDuringASearchKeepsItsStatus() {
+    var query = TaskQuery()
+    query.beginSearch(); query.search = "report"
+    query.selectDate(.today, searching: true); query.selectDate(.all, searching: true)
+    #expect(query.status == "All" && query.historyRange == .allTime)
+    var browsing = TaskQuery(); browsing.status = "All"
+    browsing.selectDate(.all, searching: false)
+    #expect(browsing.status == "Open" && browsing.historyRange == .thisMonth)
+}

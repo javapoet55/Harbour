@@ -200,7 +200,7 @@ struct MomentConnectSection: View {
         .task { await model.load(momentIDs: moments.map(\.id)) }
         .onChange(of: moments.map(\.id)) { _, ids in Task { await model.load(momentIDs: ids) } }
         .sheet(isPresented: $verifying) { CallerIDVerificationSheet(model: model) }
-        .sheet(isPresented: $showingHowItWorks) { MomentCallingGuide() }
+        .sheet(isPresented: $showingHowItWorks) { MomentCallingGuide().presentationBackground(.white) }
         .alert("Connect me on the day", isPresented: Binding(get: { model.error != nil || model.notice != nil }, set: { if !$0 { model.error = nil; model.notice = nil } })) {
             Button("OK", role: .cancel) { model.error = nil; model.notice = nil }
         } message: { Text(model.error ?? model.notice ?? "") }
@@ -241,6 +241,11 @@ struct MomentConnectSection: View {
                 } else if state.passed {
                     Text("This moment has already passed.").font(.caption).foregroundStyle(.secondary)
                 }
+                // The third reason the switch is off: the caller ID card above asks for this, but not at the switch.
+                if !model.verified && !state.passed {
+                    Text("Verify your phone number above to turn this on.").font(.caption).foregroundStyle(.orange)
+                        .accessibilityIdentifier("connect-needs-verified-\(moment.id)")
+                }
                 if draft.enabled {
                     DatePicker("Call time", selection: Binding(
                         get: { MomentConnectModel.date(from: draft.time, zone: draft.timeZone) },
@@ -252,9 +257,9 @@ struct MomentConnectSection: View {
                         Text("Time zone")
                         Spacer()
                         Picker("Time zone", selection: Binding(
-                            get: { draft.timeZone },
+                            get: { TimeZoneNames.canonical(draft.timeZone) },
                             set: { zone in model.drafts[moment.id]?.timeZone = zone; schedulePreview(moment.id) })) {
-                            ForEach(TimeZone.knownTimeZoneIdentifiers, id: \.self) { id in
+                            ForEach(TimeZoneNames.pickerIdentifiers(including: draft.timeZone), id: \.self) { id in
                                 Text(TimeZone(identifier: id)?.localizedName(for: .generic, locale: .current) ?? id).tag(id)
                             }
                         }.labelsHidden().accessibilityIdentifier("connect-zone-\(moment.id)")
@@ -391,6 +396,7 @@ private struct MomentCallingGuide: View {
                             .frame(width:76,height:76)
                         VStack(alignment:.leading,spacing:10) {
                             Text("We call for you on special days").font(.title.bold())
+                                .fixedSize(horizontal:false,vertical:true)   // wraps; it was cut to "We call for you on s…"
                             Text("NexDo makes the call at the time you choose and connects you with your loved ones.")
                                 .foregroundStyle(.secondary)
                         }
@@ -425,6 +431,9 @@ private struct MomentCallingGuide: View {
                 Button("Back",systemImage:"chevron.left") { dismiss() }
             } }
         }.tint(.nexdoIndigo)
+            // A fixed light design (dark ink, white step cards, artwork drawn for white), like the Wellness guides; in dark
+            // mode its header and intro were dark ink on a dark sheet.
+            .environment(\.colorScheme, .light)
     }
     private func step(_ number:Int,title:String,text:String,rect:CGRect) -> some View {
         HStack(alignment:.top,spacing:10) {

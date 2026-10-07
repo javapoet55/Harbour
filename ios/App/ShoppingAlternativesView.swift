@@ -53,8 +53,11 @@ struct ShoppingAlternativesView: View {
                             .frame(maxWidth: .infinity, alignment: .leading).background(Color.nexdoBlue.opacity(0.06), in: RoundedRectangle(cornerRadius: 14))
                     }
                     if let error {
-                        Text(error).font(.subheadline).foregroundStyle(.red).accessibilityIdentifier("alternatives.error")
-                        Button("Try again") { retry += 1 }.frame(minHeight: 44)
+                        // No alternatives loaded: a clear state with Try again (Item Alternatives has no local fallback,
+                        // so this is the whole screen). With a result on screen, the error is a failed save and reloading
+                        // would not fix it.
+                        if result == nil { loadFailure(error) }
+                        else { Text(error).font(.subheadline).foregroundStyle(.red).accessibilityIdentifier("alternatives.error") }
                     }
                 }.padding(16)
             }.background { AlternativesBackdrop() }
@@ -68,7 +71,7 @@ struct ShoppingAlternativesView: View {
                 .foregroundStyle(Color.nexdoInk)
                 .navigationDestination(isPresented: Binding(get: { detail != nil }, set: { if !$0 { detail = nil } })) {
                     if let presentation = detail {
-                        ShoppingAlternativeDetails(original: original, originalFacts: result?.originalFacts, alternative: presentation.alternative, initialTab: presentation.tab,
+                        ShoppingAlternativeDetails(original: original, originalFacts: result?.originalFacts, alternative: presentation.alternative,
                             onView: { track($0.event) }, onReplace: { panel = .confirm(presentation.alternative) },
                             onAdd: { await apply(presentation.alternative, add: true) }, failure: { error },
                             favorite: savedOriginal.favoriteAlternatives?.contains(presentation.alternative.id) == true,
@@ -150,7 +153,7 @@ struct ShoppingAlternativesView: View {
     private func favorite(_ id: String?) {
         Task { saving = true; defer { saving = false }; if !(await onFavorite(id)) { error = store.error ?? "Couldn’t save favorite. Please try again." } }
     }
-    private func show(_ item: ShoppingAlternative) { detail = .init(alternative: item, tab: .why); track("alternative_viewed") }
+    private func show(_ item: ShoppingAlternative) { detail = .init(alternative: item); track("alternative_viewed") }
     private func emptyState(filtered: Bool) -> some View {
         VStack(spacing: 16) {
             ZStack { Circle().fill(Color.nexdoBlue.opacity(0.08)).frame(width: 140, height: 140); Image(systemName: "magnifyingglass").font(.system(size: 72)).foregroundStyle(Color.nexdoBlue.opacity(0.25)); AlternativeArtwork(item: original).frame(width: 75, height: 85).offset(x: 30, y: 15) }.padding(.top, 20)
@@ -164,7 +167,7 @@ struct ShoppingAlternativesView: View {
             Spacer(minLength: 12)
             Image(systemName: "arrow.left.arrow.right").font(.largeTitle).foregroundStyle(Color.nexdoBlue).frame(width: 78, height: 78).background(Color.nexdoBlue.opacity(0.08), in: Circle())
             Text("Replace item?").font(.title2.bold())
-            Text("Replace “\(original.name)” with “\(item.name)”? ").foregroundStyle(Color.nexdoSecondary).multilineTextAlignment(.center)
+            Text("Replace “\(original.name)” with “\(item.name)”?").foregroundStyle(Color.nexdoSecondary).multilineTextAlignment(.center)
             VStack(spacing: 10) {
                 replacementItem(original)
                 Image(systemName: "arrow.down").foregroundStyle(Color.nexdoBlue)
@@ -187,6 +190,18 @@ struct ShoppingAlternativesView: View {
         } else { error = store.error ?? "Couldn’t save this change. Please try again." }
     }
     private func track(_ event: String) { NexdoAnalytics.logEvent(event, parameters: ["original_category": original.category, "goal": goal?.rawValue ?? "All"]) }
+    private func loadFailure(_ message: String) -> some View {
+        VStack(spacing: 12) {
+            Image(systemName: "exclamationmark.triangle.fill").font(.largeTitle).foregroundStyle(.orange)
+                .frame(width: 72, height: 72).background(Color.orange.opacity(0.1), in: Circle()).accessibilityHidden(true)
+            Text("Couldn’t load alternatives").font(.headline)
+            Text(message).font(.subheadline).foregroundStyle(Color.nexdoSecondary).multilineTextAlignment(.center)
+                .accessibilityIdentifier("alternatives.error")
+            Button { retry += 1 } label: { Label("Try again", systemImage: "arrow.clockwise").frame(maxWidth: .infinity) }
+                .buttonStyle(AlternativeBlueButtonStyle())
+        }.padding(20).frame(maxWidth: .infinity)
+            .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 20))
+    }
     @MainActor private func load() async {
         loading = true; error = nil; defer { loading = false }
         do { result = try await store.alternatives(for: original, refresh: retry > 0); try Task.checkCancellation(); track("shopping_alternatives_opened") }
@@ -217,7 +232,6 @@ private func nutritionSummary(_ facts: ShoppingNutrition) -> String {
 struct AlternativePresentation: Identifiable {
     let id = UUID()
     let alternative: ShoppingAlternative
-    let tab: AlternativeTab
 }
 enum AlternativeTab: String, CaseIterable, Identifiable {
     case nutrition = "Nutrition", allergens = "Allergens", why = "Why this?", bestFor = "Best For"
@@ -264,7 +278,6 @@ struct ShoppingAlternativeDetails: View {
     let original: GroceryItem
     let originalFacts: ShoppingProductFacts?
     let alternative: ShoppingAlternative
-    let initialTab: AlternativeTab
     let onView: (AlternativeTab) -> Void
     let onReplace: () async -> Void
     let onAdd: () async -> Void

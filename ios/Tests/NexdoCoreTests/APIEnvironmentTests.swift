@@ -55,3 +55,9 @@ import Testing
         #expect(xml[archive.upperBound...].prefix(80).contains("buildConfiguration = \"Release\""), "\(scheme)")
     }
 }
+
+@Test func queryValuesAreEncodedForOneParameter() {
+    #expect(URLQuery.value("9f1c2a3b-0000-4000-8000-000000000001") == "9f1c2a3b-0000-4000-8000-000000000001")
+    #expect(URLQuery.value("a&b=c+d#e f") == "a%26b%3Dc%2Bd%23e%20f")
+    #expect(URLQuery.value("liste/été") == "liste%2F%C3%A9t%C3%A9")
+}

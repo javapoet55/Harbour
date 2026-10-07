@@ -50,3 +50,12 @@ import Testing
     #expect(BriefContent.taskTitleMatches("Bill Payment", text: "1. Bill Payment — overdue"))
     #expect(BriefContent.taskTitleMatches("Review proposal", text: "Review proposal is due today."))
 }
+
+@Test func briefSectionsCountItemsNotNothingStatements() {
+    #expect(BriefContent.itemCount(["Send the report by 4 PM.", "No deadlines appear to fall today."]) == 1)
+    #expect(BriefContent.itemCount(["No deadlines appear to fall today.", "There are no other deadlines this week."]) == 0)
+    #expect(BriefContent.itemCount(["You have no conflicts today.", "Nothing else needs a decision."]) == 0)
+    #expect(BriefContent.itemCount(["1. Contact gutter technician is overdue. Tackle it first.", "2) Review the plumbing quote."]) == 2)
+    // A bullet that only starts with a word beginning "no" still counts.
+    #expect(BriefContent.itemCount(["Notify Asha about the venue.", "Nova Plumbing replied.", "Nonetheless, call the bank."]) == 3)
+}

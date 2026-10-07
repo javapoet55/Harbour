@@ -178,10 +178,9 @@ import XCTest
         app.buttons["alternatives.whyThese"].tap()
         XCTAssertTrue(app.navigationBars["Why these alternatives?"].waitForExistence(timeout: 5)); app.buttons["Got it"].tap()
         app.buttons["alternatives.moreGoals"].tap()
-        app.buttons["alternatives.moreOptions"].tap()
-        let goal = app.buttons["alternatives.goal.Low sodium"]
-        for _ in 0..<4 { if goal.isHittable { break }; app.swipeUp() }
-        XCTAssertTrue(goal.isHittable); goal.tap()
+        // The goal sheet now opens on a grid of eight goals; pick one there (not one of the list's own chips).
+        let goal = app.buttons["alternatives.goal.Gluten-free"]
+        XCTAssertTrue(goal.waitForExistence(timeout: 5)); XCTAssertTrue(goal.isHittable); goal.tap()
         app.buttons["Cancel"].tap()
         XCTAssertTrue(app.buttons["alternatives.select.Whole wheat bread"].waitForExistence(timeout: 5))
         app.buttons["alternatives.select.Whole wheat bread"].tap()
@@ -213,12 +212,18 @@ import XCTest
     func testTypedAddDoesNotOpenVoice() {
         openList()
         let field=app.textFields["shopping-quick-add"]
-        field.tap();field.typeText("Tomatoes")
+        // A new item, so a new row appears: "Tomatoes" is already on the preview list and merges into it.
+        field.tap();field.typeText("Apples")
         app.buttons["Add typed items"].tap()
-        XCTAssertTrue(app.buttons["Check Apples"].waitForExistence(timeout:5))
+        // The new row lands at the end of a lazy list, so it exists only once scrolled to.
+        let apples=app.buttons["Check Apples"]
+        for _ in 0..<5 {if apples.waitForExistence(timeout:1){break};app.swipeUp()}
+        XCTAssertTrue(apples.exists)
         XCTAssertFalse(app.navigationBars["Add by Voice"].exists)
         XCTAssertFalse(app.textViews["Shopping transcript"].exists)
-        app.buttons["Add groceries by voice"].tap()
+        let voice=app.buttons["Add groceries by voice"]
+        for _ in 0..<5 {if voice.isHittable{break};app.swipeDown()}
+        voice.tap()
         XCTAssertTrue(app.navigationBars["Add by Voice"].waitForExistence(timeout:5))
     }
     func testCameraAddUnavailableFallbackAndCancel() {
@@ -335,7 +340,9 @@ import XCTest
         app.launchArguments = ["-ask-design-preview"]
         app.launch()
         XCTAssertTrue(app.buttons["ask-card-0"].waitForExistence(timeout: 15))
-        for index in 0..<8 { XCTAssertTrue(app.buttons["ask-card-\(index)"].exists) }
+        // Four cards: My Daily Brief, Top 3 Tasks, Due & Risks and Find Time.
+        for index in 0..<4 { XCTAssertTrue(app.buttons["ask-card-\(index)"].exists) }
+        XCTAssertFalse(app.buttons["ask-card-4"].exists)
         app.swipeUp()
         let field = app.textFields["Type your request"]
         XCTAssertTrue(field.waitForExistence(timeout: 5))

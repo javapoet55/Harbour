@@ -29,8 +29,8 @@ struct WellnessModuleGuide: View {
         var steps: [(String,String)] {
             switch self {
             case .calories: [
-                ("Log your meals","Quickly add what you eat by search, scan, or voice. We estimate calories and nutrition for you."),
-                ("Set your goals","Choose a goal like maintain, lose, or gain. Personalize your daily calorie and macro targets."),
+                ("Log your meals","Add what you eat to your food log, or tell us on your daily check-in call. We estimate calories and nutrition from the call."),
+                ("Set your goals","Personalize your daily calorie and macro targets."),
                 ("Track progress","See your daily intake, trends, and insights. Get tips to make healthier choices.")]
             case .pomodoro: [
                 ("Choose a focus session","Start a 25-minute focused work session. Customize the duration to fit your style."),
@@ -98,6 +98,8 @@ struct WellnessModuleGuide: View {
                 Button("Back",systemImage:"chevron.left",action:onHome)
             } }
         }.tint(kind.color).accessibilityIdentifier("module-guide-\(kind.rawValue)")
+            // Fixed light design, like the Wellness chooser: white cards and artwork drawn for white.
+            .environment(\.colorScheme, .light)
     }
     private func step(_ index:Int) -> some View {
         HStack(alignment:.top,spacing:10) {

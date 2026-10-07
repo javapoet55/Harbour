@@ -119,7 +119,9 @@ struct ActionNeededCard: View {
         if let manual = action.manualRecipient { return .manual(manual) }
         return action.contactIdentifier.flatMap { coordinator.resolvedContacts[$0] }
     }
-    private var isBusiness: Bool { if action.manualRecipient != nil || action.contactIdentifier != nil { return false }; return action.businessCandidateID != nil || envelope?.intent?.eligible == true || envelope?.run != nil }
+    // A cancelled or failed run is not a business task by itself (as on Android, 2f60eba): "Keep as a task" cancels it, and so does a title edit that makes
+    // the task personal. Counting any run made those tasks ask to "Find a business".
+    private var isBusiness: Bool { if action.manualRecipient != nil || action.contactIdentifier != nil { return false }; return action.businessCandidateID != nil || envelope?.intent?.eligible == true || (envelope?.run.map { !["CANCELLED", "FAILED"].contains($0.status) } ?? false) }
     private var state: ActionNeededState {
         .resolve(loaded: loaded, failed: failed, business: isBusiness, hasResults: !(envelope?.run?.candidates.isEmpty ?? true), hasRecipient: contact != nil, hasPhone: !(contact?.phones.isEmpty ?? true), hasEmail: !(contact?.emails.isEmpty ?? true))
     }
@@ -164,7 +166,7 @@ struct ActionNeededCard: View {
                         }.frame(maxWidth: .infinity, minHeight: 76)
                             .foregroundStyle(channel == .call ? Color.green : channel == .message ? Color.nexdoBlue : Color.purple)
                             .background((channel == .call ? Color.green : channel == .message ? Color.nexdoBlue : Color.purple).opacity(0.13), in: RoundedRectangle(cornerRadius: 16))
-                    }.buttonStyle(.plain).accessibilityLabel("\(channel.rawValue.capitalized) \(action.contactName)")
+                    }.buttonStyle(.plain).accessibilityLabel("\(channel.rawValue.capitalized) \(contact?.name ?? action.contactName)")
                         .accessibilityIdentifier("today.actions.\(channel.rawValue)")
                 }
             }
@@ -194,10 +196,11 @@ struct ActionNeededCard: View {
             }
 
             layout {
-                SnoozeMenu(action: action)
+                // The chosen recipient's name, as the card shows it, not the name the task was written with.
+                SnoozeMenu(action: action, name: contact?.name ?? action.contactName)
                 Button { coordinator.dismiss(action.id) } label: {
                     Label("Dismiss", systemImage: "xmark").frame(maxWidth: .infinity, minHeight: 44)
-                }.buttonStyle(.bordered).accessibilityLabel("Dismiss \(action.contactName) action")
+                }.buttonStyle(.bordered).accessibilityLabel("Dismiss \(contact?.name ?? action.contactName) action")
                     .accessibilityIdentifier("today.actions.dismiss")
             }
         }.padding(18).modifier(ActionGlass())
@@ -228,6 +231,7 @@ struct ActionNeededCard: View {
 
 struct SnoozeMenu: View {
     let action: TaskAction
+    let name: String
     @State private var choosing = false
     @State private var date = Date().addingTimeInterval(900)
     var body: some View {
@@ -240,7 +244,7 @@ struct SnoozeMenu: View {
             Button("Choose time…") { date = Date().addingTimeInterval(900); choosing = true }
         } label: {
             Label("Remind later", systemImage: "clock").frame(maxWidth: .infinity, minHeight: 44)
-        }.buttonStyle(.bordered).accessibilityLabel("Remind \(action.contactName) task later")
+        }.buttonStyle(.bordered).accessibilityLabel("Remind \(name) task later")
             .accessibilityIdentifier("today.actions.snooze")
             .sheet(isPresented: $choosing) {
                 NavigationStack {
@@ -289,6 +293,7 @@ struct ActionQueueSheet: View {
     @ObservedObject private var coordinator = TaskActionCoordinator.shared
     @Environment(\.dismiss) private var dismiss
     @State private var selectedTask: NexdoTask?
+    @State private var missingTask = false
     var body: some View {
         NavigationStack {
             TimelineView(.periodic(from: .now, by: 60)) { context in
@@ -300,7 +305,7 @@ struct ActionQueueSheet: View {
                         if !actions.isEmpty {
                             Section(due ? "Due now" : "Upcoming") {
                                 ForEach(actions) { action in
-                                    Button { selectedTask = model.tasks.first { $0.id == action.taskId } } label: {
+                                    Button { open(action) } label: {
                                         NextActionRow(action: action, now: context.date)
                                             .frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
                                     }.buttonStyle(.plain)
@@ -315,6 +320,18 @@ struct ActionQueueSheet: View {
         }.sheet(item: $selectedTask) { task in
             TaskDetailsView(task: task)
         }
+        .alert("Task not available", isPresented: $missingTask) { Button("OK", role: .cancel) {} } message: {
+            Text("This task may have been completed, deleted or moved. Your task list has been refreshed.")
+        }
+    }
+
+    /// A row whose task is not loaded yet refreshes the tasks before giving up; it used to do nothing at all.
+    private func open(_ action: TaskAction) {
+        if let task = model.tasks.first(where: { $0.id == action.taskId }) { selectedTask = task; return }
+        Task {
+            await model.refreshTasks()
+            if let task = model.tasks.first(where: { $0.id == action.taskId }) { selectedTask = task } else { missingTask = true }
+        }
     }
 
     private func closeActionQueue() {
@@ -326,15 +343,5 @@ private func actionIcon(_ channel: TaskActionChannel) -> String {
     switch channel { case .call: "phone.fill"; case .message: "message.fill"; case .email: "envelope.fill" }
 }
 private func actionTimeLabel(_ action: TaskAction, now: Date) -> String {
-    let seconds = (action.notificationDate ?? now).timeIntervalSince(now)
-    if seconds > 0 { return "in \(actionDurationLabel(minutes: max(1, Int(ceil(seconds / 60)))))" }
-    if seconds > -60 { return "Due now" }
-    return "\(actionDurationLabel(minutes: Int(-seconds / 60))) overdue"
-}
-
-private func actionDurationLabel(minutes: Int) -> String {
-    let hours = minutes / 60
-    let remainder = minutes % 60
-    guard hours > 0 else { return "\(minutes) min" }
-    return remainder == 0 ? "\(hours) hr" : "\(hours) hr \(remainder) min"
+    ActionTimeLabel.text(seconds: (action.notificationDate ?? now).timeIntervalSince(now))
 }

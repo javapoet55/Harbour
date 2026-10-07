@@ -98,7 +98,10 @@ struct NutritionSummary: Decodable, Sendable {
     }
     private struct PhoneStart: Encodable { var action = "start"; let phone: String }
     private struct PhoneVerify: Encodable { var action = "verify"; let code: String }
-    private struct Sent: Decodable, Sendable { let sent: Bool }
+    /// POST /api/nutrition/phone start: the code goes by `channel` (voice or sms); a number that is already
+    /// verified answers sent: false, alreadyVerified: true and nothing is sent.
+    struct PhoneCodeResult: Decodable, Sendable { let sent: Bool; let alreadyVerified: Bool?; let channel: String? }
+    /// POST /api/nutrition/call-now answers 202 with dialing, cancelled (calls off or outside the window), failed or not_claimed.
     private struct CallStarted: Decodable, Sendable { let status: String }
     private struct NewEntry: Encodable { let date: String; let meal: String; let description: String; let kcal: Int }
     private struct EntryPatch: Encodable { var meal: String?; var description: String?; var kcal: Int?; var confirm: Bool? }
@@ -152,9 +155,11 @@ struct NutritionSummary: Decodable, Sendable {
         return await attempt { let value: NutritionSettings = try await api.request("/api/nutrition/settings", method: "PUT", body: JSONEncoder().encode(update)); settings = value }
     }
 
-    func sendCode(to phone: String) async -> Bool {
-        guard let api else { return true }
-        return await attempt { let _: Sent = try await api.request("/api/nutrition/phone", method: "POST", body: JSONEncoder().encode(PhoneStart(phone: phone))) }
+    func sendCode(to phone: String) async -> PhoneCodeResult? {
+        guard let api else { return PhoneCodeResult(sent: true, alreadyVerified: false, channel: "voice") }
+        var result: PhoneCodeResult?
+        let ok = await attempt { result = try await api.request("/api/nutrition/phone", method: "POST", body: JSONEncoder().encode(PhoneStart(phone: phone))) }
+        return ok ? result : nil
     }
 
     func verify(code: String) async -> Bool {
@@ -162,9 +167,12 @@ struct NutritionSummary: Decodable, Sendable {
         return await attempt { let value: NutritionSettings = try await api.request("/api/nutrition/phone", method: "POST", body: JSONEncoder().encode(PhoneVerify(code: code))); settings = value }
     }
 
-    func callNow() async -> Bool {
-        guard let api else { return true }
-        return await attempt { let _: CallStarted = try await api.request("/api/nutrition/call-now", method: "POST") }
+    /// The call's status, or nil when the request failed (the error is already set).
+    func callNow() async -> String? {
+        guard let api else { return "dialing" }
+        var status: String?
+        let ok = await attempt { let started: CallStarted = try await api.request("/api/nutrition/call-now", method: "POST"); status = started.status }
+        return ok ? status : nil
     }
 
     func add(date: String, meal: String, description: String, kcal: Int) async -> Bool {
@@ -262,6 +270,8 @@ struct CalorieTrackerView: View {
     @State private var phoneInput = ""
     @State private var codeInput = ""
     @State private var codeSent = false
+    /// The channel the last code went by ("voice" or "sms"), from the server.
+    @State private var codeChannel: String?
     @State private var editingPhone = false
     @State private var working = false
     @State private var period = "Today"
@@ -587,12 +597,23 @@ struct CalorieTrackerView: View {
                     Button("Change") { editingPhone = true; codeSent = false; codeInput = "" }
                 }
             } else {
-                Text("NexDo calls this number. First we'll call it once and read out a 6-digit code.").font(.caption).foregroundStyle(.secondary)
+                // The server picks the code's channel; until a code has gone by text, the copy says "call" (voice is the default).
+                Text(codeSent && codeChannel == "sms" ? "NexDo calls this number. First we'll text it a 6-digit code." : "NexDo calls this number. First we'll call it once and read out a 6-digit code.").font(.caption).foregroundStyle(.secondary)
                 TextField("Mobile number, e.g. +1 650 555 0123", text: $phoneInput)
                     .keyboardType(.phonePad).textContentType(.telephoneNumber).textFieldStyle(.roundedBorder)
-                Button(codeSent ? "Call me again with a code" : "Call me with a code") {
+                Button(!codeSent ? "Call me with a code" : codeChannel == "sms" ? "Text me again with a code" : "Call me again with a code") {
                     guard let number = CalorieStore.e164(phoneInput) else { notice = "Enter your mobile number with its country code, for example +1 650 555 0123."; return }
-                    perform { if await store.sendCode(to: number) { codeSent = true; notice = "Calling \(number) now. Answer to hear your 6-digit code." } }
+                    perform {
+                        guard let result = await store.sendCode(to: number) else { return }
+                        if result.alreadyVerified == true {
+                            await store.loadSettings()
+                            editingPhone = false; codeSent = false; codeInput = ""
+                            notice = "\(number) is already verified."
+                        } else {
+                            codeSent = true; codeChannel = result.channel
+                            notice = result.channel == "sms" ? "We’ve texted a 6-digit code to \(number)." : "Calling \(number) now. Answer to hear your 6-digit code."
+                        }
+                    }
                 }
                 if codeSent {
                     TextField("6-digit code", text: $codeInput).keyboardType(.numberPad).textContentType(.oneTimeCode).textFieldStyle(.roundedBorder)
@@ -641,7 +662,15 @@ struct CalorieTrackerView: View {
             primary("View Nutrition Dashboard") { history = [.intro]; page = .dashboard; Task { await refresh() } }
             if live {
                 Button("Call me now to try it") {
-                    perform { if await store.callNow() { notice = "Calling you now. Pick up to log today’s meals." } }
+                    perform {
+                        switch await store.callNow() {
+                        case "dialing": notice = "Calling you now. Pick up to log today’s meals."
+                        // Same wording as Android (ff5ceb7); not_claimed reads as failed there too.
+                        case "cancelled": notice = "The call was cancelled. Check that daily calls are on, then try again."
+                        case .some: notice = "The call could not be placed. Try again in a few minutes."
+                        case nil: break
+                        }
+                    }
                 }.frame(maxWidth: .infinity)
             }
             Button("Edit setup") { go(.time) }.frame(maxWidth: .infinity)
@@ -902,7 +931,9 @@ struct CalorieTrackerView: View {
                         Task {
                             var saved = false
                             if let entry {
-                                saved = await store.update(entry, date: date, meal: chosenMeal, description: name, kcal: calories)
+                                // kcal only when it changed: the server reads a sent kcal as a manual correction
+                                // (source MANUAL), so a rename would otherwise have dropped the food's nutrients.
+                                saved = await store.update(entry, date: date, meal: chosenMeal, description: name, kcal: calories == entry.kcal ? nil : calories)
                             } else {
                                 saved = await store.add(date: date, meal: chosenMeal, description: name, kcal: calories)
                             }

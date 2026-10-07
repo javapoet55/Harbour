@@ -37,24 +37,23 @@ actor AppleTaskActionContacts: TaskActionContactResolver {
             contacts = try store.unifiedContacts(matching: CNContact.predicateForContacts(matchingName: name), keysToFetch: keys)
         }
         guard !contacts.isEmpty else { throw TaskActionServiceError.noContact }
-        return contacts.map { contact in
-            ActionContact(id: contact.identifier, name: CNContactFormatter.string(from: contact, style: .fullName) ?? name,
-                phones: contact.phoneNumbers.map {
-                    ActionContact.Address(id: $0.identifier, label: $0.label.map(CNLabeledValue<NSString>.localizedString(forLabel:)) ?? "Phone", value: $0.value.stringValue)
-                }, emails: contact.emailAddresses.map {
-                    ActionContact.Address(id: $0.identifier, label: $0.label.map(CNLabeledValue<NSString>.localizedString(forLabel:)) ?? "Email", value: String($0.value))
-                })
-        }
+        return contacts.map { ActionContact.from($0, fallbackName: name) }
     }
 }
 
 
 extension ActionContact {
-    static func selected(_ contact: CNContact) -> ActionContact {
-        ActionContact(id: contact.identifier, name: CNContactFormatter.string(from: contact, style: .fullName) ?? "Selected contact",
-            phones: contact.phoneNumbers.map { .init(id: $0.identifier, label: "Phone", value: $0.value.stringValue) },
-            emails: contact.emailAddresses.map { .init(id: $0.identifier, label: "Email", value: String($0.value)) })
+    /// A contact with each number's and address's own label ("mobile", "work"), as Contacts shows them. Picked
+    /// contacts used to be labeled "Phone" and "Email" whatever they were, so two numbers could not be told apart.
+    static func from(_ contact: CNContact, fallbackName: String) -> ActionContact {
+        ActionContact(id: contact.identifier, name: CNContactFormatter.string(from: contact, style: .fullName) ?? fallbackName,
+            phones: contact.phoneNumbers.map {
+                .init(id: $0.identifier, label: $0.label.map(CNLabeledValue<NSString>.localizedString(forLabel:)) ?? "Phone", value: $0.value.stringValue)
+            }, emails: contact.emailAddresses.map {
+                .init(id: $0.identifier, label: $0.label.map(CNLabeledValue<NSString>.localizedString(forLabel:)) ?? "Email", value: String($0.value))
+            })
     }
+    static func selected(_ contact: CNContact) -> ActionContact { from(contact, fallbackName: "Selected contact") }
     static func manual(_ value: TaskActionRecipient) -> ActionContact {
         ActionContact(id: "manual", name: value.name,
             phones: value.phone.isEmpty ? [] : [.init(id: "phone", label: "Phone", value: value.phone)],

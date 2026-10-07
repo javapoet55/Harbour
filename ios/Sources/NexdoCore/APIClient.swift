@@ -95,3 +95,12 @@ public actor APIClient {
 }
 
 private struct ServerError: Decodable { let error: String; let code: String?; let warnings: [String]?; let verificationProof: String? }
+
+public enum URLQuery {
+    /// `value` encoded for one query parameter: only RFC 3986 unreserved characters stay as they are, so an `&`,
+    /// `=`, `+` or `#` in an ID cannot end the parameter or start another (`.urlQueryAllowed` keeps all four).
+    public static func value(_ value: String) -> String {
+        value.addingPercentEncoding(withAllowedCharacters: unreserved) ?? value
+    }
+    private static let unreserved = CharacterSet(charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~")
+}

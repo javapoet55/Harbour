@@ -53,6 +53,8 @@ struct FeedbackView: View {
         .disabled(saving || submitted)
         .scrollDismissesKeyboard(.interactively)
         .navigationTitle("Feedback").navigationBarTitleDisplayMode(.inline)
+        // Return adds a newline in the description, so the keyboard needs its own way out; it covered the rating and Submit.
+        .toolbar { ToolbarItemGroup(placement: .keyboard) { Spacer(); Button("Done") { editing = false }.accessibilityIdentifier("feedback.keyboardDone") } }
         .navigationBarBackButtonHidden(saving)
         .interactiveDismissDisabled(saving)
         .alert("Thank you for your feedback!", isPresented: $submitted) {

@@ -79,7 +79,8 @@ import XCTest
         XCTAssertTrue(priorities.waitForExistence(timeout: 10))
         priorities.tap()
         XCTAssertTrue(app.buttons["Back to briefing"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts["3 items to focus on"].exists)
+        // Top Priorities keeps only the bullets naming a current task: one, in this fixture.
+        XCTAssertTrue(app.staticTexts["1 item to focus on"].exists)
         XCTAssertTrue(app.buttons["Complete Contact gutter technician"].exists)
         XCTAssertTrue(app.staticTexts["Discuss gutter repair and get an estimate."].exists)
         XCTAssertTrue(app.buttons["Add Note"].exists)
@@ -163,12 +164,31 @@ import XCTest
         let selected=expectation(for:NSPredicate(format:"isSelected == true"),evaluatedWith:element)
         return XCTWaiter().wait(for:[selected],timeout:timeout) == .completed
     }
+    /// Manage Moments opens on Scheduled; a moment's row is under whichever filter tab its state puts it in.
+    @discardableResult func showManaged(_ row:XCUIElement) -> XCUIElement {
+        for filter in ["Scheduled","Need Review","Ready to Schedule"] {
+            let tab=app.buttons["manage-filter-"+filter]
+            if tab.waitForExistence(timeout:5) {tab.tap()}
+            if row.waitForExistence(timeout:2) {return row}
+        }
+        return row
+    }
+    /// The Moments list opens on the Today chip; which chip shows a card depends on today's date, so try each in turn.
+    @discardableResult func showUpcoming(_ card:XCUIElement) -> XCUIElement {
+        if card.waitForExistence(timeout:10) {return card}
+        for period in ["Today","Tomorrow","This Week","Later"] {
+            let chip=app.buttons["moments-period-"+period]
+            for _ in 0..<3 where chip.exists && !chip.isHittable {app.swipeUp()}
+            if chip.exists {chip.tap()}
+            if card.waitForExistence(timeout:2) {return card}
+        }
+        return card
+    }
     func openFestivalManager() {
         app.terminate(); app.launchArguments.append("-festival-manage-preview"); app.launch()
         let manage=app.buttons["moments-manage"].firstMatch
         XCTAssertTrue(manage.waitForExistence(timeout:15));manage.tap()
-        app.buttons["manage-filter-Ready to Schedule"].tap()
-        app.buttons["manage-moment-moment"].tap()
+        showManaged(app.buttons["manage-moment-moment"]).tap()
         XCTAssertTrue(app.navigationBars["Manage Moment"].waitForExistence(timeout:5))
     }
     func openMomentEditor() {
@@ -333,8 +353,8 @@ import XCTest
     }
     func testFestivalCardOpensItsFourTabManager() {
         app.terminate(); app.launchArguments.append("-festival-manage-preview"); app.launch()
-        let manage = app.buttons["festival-manage-moment"]
-        XCTAssertTrue(manage.waitForExistence(timeout: 15))
+        let manage = showUpcoming(app.buttons["festival-manage-moment"])
+        XCTAssertTrue(manage.exists)
         for _ in 0..<5 { if manage.isHittable { break }; app.swipeUp() }
         XCTAssertEqual(manage.label, "Manage Happy Diwali")
         let formatter=DateFormatter()
@@ -359,7 +379,7 @@ import XCTest
     }
     func testFestivalCardBodyOpensManager() {
         app.terminate();app.launchArguments.append("-festival-manage-preview");app.launch()
-        let date=app.staticTexts["festival-date-moment"]
+        let date=showUpcoming(app.staticTexts["festival-date-moment"])
         for _ in 0..<5 {if date.isHittable{break};app.swipeUp()}
         date.tap()
         XCTAssertTrue(app.navigationBars["Manage Moment"].waitForExistence(timeout:5))
@@ -437,7 +457,7 @@ import XCTest
     private func verifyOccasionCard(id:String) {
         app.terminate();app.launchArguments.append("-all-moment-categories");app.launch()
         app.buttons["moments-manage"].firstMatch.tap()
-        let moment=app.buttons["manage-moment-"+id]
+        let moment=showManaged(app.buttons["manage-moment-"+id])
         for _ in 0..<5 {if moment.isHittable{break};app.swipeUp()};moment.tap()
         XCTAssertTrue(app.navigationBars["Manage Moment"].waitForExistence(timeout:5))
         for tab in ["Contacts","Message","Schedule"] {XCTAssertTrue(app.buttons["festival-tab-"+tab].exists)}
@@ -463,7 +483,8 @@ import XCTest
         XCTAssertTrue(app.navigationBars["Manage Moment"].waitForExistence(timeout:8))
         let save=app.buttons["Save Message"]
         for _ in 0..<7 {if save.isHittable{break};app.swipeUp()};save.tap()
-        XCTAssertTrue(app.staticTexts["Message approved and saved. Nothing has been sent."].waitForExistence(timeout:8))
+        // Saving the message approves it and moves on to the Schedule tab.
+        XCTAssertTrue(app.staticTexts["Send time"].waitForExistence(timeout:8))
         app.navigationBars["Manage Moment"].buttons.firstMatch.tap()
         for _ in 0..<5 {if moment.isHittable{break};app.swipeUp()};moment.tap()
         app.buttons["festival-tab-Message"].tap()
@@ -645,8 +666,7 @@ import XCTest
         if direct {
             app.navigationBars["Manage Moment"].buttons["Back"].tap()
             app.navigationBars["Manage Moments"].buttons.firstMatch.tap()
-            app.buttons["moments-period-Later"].tap()
-            let card=app.buttons["festival-manage-moment"]
+            let card=showUpcoming(app.buttons["festival-manage-moment"])
             for _ in 0..<5 {if card.isHittable{break};app.swipeUp()}
             card.tap()
         }
@@ -667,7 +687,8 @@ import XCTest
             XCTAssertTrue(save.isEnabled)
         }
         for _ in 0..<6 {if save.isHittable{break};app.swipeUp()};save.tap()
-        XCTAssertTrue(app.staticTexts["Message approved and saved. Nothing has been sent."].waitForExistence(timeout:8))
+        // Saving the message approves it and moves on to the Schedule tab, where the send time is chosen.
+        XCTAssertTrue(app.staticTexts["Send time"].waitForExistence(timeout:8))
         for _ in 0..<6 {if app.buttons["festival-tab-Schedule"].isHittable{break};app.swipeDown()}
         app.buttons["festival-tab-Schedule"].tap()
         let schedule=app.buttons.matching(identifier:"wish-primary").matching(NSPredicate(format:"label == %@","Schedule Wish")).firstMatch

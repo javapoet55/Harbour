@@ -39,6 +39,12 @@ final class MomentsPreviewProtocol: URLProtocol, @unchecked Sendable {
                 Self.createdMoments.append(value)
                 result = ["moment": value]
             case "festivalCatalog": result = ["entries":[]]
+            case "connectStatus":
+                // Debug-only fixture: Connect me with an unverified caller ID, so no call can be placed.
+                let ids = input["momentIds"] as? [String] ?? []
+                result = ["available": true, "callerId": NSNull(), "userTimeZone": "America/Los_Angeles", "moments": ids.map { id in
+                    ["momentId": id, "enabled": false, "time": "09:00", "timeZone": "America/Los_Angeles", "recipientPhone": "+15555550123", "passed": false, "isToday": false,
+                     "nextCallAt": "2026-11-05T17:00:00.000Z", "preview": ["userLocal": "9:00 AM", "recipientLocal": "9:00 AM", "userOk": true, "recipientOk": true]] as [String: Any] }]
             case "festivalSave":
                 Self.festivalSaved = input
                 // Like the server: a moment created here gets its recipient, and each recipient without an id becomes a moment in the group.
@@ -78,6 +84,8 @@ final class MomentsPreviewProtocol: URLProtocol, @unchecked Sendable {
         } else {
             var moment: [String: Any] = ["id":"moment","type":"birthday","title":"Damien’s Birthday","firstName":"Damien","phone":"+15555550184","email":"damien@example.com","occurrenceDate":day,"timeZoneID":"America/Los_Angeles","source":"manual","sourceKey":"fixture","yearly":true,"enabled":true,"nextOccurrence":day,"drafts":[draft()]]
             if ProcessInfo.processInfo.arguments.contains("-legacy-moment-preview") { moment["type"] = "custom"; moment["title"] = "Damien’s Celebration" }
+            // Debug-only fixture: a birthday stored with the birth year, as a contact's birthday is.
+            if ProcessInfo.processInfo.arguments.contains("-moment-birth-year-preview") { moment["occurrenceDate"] = "1990" + String(day.dropFirst(4)) }
             if ProcessInfo.processInfo.arguments.contains("-festival-manage-preview") {
                 moment["type"]="festival";moment["title"]=Self.festivalSaved?["title"] ?? "Happy Diwali";moment["yearly"]=false
                 let future=MomentDates.day(Date().addingTimeInterval(30*86400),zone:"America/Los_Angeles")

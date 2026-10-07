@@ -160,7 +160,7 @@ import Testing
     #expect(matches(.today,"2026-09-27","Asia/Tokyo"))
     #expect(matches(.tomorrow,"2026-09-27"))
     #expect(matches(.thisWeek,"2026-09-26"))
-    #expect(!matches(.thisWeek,"2026-09-27"))
+    #expect(matches(.thisWeek,"2026-09-27"))   // weeks run Monday to Sunday, so Sunday is still this week
     #expect(!matches(.later,"2026-09-27"))
     #expect(matches(.later,"2026-09-28"))
     #expect(!matches(.thisWeek,"2026-09-25"))
@@ -196,4 +196,36 @@ import Testing
     settings.preparationMinutes = 1440
     #expect(settings.prepareHours == 0)
     #expect(settings.prepareDays == 1)
+}
+
+@Test func aYearlyMomentShowsThisYearsOccurrence() {
+    let now = ISO8601DateFormatter().date(from: "2026-10-07T12:00:00Z")!
+    #expect(MomentDates.shownDay("1990-10-06", yearly: true, zone: "UTC", now: now) == "2026-10-06")
+    #expect(MomentDates.shownDay("1992-02-29", yearly: true, zone: "UTC", now: now) == "2026-02-28")
+    #expect(MomentDates.shownDay("2027-03-01", yearly: true, zone: "UTC", now: now) == "2027-03-01")
+    #expect(MomentDates.shownDay("1990-10-06", yearly: false, zone: "UTC", now: now) == "1990-10-06")
+    let leapYear = ISO8601DateFormatter().date(from: "2028-01-07T12:00:00Z")!
+    #expect(MomentDates.shownDay("1992-02-29", yearly: true, zone: "UTC", now: leapYear) == "2028-02-29")
+}
+
+@Test func momentWeeksRunMondayToSundayWhateverThePhoneCalendar() {
+    var sundayFirst = Calendar(identifier: .gregorian); sundayFirst.firstWeekday = 1
+    let saturday = ISO8601DateFormatter().date(from: "2026-10-10T18:00:00Z")!   // Saturday 10 Oct, 11:00 in Los Angeles
+    // Sunday 11 Oct is still this week; Monday 12 Oct is later.
+    #expect(MomentUpcomingFilter.thisWeek.includes(day: "2026-10-11", zone: "America/Los_Angeles", now: saturday, calendar: sundayFirst))
+    #expect(!MomentUpcomingFilter.thisWeek.includes(day: "2026-10-12", zone: "America/Los_Angeles", now: saturday, calendar: sundayFirst))
+    #expect(MomentUpcomingFilter.later.includes(day: "2026-10-12", zone: "America/Los_Angeles", now: saturday, calendar: sundayFirst))
+}
+
+@Test func upcomingSectionsUseMondayFirstWeeksLikeTheChips() throws {
+    func moment(_ day: String) throws -> ImportantMoment {
+        let raw: [String: Any] = ["id":"m","type":"birthday","title":"Birthday","firstName":"","phone":"","email":"","occurrenceDate":day,"nextOccurrence":day,"timeZoneID":"America/Los_Angeles","source":"manual","sourceKey":"test","yearly":false,"enabled":true,"drafts":[]]
+        return try JSONDecoder().decode(ImportantMoment.self, from: JSONSerialization.data(withJSONObject: raw))
+    }
+    var sundayFirst = Calendar(identifier: .gregorian); sundayFirst.firstWeekday = 1
+    let saturday = ISO8601DateFormatter().date(from: "2026-10-10T18:00:00Z")!   // Saturday 10 Oct in Los Angeles
+    #expect(try moment("2026-10-11").upcomingGroup(now: saturday, calendar: sundayFirst) == .thisWeek)
+    #expect(try moment("2026-10-12").upcomingGroup(now: saturday, calendar: sundayFirst) == .nextWeek)
+    // The chip agrees: Sunday is in This Week.
+    #expect(MomentUpcomingFilter.thisWeek.includes(day: "2026-10-11", zone: "America/Los_Angeles", now: saturday, calendar: sundayFirst))
 }

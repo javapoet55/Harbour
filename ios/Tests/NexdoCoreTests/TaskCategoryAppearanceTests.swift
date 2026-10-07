@@ -34,3 +34,12 @@ import Testing
     let current = Data(#"{"id":"1","title":"Task","status":"PLANNED","priority":"NORMAL","durationMin":30,"category":{"name":"Work"}}"#.utf8)
     #expect(try JSONDecoder().decode(NexdoTask.self, from: current).category?.name == "Work")
 }
+
+@Test func taskRowIconsMatchWholeWords() {
+    #expect(TaskRowIcon.symbol(for: "Recall the order") == "doc.text")
+    #expect(TaskRowIcon.symbol(for: "Read the contactless card terms") == "doc.text")
+    #expect(TaskRowIcon.symbol(for: "Calling the bank") == "phone")
+    #expect(TaskRowIcon.symbol(for: "Find a plumber") == "wrench")
+    #expect(TaskRowIcon.symbol(for: "Two meetings with HR") == "calendar")
+    #expect(TaskRowIcon.symbol(for: "Answer emails") == "envelope")
+}

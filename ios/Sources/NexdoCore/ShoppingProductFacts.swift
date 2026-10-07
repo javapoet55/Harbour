@@ -93,10 +93,13 @@ public struct ShoppingComparison: Sendable {
         let normalized = value * factor
         return normalized.isFinite ? normalized : nil
     }
+    public static let smallestShownDifference = 0.5
     public func difference(_ nutrient: ShoppingNutrient) -> ShoppingDifference {
         guard let a = nutrient.value(original), let b = alternativeValue(nutrient) else { return .unknown }
         let delta = b - a
-        if abs(delta) < 0.0001 { return .same }
+        // Values are shown to the whole unit, so a difference that rounds to zero is "Same". Counting it showed
+        // "↑ 0 g" rows and tagged equal products "Lower sugar · Higher protein".
+        if abs(delta) < Self.smallestShownDifference { return .same }
         return delta < 0 ? .lower(-delta) : .higher(delta)
     }
 }

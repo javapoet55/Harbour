@@ -41,8 +41,12 @@ struct CalendarEventDetailsView: View {
                             }
                         }
                         HStack(alignment: .top, spacing: 10) {
-                            action("Mark Complete", icon: "checkmark.circle.fill", color: .green) { await setCompletion(true) }
-                            action("Mark Incomplete", icon: "xmark.circle.fill", color: .red) { await setCompletion(false) }
+                            // One of the two, like the ⋯ menu: completing a completed event does nothing.
+                            if event.completedAt == nil {
+                                action("Mark Complete", icon: "checkmark.circle.fill", color: .green) { await setCompletion(true) }
+                            } else {
+                                action("Mark Incomplete", icon: "xmark.circle.fill", color: .red) { await setCompletion(false) }
+                            }
                             action(taskAdded ? "Added to Tasks" : "Add to Tasks", icon: "calendar.badge.plus", color: .indigo) { await addTask() }
                         }
                         VStack(spacing: 0) {
@@ -94,7 +98,9 @@ struct CalendarEventDetailsView: View {
             .confirmationDialog("Delete this event?", isPresented: $deleting, titleVisibility: .visible) {
                 Button("Delete Event", role: .destructive) { Task { await deleteEvent() } }
             }
-            .alert("Event Details", isPresented: Binding(get: { message != nil }, set: { if !$0 { message = nil; if deleted { dismiss() } } })) { Button("OK") { message = nil; if deleted { dismiss() } } } message: { Text(message ?? "") }
+            // The binding closes the screen after a delete; OK only clears the message. Both used to call
+            // dismiss(), so OK dismissed twice and could close the screen underneath as well.
+            .alert("Event Details", isPresented: Binding(get: { message != nil }, set: { if !$0 { message = nil; if deleted { dismiss() } } })) { Button("OK") { message = nil } } message: { Text(message ?? "") }
             .sheet(isPresented: $editing) { CalendarEventDetailsEditor(event: event) { body in try await update(body) } }
             .task {
                 #if DEBUG
@@ -160,7 +166,8 @@ struct CalendarEventDetailsView: View {
 
 private extension View {
     func eventCard() -> some View {
-        background(.white.opacity(0.94), in: RoundedRectangle(cornerRadius: 26))
+        // The system card surface: white in light mode, dark grey in dark mode, where nexdoInk turns white.
+        background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 26))
             .shadow(color: .indigo.opacity(0.035), radius: 14, y: 6)
     }
 }

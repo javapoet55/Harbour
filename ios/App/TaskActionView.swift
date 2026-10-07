@@ -127,7 +127,6 @@ struct TaskActionView: View {
     @State private var receipt: String?
     @State private var confirmCall = false
     @State private var composer: Composer?
-    @State private var resolution: Task<Void, Never>?
     private let resolver: any TaskActionContactResolver = AppleTaskActionContacts()
     private let emailService: any TaskActionEmailService = NativeTaskActionEmailService()
     private struct Composer: Identifiable {
@@ -149,6 +148,8 @@ struct TaskActionView: View {
                 VStack(alignment: .leading, spacing: 18) {
                     if let action, usable {
                         Text("Contact \(contact?.name ?? action.contactName)").font(.title2.bold())
+                        // Above the buttons it refers to ("…or enter details below").
+                        if let error { Text(error).foregroundStyle(.red).accessibilityIdentifier("taskAction.error") }
                         if checking { ProgressView("Checking next action…") }
                         else if checkFailed {
                             Text("Couldn’t check this task. Please retry.")
@@ -177,9 +178,11 @@ struct TaskActionView: View {
                                 if contact != nil { Button("Change business") { showingTask = true } }
                                 Button("Choose someone from Contacts") { pickingContact = true }
                             } else {
-                                Button("Choose contact") { pickingContact = true }.buttonStyle(.borderedProminent)
+                                // White on the indigo fill: the screen's nexdoInk foreground made it black on dark indigo.
+                                Button("Choose contact") { pickingContact = true }.buttonStyle(.borderedProminent).foregroundStyle(.white)
                                 Button("Enter contact details") {
-                                    manualName = contact?.name ?? action.contactName
+                                    // The name as looked up ("plumber"), not as written in the task ("the plumber").
+                                    manualName = contact?.name ?? DeterministicTaskActionDetector.contactSearchName(action.contactName)
                                     manualPhone = contact?.phones.first?.value ?? ""
                                     manualEmail = contact?.emails.first?.value ?? ""
                                     enteringDetails = true
@@ -206,7 +209,6 @@ struct TaskActionView: View {
                                     .padding(.vertical, 8).accessibilityIdentifier("taskAction.address.\(address.id)")
                             }
                         }
-                        if let error { Text(error).foregroundStyle(.red).accessibilityIdentifier("taskAction.error") }
                         if let receipt { Text(receipt).foregroundStyle(.secondary).accessibilityIdentifier("taskAction.receipt") }
                         if action.status == .executing || action.status == .completed {
                             Button("Mark task complete") {
@@ -248,7 +250,7 @@ struct TaskActionView: View {
                         .ignoresSafeArea()
                         .interactiveDismissDisabled()
                 } else {
-                    ActionEmailComposer(draft: emailService.draft(recipient: draft.recipient, name: draft.name, context: draft.context), finished: finishCompose)
+                    ActionEmailComposer(draft: emailService.draft(recipient: draft.recipient, name: draft.name, context: draft.context, body: draft.body), finished: finishCompose)
                         .ignoresSafeArea()
                         .interactiveDismissDisabled()
                 }
@@ -290,7 +292,6 @@ struct TaskActionView: View {
         .presentationDetents([.large]).presentationDragIndicator(.visible)
         .onAppear { coordinator.screenOpened(actionID) }
         .onDisappear {
-            resolution?.cancel()
             if isRoutedAction { coordinator.route = nil }
             coordinator.screenClosed(actionID)
         }
@@ -320,7 +321,9 @@ struct TaskActionView: View {
         checking = true; checkFailed = false; error = nil; contact = nil; businessDraft = nil; contacts = []; addresses = []
         defer { checking = false }
         if let recipient = action.manualRecipient { businessFlow = false; contact = .manual(recipient); return }
-        if action.contactIdentifier == nil {
+        // A person ("Call Asha") needs no business search: go straight to Contacts. Asking the agent first made a
+        // personal task fail offline with "Couldn't check this task".
+        if action.contactIdentifier == nil && (action.businessCandidateID != nil || !DeterministicTaskActionDetector.isPersonalName(action.contactName)) {
             do {
                 let response = try await model.loadTaskAgent(taskID: action.taskId)
                 guard !Task.isCancelled, usable else { return }
@@ -343,27 +346,26 @@ struct TaskActionView: View {
                 contact = matches[0]; coordinator.remember(matches[0])
                 coordinator.update(actionID) { $0.contactIdentifier = matches[0].id }
             } else { contacts = matches }
-        } catch { self.error = "No contact selected. Choose a contact or enter details below." }
+        } catch { self.error = lookupFailure(error) }
+    }
+    /// What went wrong finding the contact, so "Allow Nexdo to access Contacts" reaches someone who refused it.
+    private func lookupFailure(_ error: Error) -> String {
+        // Same three messages as Android (642a4ef).
+        switch error as? TaskActionServiceError {
+        case .contactsDenied: TaskActionServiceError.contactsDenied.localizedDescription
+        case .noContact: "No contact selected. Choose a contact or enter details below."
+        default: "Couldn’t look up this contact. Choose a contact or enter details below."
+        }
     }
 
     private func title(_ channel: TaskActionChannel) -> String { switch channel { case .call: "Call"; case .message: "Message"; case .email: "Email" } }
     private func icon(_ channel: TaskActionChannel) -> String { switch channel { case .call: "phone"; case .message: "message"; case .email: "envelope" } }
+    /// Every caller has a recipient already (channel buttons exist only for one, and the other callers check), so this
+    /// only picks the address; the Contacts search it used to start when there was none could not be reached.
     private func resolve(_ option: TaskActionChannel) {
-        guard let action, usable, !busy else { return }
+        guard usable, !busy else { return }
         channel = option; contacts = []; addresses = []; error = nil; receipt = nil
-        if let contact { choose(contact); return }
-        busy = true
-        coordinator.update(actionID) { $0.transition(to: .awaitingApproval) }
-        resolution?.cancel()
-        resolution = Task {
-            defer { busy = false }
-            do {
-                // "the plumber" is looked up as "plumber"; the card and notification keep the name as written.
-                let matches = try await resolver.resolve(name: DeterministicTaskActionDetector.contactSearchName(action.contactName), identifier: action.contactIdentifier)
-                guard !Task.isCancelled, usable, self.action?.id == action.id else { return }
-                if matches.count == 1 { choose(matches[0]) } else { contacts = matches }
-            } catch { self.error = error.localizedDescription }
-        }
+        if let contact { choose(contact) }
     }
     private func choose(_ value: ActionContact) {
         guard usable else { return }

@@ -5,6 +5,7 @@ struct BriefSectionDetailView: View {
     @Environment(\.dismiss) private var dismiss
     let title: String
     let items: [String]
+    var readError: String? = nil
     let ask: (String) -> Void
     let read: () -> Void
     @State private var taskSection: TaskDetailsView.InitialSection?
@@ -34,7 +35,8 @@ struct BriefSectionDetailView: View {
                 }.accessibilityLabel("Back to briefing")
                 VStack(spacing: 4) {
                     Text(title).font(.title2.bold()).multilineTextAlignment(.center)
-                    Text("\(items.count) \(items.count == 1 ? "item" : "items") to \(isPriority ? "focus on" : "review")")
+                    let count = BriefContent.itemCount(items)
+                    Text(count == 0 ? "Nothing to \(isPriority ? "focus on" : "review")" : "\(count) \(count == 1 ? "item" : "items") to \(isPriority ? "focus on" : "review")")
                         .font(.subheadline).foregroundStyle(secondary)
                 }.frame(maxWidth: .infinity)
                 Menu {
@@ -55,6 +57,7 @@ struct BriefSectionDetailView: View {
                         DetailArtwork(part: .target).frame(width: 70, height: 60).accessibilityHidden(true)
                     }.padding(14).background(.purple.opacity(0.045), in: RoundedRectangle(cornerRadius: 22))
                         .overlay(RoundedRectangle(cornerRadius: 22).stroke(.white, lineWidth: 1.5))
+                    if let readError { ReadAloudError(message: readError) }
                     ForEach(Array(items.enumerated()), id: \.offset) { index, item in
                         if let task = task(for: item) { taskCard(task, context: item, index: index) }
                         else { insightCard(item, index: index) }

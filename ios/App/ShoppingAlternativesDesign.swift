@@ -115,8 +115,8 @@ struct AlternativesSuccess: View {
             Text("Item replaced!").font(.title.bold()).accessibilityIdentifier("alternatives.success")
             Text("\(original) has been replaced with \(replacement).").foregroundStyle(Color.nexdoSecondary).multilineTextAlignment(.center)
             Spacer()
+            // One button: Done and View in Cart both only closed this screen.
             Button(action: close) { Text("Done").frame(maxWidth: .infinity) }.buttonStyle(AlternativeBlueButtonStyle())
-            Button(action: close) { Label("View in Cart", systemImage: "cart").frame(maxWidth: .infinity, minHeight: 48) }.buttonStyle(.bordered)
         }.padding(28).padding(.bottom, 20).background { AlternativesBackdrop() }.interactiveDismissDisabled()
     }
 }

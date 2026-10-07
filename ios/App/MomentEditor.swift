@@ -41,7 +41,7 @@ struct MomentEditor: View {
                 if MomentDates.day(date,zone:input.timeZoneID) < MomentDates.day(Date(),zone:input.timeZoneID) {
                     Text(input.yearly ? "The original date is kept; the next yearly occurrence appears in Moments." : "This date is in the past. You can save it, but choose a future time before scheduling delivery.").font(.caption).foregroundStyle(.secondary)
                 }
-                Picker("Time zone", selection: $input.timeZoneID) { ForEach(TimeZone.knownTimeZoneIdentifiers, id: \.self) { Text($0) } }
+                Picker("Time zone", selection: Binding(get: { TimeZoneNames.canonical(input.timeZoneID) }, set: { input.timeZoneID = $0 })) { ForEach(TimeZoneNames.pickerIdentifiers(including: input.timeZoneID), id: \.self) { Text($0) } }
                 if !dateConfirmed { Toggle("I have confirmed the event date", isOn: $dateConfirmed) }
                 Toggle("Repeat yearly", isOn: $input.yearly)
                 Text("February 29 is observed on February 28 in non-leap years. Dates for festivals with moving calendars must be confirmed each year.").font(.caption)

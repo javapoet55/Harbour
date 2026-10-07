@@ -82,7 +82,7 @@ struct ShoppingOffersView:View {
     }
     private func load() async {
         do {
-            let result:ShoppingOffersSnapshot=try await store.api.request("/api/shopping/offers?listId=\(list.id)");snapshot=result;error=nil
+            let result:ShoppingOffersSnapshot=try await store.api.request("/api/shopping/offers?listId=\(URLQuery.value(list.id))");snapshot=result;error=nil
             // Open on a tab that has offers; most items have no brand, so their offers are under Available.
             if !matches.contains(where:{$0.category==category}),let first=tabs.first(where:{tab in matches.contains{$0.category==tab.0}}) {category=first.0}
         }
@@ -105,7 +105,7 @@ struct ShoppingOfferDetail:View {
         ScrollView {VStack(alignment:.leading,spacing:18){
             OfferPanel {OfferSummary(offer:match.offer);Text("Why this \(match.category == "alternative" ? "is an alternative":"matches")").font(.headline).foregroundStyle(Color.nexdoBlue);ForEach(match.reasons,id:\.self){Label($0,systemImage:"checkmark.circle").font(.subheadline)};ForEach(match.differences,id:\.self){Label($0,systemImage:"info.circle").font(.subheadline)}}
             OfferPanel {
-                Label("Valid through \(offerDate(match.offer.expiresAt))",systemImage:"calendar")
+                Label("Valid through \(ShoppingOfferDates.lastDay(match.offer.expiresAt))",systemImage:"calendar")
                 Divider();Text(match.offer.conditions).font(.subheadline)
                 if let url=URL(string:match.offer.sourceURL){Divider();Link(destination:url){Label("View store offer ↗",systemImage:"tag")}}
                 Divider();Label("Last checked \(offerDate(match.offer.checkedAt))",systemImage:"clock").font(.subheadline)

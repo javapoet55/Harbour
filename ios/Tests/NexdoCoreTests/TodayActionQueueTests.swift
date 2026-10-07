@@ -108,3 +108,21 @@ private func queue(_ pairs: [(TaskAction, NexdoTask)], now: Date = queueNow) -> 
     #expect(queue([first, second, (third.0, completed)]).dueActions.isEmpty)
     #expect(queue([]).upcomingActions.isEmpty)
 }
+
+@Test func actionTimesRoundTheSameWayBeforeAndAfterTheDueTime() {
+    #expect(ActionTimeLabel.text(seconds: 90) == "in 2 min")
+    #expect(ActionTimeLabel.text(seconds: -90) == "2 min overdue")
+    #expect(ActionTimeLabel.text(seconds: 80) == "in 1 min")
+    #expect(ActionTimeLabel.text(seconds: -80) == "1 min overdue")
+    #expect(ActionTimeLabel.text(seconds: 20) == "in 1 min")
+    #expect(ActionTimeLabel.text(seconds: -20) == "Due now")
+    #expect(ActionTimeLabel.text(seconds: -(90 * 60 + 40)) == "1 hr 31 min overdue")
+    #expect(ActionTimeLabel.text(seconds: 2 * 3600) == "in 2 hr")
+}
+
+@Test func overdueAgesPast48HoursReadInDays() {
+    #expect(ActionTimeLabel.text(seconds: -(257 * 3600 + 60)) == "10 days overdue")
+    #expect(ActionTimeLabel.text(seconds: -(48 * 3600)) == "2 days overdue")
+    #expect(ActionTimeLabel.text(seconds: -(47 * 3600 + 59 * 60)) == "47 hr 59 min overdue")
+    #expect(ActionTimeLabel.text(seconds: 72 * 3600) == "in 72 hr")
+}

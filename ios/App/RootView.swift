@@ -207,6 +207,8 @@ private struct NexdoTabShell: View {
             .fixedSize(horizontal: false, vertical: true)
             .background { Color(uiColor: .systemBackground).ignoresSafeArea(edges: .bottom) }
         }
+        // On Tasks the tab bar stays at the bottom, under the keyboard, instead of riding up above it during a search.
+        .ignoresSafeArea(.keyboard, edges: selection == .tasks ? .bottom : [])
         .onAppear { openPomodoroNotification() }
         .onChange(of: pomodoroRoute.owner) { _, _ in openPomodoroNotification() }
         .fullScreenCover(isPresented: $showingWellness, onDismiss: {
@@ -225,6 +227,8 @@ private struct NexdoTabShell: View {
     private func openPomodoroNotification() {
         guard let pending = pomodoroRoute.owner, let owner = model.profile?.id else { return }
         guard pending == TaskActionCoordinator.ownerKey(owner) else { pomodoroRoute.owner = nil; return }
+        // Already in Pomodoro (from the Wellness chooser, say): that is where the alert leads, so it is handled.
+        if pomodoroRoute.isOpen { pomodoroRoute.owner = nil; return }
         if showingAsk { showingAsk = false; return }
         if showingWellness { return }
         pomodoroRoute.owner = nil
@@ -1040,7 +1044,6 @@ private struct TodayView: View {
     let onCalendar: () -> Void
     let onPlanWeek: (String) -> Void
     @State private var range: TodayRange = .today
-    @State private var adding = false
     @State private var showingAccount = false
     @State private var editing: NexdoTask?
     @State private var showingWeeklySummary = false
@@ -1288,7 +1291,6 @@ private struct TodayView: View {
                 }
             }
             .toolbar(.hidden, for: .navigationBar)
-            .sheet(isPresented: $adding) { NavigationStack { TaskEditor(task: nil) } }
             .sheet(isPresented: $showingDoNow) { DoNowView().presentationDetents([.large]).presentationDragIndicator(.visible) }
             .sheet(isPresented: $showingAccount) { AccountView() }
             .sheet(item: $editing) { task in
@@ -1686,7 +1688,9 @@ struct TasksView: View {
         let snapshot = model.taskQuery.snapshot(model.tasks, timeZone: zone)
         NavigationStack {
             ZStack {
-                LinearGradient(colors: [Color(red: 0.973, green: 0.977, blue: 1), Color(red: 1, green: 0.914, blue: 0.969), .white], startPoint: .topLeading, endPoint: .bottomTrailing)
+                // Light: the original lilac-to-pink wash. Dark: the same tints over the system background, so
+                // the adaptive ink on it stays readable.
+                LinearGradient(colors: [TasksBackdrop.top, TasksBackdrop.middle, Color(uiColor: .systemBackground)], startPoint: .topLeading, endPoint: .bottomTrailing)
                     .ignoresSafeArea()
                 VStack(alignment: .leading, spacing: 16) {
                     TodayTopBar(name: model.profile?.name ?? "", temperature: nil, showsWeather: false, add: nil, account: { account = true })
@@ -1792,7 +1796,7 @@ struct TasksView: View {
                 headerButton("magnifyingglass", label: "Search tasks") {
                     searching.toggle()
                     if searching { model.taskQuery.beginSearch() }
-                    else { model.taskQuery.search = "" }
+                    else { model.taskQuery.endSearch() }
                     searchFocused = searching
                 }
             }
@@ -1814,7 +1818,7 @@ struct TasksView: View {
             TextField("Search your tasks", text: $model.taskQuery.search)
                 .focused($searchFocused).submitLabel(.search).autocorrectionDisabled()
                 .accessibilityLabel("Search tasks")
-            Button { model.taskQuery.search = ""; searching = false; searchFocused = false } label: {
+            Button { model.taskQuery.endSearch(); searching = false; searchFocused = false } label: {
                 Image(systemName: "xmark.circle.fill").frame(width: 44, height: 44)
             }.accessibilityLabel("Close search")
         }.padding(.leading, 14).background(.background.opacity(0.85), in: RoundedRectangle(cornerRadius: 16))
@@ -1856,8 +1860,7 @@ struct TasksView: View {
                 let selected = model.taskQuery.date == filter
                 Button {
                     searchFocused = false
-                    if filter == .all && model.taskQuery.date != .all { model.taskQuery.historyRange = .thisMonth; model.taskQuery.status = "Open" }
-                    model.taskQuery.date = filter
+                    model.taskQuery.selectDate(filter, searching: searching || !model.taskQuery.search.isEmpty)
                 } label: {
                     HStack(spacing: 5) {
                         Text(filter.rawValue)
@@ -1901,14 +1904,15 @@ struct TasksView: View {
                                 .frame(width: 36, height: 40)
                             VStack(alignment: .leading, spacing: 2) {
                             Text(group.isDone && model.taskQuery.status == "All" ? "Completed · \(sectionTitle(group.date))" : sectionTitle(group.date)).font(.title3.bold()).foregroundStyle(Color.nexdoInk).accessibilityHeading(.h2)
-                            if group.date != .distantFuture {
+                            // Only under Today, Yesterday and Tomorrow: any other day's title is already the date (as on Android, ca4d583).
+                            if group.date != .distantFuture && sectionDate(group.date) != sectionTitle(group.date) {
                                 Text(sectionDate(group.date))
                                     .font(.caption).foregroundStyle(Color.nexdoSecondary)
                             }
                             }
                             Spacer()
                             Text("\(group.tasks.count) \(group.tasks.count == 1 ? "task" : "tasks")").font(.subheadline).foregroundStyle(Color.nexdoSecondary)
-                        }.padding(12).background(Color.white.opacity(0.65), in: RoundedRectangle(cornerRadius: 16))
+                        }.padding(12).background(Color(uiColor: .secondarySystemGroupedBackground).opacity(0.65), in: RoundedRectangle(cornerRadius: 16))
                         ForEach(group.tasks) { task in taskCard(task) }
                     }
             }
@@ -1947,13 +1951,14 @@ struct TasksView: View {
     }
 
     private func taskIcon(_ task: NexdoTask) -> (String, Color) {
-        let title = task.title.lowercased()
-        if title.contains("email") || title.contains("message") { return ("envelope", .pink) }
-        if ["plumb", "repair", "handyman", "electrician"].contains(where: title.contains) { return ("wrench", .nexdoBlue) }
-        if title.contains("call") || title.contains("contact") { return ("phone", .green) }
-        if title.contains("laptop") || title.contains("computer") { return ("laptopcomputer", .orange) }
-        if title.contains("meeting") || title.contains("appointment") { return ("calendar", .purple) }
-        return ("doc.text", .nexdoBlue)
+        let symbol = TaskRowIcon.symbol(for: task.title)
+        switch symbol {
+        case "envelope": return (symbol, .pink)
+        case "phone": return (symbol, .green)
+        case "laptopcomputer": return (symbol, .orange)
+        case "calendar": return (symbol, .purple)
+        default: return (symbol, .nexdoBlue)
+        }
     }
 
     private func sectionDate(_ date: Date) -> String {
@@ -2247,7 +2252,7 @@ private struct TasksHero: View {
         }
         .padding(22)
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 26, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 26, style: .continuous).stroke(Color.white.opacity(0.9)))
+        .overlay(RoundedRectangle(cornerRadius: 26, style: .continuous).stroke(Color(uiColor: .secondarySystemGroupedBackground).opacity(0.9)))
         .shadow(color: Color.nexdoIndigo.opacity(0.08), radius: 22, y: 10)
     }
 }
@@ -2264,8 +2269,15 @@ private struct TaskMetric: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 12)
-        .background(Color.white.opacity(0.65), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .background(Color(uiColor: .secondarySystemGroupedBackground).opacity(0.65), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
+}
+
+/// The Tasks backdrop's tints. Built here, outside any view: a dynamic color made inside a view's body is main-actor
+/// isolated, and SwiftUI resolves colors off the main thread, which stopped the app the first time it drew in light mode.
+private enum TasksBackdrop {
+    static let top = Color(uiColor: UIColor { $0.userInterfaceStyle == .dark ? UIColor(red: 0.07, green: 0.07, blue: 0.12, alpha: 1) : UIColor(red: 0.973, green: 0.977, blue: 1, alpha: 1) })
+    static let middle = Color(uiColor: UIColor { $0.userInterfaceStyle == .dark ? UIColor(red: 0.11, green: 0.06, blue: 0.10, alpha: 1) : UIColor(red: 1, green: 0.914, blue: 0.969, alpha: 1) })
 }
 
 enum TaskCreationStyle {
