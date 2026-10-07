@@ -46,6 +46,12 @@ describe('Wellness chooser', () => {
 });
 
 describe('module guides', () => {
+  it('the Calorie Tracker guide promises nothing the tracker lacks (Android ahead of iOS)', () => {
+    const text = GUIDES.calories.steps.map(([title, body]) => `${title} ${body}`).join(' ').toLowerCase();
+    for (const promise of ['search', 'scan', 'voice', 'maintain', 'lose', 'gain']) expect(text).not.toContain(promise);
+    expect(GUIDES.calories.steps[1]).toEqual(['Set your goals', 'Personalize your daily calorie and macro targets.']);
+  });
+
   it.each(['calories', 'pomodoro', 'moments', 'shopping'] as const)('the %s guide shows its title, three steps and benefit', async (kind) => {
     await render(<WellnessModuleGuide kind={kind} onContinue={jest.fn()} onHome={jest.fn()} />);
     const guide = GUIDES[kind];

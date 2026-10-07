@@ -1736,3 +1736,9 @@ match". Logic fixes have a test that fails without them.
   load alternatives", the reason and a full-width Try again; with alternatives already on screen the error is a
   failed save, which a reload would not fix, so it stays an inline message without Try again
   (`AlternativesSheet.tsx`). The local fallback stays removed (a product decision; open).
+- **Android ahead of iOS: the Calorie Tracker guide promises only what the tracker does.** "Quickly add what you eat
+  by search, scan, or voice" and "Choose a goal like maintain, lose, or gain" described a food search, a barcode
+  scan, in-app voice entry and a goal type that do not exist. Step 1 now reads "Add what you eat to your food log,
+  or tell us on your daily check-in call. We estimate calories and nutrition from the call." and step 2 "Personalize
+  your daily calorie and macro targets."; the rest is unchanged (`WellnessModuleGuide.tsx`; new text, in §22's
+  wording table).

@@ -31,8 +31,11 @@ export const GUIDES: Record<WellnessModule, Guide> = {
     subtitle: 'Log your meals, reach your goals, and feel your best.',
     color: '#F04008',
     steps: [
-      ['Log your meals', 'Quickly add what you eat by search, scan, or voice. We estimate calories and nutrition for you.'],
-      ['Set your goals', 'Choose a goal like maintain, lose, or gain. Personalize your daily calorie and macro targets.'],
+      // Android ahead of iOS: no promises the tracker does not keep. There is no food search, barcode scan or
+      // in-app voice entry, and no maintain / lose / gain goal (§22 "For the team"); meals come from the daily
+      // check-in call or Add Food, and the goals are a daily calorie number and nutrient targets.
+      ['Log your meals', 'Add what you eat to your food log, or tell us on your daily check-in call. We estimate calories and nutrition from the call.'],
+      ['Set your goals', 'Personalize your daily calorie and macro targets.'],
       ['Track progress', 'See your daily intake, trends, and insights. Get tips to make healthier choices.'],
     ],
     benefit: { title: 'Small changes add up', text: 'Track consistently, get helpful insights, and build habits that last.', icon: 'bulb' },
