@@ -1583,7 +1583,7 @@ gets the fix too, and the Swift app is to mirror it. Each fix has a test that fa
   unavailable, any recipient with a phone stopped the whole send, so a recipient set to Email was not sent
   either. Now only the recipients whose channel is Messages need it: the others are sent, the composer is not
   opened on a device without one, and the error names who was left out ("Messages is not available on this
-  device. No greeting has been sent to Lee." â€” new text, Swift's sentence with the names added). When every
+  device. No greeting has been sent to Lee." — new text, Swift's sentence with the names added). When every
   recipient needs Messages, Swift's message is unchanged (`ScheduleReview.tsx` `sendNow`,
   `sendImmediately(skip)`).
 - **Android ahead of iOS: Send Now and Schedule confirmed wait for their sheet to close.** "Send email & open
@@ -1598,7 +1598,7 @@ gets the fix too, and the Swift app is to mirror it. Each fix has a test that fa
   turned the retired-question step's spinner into "Retry search". They now have their own line
   (`agent-notice`), in the same place and style, cleared by the next action or load (`TaskAgentCard.tsx`).
 - **Android ahead of iOS: the task agent card's search sends the key the question asks for.** The search button
-  always sent `key: "location"`; it now sends `question.key`. "Use â€¦" still sends `location`, since it is only
+  always sent `key: "location"`; it now sends `question.key`. "Use …" still sends `location`, since it is only
   shown for that question. Swift's dead `question.key == "urgency"` title test was never ported (the card
   shows `question.text`), so there is nothing to remove in RN.
 - **Already right on Android: an agent action fires no extra GET.** Swift keys its polling task on the run's
@@ -1612,8 +1612,8 @@ gets the fix too, and the Swift app is to mirror it. Each fix has a test that fa
   refused, and the card shows the server's message.
 - **Android ahead of iOS: the Calorie phone check says what the server did.** Swift always says it is calling and
   shows the code field. The server sends the code by voice or SMS (`channel`) and sends none for a number it
-  has already verified (`alreadyVerified`). Now: by voice, Swift's words; by SMS, "Weâ€™ve texted a 6-digit code
-  to â€¦", "Text me again with a code" and a caption that says it texts; already verified, "â€¦ is already
+  has already verified (`alreadyVerified`). Now: by voice, Swift's words; by SMS, "We’ve texted a 6-digit code
+  to …", "Text me again with a code" and a caption that says it texts; already verified, "… is already
   verified.", no code field, and the settings reload so the number shows verified (new text in each case).
   Before the first send the app cannot know the channel, so the caption and the first button still say
   "call" (`CalorieTracker.tsx`, `useCalorieStore.sendCode`, `useSendNutritionCode`).
@@ -1628,10 +1628,10 @@ gets the fix too, and the Swift app is to mirror it. Each fix has a test that fa
   Loud."). A playback failure later on still shows only in Ask (`briefHandlers.ts`, `BriefSectionDetail.tsx`).
 - **Android ahead of iOS: Event Details shows Mark Complete or Mark Incomplete, whichever applies.** Swift's action
   row always shows both; the row now shows Mark Incomplete for a completed event and Mark Complete otherwise,
-  as the â‹¯ menu already did (`EventDetailsScreen.tsx`). The delete-with-warnings alert that dismisses twice
-  (same Â§22 item) is Swift-only: RN's alert dismisses once.
+  as the ⋯ menu already did (`EventDetailsScreen.tsx`). The delete-with-warnings alert that dismisses twice
+  (same §22 item) is Swift-only: RN's alert dismisses once.
 - **Android ahead of iOS: Item Alternatives shows no zero differences.** Swift counts any change over 0.0001, so a
-  few tenths of a gram showed as "â†‘ 0 g" in the comparison table and earned a label such as "Higher protein"
+  few tenths of a gram showed as "↑ 0 g" in the comparison table and earned a label such as "Higher protein"
   (and passed that filter). A change that rounds to 0 at the table's whole units is now "= Same" and earns no
   goal (`difference` in `productFacts.ts`).
 - **Android ahead of iOS: Item Alternatives does not offer the item itself.** The server's answer can include the
@@ -1641,11 +1641,11 @@ gets the fix too, and the Swift app is to mirror it. Each fix has a test that fa
   above the buttons.** Swift reads every lookup failure as "No contact selected. Choose a contact or enter
   details below.", so the "Allow Nexdo to access Contacts in Settings, then try again." guidance never showed,
   and the line sat under the buttons it calls "below". No match keeps Swift's text, refused access shows the
-  Contacts guidance, any other failure says "Couldnâ€™t look up this contact. Choose a contact or enter details
+  Contacts guidance, any other failure says "Couldn’t look up this contact. Choose a contact or enter details
   below." (new text); the message line now sits above Choose contact / Enter contact details
   (`app/action/[id].tsx`, `lookupMessage`).
 - **Android ahead of iOS: offline, a personal Nexdo Action does not need the business check.** With no saved
-  contact, Swift asks the task agent endpoint first and stops at "Couldnâ€™t check this task" when that fails,
+  contact, Swift asks the task agent endpoint first and stops at "Couldn’t check this task" when that fails,
   even for a plain "Call Asha". Now a failed check only stops a task whose business was already chosen; any
   other task goes on to Contacts, and only when nobody is found (it may still be a business) does it ask for
   the retry as before (`loadDestination`).
@@ -1653,9 +1653,9 @@ gets the fix too, and the Swift app is to mirror it. Each fix has a test that fa
   found it prefilled the task's words ("the plumber"); it now prefills the name as searched ("plumber",
   `contactSearchName`).
 - **Android ahead of iOS: a contact picked for a Nexdo Action keeps its own labels.** Swift labels every picked
-  address "Phone" or "Email", so "Choose a phone number" listed "Phone: â€¦" twice for a mobile and a work number.
+  address "Phone" or "Email", so "Choose a phone number" listed "Phone: …" twice for a mobile and a work number.
   A picked contact now maps as a contact found by name does ("mobile", "work"; "Phone" / "Email" only when
-  unlabelled) (`selectedActionContact`). Swift's email composer ignoring the business draft (same Â§22 item) does
+  unlabelled) (`selectedActionContact`). Swift's email composer ignoring the business draft (same §22 item) does
   not apply: a business has no email in RN or Swift (`businessActionContact`).
 - **Android ahead of iOS: a cancelled or failed research run does not make a person task a business task.**
   Swift's Today card (and the Nexdo Action screen) counted any run, so a person task whose research was once
@@ -1665,7 +1665,7 @@ gets the fix too, and the Swift app is to mirror it. Each fix has a test that fa
 - **Android ahead of iOS: Today's Dismiss and Remind later name the chosen recipient.** Their accessibility labels
   read the task's `contactName` ("Dismiss the plumber action") after a business or person had been chosen; they
   now use the chosen recipient ("Dismiss Ace Plumbing action"), as the card's title does (`TodayActions.tsx`,
-  `SnoozeMenu recipient`). The other Today card items in Â§22 (a queue row whose task is not loaded, overdue
+  `SnoozeMenu recipient`). The other Today card items in §22 (a queue row whose task is not loaded, overdue
   minute rounding) were not in this pass.
 - **Android ahead of iOS: closing Tasks search restores the filters it reset.** Opening search sets All dates,
   All time, All statuses and All priorities; Swift's close only clears the term, so the list stayed there. The
@@ -1696,6 +1696,6 @@ gets the fix too, and the Swift app is to mirror it. Each fix has a test that fa
   `ShoppingOffersView` and `ShoppingEmailView` put `listId` in the query raw; RN's `shoppingOffersApi.offers` and
   `shoppingEmailApi.get` already `encodeURIComponent` it. A test now pins both (`src/api/shoppingListId.test.ts`);
   no code change.
-- **Android ahead of iOS: Stores Near You says "your phoneâ€™s Settings", not "iPhone Settings".** The only wording
-  change in this pass: "Location is unavailable. Enter a city or ZIP code, or allow location access in your
-  phoneâ€™s Settings." (`LOCATION_UNAVAILABLE` in `StorePages.tsx`).
+- **Android ahead of iOS: Stores Near You says "your phone’s Settings", not "iPhone Settings".** Now
+  "Location is unavailable. Enter a city or ZIP code, or allow location access in your
+  phone’s Settings." (`LOCATION_UNAVAILABLE` in `StorePages.tsx`).
