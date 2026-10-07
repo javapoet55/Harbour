@@ -3127,6 +3127,7 @@ iOS copied exactly are marked "(Android)".
 | Task Details, business mode | "Back" and "Close task details" buttons | "Close task details" only | `12edf0f` |
 | Ask AI, landing and entry cards (unreachable) | "Free form Text", "Type your prompt" | — (deleted) | `8185321` |
 | Daily Brief and Ask, Read aloud with OpenAI sharing off | "Allow OpenAI sharing in Account to use Read Loud." | "Allow OpenAI sharing in Account to use Read aloud." (Android to match) | `29c0f0b` |
+| Ask AI, answer section button | "Read Loud" | "Read aloud" (Android to match; "Stop" while reading is unchanged) | `5ed717c` |
 
 Unchanged on purpose: "Phone number copied." and "Draft copied." (now a confirmation, not an error); "…allow location access in iPhone
-Settings." on iOS. The Ask answer's own button still reads "Read Loud" (`AskResponseView.swift:114`).
+Settings." on iOS.
