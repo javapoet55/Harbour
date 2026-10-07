@@ -93,13 +93,13 @@ describe('task and reminder integration', () => {
     const dueNow = reminders.find((r) => r.offsetLabel === 'at due time');
     expect(dueNow).toBeTruthy();
     await prisma.reminder.update({ where: { id: dueNow!.id }, data: { fireAt: now, status: 'QUEUED', critical: true } });
-    const first = await tickReminders(now);
+    const first = await tickReminders(now, { userId: userA });
     expect(first.processed).toBeGreaterThan(0);
     const afterPush = await prisma.notificationAttempt.findMany({ where: { reminderId: dueNow!.id } });
     expect(afterPush.some((a) => a.channel === 'push')).toBe(true);
 
     const later = new Date(now.getTime() + 60 * 1000);
-    await tickReminders(later);
+    await tickReminders(later, { userId: userA });
     const afterEmail = await prisma.notificationAttempt.findMany({ where: { reminderId: dueNow!.id } });
     expect(afterEmail.some((a) => a.channel === 'email')).toBe(true);
 

@@ -61,7 +61,7 @@ afterEach(async () => {
 
 describe('reminder escalation when push cannot be delivered', () => {
   it('emails on the first tick when the account has no push subscription', async () => {
-    await tickReminders(at(0));
+    await tickReminders(at(0), { userId });
 
     // Push is still tried first, reports that it can never work, and hands over without another tick.
     expect(await channels()).toEqual(['push:FAILED', 'email:SENT']);
@@ -71,11 +71,11 @@ describe('reminder escalation when push cannot be delivered', () => {
   });
 
   it('does not try the dead push channel again on later ticks', async () => {
-    await tickReminders(at(0));
+    await tickReminders(at(0), { userId });
     const afterFirst = (await attempts()).length;
 
-    await tickReminders(at(60));
-    await tickReminders(at(120));
+    await tickReminders(at(60), { userId });
+    await tickReminders(at(120), { userId });
 
     expect((await attempts()).length).toBe(afterFirst);
     expect((await attempts()).filter((a) => a.channel === 'push')).toHaveLength(1);
@@ -85,31 +85,31 @@ describe('reminder escalation when push cannot be delivered', () => {
     await subscribe();
     sendNotification.mockRejectedValue(Object.assign(new Error('gateway'), { statusCode: 500 }));
 
-    await tickReminders(at(0));
+    await tickReminders(at(0), { userId });
     expect(await channels()).toEqual(['push:FAILED']);
     expect((await attempts())[0].failureReason).toContain('500');
     expect((await reminder()).status).toBe('RETRYING');
 
     // Inside the backoff nothing is attempted, so a fast tick loop writes no rows.
-    await tickReminders(at(0));
+    await tickReminders(at(0), { userId });
     expect(await channels()).toEqual(['push:FAILED']);
 
     // One failure so far, so the channel reopens backoffMs(1) later.
     const reopens = new Date(at(0).getTime() + backoffMs(1));
-    await tickReminders(reopens);
+    await tickReminders(reopens, { userId });
     expect((await attempts()).filter((a) => a.channel === 'push')).toHaveLength(2);
 
     // Spend the rest of the retries, each after its own backoff.
     let clock = reopens;
     for (let failures = 2; failures < MAX_CHANNEL_RETRIES; failures += 1) {
       clock = new Date(clock.getTime() + backoffMs(failures));
-      await tickReminders(clock);
+      await tickReminders(clock, { userId });
     }
     expect((await attempts()).filter((a) => a.channel === 'push')).toHaveLength(MAX_CHANNEL_RETRIES);
     expect((await attempts()).map((a) => a.retryCount)).toEqual([0, 1, 2, 3, 4]);
 
     // Push is spent, so the next tick escalates rather than retrying it a sixth time.
-    await tickReminders(new Date(clock.getTime() + backoffMs(MAX_CHANNEL_RETRIES)));
+    await tickReminders(new Date(clock.getTime() + backoffMs(MAX_CHANNEL_RETRIES)), { userId });
     expect(await channels()).toEqual([...Array(MAX_CHANNEL_RETRIES).fill('push:FAILED'), 'email:SENT']);
     expect((await reminder()).status).toBe('DELIVERED');
   });
@@ -124,7 +124,7 @@ describe('reminder escalation when push cannot be delivered', () => {
       });
     }
 
-    await tickReminders(at(0));
+    await tickReminders(at(0), { userId });
 
     expect((await attempts()).filter((a) => a.channel === 'email' && a.status === 'SENT')).toHaveLength(1);
     expect((await attempts()).filter((a) => a.channel === 'push')).toHaveLength(4);
@@ -136,10 +136,10 @@ describe('reminder escalation when push cannot be delivered', () => {
 
     // Push is dead on the first tick, so email takes over and then burns its own retries.
     let clock = at(0);
-    await tickReminders(clock);
+    await tickReminders(clock, { userId });
     for (let failures = 1; failures <= MAX_CHANNEL_RETRIES; failures += 1) {
       clock = new Date(clock.getTime() + backoffMs(failures));
-      await tickReminders(clock);
+      await tickReminders(clock, { userId });
     }
 
     const rows = await attempts();
@@ -149,7 +149,7 @@ describe('reminder escalation when push cannot be delivered', () => {
 
     // Nothing more is written, and the reminder has left the scheduler's queue for good.
     const settled = rows.length;
-    const later = await tickReminders(new Date(clock.getTime() + 24 * 60 * 60_000));
+    const later = await tickReminders(new Date(clock.getTime() + 24 * 60 * 60_000), { userId });
     expect((await attempts()).length).toBe(settled);
     expect(later.scanned).toBe(0);
   });
@@ -160,21 +160,21 @@ describe('reminder escalation when push works', () => {
     await subscribe();
     sendNotification.mockResolvedValue({ statusCode: 201, headers: { location: 'https://push.test/receipt' }, body: '' } as Awaited<ReturnType<typeof webpush.sendNotification>>);
 
-    await tickReminders(at(0));
+    await tickReminders(at(0), { userId });
     expect(await channels()).toEqual(['push:SENT']);
     expect((await reminder()).status).toBe('QUEUED');
 
     // Still inside escalateToEmailMinutes: push succeeded, so nothing else goes out yet.
-    await tickReminders(at(14));
+    await tickReminders(at(14), { userId });
     expect(await channels()).toEqual(['push:SENT']);
 
-    await tickReminders(at(16));
+    await tickReminders(at(16), { userId });
     expect(await channels()).toEqual(['push:SENT', 'email:SENT']);
     expect(await pushProvider.send({ userId, title: 't', body: 'b' })).toMatchObject({ status: 'SENT' });
 
     // Every enabled channel has now reached the user, so the reminder settles and leaves the due query.
     expect((await reminder()).status).toBe('DELIVERED');
-    const later = await tickReminders(at(24 * 60));
+    const later = await tickReminders(at(24 * 60), { userId });
     expect(later.scanned).toBe(0);
     expect(await channels()).toEqual(['push:SENT', 'email:SENT']);
   });
@@ -182,10 +182,10 @@ describe('reminder escalation when push works', () => {
   it('stops once the user opens the notification', async () => {
     await subscribe();
     sendNotification.mockResolvedValue({ statusCode: 201, headers: {}, body: '' } as Awaited<ReturnType<typeof webpush.sendNotification>>);
-    await tickReminders(at(0));
+    await tickReminders(at(0), { userId });
     await prisma.notificationAttempt.create({ data: { reminderId, channel: 'push', status: 'OPENED', openedAt: at(1) } });
 
-    await tickReminders(at(60));
+    await tickReminders(at(60), { userId });
 
     expect((await attempts()).filter((a) => a.channel === 'email')).toHaveLength(0);
     expect((await reminder()).status).toBe('DELIVERED');
@@ -238,8 +238,8 @@ describe('a reminder moved to a new time starts a fresh occurrence', () => {
     await prisma.reminder.delete({ where: { id: reminderId } });
     const task = await prisma.task.findFirstOrThrow({ where: { userId } });
     reminderId = (await scheduleRequestedReminder(userId, task.id, at(0))).id;
-    await tickReminders(at(0));
-    await tickReminders(at(16));
+    await tickReminders(at(0), { userId });
+    await tickReminders(at(16), { userId });
     expect(await channels()).toEqual(['push:SENT', 'email:SENT']);
     expect((await reminder()).status).toBe('DELIVERED');
     return task.id;
@@ -253,19 +253,19 @@ describe('a reminder moved to a new time starts a fresh occurrence', () => {
     expect(await reminder()).toMatchObject({ status: 'SCHEDULED', generation: 1, fireAt: at(120) });
 
     // Not due yet, so nothing goes out early.
-    await tickReminders(at(60));
+    await tickReminders(at(60), { userId });
     expect(await channels()).toEqual(['push:SENT', 'email:SENT']);
 
     // Push goes first again, and email escalates on its own delay counted from the new push.
-    await tickReminders(at(120));
+    await tickReminders(at(120), { userId });
     expect((await reminder()).status).toBe('QUEUED');
-    await tickReminders(at(130));
+    await tickReminders(at(130), { userId });
     expect(await channels()).toEqual(['push:SENT', 'email:SENT', 'push:SENT']);
-    await tickReminders(at(136));
+    await tickReminders(at(136), { userId });
     expect(await channels()).toEqual(['push:SENT', 'email:SENT', 'push:SENT', 'email:SENT']);
     expect((await attempts()).map((a) => a.generation)).toEqual([0, 0, 1, 1]);
     expect((await reminder()).status).toBe('DELIVERED');
-    expect((await tickReminders(at(24 * 60))).scanned).toBe(0);
+    expect((await tickReminders(at(24 * 60), { userId })).scanned).toBe(0);
   });
 
   it('does not re-send when the task is saved again at the same time', async () => {
@@ -275,7 +275,7 @@ describe('a reminder moved to a new time starts a fresh occurrence', () => {
     await scheduleRequestedReminder(userId, taskId, at(0), true);
 
     expect(await reminder()).toMatchObject({ status: 'DELIVERED', generation: 0, critical: true });
-    await tickReminders(at(30));
+    await tickReminders(at(30), { userId });
     expect(await channels()).toEqual(['push:SENT', 'email:SENT']);
   });
 
@@ -288,7 +288,7 @@ describe('a reminder moved to a new time starts a fresh occurrence', () => {
     const snoozed = await reminder();
     expect(snoozed).toMatchObject({ status: 'SCHEDULED', generation: 1 });
     expect(Math.abs(snoozed.fireAt.getTime() - (Date.now() + 2 * 60 * 60_000))).toBeLessThan(60_000);
-    await tickReminders(snoozed.fireAt);
+    await tickReminders(snoozed.fireAt, { userId });
     expect(await channels()).toEqual(['push:SENT', 'email:SENT', 'push:SENT']);
   });
 
@@ -296,10 +296,10 @@ describe('a reminder moved to a new time starts a fresh occurrence', () => {
     vi.spyOn(emailProvider, 'send').mockResolvedValue({ id: '', status: 'FAILED', reason: 'SendGrid 500' });
     const exhaust = async (from: Date) => {
       let clock = from;
-      await tickReminders(clock);
+      await tickReminders(clock, { userId });
       for (let failures = 1; failures <= MAX_CHANNEL_RETRIES; failures += 1) {
         clock = new Date(clock.getTime() + backoffMs(failures));
-        await tickReminders(clock);
+        await tickReminders(clock, { userId });
       }
       return clock;
     };
@@ -321,7 +321,7 @@ describe('a reminder moved to a new time starts a fresh occurrence', () => {
     expect(rows).toHaveLength(2 * firstRows);
     expect(rows.filter((a) => a.generation === 1).map((a) => a.retryCount)).toEqual([0, 0, 1, 2, 3, 4]);
 
-    const later = await tickReminders(new Date(clock.getTime() + 24 * 60 * 60_000));
+    const later = await tickReminders(new Date(clock.getTime() + 24 * 60 * 60_000), { userId });
     expect(later.scanned).toBe(0);
     expect(await attempts()).toHaveLength(2 * firstRows);
   });
