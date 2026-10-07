@@ -2,7 +2,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import * as Notifications from 'expo-notifications';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { Alert, StyleSheet } from 'react-native';
-import { palettes } from '../theme';
+import { brand, palettes } from '../theme';
+import { useAppearance } from '../store/appearance';
 
 import type { NexdoTask } from '../api';
 import { useCoordinator, scheduledWork } from '../actions/coordinator';
@@ -230,6 +231,16 @@ describe('the action screen', () => {
     mockResolve.mockRejectedValue(new Error('Contacts store unavailable'));
     await open();
     await waitFor(() => expect(screen.getByTestId('action-error')).toHaveTextContent('Couldn’t look up this contact. Choose a contact or enter details below.'));
+  });
+
+  it.each(['day', 'night'] as const)('"Choose contact" is white on its indigo fill in %s mode', async (appearance) => {
+    useAppearance.setState({ appearance });
+    mockResolve.mockRejectedValue(new TaskActionError('noContact'));
+    await open();
+    const label = await screen.findByText('Choose contact');
+    expect(StyleSheet.flatten(label.props.style).color).toBe('#FFFFFF');
+    expect(StyleSheet.flatten(screen.getByTestId('action-pick-contact').props.style).backgroundColor).toBe(brand.nexdoIndigo);
+    useAppearance.setState({ appearance: 'system' });
   });
 
   it('asks which person when the name matches more than one, then waits for a channel', async () => {

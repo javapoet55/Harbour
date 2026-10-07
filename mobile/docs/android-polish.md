@@ -1778,3 +1778,7 @@ match". Logic fixes have a test that fails without them.
   an unknown recipient, but every caller has one (the channel buttons exist only once there is a recipient), so it
   could not run; its "Finding contact…" spinner could only have shown, wrongly, while completing the task. Both are
   removed; no behaviour change, so no new test (`app/action/[id].tsx`).
+- **Already right on Android: Nexdo Action's "Choose contact" is white on its indigo fill.** Swift drew it black on
+  dark indigo (the screen's ink foreground); RN's `ProminentButton` already uses `onTint` (#FFFFFF) on `tint` (indigo)
+  in both palettes, as iOS a2c1699 now does. A test pins it in day and night; no code change (fixed from code, not
+  yet seen on device).
