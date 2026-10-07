@@ -27,6 +27,8 @@ struct DailyBriefView: View {
     let voice: () -> Void
     let read: (Int, String) -> Void
     let readingSection: Int?
+    /// Why Read aloud could not start (no OpenAI sharing, a voice failure). The composer that shows it elsewhere is hidden here.
+    var readError: String? = nil
     @Environment(\.dynamicTypeSize) private var typeSize
     @State private var selectedSection: SectionRoute?
     /// Keyed by the section's title, not its position: completing the last task a section names removes it from
@@ -70,6 +72,7 @@ struct DailyBriefView: View {
                 .background(.purple.opacity(0.07), in: RoundedRectangle(cornerRadius: 22))
                 .overlay(RoundedRectangle(cornerRadius: 22).stroke(.white, lineWidth: 1))
 
+            if let readError { ReadAloudError(message: readError) }
             ForEach(Array(visibleSections.enumerated()), id: \.offset) { index, section in
                 sectionCard(index, section)
             }
@@ -109,7 +112,7 @@ struct DailyBriefView: View {
                 // A section that has emptied keeps its page: the title, "Nothing to report here today." and Back.
                 let index = visibleSections.firstIndex { $0.title == route.id }
                 BriefSectionDetailView(title: style(route.id).0,
-                    items: index.map { visibleSections[$0].items } ?? [], ask: ask,
+                    items: index.map { visibleSections[$0].items } ?? [], readError: readError, ask: ask,
                     read: { if let index { read(index, visibleSections[index].items.joined(separator: "\n\n")) } })
             }
     }
@@ -212,5 +215,16 @@ private struct BriefArtwork: View {
         if let image = Self.sprites[part] {
             Image(uiImage: image).resizable().scaledToFit().blendMode(.multiply)
         }
+    }
+}
+
+/// A Read aloud failure, shown where Read aloud was tapped.
+struct ReadAloudError: View {
+    let message: String
+    var body: some View {
+        Label(message, systemImage: "speaker.slash.fill").font(.subheadline).foregroundStyle(.red)
+            .frame(maxWidth: .infinity, alignment: .leading).fixedSize(horizontal: false, vertical: true)
+            .padding(12).background(Color.red.opacity(0.07), in: RoundedRectangle(cornerRadius: 16))
+            .accessibilityAddTraits(.updatesFrequently)
     }
 }

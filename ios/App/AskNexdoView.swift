@@ -273,7 +273,7 @@ struct AskNexdoView: View {
                             read: { index, text in
                                 if readingSection == index { stopSpeech() }
                                 else { speakAnswer(text: text, section: index) }
-                            }, readingSection: readingSection)
+                            }, readingSection: readingSection, readError: voiceError ?? playback.error)
                     } else {
                         if let query = model.lastAssistantPrompt {
                             Label {
@@ -528,7 +528,7 @@ struct AskNexdoView: View {
     }
 
     private func speakAnswer(text: String? = nil, section: Int? = nil) {
-        guard model.aiConsent else { voiceError = "Allow OpenAI sharing in Account to use Read Loud."; return }
+        guard model.aiConsent else { voiceError = "Allow OpenAI sharing in Account to use Read aloud."; return }
         guard let text = text ?? model.turn?.displaySections.flatMap(\.items).joined(separator: "\n\n"), !text.isEmpty else { return }
         stopSpeech(); voiceError = nil
         lastSpeechText = text; readingSection = section

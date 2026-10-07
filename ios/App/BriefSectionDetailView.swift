@@ -5,6 +5,7 @@ struct BriefSectionDetailView: View {
     @Environment(\.dismiss) private var dismiss
     let title: String
     let items: [String]
+    var readError: String? = nil
     let ask: (String) -> Void
     let read: () -> Void
     @State private var taskSection: TaskDetailsView.InitialSection?
@@ -55,6 +56,7 @@ struct BriefSectionDetailView: View {
                         DetailArtwork(part: .target).frame(width: 70, height: 60).accessibilityHidden(true)
                     }.padding(14).background(.purple.opacity(0.045), in: RoundedRectangle(cornerRadius: 22))
                         .overlay(RoundedRectangle(cornerRadius: 22).stroke(.white, lineWidth: 1.5))
+                    if let readError { ReadAloudError(message: readError) }
                     ForEach(Array(items.enumerated()), id: \.offset) { index, item in
                         if let task = task(for: item) { taskCard(task, context: item, index: index) }
                         else { insightCard(item, index: index) }
