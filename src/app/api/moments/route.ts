@@ -12,7 +12,7 @@ import { shoppingEmailSending, stopShoppingEmails } from '@/server/shopping/emai
 import { z } from 'zod';
 import { callerIdStatus, removeCallerId, startCallerIdVerification } from '@/server/moment-calls/caller-id';
 import { connectNow, connectPreview, connectStatus, saveConnect } from '@/server/moment-calls/service';
-function failure(e:unknown) { if(e instanceof SyntaxError) return NextResponse.json({error:"Invalid JSON request."},{status:400}); return e instanceof MomentError ? NextResponse.json({error:e.message},{status:e.status}) : jsonError(e); }
+function failure(e:unknown) { if(e instanceof SyntaxError) return NextResponse.json({error:"Invalid JSON request."},{status:400}); if(e instanceof z.ZodError) return NextResponse.json({error:"Check the moment details and try again."},{status:400}); return e instanceof MomentError ? NextResponse.json({error:e.message},{status:e.status}) : jsonError(e); }
 async function healthHandlerGET() { try { return NextResponse.json(await listMoments((await requireUser()).id)); } catch(e) { return failure(e); } }
 async function healthHandlerPOST(req:Request) {
  try {
