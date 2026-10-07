@@ -39,6 +39,12 @@ final class MomentsPreviewProtocol: URLProtocol, @unchecked Sendable {
                 Self.createdMoments.append(value)
                 result = ["moment": value]
             case "festivalCatalog": result = ["entries":[]]
+            case "connectStatus":
+                // Debug-only fixture: Connect me with an unverified caller ID, so no call can be placed.
+                let ids = input["momentIds"] as? [String] ?? []
+                result = ["available": true, "callerId": NSNull(), "userTimeZone": "America/Los_Angeles", "moments": ids.map { id in
+                    ["momentId": id, "enabled": false, "time": "09:00", "timeZone": "America/Los_Angeles", "recipientPhone": "+15555550123", "passed": false, "isToday": false,
+                     "nextCallAt": "2026-11-05T17:00:00.000Z", "preview": ["userLocal": "9:00 AM", "recipientLocal": "9:00 AM", "userOk": true, "recipientOk": true]] as [String: Any] }]
             case "festivalSave":
                 Self.festivalSaved = input
                 // Like the server: a moment created here gets its recipient, and each recipient without an id becomes a moment in the group.

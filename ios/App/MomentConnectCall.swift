@@ -241,6 +241,11 @@ struct MomentConnectSection: View {
                 } else if state.passed {
                     Text("This moment has already passed.").font(.caption).foregroundStyle(.secondary)
                 }
+                // The third reason the switch is off: the caller ID card above asks for this, but not at the switch.
+                if !model.verified && !state.passed {
+                    Text("Verify your phone number above to turn this on.").font(.caption).foregroundStyle(.orange)
+                        .accessibilityIdentifier("connect-needs-verified-\(moment.id)")
+                }
                 if draft.enabled {
                     DatePicker("Call time", selection: Binding(
                         get: { MomentConnectModel.date(from: draft.time, zone: draft.timeZone) },
