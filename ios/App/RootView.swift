@@ -207,6 +207,8 @@ private struct NexdoTabShell: View {
             .fixedSize(horizontal: false, vertical: true)
             .background { Color(uiColor: .systemBackground).ignoresSafeArea(edges: .bottom) }
         }
+        // On Tasks the tab bar stays at the bottom, under the keyboard, instead of riding up above it during a search.
+        .ignoresSafeArea(.keyboard, edges: selection == .tasks ? .bottom : [])
         .onAppear { openPomodoroNotification() }
         .onChange(of: pomodoroRoute.owner) { _, _ in openPomodoroNotification() }
         .fullScreenCover(isPresented: $showingWellness, onDismiss: {
