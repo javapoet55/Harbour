@@ -1673,3 +1673,7 @@ gets the fix too, and the Swift app is to mirror it. Each fix has a test that fa
 - **Android ahead of iOS: a Tasks section caption no longer repeats its title.** For any day but Today, Yesterday
   and Tomorrow the title is already the date, and Swift drew it again underneath ("Friday, Sep 18" twice). The
   caption is now left out when it equals the title (`tasks.tsx`).
+- **Android ahead of iOS: the Tasks row icon matches whole words.** Swift's keyword test is a substring test, so
+  "Recall the order" got the phone and "contactless" the phone too. A keyword now matches a whole word or the
+  word with a common ending (s, es, ed, ing, er, ers), so "Calling", "plumber" and "meetings" still match
+  (`taskIcon` in `TaskCard.tsx`).
