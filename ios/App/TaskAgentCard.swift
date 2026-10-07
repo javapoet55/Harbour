@@ -26,6 +26,9 @@ struct TaskAgentCard: View {
     private struct CopyNotice: Equatable { let place: String; let text: String }
     @State private var loading = true
     @State private var refreshID = 0
+    /// The task and refresh the run was last fetched for. An action's POST returns the run, so a status change alone needs no GET.
+    @State private var loadedKey: String?
+    private var polling: Bool { ["QUEUED", "RUNNING"].contains(run?.status ?? "") }
     @State private var messageDraft: BusinessMessageDraft?
     @State private var messageNotice: String?
     private struct BusinessMessageDraft: Identifiable {
@@ -137,7 +140,8 @@ struct TaskAgentCard: View {
         .alert("Messages", isPresented: Binding(get: { messageNotice != nil }, set: { if !$0 { messageNotice = nil } })) {
             Button("OK", role: .cancel) { messageNotice = nil }
         } message: { Text(messageNotice ?? "") }
-        .task(id: taskID + (run?.status ?? "") + String(refreshID)) {
+        // Keyed on polling, not the status: every action changed the status and fetched the run it had just received.
+        .task(id: "\(taskID)#\(refreshID)#\(polling)") {
             #if DEBUG
             if ProcessInfo.processInfo.arguments.contains("-agent-design-preview") {
                 let data = Data(#"{"id":"preview","status":"NEEDS_INPUT","version":0,"service":"plumber","urgency":"unknown","slots":{"location":"","budget":"","constraints":""},"steps":[],"candidates":[],"warnings":[],"question":{"key":"location","text":"Which city or ZIP code should I search?"}}"#.utf8)
@@ -150,8 +154,14 @@ struct TaskAgentCard: View {
                 return
             }
             #endif
+            let key = "\(taskID)#\(refreshID)"
+            // Fetch at once for a new task or a manual refresh; otherwise only poll while a search is running.
+            var fetchNow = loadedKey != key
+            if !fetchNow && !polling { return }
             loading = run == nil && !eligible
             while !Task.isCancelled {
+                if !fetchNow { do { try await Task.sleep(for: .seconds(4)) } catch { return } }
+                fetchNow = false
                 do {
                     var response = try await model.loadTaskAgent(taskID: taskID)
                     // Resume tasks left at the retired optional-question step.
@@ -169,6 +179,7 @@ struct TaskAgentCard: View {
                         fallbackReason = ["PROCUREMENT", "RESEARCH", "LOGISTICS"].contains(response.intent?.category ?? "") ? response.intent?.reason : nil
                         error = nil
                     }
+                    loadedKey = key
                     loading = false
                 } catch {
                     guard !Task.isCancelled else { return }
@@ -176,8 +187,7 @@ struct TaskAgentCard: View {
                     self.error = "Could not refresh task research. \(error.localizedDescription)"
                     return
                 }
-                guard let run, ["QUEUED", "RUNNING"].contains(run.status) else { return }
-                do { try await Task.sleep(for: .seconds(4)) } catch { return }
+                guard polling else { return }
             }
         }
     }
