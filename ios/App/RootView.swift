@@ -1044,7 +1044,6 @@ private struct TodayView: View {
     let onCalendar: () -> Void
     let onPlanWeek: (String) -> Void
     @State private var range: TodayRange = .today
-    @State private var adding = false
     @State private var showingAccount = false
     @State private var editing: NexdoTask?
     @State private var showingWeeklySummary = false
@@ -1292,7 +1291,6 @@ private struct TodayView: View {
                 }
             }
             .toolbar(.hidden, for: .navigationBar)
-            .sheet(isPresented: $adding) { NavigationStack { TaskEditor(task: nil) } }
             .sheet(isPresented: $showingDoNow) { DoNowView().presentationDetents([.large]).presentationDragIndicator(.visible) }
             .sheet(isPresented: $showingAccount) { AccountView() }
             .sheet(item: $editing) { task in
