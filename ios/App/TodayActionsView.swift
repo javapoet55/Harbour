@@ -293,6 +293,7 @@ struct ActionQueueSheet: View {
     @ObservedObject private var coordinator = TaskActionCoordinator.shared
     @Environment(\.dismiss) private var dismiss
     @State private var selectedTask: NexdoTask?
+    @State private var missingTask = false
     var body: some View {
         NavigationStack {
             TimelineView(.periodic(from: .now, by: 60)) { context in
@@ -304,7 +305,7 @@ struct ActionQueueSheet: View {
                         if !actions.isEmpty {
                             Section(due ? "Due now" : "Upcoming") {
                                 ForEach(actions) { action in
-                                    Button { selectedTask = model.tasks.first { $0.id == action.taskId } } label: {
+                                    Button { open(action) } label: {
                                         NextActionRow(action: action, now: context.date)
                                             .frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
                                     }.buttonStyle(.plain)
@@ -318,6 +319,18 @@ struct ActionQueueSheet: View {
                 .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { closeActionQueue() } } }
         }.sheet(item: $selectedTask) { task in
             TaskDetailsView(task: task)
+        }
+        .alert("Task not available", isPresented: $missingTask) { Button("OK", role: .cancel) {} } message: {
+            Text("This task may have been completed, deleted or moved. Your task list has been refreshed.")
+        }
+    }
+
+    /// A row whose task is not loaded yet refreshes the tasks before giving up; it used to do nothing at all.
+    private func open(_ action: TaskAction) {
+        if let task = model.tasks.first(where: { $0.id == action.taskId }) { selectedTask = task; return }
+        Task {
+            await model.refreshTasks()
+            if let task = model.tasks.first(where: { $0.id == action.taskId }) { selectedTask = task } else { missingTask = true }
         }
     }
 
