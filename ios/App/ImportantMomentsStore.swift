@@ -17,7 +17,8 @@ struct MomentOK: Decodable, Sendable {}
     func receive(_ id: String, owner: String) { self.owner = owner; pending = id }
 }
 @MainActor final class ImportantMomentsStore: ObservableObject {
-    @Published var snapshot: MomentsSnapshot?
+    @Published private(set) var scheduleRevision = 0
+    @Published var snapshot: MomentsSnapshot? { didSet { scheduleRevision += 1 } }
     @Published var error: String?
     @Published var loading = false
     @Published var busy = false

@@ -4,7 +4,7 @@ import { prisma } from '@/server/db';
 const timestamp = z.number().finite().min(0).max(4_102_444_800);
 export const pomodoroSchema = z.object({
   id: z.string().uuid(), revision: z.number().int().min(1).max(1_000_000),
-  category: z.enum(['reading', 'focus', 'coding', 'diary', 'math', 'stretching']),
+  category: z.enum(['reading', 'focus', 'coding', 'diary', 'math', 'stretching', 'personalWork']),
   name: z.string().max(120), durationMinutes: z.number().int().min(1).max(120),
   autoBreak: z.boolean(), playSound: z.boolean(), keepAwake: z.boolean(),
   phase: z.enum(['focus', 'shortBreak', 'completed', 'stopped']), paused: z.boolean(),

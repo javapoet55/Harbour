@@ -21,3 +21,10 @@ it.each([403,429,500])('sanitizes provider failure %s',async status=>{
 it('rejects malformed identifiers before provider access',()=>{
  for(const value of ['../secret','https://evil.test','', 'x?key=y'])expect(placeID.safeParse(value).success).toBe(false);
 });
+it('returns the selected store offset for highlighting today',async()=>{
+ vi.stubEnv('GOOGLE_PLACES_API_KEY','test-secret');
+ const f=vi.fn().mockResolvedValue(Response.json({utcOffsetMinutes:-420,regularOpeningHours:{weekdayDescriptions:['Friday: 10 AM–8:30 PM']}}));
+ vi.stubGlobal('fetch',f);
+ expect(await shoppingStoreHours('place')).toMatchObject({utcOffsetMinutes:-420});
+ expect(f.mock.calls[0][1].headers['X-Goog-FieldMask']).toContain('utcOffsetMinutes');
+});

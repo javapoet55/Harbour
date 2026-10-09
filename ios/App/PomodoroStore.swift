@@ -71,9 +71,9 @@ import AudioToolbox
     }
     func tick() {
         guard let index = sessions.firstIndex(where: { $0.id == currentID }) else { return }
-        let previous = sessions[index].phase
-        guard sessions[index].advance(at: Date()) else { return }
-        if previous != sessions[index].phase, sessions[index].playSound { AudioServicesPlaySystemSound(1005) }
+        let result = sessions[index].tick(at: Date())
+        guard result.changed else { return }
+        if result.shouldPlaySound { AudioServicesPlaySystemSound(1005) }
         persist(); Task { await scheduleAlerts(); await sync() }
     }
     func newSession() { guard current?.active != true else { return }; currentID = nil; persist() }

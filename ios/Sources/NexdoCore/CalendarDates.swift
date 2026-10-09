@@ -17,10 +17,8 @@ public struct CalendarDates {
         calendar = value
     }
     public func key(_ date: Date) -> String {
-        let f = DateFormatter()
-        f.calendar = calendar; f.timeZone = calendar.timeZone
-        f.locale = Locale(identifier: "en_US_POSIX"); f.dateFormat = "yyyy-MM-dd"
-        return f.string(from: date)
+        let parts = calendar.dateComponents([.year, .month, .day], from: date)
+        return String(format: "%04d-%02d-%02d", parts.year!, parts.month!, parts.day!)
     }
     public func addingDays(_ count: Int, to date: Date) -> Date {
         calendar.date(byAdding: .day, value: count, to: date)!

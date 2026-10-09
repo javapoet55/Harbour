@@ -80,7 +80,7 @@ struct PomodoroView: View {
         UIApplication.shared.isIdleTimerDisabled = visible && !showingDashboard && !history && scenePhase == .active && store.current?.phase == .focus && store.current?.paused == false && store.current?.keepAwake == true
     }
     private func tint(_ category: PomodoroCategory) -> Color {
-        switch category { case .reading: .mint; case .focus: .purple; case .coding: .orange; case .diary: .pink; case .math: .yellow; case .stretching: .cyan }
+        switch category { case .reading: .mint; case .focus: .purple; case .coding: .orange; case .diary: .pink; case .math: .yellow; case .stretching: .cyan; case .personalWork: .blue }
     }
     private var setup: some View {
         VStack(alignment: .leading, spacing: 12) {

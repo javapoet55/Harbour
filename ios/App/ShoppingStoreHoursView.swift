@@ -4,6 +4,7 @@ struct ShoppingStoreHours: Decodable, Sendable {
     let days: [String]
     let openNow: Bool?
     let current: Bool
+    let utcOffsetMinutes: Int?
 }
 
 struct ShoppingStoreHoursView: View {
@@ -22,7 +23,15 @@ struct ShoppingStoreHoursView: View {
                 if let result {
                     if let open = result.openNow { Text(open ? "Open now" : "Closed now").foregroundStyle(open ? .green : .secondary) }
                     if result.days.isEmpty { Text("No hours provided for this store.") }
-                    ForEach(Array(result.days.enumerated()), id: \.offset) { _, day in Text(day).fixedSize(horizontal: false, vertical: true) }
+                    ForEach(Array(result.days.enumerated()), id: \.offset) { _, day in
+                        TimelineView(.everyMinute) { context in
+                            let today = ShoppingStoreHoursDay.isToday(day, at: context.date, utcOffsetMinutes: result.utcOffsetMinutes)
+                            Text(day)
+                                .fontWeight(today ? .bold : .regular)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .accessibilityLabel(today ? "Today, " + day : day)
+                        }
+                    }
                     Text(result.current ? "Hours for the next seven days · Store local time" : "Regular hours · Holiday hours may differ").font(.caption).foregroundStyle(.secondary)
                 }
                 if let error { Text(error).foregroundStyle(.secondary) }

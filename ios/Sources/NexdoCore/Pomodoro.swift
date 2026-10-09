@@ -1,12 +1,12 @@
 import Foundation
 
 public enum PomodoroCategory: String, Codable, CaseIterable, Sendable {
-    case reading, focus, coding, diary, math, stretching
+    case reading, focus, coding, diary, math, stretching, personalWork
     public var title: String {
-        switch self { case .reading: "Reading"; case .focus: "Focus time"; case .coding: "Coding"; case .diary: "Write a diary"; case .math: "Study"; case .stretching: "Yoga & Stretching" }
+        switch self { case .reading: "Reading"; case .focus: "Focus time"; case .coding: "Coding"; case .diary: "Write a diary"; case .math: "Study"; case .stretching: "Yoga & Stretching"; case .personalWork: "Personal Work" }
     }
     public var icon: String {
-        switch self { case .reading: "book.fill"; case .focus: "stopwatch.fill"; case .coding: "chevron.left.forwardslash.chevron.right"; case .diary: "heart.fill"; case .math: "graduationcap.fill"; case .stretching: "figure.flexibility" }
+        switch self { case .reading: "book.fill"; case .focus: "stopwatch.fill"; case .coding: "chevron.left.forwardslash.chevron.right"; case .diary: "heart.fill"; case .math: "graduationcap.fill"; case .stretching: "figure.flexibility"; case .personalWork: "person.crop.square.fill" }
     }
 }
 
@@ -61,6 +61,12 @@ public struct PomodoroSession: Codable, Identifiable, Equatable, Sendable {
         return min(1, max(0, 1 - remaining(at: now) / total))
     }
     private mutating func changed(_ now: Date) { revision += 1; updatedAt = max(now.timeIntervalSince1970, startedAt) }
+    /// The timer and its sound decision advance together, so repeated ticks never replay a chime.
+    public mutating func tick(at now: Date) -> (changed: Bool, shouldPlaySound: Bool) {
+        let previous = phase
+        let changed = advance(at: now)
+        return (changed, changed && previous != phase && playSound)
+    }
     @discardableResult public mutating func advance(at now: Date) -> Bool {
         guard active, !paused, let end = deadline, now.timeIntervalSince1970 >= end else { return false }
         if phase == .focus {

@@ -5,6 +5,7 @@ struct CalendarView: View {
     private enum Mode: String, CaseIterable { case schedule = "Schedule", week = "Week", month = "Month" }
     private enum Range: String, CaseIterable { case three = "Next 3 days", seven = "Next 7 days", week = "This week" }
     @EnvironmentObject private var model: AppModel
+    @EnvironmentObject private var moments: ImportantMomentsStore
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var mode: Mode = .schedule
     @State private var range: Range = .three
@@ -15,6 +16,10 @@ struct CalendarView: View {
     @State private var dataOwner: String?
     @State private var showingAppleCalendars = false
     @State private var data: Agenda?
+    @State private var dataRevision = UUID()
+    @State private var dayIndex = CalendarDayIndex()
+    @State private var indexedRangeID: String?
+    private var indexRequestID: String { requestID + ":" + dataRevision.uuidString + ":" + String(moments.scheduleRevision) }
     @State private var loading = false
     @State private var failure: String?
     @State private var ask = false
@@ -68,12 +73,15 @@ struct CalendarView: View {
             && CalendarSearch.matches(task.title, query: searchText)
     }
     private func tasks(_ day: Date) -> [NexdoTask] {
-        (currentData?.tasks ?? []).filter { matches($0) && dates.taskOccurs($0, on: day, completedOnly: completedOnly) }
+        guard indexedRangeID == requestID else { return [] }
+        return (dayIndex.tasks[dates.key(day)] ?? []).filter {
+            matches($0) && $0.isDone == completedOnly && $0.status != "CANCELLED"
+        }
     }
     private func events(_ day: Date) -> [CalendarEvent] {
-        guard showEvents, !criticalOnly else { return [] }
-        return (currentData?.events ?? []).filter {
-            CalendarSearch.matches($0.title, query: searchText) && CalendarEventFilter.matches($0, day: dates.key(day), timeZone: zone, completedOnly: completedOnly)
+        guard showEvents, !criticalOnly, indexedRangeID == requestID else { return [] }
+        return (dayIndex.events[dates.key(day)] ?? []).filter {
+            CalendarSearch.matches($0.title, query: searchText) && (!completedOnly || $0.completedAt != nil)
         }
     }
     private var backlog: [NexdoTask] { openTasks.filter { matches($0) && ($0.startAt == nil || overdue($0)) } }
@@ -101,7 +109,7 @@ struct CalendarView: View {
                             }.foregroundStyle(Color.nexdoSecondary)
                         }
                         if loading { ProgressView("Loading calendar…").frame(maxWidth: .infinity) }
-                        if currentData != nil {
+                        if currentData != nil || indexedRangeID == requestID {
                             if mode == .schedule {
                                 upcoming
                                 if completedOnly {
@@ -156,7 +164,7 @@ struct CalendarView: View {
                 .scrollDismissesKeyboard(.interactively)
                 .refreshable {
                     async let analysis: Void = model.refreshScheduleIntelligence()
-                    await model.refresh(); await load()
+                    await model.refresh(); await moments.refresh(); await load()
                     await analysis
                 }
             }
@@ -176,6 +184,7 @@ struct CalendarView: View {
                 #endif
             }
             .task(id: requestID) { await load() }
+            .task(id: indexRequestID) { await rebuildDayIndex() }
             .task {
                 #if DEBUG
                 if ProcessInfo.processInfo.arguments.contains("-calendar-design-preview") { return }
@@ -426,7 +435,8 @@ struct CalendarView: View {
                                 if tasks(day).contains(where: { $0.critical == true || $0.priority == "CRITICAL" }) { Circle().fill(.red).frame(width: 4, height: 4) }
                             }.frame(height: 5)
                         }.frame(maxWidth: .infinity, minHeight: 48).contentShape(Rectangle())
-                    }.buttonStyle(.plain).accessibilityLabel("\(label(day, "EEEE, MMMM d, yyyy")), \(currentData == nil ? "loading" : itemCount(count(day)))")
+                    }.buttonStyle(.plain).accessibilityLabel("\(label(day, "EEEE, MMMM d, yyyy")), \(indexedRangeID != requestID ? "loading" : itemCount(count(day)))")
+                        .accessibilityIdentifier("calendar-day-\(dates.key(day))")
                         .accessibilityAddTraits(dates.calendar.isDate(day, inSameDayAs: selected) ? .isSelected : [])
                 }
             }
@@ -478,7 +488,11 @@ struct CalendarView: View {
                 if let task = row.task {
                     NavigationLink { TaskDetailsView(task: task) } label: { timeline(row) }.buttonStyle(.plain)
                 } else if let event = row.event {
-                    Button { eventDetail = event } label: { timeline(row) }.buttonStyle(.plain)
+                    Button {
+                        if let id = MomentSchedule.momentID(event.id), event.source == "moment" {
+                            moments.route = moments.moments.first { $0.id == id }
+                        } else { eventDetail = event }
+                    } label: { timeline(row) }.buttonStyle(.plain)
                 }
             }
         }
@@ -507,7 +521,7 @@ struct CalendarView: View {
             let end = min(ServerDate.parse(event.endAt) ?? start, dates.addingDays(1, to: dates.calendar.startOfDay(for: day)))
             return Row(id: "event:\(event.id)", title: event.title, at: event.allDay == true ? dates.calendar.startOfDay(for: day) : start,
                        time: event.allDay == true ? "All day" : ServerDate.time(ISO8601DateFormatter().string(from: start), timeZone: zone),
-                       detail: event.allDay == true ? "Calendar event" : "\(max(0, Int(end.timeIntervalSince(start) / 60))) min · Event", task: nil, event: event, deadline: false)
+                       detail: event.source == "moment" ? (event.notes ?? "Moment") : event.allDay == true ? "Calendar event" : "\(max(0, Int(end.timeIntervalSince(start) / 60))) min · Event", task: nil, event: event, deadline: false)
         }
         return (taskRows + eventRows).sorted { $0.at == $1.at ? $0.id < $1.id : $0.at < $1.at }
     }
@@ -522,7 +536,11 @@ struct CalendarView: View {
                 Circle().fill(color).frame(width: 8, height: 8)
             }.frame(width: 8)
             if let event = row.event {
-                CalendarEventProviderIcon(source: event.source)
+                if event.source == "moment" {
+                    Image(systemName: moments.moments.first { $0.id == MomentSchedule.momentID(event.id) }?.icon ?? "gift.fill")
+                        .font(.title3).foregroundStyle(.pink).frame(width: 32, height: 36)
+                        .accessibilityLabel("Moment")
+                } else { CalendarEventProviderIcon(source: event.source) }
             } else {
                 Image(systemName: late ? "doc.text" : "checkmark.square").font(.title3).foregroundStyle(color)
                     .frame(width: 32, height: 36).background(color.opacity(0.11), in: RoundedRectangle(cornerRadius: 10))
@@ -561,12 +579,39 @@ struct CalendarView: View {
         }
     }
     private func eventDate(_ value: String) -> String { ServerDate.parse(value).map { label($0, "EEE, MMM d, yyyy h:mm a") } ?? "Unavailable" }
+    private func rebuildDayIndex() async {
+        let revision = indexRequestID
+        let rangeID = requestID
+        let days = visibleDays.map(dates.key)
+        let timeZone = zone
+        let snapshot = currentData
+        let savedMoments = moments.moments
+        let worker = Task.detached(priority: .userInitiated) {
+            let momentEvents = MomentSchedule.events(savedMoments, days: days, timeZone: timeZone)
+            return CalendarDayIndex(days: days, timeZone: timeZone,
+                             tasks: snapshot?.tasks ?? [], events: (snapshot?.events ?? []) + momentEvents)
+        }
+        let index = await withTaskCancellationHandler { await worker.value } onCancel: { worker.cancel() }
+        guard !Task.isCancelled, revision == indexRequestID else { return }
+        dayIndex = index; indexedRangeID = rangeID
+    }
     @State private var loadToken = UUID()
     private func load() async {
         #if DEBUG
         if ProcessInfo.processInfo.arguments.contains("-calendar-design-preview") {
             dataOwner = model.profile?.id
-            data = Agenda(timeZone: zone, range: .init(days: visibleDays.map(dates.key)), tasks: model.tasks, events: [], overdue: model.tasks.filter { overdue($0) })
+            let previewEvents: [CalendarEvent]
+            if ProcessInfo.processInfo.arguments.contains("-calendar-stress-preview") {
+                let days = visibleDays
+                previewEvents = (0..<2000).map { index in
+                    let start = dates.calendar.startOfDay(for: days[index % days.count]).addingTimeInterval(12 * 3600)
+                    return DeviceCalendarEvent.make(identifier: "preview-\(index)", calendarID: "preview",
+                        title: "Preview appointment \(index)", start: start, end: start.addingTimeInterval(1800),
+                        allDay: false, timeZone: zone)
+                }
+            } else { previewEvents = [] }
+            data = Agenda(timeZone: zone, range: .init(days: visibleDays.map(dates.key)), tasks: model.tasks, events: previewEvents, overdue: model.tasks.filter { overdue($0) })
+            dataRevision = UUID()
             return
         }
         #endif
@@ -586,11 +631,12 @@ struct CalendarView: View {
         } else {
             appleEvents = []; appleRangeID = nil
         }
+        dataRevision = UUID()
         do {
             let result = try await model.calendarAgenda(from: dates.key(days[0]), days: days.count)
             guard !Task.isCancelled, token == loadToken, requestID == requested else { return }
             guard days.allSatisfy({ result.range.days.contains(dates.key($0)) }) else { throw APIError.invalidResponse }
-            data = result; dataOwner = owner; loading = false
+            data = result; dataOwner = owner; dataRevision = UUID(); loading = false
         } catch {
             guard !Task.isCancelled, token == loadToken, requestID == requested else { return }
             loading = false; failure = "Couldn’t refresh online calendars and tasks.\(currentData == nil ? "" : " Available calendar data is still shown.")"

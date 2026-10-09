@@ -1666,6 +1666,7 @@ struct TodayBackdrop: View {
 
 struct TasksView: View {
     @EnvironmentObject var model: AppModel
+    @EnvironmentObject private var moments: ImportantMomentsStore
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.dynamicTypeSize) private var typeSize
     @State private var showingProjects = false
@@ -1678,6 +1679,11 @@ struct TasksView: View {
     @State private var editing: NexdoTask?
     @State private var completingTask: NexdoTask?
     @State private var departingTaskID: String?
+    @State private var momentTasks: [NexdoTask] = []
+    @State private var momentTasksKey: String?
+    private var momentsKey: String {
+        "\(model.profile?.id ?? ""):\(zone):\(moments.scheduleRevision):\(CalendarDates(timeZone: zone).key(Date()))"
+    }
 
     private var zone: String { model.profile?.timeZone ?? model.agenda?.timeZone ?? TimeZone.current.identifier }
     private var calendar: Calendar {
@@ -1693,7 +1699,7 @@ struct TasksView: View {
         let displayedTasks = model.tasks.map { task in
             completingTask?.id == task.id ? completingTask! : task
         }
-        let snapshot = model.taskQuery.snapshot(displayedTasks, timeZone: zone)
+        let snapshot = model.taskQuery.snapshot(displayedTasks + (momentTasksKey == momentsKey ? momentTasks : []), timeZone: zone)
         NavigationStack {
             ZStack {
                 // Light: the original lilac-to-pink wash. Dark: the same tints over the system background, so
@@ -1750,10 +1756,20 @@ struct TasksView: View {
                         .buttonStyle(.plain)
                         .scrollIndicators(.hidden)
                         .scrollDismissesKeyboard(.interactively)
-                        .refreshable { await model.refreshTasks() }
+                        .refreshable { await model.refreshTasks(); await moments.refresh() }
                     }
                 }
                 .padding(.horizontal, 20)
+            }
+            .task(id: momentsKey) {
+                let key = momentsKey
+                let saved = moments.moments
+                let timeZone = zone
+                let entries = await Task.detached(priority: .userInitiated) {
+                    MomentSchedule.tasks(saved, timeZone: timeZone)
+                }.value
+                guard !Task.isCancelled, key == momentsKey else { return }
+                momentTasks = entries; momentTasksKey = key
             }
             .toolbar(.hidden, for: .navigationBar)
             .sheet(isPresented: $adding) { NavigationStack { TaskEditor(task: nil) } }
@@ -1884,7 +1900,7 @@ struct TasksView: View {
                     .padding(.horizontal, 8).frame(minHeight: 44)
                     .background(selected ? AnyShapeStyle(accent) : AnyShapeStyle(Color(uiColor: .systemBackground).opacity(0.8)), in: Capsule())
                     .overlay(Capsule().stroke(selected ? Color.clear : Color.nexdoIndigo.opacity(0.16)))
-                }.buttonStyle(.plain).accessibilityLabel("\(filter.rawValue), \(snapshot.counts[filter, default: 0]) tasks")
+                }.buttonStyle(.plain).accessibilityLabel("\(filter.rawValue), \(snapshot.counts[filter, default: 0]) items")
                     .accessibilityAddTraits(selected ? .isSelected : [])
             }
         }
@@ -1921,9 +1937,26 @@ struct TasksView: View {
                             }
                             }
                             Spacer()
-                            Text("\(group.tasks.count) \(group.tasks.count == 1 ? "task" : "tasks")").font(.subheadline).foregroundStyle(Color.nexdoSecondary)
+                            Text("\(group.tasks.count) \(group.tasks.count == 1 ? "item" : "items")").font(.subheadline).foregroundStyle(Color.nexdoSecondary)
                         }.padding(12).background(Color(uiColor: .secondarySystemGroupedBackground).opacity(0.65), in: RoundedRectangle(cornerRadius: 16))
-                        ForEach(group.tasks) { task in taskCard(task) }
+                        ForEach(group.tasks) { task in
+                            if let id = MomentSchedule.momentID(task.id),
+                               let moment = moments.moments.first(where: { $0.id == id }) {
+                                Button { moments.route = moment } label: {
+                                    HStack(spacing: 12) {
+                                        Image(systemName: moment.icon).font(.title2).foregroundStyle(.pink)
+                                            .frame(width: 44, height: 44).background(.pink.opacity(0.1), in: RoundedRectangle(cornerRadius: 14))
+                                        VStack(alignment: .leading, spacing: 5) {
+                                            Text(moment.title).font(.subheadline.weight(.medium)).foregroundStyle(Color.nexdoInk)
+                                            Text("All day · \(moment.typeLabel) · Moment").font(.caption).foregroundStyle(Color.nexdoSecondary)
+                                        }
+                                        Spacer()
+                                        Image(systemName: "chevron.right").font(.caption).foregroundStyle(Color.nexdoSecondary)
+                                    }.padding(14).frame(maxWidth: .infinity, alignment: .leading)
+                                        .background(.background.opacity(0.8), in: RoundedRectangle(cornerRadius: 18))
+                                }.buttonStyle(.plain).accessibilityHint("Opens Moment")
+                            } else { taskCard(task) }
+                        }
                     }
             }
         }

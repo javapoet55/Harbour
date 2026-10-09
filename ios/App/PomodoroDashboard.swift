@@ -255,7 +255,7 @@ struct PomodoroDashboard: View {
         if minutes >= 60 { return "\(minutes / 60)h \(minutes % 60)m" }
         return minutes == 0 && seconds > 0 ? "\(Int(seconds))s" : "\(minutes) min"
     }
-    private func categoryColor(_ category: PomodoroCategory) -> Color { switch category { case .reading: .green; case .focus: .purple; case .coding: .orange; case .diary: .pink; case .math: .yellow; case .stretching: .cyan } }
+    private func categoryColor(_ category: PomodoroCategory) -> Color { switch category { case .reading: .green; case .focus: .purple; case .coding: .orange; case .diary: .pink; case .math: .yellow; case .stretching: .cyan; case .personalWork: .blue } }
 }
 
 private extension View {

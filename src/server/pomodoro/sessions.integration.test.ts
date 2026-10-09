@@ -55,3 +55,12 @@ describe('durable Pomodoro sessions', () => {
     expect(pomodoroSchema.safeParse({ ...session(), paused: true, deadline: null, pausedRemaining: 1300 }).success).toBe(true);
   });
 });
+
+it('saves Personal Work sessions and preserves the sound setting', async () => {
+  const user = await owner();
+  for (const playSound of [true, false]) {
+    const state = { ...session(), category: 'personalWork', playSound };
+    await savePomodoro(user, state);
+    expect((await listPomodoro(user)).find(value => value.id === state.id)).toMatchObject({ category: 'personalWork', playSound });
+  }
+});

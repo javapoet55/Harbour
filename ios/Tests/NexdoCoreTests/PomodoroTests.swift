@@ -58,3 +58,44 @@ struct PomodoroTests {
     let session = PomodoroSession(category: .focus, name: "  " + String(repeating: family, count: 30), durationMinutes: 25, autoBreak: true, playSound: false)
     #expect(session.name.unicodeScalars.count <= 120)
 }
+
+@Test func personalWorkAndSoundPreferenceSurviveSaveAndRestore() throws {
+    for enabled in [false, true] {
+        let session = PomodoroSession(category: .personalWork, name: "Home paperwork", durationMinutes: 25,
+                                      autoBreak: true, playSound: enabled)
+        let restored = try JSONDecoder().decode(PomodoroSession.self, from: JSONEncoder().encode(session))
+        #expect(restored.category == .personalWork)
+        #expect(restored.playSound == enabled)
+        #expect(restored.category.title == "Personal Work")
+        #expect(!restored.category.icon.isEmpty)
+    }
+}
+
+@Test func pomodoroSoundPlaysOnceAtEachAutomaticBoundaryOnlyWhenEnabled() {
+    let start = Date(timeIntervalSince1970: 1_790_000_000)
+    for enabled in [false, true] {
+        var session = PomodoroSession(category: .personalWork, name: "", durationMinutes: 25,
+                                      autoBreak: true, playSound: enabled, now: start)
+        #expect(!session.tick(at: start.addingTimeInterval(1499)).shouldPlaySound)
+        #expect(session.tick(at: start.addingTimeInterval(1500)).shouldPlaySound == enabled)
+        #expect(session.phase == .shortBreak)
+        #expect(!session.tick(at: start.addingTimeInterval(1501)).shouldPlaySound)
+        #expect(session.tick(at: start.addingTimeInterval(1800)).shouldPlaySound == enabled)
+        #expect(!session.tick(at: start.addingTimeInterval(1801)).shouldPlaySound)
+    }
+}
+
+@Test func pomodoroSoundRespectsPauseStopAndNoBreak() {
+    let start = Date(timeIntervalSince1970: 1_790_000_000)
+    var session = PomodoroSession(category: .personalWork, name: "", durationMinutes: 25,
+                                  autoBreak: false, playSound: true, now: start)
+    _ = session.togglePause(at: start.addingTimeInterval(60))
+    #expect(!session.tick(at: start.addingTimeInterval(2000)).shouldPlaySound)
+    _ = session.togglePause(at: start.addingTimeInterval(2000))
+    #expect(session.tick(at: start.addingTimeInterval(3440)).shouldPlaySound)
+    #expect(session.phase == .completed)
+    session = PomodoroSession(category: .personalWork, name: "", durationMinutes: 25,
+                              autoBreak: true, playSound: true, now: start)
+    session.stop(at: start.addingTimeInterval(20))
+    #expect(!session.tick(at: start.addingTimeInterval(2000)).shouldPlaySound)
+}
