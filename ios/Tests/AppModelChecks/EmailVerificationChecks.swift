@@ -126,9 +126,15 @@ struct EmailVerificationChecks {
             }
         }
         let verified = try model()
+        verified.hasSeenShoppingGuide = true
         try await verified.verifyEmail(email: email, code: "123456")
         expect(verified.profile?.id == "verified", "Verification did not load the signed-in profile")
+        expect(!verified.hasSeenShoppingGuide, "A fresh sign-in did not reset the shopping guide")
+        verified.hasSeenShoppingGuide = true
+        try await verified.reloadProfile()
+        expect(verified.hasSeenShoppingGuide, "A profile refresh reset the shopping guide")
         await verified.reset()
+        expect(!verified.hasSeenShoppingGuide, "Signing out did not reset the shopping guide")
         print("PASS: correct code signs in and loads the profile")
 
         // Resend posts the address and returns the server's message.

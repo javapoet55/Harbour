@@ -130,12 +130,18 @@ private struct ModuleGuideArtwork: View {
     }
 }
 
-/// Own presentation state inside the cover so every new module tap starts at its guide.
+/// Capture the initial guide decision so marking it seen does not dismiss an open guide.
 struct WellnessModuleEntrance<Content:View>: View {
     let kind:WellnessModuleGuide.Kind
     let onHome:()->Void
     @ViewBuilder var content:()->Content
     @State private var continued=false
+    init(kind:WellnessModuleGuide.Kind,showGuide:Bool=true,onHome:@escaping ()->Void,@ViewBuilder content:@escaping ()->Content) {
+        self.kind=kind
+        self.onHome=onHome
+        self.content=content
+        _continued=State(initialValue:!showGuide)
+    }
     var body:some View {
         if continued { content() }
         else { WellnessModuleGuide(kind:kind,onContinue:{ continued=true },onHome:onHome) }

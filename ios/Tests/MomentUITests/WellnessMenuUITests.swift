@@ -39,7 +39,7 @@ import XCTest
         XCTAssertTrue(button.isHittable)
         button.tap()
     }
-    func testGuideReturnsHomeAndShowsAgain() {
+    func testShoppingGuideReturnsHomeAndIsSkippedOnNextVisit() {
         let app=XCUIApplication()
         app.launchArguments=["-wellness-design-preview"]
         app.launch()
@@ -50,9 +50,24 @@ import XCTest
         home.tap()
         XCTAssertTrue(app.buttons["wellness.shopping"].waitForExistence(timeout:5))
         app.buttons["wellness.shopping"].tap()
-        XCTAssertTrue(app.navigationBars["How It Works"].waitForExistence(timeout:5))
+        XCTAssertTrue(app.navigationBars["My Lists"].waitForExistence(timeout:5))
+        XCTAssertFalse(app.navigationBars["How It Works"].exists)
         app.buttons["Back"].firstMatch.tap()
         XCTAssertTrue(app.buttons["wellness.shopping"].waitForExistence(timeout:5))
+    }
+
+    func testShoppingGuideIsSkippedAfterContinuing() {
+        let app=XCUIApplication()
+        app.launchArguments=["-wellness-design-preview"]
+        app.launch()
+        app.buttons["wellness.shopping"].tap()
+        continueFromGuide(app)
+        XCTAssertTrue(app.navigationBars["My Lists"].waitForExistence(timeout:5))
+        app.buttons["Back"].firstMatch.tap()
+        XCTAssertTrue(app.buttons["wellness.shopping"].waitForExistence(timeout:5))
+        app.buttons["wellness.shopping"].tap()
+        XCTAssertTrue(app.navigationBars["My Lists"].waitForExistence(timeout:5))
+        XCTAssertFalse(app.navigationBars["How It Works"].exists)
     }
 
 }
