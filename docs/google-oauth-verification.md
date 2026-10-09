@@ -60,6 +60,12 @@ These describe intended supported actions, not a claim that every AI action has 
 8. Test fresh consent, selective denial, reconnect, restart/refresh, revoked access, create, reschedule and event-only deletion with a designated test account. Test iOS browser cookie continuity.
 9. Plan deployment separately after review. No schema migration is required for this patch. Monitor sanitized errors and reconnect status.
 
+## Temporary "still reviewing" notice
+
+While verification is pending, Google shows "Google hasn't verified this app" and users must tap Advanced → Go to Nexdo (unsafe). Setting `GOOGLE_OAUTH_UNVERIFIED_NOTICE=true` on the Railway API service shows a NexDo page explaining that step before Google's screen, for both Google Calendar (`/api/calendar/oauth/google/start`) and Gmail (`/api/moments/email/start`, which `connectURL()` returns while the flag is on). Every client opens these server URLs, so no app release is needed. Any other value, or no variable, keeps the previous behaviour exactly.
+
+After Google approves verification, delete the Railway variable. No code change or new build is needed; Railway applies the variable change when it redeploys the service. Later, remove `src/server/oauth-notice.ts`, the `/api/moments/email/start` route and the flag checks.
+
 ## Existing users and rollout
 
 No forced disconnect. Existing tokens retain their previously authorized grant and continue to refresh. To truly narrow old access, explain a voluntary Google Account revocation and reconnect. Check whether Gmail shares the grant/project before revoking: revocation may affect other authorizations. Keep NexDo data; do not delete external calendars or events as migration cleanup. Signed state now binds to an initiating-browser cookie; users with a pre-deployment OAuth flow in progress must start it again. Only explicit connect/reconnect requests prompt for consent.

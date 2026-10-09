@@ -7,11 +7,23 @@ import { MomentError } from './domain';
 import { randomUUID } from 'node:crypto';
 import { log } from '@/lib/logger';
 import { renderWishEmail } from '@/server/email/wish-template';
+import { oauthNoticeEnabled } from '@/server/oauth-notice';
 export function emailConfigured() { return !!(process.env.MOMENTS_GOOGLE_CLIENT_ID && process.env.MOMENTS_GOOGLE_CLIENT_SECRET && process.env.MOMENTS_GOOGLE_REDIRECT_URI); }
 export async function connectURL(userID: string) {
   if (!emailConfigured()) throw new MomentError('Connected email is not configured on this server.',503);
   const state = await new SignJWT({sub:userID,purpose:'moments-email'}).setProtectedHeader({alg:'HS256'}).setIssuedAt().setExpirationTime('10m').sign(sessionSigningKey());
+  // While Google verification is pending, the app opens our notice page first (/api/moments/email/start).
+  if (oauthNoticeEnabled()) return `${new URL(process.env.MOMENTS_GOOGLE_REDIRECT_URI!).origin}/api/moments/email/start?${new URLSearchParams({state})}`;
+  return googleEmailAuthorizationURL(state);
+}
+export function googleEmailAuthorizationURL(state: string) {
   return 'https://accounts.google.com/o/oauth2/v2/auth?' + new URLSearchParams({client_id:process.env.MOMENTS_GOOGLE_CLIENT_ID!,redirect_uri:process.env.MOMENTS_GOOGLE_REDIRECT_URI!,response_type:'code',scope:'openid email https://www.googleapis.com/auth/gmail.send',access_type:'offline',prompt:'consent',state});
+}
+/** The user a connect state was issued to. Throws when it is invalid, expired or for another purpose. */
+export async function verifyEmailState(state: string) {
+  const {payload}=await jwtVerify(state,sessionSigningKey(),{algorithms:['HS256']});
+  if(payload.purpose!=='moments-email'||typeof payload.sub!=='string') throw new MomentError('Invalid authorization.');
+  return payload.sub;
 }
 async function token(params: Record<string,string>) {
   const res=await observedFetch('https://oauth2.googleapis.com/token',{method:'POST',signal:AbortSignal.timeout(15000),body:new URLSearchParams({client_id:process.env.MOMENTS_GOOGLE_CLIENT_ID!,client_secret:process.env.MOMENTS_GOOGLE_CLIENT_SECRET!,...params})});
@@ -20,8 +32,7 @@ async function token(params: Record<string,string>) {
   return await res.json() as {access_token:string; refresh_token?:string};
 }
 export async function connect(code:string,state:string) {
-  const {payload}=await jwtVerify(state,sessionSigningKey(),{algorithms:['HS256']});
-  if(payload.purpose!=='moments-email'||typeof payload.sub!=='string') throw new MomentError('Invalid authorization.');
+  const sub=await verifyEmailState(state);
   const t=await token({code,grant_type:'authorization_code',redirect_uri:process.env.MOMENTS_GOOGLE_REDIRECT_URI!});
   if(!t.refresh_token) throw new MomentError('Please reconnect and approve offline email access.');
   const res=await observedFetch('https://openidconnect.googleapis.com/v1/userinfo',{headers:{Authorization:`Bearer ${t.access_token}`},signal:AbortSignal.timeout(15000)});
@@ -29,7 +40,7 @@ export async function connect(code:string,state:string) {
   if(!res.ok||!profile.email||!profile.email_verified) throw new MomentError('Unable to verify email account.');
   // Anyone holding a connect link can finish Google's consent, so nothing is saved here. The account is
   // saved only when the signed-in app that received this ticket confirms it as the same user.
-  return encryptCredential(JSON.stringify({purpose:TICKET_PURPOSE,sub:payload.sub,email:profile.email,refreshToken:t.refresh_token,exp:Date.now()+TICKET_MS}))!;
+  return encryptCredential(JSON.stringify({purpose:TICKET_PURPOSE,sub,email:profile.email,refreshToken:t.refresh_token,exp:Date.now()+TICKET_MS}))!;
 }
 const TICKET_PURPOSE='moments-email-ticket', TICKET_MS=10*60000;
 export async function confirmConnect(userId:string,ticket:unknown) {
