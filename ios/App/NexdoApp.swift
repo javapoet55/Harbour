@@ -30,6 +30,8 @@ final class AppModel: ObservableObject {
     @Published private(set) var voiceUsage: VoiceUsage?
     @Published private(set) var calendarConnections: [CalendarConnection] = []
     @Published private(set) var calendarConnectionsLoaded = false
+    @Published private(set) var calendarConnectionsError: String?
+    private var calendarConnectionGeneration = UUID()
     @Published private(set) var protectedTime: ProtectedTimeProposal?
     @Published private(set) var protectingTime = false
     @Published private(set) var persistentNext: ProactiveNextResponse?
@@ -317,15 +319,25 @@ final class AppModel: ObservableObject {
         case unavailable
         var errorDescription: String? { "Nexdo could not start the calendar connection. Please try again." }
     }
-    func loadCalendarConnections() async {
+    @discardableResult
+    func loadCalendarConnections() async -> Bool {
         struct Response: Decodable, Sendable { let connections: [CalendarConnection] }
+        let owner = profile?.id
+        let generation = UUID()
+        calendarConnectionGeneration = generation
         do {
-            let response: Response = try await api.request("/api/calendar/connections")
+            let response: Response = try await api.request("/api/calendar/connections", timeout: 15)
+            guard !Task.isCancelled, profile?.id == owner, calendarConnectionGeneration == generation else { return false }
             calendarConnections = response.connections
+            calendarConnectionsError = nil
+            calendarConnectionsLoaded = true
+            return true
         } catch {
-            calendarConnections = []
+            guard !Task.isCancelled, profile?.id == owner, calendarConnectionGeneration == generation else { return false }
+            // A transient refresh failure must not erase existing connected accounts.
+            calendarConnectionsError = "Could not refresh calendar connections. Please try again."
+            return false
         }
-        calendarConnectionsLoaded = true
     }
     func setCalendarWrites(id: String, enabled: Bool) async throws -> String {
         struct Input: Encodable, Sendable { let id: String; let writeEnabled: Bool }
@@ -839,6 +851,8 @@ final class AppModel: ObservableObject {
     func withdrawConsent() { voiceConsent = false; aiConsent = false; turn = nil; lastAssistantPrompt = nil; contextID = nil }
     func reset() async {
         seenWellnessGuides.removeAll()
+        calendarConnectionGeneration = UUID()
+        calendarConnections = []; calendarConnectionsLoaded = false; calendarConnectionsError = nil
         if let owner = profile?.id { await PomodoroStore.cancelAlerts(owner: owner) }
         profileRevision += 1
         projectRevision += 1; projectLoadID = nil; projects = []; projectsLoaded = false; projectsLoading = false; projectsError = nil; unassignedTaskCount = 0

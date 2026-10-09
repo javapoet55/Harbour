@@ -106,10 +106,10 @@ public enum LegalLinks {
     public static let termsOfService = URL(string: "https://nexdoapp.com/terms")!
 }
 
-/// How a finished Google sign-in sheet ended.
+/// How a finished calendar provider sign-in sheet ended.
 public enum CalendarOAuthResult: Equatable, Sendable {
     case connected
-    /// Google's page was closed without signing in. Settings closes quietly.
+    /// The provider's page was closed without signing in. Settings closes quietly.
     case cancelled
     case failed(String)
 
@@ -117,14 +117,20 @@ public enum CalendarOAuthResult: Equatable, Sendable {
     ///   - callback: the `nexdo://calendar-connected?…` URL the server redirected to, if any.
     ///   - cancelled: the sheet was closed (`ASWebAuthenticationSessionError.canceledLogin`).
     ///   - error: the description of any other session error.
-    public init(callback: URL?, cancelled: Bool, error: String?) {
+    public init(callback: URL?, cancelled: Bool, error: String?, providerName: String = "Google") {
         if cancelled { self = .cancelled; return }
-        if let error { self = .failed("Google Calendar connection failed: \(error)"); return }
+        if let error { self = .failed("\(providerName) Calendar connection failed: \(error)"); return }
         guard let callback else { self = .cancelled; return }
+        guard callback.scheme == "nexdo", callback.host == "calendar-connected" else {
+            self = .failed("Unexpected calendar sign-in response. Please try again."); return
+        }
         let query = URLComponents(url: callback, resolvingAgainstBaseURL: false)?.queryItems ?? []
         if query.first(where: { $0.name == "calendar" })?.value == "error" || query.contains(where: { $0.name == "detail" }) {
             let detail = query.first(where: { $0.name == "detail" })?.value ?? "authorization failed"
-            self = .failed("Google Calendar connection failed: \(detail)"); return
+            self = .failed("\(providerName) Calendar connection failed: \(detail)"); return
+        }
+        guard query.first(where: { $0.name == "calendar" })?.value == "\(providerName.lowercased())-connected" else {
+            self = .failed("Calendar connection was not confirmed. Please try again."); return
         }
         self = .connected
     }

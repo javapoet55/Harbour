@@ -17,7 +17,9 @@ struct RootView: View {
     var body: some View {
         Group {
             #if DEBUG
-            if ProcessInfo.processInfo.arguments.contains("-help-design-preview") {
+            if ProcessInfo.processInfo.arguments.contains("-calendar-connect-preview") {
+                NavigationStack { CalendarConnectionView() }
+            } else if ProcessInfo.processInfo.arguments.contains("-help-design-preview") {
                 NavigationStack { HelpView() }
             } else if ProcessInfo.processInfo.arguments.contains("-calorie-design-preview") {
                 CalorieTrackerView()

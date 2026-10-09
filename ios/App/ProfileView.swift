@@ -4,23 +4,40 @@ import ImageIO
 import AuthenticationServices
 
 @MainActor
-private final class CalendarOAuthCoordinator: NSObject, ObservableObject, ASWebAuthenticationPresentationContextProviding {
+final class CalendarOAuthCoordinator: NSObject, ObservableObject, ASWebAuthenticationPresentationContextProviding {
     private var session: ASWebAuthenticationSession?
-    func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor { UIApplication.shared.connectedScenes.compactMap { ($0 as? UIWindowScene)?.keyWindow }.first ?? ASPresentationAnchor() }
-    // The URL already carries a short-lived connect token: the web session
-    // cookie is not available to ASWebAuthenticationSession.
-    func connectGoogle(url: URL, completion: @escaping (CalendarOAuthResult) -> Void) {
-        session = ASWebAuthenticationSession(url: url, callbackURLScheme: "nexdo") { callback, error in
+    private var completion: ((CalendarOAuthResult) -> Void)?
+    private var generation = UUID()
+    func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
+        UIApplication.shared.connectedScenes.compactMap { ($0 as? UIWindowScene)?.keyWindow }.first ?? ASPresentationAnchor()
+    }
+    // Reuse the authenticated server's short-lived start URL; no provider tokens live in the UI.
+    func connect(url: URL, providerName: String = "Google", completion: @escaping (CalendarOAuthResult) -> Void) {
+        guard session == nil else { completion(.failed("A calendar connection is already in progress.")); return }
+        self.completion = completion
+        let generation = UUID()
+        self.generation = generation
+        let session = ASWebAuthenticationSession(url: url, callbackURLScheme: "nexdo") { [weak self] callback, error in
             Task { @MainActor in
-                defer { self.session = nil }
-                // Closing Google's page is not an error; server-side failures come back in the callback.
+                guard let self, self.generation == generation else { return }
                 let cancelled = (error as? ASWebAuthenticationSessionError)?.code == .canceledLogin
-                completion(CalendarOAuthResult(callback: callback, cancelled: cancelled, error: cancelled ? nil : error?.localizedDescription))
+                self.finish(CalendarOAuthResult(callback: callback, cancelled: cancelled,
+                    error: cancelled ? nil : error?.localizedDescription, providerName: providerName))
             }
         }
-        session?.presentationContextProvider = self
-        session?.prefersEphemeralWebBrowserSession = false
-        session?.start()
+        self.session = session
+        session.presentationContextProvider = self
+        session.prefersEphemeralWebBrowserSession = false
+        if !session.start() { finish(.failed("Could not open sign-in. Please try again.")) }
+    }
+    func cancel() {
+        session?.cancel()
+        finish(.cancelled)
+    }
+    private func finish(_ result: CalendarOAuthResult) {
+        let callback = completion
+        completion = nil; session = nil; generation = UUID()
+        callback?(result)
     }
 }
 
@@ -312,10 +329,16 @@ struct ProfileSettingsView: View {
                         Text("Manage delivery permissions and send tests in Notification Center.").font(.caption).foregroundStyle(Color.nexdoSecondary)
                         Button("Open Notification Center") { website("/notifications") }
                     }
-                    card("Calendars and privacy") {
-                        Text("Connect Google Calendar securely. You may need to sign in with Google.").font(.subheadline).foregroundStyle(Color.nexdoSecondary)
+                    card("Calendars & Privacy") {
+                        Text("Connect your calendar to keep your plans and important moments together.").font(.subheadline).foregroundStyle(Color.nexdoSecondary)
                         connectionList
-                        Button(connecting ? "Connecting…" : (model.calendarConnections.isEmpty ? "Connect Google Calendar" : "Connect another calendar"), systemImage: "calendar.badge.plus") { connect() }
+                        if let error = model.calendarConnectionsError {
+                            Text(error).font(.caption).foregroundStyle(.red)
+                            Button("Retry connection status") { Task { await model.loadCalendarConnections() } }
+                        }
+                        NavigationLink { CalendarConnectionView() } label: {
+                            Label("Connect Calendar", systemImage: "calendar.badge.plus")
+                        }.accessibilityIdentifier("settings-connect-calendar")
                         Button("Synchronize now", systemImage: "arrow.triangle.2.circlepath") { run { message = try await model.syncProfileCalendars() } }
                         Divider()
                         Text(model.aiConsent ? "OpenAI sharing is allowed for this session." : "OpenAI sharing is off.").font(.caption)
@@ -413,8 +436,7 @@ struct ProfileSettingsView: View {
                             }
                         }
                         Divider()
-                        // Writes default to off on the server, so without this toggle the
-                        // app only ever reads: scheduled tasks never reach the calendar.
+                        // Reflect the stored write preference; users can disable calendar writes here.
                         Toggle("Add my scheduled tasks and events here", isOn: Binding(
                             get: { connection.writeEnabled },
                             set: { enabled in run { message = try await model.setCalendarWrites(id: connection.id, enabled: enabled) } }
@@ -441,9 +463,11 @@ struct ProfileSettingsView: View {
         Task {
             defer { connecting = false }
             do {
-                let url = try await model.calendarConnectURL()
+                let provider = connection?.provider.lowercased() ?? "google"
+                let providerName = provider == "microsoft" ? "Microsoft" : "Google"
+                let url = try await model.calendarConnectURL(provider: provider)
                 let result = await withCheckedContinuation { (continuation: CheckedContinuation<CalendarOAuthResult, Never>) in
-                    calendarOAuth.connectGoogle(url: url) { continuation.resume(returning: $0) }
+                    calendarOAuth.connect(url: url, providerName: providerName) { continuation.resume(returning: $0) }
                 }
                 switch result {
                 case .cancelled: return
@@ -453,11 +477,11 @@ struct ProfileSettingsView: View {
                 let refreshed = (try? await model.reloadProfile()) != nil
                 await model.loadCalendarConnections()
                 if let connection, model.calendarConnections.first(where: { $0.id == connection.id })?.needsReconnect ?? false {
-                    failure = "\(connection.displayName) still needs reconnecting. Choose \(connection.accountEmail ?? "the same Google account") on Google’s sign-in page."
+                    failure = "\(connection.displayName) still needs reconnecting. Choose \(connection.accountEmail ?? "the same account") on \(providerName)’s sign-in page."
                 } else if connection != nil {
-                    message = "Google Calendar reconnected and synchronized."
+                    message = "\(providerName) Calendar reconnected and synchronized."
                 } else {
-                    message = refreshed ? "Google Calendar connected and synchronized." : "Google Calendar connected, but Nexdo could not refresh it yet."
+                    message = refreshed ? "\(providerName) Calendar connected and synchronized." : "\(providerName) Calendar connected, but Nexdo could not refresh it yet."
                 }
             } catch { failure = error.localizedDescription }
         }

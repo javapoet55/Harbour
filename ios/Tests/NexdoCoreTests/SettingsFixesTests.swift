@@ -36,3 +36,20 @@ import Testing
     #expect(CalendarConnection(id: "c", provider: "google", accountEmail: nil, calendarName: nil, status: "error", lastSyncedAt: nil).needsReconnect)
     #expect(!CalendarConnection(id: "c", provider: "google", accountEmail: nil, calendarName: nil, status: "connected", lastSyncedAt: nil).needsReconnect)
 }
+
+@Test func microsoftCalendarCallbackUsesItsOwnProvider() {
+    let callback = URL(string: "nexdo://calendar-connected?calendar=microsoft-connected")!
+    #expect(CalendarOAuthResult(callback: callback, cancelled: false, error: nil, providerName: "Microsoft") == .connected)
+    #expect(CalendarOAuthResult(callback: callback, cancelled: false, error: nil) == .failed("Calendar connection was not confirmed. Please try again."))
+    let failure = URL(string: "nexdo://calendar-connected?calendar=error")!
+    #expect(CalendarOAuthResult(callback: failure, cancelled: false, error: nil, providerName: "Microsoft") == .failed("Microsoft Calendar connection failed: authorization failed"))
+}
+
+@Test func calendarCallbackMustConfirmTheExpectedConnection() {
+    for raw in ["nexdo://calendar-connected", "nexdo://calendar-connected?calendar=unsupported", "nexdo://calendar-connected?calendar=google-cancelled"] {
+        #expect(CalendarOAuthResult(callback: URL(string: raw), cancelled: false, error: nil) == .failed("Calendar connection was not confirmed. Please try again."))
+    }
+    for raw in ["https://calendar-connected?calendar=google-connected", "nexdo://other?calendar=google-connected"] {
+        #expect(CalendarOAuthResult(callback: URL(string: raw), cancelled: false, error: nil) == .failed("Unexpected calendar sign-in response. Please try again."))
+    }
+}

@@ -134,7 +134,20 @@ struct EmailVerificationChecks {
         verified.seenWellnessGuides = allGuides
         try await verified.reloadProfile()
         expect(verified.seenWellnessGuides == allGuides, "A profile refresh reset the module guides")
+        MockProtocol.state.configure { _ in
+            Reply(body: #"{"connections":[{"id":"calendar-1","provider":"google","accountEmail":"new@example.test","calendarName":"Primary","status":"connected","lastSyncedAt":null,"writeEnabled":true}]}"#)
+        }
+        let connectionsLoaded = await verified.loadCalendarConnections()
+        expect(connectionsLoaded, "Calendar connections did not load")
+        let existingConnections = verified.calendarConnections
+        expect(existingConnections.count == 1, "Connected account missing")
+        MockProtocol.state.configure { _ in Reply(status: 503) }
+        let refreshedConnections = await verified.loadCalendarConnections()
+        expect(!refreshedConnections, "Failed connection refresh reported success")
+        expect(verified.calendarConnections == existingConnections, "A failed refresh erased existing calendar connections")
+        expect(verified.calendarConnectionsError != nil, "A failed refresh did not show a retry message")
         await verified.reset()
+        expect(verified.calendarConnections.isEmpty && !verified.calendarConnectionsLoaded, "Signing out retained another user's calendars")
         expect(verified.seenWellnessGuides.isEmpty, "Signing out did not reset the module guides")
         print("PASS: correct code signs in and loads the profile")
 
