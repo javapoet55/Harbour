@@ -97,7 +97,6 @@ private struct CalendarProviderConnectionView: View {
     @State private var confirmedConnection = false
     @State private var connectionTask: Task<Void, Never>?
     @State private var statusMessage: String?
-    private let appleCalendars = MomentCalendarService()
     private var connected: Bool {
         provider == .apple ? appleAccess : confirmedConnection || model.calendarConnections.contains { $0.provider.lowercased() == provider.rawValue && !$0.needsReconnect }
     }
@@ -115,7 +114,7 @@ private struct CalendarProviderConnectionView: View {
                 VStack(spacing: 8) {
                     Text("Connect \(provider.title)").font(.title.bold()).multilineTextAlignment(.center)
                     Text(provider == .apple
-                         ? "Use calendars already added to your iPhone to find birthdays and anniversaries."
+                         ? "Show events from calendars already added to your iPhone alongside your NexDo plans."
                          : "Connect your \(provider.title) to organize your schedule and important events.")
                         .font(.subheadline).foregroundStyle(ink.opacity(0.7)).multilineTextAlignment(.center)
                 }
@@ -124,10 +123,10 @@ private struct CalendarProviderConnectionView: View {
                          detail: provider == .apple ? "Add your iCloud account in iPhone Settings if it isn't already there. No Apple password is entered in NexDo." : "Tap Connect Now and choose the \(provider.name) account you want to use.")
                     Divider().padding(.horizontal, 18)
                     step(2, title: "Review permissions",
-                         detail: provider == .apple ? "Allow calendar access when iOS asks. NexDo reads the calendar you choose to suggest moments. It does not edit those events." : "Your provider requests access to read and manage events. NexDo can add your scheduled tasks and events. You can turn this off in Calendars & Privacy.")
+                         detail: provider == .apple ? "Allow calendar access when iOS asks. NexDo reads your selected calendars to display their events. It does not edit those events." : "Your provider requests access to read and manage events. NexDo can add your scheduled tasks and events. You can turn this off in Calendars & Privacy.")
                     Divider().padding(.horizontal, 18)
-                    step(3, title: provider == .apple ? "Choose and review" : "You're all set!",
-                         detail: provider == .apple ? "Choose a calendar, then review birthday and anniversary suggestions before saving them as Moments." : "We'll synchronize your calendar so your events appear alongside your plans.")
+                    step(3, title: provider == .apple ? "Choose calendars" : "You're all set!",
+                         detail: provider == .apple ? "Choose which calendars appear in Schedule, Week, and Month. You can also import birthday and anniversary suggestions into Moments." : "We'll synchronize your calendar so your events appear alongside your plans.")
                 }.background(.white.opacity(0.87), in: RoundedRectangle(cornerRadius: 24))
                 Label(provider == .apple ? "Calendar reading happens on this device. Change access in iPhone Settings." : "You control access. Disconnect this calendar in NexDo Settings at any time.", systemImage: "lock.shield.fill")
                     .font(.footnote).foregroundStyle(ink.opacity(0.7)).padding(16)
@@ -135,7 +134,7 @@ private struct CalendarProviderConnectionView: View {
                 if connected {
                     Label("\(provider.title) connected.", systemImage: "checkmark.circle.fill")
                         .foregroundStyle(.green).accessibilityIdentifier("calendar-connect-success")
-                    Text(provider == .apple ? "Calendar access is allowed on this iPhone. Choose calendars to review suggested Moments." : "This provider is already connected. Manage accounts in Calendars & Privacy.").font(.footnote)
+                    Text(provider == .apple ? "Calendar access is allowed on this iPhone. Choose which calendars appear in NexDo." : "This provider is already connected. Manage accounts in Calendars & Privacy.").font(.footnote)
                     ForEach(model.calendarConnections.filter { $0.provider.lowercased() == provider.rawValue }) { connection in
                         VStack(spacing: 4) {
                             Text(connection.displayName).font(.subheadline.bold())
@@ -175,7 +174,7 @@ private struct CalendarProviderConnectionView: View {
         }
         .navigationBarBackButtonHidden(connecting)
         .interactiveDismissDisabled(connecting)
-        .navigationDestination(isPresented: $showingAppleCalendars) { MomentCalendarImportView() }
+        .navigationDestination(isPresented: $showingAppleCalendars) { AppleCalendarSelectionView() }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { appleAccess = EKEventStore.authorizationStatus(for: .event) == .fullAccess }
         }
@@ -231,10 +230,15 @@ private struct CalendarProviderConnectionView: View {
             defer { connecting = false; connectionTask = nil }
             do {
                 if provider == .apple {
-                    _ = try await appleCalendars.calendars()
+                    _ = try await AppleCalendarService.shared.requestAccess()
                     guard !Task.isCancelled, model.profile?.id == owner else { return }
                     appleAccess = EKEventStore.authorizationStatus(for: .event) == .fullAccess
-                    statusMessage = "Calendar access allowed. Choose a calendar to review suggested Moments."
+                    guard appleAccess else {
+                        failure = "Full Calendar access is needed to display events. Enable it for NexDo in iPhone Settings."
+                        return
+                    }
+                    statusMessage = "Calendar access allowed. Choose calendars to display in NexDo."
+                    showingAppleCalendars = true
                     return
                 }
                 let url = try await model.calendarConnectURL(provider: provider.rawValue)
@@ -278,6 +282,40 @@ private struct CalendarConnectBackground: View {
         LinearGradient(colors: [accent.opacity(0.10), .white, accent.opacity(0.12)], startPoint: .topLeading, endPoint: .bottomTrailing)
             .overlay(alignment: .topTrailing) { Circle().fill(accent.opacity(0.04)).frame(width: 280, height: 280).offset(x: 140, y: -130) }
             .ignoresSafeArea()
+    }
+}
+
+/// Uses the recorded event source, never guesses a provider from the event title.
+struct CalendarEventProviderIcon: View {
+    let source: String?
+    private var normalizedSource: String { source?.lowercased() ?? "" }
+    private var label: String {
+        switch normalizedSource {
+        case "apple", "apple-device", "icloud": "Apple Calendar"
+        case "microsoft", "outlook": "Outlook Calendar"
+        case "google": "Google Calendar"
+        case "harbor": "NexDo Calendar"
+        default: "Calendar"
+        }
+    }
+    var body: some View {
+        Group {
+            switch normalizedSource {
+            case "apple", "apple-device", "icloud":
+                Image(systemName: "apple.logo").font(.title2).foregroundStyle(Color.primary)
+            case "microsoft", "outlook":
+                CalendarConnectionArtwork(kind: .microsoft)
+            case "google":
+                CalendarConnectionArtwork(kind: .google)
+            case "harbor":
+                Image("wellness-navigation").resizable().scaledToFit()
+            default:
+                Image(systemName: "calendar").font(.title3).foregroundStyle(Color.nexdoIndigo)
+            }
+        }
+        .frame(width: 32, height: 36)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(label)
     }
 }
 

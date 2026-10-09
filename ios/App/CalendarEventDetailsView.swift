@@ -18,7 +18,7 @@ struct CalendarEventDetailsView: View {
     private struct TaskResponse: Decodable, Sendable { let taskId: String }
     private var path: String { "/api/calendar/events/\(event.id)" }
     private var editable: Bool { event.source == "harbor" && event.connectionId == nil }
-    private var calendarName: String { event.source == "harbor" ? "NexDo" : (event.source ?? "Calendar").capitalized }
+    private var calendarName: String { event.isDeviceCalendarEvent ? "Apple Calendar" : event.source == "harbor" ? "NexDo" : (event.source ?? "Calendar").capitalized }
     private var status: String { event.completedAt != nil ? "Completed" : ((ServerDate.parse(event.endAt) ?? .distantFuture) < Date() ? "Past" : "Upcoming") }
 
     var body: some View {
@@ -40,6 +40,9 @@ struct CalendarEventDetailsView: View {
                                 if let notes = event.notes, !notes.isEmpty { Text(notes).font(.subheadline).foregroundStyle(Color.nexdoSecondary) }
                             }
                         }
+                        if event.isDeviceCalendarEvent {
+                            Text("On this iPhone · Edit this event in Apple Calendar.").font(.subheadline).foregroundStyle(Color.nexdoSecondary)
+                        } else {
                         HStack(alignment: .top, spacing: 10) {
                             // One of the two, like the ⋯ menu: completing a completed event does nothing.
                             if event.completedAt == nil {
@@ -48,6 +51,7 @@ struct CalendarEventDetailsView: View {
                                 action("Mark Incomplete", icon: "xmark.circle.fill", color: .red) { await setCompletion(false) }
                             }
                             action(taskAdded ? "Added to Tasks" : "Add to Tasks", icon: "calendar.badge.plus", color: .indigo) { await addTask() }
+                        }
                         }
                         VStack(spacing: 0) {
                             detail("Start", value: dateText(event.startAt), icon: "clock")
@@ -86,12 +90,14 @@ struct CalendarEventDetailsView: View {
                 ToolbarItem(placement: .cancellationAction) { Button { dismiss() } label: { Image(systemName: "chevron.left") }.accessibilityLabel("Back") }
                 ToolbarItemGroup(placement: .primaryAction) {
                     if editable { Button("Edit") { editing = true }.disabled(busy) }
+                    if !event.isDeviceCalendarEvent {
                     Menu {
                         Button(event.completedAt == nil ? "Mark Complete" : "Mark Incomplete", systemImage: event.completedAt == nil ? "checkmark.circle" : "xmark.circle") {
                             Task { await setCompletion(event.completedAt == nil) }
                         }
                         if editable { Button("Delete Event", systemImage: "trash", role: .destructive) { deleting = true } }
                     } label: { Image(systemName: "ellipsis") }.disabled(busy).accessibilityLabel("More event actions")
+                    }
                 }
             }
             .overlay { if busy { ProgressView().padding(22).background(.regularMaterial, in: RoundedRectangle(cornerRadius: 18)) } }
@@ -103,6 +109,7 @@ struct CalendarEventDetailsView: View {
             .alert("Event Details", isPresented: Binding(get: { message != nil }, set: { if !$0 { message = nil; if deleted { dismiss() } } })) { Button("OK") { message = nil } } message: { Text(message ?? "") }
             .sheet(isPresented: $editing) { CalendarEventDetailsEditor(event: event) { body in try await update(body) } }
             .task {
+                guard !event.isDeviceCalendarEvent else { return }
                 #if DEBUG
                 if ProcessInfo.processInfo.arguments.contains("-event-details-preview") { return }
                 #endif

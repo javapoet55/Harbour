@@ -12,6 +12,7 @@ struct StoreBrandLogo: View {
     let api: APIClient
     let listID: String
     let identity: String
+    var customImageData: String? = nil
     var size: CGFloat = 56
     var expandsOnTap = false
     @State private var expanded = false
@@ -28,7 +29,7 @@ struct StoreBrandLogo: View {
                 avatar.accessibilityLabel(image == nil ? "Shopping list" : "\(label) logo")
             }
         }
-        .task(id: "\(listID)|\(identity)") { await load() }
+        .task(id: "\(listID)|\(identity)|\(customImageData ?? "")") { await load() }
         .sheet(isPresented: $expanded) {
             NavigationStack {
                 Group {
@@ -59,6 +60,9 @@ struct StoreBrandLogo: View {
         .contentShape(Circle())
     }
     @MainActor private func load() async {
+        if let customImageData, let data = Data(base64Encoded: customImageData), let custom = UIImage(data: data) {
+            image = custom; label = identity.components(separatedBy: "|").first ?? "Store"; return
+        }
         let cacheKey = "\(listID)|\(identity)"
         if let cached = StoreBrandLogoCache.images.object(forKey: cacheKey as NSString), cached.expires > Date() {
             image = cached.image; label = cached.label; return

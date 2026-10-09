@@ -94,3 +94,29 @@ it('persists Places identity, copies it weekly, and clears it on legacy-client s
  const saved=await shoppingAction(owner,{operation:'save',id:next.list.id,revision:0,input:legacy});if(!('list'in saved)||!saved.list)throw Error('Missing saved list');
  expect(saved.list).toMatchObject({storePlaceId:null,storeWebsite:null});
 });
+
+function logoList(result: Awaited<ReturnType<typeof shoppingAction>>) {
+ if (!('list' in result) || !result.list) throw new Error('Expected a saved shopping list');
+ return result.list;
+}
+
+it('keeps custom logos per list, preserves them for older clients and clears them explicitly',async()=>{
+ const logo='/9j/AA==';
+ const first=logoList(await shoppingAction(owner,{operation:'create',input:{...input(),storeName:'Safeway',storeLogoData:logo}}));
+ const second=logoList(await shoppingAction(owner,{operation:'create',input:{...input(),storeName:'Safeway'}}));
+ expect(second.storeLogoData).toBeNull();
+ const saved=logoList(await shoppingAction(owner,{operation:'save',id:first.id,revision:first.revision,input:{...input(),storeName:'Safeway'}}));
+ expect(saved.storeLogoData).toBe(logo);
+ await expect(shoppingAction(other,{operation:'save',id:first.id,revision:saved.revision,input:{...input(),storeLogoData:''}})).rejects.toThrow();
+ const cleared=logoList(await shoppingAction(owner,{operation:'save',id:first.id,revision:saved.revision,input:{...input(),storeName:'Safeway',storeLogoData:''}}));
+ expect(cleared.storeLogoData).toBeNull();
+});
+
+it('copies the logo to the next weekly trip and rejects URLs or oversized image data',async()=>{
+ const logo='/9j/AA==';
+ const list=logoList(await shoppingAction(owner,{operation:'create',input:{...input(),storeLogoData:logo}}));
+ const next=logoList(await shoppingAction(owner,{operation:'complete',id:list.id,revision:list.revision}));
+ expect(next.storeLogoData).toBe(logo);
+ expect(listInput.safeParse({...input(),storeLogoData:'https://example.com/logo.png'}).success).toBe(false);
+ expect(listInput.safeParse({...input(),storeLogoData:'/9j/'+'A'.repeat(90000)}).success).toBe(false);
+});

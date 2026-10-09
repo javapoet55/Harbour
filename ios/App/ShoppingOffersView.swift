@@ -126,7 +126,32 @@ private struct OfferSummary:View {
     let offer:StoreOffer
     var body:some View{HStack(alignment:.top,spacing:16){
         AsyncImage(url:offer.imageURL.flatMap(URL.init(string:))){image in image.resizable().scaledToFit()}placeholder:{Image(systemName:"basket").font(.largeTitle).foregroundStyle(Color.nexdoBlue)}.frame(width:90,height:125).accessibilityHidden(true)
-        VStack(alignment:.leading,spacing:8){Text(offer.product).font(.headline);Text("\(offer.store) · \(offer.packageSize ?? "Size not specified")").font(.subheadline).foregroundStyle(Color.nexdoSecondary);if let price=offer.price{Text(price).font(.title.bold())}else{Text("Price not published").font(.subheadline).foregroundStyle(.secondary)};if let savings=offer.savings{Text(savings).font(.headline).foregroundStyle(.red).padding(8).background(Color.red.opacity(0.08),in:RoundedRectangle(cornerRadius:10))};if let unit=offer.unitPrice{Text(unit).font(.caption)}}
+        VStack(alignment: .leading, spacing: 10) {
+            Text(offer.product).font(.headline)
+            Text("\(offer.store) · \(offer.packageSize ?? "Size not specified")")
+                .font(.subheadline).foregroundStyle(Color.nexdoSecondary)
+            let original = ShoppingOfferPricing.originalPrice(finalPrice: offer.price, savings: offer.savings)
+            VStack(alignment: .leading, spacing: 3) {
+                Text("Before discount").font(.caption).foregroundStyle(.secondary)
+                Text(original ?? "Not published").font(.subheadline).strikethrough(original != nil)
+            }
+            VStack(alignment: .leading, spacing: 3) {
+                Text("Discount").font(.caption).foregroundStyle(.secondary)
+                Text(offer.savings ?? "Not published").font(.headline)
+                    .foregroundStyle(offer.savings == nil ? Color.secondary : .red)
+            }
+            .padding(8).frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.red.opacity(0.06), in: RoundedRectangle(cornerRadius: 10))
+            VStack(alignment: .leading, spacing: 3) {
+                Text("Final price").font(.caption).foregroundStyle(.secondary)
+                Text(offer.price ?? "Not published").font(offer.price == nil ? .subheadline : .title2.bold())
+            }
+            if original != nil {
+                Text("Before-discount price calculated from the final price and discount.")
+                    .font(.caption2).foregroundStyle(.secondary)
+            }
+            if let unit = offer.unitPrice { Text(unit).font(.caption) }
+        }
     }}
 }
 private func offerDate(_ value:String)->String {

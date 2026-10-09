@@ -4,9 +4,10 @@ struct ShoppingSnapshot:Decodable,Sendable {let lists:[GroceryList]}
 struct ShoppingResult:Decodable,Sendable {var list:GroceryList?;var items:[GroceryItem]?}
 struct ShoppingInput:Encodable {
     var title:String;var date:String;var timeZone:String;var weekly:Bool;var items:[GroceryItem]
+    var storeLogoData:String
     var storePlaceId:String?;var storeWebsite:String?
     var storeName:String?;var storeAddress:String?;var storeZip:String?
-    init(_ list:GroceryList){storePlaceId=list.storePlaceId;storeWebsite=list.storeWebsite;storeName=list.storeName;storeAddress=list.storeAddress;storeZip=list.storeZip;title=list.title;date=list.date;timeZone=list.timeZone;weekly=list.weekly;items=list.items}
+    init(_ list:GroceryList){storeLogoData=list.storeLogoData ?? "";storePlaceId=list.storePlaceId;storeWebsite=list.storeWebsite;storeName=list.storeName;storeAddress=list.storeAddress;storeZip=list.storeZip;title=list.title;date=list.date;timeZone=list.timeZone;weekly=list.weekly;items=list.items}
 }
 private struct ShoppingAlternativeInput:Encodable {let name:String;let category:String;let quantity:String;let size:String;let brand:String?;let barcode:String?}
 @MainActor final class ShoppingStore:ObservableObject {

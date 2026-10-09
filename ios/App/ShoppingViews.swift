@@ -106,7 +106,7 @@ struct ShoppingHome: View {
                                 if index > 0 { Divider() }
                                 NavigationLink { ShoppingDetail(store: store, initial: list) } label: {
                                     HStack(spacing: 12) {
-                                        StoreBrandLogo(api: store.api, listID: list.id, identity: [list.storeName ?? "", list.storeWebsite ?? ""].joined(separator: "|"), size: 48)
+                                        StoreBrandLogo(api: store.api, listID: list.id, identity: [list.storeName ?? "", list.storeWebsite ?? ""].joined(separator: "|"), customImageData: list.storeLogoData, size: 48)
                                         VStack(alignment: .leading, spacing: 4) {
                                             Text(list.title).font(.headline).foregroundStyle(Color.nexdoInk)
                                             Text(GroceryList.itemCount(list.items.count) + (list.completedAt == nil ? "" : " · Completed")).font(.caption).foregroundStyle(Color.nexdoSecondary)
@@ -238,7 +238,7 @@ struct ShoppingDetail:View {
         List {
             Section {
                 HStack(spacing: 12) {
-                    StoreBrandLogo(api: store.api, listID: list.id, identity: [list.storeName ?? "", list.storeWebsite ?? ""].joined(separator: "|"), expandsOnTap: true)
+                    StoreBrandLogo(api: store.api, listID: list.id, identity: [list.storeName ?? "", list.storeWebsite ?? ""].joined(separator: "|"), customImageData: list.storeLogoData, expandsOnTap: true)
                     VStack(alignment: .leading, spacing: 4) {
                         Text(list.title).font(.title2.bold())
                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -657,6 +657,7 @@ struct ShoppingSettings:View {
         Section {
             NavigationLink {
                 ShoppingStoreFinder(store:store,area:initial.storeZip ?? "") { selected in
+                    initial.storeLogoData=nil
                     initial.storePlaceId=selected.id
                     initial.storeWebsite=selected.website
                     initial.storeName=selected.name
@@ -666,7 +667,11 @@ struct ShoppingSettings:View {
                 }
             } label: {Label("Add New Store",systemImage:"plus")}
                 .accessibilityIdentifier("shopping-add-store")
-            TextField("Store name",text:Binding(get:{initial.storeName ?? ""},set:{initial.storeName=$0;initial.storeWebsite=nil;initial.storePlaceId=nil}))
+            HStack(spacing: 14) {
+                TextField("Store name",text:Binding(get:{initial.storeName ?? ""},set:{initial.storeName=$0;initial.storeWebsite=nil;initial.storePlaceId=nil;initial.storeLogoData=nil}))
+                ShoppingListLogoEditor(api: store.api, listID: initial.id, storeName: initial.storeName ?? "",
+                                       website: initial.storeWebsite, imageData: $initial.storeLogoData)
+            }
             TextField("Street address", text: Binding(get: { addressLines.street }, set: { updateAddress(street: $0) }), axis: .vertical)
                 .textContentType(.streetAddressLine1).lineLimit(1...3)
             TextField("City, state and ZIP code", text: Binding(get: { addressLines.locality }, set: { updateAddress(locality: $0) }), axis: .vertical)

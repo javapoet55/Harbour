@@ -273,6 +273,8 @@ public enum ServerDate {
     }
     // An event ending exactly at midnight does not occupy the following day.
     public static func occurs(_ event: CalendarEvent, on day: String, timeZone: String) -> Bool {
+        // Device all-day events retain their calendar dates even when the profile uses another zone.
+        let timeZone = event.isDeviceCalendarEvent && event.allDay == true ? (event.timeZone ?? timeZone) : timeZone
         guard let start = self.day(event.startAt, timeZone: timeZone),
               let end = parse(event.endAt), let beginning = parse(event.startAt), end > beginning else { return false }
         let inclusiveEnd = ISO8601DateFormatter().string(from: end.addingTimeInterval(-0.001))

@@ -539,6 +539,7 @@ model MomentEmailAccount {
 }
 
 model ShoppingList {
+  storeLogoData String?
   storePlaceId String?
   storeWebsite String?
   storeName String?

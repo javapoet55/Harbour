@@ -1,4 +1,5 @@
 import SwiftUI
+import EventKit
 
 struct CalendarView: View {
     private enum Mode: String, CaseIterable { case schedule = "Schedule", week = "Week", month = "Month" }
@@ -8,6 +9,11 @@ struct CalendarView: View {
     @State private var mode: Mode = .schedule
     @State private var range: Range = .three
     @State private var selected = Date()
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var appleEvents: [CalendarEvent] = []
+    @State private var appleRangeID: String?
+    @State private var dataOwner: String?
+    @State private var showingAppleCalendars = false
     @State private var data: Agenda?
     @State private var loading = false
     @State private var failure: String?
@@ -39,10 +45,18 @@ struct CalendarView: View {
             return (0..<(range == .three ? 3 : 7)).map { dates.addingDays($0, to: dates.calendar.startOfDay(for: selected)) }
         }
     }
-    private var requestID: String { "\(zone):\(dates.key(visibleDays[0])):\(visibleDays.count)" }
+    private var requestID: String { "\(model.profile?.id ?? ""):\(zone):\(dates.key(visibleDays[0])):\(visibleDays.count)" }
     private var currentData: Agenda? {
-        guard let data, data.timeZone == zone, visibleDays.allSatisfy({ data.range.days.contains(dates.key($0)) }) else { return nil }
-        return data
+        let server = data.flatMap { value in
+            dataOwner == model.profile?.id && value.timeZone == zone &&
+                visibleDays.allSatisfy({ value.range.days.contains(dates.key($0)) }) ? value : nil
+        }
+        let hasDeviceData = appleRangeID == requestID && EKEventStore.authorizationStatus(for: .event) == .fullAccess
+        guard server != nil || hasDeviceData else { return nil }
+        return Agenda(timeZone: zone, range: .init(days: visibleDays.map(dates.key)),
+                      tasks: server?.tasks ?? [],
+                      events: (server?.events ?? []) + (hasDeviceData ? appleEvents : []),
+                      overdue: server?.overdue ?? [])
     }
     private var openTasks: [NexdoTask] { model.tasks.filter { !$0.isDone && $0.status != "CANCELLED" } }
     private func overdue(_ task: NexdoTask) -> Bool {
@@ -126,7 +140,9 @@ struct CalendarView: View {
                                 if hasSearch { searchResults }
                                 else {
                                 if mode == .week {
-                                    summaryCard("Your \(label(selected, "EEEE"))", detail: "\(itemCount(count(selected))) · \(tasks(selected).filter { scheduled($0, selected) }.reduce(0) { $0 + $1.durationMin }) min planned")
+                                    let plannedMinutes = tasks(selected).filter { scheduled($0, selected) }.reduce(0) { $0 + $1.durationMin }
+                                    summaryCard("Your \(label(selected, "EEEE"))",
+                                                detail: itemCount(count(selected)) + (plannedMinutes > 0 ? " · \(plannedMinutes) min planned" : ""))
                                 }
                                 daySection(selected, relative: false)
                                 }
@@ -166,6 +182,15 @@ struct CalendarView: View {
                 #endif
                 await model.refreshScheduleIntelligence()
             }
+            .onChange(of: scenePhase) { _, phase in if phase == .active { Task { await load() } } }
+            .onReceive(NotificationCenter.default.publisher(for: .EKEventStoreChanged)) { _ in Task { await load() } }
+            .onReceive(NotificationCenter.default.publisher(for: AppleCalendarSelection.changed)) { _ in Task { await load() } }
+            .sheet(isPresented: $showingAppleCalendars) {
+                NavigationStack {
+                    AppleCalendarSelectionView()
+                        .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { showingAppleCalendars = false } } }
+                }
+            }
             .onReceive(model.$agenda.dropFirst()) { _ in Task { await load() } }
             .sheet(isPresented: $ask) {
                 AskNexdoView(initialPrompt: "Help fix my schedule around \(dates.key(selected)). Analyze tasks, due dates, calendar commitments, available time, priority, and overdue work. Propose an improved schedule for my approval.")
@@ -183,20 +208,31 @@ struct CalendarView: View {
     }
 
     private var calendarHeader: some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 10) {
                 Text("Calendar").font(.largeTitle.bold())
-                Text("Plan your time. Make it happen.").font(.subheadline).foregroundStyle(Color.nexdoSecondary)
+                Spacer(minLength: 0)
+                NavigationLink {
+                    ProfileSettingsView(openCalendarSettings: true)
+                        .toolbar(.visible, for: .navigationBar)
+                } label: {
+                    Image(systemName: "gearshape").font(.title3)
+                        .frame(width: 44, height: 44)
+                        .background(Color.nexdoIndigo.opacity(0.09), in: Circle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Calendar settings")
+                .accessibilityIdentifier("calendar-settings")
+                Button {
+                    searching = true
+                    searchFocused = true
+                } label: {
+                    Image(systemName: "magnifyingglass").font(.title3)
+                        .frame(width: 44, height: 44)
+                        .background(Color.nexdoIndigo.opacity(0.09), in: Circle())
+                }.buttonStyle(.plain).accessibilityLabel("Search calendar")
             }
-            Spacer()
-            Button {
-                searching = true
-                searchFocused = true
-            } label: {
-                Image(systemName: "magnifyingglass").font(.title3)
-                    .frame(width: 44, height: 44)
-                    .background(Color.nexdoIndigo.opacity(0.09), in: Circle())
-            }.buttonStyle(.plain).accessibilityLabel("Search calendar")
+            Text("Plan your time. Make it happen.").font(.subheadline).foregroundStyle(Color.nexdoSecondary)
         }
     }
 
@@ -344,6 +380,7 @@ struct CalendarView: View {
             Toggle("Completed", isOn: $completedOnly)
                 .onChange(of: completedOnly) { _, enabled in if enabled { criticalOnly = false } }
             Toggle("Critical only", isOn: $criticalOnly)
+            Button("Apple calendars…") { showingAppleCalendars = true }
             Button("Reset filters") { showTasks = true; showEvents = true; criticalOnly = false; completedOnly = false }
         } label: {
             Image(systemName: "slider.horizontal.3").frame(width: 44, height: 44)
@@ -484,8 +521,12 @@ struct CalendarView: View {
                 Rectangle().fill(Color.nexdoIndigo.opacity(0.18)).frame(width: 1)
                 Circle().fill(color).frame(width: 8, height: 8)
             }.frame(width: 8)
-            Image(systemName: row.event != nil ? "calendar" : late ? "doc.text" : "checkmark.square").font(.title3).foregroundStyle(color)
-                .frame(width: 32, height: 36).background(color.opacity(0.11), in: RoundedRectangle(cornerRadius: 10))
+            if let event = row.event {
+                CalendarEventProviderIcon(source: event.source)
+            } else {
+                Image(systemName: late ? "doc.text" : "checkmark.square").font(.title3).foregroundStyle(color)
+                    .frame(width: 32, height: 36).background(color.opacity(0.11), in: RoundedRectangle(cornerRadius: 10))
+            }
             VStack(alignment: .leading, spacing: 7) {
                 Text(row.title).font(.body).fixedSize(horizontal: false, vertical: true)
                 Text(row.detail).font(.caption).foregroundStyle(Color.nexdoSecondary)
@@ -524,6 +565,7 @@ struct CalendarView: View {
     private func load() async {
         #if DEBUG
         if ProcessInfo.processInfo.arguments.contains("-calendar-design-preview") {
+            dataOwner = model.profile?.id
             data = Agenda(timeZone: zone, range: .init(days: visibleDays.map(dates.key)), tasks: model.tasks, events: [], overdue: model.tasks.filter { overdue($0) })
             return
         }
@@ -531,14 +573,27 @@ struct CalendarView: View {
         let token = UUID(); loadToken = token
         let days = visibleDays; let requested = requestID
         loading = true; failure = nil
+        let owner = model.profile?.id
+        if let owner {
+            // Pad the query for floating all-day dates when device and profile zones differ.
+            let device = await AppleCalendarService.shared.events(
+                start: dates.addingDays(-1, to: days[0]),
+                end: dates.addingDays(2, to: days[days.count - 1]),
+                selectedIDs: AppleCalendarSelection.selectedIDs(owner: owner))
+            guard !Task.isCancelled, token == loadToken, requestID == requested else { return }
+            appleEvents = device
+            appleRangeID = requested
+        } else {
+            appleEvents = []; appleRangeID = nil
+        }
         do {
             let result = try await model.calendarAgenda(from: dates.key(days[0]), days: days.count)
             guard !Task.isCancelled, token == loadToken, requestID == requested else { return }
             guard days.allSatisfy({ result.range.days.contains(dates.key($0)) }) else { throw APIError.invalidResponse }
-            data = result; loading = false
+            data = result; dataOwner = owner; loading = false
         } catch {
             guard !Task.isCancelled, token == loadToken, requestID == requested else { return }
-            loading = false; failure = "Couldn’t refresh this date range.\(currentData == nil ? "" : " Showing previously loaded data.")"
+            loading = false; failure = "Couldn’t refresh online calendars and tasks.\(currentData == nil ? "" : " Available calendar data is still shown.")"
         }
     }
 }

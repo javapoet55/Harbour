@@ -116,6 +116,7 @@ public struct GroceryList: Codable, Identifiable, Equatable, Sendable {
     public var revision:Int
     public var storePlaceId:String?
     public var storeWebsite:String?
+    public var storeLogoData:String? = nil
     public var storeName:String?
     public var storeAddress:String?
     public var storeZip:String?

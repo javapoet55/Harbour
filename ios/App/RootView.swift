@@ -1676,6 +1676,8 @@ struct TasksView: View {
     @State private var searching = false
     @FocusState private var searchFocused: Bool
     @State private var editing: NexdoTask?
+    @State private var completingTask: NexdoTask?
+    @State private var departingTaskID: String?
 
     private var zone: String { model.profile?.timeZone ?? model.agenda?.timeZone ?? TimeZone.current.identifier }
     private var calendar: Calendar {
@@ -1687,7 +1689,11 @@ struct TasksView: View {
     private let accent = LinearGradient(colors: [Color(red: 0.68, green: 0.20, blue: 1), .nexdoIndigo, Color(red: 0.36, green: 0.46, blue: 1)], startPoint: .leading, endPoint: .trailing)
 
     var body: some View {
-        let snapshot = model.taskQuery.snapshot(model.tasks, timeZone: zone)
+        // Keep the original row until the save succeeds and its exit animation finishes.
+        let displayedTasks = model.tasks.map { task in
+            completingTask?.id == task.id ? completingTask! : task
+        }
+        let snapshot = model.taskQuery.snapshot(displayedTasks, timeZone: zone)
         NavigationStack {
             ZStack {
                 // Light: the original lilac-to-pink wash. Dark: the same tints over the system background, so
@@ -1736,6 +1742,8 @@ struct TasksView: View {
                             .listRowSeparator(.hidden)
                             .listRowBackground(Color.clear)
                         }
+                        .animation(reduceMotion ? .easeOut(duration: 0.15) : .easeInOut(duration: 0.25),
+                                   value: snapshot.sections.flatMap { $0.tasks.map(\.id) })
                         .listStyle(.plain)
                         .scrollContentBackground(.hidden)
                         .environment(\.defaultMinListRowHeight, 0)
@@ -1922,12 +1930,15 @@ struct TasksView: View {
     }
 
     private func taskCard(_ task: NexdoTask) -> some View {
-        HStack(spacing: 8) {
-            Button { Task { await model.complete(task) } } label: {
-                Image(systemName: task.isDone ? "checkmark.circle.fill" : "circle")
-                    .font(.system(size: 21, weight: .regular)).foregroundStyle(task.isDone ? Color.nexdoIndigo : Color.nexdoSecondary)
+        let completing = completingTask?.id == task.id && !task.isDone
+        return HStack(spacing: 8) {
+            Button { completeWithAnimation(task) } label: {
+                Image(systemName: task.isDone || completing ? "checkmark.circle.fill" : "circle")
+                    .font(.system(size: 21, weight: .regular)).foregroundStyle(task.isDone || completing ? Color.nexdoIndigo : Color.nexdoSecondary)
+                    .scaleEffect(completing && !reduceMotion ? 1.12 : 1)
+                    .animation(reduceMotion ? nil : .spring(response: 0.25, dampingFraction: 0.6), value: completing)
                     .frame(width: 32, height: 44)
-            }.buttonStyle(.plain).disabled(model.busy)
+            }.buttonStyle(.plain).disabled(model.busy || completingTask != nil)
                 .accessibilityLabel("\(task.isDone ? "Restore" : "Complete") \(task.title)")
             Button { editing = task } label: {
                 HStack(spacing: 8) {
@@ -1937,7 +1948,7 @@ struct TasksView: View {
                         .background(appearance.1.opacity(0.11), in: RoundedRectangle(cornerRadius: 14))
                         .accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: 5) {
-                        Text(task.title).font(.subheadline.weight(.medium)).foregroundStyle(Color.nexdoInk).strikethrough(task.isDone)
+                        Text(task.title).font(.subheadline.weight(.medium)).foregroundStyle(Color.nexdoInk).strikethrough(task.isDone || completing)
                         Text(taskSubtitle(task)).font(.caption).foregroundStyle(Color.nexdoSecondary)
                         if let project = model.projects.first(where: { $0.id == task.projectId }) {
                             Label(project.name, systemImage: "folder.fill").font(.caption).foregroundStyle(Color.nexdoSecondary)
@@ -1945,11 +1956,31 @@ struct TasksView: View {
                     }.frame(maxWidth: .infinity, alignment: .leading)
                     Image(systemName: "chevron.right").font(.subheadline).foregroundStyle(Color.nexdoSecondary)
                 }.frame(minHeight: 44).contentShape(Rectangle())
-            }.buttonStyle(.plain).accessibilityHint("Opens task editor")
+            }.buttonStyle(.plain).disabled(completingTask?.id == task.id).accessibilityHint("Opens task editor")
         }.padding(.horizontal, 10).padding(.vertical, 10)
             .frame(maxWidth: .infinity, minHeight: 66)
             .background(.background.opacity(0.8), in: RoundedRectangle(cornerRadius: 18))
             .overlay(RoundedRectangle(cornerRadius: 18).stroke(Color.nexdoIndigo.opacity(0.05)))
+            .offset(x: departingTaskID == task.id && !reduceMotion ? 80 : 0)
+            .opacity(departingTaskID == task.id ? 0 : 1)
+    }
+
+    private func completeWithAnimation(_ task: NexdoTask) {
+        guard completingTask == nil, !model.busy else { return }
+        completingTask = task
+        Task { @MainActor in
+            await model.complete(task)
+            let succeeded = model.tasks.first(where: { $0.id == task.id })?.isDone == !task.isDone
+            if succeeded && !task.isDone {
+                // The save is confirmed before the row exits. A failed save leaves it in place.
+                withAnimation(.easeInOut(duration: reduceMotion ? 0.15 : 0.25)) { departingTaskID = task.id }
+                try? await Task.sleep(for: .milliseconds(reduceMotion ? 150 : 250))
+            }
+            withAnimation(reduceMotion ? .easeOut(duration: 0.15) : .easeInOut(duration: 0.25)) {
+                completingTask = nil
+                departingTaskID = nil
+            }
+        }
     }
 
     private func taskIcon(_ task: NexdoTask) -> (String, Color) {
