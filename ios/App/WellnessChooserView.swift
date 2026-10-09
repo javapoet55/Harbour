@@ -43,8 +43,8 @@ struct WellnessChooserView: View {
         }
         .fullScreenCover(item: $destination) { target in
             if let guide = WellnessModuleGuide.Kind(rawValue:target.rawValue) {
-                WellnessModuleEntrance(kind:guide,showGuide:guide != .shopping || !model.hasSeenShoppingGuide,onHome:{ destination=nil }) { moduleDestination(target) }
-                    .onAppear { if guide == .shopping { model.hasSeenShoppingGuide = true } }
+                WellnessModuleEntrance(kind:guide,showGuide:!model.seenWellnessGuides.contains(guide.rawValue),onHome:{ destination=nil }) { moduleDestination(target) }
+                    .onAppear { model.seenWellnessGuides.insert(guide.rawValue) }
             } else {
                 moduleDestination(target)
             }

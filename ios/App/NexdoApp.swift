@@ -25,8 +25,8 @@ struct NexdoApp: App {
 @MainActor
 final class AppModel: ObservableObject {
     @Published var profile: Profile?
-    // The guide belongs to this sign-in, not to a particular presentation of Wellness.
-    @Published var hasSeenShoppingGuide = false
+    // Each module's guide belongs to this sign-in, not to a presentation of Wellness.
+    @Published var seenWellnessGuides: Set<String> = []
     @Published private(set) var voiceUsage: VoiceUsage?
     @Published private(set) var calendarConnections: [CalendarConnection] = []
     @Published private(set) var calendarConnectionsLoaded = false
@@ -354,7 +354,7 @@ final class AppModel: ObservableObject {
 
     private func finishAuthentication() async throws {
         let response: ProfileResponse = try await api.request("/api/me")
-        hasSeenShoppingGuide = false
+        seenWellnessGuides.removeAll()
         profile = response.user
         try await synchronizeDeviceTimeZone()
         rememberProfileName()
@@ -838,7 +838,7 @@ final class AppModel: ObservableObject {
     }
     func withdrawConsent() { voiceConsent = false; aiConsent = false; turn = nil; lastAssistantPrompt = nil; contextID = nil }
     func reset() async {
-        hasSeenShoppingGuide = false
+        seenWellnessGuides.removeAll()
         if let owner = profile?.id { await PomodoroStore.cancelAlerts(owner: owner) }
         profileRevision += 1
         projectRevision += 1; projectLoadID = nil; projects = []; projectsLoaded = false; projectsLoading = false; projectsError = nil; unassignedTaskCount = 0
