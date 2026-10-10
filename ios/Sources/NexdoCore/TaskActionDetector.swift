@@ -5,6 +5,7 @@ public struct DeterministicTaskActionDetector: TaskActionDetector {
     public init() {}
     public func detect(title: String, now: Date = Date(), timeZone: TimeZone = .current) -> DetectedTaskAction? {
         let text = title.trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: #"^(?:(?:I need to|I have to|I want to|please|remind me to)\s+)"#, with: "", options: [.regularExpression, .caseInsensitive])
         guard let regex = try? NSRegularExpression(pattern: #"^(contact|call|email|message|text|follow\s+up\s+with)\s+(.+)$"#, options: .caseInsensitive),
               let match = regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)),
               let verbRange = Range(match.range(at: 1), in: text), let tailRange = Range(match.range(at: 2), in: text) else { return nil }

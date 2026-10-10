@@ -217,7 +217,7 @@ struct AskNexdoView: View {
                             AskAILandingView(prompt: $prompt, busy: blocked, sendEnabled: validPrompt,
                                 ask: { request($0) }, voice: { stopSpeech(); showingVoice = true },
                                 close: { requestTask?.cancel(); stopSpeech(); dismiss() }, typing: $composerFocused)
-                                .frame(minHeight: max(0, viewport.size.height - 20))
+                                .frame(minHeight: max(0, viewport.size.height - 4))
 
                         }
                     } else if showsBriefing, let turn = model.turn {
@@ -262,7 +262,7 @@ struct AskNexdoView: View {
                             Button("Retry") { request(query, speakResponse: lastRequestWasVoice) }.disabled(blocked)
                         }.font(.subheadline).padding(.vertical, 12)
                     }
-                }.padding(.horizontal, 20).padding(.bottom, 20)
+                }.padding(.horizontal, 20).padding(.bottom, model.turn == nil && !textPage ? 4 : 20)
             }.scrollDismissesKeyboard(.interactively)
             }
         }

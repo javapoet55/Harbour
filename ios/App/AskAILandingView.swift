@@ -68,8 +68,8 @@ struct AskAILandingView: View {
                     }.disabled(!sendEnabled || busy).accessibilityLabel("Send request")
                 }.padding(7).background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 28))
                 if prompt.count > 4000 { Text("Keep your request under 4,000 characters.").font(.caption).foregroundStyle(.red) }
-            }.padding(12).frame(minHeight:300, maxHeight:.infinity).background(pastel(.purple), in: RoundedRectangle(cornerRadius: 20))
-            Label("Powered by Nexdo AI", systemImage: "sparkles").font(.caption).foregroundStyle(Color.nexdoSecondary.opacity(0.65)).frame(maxWidth: .infinity).padding(.vertical, 12)
+            }.padding(12).frame(minHeight: 268, maxHeight: .infinity).background(pastel(.purple), in: RoundedRectangle(cornerRadius: 20))
+            Label("Powered by Nexdo AI", systemImage: "sparkles").font(.caption).foregroundStyle(Color.nexdoSecondary.opacity(0.65)).frame(maxWidth: .infinity).padding(.top, 6).padding(.bottom, 2)
         }
         .foregroundStyle(Color.nexdoInk)
         .background { LinearGradient(colors: [.cyan.opacity(0.08), .purple.opacity(0.06), Color(uiColor: .systemBackground)], startPoint: .topLeading, endPoint: .bottomTrailing).ignoresSafeArea() }

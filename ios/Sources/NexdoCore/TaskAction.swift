@@ -33,6 +33,7 @@ public struct TaskAction: Codable, Equatable, Identifiable, Sendable {
     public var requiresApproval: Bool { true }
     public private(set) var executedAt: Date?
     public var snoozedUntil: Date?
+    public var preparation: FollowUpPreparation?
     public var sourceTitle: String
     public var notificationDate: Date? { snoozedUntil ?? scheduledAt }
 
@@ -102,10 +103,12 @@ public enum TaskActionReconciler {
                 let identifier = old.contactIdentifier
                 let businessID = old.businessCandidateID
                 let recipient = old.manualRecipient
+                let preparation = old.preparation
                 old = TaskAction(taskId: task.id, title: task.title, detection: detected, scheduledAt: schedule)
                 old.contactIdentifier = identifier
                 old.businessCandidateID = businessID
                 old.manualRecipient = recipient
+                old.preparation = preparation
             }
             return old
         }

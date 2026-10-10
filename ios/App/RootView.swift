@@ -701,7 +701,7 @@ private struct SignUpView: View {
     }
 }
 
-private struct PasswordResetView: View {
+struct PasswordResetView: View {
     @EnvironmentObject private var model: AppModel
     @Environment(\.dismiss) private var dismiss
     @State private var email: String
@@ -759,13 +759,19 @@ private struct PasswordResetView: View {
 
     private func requestCode() {
         localError = nil
-        Task { if await model.requestPasswordReset(email: email) { codeSent = true } }
+        Task {
+            if await model.requestPasswordReset(email: email) { codeSent = true }
+            else { localError = model.error ?? "Could not send the reset code. Please try again." }
+        }
     }
 
     private func confirm() {
         guard password == confirmation else { localError = "The passwords do not match."; return }
         localError = nil
-        Task { if await model.confirmPasswordReset(email: email, code: code, password: password) { complete = true } }
+        Task {
+            if await model.confirmPasswordReset(email: email, code: code, password: password) { complete = true }
+            else { localError = model.error ?? "Could not reset the password. Please try again." }
+        }
     }
 }
 

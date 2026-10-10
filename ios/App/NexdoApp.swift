@@ -221,6 +221,8 @@ final class AppModel: ObservableObject {
             struct Input: Encodable { let email: String; let code: String; let password: String }
             let _: Ignore = try await api.request("/api/auth/password-reset/confirm", method: "POST", body: JSONEncoder().encode(Input(email: email, code: code, password: password)), treatUnauthorizedAsSignedOut: false)
             changed = true
+            // Match Change password: return signed-in users to login after a reset.
+            if profile != nil { await reset() }
         }
         return changed
     }
@@ -705,6 +707,20 @@ final class AppModel: ObservableObject {
             } catch is CancellationError { throw CancellationError() }
             catch { throw TaskEditError.schedule }
         }
+    }
+
+    func loadFollowUp(_ taskID: String) async throws -> FollowUpEnvelope {
+        try await api.request("/api/tasks/\(taskID)/preparation")
+    }
+    func saveFollowUp(_ taskID: String, value: FollowUpEnvelope) async throws -> FollowUpEnvelope {
+        try await api.request("/api/tasks/\(taskID)/preparation", method: "PUT", body: JSONEncoder().encode(value))
+    }
+    func scheduleFollowUp(_ task: NexdoTask, at date: Date) async throws {
+        guard date > Date() else { throw APIError.server(400, "Choose a future follow-up time.") }
+        struct Input: Encodable { let startAt: String; let durationMin: Int }
+        let response: TaskResponse = try await scheduleRequest("/api/tasks/\(task.id)", method: "PATCH",
+            body: JSONEncoder().encode(Input(startAt: ISO8601DateFormatter().string(from: date), durationMin: task.durationMin)))
+        replaceTask(response.task)
     }
 
     func changeTaskStatus(_ task: NexdoTask, status: String) async throws {

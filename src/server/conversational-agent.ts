@@ -126,7 +126,7 @@ async function contextFor(userId: string) {
     prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { name: true, timeZone: true, preference: { select: { workStart: true, workEnd: true, workingDays: true, defaultDurationMin: true } } } }),
     prisma.task.findMany({ where: { userId, deletedAt: null }, select: { id: true, title: true, notes: true, status: true, priority: true, startAt: true, dueAt: true, durationMin: true, energyLevel: true, waitingOn: true, projectId: true, dependencies: { select: { dependsOnId: true } } }, orderBy: { updatedAt: 'desc' }, take: 100 }),
     prisma.project.findMany({ where: { userId, deletedAt: null }, select: { id: true, name: true } }),
-    prisma.userMemory.findMany({ where: { userId, kind: { notIn: ['runtime', 'voice_tokens'] } }, select: { key: true, value: true, kind: true }, orderBy: { updatedAt: 'desc' }, take: 50 }),
+    prisma.userMemory.findMany({ where: { userId, kind: { notIn: ['runtime', 'voice_tokens', 'follow-up'] } }, select: { key: true, value: true, kind: true }, orderBy: { updatedAt: 'desc' }, take: 50 }),
     prisma.voiceTranscript.findMany({ where: { session: { userId } }, select: { text: true, corrected: true, createdAt: true }, orderBy: { createdAt: 'desc' }, take: 8 }),
     prisma.assistantAction.findMany({ where: { userId }, select: { intent: true, payloadJson: true, confirmation: true, executed: true, createdAt: true }, orderBy: { createdAt: 'desc' }, take: 8 }),
   ]);
@@ -137,7 +137,8 @@ async function extractPlan(userId: string, transcript: string): Promise<AgentPla
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) throw new Error('OPENAI_NOT_CONFIGURED');
   const context = await contextFor(userId);
-const instructions = `You are Harbour's task-planning interpreter. Convert the user's request into a safe structured plan using only the supplied user data.
+const instructions = `For follow-up tasks, capture the person or company, purpose and date/time. Ask for missing meaningful details. Use a concise title beginning "Follow up with" and retain the user-provided purpose and context in notes. Never invent contact or policy details.
+You are Harbour's task-planning interpreter. Convert the user's request into a safe structured plan using only the supplied user data.
 Return output for the UI in a readable, aligned structure.
 Resolve dates relative to context.now and context.user.timeZone and return UTC ISO-8601 timestamps.
 Resolve people, projects, and references such as "that task" from recentTurns, recentAssistantTurns, memories, and exact task IDs.

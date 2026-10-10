@@ -5,6 +5,7 @@ struct TaskActionCard: View {
     @ObservedObject private var coordinator = TaskActionCoordinator.shared
     let task: NexdoTask
     @State private var showing = false
+    @State private var showingHistory = false
     @EnvironmentObject private var model: AppModel
     var body: some View {
         if let action = coordinator.action(for: task.id), !task.isDone, task.status != "CANCELLED" {
@@ -33,6 +34,11 @@ struct TaskActionCard: View {
             .sheet(isPresented: $showing) {
                 TaskActionView(actionID: action.id, preferred: action.preferredAction)
             }
+        } else if task.isDone, let detection = DeterministicTaskActionDetector().detect(title: task.title) {
+            Button("Follow-up preparation and outcome history") { showingHistory = true }
+                .sheet(isPresented: $showingHistory) {
+                    FollowUpPreparationView(task: task, action: TaskAction(taskId: task.id, title: task.title, detection: detection, scheduledAt: task.startAt.flatMap(ServerDate.parse)), saved: { _ in })
+                }
         } else if !task.isDone && task.status != "CANCELLED" && (task.subtasks ?? []).isEmpty && TaskActionClarification.isCandidate(task.title) {
             ClarifyTaskActionCard(task: task)
         }
@@ -111,6 +117,7 @@ struct TaskActionView: View {
     @State private var businessRun: TaskAgentRun?
     @State private var businessDraft: String?
     @State private var showingTask = false
+    @State private var showingPreparation = false
     @State private var pickingContact = false
     @State private var enteringDetails = false
     @State private var manualName = ""
@@ -148,6 +155,20 @@ struct TaskActionView: View {
                 VStack(alignment: .leading, spacing: 18) {
                     if let action, usable {
                         Text("Contact \(contact?.name ?? action.contactName)").font(.title2.bold())
+                        if let task {
+                            Button { showingPreparation = true } label: {
+                                VStack(alignment: .leading, spacing: 6) {
+                                    Label("Prepare and follow up", systemImage: "list.clipboard").font(.headline)
+                                    Text(action.preparation?.purpose.isEmpty == false ? action.preparation!.purpose : "Add the purpose, notes, checklist and message draft.").font(.subheadline)
+                                    if let prep = action.preparation {
+                                        Text("\(prep.checklist.filter(\.done).count) of \(prep.checklist.count) steps ready · Record outcome").font(.caption)
+                                    }
+                                }.frame(maxWidth: .infinity, alignment: .leading).padding(14)
+                                    .background(Color.nexdoIndigo.opacity(0.08), in: RoundedRectangle(cornerRadius: 14))
+                            }.buttonStyle(.plain).accessibilityIdentifier("taskAction.preparation")
+                            Button("Complete or record outcome") { showingPreparation = true }.font(.subheadline)
+                            Text(task.title).font(.caption).foregroundStyle(.secondary)
+                        }
                         // Above the buttons it refers to ("…or enter details below").
                         if let error { Text(error).foregroundStyle(.red).accessibilityIdentifier("taskAction.error") }
                         if checking { ProgressView("Checking next action…") }
@@ -211,15 +232,8 @@ struct TaskActionView: View {
                         }
                         if let receipt { Text(receipt).foregroundStyle(.secondary).accessibilityIdentifier("taskAction.receipt") }
                         if action.status == .executing || action.status == .completed {
-                            Button("Mark task complete") {
-                                guard let task else { return }
-                                busy = true
-                                Task {
-                                    defer { busy = false }
-                                    do { try await model.changeTaskStatus(task, status: "COMPLETED"); closeAction() }
-                                    catch { self.error = error.localizedDescription }
-                                }
-                            }.disabled(busy).accessibilityIdentifier("taskAction.completeTask")
+                            Button("Record outcome and complete") { showingPreparation = true }
+                                .disabled(busy).accessibilityIdentifier("taskAction.completeTask")
                         }
                         Divider()
                         Button("Remind me in 15 minutes") { coordinator.snooze(actionID); closeAction() }
@@ -253,6 +267,14 @@ struct TaskActionView: View {
                     ActionEmailComposer(draft: emailService.draft(recipient: draft.recipient, name: draft.name, context: draft.context, body: draft.body), finished: finishCompose)
                         .ignoresSafeArea()
                         .interactiveDismissDisabled()
+                }
+            }
+        }
+        .sheet(isPresented: $showingPreparation, onDismiss: { Task { await loadDestination() } }) {
+            if let task, let action {
+                FollowUpPreparationView(task: task, action: action,
+                    initialContact: contact.map { TaskActionRecipient(name: $0.name, phone: $0.phones.count == 1 ? $0.phones[0].value : "", email: $0.emails.count == 1 ? $0.emails[0].value : "") }) { preparation in
+                    coordinator.update(actionID) { $0.preparation = preparation }
                 }
             }
         }
@@ -300,6 +322,9 @@ struct TaskActionView: View {
             // Closed while tasks were refreshing: leave the action on its schedule.
             guard usable, !Task.isCancelled else { return }
             coordinator.update(actionID) { $0.transition(to: .awaitingApproval) }
+            if let action, let envelope = try? await model.loadFollowUp(action.taskId), let preparation = envelope.preparation {
+                coordinator.update(actionID) { $0.preparation = preparation }
+            }
             await loadDestination()
             if startSelectedAction, let preferred, !Task.isCancelled, contact != nil { resolve(preferred) }
         }
@@ -320,6 +345,14 @@ struct TaskActionView: View {
         guard let action, usable else { checking = false; return }
         checking = true; checkFailed = false; error = nil; contact = nil; businessDraft = nil; contacts = []; addresses = []
         defer { checking = false }
+        if let preparation = action.preparation {
+            businessDraft = preparation.draft
+            if TaskActionRecipient.isValid(name: preparation.company, phone: preparation.phone, email: preparation.email) {
+                businessFlow = false
+                contact = .manual(TaskActionRecipient(name: preparation.company, phone: preparation.phone, email: preparation.email))
+                return
+            }
+        }
         if let recipient = action.manualRecipient { businessFlow = false; contact = .manual(recipient); return }
         // A person ("Call Asha") needs no business search: go straight to Contacts. Asking the agent first made a
         // personal task fail offline with "Couldn't check this task".
@@ -388,7 +421,7 @@ struct TaskActionView: View {
         }
         // Approval is to open an editable composer, never to send automatically.
         guard coordinator.approveExecution(actionID) else { return }
-        composer = Composer(channel: channel, recipient: address.value, name: contact.name, context: action.context, body: businessDraft)
+        composer = Composer(channel: channel, recipient: address.value, name: contact.name, context: action.preparation?.purpose.isEmpty == false ? action.preparation?.purpose : action.context, body: action.preparation?.draft ?? businessDraft)
     }
     private func placeCall() {
         guard usable, let address = selectedAddress else { return }

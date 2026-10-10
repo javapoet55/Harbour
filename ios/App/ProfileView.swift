@@ -1,5 +1,6 @@
 import SwiftUI
 import PhotosUI
+import EventKit
 import ImageIO
 import AuthenticationServices
 
@@ -81,9 +82,9 @@ struct AccountView: View {
                     voiceUsageCard
                     // One card for all four rows; the modifiers sat on Change password alone, leaving the others bare.
                     VStack(spacing: 0) {
-                        NavigationLink { HelpView() } label: { menuRow("Help", "questionmark.circle") }
-                        NavigationLink { FeedbackView() } label: { menuRow("Feedback", "bubble.left.and.text.bubble.right") }
                         NavigationLink { ProfileSettingsView() } label: { menuRow("Edit profile and settings", "person.crop.circle") }
+                        NavigationLink { FeedbackView() } label: { menuRow("Feedback", "bubble.left.and.text.bubble.right") }
+                        NavigationLink { HelpView() } label: { menuRow("Help", "questionmark.circle") }
                         NavigationLink { ChangePasswordView() } label: { menuRow("Change password", "lock.rotation") }
                     }.padding(8).profileCard()
                     Button("Sign out", role: .destructive) { confirmsSignOut = true }
@@ -172,6 +173,7 @@ private struct ChangePasswordView: View {
     @State private var new = ""
     @State private var confirmation = ""
     @State private var confirming = false
+    @State private var showsPasswordReset = false
     @State private var saving = false
     @State private var failure: String?
     private var valid: Bool {
@@ -186,6 +188,10 @@ private struct ChangePasswordView: View {
             } footer: {
                 Text("Use at least 12 characters (72 bytes maximum). You’ll need to sign in again after changing your password.")
             }
+            Section {
+                Button("Forgot password?") { showsPasswordReset = true }
+                    .accessibilityIdentifier("change-password-forgot")
+            }
             if !confirmation.isEmpty && new != confirmation {
                 Text("The new passwords do not match.").foregroundStyle(.red)
             }
@@ -193,6 +199,9 @@ private struct ChangePasswordView: View {
             Button { confirming = true } label: {
                 Text(saving ? "Changing password…" : "Change password").frame(maxWidth: .infinity)
             }.buttonStyle(NexdoGradientButtonStyle()).disabled(!valid || saving)
+        }
+        .sheet(isPresented: $showsPasswordReset) {
+            PasswordResetView(initialEmail: model.profile?.email ?? "")
         }
         .disabled(saving)
         .navigationTitle("Change password").navigationBarTitleDisplayMode(.inline)
@@ -233,6 +242,9 @@ struct ProfileSettingsView: View {
     @AppStorage(AppVoice.volumeStorageKey) private var appVoiceVolume = AppVoice.defaultVolume
     @EnvironmentObject private var model: AppModel
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var appleCalendarAccess = false
+    @State private var appleCalendarCount = 0
     @Environment(\.openURL) private var openURL
     @State private var name = ""
     @State private var zone = ""
@@ -332,6 +344,7 @@ struct ProfileSettingsView: View {
                     card("Calendars & Privacy") {
                         Text("Connect your calendar to keep your plans and important moments together.").font(.subheadline).foregroundStyle(Color.nexdoSecondary)
                         connectionList
+                        if appleCalendarAccess { appleCalendarCard }
                         if let error = model.calendarConnectionsError {
                             Text(error).font(.caption).foregroundStyle(.red)
                             Button("Retry connection status") { Task { await model.loadCalendarConnections() } }
@@ -372,6 +385,16 @@ struct ProfileSettingsView: View {
             }
         }
         .task { if loading { await load() } }
+        .task(id: model.profile?.id) { await refreshAppleCalendarStatus() }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { Task { await refreshAppleCalendarStatus() } }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: AppleCalendarSelection.changed)) { _ in
+            Task { await refreshAppleCalendarStatus() }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .EKEventStoreChanged)) { _ in
+            Task { await refreshAppleCalendarStatus() }
+        }
         .interactiveDismissDisabled(saving || connecting)
         .navigationBarBackButtonHidden(true)
         .alert("Could not update profile", isPresented: Binding(get: { failure != nil }, set: { if !$0 { failure = nil } })) {
@@ -405,15 +428,51 @@ struct ProfileSettingsView: View {
             Button("Delete account", role: .destructive) { Task { await model.deleteAccount() } }
         } message: { Text("This removes your Nexdo data permanently and cannot be undone.") }
     }
+    private var appleCalendarCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top, spacing: 12) {
+                CalendarEventProviderIcon(source: "apple-device")
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Apple Calendar").font(.subheadline.bold())
+                    Text("Connected on this iPhone").font(.caption).foregroundStyle(Color.nexdoSecondary)
+                    Text(appleCalendarCount == 0 ? "No calendars selected" : "\(appleCalendarCount) calendar\(appleCalendarCount == 1 ? "" : "s") selected")
+                        .font(.caption2).foregroundStyle(Color.nexdoSecondary)
+                }
+                Spacer(minLength: 8)
+            }
+            Divider()
+            NavigationLink { AppleCalendarSelectionView() } label: {
+                Label("Manage Apple calendars", systemImage: "slider.horizontal.3")
+            }.font(.subheadline)
+            Text("Selected events appear in NexDo. Manage calendar access in iPhone Settings. NexDo does not add tasks or events to Apple Calendar.")
+                .font(.caption2).foregroundStyle(Color.nexdoSecondary)
+        }
+        .padding(12)
+        .background(Color.nexdoIndigo.opacity(0.035), in: RoundedRectangle(cornerRadius: 12))
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.nexdoIndigo.opacity(0.16)))
+        .accessibilityIdentifier("settings-apple-calendar")
+    }
+    private func refreshAppleCalendarStatus() async {
+        let owner = model.profile?.id
+        let choices = await AppleCalendarService.shared.calendars()
+        guard owner == model.profile?.id, !Task.isCancelled else { return }
+        appleCalendarAccess = EKEventStore.authorizationStatus(for: .event) == .fullAccess
+        let selected = owner.flatMap { AppleCalendarSelection.selectedIDs(owner: $0) }
+        appleCalendarCount = choices.filter { selected?.contains($0.id) ?? true }.count
+    }
     @ViewBuilder private var connectionList: some View {
         if !model.calendarConnections.isEmpty {
             VStack(spacing: 10) {
                 ForEach(model.calendarConnections) { connection in
                     VStack(alignment: .leading, spacing: 10) {
                         HStack(alignment: .top, spacing: 12) {
-                            Image(systemName: connection.isHealthy ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
-                                .foregroundStyle(connection.isHealthy ? Color.nexdoIndigo : .orange)
-                                .accessibilityHidden(true)
+                            CalendarEventProviderIcon(source: connection.provider)
+                                .overlay(alignment: .bottomTrailing) {
+                                    if !connection.isHealthy {
+                                        Image(systemName: "exclamationmark.triangle.fill")
+                                            .font(.caption2).foregroundStyle(.orange)
+                                    }
+                                }
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(connection.displayName).font(.subheadline).bold()
                                 Text(connection.detail).font(.caption).foregroundStyle(Color.nexdoSecondary)
@@ -451,7 +510,7 @@ struct ProfileSettingsView: View {
                     .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.nexdoIndigo.opacity(0.16)))
                 }
             }
-        } else if model.calendarConnectionsLoaded {
+        } else if model.calendarConnectionsLoaded && !appleCalendarAccess {
             Text("No calendars connected yet.").font(.caption).foregroundStyle(Color.nexdoSecondary)
         }
     }
