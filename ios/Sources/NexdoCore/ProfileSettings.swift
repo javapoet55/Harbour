@@ -1,6 +1,7 @@
 import Foundation
 
 public struct ProfilePreferences: Codable, Sendable {
+    public var workingDays: String?
     public var workStart: String
     public var workEnd: String
     public var quietStart: String

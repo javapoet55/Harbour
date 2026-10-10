@@ -17,6 +17,7 @@ struct DoNowRecommendation: Decodable, Sendable {
     struct Next: Decodable, Sendable {
         let bestAction: Choice?
         let alternatives: [Choice]
+        let outsideWorkingDay: Bool?
         let outsideWorkingHours: Bool?
         let remainingWorkingMinutesToday: Int?
         let availableWindowMinutes: Int

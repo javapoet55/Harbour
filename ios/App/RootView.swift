@@ -1515,12 +1515,13 @@ private struct TodayIntelligenceCard: View {
     let onAsk: () -> Void
     let onCalendar: () -> Void
 
+    @State private var scheduleExpanded = false
     @State private var showingSearch = false
     @State private var searchText = ""
     @FocusState private var searchFocused: Bool
     private var searching: Bool { showingSearch && !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
     private var visibleSchedule: [TodayScheduleItem] {
-        guard searching else { return Array(schedule.prefix(7)) }
+        guard searching else { return scheduleExpanded ? schedule : Array(schedule.prefix(3)) }
         let keywords = searchText.split(whereSeparator: { $0.isWhitespace }).map(String.init)
         // searchSchedule already contains only the selected Today/3/5-day range.
         return searchSchedule.filter { item in
@@ -1618,9 +1619,15 @@ private struct TodayIntelligenceCard: View {
                             Button(action: onCalendar) { TodayScheduleRow(item: item) }.buttonStyle(.plain)
                         }
                     }
-                    if !searching && schedule.count > 7 {
-                        Button("View \(schedule.count - 7) more") { onCalendar() }
-                            .font(.subheadline.weight(.semibold)).padding(.top, 12)
+                    if !searching && schedule.count > 3 {
+                        Button(scheduleExpanded ? "Show less" : "View \(schedule.count - 3) more") {
+                            withAnimation(.easeInOut(duration: 0.2)) { scheduleExpanded.toggle() }
+                        }
+                        .font(.subheadline.weight(.semibold))
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                        .padding(.top, 8)
+                        .accessibilityIdentifier("today-schedule-expand")
+                        .accessibilityHint(scheduleExpanded ? "Shows the first three schedule items" : "Shows all schedule items here")
                     }
                 }
 
@@ -1633,6 +1640,7 @@ private struct TodayIntelligenceCard: View {
         .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).stroke(Color.nexdoIndigo.opacity(0.11)))
         .shadow(color: Color.nexdoIndigo.opacity(0.09), radius: 24, y: 10)
         .accessibilityElement(children: .contain)
+        .onChange(of: range) { _, _ in scheduleExpanded = false }
     }
 }
 
@@ -1682,6 +1690,7 @@ struct TasksView: View {
     @EnvironmentObject private var moments: ImportantMomentsStore
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.dynamicTypeSize) private var typeSize
+    @AppStorage("nexdo.taskDisplayOrders") private var displayOrders = Data()
     @State private var showingProjects = false
     @State private var adding = false
     @State private var account = false
@@ -1952,7 +1961,7 @@ struct TasksView: View {
                             Spacer()
                             Text("\(group.tasks.count) \(group.tasks.count == 1 ? "item" : "items")").font(.subheadline).foregroundStyle(Color.nexdoSecondary)
                         }.padding(12).background(Color(uiColor: .secondarySystemGroupedBackground).opacity(0.65), in: RoundedRectangle(cornerRadius: 16))
-                        ForEach(group.tasks) { task in
+                        ForEach(orderedTasks(group.tasks)) { task in
                             if let id = MomentSchedule.momentID(task.id),
                                let moment = moments.moments.first(where: { $0.id == id }) {
                                 Button { moments.route = moment } label: {
@@ -1968,11 +1977,46 @@ struct TasksView: View {
                                     }.padding(14).frame(maxWidth: .infinity, alignment: .leading)
                                         .background(.background.opacity(0.8), in: RoundedRectangle(cornerRadius: 18))
                                 }.buttonStyle(.plain).accessibilityHint("Opens Moment")
-                            } else { taskCard(task) }
+                            } else {
+                                taskCard(task)
+                                    .draggable("nexdo-task:" + task.id)
+                                    .dropDestination(for: String.self) { items, _ in
+                                        guard items.count == 1, let payload = items.first, payload.hasPrefix("nexdo-task:") else { return false }
+                                        return reorderTask(String(payload.dropFirst("nexdo-task:".count)), to: task.id, tasks: group.tasks)
+                                    }
+                                    .accessibilityAction(named: "Move up") { moveTask(task.id, offset: -1, tasks: group.tasks) }
+                                    .accessibilityAction(named: "Move down") { moveTask(task.id, offset: 1, tasks: group.tasks) }
+                                    .accessibilityHint("Touch and hold to reorder within this date. Scheduled time stays the same.")
+                            }
                         }
                     }
             }
         }
+    }
+
+    private var savedDisplayOrders: [String: [String]] {
+        (try? JSONDecoder().decode([String: [String]].self, from: displayOrders)) ?? [:]
+    }
+    private func orderedTasks(_ tasks: [NexdoTask]) -> [NexdoTask] {
+        let saved = (model.profile?.id).flatMap { savedDisplayOrders[$0] } ?? []
+        let byID = Dictionary(tasks.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        return TaskDisplayOrder.sorted(tasks.map(\.id), saved: saved).compactMap { byID[$0] }
+    }
+    @discardableResult private func reorderTask(_ source: String, to target: String, tasks: [NexdoTask]) -> Bool {
+        guard let owner = model.profile?.id,
+              MomentSchedule.momentID(source) == nil, MomentSchedule.momentID(target) == nil,
+              let reordered = TaskDisplayOrder.moving(source, to: target, in: orderedTasks(tasks).map(\.id)) else { return false }
+        var orders = savedDisplayOrders
+        let visible = Set(reordered)
+        orders[owner] = (orders[owner] ?? []).filter { !visible.contains($0) } + reordered
+        guard let encoded = try? JSONEncoder().encode(orders) else { return false }
+        withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) { displayOrders = encoded }
+        return true
+    }
+    private func moveTask(_ id: String, offset: Int, tasks: [NexdoTask]) {
+        let ids = orderedTasks(tasks).filter { MomentSchedule.momentID($0.id) == nil }.map(\.id)
+        guard let index = ids.firstIndex(of: id), ids.indices.contains(index + offset) else { return }
+        reorderTask(id, to: ids[index + offset], tasks: tasks)
     }
 
     private func taskCard(_ task: NexdoTask) -> some View {
@@ -2250,7 +2294,9 @@ struct TaskEditor: View {
 
     private var resolvedCreationDate: Date {
         if !dateExplicitlyChosen, let date = DeterministicTaskActionDetector().detect(title: title)?.scheduledAt { return date }
-        return dateChoice.resolve(customDate: customDate, timeZone: accountTimeZone)
+        let proposed = dateChoice.resolve(customDate: customDate, timeZone: accountTimeZone)
+        guard task == nil else { return proposed }
+        return TaskCreationSpacing.start(at: proposed, durationMin: duration, tasks: model.tasks)
     }
 
     private func save() {

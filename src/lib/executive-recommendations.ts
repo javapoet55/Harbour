@@ -185,13 +185,18 @@ export function buildExecutiveRecommendation(context: ExecutiveContext, intent: 
     if (windowIntent && priorities[0]?.focusMinutes && !context.contextWarnings?.length) recommendation.recommendedActions = [{ type: 'START_FOCUS', taskId: priorities[0].taskId, durationMin: priorities[0].focusMinutes, label: `Start ${priorities[0].focusMinutes}-minute focus session` }];
   }
   if (windowIntent) {
+    const outsideWorkingDay = !context.workingDays.split(',').filter(Boolean).map(Number).includes(day.getUTCDay());
     const outsideWorkingHours = !working.some(window => window.start <= +now && window.end > +now);
     const remainingWorkingMinutesToday = minutesIn(working.flatMap(window => freeSlots(Math.max(+now, window.start), Math.min(todayEnd, window.end), [...busy, ...scheduled])).filter(slot => slot.end > slot.start));
-    recommendation.nextAction = { outsideWorkingHours: intent !== 'FREE_WINDOW' && outsideWorkingHours, remainingWorkingMinutesToday, bestAction: priorities[0] ?? null, alternatives: priorities.slice(1), availableWindowMinutes: available,
+    recommendation.nextAction = { outsideWorkingDay: intent !== 'FREE_WINDOW' && outsideWorkingDay, outsideWorkingHours: intent !== 'FREE_WINDOW' && outsideWorkingHours, remainingWorkingMinutesToday, bestAction: priorities[0] ?? null, alternatives: priorities.slice(1), availableWindowMinutes: available,
       suggestedFocusDuration: priorities[0]?.focusMinutes ?? 0, proactive: options.proactive ?? false,
       continuingFocus: Boolean(activeFocus && priorities[0]?.taskId === activeFocus.taskId), confidence: recommendation.confidence };
     recommendation.assumptions.push('Task durations are saved or consented personalized estimates, not verified remaining work. Unknown location, device and meeting-preparation links are not inferred.', `Switching policy uses a ${context.switchingThreshold ?? NEXT_ACTION_POLICY.switchingThreshold}-point improvement threshold plus setup and active-focus investment; it never switches tasks automatically.`);
     if (intent !== 'FREE_WINDOW' && !available && !working.some((window) => window.start <= +now && window.end > +now)) recommendation.summary = `You are outside your saved working hours (${context.workStart}–${context.workEnd}, ${timeZone}). This does not mean your day is full: ${durationLabel(remainingWorkingMinutesToday)} of unreserved working time remaining today. Enter the time you have available to get a recommendation now; appointments and buffers still apply.`;
+    if (intent !== 'FREE_WINDOW' && !available && outsideWorkingDay) {
+      const weekday = new Intl.DateTimeFormat('en-US', { timeZone, weekday: 'long' }).format(now);
+      recommendation.summary = `${weekday} is not selected in your saved working days (${timeZone}). Your daily hours are ${context.workStart}–${context.workEnd}, but they apply only on selected days. Add ${weekday} under Settings → Working days, or enter the minutes you have available for a recommendation now. Appointments and buffers still apply.`;
+    }
   }
   recommendation.reasoning = priorities.map((item) => `${item.title}: ${item.reasons.join('; ')}`);
   if (context.contextWarnings?.length) {

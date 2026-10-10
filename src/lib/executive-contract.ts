@@ -25,6 +25,7 @@ export const executiveRecommendationSchema = z.object({
   assumptions: z.array(z.string()), sections: z.array(z.object({ title: z.string(), items: z.array(z.string()) })),
   nextAction: z.object({ bestAction: prioritySchema.nullable(), alternatives: z.array(prioritySchema),
     outsideWorkingHours: z.boolean().optional(),
+    outsideWorkingDay: z.boolean().optional(),
     remainingWorkingMinutesToday: z.number().nonnegative().optional(),
     availableWindowMinutes: z.number().nonnegative(), suggestedFocusDuration: z.number().nonnegative(),
     proactive: z.boolean(), continuingFocus: z.boolean(), confidence: z.number().min(0).max(1),

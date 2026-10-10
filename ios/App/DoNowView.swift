@@ -47,7 +47,7 @@ struct DoNowView: View {
                             Button("Refresh recommendation") { Task { await refresh() } }.disabled(loading || starting)
                         }
                         if let recommendation, let next = recommendation.nextAction {
-                            Text(next.outsideWorkingHours == true ? "Outside your working hours" : "You have \(DurationDisplay.durationLabel(next.availableWindowMinutes)) free now")
+                            Text(next.outsideWorkingDay == true ? "Today isn’t a selected working day" : next.outsideWorkingHours == true ? "Outside your working hours" : "You have \(DurationDisplay.durationLabel(next.availableWindowMinutes)) free now")
                                 .font(.title2.bold()).foregroundStyle(Color.nexdoInk)
                             if let remaining = next.remainingWorkingMinutesToday {
                                 Text("Unreserved working time remaining today: \(DurationDisplay.durationLabel(remaining))")

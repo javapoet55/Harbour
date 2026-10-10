@@ -142,3 +142,25 @@ describe('signature do-now experience', () => {
     expect(rec.recommendedActions).toEqual([]);
   });
 });
+
+describe('weekend working-day settings', () => {
+  const saturday = ctx({ now: new Date('2026-10-10T09:04:00-07:00'), workStart: '06:00', workEnd: '22:00', tasks: [task('work')] });
+  it('explains an excluded Saturday rather than blaming the clock hours', () => {
+    const rec = next(saturday);
+    expect(rec.nextAction?.outsideWorkingDay).toBe(true);
+    expect(rec.summary).toContain('Saturday is not selected');
+    expect(rec.summary).not.toContain('outside your saved working hours');
+  });
+  it('recommends within Saturday hours when Saturday is selected', () => {
+    const rec = next({ ...saturday, workingDays: '0,1,2,3,4,5,6' });
+    expect(rec.nextAction?.outsideWorkingDay).toBe(false);
+    expect(rec.nextAction?.outsideWorkingHours).toBe(false);
+    expect(rec.nextAction?.bestAction?.taskId).toBe('work');
+    expect(rec.window.availableMinutes).toBe(776);
+  });
+  it('permits an explicit free window on an excluded day', () => {
+    const rec = buildExecutiveRecommendation(saturday, 'FREE_WINDOW', { minutes: 30 }).recommendation;
+    expect(rec.nextAction?.outsideWorkingDay).toBe(false);
+    expect(rec.nextAction?.bestAction?.taskId).toBe('work');
+  });
+});

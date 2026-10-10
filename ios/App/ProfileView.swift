@@ -315,6 +315,7 @@ struct ProfileSettingsView: View {
                         VStack(alignment: .leading, spacing: 8) {
                             LabeledContent("Time zone (Automatic)", value: TimeZone.autoupdatingCurrent.identifier.replacingOccurrences(of: "_", with: " "))
                         }
+                        WorkingDaysField(value: Binding(get: { preferences?.workingDays ?? "1,2,3,4,5" }, set: { preferences?.workingDays = $0 }))
                         hours("Working hours", start: pref(\.workStart), end: pref(\.workEnd))
                         hours("Quiet hours", start: pref(\.quietStart), end: pref(\.quietEnd))
                     }
@@ -634,5 +635,29 @@ struct ProfileSettingsView: View {
         }
         guard digits.count == 10 else { return nil }
         return "+1" + digits
+    }
+}
+
+private struct WorkingDaysField: View {
+    @Binding var value: String
+    private let labels = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
+    private var selected: Set<Int> { Set(value.split(separator: ",").compactMap { Int($0) }) }
+    private func selection(_ day: Int) -> Binding<Bool> {
+        Binding(get: { selected.contains(day) }, set: { enabled in
+            var days = selected
+            if enabled { days.insert(day) } else if days.count > 1 { days.remove(day) }
+            value = days.sorted().map { String($0) }.joined(separator: ",")
+        })
+    }
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Working days").font(.headline)
+            ForEach(0..<7, id: \.self) { day in
+                Toggle(labels[day], isOn: selection(day))
+                    .disabled(selected.count == 1 && selected.contains(day))
+            }
+            Text("Choose at least one day. Find my next task uses these days and your working hours.")
+                .font(.caption).foregroundStyle(.secondary)
+        }
     }
 }
