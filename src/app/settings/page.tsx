@@ -134,9 +134,10 @@ export default function SettingsPage() {
           {(['pushEnabled', 'emailEnabled', 'smsEnabled', 'morningSummary', 'eveningSummary'] as const).map((key) => (
             <label key={key} className="mt-2 flex items-center gap-2 text-sm">
               <input type="checkbox" checked={pref[key]} onChange={(e) => setPref({ ...pref, [key]: e.target.checked })} />
-              {key.replace(/([A-Z])/g, ' $1')}
+              {key === 'morningSummary' ? 'Daily morning email · 6:00 a.m. local time' : key.replace(/([A-Z])/g, ' $1')}
             </label>
           ))}
+          <p className="mt-2 text-xs text-[var(--muted)]">The morning email contains today’s tasks, calendar events and conflicts and goes to your profile email at 6:00 a.m. in your profile time zone. Both Email Enabled and Daily Morning Email must be on.</p>
           <label className="mt-3 block text-sm">SMS phone number (E.164)
             <input className="harbor-input mt-1" placeholder="+15551234567" value={pref.phoneNumber ?? ''} onChange={(e) => setPref({ ...pref, phoneNumber: e.target.value || null })} />
           </label>

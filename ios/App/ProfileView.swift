@@ -336,7 +336,8 @@ struct ProfileSettingsView: View {
                         Text("Suggestions respect your working hours, quiet hours, and active focus.").font(.caption).foregroundStyle(Color.nexdoSecondary)
                         Toggle("Push notifications", isOn: pref(\.pushEnabled))
                         Toggle("Email notifications", isOn: pref(\.emailEnabled))
-                        Toggle("Morning summary", isOn: pref(\.morningSummary))
+                        Toggle("Daily morning email · 6:00 a.m.", isOn: pref(\.morningSummary))
+                        Text("Today’s tasks, calendar events and conflicts, sent to \(model.profile?.email ?? "your profile email") at 6:00 a.m. in \(model.profile?.timeZone ?? TimeZone.current.identifier). Email notifications must also be enabled.").font(.caption).foregroundStyle(Color.nexdoSecondary)
                         Toggle("Evening summary", isOn: pref(\.eveningSummary))
                         Text("Manage delivery permissions and send tests in Notification Center.").font(.caption).foregroundStyle(Color.nexdoSecondary)
                         Button("Open Notification Center") { website("/notifications") }

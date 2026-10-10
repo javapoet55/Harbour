@@ -105,8 +105,8 @@ export async function getScheduleIntelligence(userId: string, now = new Date(), 
 }
 
 /** The Today page and its conversational shortcut use the same facts. */
-export async function buildTodayBriefing(userId: string) {
-  const { today } = await getScheduleIntelligence(userId, new Date(), { scope: 'today' });
+export async function buildTodayBriefing(userId: string, now = new Date()) {
+  const { today } = await getScheduleIntelligence(userId, now, { scope: 'today' });
   const summary = `You have ${today.commitments} commitment${today.commitments === 1 ? '' : 's'} today: ${today.appointments} calendar appointments and ${today.tasks} open tasks. ${today.attention.length ? `${today.attention.length} thing${today.attention.length === 1 ? ' needs' : 's need'} your attention.` : 'No conflicts detected.'}`;
   const line = (item: typeof today.timeline[number]) => `${item.allDay ? 'All day' : `${item.deadlineOnly ? 'Due ' : ''}${formatTime(new Date(item.startAt), today.timeZone)}`} — ${item.title}`;
   const sections = [

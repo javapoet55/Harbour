@@ -64,6 +64,10 @@ answered after min(interval, 5 minutes) is abandoned until the next run. Each ru
 logs one line: `Calendar sync: ok, N connections, N errors, N ms` or
 `Calendar sync: failed (<reason>), …`; no ids, tokens, emails or provider messages.
 
+The worker also checks daily morning emails every minute on an independent timer.
+Deploy the backend and worker together; see [Morning summary delivery](morning-summary.md)
+for preferences, time zones, delivery claims and retry behavior.
+
 Worker service variables:
 
 | Variable | Required | Value |

@@ -18,8 +18,27 @@ const calendarTimer = calendarInterval === null ? null : startCalendarSyncTimer(
   run: () => runCalendarSync({ url: calendarUrl, secret, timeoutMs: Math.min(calendarInterval, MAX_CALENDAR_SYNC_TIMEOUT_MS) }),
 });
 
+// Independent timer: a slow shopping or Moments tick must not delay the 6 a.m. briefing.
+let morningRunning = false;
+async function morningTick() {
+  if (morningRunning || stopping) return;
+  morningRunning = true;
+  try {
+    const response = await fetch(new URL('/api/notifications/morning-tick', base), {
+      method: 'POST', redirect: 'error', headers: { Authorization: `Bearer ${secret}` }, signal: AbortSignal.timeout(55000),
+    });
+    console.log(`Morning summary tick: HTTP ${response.status}`);
+    if (response.ok) {
+      const counts = await response.json();
+      console.log(`Morning summary deliveries: sent=${Number(counts.sent) || 0} skipped=${Number(counts.skipped) || 0} failed=${Number(counts.failed) || 0}`);
+    } else { await response.body?.cancel(); }
+  } catch { console.error('Morning summary tick failed; checking again next cycle'); }
+  finally { morningRunning = false; }
+}
 let stopping = false;
-for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => { stopping = true; void calendarTimer?.stop(); });
+const morningTimer = setInterval(() => { void morningTick(); }, 60000);
+void morningTick();
+for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => { stopping = true; clearInterval(morningTimer); void calendarTimer?.stop(); });
 while (!stopping) {
   const started = Date.now();
   try {
