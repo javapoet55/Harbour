@@ -226,7 +226,7 @@ struct BugReportPreview: View {
                 attempts += 1
                 try await Task.sleep(for: .seconds(4))
                 if ProcessInfo.processInfo.arguments.contains("-bug-failure"), attempts == 1 { throw URLError(.notConnectedToInternet) }
-                return "BR-" + input.id.replacingOccurrences(of: "-", with: "").uppercased()
+                return "BR-134902"
             })
         }
     }

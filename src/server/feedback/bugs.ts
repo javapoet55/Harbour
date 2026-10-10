@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { adminAppUrl } from '@/lib/admin-app-url';
 import sharp from 'sharp';
@@ -18,7 +19,10 @@ export const bugSchema = z.object({
   screenshotConsent: z.boolean(), screenshot: z.string().max(2_800_000).optional(),
 }).strict().refine(x => !x.screenshot || x.screenshotConsent, 'Screenshot consent required');
 export type BugInput = z.infer<typeof bugSchema>;
-export const referenceFor = (id: string) => `BR-${id.replaceAll('-', '').toUpperCase()}`;
+export const referenceFor = (id: string, attempt = 0) => {
+  const hash = createHash('sha256').update(`${id}:${attempt}`).digest();
+  return `BR-${String(hash.readUInt32BE(0) % 1_000_000).padStart(6, '0')}`;
+};
 // Do not copy credential-shaped text into feedback, email, or diagnostics. Never log request bodies.
 export function redactSecrets(value: string) {
   return value.replace(/\b(?:password|passwd|api[_ -]?key|client[_ -]?secret|access[_ -]?token|refresh[_ -]?token|authorization)\s*[:=]\s*[^\s,;]+/gi, '[REDACTED]')
@@ -49,22 +53,30 @@ export async function saveBug(user: { id: string; name: string }, input: BugInpu
   }
   await consumeLimit('bug-report-create', user.id, 5, 86_400_000);
   const screenshot = await screenshotCipher(input);
-  const reference = referenceFor(input.id);
-  // Atomic parent+outbox write. Success means durable receipt, not successful email delivery.
-  const saved = await prisma.feedback.upsert({ where: { id: input.id }, update: {}, create: {
-    id: input.id, userId: user.id, customerName: "NexDo user", title: `Bug report ${reference}`,
-    description: redactSecrets(input.description), stars: 0,
-    bugReport: { create: { reference, metadata: JSON.stringify(input.metadata), screenshot,
-      screenshotExpiresAt: new Date(+now + 7 * 86400000), expiresAt: new Date(+now + 90 * 86400000) } },
-  }, include: { bugReport: true } }).catch(async error => {
-    // Nested upserts can race before INSERT. Recover only a confirmed unique-key conflict.
-    if (error?.code !== 'P2002') throw error;
-    const duplicate = await prisma.feedback.findUnique({ where: { id: input.id }, include: { bugReport: true } });
-    if (!duplicate) throw error;
-    return duplicate;
-  });
-  if (saved.userId !== user.id || !saved.bugReport) throw new Error('BUG_ID_CONFLICT');
-  return saved.bugReport.reference;
+  for (let attempt = 0; attempt < 20; attempt++) {
+    const reference = referenceFor(input.id, attempt);
+    try {
+    // Atomic parent+outbox write. Success means durable receipt, not successful email delivery.
+    const saved = await prisma.feedback.upsert({ where: { id: input.id }, update: {}, create: {
+      id: input.id, userId: user.id, customerName: "NexDo user", title: `Bug report ${reference}`,
+      description: redactSecrets(input.description), stars: 0,
+      bugReport: { create: { reference, metadata: JSON.stringify(input.metadata), screenshot,
+        screenshotExpiresAt: new Date(+now + 7 * 86400000), expiresAt: new Date(+now + 90 * 86400000) } },
+    }, include: { bugReport: true } });
+    if (saved.userId !== user.id || !saved.bugReport) throw new Error('BUG_ID_CONFLICT');
+    return saved.bugReport.reference;
+    } catch (error) {
+      if (!(error && typeof error === 'object' && 'code' in error && error.code === 'P2002')) throw error;
+      // A concurrent retry can win the report ID, or a different report can win
+      // the short reference. Keep the first receipt; otherwise try another code.
+      const duplicate = await prisma.feedback.findUnique({ where: { id: input.id }, include: { bugReport: true } });
+      if (duplicate) {
+        if (duplicate.userId !== user.id || !duplicate.bugReport) throw new Error('BUG_ID_CONFLICT');
+        return duplicate.bugReport.reference;
+      }
+    }
+  }
+  throw new Error('BUG_REFERENCE_UNAVAILABLE');
 }
 
 export async function maintainBugReports(now = new Date()) {

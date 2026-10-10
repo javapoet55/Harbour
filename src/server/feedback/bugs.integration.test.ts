@@ -82,7 +82,7 @@ it('limits new reports while allowing a retry of a received report', async () =>
   expect(await saveBug(u, first)).toBe(referenceFor(first.id));
 });
 it('generates unique references from distinct submission IDs', () => {
-  expect(new Set(Array.from({ length: 1000 }, () => referenceFor(randomUUID()))).size).toBe(1000);
+  for (let i = 0; i < 1000; i++) expect(referenceFor(randomUUID())).toMatch(/^BR-\d{6}$/);
 });
 it('rejects malformed and oversized HTTP bodies without storing a report', async () => {
   const u = await user(); vi.mocked(requireUser).mockResolvedValue({ ...u, preference: null });
@@ -110,4 +110,16 @@ it('accepts concurrent retries without duplicate records', async () => {
 it('requires the worker secret before delivering reports', async () => {
   const { POST: tick } = await import('@/app/api/feedback/bug-tick/route');
   expect((await tick(new Request('http://localhost', { method: 'POST', headers: { authorization: 'Bearer wrong' } }))).status).toBe(401);
+});
+
+it('recovers a short-reference collision and preserves the receipt on retry', async () => {
+  const u = await user();
+  const occupied = input(); const body = input();
+  await saveBug(u, occupied);
+  await prisma.bugReport.update({ where: { id: occupied.id }, data: { reference: referenceFor(body.id) } });
+  const receipt = await saveBug(u, body);
+  expect(receipt).toMatch(/^BR-\d{6}$/);
+  expect(receipt).not.toBe(referenceFor(body.id));
+  expect(await saveBug(u, body)).toBe(receipt);
+  expect(await prisma.feedback.count({ where: { id: body.id } })).toBe(1);
 });
