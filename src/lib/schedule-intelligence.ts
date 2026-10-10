@@ -88,15 +88,21 @@ export function freeSlots(start: number, end: number, busy: Interval[]) {
 
 export const minutesIn = (slots: Interval[]) => Math.floor(slots.reduce((sum, slot) => sum + slot.end - slot.start, 0) / 60_000);
 
-export function withoutTaskMirrors<T extends IntelligenceEvent>(events: T[], tasks: IntelligenceTask[]) {
+/** True for the calendar copy of a task written by pushTaskToExternal, unless it was moved away from the task's time. */
+export function taskMirrorMatcher(events: IntelligenceEvent[], tasks: IntelligenceTask[]) {
   const ids = new Map<string, number>();
   for (const event of events) if (event.externalId) ids.set(event.externalId, (ids.get(event.externalId) ?? 0) + 1);
-  return events.filter((event) => event.endAt > event.startAt && !tasks.some((task) => {
+  return (event: IntelligenceEvent) => tasks.some((task) => {
     const linked = task.calendarEventId ? task.calendarEventId === event.id : Boolean(event.externalId && ids.get(event.externalId) === 1 && task.externalEventId === event.externalId);
     if (!linked) return false;
     if (task.status === 'COMPLETED' || task.status === 'CANCELLED') return true;
     return Boolean(task.startAt && +task.startAt === +event.startAt && +event.endAt === +task.startAt + (task.calendarDurationMin ?? task.durationMin) * 60000);
-  }));
+  });
+}
+
+export function withoutTaskMirrors<T extends IntelligenceEvent>(events: T[], tasks: IntelligenceTask[]) {
+  const isMirror = taskMirrorMatcher(events, tasks);
+  return events.filter((event) => event.endAt > event.startAt && !isMirror(event));
 }
 
 /** Disclosed transition allowance, not a route/travel-time estimate. */
