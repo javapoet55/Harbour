@@ -189,7 +189,7 @@ struct BugReportView: View {
                 if let submitOverride { reference = try await submitOverride(input) }
                 else { reference = try await model.submitBugReport(input).reference }
                 draft.clear()
-            } catch { self.error = "Couldn’t send the report. Check your connection and try again." }
+            } catch { self.error = BugReportFailure.message(for: error) }
             sending = false
         }
     }

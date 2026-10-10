@@ -41,3 +41,11 @@ private let bugMetadata = BugDiagnostics(appVersion: "1", buildNumber: "1", devi
     let result7 = gate.accept(enabled: true, active: true, presenting: false, acceleration: 4, now: 8)
     #expect(result7)
 }
+
+@Test func bugSubmissionErrorsExplainTheActualFailure() {
+    #expect(BugReportFailure.message(for: APIError.response(404)).contains("not available"))
+    #expect(BugReportFailure.message(for: APIError.server(404, "Not found")).contains("not available"))
+    #expect(BugReportFailure.message(for: APIError.signedOut).contains("sign in again"))
+    #expect(BugReportFailure.message(for: APIError.server(429, "Too many attempts. Please try again later.")) == "Too many attempts. Please try again later.")
+    #expect(BugReportFailure.message(for: URLError(.notConnectedToInternet)).contains("connection"))
+}

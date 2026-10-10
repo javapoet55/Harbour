@@ -49,3 +49,22 @@ public struct BugShakeGate: Sendable {
         last = now; return true
     }
 }
+
+public enum BugReportFailure {
+    public static func message(for error: Error) -> String {
+        if let api = error as? APIError {
+            switch api {
+            case .response(404), .server(404, _):
+                return "Bug reporting is not available on this server yet. Please try again later."
+            case .signedOut:
+                return "Your session has expired. Please sign in again before sending your report."
+            default:
+                return api.localizedDescription
+            }
+        }
+        if error is URLError {
+            return "Couldn’t send the report. Check your connection and try again."
+        }
+        return "Couldn’t send the report. Please try again later."
+    }
+}
