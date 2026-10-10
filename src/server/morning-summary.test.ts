@@ -35,6 +35,12 @@ describe('local morning delivery', () => {
     expect((await runMorningSummaries(now, { userId })).sent).toBe(1);
     const email = vi.mocked(emailProvider.send).mock.calls[0][0];
     expect(email.to).toBe(`updated-${userId}@example.test`);
+    expect(email.html).toContain('<h2');
+    expect(email.html).toContain('Saturday, October 10, 2026');
+    expect(email.html).toContain('Pacific Daylight Time');
+    expect(email.html).toContain('Open NexDo');
+    expect(email.text).toContain('not one of your selected working days');
+    expect(email.text).not.toContain('0 free minutes');
     expect(email.text).toContain('Call dentist');
     expect(email.text).toContain('Team meeting');
     expect(email.text).not.toContain('Tomorrow only');

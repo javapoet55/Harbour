@@ -22,6 +22,9 @@ export type EmailTemplateInput = {
   /** One-time code shown in the code card, with its lifetime, e.g. "15 minutes". */
   code?: { value: string; expiresIn: string };
   body?: string[];
+  sections?: { title: string; items: string[] }[];
+  metrics?: { label: string; value: string }[];
+  action?: { label: string; path: string };
   /** Why the recipient is getting this email. */
   footerNote: string;
   /** Shown only where the recipient may not have asked for the email. */
@@ -80,6 +83,11 @@ function renderHtml(input: EmailTemplateInput) {
 
   const body = (input.body ?? []).map((line) => paragraph(line, bodyText)).join('');
 
+  const metrics = input.metrics?.length ? `<tr><td style="padding:8px 0 16px;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>${input.metrics.map(metric => `<td width="${100 / input.metrics!.length}%" valign="top" style="padding:16px 8px;background:${colors.codeCard};text-align:center;"><div style="font-family:${fontStack};font-size:28px;line-height:36px;font-weight:700;color:${colors.heading};">${escapeHtml(metric.value)}</div><div style="${footerText}">${escapeHtml(metric.label)}</div></td>`).join('')}</tr></table></td></tr>` : '';
+  const structured = (input.sections ?? []).map(section => `<tr><td style="padding:20px 0 4px;border-top:1px solid ${colors.codeBorder};"><h2 style="margin:0 0 12px;font-family:${fontStack};font-size:18px;line-height:26px;color:${colors.heading};">${escapeHtml(section.title)}</h2>${section.items.map(item => paragraph(item, bodyText)).join('')}</td></tr>`).join('');
+  const actionURL = input.action && input.action.path.startsWith('/') && !input.action.path.startsWith('//') ? new URL(input.action.path, emailAppUrl()).href : null;
+  const action = actionURL && input.action ? `<tr><td style="padding:20px 0 0;"><table role="presentation" cellpadding="0" cellspacing="0"><tr><td bgcolor="${colors.primary}" style="border-radius:10px;text-align:center;"><a href="${escapeHtml(actionURL)}" style="display:inline-block;padding:14px 28px;border:1px solid ${colors.primary};border-radius:10px;font-family:${fontStack};font-size:16px;line-height:24px;font-weight:600;color:#FFFFFF;text-decoration:none;">${escapeHtml(input.action.label)}</a></td></tr></table></td></tr>` : '';
+
   return `<!DOCTYPE html>
 <html lang="en" xmlns="http://www.w3.org/1999/xhtml" xmlns:o="urn:schemas-microsoft-com:office:office">
 <head>
@@ -108,7 +116,7 @@ function renderHtml(input: EmailTemplateInput) {
 <tr><td style="padding:32px;">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
 <tr><td style="padding:0 0 12px;"><h1 style="margin:0;font-family:${fontStack};font-size:24px;line-height:32px;font-weight:700;color:${colors.heading};">${escapeHtml(input.heading)}</h1>${input.subheading ? `<p style="margin:4px 0 0;font-family:${fontStack};font-size:15px;line-height:22px;font-weight:600;color:${colors.primary};">${escapeHtml(input.subheading)}</p>` : ''}</td></tr>
-<tr><td>${paragraph(input.intro, bodyText)}</td></tr>${code}
+<tr><td>${paragraph(input.intro, bodyText)}</td></tr>${code}${metrics}${structured}${action}
 ${body ? `<tr><td style="padding-top:24px;">${body}</td></tr>` : ''}
 </table>
 </td></tr>
@@ -136,7 +144,10 @@ function renderText(input: EmailTemplateInput) {
 ${input.subheading}` : input.heading,
     input.intro,
     input.code ? `Your code is ${input.code.value}.\nExpires in ${input.code.expiresIn} · single use` : '',
+    ...(input.metrics?.map(metric => `${metric.value} ${metric.label}`) ?? []),
+    ...(input.sections?.map(section => [section.title, ...section.items].join('\n')) ?? []),
     ...(input.body ?? []),
+    input.action ? `${input.action.label}: ${new URL(input.action.path, emailAppUrl()).href}` : '',
     [input.footerNote, input.ignoreNote].filter(Boolean).join('\n'),
     ['Nexdo', support ? `Questions? ${support}` : ''].filter(Boolean).join('\n'),
   ];
