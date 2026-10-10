@@ -700,6 +700,7 @@ model PomodoroSession {
 }
 
 model Feedback {
+  bugReport BugReport?
   id String @id
   userId String
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -919,4 +920,21 @@ model ShoppingOffer {
   expiresAt DateTime
   checkedAt DateTime
   @@index([sourceId, expiresAt])
+}
+
+// Bug reports reuse Feedback ownership, moderation and account-deletion cascading.
+model BugReport {
+  id String @id
+  feedback Feedback @relation(fields: [id], references: [id], onDelete: Cascade)
+  reference String @unique
+  metadata String
+  screenshot String?
+  screenshotExpiresAt DateTime
+  expiresAt DateTime
+  emailSentAt DateTime?
+  leaseUntil DateTime?
+  nextAttemptAt DateTime @default(now())
+  attempts Int @default(0)
+  @@index([nextAttemptAt, emailSentAt])
+  @@index([expiresAt])
 }

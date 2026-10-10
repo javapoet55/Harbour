@@ -17,7 +17,11 @@ struct RootView: View {
     var body: some View {
         Group {
             #if DEBUG
-            if ProcessInfo.processInfo.arguments.contains("-calendar-connect-preview") {
+            if ProcessInfo.processInfo.arguments.contains("-bug-capture-preview") {
+                BugReportCapturePreview()
+            } else if ProcessInfo.processInfo.arguments.contains("-bug-report-preview") {
+                BugReportPreview()
+            } else if ProcessInfo.processInfo.arguments.contains("-calendar-connect-preview") {
                 NavigationStack { CalendarConnectionView() }
             } else if ProcessInfo.processInfo.arguments.contains("-help-design-preview") {
                 NavigationStack { HelpView() }
@@ -90,7 +94,8 @@ struct RootView: View {
         .environmentObject(model)
         .environmentObject(moments)
         .tint(.nexdoIndigo)
-        .onChange(of: model.profile?.id) { _, id in taskActions.activate(userID: id); model.refreshNextAction(); Task { await moments.activate(id) } }
+        .onAppear { BugReportCoordinator.shared.configure(model: model, active: phase == .active) }
+        .onChange(of: model.profile?.id) { _, id in BugReportCoordinator.shared.configure(model: model, active: phase == .active); taskActions.activate(userID: id); model.refreshNextAction(); Task { await moments.activate(id) } }
         .onReceive(model.$tasks) { tasks in
             if let id = model.profile?.id { taskActions.synchronize(tasks: tasks, userID: id); if phase == .active { model.refreshNextAction() } }
         }
@@ -112,6 +117,7 @@ struct RootView: View {
             Button("OK") { model.error = nil }
         } message: { Text(model.error ?? "") }
         .onChange(of: phase) { _, value in
+            BugReportCoordinator.shared.configure(model: model, active: value == .active)
             if value == .active && model.profile != nil { model.refreshNextAction(); Task { await model.refresh(); await moments.refresh() } }
             else if value != .active { model.invalidateNextAction() }
         }
@@ -156,13 +162,14 @@ private struct NexdoTabShell: View {
                 }
             }
             .id(selection)
+            .bugReportScreen(selection.rawValue)
             .transition(.opacity.combined(with: .scale(scale: 0.985)))
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .clipped()
         .blur(radius: showingAsk ? 2 : 0)
         .fullScreenCover(isPresented: $showingAsk, onDismiss: { openPomodoroNotification() }) {
-            AskNexdoView(initialPrompt: askPrompt)
+            AskNexdoView(initialPrompt: askPrompt).bugReportScreen("askAI")
                 .presentationDetents([.fraction(0.84)])
                 .presentationDragIndicator(.visible)
                 .presentationCornerRadius(28)
@@ -218,11 +225,11 @@ private struct NexdoTabShell: View {
             wellnessChoice = nil
             switch choice { case .home: selection = .today; case .calendar: selection = .calendar; case .tasks: model.taskQuery.date = .today; selection = .tasks; case .askAI: showingAsk = true }
         }) {
-            WellnessChooserView { choice in wellnessChoice = choice; showingWellness = false }
+            WellnessChooserView { choice in wellnessChoice = choice; showingWellness = false }.bugReportScreen("wellness")
         }
         .fullScreenCover(isPresented: $showingPomodoro) {
             if let owner = model.profile?.id {
-                PomodoroView(api: model.momentAPI, owner: owner, onTasks: { selection = .tasks })
+                PomodoroView(api: model.momentAPI, owner: owner, onTasks: { selection = .tasks }).bugReportScreen("pomodoro")
             }
         }
     }

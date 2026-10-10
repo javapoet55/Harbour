@@ -59,5 +59,11 @@ while (!stopping) {
     console.log(`Shopping offers tick: HTTP ${response.status}`);
     await response.body?.cancel();
   } catch { console.error('Shopping offers check failed; retrying on next cycle'); }
+  // Durable bug report delivery and retention use the existing authenticated worker.
+  try {
+    const response = await fetch(new URL('/api/feedback/bug-tick', base), {method:'POST', redirect:'error', headers:{Authorization:`Bearer ${secret}`}, signal:AbortSignal.timeout(55000)});
+    console.log(`Bug report tick: HTTP ${response.status}`);
+    await response.body?.cancel();
+  } catch { console.error('Bug report tick failed; retrying next cycle'); }
   if (!stopping) await delay(Math.max(1000, 60000 - (Date.now() - started)));
 }

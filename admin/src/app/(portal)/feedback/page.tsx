@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { z } from 'zod';
 import { adminData } from '@/server/admin-data';
 import { PageHeading, Panel } from '@/components/admin/admin-ui';
-const schema = z.object({ feedback: z.array(z.object({ id: z.string(), customerName: z.string(), title: z.string(), description: z.string(), stars: z.number().int().min(1).max(5), createdAt: z.string().datetime() })), nextCursor: z.string().nullable() });
+const schema = z.object({ feedback: z.array(z.object({ id: z.string(), customerName: z.string(), title: z.string(), description: z.string(), stars: z.number().int().min(0).max(5), createdAt: z.string().datetime() })), nextCursor: z.string().nullable() });
 export default async function FeedbackPage({ searchParams }: { searchParams: Promise<{ cursor?: string }> }) {
   const { cursor } = await searchParams;
   const validCursor = cursor && z.string().uuid().safeParse(cursor).success ? cursor : undefined;
@@ -18,7 +18,7 @@ export default async function FeedbackPage({ searchParams }: { searchParams: Pro
             <td style={{ padding: 12, verticalAlign: 'top', overflowWrap: 'anywhere' }}>{item.title}</td>
             <td style={{ padding: 12, verticalAlign: 'top', whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', minWidth: 240 }}>{item.description}</td>
             <td style={{ padding: 12, verticalAlign: 'top', whiteSpace: 'nowrap' }}><time dateTime={item.createdAt}>{new Intl.DateTimeFormat('en-US', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'UTC' }).format(new Date(item.createdAt))}</time></td>
-            <td style={{ padding: 12, verticalAlign: 'top', whiteSpace: 'nowrap' }} aria-label={`${item.stars} out of 5 stars`}><span style={{ color: '#a65f00' }} aria-hidden="true">{'★'.repeat(item.stars)}{'☆'.repeat(5 - item.stars)}</span> {item.stars}/5</td>
+            <td style={{ padding: 12, verticalAlign: 'top', whiteSpace: 'nowrap' }} aria-label={item.stars === 0 ? "Bug report" : `${item.stars} out of 5 stars`}><span style={{ color: '#a65f00' }} aria-hidden="true">{item.stars === 0 ? 'Bug report' : '★'.repeat(item.stars) + '☆'.repeat(5 - item.stars)}</span> {item.stars > 0 ? `${item.stars}/5` : ""}</td>
           </tr>)}</tbody>
         </table>
       </div>}

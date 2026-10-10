@@ -80,11 +80,12 @@ struct AccountView: View {
                         }
                     }.padding(.vertical, 8)
                     voiceUsageCard
-                    // One card for all four rows; the modifiers sat on Change password alone, leaving the others bare.
+                    // Keep account actions together in one card.
                     VStack(spacing: 0) {
                         NavigationLink { ProfileSettingsView() } label: { menuRow("Edit profile and settings", "person.crop.circle") }
                         NavigationLink { FeedbackView() } label: { menuRow("Feedback", "bubble.left.and.text.bubble.right") }
                         NavigationLink { HelpView() } label: { menuRow("Help", "questionmark.circle") }
+                        Button { BugReportCoordinator.shared.open(from: "settings") } label: { menuRow("Report Bugs", "ladybug") }
                         NavigationLink { ChangePasswordView() } label: { menuRow("Change password", "lock.rotation") }
                     }.padding(8).profileCard()
                     Button("Sign out", role: .destructive) { confirmsSignOut = true }
@@ -101,7 +102,7 @@ struct AccountView: View {
                 try? await model.reloadProfile()
                 await model.refreshVoiceUsage()
             }
-        }.tint(.nexdoIndigo)
+        }.tint(.nexdoIndigo).bugReportScreen("settings")
     }
 
     private var voiceUsageCard:some View {

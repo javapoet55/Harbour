@@ -2,6 +2,8 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+    <key>NSMotionUsageDescription</key>
+    <string>When you enable shake-to-report, NexDo uses motion to open the bug report form. Motion data is not stored or sent.</string>
     <key>NSLocationWhenInUseUsageDescription</key>
     <string>NexDo uses your approximate location to show local weather and find nearby stores when you request it.</string>
 	<key>NexdoAPIBaseURL</key>

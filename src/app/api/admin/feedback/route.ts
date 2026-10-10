@@ -9,6 +9,7 @@ async function list(req: Request) {
     const cursor = new URL(req.url).searchParams.get('cursor');
     if (cursor && !z.string().uuid().safeParse(cursor).success) return adminJson({ error: 'Invalid feedback cursor.' }, 400);
     const rows = await prisma.feedback.findMany({
+      where: { OR: [{ bugReport: null }, { bugReport: { expiresAt: { gt: new Date() } } }] },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: 51,
       ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
       select: { id: true, customerName: true, title: true, description: true, stars: true, createdAt: true },

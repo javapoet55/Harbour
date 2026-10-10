@@ -880,6 +880,10 @@ final class AppModel: ObservableObject {
         focusSession = nil
         taskQuery = TaskQuery(); tasksLoadFailed = false; profile = nil; voiceUsage = nil; tasks = []; agenda = nil; scheduleIntelligence = nil; weather = nil; withdrawConsent()
     }
+    func submitBugReport(_ input: BugReportInput) async throws -> BugReportReceipt {
+        try await api.request("/api/feedback/bugs", method: "POST", body: JSONEncoder().encode(input))
+    }
+
     func submitFeedback(id: UUID, title: String, description: String, stars: Int) async throws {
         struct Input: Encodable { let id: String; let title: String; let description: String; let stars: Int }
         let _: Ignore = try await api.request("/api/feedback", method: "POST",
