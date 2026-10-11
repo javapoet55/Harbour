@@ -52,9 +52,9 @@ import CoreMotion
             host.view.isHidden = true
             defer { host.view.isHidden = false }
             // Password inputs cannot be included, even if the user enables screenshots.
-            func containsSecure(_ view: UIView) -> Bool {
+            @MainActor func containsSecure(_ view: UIView) -> Bool {
                 if let field = view as? UITextField, field.isSecureTextEntry, !field.isHidden { return true }
-                return view.subviews.contains(where: containsSecure)
+                return view.subviews.contains { containsSecure($0) }
             }
             guard !containsSecure(presenter.view) else { return nil }
             let format = UIGraphicsImageRendererFormat(); format.scale = min(2, 1170 / window.bounds.width)

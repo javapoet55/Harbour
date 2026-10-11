@@ -6,6 +6,20 @@ struct CalendarView: View {
     private enum Range: String, CaseIterable { case three = "Next 3 days", seven = "Next 7 days", week = "This week" }
     @EnvironmentObject private var model: AppModel
     @EnvironmentObject private var moments: ImportantMomentsStore
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.colorSchemeContrast) private var colorContrast
+    // Calendar accents and separators need their own dark-mode contrast over the backdrop.
+    private var calendarAccent: Color {
+        colorScheme == .dark ? Color(red: 0.70, green: 0.64, blue: 1.0) : .nexdoIndigo
+    }
+    private var calendarSeparator: Color {
+        if colorScheme == .dark { return .white.opacity(colorContrast == .increased ? 0.60 : 0.32) }
+        return Color.nexdoIndigo.opacity(colorContrast == .increased ? 0.40 : 0.16)
+    }
+    private var separatorWidth: CGFloat { colorContrast == .increased ? 2 : 1 }
+    private var calendarRule: some View {
+        Rectangle().fill(calendarSeparator).frame(height: separatorWidth).accessibilityHidden(true)
+    }
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var mode: Mode = .schedule
     @State private var range: Range = .three
@@ -141,8 +155,8 @@ struct CalendarView: View {
                                     .accessibilityElement(children: .ignore)
                                     .accessibilityLabel("Unscheduled & overdue, \(backlog.count) tasks")
                                 }
-                                    .padding(16).background(Color.nexdoIndigo.opacity(0.10), in: RoundedRectangle(cornerRadius: 16))
-                                    .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.nexdoIndigo.opacity(0.18)))
+                                    .padding(16).background(calendarAccent.opacity(0.10), in: RoundedRectangle(cornerRadius: 16))
+                                    .overlay(RoundedRectangle(cornerRadius: 16).stroke(calendarAccent.opacity(0.18)))
                                 }
                             } else {
                                 if hasSearch { searchResults }
@@ -227,7 +241,7 @@ struct CalendarView: View {
                 } label: {
                     Image(systemName: "gearshape").font(.title3)
                         .frame(width: 44, height: 44)
-                        .background(Color.nexdoIndigo.opacity(0.09), in: Circle())
+                        .background(calendarAccent.opacity(0.09), in: Circle())
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Calendar settings")
@@ -238,7 +252,7 @@ struct CalendarView: View {
                 } label: {
                     Image(systemName: "magnifyingglass").font(.title3)
                         .frame(width: 44, height: 44)
-                        .background(Color.nexdoIndigo.opacity(0.09), in: Circle())
+                        .background(calendarAccent.opacity(0.09), in: Circle())
                 }.buttonStyle(.plain).accessibilityLabel("Search calendar")
             }
             Text("Plan your time. Make it happen.").font(.subheadline).foregroundStyle(Color.nexdoSecondary)
@@ -264,7 +278,7 @@ struct CalendarView: View {
                 }
                 .padding(.leading, 12).frame(minHeight: 48)
                 .background(.background.opacity(0.9), in: RoundedRectangle(cornerRadius: 12))
-                .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.nexdoIndigo.opacity(0.18)))
+                .overlay(RoundedRectangle(cornerRadius: 12).stroke(calendarAccent.opacity(0.18)))
                 Button("Cancel") { searchFocused = false; searchText = ""; searching = false }
                     .frame(minHeight: 44)
             }
@@ -291,11 +305,11 @@ struct CalendarView: View {
             ForEach(Mode.allCases, id: \.self) { option in
                 Button { withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.18)) { mode = option } } label: {
                     Text(option.rawValue).font(.subheadline).frame(maxWidth: .infinity, minHeight: 48)
-                        .foregroundStyle(mode == option ? .white : Color.nexdoIndigo)
+                        .foregroundStyle(mode == option ? .white : calendarAccent)
                         .background(mode == option ? AnyShapeStyle(NexdoTheme.saveGradient) : AnyShapeStyle(Color.clear), in: RoundedRectangle(cornerRadius: 11))
                 }.buttonStyle(.plain).accessibilityAddTraits(mode == option ? .isSelected : [])
             }
-        }.background(Color.nexdoIndigo.opacity(0.07), in: RoundedRectangle(cornerRadius: 12))
+        }.background(calendarAccent.opacity(0.07), in: RoundedRectangle(cornerRadius: 12))
     }
     private var reviewableConflicts: [ScheduleIntelligenceResponse.Today.AttentionItem] {
         guard model.intelligenceError == nil,
@@ -343,7 +357,7 @@ struct CalendarView: View {
         Button(action: action) {
             HStack(spacing: 8) {
                 Image(systemName: voice ? "mic.fill" : "plus").font(.title2)
-                    .foregroundStyle(voice ? Color.white : Color.nexdoIndigo)
+                    .foregroundStyle(voice ? Color.white : calendarAccent)
                     .frame(width: 38, height: 38)
                     .background(voice ? AnyShapeStyle(LinearGradient(colors: [.nexdoIndigo, .nexdoBlue], startPoint: .leading, endPoint: .trailing)) : AnyShapeStyle(Color.nexdoMagenta.opacity(0.07)), in: Circle())
                 VStack(alignment: .leading, spacing: 4) {
@@ -351,8 +365,8 @@ struct CalendarView: View {
                     Text(subtitle).font(.caption2).foregroundStyle(Color.nexdoSecondary).lineLimit(1)
                 }
             }.frame(maxWidth: .infinity, minHeight: 64).padding(8)
-                .background(voice ? Color.nexdoIndigo.opacity(0.05) : Color(uiColor: .systemBackground), in: RoundedRectangle(cornerRadius: 18))
-                .overlay(RoundedRectangle(cornerRadius: 18).stroke(Color.nexdoIndigo.opacity(0.18)))
+                .background(voice ? calendarAccent.opacity(0.05) : Color(uiColor: .systemBackground), in: RoundedRectangle(cornerRadius: 18))
+                .overlay(RoundedRectangle(cornerRadius: 18).stroke(calendarAccent.opacity(0.18)))
         }.buttonStyle(.plain)
     }
     @ViewBuilder private func intelligenceStatus(allowCreation: Bool = false) -> some View {
@@ -394,7 +408,7 @@ struct CalendarView: View {
         } label: {
             Image(systemName: "slider.horizontal.3").frame(width: 44, height: 44)
                 .background(.background.opacity(0.8), in: RoundedRectangle(cornerRadius: 14))
-                .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.nexdoIndigo.opacity(0.18)))
+                .overlay(RoundedRectangle(cornerRadius: 14).stroke(calendarAccent.opacity(0.18)))
         }.accessibilityLabel("Calendar filters\((!showTasks || !showEvents || criticalOnly || completedOnly) ? ", active" : "")")
     }
     private var summary: some View {
@@ -404,10 +418,10 @@ struct CalendarView: View {
     }
     private func summaryCard(_ title: String, detail: String) -> some View {
         HStack(spacing: 14) {
-            Image(systemName: "sparkles").font(.title2).foregroundStyle(Color.nexdoIndigo)
-            VStack(alignment: .leading, spacing: 8) { Text(title).font(.headline).foregroundStyle(Color.nexdoIndigo); Text(detail).font(.subheadline).foregroundStyle(Color.nexdoSecondary) }
+            Image(systemName: "sparkles").font(.title2).foregroundStyle(calendarAccent)
+            VStack(alignment: .leading, spacing: 8) { Text(title).font(.headline).foregroundStyle(calendarAccent); Text(detail).font(.subheadline).foregroundStyle(Color.nexdoSecondary) }
             Spacer(minLength: 0)
-        }.padding(20).frame(maxWidth: .infinity, alignment: .leading).background(Color.nexdoIndigo.opacity(0.075), in: RoundedRectangle(cornerRadius: 16))
+        }.padding(20).frame(maxWidth: .infinity, alignment: .leading).background(calendarAccent.opacity(0.075), in: RoundedRectangle(cornerRadius: 16))
     }
     private var dateNavigation: some View {
         HStack {
@@ -416,7 +430,7 @@ struct CalendarView: View {
             Text(mode == .month ? label(selected, "MMMM yyyy") : "\(label(visibleDays[0], "MMM d")) – \(label(visibleDays.last!, "MMM d, yyyy"))").font(.headline).multilineTextAlignment(.center)
             Spacer(minLength: 0)
             Button { shift(1) } label: { Image(systemName: "chevron.right").frame(width: 44, height: 44) }.accessibilityLabel("Next \(mode == .week ? "week" : "month")")
-            Button("Today") { selected = Date() }.font(.subheadline).foregroundStyle(Color.nexdoIndigo).frame(minHeight: 44)
+            Button("Today") { selected = Date() }.font(.subheadline).foregroundStyle(calendarAccent).frame(minHeight: 44)
         }.buttonStyle(.plain)
     }
     private var dateGrid: some View {
@@ -479,7 +493,7 @@ struct CalendarView: View {
                 if !relative { filters }
             }.padding(.bottom, 16)
             }
-            Divider().overlay(Color.nexdoIndigo.opacity(0.08))
+            calendarRule
             if empty && isExpanded {
                 Text(!showTasks || !showEvents || criticalOnly || completedOnly ? "No items match your filters." : "Nothing scheduled. Room to breathe.")
                     .font(.subheadline).foregroundStyle(Color.nexdoSecondary).padding(.vertical, 26).frame(maxWidth: .infinity, alignment: .leading)
@@ -528,11 +542,11 @@ struct CalendarView: View {
     private func timeline(_ row: Row) -> some View {
         let late = row.task.map { overdue($0) } ?? false
         let critical = row.task.map { $0.critical == true || $0.priority == "CRITICAL" } ?? false
-        let color: Color = critical ? .red : late ? .orange : .nexdoIndigo
+        let color: Color = critical ? .red : late ? .orange : calendarAccent
         return HStack(spacing: 10) {
             Text(row.time).font(.caption).frame(width: 64, alignment: .leading)
             ZStack {
-                Rectangle().fill(Color.nexdoIndigo.opacity(0.18)).frame(width: 1)
+                Rectangle().fill(calendarSeparator).frame(width: separatorWidth)
                 Circle().fill(color).frame(width: 8, height: 8)
             }.frame(width: 8)
             if let event = row.event {
@@ -543,20 +557,20 @@ struct CalendarView: View {
                 } else { CalendarEventProviderIcon(source: event.source) }
             } else {
                 Image(systemName: late ? "doc.text" : "checkmark.square").font(.title3).foregroundStyle(color)
-                    .frame(width: 32, height: 36).background(color.opacity(0.11), in: RoundedRectangle(cornerRadius: 10))
+                    .frame(width: 32, height: 36).background(color.opacity(colorScheme == .dark ? 0.18 : 0.11), in: RoundedRectangle(cornerRadius: 10))
             }
             VStack(alignment: .leading, spacing: 7) {
                 Text(row.title).font(.body).fixedSize(horizontal: false, vertical: true)
                 Text(row.detail).font(.caption).foregroundStyle(Color.nexdoSecondary)
-                HStack { if completedOnly || row.event?.completedAt != nil { badge("Completed", color: .green) }; if late { badge("Overdue", color: .orange) }; if critical { badge("Critical", color: .red) }; if row.deadline { badge("Deadline", color: .nexdoIndigo) } }
-                Divider().padding(.top, 10)
+                HStack { if completedOnly || row.event?.completedAt != nil { badge("Completed", color: .green) }; if late { badge("Overdue", color: .orange) }; if critical { badge("Critical", color: .red) }; if row.deadline { badge("Deadline", color: calendarAccent) } }
+                calendarRule.padding(.top, 10)
             }.padding(.top, 18).padding(.bottom, 4)
             Spacer(minLength: 0)
             Image(systemName: "chevron.right").font(.caption).foregroundStyle(Color.nexdoSecondary)
         }.fixedSize(horizontal: false, vertical: true).contentShape(Rectangle())
     }
     private func badge(_ text: String, color: Color) -> some View {
-        Text(text).font(.caption2).foregroundStyle(color).padding(.horizontal, 8).padding(.vertical, 4).background(color.opacity(0.12), in: Capsule())
+        Text(text).font(.caption2).foregroundStyle(color).padding(.horizontal, 8).padding(.vertical, 4).background(color.opacity(colorScheme == .dark ? 0.18 : 0.12), in: Capsule())
     }
     private var conflictSheet: some View {
         NavigationStack {

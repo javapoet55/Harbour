@@ -84,7 +84,7 @@ export async function revokeAppleIdentity(encryptedRefreshToken: string) {
   const token = decryptCredential(encryptedRefreshToken);
   if (!token) return;
   const response = await observedFetch('https://appleid.apple.com/auth/revoke', {
-    method: 'POST',
+    method: 'POST', signal: AbortSignal.timeout(15000),
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({ client_id: clientId, client_secret: await clientSecret(clientId), token, token_type_hint: 'refresh_token' }),
   });

@@ -5,12 +5,16 @@ enum WellnessExit { case home, calendar, tasks, askAI }
 struct WellnessChooserView: View {
     let onSelect: (WellnessExit) -> Void
     @EnvironmentObject private var model: AppModel
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.colorSchemeContrast) private var contrast
+    private var isDark: Bool { colorScheme == .dark }
+    private var surface: Color { Color(uiColor: .secondarySystemBackground) }
     @State private var destination: Destination?
     private enum Destination: String, Identifiable {
         case calories, pomodoro, moments, shopping
         var id: String { rawValue }
     }
-    private let ink = Color(red: 0.035, green: 0.035, blue: 0.19)
+    private var ink: Color { isDark ? .primary : Color(red: 0.035, green: 0.035, blue: 0.19) }
     var body: some View {
         GeometryReader { proxy in
             let scale = min(proxy.size.width / 393, 1.4)
@@ -24,7 +28,7 @@ struct WellnessChooserView: View {
                         module(.moments, title: "Moments", subtitle: "Remember what matters", tags: "Birthdays  ·  Festivals  ·  Special occasions", color: Color(red: 0.87, green: 0.08, blue: 0.37), icon: CGRect(x: 798, y: 428, width: 94, height: 95), art: CGRect(x: 896, y: 693, width: 234, height: 178), scale: scale)
                     }.padding(.horizontal, 14 * scale)
                     HStack(alignment: .top, spacing: 16) {
-                        Text("“").font(.system(size: 58 * scale, weight: .bold, design: .rounded)).foregroundStyle(.indigo.opacity(0.75))
+                        Text("“").font(.system(size: 58 * scale, weight: .bold, design: .rounded)).foregroundStyle(isDark ? Color(red: 0.72, green: 0.65, blue: 1) : .indigo.opacity(0.75))
                         Text("“A more organized you,\na brighter tomorrow.” — NexDo")
                             .font(.system(size: 15 * scale, weight: .medium))
                             .fixedSize(horizontal: false, vertical: true).padding(.top, 10)
@@ -33,14 +37,12 @@ struct WellnessChooserView: View {
                         .background(LinearGradient(colors: [.indigo.opacity(0.07), .blue.opacity(0.12)], startPoint: .topLeading, endPoint: .bottomTrailing), in: RoundedRectangle(cornerRadius: 20 * scale))
                         .padding(.horizontal, 14 * scale).padding(.top, 17 * scale).padding(.bottom, 24)
                 }
-            }.background(LinearGradient(colors: [Color(red: 0.98, green: 0.97, blue: 1), .white, Color(red: 0.94, green: 0.96, blue: 1)], startPoint: .topLeading, endPoint: .bottomTrailing))
+            }.background(LinearGradient(colors: isDark ? [Color(red: 0.055, green: 0.055, blue: 0.10), .black, Color(red: 0.075, green: 0.06, blue: 0.13)] : [Color(red: 0.98, green: 0.97, blue: 1), .white, Color(red: 0.94, green: 0.96, blue: 1)], startPoint: .topLeading, endPoint: .bottomTrailing))
                 .safeAreaInset(edge: .bottom, spacing: 0) { bottomBar }
                 .foregroundStyle(ink)
-                // A fixed light design: the artwork multiplies onto white and the surfaces are white, so
-                // adaptive text (nexdoSecondary, the footer) would turn light on light in dark mode. The
-                // modules this opens keep the system appearance: the cover is attached outside this scope.
-                .environment(\.colorScheme, .light)
+
         }
+        .background(isDark ? Color.black : Color(red: 0.98, green: 0.97, blue: 1))
         .fullScreenCover(item: $destination) { target in
             if let guide = WellnessModuleGuide.Kind(rawValue:target.rawValue) {
                 WellnessModuleEntrance(kind:guide,showGuide:!model.seenWellnessGuides.contains(guide.rawValue),onHome:{ destination=nil }) { moduleDestination(target).bugReportScreen(target.rawValue) }
@@ -65,6 +67,13 @@ struct WellnessChooserView: View {
     private func hero(scale: CGFloat) -> some View {
         ZStack(alignment: .topLeading) {
             LinearGradient(colors: [.pink.opacity(0.05), .blue.opacity(0.10), .purple.opacity(0.07)], startPoint: .topLeading, endPoint: .bottomTrailing)
+            if isDark {
+                Image(systemName: "moon.stars.fill")
+                    .font(.system(size: 75 * scale, weight: .light))
+                    .foregroundStyle(Color(red: 0.72, green: 0.65, blue: 1).opacity(0.28))
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+                    .padding(20 * scale).accessibilityHidden(true)
+            } else {
             HStack(spacing: 0) {
                 Spacer()
                 WellnessPackRegion(rect: CGRect(x: 35, y: 18, width: 315, height: 384))
@@ -73,6 +82,7 @@ struct WellnessChooserView: View {
             WellnessPackRegion(rect: CGRect(x: 498, y: 273, width: 244, height: 108))
                 .frame(width: 75 * scale, height: 57 * scale).rotationEffect(.degrees(-8)).blendMode(.multiply)
                 .frame(maxWidth: .infinity, alignment: .trailing).padding(.top, 42 * scale).padding(.trailing, 8)
+            }
             VStack(alignment: .leading, spacing: 10 * scale) {
                 Text("A little time\nfor you").font(.system(size: 30 * scale, weight: .bold)).tracking(-0.8)
                 Text("Nourish your day. Organize your life.\nFocus on what matters.")
@@ -82,28 +92,37 @@ struct WellnessChooserView: View {
         }.frame(height: 192 * scale).clipped()
     }
     private func module(_ target: Destination, title: String, subtitle: String, tags: String, color: Color, icon: CGRect, art: CGRect, scale: CGFloat) -> some View {
-        Button { destination = target } label: {
+        let accent: Color = isDark ? darkAccent(target) : color
+        return Button { destination = target } label: {
             HStack(spacing: 15 * scale) {
                 WellnessPackRegion(rect: icon).frame(width: 51 * scale, height: 51 * scale).clipShape(RoundedRectangle(cornerRadius: 14)).accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 5 * scale) {
                     Text(title).font(.system(size: 15 * scale, weight: .bold)).foregroundStyle(ink)
                     Text(subtitle).font(.system(size: 10.5 * scale)).foregroundStyle(Color.nexdoSecondary).frame(maxWidth: 158 * scale, alignment: .leading)
-                    Text(tags).font(.system(size: 8.5 * scale, weight: .medium)).foregroundStyle(color)
+                    Text(tags).font(.system(size: 8.5 * scale, weight: .medium)).foregroundStyle(accent)
                         .padding(.horizontal, 7 * scale).padding(.vertical, 4 * scale)
-                        .background(color.opacity(0.08), in: Capsule()).background(.white.opacity(0.96), in: Capsule())
+                        .background(accent.opacity(isDark ? 0.16 : 0.08), in: Capsule()).background(isDark ? surface : .white.opacity(0.96), in: Capsule())
                 }.frame(maxWidth: .infinity, alignment: .leading)
-                Image(systemName: "arrow.right").font(.system(size: 20 * scale, weight: .bold)).foregroundStyle(color)
-                    .frame(width: 36 * scale, height: 36 * scale).background(.white.opacity(0.94), in: Circle())
+                Image(systemName: "arrow.right").font(.system(size: 20 * scale, weight: .bold)).foregroundStyle(accent)
+                    .frame(width: 36 * scale, height: 36 * scale).background(isDark ? Color(uiColor: .tertiarySystemBackground) : .white.opacity(0.94), in: Circle())
             }.padding(.horizontal, 16 * scale).padding(.vertical, 17 * scale)
                 .frame(maxWidth: .infinity, minHeight: 92 * scale, alignment: .leading)
                 .background(alignment: .trailing) {
-                    WellnessPackRegion(rect: art).frame(width: 77 * scale, height: 81 * scale)
-                        .blendMode(.multiply).padding(.trailing, 30 * scale).opacity(0.9)
+                    if !isDark { WellnessPackRegion(rect: art).frame(width: 77 * scale, height: 81 * scale)
+                        .blendMode(.multiply).padding(.trailing, 30 * scale).opacity(0.9) }
                 }
-                .background(LinearGradient(colors: [.white, color.opacity(0.055)], startPoint: .topLeading, endPoint: .bottomTrailing), in: RoundedRectangle(cornerRadius: 18 * scale))
-                .overlay(RoundedRectangle(cornerRadius: 18 * scale).stroke(color.opacity(0.10)))
+                .background(LinearGradient(colors: isDark ? [surface, surface] : [.white, color.opacity(0.055)], startPoint: .topLeading, endPoint: .bottomTrailing), in: RoundedRectangle(cornerRadius: 18 * scale))
+                .overlay(RoundedRectangle(cornerRadius: 18 * scale).stroke(accent.opacity(isDark ? (contrast == .increased ? 0.65 : 0.32) : 0.10)))
                 .contentShape(RoundedRectangle(cornerRadius: 18 * scale))
         }.buttonStyle(.plain).accessibilityIdentifier("wellness.\(target.rawValue)")
+    }
+    private func darkAccent(_ target: Destination) -> Color {
+        switch target {
+        case .shopping: return Color(red: 0.35, green: 0.90, blue: 0.62)
+        case .calories: return Color(red: 1, green: 0.66, blue: 0.38)
+        case .pomodoro: return Color(red: 0.72, green: 0.65, blue: 1)
+        case .moments: return Color(red: 1, green: 0.48, blue: 0.70)
+        }
     }
     private var bottomBar: some View {
         HStack(alignment: .center, spacing: 0) {
@@ -116,7 +135,7 @@ struct WellnessChooserView: View {
             footer("Ask AI", icon: "sparkles") { onSelect(.askAI) }
             footer("Calendar", icon: "calendar") { onSelect(.calendar) }
         }.padding(.horizontal, 13).padding(.top, 10).padding(.bottom, 5)
-            .background(.white.opacity(0.98), in: UnevenRoundedRectangle(topLeadingRadius: 22, topTrailingRadius: 22))
+            .background(isDark ? surface : .white.opacity(0.98), in: UnevenRoundedRectangle(topLeadingRadius: 22, topTrailingRadius: 22))
     }
     private func footer(_ title: String, icon: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
