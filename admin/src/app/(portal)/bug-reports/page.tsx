@@ -18,6 +18,10 @@ export default async function BugReportsPage({ searchParams }: { searchParams: P
     <PageHeading title="Bug Reports" description="Submitted bug tickets, newest first. Reports are retained for 90 days; screenshots for 7 days.">
       <a href="/bug-reports">Refresh reports</a>
     </PageHeading>
+    <p role="note">Reports stay in the environment where they were submitted. Xcode Debug builds send reports to{' '}
+      <a href="https://admin-dev.nexdoapp.com/bug-reports">Development Bug Reports</a>.
+      {' '}Release builds send reports to <a href="https://admin.nexdoapp.com/bug-reports">Production Bug Reports</a>.
+    </p>
     <Panel title="Submitted bugs">
       {data.bugs.length === 0 ? <p>No bug reports submitted yet.</p> : <div style={{ overflowX: 'auto' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
