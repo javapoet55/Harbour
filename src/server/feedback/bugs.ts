@@ -1,3 +1,4 @@
+import { bugReportMessage } from '@/server/email/bug-report';
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { adminAppUrl } from '@/lib/admin-app-url';
@@ -95,10 +96,11 @@ export async function maintainBugReports(now = new Date()) {
       // The support inbox receives no customer name/email, tokens, raw logs, or screenshot attachment.
       // Screenshots stay behind admin authentication and their retention deadline.
       const screenshotURL = adminAppUrl(`/api/admin/feedback/bugs/${row.id}/screenshot`);
-      const screenshotLink = row.screenshot && screenshotURL?.protocol === 'https:' ? `\nScreenshot (authorized support access, expires after 7 days): ${screenshotURL}` : '';
       if (emailDeliveryMocked()) throw new Error('EMAIL_NOT_CONFIGURED');
-      const result = await emailProvider.send({ to: 'support@nexdoapp.com', subject: `NexDo bug report ${row.reference}`,
-        text: `${row.reference}\n\n${row.feedback.description}\n\nDiagnostics:\n${row.metadata}${screenshotLink}` });
+      const result = await emailProvider.send({ to: 'support@nexdoapp.com', ...bugReportMessage({
+        reference: row.reference, description: row.feedback.description, metadata: row.metadata,
+        screenshotUrl: row.screenshot && row.screenshotExpiresAt > now && screenshotURL?.protocol === 'https:' ? screenshotURL.href : undefined,
+      }) });
       if (result.status !== 'SENT') throw new Error('EMAIL_FAILED');
       await prisma.bugReport.updateMany({ where: { id: row.id, leaseUntil }, data: { emailSentAt: new Date(), leaseUntil: null } }); sent++;
     } catch {
