@@ -18,5 +18,6 @@ it('shows empty state and ignores invalid cursors', async () => {
   vi.mocked(adminData).mockResolvedValue({ bugs: [], nextCursor: null });
   render(await BugReportsPage({ searchParams: Promise.resolve({ cursor: 'bad' }) }));
   expect(screen.getByText('No bug reports submitted yet.')).toBeTruthy();
+  expect(screen.getByText('Development Bug Reports').getAttribute('href')).toBe('https://admin-dev.nexdoapp.com/bug-reports');
   expect(vi.mocked(adminData).mock.lastCall?.[0]).toBe('/api/admin/feedback/bugs');
 });
