@@ -120,3 +120,28 @@ it('does not start paid voice when the allowance lookup fails', async () => {
   expect(response.status).toBeGreaterThanOrEqual(500);
   expect(provider).not.toHaveBeenCalled();
 });
+
+it.each([
+  ['malformed JSON', () => new Response('{broken', { status: 200 })],
+  ['missing credentials', () => Response.json({ expires_at: 123 })],
+  ['invalid credential types', () => Response.json({ value: 42, expires_at: 'tomorrow' })],
+  ['unavailable model', () => Response.json({ error: { code: 'model_not_found', message: 'private model diagnostic' } }, { status: 404 })],
+] as const)('fails safely for %s', async (_name, result) => {
+  upstream.mockResolvedValue(result());
+  const response = await POST(request());
+  expect(response.status).toBe(502);
+  const body = await response.json();
+  expect(body.error).toBeTruthy();
+  expect(body.value).toBeUndefined();
+  expect(JSON.stringify(body)).not.toMatch(/server-key|private model diagnostic/);
+  expect(upstream).toHaveBeenCalledTimes(1);
+});
+
+it('handles a provider timeout without issuing a credential or retrying repeatedly', async () => {
+  upstream.mockRejectedValue(new DOMException('private timeout diagnostic', 'TimeoutError'));
+  const response = await POST(request());
+  expect(response.status).toBe(502);
+  expect(await response.json()).toEqual({ error: 'Voice connection unavailable. Please try again later.' });
+  expect(upstream).toHaveBeenCalledTimes(1);
+  expect(upstream.mock.calls[0][1].signal).toBeInstanceOf(AbortSignal);
+});

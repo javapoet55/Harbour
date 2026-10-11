@@ -54,3 +54,17 @@ it('combines explicit status and overdue filters instead of overwriting status',
  expect(where.AND).toContainEqual({ status: { notIn: ['COMPLETED', 'CANCELLED'] } });
  expect(where.dueAt.lt).toBeInstanceOf(Date);
 });
+
+it('accepts a first task with only a name and no project or calendar setup', async () => {
+  mocks.createTask.mockReset();
+  mocks.createTask.mockResolvedValue({ id: 'first-task', title: 'Read a book', status: 'PLANNED', startAt: null, reminderAt: null });
+  const response = await POST(new Request('http://localhost/api/tasks', {
+    method: 'POST', body: JSON.stringify({ title: 'Read a book' }),
+  }));
+  expect(response.status).toBe(200);
+  expect(await response.json()).toMatchObject({ task: { id: 'first-task', title: 'Read a book', status: 'PLANNED' } });
+  expect(mocks.createTask).toHaveBeenCalledWith(expect.objectContaining({
+    userId: 'task-owner', title: 'Read a book', status: 'PLANNED',
+    projectId: undefined, startAt: null, dueAt: null,
+  }));
+});

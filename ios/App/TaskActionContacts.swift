@@ -24,9 +24,9 @@ actor AppleTaskActionContacts: TaskActionContactResolver {
             _ = try await store.requestAccess(for: .contacts)
         }
         let status = CNContactStore.authorizationStatus(for: .contacts)
-        var permitted = status == .authorized
-        if #available(iOS 18, *) { permitted = permitted || status == .limited }
-        guard permitted else { throw TaskActionServiceError.contactsDenied }
+        var access: PermissionAccess.Status = status == .authorized ? .authorized : .denied
+        if #available(iOS 18, *), status == .limited { access = .limited }
+        guard PermissionAccess.decision(for: .contacts, status: access) == .allow else { throw TaskActionServiceError.contactsDenied }
         let keys: [CNKeyDescriptor] = [CNContactIdentifierKey as CNKeyDescriptor,
             CNContactFormatter.descriptorForRequiredKeys(for: .fullName), CNContactPhoneNumbersKey as CNKeyDescriptor,
             CNContactEmailAddressesKey as CNKeyDescriptor]

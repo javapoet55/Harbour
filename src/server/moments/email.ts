@@ -29,12 +29,13 @@ async function token(params: Record<string,string>) {
   const res=await observedFetch('https://oauth2.googleapis.com/token',{method:'POST',signal:AbortSignal.timeout(15000),body:new URLSearchParams({client_id:process.env.MOMENTS_GOOGLE_CLIENT_ID!,client_secret:process.env.MOMENTS_GOOGLE_CLIENT_SECRET!,...params})});
   if (res.status===429||res.status>=500) throw new MomentError('Gmail is temporarily unavailable. Try again shortly.',503);
   if (!res.ok) throw new MomentError('Reconnect your email account.',409);
-  return await res.json() as {access_token:string; refresh_token?:string};
+  return await res.json() as {access_token:string; refresh_token?:string; scope?:string};
 }
 export async function connect(code:string,state:string) {
   const sub=await verifyEmailState(state);
   const t=await token({code,grant_type:'authorization_code',redirect_uri:process.env.MOMENTS_GOOGLE_REDIRECT_URI!});
   if(!t.refresh_token) throw new MomentError('Please reconnect and approve offline email access.');
+  if (!t.scope?.split(/\s+/).includes('https://www.googleapis.com/auth/gmail.send')) throw new MomentError('Please reconnect and approve permission to send email with Gmail.');
   const res=await observedFetch('https://openidconnect.googleapis.com/v1/userinfo',{headers:{Authorization:`Bearer ${t.access_token}`},signal:AbortSignal.timeout(15000)});
   const profile=await res.json() as {email?:string;email_verified?:boolean};
   if(!res.ok||!profile.email||!profile.email_verified) throw new MomentError('Unable to verify email account.');

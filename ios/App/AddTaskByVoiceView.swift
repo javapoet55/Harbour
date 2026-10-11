@@ -47,6 +47,8 @@ struct AddTaskByVoiceView: View {
     @State private var audioOutput = "Device audio"
     @State private var consent = false
     @State private var starting = false
+    @State private var microphoneDenied = false
+    @State private var isVisible = false
     @State private var readyBell: AVAudioPlayer?
     private let clock = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
     @State private var startupError: String?
@@ -92,6 +94,14 @@ struct AddTaskByVoiceView: View {
                         Text(recovering && !connectivity.isConnected ? "Waiting for network…" : recovering ? "Reconnecting…" : starting ? "Connecting…" : foodContext != nil && voice.phase == .toolExecution ? "Looking up food information…" : voice.status).font(.title2.bold()).foregroundStyle(Color.nexdoIndigo)
                             .accessibilityAddTraits(.updatesFrequently)
                         if let error = startupError ?? voice.error { Text(error).foregroundStyle(.red).multilineTextAlignment(.center) }
+                        if microphoneDenied {
+                            Button("Open Settings") {
+                                if let url = URL(string: UIApplication.openSettingsURLString) {
+                                    UIApplication.shared.open(url)
+                                }
+                            }
+                            .buttonStyle(.borderedProminent)
+                        }
                         if voice.phase == .paused {
                             Button("Resume") { Task { await voice.resumeAfterAudioInterruption() } }
                                 .buttonStyle(.borderedProminent)
@@ -208,8 +218,11 @@ struct AddTaskByVoiceView: View {
                 beginAutomaticRecovery(resetAttempts: true)
             }
         }
-        .onDisappear { recoveryTask?.cancel(); readyBell?.stop(); voice.close(); executor.clear(); endBackgroundTask() }
+        .onAppear { isVisible = true }
+        .onDisappear { isVisible = false; recoveryTask?.cancel(); readyBell?.stop(); voice.close(); executor.clear(); endBackgroundTask() }
         .onChange(of: scenePhase) { _, phase in
+            // Permission setup has no live session to suspend (including trips to Settings).
+            guard voice.phase != .idle else { return }
             if phase == .background {
                 voice.background(true)
                 backgroundTask = UIApplication.shared.beginBackgroundTask(withName: "Finish voice session") { voice.close(reason: .appBackgrounded); endBackgroundTask() }
@@ -262,12 +275,18 @@ struct AddTaskByVoiceView: View {
     }
     private func start() async {
         guard !starting, voice.phase == .idle else { return }
-        starting = true; startupError = nil; defer { starting = false }
+        starting = true; startupError = nil; microphoneDenied = false; defer { starting = false }
         executor.attach(model)
         do {
+            try await VoicePermissionGate.authorize { await AVAudioApplication.requestRecordPermission() }
+            guard isVisible else { return }
             let credential = try await model.voiceTaskSession(calendarOnly: calendarOnly, foodContext: foodContext)
             try Task.checkCancellation()
+            guard isVisible else { return }
             voice.start(credential: credential)
+        } catch VoicePermissionGate.Failure.microphoneDenied {
+            microphoneDenied = true
+            startupError = VoicePermissionGate.Failure.microphoneDenied.localizedDescription
         } catch is CancellationError {
             // Dismissing the screen cancels startup; it is not a connection failure.
         } catch {
