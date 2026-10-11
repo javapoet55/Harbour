@@ -1,3 +1,5 @@
+import { voiceAllowanceResponse } from '@/server/voice/usage';
+import { speechAudio } from '@/server/voice/speech-stream';
 import { observedFetch } from '@/server/health/telemetry';
 import { healthRoute } from '@/server/health/telemetry';
 import { nexdoPersonality } from "@/server/assistant-personality";
@@ -16,18 +18,20 @@ async function healthHandlerPOST(req: Request) {
     }
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) return Response.json({ error: 'OpenAI voice is not configured.' }, { status: 503 });
+    const allowance = await voiceAllowanceResponse(user.id, user.timeZone);
+    if (allowance) return allowance;
     const response = await observedFetch('https://api.openai.com/v1/audio/speech', {
       method: 'POST',
       headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         model: 'gpt-4o-mini-tts', voice: 'coral', input: body.text.trim(),
         instructions: nexdoPersonality,
-        response_format: 'mp3',
+        response_format: 'mp3', stream_format: 'sse',
       }),
       signal: AbortSignal.any([req.signal, AbortSignal.timeout(45000)]),
     });
     if (!response.ok) return Response.json({ error: 'OpenAI voice is temporarily unavailable. You can still read the answer.' }, { status: 502 });
-    return new Response(await response.arrayBuffer(), {
+    return new Response(await speechAudio(response) as BodyInit, {
       headers: { 'Content-Type': 'audio/mpeg', 'Cache-Control': 'private, no-store' },
     });
   } catch (err) {

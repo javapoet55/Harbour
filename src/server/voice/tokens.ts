@@ -1,13 +1,13 @@
 import { prisma } from '@/server/db';
 import { groupVoiceTokens, voiceTokenReceipt, type VoiceTokenReceipt } from '@/lib/voice-tokens';
 
-export async function recordVoiceTokens(userId: string, receipt: VoiceTokenReceipt) {
+export async function recordVoiceTokens(userId: string, receipt: VoiceTokenReceipt, source = 'ios-realtime') {
   const value = voiceTokenReceipt.parse(receipt);
   // Provider response/item IDs are stable across retries. First receipt wins;
   // retries must not change its timestamp or duplicate usage.
   await prisma.userMemory.upsert({
     where: {userId_key:{userId,key:`voice-token:${value.source}:${value.id}`}},
-    create: {userId,key:`voice-token:${value.source}:${value.id}`,kind:'voice_tokens',source:'ios-realtime',value:JSON.stringify(value)},
+    create: {userId,key:`voice-token:${value.source}:${value.id}`,kind:'voice_tokens',source,value:JSON.stringify(value)},
     update: {},
   });
 }

@@ -1,3 +1,4 @@
+import { voiceAllowanceResponse } from '@/server/voice/usage';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { requireUser } from '@/server/auth';
 import { POST } from './route';
@@ -82,4 +83,27 @@ it('rejects silence, malformed output, and transcripts too long for the assistan
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(Response.json(output)));
     expect((await POST(request())).status).toBe(422);
   }
+});
+
+vi.mock('@/server/voice/usage', () => ({ voiceAllowanceResponse: vi.fn().mockResolvedValue(null) }));
+it('blocks exhausted monthly allowance before contacting the provider', async () => {
+  vi.mocked(requireUser).mockResolvedValue({ id: 'exhausted', timeZone: 'America/Los_Angeles' } as never);
+  vi.mocked(voiceAllowanceResponse).mockResolvedValueOnce(Response.json({ code: 'VOICE_MONTHLY_LIMIT_REACHED' }, { status: 429 }));
+  vi.stubEnv('OPENAI_API_KEY', 'test-key');
+  const provider = vi.fn(); vi.stubGlobal('fetch', provider);
+  const response = await POST(request());
+  expect(response.status).toBe(429);
+  expect(await response.json()).toMatchObject({ code: 'VOICE_MONTHLY_LIMIT_REACHED' });
+  expect(voiceAllowanceResponse).toHaveBeenCalledWith('exhausted', 'America/Los_Angeles');
+  expect(provider).not.toHaveBeenCalled();
+});
+
+it('does not start paid voice when the allowance lookup fails', async () => {
+  vi.mocked(requireUser).mockResolvedValue({ id: 'voice-user', timeZone: 'America/Los_Angeles' } as never);
+  vi.mocked(voiceAllowanceResponse).mockRejectedValueOnce(new Error('database unavailable'));
+  vi.stubEnv('OPENAI_API_KEY', 'test-key');
+  const provider = vi.fn(); vi.stubGlobal('fetch', provider);
+  const response = await POST(request());
+  expect(response.status).toBeGreaterThanOrEqual(500);
+  expect(provider).not.toHaveBeenCalled();
 });

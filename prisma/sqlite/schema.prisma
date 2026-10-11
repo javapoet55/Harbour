@@ -9,6 +9,7 @@ datasource db {
 }
 
 model User {
+  aiApiReceipts AiApiReceipt[]
   callerIdentity CallerIdentity?
   nutritionCallSettings NutritionCallSettings?
   nutritionCalls NutritionCall[]
@@ -937,4 +938,27 @@ model BugReport {
   attempts Int @default(0)
   @@index([nextAttemptAt, emailSentAt])
   @@index([expiresAt])
+}
+
+// Numeric provider usage only; never prompts, transcripts, audio, or credentials.
+model AiApiReceipt {
+  userId String?
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+  audioInput Int?
+  audioOutput Int?
+  id String @id @default(cuid())
+  createdAt DateTime @default(now())
+  operation String
+  feature String
+  model String?
+  status Int
+  inputTokens Int?
+  outputTokens Int?
+  cachedTokens Int?
+  durationSeconds Float?
+  characters Int?
+  costUsd Float?
+  pricing String?
+  @@index([createdAt])
+  @@index([operation, createdAt])
 }

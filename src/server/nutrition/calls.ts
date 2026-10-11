@@ -1,3 +1,6 @@
+import { voiceTokenReceipt } from '@/lib/voice-tokens';
+import { recordVoiceTokens } from '@/server/voice/tokens';
+import { inc } from '@/lib/metrics';
 import { z } from 'zod';
 import { prisma } from '@/server/db';
 import { pushProvider } from '@/providers';
@@ -341,6 +344,7 @@ export async function executeTool(callId: string, name: string, rawArgs: unknown
 }
 
 export const completeInput = z.object({
+  tokenReceipts: z.array(z.unknown()).max(400).optional(),
   durationSec: z.number().min(0).max(3600).optional(),
   endReason: z.string().max(60).optional(),
   noiseFilter: z.enum(['krisp', 'openai_only', 'none']).optional(),
@@ -353,6 +357,13 @@ export async function completeCall(callId: string, raw: unknown) {
   const input = completeInput.parse(raw);
   const call = await prisma.nutritionCall.findUnique({ where: { id: callId } });
   if (!call) throw new NutritionError('NOT_FOUND');
+  for (const value of input.tokenReceipts ?? []) {
+    const receipt = voiceTokenReceipt.safeParse(value);
+    if (receipt.success) {
+      try { await recordVoiceTokens(call.userId, receipt.data, 'nutrition-realtime'); }
+      catch { inc('ai_cost.write_failures'); }
+    }
+  }
   const status = call.endReason?.startsWith('skipped_') ? 'SKIPPED' : 'COMPLETED';
   await finalizeCall(callId, { status, endReason: call.endReason ?? input.endReason, durationSec: input.durationSec, noiseFilter: input.noiseFilter, transcript: input.transcript, backupTranscript: input.backupTranscript });
   return { ok: true };

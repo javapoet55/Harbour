@@ -1,9 +1,10 @@
+import { recordApiReceipt, apiCostOperation } from '@/server/ai-api-costs';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { randomBytes } from 'node:crypto';
 import { inc } from '@/lib/metrics';
 import { prisma } from '@/server/db';
 
-export const healthContext = new AsyncLocalStorage<{ traceId: string; feature: string }>();
+export const healthContext = new AsyncLocalStorage<{ traceId: string; feature: string; userId?: string }>();
 export const newTrace = () => randomBytes(16).toString('hex');
 // Strict allowlisting: never persist exception messages, bodies, URLs, headers or user identifiers.
 export function safeError(error: unknown) {
@@ -63,6 +64,13 @@ const hosts: Record<string, string> = {
   'appleid.apple.com': 'Apple Authentication', 'analyticsdata.googleapis.com': 'Firebase Analytics',
 };
 export async function observedFetch(input: Parameters<typeof fetch>[0], init?: RequestInit): Promise<Response> {
+  const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
+  if (url.hostname !== 'api.openai.com' || !apiCostOperation(url.pathname)) return observedHealthFetch(input, init);
+  let response: Response | undefined;
+  try { response = await observedHealthFetch(input, init); return response; }
+  finally { await recordApiReceipt(url.pathname, init, response, healthContext.getStore()?.feature ?? 'Background', healthContext.getStore()?.userId); }
+}
+async function observedHealthFetch(input: Parameters<typeof fetch>[0], init?: RequestInit): Promise<Response> {
   const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
   const service = hosts[url.hostname];
   if (!service || process.env.NEXDO_HEALTH_ENABLED !== 'true') return fetch(input, init);

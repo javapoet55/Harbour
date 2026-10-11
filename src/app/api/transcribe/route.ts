@@ -1,3 +1,4 @@
+import { voiceAllowanceResponse } from '@/server/voice/usage';
 import { observedFetch } from '@/server/health/telemetry';
 import { healthRoute } from '@/server/health/telemetry';
 import { requireUser } from '@/server/auth';
@@ -35,7 +36,11 @@ async function readAudio(req: Request): Promise<Blob | null> {
 }
 
 async function healthHandlerPOST(req: Request) {
-  try { await requireUser(); } catch (err) { return jsonError(err); }
+  try {
+    const user = await requireUser();
+    const allowance = await voiceAllowanceResponse(user.id, user.timeZone);
+    if (allowance) return allowance;
+  } catch (err) { return jsonError(err); }
   try {
     const audio = await readAudio(req);
     if (!audio) return failure('Record a short voice message of up to two minutes.', 400);

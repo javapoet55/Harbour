@@ -1,0 +1,26 @@
+import { afterAll, expect, it } from 'vitest';
+import { randomUUID } from 'node:crypto';
+import { prisma } from '@/server/db';
+import { recordVoiceUsage, voiceAllowanceResponse } from './usage';
+const ids: string[] = [];
+afterAll(async () => { await prisma.user.deleteMany({ where: { id: { in: ids } } }); });
+it('blocks at 100 minutes, isolates accounts, and unlocks in the next local month', async () => {
+  const user = await prisma.user.create({ data: { name: 'Voice allowance test', email: `voice-limit-${randomUUID()}@example.test`, passwordHash: 'test' } });
+  const other = await prisma.user.create({ data: { name: 'Voice allowance test', email: `voice-limit-${randomUUID()}@example.test`, passwordHash: 'test' } });
+  ids.push(user.id, other.id);
+  const zone = 'America/Los_Angeles';
+  const september = new Date('2026-10-01T06:59:00Z');
+  await recordVoiceUsage(user.id, zone, randomUUID(), 5999, september);
+  expect(await voiceAllowanceResponse(user.id, zone, september)).toBeNull();
+  const session = randomUUID();
+  await recordVoiceUsage(user.id, zone, session, 1, september);
+  await recordVoiceUsage(user.id, zone, session, 0, september);
+  const blocked = await voiceAllowanceResponse(user.id, zone, september);
+  expect(blocked?.status).toBe(429);
+  expect(blocked?.headers.get('Cache-Control')).toContain('no-store');
+  expect(await blocked?.json()).toMatchObject({ code: 'VOICE_MONTHLY_LIMIT_REACHED', usedSeconds: 6000, remainingSeconds: 0, month: '2026-09' });
+  expect(await voiceAllowanceResponse(other.id, zone, september)).toBeNull();
+  await recordVoiceUsage(user.id, zone, session, 61, september);
+  expect((await voiceAllowanceResponse(user.id, zone, september))?.status).toBe(429);
+  expect(await voiceAllowanceResponse(user.id, zone, new Date('2026-10-01T07:00:00Z'))).toBeNull();
+});

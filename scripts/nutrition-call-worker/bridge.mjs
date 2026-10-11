@@ -1,3 +1,4 @@
+import { usageReceipt } from './usage.mjs';
 // One phone call: Twilio Media Stream ⇄ (noise filter) ⇄ OpenAI Realtime, with tools executed by the Nexdo API.
 import { MULAW_BYTES_PER_MS } from './audio.mjs';
 
@@ -23,6 +24,7 @@ export class CallBridge {
     this.streamSid = null; this.callSid = null; this.token = null;
     this.openai = null; this.ready = false; this.pending = [];
     this.filter = null; this.flux = null;
+    this.tokenReceipts = new Map(); this.model = undefined;
     this.transcript = []; this.startedAt = null; this.timers = [];
     this.assistantItem = null; this.assistantAudioMs = 0; this.firstDeltaAt = null; this.marksPending = 0;
     this.endAfterResponse = false; this.hangupTimer = null; this.ended = false;
@@ -45,6 +47,7 @@ export class CallBridge {
     let config;
     try { config = await this.d.api.session(this.token, this.callSid); }
     catch { this.d.log('session_rejected'); return this.end('session_rejected', { report: false }); }
+    this.model = config.session?.model;
     this.filter = this.d.createNoiseFilter();
     if (this.filter.reason) this.d.log(`noise_filter: ${this.filter.reason}`);
     this.flux = this.d.createBackupTranscriber();
@@ -116,6 +119,8 @@ export class CallBridge {
   }
 
   async responseFinished(response) {
+    const receipt = usageReceipt(response.id, response.usage, this.model);
+    if (receipt && this.tokenReceipts.size < 400) this.tokenReceipts.set(receipt.id, receipt);
     this.responseDone = true;
     const calls = (response.output ?? []).filter(item => item.type === 'function_call');
     if (!calls.length) {
@@ -156,7 +161,7 @@ export class CallBridge {
     try {
       await this.d.api.complete(this.token, {
         durationSec, endReason: reason, noiseFilter: this.filter?.name ?? 'openai_only',
-        transcript: this.transcript, ...(backup ? { backupTranscript: backup } : {}),
+        transcript: this.transcript, ...(this.tokenReceipts.size ? { tokenReceipts: [...this.tokenReceipts.values()] } : {}), ...(backup ? { backupTranscript: backup } : {}),
       });
     } catch { this.d.log('complete_report_failed'); }
   }
