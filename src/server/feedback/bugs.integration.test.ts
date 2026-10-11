@@ -123,3 +123,23 @@ it('recovers a short-reference collision and preserves the receipt on retry', as
   expect(await saveBug(u, body)).toBe(receipt);
   expect(await prisma.feedback.count({ where: { id: body.id } })).toBe(1);
 });
+
+it('lists newly created tickets for admins without exposing screenshots and excludes expired reports', async () => {
+  const { GET: list } = await import('@/app/api/admin/feedback/bugs/route');
+  const request = (suffix = '') => new Request(`http://localhost/api/admin/feedback/bugs${suffix}`);
+  vi.mocked(requireAdmin).mockRejectedValueOnce(new Error('UNAUTHENTICATED'));
+  expect((await list(request())).status).toBe(401);
+  expect((await list(request('?cursor=invalid'))).status).toBe(400);
+  const u = await user(); const body = input();
+  await saveBug(u, body);
+  const response = await list(request());
+  expect(response.status).toBe(200);
+  expect(response.headers.get('cache-control')).toContain('no-store');
+  const data = await response.json();
+  expect(data.bugs.find((bug: { id: string }) => bug.id === body.id)).toEqual({
+    id: body.id, reference: referenceFor(body.id), description: body.description,
+    createdAt: expect.any(String), metadata: body.metadata, hasScreenshot: false,
+  });
+  await prisma.bugReport.update({ where: { id: body.id }, data: { expiresAt: new Date(0) } });
+  expect((await (await list(request())).json()).bugs.some((bug: { id: string }) => bug.id === body.id)).toBe(false);
+});
