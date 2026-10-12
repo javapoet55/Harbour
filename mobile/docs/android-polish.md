@@ -1295,6 +1295,8 @@ JavaScript only; no new build needed.
 
 ### The chooser and the guides stay light in dark mode
 
+> **Superseded for the chooser by §33 (Phase 13 Run A):** Swift gave the chooser a real dark mode in 4185501, and the RN chooser now follows it. The guides stay fixed light, as Swift’s still are.
+
 Swift's intent is a fixed light design (§21), but on iOS in dark mode its chooser and guides actually
 lose text: subtitles, step text, "Back to Home" and the bar's labels turn white on white (`wellness-chooser-dark`,
 `module-guide-shopping-dark`). That is a Swift bug, kept on the §22 "For the team" list. Android keeps the
@@ -1926,3 +1928,46 @@ calendar connection onboarding (08be688), Today attention sheet, Ask landing, da
 `features/tasks/workingDays.ts`), Do Now's "Today isn't a selected working day", Settings "Working days", "Forgot
 password?" under Change password, and the account-deletion overlay. The voice prompt gained follow-up guidance
 (server only).
+
+## 33. Phase 13 Run A (Windows): small screens from Swift source (2026-10-12)
+
+Built from `git diff 1938c7c origin/main -- ios/` on `rn-phase-13`, on top of the §32 plumbing. No reference
+captures exist; each item follows the Swift source's strings, states and order. Jest 2,545 → 2,572; `tsc` and
+ESLint clean. **Item 10 adds a native module: a new Android build is required** (see its row).
+
+| # | Swift source | Built | Deliberate Android difference |
+|---|---|---|---|
+| 1 | RootView.swift:1502 (`scheduleExpanded`), :1507-1515 (`visibleSchedule`), :1624-1633 (button), :1645 (`.onChange(of: range)`) | Today's schedule card shows three rows; "View N more" expands it in place and "Show less" folds it (was seven rows and a jump to Calendar). Hints "Shows all schedule items here" / "Shows the first three schedule items". Changing the range folds it. Search still shows every match. `TodayIntelligenceCard.tsx` | None. The 0.2 s ease is a `LayoutAnimation` (opacity); 44 pt touch target as Swift's `minHeight: 44`. |
+| 2 | DoNowView.swift:50 | Do Now's window line: "Today isn't a selected working day" before "Outside your working hours" before "You have … free now" (`doNowWindowTitle`). | None. |
+| 3 | ProfileView.swift:320, :658 (`WorkingDaysField`) | Settings → Profile and time: "Working days" heading, seven `SettingsToggle` rows Sunday first, the caption "Choose at least one day. Find my next task uses these days and your working hours.", between Time zone and Working hours. The last day on is disabled. Unset reads as Mon–Fri; `workingDays` is only sent once a day is toggled. `SettingsToggle` gained `disabled`. | Swift uses toggles, so the shared toggle row is reused rather than a chip row. On Android the heading takes the shared field-label style (§4, §5), like "Working hours" under it. |
+| 4 | ProfileView.swift:192-195 (`Forgot password?`), :204-206 (`.sheet { PasswordResetView(initialEmail:) }`); NexdoApp.swift:228 (`if profile != nil { await reset() }`); RootView.swift:711 (`PasswordResetView`) | "Forgot password?" row under Change password's fields opens the existing reset screen as a modal in the Account stack (`app/account/reset-password.tsx`), prefilled with the account email. Signed in, a confirmed reset closes the presented screens, ends the session, opens Sign in and shows "Password updated" / "You can now sign in with your new password." Signed out, unchanged. | Swift's alert sits in a sheet the reset tears down; here it is shown over Sign in, so it is actually seen. |
+| 5 | ProfileView.swift:433-444, :682-697 (`AccountDeletionPresentation`) | "Deleting account…" with a spinner on a material card over Settings while the delete runs; the screen is disabled and cannot be dismissed (already true), a second Delete is ignored, and a failure alerts "Couldn't delete account" with the reason (or "Please try again."). | The material is the same opaque stand-in Ask's "Working on it…" uses. |
+| 6a | RootView.swift:2297-2302; TaskCreationSpacing.swift:6-21 | New Task: the date pill's time moves to the first opening with 15 minutes either side of open, scheduled tasks; a time in the title is used as written. TODO removed. | None. |
+| 6b | AddTaskByVoiceView.swift:50, :97-104, :225, :278-289; PermissionAccess.swift (`VoicePermissionGate`) | Voice asks for the microphone BEFORE requesting a session; a refusal shows "Microphone access is off. Enable it in Settings to use voice, or close this screen to type." with an "Open Settings" button; closing during the prompt cancels quietly; going to Settings while idle no longer backgrounds the session. | The permission comes from expo-audio (already installed); "Open Settings" opens the app's Android settings page. The button is a filled capsule standing in for `.borderedProminent`. |
+| 7 | WellnessChooserView.swift:46-49; WellnessModuleGuide.swift:139; NexdoApp.swift:374, :872 | A module card opens its guide only the first time this sign-in enters that module, then the module itself (`openModuleGuide` + `useWellnessGuides.enter`). Leaving a guide with Back still counts as seen; each module is separate; a new sign-in shows them all again. | None. |
+| 8 | WellnessChooserView.swift:8-17 (`isDark`, `ink`), :63-75 (hero moon), :83-118 (cards), :119-126 (`darkAccent`), :127-137 (bar); WellnessModuleGuide.swift:102 | The chooser follows the theme as Swift now does: near-black gradient, white ink, `darkAccent` colours (#59E59E, #FFA861, #B8A6FF, #FF7AB3), system-surface cards and bar, a lilac moon instead of the pack art (which is multiplied onto white), and no forced-dark status bar. Light is unchanged. New theme token `tertiaryBackground`. **Supersedes §23's "fixed light in both themes" for the chooser.** The module guides stay fixed light: Swift still forces `.light` on them (:102). | Swift raises the card stroke to 0.65 under Increase Contrast; Android has no such setting, so it stays 0.32. |
+| 9 | StoreBrandLogo.swift:15, :32, :63-65; ShoppingViews.swift:109, :241 | `StoreBrandLogo` shows the list's own logo (`storeLogoData`) first, labelled with the store name, without asking for the brand; one that can't be drawn falls back to the brand lookup. Passed from My Lists and the list header. The logo editor waits for captures. | None. |
+| — | CalendarEventDetailsView.swift:21, :44 | Device-calendar decision, label only: Android names it "Phone calendar" and the note "On this phone · Edit this event in Phone calendar."; iOS keeps Swift's. The source value stays `apple-device`. The expo-calendar reader waits for the Calendar run. | The label, by decision. "On this iPhone" also became "On this phone" so the line is not iPhone-specific (**for Sri**). |
+| 10 | NexdoCrashReporting.swift:1-23; NexdoApp.swift:19; ios/CRASHLYTICS.md | `@react-native-firebase/crashlytics` 26.4.0 (same as app/analytics) and its config plugin. At launch (`app/_layout.tsx`, module scope): collection on and one custom value, `build_configuration` = "debug"/"release" — no user id or account details. `firebase.json` sets `crashlytics_debug_enabled: true` so debug builds report, as Swift's Debug builds do. Debug-only test crash: developer menu "Crashlytics test crash" → `controlled_test` = "true", a log line, and a native crash 5 s later; compiled out of release. `src/lib/crashReporting.ts`. | React Native has no launch arguments, so the test crash is a developer-menu item instead of `-nexdo-crashlytics-test-crash`. RNFB also records fatal JS errors (its default); Swift has no JS layer. |
+
+### Item 10: what the native build changes
+
+- **A new Android build is required**; an OTA/JS update does not add the SDK.
+- `expo prebuild` adds, via the plugin, `classpath 'com.google.firebase:firebase-crashlytics-gradle:3.0.8'` to
+  `android/build.gradle` and `apply plugin: 'com.google.firebase.crashlytics'` to `android/app/build.gradle`
+  (checked by running the plugin's own transforms on the current generated files; `android/` is not tracked).
+- **R8 mapping upload:** release builds are not minified today (`android.enableMinifyInReleaseBuilds` defaults to
+  false in `android/app/build.gradle:69`), so there is no mapping file and stack traces are readable as is. If
+  minify is turned on, the Crashlytics Gradle plugin uploads the R8 mapping for each minified release build by
+  default (`mappingFileUploadEnabled`), which needs network access and the Firebase project credentials at build
+  time; keep the mapping files of every distributed build. NDK symbol upload is not enabled (no native crash
+  code of our own).
+- Verification on a device, mirroring CRASHLYTICS.md: install a debug build, open the developer menu, choose
+  "Crashlytics test crash", wait for the crash, relaunch to upload, and look for it under the Android app in
+  Firebase project `nexdoapp-19f07` with `build_configuration = debug` and `controlled_test = true`. Alert
+  subscriptions are per member and per app, so the Android app needs its own.
+
+### Needed a capture after all
+
+None of the ten items. Not built, as asked: the shopping logo editor and the expo-calendar device reader. The
+bug-report screen tags (`.bugReportScreen`) on the Wellness destinations wait with the bug-report screen.

@@ -144,6 +144,15 @@ jest.mock('expo-audio', () => ({
   requestRecordingPermissionsAsync: jest.fn(async () => ({ granted: true, status: 'granted', canAskAgain: true })),
 }));
 
+// Crashlytics is native-only; `configureCrashReporting` runs at the root layout's module scope.
+jest.mock('@react-native-firebase/crashlytics', () => ({
+  getCrashlytics: jest.fn(() => ({})),
+  setCrashlyticsCollectionEnabled: jest.fn(async () => undefined),
+  setAttribute: jest.fn(async () => undefined),
+  log: jest.fn(),
+  crash: jest.fn(),
+}));
+
 // react-native-webrtc and its in-call companion are native-only; the voice tests inject fakes.
 jest.mock('react-native-webrtc', () => ({ RTCPeerConnection: jest.fn(), mediaDevices: { getUserMedia: jest.fn() } }));
 jest.mock('react-native-incall-manager', () => ({

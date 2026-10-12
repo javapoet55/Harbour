@@ -23,6 +23,7 @@ import { useAppearance } from '../src/store/appearance';
 import { useLastSignedIn } from '../src/store/lastSignedIn';
 import { useSession } from '../src/store/session';
 import { useTheme } from '../src/theme';
+import { configureCrashReporting } from '../src/lib/crashReporting';
 
 /**
  * ONE launch splash, not two. Left to itself the native splash hides on the first React frame, and the
@@ -32,6 +33,9 @@ import { useTheme } from '../src/theme';
  * `RootView` does. Called at module scope, as the docs require, so it runs before the first frame.
  */
 void SplashScreen.preventAutoHideAsync();
+
+/** `NexdoApp.init()` → `NexdoCrashReporting.configure()` (4185501): at launch, before the first screen. */
+configureCrashReporting();
 
 /**
  * The longest the native splash is held. A launch that is still retrying `/api/me` after this falls

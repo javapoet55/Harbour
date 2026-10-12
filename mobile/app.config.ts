@@ -143,6 +143,11 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     // Firebase Analytics. Android only for now: iOS still ships the Swift app, which has its own SDK.
     '@react-native-firebase/app',
     '@react-native-firebase/analytics',
+    // Phase 13 Run A: Crashlytics, as ios/CRASHLYTICS.md (4185501). The plugin adds the
+    // `com.google.firebase.crashlytics` Gradle plugin and its classpath to the generated android/
+    // project; it needs a new native build. firebase.json turns collection on in debug builds too,
+    // as Swift's Debug builds report (tagged `build_configuration` = "debug").
+    '@react-native-firebase/crashlytics',
     'expo-apple-authentication',
     // Phase 7. `expo-web-browser` drives the Google Calendar OAuth session
     // (`openAuthSessionAsync`), the analogue of Swift's `ASWebAuthenticationSession`
