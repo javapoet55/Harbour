@@ -432,6 +432,41 @@ describe('the Settings screen', () => {
     await waitFor(() => expect(screen.getByTestId('settings-message')).toHaveTextContent('Settings saved.'));
   });
 
+  /** `WorkingDaysField` (ProfileView.swift, d568989). */
+  it('lists the working days Sunday first, and saves Saturday added', async () => {
+    mockUpdateSettings.mockResolvedValue({ ok: true });
+    await show(<Settings />);
+    await waitFor(() => expect(screen.getByTestId('settings-working-days')).toBeTruthy());
+    expect(screen.getByText('Working days')).toBeTruthy();
+    expect(screen.getByText('Choose at least one day. Find my next task uses these days and your working hours.')).toBeTruthy();
+    // Unset on the server reads as Monday to Friday.
+    const on = [0, 1, 2, 3, 4, 5, 6].map((day) => screen.getByTestId(`settings-working-day-${day}`).props.accessibilityState?.checked);
+    expect(on).toEqual([false, true, true, true, true, true, false]);
+
+    fireEvent(screen.getByTestId('settings-working-day-6'), 'valueChange', true);
+    await waitFor(() => expect(screen.getByTestId('settings-working-day-6').props.accessibilityState).toMatchObject({ checked: true }));
+    fireEvent.press(screen.getByTestId('settings-save'));
+
+    await waitFor(() => expect(mockUpdateSettings).toHaveBeenCalledTimes(1));
+    expect(mockUpdateSettings.mock.calls[0][0].preference).toEqual({ ...PREFERENCES, workingDays: '1,2,3,4,5,6' });
+  });
+
+  it('keeps the last working day on', async () => {
+    await show(<Settings />, profile({ preference: { ...PREFERENCES, workingDays: '3' } }));
+    await waitFor(() => expect(screen.getByTestId('settings-working-day-3')).toBeTruthy());
+    expect(screen.getByTestId('settings-working-day-3').props.accessibilityState).toMatchObject({ checked: true, disabled: true });
+    expect(screen.getByTestId('settings-working-day-2').props.accessibilityState).toMatchObject({ checked: false, disabled: false });
+  });
+
+  it('does not send workingDays when nobody touched them', async () => {
+    mockUpdateSettings.mockResolvedValue({ ok: true });
+    await show(<Settings />);
+    await waitFor(() => expect(screen.getByTestId('settings-save')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('settings-save'));
+    await waitFor(() => expect(mockUpdateSettings).toHaveBeenCalledTimes(1));
+    expect('workingDays' in mockUpdateSettings.mock.calls[0][0].preference).toBe(false);
+  });
+
   it('refuses to save an empty name and reports Swift’s message', async () => {
     await show(<Settings />);
     await waitFor(() => expect(screen.getByTestId('settings-name')).toBeTruthy());

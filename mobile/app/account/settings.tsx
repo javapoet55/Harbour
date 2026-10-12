@@ -55,6 +55,8 @@ import { useDeleteAccount, useSyncNow, useUpdateProfile, useUploadPhoto } from '
 import { useAppearance } from '../../src/store/appearance';
 import { useConsent } from '../../src/store/consent';
 import { brand, ElevatedSurface, useTheme } from '../../src/theme';
+import { androidLabel } from '../../src/theme/androidForm';
+import { toggleWorkingDay, WORKING_DAY_LABELS, WORKING_DAYS_FOOTNOTE, workingDayLocked, workingDaySet } from '../../src/features/tasks/workingDays';
 
 /**
  * `ProfileSettingsView` (ios/App/ProfileView.swift:126), **body `:146-270`**, read top to bottom.
@@ -426,6 +428,7 @@ function SettingsScreen({
                 testID="settings-time-zone"
                 value={timeZoneLabel(zone)}
               />
+              <WorkingDaysField onChange={(workingDays) => patch({ workingDays })} value={preferences.workingDays} />
               <SettingsHours
                 end={preferences.workEnd}
                 onChangeEnd={(value) => patch({ workEnd: value })}
@@ -666,6 +669,32 @@ function SettingsScreen({
  * its health icon, name, detail, last sync, Disconnect, and the "Add my scheduled tasks and events here" toggle.
  * The demo account has no connected calendar, so this is ported from source, not from a capture.
  */
+/**
+ * `WorkingDaysField` (ProfileView.swift, d568989): "Working days" over one toggle per weekday, Sunday
+ * first, and the caption. The last day left on cannot be turned off. An unset value reads as Monday to
+ * Friday (`preferences?.workingDays ?? "1,2,3,4,5"`, `:320`).
+ */
+function WorkingDaysField({ value, onChange }: { value: string | undefined; onChange: (next: string) => void }) {
+  const theme = useTheme();
+  const selected = workingDaySet(value);
+  return (
+    <View style={styles.workingDays} testID="settings-working-days">
+      <Text style={[styles.workingDaysTitle, { color: theme.colors.ink }, androidLabel(theme)]}>Working days</Text>
+      {WORKING_DAY_LABELS.map((label, day) => (
+        <SettingsToggle
+          disabled={workingDayLocked(value, day)}
+          key={label}
+          label={label}
+          onValueChange={(enabled) => onChange(toggleWorkingDay(value, day, enabled))}
+          testID={`settings-working-day-${day}`}
+          value={selected.has(day)}
+        />
+      ))}
+      <SettingsCaption>{WORKING_DAYS_FOOTNOTE}</SettingsCaption>
+    </View>
+  );
+}
+
 function ConnectionList({
   connections,
   loaded,
@@ -770,6 +799,9 @@ function withAlpha(color: string, alpha: number): string {
 }
 
 const styles = StyleSheet.create({
+  // `VStack(alignment: .leading, spacing: 8)` and `.font(.headline)` (WorkingDaysField).
+  workingDays: { gap: 8 },
+  workingDaysTitle: { fontSize: 17, lineHeight: 22, fontWeight: '600' },
   fill: { flex: 1 },
   grow: { flex: 1 },
   // `.subheadline` carries its own 21pt leading (style map section 2).
