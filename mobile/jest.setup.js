@@ -140,6 +140,8 @@ jest.mock('expo-audio', () => ({
     addListener: jest.fn(() => ({ remove: jest.fn() })),
   })),
   setAudioModeAsync: jest.fn(async () => undefined),
+  // b61801c: voice asks for the microphone before it requests a session.
+  requestRecordingPermissionsAsync: jest.fn(async () => ({ granted: true, status: 'granted', canAskAgain: true })),
 }));
 
 // react-native-webrtc and its in-call companion are native-only; the voice tests inject fakes.

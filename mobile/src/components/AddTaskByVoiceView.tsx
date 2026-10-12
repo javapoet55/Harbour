@@ -1,7 +1,7 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Alert, Linking, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useSession } from '../store/session';
@@ -171,6 +171,20 @@ export function AddTaskByVoiceView({ askMode = false, calendarOnly = false, food
           </Text>
         ) : null}
 
+        {/* `Button("Open Settings").buttonStyle(.borderedProminent)` when the microphone was refused
+            (AddTaskByVoiceView.swift:97-104, b61801c). */}
+        {voice.microphoneDenied ? (
+          <Pressable
+            accessibilityLabel="Open Settings"
+            accessibilityRole="button"
+            onPress={() => void Linking.openSettings()}
+            style={[styles.openSettings, { backgroundColor: theme.colors.link }]}
+            testID="voice-open-settings"
+          >
+            <Text style={[theme.typography.body, { color: '#FFFFFF' }]}>Open Settings</Text>
+          </Pressable>
+        ) : null}
+
         {/* Where a voice-created event went (the server's `calendarPush`), and any warnings. */}
         <CalendarPushNote />
 
@@ -318,6 +332,8 @@ function scheduleLabel(startAt: string, timeZone: string | undefined): string {
 }
 
 const styles = StyleSheet.create({
+  // `.borderedProminent`: a filled capsule in the tint; 44 tall for the touch target.
+  openSettings: { alignSelf: 'center', minHeight: 44, justifyContent: 'center', paddingHorizontal: 16, borderRadius: 22 },
   fill: { flex: 1 },
   grow: { flex: 1 },
   centred: { textAlign: 'center' },

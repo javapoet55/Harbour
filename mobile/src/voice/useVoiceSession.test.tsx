@@ -15,9 +15,10 @@ import type { ConversationOptions, VoicePhase } from './conversation';
 const mockRecord = jest.fn(async () => undefined);
 jest.mock('../query/useVoiceUsage', () => ({ recordVoiceUsage: (...args: unknown[]) => mockRecord(...(args as [])) }));
 jest.mock('../query/useProfile', () => ({ synchronizeDeviceTimeZone: jest.fn(async () => undefined) }));
+const mockRequest = jest.fn(async () => ({ value: 'ek', expiresAt: 9e9, model: 'm' }));
 jest.mock('../api', () => ({
   ...jest.requireActual('../api'),
-  getApi: () => ({ request: jest.fn(async () => ({ value: 'ek', expiresAt: 9e9, model: 'm' })) }),
+  getApi: () => ({ request: (...args: unknown[]) => mockRequest(...(args as [])) }),
 }));
 jest.mock('./nativeDriver', () => ({ isWebRtcAvailable: () => true, createNativeDriver: () => ({}) }));
 jest.mock('./transport', () => ({ WebRtcTransport: jest.fn().mockImplementation(() => ({ applyVolume: jest.fn() })) }));
@@ -53,7 +54,9 @@ jest.mock('./conversation', () => {
   return { ...actual, VoiceConversation };
 });
 
-import { useVoiceSession } from './useVoiceSession';
+import { requestRecordingPermissionsAsync } from 'expo-audio';
+import { MICROPHONE_DENIED } from '../lib/permissionAccess';
+import { useVoiceSession, type UseVoiceSession } from './useVoiceSession';
 
 function Probe() {
   useVoiceSession({ scope: 'tasks' as never, enabled: true, onClose: () => undefined });
@@ -126,5 +129,46 @@ describe('useVoiceSession voice metering', () => {
     await seconds(30);
     await act(async () => view.unmount());
     expect(mockRecord).not.toHaveBeenCalled();
+  });
+});
+
+/** b61801c: `VoicePermissionGate` (AddTaskByVoiceView.swift:276-295). */
+describe('useVoiceSession microphone gate', () => {
+  const permission = requestRecordingPermissionsAsync as unknown as jest.Mock;
+  afterEach(() => permission.mockResolvedValue({ granted: true, status: 'granted', canAskAgain: true }));
+
+  async function start() {
+    const resultRef: { current?: UseVoiceSession } = {};
+    function Capture({ onResult }: { onResult: (value: UseVoiceSession) => void }) {
+      onResult(useVoiceSession({ scope: 'tasks' as never, enabled: true, onClose: () => undefined }));
+      return null;
+    }
+    const view = await render(
+      <QueryClientProvider client={new QueryClient()}>
+        <Capture onResult={(value) => (resultRef.current = value)} />
+      </QueryClientProvider>,
+    );
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    return { view, result: resultRef };
+  }
+
+  it('asks for the microphone before any session is requested', async () => {
+    mockRequest.mockClear();
+    await start();
+    expect(permission).toHaveBeenCalled();
+    expect(mockRequest).toHaveBeenCalledTimes(1);
+    expect(permission.mock.invocationCallOrder[0]).toBeLessThan(mockRequest.mock.invocationCallOrder[0]);
+  });
+
+  it('stops on a refusal, says how to turn it on, and offers Settings', async () => {
+    mockRequest.mockClear();
+    permission.mockResolvedValue({ granted: false, status: 'denied', canAskAgain: false });
+    const { result } = await start();
+    expect(mockRequest).not.toHaveBeenCalled();
+    expect(result.current?.startupError).toBe(MICROPHONE_DENIED);
+    expect(result.current?.microphoneDenied).toBe(true);
   });
 });
