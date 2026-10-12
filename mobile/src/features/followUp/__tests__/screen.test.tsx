@@ -1,10 +1,12 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { StyleSheet } from 'react-native';
 
 import type { NexdoTask, Profile } from '../../../api';
 import { ApiError } from '../../../api/client';
 import type { StoredTaskAction } from '../../../lib/taskAction';
 import { useSession } from '../../../store/session';
+import { palettes } from '../../../theme';
 
 const mockLoad = jest.fn();
 const mockSave = jest.fn();
@@ -22,7 +24,7 @@ jest.mock('../../../api', () => ({ ...jest.requireActual('../../../api'), endpoi
 
 import { FollowUpPreparationScreen } from '../FollowUpPreparationScreen';
 
-/** `FollowUpPreparationView` (ios/App/FollowUpPreparationView.swift, 6f079c0). No capture exists (needs sign-in). */
+/** `FollowUpPreparationView` (ios/App/FollowUpPreparationView.swift, 6f079c0). Captures `follow-up-*` (Mac, 0bb8212). */
 
 const NOW = Date.parse('2026-10-12T16:00:00Z');
 const ZONE = 'America/Los_Angeles';
@@ -173,4 +175,17 @@ it('Create draft from purpose rebuilds the draft; Add takes a new step', async (
   await fireEvent.changeText(screen.getByTestId('follow-up-new-check'), 'Bring the receipt');
   await fireEvent.press(screen.getByTestId('follow-up-add-check'));
   expect(screen.getByTestId('follow-up-check-4').props.value).toBe('Bring the receipt');
+});
+
+/** Captures `follow-up-outcome-history`, `-saved`: the sheet's buttons and Close are ink, not the tint. */
+it('draws its button rows in ink, grey while disabled, and the notes three lines tall', async () => {
+  mockLoad.mockResolvedValue({ revision: 0, preparation: null });
+  await show();
+  await waitFor(() => expect(screen.queryByTestId('follow-up-loading')).toBeNull());
+  const colour = (text: string) => StyleSheet.flatten(screen.getByText(text).props.style).color;
+  expect(colour('Save preparation')).toBe(palettes.light.ink);
+  expect(colour('Create draft from purpose')).toBe(palettes.light.ink);
+  expect(colour('Close')).toBe(palettes.light.ink);
+  expect(colour('Add')).toBe('rgba(60, 60, 67, 0.3)');
+  expect(StyleSheet.flatten(screen.getByTestId('follow-up-notes').props.style).minHeight).toBe(88);
 });

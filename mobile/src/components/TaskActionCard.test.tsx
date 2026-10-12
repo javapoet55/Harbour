@@ -7,7 +7,7 @@ jest.mock('expo-router', () => ({ router: { push: (...args: unknown[]) => mockPu
 
 import { TaskActionCard } from './TaskActionCard';
 
-/** `TaskActionCard`'s completed branch (ios/App/TaskActionView.swift:37-41, 6f079c0). No capture (needs sign-in). */
+/** `TaskActionCard`'s completed branch (ios/App/TaskActionView.swift:37-41, 6f079c0). Capture: `task-details-followup-history-button`. */
 
 function task(overrides: Partial<NexdoTask>): NexdoTask {
   return { id: 't1', title: 'Follow up with Acme Insurance', status: 'COMPLETED', priority: 'NORMAL', durationMin: 15, timeZone: 'America/Los_Angeles', ...overrides } as NexdoTask;

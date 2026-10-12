@@ -468,8 +468,9 @@ export default function TaskAction() {
     <SafeAreaView edges={['top', 'left', 'right', 'bottom']} style={[styles.fill, { backgroundColor: theme.colors.background }]}>
       {/* `.navigationTitle("Nexdo Action")` with a leading Close (TaskActionView.swift:206-208). */}
       <View style={styles.navBar}>
+        {/* Ink, like the view's other plain buttons (`task-action-prepare-card`, Phase 13). */}
         <Pressable accessibilityLabel="Close" accessibilityRole="button" hitSlop={8} onPress={closeAction} testID="action-close">
-          <Text style={[theme.typography.body, { color: theme.colors.link }]}>Close</Text>
+          <Text style={[theme.typography.body, { color: theme.colors.ink }]}>Close</Text>
         </Pressable>
         <Text accessibilityRole="header" style={[styles.navTitle, styles.grow, { color: theme.colors.ink }]}>
           Nexdo Action
@@ -506,7 +507,7 @@ export default function TaskAction() {
                   ) : null}
                 </Pressable>
                 <Pressable accessibilityRole="button" onPress={openPreparation} testID="action-record-outcome">
-                  <Text style={[styles.subheadline, { color: theme.colors.link }]}>Complete or record outcome</Text>
+                  <Text style={[styles.subheadline, { color: theme.colors.ink }]}>Complete or record outcome</Text>
                 </Pressable>
                 <Text style={[styles.caption, { color: theme.colors.secondary }]} testID="action-task-title">
                   {task.title}
@@ -645,7 +646,7 @@ export default function TaskAction() {
                 onPress={openPreparation}
                 testID="action-complete-task"
               >
-                <Text style={[theme.typography.body, { color: theme.colors.link }]}>Record outcome and complete</Text>
+                <Text style={[theme.typography.body, { color: theme.colors.ink }]}>Record outcome and complete</Text>
               </Pressable>
             ) : null}
 

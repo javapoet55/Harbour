@@ -38,7 +38,8 @@ export function TaskActionCard({ task, onOpen, now }: { task: NexdoTask; onOpen:
         style={styles.history}
         testID="task-follow-up-history"
       >
-        <Text style={[styles.body, { color: theme.colors.link }]}>Follow-up preparation and outcome history</Text>
+        {/* A plain `Button` under Task Details' ink foreground (`task-details-followup-history-button`). */}
+        <Text style={[styles.body, { color: theme.colors.ink }]}>Follow-up preparation and outcome history</Text>
       </Pressable>
     );
   }

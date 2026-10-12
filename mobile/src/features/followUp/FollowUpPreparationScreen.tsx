@@ -178,7 +178,7 @@ export function FollowUpPreparationScreen({
           Follow-up preparation
         </Text>
         <Pressable accessibilityRole="button" disabled={busy} hitSlop={8} onPress={onClose} style={[styles.side, styles.trailing, { opacity: busy ? 0.4 : 1 }]} testID="follow-up-close">
-          <Text style={[textStyles.body, { color: theme.colors.link }]}>Close</Text>
+          <Text style={[textStyles.body, { color: theme.colors.ink }]}>Close</Text>
         </Pressable>
       </View>
       <View pointerEvents={disabled ? 'none' : 'auto'} style={styles.fill}>
@@ -229,7 +229,18 @@ export function FollowUpPreparationScreen({
 
           <FormSection header="Preparation notes">
             <FormRow last>
-              <FormField multiline onChangeText={(notes) => set({ notes })} placeholder="Reference numbers, previous discussion and questions" testID="follow-up-notes" value={value.notes} />
+              {/* `.lineLimit(3...8)`: three lines tall when empty (`follow-up-preparation-saved`). */}
+              <TextInput
+                accessibilityLabel="Reference numbers, previous discussion and questions"
+                multiline
+                onChangeText={(notes) => set({ notes })}
+                placeholder="Reference numbers, previous discussion and questions"
+                placeholderTextColor={theme.colors.placeholder}
+                style={[inputText(textStyles.body), styles.notes, { color: theme.colors.label }]}
+                testID="follow-up-notes"
+                textAlignVertical="top"
+                value={value.notes}
+              />
             </FormRow>
           </FormSection>
 
@@ -280,7 +291,7 @@ export function FollowUpPreparationScreen({
                   }}
                   testID="follow-up-add-check"
                 >
-                  <Text style={[textStyles.body, { color: canAddCheck(value, newCheck) ? theme.colors.link : theme.colors.secondaryLabel }]}>Add</Text>
+                  <Text style={[textStyles.body, { color: canAddCheck(value, newCheck) ? theme.colors.ink : tertiaryLabel(theme.scheme) }]}>Add</Text>
                 </Pressable>
               </View>
             </FormRow>
@@ -398,12 +409,21 @@ function ToggleRow({ label, value, onValueChange, testID }: { label: string; val
   );
 }
 
-/** A `Button` row in a `Form`: the tint, or tertiary grey when disabled. */
+/** `.tertiaryLabel`, as `FormButton` draws a disabled title. */
+function tertiaryLabel(scheme: 'light' | 'dark'): string {
+  return scheme === 'dark' ? 'rgba(235, 235, 245, 0.3)' : 'rgba(60, 60, 67, 0.3)';
+}
+
+/**
+ * A `Button` row in a `Form`. Not the tint: the sheet inherits TaskActionView's
+ * `.foregroundStyle(Color.nexdoInk)` (:255), so its buttons and Close are ink (`follow-up-outcome-history`),
+ * while the Result picker keeps the indigo tint. Tertiary grey when disabled.
+ */
 function LinkRow({ title, onPress, disabled = false, testID }: { title: string; onPress: () => void; disabled?: boolean; testID: string }) {
   const theme = useTheme();
   return (
     <Pressable accessibilityRole="button" accessibilityState={{ disabled }} disabled={disabled} onPress={onPress} style={styles.inline} testID={testID}>
-      <Text style={[textStyles.body, { color: disabled ? theme.colors.secondaryLabel : theme.colors.link }]}>{title}</Text>
+      <Text style={[textStyles.body, { color: disabled ? tertiaryLabel(theme.scheme) : theme.colors.ink }]}>{title}</Text>
     </Pressable>
   );
 }
@@ -418,6 +438,7 @@ const styles = StyleSheet.create({
   title: { flex: 1, textAlign: 'center', fontSize: 17, lineHeight: 22, fontWeight: '600' },
   inline: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 44 },
   draft: { flex: 1, minHeight: 150, paddingVertical: 8 },
+  notes: { flex: 1, minHeight: 3 * 22 + 22, maxHeight: 8 * 22 + 22, paddingVertical: 11 },
   historyItem: { flex: 1, gap: 4, paddingVertical: 8 },
   caption: { fontSize: 12, lineHeight: 16 },
 });
