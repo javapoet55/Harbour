@@ -64,9 +64,6 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     blockedPermissions: [
       'android.permission.SYSTEM_ALERT_WINDOW',
       'android.permission.WRITE_CONTACTS',
-      // - WRITE_CALENDAR: added by expo-calendar. Important Moments only READS the calendar the person
-      //   picks (`MomentCalendarService`, ios/App/MomentEditor.swift:276-287); nothing is ever written.
-      'android.permission.WRITE_CALENDAR',
       // - FOREGROUND_SERVICE / FOREGROUND_SERVICE_MEDIA_PLAYBACK: added by expo-audio for background
       //   playback. Nexdo never plays audio in the background — `VoicePlayback`
       //   (ios/App/VoicePlayback.swift) is an in-app player, and the voice session closes five
@@ -194,7 +191,14 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       // ios/App/MomentEditor.swift:276-287); the Phase 13 Calendar run (android-polish.md §37) also shows
       // the chosen calendars' events in the Calendar tab (`AppleCalendarService`). The usage string is the
       // Swift target's full-access one verbatim (ios/Nexdo.xcodeproj/project.pbxproj:347); reminders are
-      // never read, so that permission stays off, and WRITE_CALENDAR stays blocked above: READ_CALENDAR only.
+      // never read, so that permission stays off.
+      //
+      // WRITE_CALENDAR is declared too (parity pass 4, android-polish.md §39): expo-calendar's Android
+      // module grants access, and reads events, only when READ_CALENDAR AND WRITE_CALENDAR are both held
+      // (CalendarModule.kt `checkPermissions()`), so with READ alone every read failed and access always
+      // read as denied. Swift asks for full access (`requestFullAccessToEvents`), which also covers
+      // writing. The app still never writes: no create/update/delete call on expo-calendar anywhere,
+      // guarded by src/features/calendar/__tests__/readOnly.test.ts.
       'expo-calendar',
       {
         calendarPermission: 'Nexdo reads your selected calendars to display events and suggest birthday and anniversary moments for your review.',
