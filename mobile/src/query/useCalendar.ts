@@ -100,8 +100,35 @@ export function useCreateCalendarEvent({ onConflict }: { onConflict: (conflict: 
  * it (src/app/api/calendar/oauth/[provider]/start/route.ts:17-19); it is valid for five minutes.
  */
 export function googleConnectStartUrl(baseUrl: string, connectToken: string): string {
+  return calendarConnectStartUrl(baseUrl, 'google', connectToken);
+}
+
+/** The same URL for any OAuth provider (`calendarConnectURL(provider:)`, NexdoApp.swift:311-322). */
+export function calendarConnectStartUrl(baseUrl: string, provider: string, connectToken: string): string {
   const query = new URLSearchParams({ native: '1', connect_token: connectToken });
-  return `${baseUrl}/api/calendar/oauth/google/start?${query.toString()}`;
+  return `${baseUrl}/api/calendar/oauth/${encodeURIComponent(provider)}/start?${query.toString()}`;
+}
+
+/** The OAuth providers the server connects (`src/app/api/calendar/oauth/[provider]`). */
+export type CalendarOAuthProvider = 'google' | 'microsoft';
+
+/** `providerName` as Swift derives it from a connection row (ProfileView.swift:546). */
+export function oauthProviderName(provider: CalendarOAuthProvider): string {
+  return provider === 'microsoft' ? 'Microsoft' : 'Google';
+}
+
+/** The provider a connection row belongs to; anything but microsoft is Google, as in Swift. */
+export function oauthProviderOf(connection: Pick<CalendarConnection, 'provider'> | null | undefined): CalendarOAuthProvider {
+  return connection?.provider.toLowerCase() === 'microsoft' ? 'microsoft' : 'google';
+}
+
+/**
+ * The provider a callback URL names (`calendar=<provider>-connected`), for a deep link that lands after
+ * Android dropped the browser session and the screen no longer knows which page started it.
+ */
+export function oauthProviderFromCallback(callbackUrl: string): CalendarOAuthProvider {
+  const params = new URLSearchParams(callbackUrl.split('#')[0].split('?')[1] ?? '');
+  return params.get('calendar') === 'microsoft-connected' ? 'microsoft' : 'google';
 }
 
 /** `CalendarConnectError.unavailable` (NexdoApp.swift:305-308): the server issued no usable token. */
@@ -167,10 +194,23 @@ export function parseGoogleCallback(callbackUrl: string | null | undefined): Cal
  * 4. Otherwise `completeGoogleConnect`.
  */
 export function useConnectGoogleCalendar() {
-  const queryClient = useQueryClient();
+  const connect = useConnectCalendar();
   return useMutation<GoogleConnectResult, Error, CalendarConnection | null>({
-    mutationFn: async (reconnecting) => {
-      const issued = await endpoints.calendarConnectToken('google');
+    mutationFn: (reconnecting) => connect.mutateAsync({ provider: oauthProviderOf(reconnecting), reconnecting }),
+  });
+}
+
+/**
+ * The same flow for either OAuth provider: the Connect Calendar provider page's Connect Now
+ * (CalendarConnectionView.swift:244-262) and Settings' Reconnect, which Swift already sends to the
+ * row's own provider (ProfileView.swift:545-546). `reconnecting` is the row whose Reconnect started
+ * it, or `null` for a new connection.
+ */
+export function useConnectCalendar() {
+  const queryClient = useQueryClient();
+  return useMutation<GoogleConnectResult, Error, { provider: CalendarOAuthProvider; reconnecting?: CalendarConnection | null }>({
+    mutationFn: async ({ provider, reconnecting = null }) => {
+      const issued = await endpoints.calendarConnectToken(provider);
       if (!issued?.token) throw new Error(CONNECT_UNAVAILABLE);
 
       // Open while the browser is: `+native-intent` then leaves the redirect to this session.
@@ -179,7 +219,7 @@ export function useConnectGoogleCalendar() {
       try {
         takeOAuthCallback('calendar');
         const result = await WebBrowser.openAuthSessionAsync(
-          googleConnectStartUrl(getApiUrl(), issued.token),
+          calendarConnectStartUrl(getApiUrl(), provider, issued.token),
           `${CONNECT_CALLBACK_SCHEME}://`,
         );
         // Android's polyfill reports `dismiss` when the app turns active, which can be just before the
@@ -187,14 +227,19 @@ export function useConnectGoogleCalendar() {
         callback = result.type === 'success' ? result.url : result.type === 'dismiss' ? await waitForOAuthCallback('calendar', LATE_CALLBACK_MS) : null;
         takeOAuthCallback('calendar');
       } catch (cause) {
-        return { kind: 'failed', message: `Google Calendar connection failed: ${cause instanceof Error ? cause.message : String(cause)}` };
+        return { kind: 'failed', message: `${oauthProviderName(provider)} Calendar connection failed: ${cause instanceof Error ? cause.message : String(cause)}` };
       } finally {
         end();
       }
 
-      return completeGoogleConnect(queryClient, callback, reconnecting);
+      return completeCalendarConnect(queryClient, callback, provider, reconnecting);
     },
   });
+}
+
+/** `completeCalendarConnect` for Google: Settings' deep-link completion before the Microsoft page existed. */
+export function completeGoogleConnect(queryClient: QueryClient, callbackUrl: string | null, reconnecting: CalendarConnection | null = null): Promise<GoogleConnectResult> {
+  return completeCalendarConnect(queryClient, callbackUrl, 'google', reconnecting);
 }
 
 /**
@@ -202,12 +247,14 @@ export function useConnectGoogleCalendar() {
  * arrived: from the session, or as a deep link after Android dropped the session
  * (src/lib/oauthCallbacks.ts). Reloads the profile, then the connection list, then says which.
  */
-export async function completeGoogleConnect(
+export async function completeCalendarConnect(
   queryClient: QueryClient,
   callbackUrl: string | null,
+  provider: CalendarOAuthProvider,
   reconnecting: CalendarConnection | null = null,
 ): Promise<GoogleConnectResult> {
-  const parsed = parseGoogleCallback(callbackUrl);
+  const providerName = oauthProviderName(provider);
+  const parsed = parseCalendarCallback(callbackUrl, providerName);
   if (parsed.kind !== 'connected') return parsed;
 
   let refreshed = true;
@@ -223,7 +270,7 @@ export async function completeGoogleConnect(
     .catch(() => queryClient.getQueryData<CalendarConnection[]>(queryKeys.calendar.connections()) ?? []);
   void queryClient.invalidateQueries({ queryKey: queryKeys.calendar.all() });
   void queryClient.invalidateQueries({ queryKey: queryKeys.agenda.all() });
-  return connectOutcome(reconnecting, refreshed, connections);
+  return connectOutcome(reconnecting, refreshed, connections, providerName);
 }
 
 /**

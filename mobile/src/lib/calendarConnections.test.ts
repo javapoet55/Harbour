@@ -186,6 +186,6 @@ describe('Reconnect (commit 27798c5)', () => {
       message: 'Work still needs reconnecting. Choose ada@example.com on Google’s sign-in page.',
     });
     const noEmail = row('error', { accountEmail: null });
-    expect(connectOutcome(noEmail, true, [noEmail]).message).toBe('Work still needs reconnecting. Choose the same Google account on Google’s sign-in page.');
+    expect(connectOutcome(noEmail, true, [noEmail]).message).toBe('Work still needs reconnecting. Choose the same account on Google’s sign-in page.');
   });
 });

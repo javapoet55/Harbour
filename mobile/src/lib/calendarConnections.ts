@@ -156,19 +156,21 @@ export function connectOutcome(
   reconnecting: CalendarConnection | null,
   refreshed: boolean,
   connections: CalendarConnection[],
+  providerName = 'Google',
 ): { kind: 'connected' | 'failed'; message: string } {
+  // Phase 13 (ProfileView.swift:546, :558-563): the messages name the provider that signed in.
   if (reconnecting) {
     const row = connections.find((connection) => connection.id === reconnecting.id);
     if (row && needsReconnect(row)) {
       return {
         kind: 'failed',
-        message: `${displayName(reconnecting)} still needs reconnecting. Choose ${reconnecting.accountEmail ?? 'the same Google account'} on Google’s sign-in page.`,
+        message: `${displayName(reconnecting)} still needs reconnecting. Choose ${reconnecting.accountEmail ?? 'the same account'} on ${providerName}’s sign-in page.`,
       };
     }
-    return { kind: 'connected', message: 'Google Calendar reconnected and synchronized.' };
+    return { kind: 'connected', message: `${providerName} Calendar reconnected and synchronized.` };
   }
   return {
     kind: 'connected',
-    message: refreshed ? 'Google Calendar connected and synchronized.' : 'Google Calendar connected, but Nexdo could not refresh it yet.',
+    message: refreshed ? `${providerName} Calendar connected and synchronized.` : `${providerName} Calendar connected, but Nexdo could not refresh it yet.`,
   };
 }
