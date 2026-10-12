@@ -1,9 +1,10 @@
 import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, RefreshControl, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, Alert, LayoutAnimation, Pressable, RefreshControl, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 
 import { CreationCard, DatePill, HeaderButton, SectionHeader, TaskCard, TaskEmptyState, TaskSymbol, Text } from '../../../src/components';
+import { ReorderableGroup } from '../../../src/components/ReorderableGroup';
 import { MomentTaskRow } from '../../../src/components/TaskCard';
 import { ProjectsList } from '../../../src/components/ProjectsList';
 import { sectionDateLabel, TaskTabs } from '../../../src/components/TaskListParts';
@@ -12,6 +13,14 @@ import { momentIdFromEntry, momentTasks } from '../../../src/features/calendar/m
 import { momentDate, momentDay } from '../../../src/features/moments/dates';
 import { momentIcon, typeLabel } from '../../../src/features/moments/domain';
 import { momentsStore, useMomentList } from '../../../src/features/moments/store';
+import {
+  loadTaskDisplayOrders,
+  moveTask,
+  orderedTasks,
+  reorderTasks,
+  saveTaskDisplayOrders,
+  type TaskDisplayOrders,
+} from '../../../src/features/tasks/displayOrder';
 import {
   DATE_FILTER_EMPTY_TITLE,
   TASK_DATE_FILTERS,
@@ -88,6 +97,27 @@ export default function Tasks() {
   const moments = useMomentList();
   const today = momentDay(useMinuteTick(), zone);
   const momentEntries = useMemo(() => momentTasks(moments, zone, momentDate(today, zone)), [moments, zone, today]);
+
+  // `@AppStorage("nexdo.taskDisplayOrders")` (d568989): the manual order, on this device, per account.
+  // Display only — no date changes and nothing sent to the server.
+  const [orders, setOrders] = useState<TaskDisplayOrders>({});
+  const [dragging, setDragging] = useState(false);
+  useEffect(() => {
+    let live = true;
+    void loadTaskDisplayOrders().then((saved) => {
+      if (live) setOrders((current) => (Object.keys(current).length === 0 ? saved : current));
+    });
+    return () => {
+      live = false;
+    };
+  }, []);
+  /** `withAnimation(.easeInOut(duration: 0.2)) { displayOrders = encoded }`. */
+  const applyOrders = (next: TaskDisplayOrders | null) => {
+    if (!next) return;
+    LayoutAnimation.configureNext(LayoutAnimation.create(200, LayoutAnimation.Types.easeInEaseOut, LayoutAnimation.Properties.opacity));
+    setOrders(next);
+    void saveTaskDisplayOrders(next);
+  };
 
   // `model.taskQuery.snapshot(displayedTasks + momentTasks, timeZone: zone)` (RootView.swift:1726).
   const view = useMemo(() => snapshot(query, [...(loaded?.tasks ?? []), ...momentEntries], zone), [query, loaded, momentEntries, zone]);
@@ -180,6 +210,8 @@ export default function Tasks() {
             keyboardShouldPersistTaps="handled"
             keyboardDismissMode="interactive"
             showsVerticalScrollIndicator={false}
+            // A held card is being dragged, not the list.
+            scrollEnabled={!dragging}
             contentContainerStyle={styles.list}
             // `.refreshable { await model.refreshTasks(); await moments.refresh() }` (bb57e09).
             refreshControl={
@@ -347,34 +379,47 @@ export default function Tasks() {
                         date={date === title ? null : date}
                         count={section.tasks.length}
                       />
-                      {section.tasks.map((task) => {
-                        const momentId = momentIdFromEntry(task.id);
-                        const moment = momentId === null ? undefined : moments.find((item) => item.id === momentId);
-                        if (moment) {
-                          return (
-                            <MomentTaskRow
-                              icon={momentIcon(moment.type) as never}
-                              key={task.id}
-                              // `moments.route = moment`: the same route a Moments notification opens.
-                              onOpen={() => momentsStore.setState({ route: moment, routedPlanID: null })}
-                              testID={`task-moment-${task.id}`}
-                              title={moment.title}
-                              type={typeLabel(moment.type)}
-                            />
-                          );
-                        }
-                        return (
-                          <TaskCard
-                            key={task.id}
-                            task={task}
-                            timeZone={zone}
-                            project={projects.data?.projects.find((item) => item.id === task.projectId)}
-                            busy={busy}
-                            onToggle={() => complete.mutate(task)}
-                            onOpen={() => router.push(`/task/${task.id}`)}
-                          />
-                        );
-                      })}
+                      {/* `ForEach(orderedTasks(group.tasks))`: the group in the saved manual order. */}
+                      <ReorderableGroup
+                        items={orderedTasks(section.tasks, orders, profile?.id).map((task) => {
+                          const momentId = momentIdFromEntry(task.id);
+                          const moment = momentId === null ? undefined : moments.find((item) => item.id === momentId);
+                          if (moment) {
+                            return {
+                              id: task.id,
+                              draggable: false,
+                              node: (
+                                <MomentTaskRow
+                                  icon={momentIcon(moment.type) as never}
+                                  // `moments.route = moment`: the same route a Moments notification opens.
+                                  onOpen={() => momentsStore.setState({ route: moment, routedPlanID: null })}
+                                  testID={`task-moment-${task.id}`}
+                                  title={moment.title}
+                                  type={typeLabel(moment.type)}
+                                />
+                              ),
+                            };
+                          }
+                          return {
+                            id: task.id,
+                            draggable: profile?.id !== undefined,
+                            node: (
+                              <TaskCard
+                                task={task}
+                                timeZone={zone}
+                                project={projects.data?.projects.find((item) => item.id === task.projectId)}
+                                busy={busy}
+                                onToggle={() => complete.mutate(task)}
+                                onOpen={() => router.push(`/task/${task.id}`)}
+                                onMove={(offset) => applyOrders(moveTask(orders, profile?.id, task.id, offset, section.tasks))}
+                              />
+                            ),
+                          };
+                        })}
+                        onDragChange={setDragging}
+                        onDrop={(source, target) => applyOrders(reorderTasks(orders, profile?.id, source, target, section.tasks))}
+                        testID={`task-group-${section.id}`}
+                      />
                     </View>
                   );
                 })}

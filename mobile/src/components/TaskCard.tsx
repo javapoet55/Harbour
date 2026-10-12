@@ -70,6 +70,11 @@ export type TaskCardProps = {
   busy?: boolean;
   onToggle: () => void;
   onOpen: () => void;
+  /**
+   * `.accessibilityAction(named: "Move up" / "Move down")` (d568989, RootView.swift:1987-1988): the
+   * reorder for people who cannot drag. Absent where the card cannot be reordered.
+   */
+  onMove?: (offset: -1 | 1) => void;
 };
 
 /**
@@ -82,7 +87,10 @@ export type TaskCardProps = {
  * keyword icon tile, a subtitle line and an 18pt surface card. The category badge went in the
  * redesign (7919779b).
  */
-export function TaskCard({ task, timeZone, project, busy = false, onToggle, onOpen }: TaskCardProps) {
+/** `.accessibilityHint` on a reorderable card (RootView.swift:1989). */
+export const REORDER_HINT = 'Touch and hold to reorder within this date. Scheduled time stays the same.';
+
+export function TaskCard({ task, timeZone, project, busy = false, onToggle, onOpen, onMove }: TaskCardProps) {
   const theme = useTheme();
   const done = isDone(task);
   const icon = taskIcon(task);
@@ -114,7 +122,9 @@ export function TaskCard({ task, timeZone, project, busy = false, onToggle, onOp
 
       <Pressable
         accessibilityRole="button"
-        accessibilityHint="Opens task editor"
+        accessibilityHint={onMove ? `Opens task editor. ${REORDER_HINT}` : 'Opens task editor'}
+        accessibilityActions={onMove ? REORDER_ACTIONS : undefined}
+        onAccessibilityAction={onMove ? (event) => onMove(event.nativeEvent.actionName === 'moveUp' ? -1 : 1) : undefined}
         onPress={onOpen}
         style={styles.body}
         testID={`task-open-${task.id}`}
@@ -176,6 +186,11 @@ export function MomentTaskRow({ title, type, icon, onOpen, testID }: { title: st
     </Pressable>
   );
 }
+
+const REORDER_ACTIONS = [
+  { name: 'moveUp', label: 'Move up' },
+  { name: 'moveDown', label: 'Move down' },
+];
 
 /** `Color.opacity` on a hex or rgba token. */
 function withAlpha(color: string, alpha: number): string {

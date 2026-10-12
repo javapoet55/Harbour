@@ -1,5 +1,8 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { State } from 'react-native-gesture-handler';
+import { fireGestureHandler, getByGestureTestId } from 'react-native-gesture-handler/jest-utils';
 import { Platform, StyleSheet } from 'react-native';
 
 import type { NexdoTask } from '../api/types';
@@ -92,6 +95,88 @@ describe('Tasks screen', () => {
     await fireEvent.press(screen.getByTestId('task-moment-moment:m1:2026-09-16'));
     expect(momentsStore.getState().route?.id).toBe('m1');
     expect(mockPush).not.toHaveBeenCalled();
+  });
+
+  /** d568989 (RootView.swift:1983-2014): drag within a date group; the order stays on the device. */
+  describe('manual order', () => {
+    const order = () => screen.getAllByTestId(/^task-open-/).map((node) => node.props.testID.replace('task-open-', ''));
+    const lay = (id: string, y: number) =>
+      fireEvent(screen.getByTestId(`reorder-item-${id}`), 'layout', { nativeEvent: { layout: { x: 0, y, width: 320, height: 66 } } });
+
+    beforeEach(async () => {
+      await AsyncStorage.clear();
+    });
+
+    it('drops a held card on another, which it replaces, and saves the order for this account', async () => {
+      await renderTasks();
+      await waitFor(() => expect(order()).toEqual(['a', 'b']));
+      await lay('a', 0);
+      await lay('b', 74);
+
+      await act(async () => {
+        fireGestureHandler(getByGestureTestId('reorder-a'), [
+          { state: State.BEGAN, translationY: 0 },
+          { state: State.ACTIVE, translationY: 40 },
+          { state: State.ACTIVE, translationY: 80 },
+          { state: State.END, translationY: 80 },
+        ]);
+      });
+
+      await waitFor(() => expect(order()).toEqual(['b', 'a']));
+      expect(JSON.parse((await AsyncStorage.getItem('nexdo.taskDisplayOrders')) ?? '{}')).toEqual({ u1: ['b', 'a'] });
+      // Display only: no task was written.
+      expect(mockUpdateTask).not.toHaveBeenCalled();
+    });
+
+    it('does nothing when the card is let go away from any other card', async () => {
+      await renderTasks();
+      await waitFor(() => expect(order()).toEqual(['a', 'b']));
+      await lay('a', 0);
+      await lay('b', 74);
+      await act(async () => {
+        fireGestureHandler(getByGestureTestId('reorder-a'), [
+          { state: State.BEGAN, translationY: 0 },
+          { state: State.ACTIVE, translationY: 400 },
+          { state: State.END, translationY: 400 },
+        ]);
+      });
+      expect(order()).toEqual(['a', 'b']);
+      expect(await AsyncStorage.getItem('nexdo.taskDisplayOrders')).toBeNull();
+    });
+
+    it('reads the saved order back, and offers Move up / Move down with Swift’s hint', async () => {
+      await AsyncStorage.setItem('nexdo.taskDisplayOrders', JSON.stringify({ u1: ['b', 'a'], other: ['a', 'b'] }));
+      await renderTasks();
+      await waitFor(() => expect(order()).toEqual(['b', 'a']));
+
+      const open = screen.getByTestId('task-open-a');
+      expect(open.props.accessibilityHint).toBe('Opens task editor. Touch and hold to reorder within this date. Scheduled time stays the same.');
+      expect(open.props.accessibilityActions.map((action: { label: string }) => action.label)).toEqual(['Move up', 'Move down']);
+      await fireEvent(open, 'accessibilityAction', { nativeEvent: { actionName: 'moveUp' } });
+      await waitFor(() => expect(order()).toEqual(['a', 'b']));
+      // Another account's order on this device is kept.
+      expect(JSON.parse((await AsyncStorage.getItem('nexdo.taskDisplayOrders')) ?? '{}')).toEqual({ u1: ['a', 'b'], other: ['a', 'b'] });
+    });
+
+    it('never moves a Moment, and a card dropped on one stays put', async () => {
+      momentsStore.setState({
+        snapshot: { moments: [moment({ id: 'm1', occurrenceDate: '2026-09-16' })], emailAccount: null, emailConfigured: false, automaticEmailEnabled: false },
+      });
+      await renderTasks();
+      await waitFor(() => expect(screen.getByTestId('task-moment-moment:m1:2026-09-16')).toBeTruthy());
+      expect(getByGestureTestId('reorder-moment:m1:2026-09-16').config.enabled).toBe(false);
+      await lay('moment:m1:2026-09-16', 0);
+      await lay('a', 74);
+      await lay('b', 148);
+      await act(async () => {
+        fireGestureHandler(getByGestureTestId('reorder-b'), [
+          { state: State.BEGAN, translationY: 0 },
+          { state: State.ACTIVE, translationY: -148 },
+          { state: State.END, translationY: -148 },
+        ]);
+      });
+      expect(order()).toEqual(['a', 'b']);
+    });
   });
 
   it('leaves off Moments out', async () => {

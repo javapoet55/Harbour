@@ -53,6 +53,9 @@ jest.mock('@react-native-masked-view/masked-view', () => {
 // react-native-keyboard-controller ships its own mock: host stand-ins for its components and inert hooks.
 jest.mock('react-native-keyboard-controller', () => require('react-native-keyboard-controller/jest'));
 
+// react-native-gesture-handler's own jest setup: its native module and views stand in as host components.
+require('react-native-gesture-handler/jestSetup');
+
 jest.mock('@expo/vector-icons/Ionicons', () => {
   const { View } = require('react-native');
   return View;

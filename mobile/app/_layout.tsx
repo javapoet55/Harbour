@@ -4,6 +4,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
 import { Alert, AppState, StyleSheet, View } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
@@ -85,15 +86,18 @@ export default function RootLayout() {
 
   return (
     <RootErrorBoundary>
-      <SafeAreaProvider>
-        {/* Keyboard frames for src/components/keyboard.tsx. It detects the app's edge-to-edge
-            window on its own, so it leaves the status and navigation bar insets alone. */}
-        <KeyboardProvider>
-          <QueryClientProvider client={queryClient}>
-            <RootNavigator />
-          </QueryClientProvider>
-        </KeyboardProvider>
-      </SafeAreaProvider>
+      {/* Tasks' drag-to-reorder (d568989) runs on gesture-handler, which needs one root view. */}
+      <GestureHandlerRootView style={styles.root}>
+        <SafeAreaProvider>
+          {/* Keyboard frames for src/components/keyboard.tsx. It detects the app's edge-to-edge
+              window on its own, so it leaves the status and navigation bar insets alone. */}
+          <KeyboardProvider>
+            <QueryClientProvider client={queryClient}>
+              <RootNavigator />
+            </QueryClientProvider>
+          </KeyboardProvider>
+        </SafeAreaProvider>
+      </GestureHandlerRootView>
     </RootErrorBoundary>
   );
 }
