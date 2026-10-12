@@ -3,6 +3,7 @@ import { useMutation, useQueryClient, type QueryClient } from '@tanstack/react-q
 import { endpoints, isApiError, type Profile } from '../api';
 import { useLastSignedIn } from '../store/lastSignedIn';
 import { useSession } from '../store/session';
+import { resetWellnessGuidesForSignIn } from '../store/wellnessGuides';
 import { queryKeys } from './keys';
 import { synchronizeDeviceTimeZone } from './useProfile';
 
@@ -21,6 +22,8 @@ import { synchronizeDeviceTimeZone } from './useProfile';
  */
 export async function finishAuthentication(queryClient: QueryClient): Promise<Profile> {
   const { user } = await endpoints.me();
+  // `seenWellnessGuides.removeAll()` (8f7e492, 2edb3f0): each sign-in shows every module guide once.
+  resetWellnessGuidesForSignIn();
   queryClient.setQueryData(queryKeys.me(), user);
   useSession.getState().setProfile(user);
 
