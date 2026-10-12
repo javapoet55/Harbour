@@ -183,7 +183,7 @@ describe('DatePill', () => {
     await render(<DatePill filter="Today" count={3} selected={false} onPress={jest.fn()} />);
     expect(screen.getByText('Today')).toBeTruthy();
     expect(screen.getByText('3')).toBeTruthy();
-    expect(screen.getByLabelText('Today, 3 tasks')).toBeTruthy();
+    expect(screen.getByLabelText('Today, 3 items')).toBeTruthy();
   });
 
   it('shows no count on the All pill, matching `if filter != .all`', async () => {
@@ -244,10 +244,10 @@ describe('SectionHeader', () => {
 
   it('singularises the count', async () => {
     const { rerender } = await render(<SectionHeader title="Today" count={1} />);
-    expect(screen.getByText('1 task')).toBeTruthy();
+    expect(screen.getByText('1 item')).toBeTruthy();
 
     await rerender(<SectionHeader title="Today" count={4} />);
-    expect(screen.getByText('4 tasks')).toBeTruthy();
+    expect(screen.getByText('4 items')).toBeTruthy();
   });
 });
 

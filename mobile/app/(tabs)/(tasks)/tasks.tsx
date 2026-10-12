@@ -4,9 +4,14 @@ import { useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, RefreshControl, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 
 import { CreationCard, DatePill, HeaderButton, SectionHeader, TaskCard, TaskEmptyState, TaskSymbol, Text } from '../../../src/components';
+import { MomentTaskRow } from '../../../src/components/TaskCard';
 import { ProjectsList } from '../../../src/components/ProjectsList';
 import { sectionDateLabel, TaskTabs } from '../../../src/components/TaskListParts';
 import { TasksTopBar, TodayBackdrop } from '../../../src/components/TodayShell';
+import { momentIdFromEntry, momentTasks } from '../../../src/features/calendar/momentSchedule';
+import { momentDate, momentDay } from '../../../src/features/moments/dates';
+import { momentIcon, typeLabel } from '../../../src/features/moments/domain';
+import { momentsStore, useMomentList } from '../../../src/features/moments/store';
 import {
   DATE_FILTER_EMPTY_TITLE,
   TASK_DATE_FILTERS,
@@ -17,6 +22,7 @@ import {
   type TaskHistoryRange,
 } from '../../../src/lib/taskQuery';
 import { sectionTitle } from '../../../src/lib/taskLabels';
+import { useMinuteTick } from '../../../src/lib/useMinuteTick';
 import { useProjects } from '../../../src/query/useProjects';
 import { useCompleteTask, useTasks, type ScheduleConflict } from '../../../src/query/useTasks';
 import { useSession } from '../../../src/store/session';
@@ -76,8 +82,15 @@ export default function Tasks() {
   const zone = profile?.timeZone ?? loaded?.timeZone ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
   const busy = complete.isPending;
 
-  // `let snapshot = model.taskQuery.snapshot(model.tasks, timeZone: zone)` (RootView.swift:1639).
-  const view = useMemo(() => snapshot(query, loaded?.tasks ?? [], zone), [query, loaded, zone]);
+  // `.task(id: momentsKey) { momentTasks = MomentSchedule.tasks(saved, timeZone:) }` (bb57e09,
+  // RootView.swift:1787-1796): the Moments projected into the list, rebuilt when the moments, the zone
+  // or the day change. Never saved, never sent.
+  const moments = useMomentList();
+  const today = momentDay(useMinuteTick(), zone);
+  const momentEntries = useMemo(() => momentTasks(moments, zone, momentDate(today, zone)), [moments, zone, today]);
+
+  // `model.taskQuery.snapshot(displayedTasks + momentTasks, timeZone: zone)` (RootView.swift:1726).
+  const view = useMemo(() => snapshot(query, [...(loaded?.tasks ?? []), ...momentEntries], zone), [query, loaded, momentEntries, zone]);
 
   // `.alert` from `confirmScheduleWarnings` (NexdoApp.swift:87-98).
   if (conflict) {
@@ -168,7 +181,16 @@ export default function Tasks() {
             keyboardDismissMode="interactive"
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.list}
-            refreshControl={<RefreshControl refreshing={tasks.isRefetching} onRefresh={() => void tasks.refetch()} />}
+            // `.refreshable { await model.refreshTasks(); await moments.refresh() }` (bb57e09).
+            refreshControl={
+              <RefreshControl
+                refreshing={tasks.isRefetching}
+                onRefresh={() => {
+                  void tasks.refetch();
+                  void momentsStore.getState().refresh();
+                }}
+              />
+            }
           >
             {searching || query.search.length > 0 ? (
               <View style={[styles.searchField, { backgroundColor: theme.colors.surface }]}>
@@ -325,17 +347,34 @@ export default function Tasks() {
                         date={date === title ? null : date}
                         count={section.tasks.length}
                       />
-                      {section.tasks.map((task) => (
-                        <TaskCard
-                          key={task.id}
-                          task={task}
-                          timeZone={zone}
-                          project={projects.data?.projects.find((item) => item.id === task.projectId)}
-                          busy={busy}
-                          onToggle={() => complete.mutate(task)}
-                          onOpen={() => router.push(`/task/${task.id}`)}
-                        />
-                      ))}
+                      {section.tasks.map((task) => {
+                        const momentId = momentIdFromEntry(task.id);
+                        const moment = momentId === null ? undefined : moments.find((item) => item.id === momentId);
+                        if (moment) {
+                          return (
+                            <MomentTaskRow
+                              icon={momentIcon(moment.type) as never}
+                              key={task.id}
+                              // `moments.route = moment`: the same route a Moments notification opens.
+                              onOpen={() => momentsStore.setState({ route: moment, routedPlanID: null })}
+                              testID={`task-moment-${task.id}`}
+                              title={moment.title}
+                              type={typeLabel(moment.type)}
+                            />
+                          );
+                        }
+                        return (
+                          <TaskCard
+                            key={task.id}
+                            task={task}
+                            timeZone={zone}
+                            project={projects.data?.projects.find((item) => item.id === task.projectId)}
+                            busy={busy}
+                            onToggle={() => complete.mutate(task)}
+                            onOpen={() => router.push(`/task/${task.id}`)}
+                          />
+                        );
+                      })}
                     </View>
                   );
                 })}

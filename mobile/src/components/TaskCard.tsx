@@ -145,6 +145,38 @@ export function TaskCard({ task, timeZone, project, busy = false, onToggle, onOp
   );
 }
 
+/**
+ * A Moment among the tasks (bb57e09, RootView.swift:1966-1981): `MomentSchedule.tasks` projects each
+ * Moment into its date group as a read-only row — the type's glyph in pink on a pink 10% tile, the
+ * title, "All day · <type> · Moment" and a chevron — with no checkbox and no drag. Tapping it opens
+ * the Moment (`moments.route = moment`).
+ */
+export function MomentTaskRow({ title, type, icon, onOpen, testID }: { title: string; type: string; icon: ComponentProps<typeof Ionicons>['name']; onOpen: () => void; testID?: string }) {
+  const theme = useTheme();
+  const pink = SYSTEM_TINT.pink[theme.scheme];
+  return (
+    <Pressable
+      accessibilityHint="Opens Moment"
+      accessibilityLabel={`${title}, All day · ${type} · Moment`}
+      accessibilityRole="button"
+      onPress={onOpen}
+      // `.padding(14)`, `.background(.background.opacity(0.8), in: RoundedRectangle(cornerRadius: 18))`.
+      style={[styles.moment, { backgroundColor: withAlpha(theme.colors.surface, 0.8) }]}
+      testID={testID}
+    >
+      {/* `.font(.title2)` in `.pink`, 44 x 44 on `.pink.opacity(0.1)`, radius 14. */}
+      <View style={[styles.iconTile, { backgroundColor: withAlpha(pink, 0.1) }]}>
+        <Ionicons color={pink} name={icon} size={22} />
+      </View>
+      <View style={styles.text}>
+        <Text style={[styles.title, { color: theme.colors.ink }]}>{title}</Text>
+        <Text style={[styles.caption, { color: theme.colors.secondary }]}>{`All day · ${type} · Moment`}</Text>
+      </View>
+      <TaskSymbol name="chevron.right" size={12} color={theme.colors.secondary} />
+    </Pressable>
+  );
+}
+
 /** `Color.opacity` on a hex or rgba token. */
 function withAlpha(color: string, alpha: number): string {
   if (color.startsWith('rgba')) return color.replace(/[\d.]+\)$/, `${alpha})`);
@@ -176,4 +208,6 @@ const styles = StyleSheet.create({
   subtitleRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   caption: { fontSize: 12, lineHeight: 16 },
   struck: { textDecorationLine: 'line-through' },
+  // `HStack(spacing: 12)` padded 14, radius 18, no stroke.
+  moment: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, borderRadius: 18 },
 });

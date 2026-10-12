@@ -3,6 +3,8 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react-nativ
 import { Platform, StyleSheet } from 'react-native';
 
 import type { NexdoTask } from '../api/types';
+import { momentsStore } from '../features/moments/store';
+import { moment } from '../features/moments/testFixtures';
 import { DEFAULT_TASK_QUERY } from '../lib/taskQuery';
 import { resetRevisions } from '../query/taskRevision';
 import { useSession } from '../store/session';
@@ -68,9 +70,39 @@ describe('Tasks screen', () => {
     useSession.setState({ status: 'signedIn', profile: { id: 'u1', name: 'Sri Ram', email: 'a@b.com', timeZone: ZONE } });
     mockTasks.mockResolvedValue({ tasks: FIXTURE, timeZone: ZONE });
     mockProjects.mockResolvedValue({ projects: [], unassignedTaskCount: 0 });
+    momentsStore.setState({ snapshot: null, route: null, routedPlanID: null });
   });
 
   afterEach(() => jest.useRealTimers());
+
+  /** bb57e09 (RootView.swift:1966-1981): a Moment is an item in its date group; tap opens the Moment. */
+  it('lists a Moment among the day’s tasks, counts it, and opens it', async () => {
+    const birthday = moment({ id: 'm1', title: 'Parity Sunday', type: 'birthday', occurrenceDate: '2020-09-16', yearly: true });
+    momentsStore.setState({ snapshot: { moments: [birthday], emailAccount: null, emailConfigured: false, automaticEmailEnabled: false } });
+    await renderTasks();
+
+    await waitFor(() => expect(screen.getByTestId('task-moment-moment:m1:2026-09-16')).toBeTruthy());
+    expect(screen.getByText('All day · Birthday · Moment')).toBeTruthy();
+    // The two open tasks and the Moment are three items today.
+    expect(screen.getByText('3 items')).toBeTruthy();
+    expect(screen.getByLabelText('Today, 3 items')).toBeTruthy();
+    // No checkbox: a Moment is never completed from here.
+    expect(screen.queryByTestId('task-toggle-moment:m1:2026-09-16')).toBeNull();
+
+    await fireEvent.press(screen.getByTestId('task-moment-moment:m1:2026-09-16'));
+    expect(momentsStore.getState().route?.id).toBe('m1');
+    expect(mockPush).not.toHaveBeenCalled();
+  });
+
+  it('leaves off Moments out', async () => {
+    momentsStore.setState({
+      snapshot: { moments: [moment({ id: 'off', occurrenceDate: '2026-09-16', enabled: false })], emailAccount: null, emailConfigured: false, automaticEmailEnabled: false },
+    });
+    await renderTasks();
+    await waitFor(() => expect(screen.getByText('Renew passport')).toBeTruthy());
+    expect(screen.queryByTestId('task-moment-moment:off:2026-09-16')).toBeNull();
+    expect(screen.getByText('2 items')).toBeTruthy();
+  });
 
   it('renders the Swift header copy and both creation cards', async () => {
     await renderTasks();
@@ -93,7 +125,7 @@ describe('Tasks screen', () => {
 
     // "Today" is both the date pill and the section header; the header is the one with a count.
     expect(screen.getByRole('header', { name: 'Today' })).toBeTruthy();
-    expect(screen.getByText('2 tasks')).toBeTruthy();
+    expect(screen.getByText('2 items')).toBeTruthy();
   });
 
   it('draws a life-reminder task as a plain row, with no reminder badge (RootView.swift:1860-1890)', async () => {
@@ -112,9 +144,9 @@ describe('Tasks screen', () => {
   it('counts each date pill from the same filtered pass', async () => {
     await renderTasks();
 
-    await waitFor(() => expect(screen.getByLabelText('Today, 2 tasks')).toBeTruthy());
-    expect(screen.getByLabelText('Tomorrow, 1 tasks')).toBeTruthy();
-    expect(screen.getByLabelText('This Week, 3 tasks')).toBeTruthy();
+    await waitFor(() => expect(screen.getByLabelText('Today, 2 items')).toBeTruthy());
+    expect(screen.getByLabelText('Tomorrow, 1 items')).toBeTruthy();
+    expect(screen.getByLabelText('This Week, 3 items')).toBeTruthy();
   });
 
   it('switches the list when another date pill is chosen', async () => {
