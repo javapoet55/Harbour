@@ -79,6 +79,19 @@ describe('TaskCreationSpacing', () => {
     expect(spacedCreationStart(date, 30, ignored)).toBe(date);
   });
 
+  /**
+   * Capture `tasks-creation-spacing` (Mac, 0bb8212): "Parity follow up with the bank" at 12:22 PM for 30
+   * minutes, then "Follow up with Parity Bank" added a few minutes later lands at 1:07 PM — 15 minutes
+   * after the first one ends. The title has no time of its own, so the pill's default is spaced.
+   */
+  it('reproduces the captured 12:22 PM → 1:07 PM spacing', () => {
+    const first = spacingTask('first', '2026-10-12T12:22:00+05:30', 30);
+    const proposed = Date.parse('2026-10-12T12:25:00+05:30');
+    expect(resolvedCreationDate({ detectedAt: null, dateExplicitlyChosen: false, proposed, creating: true, durationMin: 30, tasks: [first] })).toBe(
+      Date.parse('2026-10-12T13:07:00+05:30'),
+    );
+  });
+
   it('uses a time from the title as written, and never moves an edit', () => {
     const tasks = [spacingTask('busy', '2026-10-10T09:00:00Z')];
     const proposed = Date.parse('2026-10-10T09:00:00Z');
