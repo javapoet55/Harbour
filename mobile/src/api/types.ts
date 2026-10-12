@@ -456,6 +456,10 @@ export type WeeklySummary = {
  *
  * The route's zod schema is `.strict()`, so an unexpected key is a 400. `repeat` is omitted entirely
  * when the frequency is "none".
+ *
+ * `requestId` names the series (b61801c): a retry with the same id skips the conflict check for the
+ * occurrences it already saved and checks only the new ones, so a retry after a dropped response —
+ * not just "Save anyway" — must resend the SAME id (pass it to `useCreateCalendarEvent`).
  */
 export type CalendarEventInput = {
   requestId: string;

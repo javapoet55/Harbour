@@ -15,7 +15,10 @@ export type CalendarEventResponse = { event: CalendarEvent; warnings?: string[] 
 /** `MutationResponse` (:17). */
 export type CalendarEventMutation = { success: boolean; warnings?: string[] | null; message?: string };
 
-/** The edit body (route.ts:10, strict). Instants are ISO 8601 with an offset. */
+/**
+ * The edit body (route.ts:10, strict). Instants are ISO 8601 WITH an offset — a local time without one
+ * is 400 — and an empty body is 400 "Invalid event details." (pinned by route.test.ts in b61801c).
+ */
 export type CalendarEventEdit = { title?: string; notes?: string; location?: string; startAt?: string; endAt?: string };
 
 function path(id: string): string {
@@ -28,6 +31,10 @@ export const calendarEventApi = {
   setCompleted: (id: string, completed: boolean, client: ApiClient = getApi()) => client.patch<CalendarEventResponse>(path(id), { completed }),
   /** A retime needs a future start and an end within seven days. */
   update: (id: string, edit: CalendarEventEdit, client: ApiClient = getApi()) => client.patch<CalendarEventResponse>(path(id), edit),
+  /**
+   * Safe to retry (b61801c): the server keeps its own tombstone reachable, so a second DELETE after a
+   * failed provider removal answers 200 and pushes the removal again instead of 404.
+   */
   remove: (id: string, client: ApiClient = getApi()) => client.del<CalendarEventMutation>(path(id)),
   /** Add to Tasks: idempotent per event, so a second tap reuses the same task. */
   addTask: (id: string, client: ApiClient = getApi()) => client.post<{ success: boolean; taskId: string }>(`${path(id)}/task`),

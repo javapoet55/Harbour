@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tansta
 import { randomUUID } from 'expo-crypto';
 import * as WebBrowser from 'expo-web-browser';
 
-import { endpoints, type Agenda, type CalendarConnection, type CalendarEventInput, type CalendarEventResponse } from '../api';
+import { endpoints, isApiError, type Agenda, type CalendarConnection, type CalendarEventInput, type CalendarEventResponse } from '../api';
 import { connectOutcome, DISCONNECTED_MESSAGE, writesMessage } from '../lib/calendarConnections';
 import { calendarPushNotice } from '../lib/calendarPush';
 import { useCalendarNotice } from '../store/calendarNotice';
@@ -198,27 +198,54 @@ export async function completeGoogleConnect(
   } catch {
     refreshed = false;
   }
-  const connections = await queryClient.fetchQuery({ queryKey: queryKeys.calendar.connections(), queryFn: loadCalendarConnections, staleTime: 0 });
+  // A failed refresh keeps the accounts already known (ProfileView.swift:557-558 reads the list
+  // either way); the card shows `CONNECTIONS_REFRESH_FAILED` from the query's error.
+  const connections = await queryClient
+    .fetchQuery({ queryKey: queryKeys.calendar.connections(), queryFn: loadCalendarConnections, staleTime: 0, retry: false })
+    .catch(() => queryClient.getQueryData<CalendarConnection[]>(queryKeys.calendar.connections()) ?? []);
   void queryClient.invalidateQueries({ queryKey: queryKeys.calendar.all() });
   void queryClient.invalidateQueries({ queryKey: queryKeys.agenda.all() });
   return connectOutcome(reconnecting, refreshed, connections);
 }
 
 /**
- * `loadCalendarConnections()` (NexdoApp.swift:309-318). A failed load is an EMPTY list, not an error:
- * Swift catches, clears the list and still marks it loaded, so the card reads "No calendars connected
- * yet." rather than showing a failure.
+ * The Connect Calendar screen's line when the connection worked but the list could not be reloaded
+ * (CalendarConnectionView.swift:255-257). The screen waits for captures.
+ */
+export const CONNECTED_STATUS_UNLOADED = 'Calendar connected, but its latest status could not be loaded. Retry from Calendars & Privacy.';
+
+/** What Settings shows when a refresh fails (`calendarConnectionsError`, NexdoApp.swift:345). */
+export const CONNECTIONS_REFRESH_FAILED = 'Could not refresh calendar connections. Please try again.';
+
+/**
+ * `loadCalendarConnections()` (NexdoApp.swift:328-349). A failed refresh is now an ERROR, and the
+ * accounts already on screen stay: Swift used to clear the list and mark it loaded, so one dropped
+ * request read as "No calendars connected yet." and offered to connect again. It now keeps the list,
+ * leaves `loaded` false until a load succeeds, and shows `CONNECTIONS_REFRESH_FAILED`.
+ *
+ * React Query keeps the previous `data` when a refetch throws, which is exactly that. One attempt,
+ * 15 seconds, no automatic retry, as Swift. A sign-out clears the cache (useSignOut), which is
+ * Swift's owner/generation guard.
  */
 async function loadCalendarConnections(): Promise<CalendarConnection[]> {
   try {
     return (await endpoints.calendarConnections()).connections;
-  } catch {
-    return [];
+  } catch (cause) {
+    if (isApiError(cause) && cause.code === 'SIGNED_OUT') throw cause;
+    throw new Error(CONNECTIONS_REFRESH_FAILED);
   }
 }
 
 export function useCalendarConnections() {
-  return useQuery({ queryKey: queryKeys.calendar.connections(), queryFn: loadCalendarConnections });
+  return useQuery({ queryKey: queryKeys.calendar.connections(), queryFn: loadCalendarConnections, retry: false });
+}
+
+/**
+ * The card's state from the query: the accounts (kept through a failed refresh), whether a load has
+ * ever succeeded (`calendarConnectionsLoaded`), and the refresh error (`calendarConnectionsError`).
+ */
+export function connectionsState(query: { data?: CalendarConnection[]; error: Error | null; isSuccess: boolean; dataUpdatedAt: number }): { connections: CalendarConnection[]; loaded: boolean; error: string | null } {
+  return { connections: query.data ?? [], loaded: query.dataUpdatedAt > 0, error: query.error ? query.error.message : null };
 }
 
 /** `setCalendarWrites(id:enabled:)` (NexdoApp.swift:319-324). Resolves to the message Swift shows. */

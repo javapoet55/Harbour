@@ -23,3 +23,63 @@ export function isDeviceCalendarEvent(event: Pick<CalendarEvent, 'source'>): boo
 export function eventDayZone(event: Pick<CalendarEvent, 'source' | 'allDay' | 'timeZone'>, profileZone: string): string {
   return isDeviceCalendarEvent(event) && event.allDay === true ? event.timeZone ?? profileZone : profileZone;
 }
+
+/**
+ * Swift's `"\(start.timeIntervalSince1970)"`: a Double's description, so whole seconds keep a `.0`.
+ * Only the device ever sees these ids, but keeping Swift's spelling keeps one rule for both.
+ */
+function swiftSeconds(at: number): string {
+  const seconds = at / 1000;
+  return Number.isInteger(seconds) ? `${seconds}.0` : String(seconds);
+}
+
+/**
+ * `DeviceCalendarEvent.make` (DeviceCalendarEvent.swift:5-13). The id carries the calendar, the
+ * event's identifier AND its start, so each occurrence of a repeating event — and the same event in
+ * two calendars — is its own row. Instants are whole-second UTC, as `ISO8601DateFormatter` writes.
+ */
+export function makeDeviceCalendarEvent({
+  identifier,
+  calendarId,
+  title,
+  start,
+  end,
+  allDay,
+  timeZone,
+  notes = null,
+  location = null,
+}: {
+  identifier: string;
+  calendarId: string;
+  title: string;
+  start: number;
+  end: number;
+  allDay: boolean;
+  timeZone: string;
+  notes?: string | null;
+  location?: string | null;
+}): CalendarEvent {
+  const iso = (at: number) => new Date(Math.floor(at / 1000) * 1000).toISOString().replace('.000Z', 'Z');
+  return {
+    id: `${DEVICE_CALENDAR_SOURCE}:${calendarId}:${identifier}:${swiftSeconds(start)}`,
+    title,
+    startAt: iso(start),
+    endAt: iso(end),
+    allDay,
+    notes,
+    location,
+    timeZone,
+    source: DEVICE_CALENDAR_SOURCE,
+    connectionId: null,
+    completedAt: null,
+  };
+}
+
+/**
+ * The per-account calendar choice (`AppleCalendarSelection`, ios/App/AppleCalendarService.swift):
+ * `UserDefaults` key `nexdo.apple-calendar.selection.<profile id>`, the chosen calendar ids sorted.
+ * No saved choice means every calendar; an EMPTY saved choice means none.
+ */
+export function deviceCalendarSelectionKey(ownerId: string): string {
+  return `nexdo.apple-calendar.selection.${ownerId}`;
+}

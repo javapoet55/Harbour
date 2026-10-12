@@ -1,6 +1,7 @@
 import type { Agenda, CalendarEvent, NexdoTask, ScheduleIntelligenceResponse } from '../api/types';
 import { serverTime } from './taskLabels';
 import { dayKey, DISTANT_FUTURE, isDone, parseServerDate } from './taskQuery';
+import { eventDayZone } from './deviceCalendarEvent';
 
 /**
  * The private helpers on `TodayView` (ios/App/RootView.swift:930-1015), lifted out so they can be
@@ -50,14 +51,18 @@ export function scheduleOrder(left: TodayScheduleItem, right: TodayScheduleItem)
   return leftAt - rightAt;
 }
 
-/** `ServerDate.occurs` (Models.swift:221-228): does an event cover this local day? */
+/**
+ * `ServerDate.occurs` (Models.swift:275-283): does an event cover this local day? A device all-day
+ * event is read in its own zone (bdb68ce, `eventDayZone`); everything else in the profile zone.
+ */
 export function eventOccursOn(event: CalendarEvent, day: string, timeZone: string): boolean {
   const start = parseServerDate(event.startAt);
   const end = parseServerDate(event.endAt);
   if (start === null || end === null || end <= start) return false;
+  const zone = eventDayZone(event, timeZone);
   // "An event ending exactly at midnight does not occupy the following day."
-  const lastDay = dayKey(end - 1, timeZone);
-  return dayKey(start, timeZone) <= day && lastDay >= day;
+  const lastDay = dayKey(end - 1, zone);
+  return dayKey(start, zone) <= day && lastDay >= day;
 }
 
 /**

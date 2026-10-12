@@ -1,4 +1,5 @@
 import type { CalendarEvent, ScheduleIntelligenceResponse } from '../../api/types';
+import { isDeviceCalendarEvent } from '../../lib/deviceCalendarEvent';
 import { parseServerDate } from '../../lib/taskQuery';
 
 /** The pure parts of Event Details (ios/App/CalendarEventDetailsView.swift:19-22). */
@@ -8,10 +9,24 @@ export function eventEditable(event: Pick<CalendarEvent, 'source' | 'connectionI
   return event.source === 'harbor' && event.connectionId == null;
 }
 
-/** `calendarName` (:21): "NexDo", or the provider capitalised as Swift's `.capitalized`. */
+/**
+ * `calendarName` (:21): "Apple Calendar" for an event read from the phone (bdb68ce), "NexDo", or the
+ * provider capitalised as Swift's `.capitalized`. The Android device reader will want its own label
+ * here (see android-polish.md §32).
+ */
 export function eventCalendarName(event: Pick<CalendarEvent, 'source'>): string {
+  if (isDeviceCalendarEvent(event)) return 'Apple Calendar';
   if (event.source === 'harbor') return 'NexDo';
   return (event.source ?? 'Calendar').toLowerCase().replace(/(^|[^\p{L}\p{N}'])(\p{L})/gu, (_match, before: string, letter: string) => before + letter.toUpperCase());
+}
+
+/**
+ * A device event has no server record (bdb68ce, CalendarEventDetailsView.swift:43-55, `:93`, `:112`):
+ * Details does not fetch it, and offers neither Mark Complete, Add to Tasks, Edit nor Delete — only
+ * "On this iPhone · Edit this event in Apple Calendar.".
+ */
+export function eventHasServerRecord(event: Pick<CalendarEvent, 'source'>): boolean {
+  return !isDeviceCalendarEvent(event);
 }
 
 /** `status` (:22): completed wins; otherwise past once the end has gone by (an unreadable end never is). */

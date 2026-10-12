@@ -244,8 +244,8 @@ export const endpoints = {
   /** `AppModel.syncProfileCalendars()` (NexdoApp.swift:286-295). */
   syncCalendars: (client: ApiClient = getApi()) => client.post<CalendarSyncResponse>('/api/calendar/sync'),
 
-  /** `loadCalendarConnections()` (NexdoApp.swift:309-318). */
-  calendarConnections: (client: ApiClient = getApi()) => client.get<CalendarConnectionsResponse>('/api/calendar/connections'),
+  /** `loadCalendarConnections()` (NexdoApp.swift:328-349): 15s since 08be688. */
+  calendarConnections: (client: ApiClient = getApi()) => client.get<CalendarConnectionsResponse>('/api/calendar/connections', { timeoutMs: 15_000 }),
 
   /** `setCalendarWrites(id:enabled:)` (NexdoApp.swift:319-324): the "Add my scheduled tasks and events here" toggle. */
   setCalendarWrites: (id: string, writeEnabled: boolean, client: ApiClient = getApi()) =>
