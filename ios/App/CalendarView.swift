@@ -16,9 +16,20 @@ struct CalendarView: View {
         if colorScheme == .dark { return .white.opacity(colorContrast == .increased ? 0.60 : 0.32) }
         return Color.nexdoIndigo.opacity(colorContrast == .increased ? 0.40 : 0.16)
     }
-    private var separatorWidth: CGFloat { colorContrast == .increased ? 2 : 1 }
+    private var separatorWidth: CGFloat {
+        colorContrast == .increased ? 2 : (colorScheme == .dark ? 1 : 0.5)
+    }
+    private func separatorStyle(vertical: Bool = false) -> LinearGradient {
+        // Keep light-mode guides quiet; retain the stronger accessible/night appearance.
+        let colors: [Color] = colorScheme == .light && colorContrast != .increased
+            ? [Color.nexdoIndigo.opacity(0.03), Color.nexdoIndigo.opacity(0.12), Color.nexdoIndigo.opacity(0.03)]
+            : [calendarSeparator, calendarSeparator]
+        return LinearGradient(colors: colors,
+                              startPoint: vertical ? .top : .leading,
+                              endPoint: vertical ? .bottom : .trailing)
+    }
     private var calendarRule: some View {
-        Rectangle().fill(calendarSeparator).frame(height: separatorWidth).accessibilityHidden(true)
+        Rectangle().fill(separatorStyle()).frame(height: separatorWidth).accessibilityHidden(true)
     }
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var mode: Mode = .schedule
@@ -546,7 +557,7 @@ struct CalendarView: View {
         return HStack(spacing: 10) {
             Text(row.time).font(.caption).frame(width: 64, alignment: .leading)
             ZStack {
-                Rectangle().fill(calendarSeparator).frame(width: separatorWidth)
+                Rectangle().fill(separatorStyle(vertical: true)).frame(width: separatorWidth).accessibilityHidden(true)
                 Circle().fill(color).frame(width: 8, height: 8)
             }.frame(width: 8)
             if let event = row.event {
