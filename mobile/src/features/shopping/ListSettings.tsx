@@ -10,6 +10,7 @@ import { momentDate, momentDay } from '../moments/dates';
 import { DateField, FormField, FormRow, FormScroll, FormSection, FormText, FormToggle } from '../moments/form';
 import { StoreFinderPage, StoreHoursPage } from './StorePages';
 import { addressZip, fullAddress, mapsUrl, storeAddress, type ShoppingStoreAddress } from './storeAddress';
+import { withStoreName } from './listLogo';
 
 /**
  * `ShoppingSettings` (ios/App/ShoppingViews.swift:642-692): name, date and weekly repeat, then "Store
@@ -28,9 +29,9 @@ export function settingsSavable(list: Pick<GroceryList, 'title' | 'storeZip'>): 
   return list.title.trim() !== '' && (zip === '' || ZIP.test(zip));
 }
 
-/** `onSelect` (:657-663): the store replaces every store field. */
+/** `onSelect` (:657-663): the store replaces every store field, and drops the old store's logo (bdb68ce). */
 export function withStore(list: GroceryList, store: ShoppingStoreSuggestion): GroceryList {
-  return { ...list, storePlaceId: store.id, storeWebsite: store.website ?? null, storeName: store.name, storeAddress: store.address, storeZip: store.zip };
+  return { ...list, storeLogoData: null, storePlaceId: store.id, storeWebsite: store.website ?? null, storeName: store.name, storeAddress: store.address, storeZip: store.zip };
 }
 
 /** `updateAddress(street:locality:)` (:684-691): a typed address is no longer the chosen place. */
@@ -166,11 +167,11 @@ function SettingsPage({
           <LinkRow icon="add" title="Add New Store" chevron onPress={() => onPage('stores')} testID="shopping-add-store" />
         </FormRow>
         <FormRow>
-          {/* Typing a name forgets the chosen place (:666). */}
+          {/* Typing a name forgets the chosen place and its logo (:671). */}
           <FormField
             placeholder="Store name"
             value={draft.storeName ?? ''}
-            onChangeText={(storeName) => setDraft({ ...draft, storeName, storeWebsite: null, storePlaceId: null })}
+            onChangeText={(storeName) => setDraft(withStoreName(draft, storeName))}
             testID="list-settings-store-name"
           />
         </FormRow>

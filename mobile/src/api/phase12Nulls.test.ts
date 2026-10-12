@@ -5,7 +5,8 @@ import { bugReportApi, feedbackApi } from './feedback';
 import { followUpApi, followUpScheduleBody } from './followUp';
 import { nutritionApi } from './nutrition';
 import { pomodoroApi } from './pomodoro';
-import { shoppingEmailApi, shoppingOffersApi, shoppingStoresApi } from './shopping';
+import { shoppingApi, shoppingEmailApi, shoppingOffersApi, shoppingStoresApi } from './shopping';
+import { listInput } from '../features/shopping/model';
 import { bugSubmission, includeScreenshot, newBugDraft, type BugDiagnostics } from '../features/bugReport/model';
 import { validateSettings } from '../lib/profileSettings';
 import { toggleWorkingDay } from '../features/tasks/workingDays';
@@ -107,6 +108,19 @@ describe('nothing Phase 12 writes sends a null into a bare zod .optional()', () 
     ['update (retimed)', (client: ApiClient) => calendarEventApi.update('e1', { title: 'T', notes: '', location: '', startAt: '2026-10-07T17:00:00Z', endAt: '2026-10-07T18:00:00Z' }, client)],
   ])('calendar event %s sends no null', async (_name, send) => {
     expect(await nullsIn(send)).toEqual([]);
+  });
+
+  // bdb68ce — src/server/shopping/domain.ts:4: `storeLogoData` is `.nullable().optional()`, but null and
+  // "" both CLEAR the logo while a missing key keeps it, so it is always the logo or "" — never null.
+  // Each item's `imageData` is null when absent, as Swift encodes it (`itemInput` is nullable there).
+  it.each([
+    ['with a logo', '/9j/AA=='],
+    ['without one', null],
+  ])('POST /api/shopping save %s sends no null logo', async (_name, logo) => {
+    const list = { id: 'l1', title: 'Groceries', date: '2026-10-10', timeZone: 'UTC', weekly: true, revision: 2, storeName: 'Safeway', storeLogoData: logo, items: [{ id: 'i1', name: 'Milk', category: 'Dairy', quantity: '1', size: '', notes: '', checked: false, imageData: null }] };
+    const nulls = await nullsIn((client) => shoppingApi.post({ operation: 'save', id: list.id, revision: list.revision, input: listInput(list), idempotencyKey: '33333333-3333-4333-8333-333333333333' }, client));
+    expect(nulls).toEqual(['input.items[0].imageData']);
+    expect((lastBody as { input: { storeLogoData: string } }).input.storeLogoData).toBe(logo ?? '');
   });
 
   // src/server/shopping/stores.ts:5-12 — `area`, `zip`, `latitude`, `longitude` bare `.optional()`.
