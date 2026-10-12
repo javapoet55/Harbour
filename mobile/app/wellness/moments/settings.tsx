@@ -80,7 +80,8 @@ export default function MomentSettingsScreen() {
 
   const account = snapshot?.emailAccount;
   return (
-    <View style={styles.fill} pointerEvents={busy ? 'none' : 'auto'}>
+    <View collapsable={false} style={styles.fill} pointerEvents={busy ? 'none' : 'auto'}>
+      {/* collapsable={false}: never flattened, so turning pointerEvents to 'none' does not create a view and move the keyboard-aware scroll view into it — Fabric's addViewAt crash on Android (android-polish.md §39). */}
       <FormScroll testID="moments-settings-form">
         <FormSection header="Import only what you choose">
           <FormRow>

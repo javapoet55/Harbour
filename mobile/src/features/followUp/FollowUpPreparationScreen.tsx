@@ -181,7 +181,8 @@ export function FollowUpPreparationScreen({
           <Text style={[textStyles.body, { color: theme.colors.ink }]}>Close</Text>
         </Pressable>
       </View>
-      <View pointerEvents={disabled ? 'none' : 'auto'} style={styles.fill}>
+      {/* collapsable={false}: never flattened, so turning pointerEvents to 'none' does not create a view and move the keyboard-aware scroll view into it — Fabric's addViewAt crash on Android (android-polish.md §39). */}
+      <View collapsable={false} pointerEvents={disabled ? 'none' : 'auto'} style={styles.fill}>
         <FormScroll testID="follow-up-form">
           {loading ? (
             <FormSection>
