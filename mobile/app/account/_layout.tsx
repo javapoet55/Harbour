@@ -24,6 +24,8 @@ export default function AccountLayout() {
       <Stack.Screen name="help" />
       <Stack.Screen name="feedback" />
       <Stack.Screen name="change-password" />
+      {/* Phase 13 Calendar run: the phone's calendars (AppleCalendarService.swift:68), pushed from three places. */}
+      <Stack.Screen name="phone-calendars" />
       {/* 4185501: "Forgot password?" on Change password presents the same reset sheet as Sign in. */}
       <Stack.Screen
         name="reset-password"
