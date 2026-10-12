@@ -79,6 +79,8 @@ export const taskIcons = {
   'moon.stars.fill': 'moon',
   // Bug reports (BugReportView.swift, ProfileView.swift:88; d511fef).
   ladybug: 'bug-outline',
+  // "Prepare and follow up" (TaskActionView.swift:162, 6f079c0).
+  'list.clipboard': 'clipboard-outline',
   'heart.fill': 'heart',
   'checkmark.shield.fill': 'shield-checkmark',
   iphone: 'phone-portrait-outline',

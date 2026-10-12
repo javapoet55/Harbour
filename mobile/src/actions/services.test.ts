@@ -141,6 +141,16 @@ describe('the composers', () => {
     });
   });
 
+  /** `draft(…body:)` (TaskActionComposers.swift:18-22): a prepared body is used as written, unless blank. */
+  it('uses a prepared body — the follow-up draft — and falls back when it is blank', () => {
+    expect(emailDraft({ recipient: 'claims@acme.example', name: 'Acme', context: 'Claim status', body: '  Hello Acme,\n\nAny update?  ' })).toEqual({
+      recipient: 'claims@acme.example',
+      subject: 'Follow-up: Claim status',
+      body: 'Hello Acme,\n\nAny update?',
+    });
+    expect(emailDraft({ recipient: 'a@b.c', name: 'Acme', context: null, body: '   ' }).body).toBe('Hi Acme,\n\nJust checking in.\n\nThanks.');
+  });
+
   /** `canSendText()` / `canSendMail()` (TaskActionView.swift:270, TaskActionComposers.swift:16). */
   it('reports availability from the platform', async () => {
     mockedSMS.isAvailableAsync.mockResolvedValue(false);

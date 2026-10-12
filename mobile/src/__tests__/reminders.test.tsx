@@ -41,6 +41,13 @@ jest.mock('../api/taskAgent', () => ({ taskAgentApi: { load: (...args: unknown[]
 const mockPick = jest.fn();
 jest.mock('../features/moments/device', () => ({ pickContact: (...args: unknown[]) => mockPick(...args) }));
 
+// The saved follow-up preparation (6f079c0), loaded as the screen opens.
+const mockPreparation = jest.fn();
+jest.mock('../api/followUp', () => ({
+  ...jest.requireActual('../api/followUp'),
+  followUpApi: { load: (...args: unknown[]) => mockPreparation(...args), save: jest.fn(), schedule: jest.fn() },
+}));
+
 const mockTasks = jest.fn();
 jest.mock('../api', () => ({
   ...jest.requireActual('../api'),
@@ -110,6 +117,7 @@ beforeEach(() => {
   mockAgent.mockResolvedValue({ run: null, intent: { eligible: false } });
   mockResolve.mockResolvedValue([]);
   mockPick.mockResolvedValue(null);
+  mockPreparation.mockResolvedValue({ revision: 0, preparation: null });
 });
 
 /**
@@ -192,6 +200,38 @@ describe('the action screen', () => {
     expect(useCoordinator.getState().actions[0].contactIdentifier).toBe('c1');
     // "the plumber" is searched without its article; Damien has none.
     expect(mockResolve).toHaveBeenCalledWith(expect.objectContaining({ name: 'Damien' }));
+  });
+
+  /** 6f079c0 (TaskActionView.swift:158-171): Prepare and follow up under the title. */
+  it('offers Prepare and follow up, Complete or record outcome, and the task title', async () => {
+    mockResolve.mockResolvedValue([DAMIEN]);
+    await open();
+    await waitFor(() => expect(screen.getByTestId('action-title')).toHaveTextContent('Contact Damien Hall'));
+    expect(screen.getByText('Prepare and follow up')).toBeTruthy();
+    expect(screen.getByTestId('action-preparation-purpose')).toHaveTextContent('Add the purpose, notes, checklist and message draft.');
+    expect(screen.queryByTestId('action-preparation-steps')).toBeNull();
+    expect(screen.getByText('Complete or record outcome')).toBeTruthy();
+    expect(screen.getByTestId('action-task-title')).toHaveTextContent('Contact Damien at 10 AM');
+    await fireEvent.press(screen.getByTestId('action-preparation'));
+    expect(mockPush).toHaveBeenLastCalledWith({
+      pathname: '/action/preparation',
+      params: { taskId: 't1', actionId: expect.any(String), name: 'Damien Hall', phone: expect.any(String), email: '' },
+    });
+  });
+
+  /** 6f079c0 (:325-327, :348-355): a saved preparation is kept on the action and names who to contact. */
+  it('uses a saved preparation: its purpose and steps on the card, its company as the contact', async () => {
+    mockPreparation.mockResolvedValue({
+      revision: 3,
+      preparation: { company: 'Acme Insurance', purpose: 'Claim status', phone: '9255550100', email: '', notes: '', draft: 'Hello Acme', checklist: [{ id: 'c1', title: 'a', done: true }, { id: 'c2', title: 'b', done: false }], outcomes: [] },
+    });
+    const id = await open();
+    await waitFor(() => expect(screen.getByTestId('action-title')).toHaveTextContent('Contact Acme Insurance'));
+    expect(screen.getByTestId('action-preparation-purpose')).toHaveTextContent('Claim status');
+    expect(screen.getByTestId('action-preparation-steps')).toHaveTextContent('1 of 2 steps ready · Record outcome');
+    expect(useCoordinator.getState().actions.find((item) => item.id === id)?.preparation?.draft).toBe('Hello Acme');
+    // No Contacts search: the preparation already says who.
+    expect(mockResolve).not.toHaveBeenCalled();
   });
 
   /** A guard against inventing controls Swift does not have on this screen. */

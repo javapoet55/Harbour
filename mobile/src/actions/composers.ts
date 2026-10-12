@@ -27,12 +27,16 @@ export type ActionEmailDraft = {
   body: string;
 };
 
-/** `NativeTaskActionEmailService.draft(recipient:name:context:)` (TaskActionComposers.swift:17-21). */
-export function emailDraft({ recipient, name, context }: { recipient: string; name: string; context?: string | null }): ActionEmailDraft {
+/**
+ * `NativeTaskActionEmailService.draft(recipient:name:context:body:)` (TaskActionComposers.swift:18-22): a
+ * prepared body — the follow-up draft, or the business draft — is used as written when it is not blank.
+ */
+export function emailDraft({ recipient, name, context, body }: { recipient: string; name: string; context?: string | null; body?: string | null }): ActionEmailDraft {
+  const prepared = body?.trim() ?? '';
   return {
     recipient,
     subject: context ? `Follow-up: ${context}` : 'Following up',
-    body: `Hi ${name},\n\n${context ? `Just following up regarding ${context}.` : 'Just checking in.'}\n\nThanks.`,
+    body: prepared !== '' ? prepared : `Hi ${name},\n\n${context ? `Just following up regarding ${context}.` : 'Just checking in.'}\n\nThanks.`,
   };
 }
 
