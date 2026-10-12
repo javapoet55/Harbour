@@ -253,6 +253,9 @@ describe('the action screen', () => {
     await waitFor(() => expect(screen.getByTestId('action-error')).toHaveTextContent('No contact selected. Choose a contact or enter details below.'));
     expect(screen.getByTestId('action-title')).toHaveTextContent('Contact Damien');
     expect(screen.getByText('Choose a contact or enter a phone number or email address.')).toBeTruthy();
+    // The red line comes first (TaskActionView.swift:172-183; `task-action-prepare-card`).
+    const tree = JSON.stringify(screen.toJSON());
+    expect(tree.indexOf('"action-error"')).toBeLessThan(tree.indexOf('"action-prompt"'));
     expect(screen.queryByTestId('action-call')).toBeNull();
     expect(screen.queryByTestId('action-email')).toBeNull();
   });
