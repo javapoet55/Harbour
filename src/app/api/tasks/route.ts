@@ -3,7 +3,7 @@ import { validateTaskDates } from '@/lib/task-input';
 import { healthRoute } from '@/server/health/telemetry';
 import { requireAvailableSchedule } from '@/server/availability';
 import { parseProjectId } from '@/server/projects';
-import { jsonError } from '@/lib/http';
+import { jsonError, withUser } from '@/lib/http';
 import { NextResponse } from 'next/server';
 import { requireUser } from '@/server/auth';
 import { createTask } from '@/server/tasks';
@@ -95,6 +95,6 @@ async function healthHandlerPOST(req: Request) {
   } catch (error) { return jsonError(error); }
 }
 
-export const GET = healthRoute('GET /api/tasks', healthHandlerGET);
+export const GET = healthRoute('GET /api/tasks', (req: Request) => withUser(() => healthHandlerGET(req)));
 
 export const POST = healthRoute('POST /api/tasks', healthHandlerPOST);

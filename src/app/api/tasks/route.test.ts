@@ -10,6 +10,26 @@ vi.mock('@/server/calendar-sync', () => ({ pushTaskToExternal: vi.fn() }));
 vi.mock('@/server/replanner', () => ({ generateReplanProposal: mocks.replan }));
 
 import { GET, POST } from './route';
+import { requireUser } from '@/server/auth';
+
+describe('task list error responses', () => {
+  it('returns JSON 401 for a missing or expired session without querying tasks', async () => {
+    mocks.findMany.mockClear();
+    vi.mocked(requireUser).mockRejectedValueOnce(new Error('UNAUTHENTICATED'));
+    const response = await GET(new Request('https://example.test/api/tasks'));
+    expect(response.status).toBe(401);
+    expect(await response.json()).toEqual({ error: 'Sign in required.' });
+    expect(response.headers.get('X-Request-ID')).toBeTruthy();
+    expect(mocks.findMany).not.toHaveBeenCalled();
+  });
+
+  it('returns a sanitized JSON error for database failures', async () => {
+    mocks.findMany.mockRejectedValueOnce(new Error('private database connection details'));
+    const response = await GET(new Request('https://example.test/api/tasks'));
+    expect(response.status).toBe(500);
+    expect(await response.json()).toEqual({ error: 'Request failed.' });
+  });
+});
 
 describe('task list timeline API', () => {
   beforeEach(() => { mocks.findMany.mockReset(); mocks.findMany.mockResolvedValue([]); });
