@@ -89,6 +89,7 @@ jest.mock('../api', () => ({
 
 import Account from '../../app/account/index';
 import Settings from '../../app/account/settings';
+import { configureBugReports, resetBugReports, useBugReport } from '../features/bugReport/coordinator';
 
 const PREFERENCES = {
   workStart: '09:00',
@@ -153,15 +154,27 @@ beforeEach(() => {
 
 /** `AccountView` body (ios/App/ProfileView.swift:53-84). */
 describe('the Account sheet', () => {
+  /** `Button { BugReportCoordinator.shared.open(from: "settings") }` (ProfileView.swift:88). */
+  it('Report Bugs opens the report over My Page, tagged "settings"', async () => {
+    const present = jest.fn();
+    configureBugReports({ capture: async () => '/9j/AA==', device: () => ({}), present, dismiss: jest.fn(), newId: () => 'id', now: () => 0 });
+    await show(<Account />);
+    await fireEvent.press(screen.getByTestId('account-report-bugs'));
+    await waitFor(() => expect(present).toHaveBeenCalledTimes(1));
+    expect(useBugReport.getState().session?.diagnostics.screen).toBe('settings');
+    resetBugReports();
+  });
+
   it('renders the header, the menu rows in Swift order, and Sign out', async () => {
     await show(<Account />);
 
     expect(screen.getByText('My Page')).toBeTruthy();
     expect(screen.getByTestId('account-name')).toHaveTextContent('Ada Lovelace');
     expect(screen.getByTestId('account-email')).toHaveTextContent('ada@example.com');
-    // Help, Feedback, Edit profile and settings, Change password (ProfileView.swift:66-69).
-    const rows = screen.getAllByTestId(/^account-(help|feedback|edit-profile|change-password)$/).map((node) => node.props.testID);
-    expect(rows).toEqual(['account-help', 'account-feedback', 'account-edit-profile', 'account-change-password']);
+    // Edit profile and settings, Feedback, Help, Report Bugs, Change password (ProfileView.swift:84-89, d511fef).
+    const rows = screen.getAllByTestId(/^account-(help|feedback|edit-profile|report-bugs|change-password)$/).map((node) => node.props.testID);
+    expect(rows).toEqual(['account-edit-profile', 'account-feedback', 'account-help', 'account-report-bugs', 'account-change-password']);
+    expect(screen.getByTestId('account-report-bugs')).toHaveTextContent('Report Bugs');
     expect(screen.getByText('Sign out')).toBeTruthy();
     // 19eb8e4 removed the web rows and the second Settings row.
     for (const gone of ['Inbox', 'Waiting For', 'AI Planner', 'Insights', 'Notifications', 'Settings']) expect(screen.queryByText(gone)).toBeNull();
