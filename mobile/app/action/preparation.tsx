@@ -1,4 +1,5 @@
 import { router, useLocalSearchParams } from 'expo-router';
+import { useState } from 'react';
 
 import { useCoordinator } from '../../src/actions/coordinator';
 import { FollowUpPreparationScreen } from '../../src/features/followUp/FollowUpPreparationScreen';
@@ -20,8 +21,10 @@ export default function FollowUpPreparationRoute() {
   const zone = useSession((state) => state.profile?.timeZone) ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
   const stored = useCoordinator((state) => state.actions.find((item) => item.id === params.actionId));
   const task = tasks.data?.tasks.find((item) => item.id === params.taskId);
+  // The detector's clock, read once per opening.
+  const [openedAt] = useState(() => Date.now());
   if (!task) return null;
-  const detection = stored ? null : detectTaskAction(task.title, Date.now(), zone);
+  const detection = stored ? null : detectTaskAction(task.title, openedAt, zone);
   const action =
     stored ??
     (detection
