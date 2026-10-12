@@ -196,7 +196,14 @@ export function BugReportScreen({ session, onDone }: { session: BugReportSession
           </View>
         </View>
 
-        <ScrollView contentContainerStyle={styles.scroll} keyboardDismissMode="interactive" keyboardShouldPersistTaps="handled">
+        {/* Keyed by stage: the form is a push in Swift, so it opens at its top, not where the intro was
+            scrolled to (parity pass 4: "What happened?" opened under the bar). */}
+        <ScrollView
+          contentContainerStyle={styles.scroll}
+          key={reference !== null ? 'success' : editing ? 'form' : 'intro'}
+          keyboardDismissMode="interactive"
+          keyboardShouldPersistTaps="handled"
+        >
           <View style={styles.column}>
             {reference !== null ? (
               /* `success(_:)` (:165-178). */
