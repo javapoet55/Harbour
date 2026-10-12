@@ -15,7 +15,7 @@ import {
   type CalendarConnectProvider,
 } from './calendarProviders';
 import { CONNECT_ART } from './connectArt';
-import { CONNECT_INK, CONNECT_PURPLE, ConnectSurface } from './ConnectSurface';
+import { CONNECT_INK, CONNECT_LINK, CONNECT_PURPLE, ConnectSurface } from './ConnectSurface';
 import { useDeviceCalendarAccess } from './useDeviceCalendarAccess';
 
 /**
@@ -86,7 +86,7 @@ export function CalendarConnectHub({ onBack, onProvider, testID = 'calendar-conn
                 {error}
               </Text>
               <Pressable accessibilityRole="button" onPress={() => void connectionsQuery.refetch()} style={styles.retry} testID="calendar-connect-hub-retry">
-                <Text style={[styles.body, { color: '#007AFF' }]}>{HUB_COPY.retry}</Text>
+                <Text style={[styles.body, { color: CONNECT_LINK }]}>{HUB_COPY.retry}</Text>
               </Pressable>
             </>
           ) : null}

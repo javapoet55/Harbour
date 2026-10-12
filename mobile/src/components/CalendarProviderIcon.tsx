@@ -1,5 +1,6 @@
 import { Image, StyleSheet, View, type ImageSourcePropType } from 'react-native';
 
+import { CONNECT_ART } from '../features/calendar/connectArt';
 import { deviceCalendarCopy, devicePlatform } from '../features/calendar/deviceCalendarCopy';
 import { WELLNESS_NAVIGATION } from '../features/wellness/art';
 import { useTheme } from '../theme';
@@ -10,17 +11,14 @@ import { TaskSymbol } from './TaskSymbol';
  * provider's artwork in a 32 x 36 frame, labelled for accessibility by the provider's calendar name.
  *
  * Google and Microsoft are cells of the bundled `calendar-connect-pack`, which Swift draws with
- * `.blendMode(.multiply)` so their white vanishes into the card. React Native has no blend mode, so
- * the two cells were cut out with the white unmixed into transparency (assets/calendar/), which
- * gives the same pixels over white and keeps the artwork from sitting in a white square in dark.
+ * `.blendMode(.multiply)` so their white vanishes into the card. React Native has no blend mode, so it
+ * uses the Calendar run's transparent crops of those cells (`CONNECT_ART`, the hub's own icons). Run D's
+ * separate crops had opaque black corners and drew as a black square on the phone (parity pass 4).
  *
  * Device events (`apple`, `apple-device`, `icloud`): Apple's logo and "Apple Calendar" on iOS; on
  * Android a phone glyph and "Phone calendar" (android-polish.md §33, the §37 Calendar run).
  */
-const ARTWORK: Record<'google' | 'microsoft', ImageSourcePropType> = {
-  google: require('../../assets/calendar/google.png'),
-  microsoft: require('../../assets/calendar/microsoft.png'),
-};
+const ARTWORK: Record<'google' | 'microsoft', ImageSourcePropType> = { google: CONNECT_ART.google, microsoft: CONNECT_ART.microsoft };
 
 export function calendarProviderLabel(source: string | null | undefined): string {
   switch (source?.toLowerCase() ?? '') {

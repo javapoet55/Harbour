@@ -5,7 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { TaskSymbol } from '../../components/TaskSymbol';
 import { Text } from '../../components/Text';
 import { withAlpha } from '../../components/CalendarParts';
-import { FixedScheme } from '../../theme';
+import { FixedScheme, palettes } from '../../theme';
 import { FixedLightStatusBar } from '../wellness/FixedLightStatusBar';
 
 /**
@@ -20,6 +20,12 @@ import { FixedLightStatusBar } from '../wellness/FixedLightStatusBar';
 export const CONNECT_INK = '#0F0D40';
 /** `.purple` (the hub), `.blue` and `.pink` (the provider pages). */
 export const CONNECT_PURPLE = '#AF52DE';
+/**
+ * Plain buttons and links on these fixed-light screens: the app tint (`.tint(.nexdoIndigo)` from
+ * RootView), which "Need help?" (a toolbar `NavigationLink`), Retry and Open iPhone Settings take
+ * (`calendar-connect-google-connected`). Only the Connect Now capsule is `Color.blue`.
+ */
+export const CONNECT_LINK = palettes.light.link;
 
 export function ConnectSurface({
   accent,
@@ -42,7 +48,8 @@ export function ConnectSurface({
         <LinearGradient colors={[withAlpha(accent, 0.1), '#FFFFFF', withAlpha(accent, 0.12)]} end={{ x: 1, y: 1 }} start={{ x: 0, y: 0 }} style={StyleSheet.absoluteFill} />
         <View pointerEvents="none" style={[styles.halo, { backgroundColor: withAlpha(accent, 0.04) }]} />
         <FixedLightStatusBar />
-        <SafeAreaView edges={['top', 'left', 'right']} style={styles.fill}>
+        {/* Transparent: a white SafeAreaView covered the gradient, so the 85% white cards vanished. */}
+        <SafeAreaView edges={['top', 'left', 'right']} style={styles.grow}>
           <View style={styles.bar}>
             <View style={styles.side}>
               {backHidden ? null : (
@@ -73,5 +80,5 @@ const styles = StyleSheet.create({
   side: { width: 44 },
   back: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255, 255, 255, 0.85)' },
   pill: { minHeight: 36, paddingHorizontal: 14, borderRadius: 18, justifyContent: 'center', backgroundColor: 'rgba(255, 255, 255, 0.85)' },
-  pillText: { fontSize: 17, lineHeight: 22, color: '#007AFF' },
+  pillText: { fontSize: 17, lineHeight: 22, color: CONNECT_LINK },
 });

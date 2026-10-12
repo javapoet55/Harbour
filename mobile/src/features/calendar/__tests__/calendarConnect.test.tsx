@@ -330,3 +330,15 @@ describe('Provider icon and artwork (CalendarConnectionView.swift:289-357)', () 
     expect(Object.keys(CONNECT_ART_RECTS)).toHaveLength(9);
   });
 });
+
+/**
+ * Phone parity pass 4: plain buttons take the app tint. (The transparent content layer over the gradient
+ * is checked on the phone: the safe-area mock does not forward a style to test.)
+ */
+describe('the Connect surface on the phone', () => {
+  it('draws Need help? in the app tint, not system blue', async () => {
+    await showProvider('google');
+    const { StyleSheet } = jest.requireActual('react-native') as typeof import('react-native');
+    expect(StyleSheet.flatten(screen.getByText('Need help?').props.style).color).toBe('#3D29F0');
+  });
+});
