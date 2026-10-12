@@ -349,6 +349,17 @@ describe('the Real-time Voice card', () => {
 });
 
 describe('the Settings screen', () => {
+  /** 12bb9d4 / 4185501 (ProfileView.swift:343-344): the morning email's label and explanation. */
+  it('labels the morning email with its time and says where and when it is sent', async () => {
+    await show(<Settings />);
+    await waitFor(() => expect(screen.getByTestId('settings-morning')).toBeTruthy());
+    expect(screen.getByText('Daily morning email · 6:00 a.m.')).toBeTruthy();
+    expect(screen.queryByText('Morning summary')).toBeNull();
+    expect(screen.getByTestId('settings-morning-explanation')).toHaveTextContent(
+      'Today’s tasks, calendar events and conflicts, sent to ada@example.com at 6:00 a.m. in Asia/Kolkata. Email notifications must also be enabled.',
+    );
+  });
+
   it('renders every card in body order', async () => {
     await show(<Settings />);
 
@@ -1251,8 +1262,9 @@ describe('the Settings screen on Android', () => {
     for (const card of ['settings-appearance', 'settings-profile-time', 'settings-voice', 'settings-notifications', 'settings-calendars']) {
       expect(flat(card)).toMatchObject({ backgroundColor: light.fieldSurfaceElevated, borderWidth: 1, borderColor: light.fieldBorder });
     }
-    // Notifications: next action | focus picker, then push | email | morning | evening.
-    expect(screen.getAllByTestId('settings-notifications-separator')).toHaveLength(4);
+    // Notifications: next action | focus picker, then push | email | morning; the morning email's caption now
+    // sits between it and evening (12bb9d4), so those two are no longer adjacent.
+    expect(screen.getAllByTestId('settings-notifications-separator')).toHaveLength(3);
     // Voice: confirmation | spoken replies; the existing divider already splits the next pair.
     expect(screen.getAllByTestId('settings-voice-separator')).toHaveLength(1);
     // Profile and time: its rows are fields, not list rows.

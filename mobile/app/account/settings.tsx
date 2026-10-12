@@ -29,6 +29,7 @@ import {
   CONFIRMATION_LEVELS,
   deviceTimeZone,
   LEGAL_LINKS,
+  morningEmailExplanation,
   SWITCHING_THRESHOLDS,
   timeZoneLabel,
   validateSettings,
@@ -510,12 +511,16 @@ function SettingsScreen({
                 testID="settings-email"
                 value={preferences.emailEnabled}
               />
+              {/* "Daily morning email · 6:00 a.m." and its explanation (ProfileView.swift:343-344; 12bb9d4, 4185501). */}
               <SettingsToggle
-                label="Morning summary"
+                label="Daily morning email · 6:00 a.m."
                 onValueChange={(value) => patch({ morningSummary: value })}
                 testID="settings-morning"
                 value={preferences.morningSummary}
               />
+              <SettingsCaption testID="settings-morning-explanation">
+                {morningEmailExplanation(profile?.email, profile?.timeZone, zone)}
+              </SettingsCaption>
               <SettingsToggle
                 label="Evening summary"
                 onValueChange={(value) => patch({ eveningSummary: value })}
