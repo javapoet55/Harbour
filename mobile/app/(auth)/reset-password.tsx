@@ -7,6 +7,8 @@ import { AuthFieldRow, GradientButton, KeyboardAvoidingView, KeyboardAwareScroll
 import { useConfirmPasswordReset, useRequestPasswordReset } from '../../src/query/useAuth';
 import { sanitizeCode } from '../../src/schemas/auth';
 import { androidGroup, androidLabel, inputText, isAndroid, textStyles, useTheme } from '../../src/theme';
+import { closePresentedScreens, replaceWithSignIn } from '../../src/lib/sessionNavigation';
+import { useSession } from '../../src/store/session';
 
 /**
  * Port of `PasswordResetView` (ios/App/RootView.swift:574-640).
@@ -33,8 +35,12 @@ export default function ResetPassword() {
   const [emailFocused, setEmailFocused] = useState(false);
   const android = isAndroid();
 
+  // 4185501: also opened from Change password while signed in. Then a confirmed reset ends the session
+  // like Change password does (`if profile != nil { await reset() }`, NexdoApp.swift:228), closing the
+  // signed-in screens first (src/lib/sessionNavigation.ts).
+  const [signedIn] = useState(() => useSession.getState().status === 'signedIn');
   const request = useRequestPasswordReset();
-  const confirm = useConfirmPasswordReset();
+  const confirm = useConfirmPasswordReset(signedIn ? { beforeSessionEnds: closePresentedScreens } : {});
   const busy = request.isPending || confirm.isPending;
 
   const close = () => router.back();
@@ -57,8 +63,15 @@ export default function ResetPassword() {
     confirm.mutate(
       { email, code, password },
       {
-        onSuccess: () =>
-          Alert.alert('Password updated', 'You can now sign in with your new password.', [{ text: 'Sign In', onPress: close }]),
+        onSuccess: () => {
+          if (signedIn) {
+            // The session has ended and this sheet with it: Sign in opens, and the same alert says why.
+            replaceWithSignIn();
+            Alert.alert('Password updated', 'You can now sign in with your new password.', [{ text: 'Sign In' }]);
+            return;
+          }
+          Alert.alert('Password updated', 'You can now sign in with your new password.', [{ text: 'Sign In', onPress: close }]);
+        },
         onError: (error) => setLocalError(error.message),
       },
     );
