@@ -53,8 +53,9 @@ export function statusFromExpo(permission: ExpoPermission): PermissionStatus {
  * (`AppleCalendarService.requestAccess`, `AppleTaskActionContacts`, `LocalTaskActionScheduler`).
  *
  * Which Android permission each resource is (Phase 13 Calendar run, android-polish.md §37):
- * - `calendar`: `READ_CALENDAR` through expo-calendar (`getCalendarPermissionsAsync`); the app blocks
- *   `WRITE_CALENDAR`, so there is no write-only state to upgrade from — `writeOnly` never occurs.
+ * - `calendar`: `READ_CALENDAR` + `WRITE_CALENDAR`, asked for together by expo-calendar
+ *   (`getCalendarPermissionsAsync`, §39), so there is no write-only state to upgrade from — `writeOnly`
+ *   never occurs.
  * - `contacts`: `READ_CONTACTS` through expo-contacts; Android has no limited grant, so `limited` is iOS 18 only.
  * - `notifications`: `POST_NOTIFICATIONS` through expo-notifications; the Android quirk ("denied" until
  *   granted, `canAskAgain` deciding) is folded in by `classifyNotificationPermission`, which keeps its own

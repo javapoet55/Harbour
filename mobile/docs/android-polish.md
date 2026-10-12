@@ -2092,3 +2092,108 @@ to add to `phase12Nulls.test.ts`.
 | 4 | RootView.swift:2026-2075, :1772-1773 (bdb68ce) | Completing a task on Tasks: the circle fills and grows to 1.12 on Swift's spring (response 0.25, damping fraction 0.6 → stiffness 632, damping 30.2), the title strikes through, other toggles wait and the row does not open while the save runs; once it succeeds the row slides 80 right and fades over 0.25 s (easeInOut, (0.42, 0, 0.58, 1)), then the list closes up. The row keeps its place until then, although the cache already says done; a failed save leaves it as it was. Reduce Motion: no growth and no slide, a 0.15 s fade. Restoring a done task has no exit. Swift animates only the Tasks rows; Today has no completable rows, so nothing was added there | Swift's `.animation` on the list's ids also animates filter switches and refreshes; RN animates the completion and reorder changes (`LayoutAnimation`), not those | Source only (an animation) |
 | 5 | RootView.swift:1210-1223, :1301, :1483-1647; TodayAttentionSheet.swift:53-54, :66-70, :90-91 | Today's intelligence card is a 12-apart stack: the gradient summary as its own 24pt card (the "N things need attention" capsule and "Nothing needs attention" are gone), the orange **Needs attention** card (48pt triangle tile on orange 12%, "N overdue task(s) · M schedule check(s)", chevron, orange 7% fill and 50% stroke, Swift's hint), and the schedule as its own 24pt card. The separate attention row lower on Today is removed. The card shows on every range: Swift's `showsSummary` is always true, so the §23 For the team reading (dropped on 3/5 days) was not copied. Needs attention: overdue rows padded to Swift's 97pt and Reschedule all on systemGray5, 24 between sections, and Reschedule all as `NexdoGradientButtonStyle` (save gradient capsule, calendar icon, 72pt), which RN had drawn as a flat indigo button since Phase 12. The sheet opens at the `.fraction(0.65)` edge with a 36pt corner | The sheet's detent is 0.63 of the height below the status bar, which puts the edge where the capture has it (39.8% down), by the same rule as the 0.54 `.medium`. Android in dark keeps §6's `link` blue for the Close and row tints where Swift tints indigo | `today-v3-attention-card`, `-dark`, `today-attention-sheet-v3` |
 | 6 | RootView.swift (the rest of the diff) | Nothing else in these rows: the remaining RootView hunks are the bug report's screen tags and coordinator (§34). Ticked too, as built in Run A: Do Now (0edb349), Add by Voice (bcf6848), Crash reporting (fc10824) | — | — |
+
+## 39. Phone parity pass 4 (2026-10-12)
+
+All 31 §23 rows checked on the OnePlus CPH2691 (Android 16, 360 dp, light; dark only for the shared Wellness
+chooser) against the Mac's iPhone captures, with the dev build of `401eb48` and then a rebuilt one (below), Metro in
+watch mode against app-dev, signed in as visakan. Android captures are `mobile/docs/reference/android/p4-*.png`
+(gitignored). Method as pass 2/3: one screenshot per screen, fix what is broken or clearly wrong; §1–§38's deliberate
+Android choices are kept. Branch `rn-ui-parity-4-win`. Jest 2,721 → 2,727; `tsc` and ESLint clean.
+
+**A new dev APK was needed** (the brief's one exception): Phone calendars could not work without WRITE_CALENDAR in the
+manifest. Rebuilt with the same route (prebuild, `assembleDebug`, arm64), reinstalled over USB as an update.
+
+### Two blockers found and fixed
+
+- **Phone calendars never worked on Android** (rows 7, 12, 13; also Moments' calendar import). Two causes:
+  1. In this expo-calendar the function API on the package root (`getCalendarPermissionsAsync`,
+     `requestCalendarPermissionsAsync`, `getCalendarsAsync`, `getEventsAsync`, …) is a set of stubs that throw
+     "… is deprecated". `deviceCalendars.ts` and `moments/device.ts` imported the root, caught the throw as
+     "denied", and so Android never asked and nothing was read: "Open Settings" showed before the app had ever asked.
+     Both now import `expo-calendar/legacy` (as contacts already uses `expo-contacts/legacy`). JavaScript only.
+  2. The legacy Android module grants access and reads only when READ_CALENDAR **and** WRITE_CALENDAR are both held
+     (`CalendarModule.kt` `checkPermissions()`), and the app blocked WRITE_CALENDAR. It is now declared, which matches
+     Swift (`requestFullAccessToEvents`, full access). **The app still never writes**: `readOnly.test.ts` fails on any
+     expo-calendar create/update/delete call and on any import of the throwing root. Play's Data safety form already
+     declares Calendar, and the app never writes to it.
+  After both: Android asks once, the Phone calendars list loads the phone's calendars, a device event ("Parity device
+  event", created with `adb content insert` in the phone's local calendar) shows in Calendar with the phone glyph and
+  opens Event Details, and Settings shows the Phone calendar card ("16 calendars selected").
+- **Saving a follow-up preparation crashed the screen** (`IllegalStateException: addViewAt: … View already has a parent`,
+  the dev build's red screen). Reproduced on a cold start with Metro running normally, so not a hot-reload artefact.
+  Cause: the sheet wraps its `KeyboardAwareScrollView` in `<View pointerEvents={disabled ? 'none' : 'auto'}>`. With
+  `'auto'` and only a flex style Fabric flattens that View away; saving turns it `'none'`, so Fabric creates it and
+  moves the scroll view's keyboard-controller `ClippingScrollViewDecoratorView` into it, which it refused. Loading went
+  the other way (none → auto, a removal), which is why opening never crashed. Fix: `collapsable={false}` keeps the
+  wrapper real. Moments settings, the Moment editor and the shopping list had the same wrapper and got the same fix.
+  Two saves after the fix: no error; a test pins the wrapper.
+
+### By screen
+
+| # | §23 row | Result | Android capture | What was off | What changed |
+|---|---|---|---|---|---|
+| 1 | Bug report: intro | checked | `p4-bug-intro`, `-scrolled` | — ("Shake iPhone…" kept word for word, §34 for Sri; the tagline sits below the fold at 360 dp) | — |
+| 2 | Bug report: form | fixed | `p4-bug-form`, `-top`, `-screenshot`, `-preview` | Opened scrolled to where the intro had been, "What happened?" under the bar | The ScrollView is keyed by stage, so each opens at its top (Swift pushes the form) |
+| 3 | Bug report: sending, failure, success | checked | `p4-bug-sending`, `p4-bug-success` | — One real report to app-dev: **BR-540506** | — |
+| 4 | Bug report: coordinator | checked | — | — Screen tag "settings" from Account, as Swift tags the sheet; shake left for the manual check | — |
+| 5 | Connect Your Calendar (hub) | fixed | `p4-calendar-hub` | Plain white page: no gradient, halo or row cards | `ConnectSurface`'s SafeAreaView carried the white fill over the gradient; it is transparent now |
+| 6 | Provider connection page | fixed | `p4-calendar-google`, `-scrolled`, `p4-calendar-microsoft`, `p4-calendar-phone` | "Need help?" (and the hub's Retry, the page's Open Settings) in system blue | The app tint, as Swift's toolbar link and plain buttons. Microsoft from source: matches its capture. A real connect is a manual check |
+| 7 | Apple Calendars (selection) | fixed | `p4-calendar-phone-permission`, `p4-phone-calendars` | Never asked; "Open Settings" before asking; nothing loaded. Then: green switches | The two fixes above; the list keeps the app tint (`SettingsToggle` gains `tone`; Settings stays green) |
+| 8 | Calendar provider icon and artwork | fixed | `p4-settings-calendars` | Settings' Google icon on a jagged black square | `CalendarProviderIcon` uses the Calendar run's transparent crops; Run D's had opaque black corners (removed) |
+| 9 | Follow-up preparation (sheet) | fixed | `p4-follow-up-new`, `-record-outcome`, `-result-menu`, `-history-*` | Checklist titles showed their end ("…urpose and desired result"); "Result" squeezed to a sliver; a long menu choice cut to "Unresolved / waiting f…"; **the save crash** | Step titles parked at their start until focused; `MenuPicker` keeps its label's width (shared); `PopoverMenu` titles wrap to two lines (shared); the crash fix above |
+| 10 | Nexdo Action contact screen | fixed | `p4-action-prepare-card`, `-saved`, `p4-action-after-contacts` | "No contact selected…" sat below the prompt | Moved above it, as Swift draws the error first (TaskActionView.swift:172-183) |
+| 11 | Task Details action card | checked | `p4-task-details-history-button` | — | — |
+| 12 | Calendar tab | fixed | `p4-calendar-tab`, `-week`, `-moment-row`, `p4-calendar-device-event` | No phone events (the calendar blocker) | Fixed with row 7. The Moment row opens the Moment. Its gift sits on §10's neutral Android tile (kept) |
+| 13 | Event Details | fixed | `p4-event-details-device` | Unreachable for a device event (same blocker) | Fixed with row 7; matches `event-details-apple-device-live` with §33's "Phone calendar" wording |
+| 14 | Settings | checked | `p4-settings-working-days`, `-morning-email`, `-calendars`, `-phone-calendar-card`, `-delete-confirm` | — Delete-account dialog opened and cancelled; the "Deleting…" overlay needs a confirm, so not reached | — |
+| 15 | Account menu | checked | `p4-account` | — | — |
+| 16 | Change password | checked | `p4-change-password` | — | — |
+| 17 | Password reset sheet | checked | `p4-password-reset-from-change`, `-error` | — Inline error shown with airplane mode on ("Nexdo could not reach the server…"), the sheet stays | — |
+| 18 | Tasks tab | checked | `p4-tasks-moment-row`, `p4-tasks-reordered` | — Drag-to-reorder works on the device (`input draganddrop`) | — |
+| 19 | Task editor | checked | `p4-task-new`, `p4-tasks-creation-spacing` | — "Parity spacing check" 3:56 PM, then "… two" 4:41 PM: the 15-minute gap | — |
+| 20 | Today | checked | `p4-today`, `p4-today-attention-card` | — Three items, View 1 more / Show less, the orange card | — |
+| 21 | Needs attention sheet | checked | `p4-attention-sheet`, `-bottom` | — | — |
+| 22 | Do Now | checked | `p4-do-now-not-working-day` | — Monday switched off, the line shown, Monday restored (`1,2,3,4,5`) | — |
+| 23 | Wellness chooser | fixed | `p4-wellness-chooser-dark` | Dark hero: a bare moon, no stars | `moon.stars.fill` drawn as the moon plus two four-point stars |
+| 24 | Pomodoro | checked | `p4-pomodoro-setup` | — Personal Work last, blue | — |
+| 25 | Shopping: List Settings store logo | checked | `p4-shopping-list-settings`, `p4-shopping-store-logo-editor` | — | — |
+| 26 | Shopping: offers | checked | `p4-shopping-offers` | — | — |
+| 27 | Shopping: Store Hours | checked | `p4-shopping-store-hours` | — The store's Monday bold (Monday 3:34 AM in San Francisco) | — The store name is semibold in code but this phone's system font has no 600 face, so it draws regular |
+| 28 | Ask AI landing | fixed | `p4-ask-ai-landing`, `-bottom` | Card captions cut off ("your next mo…", "Free time around…") | Android lets the caption take a third line |
+| 29 | Add by Voice / Ask by Voice | fixed | `p4-voice-consent`, `p4-voice-allowed`, `p4-voice-mic-denied`, `-scrolled` | Two title bars ("Cancel" above "× Close") | The stack header is hidden. Denied: the message and **Open Settings** (below the fold at 360 dp, scrolls into view), which opens the app's Android settings; no session was requested while denied. Allowed: "Listening…". adb cannot revoke on this phone, so the mic was switched off in the app's settings page |
+| 30 | Crash reporting | checked | `p4-dev-menu-crashlytics` | — "Crashlytics test crash" is in the React Native dev menu; not fired | — |
+| 31 | Permission decisions | checked | — | — Contacts asked on first use (allowed), Calendar asked once now (allowed), Microphone asked before any session (denied, then allowed), Notifications not determined | — |
+
+**Totals by group:**
+
+| Group | Rows | Fixed | Already matched | Not reached |
+|---|---|---|---|---|
+| 1 Calendar (5–8, 12, 13, 31) | 7 | 6 | 1 | 0 |
+| 2 Bug report (1–4) | 4 | 1 | 3 | 0 |
+| 3 Follow-ups (9–11) | 3 | 2 | 1 | 0 |
+| 4 Tasks & Today (18–21) | 4 | 0 | 4 | 0 |
+| 5 Wellness & Shopping (23–28) | 6 | 2 | 4 | 0 |
+| 6 Profile/Account (14–17) | 4 | 0 | 4 (the delete overlay itself not reached) | 0 |
+| 7 Remaining (22, 29, 30) | 3 | 1 | 2 | 0 |
+| **All** | **31** | **12** | **19** | **0** |
+
+### Manual checks left
+
+- Shake to report (the dev build's shake opens the dev menu first).
+- The Crashlytics test crash (dev menu → "Crashlytics test crash", relaunch, check Firebase).
+- A real Google calendar connect and disconnect.
+- The completion animation's feel (spring, slide, fade) and drag-to-reorder's feel.
+- The "Deleting account…" overlay (needs a confirmed delete on a throwaway account).
+
+### Found for the team (not fixed)
+
+- **The same event shows up to three times in Calendar** when the phone also syncs the connected Google account: the
+  Nexdo task, the event Nexdo wrote to Google (31 icon), and the same Google event read again from the phone's calendar
+  (phone glyph). Swift appends device events to server events without de-duplicating (`CalendarView.swift:77`), so an
+  iPhone with the same Google account added would show the same. Matching on title and time, or hiding phone calendars
+  that belong to a connected account, would fix it on both.
+- **expo-calendar's root API now throws.** Anything else still importing it from the root breaks silently; the guard test
+  covers this app. The legacy import will itself go away in a later Expo; moving to the object API is a separate change.
+- The Phone calendars list wraps a long account name a letter at a time ("karpagamsures / hkumar@gmail / .com") when
+  the calendar's title is the address; iOS would do the same with a long enough name.

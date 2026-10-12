@@ -1,4 +1,4 @@
-import * as Calendar from 'expo-calendar';
+import * as Calendar from 'expo-calendar/legacy';
 import { Platform } from 'react-native';
 
 import type { CalendarEvent } from '../../api/types';
@@ -8,8 +8,9 @@ import { deviceTimeZone } from '../../lib/profileSettings';
 
 /**
  * `AppleCalendarService` (bdb68ce, b61801c; ios/App/AppleCalendarService.swift:11-54), the one place
- * the phone's own calendars are read. EventKit on iOS; on Android, expo-calendar over `READ_CALENDAR`
- * (the app blocks `WRITE_CALENDAR`, android-polish.md §37). Events read here never leave the phone:
+ * the phone's own calendars are read. EventKit on iOS; on Android, expo-calendar, which needs
+ * `READ_CALENDAR` and `WRITE_CALENDAR` together to read anything (android-polish.md §39). Nothing here
+ * or anywhere else writes (`__tests__/readOnly.test.ts`). Events read here never leave the phone:
  * they are shown beside the server's events and are never sent anywhere.
  *
  * Swift keeps every EventKit object inside one actor and hands out value snapshots; here every call is

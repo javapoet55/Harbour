@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
-import * as Calendar from 'expo-calendar';
+import * as Calendar from 'expo-calendar/legacy';
 import { Linking, Platform } from 'react-native';
 
 import { useSession } from '../../../store/session';
@@ -16,7 +16,7 @@ jest.mock('expo-router', () => {
     useIsFocused: () => true,
   };
 });
-jest.mock('expo-calendar', () => ({
+jest.mock('expo-calendar/legacy', () => ({
   EntityTypes: { EVENT: 'event' },
   EventStatus: { CANCELED: 'canceled' },
   getCalendarPermissionsAsync: jest.fn(async () => ({ status: 'undetermined', canAskAgain: true, granted: false })),
@@ -328,5 +328,17 @@ describe('Provider icon and artwork (CalendarConnectionView.swift:289-357)', () 
     expect(CONNECT_ART_RECTS.hero).toEqual([24, 443, 401, 392]);
     expect(CONNECT_ART_RECTS.complete).toEqual([830, 856, 389, 350]);
     expect(Object.keys(CONNECT_ART_RECTS)).toHaveLength(9);
+  });
+});
+
+/**
+ * Phone parity pass 4: plain buttons take the app tint. (The transparent content layer over the gradient
+ * is checked on the phone: the safe-area mock does not forward a style to test.)
+ */
+describe('the Connect surface on the phone', () => {
+  it('draws Need help? in the app tint, not system blue', async () => {
+    await showProvider('google');
+    const { StyleSheet } = jest.requireActual('react-native') as typeof import('react-native');
+    expect(StyleSheet.flatten(screen.getByText('Need help?').props.style).color).toBe('#3D29F0');
   });
 });

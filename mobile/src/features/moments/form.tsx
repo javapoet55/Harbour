@@ -268,7 +268,9 @@ export function MenuPicker<T extends string | number>({
         style={[hideLabel ? styles.menuButton : styles.inline, disabled && styles.dimmed]}
         testID={testID}
       >
-        {hideLabel ? null : <Text style={[textStyles.body, styles.grow, { color: theme.colors.label }]}>{label}</Text>}
+        {/* The label keeps its width (up to 60%) and the choice gives way: with a long choice the label was
+            squeezed to a sliver and wrapped a letter at a time (parity pass 4, the follow-up Result row). */}
+        {hideLabel ? null : <Text style={[textStyles.body, styles.menuLabel, { color: theme.colors.label }]}>{label}</Text>}
         {pill ? (
           <View style={[styles.menuPill, pill]} testID={`${testID}-pill`}>
             {choice}
@@ -388,8 +390,10 @@ export function PopoverMenu({ items, menu, showsChecks = false, testID }: { item
                       {item.icon ? <Ionicons color={item.destructive ? theme.colors.danger : (item.iconColor ?? theme.colors.label)} name={item.icon} size={20} /> : null}
                     </View>
                   ) : null}
+                  {/* A long title wraps, as an iOS menu does ("Unresolved / waiting / for response",
+                      `follow-up-result-menu`), rather than ending in an ellipsis. */}
                   <Text
-                    numberOfLines={1}
+                    numberOfLines={2}
                     style={[textStyles.body, styles.grow, { color: item.disabled ? disabledColor : item.destructive ? theme.colors.danger : theme.colors.label }]}
                   >
                     {item.title}
@@ -657,7 +661,8 @@ const styles = StyleSheet.create({
   // Android: 20 above the label; `sectionBody`'s 8 is the label-to-group gap.
   androidHeader: { marginTop: 20 },
   // Android: the menu choice's field pill; 36 tall with 12 inside, like a chip.
-  menuPill: { flexDirection: 'row', alignItems: 'center', gap: 4, minHeight: 36, paddingHorizontal: 12 },
+  menuPill: { flexDirection: 'row', alignItems: 'center', gap: 4, minHeight: 36, paddingHorizontal: 12, flexShrink: 1 },
+  menuLabel: { flexGrow: 1, flexShrink: 0, maxWidth: '60%' },
   footer: { ...textStyles.subheadline, marginHorizontal: 32, marginTop: 10, marginBottom: 12 },
   // A row of text in a `VStack` card is its line height, not a 32pt control; a `FormRow` still
   // enforces its own 56 (`moment-manage-details`: 54pt from row to row, 14pt spacing).
@@ -677,7 +682,7 @@ const styles = StyleSheet.create({
   menuRowPlain: { paddingLeft: 20 },
   calendarMenu: { paddingHorizontal: 12 },
   datePopover: { position: 'absolute', borderRadius: 26, paddingHorizontal: 12, paddingVertical: 10, elevation: 12, shadowOpacity: 0.18, shadowRadius: 24, shadowOffset: { width: 0, height: 8 } },
-  menuRow: { flexDirection: 'row', alignItems: 'center', paddingLeft: 14, paddingRight: 18, minHeight: MENU_ROW, gap: 8 },
+  menuRow: { flexDirection: 'row', alignItems: 'center', paddingLeft: 14, paddingRight: 18, paddingVertical: 6, minHeight: MENU_ROW, gap: 8 },
   // The compact `DatePicker`'s value is a capsule on iOS 26.
   datePill: { borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6 },
   dateRow: { gap: 6 },

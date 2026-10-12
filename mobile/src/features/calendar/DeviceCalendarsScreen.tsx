@@ -125,6 +125,8 @@ export function DeviceCalendarsScreen({ onBack, onImportMoments }: { onBack: () 
                     label={calendar.title}
                     onValueChange={(enabled) => toggle(calendar.id, enabled)}
                     testID={`device-calendar-toggle-${calendar.id}`}
+                    // A plain `List` Toggle in the app tint (`apple-calendars`), not Settings' green.
+                    tone="tint"
                     value={calendarShown(selection, calendar.id)}
                   />
                   {calendar.account ? <SettingsCaption testID={`device-calendar-account-${calendar.id}`}>{calendar.account}</SettingsCaption> : null}

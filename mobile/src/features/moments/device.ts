@@ -1,4 +1,4 @@
-import * as Calendar from 'expo-calendar';
+import * as Calendar from 'expo-calendar/legacy';
 import * as Clipboard from 'expo-clipboard';
 import * as Contacts from 'expo-contacts/legacy';
 import * as Crypto from 'expo-crypto';

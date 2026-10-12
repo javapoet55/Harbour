@@ -41,7 +41,9 @@ export default function TaskLayout() {
       <Stack.Screen name="[id]" options={{ presentation: 'modal', title: 'Task', headerShown: false }} />
       {/* Swift has only a confirmation "Done" here and a large title, both set by the screen. */}
       <Stack.Screen name="filters" options={{ presentation: 'modal' }} />
-      <Stack.Screen name="voice-capture" options={{ presentation: 'fullScreenModal', title: 'Add by Voice', headerLeft: closeButton('Cancel') }} />
+      {/* `AddTaskByVoiceView` draws its own "Close" and title (AddTaskByVoiceView.swift); a stack header over it
+          gave the screen two bars, "Cancel" above "Close" (parity pass 4). */}
+      <Stack.Screen name="voice-capture" options={{ presentation: 'fullScreenModal', title: 'Add by Voice', headerShown: false }} />
     </Stack>
   );
 }

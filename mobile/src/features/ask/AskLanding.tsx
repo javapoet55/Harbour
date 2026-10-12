@@ -10,7 +10,7 @@ import { Text } from '../../components/Text';
 import { ASK_LANDING_CARDS, ASK_MAX_LENGTH, askIntent } from '../../lib/askIntents';
 import { firstName } from '../../store/lastSignedIn';
 import { useSession } from '../../store/session';
-import { brand, inputText, linearGradientStops, palettes } from '../../theme';
+import { brand, inputText, isAndroid, linearGradientStops, palettes } from '../../theme';
 import { swiftColors } from '../wellness/style';
 import { useAccessibilityTextSize } from '../wellness/useAccessibilityTextSize';
 
@@ -121,7 +121,9 @@ export function AskLanding({
                     <Text style={[styles.body, { color: secondary }]}>{card.detail}</Text>
                   ) : (
                     // `.lineLimit(2).minimumScaleFactor(0.85)`: shrunk to keep each line whole, not truncated.
-                    <FittedText minimumFontScale={0.85} numberOfLines={2} style={[styles.cardDetail, { color: secondary }]}>
+                    // Android ahead of iOS: a wider system font can leave a line too wide even at 85% on a
+                    // 360 dp phone ("your next mo…", parity pass 4), so it may wrap to a third line instead.
+                    <FittedText minimumFontScale={0.85} numberOfLines={isAndroid() ? 3 : 2} style={[styles.cardDetail, { color: secondary }]}>
                       {card.detail}
                     </FittedText>
                   )}

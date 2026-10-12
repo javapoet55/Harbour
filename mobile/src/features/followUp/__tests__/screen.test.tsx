@@ -189,3 +189,30 @@ it('draws its button rows in ink, grey while disabled, and the notes three lines
   expect(colour('Add')).toBe('rgba(60, 60, 67, 0.3)');
   expect(StyleSheet.flatten(screen.getByTestId('follow-up-notes').props.style).minHeight).toBe(88);
 });
+
+/** Phone parity pass 4: an unfocused step title reads from its start; the Result label keeps its width. */
+it('parks a step title at its start until focused, and keeps the Result label beside its pill', async () => {
+  mockLoad.mockResolvedValue({ revision: 0, preparation: null });
+  await show();
+  await waitFor(() => expect(screen.queryByTestId('follow-up-loading')).toBeNull());
+  const step = screen.getByTestId('follow-up-check-0');
+  expect(step.props.selection).toEqual({ start: 0, end: 0 });
+  await fireEvent(step, 'focus');
+  expect(screen.getByTestId('follow-up-check-0').props.selection).toBeUndefined();
+  const label = StyleSheet.flatten(screen.getByText('Result').props.style);
+  expect(label).toMatchObject({ flexShrink: 0, maxWidth: '60%' });
+});
+
+/**
+ * Parity pass 4 (§39): saving turned the wrapper's pointerEvents to 'none'; a flattened wrapper then had
+ * to be created and the keyboard-aware scroll view moved into it, which Fabric refused on Android
+ * (`addViewAt: … already has a parent`). The wrapper is never flattened.
+ */
+it('keeps the busy wrapper a real view, so disabling it never re-parents the form', async () => {
+  mockLoad.mockResolvedValue({ revision: 0, preparation: null });
+  await show();
+  await waitFor(() => expect(screen.queryByTestId('follow-up-loading')).toBeNull());
+  const wrapper = screen.getByTestId('follow-up-form').parent;
+  const real = (node: typeof wrapper): boolean => node !== null && (node.props.collapsable === false || real(node.parent));
+  expect(real(wrapper)).toBe(true);
+});

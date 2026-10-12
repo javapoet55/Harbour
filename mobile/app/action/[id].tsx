@@ -515,6 +515,14 @@ export default function TaskAction() {
               </>
             ) : null}
 
+            {/* `if let error { Text(error).foregroundStyle(.red) }` (TaskActionView.swift:172-173): above the
+                prompt and the recipient buttons its "Choose a contact or enter details below." points to. */}
+            {error !== null ? (
+              <Text style={[theme.typography.body, { color: theme.colors.danger }]} testID="action-error">
+                {error}
+              </Text>
+            ) : null}
+
             {checking ? (
               <View style={styles.progress} testID="action-checking">
                 <ActivityIndicator color={theme.colors.link} size="small" />
@@ -554,13 +562,6 @@ export default function TaskAction() {
                 ))}
               </>
             )}
-
-            {/* Above the recipient buttons, which its "Choose a contact or enter details below." points to. */}
-            {error !== null ? (
-              <Text style={[theme.typography.body, { color: theme.colors.danger }]} testID="action-error">
-                {error}
-              </Text>
-            ) : null}
 
             {/* The recipient buttons (`:175-188`). */}
             {!checking && !checkFailed ? (

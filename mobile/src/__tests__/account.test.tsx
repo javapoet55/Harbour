@@ -49,7 +49,7 @@ jest.mock('expo-image-picker', () => ({
 // The phone's calendars (Phase 13 Calendar run): no access unless a test grants it.
 const mockCalendarPermissions = jest.fn();
 const mockDeviceCalendars = jest.fn();
-jest.mock('expo-calendar', () => ({
+jest.mock('expo-calendar/legacy', () => ({
   EntityTypes: { EVENT: 'event' },
   EventStatus: { CANCELED: 'canceled' },
   getCalendarPermissionsAsync: (...args: unknown[]) => mockCalendarPermissions(...args),

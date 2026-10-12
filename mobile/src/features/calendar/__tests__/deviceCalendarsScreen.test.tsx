@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
-import * as Calendar from 'expo-calendar';
+import * as Calendar from 'expo-calendar/legacy';
 import { Linking, Platform } from 'react-native';
 
 import { useSession } from '../../../store/session';
@@ -10,7 +10,7 @@ jest.mock('expo-router', () => {
   const { useEffect } = require('react') as typeof import('react');
   return { router: { push: jest.fn(), back: jest.fn() }, useFocusEffect: (effect: () => void) => useEffect(effect, [effect]) };
 });
-jest.mock('expo-calendar', () => ({
+jest.mock('expo-calendar/legacy', () => ({
   EntityTypes: { EVENT: 'event' },
   EventStatus: { CANCELED: 'canceled' },
   getCalendarPermissionsAsync: jest.fn(async () => ({ status: 'granted', canAskAgain: true, granted: true })),

@@ -14,7 +14,7 @@ jest.mock('expo-router', () => ({
 }));
 
 const mockOpenDeviceEvent = jest.fn();
-jest.mock('expo-calendar', () => ({
+jest.mock('expo-calendar/legacy', () => ({
   EntityTypes: { EVENT: 'event' },
   EventStatus: { CANCELED: 'canceled' },
   openEventInCalendarAsync: (...args: unknown[]) => mockOpenDeviceEvent(...args),

@@ -135,12 +135,15 @@ export function SettingsToggle({
   onValueChange,
   disabled = false,
   testID,
+  tone = 'green',
 }: {
   label: string;
   value: boolean;
   onValueChange: (next: boolean) => void;
   disabled?: boolean;
   testID?: string;
+  /** Settings is green (`SwitchToggleStyle(tint: .green)`); a screen outside Settings keeps the tint. */
+  tone?: 'green' | 'tint';
 }) {
   const theme = useTheme();
   return (
@@ -152,7 +155,7 @@ export function SettingsToggle({
         disabled={disabled}
         onValueChange={onValueChange}
         testID={testID}
-        tone="green"
+        tone={tone}
         value={value}
       />
     </View>

@@ -15,7 +15,7 @@ import { CONNECTED_STATUS_UNLOADED, connectionsState, useCalendarConnections, us
 import { useSession } from '../../store/session';
 import { providerAccent, providerArt, providerConnected, providerConnections, providerPageCopy, type CalendarConnectProvider, type ProviderStep } from './calendarProviders';
 import { CONNECT_ART } from './connectArt';
-import { CONNECT_INK, ConnectSurface } from './ConnectSurface';
+import { CONNECT_INK, CONNECT_LINK, ConnectSurface } from './ConnectSurface';
 import { requestDeviceCalendarAccess } from './deviceCalendars';
 import { useDeviceCalendarAccess } from './useDeviceCalendarAccess';
 
@@ -211,7 +211,7 @@ export function CalendarProviderScreen({
           ) : null}
           {device && access.denied ? (
             <Pressable accessibilityRole="button" onPress={() => void Linking.openSettings()} style={styles.textButton} testID="calendar-connect-open-settings">
-              <Text style={[styles.body, { color: '#007AFF' }]}>{copy.openSettings}</Text>
+              <Text style={[styles.body, { color: CONNECT_LINK }]}>{copy.openSettings}</Text>
             </Pressable>
           ) : null}
 

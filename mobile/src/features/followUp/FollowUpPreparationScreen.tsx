@@ -181,7 +181,8 @@ export function FollowUpPreparationScreen({
           <Text style={[textStyles.body, { color: theme.colors.ink }]}>Close</Text>
         </Pressable>
       </View>
-      <View pointerEvents={disabled ? 'none' : 'auto'} style={styles.fill}>
+      {/* collapsable={false}: never flattened, so turning pointerEvents to 'none' does not create a view and move the keyboard-aware scroll view into it — Fabric's addViewAt crash on Android (android-polish.md §39). */}
+      <View collapsable={false} pointerEvents={disabled ? 'none' : 'auto'} style={styles.fill}>
         <FormScroll testID="follow-up-form">
           {loading ? (
             <FormSection>
@@ -248,12 +249,8 @@ export function FollowUpPreparationScreen({
             {value.checklist.map((check, index) => (
               <FormRow key={check.id}>
                 <View style={styles.inline}>
-                  <TextInput
-                    accessibilityLabel="Preparation step"
+                  <StepTitleInput
                     onChangeText={(title) => set({ checklist: value.checklist.map((item) => (item.id === check.id ? { ...item, title } : item)) })}
-                    placeholder="Preparation step"
-                    placeholderTextColor={theme.colors.placeholder}
-                    style={[inputText(textStyles.body), styles.grow, { color: theme.colors.label }]}
                     testID={`follow-up-check-${index}`}
                     value={check.title}
                   />
@@ -397,6 +394,33 @@ export function FollowUpPreparationScreen({
 function formatDateTime(at: number, zone: string): string {
   return new Intl.DateTimeFormat('en-US', { timeZone: zone, month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }).format(new Date(at));
 }
+
+/**
+ * A checklist step's editable title (`Toggle(isOn:) { TextField("Preparation step", text:) }`). A long
+ * title reads from its start, as iOS truncates it with an ellipsis: Android leaves an unfocused
+ * single-line field scrolled to its end ("…urpose and desired result", parity pass 4), so the caret is
+ * parked at the start until the field is focused.
+ */
+function StepTitleInput({ value, onChangeText, testID }: { value: string; onChangeText: (next: string) => void; testID: string }) {
+  const theme = useTheme();
+  const [focused, setFocused] = useState(false);
+  return (
+    <TextInput
+      accessibilityLabel="Preparation step"
+      onBlur={() => setFocused(false)}
+      onChangeText={onChangeText}
+      onFocus={() => setFocused(true)}
+      placeholder="Preparation step"
+      placeholderTextColor={theme.colors.placeholder}
+      selection={focused ? undefined : START}
+      style={[inputText(textStyles.body), styles.grow, { color: theme.colors.label }]}
+      testID={testID}
+      value={value}
+    />
+  );
+}
+
+const START = { start: 0, end: 0 };
 
 /** A `Toggle` row whose label stays full colour. */
 function ToggleRow({ label, value, onValueChange, testID }: { label: string; value: boolean; onValueChange: (next: boolean) => void; testID: string }) {

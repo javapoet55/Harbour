@@ -1,3 +1,4 @@
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Image, Pressable, ScrollView, StyleSheet, View, useWindowDimensions, type ImageSourcePropType } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -102,6 +103,23 @@ export function WellnessChooser({ onModule, onExit }: WellnessChooserProps) {
 type ChooserColors = ReturnType<typeof chooserColors>;
 
 /** `hero(scale:)` (:63-82). */
+/**
+ * SF Symbols' `moon.stars.fill`: a crescent with two four-point stars at its upper right
+ * (`wellness-chooser-v3-dark`). Ionicons' `moon` has no stars, so the stars are drawn beside it
+ * (parity pass 4).
+ */
+function MoonStars({ size, color }: { size: number; color: string }) {
+  return (
+    <View style={{ width: size, height: size }}>
+      <View style={{ position: 'absolute', left: 0, bottom: 0 }}>
+        <TaskSymbol color={color} name="moon.stars.fill" size={size * 0.82} />
+      </View>
+      <MaterialCommunityIcons color={color} name="star-four-points" size={size * 0.3} style={{ position: 'absolute', right: 0, top: 0 }} />
+      <MaterialCommunityIcons color={color} name="star-four-points" size={size * 0.2} style={{ position: 'absolute', right: size * 0.08, top: size * 0.36 }} />
+    </View>
+  );
+}
+
 function Hero({ scale, colors }: { scale: number; colors: ChooserColors }) {
   return (
     <View style={{ height: 192 * scale, overflow: 'hidden' }}>
@@ -114,7 +132,7 @@ function Hero({ scale, colors }: { scale: number; colors: ChooserColors }) {
       {colors.isDark ? (
         // `Image(systemName: "moon.stars.fill")`, 75pt light, lilac at 0.28, bottom-trailing, 20 in.
         <View accessible={false} importantForAccessibility="no-hide-descendants" pointerEvents="none" style={[StyleSheet.absoluteFill, styles.moon, { padding: 20 * scale }]} testID="wellness-hero-moon">
-          <TaskSymbol name="moon.stars.fill" size={75 * scale} color={withAlpha(DARK_LILAC, 0.28)} />
+          <MoonStars color={withAlpha(DARK_LILAC, 0.28)} size={75 * scale} />
         </View>
       ) : (
         <>
