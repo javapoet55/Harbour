@@ -56,6 +56,12 @@ jest.mock('react-native-keyboard-controller', () => require('react-native-keyboa
 // react-native-gesture-handler's own jest setup: its native module and views stand in as host components.
 require('react-native-gesture-handler/jestSetup');
 
+// Reanimated 4 and its worklets runtime ship mocks: animations settle on their target at once, and
+// `useAnimatedStyle` returns the style for the current values.
+jest.mock('react-native-worklets', () => require('react-native-worklets/src/mock'));
+// The mock has no `useReducedMotion`; tests run with motion on.
+jest.mock('react-native-reanimated', () => ({ ...require('react-native-reanimated/mock'), useReducedMotion: () => false }));
+
 jest.mock('@expo/vector-icons/Ionicons', () => {
   const { View } = require('react-native');
   return View;

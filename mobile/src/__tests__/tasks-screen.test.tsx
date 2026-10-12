@@ -305,6 +305,50 @@ describe('Tasks screen', () => {
     await waitFor(() => expect(mockUpdateTask).toHaveBeenCalledWith('a', { status: 'COMPLETED' }));
   });
 
+  /** bdb68ce (RootView.swift:2026-2075): fill and strike while saving, leave once the save is confirmed. */
+  describe('completion animation', () => {
+    const glyph = (id: string) => (screen.getByTestId(`task-toggle-${id}-circle`).children[0] as unknown as { props: { name: string } }).props.name;
+
+    it('keeps the completing row, filled and struck, until the save succeeds and its 0.25 s exit ends', async () => {
+      let resolve: (value: unknown) => void = () => undefined;
+      mockUpdateTask.mockReturnValue(new Promise((done) => (resolve = done)));
+      await renderTasks();
+      await waitFor(() => expect(screen.getByText('Renew passport')).toBeTruthy());
+
+      await fireEvent.press(screen.getByTestId('task-toggle-a'));
+      expect(glyph('a')).toBe('checkmark-circle');
+      expect(JSON.stringify(StyleSheet.flatten(screen.getByText('Renew passport').props.style))).toContain('line-through');
+      // Every other toggle waits, and the row being completed does not open.
+      expect(screen.getByTestId('task-toggle-b').props.accessibilityState.disabled).toBe(true);
+      expect(screen.getByTestId('task-open-a').props.accessibilityState.disabled).toBe(true);
+
+      // Saved: the cache now says COMPLETED, but the row stays listed while it leaves. (No waitFor
+      // here: it would run the fake 250 ms timer.)
+      await act(async () => resolve({ task: { ...FIXTURE[0], status: 'COMPLETED' } }));
+      expect(screen.getByText('Renew passport')).toBeTruthy();
+      await act(async () => {
+        jest.advanceTimersByTime(249);
+      });
+      expect(screen.getByText('Renew passport')).toBeTruthy();
+      await act(async () => {
+        jest.advanceTimersByTime(1);
+      });
+      await waitFor(() => expect(screen.queryByText('Renew passport')).toBeNull());
+      expect(screen.getByTestId('task-toggle-b').props.accessibilityState.disabled).toBe(false);
+    });
+
+    it('leaves the row in place when the save fails', async () => {
+      mockUpdateTask.mockRejectedValue(new Error('offline'));
+      await renderTasks();
+      await waitFor(() => expect(screen.getByText('Renew passport')).toBeTruthy());
+
+      await fireEvent.press(screen.getByTestId('task-toggle-a'));
+      await waitFor(() => expect(glyph('a')).toBe('ellipse-outline'));
+      expect(screen.getByText('Renew passport')).toBeTruthy();
+      expect(screen.getByTestId('task-toggle-b').props.accessibilityState.disabled).toBe(false);
+    });
+  });
+
   it('toggles a completed task back to PLANNED, matching AppModel.complete', async () => {
     useTaskQuery.setState({ query: { ...DEFAULT_TASK_QUERY, status: 'All' } });
     mockUpdateTask.mockResolvedValue({ task: { ...FIXTURE[3], status: 'PLANNED' } });

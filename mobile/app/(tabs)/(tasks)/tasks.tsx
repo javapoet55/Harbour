@@ -2,10 +2,11 @@ import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, LayoutAnimation, Pressable, RefreshControl, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { useReducedMotion } from 'react-native-reanimated';
 
 import { CreationCard, DatePill, HeaderButton, SectionHeader, TaskCard, TaskEmptyState, TaskSymbol, Text } from '../../../src/components';
 import { ReorderableGroup } from '../../../src/components/ReorderableGroup';
-import { MomentTaskRow } from '../../../src/components/TaskCard';
+import { DEPART_MS, DEPART_REDUCED_MS, MomentTaskRow } from '../../../src/components/TaskCard';
 import { ProjectsList } from '../../../src/components/ProjectsList';
 import { sectionDateLabel, TaskTabs } from '../../../src/components/TaskListParts';
 import { TasksTopBar, TodayBackdrop } from '../../../src/components/TodayShell';
@@ -33,6 +34,8 @@ import {
 import { sectionTitle } from '../../../src/lib/taskLabels';
 import { useMinuteTick } from '../../../src/lib/useMinuteTick';
 import { useProjects } from '../../../src/query/useProjects';
+import type { NexdoTask } from '../../../src/api/types';
+import { isDone } from '../../../src/lib/taskQuery';
 import { useCompleteTask, useTasks, type ScheduleConflict } from '../../../src/query/useTasks';
 import { useSession } from '../../../src/store/session';
 import { useTaskQuery } from '../../../src/store/taskQuery';
@@ -119,8 +122,48 @@ export default function Tasks() {
     void saveTaskDisplayOrders(next);
   };
 
-  // `model.taskQuery.snapshot(displayedTasks + momentTasks, timeZone: zone)` (RootView.swift:1726).
-  const view = useMemo(() => snapshot(query, [...(loaded?.tasks ?? []), ...momentEntries], zone), [query, loaded, momentEntries, zone]);
+  // `@State completingTask` / `departingTaskID` (bdb68ce): the row being completed keeps its original
+  // place until the save succeeds and its exit has played.
+  const reduceMotion = useReducedMotion();
+  const [completing, setCompleting] = useState<NexdoTask | null>(null);
+  const [departingId, setDepartingId] = useState<string | null>(null);
+  const live = useRef(true);
+  useEffect(
+    () => () => {
+      live.current = false;
+    },
+    [],
+  );
+
+  /** `completeWithAnimation(_:)` (RootView.swift:2060-2075). */
+  const completeWithAnimation = (task: NexdoTask) => {
+    if (completing !== null || busy) return;
+    setCompleting(task);
+    const finish = () => {
+      if (!live.current) return;
+      // `withAnimation { completingTask = nil; departingTaskID = nil }`: the list closes up over the row.
+      LayoutAnimation.configureNext(LayoutAnimation.create(reduceMotion ? 150 : 250, LayoutAnimation.Types.easeInEaseOut, LayoutAnimation.Properties.opacity));
+      setCompleting(null);
+      setDepartingId(null);
+    };
+    complete.mutate(task, {
+      onSuccess: () => {
+        // A restore has no exit; a completion leaves once the save is confirmed.
+        if (isDone(task) || !live.current) return finish();
+        setDepartingId(task.id);
+        setTimeout(finish, reduceMotion ? DEPART_REDUCED_MS : DEPART_MS);
+      },
+      // A failed save leaves the row where it was.
+      onError: finish,
+    });
+  };
+
+  // `model.taskQuery.snapshot(displayedTasks + momentTasks, timeZone: zone)` (RootView.swift:1726), with
+  // `displayedTasks` holding the completing row as it was.
+  const view = useMemo(() => {
+    const displayed = (loaded?.tasks ?? []).map((task) => (completing?.id === task.id ? completing : task));
+    return snapshot(query, [...displayed, ...momentEntries], zone);
+  }, [query, loaded, momentEntries, zone, completing]);
 
   // `.alert` from `confirmScheduleWarnings` (NexdoApp.swift:87-98).
   if (conflict) {
@@ -409,7 +452,10 @@ export default function Tasks() {
                                 timeZone={zone}
                                 project={projects.data?.projects.find((item) => item.id === task.projectId)}
                                 busy={busy}
-                                onToggle={() => complete.mutate(task)}
+                                completing={completing?.id === task.id && !isDone(task)}
+                                departing={departingId === task.id}
+                                locked={completing !== null}
+                                onToggle={() => completeWithAnimation(task)}
                                 onOpen={() => router.push(`/task/${task.id}`)}
                                 onMove={(offset) => applyOrders(moveTask(orders, profile?.id, task.id, offset, section.tasks))}
                               />

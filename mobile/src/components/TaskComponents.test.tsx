@@ -7,7 +7,7 @@ import { NexdoTaskBackdrop } from './NexdoTaskBackdrop';
 import { TaskBadge } from './TaskBadge';
 import { DISTANT_FUTURE } from '../lib/taskQuery';
 import { brand } from '../theme';
-import { TaskCard, taskIcon, taskIconColor } from './TaskCard';
+import { COMPLETION_SPRING, completionTargets, TaskCard, taskIcon, taskIconColor } from './TaskCard';
 import { TaskCategoryBadge } from './TaskCategoryBadge';
 import { CreationCard, DatePill, HeaderButton, SectionHeader, sectionDateLabel, TASK_ACCENT, TaskEmptyState, TaskTabs } from './TaskListParts';
 
@@ -278,5 +278,24 @@ describe('NexdoTaskBackdrop', () => {
     await render(<NexdoTaskBackdrop />);
     // Purely decorative: it must not capture touches meant for the form on top of it.
     expect(screen.toJSON()).toBeTruthy();
+  });
+});
+
+/** bdb68ce (RootView.swift:2026-2075): where the completion animation settles, with and without Reduce Motion. */
+describe('completion animation targets', () => {
+  it('grows the circle to 1.12 while completing, and slides the departing row 80 right as it fades over 0.25 s', () => {
+    expect(completionTargets({ completing: false, departing: false, reduceMotion: false })).toEqual({ scale: 1, translateX: 0, opacity: 1, springs: true, departMs: 250 });
+    expect(completionTargets({ completing: true, departing: false, reduceMotion: false })).toMatchObject({ scale: 1.12, translateX: 0, opacity: 1 });
+    expect(completionTargets({ completing: true, departing: true, reduceMotion: false })).toMatchObject({ scale: 1.12, translateX: 80, opacity: 0 });
+  });
+
+  it('with Reduce Motion: no growth and no slide, only a 0.15 s fade', () => {
+    expect(completionTargets({ completing: true, departing: true, reduceMotion: true })).toEqual({ scale: 1, translateX: 0, opacity: 0, springs: false, departMs: 150 });
+  });
+
+  it('turns .spring(response: 0.25, dampingFraction: 0.6) into stiffness and damping', () => {
+    const omega = (2 * Math.PI) / 0.25;
+    expect(COMPLETION_SPRING.stiffness).toBeCloseTo(omega * omega, -1);
+    expect(COMPLETION_SPRING.damping).toBeCloseTo(2 * 0.6 * omega, 0);
   });
 });

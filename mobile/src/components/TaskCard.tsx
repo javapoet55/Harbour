@@ -1,6 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import type { ComponentProps } from 'react';
+import { useEffect, type ComponentProps } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
+import Animated, { Easing, useAnimatedStyle, useReducedMotion, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
 
 import type { NexdoProject, NexdoTask } from '../api/types';
 import { taskSubtitle } from '../lib/taskLabels';
@@ -75,7 +76,38 @@ export type TaskCardProps = {
    * reorder for people who cannot drag. Absent where the card cannot be reordered.
    */
   onMove?: (offset: -1 | 1) => void;
+  /** `completingTask?.id == task.id && !task.isDone`: the save is in flight, so the circle fills. */
+  completing?: boolean;
+  /** `departingTaskID == task.id`: the save succeeded and the row is leaving. */
+  departing?: boolean;
+  /** Another row is completing: `.disabled(model.busy || completingTask != nil)`. */
+  locked?: boolean;
 };
+
+/**
+ * The completion animation (bdb68ce, RootView.swift:2026-2075). SwiftUI's
+ * `.spring(response: 0.25, dampingFraction: 0.6)` is stiffness (2π / 0.25)² ≈ 632 and damping
+ * 2 · 0.6 · 2π / 0.25 ≈ 30.2 at unit mass; `.easeInOut` is the (0.42, 0, 0.58, 1) curve.
+ */
+export const COMPLETION_SPRING = { mass: 1, stiffness: 632, damping: 30.2 };
+export const DEPART_MS = 250;
+export const DEPART_REDUCED_MS = 150;
+const EASE_IN_OUT = Easing.bezier(0.42, 0, 0.58, 1);
+
+/**
+ * Where the row's animated values settle: `.scaleEffect(completing && !reduceMotion ? 1.12 : 1)`,
+ * `.offset(x: departing && !reduceMotion ? 80 : 0)`, `.opacity(departing ? 0 : 1)`, and the exit's
+ * `.easeInOut(duration: reduceMotion ? 0.15 : 0.25)`.
+ */
+export function completionTargets({ completing, departing, reduceMotion }: { completing: boolean; departing: boolean; reduceMotion: boolean }) {
+  return {
+    scale: completing && !reduceMotion ? 1.12 : 1,
+    translateX: departing && !reduceMotion ? 80 : 0,
+    opacity: departing ? 0 : 1,
+    springs: !reduceMotion,
+    departMs: reduceMotion ? DEPART_REDUCED_MS : DEPART_MS,
+  };
+}
 
 /**
  * Port of `TasksView.taskCard` (ios/App/RootView.swift:1918-1957). The Tasks tab is its only caller,
@@ -90,34 +122,57 @@ export type TaskCardProps = {
 /** `.accessibilityHint` on a reorderable card (RootView.swift:1989). */
 export const REORDER_HINT = 'Touch and hold to reorder within this date. Scheduled time stays the same.';
 
-export function TaskCard({ task, timeZone, project, busy = false, onToggle, onOpen, onMove }: TaskCardProps) {
+export function TaskCard({ task, timeZone, project, busy = false, onToggle, onOpen, onMove, completing = false, departing = false, locked = false }: TaskCardProps) {
   const theme = useTheme();
-  const done = isDone(task);
+  const reduceMotion = useReducedMotion();
+  // The circle and the strike show the outcome while the save runs.
+  const done = isDone(task) || completing;
+
+  const targets = completionTargets({ completing, departing, reduceMotion });
+  const scale = useSharedValue(1);
+  const offset = useSharedValue(0);
+  const opacity = useSharedValue(1);
+  useEffect(() => {
+    // The circle grows on the spring; with Reduce Motion it does not grow at all.
+    scale.value = targets.springs ? withSpring(targets.scale, COMPLETION_SPRING) : targets.scale;
+  }, [targets.scale, targets.springs, scale]);
+  useEffect(() => {
+    const timing = { duration: targets.departMs, easing: EASE_IN_OUT };
+    offset.value = withTiming(targets.translateX, timing);
+    opacity.value = withTiming(targets.opacity, timing);
+  }, [targets.translateX, targets.opacity, targets.departMs, offset, opacity]);
+  const circleStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
+  const rowStyle = useAnimatedStyle(() => ({ opacity: opacity.value, transform: [{ translateX: offset.value }] }));
   const icon = taskIcon(task);
   const tint = taskIconColor(icon.tint, theme.scheme);
 
   return (
-    <View
+    <Animated.View
       style={[
         styles.card,
         // `.background(.background.opacity(0.8))` and `.stroke(Color.nexdoIndigo.opacity(0.05))`.
         { backgroundColor: withAlpha(theme.colors.surface, 0.8), borderColor: withAlpha(brand.nexdoIndigo, 0.05) },
+        rowStyle,
       ]}
+      testID={`task-card-${task.id}`}
     >
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={`${done ? 'Restore' : 'Complete'} ${task.title}`}
-        accessibilityState={{ disabled: busy }}
-        disabled={busy}
+        // The label names the action the task's saved state offers (`task.isDone`), not the pending one.
+        accessibilityLabel={`${isDone(task) ? 'Restore' : 'Complete'} ${task.title}`}
+        accessibilityState={{ disabled: busy || locked }}
+        disabled={busy || locked}
         onPress={onToggle}
         style={styles.toggle}
         testID={`task-toggle-${task.id}`}
       >
-        <TaskSymbol
-          name={done ? 'checkmark.circle.fill' : 'circle'}
-          size={21}
-          color={done ? theme.colors.link : theme.colors.secondary}
-        />
+        <Animated.View style={circleStyle} testID={`task-toggle-${task.id}-circle`}>
+          <TaskSymbol
+            name={done ? 'checkmark.circle.fill' : 'circle'}
+            size={21}
+            color={done ? theme.colors.link : theme.colors.secondary}
+          />
+        </Animated.View>
       </Pressable>
 
       <Pressable
@@ -125,6 +180,9 @@ export function TaskCard({ task, timeZone, project, busy = false, onToggle, onOp
         accessibilityHint={onMove ? `Opens task editor. ${REORDER_HINT}` : 'Opens task editor'}
         accessibilityActions={onMove ? REORDER_ACTIONS : undefined}
         onAccessibilityAction={onMove ? (event) => onMove(event.nativeEvent.actionName === 'moveUp' ? -1 : 1) : undefined}
+        // `.disabled(completingTask?.id == task.id)`.
+        accessibilityState={{ disabled: completing }}
+        disabled={completing}
         onPress={onOpen}
         style={styles.body}
         testID={`task-open-${task.id}`}
@@ -151,7 +209,7 @@ export function TaskCard({ task, timeZone, project, busy = false, onToggle, onOp
 
         <TaskSymbol name="chevron.right" size={15} color={theme.colors.secondary} />
       </Pressable>
-    </View>
+    </Animated.View>
   );
 }
 
