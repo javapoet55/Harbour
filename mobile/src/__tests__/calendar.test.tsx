@@ -12,9 +12,26 @@ import { palettes } from '../theme';
 
 const mockPush = jest.fn();
 const mockBack = jest.fn();
-jest.mock('expo-router', () => ({
-  router: { push: (...args: unknown[]) => mockPush(...args), replace: jest.fn(), back: (...args: unknown[]) => mockBack(...args) },
-  useLocalSearchParams: () => ({}),
+jest.mock('expo-router', () => {
+  const { useEffect } = require('react') as typeof import('react');
+  return {
+    router: { push: (...args: unknown[]) => mockPush(...args), replace: jest.fn(), back: (...args: unknown[]) => mockBack(...args) },
+    useLocalSearchParams: () => ({}),
+    useFocusEffect: (effect: () => void | (() => void)) => useEffect(effect, [effect]),
+  };
+});
+
+// The phone's calendars (Phase 13 Calendar run): no access unless a test grants it.
+const mockCalendarPermissions = jest.fn();
+const mockDeviceCalendars = jest.fn();
+const mockDeviceEvents = jest.fn();
+jest.mock('expo-calendar', () => ({
+  EntityTypes: { EVENT: 'event' },
+  EventStatus: { CANCELED: 'canceled' },
+  getCalendarPermissionsAsync: (...args: unknown[]) => mockCalendarPermissions(...args),
+  requestCalendarPermissionsAsync: jest.fn(async () => ({ status: 'granted', canAskAgain: true, granted: true })),
+  getCalendarsAsync: (...args: unknown[]) => mockDeviceCalendars(...args),
+  getEventsAsync: (...args: unknown[]) => mockDeviceEvents(...args),
 }));
 
 jest.mock('expo-crypto', () => ({
@@ -38,6 +55,9 @@ jest.mock('../api', () => ({
 
 import Calendar, { creationTitlesFit } from '../../app/(tabs)/calendar';
 import NewCalendarEvent from '../../app/calendar/event/new';
+import { deviceCalendarSelection } from '../features/calendar/deviceCalendarSelection';
+import { momentsStore } from '../features/moments/store';
+import { moment } from '../features/moments/testFixtures';
 
 const ZONE = 'Asia/Kolkata';
 /** 2026-09-16 09:00 in Asia/Kolkata (a Wednesday). */
@@ -87,6 +107,11 @@ beforeEach(() => {
   mockTasks.mockResolvedValue({ tasks: AGENDA.tasks, timeZone: ZONE });
   mockAgenda.mockResolvedValue(AGENDA);
   mockIntelligence.mockRejectedValue(new Error('unavailable'));
+  mockCalendarPermissions.mockReset().mockResolvedValue({ status: 'undetermined', canAskAgain: true, granted: false });
+  mockDeviceCalendars.mockReset().mockResolvedValue([]);
+  mockDeviceEvents.mockReset().mockResolvedValue([]);
+  deviceCalendarSelection.setState({ owner: null, selection: null, loaded: false, revision: 0 });
+  momentsStore.setState({ owner: null, snapshot: null, route: null, routedPlanID: null });
   jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
 });
 
@@ -710,3 +735,137 @@ describe('creationTitlesFit', () => {
   });
 });
 
+
+/**
+ * Phase 13 Calendar run (§37 item 4): the phone's events beside the server's, Moment rows, the one
+ * day index, the header gear, the filters entry and the failure copy (CalendarView.swift, bb57e09 /
+ * bdb68ce / b61801c).
+ */
+describe('Calendar tab, Phase 13', () => {
+  const DEVICE_EVENT = {
+    id: 'ev1',
+    calendarId: 'cal1',
+    title: 'Dussehra',
+    startDate: atLocal('2026-09-16', '11:00'),
+    endDate: atLocal('2026-09-16', '11:30'),
+    allDay: false,
+    timeZone: ZONE,
+    status: 'confirmed',
+  };
+
+  function grantDeviceCalendar(events: (typeof DEVICE_EVENT)[] = [DEVICE_EVENT]) {
+    mockCalendarPermissions.mockResolvedValue({ status: 'granted', canAskAgain: true, granted: true });
+    mockDeviceCalendars.mockResolvedValue([{ id: 'cal1', title: 'Calendar', source: { name: 'Default' } }]);
+    mockDeviceEvents.mockResolvedValue(events);
+  }
+
+  it('shows the phone’s events beside the server’s, with the provider icon, and opens their details', async () => {
+    grantDeviceCalendar();
+    await renderCalendar();
+    await waitFor(() => expect(screen.getByText('Dussehra')).toBeTruthy());
+    expect(screen.getByText('Standup')).toBeTruthy();
+    expect(screen.getAllByText('30 min · Event')).toHaveLength(2);
+    expect(screen.getByLabelText('Apple Calendar')).toBeTruthy();
+    expect(mockDeviceEvents).toHaveBeenCalled();
+    // Padded one day before and two after the visible range (`:634-636`).
+    const [, start, end] = mockDeviceEvents.mock.calls[0] as [string[], Date, Date];
+    expect(start.toISOString()).toBe('2026-09-14T18:30:00.000Z');
+    expect(end.toISOString()).toBe('2026-09-19T18:30:00.000Z');
+    // `apple-device:<calendarID>:<eventID>:<start>` (DeviceCalendarEvent.swift), the start as Swift prints its seconds.
+    const row = screen.getAllByTestId(/^calendar-row-event:apple-device:cal1:ev1:\d+(\.\d+)?$/);
+    expect(row).toHaveLength(1);
+    await fireEvent.press(row[0]);
+    expect(mockPush).toHaveBeenCalledWith({ pathname: '/calendar/event/[id]', params: { id: expect.stringMatching(/^apple-device:cal1:ev1:\d+(\.\d+)?$/), zone: ZONE } });
+  });
+
+  it('reads nothing from the phone without calendar access', async () => {
+    await renderCalendar();
+    expect(mockDeviceEvents).not.toHaveBeenCalled();
+    expect(screen.queryByText('Dussehra')).toBeNull();
+  });
+
+  it('shows a Moment as an all-day row with its icon and "<type> · Moment", and opens the moment', async () => {
+    momentsStore.setState({
+      owner: 'o',
+      snapshot: { moments: [moment({ id: 'm1', title: 'Parity Birthday', occurrenceDate: '2026-09-17', yearly: false })], emailAccount: null, emailConfigured: false, automaticEmailEnabled: false },
+    });
+    await renderCalendar();
+    expect(screen.getByText('Parity Birthday')).toBeTruthy();
+    expect(screen.getByText('Birthday · Moment')).toBeTruthy();
+    expect(screen.getByLabelText('Moment')).toBeTruthy();
+    await fireEvent.press(screen.getByTestId('calendar-row-event:moment:m1:2026-09-17'));
+    expect(momentsStore.getState().route?.id).toBe('m1');
+    expect(mockPush).not.toHaveBeenCalled();
+  });
+
+  it('files every item once per load: a day pick is a lookup, not a re-bucketing', async () => {
+    const spy = jest.spyOn(require('../features/calendar/dayIndex'), 'buildCalendarDayIndex');
+    await renderCalendar();
+    const built = spy.mock.calls.length;
+    expect(built).toBeGreaterThanOrEqual(1);
+    await fireEvent.press(screen.getByTestId('calendar-mode-Week'));
+    await waitFor(() => expect(screen.getByTestId('calendar-week-summary')).toBeTruthy());
+    const afterMode = spy.mock.calls.length;
+    await fireEvent.press(screen.getByTestId('calendar-day-2026-09-18'));
+    await waitFor(() => expect(screen.getByTestId('calendar-week-summary')).toHaveTextContent('Your Friday0 items'));
+    // Picking another day of the same range rebuilds nothing.
+    expect(spy.mock.calls.length).toBe(afterMode);
+    spy.mockRestore();
+  });
+
+  it('drops "· 0 min planned" from the Week card when nothing is planned', async () => {
+    await renderCalendar();
+    await fireEvent.press(screen.getByTestId('calendar-mode-Week'));
+    await waitFor(() => expect(screen.getByTestId('calendar-week-summary')).toHaveTextContent('Your Wednesday3 items · 30 min planned'));
+    await fireEvent.press(screen.getByTestId('calendar-day-2026-09-18'));
+    await waitFor(() => expect(screen.getByTestId('calendar-week-summary')).toHaveTextContent('Your Friday0 items'));
+    expect(screen.getByTestId('calendar-week-summary')).not.toHaveTextContent('min planned');
+  });
+
+  it('the gear opens Settings at Calendars & Privacy', async () => {
+    await renderCalendar();
+    await fireEvent.press(screen.getByTestId('calendar-settings'));
+    expect(mockPush).toHaveBeenCalledWith({ pathname: '/account/settings', params: { calendars: '1' } });
+  });
+
+  it('the filters menu offers the phone’s calendars, above Reset filters', async () => {
+    await renderCalendar();
+    await fireEvent.press(screen.getByTestId('calendar-filters'));
+    expect(screen.getByTestId('filter-phone-calendars')).toHaveTextContent('Apple calendars…');
+    const order = screen.getAllByTestId(/^filter-(critical|phone-calendars|reset)$/).map((node) => node.props.testID);
+    expect(order).toEqual(['filter-critical', 'filter-phone-calendars', 'filter-reset']);
+    await fireEvent.press(screen.getByTestId('filter-phone-calendars'));
+    expect(mockPush).toHaveBeenCalledWith('/account/phone-calendars');
+    expect(screen.queryByTestId('filter-reset')).toBeNull();
+  });
+
+  it('says the online calendars could not refresh, and keeps the phone’s events on screen', async () => {
+    mockAgenda.mockRejectedValue(new ApiError({ status: 0, code: 'NETWORK', message: 'offline' }));
+    grantDeviceCalendar();
+    await wrap(<Calendar />);
+    await waitFor(() => expect(screen.getByTestId('calendar-failure')).toHaveTextContent('Couldn’t refresh online calendars and tasks. Available calendar data is still shown.'));
+    await waitFor(() => expect(screen.getByText('Dussehra')).toBeTruthy());
+    expect(screen.queryByText('Standup')).toBeNull();
+  });
+
+  it('says only that the online calendars could not refresh when there is nothing to show', async () => {
+    mockAgenda.mockRejectedValue(new ApiError({ status: 0, code: 'NETWORK', message: 'offline' }));
+    await wrap(<Calendar />);
+    await waitFor(() => expect(screen.getByTestId('calendar-failure')).toHaveTextContent('Couldn’t refresh online calendars and tasks.'));
+    expect(screen.getByTestId('calendar-failure')).not.toHaveTextContent('still shown');
+    expect(screen.queryByTestId('calendar-summary')).toBeNull();
+  });
+
+  it('on Android says Phone calendar and Phone calendars… (§33)', async () => {
+    const platform = jest.replaceProperty(Platform, 'OS', 'android');
+    try {
+      grantDeviceCalendar();
+      await renderCalendar();
+      await waitFor(() => expect(screen.getByLabelText('Phone calendar')).toBeTruthy());
+      await fireEvent.press(screen.getByTestId('calendar-filters'));
+      expect(screen.getByTestId('filter-phone-calendars')).toHaveTextContent('Phone calendars…');
+    } finally {
+      platform.restore();
+    }
+  });
+});

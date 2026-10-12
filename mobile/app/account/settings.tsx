@@ -1,7 +1,7 @@
 import { useQueryClient } from '@tanstack/react-query';
 import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Linking, Pressable, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -11,7 +11,7 @@ import { CalendarProviderIcon } from '../../src/components/CalendarProviderIcon'
 import { deviceCalendarCopy, selectedCalendarsLabel } from '../../src/features/calendar/deviceCalendarCopy';
 import { useDeviceCalendarSummary } from '../../src/features/calendar/useDeviceCalendarSummary';
 import { IOSSwitch } from '../../src/components/IOSSwitch';
-import { KeyboardAwareScrollView } from '../../src/components/keyboard';
+import { KeyboardAwareScrollView, type ScrollTarget } from '../../src/components/keyboard';
 import { AccountAvatar, ProfileBackground } from '../../src/components/ProfileParts';
 import {
   SettingsCaption,
@@ -144,6 +144,13 @@ function SettingsScreen({
   const calendar = connectionsState(connections);
   // `appleCalendarAccess` and `appleCalendarCount` (ProfileView.swift:143-144, :478-485).
   const phoneCalendar = useDeviceCalendarSummary();
+  // `openCalendarSettings` (ProfileView.swift:241, :379): the Calendar tab's gear scrolls to the card.
+  const { calendars: openCalendarSettings } = useLocalSearchParams<{ calendars?: string }>();
+  const scrollRef = useRef<ScrollTarget | null>(null);
+  const [calendarsCardY, setCalendarsCardY] = useState<number | null>(null);
+  useEffect(() => {
+    if (openCalendarSettings && calendarsCardY !== null) scrollRef.current?.scrollTo({ y: calendarsCardY, animated: false });
+  }, [openCalendarSettings, calendarsCardY]);
   const setWrites = useSetCalendarWrites();
   const disconnect = useDisconnectCalendar();
   const deleteAccount = useDeleteAccount({ beforeSessionEnds: closePresentedScreens });
@@ -344,7 +351,7 @@ function SettingsScreen({
         </Pressable>
       </View>
 
-      <KeyboardAwareScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+      <KeyboardAwareScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled" scrollRef={scrollRef}>
         {/* `.disabled(saving || connecting)` on the whole column (`:243`). */}
         <View pointerEvents={blocked ? 'none' : 'auto'} style={styles.column} testID="settings-column">
         <Text accessibilityRole="header" style={[styles.largeTitle, { color: theme.colors.ink }]}>
@@ -554,6 +561,7 @@ function SettingsScreen({
             </SettingsCard>
 
             {/* 8. Calendars & Privacy (ProfileView.swift:349-368, 6f079c0). */}
+            <View onLayout={(event) => setCalendarsCardY(event.nativeEvent.layout.y)}>
             <SettingsCard testID="settings-calendars" title="Calendars & Privacy">
               <Text style={[styles.subheadline, { color: theme.colors.secondary }]}>
                 Connect your calendar to keep your plans and important moments together.
@@ -655,6 +663,7 @@ function SettingsScreen({
                 <Text style={[theme.typography.body, { color: theme.colors.danger }]}>Delete account</Text>
               </Pressable>
             </SettingsCard>
+            </View>
 
             {/* 9. Save settings (`:239-241`): a capsule filled with `NexdoTheme.saveGradient`. */}
             <Pressable

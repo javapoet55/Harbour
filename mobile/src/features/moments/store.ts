@@ -92,6 +92,8 @@ export type MomentsState = {
   enableWishReminders: () => Promise<void>;
   receiveRoute: (id: string, owner: string) => void;
   resolveRoute: () => void;
+  /** A Calendar or Tasks Moment row tapped (CalendarView.swift:502-504): open that moment, if it still exists. */
+  routeTo: (momentId: string) => void;
   clearRoute: () => void;
   clearInbox: () => void;
   setError: (error: string | null) => void;
@@ -302,6 +304,12 @@ export function createMomentsStore(deps: MomentsDeps) {
         const moment = snapshot.moments.find((item) => item.id === id || item.drafts.some((draft) => (draft.plans ?? []).some((plan) => plan.id === id)));
         if (moment) set({ route: moment });
         else set({ showingInbox: true });
+      },
+
+      /** `moments.route = moments.moments.first { $0.id == id }` (bb57e09). A vanished moment opens nothing. */
+      routeTo(momentId) {
+        const moment = get().snapshot?.moments.find((item) => item.id === momentId);
+        if (moment) set({ route: moment, routedPlanID: null });
       },
 
       clearRoute() {

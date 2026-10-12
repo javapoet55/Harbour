@@ -40,7 +40,12 @@ export type DeviceEventRecord = {
 
 /** The current status without prompting (`EKEventStore.authorizationStatus(for: .event)`). */
 export async function deviceCalendarAccess(): Promise<PermissionStatus> {
-  return statusFromExpo(await Calendar.getCalendarPermissionsAsync());
+  try {
+    return statusFromExpo(await Calendar.getCalendarPermissionsAsync());
+  } catch {
+    // No calendar provider on this phone (or the module is unavailable): nothing can be read.
+    return 'denied';
+  }
 }
 
 /** `fullAccess` on iOS 17+: the only state that lets events be read. */

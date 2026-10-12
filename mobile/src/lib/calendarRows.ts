@@ -74,7 +74,8 @@ export function calendarRows({
       title: event.title,
       at: allDay ? midnight : start,
       time: allDay ? 'All day' : serverTime(new Date(start).toISOString(), timeZone),
-      detail: allDay ? 'Calendar event' : `${Math.max(0, Math.round((end - start) / 60_000))} min · Event`,
+      // A Moment projection (MomentSchedule, bb57e09) reads its notes: "Birthday · Moment".
+      detail: event.source === 'moment' ? (event.notes ?? 'Moment') : allDay ? 'Calendar event' : `${Math.max(0, Math.round((end - start) / 60_000))} min · Event`,
       task: null,
       event,
       deadline: false,
