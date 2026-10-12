@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import * as Location from 'expo-location';
-import { Linking } from 'react-native';
+import { Linking, StyleSheet } from 'react-native';
 
 const mockPush = jest.fn();
 jest.mock('expo-router', () => ({
@@ -111,6 +111,32 @@ describe('Store logos', () => {
     expect(screen.queryByTestId('store-brand-image')).toBeNull();
   });
 
+  /** bdb68ce (StoreBrandLogo.swift `load()`): the list's own logo first, labelled with the store name. */
+  it('shows the list’s own logo without asking for the brand, and it expands', async () => {
+    await render(<StoreBrandLogo customImageData="/9j/AA==" expandsOnTap identity="Safeway|https://www.safeway.com" listId="l4" />);
+    const image = screen.getByTestId('store-brand-image');
+    expect(image.props.source.uri).toBe('data:image/jpeg;base64,/9j/AA==');
+    expect(mockBrand).not.toHaveBeenCalled();
+    await fireEvent(image, 'load');
+    await fireEvent.press(screen.getByLabelText('Expand Safeway logo'));
+    expect(screen.getByLabelText('Safeway logo')).toBeTruthy();
+  });
+
+  it('falls back to the brand when the list’s logo cannot be drawn', async () => {
+    mockBrand.mockResolvedValue({ brand: { displayName: 'Safeway', logoUrl: 'https://cdn.brandfetch.io/safeway/logo.png?c=1' } });
+    await render(<StoreBrandLogo customImageData="/9j/broken" identity="Safeway|" listId="l5" />);
+    await fireEvent(screen.getByTestId('store-brand-image'), 'error');
+    await waitFor(() => expect(mockBrand).toHaveBeenCalledWith('l5'));
+    await waitFor(() => expect(screen.getByTestId('store-brand-image').props.source.uri).toBe('https://cdn.brandfetch.io/safeway/logo.png?c=1'));
+  });
+
+  it('a null or empty logo is no logo', async () => {
+    mockBrand.mockResolvedValue({ brand: { displayName: 'Safeway', logoUrl: null } });
+    await render(<StoreBrandLogo customImageData={null} identity="Safeway|" listId="l6" />);
+    await waitFor(() => expect(mockBrand).toHaveBeenCalledWith('l6'));
+    expect(screen.queryByTestId('store-brand-image')).toBeNull();
+  });
+
   it('keeps the cart when the brand request fails', async () => {
     mockBrand.mockRejectedValue(new Error('offline'));
     await render(<StoreBrandLogo identity="Other|" listId="l3" />);
@@ -129,6 +155,20 @@ describe('My Lists', () => {
     await waitFor(() => expect(mockBrand).toHaveBeenCalledWith('l1'));
     expect(screen.queryByTestId('shopping-plus')).toBeNull();
     expect(screen.getByLabelText('Shopping list')).toBeTruthy();
+  });
+
+  /** StoreBrandLogo.swift:63-65 with ShoppingViews.swift:109 (bdb68ce): the list's own logo first, at 48. */
+  it('shows a list’s own logo in its row, without asking for the brand, even with no store', async () => {
+    const lists = [list({ storeName: 'Safeway', storeLogoData: '/9j/AA==' }), list({ id: 'l2', storeLogoData: '/9j/BB==' })];
+    mockLists.mockResolvedValue({ lists });
+    shoppingStore.setState({ lists, busy: false, error: null });
+    await wrap(<MyLists />);
+    const images = screen.getAllByTestId('store-brand-image');
+    expect(images.map((image) => image.props.source.uri)).toEqual(['data:image/jpeg;base64,/9j/AA==', 'data:image/jpeg;base64,/9j/BB==']);
+    expect(images.map((image) => image.props.style)).toEqual(expect.arrayContaining([expect.arrayContaining([expect.objectContaining({ width: 48 * 0.94 })])]));
+    await fireEvent(images[1], 'load');
+    expect(screen.getByLabelText('Store logo')).toBeTruthy();
+    expect(mockBrand).not.toHaveBeenCalled();
   });
 
   it('New List starts as "Shopping List" and says "Create List & Add Store"', async () => {
@@ -294,6 +334,20 @@ describe('List Settings', () => {
     expect(screen.queryByText('Back')).toBeNull();
     await fireEvent.press(screen.getByTestId('list-settings-back'));
     expect(screen.getByText('List Settings')).toBeTruthy();
+  });
+
+  /** bb57e09 (ShoppingStoreHoursView.swift:27-34): today's row at the store is bold, "Today, …" to a screen reader. */
+  it('Store Hours bolds the store’s today, by its UTC offset across midnight', async () => {
+    // 01:00 UTC on Saturday 10 October is still Friday at a store seven hours behind.
+    const now = jest.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-10-10T01:00:00Z'));
+    mockHours.mockResolvedValueOnce({ days: ['Thursday: 10 AM–8:30 PM', 'Friday: 10 AM–8:30 PM', 'Saturday: 9:30 AM–7 PM'], openNow: true, current: true, utcOffsetMinutes: -420 });
+    await open(list({ storeName: 'Safeway', storePlaceId: 'place-1' }));
+    await fireEvent.press(screen.getByTestId('list-settings-hours'));
+    await waitFor(() => expect(screen.getByTestId('store-hours-today')).toHaveTextContent('Friday: 10 AM–8:30 PM'));
+    expect(screen.getByTestId('store-hours-today').props.accessibilityLabel).toBe('Today, Friday: 10 AM–8:30 PM');
+    expect(StyleSheet.flatten(screen.getByTestId('store-hours-today').props.style)).toMatchObject({ fontWeight: '700' });
+    expect(StyleSheet.flatten(screen.getByTestId('store-hours-day-2').props.style).fontWeight).not.toBe('700');
+    now.mockRestore();
   });
 
   it('Store Hours without a chosen place says how to choose one', async () => {

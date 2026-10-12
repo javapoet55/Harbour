@@ -1,10 +1,4 @@
-import {
-  attentionRowSubtitle,
-  commitmentCount,
-  commitmentHeadline,
-  showsAttentionRow,
-  summaryLine,
-} from './todayQuickAccess';
+import { attentionDescription, commitmentCount, commitmentHeadline, summaryLine } from './todayQuickAccess';
 
 /** `TodayIntelligenceCard` summary (RootView.swift:1403-1413, e0a7bcd). */
 describe('the "Your day, in focus" summary', () => {
@@ -21,21 +15,16 @@ describe('the "Your day, in focus" summary', () => {
   });
 });
 
-/** The attention row (RootView.swift:1146-1166). */
-describe('the attention row', () => {
+/** The attention card's line (RootView.swift:1517-1522, Phase 13). */
+describe('the attention card', () => {
   it.each([
     [1, 0, '1 overdue task'],
     [3, 0, '3 overdue tasks'],
-    [1, 2, '1 overdue task · 2 other'],
+    [1, 2, '1 overdue task · 2 schedule checks'],
+    [3, 1, '3 overdue tasks · 1 schedule check'],
     [0, 1, '1 schedule check'],
-    [0, 2, '2 schedule checks'],
-  ])('overdue %i, other %i reads "%s"', (overdue, other, expected) => {
-    expect(attentionRowSubtitle(overdue, other)).toBe(expected);
-  });
-
-  it('shows only when something needs attention', () => {
-    expect(showsAttentionRow(0, 0)).toBe(false);
-    expect(showsAttentionRow(1, 0)).toBe(true);
-    expect(showsAttentionRow(0, 1)).toBe(true);
+    [0, 0, ''],
+  ])('overdue %i, checks %i reads "%s"', (overdue, other, expected) => {
+    expect(attentionDescription(overdue, other)).toBe(expected);
   });
 });

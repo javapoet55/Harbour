@@ -3,7 +3,8 @@ import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
-import { Alert, AppState } from 'react-native';
+import { Alert, AppState, StyleSheet, View } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
@@ -23,6 +24,8 @@ import { useAppearance } from '../src/store/appearance';
 import { useLastSignedIn } from '../src/store/lastSignedIn';
 import { useSession } from '../src/store/session';
 import { useTheme } from '../src/theme';
+import { configureCrashReporting } from '../src/lib/crashReporting';
+import { useBugReportHost } from '../src/features/bugReport/useBugReportHost';
 
 /**
  * ONE launch splash, not two. Left to itself the native splash hides on the first React frame, and the
@@ -32,6 +35,9 @@ import { useTheme } from '../src/theme';
  * `RootView` does. Called at module scope, as the docs require, so it runs before the first frame.
  */
 void SplashScreen.preventAutoHideAsync();
+
+/** `NexdoApp.init()` → `NexdoCrashReporting.configure()` (4185501): at launch, before the first screen. */
+configureCrashReporting();
 
 /**
  * The longest the native splash is held. A launch that is still retrying `/api/me` after this falls
@@ -51,6 +57,13 @@ const SHEET_OPTIONS = {
   sheetInitialDetentIndex: 0,
   sheetGrabberVisible: true,
 };
+
+/**
+ * Needs attention since Phase 13: `[.fraction(0.65), .large]` with `.presentationCornerRadius(36)`
+ * (RootView.swift:1301). On `today-attention-sheet-v3` the top edge sits at 39.8% of the screen; below
+ * Android's status bar that is 0.63 of the height, as 0.54 matches `.medium` above.
+ */
+const ATTENTION_SHEET_OPTIONS = { ...SHEET_OPTIONS, sheetAllowedDetents: [0.63, 1.0], sheetCornerRadius: 36 };
 
 export default function RootLayout() {
   const [queryClient] = useState(createQueryClient);
@@ -80,15 +93,18 @@ export default function RootLayout() {
 
   return (
     <RootErrorBoundary>
-      <SafeAreaProvider>
-        {/* Keyboard frames for src/components/keyboard.tsx. It detects the app's edge-to-edge
-            window on its own, so it leaves the status and navigation bar insets alone. */}
-        <KeyboardProvider>
-          <QueryClientProvider client={queryClient}>
-            <RootNavigator />
-          </QueryClientProvider>
-        </KeyboardProvider>
-      </SafeAreaProvider>
+      {/* Tasks' drag-to-reorder (d568989) runs on gesture-handler, which needs one root view. */}
+      <GestureHandlerRootView style={styles.root}>
+        <SafeAreaProvider>
+          {/* Keyboard frames for src/components/keyboard.tsx. It detects the app's edge-to-edge
+              window on its own, so it leaves the status and navigation bar insets alone. */}
+          <KeyboardProvider>
+            <QueryClientProvider client={queryClient}>
+              <RootNavigator />
+            </QueryClientProvider>
+          </KeyboardProvider>
+        </SafeAreaProvider>
+      </GestureHandlerRootView>
     </RootErrorBoundary>
   );
 }
@@ -193,8 +209,12 @@ export function RootNavigator() {
   // Pomodoro: a different account (or none) resets the store and its pending alerts.
   usePomodoroLifecycle(profile?.id);
 
+  // Bug reports (BugReportCoordinator.swift): the capture root, screen tags, the shake and its setting.
+  const bugReportRoot = useBugReportHost(profile?.id);
+
   return (
-    <>
+    // The whole app, so a bug report's screenshot is what was on screen when it opened.
+    <View collapsable={false} ref={bugReportRoot} style={[styles.root, { backgroundColor: theme.colors.groupedBackground }]}>
       <StatusBar style={theme.scheme === 'dark' ? 'light' : 'dark'} />
       <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: theme.colors.groupedBackground } }}>
         <Stack.Screen name="index" />
@@ -207,7 +227,7 @@ export function RootNavigator() {
             the detent API — Material `BottomSheetBehavior` on Android — and needs no new dependency.
             Both draw their own bar, since a form sheet has no navigator header on Android.
           */}
-          <Stack.Screen name="attention" options={SHEET_OPTIONS} />
+          <Stack.Screen name="attention" options={ATTENTION_SHEET_OPTIONS} />
           <Stack.Screen name="reschedule-all" options={SHEET_OPTIONS} />
           {/*
             The signed-in groups that open over the tabs. Left undeclared, Expo Router registered them
@@ -221,6 +241,8 @@ export function RootNavigator() {
           <Stack.Screen name="task" />
           {/* The Wellness chooser, module guides, Pomodoro and the Calorie Tracker: full-screen covers. */}
           <Stack.Screen name="wellness" />
+          {/* Report Bugs: `overFullScreen` over whatever is on screen (BugReportCoordinator.swift:66-70). */}
+          <Stack.Screen name="bug-report" options={{ presentation: 'fullScreenModal', gestureEnabled: false }} />
         </Stack.Protected>
         <Stack.Protected guard={status === 'signedOut'}>
           <Stack.Screen name="(auth)" />
@@ -230,6 +252,8 @@ export function RootNavigator() {
           <Stack.Screen name="action" />
         </Stack.Protected>
       </Stack>
-    </>
+    </View>
   );
 }
+
+const styles = StyleSheet.create({ root: { flex: 1 } });

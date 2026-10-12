@@ -3,7 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 import { AppState } from 'react-native';
 
-import { getApi } from '../api';
+import { getApi, isVoiceLimitReached } from '../api';
 import { synchronizeDeviceTimeZone } from '../query/useProfile';
 import { recordVoiceUsage } from '../query/useVoiceUsage';
 import { useConsent } from '../store/consent';
@@ -16,6 +16,8 @@ import { VoiceToolExecutor } from './toolExecutor';
 import type { FoodVoiceContext } from '../features/shopping/foodVoice';
 import { WebRtcTransport } from './transport';
 import { VoiceUsageMeter } from './usageMeter';
+import { requestRecordingPermissionsAsync } from 'expo-audio';
+import { authorizeMicrophone, MICROPHONE_DENIED, MicrophoneDenied, PermissionCancelled } from '../lib/permissionAccess';
 
 /**
  * The React side of `AddTaskByVoiceView`'s session ownership
@@ -29,10 +31,22 @@ import { VoiceUsageMeter } from './usageMeter';
 /** `AppModel.voiceTaskSession(calendarOnly:)` (ios/App/NexdoApp.swift:470-474). */
 export const START_FAILED = 'Couldn’t start voice. Close this screen and try again.';
 
+/**
+ * The line a failed start shows. Swift shows `error.localizedDescription` (AddTaskByVoiceView.swift:
+ * 292-294), so the monthly limit (94da063) reads as the server wrote it — "You have used your 100
+ * minutes of voice this month. …" — while every other failure keeps this screen's own line.
+ */
+export function startupErrorFor(error: unknown): string {
+  if (error instanceof MicrophoneDenied) return MICROPHONE_DENIED;
+  return isVoiceLimitReached(error) ? error.message : START_FAILED;
+}
+
 export type UseVoiceSession = {
   state: VoiceState;
   starting: boolean;
   startupError: string | null;
+  /** b61801c: the microphone was refused, so the screen offers "Open Settings" (AddTaskByVoiceView.swift:97-104). */
+  microphoneDenied: boolean;
   toggleMute: () => void;
   finish: () => void;
   close: () => void;
@@ -58,6 +72,7 @@ export function useVoiceSession({
   const [state, setState] = useState<VoiceState>(INITIAL_STATE);
   const [starting, setStarting] = useState(false);
   const [startupError, setStartupError] = useState<string | null>(null);
+  const [microphoneDenied, setMicrophoneDenied] = useState(false);
 
   const session = useRef<VoiceConversation | null>(null);
   const executor = useRef<VoiceToolExecutor | null>(null);
@@ -110,12 +125,18 @@ export function useVoiceSession({
     transport.current = peer;
     session.current = conversation;
 
-    // `start()` (AddTaskByVoiceView.swift:125-131): sync the zone, ask for a credential, connect.
-    // Deferred by a microtask so the flag is not written during this effect's own commit.
+    // `start()` (AddTaskByVoiceView.swift:276-295): the microphone first (b61801c), then sync the zone,
+    // ask for a credential and connect. Deferred by a microtask so the flag is not written during this
+    // effect's own commit.
+    let unmounted = false;
     void (async () => {
       await Promise.resolve();
       setStarting(true);
+      setMicrophoneDenied(false);
       try {
+        // `VoicePermissionGate.authorize` — before any paid session exists, and abandoned if the screen
+        // closed while the system prompt was up (`guard isVisible`).
+        await authorizeMicrophone(async () => (await requestRecordingPermissionsAsync()).granted, () => unmounted);
         // The THIRD `synchronizeDeviceTimeZone()` call site (NexdoApp.swift:472), left open in Phase 7.
         await synchronizeDeviceTimeZone(queryClient);
         const credential = await getApi().request<VoiceCredential>(TASK_SESSION_PATH, {
@@ -124,14 +145,18 @@ export function useVoiceSession({
           timeoutMs: 25_000,
         });
         conversation.start(credential);
-      } catch {
-        setStartupError(START_FAILED);
+      } catch (error) {
+        // Dismissing the screen cancels startup; it is not a connection failure.
+        if (error instanceof PermissionCancelled) return;
+        if (error instanceof MicrophoneDenied) setMicrophoneDenied(true);
+        setStartupError(startupErrorFor(error));
       } finally {
         setStarting(false);
       }
     })();
 
     return () => {
+      unmounted = true;
       conversation.close();
       tools.clear();
       session.current = null;
@@ -158,6 +183,8 @@ export function useVoiceSession({
     const subscription = AppState.addEventListener('change', (next) => {
       const conversation = session.current;
       if (!conversation) return;
+      // "Permission setup has no live session to suspend (including trips to Settings)" (b61801c).
+      if (conversation.snapshot.phase === 'idle') return;
       if (next === 'background') conversation.background(true);
       else if (next === 'active') {
         conversation.tick();
@@ -189,6 +216,7 @@ export function useVoiceSession({
     state,
     starting,
     startupError,
+    microphoneDenied,
     toggleMute: () => session.current?.toggleMute(),
     finish: () => session.current?.finish(),
     close: () => session.current?.close(),

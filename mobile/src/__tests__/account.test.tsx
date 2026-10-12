@@ -1,8 +1,9 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
 import { Alert, Linking, Platform, StyleSheet } from 'react-native';
 
 import type { Profile } from '../api';
+import { deviceCalendarSelection } from '../features/calendar/deviceCalendarSelection';
 import { deliverOAuthCallback, redirectOAuthCallback, resetOAuthCallbacks } from '../lib/oauthCallbacks';
 import { deviceTimeZone } from '../lib/profileSettings';
 import { addDays, startOfDay } from '../lib/taskQuery';
@@ -43,6 +44,18 @@ jest.mock('expo-router', () => {
 const mockLaunchLibrary = jest.fn();
 jest.mock('expo-image-picker', () => ({
   launchImageLibraryAsync: (...args: unknown[]) => mockLaunchLibrary(...args),
+}));
+
+// The phone's calendars (Phase 13 Calendar run): no access unless a test grants it.
+const mockCalendarPermissions = jest.fn();
+const mockDeviceCalendars = jest.fn();
+jest.mock('expo-calendar/legacy', () => ({
+  EntityTypes: { EVENT: 'event' },
+  EventStatus: { CANCELED: 'canceled' },
+  getCalendarPermissionsAsync: (...args: unknown[]) => mockCalendarPermissions(...args),
+  requestCalendarPermissionsAsync: jest.fn(async () => ({ status: 'granted', canAskAgain: true, granted: true })),
+  getCalendarsAsync: (...args: unknown[]) => mockDeviceCalendars(...args),
+  getEventsAsync: jest.fn(async () => []),
 }));
 
 const mockOpenAuthSession = jest.fn();
@@ -89,6 +102,7 @@ jest.mock('../api', () => ({
 
 import Account from '../../app/account/index';
 import Settings from '../../app/account/settings';
+import { configureBugReports, resetBugReports, useBugReport } from '../features/bugReport/coordinator';
 
 const PREFERENCES = {
   workStart: '09:00',
@@ -140,6 +154,8 @@ beforeEach(() => {
     mock.mockReset();
   }
   mockConnections.mockResolvedValue({ connections: [] });
+  mockCalendarPermissions.mockReset().mockResolvedValue({ status: 'undetermined', canAskAgain: true, granted: false });
+  mockDeviceCalendars.mockReset().mockResolvedValue([]);
   mockConnectToken.mockResolvedValue({ token: 'one-time-token' });
   mockVoiceUsage.mockResolvedValue(SEPTEMBER);
   mockMe.mockResolvedValue({ user: profile() });
@@ -153,15 +169,27 @@ beforeEach(() => {
 
 /** `AccountView` body (ios/App/ProfileView.swift:53-84). */
 describe('the Account sheet', () => {
+  /** `Button { BugReportCoordinator.shared.open(from: "settings") }` (ProfileView.swift:88). */
+  it('Report Bugs opens the report over My Page, tagged "settings"', async () => {
+    const present = jest.fn();
+    configureBugReports({ capture: async () => '/9j/AA==', device: () => ({}), present, dismiss: jest.fn(), newId: () => 'id', now: () => 0 });
+    await show(<Account />);
+    await fireEvent.press(screen.getByTestId('account-report-bugs'));
+    await waitFor(() => expect(present).toHaveBeenCalledTimes(1));
+    expect(useBugReport.getState().session?.diagnostics.screen).toBe('settings');
+    resetBugReports();
+  });
+
   it('renders the header, the menu rows in Swift order, and Sign out', async () => {
     await show(<Account />);
 
     expect(screen.getByText('My Page')).toBeTruthy();
     expect(screen.getByTestId('account-name')).toHaveTextContent('Ada Lovelace');
     expect(screen.getByTestId('account-email')).toHaveTextContent('ada@example.com');
-    // Help, Feedback, Edit profile and settings, Change password (ProfileView.swift:66-69).
-    const rows = screen.getAllByTestId(/^account-(help|feedback|edit-profile|change-password)$/).map((node) => node.props.testID);
-    expect(rows).toEqual(['account-help', 'account-feedback', 'account-edit-profile', 'account-change-password']);
+    // Edit profile and settings, Feedback, Help, Report Bugs, Change password (ProfileView.swift:84-89, d511fef).
+    const rows = screen.getAllByTestId(/^account-(help|feedback|edit-profile|report-bugs|change-password)$/).map((node) => node.props.testID);
+    expect(rows).toEqual(['account-edit-profile', 'account-feedback', 'account-help', 'account-report-bugs', 'account-change-password']);
+    expect(screen.getByTestId('account-report-bugs')).toHaveTextContent('Report Bugs');
     expect(screen.getByText('Sign out')).toBeTruthy();
     // 19eb8e4 removed the web rows and the second Settings row.
     for (const gone of ['Inbox', 'Waiting For', 'AI Planner', 'Insights', 'Notifications', 'Settings']) expect(screen.queryByText(gone)).toBeNull();
@@ -336,6 +364,17 @@ describe('the Real-time Voice card', () => {
 });
 
 describe('the Settings screen', () => {
+  /** 12bb9d4 / 4185501 (ProfileView.swift:343-344): the morning email's label and explanation. */
+  it('labels the morning email with its time and says where and when it is sent', async () => {
+    await show(<Settings />);
+    await waitFor(() => expect(screen.getByTestId('settings-morning')).toBeTruthy());
+    expect(screen.getByText('Daily morning email · 6:00 a.m.')).toBeTruthy();
+    expect(screen.queryByText('Morning summary')).toBeNull();
+    expect(screen.getByTestId('settings-morning-explanation')).toHaveTextContent(
+      'Today’s tasks, calendar events and conflicts, sent to ada@example.com at 6:00 a.m. in Asia/Kolkata. Email notifications must also be enabled.',
+    );
+  });
+
   it('renders every card in body order', async () => {
     await show(<Settings />);
 
@@ -346,7 +385,7 @@ describe('the Settings screen', () => {
     expect(screen.getByText('Profile and time')).toBeTruthy();
     expect(screen.getByText('Voice and confirmation')).toBeTruthy();
     expect(screen.getByText('Notifications and focus')).toBeTruthy();
-    expect(screen.getByText('Calendars and privacy')).toBeTruthy();
+    expect(screen.getByText('Calendars & Privacy')).toBeTruthy();
     expect(screen.getByText('Save settings')).toBeTruthy();
   });
 
@@ -430,6 +469,41 @@ describe('the Settings screen', () => {
       nextAction: { enabled: true, switchingThreshold: 10 },
     });
     await waitFor(() => expect(screen.getByTestId('settings-message')).toHaveTextContent('Settings saved.'));
+  });
+
+  /** `WorkingDaysField` (ProfileView.swift, d568989). */
+  it('lists the working days Sunday first, and saves Saturday added', async () => {
+    mockUpdateSettings.mockResolvedValue({ ok: true });
+    await show(<Settings />);
+    await waitFor(() => expect(screen.getByTestId('settings-working-days')).toBeTruthy());
+    expect(screen.getByText('Working days')).toBeTruthy();
+    expect(screen.getByText('Choose at least one day. Find my next task uses these days and your working hours.')).toBeTruthy();
+    // Unset on the server reads as Monday to Friday.
+    const on = [0, 1, 2, 3, 4, 5, 6].map((day) => screen.getByTestId(`settings-working-day-${day}`).props.accessibilityState?.checked);
+    expect(on).toEqual([false, true, true, true, true, true, false]);
+
+    fireEvent(screen.getByTestId('settings-working-day-6'), 'valueChange', true);
+    await waitFor(() => expect(screen.getByTestId('settings-working-day-6').props.accessibilityState).toMatchObject({ checked: true }));
+    fireEvent.press(screen.getByTestId('settings-save'));
+
+    await waitFor(() => expect(mockUpdateSettings).toHaveBeenCalledTimes(1));
+    expect(mockUpdateSettings.mock.calls[0][0].preference).toEqual({ ...PREFERENCES, workingDays: '1,2,3,4,5,6' });
+  });
+
+  it('keeps the last working day on', async () => {
+    await show(<Settings />, profile({ preference: { ...PREFERENCES, workingDays: '3' } }));
+    await waitFor(() => expect(screen.getByTestId('settings-working-day-3')).toBeTruthy());
+    expect(screen.getByTestId('settings-working-day-3').props.accessibilityState).toMatchObject({ checked: true, disabled: true });
+    expect(screen.getByTestId('settings-working-day-2').props.accessibilityState).toMatchObject({ checked: false, disabled: false });
+  });
+
+  it('does not send workingDays when nobody touched them', async () => {
+    mockUpdateSettings.mockResolvedValue({ ok: true });
+    await show(<Settings />);
+    await waitFor(() => expect(screen.getByTestId('settings-save')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('settings-save'));
+    await waitFor(() => expect(mockUpdateSettings).toHaveBeenCalledTimes(1));
+    expect('workingDays' in mockUpdateSettings.mock.calls[0][0].preference).toBe(false);
   });
 
   it('refuses to save an empty name and reports Swift’s message', async () => {
@@ -523,15 +597,27 @@ describe('the Settings screen', () => {
     });
   });
 
-  /** "Calendars and privacy" (ProfileView.swift:223-244). */
+  /** "Calendars & Privacy" (ProfileView.swift:349-368). */
   describe('calendars and privacy', () => {
+    /**
+     * Phase 13 Calendar run (§37 item 6): the card's direct "Connect Google Calendar" row became
+     * **Connect Calendar**, which opens the Connect Your Calendar hub. The OAuth flow Settings still
+     * runs itself is **Reconnect** on a row that needs it (ProfileView.swift:539-563), so these tests
+     * start from one; the hub and provider pages have their own (calendarConnect.test.tsx).
+     */
+    const STALE = { id: 'c1', provider: 'google', accountEmail: 'ada@example.com', calendarName: 'Work', status: 'NEEDS_REAUTH', lastSyncedAt: null, writeEnabled: true };
+    async function showStale() {
+      mockConnections.mockResolvedValueOnce({ connections: [STALE] });
+      await show(<Settings />);
+      await waitFor(() => expect(screen.getByTestId('settings-reconnect-c1')).toBeTruthy());
+    }
+
     it('fetches a connect token FIRST, then opens the start URL carrying it (3a26c52)', async () => {
       mockOpenAuthSession.mockResolvedValue({ type: 'success', url: 'nexdo://calendar-connected?calendar=google-connected' });
       mockMe.mockResolvedValue({ user: profile() });
-      await show(<Settings />);
-      await waitFor(() => expect(screen.getByTestId('settings-connect-google')).toBeTruthy());
+      await showStale();
 
-      fireEvent.press(screen.getByTestId('settings-connect-google'));
+      fireEvent.press(screen.getByTestId('settings-reconnect-c1'));
 
       await waitFor(() => expect(mockOpenAuthSession).toHaveBeenCalled());
       expect(mockConnectToken).toHaveBeenCalledWith('google');
@@ -540,16 +626,15 @@ describe('the Settings screen', () => {
       expect(url).toBe('https://api.example.com/api/calendar/oauth/google/start?native=1&connect_token=one-time-token');
       expect(scheme).toBe('nexdo://');
       await waitFor(() =>
-        expect(screen.getByTestId('settings-message')).toHaveTextContent('Google Calendar connected and synchronized.'),
+        expect(screen.getByTestId('settings-message')).toHaveTextContent('Google Calendar reconnected and synchronized.'),
       );
     });
 
     it('reports a callback that carries a detail as a failure', async () => {
-      mockOpenAuthSession.mockResolvedValue({ type: 'success', url: 'nexdo://?calendar=error&detail=token%20expired' });
-      await show(<Settings />);
-      await waitFor(() => expect(screen.getByTestId('settings-connect-google')).toBeTruthy());
+      mockOpenAuthSession.mockResolvedValue({ type: 'success', url: 'nexdo://calendar-connected?calendar=error&detail=token%20expired' });
+      await showStale();
 
-      fireEvent.press(screen.getByTestId('settings-connect-google'));
+      fireEvent.press(screen.getByTestId('settings-reconnect-c1'));
 
       await waitFor(() =>
         expect(screen.getByTestId('settings-failure')).toHaveTextContent('Google Calendar connection failed: token expired'),
@@ -558,13 +643,12 @@ describe('the Settings screen', () => {
 
     it('says nothing when Google’s page is closed without signing in (27798c5)', async () => {
       mockOpenAuthSession.mockResolvedValue({ type: 'cancel' });
-      await show(<Settings />);
-      await waitFor(() => expect(screen.getByTestId('settings-connect-google')).toBeTruthy());
+      await showStale();
 
-      fireEvent.press(screen.getByTestId('settings-connect-google'));
+      fireEvent.press(screen.getByTestId('settings-reconnect-c1'));
 
-      await waitFor(() => expect(screen.getByTestId('settings-connect-label')).toHaveTextContent('Connect Google Calendar'));
-      expect(mockOpenAuthSession).toHaveBeenCalled();
+      await waitFor(() => expect(mockOpenAuthSession).toHaveBeenCalled());
+      await waitFor(() => expect(screen.getByTestId('settings-column').props.pointerEvents).toBe('auto'));
       expect(screen.queryByTestId('settings-failure')).toBeNull();
       expect(screen.queryByTestId('settings-message')).toBeNull();
       expect(Alert.alert).not.toHaveBeenCalled();
@@ -573,22 +657,21 @@ describe('the Settings screen', () => {
     it('also says nothing when the Android session is dismissed and no callback follows', async () => {
       resetOAuthCallbacks();
       mockOpenAuthSession.mockResolvedValue({ type: 'dismiss' });
-      await show(<Settings />);
-      await waitFor(() => expect(screen.getByTestId('settings-connect-google')).toBeTruthy());
+      await showStale();
 
-      fireEvent.press(screen.getByTestId('settings-connect-google'));
+      fireEvent.press(screen.getByTestId('settings-reconnect-c1'));
 
-      await waitFor(() => expect(screen.getByTestId('settings-connect-label')).toHaveTextContent('Connect Google Calendar'), { timeout: 3000 });
+      await waitFor(() => expect(mockOpenAuthSession).toHaveBeenCalled());
+      await waitFor(() => expect(screen.getByTestId('settings-column').props.pointerEvents).toBe('auto'), { timeout: 3000 });
       expect(screen.queryByTestId('settings-failure')).toBeNull();
       expect(Alert.alert).not.toHaveBeenCalled();
     });
 
     it('still reports a server failure under "Could not update profile", with the fallback detail', async () => {
       mockOpenAuthSession.mockResolvedValue({ type: 'success', url: 'nexdo://calendar-connected?calendar=error' });
-      await show(<Settings />);
-      await waitFor(() => expect(screen.getByTestId('settings-connect-google')).toBeTruthy());
+      await showStale();
 
-      fireEvent.press(screen.getByTestId('settings-connect-google'));
+      fireEvent.press(screen.getByTestId('settings-reconnect-c1'));
 
       await waitFor(() =>
         expect(screen.getByTestId('settings-failure')).toHaveTextContent('Google Calendar connection failed: authorization failed'),
@@ -598,10 +681,9 @@ describe('the Settings screen', () => {
 
     it('reports a browser error as a connection failure', async () => {
       mockOpenAuthSession.mockRejectedValue(new Error('No browser available'));
-      await show(<Settings />);
-      await waitFor(() => expect(screen.getByTestId('settings-connect-google')).toBeTruthy());
+      await showStale();
 
-      fireEvent.press(screen.getByTestId('settings-connect-google'));
+      fireEvent.press(screen.getByTestId('settings-reconnect-c1'));
 
       await waitFor(() =>
         expect(screen.getByTestId('settings-failure')).toHaveTextContent('Google Calendar connection failed: No browser available'),
@@ -609,12 +691,10 @@ describe('the Settings screen', () => {
     });
 
     it('says a new connection could not refresh yet when the profile reload fails', async () => {
-      mockOpenAuthSession.mockResolvedValue({ type: 'success', url: 'nexdo://calendar-connected?calendar=google-connected' });
-      await show(<Settings />);
-      await waitFor(() => expect(screen.getByTestId('settings-connect-google')).toBeTruthy());
+      resetOAuthCallbacks();
+      deliverOAuthCallback('calendar', 'nexdo://calendar-connected?calendar=google-connected');
       mockMe.mockRejectedValue(new Error('offline'));
-
-      fireEvent.press(screen.getByTestId('settings-connect-google'));
+      await show(<Settings />, null);
 
       await waitFor(() =>
         expect(screen.getByTestId('settings-message')).toHaveTextContent('Google Calendar connected, but Nexdo could not refresh it yet.'),
@@ -648,13 +728,12 @@ describe('the Settings screen', () => {
         }, 50);
         return { type: 'dismiss' };
       });
-      await show(<Settings />);
-      await waitFor(() => expect(screen.getByTestId('settings-connect-google')).toBeTruthy());
+      await showStale();
 
-      fireEvent.press(screen.getByTestId('settings-connect-google'));
+      fireEvent.press(screen.getByTestId('settings-reconnect-c1'));
 
       await waitFor(() =>
-        expect(screen.getByTestId('settings-message')).toHaveTextContent('Google Calendar connected and synchronized.'),
+        expect(screen.getByTestId('settings-message')).toHaveTextContent('Google Calendar reconnected and synchronized.'),
       );
       // The router was told to stay put: no "Unmatched Route".
       expect(redirected).toBeNull();
@@ -684,10 +763,9 @@ describe('the Settings screen', () => {
 
     it('never opens the browser when the connect token cannot be issued', async () => {
       mockConnectToken.mockResolvedValue({ token: '' });
-      await show(<Settings />);
-      await waitFor(() => expect(screen.getByTestId('settings-connect-google')).toBeTruthy());
+      await showStale();
 
-      fireEvent.press(screen.getByTestId('settings-connect-google'));
+      fireEvent.press(screen.getByTestId('settings-reconnect-c1'));
 
       await waitFor(() =>
         expect(screen.getByTestId('settings-failure')).toHaveTextContent('Nexdo could not start the calendar connection. Please try again.'),
@@ -697,25 +775,22 @@ describe('the Settings screen', () => {
 
     it('surfaces the API’s own message when the token request fails', async () => {
       mockConnectToken.mockRejectedValue(new Error('Sign in required'));
-      await show(<Settings />);
-      await waitFor(() => expect(screen.getByTestId('settings-connect-google')).toBeTruthy());
+      await showStale();
 
-      fireEvent.press(screen.getByTestId('settings-connect-google'));
+      fireEvent.press(screen.getByTestId('settings-reconnect-c1'));
 
       await waitFor(() => expect(screen.getByTestId('settings-failure')).toHaveTextContent('Sign in required'));
       expect(mockOpenAuthSession).not.toHaveBeenCalled();
     });
 
-    it('shows Connecting…, blocks the screen and the sheet, and never shows Saving… while connecting', async () => {
+    it('blocks the screen and the sheet while reconnecting, and never shows Saving…', async () => {
       let finish: (value: unknown) => void = () => undefined;
       mockOpenAuthSession.mockReturnValue(new Promise((resolve) => (finish = resolve)));
-      await show(<Settings />);
-      await waitFor(() => expect(screen.getByTestId('settings-connect-google')).toBeTruthy());
+      await showStale();
 
-      fireEvent.press(screen.getByTestId('settings-connect-google'));
+      fireEvent.press(screen.getByTestId('settings-reconnect-c1'));
 
-      await waitFor(() => expect(screen.getByTestId('settings-connect-label')).toHaveTextContent('Connecting…'));
-      expect(screen.getByTestId('settings-column').props.pointerEvents).toBe('none');
+      await waitFor(() => expect(screen.getByTestId('settings-column').props.pointerEvents).toBe('none'));
       expect(screen.getByTestId('settings-back').props.accessibilityState).toMatchObject({ disabled: true });
       expect(mockSetOptions).toHaveBeenLastCalledWith({ gestureEnabled: false });
       expect(mockSetParentOptions).toHaveBeenLastCalledWith({ gestureEnabled: false });
@@ -723,8 +798,7 @@ describe('the Settings screen', () => {
       expect(screen.queryByText('Saving…')).toBeNull();
 
       finish({ type: 'cancel' });
-      await waitFor(() => expect(screen.getByTestId('settings-connect-label')).toHaveTextContent('Connect Google Calendar'));
-      expect(screen.getByTestId('settings-column').props.pointerEvents).toBe('auto');
+      await waitFor(() => expect(screen.getByTestId('settings-column').props.pointerEvents).toBe('auto'));
       expect(mockSetParentOptions).toHaveBeenLastCalledWith({ gestureEnabled: true });
     });
 
@@ -819,6 +893,27 @@ describe('the Settings screen', () => {
       expect(order).toEqual(['dismissAll while signedIn', 'back while signedIn']);
     });
 
+    /** 4185501: `ProgressView("Deleting account…")` over a disabled, undismissable screen. */
+    it('shows "Deleting account…" over a blocked screen while the deletion runs', async () => {
+      let finish: (value: { ok: boolean }) => void = () => undefined;
+      mockDelete.mockReturnValue(new Promise((resolve) => (finish = resolve)));
+      await show(<Settings />);
+      await waitFor(() => expect(screen.getByTestId('settings-delete-account')).toBeTruthy());
+
+      fireEvent.press(screen.getByTestId('settings-delete-account'));
+      const buttons = (Alert.alert as jest.Mock).mock.calls.at(-1)?.[2] as { text: string; onPress?: () => void }[];
+      buttons[1].onPress?.();
+
+      await waitFor(() => expect(screen.getByTestId('settings-deleting')).toHaveTextContent('Deleting account…'));
+      expect(screen.getByTestId('settings-column').props.pointerEvents).toBe('none');
+      expect(screen.getByTestId('settings-back').props.accessibilityState).toMatchObject({ disabled: true });
+      // A second Delete while it runs does nothing (`guard !deletingAccount`).
+      buttons[1].onPress?.();
+      expect(mockDelete).toHaveBeenCalledTimes(1);
+      finish({ ok: true });
+      await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/sign-in'));
+    });
+
     it('when the delete fails, says why and stays put, still signed in', async () => {
       const router = { replace: mockReplace };
       mockCanDismiss.mockReturnValue(true);
@@ -830,14 +925,15 @@ describe('the Settings screen', () => {
       const buttons = (Alert.alert as jest.Mock).mock.calls.at(-1)?.[2] as { text: string; onPress?: () => void }[];
       buttons[1].onPress?.();
 
-      // `model.error`'s alert (RootView.swift:76-78).
+      // `AccountDeletionPresentation`'s alert (ProfileView.swift:682-697, 4185501).
       await waitFor(() =>
         expect(Alert.alert).toHaveBeenCalledWith(
-          'Unable to complete request',
+          'Couldn’t delete account',
           'A wish is being submitted. Wait for its status before deleting your account.',
           [{ text: 'OK' }],
         ),
       );
+      expect(screen.queryByTestId('settings-deleting')).toBeNull();
       expect(useSession.getState().status).toBe('signedIn');
       expect(router.replace).not.toHaveBeenCalled();
       expect(mockBack).not.toHaveBeenCalled();
@@ -864,17 +960,101 @@ describe('calendar connections', () => {
   it('says "No calendars connected yet." once an empty list has loaded', async () => {
     await show(<Settings />);
     await waitFor(() => expect(screen.getByTestId('settings-no-calendars')).toHaveTextContent('No calendars connected yet.'));
-    expect(screen.getByTestId('settings-connect-label')).toHaveTextContent('Connect Google Calendar');
+    expect(screen.getByTestId('settings-connect-calendar')).toHaveTextContent('Connect Calendar');
+    expect(screen.queryByTestId('settings-apple-calendar')).toBeNull();
   });
 
-  it('treats a failed load as an empty list, as Swift does', async () => {
+  /** Phase 13 Calendar run (§37 item 6): `NavigationLink { CalendarConnectionView() }` (ProfileView.swift:357-359). */
+  it('Connect Calendar opens the Connect Your Calendar hub', async () => {
+    await show(<Settings />);
+    await waitFor(() => expect(screen.getByTestId('settings-connect-calendar')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('settings-connect-calendar'));
+    expect(mockPush).toHaveBeenCalledWith('/account/calendar-connect');
+    expect(mockOpenAuthSession).not.toHaveBeenCalled();
+  });
+
+  /** `appleCalendarCard` (ProfileView.swift:451-477), shown once calendar access is allowed on the phone. */
+  describe('the phone calendar card', () => {
+    beforeEach(() => {
+      mockCalendarPermissions.mockResolvedValue({ status: 'granted', canAskAgain: true, granted: true });
+      mockDeviceCalendars.mockResolvedValue([
+        { id: '1', title: 'Calendar', source: { name: 'Default' } },
+        { id: '2', title: 'Birthdays', source: { name: 'Other' } },
+        { id: '3', title: 'India Holidays', source: { name: 'Subscribed Calendars' } },
+      ]);
+      deviceCalendarSelection.setState({ owner: null, selection: null, loaded: false, revision: 0 });
+    });
+
+    it('shows the card with the selected count and no "No calendars connected yet.", and Manage opens the list', async () => {
+      await show(<Settings />);
+      await waitFor(() => expect(screen.getByTestId('settings-apple-calendar')).toBeTruthy());
+      await waitFor(() => expect(screen.getByTestId('settings-apple-calendar-count')).toHaveTextContent('3 calendars selected'));
+      expect(screen.getByTestId('settings-provider-apple-device').props.accessibilityLabel).toBe('Apple Calendar');
+      expect(screen.getByText('Apple Calendar')).toBeTruthy();
+      expect(screen.getByText('Connected on this iPhone')).toBeTruthy();
+      expect(screen.getByText('Selected events appear in NexDo. Manage calendar access in iPhone Settings. NexDo does not add tasks or events to Apple Calendar.')).toBeTruthy();
+      await waitFor(() => expect(mockConnections).toHaveBeenCalled());
+      expect(screen.queryByTestId('settings-no-calendars')).toBeNull();
+      fireEvent.press(screen.getByTestId('settings-manage-phone-calendars'));
+      expect(mockPush).toHaveBeenCalledWith('/account/phone-calendars');
+    });
+
+    it('counts only the calendars this account shows, and follows a change on the list', async () => {
+      // Persisted for this account, as the phone-calendar list saves it (the card reloads it on mount).
+      await deviceCalendarSelection.getState().save('u1', new Set(['2']));
+      await show(<Settings />);
+      await waitFor(() => expect(screen.getByTestId('settings-apple-calendar-count')).toHaveTextContent('1 calendar selected'));
+      await act(async () => {
+        await deviceCalendarSelection.getState().save('u1', new Set());
+      });
+      await waitFor(() => expect(screen.getByTestId('settings-apple-calendar-count')).toHaveTextContent('No calendars selected'));
+    });
+
+    it('says Phone calendar on Android (§33)', async () => {
+      const platform = jest.replaceProperty(Platform, 'OS', 'android');
+      try {
+        await show(<Settings />);
+        await waitFor(() => expect(screen.getByTestId('settings-apple-calendar')).toBeTruthy());
+        expect(screen.getByText('Phone calendar')).toBeTruthy();
+        expect(screen.getByText('Connected on this phone')).toBeTruthy();
+        expect(screen.getByText('Manage phone calendars')).toBeTruthy();
+        expect(screen.getByTestId('settings-provider-apple-device').props.accessibilityLabel).toBe('Phone calendar');
+        expect(within(screen.getByTestId('settings-apple-calendar')).queryByText(/iPhone/)).toBeNull();
+      } finally {
+        platform.restore();
+      }
+    });
+  });
+
+  /**
+   * 6f079c0 (ProfileView.swift:353-356, :522): a failed load is an error with **Retry connection status**,
+   * not "No calendars connected yet.", which waits for a load that succeeded.
+   */
+  it('shows a failed load as an error with Retry connection status, and retries', async () => {
     mockConnections.mockRejectedValue(new Error('offline'));
     await show(<Settings />);
-    await waitFor(() => expect(screen.getByTestId('settings-no-calendars')).toBeTruthy());
+    await waitFor(() => expect(screen.getByTestId('settings-connections-error')).toHaveTextContent('Could not refresh calendar connections. Please try again.'));
+    expect(screen.queryByTestId('settings-no-calendars')).toBeNull();
     expect(screen.queryByTestId('settings-failure')).toBeNull();
+
+    mockConnections.mockResolvedValue({ connections: [] });
+    await fireEvent.press(screen.getByTestId('settings-retry-connections'));
+    await waitFor(() => expect(screen.getByTestId('settings-no-calendars')).toBeTruthy());
+    expect(screen.queryByTestId('settings-connections-error')).toBeNull();
   });
 
-  it('lists each connection with its name, detail and last sync, and relabels the button', async () => {
+  /** 6f079c0 (:483-490): the provider's icon, with an orange triangle at its corner when unhealthy. */
+  it('shows each provider’s icon, marked when the connection is unhealthy', async () => {
+    mockConnections.mockResolvedValue({ connections: [GOOGLE, { ...GOOGLE, id: 'c2', provider: 'microsoft', status: 'ERROR' }] });
+    await show(<Settings />);
+    await waitFor(() => expect(screen.getByTestId('settings-provider-c1')).toBeTruthy());
+    expect(screen.getByTestId('settings-provider-c1').props.accessibilityLabel).toBe('Google Calendar');
+    expect(screen.getByTestId('settings-provider-c2').props.accessibilityLabel).toBe('Outlook Calendar');
+    expect(screen.queryByTestId('settings-unhealthy-c1')).toBeNull();
+    expect(screen.getByTestId('settings-unhealthy-c2')).toBeTruthy();
+  });
+
+  it('lists each connection with its name, detail and last sync', async () => {
     mockConnections.mockResolvedValue({ connections: [GOOGLE] });
     await show(<Settings />);
 
@@ -882,7 +1062,6 @@ describe('calendar connections', () => {
     expect(screen.getByText('Work')).toBeTruthy();
     expect(screen.getByText('Google Calendar · ada@example.com')).toBeTruthy();
     expect(screen.getByTestId('settings-last-synced-c1')).toHaveTextContent('Last synced 5 min ago');
-    expect(screen.getByTestId('settings-connect-label')).toHaveTextContent('Connect another calendar');
     expect(screen.queryByTestId('settings-no-calendars')).toBeNull();
   });
 
@@ -1016,6 +1195,27 @@ describe('calendar connections', () => {
       expect(order).toEqual(['settings-reconnect-c2', 'settings-disconnect-c2']);
     });
 
+    /** 6f079c0 (:541-560): a Microsoft row reconnects through Microsoft, and every line names it. */
+    it('reconnects a Microsoft row through Microsoft and names the provider', async () => {
+      const MICROSOFT = { ...STALE, provider: 'microsoft', accountEmail: null };
+      mockConnections.mockResolvedValue({ connections: [MICROSOFT] });
+      mockOpenAuthSession.mockResolvedValue({ type: 'success', url: 'nexdo://calendar-connected?calendar=microsoft-connected' });
+      await show(<Settings />);
+      await waitFor(() => expect(screen.getByTestId('settings-reconnect-c1')).toBeTruthy());
+
+      await fireEvent.press(screen.getByTestId('settings-reconnect-c1'));
+
+      await waitFor(() =>
+        expect(screen.getByTestId('settings-failure')).toHaveTextContent('Work still needs reconnecting. Choose the same account on Microsoft’s sign-in page.'),
+      );
+      expect(mockConnectToken).toHaveBeenCalledWith('microsoft');
+      expect(mockOpenAuthSession.mock.calls[0][0]).toBe('https://api.example.com/api/calendar/oauth/microsoft/start?native=1&connect_token=one-time-token');
+
+      mockConnections.mockResolvedValue({ connections: [{ ...MICROSOFT, status: 'connected' }] });
+      await fireEvent.press(screen.getByTestId('settings-reconnect-c1'));
+      await waitFor(() => expect(screen.getByTestId('settings-message')).toHaveTextContent('Microsoft Calendar reconnected and synchronized.'));
+    });
+
     it('starts the same Google sign-in, reloads the list and says reconnected', async () => {
       mockConnections.mockResolvedValue({ connections: [STALE] });
       mockOpenAuthSession.mockImplementation(async () => {
@@ -1059,7 +1259,7 @@ describe('calendar connections', () => {
       fireEvent.press(screen.getByTestId('settings-reconnect-c1'));
 
       await waitFor(() => expect(mockOpenAuthSession).toHaveBeenCalled());
-      await waitFor(() => expect(screen.getByTestId('settings-connect-label')).toHaveTextContent('Connect another calendar'));
+      await waitFor(() => expect(screen.getByTestId('settings-column').props.pointerEvents).toBe('auto'));
       expect(screen.queryByTestId('settings-failure')).toBeNull();
       expect(screen.queryByTestId('settings-message')).toBeNull();
     });
@@ -1072,7 +1272,7 @@ describe('calendar connections', () => {
     await waitFor(() => expect(screen.getByTestId('settings-writes-c1')).toBeTruthy());
     const loads = mockConnections.mock.calls.length;
 
-    fireEvent(screen.getByTestId('settings-writes-c1'), 'valueChange', true);
+    await fireEvent.press(screen.getByTestId('settings-writes-c1'));
 
     await waitFor(() => expect(mockSetWrites).toHaveBeenCalledWith('c1', true));
     await waitFor(() =>
@@ -1087,7 +1287,7 @@ describe('calendar connections', () => {
     await show(<Settings />);
     await waitFor(() => expect(screen.getByTestId('settings-writes-c1')).toBeTruthy());
 
-    fireEvent(screen.getByTestId('settings-writes-c1'), 'valueChange', false);
+    await fireEvent.press(screen.getByTestId('settings-writes-c1'));
 
     await waitFor(() => expect(screen.getByTestId('settings-message')).toHaveTextContent('Nexdo will no longer add events to this calendar.'));
   });
@@ -1181,8 +1381,9 @@ describe('the Settings screen on Android', () => {
     for (const card of ['settings-appearance', 'settings-profile-time', 'settings-voice', 'settings-notifications', 'settings-calendars']) {
       expect(flat(card)).toMatchObject({ backgroundColor: light.fieldSurfaceElevated, borderWidth: 1, borderColor: light.fieldBorder });
     }
-    // Notifications: next action | focus picker, then push | email | morning | evening.
-    expect(screen.getAllByTestId('settings-notifications-separator')).toHaveLength(4);
+    // Notifications: next action | focus picker, then push | email | morning; the morning email's caption now
+    // sits between it and evening (12bb9d4), so those two are no longer adjacent.
+    expect(screen.getAllByTestId('settings-notifications-separator')).toHaveLength(3);
     // Voice: confirmation | spoken replies; the existing divider already splits the next pair.
     expect(screen.getAllByTestId('settings-voice-separator')).toHaveLength(1);
     // Profile and time: its rows are fields, not list rows.

@@ -2,9 +2,10 @@ import { brand, palettes } from '../../theme';
 import { systemColors } from '../moments/components';
 
 /**
- * The Wellness screens' colours. Swift draws the chooser, the guides and Pomodoro in FIXED light colours
+ * The Wellness screens' light colours. Swift draws the guides and Pomodoro in FIXED light colours
  * — white cards, gradients from `.white`, an explicit ink, and `.preferredColorScheme(.light)` on the
- * Pomodoro dashboard — so they stay light in dark mode here too (android-polish.md, Phase 12 Run C).
+ * Pomodoro dashboard — so they stay light in dark mode here too (android-polish.md, Phase 12 Run C). The
+ * chooser uses these in light mode only; it has its own dark mode since 4185501 (android-polish.md §33).
  */
 
 /** SwiftUI's system colours, light values. */

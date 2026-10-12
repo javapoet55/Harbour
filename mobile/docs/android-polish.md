@@ -1295,6 +1295,8 @@ JavaScript only; no new build needed.
 
 ### The chooser and the guides stay light in dark mode
 
+> **Superseded for the chooser by §33 (Phase 13 Run A):** Swift gave the chooser a real dark mode in 4185501, and the RN chooser now follows it. The guides stay fixed light, as Swift’s still are.
+
 Swift's intent is a fixed light design (§21), but on iOS in dark mode its chooser and guides actually
 lose text: subtitles, step text, "Back to Home" and the bar's labels turn white on white (`wellness-chooser-dark`,
 `module-guide-shopping-dark`). That is a Swift bug, kept on the §22 "For the team" list. Android keeps the
@@ -1811,3 +1813,387 @@ wording.
   task list has been refreshed." with OK (`open` in `app/action/queue.tsx`). The sheet builds its rows from the same
   loaded list, so on Android a row normally arrives with its task; the test injects a row ahead of its task to cover
   the gap (fixed from code, not seen on device).
+
+## 32. Phase 13 plumbing (Windows) (2026-10-12)
+
+Part 1 of Phase 13, built on `rn-phase-13` from `git diff 1938c7c origin/main -- ios/ src/ prisma/` (26 commits,
+none in `mobile/`). Server trace and RN data layer only: no reference captures exist yet, so no screen was built or
+restyled. These notes are for the Mac to fold into `docs/IOS_TO_REACT_NATIVE.md` §23. Jest 2,406 → 2,545; `tsc`
+and ESLint clean; `src/api/phase12Nulls.test.ts` now also covers the follow-up save and reschedule, the bug report
+(with and without a screenshot), the settings PATCH with `workingDays`, and the shopping save with `storeLogoData`.
+
+### What each module added
+
+1. **Follow-up preparation (6f079c0).** `api/followUp.ts`, `features/followUp/model.ts`, `query/useFollowUp.ts`.
+   `GET/PUT /api/tasks/{id}/preparation` is compare-and-set on `revision`; a stale save is 409 "This preparation
+   changed on another device. Reopen it before saving." unless the preparation is byte-identical, which answers the
+   stored envelope. `useSaveFollowUp` is Swift's `save(then:)`: save first, then complete or reschedule (schedule
+   warning retry included); `recordOutcome` appends the outcome once so a retry does not duplicate it. Also from the
+   same commit: `TaskAction.preparation` survives a reschedule, and the detector strips one lead-in ("I need to",
+   "I have to", "I want to", "please", "remind me to").
+2. **Bug reports (d511fef, a13461a, da57b57).** `features/bugReport/model.ts`, `bugReportApi` in `api/feedback.ts`,
+   `useSubmitBugReport`. The frozen first request is resent on retry (idempotent on `id`, same `BR-000000`
+   reference). Caps: body 2,850,000 bytes (413 "Screenshot is too large."), base64 2,800,000 characters, decoded
+   image 2,000,000 bytes, PNG/JPEG only, re-encoded by the server to ≤1170×2532 JPEG; kept 7 days (report 90).
+   `screenshot` is omitted, never null. `bugFailureMessage` is a13461a: 404 → "not available on this server yet",
+   SIGNED_OUT → "sign in again before sending your report", NETWORK → "check your connection", other API errors →
+   the server's text, anything else → "try again later". `bugDiagnostics` clamps values to `bugSchema`'s regexes.
+   Shake-to-report needs an accelerometer module the app does not have (expo-sensors); only the gate and the
+   `bug.shake.<owner>` key are ported.
+3. **Moments in Calendar and Tasks (bb57e09).** `features/calendar/momentSchedule.ts` (read-only `moment:<id>:<day>`
+   projections, never saved; 29 February on the 28th in common years; off and archived moments hidden) and
+   `features/calendar/dayIndex.ts` (`CalendarDayIndex`: every task and event filed by day once per refresh).
+4. **Calendar events, readiness and retries (bdb68ce, b61801c, 08be688).** `lib/deviceCalendarEvent.ts`,
+   `lib/permissionAccess.ts`. A device all-day event is read in its own zone by `eventOccursOn`; device events have
+   no server record (`eventHasServerRecord`). `useCalendarConnections` now treats a failed refresh as an error that
+   KEEPS the accounts on screen (15 s, one attempt, "Could not refresh calendar connections. Please try again."),
+   where it used to blank the list. Server retry safety, documented on the client: a second DELETE of a
+   tombstoned event answers 200 and pushes again; a POST repeated with the same `requestId` only conflict-checks
+   occurrences not yet saved, so a retry after a dropped response must resend the same id.
+5. **Tasks ordering and spacing (d568989).** `features/tasks/displayOrder.ts` (per-account
+   `nexdo.taskDisplayOrders`, display only, Moments never move), `creationSpacing.ts` (15 minutes either side of
+   open scheduled tasks, new tasks only, a time from the title wins), `workingDays.ts`. New fields:
+   `ProfilePreferences.workingDays`, `DoNowNext.outsideWorkingDay`. `mobile/src/api/tasks.ts` does not exist (task
+   endpoints live in `api/index.ts`) and `/api/tasks` gained no field, so nothing changed there.
+6. **Shopping (bdb68ce, bb57e09).** `offerPricing.ts` (before-discount price only from an exact USD price and a
+   fixed USD discount, in cents), `storeHoursDay.ts` (today by the store's `utcOffsetMinutes`, now returned by the
+   hours route), `listLogo.ts`. `storeLogoData` is now sent on every save as Swift does — the logo, or `""` to
+   clear — and List Settings drops the logo when the store name is typed or a store is picked (a one-field state
+   change in `ListSettings.tsx`, no layout change). The logo editor waits for captures; `StoreBrandLogo.tsx` does
+   not yet prefer the custom logo.
+7. **Guides once per sign-in (8f7e492, 2edb3f0).** `store/wellnessGuides.ts`: in memory, emptied by
+   `finishAuthentication` and whenever the signed-in account changes or signs out, kept through a profile refresh.
+   `enter(kind)` decides once per entrance. The guide screens do not call it yet.
+8. **Profile and settings (08be688, 12bb9d4, 4185501).** `parseCalendarCallback`: only `nexdo://calendar-connected`
+   (or Android's `nexdo:///…`) with `calendar=<provider>-connected` is connected; anything else is "Unexpected
+   calendar sign-in response" or "Calendar connection was not confirmed". A password reset confirmed while signed in
+   ends the session. `morningEmailExplanation` (6 a.m. in the profile zone). Two Settings test fixtures used
+   callbacks the stricter rule rejects and were corrected.
+9. **Pomodoro and voice (bb57e09, 94da063).** `personalWork` category (blue, last in the list, so it now shows in the
+   picker) and `tick()`, which never chimes twice for one boundary. The monthly voice limit: a 429
+   `VOICE_MONTHLY_LIMIT_REACHED` is an `ApiError` with that code and the usage receipt; voice start shows the server's
+   message instead of "Couldn't start voice…" (Swift shows `localizedDescription`), and `/api/speech` reports it.
+
+### Native requirements (recorded, not added)
+
+- **Crashlytics (4185501, `ios/CRASHLYTICS.md`, `NexdoCrashReporting.swift`).** Swift enables collection at launch
+  when Firebase is configured, sets one custom key `build_configuration` = `debug`/`release`, and (Debug only) a
+  `-nexdo-crashlytics-test-crash` launch argument that crashes after 5 s with `controlled_test` = true. No account
+  ids, descriptions, screenshots or tokens are attached; bug reports stay separate. Android needs
+  `@react-native-firebase/crashlytics` (same major as the `app`/`analytics` 26.x already present) and its config
+  plugin, which adds the `com.google.firebase.crashlytics` Gradle plugin; `google-services.json` is already wired.
+  Then: `setCrashlyticsCollectionEnabled(true)` and the same custom key at startup, mapping-file upload for R8
+  release builds, a debug-only crash trigger, and per-member Firebase alert subscriptions for the Android app.
+  Needs a new native build.
+- **Device calendar (`ios/App/AppleCalendarService.swift`).** iOS reads EventKit with FULL access (write-only asks
+  again), lists calendars sorted by account then title, keeps a per-account selection
+  (`nexdo.apple-calendar.selection.<owner>`; none saved = all, empty = none), reads events in the visible range,
+  skips cancelled ones, dedupes by id, and shows them read-only beside server events with "Edit this event in Apple
+  Calendar". It also refreshes on foreground and on store changes. expo-calendar (already present) can supply this
+  on Android: `requestCalendarPermissionsAsync`, `getCalendarsAsync(EntityTypes.EVENT)`, `getEventsAsync(ids, start,
+  end)` (cancelled events by `status`), feeding `makeDeviceCalendarEvent`. Android only needs READ_CALENDAR;
+  WRITE_CALENDAR stays blocked. Open points: the label ("Apple Calendar" is iOS copy), and whether to keep the
+  `apple-device` source string on Android (the code keys on it). No change-notification equivalent to EKEventStoreChanged
+  — re-read on focus.
+- **Bug report screenshot.** react-native-view-shot (already present): `captureRef` of the app root with
+  `{ format: 'jpg', quality: 0.7, result: 'base64', width: min(1170, window width) }`, the report sheet hidden first,
+  refused while a `secureTextEntry` input is mounted, and `screenshotFits` checked before `includeScreenshot`. No new
+  native module. Shake-to-report (with iOS's new `NSMotionUsageDescription`) would need expo-sensors.
+
+### Server findings for the team list
+
+- `src/server/feedback/bugs.ts:16` — `deviceModel` accepts only `[A-Za-z0-9, ._-]` and the OS field is named
+  `iosVersion`. Android model names can carry `+`, parentheses or non-Latin letters, and any miss is answered with
+  the unrelated "Enter a description of 1–2,000 characters and review screenshot consent." (`route.ts:21`). The RN
+  client clamps to work around it.
+- `src/server/feedback/bugs.ts:80` — `BUG_REFERENCE_UNAVAILABLE` falls through `jsonError` to 500 "Request failed."
+- `src/app/api/tasks/[id]/preparation/route.ts:14` — a malformed JSON body throws a `SyntaxError` that is neither a
+  `ZodError` nor `FOLLOW_UP_CHANGED`, so it is 500 "Request failed." instead of 400.
+- `src/app/api/speech/route.ts:21` — read-aloud of Ask answers is blocked once realtime minutes run out, although
+  TTS is not counted toward those minutes. Possibly intended; worth confirming.
+- `src/app/api/settings/route.ts:29` — `workingDays` accepts duplicates and any order ("1,1,5,0"). Harmless today.
+
+### Outside the nine modules
+
+Server/admin/web only, no client change: Ask Nexdo analytics (Firebase/Amplitude grounding, funnels, prompts —
+28dbd98, 56047fc, 6539021, a5eb75b, 4325e57), AI API cost receipts and the admin pages (94da063, migration
+`20261010140000_ai_api_receipts`), the admin bug-report pages (3c47d20, 058ae50, 9e3a3ae), the Inbox palette
+(978f61a), morning summary and welcome/bug emails (375f28e, 71c0de4, 12bb9d4), `/reset-password` page. With client
+impact but no RN change needed: the temporary Google unverified-app notice (105146f) — the calendar and Gmail OAuth
+starts may show a notice page first; its Cancel lands on `nexdo://calendar-connected?calendar=error&detail=Connection
+cancelled.` or `nexdo://moments-email?status=error`, which the existing callback handling already treats as a
+failure; Gmail connect now also fails when `gmail.send` was not granted. iOS UI only, for the captures pass:
+calendar connection onboarding (08be688), Today attention sheet, Ask landing, dark-mode Wellness chooser
+(4185501), Today's schedule now three items with in-place "View N more" / "Show less" (helpers in
+`features/tasks/workingDays.ts`), Do Now's "Today isn't a selected working day", Settings "Working days", "Forgot
+password?" under Change password, and the account-deletion overlay. The voice prompt gained follow-up guidance
+(server only).
+
+## 33. Phase 13 Run A (Windows): small screens from Swift source (2026-10-12)
+
+Built from `git diff 1938c7c origin/main -- ios/` on `rn-phase-13`, on top of the §32 plumbing. No reference
+captures exist; each item follows the Swift source's strings, states and order. Jest 2,545 → 2,572; `tsc` and
+ESLint clean. **Item 10 adds a native module: a new Android build is required** (see its row).
+
+| # | Swift source | Built | Deliberate Android difference |
+|---|---|---|---|
+| 1 | RootView.swift:1502 (`scheduleExpanded`), :1507-1515 (`visibleSchedule`), :1624-1633 (button), :1645 (`.onChange(of: range)`) | Today's schedule card shows three rows; "View N more" expands it in place and "Show less" folds it (was seven rows and a jump to Calendar). Hints "Shows all schedule items here" / "Shows the first three schedule items". Changing the range folds it. Search still shows every match. `TodayIntelligenceCard.tsx` | None. The 0.2 s ease is a `LayoutAnimation` (opacity); 44 pt touch target as Swift's `minHeight: 44`. |
+| 2 | DoNowView.swift:50 | Do Now's window line: "Today isn't a selected working day" before "Outside your working hours" before "You have … free now" (`doNowWindowTitle`). | None. |
+| 3 | ProfileView.swift:320, :658 (`WorkingDaysField`) | Settings → Profile and time: "Working days" heading, seven `SettingsToggle` rows Sunday first, the caption "Choose at least one day. Find my next task uses these days and your working hours.", between Time zone and Working hours. The last day on is disabled. Unset reads as Mon–Fri; `workingDays` is only sent once a day is toggled. `SettingsToggle` gained `disabled`. | Swift uses toggles, so the shared toggle row is reused rather than a chip row. On Android the heading takes the shared field-label style (§4, §5), like "Working hours" under it. |
+| 4 | ProfileView.swift:192-195 (`Forgot password?`), :204-206 (`.sheet { PasswordResetView(initialEmail:) }`); NexdoApp.swift:228 (`if profile != nil { await reset() }`); RootView.swift:711 (`PasswordResetView`) | "Forgot password?" row under Change password's fields opens the existing reset screen as a modal in the Account stack (`app/account/reset-password.tsx`), prefilled with the account email. Signed in, a confirmed reset closes the presented screens, ends the session, opens Sign in and shows "Password updated" / "You can now sign in with your new password." Signed out, unchanged. | Swift's alert sits in a sheet the reset tears down; here it is shown over Sign in, so it is actually seen. |
+| 5 | ProfileView.swift:433-444, :682-697 (`AccountDeletionPresentation`) | "Deleting account…" with a spinner on a material card over Settings while the delete runs; the screen is disabled and cannot be dismissed (already true), a second Delete is ignored, and a failure alerts "Couldn't delete account" with the reason (or "Please try again."). | The material is the same opaque stand-in Ask's "Working on it…" uses. |
+| 6a | RootView.swift:2297-2302; TaskCreationSpacing.swift:6-21 | New Task: the date pill's time moves to the first opening with 15 minutes either side of open, scheduled tasks; a time in the title is used as written. TODO removed. | None. |
+| 6b | AddTaskByVoiceView.swift:50, :97-104, :225, :278-289; PermissionAccess.swift (`VoicePermissionGate`) | Voice asks for the microphone BEFORE requesting a session; a refusal shows "Microphone access is off. Enable it in Settings to use voice, or close this screen to type." with an "Open Settings" button; closing during the prompt cancels quietly; going to Settings while idle no longer backgrounds the session. | The permission comes from expo-audio (already installed); "Open Settings" opens the app's Android settings page. The button is a filled capsule standing in for `.borderedProminent`. |
+| 7 | WellnessChooserView.swift:46-49; WellnessModuleGuide.swift:139; NexdoApp.swift:374, :872 | A module card opens its guide only the first time this sign-in enters that module, then the module itself (`openModuleGuide` + `useWellnessGuides.enter`). Leaving a guide with Back still counts as seen; each module is separate; a new sign-in shows them all again. | None. |
+| 8 | WellnessChooserView.swift:8-17 (`isDark`, `ink`), :63-75 (hero moon), :83-118 (cards), :119-126 (`darkAccent`), :127-137 (bar); WellnessModuleGuide.swift:102 | The chooser follows the theme as Swift now does: near-black gradient, white ink, `darkAccent` colours (#59E59E, #FFA861, #B8A6FF, #FF7AB3), system-surface cards and bar, a lilac moon instead of the pack art (which is multiplied onto white), and no forced-dark status bar. Light is unchanged. New theme token `tertiaryBackground`. **Supersedes §23's "fixed light in both themes" for the chooser.** The module guides stay fixed light: Swift still forces `.light` on them (:102). | Swift raises the card stroke to 0.65 under Increase Contrast; Android has no such setting, so it stays 0.32. The moon is Ionicons `moon`, which has no stars; checked against the Mac’s `wellness-chooser-v3-dark.png` (2a587c7), which otherwise matches. |
+| 9 | StoreBrandLogo.swift:15, :32, :63-65; ShoppingViews.swift:109, :241 | `StoreBrandLogo` shows the list's own logo (`storeLogoData`) first, labelled with the store name, without asking for the brand; one that can't be drawn falls back to the brand lookup. Passed from My Lists and the list header. The logo editor waits for captures. | None. |
+| — | CalendarEventDetailsView.swift:21, :44 | Device-calendar decision, label only: Android names it "Phone calendar" and the note "On this phone · Edit this event in Phone calendar."; iOS keeps Swift's. The source value stays `apple-device`. The expo-calendar reader waits for the Calendar run. | The label, by decision. "On this iPhone" also became "On this phone" so the line is not iPhone-specific (**for Sri**). |
+| 10 | NexdoCrashReporting.swift:1-23; NexdoApp.swift:19; ios/CRASHLYTICS.md | `@react-native-firebase/crashlytics` 26.4.0 (same as app/analytics) and its config plugin. At launch (`app/_layout.tsx`, module scope): collection on and one custom value, `build_configuration` = "debug"/"release" — no user id or account details. `firebase.json` sets `crashlytics_debug_enabled: true` so debug builds report, as Swift's Debug builds do. Debug-only test crash: developer menu "Crashlytics test crash" → `controlled_test` = "true", a log line, and a native crash 5 s later; compiled out of release. `src/lib/crashReporting.ts`. | React Native has no launch arguments, so the test crash is a developer-menu item instead of `-nexdo-crashlytics-test-crash`. RNFB also records fatal JS errors (its default); Swift has no JS layer. |
+
+### Item 10: what the native build changes
+
+- **A new Android build is required**; an OTA/JS update does not add the SDK.
+- `expo prebuild` adds, via the plugin, `classpath 'com.google.firebase:firebase-crashlytics-gradle:3.0.8'` to
+  `android/build.gradle` and `apply plugin: 'com.google.firebase.crashlytics'` to `android/app/build.gradle`
+  (checked by running the plugin's own transforms on the current generated files; `android/` is not tracked).
+- **R8 mapping upload:** release builds are not minified today (`android.enableMinifyInReleaseBuilds` defaults to
+  false in `android/app/build.gradle:69`), so there is no mapping file and stack traces are readable as is. If
+  minify is turned on, the Crashlytics Gradle plugin uploads the R8 mapping for each minified release build by
+  default (`mappingFileUploadEnabled`), which needs network access and the Firebase project credentials at build
+  time; keep the mapping files of every distributed build. NDK symbol upload is not enabled (no native crash
+  code of our own).
+- Verification on a device, mirroring CRASHLYTICS.md: install a debug build, open the developer menu, choose
+  "Crashlytics test crash", wait for the crash, relaunch to upload, and look for it under the Android app in
+  Firebase project `nexdoapp-19f07` with `build_configuration = debug` and `controlled_test = true`. Alert
+  subscriptions are per member and per app, so the Android app needs its own.
+
+### Needed a capture after all
+
+None of the ten items. Not built, as asked: the shopping logo editor and the expo-calendar device reader. The
+bug-report screen tags (`.bugReportScreen`) on the Wellness destinations wait with the bug-report screen.
+
+## 34. Phase 13 Run B (Windows): Bug report (2026-10-12)
+
+Report Bugs, built from the Swift source (d511fef, a13461a, da57b57) and the Mac's `bug-report-*` captures
+(2a587c7) on top of the §32 data layer. Jest 2,572 → 2,615; `tsc` and ESLint clean. The submit with and
+without a screenshot was already in `phase12Nulls.test.ts` (§32). **Item 7 adds `expo-sensors`, a native
+module; the new Android build Crashlytics already requires (§33) covers it.** No report was sent to any
+server: the tests mock the client.
+
+| # | Swift source | Built | Deliberate Android difference |
+|---|---|---|---|
+| 1 | ProfileView.swift:84-89, :103 | Account card in Swift's order: Edit profile and settings, Feedback, Help, **Report Bugs** (`ladybug`), Change password. Report Bugs opens the report over My Page, tagged `settings`. `app/account/index.tsx` | None. (The row order had been the pre-6f079c0 one.) No signed-in capture exists for this row; built from source. |
+| 2 | BugReportView.swift:22-80 (`body`), :82-101 (`introduction`), :200-211 (`BugArtwork`) | Introduction as captured (`bug-report-intro`, `-dark`): NexDo header with the calendar badge, the bug artwork, "Report a bug?", the explanation, the **Shake iPhone to report a bug** toggle, the heart card, "Together we make NexDo better!", **Report Bug** in the capsule bar, ×. `src/features/bugReport/BugReportScreen.tsx` | The artwork regions are cropped once from Swift's `bug-report-pack` (same rects, `assets/bug-report/`) rather than shipping the 1.5 MB atlas. Ionicons has no radio-waves phone, so the toggle's glyph is a plain phone. **For Sri:** "Shake iPhone…" is kept word for word. |
+| 3 | BugReportView.swift:103-162; BugReportCoordinator.swift:80-87 | "Report app issue": "What happened?", the guidance, the editor capped at 2,000 UTF-16 units with "N / 2000", the screenshot toggle, "What we'll include" (app version and build, device model, OS version, current screen, timestamp, correlation id — exactly what is sent), the retention note, **Contact support** (`mailto:support@nexdoapp.com`), Back, × with "Discard this report?" (**Discard Report** / Keep Report), **Send** grey until the description is non-blank. | Device values come from `Platform.constants` (Android `Build.MODEL`, `Build.VERSION.RELEASE`) and expo-constants (version, build): expo-device and expo-application are not installed and are not needed for these four values. The model is cleaned to the server's characters (§32); this app's "1.0.0-rc.1" is sent as "1.0.0" (the server refuses pre-release versions). The discard confirmation is an alert (iOS 26 shows a popover). Android's back acts as Back on the form and × elsewhere. **For Sri:** the "iOS version" label is kept word for word. |
+| 4 | BugReportCoordinator.swift:52-65; BugReportView.swift:72-75, :180-183 | The screenshot: consent alert ("Include a screenshot?", **Include Screenshot** / Cancel), then the 145×260 preview, "Screenshot captured", "Review for private information before sending.", **Retake**, **Remove Screenshot**; on a secure screen, "Screenshot unavailable on this screen. You can still send your description." `react-native-view-shot` of the app root, JPEG 0.7, `scale = min(2, 1170 / width)`, behind `screenshotFits`. | **Captured before the modal opens**, held, and attached only on consent: a React Native modal hides the screen beneath, which Swift draws by hiding its own overlay. Retake therefore re-attaches that same capture. Secure screens are a flag (`useSecureScreen`), not a tree search. |
+| 5 | BugReportView.swift:64-70, :144-147, :165-178, :183-195; BugReport.swift:35-42, :54-69 | "Sending report..." over a dimmed screen; on failure the red message and "Your report is preserved. Retry sends the same report safely.", the editor and toggle locked, **Retry Send** resending the frozen request and id; success with the artwork, "Thanks for helping improve NexDo!", "Your bug report has been received.", the Reference ID card, **Copy reference** → **Reference copied**, **Done**. Every a13461a message through `bugFailureMessage`; a server rejection (for example its description/consent message for a bad device model) shows the server's own words, as Swift's `localizedDescription` does. | Android's clipboard has no local-only or expiring item, so the reference is cleared after 120 s if it is still what is on the clipboard. |
+| 6 | BugReportCoordinator.swift:41-79, `BugScreenTag` :83-92; RootView.swift:97-120 | `app/bug-report.tsx`, a `fullScreenModal` inside the signed-in guard with gestures off, opened by `openBugReport` over any screen and closed back to it; one at a time, only signed in. Screen tags from the route (`screenForPath`): today, tasks, calendar, askAI, wellness (chooser and guides), shopping, moments, calories, pomodoro, settings (Account); an untagged route keeps the last tag. `src/features/bugReport/coordinator.ts`, `useBugReportHost.ts`. | Tags follow routes rather than view modifiers. On iOS a native modal presented over another is not part of the root capture (iOS ships Swift). |
+| 7 | BugReportCoordinator.swift:16-39; BugReport.swift:44-51; Nexdo-Info.plist:5-6 | Shake to report: expo-sensors accelerometer at 10 Hz, a jolt over 2.7 g at most once every 8 s, only while the intro toggle (`bug.shake.<owner>`, off by default, per account) is on, the app is active, someone is signed in, no report is open and this is not a sign-in screen. | `AppState` stands in for `scenePhase`. Android needs no permission at 10 Hz; iOS gets Swift's motion usage string through the expo-sensors plugin. |
+
+**Secure routes flagged** (`useSecureScreen`, every screen with a password field): `/sign-in`, `/sign-up`,
+`/reset-password`, `/account/reset-password`, `/account/change-password`. Only the last two can host a report
+(the others are signed out, where neither the menu nor the shake opens one).
+
+**Needed a capture that was not available:** the Account menu with the Report Bugs row is "needs sign-in" in §23
+and was not captured; it is built from `ProfileView.swift:84-89`. Every bug-report screen had its capture.
+
+## 35. Phase 13 Run C (Windows): Wellness & Shopping (2026-10-12)
+
+The rest of the §23 Wellness and Shopping rows, from the Swift source and the Mac's captures (2a587c7), on the
+§32 model code. §33 items 7–9 (guides once per sign-in, the chooser's dark mode, the custom logo in
+`StoreBrandLogo`) were not redone. Jest 2,615 → 2,632; `tsc` and ESLint clean. No new native module: the
+editor uses expo-image-picker, expo-clipboard and expo-image-manipulator, all already installed. The logo save
+was already in `phase12Nulls.test.ts` (§32: `storeLogoData` is the logo or `""`, never null).
+
+| # | Swift source | Built | Deliberate Android difference |
+|---|---|---|---|
+| 1 | ShoppingListLogoEditor.swift:5-113; ShoppingViews.swift:660, :670-674 | The 48-pt logo with a pencil badge beside List Settings' Store name (`HStack(spacing: 14)`) opens **Store Logo**: the logo at 100 over the store name ("Store logo" without one); **Search Google Images** (`google.com/search?tbm=isch&q=<name> logo`, off without a name) and its hint; **Choose from Photos**; **Paste copied image** ("Copy an image first, or save it to Photos and choose it above." when there is none); **Use automatic store logo** (only with a custom logo); the footer; "Loading image…" and the failure each in a card of their own; **Done**, off while loading. The image goes to at most 384 px, onto white, JPEG 0.85 → 0.65 → 0.45 → 0.25 until ≤ 67,500 bytes, and into `storeLogoData`, saved with the list. Swift's "could not be opened / loaded" and "too large" failures. `src/features/shopping/LogoEditor.tsx`, `ListSettings.tsx`, `listLogo.ts` | A **page** of the List Settings sheet (like Stores Near You and Store Hours) rather than a second sheet, which Android cannot stack on this modal. The white canvas comes from the item-image encoder (`image.ts`: upng-js flattening, then the manipulator's JPEG), since Android's JPEG encoder turns transparency black and the manipulator has no fill. A pasted image is read as PNG and goes through the cache. |
+| 2 | StoreBrandLogo.swift:15, :32, :63-65; ShoppingViews.swift:109, :241 | Swift shows the logo in exactly three places — My Lists rows (48), the list header (56, tap to expand) and the editor (48, 100) — and RN matches; there is no logo on a Today card or the share sheet in Swift. Fallback order as §33 item 9. Pinned by tests, including a custom logo on a list with no store. | A custom logo on a list without a store name is labelled "Store logo" — Swift's `?? "Store"` — rather than " logo". |
+| 3 | ShoppingOffersView.swift:125-158; ShoppingOfferPricing.swift | `OfferSummary`: **Before discount** (struck through when worked out, else "Not published"), the **Discount** box (red savings on red 0.06, or "Not published"), **Final price** (title2 bold, or "Not published"), "Before-discount price calculated from the final price and discount." only when derived, then the unit price; on the list and on Offer details (`shopping-offers-price-breakdown`, `shopping-offer-detail-price-breakdown`). The offer's "Valid through" was already on Offer details. | None. |
+| 4 | ShoppingStoreHoursView.swift:7, :27-34; ShoppingStoreHoursDay.swift | Store Hours bolds the row for the store's own today and reads it as "Today, …", from the hours' `utcOffsetMinutes` (the phone's zone without one), re-checked every minute. **Built from source**: §23 marks this screen "needs sign-in" and no capture exists. | `useMinuteTick` stands in for `TimelineView(.everyMinute)`. |
+| 5 | AskAILandingView.swift:71-72; AskNexdoView.swift:220, :265 | The composer card's minimum height 268 (was 300); "Powered by Nexdo AI" 6 above and 2 below (was 12 and 12); 4 below the landing instead of 20, so it fills the viewport as Swift's `viewport − 4`. Strings unchanged (`ask-ai-cards-v3`). | None. |
+| 6 | Pomodoro.swift:4-10; PomodoroView.swift:83; PomodoroDashboard.swift:258 | Personal Work is the seventh and last setup choice (`pomodoro-setup-personal-work`), and shows in the Sessions history and Time by Category on Insights: every surface reads the same category maps, so part 1's model change already reached them. Pinned by a test. | The glyph is Ionicons `person` on the blue tile; SF's `person.crop.square.fill` has no Ionicons equivalent. |
+| 7 | — | Nothing else in the §23 Wellness or Shopping rows was left. `ImportantMomentsStore.scheduleRevision` (bb57e09) only feeds the Moment rows in Calendar and Tasks, which belong to the Calendar run. | — |
+
+## 36. Phase 13 Run D (Windows): Follow-ups and Profile (2026-10-12)
+
+The §23 follow-up rows and the Profile remainder, from the Swift source, on the §32 plumbing (`followUp.ts`,
+`model.ts`, `useSaveFollowUp`). Items 1–3 were built before the Mac's signed-in captures arrived (0bb8212),
+then re-checked against them (6ede29a); items 4–7 used them from the start. §33's Working days, Forgot
+password, Deleting account overlay and Account menu order were not redone; the new Do Now, Change password
+and Working days captures agree with them. Jest 2,632 → 2,652; `tsc` and ESLint clean. No new native
+module. The outcome save was already in `phase12Nulls.test.ts` (§32), and Run D adds no other write.
+
+| # | Swift source | Built | Capture used / source only | Deliberate Android difference |
+|---|---|---|---|---|
+| 1 | FollowUpPreparationView.swift:4-131; FollowUpPreparation.swift | **Follow-up preparation** (`app/action/preparation.tsx`, `src/features/followUp/FollowUpPreparationScreen.tsx`): Close (off while busy); "Loading preparation…"; Follow-up (company, purpose, phone, email, Scheduled, **Set or change follow-up time**, Follow-up time), Preparation notes (3–8 lines), Checklist (toggle per step, editable title, **Add**, off when blank or at 30), Editable message draft, **Create draft from purpose** and its caption, **Save preparation** (needs loaded, company and purpose), Record outcome for open tasks (Result, notes, then Next follow-up + **Record and schedule next follow-up** or **Record and complete task**), Outcome history newest first, the error with **Retry loading**. A retry keeps the appended outcome's id; a failed complete or reschedule keeps the saved revision. Button rows and Close are ink, not the tint: the sheet inherits TaskActionView's `.foregroundStyle(Color.nexdoInk)`, and only the Result picker keeps the indigo | Captures: `follow-up-preparation-new`, `-filled`, `-filled-scrolled`, `-saved`, `follow-up-record-outcome`, `-result-menu`, `-record-resolved`, `-outcome-history`, `-history-completed`, `-history-completed-scrolled` (re-check: ink buttons, the 3-line notes) | A modal route over the Nexdo Action screen, not a sheet over a sheet; the action screen reloads when it regains focus (`onDismiss: loadDestination`). Swipe-to-delete on a checklist step is a red remove icon. Back closes only when Close would. The completed task's sheet stays as editable as Swift's (§23 For the team asks whether it should be read-only; not changed here). |
+| 2 | TaskActionView.swift:158-171, :234-236, :273-280, :325-327, :348-355, :424 | Under "Contact <name>": the **Prepare and follow up** card (clipboard, the saved purpose or "Add the purpose, notes, checklist and message draft.", "N of M steps ready · Record outcome" once saved), **Complete or record outcome**, the task title as a caption. **Mark task complete** became **Record outcome and complete** (opens the sheet). On open the saved preparation is loaded onto the action; one with a valid company/phone/email is the contact and skips the search; its draft is the composer body (`emailDraft(…body:)`) and its purpose the context. Close, Complete or record outcome and Record outcome and complete are ink | Captures: `task-action-prepare-card`, `task-action-prepare-card-saved` | None. As in Swift, a reschedule from the sheet does not move the action screen's own reminder line until it reloads (§23 For the team). |
+| 3 | TaskActionView.swift:37-41 | A completed task whose title still matches the detector shows **Follow-up preparation and outcome history** (ink, plain) on Task Details; it opens the sheet with an action made from the title, so the saved outcomes show | Capture: `task-details-followup-history-button` | None. |
+| 4 | ProfileView.swift:343-344 (12bb9d4, 4185501) | "Morning summary" is now **Daily morning email · 6:00 a.m.** with "Today’s tasks, calendar events and conflicts, sent to <email> at 6:00 a.m. in <profile zone>. Email notifications must also be enabled." (`morningEmailExplanation`, falling back to "your profile email" and the device zone). This also settles the §23 For the team note on the morning email's footer | Captures: `settings-v3-scrolled-2`, `-scrolled-3`, `-scrolled-3-dark` | On Android the caption splits morning and evening, so the form group draws three separators in Notifications, not four. |
+| 5 | ProfileView.swift `.toggleStyle(SwitchToggleStyle(tint: .green))` (4185501) | Every Settings switch is green: `IOSSwitch tone="green"`, used by `SettingsToggle` (so Working days, the voice, prediction and notification toggles) and the per-calendar "Add my scheduled tasks and events here", which was React Native's `Switch` and is now an `IOSSwitch` like the rest. iOS draws `success` (the system green, #34C759 / #30D158) | Captures: `settings-v3-scrolled-1`…`-4`, `settings-v3-dark`, `-scrolled-1-dark`…`-3-dark` | New token `switchOnGreen`: #34C759 in light, **green at 85% in dark** — the rule `switchOn` already follows (§6: a full-strength track glows on a grey card). The brief called this "the §12 rule"; §12 is Reset password actions, and the switch rule is §6. The off track keeps `switchOff` and its hairline. |
+| 6 | RootView.swift:767-781; NexdoApp.swift:213-230 | A failed request or confirm shows the request's message, or "Could not send the reset code. Please try again." / "Could not reset the password. Please try again." when it has none, inline under the fields; the screen stays (`resetFailure`, `RESET_CODE_FAILED`, `RESET_PASSWORD_FAILED`). **Swift bug, for Sri:** `perform` sets `model.error`, RootView turns that into the global "Unable to complete request" alert, and the alert dismisses the Reset password sheet, so Swift's inline line is never seen | Captures: `password-reset-error-invalid-email` (Swift's bug, not the target), `password-reset-from-change-password` | Android ahead of iOS: the inline message is actually shown. |
+| 7 | ProfileView.swift:349-368, :478-560 (6f079c0) | **Calendars & Privacy** with "Connect your calendar to keep your plans and important moments together."; each connection shows its provider's icon (`CalendarProviderIcon`: Google and Microsoft cut from `calendar-connect-pack`, Apple's logo, NexDo's mark, else an indigo calendar) with an orange triangle at its corner when unhealthy; a failed load shows its error and **Retry connection status**, and "No calendars connected yet." waits for a load that succeeded; Reconnect on a Microsoft row signs in with Microsoft, and every connect line names the provider ("Microsoft Calendar reconnected and synchronized.", "Choose the same account on Microsoft’s sign-in page.") | Captures: `settings-v3-scrolled-3`, `-scrolled-4`, `-scrolled-3-dark` | The pack's cells are drawn with `.multiply` in Swift; RN has no blend mode, so the white was unmixed into transparency when cutting them (`assets/calendar/`), which gives the same pixels on white and no white square in dark. **Not built:** the Apple Calendar card and the **Connect Calendar** row, which opens the calendar chooser (`CalendarConnectionView`). Both need the Provider connection page and Apple Calendars rows of §23 (new screens, not in this run); until then the card keeps its direct **Connect Google Calendar** row, and "No calendars connected yet." shows whenever the list is empty, as Swift does without Apple access. |
+
+Also checked, no change needed: Swift's Contacts and notification permission changes in the same commits (limited Contacts access counts, provisional and ephemeral notifications count) already match RN (`src/actions/contacts.ts`, `src/actions/notifications.ts:97`).
+
+## 37. Phase 13 Calendar run (Mac) (2026-10-12)
+
+The §23 Calendar rows — the Connect Your Calendar hub, the provider pages, the phone's calendars, the
+Calendar tab, Event Details for a device event, Settings' phone-calendar card and the permission model —
+on the part-1 plumbing (`deviceCalendarEvent.ts`, `permissionAccess.ts`, `dayIndex.ts`, `momentSchedule.ts`,
+`eventDetails.ts`, `useCalendar.ts`). Branch `rn-phase-13-mac`, cut from `rn-phase-13` at 0bb8212 and merged
+with Windows' Run D (034c639) before item 6, whose Calendars & Privacy remainder (§36 item 7) this run builds
+on. Captures matched for layout, Swift for strings, states and order; the Microsoft page and the phone
+provider's empty states were not captured (§23) and come from the source. Jest 2,652 → 2,711; `tsc` and
+ESLint clean. Native: only expo-calendar, already installed, with its `READ_CALENDAR` permission
+(`WRITE_CALENDAR` stays blocked, `app.config.ts`); the plugin's usage string is Swift's full-access string.
+Nothing new is written to the server — the chosen calendars stay on the phone, as in Swift — so
+`phase12Nulls.test.ts` is unchanged.
+
+Everywhere Swift says **Apple Calendar** / **iPhone**, Android says **Phone calendar** / **phone** (§33);
+iOS keeps Swift's words (`deviceCalendarCopy`, `providerPageCopy`). The event `source` stays `apple-device`
+and the provider key stays `apple`, so the §23 captures, the server strings and the ids all line up.
+
+| # | Swift source | Built | Capture used / source only | Deliberate Android difference |
+|---|---|---|---|---|
+| 1 | CalendarConnectionView.swift:5-84, :279-286, :322-371; Assets.xcassets/calendar-connect-pack | **Connect Your Calendar** (`app/account/calendar-connect/index.tsx`, `CalendarConnectHub.tsx`): fixed light over the purple gradient and its corner halo (`ConnectSurface`), the hero, "Connect Your Calendar" and its subtitle, the three cards in Swift's order with artwork, title, caption and a chevron — **Connected** (green check; Google/Microsoft from a healthy connection, the phone from calendar access) or **Needs reconnecting** (orange) — the connections error with **Retry connection status**, and "Your data stays private". Reloads `/api/calendar/connections` on mount and the phone's access on focus and foreground (`useDeviceCalendarAccess`). The nine regions of `calendar-connect-pack` are cut once at Swift's rectangles (`connectArt.ts`, `assets/calendar-connect/`, 448 KB in all: icons 160 px, step pictures 180 px, hero 300 px) | `calendar-connect-hub`, `-hub-live` (Google and the phone connected), `-hub-apple-connected` | "Phone calendar" / "Connect your phone’s calendars". Swift draws the crops with `.multiply`; RN has no blend mode, so the hub and provider pages place them on their white cards and the white cells vanish there (the row-sized icons use Run D's transparent cuts in `assets/calendar/`). Pushed inside the account stack (Swift: a `NavigationLink` in the same stack). |
+| 2 | CalendarConnectionView.swift:86-277; NexdoApp.swift:311-322; ProfileView.swift:539-563 | **Provider page** (`app/account/calendar-connect/[provider].tsx`, `CalendarProviderScreen.tsx`): the progress capsule (30 → 100 when connected; pink for the phone, blue otherwise), the 66-pt icon, "Connect <Provider> Calendar", the subtitle, the three numbered steps with their artwork ("Allow access" under the phone's icon for step 1), the privacy label, the connected state ("<Provider> Calendar connected.", the footnote, each account's name and `lastSyncedDescription`, **Connect another account** for OAuth providers), `failure` (red) and `statusMessage`, **Open Settings** once the phone's access is denied, **Connect Now** → **Connecting…** (spinner, back hidden, swipe and hardware back blocked, toolbar **Cancel**) → **Done** / **Choose calendars**, black button for the phone, **Learn more** → the privacy policy, toolbar **Need help?** → Help. `useConnectCalendar({ provider, reconnecting })` fetches that provider's connect token, opens `/api/calendar/oauth/<provider>/start?native=1&connect_token=…`, and the callback must say `calendar=<provider>-connected`; `connectOutcome` names the provider. After a connection the list is reloaded; when that fails the page says "Calendar connected, but its latest status could not be loaded. Retry from Calendars & Privacy." A closed browser says "Connection cancelled. Your existing calendars are unchanged."; Cancel says "Connection cancelled." and ignores the late answer. The phone provider requests READ_CALENDAR and opens the calendar list with "Calendar access allowed. Choose calendars to display in NexDo.", or reports "Calendar access is needed to display events. Enable it for NexDo in Settings." | Google: `calendar-connect-google`, `-google-bottom`, `-google-connected`, `-google-connected-scrolled`; phone: `-apple`, `-apple-permission`, `-apple-connected`; `-help`. **Microsoft: source only** (`calendar-connect-microsoft` shows the page, its OAuth could not be run) | Cancel while the browser is open: iOS dismisses the auth session (`dismissAuthSession`); Android cannot close the Custom Tab from the app, so Cancel marks the attempt cancelled and the answer is dropped when the tab closes. Android reports `dismiss` when the app turns active, so the late `nexdo://calendar-connected` link is awaited (`waitForOAuthCallback`), as Settings already did. A deep link that lands after Android dropped the session completes on Settings (`OAUTH_LANDING`), with the provider read from `calendar=` (`oauthProviderFromCallback`). The step pictures are laid out by width with Swift's aspect. |
+| 3 | AppleCalendarService.swift:11-121; PermissionAccess.swift:4-18 | **Phone calendars** (`app/account/phone-calendars.tsx`, `DeviceCalendarsScreen.tsx`, `deviceCalendars.ts`, `deviceCalendarSelection.ts`): the intro text, **Allow calendar access** and **Open Settings** without access, "Loading calendars…", the two failure lines, **Calendars to show** with a toggle per calendar and its account caption (sorted by account then title), "No calendars are available on this phone…" / "All calendars are hidden…", **Import birthdays and anniversaries into Moments**. The request goes through the decision table (`requestDeviceCalendarAccess`: allow → read, deny → no prompt, else prompt); the selection is per account in AsyncStorage under Swift's key (`nexdo.apple-calendar.selection.<owner>`, absent = all, empty = none); cancelled occurrences are skipped and the rest go through `makeDeviceCalendarEvent`; reloads on focus, foreground and after a request. Reached from the phone provider page, Settings' card and the Calendar filters menu | `apple-calendars`, `-one-hidden`, `calendar-apple-calendars-sheet` (layout); **empty and denied states: source only** (§23) | "Phone calendars", "Add a calendar account in your phone’s Settings." Pushed from the filters menu rather than presented as a sheet with Done. No `EKEventStoreChanged` or selection notification: expo-calendar has no change listener (§32), so every reader re-reads on focus, foreground, selection save and pull-to-refresh. `WRITE_CALENDAR` is blocked, so there is no `writeOnly` state. |
+| 4 | CalendarView.swift:12-21, :67-77, :89-100, :165-167, :176-181, :201-207, :233-258, :406, :496-510, :535-558, :596-657; CalendarDayIndex.swift; MomentSchedule.swift | **Calendar tab** (`app/(tabs)/calendar.tsx`, `CalendarParts.tsx`, `useDeviceCalendarEvents.ts`): the phone's events from the chosen calendars are read for the visible days (padded one day before and two after) beside the server's agenda, and shown on their own when the server fails; **Moments** project as all-day rows with the moment's icon in pink and "<type> · Moment", and a tap routes to the moment (`momentsStore.routeTo`, opened by `useMomentsLifecycle`); tasks and events are bucketed **once** per load into `CalendarDayIndex` with the day keys keyed by content, so a day pick is a lookup (a test counts the builds); each event row shows its provider icon (`CalendarProviderIcon`); the header **gear** opens Settings scrolled to Calendars & Privacy (`openCalendarSettings` → the `calendars` param); the filters menu gains **Phone calendars…** above Reset; the Week card drops "· 0 min planned"; the failure line is "Couldn’t refresh online calendars and tasks." with " Available calendar data is still shown." when something is; the dark accent `Color(red: 0.70, green: 0.64, blue: 1.0)` and white separators at 32 %; pull-to-refresh also refreshes Moments and the phone's events. The 3/5/7-day ranges keep their existing day arithmetic (`visibleDays`); the attention-card range bug is Swift's and was not copied | `calendar-v3`, `-dark`, `-live`, `calendar-filters-menu`, `calendar-month-device-events`, `-scrolled`, `-dark`, `calendar-moment-row`, `-dark`, `-opened`, `calendar-device-event-row` | Android keeps its one dark accent (`link`, §6/§7) where iOS takes the lavender; separators follow Swift in both. **Swift reindexes twice per load** (`dataRevision` changes before and after the server answers); RN builds the index once per change — on the §23 For the team list. The gear is a push of `/account/settings` (Swift: a `NavigationLink` into the Account stack). No `-calendar-stress-preview`. |
+| 5 | CalendarEventDetailsView.swift:21, :43-55, :93-100, :112 | **Event Details for a device event** (`EventDetailsScreen.tsx`): read-only — no `GET` (`useCalendarEvent(id, { enabled: false })` keeps the row's copy), the line "On this phone · Edit this event in Phone calendar." in place of Mark Complete / Add to Tasks, no ⋯ menu, no Edit, no Delete; the calendar reads "Phone calendar"; **Open in Calendar** opens THAT event in the phone's calendar app (`openDeviceEvent` → expo-calendar `openEventInCalendarAsync`, the Android `ACTION_VIEW` intent with the occurrence start; the EventKit view on iOS), falling back to the day link | `event-details-apple-device`, `-dark`, `-live` | "On this phone · Edit this event in Phone calendar." (iOS keeps Swift's words). Swift's Open in Calendar opens the DAY (`calshow:`) even for a device event; both platforms here open the event itself, as the line promises. |
+| 6 | ProfileView.swift:143-144, :349-368, :451-477, :478-485, :522 | On Run D's card: the **Phone calendar** card once calendar access is allowed (provider icon, "Connected on this phone", "N calendars selected" / "No calendars selected" from the saved selection, **Manage phone calendars** → the list, the read-only footnote; `useDeviceCalendarSummary` re-reads on focus, foreground and selection save), the **Connect Calendar** row (`calendar.badge.plus`, chevron) → the hub, in place of the direct "Connect Google Calendar" row, and "No calendars connected yet." only without phone access. Settings' own OAuth flow is now **Reconnect** on a row that needs it (its tests start from one); the Calendar tab's gear lands here scrolled to the card | `settings-v3-scrolled-3`, `-scrolled-3-dark`, `-scrolled-4` | "Phone calendar" / "Connected on this phone" / "Manage phone calendars" / "…in your phone’s Settings. NexDo does not add tasks or events to Phone calendar." The Appearance caption above the card still says "System follows your iPhone" on Android (pre-existing, not this run's). |
+| 7 | Sources/NexdoCore/PermissionAccess.swift:4-18; TaskActionContacts.swift:27-29; TaskActionNotifications.swift:20-31; AppleCalendarService.swift:15-27 | `decisionFromExpo(resource, permission)` in `src/lib/permissionAccess.ts`: one table from an Expo permission answer to allow / deny / request, used by the calendar reader (`requestDeviceCalendarAccess`), the hub, the provider page and Settings. Mapping: **calendar** → `READ_CALENDAR` via expo-calendar (`WRITE_CALENDAR` blocked, so no `writeOnly`); **contacts** → `READ_CONTACTS` via expo-contacts (`limited` is iOS 18 only); **notifications** → `POST_NOTIFICATIONS` via `classifyNotificationPermission` (`provisional` / `ephemeral` are iOS only); **microphone** → `RECORD_AUDIO` via expo-audio (`authorizeMicrophone`) | source only (a model, no screen) | Android 13+ asks for `POST_NOTIFICATIONS` at runtime where iOS has provisional delivery; below 13 notifications are granted at install. `restricted` does not exist on Android; `canAskAgain: false` is read as denied. |
+
+For the team (added to §23's list by this run): Swift's double reindex per Calendar load (item 4); Swift's
+Open in Calendar opening the day rather than the device event (item 5); the Appearance caption's "iPhone"
+on Android (item 6). Rows left unbuilt: none. Built from the source alone, awaiting a capture: the Microsoft
+provider page's OAuth states (item 2) and the phone-calendar list's empty and denied states (item 3).
+
+## 38. Phase 13 Tasks & Today run (2026-10-12)
+
+The §23 Tasks tab, Task editor, Today and Needs attention sheet rows, on part 1's model code (§32: Moment
+projections, manual order, creation spacing). Captures are the Mac's (0bb8212); Swift source decides
+strings, states and order. §33 items 1, 2 and 6a (the three-item schedule, the working-day line on Do Now,
+the new-task default time) were not redone. Jest 2,652 → 2,662; `tsc` and ESLint clean.
+
+**New native module: react-native-gesture-handler ~2.32.0** (the version Expo SDK 57 pins; `npx expo install`).
+It was already in `node_modules` through expo-router, but undeclared packages are not autolinked, so the
+Android build needs it added. The rebuild that §33 item 10 (Crashlytics) and Run C's expo-sensors already
+require covers it: no separate build. The app root is now a `GestureHandlerRootView`. Reanimated (already
+declared and linked) is used for the first time, for the completion animation; Jest loads its and the
+worklets runtime's mocks. The manual order is stored on the device only, so no new server write and nothing
+to add to `phase12Nulls.test.ts`.
+
+| # | Swift source | Built | Android difference | Capture used |
+|---|---|---|---|---|
+| 1 | RootView.swift:1787-1796, :1966-1981, :1927, :1964 (bb57e09); MomentSchedule.swift | `momentTasks` projections join the Tasks snapshot, rebuilt when the moments, the zone or the day change, and draw in their date group as a pink row: the type's glyph on a pink 10% 44pt tile, the title, "All day · <type> · Moment", a chevron; no checkbox, no drag. A tap sets `momentsStore.route`, the route a Moments notification takes, which opens the moment's wish, Manage Moment or Review Wish. Group headers and the date pills count **items**. Pull-to-refresh also refreshes Moments | None | `tasks-v3-moment-row`, `-dark` |
+| 2 | RootView.swift:1983-2014 (d568989); TaskDisplayOrder.swift | Drag to reorder within a date group: a long press (400 ms) lifts the card (slightly larger, above its neighbours), it follows the finger, and letting go over another card in the group puts it there (`reorderTasks`); letting go elsewhere does nothing. The list does not scroll while a card is held. **Move up** / **Move down** accessibility actions and Swift's hint "Touch and hold to reorder within this date. Scheduled time stays the same." Moments never move and are never a target. The order is per account in AsyncStorage `nexdo.taskDisplayOrders`, read on open, applied with a 0.2 s ease | An in-repo `ReorderableGroup` on gesture-handler's `Gesture.Pan().activateAfterLongPress` instead of iOS drag and drop (react-native-draggable-flatlist would also need FlatLists inside the Tasks `ScrollView` and Reanimated worklets for the drag). The hint is added to the open button's "Opens task editor" rather than replacing it | Source only: §23 notes reorder was not capturable |
+| 3 | RootView.swift:2297-2302, :2195 (d568989); TaskCreationSpacing.swift | Nothing new to draw. Swift's editor only moves the default start, and the one place the time shows is the "Nexdo Action: contact … Schedule: …" line, which New Task already draws from the spaced time (§33 6a). The editor has no working-day text. A test pins the capture: 12:22 PM for 30 minutes, then a new task at 1:07 PM. Note for §23: Swift spaces an explicitly picked time too (only a time read from the title skips it); the row's "an explicitly chosen date/time … bypass it" does not match the source, and RN follows the source | None | `tasks-creation-spacing` |
+| 4 | RootView.swift:2026-2075, :1772-1773 (bdb68ce) | Completing a task on Tasks: the circle fills and grows to 1.12 on Swift's spring (response 0.25, damping fraction 0.6 → stiffness 632, damping 30.2), the title strikes through, other toggles wait and the row does not open while the save runs; once it succeeds the row slides 80 right and fades over 0.25 s (easeInOut, (0.42, 0, 0.58, 1)), then the list closes up. The row keeps its place until then, although the cache already says done; a failed save leaves it as it was. Reduce Motion: no growth and no slide, a 0.15 s fade. Restoring a done task has no exit. Swift animates only the Tasks rows; Today has no completable rows, so nothing was added there | Swift's `.animation` on the list's ids also animates filter switches and refreshes; RN animates the completion and reorder changes (`LayoutAnimation`), not those | Source only (an animation) |
+| 5 | RootView.swift:1210-1223, :1301, :1483-1647; TodayAttentionSheet.swift:53-54, :66-70, :90-91 | Today's intelligence card is a 12-apart stack: the gradient summary as its own 24pt card (the "N things need attention" capsule and "Nothing needs attention" are gone), the orange **Needs attention** card (48pt triangle tile on orange 12%, "N overdue task(s) · M schedule check(s)", chevron, orange 7% fill and 50% stroke, Swift's hint), and the schedule as its own 24pt card. The separate attention row lower on Today is removed. The card shows on every range: Swift's `showsSummary` is always true, so the §23 For the team reading (dropped on 3/5 days) was not copied. Needs attention: overdue rows padded to Swift's 97pt and Reschedule all on systemGray5, 24 between sections, and Reschedule all as `NexdoGradientButtonStyle` (save gradient capsule, calendar icon, 72pt), which RN had drawn as a flat indigo button since Phase 12. The sheet opens at the `.fraction(0.65)` edge with a 36pt corner | The sheet's detent is 0.63 of the height below the status bar, which puts the edge where the capture has it (39.8% down), by the same rule as the 0.54 `.medium`. Android in dark keeps §6's `link` blue for the Close and row tints where Swift tints indigo | `today-v3-attention-card`, `-dark`, `today-attention-sheet-v3` |
+| 6 | RootView.swift (the rest of the diff) | Nothing else in these rows: the remaining RootView hunks are the bug report's screen tags and coordinator (§34). Ticked too, as built in Run A: Do Now (0edb349), Add by Voice (bcf6848), Crash reporting (fc10824) | — | — |
+
+## 39. Phone parity pass 4 (2026-10-12)
+
+All 31 §23 rows checked on the OnePlus CPH2691 (Android 16, 360 dp, light; dark only for the shared Wellness
+chooser) against the Mac's iPhone captures, with the dev build of `401eb48` and then a rebuilt one (below), Metro in
+watch mode against app-dev, signed in as visakan. Android captures are `mobile/docs/reference/android/p4-*.png`
+(gitignored). Method as pass 2/3: one screenshot per screen, fix what is broken or clearly wrong; §1–§38's deliberate
+Android choices are kept. Branch `rn-ui-parity-4-win`. Jest 2,721 → 2,727; `tsc` and ESLint clean.
+
+**A new dev APK was needed** (the brief's one exception): Phone calendars could not work without WRITE_CALENDAR in the
+manifest. Rebuilt with the same route (prebuild, `assembleDebug`, arm64), reinstalled over USB as an update.
+
+### Two blockers found and fixed
+
+- **Phone calendars never worked on Android** (rows 7, 12, 13; also Moments' calendar import). Two causes:
+  1. In this expo-calendar the function API on the package root (`getCalendarPermissionsAsync`,
+     `requestCalendarPermissionsAsync`, `getCalendarsAsync`, `getEventsAsync`, …) is a set of stubs that throw
+     "… is deprecated". `deviceCalendars.ts` and `moments/device.ts` imported the root, caught the throw as
+     "denied", and so Android never asked and nothing was read: "Open Settings" showed before the app had ever asked.
+     Both now import `expo-calendar/legacy` (as contacts already uses `expo-contacts/legacy`). JavaScript only.
+  2. The legacy Android module grants access and reads only when READ_CALENDAR **and** WRITE_CALENDAR are both held
+     (`CalendarModule.kt` `checkPermissions()`), and the app blocked WRITE_CALENDAR. It is now declared, which matches
+     Swift (`requestFullAccessToEvents`, full access). **The app still never writes**: `readOnly.test.ts` fails on any
+     expo-calendar create/update/delete call and on any import of the throwing root. Play's Data safety form already
+     declares Calendar, and the app never writes to it.
+  After both: Android asks once, the Phone calendars list loads the phone's calendars, a device event ("Parity device
+  event", created with `adb content insert` in the phone's local calendar) shows in Calendar with the phone glyph and
+  opens Event Details, and Settings shows the Phone calendar card ("16 calendars selected").
+- **Saving a follow-up preparation crashed the screen** (`IllegalStateException: addViewAt: … View already has a parent`,
+  the dev build's red screen). Reproduced on a cold start with Metro running normally, so not a hot-reload artefact.
+  Cause: the sheet wraps its `KeyboardAwareScrollView` in `<View pointerEvents={disabled ? 'none' : 'auto'}>`. With
+  `'auto'` and only a flex style Fabric flattens that View away; saving turns it `'none'`, so Fabric creates it and
+  moves the scroll view's keyboard-controller `ClippingScrollViewDecoratorView` into it, which it refused. Loading went
+  the other way (none → auto, a removal), which is why opening never crashed. Fix: `collapsable={false}` keeps the
+  wrapper real. Moments settings, the Moment editor and the shopping list had the same wrapper and got the same fix.
+  Two saves after the fix: no error; a test pins the wrapper.
+
+### By screen
+
+| # | §23 row | Result | Android capture | What was off | What changed |
+|---|---|---|---|---|---|
+| 1 | Bug report: intro | checked | `p4-bug-intro`, `-scrolled` | — ("Shake iPhone…" kept word for word, §34 for Sri; the tagline sits below the fold at 360 dp) | — |
+| 2 | Bug report: form | fixed | `p4-bug-form`, `-top`, `-screenshot`, `-preview` | Opened scrolled to where the intro had been, "What happened?" under the bar | The ScrollView is keyed by stage, so each opens at its top (Swift pushes the form) |
+| 3 | Bug report: sending, failure, success | checked | `p4-bug-sending`, `p4-bug-success` | — One real report to app-dev: **BR-540506** | — |
+| 4 | Bug report: coordinator | checked | — | — Screen tag "settings" from Account, as Swift tags the sheet; shake left for the manual check | — |
+| 5 | Connect Your Calendar (hub) | fixed | `p4-calendar-hub` | Plain white page: no gradient, halo or row cards | `ConnectSurface`'s SafeAreaView carried the white fill over the gradient; it is transparent now |
+| 6 | Provider connection page | fixed | `p4-calendar-google`, `-scrolled`, `p4-calendar-microsoft`, `p4-calendar-phone` | "Need help?" (and the hub's Retry, the page's Open Settings) in system blue | The app tint, as Swift's toolbar link and plain buttons. Microsoft from source: matches its capture. A real connect is a manual check |
+| 7 | Apple Calendars (selection) | fixed | `p4-calendar-phone-permission`, `p4-phone-calendars` | Never asked; "Open Settings" before asking; nothing loaded. Then: green switches | The two fixes above; the list keeps the app tint (`SettingsToggle` gains `tone`; Settings stays green) |
+| 8 | Calendar provider icon and artwork | fixed | `p4-settings-calendars` | Settings' Google icon on a jagged black square | `CalendarProviderIcon` uses the Calendar run's transparent crops; Run D's had opaque black corners (removed) |
+| 9 | Follow-up preparation (sheet) | fixed | `p4-follow-up-new`, `-record-outcome`, `-result-menu`, `-history-*` | Checklist titles showed their end ("…urpose and desired result"); "Result" squeezed to a sliver; a long menu choice cut to "Unresolved / waiting f…"; **the save crash** | Step titles parked at their start until focused; `MenuPicker` keeps its label's width (shared); `PopoverMenu` titles wrap to two lines (shared); the crash fix above |
+| 10 | Nexdo Action contact screen | fixed | `p4-action-prepare-card`, `-saved`, `p4-action-after-contacts` | "No contact selected…" sat below the prompt | Moved above it, as Swift draws the error first (TaskActionView.swift:172-183) |
+| 11 | Task Details action card | checked | `p4-task-details-history-button` | — | — |
+| 12 | Calendar tab | fixed | `p4-calendar-tab`, `-week`, `-moment-row`, `p4-calendar-device-event` | No phone events (the calendar blocker) | Fixed with row 7. The Moment row opens the Moment. Its gift sits on §10's neutral Android tile (kept) |
+| 13 | Event Details | fixed | `p4-event-details-device` | Unreachable for a device event (same blocker) | Fixed with row 7; matches `event-details-apple-device-live` with §33's "Phone calendar" wording |
+| 14 | Settings | checked | `p4-settings-working-days`, `-morning-email`, `-calendars`, `-phone-calendar-card`, `-delete-confirm` | — Delete-account dialog opened and cancelled; the "Deleting…" overlay needs a confirm, so not reached | — |
+| 15 | Account menu | checked | `p4-account` | — | — |
+| 16 | Change password | checked | `p4-change-password` | — | — |
+| 17 | Password reset sheet | checked | `p4-password-reset-from-change`, `-error` | — Inline error shown with airplane mode on ("Nexdo could not reach the server…"), the sheet stays | — |
+| 18 | Tasks tab | checked | `p4-tasks-moment-row`, `p4-tasks-reordered` | — Drag-to-reorder works on the device (`input draganddrop`) | — |
+| 19 | Task editor | checked | `p4-task-new`, `p4-tasks-creation-spacing` | — "Parity spacing check" 3:56 PM, then "… two" 4:41 PM: the 15-minute gap | — |
+| 20 | Today | checked | `p4-today`, `p4-today-attention-card` | — Three items, View 1 more / Show less, the orange card | — |
+| 21 | Needs attention sheet | checked | `p4-attention-sheet`, `-bottom` | — | — |
+| 22 | Do Now | checked | `p4-do-now-not-working-day` | — Monday switched off, the line shown, Monday restored (`1,2,3,4,5`) | — |
+| 23 | Wellness chooser | fixed | `p4-wellness-chooser-dark` | Dark hero: a bare moon, no stars | `moon.stars.fill` drawn as the moon plus two four-point stars |
+| 24 | Pomodoro | checked | `p4-pomodoro-setup` | — Personal Work last, blue | — |
+| 25 | Shopping: List Settings store logo | checked | `p4-shopping-list-settings`, `p4-shopping-store-logo-editor` | — | — |
+| 26 | Shopping: offers | checked | `p4-shopping-offers` | — | — |
+| 27 | Shopping: Store Hours | checked | `p4-shopping-store-hours` | — The store's Monday bold (Monday 3:34 AM in San Francisco) | — The store name is semibold in code but this phone's system font has no 600 face, so it draws regular |
+| 28 | Ask AI landing | fixed | `p4-ask-ai-landing`, `-bottom` | Card captions cut off ("your next mo…", "Free time around…") | Android lets the caption take a third line |
+| 29 | Add by Voice / Ask by Voice | fixed | `p4-voice-consent`, `p4-voice-allowed`, `p4-voice-mic-denied`, `-scrolled` | Two title bars ("Cancel" above "× Close") | The stack header is hidden. Denied: the message and **Open Settings** (below the fold at 360 dp, scrolls into view), which opens the app's Android settings; no session was requested while denied. Allowed: "Listening…". adb cannot revoke on this phone, so the mic was switched off in the app's settings page |
+| 30 | Crash reporting | checked | `p4-dev-menu-crashlytics` | — "Crashlytics test crash" is in the React Native dev menu; not fired | — |
+| 31 | Permission decisions | checked | — | — Contacts asked on first use (allowed), Calendar asked once now (allowed), Microphone asked before any session (denied, then allowed), Notifications not determined | — |
+
+**Totals by group:**
+
+| Group | Rows | Fixed | Already matched | Not reached |
+|---|---|---|---|---|
+| 1 Calendar (5–8, 12, 13, 31) | 7 | 6 | 1 | 0 |
+| 2 Bug report (1–4) | 4 | 1 | 3 | 0 |
+| 3 Follow-ups (9–11) | 3 | 2 | 1 | 0 |
+| 4 Tasks & Today (18–21) | 4 | 0 | 4 | 0 |
+| 5 Wellness & Shopping (23–28) | 6 | 2 | 4 | 0 |
+| 6 Profile/Account (14–17) | 4 | 0 | 4 (the delete overlay itself not reached) | 0 |
+| 7 Remaining (22, 29, 30) | 3 | 1 | 2 | 0 |
+| **All** | **31** | **12** | **19** | **0** |
+
+### Manual checks left
+
+- Shake to report (the dev build's shake opens the dev menu first).
+- The Crashlytics test crash (dev menu → "Crashlytics test crash", relaunch, check Firebase).
+- A real Google calendar connect and disconnect.
+- The completion animation's feel (spring, slide, fade) and drag-to-reorder's feel.
+- The "Deleting account…" overlay (needs a confirmed delete on a throwaway account).
+
+### Found for the team (not fixed)
+
+- **The same event shows up to three times in Calendar** when the phone also syncs the connected Google account: the
+  Nexdo task, the event Nexdo wrote to Google (31 icon), and the same Google event read again from the phone's calendar
+  (phone glyph). Swift appends device events to server events without de-duplicating (`CalendarView.swift:77`), so an
+  iPhone with the same Google account added would show the same. Matching on title and time, or hiding phone calendars
+  that belong to a connected account, would fix it on both.
+- **expo-calendar's root API now throws.** Anything else still importing it from the root breaks silently; the guard test
+  covers this app. The legacy import will itself go away in a later Expo; moving to the object API is a separate change.
+- The Phone calendars list wraps a long account name a letter at a time ("karpagamsures / hkumar@gmail / .com") when
+  the calendar's title is the address; iOS would do the same with a long enough name.

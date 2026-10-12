@@ -64,9 +64,6 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     blockedPermissions: [
       'android.permission.SYSTEM_ALERT_WINDOW',
       'android.permission.WRITE_CONTACTS',
-      // - WRITE_CALENDAR: added by expo-calendar. Important Moments only READS the calendar the person
-      //   picks (`MomentCalendarService`, ios/App/MomentEditor.swift:276-287); nothing is ever written.
-      'android.permission.WRITE_CALENDAR',
       // - FOREGROUND_SERVICE / FOREGROUND_SERVICE_MEDIA_PLAYBACK: added by expo-audio for background
       //   playback. Nexdo never plays audio in the background — `VoicePlayback`
       //   (ios/App/VoicePlayback.swift) is an in-app player, and the voice session closes five
@@ -143,6 +140,17 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     // Firebase Analytics. Android only for now: iOS still ships the Swift app, which has its own SDK.
     '@react-native-firebase/app',
     '@react-native-firebase/analytics',
+    // Phase 13 Run A: Crashlytics, as ios/CRASHLYTICS.md (4185501). The plugin adds the
+    // `com.google.firebase.crashlytics` Gradle plugin and its classpath to the generated android/
+    // project; it needs a new native build. firebase.json turns collection on in debug builds too,
+    // as Swift's Debug builds report (tagged `build_configuration` = "debug").
+    '@react-native-firebase/crashlytics',
+    // Phase 13 Run B: shake to report a bug (BugReportCoordinator.swift:29-39). Android needs no
+    // permission for the accelerometer at 10 Hz; iOS gets Swift's own motion string (Nexdo-Info.plist:5-6).
+    [
+      'expo-sensors',
+      { motionPermission: 'When you enable shake-to-report, NexDo uses motion to open the bug report form. Motion data is not stored or sent.' },
+    ],
     'expo-apple-authentication',
     // Phase 7. `expo-web-browser` drives the Google Calendar OAuth session
     // (`openAuthSessionAsync`), the analogue of Swift's `ASWebAuthenticationSession`
@@ -179,13 +187,21 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       },
     ],
     [
-      // Phase 11 Important Moments. "Choose calendars and anniversary candidates" reads ONE device
-      // calendar the person picks (`MomentCalendarService`, ios/App/MomentEditor.swift:276-287). The
-      // usage string is the Swift target's verbatim (ios/Nexdo.xcodeproj/project.pbxproj:319); reminders
-      // are never read, so that permission stays off.
+      // Phase 11 Important Moments reads ONE device calendar the person picks (`MomentCalendarService`,
+      // ios/App/MomentEditor.swift:276-287); the Phase 13 Calendar run (android-polish.md §37) also shows
+      // the chosen calendars' events in the Calendar tab (`AppleCalendarService`). The usage string is the
+      // Swift target's full-access one verbatim (ios/Nexdo.xcodeproj/project.pbxproj:347); reminders are
+      // never read, so that permission stays off.
+      //
+      // WRITE_CALENDAR is declared too (parity pass 4, android-polish.md §39): expo-calendar's Android
+      // module grants access, and reads events, only when READ_CALENDAR AND WRITE_CALENDAR are both held
+      // (CalendarModule.kt `checkPermissions()`), so with READ alone every read failed and access always
+      // read as denied. Swift asks for full access (`requestFullAccessToEvents`), which also covers
+      // writing. The app still never writes: no create/update/delete call on expo-calendar anywhere,
+      // guarded by src/features/calendar/__tests__/readOnly.test.ts.
       'expo-calendar',
       {
-        calendarPermission: 'Nexdo reads your selected calendars to suggest birthday and anniversary moments for your review.',
+        calendarPermission: 'Nexdo reads your selected calendars to display events and suggest birthday and anniversary moments for your review.',
         remindersPermission: false,
       },
     ],

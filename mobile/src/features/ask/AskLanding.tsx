@@ -10,7 +10,7 @@ import { Text } from '../../components/Text';
 import { ASK_LANDING_CARDS, ASK_MAX_LENGTH, askIntent } from '../../lib/askIntents';
 import { firstName } from '../../store/lastSignedIn';
 import { useSession } from '../../store/session';
-import { brand, inputText, linearGradientStops, palettes } from '../../theme';
+import { brand, inputText, isAndroid, linearGradientStops, palettes } from '../../theme';
 import { swiftColors } from '../wellness/style';
 import { useAccessibilityTextSize } from '../wellness/useAccessibilityTextSize';
 
@@ -35,9 +35,9 @@ const tones = { blue: swiftColors.blue, green: swiftColors.green, orange: swiftC
 const MIC_GRADIENT = linearGradientStops([brand.nexdoMagenta, brand.nexdoIndigo, brand.nexdoBlue]);
 
 /** `pastel(_:)` (:87): the colour at 10% fading to 4.5%, top-leading to bottom-trailing. */
-function Pastel({ color, style, children }: { color: string; style: object; children: ReactNode }) {
+function Pastel({ color, style, children, testID }: { color: string; style: object; children: ReactNode; testID?: string }) {
   return (
-    <LinearGradient colors={[withAlpha(color, 0.1), withAlpha(color, 0.045)]} end={{ x: 1, y: 1 }} start={{ x: 0, y: 0 }} style={style}>
+    <LinearGradient colors={[withAlpha(color, 0.1), withAlpha(color, 0.045)]} end={{ x: 1, y: 1 }} start={{ x: 0, y: 0 }} style={style} testID={testID}>
       {children}
     </LinearGradient>
   );
@@ -121,7 +121,9 @@ export function AskLanding({
                     <Text style={[styles.body, { color: secondary }]}>{card.detail}</Text>
                   ) : (
                     // `.lineLimit(2).minimumScaleFactor(0.85)`: shrunk to keep each line whole, not truncated.
-                    <FittedText minimumFontScale={0.85} numberOfLines={2} style={[styles.cardDetail, { color: secondary }]}>
+                    // Android ahead of iOS: a wider system font can leave a line too wide even at 85% on a
+                    // 360 dp phone ("your next mo…", parity pass 4), so it may wrap to a third line instead.
+                    <FittedText minimumFontScale={0.85} numberOfLines={isAndroid() ? 3 : 2} style={[styles.cardDetail, { color: secondary }]}>
                       {card.detail}
                     </FittedText>
                   )}
@@ -135,7 +137,7 @@ export function AskLanding({
         })}
       </View>
 
-      <Pastel color={swiftColors.purple} style={styles.voicePanel}>
+      <Pastel color={swiftColors.purple} style={styles.voicePanel} testID="ask-landing-composer">
         <Pressable
           accessibilityLabel="Ask by Voice"
           accessibilityRole="button"
@@ -193,7 +195,7 @@ export function AskLanding({
         ) : null}
       </Pastel>
 
-      <View style={styles.powered}>
+      <View style={styles.powered} testID="ask-landing-powered">
         <TaskSymbol color={withAlpha(secondary, 0.65)} name="sparkles" size={12} />
         <Text style={[styles.caption, { color: withAlpha(secondary, 0.65) }]}>Powered by Nexdo AI</Text>
       </View>
@@ -267,7 +269,8 @@ const styles = StyleSheet.create({
   cardIcon: { width: 34, height: 36, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
   cardText: { gap: 5 },
   cardChevron: { paddingTop: 24 },
-  voicePanel: { flexGrow: 1, minHeight: 300, padding: 12, gap: 8, borderRadius: 20, justifyContent: 'center' },
+  // `.frame(minHeight: 268, maxHeight: .infinity)` since 6f079c0 (AskAILandingView.swift:71; was 300).
+  voicePanel: { flexGrow: 1, minHeight: 268, padding: 12, gap: 8, borderRadius: 20, justifyContent: 'center' },
   voice: { alignItems: 'center', gap: 8 },
   voiceRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   mic: {
@@ -289,7 +292,8 @@ const styles = StyleSheet.create({
   // `.lineLimit(1...4)` at a 20pt line.
   field: { flex: 1, maxHeight: 88, paddingVertical: 8 },
   send: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center' },
-  powered: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingVertical: 12 },
+  // `.padding(.top, 6).padding(.bottom, 2)` since 6f079c0 (AskAILandingView.swift:72; was 12 and 12).
+  powered: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingTop: 6, paddingBottom: 2 },
 
   orb: {
     width: 64,

@@ -76,7 +76,8 @@ describe('GroceryItem', () => {
     const input = listInput(list({ items: [item({ imageData: undefined }), item({ id: 'j', imageData: '/9j/AA==' })] }));
     expect(input.items[0]).toHaveProperty('imageData', null);
     expect(input.items[1].imageData).toBe('/9j/AA==');
-    expect(Object.keys(input).sort()).toEqual(['date', 'items', 'timeZone', 'title', 'weekly']);
+    // `storeLogoData` is always encoded since bdb68ce (ShoppingStore.swift:7), as "" when there is none.
+    expect(Object.keys(input).sort()).toEqual(['date', 'items', 'storeLogoData', 'timeZone', 'title', 'weekly']);
   });
 });
 

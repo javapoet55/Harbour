@@ -128,26 +128,34 @@ export function SettingsLabeledValue({ label, value, testID }: { label: string; 
   );
 }
 
-/** `Toggle(_:isOn:)`. */
+/** `Toggle(_:isOn:)`, with SwiftUI's `.disabled(_:)`. */
 export function SettingsToggle({
   label,
   value,
   onValueChange,
+  disabled = false,
   testID,
+  tone = 'green',
 }: {
   label: string;
   value: boolean;
   onValueChange: (next: boolean) => void;
+  disabled?: boolean;
   testID?: string;
+  /** Settings is green (`SwitchToggleStyle(tint: .green)`); a screen outside Settings keeps the tint. */
+  tone?: 'green' | 'tint';
 }) {
   const theme = useTheme();
   return (
     <View style={styles.row}>
       <Text style={[theme.typography.body, styles.grow, { color: theme.colors.label }, isAndroid() && styles.androidRowLabel]}>{label}</Text>
+      {/* Settings is `.toggleStyle(SwitchToggleStyle(tint: .green))` (ProfileView.swift, 4185501). */}
       <IOSSwitch
         accessibilityLabel={label}
+        disabled={disabled}
         onValueChange={onValueChange}
         testID={testID}
+        tone={tone}
         value={value}
       />
     </View>

@@ -21,7 +21,8 @@ import { stackHeaderOptions, useTheme } from '../../src/theme';
  * the module's first screen, so its Back returns to the chooser, and every screen after that PUSHES with
  * the iOS 26 bar, as it did in the Today stack before Phase 12. The cover hides the tab bar and the
  * chooser's own bottom bar, as the Swift captures show (`moments-date-filter-*`, `shopping-detail-store`).
- * These screens follow the phone's theme; only the chooser and the guides keep fixed light colours.
+ * These screens follow the phone's theme, and so does the chooser since 4185501; only the guides keep
+ * fixed light colours (WellnessModuleGuide.swift:102).
  */
 export default function WellnessLayout() {
   const theme = useTheme();
@@ -40,7 +41,8 @@ export default function WellnessLayout() {
 
   return (
     <Stack screenOptions={{ headerShown: false, presentation: 'fullScreenModal', contentStyle: { backgroundColor: '#FFFFFF' } }}>
-      <Stack.Screen name="index" />
+      {/* The chooser follows the theme (4185501), so its cover does too while it slides in. */}
+      <Stack.Screen name="index" options={{ contentStyle: { backgroundColor: theme.scheme === 'dark' ? '#000000' : '#FFFFFF' } }} />
       <Stack.Screen name="guide/[kind]" />
       <Stack.Screen name="pomodoro" />
       <Stack.Screen name="calories" />

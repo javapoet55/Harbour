@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
-import { Linking } from 'react-native';
+import { Linking, StyleSheet } from 'react-native';
 
 const mockPush = jest.fn();
 jest.mock('expo-router', () => ({
@@ -107,11 +107,36 @@ describe('Offers for your list', () => {
     expect(screen.getByText('Alternatives (1)')).toBeTruthy();
     expect(screen.getByText('Parity Weekly Groceries')).toBeTruthy();
     expect(screen.getByText('$4.99 ea member price')).toBeTruthy();
-    expect(screen.getByText('Price not published')).toBeTruthy();
+    // bdb68ce: each line of the breakdown says "Not published" for itself.
+    expect(screen.getAllByText('Not published').length).toBeGreaterThanOrEqual(2);
     expect(screen.getByText('BUY 1 GET 1 FREE')).toBeTruthy();
     expect(screen.getAllByText('Product: chicken')).toHaveLength(2);
     await fireEvent.press(screen.getByTestId('offer-chicken-o1'));
     expect(mockPush).toHaveBeenCalledWith({ pathname: '/wellness/shopping/offer', params: { id: 'l1', itemId: 'chicken', offerId: 'o1' } });
+  });
+
+  /** `OfferSummary` (ShoppingOffersView.swift:125-158); captures `shopping-offers-price-breakdown`, `-offer-detail-price-breakdown`. */
+  it('breaks a fixed dollar discount down into before, discount and final price', async () => {
+    const coffee = match({ id: 'o9', offer: { ...match().offer, id: 'o9', product: 'Starbucks Ground Coffee', packageSize: '12 oz', price: '$7.99', savings: '$2 off', unitPrice: '$0.67/oz' } });
+    mockOffers.mockResolvedValue({ ...SNAPSHOT, matches: [coffee] });
+    await show(<OffersScreen listId="l1" />);
+    await waitFor(() => expect(screen.getByText('Starbucks Ground Coffee')).toBeTruthy());
+    expect(screen.getByTestId('offer-before-discount')).toHaveTextContent('Before discount$9.99');
+    expect(StyleSheet.flatten(screen.getByText('$9.99').props.style)).toMatchObject({ textDecorationLine: 'line-through' });
+    expect(screen.getByTestId('offer-discount')).toHaveTextContent('Discount$2 off');
+    expect(screen.getByTestId('offer-final-price')).toHaveTextContent('Final price$7.99');
+    expect(screen.getByText('Before-discount price calculated from the final price and discount.')).toBeTruthy();
+    expect(screen.getByText('$0.67/oz')).toBeTruthy();
+  });
+
+  it('keeps a bundle or percentage verbatim, with no before-discount line worked out', async () => {
+    const bundle = match({ id: 'o8', offer: { ...match().offer, id: 'o8', price: '2 for $7.99', savings: '20% OFF' } });
+    mockOffers.mockResolvedValue({ ...SNAPSHOT, matches: [bundle] });
+    await show(<OffersScreen listId="l1" />);
+    await waitFor(() => expect(screen.getByTestId('offer-final-price')).toHaveTextContent('Final price2 for $7.99'));
+    expect(screen.getByTestId('offer-before-discount')).toHaveTextContent('Before discountNot published');
+    expect(screen.getByTestId('offer-discount')).toHaveTextContent('Discount20% OFF');
+    expect(screen.queryByText('Before-discount price calculated from the final price and discount.')).toBeNull();
   });
 
   it('says why a tab is empty, and explains the labels with the status, last check and source', async () => {

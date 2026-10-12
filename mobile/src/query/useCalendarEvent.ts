@@ -10,12 +10,16 @@ import { queryKeys } from './keys';
  * (`model.refresh()`).
  */
 
-export function useCalendarEvent(id: string | null | undefined) {
+/**
+ * `enabled` false keeps the copy the Calendar row put in the cache without ever asking the server: a
+ * device event has no server record (`guard !event.isDeviceCalendarEvent`, CalendarEventDetailsView.swift:112).
+ */
+export function useCalendarEvent(id: string | null | undefined, { enabled = true }: { enabled?: boolean } = {}) {
   const owner = useSession((state) => state.profile?.id) ?? '';
   return useQuery({
     queryKey: queryKeys.calendar.event(owner, id ?? ''),
     queryFn: () => calendarEventApi.get(id!),
-    enabled: owner !== '' && !!id,
+    enabled: enabled && owner !== '' && !!id,
   });
 }
 

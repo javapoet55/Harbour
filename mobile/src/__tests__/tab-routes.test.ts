@@ -90,7 +90,9 @@ describe('routes Swift pushes stay inside the tab navigator', () => {
     expect(exists('reschedule-all.tsx')).toBe(true);
     expect(exists('(tabs)/(today)/today/attention.tsx')).toBe(false);
     const root = fs.readFileSync(path.join(APP, '_layout.tsx'), 'utf8');
-    expect(root).toMatch(/name="attention" options=\{SHEET_OPTIONS\}/);
+    // Phase 13: Needs attention has its own detent and corner, on top of the shared sheet options.
+    expect(root).toMatch(/name="attention" options=\{ATTENTION_SHEET_OPTIONS\}/);
+    expect(root).toContain('const ATTENTION_SHEET_OPTIONS = { ...SHEET_OPTIONS, sheetAllowedDetents: [0.63, 1.0], sheetCornerRadius: 36 };');
     expect(root).toMatch(/name="reschedule-all" options=\{SHEET_OPTIONS\}/);
   });
 });

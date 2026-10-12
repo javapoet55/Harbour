@@ -1,8 +1,13 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { State } from 'react-native-gesture-handler';
+import { fireGestureHandler, getByGestureTestId } from 'react-native-gesture-handler/jest-utils';
 import { Platform, StyleSheet } from 'react-native';
 
 import type { NexdoTask } from '../api/types';
+import { momentsStore } from '../features/moments/store';
+import { moment } from '../features/moments/testFixtures';
 import { DEFAULT_TASK_QUERY } from '../lib/taskQuery';
 import { resetRevisions } from '../query/taskRevision';
 import { useSession } from '../store/session';
@@ -68,9 +73,121 @@ describe('Tasks screen', () => {
     useSession.setState({ status: 'signedIn', profile: { id: 'u1', name: 'Sri Ram', email: 'a@b.com', timeZone: ZONE } });
     mockTasks.mockResolvedValue({ tasks: FIXTURE, timeZone: ZONE });
     mockProjects.mockResolvedValue({ projects: [], unassignedTaskCount: 0 });
+    momentsStore.setState({ snapshot: null, route: null, routedPlanID: null });
   });
 
   afterEach(() => jest.useRealTimers());
+
+  /** bb57e09 (RootView.swift:1966-1981): a Moment is an item in its date group; tap opens the Moment. */
+  it('lists a Moment among the day’s tasks, counts it, and opens it', async () => {
+    const birthday = moment({ id: 'm1', title: 'Parity Sunday', type: 'birthday', occurrenceDate: '2020-09-16', yearly: true });
+    momentsStore.setState({ snapshot: { moments: [birthday], emailAccount: null, emailConfigured: false, automaticEmailEnabled: false } });
+    await renderTasks();
+
+    await waitFor(() => expect(screen.getByTestId('task-moment-moment:m1:2026-09-16')).toBeTruthy());
+    expect(screen.getByText('All day · Birthday · Moment')).toBeTruthy();
+    // The two open tasks and the Moment are three items today.
+    expect(screen.getByText('3 items')).toBeTruthy();
+    expect(screen.getByLabelText('Today, 3 items')).toBeTruthy();
+    // No checkbox: a Moment is never completed from here.
+    expect(screen.queryByTestId('task-toggle-moment:m1:2026-09-16')).toBeNull();
+
+    await fireEvent.press(screen.getByTestId('task-moment-moment:m1:2026-09-16'));
+    expect(momentsStore.getState().route?.id).toBe('m1');
+    expect(mockPush).not.toHaveBeenCalled();
+  });
+
+  /** d568989 (RootView.swift:1983-2014): drag within a date group; the order stays on the device. */
+  describe('manual order', () => {
+    const order = () => screen.getAllByTestId(/^task-open-/).map((node) => node.props.testID.replace('task-open-', ''));
+    const lay = (id: string, y: number) =>
+      fireEvent(screen.getByTestId(`reorder-item-${id}`), 'layout', { nativeEvent: { layout: { x: 0, y, width: 320, height: 66 } } });
+
+    beforeEach(async () => {
+      await AsyncStorage.clear();
+    });
+
+    it('drops a held card on another, which it replaces, and saves the order for this account', async () => {
+      await renderTasks();
+      await waitFor(() => expect(order()).toEqual(['a', 'b']));
+      await lay('a', 0);
+      await lay('b', 74);
+
+      await act(async () => {
+        fireGestureHandler(getByGestureTestId('reorder-a'), [
+          { state: State.BEGAN, translationY: 0 },
+          { state: State.ACTIVE, translationY: 40 },
+          { state: State.ACTIVE, translationY: 80 },
+          { state: State.END, translationY: 80 },
+        ]);
+      });
+
+      await waitFor(() => expect(order()).toEqual(['b', 'a']));
+      expect(JSON.parse((await AsyncStorage.getItem('nexdo.taskDisplayOrders')) ?? '{}')).toEqual({ u1: ['b', 'a'] });
+      // Display only: no task was written.
+      expect(mockUpdateTask).not.toHaveBeenCalled();
+    });
+
+    it('does nothing when the card is let go away from any other card', async () => {
+      await renderTasks();
+      await waitFor(() => expect(order()).toEqual(['a', 'b']));
+      await lay('a', 0);
+      await lay('b', 74);
+      await act(async () => {
+        fireGestureHandler(getByGestureTestId('reorder-a'), [
+          { state: State.BEGAN, translationY: 0 },
+          { state: State.ACTIVE, translationY: 400 },
+          { state: State.END, translationY: 400 },
+        ]);
+      });
+      expect(order()).toEqual(['a', 'b']);
+      expect(await AsyncStorage.getItem('nexdo.taskDisplayOrders')).toBeNull();
+    });
+
+    it('reads the saved order back, and offers Move up / Move down with Swift’s hint', async () => {
+      await AsyncStorage.setItem('nexdo.taskDisplayOrders', JSON.stringify({ u1: ['b', 'a'], other: ['a', 'b'] }));
+      await renderTasks();
+      await waitFor(() => expect(order()).toEqual(['b', 'a']));
+
+      const open = screen.getByTestId('task-open-a');
+      expect(open.props.accessibilityHint).toBe('Opens task editor. Touch and hold to reorder within this date. Scheduled time stays the same.');
+      expect(open.props.accessibilityActions.map((action: { label: string }) => action.label)).toEqual(['Move up', 'Move down']);
+      await fireEvent(open, 'accessibilityAction', { nativeEvent: { actionName: 'moveUp' } });
+      await waitFor(() => expect(order()).toEqual(['a', 'b']));
+      // Another account's order on this device is kept.
+      expect(JSON.parse((await AsyncStorage.getItem('nexdo.taskDisplayOrders')) ?? '{}')).toEqual({ u1: ['a', 'b'], other: ['a', 'b'] });
+    });
+
+    it('never moves a Moment, and a card dropped on one stays put', async () => {
+      momentsStore.setState({
+        snapshot: { moments: [moment({ id: 'm1', occurrenceDate: '2026-09-16' })], emailAccount: null, emailConfigured: false, automaticEmailEnabled: false },
+      });
+      await renderTasks();
+      await waitFor(() => expect(screen.getByTestId('task-moment-moment:m1:2026-09-16')).toBeTruthy());
+      expect(getByGestureTestId('reorder-moment:m1:2026-09-16').config.enabled).toBe(false);
+      await lay('moment:m1:2026-09-16', 0);
+      await lay('a', 74);
+      await lay('b', 148);
+      await act(async () => {
+        fireGestureHandler(getByGestureTestId('reorder-b'), [
+          { state: State.BEGAN, translationY: 0 },
+          { state: State.ACTIVE, translationY: -148 },
+          { state: State.END, translationY: -148 },
+        ]);
+      });
+      expect(order()).toEqual(['a', 'b']);
+    });
+  });
+
+  it('leaves off Moments out', async () => {
+    momentsStore.setState({
+      snapshot: { moments: [moment({ id: 'off', occurrenceDate: '2026-09-16', enabled: false })], emailAccount: null, emailConfigured: false, automaticEmailEnabled: false },
+    });
+    await renderTasks();
+    await waitFor(() => expect(screen.getByText('Renew passport')).toBeTruthy());
+    expect(screen.queryByTestId('task-moment-moment:off:2026-09-16')).toBeNull();
+    expect(screen.getByText('2 items')).toBeTruthy();
+  });
 
   it('renders the Swift header copy and both creation cards', async () => {
     await renderTasks();
@@ -93,7 +210,7 @@ describe('Tasks screen', () => {
 
     // "Today" is both the date pill and the section header; the header is the one with a count.
     expect(screen.getByRole('header', { name: 'Today' })).toBeTruthy();
-    expect(screen.getByText('2 tasks')).toBeTruthy();
+    expect(screen.getByText('2 items')).toBeTruthy();
   });
 
   it('draws a life-reminder task as a plain row, with no reminder badge (RootView.swift:1860-1890)', async () => {
@@ -112,9 +229,9 @@ describe('Tasks screen', () => {
   it('counts each date pill from the same filtered pass', async () => {
     await renderTasks();
 
-    await waitFor(() => expect(screen.getByLabelText('Today, 2 tasks')).toBeTruthy());
-    expect(screen.getByLabelText('Tomorrow, 1 tasks')).toBeTruthy();
-    expect(screen.getByLabelText('This Week, 3 tasks')).toBeTruthy();
+    await waitFor(() => expect(screen.getByLabelText('Today, 2 items')).toBeTruthy());
+    expect(screen.getByLabelText('Tomorrow, 1 items')).toBeTruthy();
+    expect(screen.getByLabelText('This Week, 3 items')).toBeTruthy();
   });
 
   it('switches the list when another date pill is chosen', async () => {
@@ -186,6 +303,50 @@ describe('Tasks screen', () => {
     await fireEvent.press(screen.getByTestId('task-toggle-a'));
 
     await waitFor(() => expect(mockUpdateTask).toHaveBeenCalledWith('a', { status: 'COMPLETED' }));
+  });
+
+  /** bdb68ce (RootView.swift:2026-2075): fill and strike while saving, leave once the save is confirmed. */
+  describe('completion animation', () => {
+    const glyph = (id: string) => (screen.getByTestId(`task-toggle-${id}-circle`).children[0] as unknown as { props: { name: string } }).props.name;
+
+    it('keeps the completing row, filled and struck, until the save succeeds and its 0.25 s exit ends', async () => {
+      let resolve: (value: unknown) => void = () => undefined;
+      mockUpdateTask.mockReturnValue(new Promise((done) => (resolve = done)));
+      await renderTasks();
+      await waitFor(() => expect(screen.getByText('Renew passport')).toBeTruthy());
+
+      await fireEvent.press(screen.getByTestId('task-toggle-a'));
+      expect(glyph('a')).toBe('checkmark-circle');
+      expect(JSON.stringify(StyleSheet.flatten(screen.getByText('Renew passport').props.style))).toContain('line-through');
+      // Every other toggle waits, and the row being completed does not open.
+      expect(screen.getByTestId('task-toggle-b').props.accessibilityState.disabled).toBe(true);
+      expect(screen.getByTestId('task-open-a').props.accessibilityState.disabled).toBe(true);
+
+      // Saved: the cache now says COMPLETED, but the row stays listed while it leaves. (No waitFor
+      // here: it would run the fake 250 ms timer.)
+      await act(async () => resolve({ task: { ...FIXTURE[0], status: 'COMPLETED' } }));
+      expect(screen.getByText('Renew passport')).toBeTruthy();
+      await act(async () => {
+        jest.advanceTimersByTime(249);
+      });
+      expect(screen.getByText('Renew passport')).toBeTruthy();
+      await act(async () => {
+        jest.advanceTimersByTime(1);
+      });
+      await waitFor(() => expect(screen.queryByText('Renew passport')).toBeNull());
+      expect(screen.getByTestId('task-toggle-b').props.accessibilityState.disabled).toBe(false);
+    });
+
+    it('leaves the row in place when the save fails', async () => {
+      mockUpdateTask.mockRejectedValue(new Error('offline'));
+      await renderTasks();
+      await waitFor(() => expect(screen.getByText('Renew passport')).toBeTruthy());
+
+      await fireEvent.press(screen.getByTestId('task-toggle-a'));
+      await waitFor(() => expect(glyph('a')).toBe('ellipse-outline'));
+      expect(screen.getByText('Renew passport')).toBeTruthy();
+      expect(screen.getByTestId('task-toggle-b').props.accessibilityState.disabled).toBe(false);
+    });
   });
 
   it('toggles a completed task back to PLANNED, matching AppModel.complete', async () => {

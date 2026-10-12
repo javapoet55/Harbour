@@ -172,6 +172,15 @@ describe('reconcile', () => {
     expect(reconcile([typed], task({ id: 't1', title: 'Contact John at 10 AM' })).manualRecipient ?? null).toBeNull();
   });
 
+  // FollowUpPreparationTests.swift:15-22: the preparation survives a move; the action id does not.
+  it('keeps the saved follow-up preparation through a reschedule', () => {
+    const preparation = { company: 'Acme Insurance', purpose: 'Claim status', phone: '', email: '', notes: 'Reference 123', draft: 'd', checklist: [{ id: 'c1', title: 'Ready', done: true }], outcomes: [{ id: 'o1', date: '2026-10-09T16:00:00Z', result: 'unresolved' as const, notes: 'Waiting for adjuster' }] };
+    const prepared = action({ scheduledAt: Date.parse('2026-09-09T17:00:00Z'), preparation });
+    const [moved] = reconcileActions({ previous: [prepared], tasks: [task({ id: 't1', startAt: '2026-09-10T18:00:00Z' })], now: NOW, timeZone: ZONE, newId });
+    expect(moved.preparation).toEqual(preparation);
+    expect(moved.id).not.toBe(prepared.id);
+  });
+
   it('falls back to dueAt when there is no startAt', () => {
     const result = reconcileActions({
       previous: [],

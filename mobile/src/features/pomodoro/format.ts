@@ -140,6 +140,7 @@ export const TIMER_TINTS: Record<PomodoroCategory, string> = {
   diary: '#FF2D55',
   math: '#FFCC00',
   stretching: '#32ADE6',
+  personalWork: '#007AFF',
 };
 
 /** The dashboard's per-category colour (PomodoroDashboard.swift:248); reading is green here, mint there. */
@@ -150,16 +151,18 @@ export const CATEGORY_COLORS: Record<PomodoroCategory, string> = {
   diary: '#FF2D55',
   math: '#FFCC00',
   stretching: '#32ADE6',
+  personalWork: '#007AFF',
 };
 
 /** Ionicons for `PomodoroCategory.icon` (Pomodoro.swift:8-10). */
-export const CATEGORY_ICONS: Record<PomodoroCategory, 'book' | 'stopwatch' | 'code-slash' | 'heart' | 'school' | 'body'> = {
+export const CATEGORY_ICONS: Record<PomodoroCategory, 'book' | 'stopwatch' | 'code-slash' | 'heart' | 'school' | 'body' | 'person'> = {
   reading: 'book',
   focus: 'stopwatch',
   coding: 'code-slash',
   diary: 'heart',
   math: 'school',
   stretching: 'body',
+  personalWork: 'person',
 };
 
 /** The "About these metrics" alert (PomodoroDashboard.swift:63-67), verbatim. */

@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
-import { Alert, BackHandler } from 'react-native';
+import { Alert, BackHandler, StyleSheet } from 'react-native';
 
 import type { NexdoTask } from '../api/types';
 import { resetRevisions } from '../query/taskRevision';
@@ -150,6 +150,18 @@ describe('Needs attention sheet', () => {
     expect(mockPush).toHaveBeenCalledWith('/task/late');
     await fireEvent.press(screen.getByTestId('attention-open-later'));
     expect(mockPush).toHaveBeenCalledWith('/task/later');
+  });
+
+  /** Phase 13 (TodayAttentionSheet.swift:53-54, :66-70, :90-91; capture `today-attention-sheet-v3`). */
+  it('draws the overdue rows and Reschedule all on systemGray5, the button as the gradient capsule', async () => {
+    await wrap(<AttentionSheet />);
+    await waitFor(() => expect(screen.getByTestId('attention-reschedule-all')).toBeTruthy());
+    expect(StyleSheet.flatten(screen.getByTestId('attention-overdue-section').props.style).backgroundColor).toBe('#E5E5EA');
+    const section = StyleSheet.flatten(screen.getByTestId('attention-reschedule-section').props.style);
+    expect(section).toMatchObject({ backgroundColor: '#E5E5EA', marginTop: 24 });
+    const button = StyleSheet.flatten(screen.getByTestId('attention-reschedule-all-gradient').props.style);
+    expect(button).toMatchObject({ minHeight: 72, borderRadius: 999 });
+    expect(screen.getByText('Reschedule all')).toBeTruthy();
   });
 
   it('presents Reschedule all', async () => {

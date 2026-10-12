@@ -147,28 +147,39 @@ export const DISCONNECTED_MESSAGE = 'Calendar disconnected. Imported events were
 export const READ_ONLY_CAPTION = 'Read-only: events come into Nexdo, but tasks and events you create in Nexdo are not added to this calendar.';
 
 /**
- * What Settings says once a Google sign-in comes back connected and the list has reloaded
- * (`connect(reconnecting:)`, ProfileView.swift, commit 27798c5). `reconnecting` is the row whose
- * Reconnect started the flow; `connections` is the reloaded list. If that row still needs
- * reconnecting (a different Google account was chosen), it is a failure.
+ * The provider a connection flow signs in with (`connect(reconnecting:)`, ProfileView.swift:539-543,
+ * 6f079c0): the reconnecting row's own provider, else Google. Only `microsoft` is named otherwise.
+ */
+export function connectProvider(reconnecting: Pick<CalendarConnection, 'provider'> | null): { provider: string; name: 'Google' | 'Microsoft' } {
+  const provider = reconnecting?.provider.toLowerCase() ?? 'google';
+  return { provider, name: provider === 'microsoft' ? 'Microsoft' : 'Google' };
+}
+
+/**
+ * What Settings says once a sign-in comes back connected and the list has reloaded
+ * (`connect(reconnecting:)`, ProfileView.swift:553-560). `reconnecting` is the row whose Reconnect
+ * started the flow; `connections` is the reloaded list. If that row still needs reconnecting (a
+ * different account was chosen), it is a failure. Every message names the provider (6f079c0).
  */
 export function connectOutcome(
   reconnecting: CalendarConnection | null,
   refreshed: boolean,
   connections: CalendarConnection[],
+  providerName: string = connectProvider(reconnecting).name,
 ): { kind: 'connected' | 'failed'; message: string } {
+  // Phase 13 (ProfileView.swift:546, :558-563): the messages name the provider that signed in.
   if (reconnecting) {
     const row = connections.find((connection) => connection.id === reconnecting.id);
     if (row && needsReconnect(row)) {
       return {
         kind: 'failed',
-        message: `${displayName(reconnecting)} still needs reconnecting. Choose ${reconnecting.accountEmail ?? 'the same Google account'} on Google’s sign-in page.`,
+        message: `${displayName(reconnecting)} still needs reconnecting. Choose ${reconnecting.accountEmail ?? 'the same account'} on ${providerName}’s sign-in page.`,
       };
     }
-    return { kind: 'connected', message: 'Google Calendar reconnected and synchronized.' };
+    return { kind: 'connected', message: `${providerName} Calendar reconnected and synchronized.` };
   }
   return {
     kind: 'connected',
-    message: refreshed ? 'Google Calendar connected and synchronized.' : 'Google Calendar connected, but Nexdo could not refresh it yet.',
+    message: refreshed ? `${providerName} Calendar connected and synchronized.` : `${providerName} Calendar connected, but Nexdo could not refresh it yet.`,
   };
 }

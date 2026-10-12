@@ -54,6 +54,8 @@ export type GroceryList = {
   storeName?: string | null;
   storeAddress?: string | null;
   storeZip?: string | null;
+  /** bdb68ce: the list's own logo, bare JPEG base64 (`listLogo.ts`). Null when none. */
+  storeLogoData?: string | null;
   items: GroceryItem[];
 };
 
@@ -70,6 +72,8 @@ export type ShoppingInput = {
   timeZone: string;
   weekly: boolean;
   items: GroceryItem[];
+  /** Always sent, as Swift does: the logo, or `""` for none, which clears it. */
+  storeLogoData: string;
   storePlaceId?: string;
   storeWebsite?: string;
   storeName?: string;
@@ -250,7 +254,14 @@ export type ShoppingOfferMatch = {
 export type ShoppingOffersSnapshot = { matches: ShoppingOfferMatch[]; status: string; lastCheckedAt?: string | null; sourceURL?: string | null };
 
 /** `ShoppingStoreHours` (ShoppingStoreHoursView.swift:3-7). `current` false means regular hours. */
-export type ShoppingStoreHours = { days: string[]; openNow?: boolean | null; current: boolean; checkedAt?: string };
+export type ShoppingStoreHours = {
+  days: string[];
+  openNow?: boolean | null;
+  current: boolean;
+  checkedAt?: string;
+  /** bb57e09: the store's UTC offset, to find today's row (`storeHoursDay.ts`). Null when Google gave none. */
+  utcOffsetMinutes?: number | null;
+};
 
 export const shoppingOffersApi = {
   /** `GET /api/shopping/offers?listId=`. */

@@ -7,7 +7,14 @@ export type ApiErrorCode =
   | 'SIGNED_OUT'
   | 'INSECURE_URL'
   | 'INVALID_RESPONSE'
-  | 'NETWORK';
+  | 'NETWORK'
+  | 'VOICE_MONTHLY_LIMIT_REACHED';
+
+/**
+ * The receipt a 429 `VOICE_MONTHLY_LIMIT_REACHED` carries (94da063, `voiceAllowanceResponse`,
+ * src/server/voice/usage.ts:43-51) — the same shape as `GET /api/voice/usage`.
+ */
+export type VoiceLimitReceipt = { month: string; usedSeconds: number; limitMinutes: number; remainingSeconds: number; asOf: string };
 
 export class ApiError extends Error {
   readonly status: number;
@@ -17,8 +24,10 @@ export class ApiError extends Error {
   /** Present for EMAIL_NOT_VERIFIED: the account email the verification code was sent to. */
   readonly email?: string;
   readonly verificationProof?: string;
+  /** Present for VOICE_MONTHLY_LIMIT_REACHED: this month's usage, as of the refusal. */
+  readonly voiceUsage?: VoiceLimitReceipt;
 
-  constructor(init: { status: number; message: string; code?: ApiErrorCode; warnings?: string[]; email?: string; verificationProof?: string }) {
+  constructor(init: { status: number; message: string; code?: ApiErrorCode; warnings?: string[]; email?: string; verificationProof?: string; voiceUsage?: VoiceLimitReceipt }) {
     super(init.message);
     Object.setPrototypeOf(this, ApiError.prototype);
     this.name = 'ApiError';
@@ -27,11 +36,34 @@ export class ApiError extends Error {
     this.warnings = init.warnings;
     this.email = init.email;
     this.verificationProof = init.verificationProof;
+    this.voiceUsage = init.voiceUsage;
   }
 }
 
 export function isApiError(error: unknown): error is ApiError {
   return error instanceof ApiError;
+}
+
+/**
+ * 94da063: the month's 100 voice minutes are used up. Every paid voice route — the realtime task and
+ * transcription sessions, /api/speech and /api/transcribe — answers 429 with this code BEFORE calling
+ * the provider, and the message ("You have used your 100 minutes of voice this month. …") is the one
+ * to show. Typing still works.
+ */
+export function isVoiceLimitReached(error: unknown): error is ApiError {
+  return isApiError(error) && error.code === 'VOICE_MONTHLY_LIMIT_REACHED';
+}
+
+/** The JSON error body of a voice route, as an `ApiError` when it is the monthly limit; else `null`. */
+export function voiceLimitError(status: number, payload: unknown): ApiError | null {
+  if (typeof payload !== 'object' || payload === null) return null;
+  const body = payload as Record<string, unknown>;
+  if (body.code !== 'VOICE_MONTHLY_LIMIT_REACHED' || typeof body.error !== 'string' || body.error === '') return null;
+  const receipt =
+    typeof body.month === 'string' && typeof body.usedSeconds === 'number' && typeof body.limitMinutes === 'number' && typeof body.remainingSeconds === 'number' && typeof body.asOf === 'string'
+      ? { month: body.month, usedSeconds: body.usedSeconds, limitMinutes: body.limitMinutes, remainingSeconds: body.remainingSeconds, asOf: body.asOf }
+      : undefined;
+  return new ApiError({ status, code: 'VOICE_MONTHLY_LIMIT_REACHED', message: body.error, voiceUsage: receipt });
 }
 
 export const messages = {
@@ -166,6 +198,8 @@ export function createApiClient(options: ApiClientOptions) {
         if (payload.code === 'SCHEDULE_WARNING' && isStringArray(payload.warnings)) {
           throw new ApiError({ status: response.status, code: 'SCHEDULE_WARNING', message: payload.warnings.join('\n\n'), warnings: payload.warnings });
         }
+        const voiceLimit = voiceLimitError(response.status, payload);
+        if (voiceLimit) throw voiceLimit;
         if (payload.code === 'EMAIL_NOT_VERIFIED') {
           throw new ApiError({
             status: response.status,

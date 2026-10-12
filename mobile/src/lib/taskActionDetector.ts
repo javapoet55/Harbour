@@ -30,6 +30,12 @@ export type DetectedTaskAction = {
 /** `^(contact|call|email|message|text|follow\s+up\s+with)\s+(.+)$` (TaskActionDetector.swift:9). */
 const VERB = /^(contact|call|email|message|text|follow\s+up\s+with)\s+([\s\S]+)$/i;
 
+/**
+ * The lead-ins `detect` drops before matching (TaskActionDetector.swift:8, 6f079c0), so "I need to
+ * follow up with my insurance company" reads as a follow-up. One lead-in only, like Swift's anchor.
+ */
+const LEAD_IN = /^(?:(?:I need to|I have to|I want to|please|remind me to)\s+)/i;
+
 /** A tail that starts with a preposition or a day word has no name in it (`:13`). */
 const TAIL_STARTS_WITH_TIME = /^(?:at|about|regarding|today|tomorrow|tonight|on)\b/i;
 
@@ -68,7 +74,7 @@ function trimNameOrContext(value: string): string {
  * five words, at most 100 characters, and contains a letter.
  */
 export function detectTaskAction(title: string, now: number, timeZone: string): DetectedTaskAction | null {
-  const text = title.trim();
+  const text = title.trim().replace(LEAD_IN, '');
   const match = VERB.exec(text);
   if (!match) return null;
 

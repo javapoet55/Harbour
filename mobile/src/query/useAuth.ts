@@ -3,6 +3,7 @@ import { useMutation, useQueryClient, type QueryClient } from '@tanstack/react-q
 import { endpoints, isApiError, type Profile } from '../api';
 import { useLastSignedIn } from '../store/lastSignedIn';
 import { useSession } from '../store/session';
+import { resetWellnessGuidesForSignIn } from '../store/wellnessGuides';
 import { queryKeys } from './keys';
 import { synchronizeDeviceTimeZone } from './useProfile';
 
@@ -21,6 +22,8 @@ import { synchronizeDeviceTimeZone } from './useProfile';
  */
 export async function finishAuthentication(queryClient: QueryClient): Promise<Profile> {
   const { user } = await endpoints.me();
+  // `seenWellnessGuides.removeAll()` (8f7e492, 2edb3f0): each sign-in shows every module guide once.
+  resetWellnessGuidesForSignIn();
   queryClient.setQueryData(queryKeys.me(), user);
   useSession.getState().setProfile(user);
 
@@ -102,6 +105,21 @@ export function useResendVerification() {
   });
 }
 
+/**
+ * `PasswordResetView.requestCode()` / `confirm()` (RootView.swift:767-781, d568989 / 4185501): a failure
+ * shows `model.error`, or these when there is none. Swift never gets that far — `perform` raises the
+ * global "Unable to complete request" alert, which dismisses the sheet (docs/IOS_TO_REACT_NATIVE.md §23,
+ * For the team) — so RN is where the inline message is actually seen.
+ */
+export const RESET_CODE_FAILED = 'Could not send the reset code. Please try again.';
+export const RESET_PASSWORD_FAILED = 'Could not reset the password. Please try again.';
+
+/** `model.error ?? fallback`: the request's own message, unless it has none. */
+export function resetFailure(error: unknown, fallback: string): string {
+  const message = error instanceof Error ? error.message.trim() : '';
+  return message !== '' ? message : fallback;
+}
+
 /** `AppModel.requestPasswordReset` (NexdoApp.swift:192–199). */
 export function useRequestPasswordReset() {
   return useMutation<string, Error, { email: string }>({
@@ -109,11 +127,23 @@ export function useRequestPasswordReset() {
   });
 }
 
-/** `AppModel.confirmPasswordReset` (NexdoApp.swift:200–208). The server does not start a session here. */
-export function useConfirmPasswordReset() {
+/**
+ * `AppModel.confirmPasswordReset` (NexdoApp.swift:221-230). The server does not start a session here.
+ *
+ * 4185501: "Forgot password?" is now also offered from Change password, i.e. while signed in, and a
+ * reset made there ends the session like Change password does — "return signed-in users to login
+ * after a reset". Signed out, nothing else happens.
+ */
+export function useConfirmPasswordReset({ beforeSessionEnds }: { beforeSessionEnds?: () => Promise<void> } = {}) {
+  const queryClient = useQueryClient();
   return useMutation<void, Error, { email: string; code: string; password: string }>({
     mutationFn: async ({ email, code, password }) => {
       await endpoints.passwordResetConfirm(email, code, password);
+      if (useSession.getState().profile === null) return;
+      await beforeSessionEnds?.().catch(() => undefined);
+      useSession.getState().clear();
+      queryClient.clear();
+      queryClient.setQueryData(queryKeys.me(), null);
     },
   });
 }

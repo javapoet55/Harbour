@@ -8,12 +8,14 @@ const mockClose = jest.fn(async () => undefined);
 jest.mock('../../../lib/sessionNavigation', () => ({ closePresentedScreens: () => mockClose() }));
 
 import { useTaskQuery } from '../../../store/taskQuery';
+import { useWellnessGuides } from '../../../store/wellnessGuides';
 import { continueToModule, leaveWellness, openModuleGuide } from '../navigation';
 
 /** RootView.swift:212-216 (`onDismiss` with the choice) and WellnessChooserView.swift:44-58. */
 
 beforeEach(() => {
   jest.clearAllMocks();
+  useWellnessGuides.getState().reset();
   useTaskQuery.getState().replace({ ...useTaskQuery.getState().query, date: 'This Week' });
 });
 
@@ -41,6 +43,19 @@ it('Ask AI closes the covers and opens the Ask sheet', async () => {
 it('a module card opens its guide', () => {
   openModuleGuide('shopping');
   expect(mockRouter.push).toHaveBeenCalledWith({ pathname: '/wellness/guide/[kind]', params: { kind: 'shopping' } });
+});
+
+/** 8f7e492, 2edb3f0: each guide once per sign-in (WellnessMenuUITests.swift). */
+it('opens the module itself once its guide has been seen this sign-in, each module on its own', () => {
+  openModuleGuide('shopping');
+  openModuleGuide('shopping');
+  expect(mockRouter.push).toHaveBeenLastCalledWith('/wellness/shopping');
+  openModuleGuide('moments');
+  expect(mockRouter.push).toHaveBeenLastCalledWith({ pathname: '/wellness/guide/[kind]', params: { kind: 'moments' } });
+  // A new sign-in shows them again.
+  useWellnessGuides.getState().reset();
+  openModuleGuide('shopping');
+  expect(mockRouter.push).toHaveBeenLastCalledWith({ pathname: '/wellness/guide/[kind]', params: { kind: 'shopping' } });
 });
 
 it('every module replaces its guide inside the cover, so Back returns to the chooser', async () => {

@@ -23,6 +23,7 @@ export function IOSSwitch({
   accessibilityLabel,
   testID,
   tint,
+  tone = 'tint',
 }: {
   value: boolean;
   onValueChange?: (next: boolean) => void;
@@ -30,6 +31,8 @@ export function IOSSwitch({
   accessibilityLabel?: string;
   testID?: string;
   tint?: string;
+  /** `green`: `SwitchToggleStyle(tint: .green)`, through the theme (`success` / `switchOnGreen`). */
+  tone?: 'tint' | 'green';
 }) {
   const theme = useTheme();
   // Held in state (created once) rather than a ref, so render never reads a ref.
@@ -43,7 +46,7 @@ export function IOSSwitch({
   // glow against a grey card, and off is a neutral grey that keeps a hairline so it stays visible.
   const android = Platform.OS === 'android';
   const off = android ? theme.colors.switchOff : theme.scheme === 'dark' ? 'rgba(120, 120, 128, 0.32)' : 'rgba(120, 120, 128, 0.5)';
-  const on = tint ?? (android ? theme.colors.switchOn : theme.colors.tint);
+  const on = tint ?? (tone === 'green' ? (android ? theme.colors.switchOnGreen : theme.colors.success) : android ? theme.colors.switchOn : theme.colors.tint);
 
   return (
     <Pressable

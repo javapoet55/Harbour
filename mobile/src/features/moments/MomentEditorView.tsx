@@ -329,7 +329,8 @@ export function MomentEditorView({ moment, imported, onDone, dismiss }: { moment
           ),
         }}
       />
-      <View style={styles.fill} pointerEvents={busy ? 'none' : 'auto'}>
+      {/* collapsable={false}: never flattened, so turning pointerEvents to 'none' does not create a view and move the keyboard-aware scroll view into it — Fabric's addViewAt crash on Android (android-polish.md §39). */}
+      <View collapsable={false} style={styles.fill} pointerEvents={busy ? 'none' : 'auto'}>
         <FormScroll testID="moment-editor">
           <FormSection header="Important moment" disabled={locked}>
             <FormRow>

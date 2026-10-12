@@ -103,7 +103,8 @@ export function DatePill({
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={`${filter}, ${count} tasks`}
+      // "items" since Moments are listed too (bb57e09, RootView.swift:1927).
+      accessibilityLabel={`${filter}, ${count} items`}
       accessibilityState={{ selected }}
       onPress={onPress}
       testID={`date-pill-${filter}`}
@@ -206,7 +207,8 @@ export function sectionDateLabel(date: number, timeZone: string): string | null 
 
 /**
  * The section header row (RootView.swift:1899-1911): a calendar glyph, the title over the day's date,
- * and the count on the right, on a white 65% rounded card.
+ * and the count on the right, on a white 65% rounded card. The count is of "items" — tasks and
+ * Moments (bb57e09, `:1964`).
  *
  * Dark mode: Swift's card is a fixed `Color.white.opacity(0.65)` under `nexdoInk`, which is white in
  * dark, so the title would vanish. Dark uses the surface at the same 65% instead.
@@ -226,7 +228,7 @@ export function SectionHeader({ title, date, count }: { title: string; date?: st
         {date ? <Text style={[styles.sectionDate, { color: theme.colors.secondary }]}>{date}</Text> : null}
       </View>
       <Text style={[styles.sectionCount, { color: theme.colors.secondary }]}>
-        {count} {count === 1 ? 'task' : 'tasks'}
+        {count} {count === 1 ? 'item' : 'items'}
       </Text>
     </View>
   );

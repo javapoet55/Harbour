@@ -3,6 +3,7 @@ import { Directory, File, Paths } from 'expo-file-system';
 
 import { getApiUrl } from '../config';
 import { useAppearance } from '../store/appearance';
+import { voiceLimitError } from '../api/client';
 
 /**
  * `VoicePlayback` (ios/App/VoicePlayback.swift:4-54) — the Read Loud path.
@@ -26,7 +27,17 @@ export async function fetchSpeech(text: string, fetchImpl: typeof fetch = fetch)
     body: JSON.stringify({ text }),
     credentials: 'include',
   });
-  if (!response.ok) throw new Error('Nexdo could not play the voice response.');
+  if (!response.ok) {
+    // 94da063: an exhausted month is refused before the provider is called; say so, as Swift's
+    // `requestData` surfaces the server's message (APIClient.swift:85-87).
+    let payload: unknown = null;
+    try {
+      payload = await response.json();
+    } catch {
+      // Not JSON: the generic message below.
+    }
+    throw voiceLimitError(response.status, payload) ?? new Error('Nexdo could not play the voice response.');
+  }
   const type = response.headers.get('content-type') ?? '';
   // `expectedMimeType: "audio/mpeg"` — a JSON error page must not be handed to the player.
   if (!type.includes('audio/')) throw new Error('Nexdo could not play the voice response.');

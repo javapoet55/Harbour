@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
-import { Alert } from 'react-native';
+import { Alert, Linking } from 'react-native';
 
 import type { DoNowRecommendation, NexdoTask, ProtectedTimeProposal } from '../api';
 import { queryKeys } from '../query/keys';
@@ -209,6 +209,23 @@ describe('the voice screen', () => {
 
     expect(screen.getByTestId('voice-status')).toHaveTextContent('Connecting…');
     expect(screen.getByTestId('voice-error')).toHaveTextContent(/Couldn’t start voice/);
+  });
+
+  /** b61801c (AddTaskByVoiceView.swift:97-104): a refused microphone offers Settings. */
+  it('offers Open Settings when the microphone was refused, and only then', async () => {
+    const openSettings = jest.spyOn(Linking, 'openSettings').mockResolvedValue(undefined);
+    mockUseVoiceSession.mockReturnValue(
+      voiceSession({ microphoneDenied: true, startupError: 'Microphone access is off. Enable it in Settings to use voice, or close this screen to type.' }),
+    );
+    await show(<AddTaskByVoiceView />);
+    expect(screen.getByTestId('voice-error')).toHaveTextContent('Microphone access is off. Enable it in Settings to use voice, or close this screen to type.');
+    await fireEvent.press(screen.getByTestId('voice-open-settings'));
+    expect(openSettings).toHaveBeenCalled();
+    openSettings.mockRestore();
+
+    mockUseVoiceSession.mockReturnValue(voiceSession({ startupError: 'Couldn’t start voice. Close this screen and try again.' }));
+    await show(<AddTaskByVoiceView />);
+    expect(screen.queryByTestId('voice-open-settings')).toBeNull();
   });
 
   it('shows Unmute and disables the control outside a live phase', async () => {

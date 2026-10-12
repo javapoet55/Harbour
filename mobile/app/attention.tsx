@@ -1,9 +1,11 @@
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Alert, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 
 import type { NexdoTask, ScheduleAttentionItem } from '../src/api';
 import { TaskSymbol, Text } from '../src/components';
+import { SAVE_GRADIENT } from '../src/components/GradientButton';
 import { withAlpha } from '../src/components/SignInBackdrop';
 import { overdueDay, overdueResults } from '../src/lib/overdueTasks';
 import { parseServerDate } from '../src/lib/taskQuery';
@@ -106,6 +108,8 @@ export default function AttentionSheet() {
   // The glass card at `.medium`, the opaque grouped sheet at `.large` (pass 2).
   const surface = useSheetSurface();
   const section = { backgroundColor: surface.row };
+  // `.listRowBackground(Color(uiColor: .systemGray5))` on the overdue rows and Reschedule all (Phase 13).
+  const gray5 = { backgroundColor: theme.scheme === 'dark' ? '#2C2C2E' : '#E5E5EA' };
 
   return (
     <View style={[styles.fill, { backgroundColor: surface.background }]} testID="attention-sheet">
@@ -171,7 +175,7 @@ export default function AttentionSheet() {
                 <Text style={[styles.header, { color: theme.colors.secondary }]} testID="attention-overdue-header">
                   {`${overdue.length} overdue task${overdue.length === 1 ? '' : 's'}`}
                 </Text>
-                <View style={[styles.section, section]}>
+                <View style={[styles.section, gray5]} testID="attention-overdue-section">
                   {overdue.map((task, index) => (
                     <OverdueRow
                       disabled={busy || saving}
@@ -184,18 +188,23 @@ export default function AttentionSheet() {
                   ))}
                 </View>
 
-                <View style={[styles.section, section, styles.buttonSection]}>
-                  {/* `Label("Reschedule all", systemImage: "calendar").font(.headline)` in a
-                      `.borderedProminent` button, full width (`:57-60`). */}
+                <View style={[styles.section, gray5, styles.buttonSection]} testID="attention-reschedule-section">
+                  {/* `Label("Reschedule all", systemImage: "calendar").font(.headline)`, full width at
+                      `minHeight: 52`, in `NexdoGradientButtonStyle` — white on the save gradient in a
+                      capsule, padded 10, 0.45 when disabled (`:57-68`, RootView.swift:2336-2347). */}
                   <Pressable
+                    accessibilityLabel="Reschedule all"
                     accessibilityRole="button"
                     accessibilityState={{ disabled: busy || saving }}
                     disabled={busy || saving}
                     onPress={() => router.push('/reschedule-all')}
-                    style={[styles.prominent, { backgroundColor: theme.colors.tint, opacity: busy || saving ? 0.45 : 1 }]}
+                    style={{ opacity: busy || saving ? 0.45 : 1 }}
                     testID="attention-reschedule-all"
                   >
-                    <Text style={[styles.headline, { color: '#FFFFFF' }]}>Reschedule all</Text>
+                    <LinearGradient colors={[...SAVE_GRADIENT]} end={{ x: 1, y: 0.5 }} start={{ x: 0, y: 0.5 }} style={styles.prominent} testID="attention-reschedule-all-gradient">
+                      <TaskSymbol color="#FFFFFF" name="calendar" size={17} />
+                      <Text style={[styles.headline, { color: '#FFFFFF' }]}>Reschedule all</Text>
+                    </LinearGradient>
                   </Pressable>
                 </View>
                 <Text style={[styles.footer, { color: theme.colors.secondary }]}>Complete a task or choose a new date.</Text>
@@ -204,7 +213,7 @@ export default function AttentionSheet() {
 
             {checks.length > 0 ? (
               <>
-                <Text style={[styles.header, { color: theme.colors.secondary }]}>Schedule checks</Text>
+                <Text style={[styles.header, overdue.length > 0 && styles.nextSection, { color: theme.colors.secondary }]}>Schedule checks</Text>
                 <View style={[styles.section, section]}>
                   {checks.map((item, index) => (
                     <Pressable
@@ -322,17 +331,20 @@ const styles = StyleSheet.create({
   // An inset-grouped `List` (style map §7, iOS 26 metrics): 16pt section inset, radius 26.
   scroll: { paddingBottom: 32 },
   section: { marginHorizontal: 16, borderRadius: 26, overflow: 'hidden' },
-  // Measured on `today-attention-sheet-half`: 33pt between the sections, a 55pt button.
-  buttonSection: { marginTop: 32, padding: 12 },
+  // `.listSectionSpacing(24)` (Phase 13); the button row `.padding(.vertical, 8)` inside the row inset.
+  buttonSection: { marginTop: 24, paddingHorizontal: 12, paddingVertical: 16 },
+  nextSection: { marginTop: 24 },
   header: { fontSize: 17, lineHeight: 22, fontWeight: '600', marginHorizontal: 32, marginTop: 12, marginBottom: 8 },
   footer: { fontSize: 13, lineHeight: 18, marginHorizontal: 32, marginTop: 8 },
   inset: { marginHorizontal: 32, marginTop: 16 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 52, paddingHorizontal: 16, paddingVertical: 12 },
-  // `.padding(.vertical, 4)` on an `HStack(spacing: 12)`.
-  taskRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 12, paddingVertical: 12 },
+  // `.padding(.vertical, 12)` on an `HStack(spacing: 12)`, inside the row's own inset: 97pt rows on
+  // `today-attention-sheet-v3`.
+  taskRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 12, paddingVertical: 24 },
   square44: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   calendarButton: { borderRadius: 12 },
-  prominent: { minHeight: 54, borderRadius: 999, alignItems: 'center', justifyContent: 'center' },
+  // The label's 52 plus the style's 10 above and below.
+  prominent: { flexDirection: 'row', gap: 8, minHeight: 72, paddingVertical: 10, paddingHorizontal: 16, borderRadius: 999, alignItems: 'center', justifyContent: 'center' },
   headline: { fontSize: 17, lineHeight: 22, fontWeight: '600' },
   subheadline: { fontSize: 15, lineHeight: 20, marginTop: 4 },
   body: { fontSize: 17, lineHeight: 22 },

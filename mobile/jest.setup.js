@@ -53,6 +53,15 @@ jest.mock('@react-native-masked-view/masked-view', () => {
 // react-native-keyboard-controller ships its own mock: host stand-ins for its components and inert hooks.
 jest.mock('react-native-keyboard-controller', () => require('react-native-keyboard-controller/jest'));
 
+// react-native-gesture-handler's own jest setup: its native module and views stand in as host components.
+require('react-native-gesture-handler/jestSetup');
+
+// Reanimated 4 and its worklets runtime ship mocks: animations settle on their target at once, and
+// `useAnimatedStyle` returns the style for the current values.
+jest.mock('react-native-worklets', () => require('react-native-worklets/src/mock'));
+// The mock has no `useReducedMotion`; tests run with motion on.
+jest.mock('react-native-reanimated', () => ({ ...require('react-native-reanimated/mock'), useReducedMotion: () => false }));
+
 jest.mock('@expo/vector-icons/Ionicons', () => {
   const { View } = require('react-native');
   return View;
@@ -140,6 +149,34 @@ jest.mock('expo-audio', () => ({
     addListener: jest.fn(() => ({ remove: jest.fn() })),
   })),
   setAudioModeAsync: jest.fn(async () => undefined),
+  // b61801c: voice asks for the microphone before it requests a session.
+  requestRecordingPermissionsAsync: jest.fn(async () => ({ granted: true, status: 'granted', canAskAgain: true })),
+}));
+
+// expo-sensors is native-only; the bug-report shake (src/features/bugReport/useBugReportHost.ts) listens
+// to the accelerometer. Tests drive `listeners` directly.
+jest.mock('expo-sensors', () => {
+  const listeners = new Set();
+  return {
+    Accelerometer: {
+      isAvailableAsync: jest.fn(async () => true),
+      setUpdateInterval: jest.fn(),
+      addListener: jest.fn((listener) => {
+        listeners.add(listener);
+        return { remove: () => listeners.delete(listener) };
+      }),
+      __listeners: listeners,
+    },
+  };
+});
+
+// Crashlytics is native-only; `configureCrashReporting` runs at the root layout's module scope.
+jest.mock('@react-native-firebase/crashlytics', () => ({
+  getCrashlytics: jest.fn(() => ({})),
+  setCrashlyticsCollectionEnabled: jest.fn(async () => undefined),
+  setAttribute: jest.fn(async () => undefined),
+  log: jest.fn(),
+  crash: jest.fn(),
 }));
 
 // react-native-webrtc and its in-call companion are native-only; the voice tests inject fakes.
@@ -159,7 +196,7 @@ jest.mock('expo-contacts/legacy', () => ({
 }));
 
 // Phase 11 Important Moments native modules. Suites that exercise them mock them again.
-jest.mock('expo-calendar', () => ({
+jest.mock('expo-calendar/legacy', () => ({
   EntityTypes: { EVENT: 'event' },
   requestCalendarPermissionsAsync: jest.fn(async () => ({ granted: true })),
   getCalendarsAsync: jest.fn(async () => []),

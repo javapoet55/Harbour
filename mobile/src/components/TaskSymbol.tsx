@@ -75,6 +75,19 @@ export const taskIcons = {
   'arrow.up.left': 'arrow-up-outline',
   'circle.fill': 'ellipse',
   'sun.max': 'sunny-outline',
+  // The Wellness chooser's hero in dark mode (WellnessChooserView.swift, 4185501).
+  'moon.stars.fill': 'moon',
+  // Bug reports (BugReportView.swift, ProfileView.swift:88; d511fef).
+  ladybug: 'bug-outline',
+  // "Prepare and follow up" (TaskActionView.swift:162, 6f079c0).
+  'list.clipboard': 'clipboard-outline',
+  'apple.logo': 'logo-apple',
+  'heart.fill': 'heart',
+  'checkmark.shield.fill': 'shield-checkmark',
+  iphone: 'phone-portrait-outline',
+  'iphone.gen3.radiowaves.left.and.right': 'phone-portrait-outline',
+  'doc.on.doc': 'copy-outline',
+  'arrow.clockwise': 'refresh',
   // Account and settings (Phase 7). `AccountView`'s menu rows (ios/App/ProfileView.swift:76-82,
   // :104-111) and `ProfileSettingsView`'s cards (`:146-270`).
   'person.crop.circle': 'person-circle-outline',
@@ -127,6 +140,12 @@ export const taskIcons = {
   scope: 'locate-outline',
   keyboard: 'keypad-outline',
   'arrow.up': 'arrow-up',
+  // Phase 13 Calendar run: the connect hub and provider pages (CalendarConnectionView.swift:31-54, :131)
+  // and the Calendar header gear (CalendarView.swift).
+  'lock.shield.fill': 'lock-closed',
+  gearshape: 'settings-outline',
+  'logo.google': 'logo-google',
+  'logo.microsoft': 'logo-microsoft',
 } satisfies Record<string, IoniconName>;
 
 export type TaskSymbolName = keyof typeof taskIcons;

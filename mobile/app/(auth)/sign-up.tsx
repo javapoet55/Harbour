@@ -17,6 +17,7 @@ import { SECURITY_CHECK_MESSAGE, signupChallenge } from '../../src/lib/signupCha
 import { useSignUp } from '../../src/query/useAuth';
 import { signUpSchema, type SignUpValues } from '../../src/schemas/auth';
 import { inputText, systemText, textStyles, useTheme } from '../../src/theme';
+import { useSecureScreen } from '../../src/features/bugReport/coordinator';
 
 /**
  * Port of `SignUpView` (ios/App/RootView.swift:472-571).
@@ -27,6 +28,8 @@ import { inputText, systemText, textStyles, useTheme } from '../../src/theme';
  * individual fields; that went beyond the Swift app and was reverted in Phase 3 housekeeping.
  */
 export default function SignUp() {
+  // Password fields: a bug report opened here would take no screenshot (BugReportCoordinator.swift:55-59).
+  useSecureScreen();
   // `presentation: 'modal'`, so the dark background elevates (see useTheme).
   const theme = useTheme({ elevated: true });
   // The field being edited, so its row's icon tile takes the focus accent (Android, docs/android-polish.md §11).

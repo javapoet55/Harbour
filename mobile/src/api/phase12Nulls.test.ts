@@ -1,9 +1,15 @@
 import { createApiClient, type ApiClient } from './client';
+import { endpoints } from './index';
 import { calendarEventApi } from './calendarEvent';
-import { feedbackApi } from './feedback';
+import { bugReportApi, feedbackApi } from './feedback';
+import { followUpApi, followUpScheduleBody } from './followUp';
 import { nutritionApi } from './nutrition';
 import { pomodoroApi } from './pomodoro';
-import { shoppingEmailApi, shoppingOffersApi, shoppingStoresApi } from './shopping';
+import { shoppingApi, shoppingEmailApi, shoppingOffersApi, shoppingStoresApi } from './shopping';
+import { listInput } from '../features/shopping/model';
+import { bugSubmission, includeScreenshot, newBugDraft, type BugDiagnostics } from '../features/bugReport/model';
+import { validateSettings } from '../lib/profileSettings';
+import { toggleWorkingDay } from '../features/tasks/workingDays';
 import { createMomentConnectModel, type ConnectOperation } from '../features/moments/connectCall';
 import type { PomodoroSession } from '../features/pomodoro/model';
 
@@ -18,7 +24,7 @@ import type { PomodoroSession } from '../features/pomodoro/model';
  * server field that stops being nullable, fails here.
  */
 
-jest.mock('./index', () => ({ getApi: () => mockClient }));
+jest.mock('./index', () => ({ ...jest.requireActual('./index'), getApi: () => mockClient }));
 
 // `mock`-prefixed so babel-plugin-jest-hoist allows the factory above to close over it.
 let mockClient: ApiClient;
@@ -104,6 +110,19 @@ describe('nothing Phase 12 writes sends a null into a bare zod .optional()', () 
     expect(await nullsIn(send)).toEqual([]);
   });
 
+  // bdb68ce — src/server/shopping/domain.ts:4: `storeLogoData` is `.nullable().optional()`, but null and
+  // "" both CLEAR the logo while a missing key keeps it, so it is always the logo or "" — never null.
+  // Each item's `imageData` is null when absent, as Swift encodes it (`itemInput` is nullable there).
+  it.each([
+    ['with a logo', '/9j/AA=='],
+    ['without one', null],
+  ])('POST /api/shopping save %s sends no null logo', async (_name, logo) => {
+    const list = { id: 'l1', title: 'Groceries', date: '2026-10-10', timeZone: 'UTC', weekly: true, revision: 2, storeName: 'Safeway', storeLogoData: logo, items: [{ id: 'i1', name: 'Milk', category: 'Dairy', quantity: '1', size: '', notes: '', checked: false, imageData: null }] };
+    const nulls = await nullsIn((client) => shoppingApi.post({ operation: 'save', id: list.id, revision: list.revision, input: listInput(list), idempotencyKey: '33333333-3333-4333-8333-333333333333' }, client));
+    expect(nulls).toEqual(['input.items[0].imageData']);
+    expect((lastBody as { input: { storeLogoData: string } }).input.storeLogoData).toBe(logo ?? '');
+  });
+
   // src/server/shopping/stores.ts:5-12 — `area`, `zip`, `latitude`, `longitude` bare `.optional()`.
   it.each([
     ['search by area', (client: ApiClient) => shoppingStoresApi.search({ name: 'Safeway', area: 'Danville' }, client)],
@@ -128,6 +147,34 @@ describe('nothing Phase 12 writes sends a null into a bare zod .optional()', () 
 
   it('POST /api/feedback sends no null', async () => {
     expect(await nullsIn((client) => feedbackApi.submit({ id: 'f1', title: 't', description: 'd', stars: 5 }, client))).toEqual([]);
+  });
+
+  // Phase 13 — src/server/follow-up.ts:4-10: every preparation field is required and none nullable,
+  // so a preparation is always sent whole and a null anywhere is a 400.
+  it.each([
+    ['save', (client: ApiClient) => followUpApi.save('t1', { revision: 0, preparation: { company: 'Acme', purpose: 'Claim', phone: '', email: '', notes: '', draft: 'd', checklist: [{ id: 'c1', title: 'Ready', done: false }], outcomes: [{ id: 'o1', date: '2026-10-09T16:00:00Z', result: 'noAnswer', notes: '' }] } }, client)],
+    ['schedule', (client: ApiClient) => followUpApi.schedule('t1', followUpScheduleBody(Date.parse('2026-10-10T16:00:00Z'), 15), client)],
+  ])('follow-up %s sends no null', async (_name, send) => {
+    expect(await nullsIn(send)).toEqual([]);
+  });
+
+  // src/server/feedback/bugs.ts:11-21 — `.strict()`, and `screenshot` a bare `.optional()`: a report
+  // without a screenshot must omit the key.
+  it.each([false, true])('POST /api/feedback/bugs sends no null (screenshot: %s)', async (withScreenshot) => {
+    const metadata: BugDiagnostics = { appVersion: '1', buildNumber: '1', deviceModel: 'Pixel 8', iosVersion: '14', screen: 'app', timestamp: '2026-10-10T12:00:00Z', correlationID: '22222222-2222-4222-8222-222222222222' };
+    const draft = { ...newBugDraft(() => '11111111-1111-4111-8111-111111111111'), description: 'Broken' };
+    const { input } = bugSubmission(withScreenshot ? includeScreenshot(draft, 'AQI=') : draft, metadata)!;
+    expect(await nullsIn((client) => bugReportApi.submit(input, client))).toEqual([]);
+  });
+
+  // d568989 — src/app/api/settings/route.ts:28-36: `workingDays` is a bare string in a `.partial()`
+  // object, so it may be omitted but not null; `phoneNumber` is the one nullable preference.
+  it('PATCH /api/settings carries workingDays without a null, and only phoneNumber may be null', async () => {
+    const preferences = { workingDays: toggleWorkingDay('1,2,3,4,5', 6, true), workStart: '09:00', workEnd: '17:00', quietStart: '21:00', quietEnd: '07:00', confirmationLevel: 'ALWAYS', voiceEnabled: true, personalizationEnabled: true, pushEnabled: true, emailEnabled: true, smsEnabled: false, morningSummary: true, eveningSummary: false, phoneNumber: '' };
+    const result = validateSettings({ name: 'Ada', preferences, nextAction: { enabled: true, switchingThreshold: 10 }, deviceTimeZone: 'America/Los_Angeles' });
+    if (!result.ok) throw new Error(result.failure);
+    expect(await nullsIn((client) => endpoints.updateSettings(result.input, client))).toEqual(['preference.phoneNumber']);
+    expect((lastBody as { preference: { workingDays: string } }).preference.workingDays).toBe('1,2,3,4,5,6');
   });
 
   /**

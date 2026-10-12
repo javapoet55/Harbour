@@ -15,11 +15,13 @@ jest.mock('expo-router', () => ({
 
 const mockCreateTask = jest.fn();
 const mockProjects = jest.fn();
+const mockTasks = jest.fn();
 jest.mock('../api', () => ({
   ...jest.requireActual('../api'),
   endpoints: {
     createTask: (...args: unknown[]) => mockCreateTask(...args),
     projects: (...args: unknown[]) => mockProjects(...args),
+    tasks: (...args: unknown[]) => mockTasks(...args),
   },
 }));
 
@@ -55,6 +57,7 @@ describe('Task creation editor', () => {
     useSession.setState({ status: 'signedIn', profile: { id: 'u1', name: 'Sri Ram', email: 'a@b.com', timeZone: ZONE } });
     jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
     mockParams.mockReturnValue({});
+    mockTasks.mockResolvedValue({ tasks: [], timeZone: ZONE });
     mockProjects.mockResolvedValue({
       projects: [
         { id: 'p1', name: 'Home move', color: '#8875ff', createdAt: '', updatedAt: '2026-09-10T00:00:00.000Z', completedTaskCount: 0, totalTaskCount: 3 },
@@ -88,6 +91,41 @@ describe('Task creation editor', () => {
 
     await fireEvent.changeText(screen.getByTestId('task-title'), 'Renew passport');
     await waitFor(() => expect(screen.getByTestId('create-task').props.accessibilityState.disabled).toBe(false));
+  });
+
+  /** `TaskCreationSpacing` (d568989): the pill's time moves past open tasks, 15 minutes either side. */
+  it('starts a new task after the open task already at that time, with a 15-minute gap', async () => {
+    mockTasks.mockResolvedValue({
+      tasks: [
+        { id: 'busy', title: 'Standup', status: 'PLANNED', priority: 'NORMAL', durationMin: 30, startAt: new Date(NOW - 10 * 60_000).toISOString() },
+        { id: 'done', title: 'Done already', status: 'COMPLETED', priority: 'NORMAL', durationMin: 120, startAt: new Date(NOW + 60 * 60_000).toISOString() },
+      ],
+      timeZone: ZONE,
+    });
+    mockCreateTask.mockResolvedValue({ task: { id: 'new', title: 'Read a book', status: 'PLANNED', priority: 'MEDIUM', durationMin: 30 } });
+    await renderEditor();
+    await waitFor(() => expect(mockTasks).toHaveBeenCalled());
+
+    await fireEvent.changeText(screen.getByTestId('task-title'), 'Read a book');
+    await fireEvent.press(screen.getByTestId('create-task'));
+
+    await waitFor(() => expect(mockCreateTask).toHaveBeenCalledTimes(1));
+    // Standup ends 20 minutes from now; the new task starts 15 minutes after that. The completed task is ignored.
+    expect(mockCreateTask.mock.calls[0][0].startAt).toBe(new Date(NOW + 35 * 60_000).toISOString());
+  });
+
+  it('uses a time read from the title as written, even beside a busy slot', async () => {
+    mockTasks.mockResolvedValue({ tasks: [{ id: 'busy', title: 'Standup', status: 'PLANNED', priority: 'NORMAL', durationMin: 60, startAt: '2026-09-16T10:30:00.000Z' }], timeZone: ZONE });
+    mockCreateTask.mockResolvedValue({ task: { id: 'new', title: 'Call Ana at 4 PM', status: 'PLANNED', priority: 'MEDIUM', durationMin: 30 } });
+    await renderEditor();
+    await waitFor(() => expect(mockTasks).toHaveBeenCalled());
+
+    await fireEvent.changeText(screen.getByTestId('task-title'), 'Call Ana at 4 PM');
+    await fireEvent.press(screen.getByTestId('create-task'));
+
+    await waitFor(() => expect(mockCreateTask).toHaveBeenCalledTimes(1));
+    // 4 PM in Asia/Kolkata, exactly where the busy task is.
+    expect(mockCreateTask.mock.calls[0][0].startAt).toBe('2026-09-16T10:30:00.000Z');
   });
 
   it('submits the exact TaskSaveInput body', async () => {

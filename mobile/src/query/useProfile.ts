@@ -164,9 +164,15 @@ export function useSyncNow() {
   });
 }
 
+/** 4185501 (ProfileView.swift, `AccountDeletionPresentation`): the alert a failed deletion shows. */
+export const DELETE_ACCOUNT_FAILED_TITLE = 'Couldn’t delete account';
+/** The overlay while the request is in flight; the sheet cannot be dismissed meanwhile. */
+export const DELETING_ACCOUNT = 'Deleting account…';
+
 /**
- * `deleteAccount()` (NexdoApp.swift:739-744): DELETE /api/account, then the same local teardown
- * `logout()` performs. The server clears the session cookie itself.
+ * `deleteAccount()` (NexdoApp.swift:916-922): DELETE /api/account, then the same local teardown
+ * `logout()` performs. The server clears the session cookie itself. Since 4185501 Swift throws a
+ * failure to the screen instead of routing it through `perform`, which is what this always did.
  */
 export function useDeleteAccount({ beforeSessionEnds }: { beforeSessionEnds?: () => Promise<void> } = {}) {
   const queryClient = useQueryClient();

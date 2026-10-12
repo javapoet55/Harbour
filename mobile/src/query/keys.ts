@@ -25,6 +25,8 @@ export const queryKeys = {
   /** `AppModel.voiceUsage` (ios/App/NexdoApp.swift:16), per account like Swift's owner check. */
   voiceUsage: (ownerId: string) => ['voice-usage', ownerId] as const,
   scheduleIntelligence: () => ['schedule-intelligence'] as const,
+  /** A task's follow-up preparation (`loadFollowUp`, ios/App/NexdoApp.swift:715), per account. */
+  followUp: (ownerId: string, taskId: string) => ['follow-up', ownerId, taskId] as const,
   /** `persistentNext` and `protectedTime` (ios/App/NexdoApp.swift:15-17). */
   nextAction: () => ['next-action'] as const,
   protectedTime: () => ['protected-time'] as const,

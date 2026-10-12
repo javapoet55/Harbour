@@ -30,13 +30,14 @@ import { TaskSymbol } from '../../src/components/TaskSymbol';
 import { Text } from '../../src/components/Text';
 import { withAlpha } from '../../src/components/SignInBackdrop';
 import { pickContact } from '../../src/features/moments/device';
-import { actionChannels, type TaskActionRecipient } from '../../src/lib/actionNeeded';
+import { followUpApi } from '../../src/api/followUp';
+import { actionChannels, isValidRecipient, type TaskActionRecipient } from '../../src/lib/actionNeeded';
 import { contactSearchName } from '../../src/lib/taskActionDetector';
 import { isBusinessAction } from '../../src/lib/taskAgent';
 import { isDone } from '../../src/lib/taskQuery';
 import type { TaskActionChannel } from '../../src/lib/taskAction';
 import { queryKeys } from '../../src/query/keys';
-import { useCompleteTask, useTasks } from '../../src/query/useTasks';
+import { useTasks } from '../../src/query/useTasks';
 import { useSession } from '../../src/store/session';
 import { brand, useTheme } from '../../src/theme';
 
@@ -71,7 +72,6 @@ export default function TaskAction() {
   const owner = useSession((state) => state.profile?.id) ?? '';
   // `model.changeTaskStatus(task, status: "COMPLETED")` (TaskActionView.swift:197). The schedule
   // warning cannot apply to a completion, so the conflict handler is a no-op.
-  const complete = useCompleteTask({ onConflict: () => undefined });
 
   const [checking, setChecking] = useState(true);
   const [checkFailed, setCheckFailed] = useState(false);
@@ -81,7 +81,8 @@ export default function TaskAction() {
   const [contacts, setContacts] = useState<ActionContact[]>([]);
   const [contact, setContact] = useState<ActionContact | null>(null);
   const [addresses, setAddresses] = useState<ActionAddress[]>([]);
-  const [busy, setBusy] = useState(false);
+  // Nothing on this screen runs long since completing moved into the preparation sheet (6f079c0).
+  const [busy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [receipt, setReceipt] = useState<string | null>(null);
   const [enteringDetails, setEnteringDetails] = useState<TaskActionRecipient | null>(null);
@@ -93,6 +94,7 @@ export default function TaskAction() {
   const loads = useRef(0);
   const mounted = useRef(true);
   const showingTask = useRef(false);
+  const showingPreparation = useRef(false);
 
   const action = coordinator.actions.find((item) => item.id === actionID);
   const task = tasks.data?.tasks.find((item) => item.id === action?.taskId);
@@ -151,6 +153,18 @@ export default function TaskAction() {
     setContacts([]);
     setAddresses([]);
     try {
+      // 6f079c0 (TaskActionView.swift:348-355): a saved preparation's draft goes into the composer, and a
+      // preparation naming someone reachable is who to contact — no business search.
+      if (current.preparation) {
+        businessDraft.current = current.preparation.draft;
+        const { company, phone, email } = current.preparation;
+        if (isValidRecipient({ name: company, phone, email })) {
+          setFlow(false);
+          const prepared = manualActionContact({ name: company, phone, email });
+          setContact(prepared);
+          return prepared;
+        }
+      }
       if (current.manualRecipient) {
         setFlow(false);
         const typed = manualActionContact(current.manualRecipient);
@@ -277,10 +291,14 @@ export default function TaskAction() {
     // "Approval is to open an editable composer, never to send automatically."
     if (!useCoordinator.getState().approveExecution(actionID)) return;
 
+    // `Composer(… context: preparation's purpose or the action's, body: preparation's draft ?? businessDraft)` (:424).
+    const purpose = current.preparation?.purpose;
+    const context = purpose ? purpose : current.context;
+    const body = current.preparation?.draft ?? businessDraft.current;
     const result =
       option === 'message'
-        ? await composeMessage({ recipient: address.value, body: businessDraft.current ?? messageBody({ name: person.name, context: current.context }) })
-        : await composeEmail(emailDraft({ recipient: address.value, name: person.name, context: current.context }));
+        ? await composeMessage({ recipient: address.value, body: body ?? messageBody({ name: person.name, context }) })
+        : await composeEmail(emailDraft({ recipient: address.value, name: person.name, context, body }));
     finishCompose(result);
   };
 
@@ -358,6 +376,25 @@ export default function TaskAction() {
     resumeSelectedChannel(value);
   };
 
+  /**
+   * `showingPreparation = true` (6f079c0): the Follow-up preparation sheet, seeded with the contact found
+   * here (its only phone and only email, `:274-276`).
+   */
+  const openPreparation = () => {
+    const current = currentAction();
+    if (!current) return;
+    showingPreparation.current = true;
+    const person = contact;
+    router.push({
+      pathname: '/action/preparation',
+      params: {
+        taskId: current.taskId,
+        actionId: current.id,
+        ...(person ? { name: person.name, phone: person.phones.length === 1 ? person.phones[0].value : '', email: person.emails.length === 1 ? person.emails[0].value : '' } : {}),
+      },
+    });
+  };
+
   /** `showingTask = true`: Task Details, where the business research lives. */
   const openTask = () => {
     const current = currentAction();
@@ -378,6 +415,12 @@ export default function TaskAction() {
   });
   useFocusEffect(
     useCallback(() => {
+      // `.sheet(isPresented: $showingPreparation, onDismiss: { await loadDestination() })` (:273).
+      if (showingPreparation.current) {
+        showingPreparation.current = false;
+        void loadRef.current();
+        return;
+      }
       if (!showingTask.current) return;
       showingTask.current = false;
       void loadRef.current().then((found) => {
@@ -398,9 +441,24 @@ export default function TaskAction() {
     const timer = setTimeout(() => {
       if (!mounted.current) return;
       useCoordinator.getState().transitionTo(actionID, 'awaitingApproval');
-      void loadRef.current().then((found) => {
+      void (async () => {
+        // 6f079c0 (:325-327): the saved preparation is loaded and kept on the action before anything else.
+        const current = useCoordinator.getState().actions.find((item) => item.id === actionID);
+        if (current) {
+          try {
+            const envelope = await followUpApi.load(current.taskId);
+            if (envelope.preparation && mounted.current) {
+              const preparation = envelope.preparation;
+              useCoordinator.getState().update(actionID, (item) => ({ ...item, preparation }));
+            }
+          } catch {
+            // `try?`: no preparation is not an error here.
+          }
+        }
+        if (!mounted.current) return;
+        const found = await loadRef.current();
         if (startSelectedAction && preferred && found && mounted.current) void resolveRef.current(preferred, found);
-      });
+      })();
     }, 0);
     return () => clearTimeout(timer);
   }, [action, usable, actionID, startSelectedAction, preferred]);
@@ -410,8 +468,9 @@ export default function TaskAction() {
     <SafeAreaView edges={['top', 'left', 'right', 'bottom']} style={[styles.fill, { backgroundColor: theme.colors.background }]}>
       {/* `.navigationTitle("Nexdo Action")` with a leading Close (TaskActionView.swift:206-208). */}
       <View style={styles.navBar}>
+        {/* Ink, like the view's other plain buttons (`task-action-prepare-card`, Phase 13). */}
         <Pressable accessibilityLabel="Close" accessibilityRole="button" hitSlop={8} onPress={closeAction} testID="action-close">
-          <Text style={[theme.typography.body, { color: theme.colors.link }]}>Close</Text>
+          <Text style={[theme.typography.body, { color: theme.colors.ink }]}>Close</Text>
         </Pressable>
         <Text accessibilityRole="header" style={[styles.navTitle, styles.grow, { color: theme.colors.ink }]}>
           Nexdo Action
@@ -424,6 +483,45 @@ export default function TaskAction() {
             <Text style={[styles.title2, { color: theme.colors.ink }]} testID="action-title">
               {`Contact ${contact?.name ?? action.contactName}`}
             </Text>
+
+            {/* 6f079c0 (TaskActionView.swift:158-171): Prepare and follow up, then Complete or record outcome. */}
+            {task ? (
+              <>
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={openPreparation}
+                  style={[styles.preparation, { backgroundColor: withAlpha(brand.nexdoIndigo, 0.08) }]}
+                  testID="action-preparation"
+                >
+                  <View style={styles.label}>
+                    <TaskSymbol color={theme.colors.ink} name="list.clipboard" size={17} />
+                    <Text style={[styles.headline, { color: theme.colors.ink }]}>Prepare and follow up</Text>
+                  </View>
+                  <Text style={[styles.subheadline, { color: theme.colors.ink }]} testID="action-preparation-purpose">
+                    {action.preparation?.purpose ? action.preparation.purpose : 'Add the purpose, notes, checklist and message draft.'}
+                  </Text>
+                  {action.preparation ? (
+                    <Text style={[styles.caption, { color: theme.colors.ink }]} testID="action-preparation-steps">
+                      {`${action.preparation.checklist.filter((check) => check.done).length} of ${action.preparation.checklist.length} steps ready · Record outcome`}
+                    </Text>
+                  ) : null}
+                </Pressable>
+                <Pressable accessibilityRole="button" onPress={openPreparation} testID="action-record-outcome">
+                  <Text style={[styles.subheadline, { color: theme.colors.ink }]}>Complete or record outcome</Text>
+                </Pressable>
+                <Text style={[styles.caption, { color: theme.colors.secondary }]} testID="action-task-title">
+                  {task.title}
+                </Text>
+              </>
+            ) : null}
+
+            {/* `if let error { Text(error).foregroundStyle(.red) }` (TaskActionView.swift:172-173): above the
+                prompt and the recipient buttons its "Choose a contact or enter details below." points to. */}
+            {error !== null ? (
+              <Text style={[theme.typography.body, { color: theme.colors.danger }]} testID="action-error">
+                {error}
+              </Text>
+            ) : null}
 
             {checking ? (
               <View style={styles.progress} testID="action-checking">
@@ -464,13 +562,6 @@ export default function TaskAction() {
                 ))}
               </>
             )}
-
-            {/* Above the recipient buttons, which its "Choose a contact or enter details below." points to. */}
-            {error !== null ? (
-              <Text style={[theme.typography.body, { color: theme.colors.danger }]} testID="action-error">
-                {error}
-              </Text>
-            ) : null}
 
             {/* The recipient buttons (`:175-188`). */}
             {!checking && !checkFailed ? (
@@ -547,23 +638,16 @@ export default function TaskAction() {
             ) : null}
 
             {action.status === 'executing' || action.status === 'completed' ? (
+              // 6f079c0 (:235-236): completing goes through the preparation, which records the outcome first.
               <Pressable
-                accessibilityLabel="Mark task complete"
+                accessibilityLabel="Record outcome and complete"
                 accessibilityRole="button"
                 accessibilityState={{ disabled: busy }}
                 disabled={busy}
-                onPress={() => {
-                  if (!task) return;
-                  setBusy(true);
-                  complete.mutate(task, {
-                    onSuccess: () => closeAction(),
-                    onError: (cause) => setError(cause.message),
-                    onSettled: () => setBusy(false),
-                  });
-                }}
+                onPress={openPreparation}
                 testID="action-complete-task"
               >
-                <Text style={[theme.typography.body, { color: theme.colors.link }]}>Mark task complete</Text>
+                <Text style={[theme.typography.body, { color: theme.colors.ink }]}>Record outcome and complete</Text>
               </Pressable>
             ) : null}
 
@@ -700,6 +784,9 @@ const styles = StyleSheet.create({
   grow: { flex: 1 },
   centred: { textAlign: 'center' },
   title2: { fontSize: 22, lineHeight: 28, fontWeight: '700' },
+  // `VStack(alignment: .leading, spacing: 6).padding(14)` on indigo 0.08, radius 14.
+  preparation: { gap: 6, padding: 14, borderRadius: 14 },
+  label: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   headline: { fontSize: 17, lineHeight: 22, fontWeight: '600' },
   // `.subheadline` carries its own 21pt leading (style map section 2).
   subheadline: { fontSize: 15, lineHeight: 21 },

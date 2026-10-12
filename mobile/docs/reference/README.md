@@ -17,6 +17,11 @@ A **fourth pass** (Phase 12) covers everything new or changed on the iPhone betw
 Feedback, account security, Event Details, the task agent, Moments and Shopping. See
 [Phase 12](#phase-12-wellness-ask-ai-account-tasks-moments-and-shopping).
 
+A **fifth pass** (Phase 13) covers what `1938c7c..origin/main` changed: bug reporting, the calendar
+connection onboarding and Apple (device) calendars, Moments in Calendar and Tasks, the follow-up
+preparation, Settings, Today, Tasks, the dark Wellness chooser and small Shopping changes. See
+[Phase 13](#phase-13-bug-reports-calendar-connection-device-calendars-today-tasks-and-shopping).
+
 ## How they were taken
 
 These settings are the same as the first pass:
@@ -436,3 +441,146 @@ On the account above, all named `Parity …` except where noted:
   for the Ask AI and Shopping captures, then withdrawn in Settings. The simulator's Photos library
   has a mango image (`grocery-mango` from the app's assets), and the simulator has Contacts and
   notification permission.
+
+## Phase 13: bug reports, calendar connection, device calendars, Today, Tasks and Shopping
+
+The fifth capture pass. It covers every iPhone screen that is new or changed in
+`git diff 1938c7c origin/main -- ios/` (branch `rn-phase-13` at `82a92df`). The screen inventory, the
+endpoint table, the native requirements, the unmounted views and the Swift bugs are in
+`docs/IOS_TO_REACT_NATIVE.md` §23. **Line numbers are as of `82a92df`.**
+
+### How they were taken
+
+The settings are the same as Phase 12: the iPhone 17 Pro simulator (`3E8DBBD7-…`, iOS 26.5, 23F77),
+Dynamic Type `large`, a Debug build of the Swift app only (`https://app-dev.nexdoapp.com`). Differences:
+
+- **No session.** The simulator's installed app was signed out and the visakan password is not on this
+  Mac, so this pass captured only what the Debug preview harnesses and the sign-in screen reach:
+  `-bug-report-preview` (with `-bug-failure`), `-bug-capture-preview`, `-calendar-connect-preview`,
+  `-calendar-design-preview` (with `-calendar-month -calendar-stress-preview`), `-today-design-preview`,
+  `-task-design-preview`, `-shopping-design-preview` (with `-shopping-offers-preview`),
+  `-wellness-design-preview`, `-pomodoro-design-preview`, `-ask-design-preview`. The signed-in screens
+  were captured in a second run the same day (see "The signed-in run" below).
+- **Driver:** four scratch XCUITest classes (`Phase13Captures{,B,C,D}.swift`, dropped into
+  `ios/Tests/MomentUITests/`, which the project picks up as a synchronized folder, then deleted before
+  the commit). Each test launches a harness, waits for the text that identifies the screen, and attaches
+  `app.screenshot()` as an `XCTAttachment` named after the capture. The attachments were exported with
+  `xcrun xcresulttool export attachments --path <run>.xcresult --output-path <dir>` and renamed from
+  `manifest.json`. A copy of the driver is kept with the session notes so the signed-in half can be run
+  by signing in on the simulator and re-running the same classes.
+- **Dark variants** came from the app's own `-nexdo.appearance night` launch argument (the
+  `AppAppearance` storage key), not `simctl ui … appearance`.
+- **Resizing:** PIL is not installed on this Mac, so `capture.sh`'s shrink step was replaced by
+  `sips --resampleWidth 720`; the 37 captures still over the 500 KB budget were resampled to 360 px wide
+  with `sips`, as in Phase 12 (no palette reduction). All 50 are under 500 KB (10.8 MB in total).
+- **The bug report's success state** comes from the DEBUG `BugReportPreview` harness
+  (`ios/App/BugReportView.swift:213-235`): its `submitOverride` waits 4 s and answers the fixed reference
+  `BR-134902`; with `-bug-failure` the first attempt throws `URLError(.notConnectedToInternet)`, which
+  gives the error-and-retry state. **No report was posted to the server** and nothing reached support.
+- **The Apple calendar permission** was granted to the Debug app on the simulator (Allow Full Access)
+  for the connection flow; the simulator's own calendars (Calendar, Birthdays, India Holidays) are what
+  `apple-calendars` shows.
+
+`-v3` marks a new capture of a screen that already has a `-v2` (Phase 12) or earlier reference; the
+older captures are kept and superseded.
+
+### The signed-in run
+
+The second run attached to the already running, signed-in app. The app keeps its session only in memory
+(`ios/App/NexdoApp.swift:140`), so the driver must never call `launch()`: every test uses
+`XCUIApplication(bundleIdentifier: "com.pinslots.nexdo").activate()`, and `xcodebuild test-without-building`
+was checked to leave the running process alone (same pid before and after a run). Each test starts with a
+"home" routine that taps any hittable Done / Close / Cancel or back button until the tab bar is hittable, then
+goes to Today. Dark variants were produced by `xcrun simctl ui … appearance dark` plus `TEST_RUNNER_DARK=1`
+(the runner reads `DARK` and suffixes the attachment names); the simulator was put back to light afterwards.
+The host Mac is in Asia/Kolkata, so "today" was Monday 12 Oct for the app and the server; the Do Now
+not-working-day state came from switching **Monday** off under Settings → Working days, capturing, and
+switching it back on (`settings-working-days` shows the restored row). Do Now first asks for OpenAI sharing
+("Allow and find my next task"); that consent was granted for the captures and withdrawn in Settings at the end
+(`Withdraw AI permission`). The driver file is `Phase13Live.swift` in the session notes.
+
+### Captures
+
+| Area | Captures |
+| --- | --- |
+| Bug report | `bug-report-intro`, `-intro-dark`, `-form-empty`, `-form-keyboard`, `-form-filled`, `-form-dark`, `-screenshot-consent`, `-form-screenshot`, `-original-screen-preview`, `-form-diagnostics`, `-discard-confirm`, `-sending`, `-error-network`, `-success`, `-success-copied` |
+| Calendar connection | `calendar-connect-hub`, `-hub-apple-connected`, `-hub-live` (Google and Apple connected), `-google`, `-google-bottom`, `-google-connected`, `-google-connected-scrolled`, `-microsoft`, `-apple`, `-apple-permission` (the iOS prompt), `-apple-connected`, `-help` |
+| Apple calendars | `apple-calendars`, `apple-calendars-one-hidden`, `calendar-apple-calendars-sheet` (from the Calendar filters menu) |
+| Calendar tab and Event Details | `calendar-v3`, `calendar-v3-dark`, `calendar-v3-live`, `calendar-filters-menu`, `calendar-month-device-events`, `-scrolled`, `-dark`, `calendar-moment-row`, `-dark` (6 Oct: "Parity Birthday" beside Google Calendar events), `calendar-moment-row-opened` (the Moment's Manage screen, reached through `moments.route`), `calendar-device-event-row` (20 Oct: the simulator's "Dussehra" and a Moment), `event-details-apple-device`, `-dark`, `event-details-apple-device-live` |
+| Today and Do Now | `today-v3-attention-card`, `-dark`, `today-attention-sheet-v3`, `do-now-v3`, `-scrolled`, `-dark`, `-scrolled-dark`, `do-now-not-working-day`, `-scrolled` |
+| Tasks | `tasks-v3-items`, `tasks-v3-moment-row`, `-dark` (the All filter with "Parity Sunday · All day · Birthday · Moment"), `tasks-creation-spacing` |
+| Nexdo Action and Follow-up preparation | `task-action-prepare-card`, `task-action-prepare-card-saved`, `follow-up-preparation-new`, `-filled`, `-filled-scrolled`, `-saved`, `follow-up-record-outcome`, `follow-up-result-menu`, `follow-up-record-resolved`, `follow-up-outcome-history`, `task-details-followup-history-button`, `follow-up-history-completed`, `-scrolled` |
+| Account, Change password, Settings | `account-v3`, `-dark`, `change-password-v3`, `password-reset-from-change-password`, `settings-v3`, `settings-v3-scrolled-1`…`-4`, `settings-v3-dark`, `settings-v3-scrolled-1-dark`…`-3-dark`, `settings-working-days` |
+| Wellness, Pomodoro, Ask AI | `wellness-chooser-v3`, `-dark`, `-dark-scrolled`, `pomodoro-setup-personal-work`, `ask-ai-cards-v3` |
+| Shopping | `shopping-list-settings-logo-button`, `shopping-store-logo-editor`, `-error-no-image`, `shopping-offers-price-breakdown`, `shopping-offer-detail-price-breakdown`, `shopping-store-hours-v3` |
+| Sign-in | `password-reset-error-invalid-email` (the global alert over the sign-in screen; see §23 For the team) |
+
+### Superseded by this pass
+
+| Earlier capture | Now |
+| --- | --- |
+| `calendar-v2`, `calendar-v2-collapsed-days` | `calendar-v3`, `-dark` (gear button in the header; dark accents) |
+| `today-v2`, `today-v2-dark`, `today-attention-row`, `today-attention-sheet-*` | `today-v3-attention-card`, `-dark`, `today-attention-sheet-v3` (the attention card inside the intelligence card; three schedule items) |
+| `tasks-v2-empty` (header counts) | `tasks-v3-items` ("items", not "tasks") |
+| `wellness-chooser`, `-scrolled`, `-dark` | `wellness-chooser-v3`, `-dark`, `-dark-scrolled` (a real dark design; the Phase 12 `-dark` showed the forced-light one) |
+| `ask-ai-cards` | `ask-ai-cards-v3` (spacing only) |
+| `shopping-list-settings-store`, `-filled` | still current for the fields; `shopping-list-settings-logo-button` adds the logo control |
+| `shopping-offers-*`, `shopping-offer-detail*` | still current for the layout; the `-price-breakdown` captures show the new price rows |
+| `account-settings-calendar-connected` | `settings-v3-scrolled-3` (Google Calendar row with the provider icon, the Apple Calendar card, Connect Calendar) |
+| `account-v2`, `-dark` | `account-v3`, `-dark` (Report Bugs row; new row order) |
+| `change-password` | `change-password-v3` (Forgot password? section) |
+
+### Not captured
+
+| Screen or state | Why |
+| --- | --- |
+| Settings: the "Deleting account…" overlay and the "Couldn’t delete account" alert | Only during a real deletion. The confirmation dialog is unchanged from Phase 7 |
+| Apple calendars: no calendars / all hidden / access denied | The simulator has three calendars and access was granted; the strings are in `AppleCalendarService.swift:96-97`, `:118-119` |
+| Calendar connection: Microsoft connected, "Needs reconnecting", a cancelled or failed OAuth sign-in | Google is the only connected provider on the account; the other states need a real sign-in. The connected Google page (with **Connect another account**) is captured |
+| Tasks: a reordered list | The XCUITest long-press drag (`press(forDuration:thenDragTo:)`, 1.2–2 s, slow and default velocity, by element and by coordinate) never started SwiftUI's `.draggable` session on iOS 26, so the order did not change. The list and its "items" counts are in `tasks-v3-items`; the behaviour is in §23 |
+| Add by Voice: microphone denied ("Open Settings") | XCTest's built-in interruption handler allowed the microphone prompt before a custom monitor could deny it, and `simctl privacy revoke/reset microphone` did not survive the test installer's reinstall. The state is one line of text plus a button (`AddTaskByVoiceView.swift:97-104`) |
+| Bug report over a real screen (shake, screen tags), "Bug reporting is not available on this server yet.", "Your session has expired…" | Need a session; the messages are in `Sources/NexdoCore/BugReport.swift:54-69` |
+| Apple calendars: no calendars / all hidden / access denied | The simulator has three calendars and access was granted; the strings are in `AppleCalendarService.swift:96-97`, `:118-119` |
+| Store Logo: an image chosen or pasted | The simulator pasteboard and Photos were left untouched; the no-image error is captured |
+| Discard confirmation with **Keep Report** | On iOS 26 the dialog anchored to the × is a popover showing only **Discard Report**; Keep Report is the implicit tap-outside |
+| Crashlytics, PermissionAccess, TaskCreationSpacing, TaskDisplayOrder, MomentSchedule | No UI of their own |
+
+### Global patterns introduced by Phase 13
+
+These continue the Phase 12 list (18–26).
+
+27. **A report that can open over anything.** The bug report is presented by UIKit over the topmost
+    controller, not by a SwiftUI route; it carries the current screen tag, blocks swipe-dismiss, and
+    keeps a frozen copy of the first submission so Retry never files twice. RN needs a root-level modal
+    plus a "current screen" tag, not a pushed route.
+28. **Onboarding pages with a progress capsule and three numbered, illustrated steps** (the calendar
+    provider pages), fixed light over a tinted gradient, one black-or-blue capsule action, a "Need help?"
+    toolbar link and a small "Learn more" text link. Same family as the Wellness module guides (pattern 19).
+29. **Device data merged into server lists.** Device calendar events and Moments are projected into the
+    Calendar and Tasks lists with their own `source`, icon and detail line, are read-only there, and route
+    back to their owner on tap. The RN port should keep them out of the task cache and the server's
+    revision/idempotency machinery.
+30. **The Wellness chooser follows dark mode.** Pattern 26 ("Wellness screens ignore dark mode") is
+    superseded for the chooser: it now has a dark design (black gradient, system card surfaces, a moon
+    glyph instead of art, per-module dark accents). The module guides are unchanged and still fixed light.
+31. **Local-only ordering and state.** The task display order, the Apple calendar selection and the
+    shake-to-report toggle live on the device per signed-in user (`UserDefaults` / `@AppStorage`), never on
+    the server, and are reset or re-keyed on sign-out.
+
+### Test data
+
+The first run created nothing (one `POST /api/auth/password-reset/request` for `parity@invalid`, rejected with
+400). The signed-in run left this on the account, for deletion later:
+
+- **Tasks:** `Follow up with Parity Bank` ×3, all completed on 12 Oct (the driver re-created the task on three
+  retries before it learned to skip creation; the one scheduled 1:36 PM carries the saved preparation "Parity
+  claim status", the checklist step "Parity reference 123", an Unresolved outcome "Parity: waiting for the
+  adjuster" and a Resolved outcome "Parity: resolved"); `Parity follow up with insurance company` (completed by a
+  mis-tap, no action: the detector needs the title to start with the verb) and `Parity follow up with the
+  bank` (open, 12 Oct 12:22 PM, no action, same reason).
+- **Settings:** Monday was switched off and back on under Working days; OpenAI sharing was allowed for Do Now and
+  withdrawn afterwards; nothing else was saved (each Settings visit left through "Save settings and go back").
+- **Nothing was sent:** no call, message, email or calendar write; the Nexdo Action screen was only opened.
+- The Moments, shopping list and calendar data are Phase 12's (`Parity Birthday` on 6 Oct, `Parity Sunday`,
+  `Parity Birth Year` on 20 Oct, the `Parity Weekly Groceries` Safeway list). Safari was opened once by a link
+  on the Store Hours page and left in the background. The session is still signed in.

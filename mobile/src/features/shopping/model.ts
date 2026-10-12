@@ -1,4 +1,5 @@
 import type { GroceryItem, GroceryList, ShoppingAlternative, ShoppingInput } from '../../api/shopping';
+import { logoForSave } from './listLogo';
 
 /**
  * The pure Shopping model: ios/Sources/NexdoCore/ShoppingList.swift and the logic ShoppingViews.swift
@@ -51,13 +52,14 @@ function present<K extends string, V>(key: K, value: V | null | undefined): Part
  * would make the server drop the item's chosen offer (src/server/shopping/service.ts:68).
  */
 export function listInput(
-  list: Pick<GroceryList, 'title' | 'date' | 'timeZone' | 'weekly' | 'items' | 'storePlaceId' | 'storeWebsite' | 'storeName' | 'storeAddress' | 'storeZip'>,
+  list: Pick<GroceryList, 'title' | 'date' | 'timeZone' | 'weekly' | 'items' | 'storePlaceId' | 'storeWebsite' | 'storeName' | 'storeAddress' | 'storeZip' | 'storeLogoData'>,
 ): ShoppingInput {
   return {
     title: list.title,
     date: list.date,
     timeZone: list.timeZone,
     weekly: list.weekly,
+    storeLogoData: logoForSave(list),
     ...present('storePlaceId', list.storePlaceId),
     ...present('storeWebsite', list.storeWebsite),
     ...present('storeName', list.storeName),

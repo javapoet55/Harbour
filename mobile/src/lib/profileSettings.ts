@@ -154,3 +154,12 @@ export const LEGAL_LINKS = {
   termsOfServiceTitle: 'Terms of service',
   termsOfService: 'https://nexdoapp.com/terms',
 } as const;
+
+/**
+ * The line under Morning summary (ProfileView.swift `morningEmailExplanation`, 4185501; the summary is
+ * delivered at 6 a.m. in the PROFILE zone since 12bb9d4). Falls back to "your profile email" and the
+ * device zone, as Swift does, while the profile is loading.
+ */
+export function morningEmailExplanation(email: string | null | undefined, profileZone: string | null | undefined, deviceZone: string): string {
+  return `Today’s tasks, calendar events and conflicts, sent to ${email ?? 'your profile email'} at 6:00 a.m. in ${profileZone ?? deviceZone}. Email notifications must also be enabled.`;
+}

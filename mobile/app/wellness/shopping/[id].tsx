@@ -297,12 +297,13 @@ export default function ShoppingDetailScreen() {
       />
       <TodayBackdrop />
       {/* `.disabled(store.busy)` (:283) covers the list; the action bar disables its own buttons. */}
-      <View style={styles.fill} pointerEvents={busy ? 'none' : 'auto'}>
+      {/* collapsable={false}: never flattened, so turning pointerEvents to 'none' does not create a view and move the keyboard-aware scroll view into it — Fabric's addViewAt crash on Android (android-polish.md §39). */}
+      <View collapsable={false} style={styles.fill} pointerEvents={busy ? 'none' : 'auto'}>
         {/* On Android the action bar rides up on the keyboard, so the focused field has to clear it too. */}
         <KeyboardAwareScrollView bottomOffset={barHeight} keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingBottom: barHeight + 16 }} testID="shopping-detail">
           {/* Header (:240-259): the store logo, which opens full size, and the settings chevron. */}
           <View style={styles.header}>
-            <StoreBrandLogo expandsOnTap identity={`${list.storeName ?? ''}|${list.storeWebsite ?? ''}`} listId={list.id} />
+            <StoreBrandLogo customImageData={list.storeLogoData} expandsOnTap identity={`${list.storeName ?? ''}|${list.storeWebsite ?? ''}`} listId={list.id} />
             <View style={[styles.grow, styles.headerText]}>
               <Text style={[textStyles.title2, styles.bold, { color: theme.colors.label }]}>{list.title}</Text>
               <View style={styles.countsRow}>
