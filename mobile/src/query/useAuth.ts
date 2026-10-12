@@ -105,6 +105,21 @@ export function useResendVerification() {
   });
 }
 
+/**
+ * `PasswordResetView.requestCode()` / `confirm()` (RootView.swift:767-781, d568989 / 4185501): a failure
+ * shows `model.error`, or these when there is none. Swift never gets that far — `perform` raises the
+ * global "Unable to complete request" alert, which dismisses the sheet (docs/IOS_TO_REACT_NATIVE.md §23,
+ * For the team) — so RN is where the inline message is actually seen.
+ */
+export const RESET_CODE_FAILED = 'Could not send the reset code. Please try again.';
+export const RESET_PASSWORD_FAILED = 'Could not reset the password. Please try again.';
+
+/** `model.error ?? fallback`: the request's own message, unless it has none. */
+export function resetFailure(error: unknown, fallback: string): string {
+  const message = error instanceof Error ? error.message.trim() : '';
+  return message !== '' ? message : fallback;
+}
+
 /** `AppModel.requestPasswordReset` (NexdoApp.swift:192–199). */
 export function useRequestPasswordReset() {
   return useMutation<string, Error, { email: string }>({
