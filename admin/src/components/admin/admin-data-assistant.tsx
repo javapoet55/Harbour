@@ -5,11 +5,29 @@ import { Bot, Database, LoaderCircle, Send, Sparkles } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import type { AdminAnswerChart } from '@/contract/insights';
 
-function prompts(days: number) { return [
-  `Summarize platform usage for the selected ${days === 1 ? 'day' : `${days}-day period`}.`,
-  'Which features are used most, and what should I watch?',
-  'How is voice usage changing compared with the previous period?',
-]; }
+const prompts = [
+  'Show the Amplitude page-view to form-submission funnel with a 24-hour conversion window.',
+  'What are Amplitude day-1, day-7 and day-30 retention rates for new users?',
+  'Which first-touch sources and campaigns bring active users in Amplitude?',
+  'Summarize Firebase engagement: active users, sessions, and most-used screens.',
+  'Show Amplitude daily active and new users for the selected period.',
+  'Compare Firebase and Amplitude trends, keeping their audiences separate.',
+  'What percentage of new users complete their first task within two minutes?',
+  'Where do users drop off during onboarding?',
+  'What are our day-1, day-7, and day-30 retention rates?',
+  'Which screens and features have declining engagement?',
+  'Which app versions have the most crashes or failed actions?',
+  'What are the most common reported bugs?',
+  'How much does AI cost per active user?',
+  'Summarize activity for the selected period compared with the previous period.',
+  'Which features are used most and least?',
+  'How are signups trending?',
+  'How many users are on Free, Pro, and Max?',
+  'How has voice usage changed?',
+  'Who are the top 10 users by AI actions or voice minutes?',
+  'Show activity for jsriramk@gmail.com.',
+  'What is estimated monthly revenue by plan? Use plan-based estimates, not verified payments.',
+];
 
 export function AdminDataAssistant({ days, from, to }: { days: number; from: string; to: string }) {
   const router = useRouter();
@@ -66,9 +84,9 @@ export function AdminDataAssistant({ days, from, to }: { days: number; from: str
       <span><Sparkles size={21}/></span>
       <div>
         <h2 id="admin-data-assistant-title">Ask Nexdo about your data</h2>
-        <p>Get grounded answers from live Admin analytics. The assistant is read-only.</p>
+        <p>Ask about database activity, Firebase/GA4 engagement, and Amplitude trends. The assistant is read-only.</p>
       </div>
-      <div className="admin-data-badge"><Database size={14}/> Live database</div>
+      <div className="admin-data-badge"><Database size={14}/> Analytics sources</div>
     </div>
     <form ref={form} onSubmit={submit} className="admin-data-form">
       <label htmlFor="admin-data-question" className="admin-sr-only">Ask a question about Nexdo usage data</label>
@@ -78,7 +96,8 @@ export function AdminDataAssistant({ days, from, to }: { days: number; from: str
         value={question}
         onChange={(event) => setQuestion(event.target.value)}
         onKeyDown={submitOnEnter}
-        placeholder="Ask about users, plans, AI actions, voice usage, features, or estimated revenue…"
+        placeholder="Choose a prompt below or ask about activation, retention, engagement, bugs, or AI costs…"
+        aria-describedby="admin-data-question-help"
         maxLength={600}
         rows={2}
         disabled={busy}
@@ -88,8 +107,9 @@ export function AdminDataAssistant({ days, from, to }: { days: number; from: str
         {busy ? 'Analyzing…' : 'Ask Nexdo'}
       </button>
     </form>
+    <p id="admin-data-question-help">Choose a question to edit, then press Enter to ask. Shift+Enter adds a new line.</p>
     <div className="admin-data-prompts" aria-label="Suggested questions">
-      {prompts(days).map((prompt) => <button type="button" key={prompt} onClick={() => choosePrompt(prompt)} disabled={busy}>{prompt}</button>)}
+      {prompts.map((prompt) => <button type="button" key={prompt} onClick={() => choosePrompt(prompt)} disabled={busy}>{prompt}</button>)}
     </div>
     {(answer || error) && <div className={`admin-data-answer${error ? ' error' : ''}`} role="status" aria-live="polite">
       <div className="admin-data-answer-icon"><Bot size={20}/></div>
@@ -97,7 +117,7 @@ export function AdminDataAssistant({ days, from, to }: { days: number; from: str
         <strong>{error ? 'Unable to answer' : 'Nexdo analysis'}</strong>
         <p>{error || answer}</p>
         {!error && chart && <AdminInsightChart chart={chart}/>}
-        {!error && generatedAt && <small>Based on Admin data refreshed {new Date(generatedAt).toLocaleString()}.</small>}
+        {!error && generatedAt && <small>Analysis started {new Date(generatedAt).toLocaleString()}. Provider freshness is included in the answer.</small>}
       </div>
     </div>}
   </section>;

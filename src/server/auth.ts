@@ -1,3 +1,4 @@
+import { healthContext } from './health/telemetry';
 import { normalizeEmail } from './account-auth';
 import bcrypt from 'bcryptjs';
 import { prisma } from './db';
@@ -29,5 +30,7 @@ export async function currentUser() {
 export async function requireUser() {
   const user = await currentUser();
   if (!user) throw new Error('UNAUTHENTICATED');
+  const context = healthContext.getStore();
+  if (context) context.userId = user.id;
   return user;
 }

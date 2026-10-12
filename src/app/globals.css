@@ -380,3 +380,26 @@ body { background:radial-gradient(ellipse at 0 0,#dff6ff,transparent 48%),radial
 .mobile-brand-header { background:linear-gradient(110deg,#f1fbfff5,#fcf2fff5); }.voice-prompt,.nexdo-focus-banner { background:var(--nexdo-surface); }
 
 .nexdo-app-loading { display:flex; min-height:60dvh; flex-direction:column; align-items:center; justify-content:center; gap:16px; padding:32px; color:var(--muted); }.nexdo-app-loading .nexdo-logo { width:240px; }
+
+/* Inbox follows the native app's blue, purple and pink palette. */
+.inbox-page { --ink:#101535; --muted:#60698a; --line:#ded9f6; width:100%; max-width:980px; margin-inline:auto; padding:clamp(16px,3vw,32px); border:1px solid #e5def7; border-radius:28px; background:linear-gradient(135deg,#e7f3ff 0%,#f3effc 48%,#fceafb 100%); color:var(--ink); }
+.inbox-heading { text-align:center; margin-bottom:26px; }
+.inbox-icon { display:grid; place-items:center; width:60px; height:60px; margin:0 auto 12px; border-radius:20px; color:white; background:linear-gradient(120deg,#e723d3,#5032f5,#079ff5); }
+.inbox-heading h1 { font-size:clamp(26px,4vw,34px); font-weight:700; letter-spacing:-.03em; }
+.inbox-heading p { margin:8px auto 0; max-width:440px; color:var(--muted); font-size:15px; line-height:1.6; }
+.inbox-page .task-workspace { margin-inline:auto; }
+.inbox-page :is(.task-search,.task-browser-card,.task-empty) { border-color:var(--line); background:#ffffffed; }
+.inbox-page :is(.task-filter-trigger,.task-card-footer button) { background:#eae4ff; color:#5032d9; border-color:#d7cdfb; }
+.inbox-page .task-chips button[aria-pressed="true"] { color:white; border-color:transparent; background:linear-gradient(115deg,#d323d4,#5032f5,#079ff5); }
+.inbox-page :is(.task-list-heading button,.task-empty button,.task-empty svg) { color:#5032d9; }
+.inbox-page .task-row-details:hover { background:#f1edff; }
+.inbox-page :is(button,input,select):focus-visible { outline-color:#7858ed; }
+@media (max-width:600px) { .inbox-page { padding:16px 12px; border-radius:22px; }.inbox-heading { margin-bottom:20px; } }
+@media (prefers-color-scheme:dark) {
+  .inbox-page { --ink:#f3f0ff; --muted:#b9bdd7; --line:#403957; border-color:var(--line); background:linear-gradient(135deg,#152238,#221b35,#301d32); }
+  .inbox-page :is(.task-search,.task-browser-card,.task-empty) { background:#202336; color:var(--ink); }
+  .inbox-page :is(.task-card-meta,.task-list-heading,.task-status,.task-empty,.task-empty h2) { color:var(--muted); }
+  .inbox-page :is(.task-filter-trigger,.task-card-footer button,.task-priority) { background:#383051; color:#d4c8ff; }
+  .inbox-page :is(.task-list-heading button,.task-empty button,.task-empty svg) { color:#c4b5ff; }
+  .inbox-page .task-row-details:hover { background:#322b47; }
+}

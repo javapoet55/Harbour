@@ -106,6 +106,31 @@ describe('Nexdo event write-back to the connected calendar', () => {
     expect(await saved()).toHaveLength(3);
   });
 
+  it('retries a recurring create without conflicting with its own saved occurrences', async () => {
+    await connect();
+    const requestId = crypto.randomUUID();
+    const body = { requestId, allowScheduleConflict: undefined, repeat: { frequency: 'daily', until: '2099-01-03', weekdays: [] } };
+    expect((await create(body)).status).toBe(200);
+    const retry = await create(body);
+    expect(retry.status).toBe(200);
+    expect(await saved()).toHaveLength(3);
+    expect(mocks.upsert).toHaveBeenCalledTimes(3);
+    await prisma.calendarEvent.create({ data: { userId, title: 'Existing booking', source: 'harbor', startAt: new Date('2099-01-04T18:00:00Z'), endAt: new Date('2099-01-04T18:30:00Z') } });
+    expect((await create({ ...body, repeat: { ...body.repeat, until: '2099-01-04' } })).status).toBe(409);
+    expect(mocks.upsert).toHaveBeenCalledTimes(3);
+  });
+
+  it('retries a single create without duplicating the local or provider event', async () => {
+    await connect();
+    const requestId = crypto.randomUUID();
+    expect((await create({ requestId })).status).toBe(200);
+    expect((await create({ requestId })).status).toBe(200);
+    expect(await saved()).toHaveLength(1);
+    expect(mocks.upsert).toHaveBeenCalledTimes(2);
+    expect(mocks.upsert).toHaveBeenLastCalledWith(expect.objectContaining({ externalId: 'google-1' }));
+    expect((await saved())[0].pushedExternalId).toBe('google-1');
+  });
+
   it('keeps events local when no calendar accepts writes', async () => {
     await connect({ writeEnabled: false });
     const single = await (await create({})).json();
@@ -181,6 +206,26 @@ describe('Nexdo event write-back to the connected calendar', () => {
     expect(body).toMatchObject({ success: true, calendarPush: { status: 'failed' }, warnings: ['Deleted from Nexdo, but it could not be removed from your connected calendar.'] });
     expect((await saved())[0]).toMatchObject({ pushedExternalId: 'google-1' });
     expect((await saved())[0].deletedAt).not.toBeNull();
+  });
+
+  it('can retry a failed provider deletion without resurrecting the local event', async () => {
+    await connect();
+    await create({});
+    const [row] = await saved();
+    const remove = () => DELETE(new Request('https://nexdo.test', { method: 'DELETE' }), params(row.id));
+    mocks.remove.mockRejectedValueOnce(Object.assign(new Error('Unavailable'), { status: 503 }));
+    expect((await (await remove()).json()).calendarPush.status).toBe('failed');
+    const retry = await remove();
+    expect(retry.status).toBe(200);
+    expect((await retry.json()).calendarPush.status).toBe('removed');
+    expect((await saved())[0].deletedAt).not.toBeNull();
+    expect((await saved())[0].pushedExternalId).toBeNull();
+    expect(mocks.remove).toHaveBeenCalledTimes(2);
+    expect((await remove()).status).toBe(200);
+    expect(mocks.remove).toHaveBeenCalledTimes(2);
+    mocks.requireUser.mockResolvedValue({ id: 'another-owner', timeZone: 'UTC' });
+    expect((await remove()).status).toBe(404);
+    expect(mocks.remove).toHaveBeenCalledTimes(2);
   });
 
   it('does not edit or delete imported events through the Nexdo event routes', async () => {

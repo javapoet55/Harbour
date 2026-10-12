@@ -71,6 +71,34 @@ describe('native account authentication', () => {
     expect(await login(resetEmail, 'original-password-123')).toMatchObject({ id: user.id });
   });
 
+  it('rejects expired reset codes without changing the password', async () => {
+    const user = await registerAccount({ name: 'Expired Reset', email: `expired-${crypto.randomUUID()}@nexdo.test`, password: 'original-password-123' });
+    createdIds.push(user.id);
+    const { developmentCode } = await createPasswordReset(user.email);
+    await prisma.passwordResetToken.updateMany({ where: { userId: user.id }, data: { expiresAt: new Date(Date.now() - 1000) } });
+    await expect(resetPassword({ email: user.email, code: developmentCode!, password: 'replacement-password-123' })).rejects.toThrow('INVALID_RESET_CODE');
+    expect(await login(user.email, 'original-password-123')).toMatchObject({ id: user.id });
+  });
+
+  it('allows only one concurrent reset-code redemption', async () => {
+    const user = await registerAccount({ name: 'Concurrent Reset', email: `concurrent-${crypto.randomUUID()}@nexdo.test`, password: 'original-password-123' });
+    createdIds.push(user.id);
+    const { developmentCode } = await createPasswordReset(user.email);
+    const results = await Promise.allSettled(['replacement-password-123', 'replacement-password-456'].map(password => resetPassword({ email: user.email, code: developmentCode!, password })));
+    expect(results.filter(result => result.status === 'fulfilled')).toHaveLength(1);
+    expect(results.filter(result => result.status === 'rejected')).toHaveLength(1);
+    expect(await login(user.email, 'original-password-123')).toBeNull();
+  });
+
+  it('rejects weak passwords without consuming a valid recovery code', async () => {
+    const user = await registerAccount({ name: 'Reset Policy', email: `policy-${crypto.randomUUID()}@nexdo.test`, password: 'original-password-123' });
+    createdIds.push(user.id);
+    const { developmentCode } = await createPasswordReset(user.email);
+    await expect(resetPassword({ email: user.email, code: developmentCode!, password: 'short' })).rejects.toThrow('PASSWORD_POLICY');
+    await resetPassword({ email: user.email, code: developmentCode!, password: 'replacement-password-123' });
+    expect(await login(user.email, 'replacement-password-123')).toMatchObject({ id: user.id });
+  });
+
   it('verifies a new account with a 24-hour one-time code and invalidates older codes', async () => {
     const user = await registerAccount({ name: 'Verify User', email: `native-verify-${Date.now()}@nexdo.test`, password: 'verify-password-123' });
     createdIds.push(user.id);

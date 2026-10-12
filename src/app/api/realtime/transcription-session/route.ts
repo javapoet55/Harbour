@@ -1,3 +1,4 @@
+import { voiceAllowanceResponse } from '@/server/voice/usage';
 import { voiceAudioInput } from '@/server/voice/audio-input';
 import { observedFetch } from '@/server/health/telemetry';
 import { healthRoute } from '@/server/health/telemetry';
@@ -9,7 +10,7 @@ const headers = { 'Cache-Control': 'private, no-store' };
 
 async function healthHandlerPOST(req: Request) {
   try {
-    await requireUser();
+    const user = await requireUser();
     const consent = await req.json().catch(() => null);
     if (consent?.consent !== true) return Response.json({ error: 'Allow voice sharing before starting.' }, { status: 400, headers });
     const key = process.env.OPENAI_API_KEY;
@@ -20,6 +21,8 @@ async function healthHandlerPOST(req: Request) {
       : { model: 'gpt-4o-transcribe' };
     const session = { type: 'transcription', audio: { input: { transcription, ...voiceAudioInput() } } };
     const model = 'gpt-4o-transcribe';
+    const allowance = await voiceAllowanceResponse(user.id, user.timeZone);
+    if (allowance) return allowance;
     const response = await observedFetch('https://api.openai.com/v1/realtime/client_secrets', {
       method: 'POST',
       headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },

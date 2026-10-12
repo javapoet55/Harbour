@@ -1,3 +1,4 @@
+import { voiceAllowanceResponse } from '@/server/voice/usage';
 import { foodVoiceContextSchema, foodVoiceSessionConfiguration } from '@/server/voice/food';
 import { observedFetch } from '@/server/health/telemetry';
 import { healthRoute } from '@/server/health/telemetry';
@@ -19,6 +20,8 @@ async function healthHandlerPOST(req: Request) {
     if (foodContext && !foodContext.success) return Response.json({ error: 'Choose an item before starting food voice.' }, { status: 400, headers });
     const session = foodContext?.success ? foodVoiceSessionConfiguration(user.timeZone, foodContext.data) : consent.scope === 'calendar' ? calendarVoiceSessionConfiguration(user.timeZone) : voiceSessionConfiguration(user.timeZone);
     const model = session.model;
+    const allowance = await voiceAllowanceResponse(user.id, user.timeZone);
+    if (allowance) return allowance;
     const response = await observedFetch('https://api.openai.com/v1/realtime/client_secrets', {
       method: 'POST',
       headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },

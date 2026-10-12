@@ -1,3 +1,4 @@
+import { welcomeEmail } from './welcome';
 import { renderEmail } from './template';
 
 // Every transactional email Nexdo sends. Subjects are part of the contract with clients and tests.
@@ -6,14 +7,7 @@ export type TransactionalEmail = { subject: string; text: string; html: string }
 export function verifyEmailMessage(code: string, expiresIn: string): TransactionalEmail {
   return {
     subject: 'Verify your Nexdo email',
-    ...renderEmail({
-      preheader: `Your Nexdo verification code expires in ${expiresIn}.`,
-      heading: 'Verify your email',
-      intro: 'Use this code to finish creating your Nexdo account.',
-      code: { value: code, expiresIn },
-      footerNote: "You're receiving this because a Nexdo account was created with this address.",
-      ignoreNote: "If you didn't create a Nexdo account, you can ignore this email.",
-    }),
+    ...welcomeEmail(code, expiresIn),
   };
 }
 

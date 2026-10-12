@@ -1212,6 +1212,8 @@ private struct TodayView: View {
                             taskCount: counts.tasks,
                             momentCount: range == .today ? moments.today.count : 0,
                             availableMinutes: range == .today ? model.scheduleIntelligence?.today.availableMinutes : nil,
+                            overdueCount: OverdueTasks.results(model.tasks, now: context.date).count,
+                            otherAttentionCount: model.scheduleIntelligence?.today.attention.filter { $0.id != "overdue" }.count ?? 0,
                             attentionCount: range == .today ? (model.scheduleIntelligence?.today.attention.count ?? model.agenda?.overdue.count ?? 0) : (model.agenda?.overdue.count ?? 0),
                             schedule: remainingSchedule(queue),
                             searchSchedule: schedule,
@@ -1272,27 +1274,7 @@ private struct TodayView: View {
                             .overlay(RoundedRectangle(cornerRadius: 20).stroke(Color.nexdoIndigo.opacity(0.12)))
                             .accessibilityIdentifier("today-focus-next")
 
-                            let overdueCount = OverdueTasks.results(model.tasks, now: context.date).count
-                            let otherCount = model.scheduleIntelligence?.today.attention.filter { $0.id != "overdue" }.count ?? 0
-                            if overdueCount + otherCount > 0 {
-                                Button { showingAttention = true } label: {
-                                    HStack(spacing: 12) {
-                                        Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange).font(.title2)
-                                        VStack(alignment: .leading, spacing: 3) {
-                                            Text("Needs attention").font(.headline).foregroundStyle(Color.nexdoInk)
-                                            Text(overdueCount > 0 ? "\(overdueCount) overdue task\(overdueCount == 1 ? "" : "s")\(otherCount > 0 ? " · \(otherCount) other" : "")" : "\(otherCount) schedule check\(otherCount == 1 ? "" : "s")")
-                                                .font(.subheadline).foregroundStyle(Color.nexdoSecondary)
-                                        }
-                                        Spacer(minLength: 4)
-                                        Text("\(overdueCount + otherCount)").font(.subheadline.bold()).foregroundStyle(.brown)
-                                            .padding(.horizontal, 10).padding(.vertical, 5).background(Color.orange.opacity(0.18), in: Capsule())
-                                        Image(systemName: "chevron.right").foregroundStyle(Color.nexdoSecondary)
-                                    }.padding(18).frame(maxWidth: .infinity, alignment: .leading)
-                                        .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 20))
-                                        .overlay(RoundedRectangle(cornerRadius: 20).stroke(Color.nexdoIndigo.opacity(0.12)))
-                                        .contentShape(RoundedRectangle(cornerRadius: 20))
-                                }.buttonStyle(.plain).accessibilityIdentifier("today-attention-summary")
-                            }
+
                         }
 
                     }
@@ -1316,7 +1298,7 @@ private struct TodayView: View {
             .sheet(isPresented: $showingAttention) {
                 NavigationStack {
                     TodayAttentionSheet()
-                }.presentationDetents([.medium, .large]).presentationDragIndicator(.visible)
+                }.presentationDetents([.fraction(0.65), .large]).presentationDragIndicator(.visible).presentationCornerRadius(36)
             }
             .navigationDestination(item: $selectedScheduleCheck) { item in
                 scheduleCheckDetails(item)
@@ -1504,6 +1486,8 @@ private struct TodayIntelligenceCard: View {
     let taskCount: Int
     var momentCount: Int = 0
     let availableMinutes: Int?
+    var overdueCount: Int = 0
+    var otherAttentionCount: Int = 0
     let attentionCount: Int
     let schedule: [TodayScheduleItem]
     let searchSchedule: [TodayScheduleItem]
@@ -1530,9 +1514,16 @@ private struct TodayIntelligenceCard: View {
         }
     }
 
+    private var attentionDescription: String {
+        var parts: [String] = []
+        if overdueCount > 0 { parts.append("\(overdueCount) overdue task\(overdueCount == 1 ? "" : "s")") }
+        if otherAttentionCount > 0 { parts.append("\(otherAttentionCount) schedule check\(otherAttentionCount == 1 ? "" : "s")") }
+        return parts.joined(separator: " · ")
+    }
+
     private var commitmentCount: Int { appointments + taskCount + momentCount }
     var body: some View {
-        VStack(spacing: 0) {
+        VStack(spacing: 12) {
             if showsSummary {
             VStack(alignment: .leading, spacing: 12) {
                 Label(range == .today ? "Your day, in focus" : "Your next \(range.rawValue) days", systemImage: "sparkles")
@@ -1543,27 +1534,38 @@ private struct TodayIntelligenceCard: View {
                 Text("\(taskCount) Task\(taskCount == 1 ? "" : "s") · \(appointments) Appointment\(appointments == 1 ? "" : "s") · \(momentCount) Moment\(momentCount == 1 ? "" : "s")")
                     .font(.subheadline).foregroundStyle(Color.nexdoSecondary)
                     .lineLimit(1).minimumScaleFactor(0.7)
-                HStack(spacing: 10) {
-                    if attentionCount > 0 {
-                        Button(action: onAttention) {
-                            Label("\(attentionCount) thing\(attentionCount == 1 ? " needs" : "s need") attention", systemImage: "exclamationmark.circle")
-                                .font(.caption.bold()).foregroundStyle(Color(red: 0.66, green: 0.18, blue: 0.12))
-                                .padding(.horizontal, 10).padding(.vertical, 7)
-                                .background(Color(red: 1, green: 0.88, blue: 0.82), in: Capsule())
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityHint("Shows the items that need your attention")
-                    } else {
-                        Label("Nothing needs attention", systemImage: "checkmark.circle")
-                            .font(.caption.bold()).foregroundStyle(.green)
-                    }
-                }
-                .fixedSize(horizontal: false, vertical: true)
+
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(18)
             .background(LinearGradient(colors: [Color.nexdoBlue.opacity(0.08), Color.nexdoMagenta.opacity(0.09)], startPoint: .topLeading, endPoint: .bottomTrailing))
+            .clipShape(RoundedRectangle(cornerRadius: 24))
+            .overlay(RoundedRectangle(cornerRadius: 24).stroke(Color.nexdoIndigo.opacity(0.11)))
             }
+
+            if showsSummary && (overdueCount + otherAttentionCount > 0) {
+                Button(action: onAttention) {
+                    HStack(spacing: 14) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(.title2).foregroundStyle(.orange)
+                            .frame(width: 48, height: 48)
+                            .background(Color.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 14))
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Needs attention").font(.headline).foregroundStyle(Color.nexdoInk)
+                            Text(attentionDescription).font(.subheadline).foregroundStyle(Color.nexdoSecondary)
+                        }
+                        Spacer(minLength: 4)
+                        Image(systemName: "chevron.right").font(.body.weight(.medium)).foregroundStyle(Color.nexdoSecondary)
+                    }
+                    .padding(16).frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color.orange.opacity(0.07), in: RoundedRectangle(cornerRadius: 20))
+                    .overlay(RoundedRectangle(cornerRadius: 20).stroke(Color.orange.opacity(0.5)))
+                    .contentShape(RoundedRectangle(cornerRadius: 20))
+                }.buttonStyle(.plain)
+                    .accessibilityIdentifier("today-attention-summary")
+                    .accessibilityHint("Opens overdue tasks and schedule checks to complete or reschedule")
+            }
+
 
             VStack(alignment: .leading, spacing: 0) {
                 HStack {
@@ -1635,9 +1637,9 @@ private struct TodayIntelligenceCard: View {
             }
             .padding(18)
             .background(Color(uiColor: .secondarySystemGroupedBackground))
+            .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).stroke(Color.nexdoIndigo.opacity(0.11)))
         }
-        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).stroke(Color.nexdoIndigo.opacity(0.11)))
         .shadow(color: Color.nexdoIndigo.opacity(0.09), radius: 24, y: 10)
         .accessibilityElement(children: .contain)
         .onChange(of: range) { _, _ in scheduleExpanded = false }

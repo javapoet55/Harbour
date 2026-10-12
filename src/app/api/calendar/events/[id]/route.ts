@@ -53,8 +53,13 @@ async function healthHandlerDELETE(_req: Request, ctx: { params: Promise<{ id: s
   try {
     const user = await requireUser();
     const { id } = await ctx.params;
-    if (!await ownedEvent(user.id, id)) throw new Error('NOT_FOUND');
-    await prisma.calendarEvent.updateMany({ where: { id, userId: user.id, deletedAt: null }, data: { deletedAt: new Date() } });
+    // Retain access to our own tombstone so a failed external removal can be retried.
+    const existing = await prisma.calendarEvent.findFirst({ where: { id, userId: user.id, source: 'harbor', connectionId: null } });
+    if (!existing) throw new Error('NOT_FOUND');
+    if (!existing.deletedAt) {
+      const changed = await prisma.calendarEvent.updateMany({ where: { id, userId: user.id, deletedAt: null }, data: { deletedAt: new Date() } });
+      if (changed.count !== 1) throw new Error('NOT_FOUND');
+    }
     const calendarPush = await pushEventToExternal(user.id, id);
     const warning = calendarPushWarning(calendarPush, 'deleted');
     return Response.json({ success: true, calendarPush, ...(warning ? { warnings: [warning] } : {}), message: calendarPushMessage(calendarPush, 'deleted') }, { headers: noStore });

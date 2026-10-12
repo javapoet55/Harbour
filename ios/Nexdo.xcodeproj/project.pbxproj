@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		F20000000000000000000001 /* FirebaseCrashlytics in Frameworks */ = {isa = PBXBuildFile; productRef = F20000000000000000000002 /* FirebaseCrashlytics */; };
 		10F35F4F304E3F3500D2D029 /* Media.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 10F35F4E304E3F3500D2D029 /* Media.xcassets */; };
 		B00000000000000000000001 /* WebRTC in Frameworks */ = {isa = PBXBuildFile; productRef = B00000000000000000000002 /* WebRTC */; };
 		F10000000000000000000001 /* FirebaseAnalytics in Frameworks */ = {isa = PBXBuildFile; productRef = F10000000000000000000002 /* FirebaseAnalytics */; };
@@ -42,6 +43,7 @@
 			files = (
 				B00000000000000000000001 /* WebRTC in Frameworks */,
 				F10000000000000000000001 /* FirebaseAnalytics in Frameworks */,
+				F20000000000000000000001 /* FirebaseCrashlytics in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -86,6 +88,7 @@
 				A00000000000000000000007 /* Sources */,
 				A00000000000000000000008 /* Frameworks */,
 				A00000000000000000000009 /* Resources */,
+				F20000000000000000000003 /* Upload Crashlytics Symbols */,
 			);
 			buildRules = (
 			);
@@ -99,6 +102,7 @@
 			packageProductDependencies = (
 				B00000000000000000000002 /* WebRTC */,
 				F10000000000000000000002 /* FirebaseAnalytics */,
+				F20000000000000000000002 /* FirebaseCrashlytics */,
 			);
 			productName = Nexdo;
 			productReference = A00000000000000000000012 /* Nexdo: AI Daily Planner.app */;
@@ -185,6 +189,27 @@
 		};
 /* End PBXResourcesBuildPhase section */
 
+/* Begin PBXShellScriptBuildPhase section */
+        F20000000000000000000003 /* Upload Crashlytics Symbols */ = {
+            isa = PBXShellScriptBuildPhase;
+            alwaysOutOfDate = 1;
+            buildActionMask = 2147483647;
+            files = ();
+            inputPaths = (
+                "${DWARF_DSYM_FOLDER_PATH}/${DWARF_DSYM_FILE_NAME}",
+                "${DWARF_DSYM_FOLDER_PATH}/${DWARF_DSYM_FILE_NAME}/Contents/Resources/DWARF/${PRODUCT_NAME}",
+                "${DWARF_DSYM_FOLDER_PATH}/${DWARF_DSYM_FILE_NAME}/Contents/Info.plist",
+                "$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/GoogleService-Info.plist",
+                "$(TARGET_BUILD_DIR)/$(EXECUTABLE_PATH)",
+            );
+            name = "Upload Crashlytics Symbols";
+            outputPaths = ();
+            runOnlyForDeploymentPostprocessing = 0;
+            shellPath = /bin/sh;
+            shellScript = "\"${BUILD_DIR%/Build/*}/SourcePackages/checkouts/firebase-ios-sdk/Crashlytics/run\"\n";
+        };
+/* End PBXShellScriptBuildPhase section */
+
 /* Begin PBXSourcesBuildPhase section */
 		A00000000000000000000007 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
@@ -234,7 +259,7 @@
 				CLANG_WARN_SUSPICIOUS_MOVE = YES;
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
-				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = BB353R6D2T;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
@@ -310,6 +335,8 @@
 				CODE_SIGN_ENTITLEMENTS = App/Nexdo.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
+                ENABLE_DEBUG_DYLIB = NO;
+                OTHER_LDFLAGS = ("$(inherited)", "-ObjC");
 				CURRENT_PROJECT_VERSION = 7;
 				DEVELOPMENT_ASSET_PATHS = "";
 				GENERATE_INFOPLIST_FILE = YES;
@@ -352,6 +379,8 @@
 				CODE_SIGN_ENTITLEMENTS = App/Nexdo.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
+                ENABLE_DEBUG_DYLIB = NO;
+                OTHER_LDFLAGS = ("$(inherited)", "-ObjC");
 				CURRENT_PROJECT_VERSION = 7;
 				DEVELOPMENT_ASSET_PATHS = "";
 				GENERATE_INFOPLIST_FILE = YES;
@@ -460,6 +489,11 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+        F20000000000000000000002 /* FirebaseCrashlytics */ = {
+            isa = XCSwiftPackageProductDependency;
+            package = F10000000000000000000003 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+            productName = FirebaseCrashlytics;
+        };
 		B00000000000000000000002 /* WebRTC */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = B00000000000000000000003 /* XCRemoteSwiftPackageReference "WebRTC" */;

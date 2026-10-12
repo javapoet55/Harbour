@@ -17,6 +17,8 @@ const links = [
   { href: '/voice', label: 'Voice Analytics', icon: Mic2 },
   { href: '/revenue', label: 'Revenue', icon: CircleDollarSign },
   { href: '/health', label: 'System Health', icon: HeartPulse },
+  { href: '/bug-reports', label: 'Bug Reports', icon: Bug },
+  { href: '/feedback', label: 'Feedback', icon: MessageSquare },
 ];
 
 export function AdminShell({ children, name, email }: { children: React.ReactNode; name: string; email: string }) {

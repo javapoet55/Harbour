@@ -50,7 +50,8 @@ struct TodayAttentionSheet: View {
                                 Image(systemName: "calendar").frame(width: 44, height: 44)
                                     .background(Color.nexdoIndigo.opacity(0.06), in: RoundedRectangle(cornerRadius: 12))
                             }.buttonStyle(.borderless).accessibilityLabel("Reschedule \(task.title)")
-                        }.padding(.vertical, 4)
+                        }.padding(.vertical, 12)
+                            .listRowBackground(Color(uiColor: .systemGray5))
                     }
                 }
                 Section {
@@ -63,8 +64,10 @@ struct TodayAttentionSheet: View {
                                 .foregroundStyle(.white)
                         }
                             .font(.headline)
-                            .frame(maxWidth: .infinity, minHeight: 44)
+                            .frame(maxWidth: .infinity, minHeight: 52)
                     }.buttonStyle(NexdoGradientButtonStyle()).disabled(model.busy || saving)
+                        .padding(.vertical, 8)
+                        .listRowBackground(Color(uiColor: .systemGray5))
                 } footer: { Text("Complete a task or choose a new date.") }
             }
             if !checks.isEmpty {
@@ -84,6 +87,8 @@ struct TodayAttentionSheet: View {
             }
             if let failure { Text(failure).foregroundStyle(.red) }
         }
+        .listSectionSpacing(24)
+        .tint(.nexdoIndigo)
         .navigationTitle("Needs attention").navigationBarTitleDisplayMode(.inline)
         .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Close") { dismiss() }.disabled(saving) } }
         .interactiveDismissDisabled(saving)

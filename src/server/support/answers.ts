@@ -1,3 +1,4 @@
+import { observedFetch } from '@/server/health/telemetry';
 import { z } from 'zod';
 import articles from '@/content/support-articles.json';
 export type SupportSource = { id: string; title: string; url: string; platform: string };
@@ -30,7 +31,7 @@ export async function answerSupport(messages: SupportMessage[], signal?: AbortSi
   try {
     // Small curated corpus also supports synonyms that lexical retrieval misses.
     const sources = context.length ? context : articles;
-    const response = await fetch('https://api.openai.com/v1/responses', {
+    const response = await observedFetch('https://api.openai.com/v1/responses', {
       method: 'POST', signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(20000)]) : AbortSignal.timeout(20000),
       headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ model: process.env.SUPPORT_CHAT_MODEL || process.env.OPENAI_MODEL || 'gpt-5.4-mini', store: false, max_output_tokens: 1200,

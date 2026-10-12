@@ -23,12 +23,22 @@ async function healthHandlerPOST(req: Request) {
       let occurrences;
       try { occurrences = eventOccurrences(new Date(event.startAt), new Date(event.endAt), user.timeZone, repeat); }
       catch (error) { return Response.json({ error: error instanceof Error ? error.message : 'Invalid repeat settings.' }, { status: 400 }); }
-      if (allowScheduleConflict !== true) {
-        const warnings = await checkOccurrenceAvailability(user.id, occurrences);
-        if (warnings.length) throw new ScheduleWarning(warnings);
-      }
       const { prisma } = await import('@/server/db');
       const seriesKey = createHash('sha256').update(`${user.id}:${requestId}`).digest('hex');
+      if (allowScheduleConflict !== true) {
+        // A retry must not conflict with occurrences this request already saved.
+        // Keep checking every new occurrence, including extensions to the series.
+        const saved = await prisma.calendarEvent.findMany({
+          where: { userId: user.id, syncKey: { in: occurrences.map(event => `manual-repeat:${seriesKey}:${event.startAt.toISOString()}`) } },
+          select: { syncKey: true },
+        });
+        const savedKeys = new Set(saved.map(event => event.syncKey));
+        const pending = occurrences.filter(event => !savedKeys.has(`manual-repeat:${seriesKey}:${event.startAt.toISOString()}`));
+        if (pending.length) {
+          const warnings = await checkOccurrenceAvailability(user.id, pending);
+          if (warnings.length) throw new ScheduleWarning(warnings);
+        }
+      }
       const saved = await prisma.$transaction(async tx => {
         const ids: string[] = [];
         for (const occurrence of occurrences) {

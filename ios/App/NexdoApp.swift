@@ -14,7 +14,10 @@ enum AppEnvironment {
 
 @main
 struct NexdoApp: App {
-    init() { NexdoAnalytics.configureIfAvailable() }
+    init() {
+        NexdoAnalytics.configureIfAvailable()
+        NexdoCrashReporting.configure()
+    }
     @UIApplicationDelegateAdaptor(TaskActionAppDelegate.self) private var actionDelegate
     @AppStorage(AppAppearance.storageKey) private var appearance: AppAppearance = .system
     var body: some Scene {
@@ -902,14 +905,12 @@ final class AppModel: ObservableObject {
         let _: Ignore? = try? await api.request("/api/auth/logout", method: "POST")
         await reset(); busy = false
     }
-    func deleteAccount() async {
-        await perform {
-            let _: Ignore = try await api.request("/api/account", method: "DELETE")
-            await reset()
-            // A deleted account should not be greeted by name on the sign-in screen.
-            lastSignedInFirstName = nil
-            UserDefaults.standard.removeObject(forKey: "nexdo.lastSignedInFirstName")
-        }
+    func deleteAccount() async throws {
+        let _: Ignore = try await api.request("/api/account", method: "DELETE")
+        await reset()
+        // A deleted account should not be greeted by name on the sign-in screen.
+        lastSignedInFirstName = nil
+        UserDefaults.standard.removeObject(forKey: "nexdo.lastSignedInFirstName")
     }
 }
 

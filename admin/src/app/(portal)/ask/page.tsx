@@ -7,7 +7,7 @@ export default async function AdminAskNexdoPage({ searchParams }: { searchParams
   const params = await searchParams;
   const range = parseAdminDateRange(params.from, params.to);
   return <div className="admin-ask-page">
-    <PageHeading title="Ask Nexdo" description="Ask questions about live platform usage and get database-grounded answers with relevant visualizations.">
+    <PageHeading title="Ask Nexdo" description="Ask questions about live platform usage and get source-grounded answers with relevant visualizations.">
       <AdminDateRangeFilter key={`${range.from}-${range.to}`} from={range.from} to={range.to} today={new Date().toISOString().slice(0, 10)} label={adminDateRangeLabel(range)} pathname="/ask"/>
     </PageHeading>
     <AdminDataAssistant days={range.days} from={range.from} to={range.to}/>

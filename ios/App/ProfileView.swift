@@ -262,6 +262,8 @@ struct ProfileSettingsView: View {
     @State private var message: String?
     @State private var failure: String?
     @State private var confirmsDeletion = false
+    @State private var deletingAccount = false
+    @State private var deletionError: String?
     @StateObject private var calendarOAuth = CalendarOAuthCoordinator()
 
     var body: some View {
@@ -339,7 +341,7 @@ struct ProfileSettingsView: View {
                         Toggle("Push notifications", isOn: pref(\.pushEnabled))
                         Toggle("Email notifications", isOn: pref(\.emailEnabled))
                         Toggle("Daily morning email · 6:00 a.m.", isOn: pref(\.morningSummary))
-                        Text("Today’s tasks, calendar events and conflicts, sent to \(model.profile?.email ?? "your profile email") at 6:00 a.m. in \(model.profile?.timeZone ?? TimeZone.current.identifier). Email notifications must also be enabled.").font(.caption).foregroundStyle(Color.nexdoSecondary)
+                        Text(morningEmailExplanation).font(.caption).foregroundStyle(Color.nexdoSecondary)
                         Toggle("Evening summary", isOn: pref(\.eveningSummary))
                         Text("Manage delivery permissions and send tests in Notification Center.").font(.caption).foregroundStyle(Color.nexdoSecondary)
                         Button("Open Notification Center") { website("/notifications") }
@@ -371,12 +373,13 @@ struct ProfileSettingsView: View {
                 } else { Button("Retry loading settings") { Task { await load() } } }
                 if let failure { Text(failure).foregroundStyle(.red).accessibilityAddTraits(.updatesFrequently) }
                 if let message { Label(message, systemImage: "checkmark.circle").foregroundStyle(Color.nexdoIndigo).accessibilityAddTraits(.updatesFrequently) }
-            }.padding(20).disabled(saving || connecting)
+            }.padding(20).disabled(saving || connecting || deletingAccount)
         }
         .onChange(of: loading) { _, isLoading in
             if !isLoading && openCalendarSettings { scrollProxy.scrollTo("calendar-settings", anchor: .top) }
         }
         }
+        .toggleStyle(SwitchToggleStyle(tint: .green))
         .background(ProfileBackground()).navigationTitle("Settings").navigationBarTitleDisplayMode(.large)
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
@@ -384,7 +387,7 @@ struct ProfileSettingsView: View {
                     Image(systemName: "chevron.backward")
                 }
                 .accessibilityLabel("Save settings and go back")
-                .disabled(loading || saving || connecting)
+                .disabled(loading || saving || connecting || deletingAccount)
             }
         }
         .task { if loading { await load() } }
@@ -428,8 +431,22 @@ struct ProfileSettingsView: View {
             Button("Keep it", role: .cancel) { disconnecting = nil }
         } message: { Text("Events imported from this calendar are removed with the connection.") }
         .confirmationDialog("Permanently delete this account?", isPresented: $confirmsDeletion, titleVisibility: .visible) {
-            Button("Delete account", role: .destructive) { Task { await model.deleteAccount() } }
+            Button("Delete account", role: .destructive) {
+                guard !deletingAccount else { return }
+                deletingAccount = true
+                Task {
+                    defer { deletingAccount = false }
+                    do { try await model.deleteAccount() }
+                    catch { deletionError = error.localizedDescription }
+                }
+            }
         } message: { Text("This removes your Nexdo data permanently and cannot be undone.") }
+        .modifier(AccountDeletionPresentation(deleting: deletingAccount, error: $deletionError))
+    }
+    private var morningEmailExplanation: String {
+        let email = model.profile?.email ?? "your profile email"
+        let zone = model.profile?.timeZone ?? TimeZone.current.identifier
+        return "Today’s tasks, calendar events and conflicts, sent to \(email) at 6:00 a.m. in \(zone). Email notifications must also be enabled."
     }
     private var appleCalendarCard: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -659,5 +676,22 @@ private struct WorkingDaysField: View {
             Text("Choose at least one day. Find my next task uses these days and your working hours.")
                 .font(.caption).foregroundStyle(.secondary)
         }
+    }
+}
+
+private struct AccountDeletionPresentation: ViewModifier {
+    let deleting: Bool
+    @Binding var error: String?
+    func body(content: Content) -> some View {
+        content.interactiveDismissDisabled(deleting)
+            .overlay {
+                if deleting {
+                    ProgressView("Deleting account…").padding(24)
+                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
+                }
+            }
+            .alert("Couldn’t delete account", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) {
+                Button("OK") { error = nil }
+            } message: { Text(error ?? "Please try again.") }
     }
 }

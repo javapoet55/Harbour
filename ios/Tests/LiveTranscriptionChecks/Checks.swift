@@ -52,6 +52,25 @@ struct VoiceTaskSession { let value = "test" }
         let denied = LiveVoiceTranscription(makeTransport: { fatalError("Must not connect") }, requestPermission: { false })
         await denied.start(credential: VoiceTaskSession())
         precondition(denied.permissionDenied && !denied.isRecording)
+        var permission = false
+        let retry = LiveVoiceTranscription(makeTransport: { transport }, requestPermission: { permission })
+        await retry.start(credential: VoiceTaskSession())
+        precondition(retry.permissionDenied)
+        permission = true
+        await retry.start(credential: VoiceTaskSession())
+        precondition(retry.isRecording && !retry.permissionDenied && retry.error == nil)
+        retry.cancel()
+
+        var pending: CheckedContinuation<Bool, Never>?
+        let cancelled = LiveVoiceTranscription(makeTransport: { fatalError("Cancelled permission must not start recording") },
+            requestPermission: { await withCheckedContinuation { pending = $0 } })
+        let start = Task { await cancelled.start(credential: VoiceTaskSession()) }
+        while pending == nil { await Task.yield() }
+        precondition(cancelled.requestingPermission)
+        cancelled.cancel()
+        pending?.resume(returning: true)
+        await start.value
+        precondition(!cancelled.isRecording && !cancelled.requestingPermission)
         print("Live transcription checks passed: partial/final text, turn ordering, cancellation, manual commit, empty text, permission denial")
     }
 }

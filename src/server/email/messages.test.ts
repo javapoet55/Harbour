@@ -84,7 +84,21 @@ describe('transactional email template', () => {
     const { html } = verifyEmailMessage('042917', '24 hours');
     expect(html).toMatch(/<div style="display:none;[^"]*mso-hide:all;[^"]*">Your Nexdo verification code expires in 24 hours\./);
     expect(html).not.toMatch(/<script|<link|<style|@import|fonts\.googleapis/i);
-    expect(html).toContain('max-width:560px');
+    expect(html).toContain('max-width:680px');
+  });
+
+  it('welcomes new users while preserving live verification and safe text', () => {
+    const email = verifyEmailMessage('913570', '24 hours');
+    expect(email.html).toContain('Welcome to <span');
+    expect(email.html).toContain('>913570</div>');
+    expect(email.html).not.toContain('042917');
+    expect(email.html).toContain('>Open NexDo</a>');
+    expect(email.html).toContain('href="https://app.nexdo.test/"');
+    expect(email.text).toContain('Pro tips to get the most out of NexDo');
+    const escaped = verifyEmailMessage('<img src=x>', '<script>');
+    expect(escaped.html).not.toContain('<img src=x>');
+    expect(escaped.html).not.toContain('<script>');
+    expect(escaped.html).toContain('&lt;img src=x&gt;');
   });
 
   it('never logs the code while rendering', () => {

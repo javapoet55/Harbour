@@ -24,7 +24,8 @@ export default function ResetPasswordPage() {
       const body = await response.json().catch(() => ({}));
       if (!response.ok) { setError(body.error || 'Could not request a reset code.'); return; }
       setSent(true); setMessage(body.developmentCode ? `Your development code is ${body.developmentCode}.` : `${body.message} It expires in 15 minutes.`);
-    } finally { setBusy(false); }
+    } catch { setError("Could not connect. Please check your connection and try again."); }
+    finally { setBusy(false); }
   }
 
   async function requestCode(event: FormEvent) {
@@ -41,7 +42,8 @@ export default function ResetPasswordPage() {
       const body = await response.json().catch(() => ({}));
       if (!response.ok) { setError(body.error || 'Could not reset your password.'); return; }
       router.push('/login?reset=complete');
-    } finally { setBusy(false); }
+    } catch { setError("Could not connect. Please check your connection and try again."); }
+    finally { setBusy(false); }
   }
 
   return <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center px-5 py-10">

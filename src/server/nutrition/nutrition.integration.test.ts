@@ -168,8 +168,14 @@ describe('scheduling and a full call', () => {
     expect(entries.map(e => e.status)).toEqual(['CONFIRMED', 'NEEDS_REVIEW']); // the estimate stays flagged for review
   });
   it('stores transcripts and flags items the backup transcript never heard', async () => {
+    const receipt = { id: `nutrition_${callId}`, source: 'response', model: 'gpt-realtime-2.1', inputTokens: 12, outputTokens: 4, totalTokens: 16 };
     await completeCall(callId, { durationSec: 184, endReason: 'finished', noiseFilter: 'openai_only',
+      tokenReceipts: [receipt, receipt, { invalid: true }],
       transcript: [{ role: 'user', text: 'I had two bananas and chicken biryani' }], backupTranscript: ['I had two bananas', 'and some rice for lunch'] });
+    const receipts = await prisma.userMemory.findMany({ where: { userId, key: `voice-token:response:${receipt.id}` } });
+    expect(receipts).toHaveLength(1);
+    expect(receipts[0].source).toBe('nutrition-realtime');
+    expect(JSON.parse(receipts[0].value)).toMatchObject(receipt);
     const call = await prisma.nutritionCall.findUniqueOrThrow({ where: { id: callId } });
     expect(call).toMatchObject({ status: 'COMPLETED', durationSec: 184, endReason: 'finished', noiseFilter: 'openai_only' });
     expect(JSON.parse(call.transcriptJson!)).toHaveLength(1);

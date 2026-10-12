@@ -12,7 +12,21 @@ actor AppleCalendarService {
     static let shared = AppleCalendarService()
     private let store = EKEventStore()
 
-    func requestAccess() async throws -> Bool { try await store.requestFullAccessToEvents() }
+    func requestAccess() async throws -> Bool {
+        let status: PermissionAccess.Status
+        switch EKEventStore.authorizationStatus(for: .event) {
+        case .notDetermined: status = .notDetermined
+        case .fullAccess: status = .authorized
+        case .writeOnly: status = .writeOnly
+        case .restricted: status = .restricted
+        default: status = .denied
+        }
+        switch PermissionAccess.decision(for: .calendar, status: status) {
+        case .allow: return true
+        case .deny: return false
+        case .request: return try await store.requestFullAccessToEvents()
+        }
+    }
 
     func calendars() -> [AppleCalendarChoice] {
         guard EKEventStore.authorizationStatus(for: .event) == .fullAccess else { return [] }

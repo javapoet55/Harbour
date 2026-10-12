@@ -38,3 +38,14 @@ export async function recordVoiceUsage(userId: string, timeZone: string, session
   });
   return currentVoiceUsage(userId, timeZone, now);
 }
+
+/** Check authenticated account usage before issuing credentials or making a paid voice call. */
+export async function voiceAllowanceResponse(userId: string, timeZone: string, now = new Date()): Promise<Response | null> {
+  const usage = await currentVoiceUsage(userId, timeZone, now);
+  if (usage.remainingSeconds > 0) return null;
+  return Response.json({
+    error: 'You have used your 100 minutes of voice this month. Voice will be available again next month. You can still type your requests.',
+    code: 'VOICE_MONTHLY_LIMIT_REACHED',
+    ...usage,
+  }, { status: 429, headers: { 'Cache-Control': 'private, no-store' } });
+}

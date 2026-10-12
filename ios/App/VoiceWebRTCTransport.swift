@@ -58,7 +58,7 @@ final class VoiceWebRTCTransport: NSObject, VoiceRealtimeTransport {
         reportedFailure = false
         Self.log.info("Connecting WebRTC")
         let token = run
-        guard await AVAudioApplication.requestRecordPermission() else { throw URLError(.userAuthenticationRequired) }
+        try await VoicePermissionGate.authorize { await AVAudioApplication.requestRecordPermission() }
         guard token == run else { throw CancellationError() }
         try await activateAudioSession()
         guard token == run else { throw CancellationError() }

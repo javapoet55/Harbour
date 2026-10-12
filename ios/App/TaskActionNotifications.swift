@@ -17,8 +17,17 @@ actor LocalTaskActionScheduler: TaskActionNotificationScheduler {
         }.map { $0.request.identifier })
         guard !notifications.isEmpty else { return }
         let settings = await center.notificationSettings()
-        var authorized = settings.authorizationStatus == .authorized || settings.authorizationStatus == .provisional || settings.authorizationStatus == .ephemeral
-        if settings.authorizationStatus == .notDetermined {
+        let access: PermissionAccess.Status
+        switch settings.authorizationStatus {
+        case .authorized: access = .authorized
+        case .provisional: access = .provisional
+        case .ephemeral: access = .ephemeral
+        case .notDetermined: access = .notDetermined
+        default: access = .denied
+        }
+        let decision = PermissionAccess.decision(for: .notifications, status: access)
+        var authorized = decision == .allow
+        if decision == .request {
             authorized = try await center.requestAuthorization(options: [.alert, .sound, .badge])
         }
         guard authorized else { throw TaskActionServiceError.notificationsDenied }

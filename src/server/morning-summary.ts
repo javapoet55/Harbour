@@ -33,10 +33,24 @@ export async function runMorningSummaries(now = new Date(), scope?: { userId: st
         // A sending/uncertain attempt is never automatically replayed: the provider may have accepted it.
         if (previous && (previous.status !== 'retry' || previous.attempts >= 3 || previous.retryAt > +now)) { counts.skipped++; continue; }
         const briefing = await buildTodayBriefing(user.id, now);
-        const message = renderEmail({ heading: 'Your morning briefing', preheader: briefing.visual.summary,
-          subheading: `${day} · ${user.timeZone}`, intro: briefing.visual.summary,
-          body: briefing.visual.sections.flatMap(section => [section.title, ...section.items]),
-          footerNote: 'Sent at 6:00 a.m. in your profile time zone. Disable Daily morning email in NexDo Settings to stop these emails.',
+        const dateLabel = new Intl.DateTimeFormat('en-US', { timeZone: user.timeZone, weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }).format(now);
+        const zoneLabel = new Intl.DateTimeFormat('en-US', { timeZone: user.timeZone, timeZoneName: 'long' }).formatToParts(now).find(part => part.type === 'timeZoneName')?.value ?? user.timeZone.replaceAll('_', ' ');
+        const today = briefing.today;
+        const message = renderEmail({
+          heading: 'Your morning briefing', preheader: briefing.visual.summary,
+          subheading: `${dateLabel} · ${zoneLabel}`,
+          intro: today.commitments ? 'Here’s your day ahead, with your schedule and the items that need attention.' : 'A little room to breathe. Nothing is scheduled today.',
+          metrics: [{ label: 'Appointments', value: String(today.appointments) }, { label: 'Open tasks', value: String(today.tasks) }, { label: 'Attention items', value: String(today.attention.length) }],
+          sections: [
+            { title: 'Your schedule', items: briefing.visual.sections[1].items },
+            { title: 'Needs attention', items: briefing.visual.sections[2].items },
+            { title: 'Your next step', items: briefing.visual.sections[3].items },
+            { title: 'Working time', items: [today.workingToday
+              ? `${today.availableMinutes} minutes unreserved during your remaining working hours. This may include several gaps.`
+              : 'Today is not one of your selected working days. You can update Working days in Settings.'] },
+          ],
+          action: { label: 'Open NexDo', path: '/' },
+          footerNote: 'Your daily briefing, delivered at 6:00 a.m. in your profile time zone. To stop these emails, turn off Daily morning email in NexDo Settings.',
           ignoreNote: 'Based on tasks and calendars synced to NexDo. Device-only Apple Calendar events are not included.',
         });
         // Recheck settings and destination after rendering, immediately before claiming delivery.

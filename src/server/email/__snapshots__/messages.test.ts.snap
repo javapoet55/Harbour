@@ -278,75 +278,83 @@ Questions? support@nexdo.test
 
 exports[`transactional email template > renders the verify email email with code, expiry and logo > html 1`] = `
 "<!DOCTYPE html>
-<html lang="en" xmlns="http://www.w3.org/1999/xhtml" xmlns:o="urn:schemas-microsoft-com:office:office">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<meta http-equiv="X-UA-Compatible" content="IE=edge">
-<meta name="x-apple-disable-message-reformatting">
-<meta name="format-detection" content="telephone=no,date=no,address=no,email=no">
-<meta name="color-scheme" content="light">
-<meta name="supported-color-schemes" content="light">
-<title>Verify your email</title>
-<!--[if mso]><noscript><xml><o:OfficeDocumentSettings><o:PixelsPerInch>96</o:PixelsPerInch></o:OfficeDocumentSettings></xml></noscript><![endif]-->
-</head>
-<body style="margin:0;padding:0;width:100%;background-color:#F5F6FA;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%;">
-<div style="display:none;font-size:1px;line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden;mso-hide:all;color:#F5F6FA;">Your Nexdo verification code expires in 24 hours.&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;</div>
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#F5F6FA" style="background-color:#F5F6FA;">
-<tr><td align="center" style="padding:32px 16px;">
-<!--[if mso]><table role="presentation" width="560" cellpadding="0" cellspacing="0" border="0" align="center"><tr><td><![endif]-->
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:560px;margin:0 auto;">
-<tr><td align="left" style="padding:0 0 24px;">
-<img src="https://app.nexdo.test/email/nexdo-logo-email.png" width="206" height="48" alt="Nexdo" style="display:block;width:206px;height:48px;max-width:206px;border:0;outline:none;text-decoration:none;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;font-size:22px;font-weight:700;color:#0B0B2E;">
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="x-apple-disable-message-reformatting"><title>Welcome to NexDo — verify your email</title></head>
+<body style="margin:0;padding:0;background:#F5F6FA;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;color:#0B0B2E;-webkit-text-size-adjust:100%;">
+<div style="display:none;font-size:1px;line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden;mso-hide:all;">Your Nexdo verification code expires in 24 hours.&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;</div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="#F5F6FA"><tr><td align="center" style="padding:24px 12px;">
+<!--[if mso]><table role="presentation" width="680"><tr><td><![endif]-->
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:680px;margin:0 auto;">
+<tr><td style="padding:28px 24px 16px;border-radius:24px 24px 0 0;background:#F4F2FF;background-image:linear-gradient(120deg,#FFFFFF,#F8F0FF,#EDF5FF);">
+<img src="https://app.nexdo.test/email/nexdo-logo-email.png" width="206" height="48" alt="Nexdo" style="display:block;width:206px;height:48px;max-width:206px;border:0;">
+<p style="margin:10px 0 30px;font-size:14px;line-height:22px;color:#6B6B80;">Less on your mind, more done in your day.</p>
+<h1 style="margin:0 0 12px;font-size:36px;line-height:43px;letter-spacing:-1px;">Welcome to <span style="color:#7037FF;">NexDo!</span></h1>
+<p style="margin:0 0 16px;font-size:19px;line-height:28px;color:#6B6B80;">Your personal AI-powered productivity assistant is almost ready.</p>
+<div style="font-size:0;"><div style="display:inline-block;width:50%;min-width:140px;vertical-align:top;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td style="padding:12px 10px 16px 0;"><div aria-hidden="true" style="width:44px;line-height:44px;border-radius:14px;background:#EEE9FF;color:#6235FF;font-size:28px;text-align:center;">ϟ</div><h3 style="margin:10px 0 5px;font-size:15px;line-height:21px;color:#0B0B2E;">Turn ideas into action</h3><p style="margin:0;font-size:13px;line-height:20px;color:#6B6B80;">Capture, organize and get things done</p></td></tr></table></div><div style="display:inline-block;width:50%;min-width:140px;vertical-align:top;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td style="padding:12px 10px 16px 0;"><div aria-hidden="true" style="width:44px;line-height:44px;border-radius:14px;background:#EEE9FF;color:#7435FF;font-size:28px;text-align:center;">▦</div><h3 style="margin:10px 0 5px;font-size:15px;line-height:21px;color:#0B0B2E;">Smarter scheduling</h3><p style="margin:0;font-size:13px;line-height:20px;color:#6B6B80;">Plan your day with AI</p></td></tr></table></div><div style="display:inline-block;width:50%;min-width:140px;vertical-align:top;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td style="padding:12px 10px 16px 0;"><div aria-hidden="true" style="width:44px;line-height:44px;border-radius:14px;background:#E1F8EB;color:#00A85A;font-size:28px;text-align:center;">✓</div><h3 style="margin:10px 0 5px;font-size:15px;line-height:21px;color:#0B0B2E;">Stay focused</h3><p style="margin:0;font-size:13px;line-height:20px;color:#6B6B80;">Prioritize what matters most</p></td></tr></table></div><div style="display:inline-block;width:50%;min-width:140px;vertical-align:top;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td style="padding:12px 10px 16px 0;"><div aria-hidden="true" style="width:44px;line-height:44px;border-radius:14px;background:#FCE7F7;color:#D819B5;font-size:28px;text-align:center;">✦</div><h3 style="margin:10px 0 5px;font-size:15px;line-height:21px;color:#0B0B2E;">Get AI support</h3><p style="margin:0;font-size:13px;line-height:20px;color:#6B6B80;">Break down tasks and find next steps</p></td></tr></table></div></div>
 </td></tr>
-<tr><td bgcolor="#FFFFFF" style="background-color:#FFFFFF;border-radius:12px;overflow:hidden;">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
-<tr><td height="4" bgcolor="#2F6BFF" style="height:4px;line-height:4px;font-size:0;background-color:#2F6BFF;background-image:linear-gradient(90deg,#2F6BFF,#7B4DFF,#E84CA8);border-radius:12px 12px 0 0;">&nbsp;</td></tr>
-<tr><td style="padding:32px;">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
-<tr><td style="padding:0 0 12px;"><h1 style="margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;font-size:24px;line-height:32px;font-weight:700;color:#0B0B2E;">Verify your email</h1></td></tr>
-<tr><td><p style="margin:0 0 16px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;font-size:15px;line-height:24px;color:#3C3C50;">Use this code to finish creating your Nexdo account.</p></td></tr>
-<tr><td style="padding:8px 0 0;">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:separate;">
-<tr><td align="center" bgcolor="#F0F3FF" style="background-color:#F0F3FF;border:1px solid #DCE3FF;border-radius:10px;padding:20px 12px;">
-<div style="font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono','Courier New',monospace;font-size:32px;line-height:40px;font-weight:700;letter-spacing:6px;padding-left:6px;color:#0B0B2E;">042917</div>
-<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;font-size:13px;line-height:20px;color:#6B6B80;padding-top:8px;">Expires in 24 hours &middot; single use</div>
+<tr><td style="padding:28px 24px;background:#FFFFFF;border-radius:20px;">
+<h2 style="margin:0 0 8px;font-size:26px;line-height:34px;">Verify your email</h2>
+<p style="margin:0 0 20px;font-size:16px;line-height:25px;color:#6B6B80;">Use this code to finish creating your NexDo account.</p>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" bgcolor="#F0F3FF" style="padding:20px 8px;border:1px solid #DCE3FF;border-radius:12px;">
+<div style="font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:32px;line-height:40px;font-weight:700;letter-spacing:6px;padding-left:6px;color:#0B0B2E;">042917</div>
+<div style="font-size:13px;line-height:20px;color:#6B6B80;padding-top:8px;">Expires in 24 hours &middot; single use</div>
+</td></tr></table>
+<table role="presentation" align="center" cellpadding="0" cellspacing="0" style="margin:20px auto 0;"><tr><td align="center" bgcolor="#6235FF" style="border-radius:12px;background-image:linear-gradient(90deg,#2F8AFF,#7037FF,#E524CC);"><a href="https://app.nexdo.test/" style="display:inline-block;padding:15px 48px;border-radius:12px;font-size:17px;line-height:24px;font-weight:700;color:#FFFFFF;text-decoration:none;">Open NexDo</a></td></tr></table>
 </td></tr>
-</table>
+<tr><td height="14" style="font-size:0;line-height:14px;">&nbsp;</td></tr>
+<tr><td style="padding:24px;background:#FFFFFF;border-radius:20px;">
+<h2 style="margin:0 0 12px;font-size:19px;line-height:27px;">Pro tips to get the most out of NexDo</h2>
+<div style="font-size:0;"><div style="display:inline-block;width:100%;max-width:194px;vertical-align:top;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td style="padding:10px 16px 8px 0;"><h3 style="margin:0 0 5px;font-size:14px;line-height:21px;color:#0B0B2E;">1. Capture everything</h3><p style="margin:0;font-size:14px;line-height:21px;color:#6B6B80;">Tasks, notes and ideas — in one place.</p></td></tr></table></div><div style="display:inline-block;width:100%;max-width:194px;vertical-align:top;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td style="padding:10px 16px 8px 0;"><h3 style="margin:0 0 5px;font-size:14px;line-height:21px;color:#0B0B2E;">2. Let AI help</h3><p style="margin:0;font-size:14px;line-height:21px;color:#6B6B80;">Get personalized suggestions and next steps.</p></td></tr></table></div><div style="display:inline-block;width:100%;max-width:194px;vertical-align:top;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td style="padding:10px 16px 8px 0;"><h3 style="margin:0 0 5px;font-size:14px;line-height:21px;color:#0B0B2E;">3. Stay consistent</h3><p style="margin:0;font-size:14px;line-height:21px;color:#6B6B80;">A clearer day leads to bigger results.</p></td></tr></table></div></div>
 </td></tr>
-
-</table>
-</td></tr>
-</table>
-</td></tr>
-<tr><td style="padding:24px 32px 0;">
-<p style="margin:0 0 16px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;font-size:12px;line-height:18px;color:#6B6B80;margin-bottom:8px;">You&#39;re receiving this because a Nexdo account was created with this address.</p><p style="margin:0 0 16px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;font-size:12px;line-height:18px;color:#6B6B80;margin-bottom:8px;">If you didn&#39;t create a Nexdo account, you can ignore this email.</p>
-<p style="margin:16px 0 4px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;font-size:14px;line-height:20px;font-weight:700;color:#0B0B2E;">Nexdo</p>
-<p style="margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;font-size:12px;line-height:18px;color:#6B6B80;">Questions? <a href="mailto:support@nexdo.test" style="color:#2F6BFF;text-decoration:underline;">support@nexdo.test</a></p>
-</td></tr>
-</table>
+<tr><td style="padding:24px 24px 0;font-size:12px;line-height:20px;color:#6B6B80;">
+<p style="margin:0 0 6px;">You're receiving this because a Nexdo account was created with this address.</p>
+<p style="margin:0 0 20px;">If you didn't create a Nexdo account, you can ignore this email.</p>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-top:1px solid #DCE3FF;"><tr><td style="padding-top:18px;">
+<strong style="font-size:18px;color:#0B0B2E;">NexDo</strong><br>Less on your mind, more done in your day.
+<p style="margin:12px 0 0;">Questions? <a href="mailto:support@nexdo.test" style="color:#2F6BFF;">support@nexdo.test</a></p>
+</td></tr></table></td></tr></table>
 <!--[if mso]></td></tr></table><![endif]-->
-</td></tr>
-</table>
-</body>
-</html>
-"
+</td></tr></table></body></html>"
 `;
 
 exports[`transactional email template > renders the verify email email with code, expiry and logo > text 1`] = `
-"Nexdo
+"Welcome to NexDo!
+
+Less on your mind, more done in your day.
+
+Your personal AI-powered productivity assistant is almost ready.
+
+Turn ideas into action: Capture, organize and get things done
+
+Smarter scheduling: Plan your day with AI
+
+Stay focused: Prioritize what matters most
+
+Get AI support: Break down tasks and find next steps
 
 Verify your email
 
-Use this code to finish creating your Nexdo account.
+Use this code to finish creating your NexDo account.
 
 Your code is 042917.
 Expires in 24 hours · single use
 
+Open NexDo: https://app.nexdo.test/
+
+Pro tips to get the most out of NexDo
+
+1. Capture everything
+Tasks, notes and ideas — in one place.
+
+2. Let AI help
+Get personalized suggestions and next steps.
+
+3. Stay consistent
+A clearer day leads to bigger results.
+
 You're receiving this because a Nexdo account was created with this address.
+
 If you didn't create a Nexdo account, you can ignore this email.
 
-Nexdo
 Questions? support@nexdo.test
 "
 `;
