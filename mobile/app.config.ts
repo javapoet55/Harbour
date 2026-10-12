@@ -190,13 +190,14 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       },
     ],
     [
-      // Phase 11 Important Moments. "Choose calendars and anniversary candidates" reads ONE device
-      // calendar the person picks (`MomentCalendarService`, ios/App/MomentEditor.swift:276-287). The
-      // usage string is the Swift target's verbatim (ios/Nexdo.xcodeproj/project.pbxproj:319); reminders
-      // are never read, so that permission stays off.
+      // Phase 11 Important Moments reads ONE device calendar the person picks (`MomentCalendarService`,
+      // ios/App/MomentEditor.swift:276-287); the Phase 13 Calendar run (android-polish.md §37) also shows
+      // the chosen calendars' events in the Calendar tab (`AppleCalendarService`). The usage string is the
+      // Swift target's full-access one verbatim (ios/Nexdo.xcodeproj/project.pbxproj:347); reminders are
+      // never read, so that permission stays off, and WRITE_CALENDAR stays blocked above: READ_CALENDAR only.
       'expo-calendar',
       {
-        calendarPermission: 'Nexdo reads your selected calendars to suggest birthday and anniversary moments for your review.',
+        calendarPermission: 'Nexdo reads your selected calendars to display events and suggest birthday and anniversary moments for your review.',
         remindersPermission: false,
       },
     ],

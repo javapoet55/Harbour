@@ -48,6 +48,24 @@ export function statusFromExpo(permission: ExpoPermission): PermissionStatus {
   return permission.canAskAgain ? 'notDetermined' : 'denied';
 }
 
+/**
+ * `decision(for:status:)` straight from an Expo answer — the adapter the Swift call sites compose by hand
+ * (`AppleCalendarService.requestAccess`, `AppleTaskActionContacts`, `LocalTaskActionScheduler`).
+ *
+ * Which Android permission each resource is (Phase 13 Calendar run, android-polish.md §37):
+ * - `calendar`: `READ_CALENDAR` through expo-calendar (`getCalendarPermissionsAsync`); the app blocks
+ *   `WRITE_CALENDAR`, so there is no write-only state to upgrade from — `writeOnly` never occurs.
+ * - `contacts`: `READ_CONTACTS` through expo-contacts; Android has no limited grant, so `limited` is iOS 18 only.
+ * - `notifications`: `POST_NOTIFICATIONS` through expo-notifications; the Android quirk ("denied" until
+ *   granted, `canAskAgain` deciding) is folded in by `classifyNotificationPermission`, which keeps its own
+ *   richer table — `provisional` / `ephemeral` are iOS only.
+ * - the microphone (`RECORD_AUDIO`, expo-audio) is not a `PermissionResource`: `authorizeMicrophone` below
+ *   is Swift's separate `VoicePermissionGate`, which only needs the boolean.
+ */
+export function decisionFromExpo(resource: PermissionResource, permission: ExpoPermission): PermissionDecision {
+  return permissionDecision(resource, statusFromExpo(permission));
+}
+
 /** `VoicePermissionGate.Failure.microphoneDenied` (:26-31). Voice shows it with an "Open Settings" button. */
 export const MICROPHONE_DENIED = 'Microphone access is off. Enable it in Settings to use voice, or close this screen to type.';
 

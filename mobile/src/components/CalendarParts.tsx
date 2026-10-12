@@ -1,10 +1,10 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import type { CalendarRow } from '../lib/calendarRows';
 import { rowSymbol, rowTone } from '../lib/calendarRows';
-import { androidGroup, androidSeparator, brand, isAndroid, useTheme } from '../theme';
+import { androidGroup, androidSeparator, brand, isAndroid, useTheme, type Theme } from '../theme';
 import { SegmentRow } from './SegmentRow';
 import { TaskSymbol } from './TaskSymbol';
 import { Text } from './Text';
@@ -24,9 +24,23 @@ const ANDROID_ROW_GAP = 10;
 export const ANDROID_TEXT_INSET = ANDROID_TIME_WIDTH + ANDROID_RAIL_WIDTH + ANDROID_GLYPH + ANDROID_ROW_GAP * 3;
 
 /** `badge(_:color:)` (CalendarView.swift:456-458). */
+/**
+ * `calendarAccent` (CalendarView.swift:12-14, bdb68ce): the indigo, or in dark `Color(red: 0.70, green: 0.64,
+ * blue: 1.0)`, a lavender that reads over the backdrop. Android keeps its one dark accent, `link`
+ * (docs/android-polish.md §6, §7), so only iOS takes the lavender.
+ */
+export function calendarAccent(theme: Theme): string {
+  return theme.scheme === 'dark' && !isAndroid() ? '#B3A3FF' : theme.colors.link;
+}
+
+/** `calendarSeparator` (`:15-18`): indigo at 16 % in light, white at 32 % in dark. */
+export function calendarSeparator(theme: Theme): string {
+  return theme.scheme === 'dark' ? 'rgba(255, 255, 255, 0.32)' : withAlpha(brand.nexdoIndigo, 0.16);
+}
+
 export function CalendarBadge({ text, tone }: { text: string; tone: 'green' | 'orange' | 'red' | 'indigo' }) {
   const theme = useTheme();
-  const colour = tone === 'green' ? '#34C759' : tone === 'orange' ? '#FF9500' : tone === 'red' ? '#FF3B30' : theme.colors.link;
+  const colour = tone === 'green' ? '#34C759' : tone === 'orange' ? '#FF9500' : tone === 'red' ? '#FF3B30' : calendarAccent(theme);
   return (
     <View style={[styles.badge, { backgroundColor: withAlpha(colour, 0.12) }]}>
       <Text style={[styles.badgeText, { color: colour }]}>{text}</Text>
@@ -150,18 +164,22 @@ export function CalendarTimelineRow({
   completedOnly,
   now,
   onPress,
+  glyph,
 }: {
   row: CalendarRow;
   timeZone: string;
   completedOnly: boolean;
   now: number;
   onPress: () => void;
+  /** An event's glyph (Phase 13: the provider icon or a Moment's icon, `:552-558`); tasks draw their own. */
+  glyph?: ReactNode;
 }) {
   const theme = useTheme();
   // Android's pressed fill, held here so it follows the finger (onPressIn / onPressOut).
   const [pressed, setPressed] = useState(false);
   const tone = rowTone(row, timeZone, now);
-  const colour = tone === 'critical' ? '#FF3B30' : tone === 'late' ? '#FF9500' : theme.colors.link;
+  const colour = tone === 'critical' ? '#FF3B30' : tone === 'late' ? '#FF9500' : calendarAccent(theme);
+  const rail = calendarSeparator(theme);
   const late = tone === 'late';
   const critical = tone === 'critical';
   const badges = (
@@ -191,14 +209,14 @@ export function CalendarTimelineRow({
       >
         <Text style={[styles.androidTime, { color: theme.colors.ink }]}>{row.time}</Text>
         <View style={styles.androidRail}>
-          <View style={[styles.railLine, { backgroundColor: withAlpha(brand.nexdoIndigo, 0.18) }]} />
+          <View style={[styles.railLine, { backgroundColor: rail }]} />
           <View style={[styles.railDot, { backgroundColor: colour }]} testID={`calendar-row-${row.id}-dot`} />
         </View>
         <View
           style={[styles.androidGlyph, { backgroundColor: theme.colors.fieldSurface, borderColor: theme.colors.fieldBorder }]}
           testID={`calendar-row-${row.id}-glyph`}
         >
-          <TaskSymbol name={rowSymbol(row, timeZone, now)} size={22} color={colour} />
+          {glyph ?? <TaskSymbol name={rowSymbol(row, timeZone, now)} size={22} color={colour} />}
         </View>
         <View style={styles.androidText}>
           <Text style={[styles.androidTitle, { color: theme.colors.ink }]}>{row.title}</Text>
@@ -226,17 +244,24 @@ export function CalendarTimelineRow({
           in the row — it is not the one greyed part of it. */}
       <Text style={[styles.time, { color: theme.colors.ink }]}>{row.time}</Text>
       <View style={styles.rail}>
-        <View style={[styles.railLine, { backgroundColor: withAlpha(brand.nexdoIndigo, 0.18) }]} />
+        <View style={[styles.railLine, { backgroundColor: rail }]} />
         <View style={[styles.railDot, { backgroundColor: colour }]} />
       </View>
-      <View style={[styles.glyph, { backgroundColor: withAlpha(colour, 0.11) }]}>
-        <TaskSymbol name={rowSymbol(row, timeZone, now)} size={20} color={colour} />
-      </View>
+      {/* An event's glyph has no tinted tile (`:552-555`); a task's does (`:556-558`). */}
+      {glyph ? (
+        <View style={styles.glyph} testID={`calendar-row-${row.id}-glyph`}>
+          {glyph}
+        </View>
+      ) : (
+        <View style={[styles.glyph, { backgroundColor: withAlpha(colour, theme.scheme === 'dark' ? 0.18 : 0.11) }]} testID={`calendar-row-${row.id}-glyph`}>
+          <TaskSymbol name={rowSymbol(row, timeZone, now)} size={20} color={colour} />
+        </View>
+      )}
       <View style={styles.rowText}>
         <Text style={[theme.typography.body, { color: theme.colors.ink }]}>{row.title}</Text>
         <Text style={[styles.caption, { color: theme.colors.secondary }]}>{row.detail}</Text>
         {badges}
-        <View style={[styles.rowDivider, { backgroundColor: theme.colors.separator }]} />
+        <View style={[styles.rowDivider, { backgroundColor: rail }]} />
       </View>
       <TaskSymbol name="chevron.right" size={12} color={theme.colors.secondary} />
     </Pressable>

@@ -1,15 +1,17 @@
 import { useQueryClient } from '@tanstack/react-query';
 import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Linking, Pressable, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import type { CalendarConnection, NextActionPreference, Profile, ProfilePreferences } from '../../src/api';
 import { CalendarProviderIcon } from '../../src/components/CalendarProviderIcon';
+import { deviceCalendarCopy, selectedCalendarsLabel } from '../../src/features/calendar/deviceCalendarCopy';
+import { useDeviceCalendarSummary } from '../../src/features/calendar/useDeviceCalendarSummary';
 import { IOSSwitch } from '../../src/components/IOSSwitch';
-import { KeyboardAwareScrollView } from '../../src/components/keyboard';
+import { KeyboardAwareScrollView, type ScrollTarget } from '../../src/components/keyboard';
 import { AccountAvatar, ProfileBackground } from '../../src/components/ProfileParts';
 import {
   SettingsCaption,
@@ -37,7 +39,6 @@ import {
   validateSettings,
 } from '../../src/lib/profileSettings';
 import {
-  connectButtonTitle,
   connectionDetail,
   DISCONNECT_MESSAGE,
   disconnectTitle,
@@ -141,6 +142,15 @@ function SettingsScreen({
   const connections = useCalendarConnections();
   // `calendarConnections`, `calendarConnectionsLoaded` (a load has succeeded) and `calendarConnectionsError`.
   const calendar = connectionsState(connections);
+  // `appleCalendarAccess` and `appleCalendarCount` (ProfileView.swift:143-144, :478-485).
+  const phoneCalendar = useDeviceCalendarSummary();
+  // `openCalendarSettings` (ProfileView.swift:241, :379): the Calendar tab's gear scrolls to the card.
+  const { calendars: openCalendarSettings } = useLocalSearchParams<{ calendars?: string }>();
+  const scrollRef = useRef<ScrollTarget | null>(null);
+  const [calendarsCardY, setCalendarsCardY] = useState<number | null>(null);
+  useEffect(() => {
+    if (openCalendarSettings && calendarsCardY !== null) scrollRef.current?.scrollTo({ y: calendarsCardY, animated: false });
+  }, [openCalendarSettings, calendarsCardY]);
   const setWrites = useSetCalendarWrites();
   const disconnect = useDisconnectCalendar();
   const deleteAccount = useDeleteAccount({ beforeSessionEnds: closePresentedScreens });
@@ -341,7 +351,7 @@ function SettingsScreen({
         </Pressable>
       </View>
 
-      <KeyboardAwareScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+      <KeyboardAwareScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled" scrollRef={scrollRef}>
         {/* `.disabled(saving || connecting)` on the whole column (`:243`). */}
         <View pointerEvents={blocked ? 'none' : 'auto'} style={styles.column} testID="settings-column">
         <Text accessibilityRole="header" style={[styles.largeTitle, { color: theme.colors.ink }]}>
@@ -551,18 +561,22 @@ function SettingsScreen({
             </SettingsCard>
 
             {/* 8. Calendars & Privacy (ProfileView.swift:349-368, 6f079c0). */}
+            <View onLayout={(event) => setCalendarsCardY(event.nativeEvent.layout.y)}>
             <SettingsCard testID="settings-calendars" title="Calendars & Privacy">
               <Text style={[styles.subheadline, { color: theme.colors.secondary }]}>
                 Connect your calendar to keep your plans and important moments together.
               </Text>
               <ConnectionList
                 connections={calendar.connections}
+                deviceAccess={phoneCalendar.allowed}
                 loaded={calendar.loaded}
                 onDisconnect={confirmDisconnect}
                 onReconnect={(connection) => void connectCalendar(connection)}
                 onWrites={(connection, enabled) => void run(() => setWrites.mutateAsync({ id: connection.id, enabled }))}
                 timeZone={zone}
               />
+              {/* `if appleCalendarAccess { appleCalendarCard }` (:352, :451-477): the phone's calendars. */}
+              {phoneCalendar.allowed ? <PhoneCalendarCard count={phoneCalendar.count} onManage={() => router.push('/account/phone-calendars')} /> : null}
               {/* `if let error = model.calendarConnectionsError` (:353-356): the error and a retry. */}
               {calendar.error !== null ? (
                 <>
@@ -579,19 +593,19 @@ function SettingsScreen({
                   </Pressable>
                 </>
               ) : null}
+              {/* `NavigationLink { CalendarConnectionView() }` (:357-359): the Connect Your Calendar hub. */}
               <Pressable
-                accessibilityLabel={connectButtonTitle(connecting, connections.data?.length ?? 0)}
+                accessibilityLabel="Connect Calendar"
                 accessibilityRole="button"
                 accessibilityState={{ disabled: blocked }}
                 disabled={blocked}
-                onPress={() => void connectCalendar()}
+                onPress={() => router.push('/account/calendar-connect')}
                 style={styles.linkRow}
-                testID="settings-connect-google"
+                testID="settings-connect-calendar"
               >
                 <TaskSymbol color={theme.colors.link} name="calendar.badge.plus" size={17} />
-                <Text style={[theme.typography.body, { color: theme.colors.link }]} testID="settings-connect-label">
-                  {connectButtonTitle(connecting, connections.data?.length ?? 0)}
-                </Text>
+                <Text style={[theme.typography.body, styles.grow, { color: theme.colors.link }]}>Connect Calendar</Text>
+                <TaskSymbol color={theme.colors.secondary} name="chevron.right" size={13} />
               </Pressable>
               <Pressable
                 accessibilityLabel="Synchronize now"
@@ -649,6 +663,7 @@ function SettingsScreen({
                 <Text style={[theme.typography.body, { color: theme.colors.danger }]}>Delete account</Text>
               </Pressable>
             </SettingsCard>
+            </View>
 
             {/* 9. Save settings (`:239-241`): a capsule filled with `NexdoTheme.saveGradient`. */}
             <Pressable
@@ -748,8 +763,40 @@ function WorkingDaysField({ value, onChange }: { value: string | undefined; onCh
  * provider's icon (an orange warning triangle at its corner when unhealthy), name, detail, last sync,
  * Disconnect, and the "Add my scheduled tasks and events here" toggle. Capture `settings-v3-scrolled-3`.
  */
+/**
+ * `appleCalendarCard` (ProfileView.swift:451-477): the phone's calendars as a connection card — the
+ * provider icon, "Connected on this phone", the selected count, **Manage phone calendars**, and the
+ * read-only footnote. iOS keeps Swift's Apple Calendar wording (`deviceCalendarCopy`, §33).
+ */
+function PhoneCalendarCard({ count, onManage }: { count: number; onManage: () => void }) {
+  const theme = useTheme({ elevated: true });
+  const copy = deviceCalendarCopy();
+  return (
+    <View style={[styles.connection, { backgroundColor: withAlpha(brand.nexdoIndigo, 0.035), borderColor: withAlpha(brand.nexdoIndigo, 0.16) }]} testID="settings-apple-calendar">
+      <View style={styles.connectionHeader}>
+        <CalendarProviderIcon source="apple-device" testID="settings-provider-apple-device" />
+        <View accessible style={styles.connectionText}>
+          <Text style={[styles.subheadline, styles.bold, { color: theme.colors.label }]}>{copy.providerTitle}</Text>
+          <Text style={[styles.caption, { color: theme.colors.secondary }]}>{copy.settingsConnected}</Text>
+          <Text style={[styles.caption2, { color: theme.colors.secondary }]} testID="settings-apple-calendar-count">
+            {selectedCalendarsLabel(count)}
+          </Text>
+        </View>
+      </View>
+      <View style={[styles.connectionDivider, { backgroundColor: theme.colors.separator }]} />
+      <Pressable accessibilityRole="button" onPress={onManage} style={styles.linkRow} testID="settings-manage-phone-calendars">
+        <TaskSymbol color={theme.colors.link} name="slider.horizontal.3" size={15} />
+        <Text style={[styles.subheadline, styles.grow, { color: theme.colors.link }]}>{copy.manageCalendars}</Text>
+        <TaskSymbol color={theme.colors.secondary} name="chevron.right" size={13} />
+      </Pressable>
+      <Text style={[styles.caption2, { color: theme.colors.secondary }]}>{copy.settingsFootnote}</Text>
+    </View>
+  );
+}
+
 function ConnectionList({
   connections,
+  deviceAccess,
   loaded,
   onDisconnect,
   onReconnect,
@@ -757,6 +804,8 @@ function ConnectionList({
   timeZone,
 }: {
   connections: CalendarConnection[];
+  /** Calendar access on this phone: with it, an empty list is not "No calendars connected yet." (:522). */
+  deviceAccess: boolean;
   loaded: boolean;
   onDisconnect: (connection: CalendarConnection) => void;
   onReconnect: (connection: CalendarConnection) => void;
@@ -766,8 +815,9 @@ function ConnectionList({
   const theme = useTheme({ elevated: true });
   const now = useMinuteTick();
   if (connections.length === 0) {
-    // `else if model.calendarConnectionsLoaded` — nothing at all while the first load is in flight.
-    return loaded ? (
+    // `else if model.calendarConnectionsLoaded && !appleCalendarAccess` — nothing while the first load
+    // is in flight, and nothing when the phone's own calendars are connected.
+    return loaded && !deviceAccess ? (
       <Text style={[styles.caption, { color: theme.colors.secondary }]} testID="settings-no-calendars">
         No calendars connected yet.
       </Text>

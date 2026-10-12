@@ -167,6 +167,7 @@ export function connectOutcome(
   connections: CalendarConnection[],
   providerName: string = connectProvider(reconnecting).name,
 ): { kind: 'connected' | 'failed'; message: string } {
+  // Phase 13 (ProfileView.swift:546, :558-563): the messages name the provider that signed in.
   if (reconnecting) {
     const row = connections.find((connection) => connection.id === reconnecting.id);
     if (row && needsReconnect(row)) {

@@ -1,13 +1,15 @@
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useQueryClient } from '@tanstack/react-query';
 import { router } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ComponentProps } from 'react';
 import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import type { CalendarEvent } from '../../src/api';
+import type { Agenda, CalendarEvent } from '../../src/api';
 import { TaskSymbol, Text } from '../../src/components';
-import { CalendarSegments, CalendarSummaryCard, CalendarTimelineRow, withAlpha } from '../../src/components/CalendarParts';
+import { calendarAccent, calendarSeparator, CalendarSegments, CalendarSummaryCard, CalendarTimelineRow, withAlpha } from '../../src/components/CalendarParts';
+import { CalendarProviderIcon } from '../../src/components/CalendarProviderIcon';
 import { CalendarPushNote } from '../../src/components/CalendarPushNote';
 import { StatusBarScrim, TodayBackdrop } from '../../src/components/TodayShell';
 import {
@@ -28,7 +30,13 @@ import {
 import { calendarRows } from '../../src/lib/calendarRows';
 import { durationLabel } from '../../src/lib/focusClock';
 import { isDone, parseServerDate } from '../../src/lib/taskQuery';
+import { buildCalendarDayIndex, EMPTY_DAY_INDEX } from '../../src/features/calendar/dayIndex';
+import { deviceCalendarCopy } from '../../src/features/calendar/deviceCalendarCopy';
 import { intelligenceHeading, reviewableConflicts } from '../../src/features/calendar/eventDetails';
+import { momentEvents, momentIdFromEntry } from '../../src/features/calendar/momentSchedule';
+import { useDeviceCalendarEvents } from '../../src/features/calendar/useDeviceCalendarEvents';
+import { momentIcon } from '../../src/features/moments/domain';
+import { momentsStore, useMomentList } from '../../src/features/moments/store';
 import { queryKeys } from '../../src/query/keys';
 import { useCalendarAgenda } from '../../src/query/useCalendar';
 import { useTasks } from '../../src/query/useTasks';
@@ -110,7 +118,42 @@ export default function Calendar() {
   const from = calendarKey(days[0], zone);
 
   const agenda = useCalendarAgenda(from, days.length);
-  const data = agenda.data ?? null;
+  // Phase 13 (bb57e09, bdb68ce): the phone's events for the same days, and the Moments to project.
+  const device = useDeviceCalendarEvents({ days, timeZone: zone });
+  const moments = useMomentList();
+  // Keyed by content, as Swift's `requestID` is (`:67`): picking another day of the same week or month
+  // keeps the same keys, so nothing below re-buckets.
+  const dayKeysId = days.map((day) => calendarKey(day, zone)).join(',');
+  const dayKeys = useMemo(() => dayKeysId.split(','), [dayKeysId]);
+  const server = agenda.data ?? null;
+  /**
+   * `currentData` (CalendarView.swift:68-78): the server's agenda with the device events appended, or
+   * the device events on their own when the server has nothing — so the days still render offline.
+   */
+  const data = useMemo<Agenda | null>(() => {
+    if (server === null && !device.hasAccess) return null;
+    return {
+      timeZone: zone,
+      range: { days: dayKeys },
+      tasks: server?.tasks ?? [],
+      events: [...(server?.events ?? []), ...(device.hasAccess ? device.events : [])],
+      overdue: server?.overdue ?? [],
+    };
+  }, [server, device.hasAccess, device.events, zone, dayKeys]);
+  /**
+   * `rebuildDayIndex()` (`:596-611`): every task and event filed under its days ONCE per load, with the
+   * Moment projections, so a date pick is a lookup. Swift rebuilds it twice per load (its `dataRevision`
+   * changes before and after the server answers, §23 For the team); this memo runs once per change.
+   */
+  const index = useMemo(
+    () =>
+      data === null
+        ? EMPTY_DAY_INDEX
+        : buildCalendarDayIndex({ days: dayKeys, timeZone: zone, tasks: data.tasks, events: [...data.events, ...momentEvents(moments, dayKeys, zone)] }),
+    [data, moments, dayKeys, zone],
+  );
+  const accent = calendarAccent(theme);
+  const separator = calendarSeparator(theme);
 
   const hasSearch = searchText.trim().length > 0;
   const filtersActive = !showTasks || !showEvents || criticalOnly || completedOnly;
@@ -121,17 +164,18 @@ export default function Calendar() {
     (!criticalOnly || task.critical === true || task.priority === 'CRITICAL') &&
     calendarSearchMatches(task.title, searchText);
 
-  /** `tasks(_:)` (CalendarView.swift:54-56). */
-  const tasksFor = (day: number) =>
-    (data?.tasks ?? []).filter((task) => taskMatches(task) && taskOccursOn(task, calendarKey(day, zone), zone, completedOnly));
+  /** `tasks(_:)` (CalendarView.swift:89-94): the day's bucket, then the filters. */
+  const tasksFor = (day: number) => {
+    const key = calendarKey(day, zone);
+    return (index.tasks[key] ?? []).filter((task) => taskMatches(task) && taskOccursOn(task, key, zone, completedOnly));
+  };
 
-  /** `events(_:)` (CalendarView.swift:57-62): critical-only hides events entirely. */
+  /** `events(_:)` (CalendarView.swift:95-100): critical-only hides events entirely. */
   const eventsFor = (day: number) => {
     if (!showEvents || criticalOnly) return [];
-    return (data?.events ?? []).filter(
-      (event) =>
-        calendarSearchMatches(event.title, searchText) &&
-        calendarEventMatches({ event, day: calendarKey(day, zone), timeZone: zone, completedOnly, now }),
+    const key = calendarKey(day, zone);
+    return (index.events[key] ?? []).filter(
+      (event) => calendarSearchMatches(event.title, searchText) && calendarEventMatches({ event, day: key, timeZone: zone, completedOnly, now }),
     );
   };
 
@@ -146,10 +190,13 @@ export default function Calendar() {
   const label = (at: number, options: Intl.DateTimeFormatOptions) =>
     new Intl.DateTimeFormat('en-US', { timeZone: zone, ...options }).format(new Date(at));
 
+  /** `.refreshable` (`:176-180`): the server data, the Moments and the phone's events. */
   const refresh = () => {
     void tasks.refetch();
     void agenda.refetch();
     void intelligence.refetch();
+    void device.reload();
+    if (momentsStore.getState().owner) void momentsStore.getState().refresh();
   };
 
   /** `dayTitle(_:_:)` (CalendarView.swift:403-407). */
@@ -170,9 +217,26 @@ export default function Calendar() {
    * fetches the server's copy, as Swift's `@State var event` does.
    */
   const openEvent = (event: CalendarEvent) => {
+    // A Moment row opens the moment itself (`:502-504`); the root layout follows the store's route.
+    if (event.source === 'moment') {
+      const momentId = momentIdFromEntry(event.id);
+      if (momentId) momentsStore.getState().routeTo(momentId);
+      return;
+    }
     const key = queryKeys.calendar.event(profile?.id ?? '', event.id);
     if (!queryClient.getQueryData(key)) queryClient.setQueryData(key, { event });
     router.push({ pathname: '/calendar/event/[id]', params: { id: event.id, zone } });
+  };
+
+  /** The glyph beside an event row (`:552-555`): the Moment's icon in pink, else the provider's icon. */
+  const eventGlyph = (event: CalendarEvent | null) => {
+    if (event === null) return undefined;
+    if (event.source === 'moment') {
+      const momentId = momentIdFromEntry(event.id);
+      const type = moments.find((moment) => moment.id === momentId)?.type ?? 'birthday';
+      return <Ionicons accessibilityLabel="Moment" color="#FF2D55" name={momentIcon(type) as ComponentProps<typeof Ionicons>['name']} size={20} />;
+    }
+    return <CalendarProviderIcon source={event.source} />;
   };
 
   /** `daySection(_:relative:)` (CalendarView.swift:402-440). */
@@ -214,7 +278,7 @@ export default function Calendar() {
             {!relative ? <FiltersButton /> : null}
           </View>
         )}
-        <View style={[styles.divider, { backgroundColor: withAlpha(brand.nexdoIndigo, 0.08) }]} />
+        <View style={[styles.divider, { backgroundColor: separator }]} />
         {rows.length === 0 && !isExpanded ? null : rows.length === 0 ? (
           <Text style={[styles.subheadline, styles.emptyDay, android && styles.androidEmptyDay, { color: theme.colors.secondary }]} testID={`calendar-empty-${calendarKey(day, zone)}`}>
             {filtersActive ? 'No items match your filters.' : 'Nothing scheduled. Room to breathe.'}
@@ -227,6 +291,7 @@ export default function Calendar() {
               timeZone={zone}
               completedOnly={completedOnly}
               now={now}
+              glyph={eventGlyph(row.event)}
               onPress={() => (row.task ? router.push(`/task/${row.task.id}`) : row.event ? openEvent(row.event) : undefined)}
             />
           ))
@@ -266,12 +331,22 @@ export default function Calendar() {
             <Text style={[styles.title, { color: theme.colors.ink }]}>Calendar</Text>
             <Text style={[styles.subheadline, { color: theme.colors.secondary }]}>Plan your time. Make it happen.</Text>
           </View>
+          {/* `NavigationLink { ProfileSettingsView(openCalendarSettings: true) }` (`:236-245`, Phase 13). */}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Calendar settings"
+            onPress={() => router.push({ pathname: '/account/settings', params: { calendars: '1' } })}
+            testID="calendar-settings"
+            style={[styles.headerButton, { backgroundColor: withAlpha(accent, 0.09) }]}
+          >
+            <TaskSymbol name="gearshape" size={20} color={theme.colors.ink} />
+          </Pressable>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Search calendar"
             onPress={() => setSearching(true)}
             testID="calendar-search-open"
-            style={[styles.headerButton, { backgroundColor: withAlpha(brand.nexdoIndigo, 0.09) }]}
+            style={[styles.headerButton, { backgroundColor: withAlpha(accent, 0.09) }]}
           >
             {/* `.font(.title3)` with no `.foregroundStyle`, so it inherits the view's nexdoInk (`:187`). */}
             <TaskSymbol name="magnifyingglass" size={20} color={theme.colors.ink} />
@@ -421,8 +496,9 @@ export default function Calendar() {
 
         {agenda.isError ? (
           <View style={styles.failure}>
+            {/* `failure` (`:654`): the phone's events are still shown when it has any. */}
             <Text style={[styles.subheadline, { color: theme.colors.secondary }]} testID="calendar-failure">
-              {`Couldn’t refresh this date range.${data === null ? '' : ' Showing previously loaded data.'}`}
+              {`Couldn’t refresh online calendars and tasks.${data === null ? '' : ' Available calendar data is still shown.'}`}
             </Text>
             {/* `.foregroundStyle(Color.nexdoSecondary)` wraps the Button too (CalendarView.swift:85). */}
             <Pressable accessibilityRole="button" accessibilityLabel="Retry" onPress={() => void agenda.refetch()} style={styles.retry} testID="calendar-retry">
@@ -548,9 +624,8 @@ export default function Calendar() {
                   {mode === 'Week' ? (
                     <CalendarSummaryCard
                       title={`Your ${label(selected, { weekday: 'long' })}`}
-                      detail={`${itemCount(countFor(selected))} · ${tasksFor(selected)
-                        .filter((task) => taskScheduledOn(task, calendarKey(selected, zone), zone))
-                        .reduce((total, task) => total + task.durationMin, 0)} min planned`}
+                      // "· N min planned" only when something is planned (`:165-167`, Phase 13).
+                      detail={`${itemCount(countFor(selected))}${plannedMinutes(selected) > 0 ? ` · ${plannedMinutes(selected)} min planned` : ''}`}
                       testID="calendar-week-summary"
                     />
                   ) : null}
@@ -579,6 +654,20 @@ export default function Calendar() {
             testID="filter-completed"
           />
           <FilterToggle label="Critical only" value={criticalOnly} onChange={setCriticalOnly} testID="filter-critical" />
+          {/* `Button("Apple calendars…")` (`:406`, Phase 13): the phone's calendar list. Swift presents it
+              as a sheet with Done; here it is pushed, like the Settings card's row. */}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={deviceCalendarCopy().filtersMenu}
+            onPress={() => {
+              setFiltersOpen(false);
+              router.push('/account/phone-calendars');
+            }}
+            style={styles.menuRow}
+            testID="filter-phone-calendars"
+          >
+            <Text style={[theme.typography.body, { color: theme.colors.ink }]}>{deviceCalendarCopy().filtersMenu}</Text>
+          </Pressable>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Reset filters"
@@ -599,6 +688,13 @@ export default function Calendar() {
 
     </View>
   );
+
+  /** The Week card's planned minutes (`:165`). */
+  function plannedMinutes(day: number): number {
+    return tasksFor(day)
+      .filter((task) => taskScheduledOn(task, calendarKey(day, zone), zone))
+      .reduce((total, task) => total + task.durationMin, 0);
+  }
 
   /** `summary` (CalendarView.swift:336-340). */
   function Summary() {
