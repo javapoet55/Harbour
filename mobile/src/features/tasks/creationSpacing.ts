@@ -30,8 +30,7 @@ export function spacedCreationStart(proposed: number, durationMin: number, tasks
 
 /**
  * `resolvedCreationDate` (RootView.swift:2297-2302): the title's own time wins unless a date was
- * picked; otherwise the pill's date, spaced when creating. TODO(screens): app/task/new.tsx still
- * calls `creationDateFor` directly; route it through here when the editor is next touched.
+ * picked; otherwise the pill's date, spaced when creating. Used by New Task (app/task/new.tsx).
  */
 export function resolvedCreationDate({
   detectedAt,

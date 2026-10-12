@@ -6,9 +6,10 @@ import { ActivityIndicator, Alert, Modal, Pressable, ScrollView, StyleSheet, Tex
 import { KeyboardAvoidingView, KeyboardAwareScrollView, NexdoTaskBackdrop, StickyFooter, TaskSymbol, Text } from '../../src/components';
 import { MonthCalendar } from '../../src/components/MonthCalendar';
 import { ProjectAssignmentField } from '../../src/components/ProjectAssignmentField';
+import { resolvedCreationDate as resolvedStart } from '../../src/features/tasks/creationSpacing';
 import { detectTaskAction } from '../../src/lib/taskActionDetector';
 import { creationDateFor, TASK_CREATION_DATES, type TaskCreationDate } from '../../src/lib/taskCreation';
-import { useCreateTask, type ScheduleConflict } from '../../src/query/useTasks';
+import { useCreateTask, useTasks, type ScheduleConflict } from '../../src/query/useTasks';
 import { useSession } from '../../src/store/session';
 import {
   ANDROID_LABEL_GAP,
@@ -57,16 +58,23 @@ export default function NewTask() {
   const [conflict, setConflict] = useState<ScheduleConflict | null>(null);
 
   /**
-   * `resolvedCreationDate` (RootView.swift:2086-2089).
+   * `resolvedCreationDate` (RootView.swift:2297-2302).
    *
    * A time detected in the TITLE wins — but only until a date pill is tapped. After that the pills
-   * decide, even if the title still says "at 4 PM".
+   * decide, even if the title still says "at 4 PM". d568989: the pill's time then moves to the first
+   * opening with 15 minutes either side of the open, scheduled tasks (`TaskCreationSpacing`); this
+   * screen only ever creates, so it always applies.
    */
   const detected = detectTaskAction(title, detectorNow, zone);
-  const resolvedCreationDate =
-    !dateExplicitlyChosen && detected?.scheduledAt != null
-      ? detected.scheduledAt
-      : creationDateFor(dateChoice, zone, customDate);
+  const existingTasks = useTasks().data?.tasks;
+  const resolvedCreationDate = resolvedStart({
+    detectedAt: detected?.scheduledAt ?? null,
+    dateExplicitlyChosen,
+    proposed: creationDateFor(dateChoice, zone, customDate),
+    creating: true,
+    durationMin: duration,
+    tasks: existingTasks ?? [],
+  });
 
   const create = useCreateTask({ onConflict: setConflict });
   const busy = create.isPending;
