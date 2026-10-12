@@ -29,6 +29,8 @@ export type Palette = {
   askBlue: string;
   /** `.secondarySystemBackground`: `AskStyle.cardBackground` (AskNexdoView.swift:54). */
   secondaryBackground: string;
+  /** `.tertiarySystemBackground`: the Wellness chooser's arrow plate in dark mode (4185501). */
+  tertiaryBackground: string;
   tint: string;
   onTint: string;
   background: string;
@@ -138,6 +140,7 @@ export const palettes: Record<ColorScheme, Palette> = {
     scheduleBlue: '#26578F', // RootView.swift:887 light: UIColor(red: 0.15, green: 0.34, blue: 0.56)
     askBlue: '#2E598F', // AskNexdoView.swift:47 light: UIColor(red: 0.18, green: 0.35, blue: 0.56)
     secondaryBackground: '#F2F2F7',
+    tertiaryBackground: '#FFFFFF',
     tint: brand.nexdoIndigo, // RootView.swift:46 `.tint(.nexdoIndigo)`
     onTint: '#FFFFFF',
     // iOS system colours used alongside the brand colours in RootView.swift
@@ -185,6 +188,7 @@ export const palettes: Record<ColorScheme, Palette> = {
     scheduleBlue: '#7ABAFF', // RootView.swift:887 dark: UIColor(red: 0.48, green: 0.73, blue: 1)
     askBlue: ASK_BLUE_DARK, // AskNexdoView.swift:46 dark: UIColor(red: 0.42, green: 0.72, blue: 1.00)
     secondaryBackground: '#1C1C1E',
+    tertiaryBackground: '#2C2C2E',
     tint: brand.nexdoIndigo,
     onTint: '#FFFFFF',
     background: '#000000',

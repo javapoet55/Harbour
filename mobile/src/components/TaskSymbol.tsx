@@ -75,6 +75,8 @@ export const taskIcons = {
   'arrow.up.left': 'arrow-up-outline',
   'circle.fill': 'ellipse',
   'sun.max': 'sunny-outline',
+  // The Wellness chooser's hero in dark mode (WellnessChooserView.swift, 4185501).
+  'moon.stars.fill': 'moon',
   // Account and settings (Phase 7). `AccountView`'s menu rows (ios/App/ProfileView.swift:76-82,
   // :104-111) and `ProfileSettingsView`'s cards (`:146-270`).
   'person.crop.circle': 'person-circle-outline',

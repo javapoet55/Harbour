@@ -14,10 +14,10 @@ jest.mock('react-native/Libraries/Utilities/useWindowDimensions', () => ({
 }));
 
 /**
- * The Wellness chooser and the module guides keep Swift's FIXED light design in both phone themes
- * (WellnessChooserView.swift:36, :101; WellnessModuleGuide.swift): every text, icon, plate and
- * background is a literal colour, never a theme token. So the whole rendered tree must come out
- * IDENTICAL with the app in Day and in Night. Swift's own dark-mode rendering is a bug ("For the team",
+ * The module guides keep Swift's FIXED light design in both phone themes (WellnessModuleGuide.swift:102):
+ * every text, icon, plate and background is a literal colour, never a theme token. So the whole rendered
+ * tree must come out IDENTICAL with the app in Day and in Night. The chooser has its own dark mode since
+ * 4185501 and is checked against Swift's instead. Swift's own dark-mode rendering is a bug ("For the team",
  * §22); this is the design, not that bug.
  */
 type Node = { type: string; props: Record<string, unknown>; children: (Node | string)[] | null };
@@ -53,9 +53,23 @@ describe('Wellness screens in dark mode', () => {
     expect(await rendered(<Text>Themed</Text>, 'night', 'Themed')).not.toBe(await rendered(<Text>Themed</Text>, 'day', 'Themed'));
   });
 
-  it('the chooser renders exactly as in light mode', async () => {
+  /**
+   * 4185501: Swift's chooser now has its own dark mode (WellnessChooserView.swift `isDark`), so it is
+   * no longer identical in Night. Light is untouched; dark swaps the art for a moon, the ink for
+   * `.primary`, the module colours for `darkAccent`, and the surfaces for system backgrounds.
+   */
+  it('the chooser follows Swift’s dark mode in Night, and is unchanged in Day', async () => {
     const ui = <WellnessChooser onModule={jest.fn()} onExit={jest.fn()} />;
-    expect(await rendered(ui, 'night', 'A little time')).toBe(await rendered(ui, 'day', 'A little time'));
+    const day = await rendered(ui, 'day', 'A little time');
+    const night = await rendered(ui, 'night', 'A little time');
+    expect(night).not.toBe(day);
+    expect(day).toContain('#090930');
+    expect(day).not.toContain('wellness-hero-moon');
+    expect(day).toContain('wellness.shopping.art');
+    expect(night).toContain('wellness-hero-moon');
+    expect(night).not.toContain('wellness.shopping.art');
+    expect(night).not.toContain('#090930');
+    for (const accent of ['#59E59E', '#FFA861', '#B8A6FF', '#FF7AB3']) expect(night).toContain(accent);
   });
 
   it.each<WellnessModule>(['calories', 'pomodoro', 'moments', 'shopping'])('the %s guide renders exactly as in light mode', async (kind) => {
