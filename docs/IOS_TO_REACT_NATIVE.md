@@ -3388,6 +3388,16 @@ Swift and server issues found while reading the diff and running the captures. N
   `-pomodoro-dashboard-preview` (`PomodoroView.swift:28`). Both guide tests added in `2edb3f0` fail there
   on the iPhone 17 Pro simulator (iOS 26.5); the four other modules pass. The test should tap "Pomodoro
   dashboard" then "Close dashboard", or launch with `-pomodoro-dashboard-preview`.
+- *(Mac, Calendar run)* **`CalendarView` rebuilds `CalendarDayIndex` twice per load.** `load()` sets
+  `dataRevision = UUID()` before the agenda request (`CalendarView.swift:644`) and again when it answers
+  (`:652`), and `indexRequestID` includes it, so `.task(id: indexRequestID)` (`:201`) runs `rebuildDayIndex()`
+  twice — the first over the device events alone. RN builds the index once per change (android-polish.md §37 item 4).
+- *(Mac, Calendar run)* **Event Details' "Open in Calendar" opens the day, not the device event.** For an
+  `apple-device` event the line above promises "Edit this event in Apple Calendar", but the row still opens
+  `calshow:<start>` (`CalendarEventDetailsView.swift:75`), the day view. `EKEventViewController` on the event's
+  `EKEvent` would open the event itself; RN does (expo-calendar `openEventInCalendarAsync`, §37 item 5).
+- *(Mac, Calendar run)* The Settings Appearance caption "System follows your iPhone." is the one "iPhone"
+  left on Android's Settings after §33 and §37; a §33-style "phone" wording is a one-line follow-up.
 
 ### Windows part 1: plumbing (no screens)
 
