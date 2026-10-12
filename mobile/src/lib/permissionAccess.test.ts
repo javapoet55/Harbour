@@ -71,3 +71,17 @@ describe('VoicePermissionGate', () => {
     expect(sessions).toEqual([]);
   });
 });
+
+describe('decisionFromExpo (Phase 13 Calendar run)', () => {
+  const { decisionFromExpo } = require('./permissionAccess') as typeof import('./permissionAccess');
+  it('maps an Expo answer straight to a decision', () => {
+    expect(decisionFromExpo('calendar', { status: 'granted', canAskAgain: true })).toBe('allow');
+    expect(decisionFromExpo('calendar', { status: 'undetermined', canAskAgain: true })).toBe('request');
+    // Android: asked once and refused, but may ask again — still a request, not a block.
+    expect(decisionFromExpo('calendar', { status: 'denied', canAskAgain: true })).toBe('request');
+    expect(decisionFromExpo('calendar', { status: 'denied', canAskAgain: false })).toBe('deny');
+    // iOS 18 limited contacts are usable; a limited calendar grant would not be.
+    expect(decisionFromExpo('contacts', { status: 'granted', canAskAgain: true, accessPrivileges: 'limited' })).toBe('allow');
+    expect(decisionFromExpo('calendar', { status: 'granted', canAskAgain: true, accessPrivileges: 'limited' })).toBe('deny');
+  });
+});
