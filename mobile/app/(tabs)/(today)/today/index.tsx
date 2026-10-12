@@ -9,14 +9,12 @@ import { KeyboardAwareScrollView } from '../../../../src/components/keyboard';
 import { TodayActionsView } from '../../../../src/components/TodayActions';
 import { FocusNextCard, ProtectedTimeCard } from '../../../../src/components/TodayNextAction';
 import { FocusSessionStrip } from '../../../../src/components/FocusSessionStrip';
-import { TodayAttentionRow } from '../../../../src/components/TodayAttentionRow';
 import { TodayIntelligenceCard } from '../../../../src/components/TodayIntelligenceCard';
 import { TodayQuickAccess } from '../../../../src/components/TodayQuickAccess';
 import { StatusBarScrim, TasksTopBar, TodayBackdrop } from '../../../../src/components/TodayShell';
 import { overdueResults } from '../../../../src/lib/overdueTasks';
 import { todayMoments } from '../../../../src/features/moments/domain';
 import { useMomentList } from '../../../../src/features/moments/store';
-import { showsAttentionRow } from '../../../../src/lib/todayQuickAccess';
 import {
   buildSchedule,
   dateLabel,
@@ -112,13 +110,10 @@ export default function Today() {
     () => buildActionQueue({ actions, tasks: loadedTasks?.tasks ?? [], now: queueNow, timeZone }),
     [actions, loadedTasks, queueNow, timeZone],
   );
-  // `range == .today ? (intelligence?.attention.count ?? agenda?.overdue.count ?? 0) : agenda?.overdue.count`
   const attention = intelligence.data?.today.attention ?? [];
-  const attentionCount =
-    range === 1 ? (intelligence.data ? attention.length : (loadedAgenda?.overdue.length ?? 0)) : (loadedAgenda?.overdue.length ?? 0);
 
-  // `OverdueTasks.results(model.tasks, now: context.date)` and the other attention items
-  // (RootView.swift:1146-1147). `context.date` is the minute timeline, so `queueNow`.
+  // `overdueCount: OverdueTasks.results(model.tasks, now: context.date).count` and
+  // `otherAttentionCount` (RootView.swift:1215-1216). `context.date` is the minute timeline, so `queueNow`.
   const overdueCount = overdueResults(loadedTasks?.tasks ?? [], queueNow).length;
   const otherCount = attention.filter((item) => item.id !== 'overdue').length;
 
@@ -203,7 +198,8 @@ export default function Today() {
           appointments={counts.appointments}
           taskCount={counts.tasks}
           momentCount={momentCount}
-          attentionCount={attentionCount}
+          overdueCount={overdueCount}
+          otherAttentionCount={otherCount}
           schedule={schedule}
           searchSchedule={schedule}
           onOpenTask={(task) => router.push(`/task/${task.id}`)}
@@ -281,10 +277,7 @@ export default function Today() {
           />
         ) : null}
 
-        {/* Section 10: the attention row (RootView.swift:1146-1166), which opens Needs attention. */}
-        {range === 1 && showsAttentionRow(overdueCount, otherCount) ? (
-          <TodayAttentionRow onPress={() => router.push('/attention')} other={otherCount} overdue={overdueCount} />
-        ) : null}
+        {/* Section 10, the separate "Needs attention" row, moved into the intelligence card (Phase 13). */}
       </KeyboardAwareScrollView>
       <StatusBarScrim />
     </View>

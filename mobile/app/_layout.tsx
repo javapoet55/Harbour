@@ -58,6 +58,13 @@ const SHEET_OPTIONS = {
   sheetGrabberVisible: true,
 };
 
+/**
+ * Needs attention since Phase 13: `[.fraction(0.65), .large]` with `.presentationCornerRadius(36)`
+ * (RootView.swift:1301). On `today-attention-sheet-v3` the top edge sits at 39.8% of the screen; below
+ * Android's status bar that is 0.63 of the height, as 0.54 matches `.medium` above.
+ */
+const ATTENTION_SHEET_OPTIONS = { ...SHEET_OPTIONS, sheetAllowedDetents: [0.63, 1.0], sheetCornerRadius: 36 };
+
 export default function RootLayout() {
   const [queryClient] = useState(createQueryClient);
 
@@ -220,7 +227,7 @@ export function RootNavigator() {
             the detent API — Material `BottomSheetBehavior` on Android — and needs no new dependency.
             Both draw their own bar, since a form sheet has no navigator header on Android.
           */}
-          <Stack.Screen name="attention" options={SHEET_OPTIONS} />
+          <Stack.Screen name="attention" options={ATTENTION_SHEET_OPTIONS} />
           <Stack.Screen name="reschedule-all" options={SHEET_OPTIONS} />
           {/*
             The signed-in groups that open over the tabs. Left undeclared, Expo Router registered them

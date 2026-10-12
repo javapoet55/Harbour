@@ -23,18 +23,16 @@ export function summaryLine(tasks: number, appointments: number, moments: number
   return `${tasks} Task${tasks === 1 ? '' : 's'} · ${appointments} Appointment${appointments === 1 ? '' : 's'} · ${moments} Moment${moments === 1 ? '' : 's'}`;
 }
 
-// MARK: The attention row
+// MARK: The attention card
 
 /**
- * The attention row's subtitle (RootView.swift:1151-1156, commit 63d9542): overdue tasks first, with
- * the other schedule checks as a suffix; with no overdue tasks, only the checks.
+ * `attentionDescription` (RootView.swift:1517-1522, Phase 13): "N overdue task(s)" and "M schedule
+ * check(s)", whichever are non-zero, joined by " · ". It replaced the attention row's subtitle when the
+ * row moved into the intelligence card.
  */
-export function attentionRowSubtitle(overdue: number, other: number): string {
-  if (overdue > 0) return `${overdue} overdue task${overdue === 1 ? '' : 's'}${other > 0 ? ` · ${other} other` : ''}`;
-  return `${other} schedule check${other === 1 ? '' : 's'}`;
-}
-
-/** `if overdueCount + otherCount > 0` (RootView.swift:1148). */
-export function showsAttentionRow(overdue: number, other: number): boolean {
-  return overdue + other > 0;
+export function attentionDescription(overdue: number, other: number): string {
+  const parts: string[] = [];
+  if (overdue > 0) parts.push(`${overdue} overdue task${overdue === 1 ? '' : 's'}`);
+  if (other > 0) parts.push(`${other} schedule check${other === 1 ? '' : 's'}`);
+  return parts.join(' · ');
 }

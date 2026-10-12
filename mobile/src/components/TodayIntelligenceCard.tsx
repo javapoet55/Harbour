@@ -4,7 +4,7 @@ import { LayoutAnimation, Pressable, StyleSheet, TextInput, View } from 'react-n
 
 import type { NexdoTask } from '../api/types';
 import { standardContains } from '../lib/taskQuery';
-import { commitmentCount as totalCommitments, commitmentHeadline, summaryLine } from '../lib/todayQuickAccess';
+import { attentionDescription, commitmentCount as totalCommitments, commitmentHeadline, summaryLine } from '../lib/todayQuickAccess';
 import type { TodayRange, TodayScheduleItem } from '../lib/todaySchedule';
 import { brand, useTheme } from '../theme';
 import { scheduleExpandLabel, visibleScheduleItems } from '../features/tasks/workingDays';
@@ -15,8 +15,11 @@ import { Text } from './Text';
  * Port of `TodayIntelligenceCard` (ios/App/RootView.swift:1373-1509) and `TodayScheduleRow`
  * (`:1511-1536`).
  *
- * Two stacked halves inside one 24pt rounded card: a gradient summary (shown only when
- * `showsSummary`) and a schedule list on the grouped surface.
+ * Phase 13 (RootView.swift:1525-1640): a `VStack(spacing: 12)` of separate cards — the gradient summary
+ * (shown only when `showsSummary`), the orange **Needs attention** card when anything is overdue or a
+ * schedule check is open, and the schedule list on the grouped surface. The summary and the schedule
+ * are each a 24pt card with the indigo 11% stroke. The "N things need attention" capsule and the
+ * "Nothing needs attention" line are gone, and so is the separate attention row further down Today.
  *
  * Phase 11: the moment count joined the total and the summary line (d444b37, e0a7bcd), and the
  * "What should I do now?" button at the foot of the schedule was removed (63d9542) — the
@@ -27,7 +30,8 @@ export function TodayIntelligenceCard({
   appointments,
   taskCount,
   momentCount = 0,
-  attentionCount,
+  overdueCount = 0,
+  otherAttentionCount = 0,
   schedule,
   searchSchedule,
   showsSummary = true,
@@ -40,7 +44,10 @@ export function TodayIntelligenceCard({
   taskCount: number;
   /** `range == .today ? moments.today.count : 0` (RootView.swift:1084). */
   momentCount?: number;
-  attentionCount: number;
+  /** `OverdueTasks.results(model.tasks, now:).count`, whatever the range. */
+  overdueCount?: number;
+  /** Today's schedule checks: `today.attention` other than `"overdue"`. */
+  otherAttentionCount?: number;
   schedule: TodayScheduleItem[];
   /** The whole selected range, which search looks through rather than the visible three. */
   searchSchedule: TodayScheduleItem[];
@@ -77,14 +84,19 @@ export function TodayIntelligenceCard({
   // `commitmentCount` (`:1403`): appointments + tasks + moments.
   const commitmentCount = totalCommitments(taskCount, appointments, momentCount);
 
+  const cardBorder = { borderColor: withAlpha(brand.nexdoIndigo, 0.11) };
+  // `.orange`, the system colour.
+  const orange = theme.scheme === 'dark' ? '#FF9F0A' : '#FF9500';
+
   return (
-    <View style={[styles.card, { borderColor: withAlpha(brand.nexdoIndigo, 0.11) }]} testID="today-intelligence">
+    <View style={styles.stack} testID="today-intelligence">
       {showsSummary ? (
         <LinearGradient
           colors={[withAlpha(brand.nexdoBlue, 0.08), withAlpha(brand.nexdoMagenta, 0.09)]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
-          style={styles.summary}
+          style={[styles.card, styles.summary, cardBorder]}
+          testID="today-summary-card"
         >
           <View style={styles.labelRow}>
             <TaskSymbol name="sparkles" size={15} color={theme.colors.link} />
@@ -106,29 +118,36 @@ export function TodayIntelligenceCard({
           >
             {summaryLine(taskCount, appointments, momentCount)}
           </Text>
-          {attentionCount > 0 ? (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityHint="Shows the items that need your attention"
-              onPress={onAttention}
-              testID="today-attention-chip"
-              style={[styles.attentionChip, { backgroundColor: '#FFE0D1' }]}
-            >
-              <TaskSymbol name="exclamationmark.circle" size={13} color="#A82E1F" />
-              <Text style={[styles.chipLabel, { color: '#A82E1F' }]}>
-                {`${attentionCount} thing${attentionCount === 1 ? ' needs' : 's need'} attention`}
-              </Text>
-            </Pressable>
-          ) : (
-            <View style={styles.labelRow}>
-              <TaskSymbol name="checkmark.circle.fill" size={13} color="#34C759" />
-              <Text style={[styles.chipLabel, { color: '#34C759' }]}>Nothing needs attention</Text>
-            </View>
-          )}
         </LinearGradient>
       ) : null}
 
-      <View style={[styles.scheduleHalf, { backgroundColor: theme.colors.surface }]}>
+      {/* `if showsSummary && (overdueCount + otherAttentionCount > 0)` (:1546-1567): every range, since
+          Today always passes `showsSummary: true`. */}
+      {showsSummary && overdueCount + otherAttentionCount > 0 ? (
+        <Pressable
+          accessibilityHint="Opens overdue tasks and schedule checks to complete or reschedule"
+          accessibilityLabel={`Needs attention, ${attentionDescription(overdueCount, otherAttentionCount)}`}
+          accessibilityRole="button"
+          onPress={onAttention}
+          // `.padding(16)`, `Color.orange.opacity(0.07)` in a radius-20 shape, stroked `orange.opacity(0.5)`.
+          style={[styles.attention, { backgroundColor: withAlpha(orange, 0.07), borderColor: withAlpha(orange, 0.5) }]}
+          testID="today-attention-summary"
+        >
+          {/* The triangle at `.title2` in a 48pt tile, `orange.opacity(0.12)`, radius 14. */}
+          <View style={[styles.attentionTile, { backgroundColor: withAlpha(orange, 0.12) }]}>
+            <TaskSymbol color={orange} name="exclamationmark.triangle.fill" size={22} />
+          </View>
+          <View style={styles.attentionLabels}>
+            <Text style={[styles.heading, { color: theme.colors.ink }]}>Needs attention</Text>
+            <Text style={[styles.subheadline, { color: theme.colors.secondary }]} testID="today-attention-subtitle">
+              {attentionDescription(overdueCount, otherAttentionCount)}
+            </Text>
+          </View>
+          <TaskSymbol color={theme.colors.secondary} name="chevron.right" size={17} />
+        </Pressable>
+      ) : null}
+
+      <View style={[styles.card, styles.scheduleHalf, cardBorder, { backgroundColor: theme.colors.surface }]} testID="today-schedule-card">
         <View style={styles.scheduleHeader}>
           <Text style={[styles.heading, { color: theme.colors.ink }]}>
             {showsSummary ? 'On your schedule' : 'Later Today'}
@@ -259,7 +278,14 @@ function withAlpha(color: string, alpha: number): string {
 }
 
 const styles = StyleSheet.create({
+  // `VStack(spacing: 12)`.
+  stack: { gap: 12 },
   card: { borderRadius: 24, borderWidth: StyleSheet.hairlineWidth, overflow: 'hidden' },
+  // `HStack(spacing: 14)`, `.padding(16)`, radius 20, a 1pt stroke.
+  attention: { flexDirection: 'row', alignItems: 'center', gap: 14, padding: 16, borderRadius: 20, borderWidth: 1 },
+  attentionTile: { width: 48, height: 48, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  // `VStack(alignment: .leading, spacing: 4)` and `Spacer(minLength: 4)`.
+  attentionLabels: { flex: 1, gap: 4, marginRight: 4 },
   // `.padding(18)` with `VStack(alignment: .leading, spacing: 12)`.
   summary: { gap: 12, padding: 18 },
   labelRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
@@ -268,8 +294,6 @@ const styles = StyleSheet.create({
   headline: { fontSize: 28, lineHeight: 34, fontWeight: '700' },
   subheadline: { fontSize: 15, lineHeight: 20 },
   semibold: { fontWeight: '600' },
-  attentionChip: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 7, borderRadius: 999, alignSelf: 'flex-start' },
-  chipLabel: { fontSize: 12, lineHeight: 16, fontWeight: '700' },
   scheduleHalf: { padding: 18 },
   scheduleHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingBottom: 10 },
   heading: { fontSize: 17, lineHeight: 22, fontWeight: '600' },

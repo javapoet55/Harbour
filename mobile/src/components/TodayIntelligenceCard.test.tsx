@@ -29,7 +29,6 @@ function card(range: TodayRange, onCalendar = jest.fn(), rows = schedule) {
       range={range}
       appointments={0}
       taskCount={rows.length}
-      attentionCount={0}
       schedule={rows}
       searchSchedule={rows}
       onOpenTask={jest.fn()}

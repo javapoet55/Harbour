@@ -158,15 +158,15 @@ describe('Today dashboard sections', () => {
     expect(screen.getByTestId('today-commitments').props.children).toBe('3 commitments ahead');
   });
 
-  it('shows the attention chip from the overdue count', async () => {
+  /**
+   * Phase 13 (RootView.swift:1534-1541): the summary card lost its "N things need attention" capsule and
+   * its "Nothing needs attention" line; the orange card below it counts overdue work from the task list.
+   */
+  it('has no attention capsule or "Nothing needs attention" line in the summary', async () => {
     await renderToday();
-    await waitFor(() => expect(screen.getByText('1 thing needs attention')).toBeTruthy());
-  });
-
-  it('says nothing needs attention when there is no overdue work', async () => {
-    mockAgenda.mockResolvedValue({ ...AGENDA, overdue: [] });
-    await renderToday();
-    await waitFor(() => expect(screen.getByText('Nothing needs attention')).toBeTruthy());
+    await waitFor(() => expect(screen.getByTestId('today-summary-line')).toBeTruthy());
+    expect(screen.queryByText(/things? needs? attention/)).toBeNull();
+    expect(screen.queryByText('Nothing needs attention')).toBeNull();
   });
 
   it('shows the empty schedule state with Swift’s copy', async () => {
@@ -353,14 +353,22 @@ describe('Today attention row', () => {
 
   const OVERDUE = task({ id: 'late', title: 'Renew passport', dueAt: atLocal('2026-09-10', '10:00') });
 
-  it('shows one row: overdue tasks from the TASK LIST, then the other checks', async () => {
+  /** Phase 13 (RootView.swift:1546-1567): the orange card inside the intelligence stack. */
+  it('shows one card: overdue tasks from the TASK LIST, then the schedule checks', async () => {
     mockIntelligence.mockResolvedValue(INTELLIGENCE);
     mockTasks.mockResolvedValue({ tasks: [...AGENDA.tasks, OVERDUE], timeZone: ZONE });
     await renderToday();
 
-    await waitFor(() => expect(screen.getByTestId('today-attention-subtitle').props.children).toBe('1 overdue task · 1 other'));
+    await waitFor(() => expect(screen.getByTestId('today-attention-subtitle').props.children).toBe('1 overdue task · 1 schedule check'));
     expect(screen.getByText('Needs attention')).toBeTruthy();
-    expect(screen.getByTestId('today-attention-count').props.children).toBe('2');
+    // No count badge any more, and the summary card lost its capsule.
+    expect(screen.queryByTestId('today-attention-count')).toBeNull();
+    expect(screen.queryByText(/things? needs? attention/)).toBeNull();
+    expect(screen.queryByText('Nothing needs attention')).toBeNull();
+    // Between the summary and the schedule cards.
+    const stack = screen.getByTestId('today-intelligence').props.children.filter(Boolean).map((child: { props: { testID: string } }) => child.props.testID);
+    expect(stack).toEqual(['today-summary-card', 'today-attention-summary', 'today-schedule-card']);
+    expect(screen.getByTestId('today-attention-summary').props.accessibilityHint).toBe('Opens overdue tasks and schedule checks to complete or reschedule');
     // No per-item cards any more.
     expect(screen.queryByTestId('today-attention-overdue')).toBeNull();
     expect(screen.queryByTestId('today-attention-gap')).toBeNull();
@@ -372,34 +380,31 @@ describe('Today attention row', () => {
 
     // The "overdue" intelligence item is ignored: the count comes from `OverdueTasks.results`.
     await waitFor(() => expect(screen.getByTestId('today-attention-subtitle').props.children).toBe('1 schedule check'));
-    expect(screen.getByTestId('today-attention-count').props.children).toBe('1');
   });
 
-  it('shows no row when nothing needs attention', async () => {
+  it('shows no card when nothing needs attention', async () => {
     await renderToday();
     await waitFor(() => expect(screen.getByText('Pack boxes')).toBeTruthy());
     expect(screen.queryByTestId('today-attention-summary')).toBeNull();
   });
 
-  it('shows no row on the 3- and 5-day ranges', async () => {
+  /**
+   * The card stays on the 3- and 5-day ranges: Today always passes `showsSummary: true`. (§23 For the
+   * team reads the 3/5-day case as dropping it; not copied.)
+   */
+  it('keeps the card on the 3- and 5-day ranges', async () => {
     mockIntelligence.mockResolvedValue(INTELLIGENCE);
     await renderToday();
     await waitFor(() => expect(screen.getByTestId('today-attention-summary')).toBeTruthy());
 
     await fireEvent.press(screen.getByTestId('today-range-3'));
-    expect(screen.queryByTestId('today-attention-summary')).toBeNull();
+    expect(screen.getByTestId('today-attention-subtitle').props.children).toBe('1 schedule check');
     expect(screen.queryByTestId('today-focus-next')).toBeNull();
+    await fireEvent.press(screen.getByTestId('today-range-5'));
+    expect(screen.getByTestId('today-attention-summary')).toBeTruthy();
   });
 
-  it('counts attention items from intelligence rather than the overdue list', async () => {
-    mockIntelligence.mockResolvedValue(INTELLIGENCE);
-    await renderToday();
-
-    // Two attention items, even though the agenda carries one overdue task.
-    await waitFor(() => expect(screen.getByText('2 things need attention')).toBeTruthy());
-  });
-
-  it('opens the Needs attention sheet from the row', async () => {
+  it('opens the Needs attention sheet from the card', async () => {
     mockIntelligence.mockResolvedValue(INTELLIGENCE);
     await renderToday();
     await waitFor(() => expect(screen.getByTestId('today-attention-summary')).toBeTruthy());
@@ -440,9 +445,8 @@ describe('Today attention row', () => {
     mockIntelligence.mockResolvedValue({ ...INTELLIGENCE, today: { ...INTELLIGENCE.today, day: '2026-09-15' } });
     await renderToday();
 
-    // It falls back to the agenda build and the agenda overdue count.
-    await waitFor(() => expect(screen.getByText('1 thing needs attention')).toBeTruthy());
-    expect(screen.getByText('Standup')).toBeTruthy();
+    // It falls back to the agenda build.
+    await waitFor(() => expect(screen.getByText('Standup')).toBeTruthy());
   });
 });
 
@@ -461,13 +465,6 @@ describe('Today navigation to the Run B screens', () => {
     expect(screen.queryByText('Shopping')).toBeNull();
   });
 
-  it('opens the attention screen from the summary chip', async () => {
-    await renderToday();
-    await waitFor(() => expect(screen.getByTestId('today-attention-chip')).toBeTruthy());
-
-    await fireEvent.press(screen.getByTestId('today-attention-chip'));
-    expect(mockPush).toHaveBeenCalledWith('/attention');
-  });
 });
 
 /**
