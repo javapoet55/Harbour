@@ -148,6 +148,12 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     // project; it needs a new native build. firebase.json turns collection on in debug builds too,
     // as Swift's Debug builds report (tagged `build_configuration` = "debug").
     '@react-native-firebase/crashlytics',
+    // Phase 13 Run B: shake to report a bug (BugReportCoordinator.swift:29-39). Android needs no
+    // permission for the accelerometer at 10 Hz; iOS gets Swift's own motion string (Nexdo-Info.plist:5-6).
+    [
+      'expo-sensors',
+      { motionPermission: 'When you enable shake-to-report, NexDo uses motion to open the bug report form. Motion data is not stored or sent.' },
+    ],
     'expo-apple-authentication',
     // Phase 7. `expo-web-browser` drives the Google Calendar OAuth session
     // (`openAuthSessionAsync`), the analogue of Swift's `ASWebAuthenticationSession`

@@ -144,6 +144,23 @@ jest.mock('expo-audio', () => ({
   requestRecordingPermissionsAsync: jest.fn(async () => ({ granted: true, status: 'granted', canAskAgain: true })),
 }));
 
+// expo-sensors is native-only; the bug-report shake (src/features/bugReport/useBugReportHost.ts) listens
+// to the accelerometer. Tests drive `listeners` directly.
+jest.mock('expo-sensors', () => {
+  const listeners = new Set();
+  return {
+    Accelerometer: {
+      isAvailableAsync: jest.fn(async () => true),
+      setUpdateInterval: jest.fn(),
+      addListener: jest.fn((listener) => {
+        listeners.add(listener);
+        return { remove: () => listeners.delete(listener) };
+      }),
+      __listeners: listeners,
+    },
+  };
+});
+
 // Crashlytics is native-only; `configureCrashReporting` runs at the root layout's module scope.
 jest.mock('@react-native-firebase/crashlytics', () => ({
   getCrashlytics: jest.fn(() => ({})),
