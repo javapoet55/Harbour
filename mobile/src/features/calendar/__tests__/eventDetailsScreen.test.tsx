@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
-import { Alert, Linking, StyleSheet } from 'react-native';
+import { Alert, Linking, Platform, StyleSheet } from 'react-native';
 
 import type { CalendarEvent } from '../../../api/types';
 import { queryKeys } from '../../../query/keys';
@@ -11,6 +11,13 @@ const mockBack = jest.fn();
 jest.mock('expo-router', () => ({
   router: { push: (...args: unknown[]) => mockPush(...args), back: (...args: unknown[]) => mockBack(...args), replace: jest.fn() },
   useLocalSearchParams: () => ({}),
+}));
+
+const mockOpenDeviceEvent = jest.fn();
+jest.mock('expo-calendar', () => ({
+  EntityTypes: { EVENT: 'event' },
+  EventStatus: { CANCELED: 'canceled' },
+  openEventInCalendarAsync: (...args: unknown[]) => mockOpenDeviceEvent(...args),
 }));
 
 const mockApi = { get: jest.fn(), setCompleted: jest.fn(), update: jest.fn(), remove: jest.fn(), addTask: jest.fn() };
@@ -43,6 +50,19 @@ const OWN: CalendarEvent = {
   completedAt: null,
 };
 const GOOGLE: CalendarEvent = { ...OWN, id: 'g1', title: 'Team sync', source: 'google', connectionId: 'c1', notes: null, location: null, timeZone: 'UTC', startAt: '2020-01-02T15:00:00Z', endAt: '2020-01-02T16:00:00Z' };
+/** An event read from the phone (bdb68ce): `apple-device:<calendarID>:<eventID>:<start>`, no server record. */
+const DEVICE: CalendarEvent = { ...GOOGLE, id: 'apple-device:cal1:ev1:1789536600.0', title: 'Dussehra', source: 'apple-device', connectionId: null, timeZone: 'Asia/Kolkata', startAt: '2026-10-20T06:30:00Z', endAt: '2026-10-20T07:00:00Z' };
+
+async function openDevice(event: CalendarEvent = DEVICE) {
+  client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Infinity }, mutations: { retry: false, gcTime: Infinity } } });
+  client.setQueryData(queryKeys.calendar.event('u1', event.id), { event });
+  await render(
+    <QueryClientProvider client={client}>
+      <EventDetailsScreen fallbackTimeZone={ZONE} id={event.id} />
+    </QueryClientProvider>,
+  );
+  await waitFor(() => expect(screen.getByTestId('event-details-title')).toHaveTextContent(event.title));
+}
 
 let alert: jest.SpyInstance;
 let client: QueryClient;
@@ -197,6 +217,52 @@ describe('Event Details', () => {
     );
     await waitFor(() => expect(alert).toHaveBeenCalledWith('Event Details', 'Network unavailable.', expect.any(Array), { cancelable: false }));
     expect(screen.getByTestId('event-details-title')).toHaveTextContent('Dentist');
+  });
+});
+
+/** Phase 13 Calendar run (§37 item 5): a device event is read-only (CalendarEventDetailsView.swift:21, :43-55, :93-100, :112). */
+describe('Event Details for a device event', () => {
+  it('shows the phone’s copy without a fetch, the note instead of actions, and no menu or Edit', async () => {
+    await openDevice();
+    expect(mockApi.get).not.toHaveBeenCalled();
+    expect(screen.getByTestId('event-details-device-note')).toHaveTextContent('On this iPhone · Edit this event in Apple Calendar.');
+    expect(screen.getAllByText('Apple Calendar')).toHaveLength(2);
+    expect(screen.getByTestId('event-details-status')).toHaveTextContent('Upcoming');
+    expect(screen.queryByTestId('event-details-complete')).toBeNull();
+    expect(screen.queryByTestId('event-details-add-task')).toBeNull();
+    expect(screen.queryByTestId('event-details-more')).toBeNull();
+    expect(screen.queryByTestId('event-details-edit-bar')).toBeNull();
+    expect(screen.queryByTestId('event-details-edit-notes')).toBeNull();
+    expect(screen.queryByTestId('event-details-delete')).toBeNull();
+    expect(screen.getByTestId('event-details-zone')).toHaveTextContent('Time ZoneAsia/Kolkata');
+  });
+
+  it('Open in Calendar opens THAT event in the phone’s calendar, and falls back to the day', async () => {
+    mockOpenDeviceEvent.mockResolvedValue(undefined);
+    jest.spyOn(Linking, 'openURL').mockResolvedValue(undefined);
+    await openDevice();
+    await act(async () => fireEvent.press(screen.getByTestId('event-details-open')));
+    expect(mockOpenDeviceEvent).toHaveBeenCalledWith({ id: 'ev1' });
+    expect(Linking.openURL).not.toHaveBeenCalled();
+
+    mockOpenDeviceEvent.mockRejectedValue(new Error('no calendar app'));
+    await act(async () => fireEvent.press(screen.getByTestId('event-details-open')));
+    expect(Linking.openURL).toHaveBeenCalledWith(openInCalendarURL(DEVICE.startAt, 'ios'));
+  });
+
+  it('on Android says Phone calendar and passes the occurrence start to the intent (§33)', async () => {
+    const platform = jest.replaceProperty(Platform, 'OS', 'android');
+    mockOpenDeviceEvent.mockResolvedValue(undefined);
+    try {
+      await openDevice();
+      expect(screen.getByTestId('event-details-device-note')).toHaveTextContent('On this phone · Edit this event in Phone calendar.');
+      expect(screen.getAllByText('Phone calendar')).toHaveLength(2);
+      expect(screen.queryByText(/iPhone/)).toBeNull();
+      await act(async () => fireEvent.press(screen.getByTestId('event-details-open')));
+      expect(mockOpenDeviceEvent).toHaveBeenCalledWith({ id: 'ev1', instanceStartDate: new Date(DEVICE.startAt) });
+    } finally {
+      platform.restore();
+    }
   });
 });
 

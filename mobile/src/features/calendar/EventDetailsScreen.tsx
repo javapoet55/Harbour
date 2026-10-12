@@ -1,3 +1,4 @@
+import { useQueryClient } from '@tanstack/react-query';
 import { router } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Linking, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
@@ -5,14 +6,18 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import type { CalendarEvent } from '../../api/types';
 import { withAlpha } from '../../components/SignInBackdrop';
+import { isDeviceCalendarEvent } from '../../lib/deviceCalendarEvent';
 import { TaskSymbol, type TaskSymbolName } from '../../components/TaskSymbol';
 import { Text } from '../../components/Text';
 import { TodayBackdrop } from '../../components/TodayShell';
+import { queryKeys } from '../../query/keys';
 import { useAddEventTask, useCalendarEvent, useDeleteCalendarEvent, useSetEventCompletion } from '../../query/useCalendarEvent';
+import { useSession } from '../../store/session';
 import { palettes, useTheme } from '../../theme';
 import { PopoverMenu, usePopoverMenu } from '../moments/form';
 import { systemColors } from '../moments/components';
-import { eventCalendarName, eventDateText, eventEditable, eventStatus, openInCalendarURL, warningsMessage } from './eventDetails';
+import { openDeviceEvent } from './deviceCalendars';
+import { deviceEventNote, eventCalendarName, eventDateText, eventEditable, eventHasServerRecord, eventStatus, openInCalendarURL, warningsMessage } from './eventDetails';
 
 /**
  * `CalendarEventDetailsView` (ios/App/CalendarEventDetailsView.swift), the Appointment details sheet
@@ -22,10 +27,20 @@ import { eventCalendarName, eventDateText, eventEditable, eventStatus, openInCal
  *
  * DARK MODE: Swift's cards are fixed white (`.white.opacity(0.94)`) under adaptive ink — white on white
  * (§22 "For the team"). Light mode is Swift's; dark mode uses the theme surface.
+ *
+ * A DEVICE event (Phase 13, bdb68ce, `:21`, `:43-55`, `:93-100`, `:112`) is read-only: no fetch, no Mark
+ * Complete / Add to Tasks, no ⋯ menu and no Edit — the line "On this phone · Edit this event in Phone
+ * calendar." instead (Apple Calendar on iOS, §33), and Open in Calendar opens that event in the phone's
+ * calendar app.
  */
 export function EventDetailsScreen({ id, fallbackTimeZone }: { id: string; fallbackTimeZone: string }) {
   const theme = useTheme();
-  const query = useCalendarEvent(id);
+  const queryClient = useQueryClient();
+  const owner = useSession((state) => state.profile?.id) ?? '';
+  const cached = queryClient.getQueryData<{ event: CalendarEvent }>(queryKeys.calendar.event(owner, id))?.event;
+  // `guard !event.isDeviceCalendarEvent else { return }` (:112): the phone's copy is the only copy.
+  const device = cached !== undefined ? isDeviceCalendarEvent(cached) : !eventHasServerRecord({ source: id.startsWith('apple-device:') ? 'apple-device' : null });
+  const query = useCalendarEvent(id, { enabled: !device });
   const completion = useSetEventCompletion();
   const addTask = useAddEventTask();
   const remove = useDeleteCalendarEvent();
@@ -103,7 +118,9 @@ export function EventDetailsScreen({ id, fallbackTimeZone }: { id: string; fallb
       { text: 'Delete Event', style: 'destructive', onPress: deleteEvent },
     ]);
 
-  const openCalendar = () => {
+  const openCalendar = async () => {
+    // A device event opens ITSELF in the phone's calendar (its intent / EventKit view); else the day.
+    if (device && (await openDeviceEvent(event))) return;
     const url = openInCalendarURL(event.startAt, Platform.OS === 'ios' ? 'ios' : 'android');
     if (url) void Linking.openURL(url).catch(() => undefined);
   };
@@ -156,19 +173,22 @@ export function EventDetailsScreen({ id, fallbackTimeZone }: { id: string; fallb
               <Text style={[styles.body, { color: theme.colors.link, opacity: busy ? 0.45 : 1 }]}>Edit</Text>
             </Pressable>
           ) : null}
-          <View collapsable={false} ref={anchor}>
-            <Pressable
-              accessibilityLabel="More event actions"
-              accessibilityRole="button"
-              accessibilityState={{ disabled: busy }}
-              disabled={busy}
-              onPress={menu.open}
-              style={styles.barButton}
-              testID="event-details-more"
-            >
-              <TaskSymbol color={theme.colors.link} name="ellipsis" size={20} />
-            </Pressable>
-          </View>
+          {/* `if !event.isDeviceCalendarEvent { Menu … }` (:93-100). */}
+          {device ? null : (
+            <View collapsable={false} ref={anchor}>
+              <Pressable
+                accessibilityLabel="More event actions"
+                accessibilityRole="button"
+                accessibilityState={{ disabled: busy }}
+                disabled={busy}
+                onPress={menu.open}
+                style={styles.barButton}
+                testID="event-details-more"
+              >
+                <TaskSymbol color={theme.colors.link} name="ellipsis" size={20} />
+              </Pressable>
+            </View>
+          )}
         </View>
       </View>
       <PopoverMenu
@@ -213,13 +233,20 @@ export function EventDetailsScreen({ id, fallbackTimeZone }: { id: string; fallb
               {event.notes ? <Text style={[styles.subheadline, { color: theme.colors.secondary }]}>{event.notes}</Text> : null}
             </View>
           </View>
-          <View style={styles.actions}>
-            {/* Android ahead of iOS: Swift shows both, whatever the state (CalendarEventDetailsView.swift:44-45); only the one that applies here, as its ⋯ menu does. */}
-            {completed
-              ? action('Mark Incomplete', 'xmark.circle.fill', red, () => setCompletion(false), 'event-details-incomplete')
-              : action('Mark Complete', 'checkmark.circle.fill', green, () => setCompletion(true), 'event-details-complete')}
-            {action(taskAdded ? 'Added to Tasks' : 'Add to Tasks', 'calendar.badge.plus', indigo, add, 'event-details-add-task')}
-          </View>
+          {device ? (
+            // `if event.isDeviceCalendarEvent { Text("On this iPhone · Edit this event in Apple Calendar.") }` (:43-44).
+            <Text style={[styles.subheadline, { color: theme.colors.secondary }]} testID="event-details-device-note">
+              {deviceEventNote()}
+            </Text>
+          ) : (
+            <View style={styles.actions}>
+              {/* Android ahead of iOS: Swift shows both, whatever the state (CalendarEventDetailsView.swift:44-45); only the one that applies here, as its ⋯ menu does. */}
+              {completed
+                ? action('Mark Incomplete', 'xmark.circle.fill', red, () => setCompletion(false), 'event-details-incomplete')
+                : action('Mark Complete', 'checkmark.circle.fill', green, () => setCompletion(true), 'event-details-complete')}
+              {action(taskAdded ? 'Added to Tasks' : 'Add to Tasks', 'calendar.badge.plus', indigo, add, 'event-details-add-task')}
+            </View>
+          )}
           <View>
             {detail('Start', eventDateText(event.startAt, zone, event.allDay), 'clock', 'event-details-start')}
             {detail('End', eventDateText(event.endAt, zone, event.allDay), 'clock', 'event-details-end')}
@@ -245,7 +272,7 @@ export function EventDetailsScreen({ id, fallbackTimeZone }: { id: string; fallb
           </Text>
         </View>
 
-        <Pressable accessibilityLabel="Open in Calendar" accessibilityRole="button" onPress={openCalendar} style={[styles.card, styles.openRow, { backgroundColor: card }]} testID="event-details-open">
+        <Pressable accessibilityLabel="Open in Calendar" accessibilityRole="button" onPress={() => void openCalendar()} style={[styles.card, styles.openRow, { backgroundColor: card }]} testID="event-details-open">
           <TaskSymbol color={theme.colors.ink} name="link" size={17} />
           <Text style={[styles.body, styles.semibold, styles.grow, { color: theme.colors.ink }]}>Open in Calendar</Text>
           <TaskSymbol color={theme.colors.ink} name="chevron.right" size={13} />
