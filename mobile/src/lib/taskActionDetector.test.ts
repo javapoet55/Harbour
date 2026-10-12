@@ -25,6 +25,19 @@ describe('detectTaskAction', () => {
     expect(result?.scheduledAt).toBe(Date.parse(at as string));
   });
 
+  // followUpCapturesNaturalRequestAndPreservesPreparationAfterMove (FollowUpPreparationTests.swift:5-10)
+  it('reads past a lead-in like "I need to"', () => {
+    const result = detectTaskAction('I need to follow up with my insurance company next Tuesday', NOW, ZONE);
+    expect(result?.intent).toBe('followUp');
+    expect(result?.contactName).toBe('my insurance company');
+    for (const title of ['Please call Damien', 'remind me to email John', 'I have to text Robert', 'I want to contact Ana']) {
+      expect(detectTaskAction(title, NOW, ZONE)).not.toBeNull();
+    }
+    // One lead-in only, and only at the start.
+    expect(detectTaskAction('Please remind me to call Damien', NOW, ZONE)).toBeNull();
+    expect(detectTaskAction('Tomorrow I need to call Damien', NOW, ZONE)).toBeNull();
+  });
+
   it('pulls the context out, whether it comes before or after the time', () => {
     for (const title of ['Contact Damien at 10 AM about the roof inspection.', 'Contact Damien about the roof inspection at 10 AM.']) {
       expect(detectTaskAction(title, NOW, ZONE)?.context).toBe('the roof inspection');

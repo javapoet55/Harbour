@@ -1,6 +1,7 @@
 import { createApiClient, type ApiClient } from './client';
 import { calendarEventApi } from './calendarEvent';
 import { feedbackApi } from './feedback';
+import { followUpApi, followUpScheduleBody } from './followUp';
 import { nutritionApi } from './nutrition';
 import { pomodoroApi } from './pomodoro';
 import { shoppingEmailApi, shoppingOffersApi, shoppingStoresApi } from './shopping';
@@ -128,6 +129,15 @@ describe('nothing Phase 12 writes sends a null into a bare zod .optional()', () 
 
   it('POST /api/feedback sends no null', async () => {
     expect(await nullsIn((client) => feedbackApi.submit({ id: 'f1', title: 't', description: 'd', stars: 5 }, client))).toEqual([]);
+  });
+
+  // Phase 13 — src/server/follow-up.ts:4-10: every preparation field is required and none nullable,
+  // so a preparation is always sent whole and a null anywhere is a 400.
+  it.each([
+    ['save', (client: ApiClient) => followUpApi.save('t1', { revision: 0, preparation: { company: 'Acme', purpose: 'Claim', phone: '', email: '', notes: '', draft: 'd', checklist: [{ id: 'c1', title: 'Ready', done: false }], outcomes: [{ id: 'o1', date: '2026-10-09T16:00:00Z', result: 'noAnswer', notes: '' }] } }, client)],
+    ['schedule', (client: ApiClient) => followUpApi.schedule('t1', followUpScheduleBody(Date.parse('2026-10-10T16:00:00Z'), 15), client)],
+  ])('follow-up %s sends no null', async (_name, send) => {
+    expect(await nullsIn(send)).toEqual([]);
   });
 
   /**

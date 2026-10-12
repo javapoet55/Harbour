@@ -2,6 +2,7 @@ import type { NexdoTask } from '../api/types';
 import { parseServerDate } from './taskQuery';
 import { detectTaskAction, type TaskActionIntent } from './taskActionDetector';
 import type { TaskActionRecipient } from './actionNeeded';
+import type { FollowUpPreparation } from '../features/followUp/model';
 import { notificationDate, type TaskAction, type TaskActionStatus } from './todayActionQueue';
 
 /**
@@ -26,6 +27,8 @@ export type StoredTaskAction = TaskAction & {
   businessCandidateID?: string | null;
   /** Phase 12: contact details the user typed instead of picking a contact (`TaskActionRecipient`). */
   manualRecipient?: TaskActionRecipient | null;
+  /** 6f079c0 (TaskAction.swift:36): the saved follow-up preparation, kept on the device copy too. */
+  preparation?: FollowUpPreparation | null;
 };
 
 /**
@@ -145,7 +148,7 @@ export function reconcileActions({
     }
 
     // Same person and intent, but the task moved or was retitled: rebuild, keeping the chosen contact,
-    // business or typed details (TaskAction.swift:103-108).
+    // business, typed details and preparation (TaskAction.swift:103-111).
     if ((old.scheduledAt ?? null) !== schedule || old.sourceTitle !== task.title) {
       const rebuilt = makeTaskAction({ id: newId(), taskId: task.id, title: task.title, detection: detected, scheduledAt: schedule });
       result.push({
@@ -153,6 +156,7 @@ export function reconcileActions({
         contactIdentifier: old.contactIdentifier ?? null,
         businessCandidateID: old.businessCandidateID ?? null,
         manualRecipient: old.manualRecipient ?? null,
+        preparation: old.preparation ?? null,
       });
       continue;
     }
