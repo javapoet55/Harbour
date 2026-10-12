@@ -49,7 +49,7 @@ export function doNowWindowTitle(next: Pick<DoNowNext, 'outsideWorkingDay' | 'ou
 /**
  * Today's schedule card (RootView.swift, d568989): three items, then "View N more" EXPANDS the card in
  * place ("Show less" folds it) instead of opening Calendar; a search shows everything; changing the
- * range folds it again. TODO(screens): TodayIntelligenceCard still shows seven and links to Calendar.
+ * range folds it again. Used by TodayIntelligenceCard.
  */
 export const TODAY_SCHEDULE_PREVIEW = 3;
 
