@@ -162,16 +162,26 @@ export function LogoEditorPage({
           </FormRow>
         ) : null}
       </FormSection>
+      {/* `if loading { ProgressView(…) }` and `if let failure { Text(failure) }` are rows of the Form, so
+          each sits in a card of its own (`shopping-store-logo-editor-error-no-image`). */}
       {loading ? (
-        <View style={styles.loading} testID="store-logo-loading">
-          <ActivityIndicator color={theme.colors.secondaryLabel} />
-          <Text style={[textStyles.body, { color: theme.colors.secondaryLabel }]}>Loading image…</Text>
-        </View>
+        <FormSection>
+          <FormRow last>
+            <View style={styles.loading} testID="store-logo-loading">
+              <ActivityIndicator color={theme.colors.secondaryLabel} />
+              <Text style={[textStyles.body, { color: theme.colors.secondaryLabel }]}>Loading image…</Text>
+            </View>
+          </FormRow>
+        </FormSection>
       ) : null}
       {failure ? (
-        <Text style={[textStyles.body, styles.failure, { color: theme.colors.danger }]} testID="store-logo-failure">
-          {failure}
-        </Text>
+        <FormSection>
+          <FormRow last>
+            <Text style={[textStyles.body, styles.grow, { color: theme.colors.danger }]} testID="store-logo-failure">
+              {failure}
+            </Text>
+          </FormRow>
+        </FormSection>
       ) : null}
     </FormScroll>
   );
@@ -197,6 +207,5 @@ const styles = StyleSheet.create({
   centred: { flex: 1, textAlign: 'center' },
   grow: { flex: 1 },
   row: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 14, minHeight: 44 },
-  loading: { flexDirection: 'row', alignItems: 'center', gap: 10, marginHorizontal: 32, marginTop: 8 },
-  failure: { marginHorizontal: 32, marginTop: 8 },
+  loading: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 44 },
 });
