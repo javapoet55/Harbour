@@ -1153,7 +1153,7 @@ describe('calendar connections', () => {
     await waitFor(() => expect(screen.getByTestId('settings-writes-c1')).toBeTruthy());
     const loads = mockConnections.mock.calls.length;
 
-    fireEvent(screen.getByTestId('settings-writes-c1'), 'valueChange', true);
+    await fireEvent.press(screen.getByTestId('settings-writes-c1'));
 
     await waitFor(() => expect(mockSetWrites).toHaveBeenCalledWith('c1', true));
     await waitFor(() =>
@@ -1168,7 +1168,7 @@ describe('calendar connections', () => {
     await show(<Settings />);
     await waitFor(() => expect(screen.getByTestId('settings-writes-c1')).toBeTruthy());
 
-    fireEvent(screen.getByTestId('settings-writes-c1'), 'valueChange', false);
+    await fireEvent.press(screen.getByTestId('settings-writes-c1'));
 
     await waitFor(() => expect(screen.getByTestId('settings-message')).toHaveTextContent('Nexdo will no longer add events to this calendar.'));
   });

@@ -3,10 +3,11 @@ import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Linking, Platform, Pressable, StyleSheet, Switch, View } from 'react-native';
+import { ActivityIndicator, Alert, Linking, Pressable, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import type { CalendarConnection, NextActionPreference, Profile, ProfilePreferences } from '../../src/api';
+import { IOSSwitch } from '../../src/components/IOSSwitch';
 import { KeyboardAwareScrollView } from '../../src/components/keyboard';
 import { AccountAvatar, ProfileBackground } from '../../src/components/ProfileParts';
 import {
@@ -796,12 +797,11 @@ function ConnectionList({
             <View style={[styles.connectionDivider, { backgroundColor: theme.colors.separator }]} />
             <View style={styles.row}>
               <Text style={[styles.subheadline, styles.grow, { color: theme.colors.label }]}>Add my scheduled tasks and events here</Text>
-              <Switch
+              <IOSSwitch
                 accessibilityLabel="Add my scheduled tasks and events here"
                 onValueChange={(enabled) => onWrites(connection, enabled)}
                 testID={`settings-writes-${connection.id}`}
-                thumbColor="#FFFFFF"
-                trackColor={Platform.OS === 'android' ? { false: theme.colors.switchOff, true: theme.colors.switchOn } : { false: theme.colors.separator, true: theme.colors.tint }}
+                tone="green"
                 value={connection.writeEnabled}
               />
             </View>
