@@ -1811,3 +1811,118 @@ wording.
   task list has been refreshed." with OK (`open` in `app/action/queue.tsx`). The sheet builds its rows from the same
   loaded list, so on Android a row normally arrives with its task; the test injects a row ahead of its task to cover
   the gap (fixed from code, not seen on device).
+
+## 32. Phase 13 plumbing (Windows) (2026-10-12)
+
+Part 1 of Phase 13, built on `rn-phase-13` from `git diff 1938c7c origin/main -- ios/ src/ prisma/` (26 commits,
+none in `mobile/`). Server trace and RN data layer only: no reference captures exist yet, so no screen was built or
+restyled. These notes are for the Mac to fold into `docs/IOS_TO_REACT_NATIVE.md` §23. Jest 2,406 → 2,545; `tsc`
+and ESLint clean; `src/api/phase12Nulls.test.ts` now also covers the follow-up save and reschedule, the bug report
+(with and without a screenshot), the settings PATCH with `workingDays`, and the shopping save with `storeLogoData`.
+
+### What each module added
+
+1. **Follow-up preparation (6f079c0).** `api/followUp.ts`, `features/followUp/model.ts`, `query/useFollowUp.ts`.
+   `GET/PUT /api/tasks/{id}/preparation` is compare-and-set on `revision`; a stale save is 409 "This preparation
+   changed on another device. Reopen it before saving." unless the preparation is byte-identical, which answers the
+   stored envelope. `useSaveFollowUp` is Swift's `save(then:)`: save first, then complete or reschedule (schedule
+   warning retry included); `recordOutcome` appends the outcome once so a retry does not duplicate it. Also from the
+   same commit: `TaskAction.preparation` survives a reschedule, and the detector strips one lead-in ("I need to",
+   "I have to", "I want to", "please", "remind me to").
+2. **Bug reports (d511fef, a13461a, da57b57).** `features/bugReport/model.ts`, `bugReportApi` in `api/feedback.ts`,
+   `useSubmitBugReport`. The frozen first request is resent on retry (idempotent on `id`, same `BR-000000`
+   reference). Caps: body 2,850,000 bytes (413 "Screenshot is too large."), base64 2,800,000 characters, decoded
+   image 2,000,000 bytes, PNG/JPEG only, re-encoded by the server to ≤1170×2532 JPEG; kept 7 days (report 90).
+   `screenshot` is omitted, never null. `bugFailureMessage` is a13461a: 404 → "not available on this server yet",
+   SIGNED_OUT → "sign in again before sending your report", NETWORK → "check your connection", other API errors →
+   the server's text, anything else → "try again later". `bugDiagnostics` clamps values to `bugSchema`'s regexes.
+   Shake-to-report needs an accelerometer module the app does not have (expo-sensors); only the gate and the
+   `bug.shake.<owner>` key are ported.
+3. **Moments in Calendar and Tasks (bb57e09).** `features/calendar/momentSchedule.ts` (read-only `moment:<id>:<day>`
+   projections, never saved; 29 February on the 28th in common years; off and archived moments hidden) and
+   `features/calendar/dayIndex.ts` (`CalendarDayIndex`: every task and event filed by day once per refresh).
+4. **Calendar events, readiness and retries (bdb68ce, b61801c, 08be688).** `lib/deviceCalendarEvent.ts`,
+   `lib/permissionAccess.ts`. A device all-day event is read in its own zone by `eventOccursOn`; device events have
+   no server record (`eventHasServerRecord`). `useCalendarConnections` now treats a failed refresh as an error that
+   KEEPS the accounts on screen (15 s, one attempt, "Could not refresh calendar connections. Please try again."),
+   where it used to blank the list. Server retry safety, documented on the client: a second DELETE of a
+   tombstoned event answers 200 and pushes again; a POST repeated with the same `requestId` only conflict-checks
+   occurrences not yet saved, so a retry after a dropped response must resend the same id.
+5. **Tasks ordering and spacing (d568989).** `features/tasks/displayOrder.ts` (per-account
+   `nexdo.taskDisplayOrders`, display only, Moments never move), `creationSpacing.ts` (15 minutes either side of
+   open scheduled tasks, new tasks only, a time from the title wins), `workingDays.ts`. New fields:
+   `ProfilePreferences.workingDays`, `DoNowNext.outsideWorkingDay`. `mobile/src/api/tasks.ts` does not exist (task
+   endpoints live in `api/index.ts`) and `/api/tasks` gained no field, so nothing changed there.
+6. **Shopping (bdb68ce, bb57e09).** `offerPricing.ts` (before-discount price only from an exact USD price and a
+   fixed USD discount, in cents), `storeHoursDay.ts` (today by the store's `utcOffsetMinutes`, now returned by the
+   hours route), `listLogo.ts`. `storeLogoData` is now sent on every save as Swift does — the logo, or `""` to
+   clear — and List Settings drops the logo when the store name is typed or a store is picked (a one-field state
+   change in `ListSettings.tsx`, no layout change). The logo editor waits for captures; `StoreBrandLogo.tsx` does
+   not yet prefer the custom logo.
+7. **Guides once per sign-in (8f7e492, 2edb3f0).** `store/wellnessGuides.ts`: in memory, emptied by
+   `finishAuthentication` and whenever the signed-in account changes or signs out, kept through a profile refresh.
+   `enter(kind)` decides once per entrance. The guide screens do not call it yet.
+8. **Profile and settings (08be688, 12bb9d4, 4185501).** `parseCalendarCallback`: only `nexdo://calendar-connected`
+   (or Android's `nexdo:///…`) with `calendar=<provider>-connected` is connected; anything else is "Unexpected
+   calendar sign-in response" or "Calendar connection was not confirmed". A password reset confirmed while signed in
+   ends the session. `morningEmailExplanation` (6 a.m. in the profile zone). Two Settings test fixtures used
+   callbacks the stricter rule rejects and were corrected.
+9. **Pomodoro and voice (bb57e09, 94da063).** `personalWork` category (blue, last in the list, so it now shows in the
+   picker) and `tick()`, which never chimes twice for one boundary. The monthly voice limit: a 429
+   `VOICE_MONTHLY_LIMIT_REACHED` is an `ApiError` with that code and the usage receipt; voice start shows the server's
+   message instead of "Couldn't start voice…" (Swift shows `localizedDescription`), and `/api/speech` reports it.
+
+### Native requirements (recorded, not added)
+
+- **Crashlytics (4185501, `ios/CRASHLYTICS.md`, `NexdoCrashReporting.swift`).** Swift enables collection at launch
+  when Firebase is configured, sets one custom key `build_configuration` = `debug`/`release`, and (Debug only) a
+  `-nexdo-crashlytics-test-crash` launch argument that crashes after 5 s with `controlled_test` = true. No account
+  ids, descriptions, screenshots or tokens are attached; bug reports stay separate. Android needs
+  `@react-native-firebase/crashlytics` (same major as the `app`/`analytics` 26.x already present) and its config
+  plugin, which adds the `com.google.firebase.crashlytics` Gradle plugin; `google-services.json` is already wired.
+  Then: `setCrashlyticsCollectionEnabled(true)` and the same custom key at startup, mapping-file upload for R8
+  release builds, a debug-only crash trigger, and per-member Firebase alert subscriptions for the Android app.
+  Needs a new native build.
+- **Device calendar (`ios/App/AppleCalendarService.swift`).** iOS reads EventKit with FULL access (write-only asks
+  again), lists calendars sorted by account then title, keeps a per-account selection
+  (`nexdo.apple-calendar.selection.<owner>`; none saved = all, empty = none), reads events in the visible range,
+  skips cancelled ones, dedupes by id, and shows them read-only beside server events with "Edit this event in Apple
+  Calendar". It also refreshes on foreground and on store changes. expo-calendar (already present) can supply this
+  on Android: `requestCalendarPermissionsAsync`, `getCalendarsAsync(EntityTypes.EVENT)`, `getEventsAsync(ids, start,
+  end)` (cancelled events by `status`), feeding `makeDeviceCalendarEvent`. Android only needs READ_CALENDAR;
+  WRITE_CALENDAR stays blocked. Open points: the label ("Apple Calendar" is iOS copy), and whether to keep the
+  `apple-device` source string on Android (the code keys on it). No change-notification equivalent to EKEventStoreChanged
+  — re-read on focus.
+- **Bug report screenshot.** react-native-view-shot (already present): `captureRef` of the app root with
+  `{ format: 'jpg', quality: 0.7, result: 'base64', width: min(1170, window width) }`, the report sheet hidden first,
+  refused while a `secureTextEntry` input is mounted, and `screenshotFits` checked before `includeScreenshot`. No new
+  native module. Shake-to-report (with iOS's new `NSMotionUsageDescription`) would need expo-sensors.
+
+### Server findings for the team list
+
+- `src/server/feedback/bugs.ts:16` — `deviceModel` accepts only `[A-Za-z0-9, ._-]` and the OS field is named
+  `iosVersion`. Android model names can carry `+`, parentheses or non-Latin letters, and any miss is answered with
+  the unrelated "Enter a description of 1–2,000 characters and review screenshot consent." (`route.ts:21`). The RN
+  client clamps to work around it.
+- `src/server/feedback/bugs.ts:80` — `BUG_REFERENCE_UNAVAILABLE` falls through `jsonError` to 500 "Request failed."
+- `src/app/api/tasks/[id]/preparation/route.ts:14` — a malformed JSON body throws a `SyntaxError` that is neither a
+  `ZodError` nor `FOLLOW_UP_CHANGED`, so it is 500 "Request failed." instead of 400.
+- `src/app/api/speech/route.ts:21` — read-aloud of Ask answers is blocked once realtime minutes run out, although
+  TTS is not counted toward those minutes. Possibly intended; worth confirming.
+- `src/app/api/settings/route.ts:29` — `workingDays` accepts duplicates and any order ("1,1,5,0"). Harmless today.
+
+### Outside the nine modules
+
+Server/admin/web only, no client change: Ask Nexdo analytics (Firebase/Amplitude grounding, funnels, prompts —
+28dbd98, 56047fc, 6539021, a5eb75b, 4325e57), AI API cost receipts and the admin pages (94da063, migration
+`20261010140000_ai_api_receipts`), the admin bug-report pages (3c47d20, 058ae50, 9e3a3ae), the Inbox palette
+(978f61a), morning summary and welcome/bug emails (375f28e, 71c0de4, 12bb9d4), `/reset-password` page. With client
+impact but no RN change needed: the temporary Google unverified-app notice (105146f) — the calendar and Gmail OAuth
+starts may show a notice page first; its Cancel lands on `nexdo://calendar-connected?calendar=error&detail=Connection
+cancelled.` or `nexdo://moments-email?status=error`, which the existing callback handling already treats as a
+failure; Gmail connect now also fails when `gmail.send` was not granted. iOS UI only, for the captures pass:
+calendar connection onboarding (08be688), Today attention sheet, Ask landing, dark-mode Wellness chooser
+(4185501), Today's schedule now three items with in-place "View N more" / "Show less" (helpers in
+`features/tasks/workingDays.ts`), Do Now's "Today isn't a selected working day", Settings "Working days", "Forgot
+password?" under Change password, and the account-deletion overlay. The voice prompt gained follow-up guidance
+(server only).
