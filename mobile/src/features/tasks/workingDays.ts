@@ -37,8 +37,7 @@ export function workingDayLocked(value: string | null | undefined, day: number):
 
 /**
  * Do Now's window line (ios/App/DoNowView.swift, d568989): an excluded day is said before the hours,
- * so a Saturday no longer reads as "Outside your working hours". TODO(screens): do-now.tsx still
- * builds the old two-way text inline.
+ * so a Saturday no longer reads as "Outside your working hours". Used by the Do Now screen.
  */
 export function doNowWindowTitle(next: Pick<DoNowNext, 'outsideWorkingDay' | 'outsideWorkingHours' | 'availableWindowMinutes'>, durationLabel: (minutes: number) => string): string {
   if (next.outsideWorkingDay === true) return 'Today isn’t a selected working day';
