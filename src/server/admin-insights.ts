@@ -219,7 +219,7 @@ export async function answerAdminAnalyticsQuestion(adminId: string, question: st
     content: JSON.stringify({ question, selectedRange: { from, to }, ADMIN_DATA: { ...adminOverviewGrounding(initial), report: { generatedAt: initial.generatedAt, periodDays: initialDays, from, to, periodMeaning: 'Selected date range; database reports use UTC and provider reports use their stated timezone.' } } }),
   }];
 
-  for (let step = 0; step < 4; step += 1) {
+  for (let step = 0; step < 6; step += 1) {
     const response = await observedFetch('https://api.openai.com/v1/responses', {
       method: 'POST',
       headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
@@ -230,7 +230,7 @@ export async function answerAdminAnalyticsQuestion(adminId: string, question: st
         tools,
         parallel_tool_calls: false,
         input,
-        max_output_tokens: 900,
+        max_output_tokens: 3000,
         reasoning: { effort: 'low' },
         text: { format: adminAnswerFormat },
         safety_identifier: `admin_${createHash('sha256').update(adminId).digest('hex').slice(0, 24)}`,
