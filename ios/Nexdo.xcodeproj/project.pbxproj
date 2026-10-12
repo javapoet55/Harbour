@@ -337,7 +337,7 @@
 				COPY_PHASE_STRIP = NO;
                 ENABLE_DEBUG_DYLIB = NO;
                 OTHER_LDFLAGS = ("$(inherited)", "-ObjC");
-				CURRENT_PROJECT_VERSION = 7;
+				CURRENT_PROJECT_VERSION = 8;
 				DEVELOPMENT_ASSET_PATHS = "";
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Nexdo-Info.plist";
@@ -381,7 +381,7 @@
 				COPY_PHASE_STRIP = NO;
                 ENABLE_DEBUG_DYLIB = NO;
                 OTHER_LDFLAGS = ("$(inherited)", "-ObjC");
-				CURRENT_PROJECT_VERSION = 7;
+				CURRENT_PROJECT_VERSION = 8;
 				DEVELOPMENT_ASSET_PATHS = "";
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Nexdo-Info.plist";
