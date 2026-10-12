@@ -29,6 +29,8 @@ export type Palette = {
   askBlue: string;
   /** `.secondarySystemBackground`: `AskStyle.cardBackground` (AskNexdoView.swift:54). */
   secondaryBackground: string;
+  /** `.tertiarySystemBackground`: the Wellness chooser's arrow plate in dark mode (4185501). */
+  tertiaryBackground: string;
   tint: string;
   onTint: string;
   background: string;
@@ -43,6 +45,8 @@ export type Palette = {
   surfaceElevated: string;
   separator: string;
   danger: string;
+  /** iOS `.green`: "Screenshot captured" on the bug report (BugReportView.swift:158). */
+  success: string;
   /** `.ultraThinMaterial` stand-in for the auth cards. expo-blur tints over this. */
   glassFill: string;
   /**
@@ -138,6 +142,7 @@ export const palettes: Record<ColorScheme, Palette> = {
     scheduleBlue: '#26578F', // RootView.swift:887 light: UIColor(red: 0.15, green: 0.34, blue: 0.56)
     askBlue: '#2E598F', // AskNexdoView.swift:47 light: UIColor(red: 0.18, green: 0.35, blue: 0.56)
     secondaryBackground: '#F2F2F7',
+    tertiaryBackground: '#FFFFFF',
     tint: brand.nexdoIndigo, // RootView.swift:46 `.tint(.nexdoIndigo)`
     onTint: '#FFFFFF',
     // iOS system colours used alongside the brand colours in RootView.swift
@@ -150,6 +155,7 @@ export const palettes: Record<ColorScheme, Palette> = {
     surfaceElevated: '#FFFFFF',
     separator: 'rgba(60, 60, 67, 0.29)',
     danger: '#FF3B30',
+    success: '#34C759',
     glassFill: 'rgba(236, 236, 240, 0.72)', // RootView.swift:354 `.ultraThinMaterial`, tuned against the Swift render
     glassSolid: '#EEEEF1', // measured off the Swift Action Needed card: (238, 238, 241)
     glassStroke: 'rgba(255, 255, 255, 0.8)', // RootView.swift:355 Color.white.opacity(0.8)
@@ -185,6 +191,7 @@ export const palettes: Record<ColorScheme, Palette> = {
     scheduleBlue: '#7ABAFF', // RootView.swift:887 dark: UIColor(red: 0.48, green: 0.73, blue: 1)
     askBlue: ASK_BLUE_DARK, // AskNexdoView.swift:46 dark: UIColor(red: 0.42, green: 0.72, blue: 1.00)
     secondaryBackground: '#1C1C1E',
+    tertiaryBackground: '#2C2C2E',
     tint: brand.nexdoIndigo,
     onTint: '#FFFFFF',
     background: '#000000',
@@ -195,6 +202,7 @@ export const palettes: Record<ColorScheme, Palette> = {
     surfaceElevated: '#2C2C2E',
     separator: 'rgba(84, 84, 88, 0.6)',
     danger: '#FF453A',
+    success: '#30D158',
     glassFill: 'rgba(40, 40, 44, 0.72)', // `.ultraThinMaterial` over the dark systemBackground
     glassSolid: '#1D1D20', // the same fill composited over the black grouped background
     // RootView.swift:355 `Color.white.opacity(0.8)`, the same as light. A previous pass guessed

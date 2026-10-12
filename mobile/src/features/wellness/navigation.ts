@@ -2,6 +2,7 @@ import { router } from 'expo-router';
 
 import { closePresentedScreens } from '../../lib/sessionNavigation';
 import { useTaskQuery } from '../../store/taskQuery';
+import { useWellnessGuides } from '../../store/wellnessGuides';
 import type { WellnessModule } from './art';
 
 /**
@@ -36,9 +37,14 @@ export async function leaveWellness(exit: WellnessExit): Promise<void> {
   }
 }
 
-/** A module card: its guide first, every time (`WellnessModuleEntrance`, WellnessModuleGuide.swift:133-141). */
+/**
+ * A module card (`WellnessModuleEntrance`, WellnessChooserView.swift, 8f7e492 / 2edb3f0): its guide
+ * the first time this sign-in opens that module, and the module itself after that. The decision is
+ * made once, on entry, and the guide is marked seen then — so leaving the guide with Back still counts.
+ */
 export function openModuleGuide(module: WellnessModule): void {
-  router.push({ pathname: '/wellness/guide/[kind]', params: { kind: module } });
+  if (useWellnessGuides.getState().enter(module)) router.push({ pathname: '/wellness/guide/[kind]', params: { kind: module } });
+  else router.push(MODULE_ROUTE[module]);
 }
 
 /**

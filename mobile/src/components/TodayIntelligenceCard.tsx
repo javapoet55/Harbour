@@ -1,12 +1,13 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import { useState } from 'react';
-import { Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { LayoutAnimation, Pressable, StyleSheet, TextInput, View } from 'react-native';
 
 import type { NexdoTask } from '../api/types';
 import { standardContains } from '../lib/taskQuery';
 import { commitmentCount as totalCommitments, commitmentHeadline, summaryLine } from '../lib/todayQuickAccess';
 import type { TodayRange, TodayScheduleItem } from '../lib/todaySchedule';
 import { brand, useTheme } from '../theme';
+import { scheduleExpandLabel, visibleScheduleItems } from '../features/tasks/workingDays';
 import { TaskSymbol } from './TaskSymbol';
 import { Text } from './Text';
 
@@ -41,7 +42,7 @@ export function TodayIntelligenceCard({
   momentCount?: number;
   attentionCount: number;
   schedule: TodayScheduleItem[];
-  /** The whole selected range, which search looks through rather than the visible seven. */
+  /** The whole selected range, which search looks through rather than the visible three. */
   searchSchedule: TodayScheduleItem[];
   showsSummary?: boolean;
   onOpenTask: (task: NexdoTask) => void;
@@ -53,8 +54,15 @@ export function TodayIntelligenceCard({
   const [searchText, setSearchText] = useState('');
 
   const searching = showingSearch && searchText.trim().length > 0;
+  // `scheduleExpanded` (RootView.swift:1502), and `.onChange(of: range) { scheduleExpanded = false }`
+  // (`:1645`): kept as the range it was expanded for, so picking another range folds it again.
+  const [expandedRange, setExpandedRange] = useState<TodayRange | null>(null);
+  const expanded = expandedRange === range;
 
-  /** `visibleSchedule` (RootView.swift:1379-1386): seven rows, or every keyword match when searching. */
+  /**
+   * `visibleSchedule` (RootView.swift:1507-1515, d568989): three rows, or all of them once expanded,
+   * or every keyword match when searching.
+   */
   const visibleSchedule = searching
     ? searchSchedule.filter((item) => {
         if (!item.task) return false;
@@ -63,7 +71,8 @@ export function TodayIntelligenceCard({
           (word) => standardContains(item.task!.title, word) || standardContains(item.task!.notes ?? '', word),
         );
       })
-    : schedule.slice(0, 7);
+    : visibleScheduleItems(schedule, false, expanded);
+  const expandLabel = scheduleExpandLabel(schedule.length, searching, expanded);
 
   // `commitmentCount` (`:1403`): appointments + tasks + moments.
   const commitmentCount = totalCommitments(taskCount, appointments, momentCount);
@@ -183,11 +192,21 @@ export function TodayIntelligenceCard({
                 <TodayScheduleRow item={item} onPress={() => (item.task ? onOpenTask(item.task) : onCalendar())} />
               </View>
             ))}
-            {!searching && schedule.length > 7 ? (
-              <Pressable accessibilityRole="button" accessibilityLabel={`View ${schedule.length - 7} more`} onPress={onCalendar} style={styles.viewMore} testID="today-view-more">
-                <Text style={[styles.subheadline, styles.semibold, { color: theme.colors.link }]}>
-                  {`View ${schedule.length - 7} more`}
-                </Text>
+            {/* "View N more" / "Show less" expands the card in place (RootView.swift:1624-1633). */}
+            {expandLabel ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={expandLabel}
+                accessibilityHint={expanded ? 'Shows the first three schedule items' : 'Shows all schedule items here'}
+                onPress={() => {
+                  // `withAnimation(.easeInOut(duration: 0.2))`.
+                  LayoutAnimation.configureNext(LayoutAnimation.create(200, LayoutAnimation.Types.easeInEaseOut, LayoutAnimation.Properties.opacity));
+                  setExpandedRange(expanded ? null : range);
+                }}
+                style={styles.viewMore}
+                testID="today-schedule-expand"
+              >
+                <Text style={[styles.subheadline, styles.semibold, { color: theme.colors.link }]}>{expandLabel}</Text>
               </Pressable>
             ) : null}
           </>
@@ -268,5 +287,5 @@ const styles = StyleSheet.create({
   rowIcon: { width: 28, height: 28, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
   rowTitle: { fontSize: 15, lineHeight: 20, fontWeight: '600' },
   rowDetail: { fontSize: 11, lineHeight: 14 },
-  viewMore: { minHeight: 44, justifyContent: 'center', paddingTop: 12 },
+  viewMore: { minHeight: 44, alignItems: 'center', justifyContent: 'center', marginTop: 8 },
 });

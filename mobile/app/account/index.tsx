@@ -14,6 +14,7 @@ import { useMe } from '../../src/query/useMe';
 import { reloadProfile } from '../../src/query/useProfile';
 import { useVoiceUsage } from '../../src/query/useVoiceUsage';
 import { ElevatedSurface, useTheme } from '../../src/theme';
+import { openBugReport } from '../../src/features/bugReport/coordinator';
 
 /**
  * `AccountView` (ios/App/ProfileView.swift:48), **body `:53-84`**, read top to bottom.
@@ -131,18 +132,19 @@ function AccountSheet() {
         {/* 2. The Real-time Voice card (`:77`, card `:101-132`). */}
         <VoiceUsageCard usage={voiceUsage} />
 
-        {/* 3-4. Help, Feedback, "Edit profile and settings" and "Change password" (ProfileView.swift:66-70) in one
-            card. Android ahead of iOS (iOS 6343e11): the `.padding(8).profileCard()` sat on Change password alone,
-            leaving the other three bare on the background. */}
+        {/* 3-4. The account actions in one card, in Swift's order since 6f079c0 / d511fef (ProfileView.swift:84-89):
+            Edit profile and settings, Feedback, Help, Report Bugs, Change password. Report Bugs is a `Button`,
+            not a link: it opens the report over this screen, tagged "settings". */}
         <ProfileCard style={styles.menuCard} testID="account-menu">
-          <AccountMenuRow icon="questionmark.circle" onPress={() => router.push('/account/help')} testID="account-help" title="Help" />
-          <AccountMenuRow icon="bubble.left.and.text.bubble.right" onPress={() => router.push('/account/feedback')} testID="account-feedback" title="Feedback" />
           <AccountMenuRow
             icon="person.crop.circle"
             onPress={() => router.push('/account/settings')}
             testID="account-edit-profile"
             title="Edit profile and settings"
           />
+          <AccountMenuRow icon="bubble.left.and.text.bubble.right" onPress={() => router.push('/account/feedback')} testID="account-feedback" title="Feedback" />
+          <AccountMenuRow icon="questionmark.circle" onPress={() => router.push('/account/help')} testID="account-help" title="Help" />
+          <AccountMenuRow icon="ladybug" onPress={() => void openBugReport('settings')} testID="account-report-bugs" title="Report Bugs" />
           <AccountMenuRow icon="lock.rotation" onPress={() => router.push('/account/change-password')} testID="account-change-password" title="Change password" />
         </ProfileCard>
 

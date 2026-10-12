@@ -7,7 +7,8 @@ import { InlineNavBar } from '../../components/InlineNavBar';
 import { closePresentedScreens, replaceWithSignIn } from '../../lib/sessionNavigation';
 import { useChangePassword } from '../../query/useAuth';
 import { useTheme } from '../../theme';
-import { FormField, FormRow, FormScroll, FormSection, FormText } from '../moments/form';
+import { FormButton, FormField, FormRow, FormScroll, FormSection, FormText } from '../moments/form';
+import { useSecureScreen } from '../bugReport/coordinator';
 
 /**
  * `ChangePasswordView` (ios/App/ProfileView.swift:150-198), pushed from Account. Three secure fields, the
@@ -30,7 +31,7 @@ export function passwordChangeValid(current: string, next: string, confirmation:
   return current !== '' && Array.from(next).length >= 12 && utf8Length(next) <= 72 && next === confirmation && next !== current;
 }
 
-export function ChangePasswordScreen({ onBack }: { onBack: () => void }) {
+export function ChangePasswordScreen({ onBack, onForgotPassword }: { onBack: () => void; onForgotPassword: () => void }) {
   const theme = useTheme();
   const [current, setCurrent] = useState('');
   const [next, setNext] = useState('');
@@ -39,6 +40,8 @@ export function ChangePasswordScreen({ onBack }: { onBack: () => void }) {
   const change = useChangePassword({ beforeSessionEnds: closePresentedScreens });
   const saving = change.isPending;
   const valid = passwordChangeValid(current, next, confirmation);
+  // Password fields: a bug report opened here takes no screenshot.
+  useSecureScreen();
 
   /** `save()` (:184-192). */
   const save = () => {
@@ -88,6 +91,12 @@ export function ChangePasswordScreen({ onBack }: { onBack: () => void }) {
               textContentType="newPassword"
               value={confirmation}
             />
+          </FormRow>
+        </FormSection>
+        {/* 4185501 (ProfileView.swift:192-195): the reset sheet, for the signed-in account's email. */}
+        <FormSection disabled={saving}>
+          <FormRow last>
+            <FormButton onPress={onForgotPassword} testID="change-password-forgot" title="Forgot password?" />
           </FormRow>
         </FormSection>
         {confirmation !== '' && next !== confirmation ? (

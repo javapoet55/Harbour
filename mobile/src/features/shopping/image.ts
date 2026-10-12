@@ -143,9 +143,12 @@ export const manipulatorEncoder: ImageEncoder = {
   },
 };
 
-/** AI artwork arrives as base64; the manipulator needs a file, so it goes through the cache first. */
-export function base64ToCacheFile(base64: string): string {
-  const file = new File(new Directory(Paths.cache), `item-${Crypto.randomUUID()}.jpg`);
+/**
+ * AI artwork (and a pasted store logo) arrives as base64; the manipulator needs a file, so it goes
+ * through the cache first.
+ */
+export function base64ToCacheFile(base64: string, extension: 'jpg' | 'png' = 'jpg'): string {
+  const file = new File(new Directory(Paths.cache), `item-${Crypto.randomUUID()}.${extension}`);
   file.write(base64, { encoding: 'base64' });
   return file.uri;
 }

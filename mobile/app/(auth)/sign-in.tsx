@@ -24,6 +24,7 @@ import { useAppleSignIn, useSignIn } from '../../src/query/useAuth';
 import { signInSchema, type SignInValues } from '../../src/schemas/auth';
 import { useLastSignedIn } from '../../src/store/lastSignedIn';
 import { brand, inputText, systemText, textStyles, useTheme } from '../../src/theme';
+import { useSecureScreen } from '../../src/features/bugReport/coordinator';
 
 /**
  * Port of `SignInView` (ios/App/RootView.swift:258-470).
@@ -33,6 +34,8 @@ import { brand, inputText, systemText, textStyles, useTheme } from '../../src/th
  */
 export default function SignIn() {
   const theme = useTheme();
+  // Password field: a bug report opened here would take no screenshot (BugReportCoordinator.swift:55-59).
+  useSecureScreen();
   const signIn = useSignIn();
   const apple = useAppleSignIn();
   const greetingName = useLastSignedIn((state) => state.value);

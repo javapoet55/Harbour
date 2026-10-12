@@ -140,6 +140,34 @@ jest.mock('expo-audio', () => ({
     addListener: jest.fn(() => ({ remove: jest.fn() })),
   })),
   setAudioModeAsync: jest.fn(async () => undefined),
+  // b61801c: voice asks for the microphone before it requests a session.
+  requestRecordingPermissionsAsync: jest.fn(async () => ({ granted: true, status: 'granted', canAskAgain: true })),
+}));
+
+// expo-sensors is native-only; the bug-report shake (src/features/bugReport/useBugReportHost.ts) listens
+// to the accelerometer. Tests drive `listeners` directly.
+jest.mock('expo-sensors', () => {
+  const listeners = new Set();
+  return {
+    Accelerometer: {
+      isAvailableAsync: jest.fn(async () => true),
+      setUpdateInterval: jest.fn(),
+      addListener: jest.fn((listener) => {
+        listeners.add(listener);
+        return { remove: () => listeners.delete(listener) };
+      }),
+      __listeners: listeners,
+    },
+  };
+});
+
+// Crashlytics is native-only; `configureCrashReporting` runs at the root layout's module scope.
+jest.mock('@react-native-firebase/crashlytics', () => ({
+  getCrashlytics: jest.fn(() => ({})),
+  setCrashlyticsCollectionEnabled: jest.fn(async () => undefined),
+  setAttribute: jest.fn(async () => undefined),
+  log: jest.fn(),
+  crash: jest.fn(),
 }));
 
 // react-native-webrtc and its in-call companion are native-only; the voice tests inject fakes.

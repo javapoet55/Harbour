@@ -21,12 +21,14 @@ import { ChangePasswordScreen, passwordChangeValid, utf8Length } from '../Change
 let client: QueryClient | undefined;
 let alert: jest.SpyInstance;
 
+const onForgotPassword = jest.fn();
+
 async function open() {
   client = new QueryClient({ defaultOptions: { mutations: { retry: false, gcTime: Infinity } } });
   const onBack = jest.fn();
   await render(
     <QueryClientProvider client={client}>
-      <ChangePasswordScreen onBack={onBack} />
+      <ChangePasswordScreen onBack={onBack} onForgotPassword={onForgotPassword} />
     </QueryClientProvider>,
   );
   return onBack;
@@ -113,4 +115,15 @@ test('a refused change keeps the session and shows the server\'s message', async
   await waitFor(() => expect(screen.getByTestId('change-password-failure')).toHaveTextContent('Your current password is incorrect.'));
   expect(mockReplace).not.toHaveBeenCalled();
   expect(useSession.getState().profile?.id).toBe('u1');
+});
+
+/** 4185501 (ProfileView.swift:192-195): "Forgot password?" opens the reset sheet. */
+test('"Forgot password?" sits under the fields and opens the reset sheet', async () => {
+  onForgotPassword.mockClear();
+  await open();
+  const forgot = screen.getByTestId('change-password-forgot');
+  expect(forgot).toHaveTextContent('Forgot password?');
+  await fireEvent.press(forgot);
+  expect(onForgotPassword).toHaveBeenCalledTimes(1);
+  expect(mockChange).not.toHaveBeenCalled();
 });

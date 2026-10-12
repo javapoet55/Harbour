@@ -1,3 +1,5 @@
+import { Platform } from 'react-native';
+
 import type { CalendarEvent, ScheduleIntelligenceResponse } from '../../api/types';
 import { isDeviceCalendarEvent } from '../../lib/deviceCalendarEvent';
 import { parseServerDate } from '../../lib/taskQuery';
@@ -10,12 +12,27 @@ export function eventEditable(event: Pick<CalendarEvent, 'source' | 'connectionI
 }
 
 /**
- * `calendarName` (:21): "Apple Calendar" for an event read from the phone (bdb68ce), "NexDo", or the
- * provider capitalised as Swift's `.capitalized`. The Android device reader will want its own label
- * here (see android-polish.md §32).
+ * The phone's own calendar, by platform. Swift's "Apple Calendar" (bdb68ce) is iOS copy; Android names
+ * it "Phone calendar" (android-polish.md §33). The `apple-device` source value stays the same on both.
+ */
+export function deviceCalendarName(platform: 'ios' | 'android' = Platform.OS === 'android' ? 'android' : 'ios'): string {
+  return platform === 'android' ? 'Phone calendar' : 'Apple Calendar';
+}
+
+/**
+ * The line Event Details shows for a device event instead of its actions (CalendarEventDetailsView.swift:43-44):
+ * iOS keeps Swift's words; Android says the same of its own calendar app.
+ */
+export function deviceEventNote(platform: 'ios' | 'android' = Platform.OS === 'android' ? 'android' : 'ios'): string {
+  return platform === 'android' ? 'On this phone · Edit this event in Phone calendar.' : 'On this iPhone · Edit this event in Apple Calendar.';
+}
+
+/**
+ * `calendarName` (:21): the phone's calendar for an event read from the phone (bdb68ce), "NexDo", or
+ * the provider capitalised as Swift's `.capitalized`.
  */
 export function eventCalendarName(event: Pick<CalendarEvent, 'source'>): string {
-  if (isDeviceCalendarEvent(event)) return 'Apple Calendar';
+  if (isDeviceCalendarEvent(event)) return deviceCalendarName();
   if (event.source === 'harbor') return 'NexDo';
   return (event.source ?? 'Calendar').toLowerCase().replace(/(^|[^\p{L}\p{N}'])(\p{L})/gu, (_match, before: string, letter: string) => before + letter.toUpperCase());
 }

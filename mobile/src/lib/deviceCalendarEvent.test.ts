@@ -1,6 +1,6 @@
 import type { CalendarEvent } from '../api/types';
 import { buildCalendarDayIndex } from '../features/calendar/dayIndex';
-import { eventCalendarName, eventHasServerRecord } from '../features/calendar/eventDetails';
+import { deviceCalendarName, deviceEventNote, eventCalendarName, eventHasServerRecord } from '../features/calendar/eventDetails';
 import { calendarEventMatches, calendarKey, calendarMonth } from './calendarDates';
 import { deviceCalendarSelectionKey, eventDayZone, isDeviceCalendarEvent, makeDeviceCalendarEvent } from './deviceCalendarEvent';
 import { eventOccursOn } from './todaySchedule';
@@ -61,6 +61,11 @@ describe('device calendar events', () => {
     const event = deviceEvent({ start: '2026-10-09T12:00:00Z', end: '2026-10-09T13:00:00Z' });
     expect(eventHasServerRecord(event)).toBe(false);
     expect(eventCalendarName(event)).toBe('Apple Calendar');
+    // §33: Android names its own calendar app; the source value is unchanged.
+    expect(deviceCalendarName('android')).toBe('Phone calendar');
+    expect(deviceEventNote('android')).toBe('On this phone · Edit this event in Phone calendar.');
+    expect(deviceEventNote('ios')).toBe('On this iPhone · Edit this event in Apple Calendar.');
+    expect(event.source).toBe('apple-device');
     expect(eventHasServerRecord({ source: 'harbor' })).toBe(true);
   });
 
@@ -82,4 +87,11 @@ describe('CalendarDayIndex agrees with ServerDate.occurs', () => {
       expect((index.events[day] ?? []).map((event) => event.id)).toEqual(events.filter((event) => eventOccursOn(event, day, zone)).map((event) => event.id));
     }
   });
+});
+
+it('names the phone calendar “Phone calendar” on Android', () => {
+  const { Platform } = jest.requireActual('react-native') as typeof import('react-native');
+  jest.replaceProperty(Platform, 'OS', 'android');
+  expect(eventCalendarName({ source: 'apple-device' })).toBe('Phone calendar');
+  jest.restoreAllMocks();
 });

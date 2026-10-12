@@ -3,7 +3,7 @@ import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
-import { Alert, AppState } from 'react-native';
+import { Alert, AppState, StyleSheet, View } from 'react-native';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
@@ -23,6 +23,8 @@ import { useAppearance } from '../src/store/appearance';
 import { useLastSignedIn } from '../src/store/lastSignedIn';
 import { useSession } from '../src/store/session';
 import { useTheme } from '../src/theme';
+import { configureCrashReporting } from '../src/lib/crashReporting';
+import { useBugReportHost } from '../src/features/bugReport/useBugReportHost';
 
 /**
  * ONE launch splash, not two. Left to itself the native splash hides on the first React frame, and the
@@ -32,6 +34,9 @@ import { useTheme } from '../src/theme';
  * `RootView` does. Called at module scope, as the docs require, so it runs before the first frame.
  */
 void SplashScreen.preventAutoHideAsync();
+
+/** `NexdoApp.init()` → `NexdoCrashReporting.configure()` (4185501): at launch, before the first screen. */
+configureCrashReporting();
 
 /**
  * The longest the native splash is held. A launch that is still retrying `/api/me` after this falls
@@ -193,8 +198,12 @@ export function RootNavigator() {
   // Pomodoro: a different account (or none) resets the store and its pending alerts.
   usePomodoroLifecycle(profile?.id);
 
+  // Bug reports (BugReportCoordinator.swift): the capture root, screen tags, the shake and its setting.
+  const bugReportRoot = useBugReportHost(profile?.id);
+
   return (
-    <>
+    // The whole app, so a bug report's screenshot is what was on screen when it opened.
+    <View collapsable={false} ref={bugReportRoot} style={[styles.root, { backgroundColor: theme.colors.groupedBackground }]}>
       <StatusBar style={theme.scheme === 'dark' ? 'light' : 'dark'} />
       <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: theme.colors.groupedBackground } }}>
         <Stack.Screen name="index" />
@@ -221,6 +230,8 @@ export function RootNavigator() {
           <Stack.Screen name="task" />
           {/* The Wellness chooser, module guides, Pomodoro and the Calorie Tracker: full-screen covers. */}
           <Stack.Screen name="wellness" />
+          {/* Report Bugs: `overFullScreen` over whatever is on screen (BugReportCoordinator.swift:66-70). */}
+          <Stack.Screen name="bug-report" options={{ presentation: 'fullScreenModal', gestureEnabled: false }} />
         </Stack.Protected>
         <Stack.Protected guard={status === 'signedOut'}>
           <Stack.Screen name="(auth)" />
@@ -230,6 +241,8 @@ export function RootNavigator() {
           <Stack.Screen name="action" />
         </Stack.Protected>
       </Stack>
-    </>
+    </View>
   );
 }
+
+const styles = StyleSheet.create({ root: { flex: 1 } });

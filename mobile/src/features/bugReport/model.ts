@@ -185,10 +185,16 @@ export function bugFailureMessage(error: unknown): string {
 const VERSION = /^[0-9.]{1,30}$/;
 const DEVICE = /^[A-Za-z0-9, ._-]{1,60}$/;
 
-/** A version the server's `^[0-9.]{1,30}$` accepts, or "0" — Swift's own fallback (BugReportCoordinator.swift:84-86). */
+/**
+ * A version the server's `^[0-9.]{1,30}$` accepts. A pre-release version keeps its numeric part — this
+ * app is "1.0.0-rc.1", which the server would refuse whole (§23 "For the team") — and anything with no
+ * numeric start is "0", Swift's own fallback (BugReportCoordinator.swift:84-86).
+ */
 export function versionForServer(value: string | number | null | undefined): string {
   const text = value === null || value === undefined ? '' : String(value).trim();
-  return VERSION.test(text) ? text : '0';
+  if (VERSION.test(text)) return text;
+  const numeric = /^[0-9]+(?:\.[0-9]+)*/.exec(text)?.[0] ?? '';
+  return VERSION.test(numeric) ? numeric : '0';
 }
 
 /**

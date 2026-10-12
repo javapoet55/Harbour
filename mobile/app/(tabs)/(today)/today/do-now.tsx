@@ -5,6 +5,7 @@ import { ActivityIndicator, Alert, Pressable, StyleSheet, TextInput, View } from
 import type { DoNowChoice, DoNowRecommendation } from '../../../../src/api';
 import { Text } from '../../../../src/components';
 import { KeyboardAwareScrollView } from '../../../../src/components/keyboard';
+import { doNowWindowTitle } from '../../../../src/features/tasks/workingDays';
 import { durationLabel } from '../../../../src/lib/focusClock';
 import { parseServerDate } from '../../../../src/lib/taskQuery';
 import { useTasks } from '../../../../src/query/useTasks';
@@ -219,9 +220,8 @@ export default function DoNow() {
           {recommendation && next ? (
             <>
               <Text style={[styles.title, { color: theme.colors.ink }]} testID="do-now-window">
-                {next.outsideWorkingHours === true
-                  ? 'Outside your working hours'
-                  : `You have ${durationLabel(next.availableWindowMinutes)} free now`}
+                {/* DoNowView.swift:50 (d568989): an excluded day is said before the hours. */}
+                {doNowWindowTitle(next, durationLabel)}
               </Text>
 
               {next.remainingWorkingMinutesToday !== null && next.remainingWorkingMinutesToday !== undefined ? (

@@ -89,6 +89,7 @@ jest.mock('../api', () => ({
 
 import Account from '../../app/account/index';
 import Settings from '../../app/account/settings';
+import { configureBugReports, resetBugReports, useBugReport } from '../features/bugReport/coordinator';
 
 const PREFERENCES = {
   workStart: '09:00',
@@ -153,15 +154,27 @@ beforeEach(() => {
 
 /** `AccountView` body (ios/App/ProfileView.swift:53-84). */
 describe('the Account sheet', () => {
+  /** `Button { BugReportCoordinator.shared.open(from: "settings") }` (ProfileView.swift:88). */
+  it('Report Bugs opens the report over My Page, tagged "settings"', async () => {
+    const present = jest.fn();
+    configureBugReports({ capture: async () => '/9j/AA==', device: () => ({}), present, dismiss: jest.fn(), newId: () => 'id', now: () => 0 });
+    await show(<Account />);
+    await fireEvent.press(screen.getByTestId('account-report-bugs'));
+    await waitFor(() => expect(present).toHaveBeenCalledTimes(1));
+    expect(useBugReport.getState().session?.diagnostics.screen).toBe('settings');
+    resetBugReports();
+  });
+
   it('renders the header, the menu rows in Swift order, and Sign out', async () => {
     await show(<Account />);
 
     expect(screen.getByText('My Page')).toBeTruthy();
     expect(screen.getByTestId('account-name')).toHaveTextContent('Ada Lovelace');
     expect(screen.getByTestId('account-email')).toHaveTextContent('ada@example.com');
-    // Help, Feedback, Edit profile and settings, Change password (ProfileView.swift:66-69).
-    const rows = screen.getAllByTestId(/^account-(help|feedback|edit-profile|change-password)$/).map((node) => node.props.testID);
-    expect(rows).toEqual(['account-help', 'account-feedback', 'account-edit-profile', 'account-change-password']);
+    // Edit profile and settings, Feedback, Help, Report Bugs, Change password (ProfileView.swift:84-89, d511fef).
+    const rows = screen.getAllByTestId(/^account-(help|feedback|edit-profile|report-bugs|change-password)$/).map((node) => node.props.testID);
+    expect(rows).toEqual(['account-edit-profile', 'account-feedback', 'account-help', 'account-report-bugs', 'account-change-password']);
+    expect(screen.getByTestId('account-report-bugs')).toHaveTextContent('Report Bugs');
     expect(screen.getByText('Sign out')).toBeTruthy();
     // 19eb8e4 removed the web rows and the second Settings row.
     for (const gone of ['Inbox', 'Waiting For', 'AI Planner', 'Insights', 'Notifications', 'Settings']) expect(screen.queryByText(gone)).toBeNull();
@@ -430,6 +443,41 @@ describe('the Settings screen', () => {
       nextAction: { enabled: true, switchingThreshold: 10 },
     });
     await waitFor(() => expect(screen.getByTestId('settings-message')).toHaveTextContent('Settings saved.'));
+  });
+
+  /** `WorkingDaysField` (ProfileView.swift, d568989). */
+  it('lists the working days Sunday first, and saves Saturday added', async () => {
+    mockUpdateSettings.mockResolvedValue({ ok: true });
+    await show(<Settings />);
+    await waitFor(() => expect(screen.getByTestId('settings-working-days')).toBeTruthy());
+    expect(screen.getByText('Working days')).toBeTruthy();
+    expect(screen.getByText('Choose at least one day. Find my next task uses these days and your working hours.')).toBeTruthy();
+    // Unset on the server reads as Monday to Friday.
+    const on = [0, 1, 2, 3, 4, 5, 6].map((day) => screen.getByTestId(`settings-working-day-${day}`).props.accessibilityState?.checked);
+    expect(on).toEqual([false, true, true, true, true, true, false]);
+
+    fireEvent(screen.getByTestId('settings-working-day-6'), 'valueChange', true);
+    await waitFor(() => expect(screen.getByTestId('settings-working-day-6').props.accessibilityState).toMatchObject({ checked: true }));
+    fireEvent.press(screen.getByTestId('settings-save'));
+
+    await waitFor(() => expect(mockUpdateSettings).toHaveBeenCalledTimes(1));
+    expect(mockUpdateSettings.mock.calls[0][0].preference).toEqual({ ...PREFERENCES, workingDays: '1,2,3,4,5,6' });
+  });
+
+  it('keeps the last working day on', async () => {
+    await show(<Settings />, profile({ preference: { ...PREFERENCES, workingDays: '3' } }));
+    await waitFor(() => expect(screen.getByTestId('settings-working-day-3')).toBeTruthy());
+    expect(screen.getByTestId('settings-working-day-3').props.accessibilityState).toMatchObject({ checked: true, disabled: true });
+    expect(screen.getByTestId('settings-working-day-2').props.accessibilityState).toMatchObject({ checked: false, disabled: false });
+  });
+
+  it('does not send workingDays when nobody touched them', async () => {
+    mockUpdateSettings.mockResolvedValue({ ok: true });
+    await show(<Settings />);
+    await waitFor(() => expect(screen.getByTestId('settings-save')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('settings-save'));
+    await waitFor(() => expect(mockUpdateSettings).toHaveBeenCalledTimes(1));
+    expect('workingDays' in mockUpdateSettings.mock.calls[0][0].preference).toBe(false);
   });
 
   it('refuses to save an empty name and reports Swift’s message', async () => {
@@ -819,6 +867,27 @@ describe('the Settings screen', () => {
       expect(order).toEqual(['dismissAll while signedIn', 'back while signedIn']);
     });
 
+    /** 4185501: `ProgressView("Deleting account…")` over a disabled, undismissable screen. */
+    it('shows "Deleting account…" over a blocked screen while the deletion runs', async () => {
+      let finish: (value: { ok: boolean }) => void = () => undefined;
+      mockDelete.mockReturnValue(new Promise((resolve) => (finish = resolve)));
+      await show(<Settings />);
+      await waitFor(() => expect(screen.getByTestId('settings-delete-account')).toBeTruthy());
+
+      fireEvent.press(screen.getByTestId('settings-delete-account'));
+      const buttons = (Alert.alert as jest.Mock).mock.calls.at(-1)?.[2] as { text: string; onPress?: () => void }[];
+      buttons[1].onPress?.();
+
+      await waitFor(() => expect(screen.getByTestId('settings-deleting')).toHaveTextContent('Deleting account…'));
+      expect(screen.getByTestId('settings-column').props.pointerEvents).toBe('none');
+      expect(screen.getByTestId('settings-back').props.accessibilityState).toMatchObject({ disabled: true });
+      // A second Delete while it runs does nothing (`guard !deletingAccount`).
+      buttons[1].onPress?.();
+      expect(mockDelete).toHaveBeenCalledTimes(1);
+      finish({ ok: true });
+      await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/sign-in'));
+    });
+
     it('when the delete fails, says why and stays put, still signed in', async () => {
       const router = { replace: mockReplace };
       mockCanDismiss.mockReturnValue(true);
@@ -830,14 +899,15 @@ describe('the Settings screen', () => {
       const buttons = (Alert.alert as jest.Mock).mock.calls.at(-1)?.[2] as { text: string; onPress?: () => void }[];
       buttons[1].onPress?.();
 
-      // `model.error`'s alert (RootView.swift:76-78).
+      // `AccountDeletionPresentation`'s alert (ProfileView.swift:682-697, 4185501).
       await waitFor(() =>
         expect(Alert.alert).toHaveBeenCalledWith(
-          'Unable to complete request',
+          'Couldn’t delete account',
           'A wish is being submitted. Wait for its status before deleting your account.',
           [{ text: 'OK' }],
         ),
       );
+      expect(screen.queryByTestId('settings-deleting')).toBeNull();
       expect(useSession.getState().status).toBe('signedIn');
       expect(router.replace).not.toHaveBeenCalled();
       expect(mockBack).not.toHaveBeenCalled();

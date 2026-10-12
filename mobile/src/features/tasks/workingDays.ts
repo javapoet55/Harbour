@@ -37,8 +37,7 @@ export function workingDayLocked(value: string | null | undefined, day: number):
 
 /**
  * Do Now's window line (ios/App/DoNowView.swift, d568989): an excluded day is said before the hours,
- * so a Saturday no longer reads as "Outside your working hours". TODO(screens): do-now.tsx still
- * builds the old two-way text inline.
+ * so a Saturday no longer reads as "Outside your working hours". Used by the Do Now screen.
  */
 export function doNowWindowTitle(next: Pick<DoNowNext, 'outsideWorkingDay' | 'outsideWorkingHours' | 'availableWindowMinutes'>, durationLabel: (minutes: number) => string): string {
   if (next.outsideWorkingDay === true) return 'Today isn’t a selected working day';
@@ -49,7 +48,7 @@ export function doNowWindowTitle(next: Pick<DoNowNext, 'outsideWorkingDay' | 'ou
 /**
  * Today's schedule card (RootView.swift, d568989): three items, then "View N more" EXPANDS the card in
  * place ("Show less" folds it) instead of opening Calendar; a search shows everything; changing the
- * range folds it again. TODO(screens): TodayIntelligenceCard still shows seven and links to Calendar.
+ * range folds it again. Used by TodayIntelligenceCard.
  */
 export const TODAY_SCHEDULE_PREVIEW = 3;
 

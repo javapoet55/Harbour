@@ -139,6 +139,28 @@ describe('the dashboard', () => {
   });
 });
 
+/** bb57e09 (Pomodoro.swift:4-10, PomodoroView.swift:83, PomodoroDashboard.swift:258; `pomodoro-setup-personal-work`). */
+describe('Personal Work', () => {
+  it('is last in the picker, and shows in the history and in Time by Category', async () => {
+    const harness = setup({ sessions: [finished(3 * 3_600_000, 'personalWork'), finished(2 * 3_600_000, 'reading')], currentID: null, synced: {} });
+    await open(harness);
+    // Sessions: the history row.
+    await fireEvent.press(screen.getByTestId('pomodoro-tab-sessions'));
+    expect(screen.getAllByText('Personal Work').length).toBeGreaterThan(0);
+    // Insights: Time by Category's legend.
+    await fireEvent.press(screen.getByTestId('pomodoro-tab-insights'));
+    expect(within(screen.getByTestId('pomodoro-category-card')).getByText('Personal Work')).toBeTruthy();
+    // Setup: the seventh and last choice.
+    await fireEvent.press(screen.getByTestId('pomodoro-tab-overview'));
+    await fireEvent.press(screen.getByTestId('pomodoro-dashboard-start'));
+    const ids = screen.getAllByTestId(/^pomodoro-category-/).map((node) => node.props.testID);
+    expect(ids[ids.length - 1]).toBe('pomodoro-category-personalWork');
+    expect(ids).toHaveLength(7);
+    await fireEvent.press(screen.getByTestId('pomodoro-category-personalWork'));
+    expect(screen.getByTestId('pomodoro-category-personalWork').props.accessibilityState).toEqual({ selected: true });
+  });
+});
+
 describe('the timer', () => {
   it('opened from Wellness, the completion button says Done and closes Pomodoro (Android ahead of iOS)', async () => {
     const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
