@@ -1,7 +1,7 @@
 import { createStore } from 'zustand';
 
 import type { PomodoroPage, PomodoroSaved } from '../../api/pomodoro';
-import { advance, BREAK_SECONDS, isActive, newPomodoroSession, type PomodoroCategory, type PomodoroSession } from './model';
+import { BREAK_SECONDS, isActive, newPomodoroSession, tick, type PomodoroCategory, type PomodoroSession } from './model';
 
 /**
  * `PomodoroStore` (ios/App/PomodoroStore.swift:10-146).
@@ -168,10 +168,9 @@ export function createPomodoroStore(deps: PomodoroDeps) {
         const { currentID, sessions } = get();
         const index = sessions.findIndex((session) => session.id === currentID);
         if (index === -1) return;
-        const previous = sessions[index];
-        const moved = advance(previous, deps.now());
+        const moved = tick(sessions[index], deps.now());
         if (!moved.changed) return;
-        if (previous.phase !== moved.session.phase && moved.session.playSound) deps.chime();
+        if (moved.shouldPlaySound) deps.chime();
         const next = [...sessions];
         next[index] = moved.session;
         set({ sessions: next });

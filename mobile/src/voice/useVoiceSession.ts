@@ -3,7 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 import { AppState } from 'react-native';
 
-import { getApi } from '../api';
+import { getApi, isVoiceLimitReached } from '../api';
 import { synchronizeDeviceTimeZone } from '../query/useProfile';
 import { recordVoiceUsage } from '../query/useVoiceUsage';
 import { useConsent } from '../store/consent';
@@ -28,6 +28,15 @@ import { VoiceUsageMeter } from './usageMeter';
 
 /** `AppModel.voiceTaskSession(calendarOnly:)` (ios/App/NexdoApp.swift:470-474). */
 export const START_FAILED = 'Couldn’t start voice. Close this screen and try again.';
+
+/**
+ * The line a failed start shows. Swift shows `error.localizedDescription` (AddTaskByVoiceView.swift:
+ * 292-294), so the monthly limit (94da063) reads as the server wrote it — "You have used your 100
+ * minutes of voice this month. …" — while every other failure keeps this screen's own line.
+ */
+export function startupErrorFor(error: unknown): string {
+  return isVoiceLimitReached(error) ? error.message : START_FAILED;
+}
 
 export type UseVoiceSession = {
   state: VoiceState;
@@ -124,8 +133,8 @@ export function useVoiceSession({
           timeoutMs: 25_000,
         });
         conversation.start(credential);
-      } catch {
-        setStartupError(START_FAILED);
+      } catch (error) {
+        setStartupError(startupErrorFor(error));
       } finally {
         setStarting(false);
       }

@@ -8,7 +8,8 @@
  * Swift mutates in place; these return a new session, and `advance` also says whether it moved.
  */
 
-export const POMODORO_CATEGORIES = ['reading', 'focus', 'coding', 'diary', 'math', 'stretching'] as const;
+/** bb57e09 added Personal Work, last, as the server's enum (src/server/pomodoro/sessions.ts:7). */
+export const POMODORO_CATEGORIES = ['reading', 'focus', 'coding', 'diary', 'math', 'stretching', 'personalWork'] as const;
 export type PomodoroCategory = (typeof POMODORO_CATEGORIES)[number];
 
 /** `PomodoroCategory.title` (Pomodoro.swift:5-7). */
@@ -19,6 +20,7 @@ export const POMODORO_CATEGORY_TITLES: Record<PomodoroCategory, string> = {
   diary: 'Write a diary',
   math: 'Study',
   stretching: 'Yoga & Stretching',
+  personalWork: 'Personal Work',
 };
 
 /** `PomodoroCategory.icon` (Pomodoro.swift:8-10): SF Symbol names; the screens map them. */
@@ -29,6 +31,7 @@ export const POMODORO_CATEGORY_SYMBOLS: Record<PomodoroCategory, string> = {
   diary: 'heart.fill',
   math: 'graduationcap.fill',
   stretching: 'figure.flexibility',
+  personalWork: 'person.crop.square.fill',
 };
 
 export type PomodoroPhase = 'focus' | 'shortBreak' | 'completed' | 'stopped';
@@ -137,6 +140,16 @@ export function progress(session: PomodoroSession, now: number): number {
 /** `changed(_:)` (Pomodoro.swift:52): a new revision, and `updatedAt` never earlier than `startedAt`. */
 function changed(session: PomodoroSession, now: number): PomodoroSession {
   return { ...session, revision: session.revision + 1, updatedAt: Math.max(now / 1000, session.startedAt) };
+}
+
+/**
+ * `tick(at:)` (bb57e09, Pomodoro.swift): advance and decide the chime together, so a second tick past
+ * the same deadline never chimes again. It chimes only when the phase actually changed and Play Sound
+ * is on; a paused or stopped timer does not advance, so it never chimes.
+ */
+export function tick(session: PomodoroSession, now: number): { session: PomodoroSession; changed: boolean; shouldPlaySound: boolean } {
+  const moved = advance(session, now);
+  return { ...moved, shouldPlaySound: moved.changed && session.phase !== moved.session.phase && session.playSound };
 }
 
 /** `finish(at:)` (Pomodoro.swift:65-67). */
