@@ -1,5 +1,11 @@
-import { describe, expect, it } from 'vitest';
-import { adminAnswerSchema, adminAssistantInstructions, adminOverviewGrounding, adminQuestionSchema } from './admin-insights';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+vi.mock('./firebase-engagement', () => ({ getFirebaseEngagement: vi.fn() }));
+vi.mock('./amplitude-engagement', () => ({ getAmplitudeEngagement: vi.fn() }));
+vi.mock('./admin-analytics', () => ({ getAdminSnapshot: vi.fn() }));
+import { getFirebaseEngagement } from './firebase-engagement';
+import { getAmplitudeEngagement } from './amplitude-engagement';
+import { getAdminSnapshot } from './admin-analytics';
+import { answerAdminAnalyticsQuestion, adminAnswerSchema, adminAssistantInstructions, adminOverviewGrounding, adminQuestionSchema } from './admin-insights';
 
 function snapshot() {
   return {
@@ -40,5 +46,25 @@ describe('admin analytics assistant grounding', () => {
     expect(adminAssistantInstructions).toMatch(/relevant line or bar chart/i);
     expect(adminAnswerSchema.safeParse({ answer: 'Usage increased.', chart: { type: 'line', title: 'Usage', xLabel: 'Day', yLabel: 'Actions', series: [{ name: 'AI actions', color: '#287ff5', data: [{ label: 'Sep 20', value: 4 }] }] } }).success).toBe(true);
     expect(adminAnswerSchema.safeParse({ answer: 'No chart needed.', chart: null }).success).toBe(true);
+  });
+});
+
+
+afterEach(() => { vi.unstubAllEnvs(); vi.unstubAllGlobals(); vi.clearAllMocks(); });
+describe('provider tool dispatch', () => {
+  it('queries both sources with the selected range and preserves unavailable status', async () => {
+    vi.stubEnv('OPENAI_API_KEY', 'fake-key');
+    vi.mocked(getAdminSnapshot).mockResolvedValue(snapshot() as never);
+    vi.mocked(getFirebaseEngagement).mockResolvedValue({ status: 'unavailable', message: 'Temporary Google outage' });
+    vi.mocked(getAmplitudeEngagement).mockResolvedValue({ status: 'connected', data: { dailyActiveUsers: [{date:'2026-09-01',value:9}] } });
+    const tool = (name: string) => Response.json({ output: [{ type: 'function_call', name, call_id: name, arguments: '{}' }] });
+    const requests: Array<Record<string, unknown>> = [];
+    const responses = [tool('get_firebase_engagement'), tool('get_amplitude_engagement'), Response.json({ output_text: JSON.stringify({ answer: 'Firebase unavailable. Amplitude daily users: 9.', chart: null }) })];
+    vi.stubGlobal('fetch', vi.fn(async (_url, options) => { requests.push(JSON.parse(options.body)); return responses.shift()!; }));
+    await answerAdminAnalyticsQuestion('admin', 'Compare Firebase and Amplitude', 2, { from: new Date('2026-09-01'), to: new Date('2026-09-02') });
+    expect(getFirebaseEngagement).toHaveBeenCalledWith('2026-09-01', '2026-09-02');
+    expect(getAmplitudeEngagement).toHaveBeenCalledWith('2026-09-01', '2026-09-02');
+    expect(JSON.stringify(requests[2].input)).toContain('Temporary Google outage');
+    expect(JSON.stringify(requests[2].input)).toContain('dailyActiveUsers');
   });
 });

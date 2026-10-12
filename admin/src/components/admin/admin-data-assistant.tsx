@@ -6,6 +6,9 @@ import { useRouter } from 'next/navigation';
 import type { AdminAnswerChart } from '@/contract/insights';
 
 const prompts = [
+  'Summarize Firebase engagement: active users, sessions, and most-used screens.',
+  'Show Amplitude daily active and new users for the selected period.',
+  'Compare Firebase and Amplitude trends, keeping their audiences separate.',
   'What percentage of new users complete their first task within two minutes?',
   'Where do users drop off during onboarding?',
   'What are our day-1, day-7, and day-30 retention rates?',
@@ -78,9 +81,9 @@ export function AdminDataAssistant({ days, from, to }: { days: number; from: str
       <span><Sparkles size={21}/></span>
       <div>
         <h2 id="admin-data-assistant-title">Ask Nexdo about your data</h2>
-        <p>Get grounded answers from live Admin analytics. The assistant is read-only.</p>
+        <p>Ask about database activity, Firebase/GA4 engagement, and Amplitude trends. The assistant is read-only.</p>
       </div>
-      <div className="admin-data-badge"><Database size={14}/> Live database</div>
+      <div className="admin-data-badge"><Database size={14}/> Analytics sources</div>
     </div>
     <form ref={form} onSubmit={submit} className="admin-data-form">
       <label htmlFor="admin-data-question" className="admin-sr-only">Ask a question about Nexdo usage data</label>
@@ -111,7 +114,7 @@ export function AdminDataAssistant({ days, from, to }: { days: number; from: str
         <strong>{error ? 'Unable to answer' : 'Nexdo analysis'}</strong>
         <p>{error || answer}</p>
         {!error && chart && <AdminInsightChart chart={chart}/>}
-        {!error && generatedAt && <small>Based on Admin data refreshed {new Date(generatedAt).toLocaleString()}.</small>}
+        {!error && generatedAt && <small>Analysis started {new Date(generatedAt).toLocaleString()}. Provider freshness is included in the answer.</small>}
       </div>
     </div>}
   </section>;
