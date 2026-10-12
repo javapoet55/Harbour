@@ -1,10 +1,11 @@
 import { createApiClient, type ApiClient } from './client';
 import { calendarEventApi } from './calendarEvent';
-import { feedbackApi } from './feedback';
+import { bugReportApi, feedbackApi } from './feedback';
 import { followUpApi, followUpScheduleBody } from './followUp';
 import { nutritionApi } from './nutrition';
 import { pomodoroApi } from './pomodoro';
 import { shoppingEmailApi, shoppingOffersApi, shoppingStoresApi } from './shopping';
+import { bugSubmission, includeScreenshot, newBugDraft, type BugDiagnostics } from '../features/bugReport/model';
 import { createMomentConnectModel, type ConnectOperation } from '../features/moments/connectCall';
 import type { PomodoroSession } from '../features/pomodoro/model';
 
@@ -138,6 +139,15 @@ describe('nothing Phase 12 writes sends a null into a bare zod .optional()', () 
     ['schedule', (client: ApiClient) => followUpApi.schedule('t1', followUpScheduleBody(Date.parse('2026-10-10T16:00:00Z'), 15), client)],
   ])('follow-up %s sends no null', async (_name, send) => {
     expect(await nullsIn(send)).toEqual([]);
+  });
+
+  // src/server/feedback/bugs.ts:11-21 — `.strict()`, and `screenshot` a bare `.optional()`: a report
+  // without a screenshot must omit the key.
+  it.each([false, true])('POST /api/feedback/bugs sends no null (screenshot: %s)', async (withScreenshot) => {
+    const metadata: BugDiagnostics = { appVersion: '1', buildNumber: '1', deviceModel: 'Pixel 8', iosVersion: '14', screen: 'app', timestamp: '2026-10-10T12:00:00Z', correlationID: '22222222-2222-4222-8222-222222222222' };
+    const draft = { ...newBugDraft(() => '11111111-1111-4111-8111-111111111111'), description: 'Broken' };
+    const { input } = bugSubmission(withScreenshot ? includeScreenshot(draft, 'AQI=') : draft, metadata)!;
+    expect(await nullsIn((client) => bugReportApi.submit(input, client))).toEqual([]);
   });
 
   /**
