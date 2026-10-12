@@ -79,6 +79,9 @@ export const taskIcons = {
   'moon.stars.fill': 'moon',
   // Bug reports (BugReportView.swift, ProfileView.swift:88; d511fef).
   ladybug: 'bug-outline',
+  // "Prepare and follow up" (TaskActionView.swift:162, 6f079c0).
+  'list.clipboard': 'clipboard-outline',
+  'apple.logo': 'logo-apple',
   'heart.fill': 'heart',
   'checkmark.shield.fill': 'shield-checkmark',
   iphone: 'phone-portrait-outline',
@@ -137,11 +140,10 @@ export const taskIcons = {
   scope: 'locate-outline',
   keyboard: 'keypad-outline',
   'arrow.up': 'arrow-up',
-  // Phase 13 Calendar run: the connect hub and provider pages (CalendarConnectionView.swift:31-54, :131),
-  // the Calendar header gear (CalendarView.swift) and the device-event provider icon (`apple.logo`).
+  // Phase 13 Calendar run: the connect hub and provider pages (CalendarConnectionView.swift:31-54, :131)
+  // and the Calendar header gear (CalendarView.swift).
   'lock.shield.fill': 'lock-closed',
   gearshape: 'settings-outline',
-  'apple.logo': 'logo-apple',
   'logo.google': 'logo-google',
   'logo.microsoft': 'logo-microsoft',
 } satisfies Record<string, IoniconName>;

@@ -237,9 +237,13 @@ export function useConnectCalendar() {
   });
 }
 
-/** `completeCalendarConnect` for Google: Settings' deep-link completion before the Microsoft page existed. */
+/**
+ * `completeCalendarConnect` for Settings, which does not know which page started the sign-in: the
+ * reconnecting row's provider, else the one a deep link names in `calendar=` (6f079c0).
+ */
 export function completeGoogleConnect(queryClient: QueryClient, callbackUrl: string | null, reconnecting: CalendarConnection | null = null): Promise<GoogleConnectResult> {
-  return completeCalendarConnect(queryClient, callbackUrl, 'google', reconnecting);
+  const provider = reconnecting ? oauthProviderOf(reconnecting) : oauthProviderFromCallback(callbackUrl ?? '');
+  return completeCalendarConnect(queryClient, callbackUrl, provider, reconnecting);
 }
 
 /**

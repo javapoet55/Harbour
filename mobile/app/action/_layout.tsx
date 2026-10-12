@@ -14,6 +14,8 @@ export default function ActionLayout() {
     <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: theme.colors.background } }}>
       <Stack.Screen name="[id]" options={{ presentation: 'modal' }} />
       <Stack.Screen name="queue" options={{ presentation: 'modal' }} />
+      {/* `FollowUpPreparationView` (6f079c0): a sheet over the action, or over Task Details. */}
+      <Stack.Screen name="preparation" options={{ presentation: 'modal' }} />
     </Stack>
   );
 }

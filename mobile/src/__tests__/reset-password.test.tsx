@@ -130,3 +130,35 @@ describe('Reset password on iOS', () => {
     expect(screen.getByTestId('reset-code').props.maxLength).toBeUndefined();
   });
 });
+
+/**
+ * Run D item 6 (RootView.swift:767-781): a failure is shown inline, under the fields, with the request's
+ * own message or Swift's fallback — and the sheet stays. Swift's global alert dismisses the sheet instead
+ * (capture `password-reset-error-invalid-email`; §23 For the team), so this is where the message is seen.
+ */
+describe('Reset password failures', () => {
+  it('shows the server’s message inline and keeps the screen', async () => {
+    mockRequest.mockRejectedValue(new Error('Enter a valid email address.'));
+    await wrap();
+    await fireEvent.press(screen.getByTestId('reset-request'));
+    await waitFor(() => expect(screen.getByTestId('reset-error')).toHaveTextContent('Enter a valid email address.'));
+    expect(jest.requireMock('expo-router').router.back).not.toHaveBeenCalled();
+    expect(screen.queryByTestId('reset-code')).toBeNull();
+  });
+
+  it('falls back to Swift’s messages when the failure says nothing', async () => {
+    mockRequest.mockRejectedValueOnce(new Error(''));
+    await wrap();
+    await fireEvent.press(screen.getByTestId('reset-request'));
+    await waitFor(() => expect(screen.getByTestId('reset-error')).toHaveTextContent('Could not send the reset code. Please try again.'));
+
+    await sendCode();
+    expect(screen.queryByTestId('reset-error')).toBeNull();
+    mockConfirm.mockRejectedValue(new Error('  '));
+    await fireEvent.changeText(screen.getByTestId('reset-code'), '123456');
+    await fireEvent.changeText(screen.getByLabelText('New password'), 'correct horse battery');
+    await fireEvent.changeText(screen.getByLabelText('Confirm new password'), 'correct horse battery');
+    await fireEvent.press(screen.getByTestId('reset-update'));
+    await waitFor(() => expect(screen.getByTestId('reset-error')).toHaveTextContent('Could not reset the password. Please try again.'));
+  });
+});

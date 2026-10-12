@@ -146,11 +146,13 @@ export function SettingsToggle({
   return (
     <View style={styles.row}>
       <Text style={[theme.typography.body, styles.grow, { color: theme.colors.label }, isAndroid() && styles.androidRowLabel]}>{label}</Text>
+      {/* Settings is `.toggleStyle(SwitchToggleStyle(tint: .green))` (ProfileView.swift, 4185501). */}
       <IOSSwitch
         accessibilityLabel={label}
         disabled={disabled}
         onValueChange={onValueChange}
         testID={testID}
+        tone="green"
         value={value}
       />
     </View>

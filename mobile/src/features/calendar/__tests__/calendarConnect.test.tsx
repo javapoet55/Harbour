@@ -46,7 +46,7 @@ import { CalendarConnectHub } from '../CalendarConnectHub';
 import { CalendarProviderScreen } from '../CalendarProviderScreen';
 import { CONNECT_ART_RECTS } from '../connectArt';
 import { providerPageCopy, providerTitle } from '../calendarProviders';
-import { providerIconLabel } from '../CalendarEventProviderIcon';
+import { calendarProviderLabel } from '../../../components/CalendarProviderIcon';
 
 const mocked = Calendar as jest.Mocked<typeof Calendar>;
 const granted = { status: 'granted', canAskAgain: true, granted: true } as never;
@@ -313,14 +313,14 @@ describe('Provider page (CalendarProviderConnectionView, :86-277)', () => {
 
 describe('Provider icon and artwork (CalendarConnectionView.swift:289-357)', () => {
   it('labels the icon from the recorded source, with the §33 label for device events on Android', () => {
-    expect(providerIconLabel('apple-device')).toBe('Phone calendar');
-    expect(providerIconLabel('iCloud')).toBe('Phone calendar');
-    expect(providerIconLabel('outlook')).toBe('Outlook Calendar');
-    expect(providerIconLabel('google')).toBe('Google Calendar');
-    expect(providerIconLabel('harbor')).toBe('NexDo Calendar');
-    expect(providerIconLabel(null)).toBe('Calendar');
+    expect(calendarProviderLabel('apple-device')).toBe('Phone calendar');
+    expect(calendarProviderLabel('iCloud')).toBe('Phone calendar');
+    expect(calendarProviderLabel('outlook')).toBe('Outlook Calendar');
+    expect(calendarProviderLabel('google')).toBe('Google Calendar');
+    expect(calendarProviderLabel('harbor')).toBe('NexDo Calendar');
+    expect(calendarProviderLabel(null)).toBe('Calendar');
     platform.replaceValue('ios');
-    expect(providerIconLabel('apple-device')).toBe('Apple Calendar');
+    expect(calendarProviderLabel('apple-device')).toBe('Apple Calendar');
   });
 
   it('cuts the nine regions at Swift’s rectangles', () => {

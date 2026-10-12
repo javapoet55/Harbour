@@ -155,6 +155,19 @@ describe('switches on Android', () => {
     expect(screen.getByTestId('switch').props.accessibilityState.checked).toBe(true);
   });
 
+  /** Settings' `SwitchToggleStyle(tint: .green)` (4185501): system green on iOS, 85% green on Android dark. */
+  it('turn green through the theme where Swift asks for .green', async () => {
+    onPlatform('ios');
+    useAppearance.setState({ appearance: 'day' });
+    const { rerender } = await render(<IOSSwitch value onValueChange={jest.fn()} testID="switch" tone="green" />);
+    expect(StyleSheet.flatten(screen.getByTestId('switch-track').props.style).backgroundColor).toMatch(/^(#34C759|rgba\(52, 199, 89, 1\))$/);
+    onPlatform('android');
+    useAppearance.setState({ appearance: 'night' });
+    await rerender(<IOSSwitch value onValueChange={jest.fn()} testID="switch" tone="green" />);
+    expect(dark.switchOnGreen).toBe('rgba(48, 209, 88, 0.85)');
+    expect(StyleSheet.flatten(screen.getByTestId('switch-track').props.style).backgroundColor).toMatch(/^rgba\(48, 209, 88, 0\.85\d*\)$/);
+  });
+
   it('keep the Swift track on iOS', async () => {
     onPlatform('ios');
     await render(<IOSSwitch value={false} onValueChange={jest.fn()} testID="switch" />);

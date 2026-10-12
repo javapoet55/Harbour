@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Alert, Pressable, StyleSheet, TextInput, View } from 'react-native';
 
 import { AuthFieldRow, GradientButton, KeyboardAvoidingView, KeyboardAwareScrollView, RevealablePasswordField, Text } from '../../src/components';
-import { useConfirmPasswordReset, useRequestPasswordReset } from '../../src/query/useAuth';
+import { RESET_CODE_FAILED, RESET_PASSWORD_FAILED, resetFailure, useConfirmPasswordReset, useRequestPasswordReset } from '../../src/query/useAuth';
 import { sanitizeCode } from '../../src/schemas/auth';
 import { androidGroup, androidLabel, inputText, isAndroid, textStyles, useTheme } from '../../src/theme';
 import { closePresentedScreens, replaceWithSignIn } from '../../src/lib/sessionNavigation';
@@ -52,7 +52,8 @@ export default function ResetPassword() {
     setLocalError(undefined);
     request.mutate(
       { email },
-      { onSuccess: () => setCodeSent(true), onError: (error) => setLocalError(error.message) },
+      // Inline, never a global alert: the sheet stays, with the message under the fields.
+      { onSuccess: () => setCodeSent(true), onError: (error) => setLocalError(resetFailure(error, RESET_CODE_FAILED)) },
     );
   };
 
@@ -75,7 +76,7 @@ export default function ResetPassword() {
           }
           Alert.alert('Password updated', 'You can now sign in with your new password.', [{ text: 'Sign In', onPress: close }]);
         },
-        onError: (error) => setLocalError(error.message),
+        onError: (error) => setLocalError(resetFailure(error, RESET_PASSWORD_FAILED)),
       },
     );
   };
@@ -154,7 +155,7 @@ export default function ResetPassword() {
           {localError ? (
             <FormSection>
               <FormRow last>
-                <Text accessibilityLiveRegion="polite" style={[theme.typography.body, { color: theme.colors.danger }]}>
+                <Text accessibilityLiveRegion="polite" style={[theme.typography.body, { color: theme.colors.danger }]} testID="reset-error">
                   {localError}
                 </Text>
               </FormRow>

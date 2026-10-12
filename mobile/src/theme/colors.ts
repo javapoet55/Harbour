@@ -128,6 +128,12 @@ export type Palette = {
   switchOn: string;
   /** An Android switch track, off: a neutral grey, drawn with a `fieldBorder` hairline. */
   switchOff: string;
+  /**
+   * An Android switch track, on, where Swift asks for `SwitchToggleStyle(tint: .green)` (Settings,
+   * ProfileView.swift, 4185501): iOS's system green, at 85% in dark by the same rule as `switchOn`.
+   * iOS draws `success`, the system green itself (docs/android-polish.md §36).
+   */
+  switchOnGreen: string;
 };
 
 export type ColorScheme = 'light' | 'dark';
@@ -179,6 +185,7 @@ export const palettes: Record<ColorScheme, Palette> = {
     link: brand.nexdoIndigo,
     switchOn: brand.nexdoIndigo,
     switchOff: 'rgba(120, 120, 128, 0.5)',
+    switchOnGreen: '#34C759',
   },
   dark: {
     // TODO(phase1-decision): the Swift dark variant is the dynamic system `.label`; this is its standard dark value.
@@ -232,5 +239,6 @@ export const palettes: Record<ColorScheme, Palette> = {
     link: brand.nexdoIndigo,
     switchOn: 'rgba(61, 41, 240, 0.85)',
     switchOff: '#48484A',
+    switchOnGreen: 'rgba(48, 209, 88, 0.85)',
   },
 };

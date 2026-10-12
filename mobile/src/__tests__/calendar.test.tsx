@@ -383,7 +383,7 @@ describe('Calendar renders no invented section', () => {
 
     expect(screen.queryByText('Connect Google Calendar')).toBeNull();
     expect(screen.queryByText('Synchronize now')).toBeNull();
-    expect(screen.queryByText('Calendars and privacy')).toBeNull();
+    expect(screen.queryByText('Calendars & Privacy')).toBeNull();
   });
 
   it('has none of the sections a brief-first port would have invented', async () => {

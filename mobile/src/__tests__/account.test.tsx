@@ -349,6 +349,17 @@ describe('the Real-time Voice card', () => {
 });
 
 describe('the Settings screen', () => {
+  /** 12bb9d4 / 4185501 (ProfileView.swift:343-344): the morning email's label and explanation. */
+  it('labels the morning email with its time and says where and when it is sent', async () => {
+    await show(<Settings />);
+    await waitFor(() => expect(screen.getByTestId('settings-morning')).toBeTruthy());
+    expect(screen.getByText('Daily morning email · 6:00 a.m.')).toBeTruthy();
+    expect(screen.queryByText('Morning summary')).toBeNull();
+    expect(screen.getByTestId('settings-morning-explanation')).toHaveTextContent(
+      'Today’s tasks, calendar events and conflicts, sent to ada@example.com at 6:00 a.m. in Asia/Kolkata. Email notifications must also be enabled.',
+    );
+  });
+
   it('renders every card in body order', async () => {
     await show(<Settings />);
 
@@ -359,7 +370,7 @@ describe('the Settings screen', () => {
     expect(screen.getByText('Profile and time')).toBeTruthy();
     expect(screen.getByText('Voice and confirmation')).toBeTruthy();
     expect(screen.getByText('Notifications and focus')).toBeTruthy();
-    expect(screen.getByText('Calendars and privacy')).toBeTruthy();
+    expect(screen.getByText('Calendars & Privacy')).toBeTruthy();
     expect(screen.getByText('Save settings')).toBeTruthy();
   });
 
@@ -571,7 +582,7 @@ describe('the Settings screen', () => {
     });
   });
 
-  /** "Calendars and privacy" (ProfileView.swift:223-244). */
+  /** "Calendars & Privacy" (ProfileView.swift:349-368). */
   describe('calendars and privacy', () => {
     it('fetches a connect token FIRST, then opens the start URL carrying it (3a26c52)', async () => {
       mockOpenAuthSession.mockResolvedValue({ type: 'success', url: 'nexdo://calendar-connected?calendar=google-connected' });
@@ -937,11 +948,32 @@ describe('calendar connections', () => {
     expect(screen.getByTestId('settings-connect-label')).toHaveTextContent('Connect Google Calendar');
   });
 
-  it('treats a failed load as an empty list, as Swift does', async () => {
+  /**
+   * 6f079c0 (ProfileView.swift:353-356, :522): a failed load is an error with **Retry connection status**,
+   * not "No calendars connected yet.", which waits for a load that succeeded.
+   */
+  it('shows a failed load as an error with Retry connection status, and retries', async () => {
     mockConnections.mockRejectedValue(new Error('offline'));
     await show(<Settings />);
-    await waitFor(() => expect(screen.getByTestId('settings-no-calendars')).toBeTruthy());
+    await waitFor(() => expect(screen.getByTestId('settings-connections-error')).toHaveTextContent('Could not refresh calendar connections. Please try again.'));
+    expect(screen.queryByTestId('settings-no-calendars')).toBeNull();
     expect(screen.queryByTestId('settings-failure')).toBeNull();
+
+    mockConnections.mockResolvedValue({ connections: [] });
+    await fireEvent.press(screen.getByTestId('settings-retry-connections'));
+    await waitFor(() => expect(screen.getByTestId('settings-no-calendars')).toBeTruthy());
+    expect(screen.queryByTestId('settings-connections-error')).toBeNull();
+  });
+
+  /** 6f079c0 (:483-490): the provider's icon, with an orange triangle at its corner when unhealthy. */
+  it('shows each provider’s icon, marked when the connection is unhealthy', async () => {
+    mockConnections.mockResolvedValue({ connections: [GOOGLE, { ...GOOGLE, id: 'c2', provider: 'microsoft', status: 'ERROR' }] });
+    await show(<Settings />);
+    await waitFor(() => expect(screen.getByTestId('settings-provider-c1')).toBeTruthy());
+    expect(screen.getByTestId('settings-provider-c1').props.accessibilityLabel).toBe('Google Calendar');
+    expect(screen.getByTestId('settings-provider-c2').props.accessibilityLabel).toBe('Outlook Calendar');
+    expect(screen.queryByTestId('settings-unhealthy-c1')).toBeNull();
+    expect(screen.getByTestId('settings-unhealthy-c2')).toBeTruthy();
   });
 
   it('lists each connection with its name, detail and last sync, and relabels the button', async () => {
@@ -1086,6 +1118,27 @@ describe('calendar connections', () => {
       expect(order).toEqual(['settings-reconnect-c2', 'settings-disconnect-c2']);
     });
 
+    /** 6f079c0 (:541-560): a Microsoft row reconnects through Microsoft, and every line names it. */
+    it('reconnects a Microsoft row through Microsoft and names the provider', async () => {
+      const MICROSOFT = { ...STALE, provider: 'microsoft', accountEmail: null };
+      mockConnections.mockResolvedValue({ connections: [MICROSOFT] });
+      mockOpenAuthSession.mockResolvedValue({ type: 'success', url: 'nexdo://calendar-connected?calendar=microsoft-connected' });
+      await show(<Settings />);
+      await waitFor(() => expect(screen.getByTestId('settings-reconnect-c1')).toBeTruthy());
+
+      await fireEvent.press(screen.getByTestId('settings-reconnect-c1'));
+
+      await waitFor(() =>
+        expect(screen.getByTestId('settings-failure')).toHaveTextContent('Work still needs reconnecting. Choose the same account on Microsoft’s sign-in page.'),
+      );
+      expect(mockConnectToken).toHaveBeenCalledWith('microsoft');
+      expect(mockOpenAuthSession.mock.calls[0][0]).toBe('https://api.example.com/api/calendar/oauth/microsoft/start?native=1&connect_token=one-time-token');
+
+      mockConnections.mockResolvedValue({ connections: [{ ...MICROSOFT, status: 'connected' }] });
+      await fireEvent.press(screen.getByTestId('settings-reconnect-c1'));
+      await waitFor(() => expect(screen.getByTestId('settings-message')).toHaveTextContent('Microsoft Calendar reconnected and synchronized.'));
+    });
+
     it('starts the same Google sign-in, reloads the list and says reconnected', async () => {
       mockConnections.mockResolvedValue({ connections: [STALE] });
       mockOpenAuthSession.mockImplementation(async () => {
@@ -1142,7 +1195,7 @@ describe('calendar connections', () => {
     await waitFor(() => expect(screen.getByTestId('settings-writes-c1')).toBeTruthy());
     const loads = mockConnections.mock.calls.length;
 
-    fireEvent(screen.getByTestId('settings-writes-c1'), 'valueChange', true);
+    await fireEvent.press(screen.getByTestId('settings-writes-c1'));
 
     await waitFor(() => expect(mockSetWrites).toHaveBeenCalledWith('c1', true));
     await waitFor(() =>
@@ -1157,7 +1210,7 @@ describe('calendar connections', () => {
     await show(<Settings />);
     await waitFor(() => expect(screen.getByTestId('settings-writes-c1')).toBeTruthy());
 
-    fireEvent(screen.getByTestId('settings-writes-c1'), 'valueChange', false);
+    await fireEvent.press(screen.getByTestId('settings-writes-c1'));
 
     await waitFor(() => expect(screen.getByTestId('settings-message')).toHaveTextContent('Nexdo will no longer add events to this calendar.'));
   });
@@ -1251,8 +1304,9 @@ describe('the Settings screen on Android', () => {
     for (const card of ['settings-appearance', 'settings-profile-time', 'settings-voice', 'settings-notifications', 'settings-calendars']) {
       expect(flat(card)).toMatchObject({ backgroundColor: light.fieldSurfaceElevated, borderWidth: 1, borderColor: light.fieldBorder });
     }
-    // Notifications: next action | focus picker, then push | email | morning | evening.
-    expect(screen.getAllByTestId('settings-notifications-separator')).toHaveLength(4);
+    // Notifications: next action | focus picker, then push | email | morning; the morning email's caption now
+    // sits between it and evening (12bb9d4), so those two are no longer adjacent.
+    expect(screen.getAllByTestId('settings-notifications-separator')).toHaveLength(3);
     // Voice: confirmation | spoken replies; the existing divider already splits the next pair.
     expect(screen.getAllByTestId('settings-voice-separator')).toHaveLength(1);
     // Profile and time: its rows are fields, not list rows.

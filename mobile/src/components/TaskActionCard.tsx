@@ -1,3 +1,4 @@
+import { router } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
@@ -5,6 +6,7 @@ import { useCoordinator } from '../actions/coordinator';
 import type { NexdoTask } from '../api/types';
 import { notificationDate } from '../lib/taskAction';
 import { isDone } from '../lib/taskQuery';
+import { detectTaskAction } from '../lib/taskActionDetector';
 import { androidCard, brand, useTheme } from '../theme';
 import { withAlpha } from './SignInBackdrop';
 import { TaskSymbol } from './TaskSymbol';
@@ -26,6 +28,21 @@ export function TaskActionCard({ task, onOpen, now }: { task: NexdoTask; onOpen:
   const action = useCoordinator((state) => state.actions.find((item) => item.taskId === task.id));
   const notice = useCoordinator((state) => state.notice);
 
+  // 6f079c0 (TaskActionView.swift:37-41): a COMPLETED task whose title is still a detected action keeps
+  // its follow-up preparation and outcome history, opened read-mostly in the same sheet.
+  if (isDone(task) && detectTaskAction(task.title, clock, task.timeZone ?? Intl.DateTimeFormat().resolvedOptions().timeZone)) {
+    return (
+      <Pressable
+        accessibilityRole="button"
+        onPress={() => router.push({ pathname: '/action/preparation', params: { taskId: task.id } })}
+        style={styles.history}
+        testID="task-follow-up-history"
+      >
+        {/* A plain `Button` under Task Details' ink foreground (`task-details-followup-history-button`). */}
+        <Text style={[styles.body, { color: theme.colors.ink }]}>Follow-up preparation and outcome history</Text>
+      </Pressable>
+    );
+  }
   if (!action || isDone(task) || task.status === 'CANCELLED') return null;
 
   const at = notificationDate(action);
@@ -80,6 +97,9 @@ function reminderLabel(at: number, timeZone: string): string {
 }
 
 const styles = StyleSheet.create({
+  // A plain `Button` in the details column: the tint, at least a 44-point target.
+  history: { minHeight: 44, justifyContent: 'center' },
+  body: { fontSize: 17, lineHeight: 22 },
   bold: { fontWeight: '700' },
   headline: { fontSize: 17, lineHeight: 22, fontWeight: '600' },
   subheadline: { fontSize: 15, lineHeight: 20 },
