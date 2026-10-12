@@ -7,8 +7,6 @@ import { usePathname, useRouter } from 'next/navigation';
 import { BarChart3, Bug, Bot, CircleDollarSign, Gauge, HeartPulse, LogOut, Mic2, Users, MessageSquare } from 'lucide-react';
 
 const links = [
-  { href: '/bug-reports', label: 'Bug Reports', icon: Bug },
-  { href: '/feedback', label: 'Feedback', icon: MessageSquare },
   { href: '/', label: 'Overview', icon: Gauge },
   { href: '/ask', label: 'Ask Nexdo', icon: Bot },
   { href: '/users', label: 'Users', icon: Users },
@@ -17,6 +15,8 @@ const links = [
   { href: '/voice', label: 'Voice Analytics', icon: Mic2 },
   { href: '/revenue', label: 'Revenue', icon: CircleDollarSign },
   { href: '/health', label: 'System Health', icon: HeartPulse },
+  { href: '/bug-reports', label: 'Bug Reports', icon: Bug },
+  { href: '/feedback', label: 'Feedback', icon: MessageSquare },
 ];
 
 export function AdminShell({ children, name, email }: { children: React.ReactNode; name: string; email: string }) {
