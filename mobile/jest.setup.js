@@ -196,7 +196,7 @@ jest.mock('expo-contacts/legacy', () => ({
 }));
 
 // Phase 11 Important Moments native modules. Suites that exercise them mock them again.
-jest.mock('expo-calendar', () => ({
+jest.mock('expo-calendar/legacy', () => ({
   EntityTypes: { EVENT: 'event' },
   requestCalendarPermissionsAsync: jest.fn(async () => ({ granted: true })),
   getCalendarsAsync: jest.fn(async () => []),

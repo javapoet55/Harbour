@@ -23,10 +23,20 @@ describe('the phone calendar stays read-only', () => {
   walk(path.join(root, 'app'));
 
   it('finds no expo-calendar write call in any file that imports expo-calendar', () => {
-    const importers = files.filter((file) => /from 'expo-calendar'/.test(fs.readFileSync(file, 'utf8')));
+    const importers = files.filter((file) => /from 'expo-calendar(?:\/legacy)?'/.test(fs.readFileSync(file, 'utf8')));
     expect(importers.length).toBeGreaterThan(0);
     const writers = importers.filter((file) => WRITES.test(fs.readFileSync(file, 'utf8')));
     expect(writers.map((file) => path.relative(root, file))).toEqual([]);
+  });
+
+  /**
+   * In this expo-calendar the function API on the package root is a set of stubs that throw ("…is
+   * deprecated"); only `expo-calendar/legacy` reaches the native module. Parity pass 4 found every read
+   * failing and access reading as denied because of it (android-polish.md §39).
+   */
+  it('imports the function API from expo-calendar/legacy, never the throwing root', () => {
+    const root = files.filter((file) => /from 'expo-calendar'/.test(fs.readFileSync(file, 'utf8')));
+    expect(root.map((file) => path.relative(path.join(__dirname, '..', '..', '..', '..'), file))).toEqual([]);
   });
 
   it('would catch a write', () => {

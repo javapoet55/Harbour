@@ -1,4 +1,4 @@
-import * as Calendar from 'expo-calendar';
+import * as Calendar from 'expo-calendar/legacy';
 import * as Crypto from 'expo-crypto';
 
 import AsyncStorage from '@react-native-async-storage/async-storage';

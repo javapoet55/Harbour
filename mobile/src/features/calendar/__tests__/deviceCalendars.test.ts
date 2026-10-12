@@ -1,8 +1,8 @@
-import * as Calendar from 'expo-calendar';
+import * as Calendar from 'expo-calendar/legacy';
 
 import { deviceCalendarEvents, deviceEventIdentifier, listDeviceCalendars, mapDeviceEvent, openDeviceEvent, requestDeviceCalendarAccess, sortDeviceCalendars, type DeviceCalendarRecord, type DeviceEventRecord } from '../deviceCalendars';
 
-jest.mock('expo-calendar', () => ({
+jest.mock('expo-calendar/legacy', () => ({
   EntityTypes: { EVENT: 'event' },
   EventStatus: { NONE: 'none', CONFIRMED: 'confirmed', TENTATIVE: 'tentative', CANCELED: 'canceled' },
   getCalendarPermissionsAsync: jest.fn(async () => ({ status: 'granted', canAskAgain: true, granted: true })),

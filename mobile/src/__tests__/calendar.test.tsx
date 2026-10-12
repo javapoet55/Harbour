@@ -25,7 +25,7 @@ jest.mock('expo-router', () => {
 const mockCalendarPermissions = jest.fn();
 const mockDeviceCalendars = jest.fn();
 const mockDeviceEvents = jest.fn();
-jest.mock('expo-calendar', () => ({
+jest.mock('expo-calendar/legacy', () => ({
   EntityTypes: { EVENT: 'event' },
   EventStatus: { CANCELED: 'canceled' },
   getCalendarPermissionsAsync: (...args: unknown[]) => mockCalendarPermissions(...args),
