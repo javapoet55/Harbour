@@ -14,6 +14,7 @@ import { headline, systemColors } from '../moments/components';
 import { MenuPicker } from '../moments/form';
 import { ListSettingsSheet } from './ListSettings';
 import { listInput } from './model';
+import { CALCULATED_PRICE_NOTE, offerPriceRows } from './offerPricing';
 import { ALL_STORES, chosenPanels, initialTab, OFFER_TABS, offerDate, offerEndDate, offersFor, storeChoices, visibleOffers } from './offers';
 import { shoppingStore, useShopping } from './store';
 
@@ -47,10 +48,16 @@ function OfferPanel({ children, testID }: { children: ReactNode; testID?: string
   );
 }
 
-/** `OfferSummary` (:125-131): the picture, product, store and size, price, savings and unit price. */
+/**
+ * `OfferSummary` (:125-158, bdb68ce): the picture, product, store and size, then the price breakdown —
+ * Before discount (struck through when it could be worked out), the Discount box (red, or "Not
+ * published"), Final price — the note when the first line was calculated, and the unit price. The
+ * before-discount price is `offerOriginalPrice`: only an exact USD price with a fixed USD discount.
+ */
 function OfferSummary({ offer }: { offer: StoreOffer }) {
   const theme = useTheme();
   const [failed, setFailed] = useState(false);
+  const rows = offerPriceRows(offer);
   return (
     <View style={styles.summary}>
       <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={styles.picture}>
@@ -63,12 +70,19 @@ function OfferSummary({ offer }: { offer: StoreOffer }) {
       <View style={[styles.grow, styles.summaryText]}>
         <Text style={[headline, { color: theme.colors.label }]}>{offer.product}</Text>
         <Text style={[textStyles.subheadline, { color: theme.colors.secondary }]}>{`${offer.store} · ${offer.packageSize ?? 'Size not specified'}`}</Text>
-        {offer.price ? (
-          <Text style={[styles.price, { color: theme.colors.label }]}>{offer.price}</Text>
-        ) : (
-          <Text style={[textStyles.subheadline, { color: theme.colors.secondaryLabel }]}>Price not published</Text>
-        )}
-        {offer.savings ? <Text style={[headline, styles.savings, { color: systemColors.red, backgroundColor: withAlpha(systemColors.red, 0.08) }]}>{offer.savings}</Text> : null}
+        <View style={styles.priceLine} testID="offer-before-discount">
+          <Text style={[styles.caption, { color: theme.colors.secondaryLabel }]}>Before discount</Text>
+          <Text style={[textStyles.subheadline, { color: theme.colors.label }, rows.calculated && styles.struck]}>{rows.beforeDiscount}</Text>
+        </View>
+        <View style={[styles.priceLine, styles.discount, { backgroundColor: withAlpha(systemColors.red, 0.06) }]} testID="offer-discount">
+          <Text style={[styles.caption, { color: theme.colors.secondaryLabel }]}>Discount</Text>
+          <Text style={[headline, { color: offer.savings ? systemColors.red : theme.colors.secondaryLabel }]}>{rows.discount}</Text>
+        </View>
+        <View style={styles.priceLine} testID="offer-final-price">
+          <Text style={[styles.caption, { color: theme.colors.secondaryLabel }]}>Final price</Text>
+          <Text style={offer.price ? [styles.price, { color: theme.colors.label }] : [textStyles.subheadline, { color: theme.colors.label }]}>{rows.finalPrice}</Text>
+        </View>
+        {rows.calculated ? <Text style={[styles.caption2, { color: theme.colors.secondaryLabel }]}>{CALCULATED_PRICE_NOTE}</Text> : null}
         {offer.unitPrice ? <Text style={[styles.caption, { color: theme.colors.label }]}>{offer.unitPrice}</Text> : null}
       </View>
     </View>
@@ -369,9 +383,14 @@ const styles = StyleSheet.create({
   panel: { gap: 12, padding: 20, borderRadius: 24 },
   summary: { flexDirection: 'row', alignItems: 'flex-start', gap: 16 },
   picture: { width: 90, height: 125, alignItems: 'center', justifyContent: 'center' },
-  summaryText: { gap: 8 },
-  price: { fontSize: 28, lineHeight: 34, fontWeight: '700' },
-  savings: { padding: 8, borderRadius: 10, overflow: 'hidden', alignSelf: 'flex-start' },
+  // `VStack(alignment: .leading, spacing: 10)`.
+  summaryText: { gap: 10 },
+  // `.title2.bold()`.
+  price: { fontSize: 22, lineHeight: 28, fontWeight: '700' },
+  priceLine: { gap: 3 },
+  discount: { padding: 8, borderRadius: 10, alignSelf: 'stretch' },
+  struck: { textDecorationLine: 'line-through' },
+  caption2: { fontSize: 11, lineHeight: 13 },
   label: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   divider: { height: StyleSheet.hairlineWidth },
   bordered: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, padding: 16, borderRadius: 14 },
