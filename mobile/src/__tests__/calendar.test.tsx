@@ -626,7 +626,7 @@ describe('Google connect helpers', () => {
   });
 
   it('treats calendar=error as a failure', () => {
-    expect(parseGoogleCallback('nexdo://calendar?calendar=error')).toEqual({
+    expect(parseGoogleCallback('nexdo://calendar-connected?calendar=error')).toEqual({
       kind: 'failed',
       // Swift's fallback is `?? "authorization failed"`, with no trailing period.
       message: 'Google Calendar connection failed: authorization failed',
@@ -638,7 +638,7 @@ describe('Google connect helpers', () => {
       kind: 'failed',
       message: 'Google Calendar connection failed: Unable to read Google account calendar',
     });
-    expect(parseGoogleCallback('nexdo://calendar?detail=access_denied')).toEqual({
+    expect(parseGoogleCallback('nexdo://calendar-connected?detail=access_denied')).toEqual({
       kind: 'failed',
       message: 'Google Calendar connection failed: access_denied',
     });

@@ -112,11 +112,23 @@ export function useRequestPasswordReset() {
   });
 }
 
-/** `AppModel.confirmPasswordReset` (NexdoApp.swift:200–208). The server does not start a session here. */
-export function useConfirmPasswordReset() {
+/**
+ * `AppModel.confirmPasswordReset` (NexdoApp.swift:221-230). The server does not start a session here.
+ *
+ * 4185501: "Forgot password?" is now also offered from Change password, i.e. while signed in, and a
+ * reset made there ends the session like Change password does — "return signed-in users to login
+ * after a reset". Signed out, nothing else happens.
+ */
+export function useConfirmPasswordReset({ beforeSessionEnds }: { beforeSessionEnds?: () => Promise<void> } = {}) {
+  const queryClient = useQueryClient();
   return useMutation<void, Error, { email: string; code: string; password: string }>({
     mutationFn: async ({ email, code, password }) => {
       await endpoints.passwordResetConfirm(email, code, password);
+      if (useSession.getState().profile === null) return;
+      await beforeSessionEnds?.().catch(() => undefined);
+      useSession.getState().clear();
+      queryClient.clear();
+      queryClient.setQueryData(queryKeys.me(), null);
     },
   });
 }

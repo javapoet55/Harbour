@@ -119,19 +119,37 @@ export type CalendarOAuthResult = { kind: 'connected' } | { kind: 'cancelled' } 
 /** What Settings shows: nothing when cancelled, else a message or a failure. */
 export type GoogleConnectResult = { kind: 'cancelled' } | { kind: 'connected' | 'failed'; message: string };
 
+/** 08be688 (ProfileSettings.swift:126-128): the callback is not Nexdo's calendar deep link. */
+export const CALLBACK_UNEXPECTED = 'Unexpected calendar sign-in response. Please try again.';
+/** 08be688 (ProfileSettings.swift:133-135): the server did not say this provider connected. */
+export const CALLBACK_UNCONFIRMED = 'Calendar connection was not confirmed. Please try again.';
+
 /**
- * `CalendarOAuthResult.init(callback:cancelled:error:)` for the callback URL. No callback means the
- * browser closed without signing in. A callback carrying `calendar=error`, or ANY `detail` parameter,
- * is a failure — Swift checks for the presence of `detail`, not its value.
+ * `CalendarOAuthResult.init(callback:cancelled:error:providerName:)` (ProfileSettings.swift:121-137)
+ * for the callback URL, in Swift's order:
+ * 1. no callback — the browser closed without signing in — is `cancelled`;
+ * 2. anything but `nexdo://calendar-connected` is a failure (Android's `nexdo:///calendar-connected`
+ *    is the same link, as `oauthCallbackKind` reads it);
+ * 3. `calendar=error`, or ANY `detail` parameter, is a failure quoting the detail;
+ * 4. only `calendar=<provider>-connected` — what the server's callback sends on success
+ *    (src/app/api/calendar/oauth/[provider]/callback/route.ts:76) — is `connected`. A bare callback, a
+ *    cancelled one or another provider's is "not confirmed".
  */
-export function parseGoogleCallback(callbackUrl: string | null | undefined): CalendarOAuthResult {
+export function parseCalendarCallback(callbackUrl: string | null | undefined, providerName = 'Google'): CalendarOAuthResult {
   if (!callbackUrl) return { kind: 'cancelled' };
-  const params = new URLSearchParams(callbackUrl.split('?')[1] ?? '');
+  if (!/^nexdo:\/\/\/?calendar-connected(?:[?#]|$)/i.test(callbackUrl)) return { kind: 'failed', message: CALLBACK_UNEXPECTED };
+  const params = new URLSearchParams(callbackUrl.split('#')[0].split('?')[1] ?? '');
   if (params.get('calendar') === 'error' || params.has('detail')) {
     const detail = params.get('detail') ?? 'authorization failed';
-    return { kind: 'failed', message: `Google Calendar connection failed: ${detail}` };
+    return { kind: 'failed', message: `${providerName} Calendar connection failed: ${detail}` };
   }
+  if (params.get('calendar') !== `${providerName.toLowerCase()}-connected`) return { kind: 'failed', message: CALLBACK_UNCONFIRMED };
   return { kind: 'connected' };
+}
+
+/** Google's callback, which is the only provider Settings connects today. */
+export function parseGoogleCallback(callbackUrl: string | null | undefined): CalendarOAuthResult {
+  return parseCalendarCallback(callbackUrl, 'Google');
 }
 
 /**

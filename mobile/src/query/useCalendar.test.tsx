@@ -64,7 +64,7 @@ test('a connection that worked still reports it when the list cannot be reloaded
   clients.push(queryClient);
   queryClient.setQueryData(queryKeys.calendar.connections(), [GOOGLE]);
   mockEndpoints.calendarConnections.mockRejectedValueOnce(new ApiError({ status: 0, code: 'NETWORK', message: 'offline' }));
-  const outcome = await completeGoogleConnect(queryClient, 'nexdo://calendar-connected?calendar=connected', null);
+  const outcome = await completeGoogleConnect(queryClient, 'nexdo://calendar-connected?calendar=google-connected', null);
   expect(outcome.kind).toBe('connected');
   expect(queryClient.getQueryData(queryKeys.calendar.connections())).toEqual([GOOGLE]);
 });

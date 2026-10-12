@@ -545,7 +545,7 @@ describe('the Settings screen', () => {
     });
 
     it('reports a callback that carries a detail as a failure', async () => {
-      mockOpenAuthSession.mockResolvedValue({ type: 'success', url: 'nexdo://?calendar=error&detail=token%20expired' });
+      mockOpenAuthSession.mockResolvedValue({ type: 'success', url: 'nexdo://calendar-connected?calendar=error&detail=token%20expired' });
       await show(<Settings />);
       await waitFor(() => expect(screen.getByTestId('settings-connect-google')).toBeTruthy());
 
