@@ -157,6 +157,20 @@ describe('My Lists', () => {
     expect(screen.getByLabelText('Shopping list')).toBeTruthy();
   });
 
+  /** StoreBrandLogo.swift:63-65 with ShoppingViews.swift:109 (bdb68ce): the list's own logo first, at 48. */
+  it('shows a list’s own logo in its row, without asking for the brand, even with no store', async () => {
+    const lists = [list({ storeName: 'Safeway', storeLogoData: '/9j/AA==' }), list({ id: 'l2', storeLogoData: '/9j/BB==' })];
+    mockLists.mockResolvedValue({ lists });
+    shoppingStore.setState({ lists, busy: false, error: null });
+    await wrap(<MyLists />);
+    const images = screen.getAllByTestId('store-brand-image');
+    expect(images.map((image) => image.props.source.uri)).toEqual(['data:image/jpeg;base64,/9j/AA==', 'data:image/jpeg;base64,/9j/BB==']);
+    expect(images.map((image) => image.props.style)).toEqual(expect.arrayContaining([expect.arrayContaining([expect.objectContaining({ width: 48 * 0.94 })])]));
+    await fireEvent(images[1], 'load');
+    expect(screen.getByLabelText('Store logo')).toBeTruthy();
+    expect(mockBrand).not.toHaveBeenCalled();
+  });
+
   it('New List starts as "Shopping List" and says "Create List & Add Store"', async () => {
     mockLists.mockResolvedValue({ lists: [] });
     shoppingStore.setState({ lists: [], busy: false, error: null });

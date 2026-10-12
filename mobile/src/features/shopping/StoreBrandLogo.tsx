@@ -108,7 +108,9 @@ export function StoreBrandLogo({
   }, [key, listId, identity, usingCustom]);
 
   const uri = usingCustom ? custom : state.uri;
-  const label = usingCustom ? identity.split('|')[0] : state.label;
+  // `identity.components(separatedBy: "|").first ?? "Store"`: a list with a custom logo and no store
+  // name would read " logo", so the name falls back to "Store" as Swift's `??` intends.
+  const label = usingCustom ? identity.split('|')[0] || 'Store' : state.label;
   const showing = uri !== null && loaded === uri;
   const avatar = (
     <View
