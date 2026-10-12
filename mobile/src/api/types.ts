@@ -12,6 +12,8 @@
 // MARK: Account
 
 export type ProfilePreferences = {
+  /** d568989: weekday numbers, 0 = Sunday, comma-separated ("1,2,3,4,5"). Optional in Swift; never null on the wire. */
+  workingDays?: string;
   workStart: string;
   workEnd: string;
   quietStart: string;
@@ -382,6 +384,8 @@ export type DoNowChoice = {
 export type DoNowNext = {
   bestAction?: DoNowChoice | null;
   alternatives: DoNowChoice[];
+  /** d568989: today is not one of the saved working days (src/lib/executive-recommendations.ts:188). */
+  outsideWorkingDay?: boolean | null;
   outsideWorkingHours?: boolean | null;
   remainingWorkingMinutesToday?: number | null;
   availableWindowMinutes: number;

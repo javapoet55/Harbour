@@ -1,4 +1,5 @@
 import { createApiClient, type ApiClient } from './client';
+import { endpoints } from './index';
 import { calendarEventApi } from './calendarEvent';
 import { bugReportApi, feedbackApi } from './feedback';
 import { followUpApi, followUpScheduleBody } from './followUp';
@@ -6,6 +7,8 @@ import { nutritionApi } from './nutrition';
 import { pomodoroApi } from './pomodoro';
 import { shoppingEmailApi, shoppingOffersApi, shoppingStoresApi } from './shopping';
 import { bugSubmission, includeScreenshot, newBugDraft, type BugDiagnostics } from '../features/bugReport/model';
+import { validateSettings } from '../lib/profileSettings';
+import { toggleWorkingDay } from '../features/tasks/workingDays';
 import { createMomentConnectModel, type ConnectOperation } from '../features/moments/connectCall';
 import type { PomodoroSession } from '../features/pomodoro/model';
 
@@ -20,7 +23,7 @@ import type { PomodoroSession } from '../features/pomodoro/model';
  * server field that stops being nullable, fails here.
  */
 
-jest.mock('./index', () => ({ getApi: () => mockClient }));
+jest.mock('./index', () => ({ ...jest.requireActual('./index'), getApi: () => mockClient }));
 
 // `mock`-prefixed so babel-plugin-jest-hoist allows the factory above to close over it.
 let mockClient: ApiClient;
@@ -148,6 +151,16 @@ describe('nothing Phase 12 writes sends a null into a bare zod .optional()', () 
     const draft = { ...newBugDraft(() => '11111111-1111-4111-8111-111111111111'), description: 'Broken' };
     const { input } = bugSubmission(withScreenshot ? includeScreenshot(draft, 'AQI=') : draft, metadata)!;
     expect(await nullsIn((client) => bugReportApi.submit(input, client))).toEqual([]);
+  });
+
+  // d568989 — src/app/api/settings/route.ts:28-36: `workingDays` is a bare string in a `.partial()`
+  // object, so it may be omitted but not null; `phoneNumber` is the one nullable preference.
+  it('PATCH /api/settings carries workingDays without a null, and only phoneNumber may be null', async () => {
+    const preferences = { workingDays: toggleWorkingDay('1,2,3,4,5', 6, true), workStart: '09:00', workEnd: '17:00', quietStart: '21:00', quietEnd: '07:00', confirmationLevel: 'ALWAYS', voiceEnabled: true, personalizationEnabled: true, pushEnabled: true, emailEnabled: true, smsEnabled: false, morningSummary: true, eveningSummary: false, phoneNumber: '' };
+    const result = validateSettings({ name: 'Ada', preferences, nextAction: { enabled: true, switchingThreshold: 10 }, deviceTimeZone: 'America/Los_Angeles' });
+    if (!result.ok) throw new Error(result.failure);
+    expect(await nullsIn((client) => endpoints.updateSettings(result.input, client))).toEqual(['preference.phoneNumber']);
+    expect((lastBody as { preference: { workingDays: string } }).preference.workingDays).toBe('1,2,3,4,5,6');
   });
 
   /**
