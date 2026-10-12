@@ -81,6 +81,7 @@ export const taskIcons = {
   ladybug: 'bug-outline',
   // "Prepare and follow up" (TaskActionView.swift:162, 6f079c0).
   'list.clipboard': 'clipboard-outline',
+  'apple.logo': 'logo-apple',
   'heart.fill': 'heart',
   'checkmark.shield.fill': 'shield-checkmark',
   iphone: 'phone-portrait-outline',

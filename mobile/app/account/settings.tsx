@@ -7,6 +7,7 @@ import { ActivityIndicator, Alert, Linking, Pressable, StyleSheet, View } from '
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import type { CalendarConnection, NextActionPreference, Profile, ProfilePreferences } from '../../src/api';
+import { CalendarProviderIcon } from '../../src/components/CalendarProviderIcon';
 import { IOSSwitch } from '../../src/components/IOSSwitch';
 import { KeyboardAwareScrollView } from '../../src/components/keyboard';
 import { AccountAvatar, ProfileBackground } from '../../src/components/ProfileParts';
@@ -51,7 +52,15 @@ import { closePresentedScreens, replaceWithSignIn } from '../../src/lib/sessionN
 import { useBlockDismiss } from '../../src/lib/useBlockDismiss';
 import { useMinuteTick } from '../../src/lib/useMinuteTick';
 import { encodeProfilePhoto } from '../../src/photo/encodePhoto';
-import { completeGoogleConnect, type GoogleConnectResult, useCalendarConnections, useConnectGoogleCalendar, useDisconnectCalendar, useSetCalendarWrites } from '../../src/query/useCalendar';
+import {
+  completeGoogleConnect,
+  connectionsState,
+  type GoogleConnectResult,
+  useCalendarConnections,
+  useConnectGoogleCalendar,
+  useDisconnectCalendar,
+  useSetCalendarWrites,
+} from '../../src/query/useCalendar';
 import { useMe } from '../../src/query/useMe';
 import { DELETE_ACCOUNT_FAILED_TITLE, DELETING_ACCOUNT, useDeleteAccount, useSyncNow, useUpdateProfile, useUploadPhoto } from '../../src/query/useProfile';
 import { useAppearance } from '../../src/store/appearance';
@@ -130,6 +139,8 @@ function SettingsScreen({
   const queryClient = useQueryClient();
   const connect = useConnectGoogleCalendar();
   const connections = useCalendarConnections();
+  // `calendarConnections`, `calendarConnectionsLoaded` (a load has succeeded) and `calendarConnectionsError`.
+  const calendar = connectionsState(connections);
   const setWrites = useSetCalendarWrites();
   const disconnect = useDisconnectCalendar();
   const deleteAccount = useDeleteAccount({ beforeSessionEnds: closePresentedScreens });
@@ -539,19 +550,35 @@ function SettingsScreen({
               </Pressable>
             </SettingsCard>
 
-            {/* 8. Calendars and privacy (`:223-244`). */}
-            <SettingsCard testID="settings-calendars" title="Calendars and privacy">
+            {/* 8. Calendars & Privacy (ProfileView.swift:349-368, 6f079c0). */}
+            <SettingsCard testID="settings-calendars" title="Calendars & Privacy">
               <Text style={[styles.subheadline, { color: theme.colors.secondary }]}>
-                Connect Google Calendar securely. You may need to sign in with Google.
+                Connect your calendar to keep your plans and important moments together.
               </Text>
               <ConnectionList
-                connections={connections.data ?? []}
-                loaded={!connections.isPending}
+                connections={calendar.connections}
+                loaded={calendar.loaded}
                 onDisconnect={confirmDisconnect}
                 onReconnect={(connection) => void connectCalendar(connection)}
                 onWrites={(connection, enabled) => void run(() => setWrites.mutateAsync({ id: connection.id, enabled }))}
                 timeZone={zone}
               />
+              {/* `if let error = model.calendarConnectionsError` (:353-356): the error and a retry. */}
+              {calendar.error !== null ? (
+                <>
+                  <Text style={[styles.caption, { color: theme.colors.danger }]} testID="settings-connections-error">
+                    {calendar.error}
+                  </Text>
+                  <Pressable
+                    accessibilityLabel="Retry connection status"
+                    accessibilityRole="button"
+                    onPress={() => void connections.refetch()}
+                    testID="settings-retry-connections"
+                  >
+                    <Text style={[theme.typography.body, { color: theme.colors.link }]}>Retry connection status</Text>
+                  </Pressable>
+                </>
+              ) : null}
               <Pressable
                 accessibilityLabel={connectButtonTitle(connecting, connections.data?.length ?? 0)}
                 accessibilityRole="button"
@@ -691,11 +718,6 @@ function SettingsScreen({
 }
 
 /**
- * `connectionList` (ProfileView.swift:290-331, commit 3ef906d): one bordered block per connection with
- * its health icon, name, detail, last sync, Disconnect, and the "Add my scheduled tasks and events here" toggle.
- * The demo account has no connected calendar, so this is ported from source, not from a capture.
- */
-/**
  * `WorkingDaysField` (ProfileView.swift, d568989): "Working days" over one toggle per weekday, Sunday
  * first, and the caption. The last day left on cannot be turned off. An unset value reads as Monday to
  * Friday (`preferences?.workingDays ?? "1,2,3,4,5"`, `:320`).
@@ -721,6 +743,11 @@ function WorkingDaysField({ value, onChange }: { value: string | undefined; onCh
   );
 }
 
+/**
+ * `connectionList` (ProfileView.swift:478-521, 6f079c0): one bordered block per connection with the
+ * provider's icon (an orange warning triangle at its corner when unhealthy), name, detail, last sync,
+ * Disconnect, and the "Add my scheduled tasks and events here" toggle. Capture `settings-v3-scrolled-3`.
+ */
 function ConnectionList({
   connections,
   loaded,
@@ -759,11 +786,15 @@ function ConnectionList({
             testID={`settings-connection-${connection.id}`}
           >
             <View style={styles.connectionHeader}>
-              <TaskSymbol
-                color={healthy ? theme.colors.link : orange}
-                name={healthy ? 'checkmark.circle.fill' : 'exclamationmark.triangle.fill'}
-                size={17}
-              />
+              <View>
+                <CalendarProviderIcon source={connection.provider} testID={`settings-provider-${connection.id}`} />
+                {/* `.overlay(alignment: .bottomTrailing)`: a `.caption2` orange triangle when unhealthy. */}
+                {!healthy ? (
+                  <View style={styles.warning} testID={`settings-unhealthy-${connection.id}`}>
+                    <TaskSymbol color={orange} name="exclamationmark.triangle.fill" size={11} />
+                  </View>
+                ) : null}
+              </View>
               <View accessible style={styles.connectionText}>
                 <Text style={[styles.subheadline, styles.bold, { color: theme.colors.label }]}>{displayName(connection)}</Text>
                 <Text style={[styles.caption, { color: theme.colors.secondary }]}>{connectionDetail(connection)}</Text>
@@ -850,6 +881,7 @@ const styles = StyleSheet.create({
   connectionText: { flex: 1, gap: 2 },
   connectionHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
   connectionActions: { alignItems: 'flex-end', gap: 8 },
+  warning: { position: 'absolute', right: 0, bottom: 0 },
   connectionDivider: { height: StyleSheet.hairlineWidth },
   row: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   centred: { alignItems: 'center', gap: 8, paddingVertical: 12 },
