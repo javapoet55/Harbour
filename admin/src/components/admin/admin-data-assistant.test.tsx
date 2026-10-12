@@ -13,7 +13,7 @@ it('fills each of the analytics prompts without sending and submits the selected
   render(<AdminDataAssistant days={7} from="2026-10-01" to="2026-10-07"/>);
   const input = screen.getByRole('textbox') as HTMLTextAreaElement;
   const prompts = screen.getByLabelText('Suggested questions').querySelectorAll('button');
-  expect(prompts).toHaveLength(18);
+  expect(prompts).toHaveLength(21);
   for (const prompt of prompts) {
     fireEvent.click(prompt);
     expect(input.value).toBe(prompt.textContent);

@@ -1,3 +1,5 @@
+vi.mock('./amplitude-analysis', () => ({ getAmplitudeAnalysis: vi.fn() }));
+import { getAmplitudeAnalysis } from './amplitude-analysis';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 vi.mock('./firebase-engagement', () => ({ getFirebaseEngagement: vi.fn() }));
 vi.mock('./amplitude-engagement', () => ({ getAmplitudeEngagement: vi.fn() }));
@@ -67,4 +69,17 @@ describe('provider tool dispatch', () => {
     expect(JSON.stringify(requests[2].input)).toContain('Temporary Google outage');
     expect(JSON.stringify(requests[2].input)).toContain('dailyActiveUsers');
   });
+});
+
+
+it.each([
+  ['catalog', {}], ['funnel', {events:['Page','Submit'],windowSeconds:86400}],
+  ['retention', {cohort:'new'}], ['attribution', {event:'_active',dimension:'utm_source',firstTouch:true}],
+])('dispatches Amplitude %s through Ask Nexdo', async (kind, args) => {
+  vi.stubEnv('OPENAI_API_KEY','test'); vi.mocked(getAdminSnapshot).mockResolvedValue(snapshot() as never);
+  vi.mocked(getAmplitudeAnalysis).mockResolvedValue({status:'connected',report:{}});
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(Response.json({output:[{type:'function_call',name:`get_amplitude_${kind}`,call_id:'analysis',arguments:JSON.stringify(args)}]}))
+    .mockResolvedValueOnce(Response.json({output_text:JSON.stringify({answer:'Analysis ready.',chart:null})})));
+  await answerAdminAnalyticsQuestion('admin','Analyze Amplitude',7,{from:new Date('2026-10-01'),to:new Date('2026-10-07')});
+  expect(getAmplitudeAnalysis).toHaveBeenCalledWith('2026-10-01','2026-10-07',{...args,kind});
 });

@@ -6,6 +6,9 @@ import { useRouter } from 'next/navigation';
 import type { AdminAnswerChart } from '@/contract/insights';
 
 const prompts = [
+  'Show the Amplitude page-view to form-submission funnel with a 24-hour conversion window.',
+  'What are Amplitude day-1, day-7 and day-30 retention rates for new users?',
+  'Which first-touch sources and campaigns bring active users in Amplitude?',
   'Summarize Firebase engagement: active users, sessions, and most-used screens.',
   'Show Amplitude daily active and new users for the selected period.',
   'Compare Firebase and Amplitude trends, keeping their audiences separate.',

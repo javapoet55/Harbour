@@ -43,7 +43,7 @@ export async function getAmplitudeEngagement(from: string, to: string) {
       dailyActiveUsers: series[0], dailyNewUsers: series[1],
       limits: ['Daily unique users must not be summed into period unique users.',
         'Project analytics are not database account counts. Do not assume these are iOS users.',
-        'This connector currently provides daily active and new users, not funnels, retention, revenue, or attribution.'],
+        'This report contains daily active and new users. Use the dedicated Amplitude tools for funnels, retention, and attribution; revenue is not provided.'],
     };
     if (cache.size >= 20) cache.delete(cache.keys().next().value!);
     cache.set(key, { expires: Date.now() + 300_000, data });
