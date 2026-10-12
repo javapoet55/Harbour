@@ -6,14 +6,14 @@ import { AdminDataAssistant } from './admin-data-assistant';
 vi.mock('next/navigation', () => ({ useRouter: () => ({ replace: vi.fn() }) }));
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
-it('fills each of the fifteen prompts without sending and submits the selected question and date range on Enter', async () => {
+it('fills each of the analytics prompts without sending and submits the selected question and date range on Enter', async () => {
   const fetch = vi.fn().mockResolvedValue(Response.json({ answer: 'The requested metric is unavailable.', chart: null }));
   vi.stubGlobal('fetch', fetch);
   vi.stubGlobal('requestAnimationFrame', (callback: () => void) => { callback(); return 1; });
   render(<AdminDataAssistant days={7} from="2026-10-01" to="2026-10-07"/>);
   const input = screen.getByRole('textbox') as HTMLTextAreaElement;
   const prompts = screen.getByLabelText('Suggested questions').querySelectorAll('button');
-  expect(prompts).toHaveLength(15);
+  expect(prompts).toHaveLength(18);
   for (const prompt of prompts) {
     fireEvent.click(prompt);
     expect(input.value).toBe(prompt.textContent);

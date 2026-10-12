@@ -216,7 +216,7 @@ export async function answerAdminAnalyticsQuestion(adminId: string, question: st
   const providerReports = new Map<string, unknown>();
   const input: unknown[] = [{
     role: 'user',
-    content: JSON.stringify({ question, ADMIN_DATA: adminOverviewGrounding(initial) }),
+    content: JSON.stringify({ question, selectedRange: { from, to }, ADMIN_DATA: { ...adminOverviewGrounding(initial), report: { generatedAt: initial.generatedAt, periodDays: initialDays, from, to, periodMeaning: 'Selected date range; database reports use UTC and provider reports use their stated timezone.' } } }),
   }];
 
   for (let step = 0; step < 4; step += 1) {
