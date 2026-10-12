@@ -708,8 +708,9 @@ const styles = StyleSheet.create({
   close: { width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
 
   scroll: { paddingHorizontal: 20, paddingBottom: 20, gap: 10, alignItems: 'stretch' },
-  // The landing fills the viewport (`.frame(minHeight: viewport.size.height - 20)`).
-  scrollFill: { flexGrow: 1 },
+  // The landing fills the viewport: `.frame(minHeight: viewport.size.height - 4)` with 4 below it rather
+  // than 20 (AskNexdoView.swift:220, :265; 6f079c0).
+  scrollFill: { flexGrow: 1, paddingBottom: 4 },
   tryHeading: { paddingTop: 16 },
   controlsRow: { flexDirection: 'row', justifyContent: 'flex-end' },
 

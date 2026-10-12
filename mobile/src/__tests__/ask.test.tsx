@@ -117,6 +117,14 @@ describe('the Ask AI landing', () => {
     expect(screen.queryByTestId('ask-field')).toBeNull();
   });
 
+  /** 6f079c0 (AskAILandingView.swift:71-72, AskNexdoView.swift:220, :265; `ask-ai-cards-v3`). */
+  it('keeps the tighter landing spacing: a 268 composer, "Powered by" 6 over 2, and 4 below the landing', async () => {
+    await show(<Ask />);
+    expect(StyleSheet.flatten(screen.getByTestId('ask-landing-composer').props.style)).toMatchObject({ minHeight: 268 });
+    expect(StyleSheet.flatten(screen.getByTestId('ask-landing-powered').props.style)).toMatchObject({ paddingTop: 6, paddingBottom: 2 });
+    expect(screen.getByText('Powered by Nexdo AI')).toBeTruthy();
+  });
+
   it('lays the cards out two to a row with room for the gap, on a white base whatever the theme', async () => {
     const dimensions = jest.spyOn(require('react-native'), 'useWindowDimensions').mockReturnValue({ width: 360, height: 792, scale: 3, fontScale: 1 });
     await show(<Ask />);
