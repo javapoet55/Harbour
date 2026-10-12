@@ -302,7 +302,7 @@ export default function ShoppingDetailScreen() {
         <KeyboardAwareScrollView bottomOffset={barHeight} keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingBottom: barHeight + 16 }} testID="shopping-detail">
           {/* Header (:240-259): the store logo, which opens full size, and the settings chevron. */}
           <View style={styles.header}>
-            <StoreBrandLogo expandsOnTap identity={`${list.storeName ?? ''}|${list.storeWebsite ?? ''}`} listId={list.id} />
+            <StoreBrandLogo customImageData={list.storeLogoData} expandsOnTap identity={`${list.storeName ?? ''}|${list.storeWebsite ?? ''}`} listId={list.id} />
             <View style={[styles.grow, styles.headerText]}>
               <Text style={[textStyles.title2, styles.bold, { color: theme.colors.label }]}>{list.title}</Text>
               <View style={styles.countsRow}>

@@ -14,6 +14,9 @@ import { headline, systemColors } from '../moments/components';
  * identity/matching/cache; SwiftUI never receives a provider credential or guesses a retailer from the
  * list title." The server names the brand and a logo on `cdn.brandfetch.io`; anything else, or any
  * failure, keeps the green cart. With `expandsOnTap`, a loaded logo opens full size.
+ *
+ * bdb68ce: a list's own logo (`customImageData`, the list's `storeLogoData`) comes first, labelled with
+ * the store name; the brand lookup runs only when there is none, or it cannot be drawn.
  */
 
 /**
@@ -56,18 +59,37 @@ function cached(key: string): Entry | null {
   return entry;
 }
 
-export function StoreBrandLogo({ listId, identity, size = 56, expandsOnTap = false }: { listId: string; identity: string; size?: number; expandsOnTap?: boolean }) {
+export function StoreBrandLogo({
+  listId,
+  identity,
+  customImageData,
+  size = 56,
+  expandsOnTap = false,
+}: {
+  listId: string;
+  identity: string;
+  /** The list's own logo: bare JPEG base64 (`storeLogoData`). */
+  customImageData?: string | null;
+  size?: number;
+  expandsOnTap?: boolean;
+}) {
   const theme = useTheme();
   const key = `${listId}|${identity}`;
+  // `if let customImageData, let data = Data(base64Encoded:), let custom = UIImage(data:)` (load(), :63-65):
+  // the custom image wins, labelled with the identity's name part. One that cannot be drawn falls
+  // through to the brand lookup, as Swift's failed decode does.
+  const custom = customImageData ? `data:image/jpeg;base64,${customImageData}` : null;
+  const [customFailed, setCustomFailed] = useState<string | null>(null);
+  const usingCustom = custom !== null && customFailed !== custom;
   const [state, setState] = useState<{ key: string; uri: string | null; label: string }>(() => ({ key, uri: cached(key)?.uri ?? null, label: cached(key)?.label ?? 'Shopping list' }));
   const [loaded, setLoaded] = useState<string | null>(null);
   const [expanded, setExpanded] = useState(false);
   if (state.key !== key) setState({ key, uri: cached(key)?.uri ?? null, label: cached(key)?.label ?? 'Shopping list' });
 
-  // `.task(id: "\(listID)|\(identity)") { await load() }`
+  // `.task(id: "\(listID)|\(identity)|\(customImageData ?? "")") { await load() }`
   useEffect(() => {
     let cancelled = false;
-    if (cached(key) || identity.replaceAll('|', '') === '') return;
+    if (usingCustom || cached(key) || identity.replaceAll('|', '') === '') return;
     shoppingStoresApi
       .brand(listId)
       .then(({ brand }) => {
@@ -83,9 +105,11 @@ export function StoreBrandLogo({ listId, identity, size = 56, expandsOnTap = fal
     return () => {
       cancelled = true;
     };
-  }, [key, listId, identity]);
+  }, [key, listId, identity, usingCustom]);
 
-  const showing = state.uri !== null && loaded === state.uri;
+  const uri = usingCustom ? custom : state.uri;
+  const label = usingCustom ? identity.split('|')[0] : state.label;
+  const showing = uri !== null && loaded === uri;
   const avatar = (
     <View
       style={[
@@ -94,14 +118,14 @@ export function StoreBrandLogo({ listId, identity, size = 56, expandsOnTap = fal
       ]}
     >
       {showing ? null : <Ionicons color={systemColors.green} name="cart" size={size * 0.5} />}
-      {state.uri ? (
+      {uri ? (
         <Image
           accessible={false}
-          onError={() => setLoaded(null)}
-          onLoad={() => setLoaded(state.uri)}
+          onError={() => (usingCustom ? setCustomFailed(custom) : setLoaded(null))}
+          onLoad={() => setLoaded(uri)}
           resizeMode="contain"
           // No persistent redistribution of provider assets (:79): iOS skips the URL cache.
-          source={{ uri: state.uri, cache: Platform.OS === 'ios' ? 'reload' : undefined }}
+          source={{ uri, cache: Platform.OS === 'ios' && !usingCustom ? 'reload' : undefined }}
           style={[styles.logo, { width: size * 0.94, height: size * 0.94, opacity: showing ? 1 : 0 }]}
           testID="store-brand-image"
         />
@@ -112,11 +136,11 @@ export function StoreBrandLogo({ listId, identity, size = 56, expandsOnTap = fal
   return (
     <>
       {expandsOnTap && showing ? (
-        <Pressable accessibilityLabel={`Expand ${state.label} logo`} accessibilityRole="button" onPress={() => setExpanded(true)} testID="shopping-store-logo-preview">
+        <Pressable accessibilityLabel={`Expand ${label} logo`} accessibilityRole="button" onPress={() => setExpanded(true)} testID="shopping-store-logo-preview">
           {avatar}
         </Pressable>
       ) : (
-        <View accessibilityLabel={showing ? `${state.label} logo` : 'Shopping list'} accessible testID="store-brand-logo">
+        <View accessibilityLabel={showing ? `${label} logo` : 'Shopping list'} accessible testID="store-brand-logo">
           {avatar}
         </View>
       )}
@@ -126,13 +150,13 @@ export function StoreBrandLogo({ listId, identity, size = 56, expandsOnTap = fal
             <View style={styles.bar}>
               <View style={styles.side} />
               <Text accessibilityRole="header" numberOfLines={1} style={[headline, styles.title, { color: '#000000' }]}>
-                {state.label}
+                {label}
               </Text>
               <Pressable accessibilityRole="button" hitSlop={8} onPress={() => setExpanded(false)} style={[styles.side, styles.trailing]} testID="store-logo-done">
                 <Text style={[headline, { color: theme.colors.link }]}>Done</Text>
               </Pressable>
             </View>
-            {state.uri ? <Image accessibilityLabel={`${state.label} logo`} resizeMode="contain" source={{ uri: state.uri }} style={styles.large} /> : null}
+            {uri ? <Image accessibilityLabel={`${label} logo`} resizeMode="contain" source={{ uri }} style={styles.large} /> : null}
           </SafeAreaView>
         </Modal>
       ) : null}

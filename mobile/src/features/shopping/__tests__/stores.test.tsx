@@ -111,6 +111,32 @@ describe('Store logos', () => {
     expect(screen.queryByTestId('store-brand-image')).toBeNull();
   });
 
+  /** bdb68ce (StoreBrandLogo.swift `load()`): the list's own logo first, labelled with the store name. */
+  it('shows the list’s own logo without asking for the brand, and it expands', async () => {
+    await render(<StoreBrandLogo customImageData="/9j/AA==" expandsOnTap identity="Safeway|https://www.safeway.com" listId="l4" />);
+    const image = screen.getByTestId('store-brand-image');
+    expect(image.props.source.uri).toBe('data:image/jpeg;base64,/9j/AA==');
+    expect(mockBrand).not.toHaveBeenCalled();
+    await fireEvent(image, 'load');
+    await fireEvent.press(screen.getByLabelText('Expand Safeway logo'));
+    expect(screen.getByLabelText('Safeway logo')).toBeTruthy();
+  });
+
+  it('falls back to the brand when the list’s logo cannot be drawn', async () => {
+    mockBrand.mockResolvedValue({ brand: { displayName: 'Safeway', logoUrl: 'https://cdn.brandfetch.io/safeway/logo.png?c=1' } });
+    await render(<StoreBrandLogo customImageData="/9j/broken" identity="Safeway|" listId="l5" />);
+    await fireEvent(screen.getByTestId('store-brand-image'), 'error');
+    await waitFor(() => expect(mockBrand).toHaveBeenCalledWith('l5'));
+    await waitFor(() => expect(screen.getByTestId('store-brand-image').props.source.uri).toBe('https://cdn.brandfetch.io/safeway/logo.png?c=1'));
+  });
+
+  it('a null or empty logo is no logo', async () => {
+    mockBrand.mockResolvedValue({ brand: { displayName: 'Safeway', logoUrl: null } });
+    await render(<StoreBrandLogo customImageData={null} identity="Safeway|" listId="l6" />);
+    await waitFor(() => expect(mockBrand).toHaveBeenCalledWith('l6'));
+    expect(screen.queryByTestId('store-brand-image')).toBeNull();
+  });
+
   it('keeps the cart when the brand request fails', async () => {
     mockBrand.mockRejectedValue(new Error('offline'));
     await render(<StoreBrandLogo identity="Other|" listId="l3" />);

@@ -80,7 +80,7 @@ export default function MyListsScreen() {
                 <View key={list.id}>
                   {index > 0 ? <View style={[styles.divider, { backgroundColor: theme.colors.separator }]} /> : null}
                   <Pressable accessibilityRole="button" onPress={() => router.push({ pathname: '/wellness/shopping/[id]', params: { id: list.id } })} style={styles.listRow} testID={`shopping-list-${list.id}`}>
-                    <StoreBrandLogo identity={identity} listId={list.id} size={48} />
+                    <StoreBrandLogo customImageData={list.storeLogoData} identity={identity} listId={list.id} size={48} />
                     <View style={styles.grow}>
                       <Text style={[headline, { color: theme.colors.ink }]}>{list.title}</Text>
                       <Text style={[styles.caption, { color: theme.colors.secondary }]}>{`${itemCount(list.items.length)}${open ? '' : ' · Completed'}`}</Text>
