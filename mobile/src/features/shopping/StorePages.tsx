@@ -12,6 +12,8 @@ import { STORE_HOURS_ERROR, useStoreHours } from '../../query/useShoppingOffers'
 import { brand, inputText, linearGradientStops, textStyles, useTheme } from '../../theme';
 import { headline } from '../moments/components';
 import { FormButton, FormRow, FormScroll, FormSection, FormText } from '../moments/form';
+import { useMinuteTick } from '../../lib/useMinuteTick';
+import { storeHoursRowIsToday, storeHoursRowLabel } from './storeHoursDay';
 
 /**
  * `ShoppingStoreFinder` (ios/App/ShoppingViews.swift:693-790) and `ShoppingStoreHoursView`
@@ -237,6 +239,7 @@ export function StoreHoursPage({ placeId, name, mapsUrl }: { placeId: string | n
   const result = hours.data ?? null;
   const busy = hours.isFetching;
   const error = hours.isError && !busy ? STORE_HOURS_ERROR : null;
+  const now = useMinuteTick();
   const rows: { key: string; node: ReactNode }[] = [{ key: 'name', node: <Text style={[headline, { color: theme.colors.label }]}>{name}</Text> }];
   if (busy) {
     rows.push({
@@ -261,7 +264,19 @@ export function StoreHoursPage({ placeId, name, mapsUrl }: { placeId: string | n
       });
     }
     if (result.days.length === 0) rows.push({ key: 'none', node: <FormText>No hours provided for this store.</FormText> });
-    result.days.forEach((day, index) => rows.push({ key: `day-${index}`, node: <FormText>{day}</FormText> }));
+    // bb57e09 (ShoppingStoreHoursView.swift:27-34): today's row at the STORE is bold, "Today, …" to a
+    // screen reader, re-checked every minute (`TimelineView(.everyMinute)`).
+    result.days.forEach((day, index) => {
+      const today = storeHoursRowIsToday(day, now, result.utcOffsetMinutes);
+      rows.push({
+        key: `day-${index}`,
+        node: (
+          <Text accessibilityLabel={storeHoursRowLabel(day, today)} style={[textStyles.body, { color: theme.colors.label }, today && styles.today]} testID={today ? 'store-hours-today' : `store-hours-day-${index}`}>
+            {day}
+          </Text>
+        ),
+      });
+    });
     rows.push({
       key: 'note',
       node: (
@@ -298,6 +313,7 @@ export function StoreHoursPage({ placeId, name, mapsUrl }: { placeId: string | n
 }
 
 const styles = StyleSheet.create({
+  today: { fontWeight: '700' },
   fill: { flex: 1 },
   grow: { flex: 1 },
   semibold: { fontWeight: '600' },

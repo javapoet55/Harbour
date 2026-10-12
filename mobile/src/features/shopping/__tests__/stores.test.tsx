@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import * as Location from 'expo-location';
-import { Linking } from 'react-native';
+import { Linking, StyleSheet } from 'react-native';
 
 const mockPush = jest.fn();
 jest.mock('expo-router', () => ({
@@ -334,6 +334,20 @@ describe('List Settings', () => {
     expect(screen.queryByText('Back')).toBeNull();
     await fireEvent.press(screen.getByTestId('list-settings-back'));
     expect(screen.getByText('List Settings')).toBeTruthy();
+  });
+
+  /** bb57e09 (ShoppingStoreHoursView.swift:27-34): today's row at the store is bold, "Today, …" to a screen reader. */
+  it('Store Hours bolds the store’s today, by its UTC offset across midnight', async () => {
+    // 01:00 UTC on Saturday 10 October is still Friday at a store seven hours behind.
+    const now = jest.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-10-10T01:00:00Z'));
+    mockHours.mockResolvedValueOnce({ days: ['Thursday: 10 AM–8:30 PM', 'Friday: 10 AM–8:30 PM', 'Saturday: 9:30 AM–7 PM'], openNow: true, current: true, utcOffsetMinutes: -420 });
+    await open(list({ storeName: 'Safeway', storePlaceId: 'place-1' }));
+    await fireEvent.press(screen.getByTestId('list-settings-hours'));
+    await waitFor(() => expect(screen.getByTestId('store-hours-today')).toHaveTextContent('Friday: 10 AM–8:30 PM'));
+    expect(screen.getByTestId('store-hours-today').props.accessibilityLabel).toBe('Today, Friday: 10 AM–8:30 PM');
+    expect(StyleSheet.flatten(screen.getByTestId('store-hours-today').props.style)).toMatchObject({ fontWeight: '700' });
+    expect(StyleSheet.flatten(screen.getByTestId('store-hours-day-2').props.style).fontWeight).not.toBe('700');
+    now.mockRestore();
   });
 
   it('Store Hours without a chosen place says how to choose one', async () => {
