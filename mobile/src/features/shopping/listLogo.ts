@@ -1,4 +1,5 @@
 import type { GroceryList } from '../../api/shopping';
+import type { ImageEncoder } from './image';
 
 /**
  * A list's own store logo (bdb68ce, migration 20261009000000_shopping_list_logo):
@@ -47,4 +48,39 @@ export function logoForSave(list: Pick<GroceryList, 'storeLogoData'>): string {
  */
 export function withStoreName<T extends Pick<GroceryList, 'storeName' | 'storeWebsite' | 'storePlaceId' | 'storeLogoData'>>(list: T, storeName: string): T {
   return { ...list, storeName, storeWebsite: null, storePlaceId: null, storeLogoData: null };
+}
+
+/**
+ * `apply(_:)` (ShoppingListLogoEditor.swift:95-112): at most 384 px on the long edge (never enlarged),
+ * drawn onto opaque white, then JPEG at 0.85, 0.65, 0.45 and 0.25 until it is at most 67,500 bytes.
+ * The same pipeline as an item image (`image.ts`), with the logo's numbers: `flatten` is what keeps a
+ * transparent PNG logo on white rather than black on Android. Resolves to bare base64.
+ */
+export async function encodeLogoImage(uri: string, encoder: ImageEncoder): Promise<string> {
+  const source = await encoder.size(uri);
+  if (!(source.width > 0) || !(source.height > 0)) throw new Error(LOGO_UNOPENABLE);
+  const scale = logoScale(source.width, source.height);
+  const size = { width: Math.max(1, Math.round(source.width * scale)), height: Math.max(1, Math.round(source.height * scale)) };
+  const opaque = await encoder.flatten(uri, size);
+  for (const quality of LOGO_QUALITIES) {
+    const data = await encoder.jpeg(opaque, size, quality);
+    if (base64Bytes(data) <= LOGO_MAX_BYTES) return data;
+  }
+  throw new Error(LOGO_TOO_LARGE);
+}
+
+/** Decoded size of base64, without decoding it. */
+function base64Bytes(value: string): number {
+  const padding = value.endsWith('==') ? 2 : value.endsWith('=') ? 1 : 0;
+  return Math.floor((value.length * 3) / 4) - padding;
+}
+
+/** "Paste copied image" with nothing to paste (`:51-54`). */
+export const LOGO_NO_CLIPBOARD_IMAGE = 'Copy an image first, or save it to Photos and choose it above.';
+
+/** "Search Google Images" (`searchURL`, :17-21), or `null` without a store name (the button is disabled). */
+export function logoSearchUrl(storeName: string): string | null {
+  const name = storeName.trim();
+  if (name === '') return null;
+  return `https://www.google.com/search?${new URLSearchParams({ tbm: 'isch', q: `${name} logo` }).toString()}`;
 }

@@ -1,6 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useState } from 'react';
-import { Linking, Pressable, StyleSheet, TextInput } from 'react-native';
+import { Linking, Pressable, StyleSheet, TextInput, View } from 'react-native';
 
 import type { GroceryList, ShoppingStoreSuggestion } from '../../api/shopping';
 import { Text } from '../../components/Text';
@@ -11,6 +11,7 @@ import { DateField, FormField, FormRow, FormScroll, FormSection, FormText, FormT
 import { StoreFinderPage, StoreHoursPage } from './StorePages';
 import { addressZip, fullAddress, mapsUrl, storeAddress, type ShoppingStoreAddress } from './storeAddress';
 import { withStoreName } from './listLogo';
+import { LogoEditButton, LogoEditorPage, type LogoEditorDeps } from './LogoEditor';
 
 /**
  * `ShoppingSettings` (ios/App/ShoppingViews.swift:642-692): name, date and weekly repeat, then "Store
@@ -18,7 +19,8 @@ import { withStoreName } from './listLogo';
  * Store Hours. Save only, disabled while the name is empty or the ZIP is not a US ZIP.
  *
  * Swift pushes Stores Near You and Store Hours inside the sheet's `NavigationStack`; here they are
- * pages of the same sheet, with Back.
+ * pages of the same sheet, with Back. The Store Logo editor (bdb68ce) is a sheet over this one in Swift;
+ * it is a page here too, with Swift's Done, since Android cannot stack a second sheet on this modal.
  */
 
 const ZIP = /^[0-9]{5}(-[0-9]{4})?$/;
@@ -39,12 +41,28 @@ export function withAddress(list: GroceryList, lines: ShoppingStoreAddress): Gro
   return { ...list, storeAddress: fullAddress(lines), storeZip: addressZip(lines), storePlaceId: null, storeWebsite: null };
 }
 
-type Page = 'settings' | 'stores' | 'hours';
+type Page = 'settings' | 'stores' | 'hours' | 'logo';
 
-export function ListSettingsSheet({ visible, list, onSave, onClose }: { visible: boolean; list: GroceryList; onSave: (list: GroceryList) => void; onClose: () => void }) {
+export function ListSettingsSheet({
+  visible,
+  list,
+  onSave,
+  onClose,
+  logoDeps,
+}: {
+  visible: boolean;
+  list: GroceryList;
+  onSave: (list: GroceryList) => void;
+  onClose: () => void;
+  /** Test seam for the logo editor's photo, clipboard and encoder. */
+  logoDeps?: LogoEditorDeps;
+}) {
   const [draft, setDraft] = useState(list);
   const [lines, setLines] = useState(() => storeAddress(list.storeAddress, list.storeZip));
   const [page, setPage] = useState<Page>('settings');
+  // The editor's `loading` and `failure` (ShoppingListLogoEditor.swift:14-15): Done is off while loading.
+  const [logoLoading, setLogoLoading] = useState(false);
+  const [logoFailure, setLogoFailure] = useState<string | null>(null);
   const [shown, setShown] = useState(visible);
   // A fresh copy of the list each time the sheet opens, as Swift's `@State var initial` is.
   if (shown !== visible) {
@@ -61,11 +79,13 @@ export function ListSettingsSheet({ visible, list, onSave, onClose }: { visible:
   return (
     <MomentSheet
       visible={visible}
-      title={page === 'stores' ? 'Stores Near You' : page === 'hours' ? 'Store Hours' : ''}
-      onRequestClose={page === 'settings' ? onClose : () => setPage('settings')}
-      left={page === 'settings' ? undefined : back}
+      title={page === 'stores' ? 'Stores Near You' : page === 'hours' ? 'Store Hours' : page === 'logo' ? 'Store Logo' : ''}
+      onRequestClose={page === 'settings' ? onClose : page === 'logo' ? () => !logoLoading && setPage('settings') : () => setPage('settings')}
+      left={page === 'settings' || page === 'logo' ? undefined : back}
       right={
-        page === 'settings'
+        page === 'logo'
+          ? { title: 'Done', bold: true, disabled: logoLoading, onPress: () => setPage('settings'), testID: 'store-logo-done' }
+          : page === 'settings'
           ? {
               title: 'Save',
               disabled: !settingsSavable(draft),
@@ -90,6 +110,19 @@ export function ListSettingsSheet({ visible, list, onSave, onClose }: { visible:
             setPage('settings');
           }}
         />
+      ) : page === 'logo' ? (
+        <LogoEditorPage
+          deps={logoDeps}
+          failure={logoFailure}
+          imageData={draft.storeLogoData}
+          listId={draft.id}
+          loading={logoLoading}
+          onChange={(storeLogoData) => setDraft({ ...draft, storeLogoData })}
+          setFailure={setLogoFailure}
+          setLoading={setLogoLoading}
+          storeName={draft.storeName ?? ''}
+          website={draft.storeWebsite}
+        />
       ) : page === 'hours' ? (
         <StoreHoursPage
           mapsUrl={mapsUrl({ name: draft.storeName, address: draft.storeAddress, placeId: draft.storePlaceId, directions: false })}
@@ -104,7 +137,10 @@ export function ListSettingsSheet({ visible, list, onSave, onClose }: { visible:
             setLines(next);
             setDraft(withAddress(draft, next));
           }}
-          onPage={setPage}
+          onPage={(next) => {
+            if (next === 'logo') setLogoFailure(null);
+            setPage(next);
+          }}
           setDraft={setDraft}
         />
       )}
@@ -167,13 +203,24 @@ function SettingsPage({
           <LinkRow icon="add" title="Add New Store" chevron onPress={() => onPage('stores')} testID="shopping-add-store" />
         </FormRow>
         <FormRow>
-          {/* Typing a name forgets the chosen place and its logo (:671). */}
-          <FormField
-            placeholder="Store name"
-            value={draft.storeName ?? ''}
-            onChangeText={(storeName) => setDraft(withStoreName(draft, storeName))}
-            testID="list-settings-store-name"
-          />
+          {/* Typing a name forgets the chosen place and its logo (:671); the logo editor sits beside it
+              (`HStack(spacing: 14)`, :670-674). */}
+          <View style={styles.storeName}>
+            <View style={styles.grow}>
+              <FormField
+                placeholder="Store name"
+                value={draft.storeName ?? ''}
+                onChangeText={(storeName) => setDraft(withStoreName(draft, storeName))}
+                testID="list-settings-store-name"
+              />
+            </View>
+            <LogoEditButton
+              identity={`${draft.storeName ?? ''}|${draft.storeWebsite ?? ''}`}
+              imageData={draft.storeLogoData}
+              listId={draft.id}
+              onPress={() => onPage('logo')}
+            />
+          </View>
         </FormRow>
         <FormRow>{address(lines.street, 'Street address', (street) => onAddress({ ...lines, street }), 3 * 22 + 16, 'list-settings-street')}</FormRow>
         <FormRow>{address(lines.locality, 'City, state and ZIP code', (locality) => onAddress({ ...lines, locality }), 2 * 22 + 16, 'list-settings-locality')}</FormRow>
@@ -208,4 +255,5 @@ const styles = StyleSheet.create({
   sheetTitle: { marginHorizontal: 16, marginTop: 4 },
   address: { flex: 1, paddingVertical: 8, backgroundColor: 'transparent' },
   link: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 14, minHeight: 44 },
+  storeName: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 4 },
 });
