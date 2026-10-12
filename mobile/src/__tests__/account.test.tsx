@@ -854,6 +854,27 @@ describe('the Settings screen', () => {
       expect(order).toEqual(['dismissAll while signedIn', 'back while signedIn']);
     });
 
+    /** 4185501: `ProgressView("Deleting account…")` over a disabled, undismissable screen. */
+    it('shows "Deleting account…" over a blocked screen while the deletion runs', async () => {
+      let finish: (value: { ok: boolean }) => void = () => undefined;
+      mockDelete.mockReturnValue(new Promise((resolve) => (finish = resolve)));
+      await show(<Settings />);
+      await waitFor(() => expect(screen.getByTestId('settings-delete-account')).toBeTruthy());
+
+      fireEvent.press(screen.getByTestId('settings-delete-account'));
+      const buttons = (Alert.alert as jest.Mock).mock.calls.at(-1)?.[2] as { text: string; onPress?: () => void }[];
+      buttons[1].onPress?.();
+
+      await waitFor(() => expect(screen.getByTestId('settings-deleting')).toHaveTextContent('Deleting account…'));
+      expect(screen.getByTestId('settings-column').props.pointerEvents).toBe('none');
+      expect(screen.getByTestId('settings-back').props.accessibilityState).toMatchObject({ disabled: true });
+      // A second Delete while it runs does nothing (`guard !deletingAccount`).
+      buttons[1].onPress?.();
+      expect(mockDelete).toHaveBeenCalledTimes(1);
+      finish({ ok: true });
+      await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/sign-in'));
+    });
+
     it('when the delete fails, says why and stays put, still signed in', async () => {
       const router = { replace: mockReplace };
       mockCanDismiss.mockReturnValue(true);
@@ -865,14 +886,15 @@ describe('the Settings screen', () => {
       const buttons = (Alert.alert as jest.Mock).mock.calls.at(-1)?.[2] as { text: string; onPress?: () => void }[];
       buttons[1].onPress?.();
 
-      // `model.error`'s alert (RootView.swift:76-78).
+      // `AccountDeletionPresentation`'s alert (ProfileView.swift:682-697, 4185501).
       await waitFor(() =>
         expect(Alert.alert).toHaveBeenCalledWith(
-          'Unable to complete request',
+          'Couldn’t delete account',
           'A wish is being submitted. Wait for its status before deleting your account.',
           [{ text: 'OK' }],
         ),
       );
+      expect(screen.queryByTestId('settings-deleting')).toBeNull();
       expect(useSession.getState().status).toBe('signedIn');
       expect(router.replace).not.toHaveBeenCalled();
       expect(mockBack).not.toHaveBeenCalled();

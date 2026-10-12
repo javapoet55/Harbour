@@ -2,7 +2,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Linking, Platform, Pressable, StyleSheet, Switch, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -51,7 +51,7 @@ import { useMinuteTick } from '../../src/lib/useMinuteTick';
 import { encodeProfilePhoto } from '../../src/photo/encodePhoto';
 import { completeGoogleConnect, type GoogleConnectResult, useCalendarConnections, useConnectGoogleCalendar, useDisconnectCalendar, useSetCalendarWrites } from '../../src/query/useCalendar';
 import { useMe } from '../../src/query/useMe';
-import { useDeleteAccount, useSyncNow, useUpdateProfile, useUploadPhoto } from '../../src/query/useProfile';
+import { DELETE_ACCOUNT_FAILED_TITLE, DELETING_ACCOUNT, useDeleteAccount, useSyncNow, useUpdateProfile, useUploadPhoto } from '../../src/query/useProfile';
 import { useAppearance } from '../../src/store/appearance';
 import { useConsent } from '../../src/store/consent';
 import { brand, ElevatedSurface, useTheme } from '../../src/theme';
@@ -131,6 +131,7 @@ function SettingsScreen({
   const setWrites = useSetCalendarWrites();
   const disconnect = useDisconnectCalendar();
   const deleteAccount = useDeleteAccount({ beforeSessionEnds: closePresentedScreens });
+  const deletingAccount = useRef(false);
 
   // `@State private var name/preferences/next` (ProfileView.swift:132-134).
   const [name, setName] = useState(() => profile?.name ?? '');
@@ -241,11 +242,18 @@ function SettingsScreen({
    * `model.error` alert (RootView.swift:76-78) and navigates nowhere: the account still exists.
    */
   const removeAccount = async () => {
+    // `guard !deletingAccount else { return }; deletingAccount = true; defer { deletingAccount = false }`
+    // (4185501). A ref, because the confirmation's button keeps the closure it was created with.
+    if (deletingAccount.current) return;
+    deletingAccount.current = true;
     try {
       await deleteAccount.mutateAsync();
     } catch (cause) {
-      Alert.alert('Unable to complete request', cause instanceof Error ? cause.message : String(cause), [{ text: 'OK' }]);
+      // `AccountDeletionPresentation`'s alert (ProfileView.swift:682-697), 4185501.
+      Alert.alert(DELETE_ACCOUNT_FAILED_TITLE, cause instanceof Error && cause.message !== '' ? cause.message : 'Please try again.', [{ text: 'OK' }]);
       return;
+    } finally {
+      deletingAccount.current = false;
     }
     replaceWithSignIn();
   };
@@ -660,6 +668,18 @@ function SettingsScreen({
         ) : null}
         </View>
       </KeyboardAwareScrollView>
+
+      {/* `ProgressView("Deleting account…").padding(24).background(.regularMaterial, in:
+          RoundedRectangle(cornerRadius: 16))` over the screen while the deletion runs (4185501). The
+          screen is already disabled and undismissable then (`blocked`). */}
+      {deleteAccount.isPending ? (
+        <View style={styles.deletingLayer} testID="settings-deleting">
+          <View style={[styles.deleting, { backgroundColor: theme.scheme === 'dark' ? 'rgba(44, 44, 46, 0.94)' : 'rgba(242, 242, 247, 0.94)' }]}>
+            <ActivityIndicator color={theme.colors.secondaryLabel} size="small" />
+            <Text style={[theme.typography.body, { color: theme.colors.secondaryLabel }]}>{DELETING_ACCOUNT}</Text>
+          </View>
+        </View>
+      ) : null}
     </SafeAreaView>
   );
 }
@@ -799,6 +819,8 @@ function withAlpha(color: string, alpha: number): string {
 }
 
 const styles = StyleSheet.create({
+  deletingLayer: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' },
+  deleting: { alignItems: 'center', gap: 8, padding: 24, borderRadius: 16 },
   // `VStack(alignment: .leading, spacing: 8)` and `.font(.headline)` (WorkingDaysField).
   workingDays: { gap: 8 },
   workingDaysTitle: { fontSize: 17, lineHeight: 22, fontWeight: '600' },
