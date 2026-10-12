@@ -77,6 +77,14 @@ export const taskIcons = {
   'sun.max': 'sunny-outline',
   // The Wellness chooser's hero in dark mode (WellnessChooserView.swift, 4185501).
   'moon.stars.fill': 'moon',
+  // Bug reports (BugReportView.swift, ProfileView.swift:88; d511fef).
+  ladybug: 'bug-outline',
+  'heart.fill': 'heart',
+  'checkmark.shield.fill': 'shield-checkmark',
+  iphone: 'phone-portrait-outline',
+  'iphone.gen3.radiowaves.left.and.right': 'phone-portrait-outline',
+  'doc.on.doc': 'copy-outline',
+  'arrow.clockwise': 'refresh',
   // Account and settings (Phase 7). `AccountView`'s menu rows (ios/App/ProfileView.swift:76-82,
   // :104-111) and `ProfileSettingsView`'s cards (`:146-270`).
   'person.crop.circle': 'person-circle-outline',

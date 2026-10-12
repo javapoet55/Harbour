@@ -45,6 +45,8 @@ export type Palette = {
   surfaceElevated: string;
   separator: string;
   danger: string;
+  /** iOS `.green`: "Screenshot captured" on the bug report (BugReportView.swift:158). */
+  success: string;
   /** `.ultraThinMaterial` stand-in for the auth cards. expo-blur tints over this. */
   glassFill: string;
   /**
@@ -153,6 +155,7 @@ export const palettes: Record<ColorScheme, Palette> = {
     surfaceElevated: '#FFFFFF',
     separator: 'rgba(60, 60, 67, 0.29)',
     danger: '#FF3B30',
+    success: '#34C759',
     glassFill: 'rgba(236, 236, 240, 0.72)', // RootView.swift:354 `.ultraThinMaterial`, tuned against the Swift render
     glassSolid: '#EEEEF1', // measured off the Swift Action Needed card: (238, 238, 241)
     glassStroke: 'rgba(255, 255, 255, 0.8)', // RootView.swift:355 Color.white.opacity(0.8)
@@ -199,6 +202,7 @@ export const palettes: Record<ColorScheme, Palette> = {
     surfaceElevated: '#2C2C2E',
     separator: 'rgba(84, 84, 88, 0.6)',
     danger: '#FF453A',
+    success: '#30D158',
     glassFill: 'rgba(40, 40, 44, 0.72)', // `.ultraThinMaterial` over the dark systemBackground
     glassSolid: '#1D1D20', // the same fill composited over the black grouped background
     // RootView.swift:355 `Color.white.opacity(0.8)`, the same as light. A previous pass guessed

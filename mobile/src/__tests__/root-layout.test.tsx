@@ -34,6 +34,8 @@ jest.mock('expo-router', () => {
       dismissAll: () => mockDismissAll(),
     },
     useLocalSearchParams: () => ({}),
+    // Bug reports tag the current route (src/features/bugReport/useBugReportHost.ts).
+    usePathname: () => '/today',
   };
 });
 

@@ -9,6 +9,7 @@ import { sanitizeCode } from '../../src/schemas/auth';
 import { androidGroup, androidLabel, inputText, isAndroid, textStyles, useTheme } from '../../src/theme';
 import { closePresentedScreens, replaceWithSignIn } from '../../src/lib/sessionNavigation';
 import { useSession } from '../../src/store/session';
+import { useSecureScreen } from '../../src/features/bugReport/coordinator';
 
 /**
  * Port of `PasswordResetView` (ios/App/RootView.swift:574-640).
@@ -39,6 +40,8 @@ export default function ResetPassword() {
   // like Change password does (`if profile != nil { await reset() }`, NexdoApp.swift:228), closing the
   // signed-in screens first (src/lib/sessionNavigation.ts).
   const [signedIn] = useState(() => useSession.getState().status === 'signedIn');
+  // Password fields: a bug report opened here takes no screenshot.
+  useSecureScreen();
   const request = useRequestPasswordReset();
   const confirm = useConfirmPasswordReset(signedIn ? { beforeSessionEnds: closePresentedScreens } : {});
   const busy = request.isPending || confirm.isPending;

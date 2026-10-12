@@ -8,6 +8,7 @@ import { closePresentedScreens, replaceWithSignIn } from '../../lib/sessionNavig
 import { useChangePassword } from '../../query/useAuth';
 import { useTheme } from '../../theme';
 import { FormButton, FormField, FormRow, FormScroll, FormSection, FormText } from '../moments/form';
+import { useSecureScreen } from '../bugReport/coordinator';
 
 /**
  * `ChangePasswordView` (ios/App/ProfileView.swift:150-198), pushed from Account. Three secure fields, the
@@ -39,6 +40,8 @@ export function ChangePasswordScreen({ onBack, onForgotPassword }: { onBack: () 
   const change = useChangePassword({ beforeSessionEnds: closePresentedScreens });
   const saving = change.isPending;
   const valid = passwordChangeValid(current, next, confirmation);
+  // Password fields: a bug report opened here takes no screenshot.
+  useSecureScreen();
 
   /** `save()` (:184-192). */
   const save = () => {

@@ -150,6 +150,8 @@ describe('diagnostics', () => {
 
   it('falls back to "0" and "unknown" like Swift rather than sending a value the server refuses', () => {
     expect(versionForServer('UpsideDownCake')).toBe('0');
+    // This app's own version: the numeric part goes, not "0".
+    expect(versionForServer('1.0.0-rc.1')).toBe('1.0.0');
     expect(versionForServer(undefined)).toBe('0');
     expect(deviceModelForServer('Pixel 8 Pro')).toBe('Pixel 8 Pro');
     expect(deviceModelForServer('小米')).toBe('unknown');
