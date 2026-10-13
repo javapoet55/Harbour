@@ -9,7 +9,7 @@ vi.mock('@/lib/executive-recommendations', () => ({ buildExecutiveRecommendation
 vi.mock('@/server/reminders', () => ({ scheduleDefaultReminders: mocks.reminders, scheduleRequestedReminder: mocks.requestedReminder }));
 vi.mock('@/server/calendar-sync', () => ({ pushTaskToExternal: vi.fn(), pushEventToExternal: vi.fn(async () => ({ status: 'not_connected', total: 0, succeeded: 0 })) }));
 vi.mock('@/server/replanner', () => ({ generateReplanProposal: vi.fn() }));
-vi.mock('@/server/agenda', () => ({ listEventsInRange: mocks.events }));
+vi.mock('@/server/agenda', () => ({ listDisplayEventsInRange: mocks.events }));
 vi.mock('@/server/db', () => ({ prisma: { task: { findMany: mocks.tasks, findFirst: mocks.owned, update: mocks.taskUpdate }, category: { findMany: mocks.categories, create: mocks.categoryCreate }, user: { findUniqueOrThrow: mocks.user }, calendarEvent: { upsert: mocks.eventSave }, reminder: { deleteMany: vi.fn(), upsert: mocks.reminderSave }, recurrenceRule: { deleteMany: vi.fn(), upsert: mocks.recurrenceSave } } }));
 const task = { id: 'task1', title: 'Call Damien', status: 'PLANNED', priority: 'NORMAL', durationMin: 30, startAt: new Date('2099-01-01T10:00:00Z'), dueAt: null, critical: false };
 const args = { title: 'Call Damien', scheduledAt: '2099-01-01T10:00:00Z', durationMin: 30 };

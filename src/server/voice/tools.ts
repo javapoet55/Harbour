@@ -8,7 +8,7 @@ import { createHash } from 'node:crypto';
 import { prisma } from '@/server/db';
 import { createTask, updateTask, scheduleTask, completeTask, deleteTask } from '@/server/tasks';
 import { scheduleDefaultReminders, scheduleRequestedReminder } from '@/server/reminders';
-import { listEventsInRange } from '@/server/agenda';
+import { listDisplayEventsInRange } from '@/server/agenda';
 import { pushEventToExternal, pushTaskToExternal } from '@/server/calendar-sync';
 import { calendarPushMessage, calendarPushWarning } from '@/lib/calendar-push';
 import { generateReplanProposal } from '@/server/replanner';
@@ -96,7 +96,7 @@ export async function executeVoiceTool(userId: string, sessionId: string, callId
     // Include tasks that began before the requested window but may still overlap it.
     const [tasks, events] = await Promise.all([
       prisma.task.findMany({ where: { userId, deletedAt: null, status: { notIn: ['CANCELLED', 'COMPLETED'] }, startAt: { gte: new Date(+from - 86400000), lt: to } }, select: selection, take: 201 }),
-      listEventsInRange(userId, from, to),
+      listDisplayEventsInRange(userId, from, to),
     ]);
     if (tasks.length > 200 || events.length > 200) return { success: false, error: 'Window too busy; request a smaller range.' };
     const overlapping = tasks.filter(t => t.startAt && +t.startAt + t.durationMin * 60000 > +from);
