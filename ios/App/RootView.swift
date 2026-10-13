@@ -718,8 +718,12 @@ struct PasswordResetView: View {
     @State private var codeSent = false
     @State private var complete = false
     @State private var localError: String?
+    private let onComplete: (() -> Void)?
 
-    init(initialEmail: String) { _email = State(initialValue: initialEmail) }
+    init(initialEmail: String, onComplete: (() -> Void)? = nil) {
+        _email = State(initialValue: initialEmail)
+        self.onComplete = onComplete
+    }
 
     var body: some View {
         NavigationStack {
@@ -755,7 +759,7 @@ struct PasswordResetView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { closePasswordReset() } } }
             .alert("Password updated", isPresented: $complete) {
-                Button("Sign In") { closePasswordReset() }
+                Button("Sign In") { closePasswordReset(); onComplete?() }
             } message: { Text("You can now sign in with your new password.") }
         }
         .presentationDetents([.large])
