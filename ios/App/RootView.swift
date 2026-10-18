@@ -138,6 +138,7 @@ struct RootView: View {
 
     private var authenticatedTabs: some View {
         NexdoTabShell(selection: $selectedTab)
+            .modifier(AppReviewPromptModifier(busy: model.busy || model.error != nil || taskActions.route != nil))
     }
 }
 
