@@ -7,7 +7,7 @@ import { z } from 'zod';
  * pages validate with plain HTML attributes — so these are derived from the two authorities instead:
  *
  * - `src/server/account-auth.ts`: `emailSchema` (trim, lowercase, email, max 254),
- *   `nameSchema` (trim, 1–100), `validatePassword` (>= 12 characters, <= 72 UTF-8 bytes),
+ *   `nameSchema` (trim, 1–100), `validatePassword` (non-empty, <= 72 UTF-8 bytes),
  *   and the `/^\d{6}$/` code test in `verifyEmail` / `resetPassword`.
  * - `ios/App/RootView.swift`: the `canSignIn` / `canCreate` gates and the
  *   "The passwords do not match." message, so the button enables at the same moment as in Swift.
@@ -27,7 +27,7 @@ export function utf8Length(value: string): number {
 }
 
 export const MAX_PASSWORD_BYTES = 72;
-export const MIN_PASSWORD_LENGTH = 12;
+export const MIN_PASSWORD_LENGTH = 1;
 export const CODE_LENGTH = 6;
 
 /** Matches src/server/account-auth.ts:6 `z.string().trim().toLowerCase().email().max(254)`. */
@@ -44,15 +44,14 @@ const name = z.string().trim().min(1, 'Enter your name.').max(100, 'Enter a name
 /** Matches src/server/account-auth.ts:18–23 `validatePassword`. */
 const newPassword = z
   .string()
-  .min(MIN_PASSWORD_LENGTH, `Use a password with at least ${MIN_PASSWORD_LENGTH} characters.`)
+  .min(MIN_PASSWORD_LENGTH, 'Enter your password.')
   .refine((value) => utf8Length(value) <= MAX_PASSWORD_BYTES, `Use a password of ${MAX_PASSWORD_BYTES} bytes or fewer.`);
 
 /** Matches the `/^\d{6}$/` test the server applies before looking a code up. */
 const code = z.string().regex(new RegExp(String.raw`^\d{${CODE_LENGTH}}$`), `Enter the ${CODE_LENGTH}-digit code.`);
 
 /**
- * Sign-in deliberately does not apply the 12-character rule: `canSignIn` in RootView.swift:432 only
- * requires a non-empty password, and an account created before the current policy must still sign in.
+ * Sign-in requires a non-empty password, including for existing accounts.
  */
 export const signInSchema = z.object({
   email,

@@ -815,7 +815,7 @@ the screen's main action. The email field was a plain row, unlike the other auth
 |---|---|
 | Email | The auth screens' field row (`AuthFieldRow`): the envelope tile, bordered in the focus accent while editing (§11). It stays in its group, with its helper text ("We'll email a six-digit code…") kept as the footer |
 | "Send Verification Code" (before a code is sent) | The primary `GradientButton`, 52pt, full width inside the sections' 16pt inset, 24pt under the email group. This row was not in the request, but it is the same kind of action; leaving it grey would have given the two stages different primary buttons |
-| "Update Password" | The primary `GradientButton`, 52pt, full width, 24pt under the Verification group. It is disabled until the code has six digits and the new password has at least 12 characters (RootView.swift:620), drawn in §11's disabled state: the gradient at 40% and the label at 70% |
+| "Update Password" | The primary `GradientButton`, 52pt, full width, 24pt under the Verification group. It is disabled until the code has six digits and the new password is non-empty (RootView.swift:620), drawn in §11's disabled state: the gradient at 40% and the label at 70% |
 | "Send a new code" | A centred text link in `link`, 16pt under the button, dimmed while a request is running |
 | Verification group | Unchanged group style. The 6-digit code was already `number-pad`, and `sanitizeCode` already stripped non-digits and capped it at six. Android now also sets `maxLength={6}` |
 

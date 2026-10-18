@@ -46,10 +46,12 @@ describe('signUpSchema', () => {
     expect(result.success).toBe(false);
   });
 
-  it('rejects a password shorter than 12 characters', () => {
-    const result = signUpSchema.safeParse({ ...valid, password: 'elevenchar', confirmation: 'elevenchar' });
-    expect(result.success).toBe(false);
-    expect(result.error?.issues.some((issue) => issue.message.includes('at least 12 characters'))).toBe(true);
+  it.each(['a', '123', 'password', ' ', '🔒'])('accepts a simple non-empty password: %s', password => {
+    expect(signUpSchema.safeParse({ ...valid, password, confirmation: password }).success).toBe(true);
+  });
+
+  it('rejects an empty password', () => {
+    expect(signUpSchema.safeParse({ ...valid, password: '', confirmation: '' }).success).toBe(false);
   });
 
   it('rejects a password over 72 UTF-8 bytes, matching validatePassword on the server', () => {
@@ -91,8 +93,8 @@ describe('passwordResetConfirmSchema', () => {
     expect(result.success).toBe(false);
   });
 
-  it('rejects a short new password', () => {
-    expect(passwordResetConfirmSchema.safeParse({ code: '123456', password: 'short', confirmation: 'short' }).success).toBe(false);
+  it('accepts a short new password', () => {
+    expect(passwordResetConfirmSchema.safeParse({ code: '123456', password: 'short', confirmation: 'short' }).success).toBe(true);
   });
 });
 

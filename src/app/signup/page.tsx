@@ -68,9 +68,9 @@ export default function SignupPage() {
           <form onSubmit={onSubmit} className="harbor-card mt-6 space-y-3 p-5">
             <label className="block text-sm font-medium">Full name<input className="harbor-input mt-1" value={name} onChange={(event) => setName(event.target.value)} autoComplete="name" required /></label>
             <label className="block text-sm font-medium">Email address<input className="harbor-input mt-1" type="email" value={email} onChange={(event) => setEmail(event.target.value)} autoComplete="email" required /></label>
-            <label className="block text-sm font-medium">Password<PasswordInput value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="new-password" minLength={12} required /></label>
-            <label className="block text-sm font-medium">Confirm password<PasswordInput value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} autoComplete="new-password" minLength={12} required /></label>
-            <p className="text-sm leading-6 text-[var(--muted)]">Use at least 12 characters. Your password is securely protected with a one-way hash.</p>
+            <label className="block text-sm font-medium">Password<PasswordInput value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="new-password" minLength={1} required /></label>
+            <label className="block text-sm font-medium">Confirm password<PasswordInput value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} autoComplete="new-password" minLength={1} required /></label>
+            <p className="text-sm leading-6 text-[var(--muted)]">Your password is securely protected with a one-way hash.</p>
             <SignupBotCheck onToken={setTurnstileToken} attempt={attempt} />
             {error && <p role="alert" className="text-sm text-[var(--danger)]">{error}</p>}
             <button className="harbor-btn harbor-btn-brand w-full" type="submit" disabled={isSubmitting || !turnstileToken}>{isSubmitting ? 'Creating account…' : 'Create account'}</button>

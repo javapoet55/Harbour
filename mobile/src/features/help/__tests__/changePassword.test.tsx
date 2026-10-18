@@ -54,10 +54,10 @@ afterEach(() => {
   client?.clear();
 });
 
-test('valid: current present, 12+ characters, at most 72 bytes, confirmed, different', () => {
+test('valid: current present, non-empty, at most 72 bytes, confirmed, different', () => {
   expect(passwordChangeValid('old', 'a-long-enough-pw', 'a-long-enough-pw')).toBe(true);
   expect(passwordChangeValid('', 'a-long-enough-pw', 'a-long-enough-pw')).toBe(false);
-  expect(passwordChangeValid('old', 'short', 'short')).toBe(false);
+  expect(passwordChangeValid('old', 'short', 'short')).toBe(true);
   expect(passwordChangeValid('old', 'a-long-enough-pw', 'a-long-enough-px')).toBe(false);
   expect(passwordChangeValid('a-long-enough-pw', 'a-long-enough-pw', 'a-long-enough-pw')).toBe(false);
   // 25 emoji: 25 characters but 100 bytes.
@@ -68,7 +68,7 @@ test('valid: current present, 12+ characters, at most 72 bytes, confirmed, diffe
 test('shows the footer and the mismatch line; the button waits for a valid form', async () => {
   await open();
   expect(screen.getByRole('header')).toHaveTextContent('Change password');
-  expect(screen.getByText('Use at least 12 characters (72 bytes maximum). You’ll need to sign in again after changing your password.')).toBeTruthy();
+  expect(screen.getByText('Choose a password (72 bytes maximum). You’ll need to sign in again after changing your password.')).toBeTruthy();
   expect(screen.getByTestId('change-password-new').props.secureTextEntry).toBe(true);
   await fill('old-password', 'a-long-enough-pw', 'a-long-enough-px');
   expect(screen.getByTestId('change-password-mismatch')).toHaveTextContent('The new passwords do not match.');

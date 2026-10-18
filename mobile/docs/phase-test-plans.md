@@ -117,10 +117,9 @@ in development builds.
 
 1. Tap **Create account**. The sheet says "Create your account".
 2. **Create Account** stays dimmed until there is a name, an "@" in the email, and both password fields
-   have at least 12 characters. Confirm that.
-3. Enter a name, a new email address, and the same 12+ character password twice. Tap **Create Account**.
-4. Change one character of the confirmation and submit: "The passwords do not match." appears under the
-   card and nothing is sent. Put it back.
+   contain the same non-empty password. Confirm that.
+3. Enter a name, a new email address, and the same short password twice. Tap **Create Account**.
+4. Change one character of the confirmation: Create Account stays disabled and nothing is sent. Put it back.
 5. On success the **Verify your email** screen appears, saying a code was sent to that address, expiring
    in 24 hours. The keyboard opens on the code field.
 6. Type five digits: **Verify Email** stays dimmed. Type the sixth: it enables.

@@ -9,7 +9,7 @@ import { clearSession } from '@/server/session';
 import { prisma } from '@/server/db';
 import { POST } from './route';
 const oldPassword = 'old-password-123';
-const newPassword = 'new-password-456';
+const newPassword = 'a';
 const request = (body: unknown) => POST(new Request('http://localhost/api/auth/change-password', { method: 'POST', body: JSON.stringify(body) }));
 beforeEach(async () => {
   vi.resetAllMocks();
@@ -25,7 +25,7 @@ describe('change password', () => {
   it.each([
     { currentPassword: 'wrong-password', newPassword, confirmPassword: newPassword },
     { currentPassword: oldPassword, newPassword, confirmPassword: 'different-password' },
-    { currentPassword: oldPassword, newPassword: 'short', confirmPassword: 'short' },
+    { currentPassword: oldPassword, newPassword: '', confirmPassword: '' },
     { currentPassword: oldPassword, newPassword: oldPassword, confirmPassword: oldPassword },
     { currentPassword: oldPassword, newPassword: '🔒'.repeat(20), confirmPassword: '🔒'.repeat(20) },
   ])('rejects invalid credentials without signing out', async body => {

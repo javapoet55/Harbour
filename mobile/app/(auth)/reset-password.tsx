@@ -171,7 +171,7 @@ export default function ResetPassword() {
                   title={confirm.isPending ? 'Updating…' : 'Update Password'}
                   onPress={updatePassword}
                   // RootView.swift:620: six digits and at least twelve characters.
-                  disabled={busy || code.length !== 6 || password.length < 12}
+                  disabled={busy || code.length !== 6 || password.length === 0}
                   minHeight={52}
                   style={styles.androidPrimary}
                   testID="reset-update"
@@ -207,7 +207,7 @@ export default function ResetPassword() {
                     title={confirm.isPending ? 'Updating…' : 'Update Password'}
                     onPress={updatePassword}
                     // RootView.swift:620: six digits and at least twelve characters.
-                    disabled={busy || code.length !== 6 || password.length < 12}
+                    disabled={busy || code.length !== 6 || password.length === 0}
                     testID="reset-update"
                   />
                   <FormButton title="Send a new code" onPress={requestCode} disabled={busy} last />

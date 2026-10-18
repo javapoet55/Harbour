@@ -54,7 +54,7 @@ export default function SignUp() {
   // `checkingSignup` (RootView.swift:588): the security check, which disables the button but keeps its label.
   const [checking, setChecking] = useState(false);
   // RootView.swift:672-673 `canCreate`.
-  const canCreate = !busy && !checking && name.trim().length > 0 && email.includes('@') && password.length >= 12 && confirmation.length >= 12;
+  const canCreate = !busy && !checking && name.trim().length > 0 && email.includes('@') && password.length > 0 && password === confirmation;
 
   // The inline footnote slot: a schema message, or whatever the server said.
   const inlineError = errors.confirmation?.message ?? errors.password?.message ?? errors.email?.message ?? errors.name?.message ?? errors.root?.message;
@@ -208,7 +208,7 @@ export default function SignUp() {
       </GlassCard>
 
       <Text style={[styles.footnote, styles.policy, { color: theme.colors.secondary }]}>
-        Use at least 12 characters. Your password is sent securely to Nexdo and stored only as a one-way hash.
+        Your password is sent securely to Nexdo and stored only as a one-way hash.
       </Text>
 
       {inlineError ? (

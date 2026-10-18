@@ -31,8 +31,8 @@ async function renderSignUp() {
 async function fillIn() {
   await fireEvent.changeText(screen.getByLabelText('Full name'), 'Sri Ram');
   await fireEvent.changeText(screen.getByLabelText('Email address'), 'person@example.com');
-  await fireEvent.changeText(screen.getByLabelText('Password'), 'a-long-enough-password');
-  await fireEvent.changeText(screen.getByLabelText('Confirm password'), 'a-long-enough-password');
+  await fireEvent.changeText(screen.getByLabelText('Password'), 'a');
+  await fireEvent.changeText(screen.getByLabelText('Confirm password'), 'a');
   await waitFor(() => expect(screen.getByLabelText('Create Account').props.accessibilityState.disabled).toBe(false));
 }
 
@@ -46,7 +46,7 @@ describe('sign-up server errors', () => {
 
   it.each([
     'An account with this email already exists.',
-    'Use a password with at least 12 characters.',
+    'Enter a password (72 bytes maximum).',
     'The request could not be completed (500). Refresh to check the current state before retrying.',
   ])('shows %s once, in the single inline slot', async (message) => {
     mockRegister.mockRejectedValue(new ApiError({ status: 400, message }));
@@ -89,7 +89,7 @@ describe('the security check before registering', () => {
 
     finish('turnstile-token');
     await waitFor(() => expect(screen.getByLabelText('Creating Account…')).toBeTruthy());
-    expect(mockRegister).toHaveBeenCalledWith('Sri Ram', 'person@example.com', 'a-long-enough-password', undefined, 'turnstile-token');
+    expect(mockRegister).toHaveBeenCalledWith('Sri Ram', 'person@example.com', 'a', undefined, 'turnstile-token');
     register({ email: 'person@example.com', emailVerificationRequired: true, emailSent: true });
   });
 
