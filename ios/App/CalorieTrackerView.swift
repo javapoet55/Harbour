@@ -290,7 +290,8 @@ struct CalorieTrackerView: View {
         _store = StateObject(wrappedValue: CalorieStore(api: api))
     }
 
-    private let ink = Color(red: 0.06, green: 0.07, blue: 0.28)
+    @Environment(\.colorScheme) private var colorScheme
+    private let ink = Color.nexdoInk
     private let gradient = LinearGradient(colors: [.purple, .indigo, .blue], startPoint: .leading, endPoint: .trailing)
     private let labels = ["Protein", "Carbs", "Fats", "Fiber", "Calcium", "Iron", "Vitamin D", "Omega-3"]
     private let units = ["g", "g", "g", "g", "mg", "mg", "IU", "mg"]
@@ -361,7 +362,7 @@ struct CalorieTrackerView: View {
             }.id(page)
         }
         .foregroundStyle(ink)
-        .background(LinearGradient(colors: [Color.purple.opacity(0.065), .white, Color.blue.opacity(0.055)], startPoint: .topLeading, endPoint: .bottomTrailing).ignoresSafeArea())
+        .background(LinearGradient(colors: [Color.purple.opacity(0.065), Color(uiColor: .systemBackground), Color.blue.opacity(0.055)], startPoint: .topLeading, endPoint: .bottomTrailing).background(Color(uiColor: .systemBackground)).ignoresSafeArea())
         .overlay { if store.loading || working { ProgressView().padding(24).background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16)) } }
         .alert(live ? "Calorie Tracker" : "Calorie Tracker Preview", isPresented: Binding(get: { notice != nil || store.error != nil }, set: { if !$0 { notice = nil; store.error = nil } })) {
             Button("OK", role: .cancel) { notice = nil; store.error = nil }
@@ -433,7 +434,7 @@ struct CalorieTrackerView: View {
     private func card<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 14, content: content)
             .padding(16).frame(maxWidth: .infinity, alignment: .leading)
-            .background(.white.opacity(0.9), in: RoundedRectangle(cornerRadius: 22))
+            .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 22))
             .overlay(RoundedRectangle(cornerRadius: 22).stroke(.indigo.opacity(0.08)))
             .shadow(color: .indigo.opacity(0.04), radius: 10, y: 4)
     }
@@ -467,7 +468,13 @@ struct CalorieTrackerView: View {
 
     private var intro: some View {
         Group {
-            CaloriePackArt().frame(height: 165).accessibilityHidden(true)
+            Group {
+                if colorScheme == .dark {
+                    Image(systemName: "heart.text.clipboard.fill")
+                        .font(.system(size: 92)).foregroundStyle(.purple, .blue)
+                        .frame(maxWidth: .infinity)
+                } else { CaloriePackArt() }
+            }.frame(height: 165).accessibilityHidden(true)
             Text("Daily Food Check-in").font(.title2.bold()).frame(maxWidth: .infinity)
             Text(live ? "Build a daily habit. NexDo calls you once a day, logs what you ate and adds up the calories."
                       : "Build a daily habit. Plan a check-in, track meals and explore your nutrition goals.")
@@ -489,7 +496,7 @@ struct CalorieTrackerView: View {
             ForEach(0..<3) { index in
                 VStack(spacing: 6) {
                     Text("\(index + 1)").font(.headline).frame(width: 32, height: 32)
-                        .foregroundStyle(index == current ? .white : .indigo)
+                        .foregroundStyle(index == current ? .white : Color.wellnessAccent)
                         .background(index == current ? Color.indigo : Color.indigo.opacity(0.08), in: Circle())
                     Text(["Time", "Goals", "Confirm"][index]).font(.caption)
                 }.frame(maxWidth: .infinity)
@@ -502,17 +509,17 @@ struct CalorieTrackerView: View {
             Text("When should NexDo call you?").font(.title3.bold())
             Text("Choose a time for your daily meal check-in.").foregroundStyle(.secondary)
             card {
-                DatePicker("Call time", selection: $callTime, displayedComponents: .hourAndMinute).tint(.indigo)
+                DatePicker("Call time", selection: $callTime, displayedComponents: .hourAndMinute).tint(.wellnessAccent)
                 Divider()
                 Picker("Time zone", selection: $timeZoneID) {
                     ForEach(zoneChoices, id: \.self) { Text(zoneName($0)).tag($0) }
-                }.tint(.indigo)
+                }.tint(.wellnessAccent)
                 Divider()
-                Toggle("Repeat every day", isOn: $repeatDaily).tint(.indigo)
+                Toggle("Repeat every day", isOn: $repeatDaily).tint(.wellnessAccent)
                 Divider()
                 Picker("Agent voice", selection: $voice) {
                     ForEach(voiceChoices, id: \.self) { Text($0.capitalized).tag($0) }
-                }.tint(.indigo)
+                }.tint(.wellnessAccent)
             }
             Text("Calls are placed between 8:00 AM and 9:30 PM.").font(.caption).foregroundStyle(.secondary)
             Text("If I don’t answer").font(.headline)
@@ -520,7 +527,7 @@ struct CalorieTrackerView: View {
                 ForEach(noAnswerChoices, id: \.self) { choice in
                     Button { noAnswer = choice.key } label: {
                         HStack {
-                            Image(systemName: noAnswer == choice.key ? "checkmark.circle.fill" : "circle").foregroundStyle(.indigo)
+                            Image(systemName: noAnswer == choice.key ? "checkmark.circle.fill" : "circle").foregroundStyle(Color.wellnessAccent)
                             VStack(alignment: .leading, spacing: 4) {
                                 Text(choice.title).font(.headline)
                                 Text(choice.detail).font(.caption).foregroundStyle(.secondary)
@@ -551,7 +558,7 @@ struct CalorieTrackerView: View {
             goalRows(3..<8)
             if live {
                 card {
-                    Toggle("Daily insight", isOn: $insightsEnabled).tint(.indigo).accessibilityIdentifier("insights-toggle")
+                    Toggle("Daily insight", isOn: $insightsEnabled).tint(.wellnessAccent).accessibilityIdentifier("insights-toggle")
                     Text("One factual observation a day about your own goals, with an optional shopping suggestion. It never labels foods good or bad.").font(.caption).foregroundStyle(.secondary)
                 }
             }
@@ -820,7 +827,7 @@ struct CalorieTrackerView: View {
             } else if !insight.items.isEmpty {
                 HStack {
                     Button { Task { await store.actOnInsight(add: true, date: dateKey) } } label: { Label("Add to \(insight.listTitle ?? "shopping list")", systemImage: "cart.badge.plus") }
-                        .buttonStyle(.borderedProminent).tint(.indigo).accessibilityIdentifier("insight-add")
+                        .buttonStyle(.borderedProminent).tint(.wellnessAccent).accessibilityIdentifier("insight-add")
                     Button("Not now") { Task { await store.actOnInsight(add: false, date: dateKey) } }.accessibilityIdentifier("insight-dismiss")
                 }
             } else {

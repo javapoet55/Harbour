@@ -32,7 +32,7 @@ struct MomentsManagementEntry: View {
                                     Text("\(tab.rawValue) (\(groups.filter { tab.includes($0) }.count))")
                                         .font(.subheadline.weight(.semibold))
                                         .padding(.horizontal, 16).padding(.vertical, 12)
-                                        .foregroundStyle(filter == tab ? Color.white : Color.nexdoIndigo)
+                                        .foregroundStyle(filter == tab ? Color.white : Color.wellnessAccent)
                                         .background(filter == tab ? AnyShapeStyle(NexdoTheme.gradient) : AnyShapeStyle(Color.nexdoIndigo.opacity(0.08)), in: Capsule())
                                 }.buttonStyle(.plain)
                                     .accessibilityIdentifier("manage-filter-\(tab.id)")
@@ -69,7 +69,7 @@ struct MomentsManagementEntry: View {
                                             }
                                             ForEach(dates, id: \.self) { date in
                                                 Label(date, systemImage: "calendar")
-                                                    .font(.subheadline).foregroundStyle(Color.nexdoIndigo)
+                                                    .font(.subheadline).foregroundStyle(Color.wellnessAccent)
                                                     .fixedSize(horizontal: false, vertical: true)
                                             }
                                             if !moment.enabled {Text("Inactive").font(.caption).foregroundStyle(.secondary)}
@@ -83,7 +83,7 @@ struct MomentsManagementEntry: View {
                     }
                 }.padding(18)
             }
-        }.navigationTitle("Manage Moments").navigationBarTitleDisplayMode(.inline)
+        }.navigationTitle("Manage Moments").navigationBarTitleDisplayMode(.inline).tint(.wellnessAccent)
     }
 }
 struct ManageFestivalView: View {
@@ -116,7 +116,7 @@ struct ManageFestivalView: View {
             if model.tab != .message, let error=model.error {Text(error).foregroundStyle(.red).accessibilityIdentifier("festival-error")}
             if model.tab != .schedule, let notice=model.notice {Text(notice).font(.subheadline).foregroundStyle(.secondary).accessibilityIdentifier("festival-notice")}
         }.padding(18)}.id(model.tab)}
-        .navigationTitle("Manage Moment").navigationBarTitleDisplayMode(.inline).navigationBarBackButtonHidden()
+        .navigationTitle("Manage Moment").navigationBarTitleDisplayMode(.inline).tint(.wellnessAccent).navigationBarBackButtonHidden()
         .navigationDestination(isPresented:$model.scheduleCompleted){FestivalScheduleSuccess(title:model.title,occasionType:model.occasionType,plans:model.savedPlans,wishes:model.selected.map { ScheduleWishPreview(heading:model.reviewHeading(for:$0),message:model.deliveryMessage(for:$0)) },done:onDone)}
         .navigationDestination(isPresented:$showingSettings){MomentSettingsView().environmentObject(model.store)}
         .toolbar {
@@ -162,7 +162,7 @@ struct ManageFestivalView: View {
         }
     }
 
-    private var tabs:some View {HStack(spacing:3){ForEach(ManageFestivalModel.Tab.allCases,id:\.self){tab in Button{focusedField=nil;approveAfterCancel=false;Task{await model.changeTab(to:tab)};FestivalAnalytics().record(.tab)}label:{Text(tab.rawValue).font(.subheadline).lineLimit(1).minimumScaleFactor(0.7).frame(maxWidth:.infinity,minHeight:44).padding(.vertical,5).foregroundStyle(model.tab==tab ? Color.white:Color.nexdoIndigo).background(model.tab==tab ? Color.nexdoIndigo:Color.clear,in:RoundedRectangle(cornerRadius:18))}.buttonStyle(.plain).disabled(generatingWish && model.tab != tab).accessibilityAddTraits(model.tab==tab ? .isSelected:[]).accessibilityIdentifier("festival-tab-\(tab.rawValue)")}}.padding(5).background(.ultraThinMaterial,in:RoundedRectangle(cornerRadius:22))}
+    private var tabs:some View {HStack(spacing:3){ForEach(ManageFestivalModel.Tab.allCases,id:\.self){tab in Button{focusedField=nil;approveAfterCancel=false;Task{await model.changeTab(to:tab)};FestivalAnalytics().record(.tab)}label:{Text(tab.rawValue).font(.subheadline).lineLimit(1).minimumScaleFactor(0.7).frame(maxWidth:.infinity,minHeight:44).padding(.vertical,5).foregroundStyle(model.tab==tab ? Color.white:Color.wellnessAccent).background(model.tab==tab ? Color.nexdoIndigo:Color.clear,in:RoundedRectangle(cornerRadius:18))}.buttonStyle(.plain).disabled(generatingWish && model.tab != tab).accessibilityAddTraits(model.tab==tab ? .isSelected:[]).accessibilityIdentifier("festival-tab-\(tab.rawValue)")}}.padding(5).background(.ultraThinMaterial,in:RoundedRectangle(cornerRadius:22))}
     private var momentSection:some View {Group {
         Text("Moment").font(.title2.bold())
         MomentCard {
@@ -195,7 +195,7 @@ struct ManageFestivalView: View {
             Text("No contacts added yet. Add a contact to choose who receives this wish.").font(.subheadline).foregroundStyle(.secondary).accessibilityIdentifier("moment-no-recipients")
         }
         if !model.recipients.isEmpty {
-        MomentCard{ForEach($model.recipients){$r in if showAllContacts || model.recipients.prefix(3).contains(where:{$0.id==r.id}) {VStack(alignment:.leading,spacing:10){HStack{Text(r.initials).font(.title2.bold()).frame(width:48,height:48).background(Color.nexdoIndigo.opacity(0.12),in:Circle());VStack(alignment:.leading){Text(r.name).font(.headline);Text(r.masked(channel:model.channel(r))).font(.subheadline).foregroundStyle(.secondary)};Spacer();Button{r.selected.toggle()}label:{Image(systemName:r.selected ? "checkmark.circle.fill":"circle").font(.title2).foregroundStyle(Color.nexdoIndigo).frame(width:44,height:44)}.buttonStyle(.plain).accessibilityLabel("Select \(r.name)").accessibilityAddTraits(r.selected ? .isSelected:[])};HStack{Button("Edit recipient"){focusedField=nil;recipientAction = .edit(r.key)}.accessibilityLabel("Edit \(r.name)");Spacer();Button("Remove contact",role:.destructive){model.removeRecipient(key:r.key)}.accessibilityLabel("Remove \(r.name)")}.buttonStyle(.borderless).frame(minHeight:44);Divider()}}}}
+        MomentCard{ForEach($model.recipients){$r in if showAllContacts || model.recipients.prefix(3).contains(where:{$0.id==r.id}) {VStack(alignment:.leading,spacing:10){HStack{Text(r.initials).font(.title2.bold()).frame(width:48,height:48).background(Color.nexdoIndigo.opacity(0.12),in:Circle());VStack(alignment:.leading){Text(r.name).font(.headline);Text(r.masked(channel:model.channel(r))).font(.subheadline).foregroundStyle(.secondary)};Spacer();Button{r.selected.toggle()}label:{Image(systemName:r.selected ? "checkmark.circle.fill":"circle").font(.title2).foregroundStyle(Color.wellnessAccent).frame(width:44,height:44)}.buttonStyle(.plain).accessibilityLabel("Select \(r.name)").accessibilityAddTraits(r.selected ? .isSelected:[])};HStack{Button("Edit recipient"){focusedField=nil;recipientAction = .edit(r.key)}.accessibilityLabel("Edit \(r.name)");Spacer();Button("Remove contact",role:.destructive){model.removeRecipient(key:r.key)}.accessibilityLabel("Remove \(r.name)")}.buttonStyle(.borderless).frame(minHeight:44);Divider()}}}}
         }
         if model.recipients.count > 3 {
             Button(showAllContacts ? "Show less" : "Show more (\(model.recipients.count-3))") {showAllContacts.toggle()}
@@ -265,7 +265,7 @@ struct ManageFestivalView: View {
             }
             .padding(.horizontal,14)
             .frame(minHeight:44)
-            .foregroundStyle(selected ? Color.white:Color.nexdoIndigo)
+            .foregroundStyle(selected ? Color.white:Color.wellnessAccent)
             .background(selected ? Color.nexdoIndigo:Color.nexdoIndigo.opacity(0.08),in:Capsule())
         }
         .buttonStyle(.plain)
@@ -315,7 +315,7 @@ private struct MomentDetailsSheet:View {
                 if let error {Text(error).foregroundStyle(.red)}
             }
             .scrollDismissesKeyboard(.interactively)
-            .navigationTitle("Edit Moment").navigationBarTitleDisplayMode(.inline)
+            .navigationTitle("Edit Moment").navigationBarTitleDisplayMode(.inline).tint(.wellnessAccent)
             .toolbar {
                 ToolbarItemGroup(placement:.keyboard){Spacer();Button("Done"){nameFocused=false}.accessibilityIdentifier("festival-keyboard-done")}
                 ToolbarItem(placement:.cancellationAction){Button("Cancel"){dismiss()}.disabled(model.busy)}
@@ -387,15 +387,15 @@ private struct FestivalScheduleSuccess:View {
             }
         }
         .overlay { if ["birthday","anniversary","festival"].contains(occasionType) { MomentConfetti().allowsHitTesting(false) } }
-        .navigationTitle("Schedule confirmed").navigationBarTitleDisplayMode(.inline)
+        .navigationTitle("Schedule confirmed").navigationBarTitleDisplayMode(.inline).tint(.wellnessAccent)
         .navigationBarBackButtonHidden()
     }
 }
 
 private enum ScheduleDesign {
-    static let ink=Color(red:0.06,green:0.09,blue:0.16)
-    static let secondary=Color(red:0.39,green:0.45,blue:0.55)
-    static let background=Color(red:0.97,green:0.98,blue:1)
+    static let ink=Color.nexdoInk
+    static let secondary=Color.nexdoSecondary
+    static let background=Color(uiColor: .systemGroupedBackground)
 }
 private struct ScheduleWishPreview {
     let heading:String
@@ -492,13 +492,13 @@ private struct FestivalScheduleReview:View {
                     }
                 }.padding(20).disabled(submitting)
             }.background(ScheduleDesign.background)
-            .navigationTitle("").navigationBarTitleDisplayMode(.inline)
+            .navigationTitle("").navigationBarTitleDisplayMode(.inline).tint(.wellnessAccent)
             .toolbar { ToolbarItem(placement:.topBarTrailing) { Button("Cancel") { model.error=nil; close() }.disabled(submitting) } }
             .sheet(isPresented:$editingDate) {
                 editor(title:"Edit date & time",done:{date=dateDraft;editingDate=false},cancel:{editingDate=false}) {
                     DatePicker("Date and time",selection:$dateDraft,in:Date()...).datePickerStyle(.wheel).labelsHidden()
                         .environment(\.timeZone,TimeZone(identifier:model.zone) ?? .current)
-                }.presentationDetents([.height(480),.large]).presentationDragIndicator(.visible).presentationBackground(.white)
+                }.presentationDetents([.height(480),.large]).presentationDragIndicator(.visible).presentationBackground(Color(uiColor: .systemBackground))
             }
             .sheet(item:$recipientDraft) { recipient in
                 ScheduleRecipientEditor(recipient:recipient,delivery:delivery(recipient)) { updated in
@@ -528,7 +528,7 @@ private struct FestivalScheduleReview:View {
                         Button("Send email & open Messages") {sendAfterConfirmation=true;sendNowConfirmation=false}
                             .buttonStyle(ScheduleActionStyle()).padding().background(.regularMaterial)
                     }
-                    .navigationTitle("Send now").navigationBarTitleDisplayMode(.inline)
+                    .navigationTitle("Send now").navigationBarTitleDisplayMode(.inline).tint(.wellnessAccent)
                     .toolbar {Button("Cancel"){sendNowConfirmation=false}.accessibilityIdentifier("send-now-cancel")}
                 }
             }
@@ -595,7 +595,7 @@ private struct FestivalScheduleReview:View {
                 Text(detail).font(.caption).foregroundStyle(ScheduleDesign.secondary)
             }.frame(maxWidth:.infinity,alignment:.leading)
             Button("Edit",action:edit).font(.subheadline.bold()).padding(12).background(.blue.opacity(0.07),in:RoundedRectangle(cornerRadius:12)).accessibilityIdentifier(identifier).disabled(sendNowStarted)
-        }.padding(14).background(.white,in:RoundedRectangle(cornerRadius:18))
+        }.padding(14).background(Color(uiColor: .secondarySystemGroupedBackground),in:RoundedRectangle(cornerRadius:18))
     }
     private func info(_ text:String,symbol:String,color:Color)->some View {
         HStack(alignment:.top,spacing:12) {
@@ -645,8 +645,8 @@ private struct ScheduleRecipientEditor:View {
                     Button("Done"){done(recipient)}.buttonStyle(ScheduleActionStyle()).disabled(recipient.name.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty)
                     Button("Cancel",action:cancel).buttonStyle(ScheduleActionStyle(secondary:true))
                 }.padding(24)
-            }.navigationTitle("Edit recipient").navigationBarTitleDisplayMode(.inline)
+            }.navigationTitle("Edit recipient").navigationBarTitleDisplayMode(.inline).tint(.wellnessAccent)
                 .toolbar { Button(action:cancel){Image(systemName:"xmark.circle.fill")}.accessibilityLabel("Close editor") }
-        }.presentationDetents([.height(480),.large]).presentationDragIndicator(.visible).presentationBackground(.white)
+        }.presentationDetents([.height(480),.large]).presentationDragIndicator(.visible).presentationBackground(Color(uiColor: .systemBackground))
     }
 }

@@ -1,5 +1,6 @@
 import SwiftUI
 import ImageIO
+import Combine
 
 struct StoreBrandMetadata: Decodable, Sendable {
     let displayName: String
@@ -13,11 +14,14 @@ struct StoreBrandLogo: View {
     let listID: String
     let identity: String
     var customImageData: String? = nil
+    var automaticLookup = true
+    var suppliedBrand: StoreBrandMetadata? = nil
     var size: CGFloat = 56
     var expandsOnTap = false
     @State private var expanded = false
     @State private var image: UIImage?
     @State private var label = "Shopping list"
+    private var cacheKey: String { "\(api.baseURL.absoluteString)|\(listID)|\(identity)" }
     var body: some View {
         Group {
             if expandsOnTap, image != nil {
@@ -29,7 +33,12 @@ struct StoreBrandLogo: View {
                 avatar.accessibilityLabel(image == nil ? "Shopping list" : "\(label) logo")
             }
         }
-        .task(id: "\(listID)|\(identity)|\(customImageData ?? "")") { await load() }
+        .task(id: "\(cacheKey)|\(customImageData ?? "")|\(automaticLookup)|\(suppliedBrand?.logoUrl ?? "")") { await load() }
+        .onReceive(StoreBrandLogoCache.updates) { key in
+            guard automaticLookup, customImageData == nil, key == cacheKey,
+                  let cached = StoreBrandLogoCache.images.object(forKey: key as NSString), cached.expires > Date() else { return }
+            image = cached.image; label = cached.label
+        }
         .sheet(isPresented: $expanded) {
             NavigationStack {
                 Group {
@@ -63,7 +72,7 @@ struct StoreBrandLogo: View {
         if let customImageData, let data = Data(base64Encoded: customImageData), let custom = UIImage(data: data) {
             image = custom; label = identity.components(separatedBy: "|").first ?? "Store"; return
         }
-        let cacheKey = "\(listID)|\(identity)"
+        guard automaticLookup || suppliedBrand != nil else { image = nil; return }
         if let cached = StoreBrandLogoCache.images.object(forKey: cacheKey as NSString), cached.expires > Date() {
             image = cached.image; label = cached.label; return
         }
@@ -73,7 +82,16 @@ struct StoreBrandLogo: View {
             var parts = URLComponents()
             parts.queryItems = [URLQueryItem(name: "listId", value: listID)]
             struct Result: Decodable, Sendable { let brand: StoreBrandMetadata }
-            let result: Result = try await api.request("/api/shopping/store-brand?\(parts.percentEncodedQuery ?? "")", timeout: 20)
+            // A concurrent view may be resolving the same brand under the server's
+            // cache lease. Briefly retry an empty result rather than keeping a cart.
+            var result: Result
+            if let suppliedBrand { result = Result(brand: suppliedBrand) }
+            else { result = try await api.request("/api/shopping/store-brand?\(parts.percentEncodedQuery ?? "")", timeout: 20) }
+            for delay in [1, 2] where suppliedBrand == nil && result.brand.logoUrl == nil {
+                try await Task.sleep(for: .seconds(delay))
+                try Task.checkCancellation()
+                result = try await api.request("/api/shopping/store-brand?\(parts.percentEncodedQuery ?? "")", timeout: 20)
+            }
             try Task.checkCancellation()
             guard let raw = result.brand.logoUrl, let url = URL(string: raw),
                   url.scheme == "https", url.host == "cdn.brandfetch.io", url.user == nil,
@@ -108,6 +126,7 @@ struct StoreBrandLogo: View {
                 let value = UIImage(cgImage: decoded)
                 image = value; label = result.brand.displayName
                 StoreBrandLogoCache.images.setObject(StoreBrandLogoCache.Entry(value, label), forKey: cacheKey as NSString, cost: decoded.bytesPerRow * decoded.height)
+                StoreBrandLogoCache.updates.send(cacheKey)
             }
         } catch { /* A missing logo must never interrupt shopping. */ }
     }
@@ -121,6 +140,7 @@ private final class LogoRedirectGuard: NSObject, URLSessionTaskDelegate, @unchec
 // Brief, bounded in-memory reuse makes reopening the same list immediate. Images
 // never go to disk; identity changes use a different key. Backend owns long TTLs.
 @MainActor private enum StoreBrandLogoCache {
+    static let updates = PassthroughSubject<String, Never>()
     final class Entry: NSObject {
         let image: UIImage
         let label: String

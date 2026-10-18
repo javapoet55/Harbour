@@ -514,12 +514,20 @@ struct ShoppingDetail:View {
         )
     }
     private func save(_ next:GroceryList){
-        let original=list;list=next
+        let original=list
+        // A logo lookup resolves the persisted store by list ID. Do not expose a
+        // draft store identity until the server has saved it.
+        if original.storeName == next.storeName && original.storeWebsite == next.storeWebsite &&
+            original.storePlaceId == next.storePlaceId && original.storeLogoData == next.storeLogoData {
+            list=next
+        }
         Task{
             if original.completedAt != nil {
                 var working=next;working.id=UUID().uuidString;working.completedAt=nil;working.revision=0
                 if let saved=await store.action("create",input:ShoppingInput(working),idempotencyKey:working.id){list=saved;error=nil}
+                else {list=original;error=store.error}
             } else if let saved=await store.action("save",list:original,input:ShoppingInput(next)){list=saved;error=nil}
+            else {list=original;error=store.error}
         }
     }
     private func quickAdd(){
@@ -631,6 +639,7 @@ private struct ShoppingCompletionView:View {
 }
 
 private struct ShoppingStoreSuggestion:Decodable,Sendable,Identifiable {
+    let brand: StoreBrandMetadata?
     let website:String?
     let id:String
     let name:String
@@ -670,7 +679,11 @@ struct ShoppingSettings:View {
             HStack(spacing: 14) {
                 TextField("Store name",text:Binding(get:{initial.storeName ?? ""},set:{initial.storeName=$0;initial.storeWebsite=nil;initial.storePlaceId=nil;initial.storeLogoData=nil}))
                 ShoppingListLogoEditor(api: store.api, listID: initial.id, storeName: initial.storeName ?? "",
-                                       website: initial.storeWebsite, imageData: $initial.storeLogoData)
+                                       website: initial.storeWebsite, imageData: $initial.storeLogoData,
+                                       automaticLookup: store.lists.contains { saved in
+                                           saved.id == initial.id && saved.storeName == initial.storeName &&
+                                           saved.storeWebsite == initial.storeWebsite && saved.storePlaceId == initial.storePlaceId
+                                       })
             }
             TextField("Street address", text: Binding(get: { addressLines.street }, set: { updateAddress(street: $0) }), axis: .vertical)
                 .textContentType(.streetAddressLine1).lineLimit(1...3)
@@ -738,8 +751,9 @@ private struct ShoppingStoreFinder:View {
                 }
                 ForEach(suggestions) { suggestion in
                     HStack(alignment:.top,spacing:12) {
-                        Image(systemName:"storefront.fill").font(.title2).foregroundStyle(Color.nexdoIndigo)
-                            .frame(width:48,height:56).background(Color.nexdoIndigo.opacity(0.08),in:RoundedRectangle(cornerRadius:12))
+                        StoreBrandLogo(api: store.api, listID: "search-" + suggestion.id,
+                                       identity: suggestion.name + "|" + (suggestion.website ?? ""),
+                                       automaticLookup: false, suppliedBrand: suggestion.brand, size: 48)
                         VStack(alignment:.leading,spacing:5) {
                             Text(suggestion.name).font(.headline).foregroundStyle(Color.nexdoInk)
                             Text(suggestion.address).font(.subheadline).foregroundStyle(Color.nexdoSecondary).fixedSize(horizontal:false,vertical:true)
@@ -802,7 +816,7 @@ private struct ShoppingStoreFinder:View {
             if !region.isEmpty {body["area"]=region}
             else {body["latitude"]=latitude;body["longitude"]=longitude}
             struct Results:Decodable,Sendable {let stores:[ShoppingStoreSuggestion]}
-            let result:Results=try await store.api.request("/api/shopping/stores",method:"POST",body:JSONSerialization.data(withJSONObject:body))
+            let result:Results=try await store.api.request("/api/shopping/stores",method:"POST",body:JSONSerialization.data(withJSONObject:body), timeout: 45)
             try Task.checkCancellation();guard key==searchKey else{return}
             suggestions=result.stores;searchBusy=false;completedKey=key
         } catch {

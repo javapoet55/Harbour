@@ -15,7 +15,7 @@ struct PomodoroDashboard: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let onClose: () -> Void
     let onStart: () -> Void
-    private let ink = Color(red: 0.05, green: 0.04, blue: 0.25)
+    private let ink = Color.nexdoInk
     private let gradient = LinearGradient(colors: [.purple, .indigo, .blue], startPoint: .leading, endPoint: .trailing)
 
     init(store: PomodoroStore, initialTab: Tab = .overview, onClose: @escaping () -> Void, onStart: @escaping () -> Void) {
@@ -26,7 +26,7 @@ struct PomodoroDashboard: View {
             let stats = PomodoroAnalytics(sessions: store.sessions, period: period, now: context.date)
             let all = PomodoroAnalytics(sessions: store.sessions, period: .all, now: context.date)
             ZStack {
-                LinearGradient(colors: [.purple.opacity(0.04), .white, .blue.opacity(0.05)], startPoint: .topLeading, endPoint: .bottomTrailing).ignoresSafeArea()
+                LinearGradient(colors: [.purple.opacity(0.04), Color(uiColor: .systemBackground), .blue.opacity(0.05)], startPoint: .topLeading, endPoint: .bottomTrailing).background(Color(uiColor: .systemBackground)).ignoresSafeArea()
                 ScrollView {
                     VStack(spacing: 18) {
                         header
@@ -54,7 +54,7 @@ struct PomodoroDashboard: View {
                 }.id(tab).refreshable { await store.restore() }
             }
         }
-        .foregroundStyle(ink).tint(.indigo).preferredColorScheme(.light)
+        .foregroundStyle(ink).tint(.wellnessAccent)
         .onChange(of: period) { _, _ in selectedDate = nil }
         .onChange(of: trendPeriod) { _, _ in selectedDate = nil }
         .sheet(item: $selectedSession) { sessionDetail($0) }
@@ -100,7 +100,7 @@ struct PomodoroDashboard: View {
         VStack(spacing: 16) {
             VStack(alignment: .leading, spacing: 16) {
                 HStack(alignment: .top, spacing: 12) {
-                    Image(systemName: "stopwatch.fill").font(.title2).foregroundStyle(.indigo).frame(width: 48, height: 48).background(.indigo.opacity(0.08), in: RoundedRectangle(cornerRadius: 16))
+                    Image(systemName: "stopwatch.fill").font(.title2).foregroundStyle(Color.wellnessAccent).frame(width: 48, height: 48).background(.indigo.opacity(0.08), in: RoundedRectangle(cornerRadius: 16))
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Focus Time").font(.subheadline)
                         Text(time(stats.focusSeconds)).font(.title.bold()).monospacedDigit().accessibilityIdentifier("pomodoro-focus-total")
@@ -126,7 +126,7 @@ struct PomodoroDashboard: View {
             Image(systemName: icon).font(.title3).foregroundStyle(color).frame(width: 36, height: 36).background(color.opacity(0.09), in: Circle())
             Text(value).font(.headline).monospacedDigit().minimumScaleFactor(0.6).lineLimit(1)
             Text(label).font(.caption).multilineTextAlignment(.center)
-        }.frame(maxWidth: .infinity).padding(.vertical, 12).background(color.opacity(0.04), in: RoundedRectangle(cornerRadius: 18)).overlay { RoundedRectangle(cornerRadius: 18).stroke(.white, lineWidth: 1) }
+        }.frame(maxWidth: .infinity).padding(.vertical, 12).background(color.opacity(0.04), in: RoundedRectangle(cornerRadius: 18)).overlay { RoundedRectangle(cornerRadius: 18).stroke(Color(uiColor: .separator).opacity(0.35), lineWidth: 1) }
     }
     private var startButton: some View {
         Button(action: onStart) {
@@ -161,7 +161,7 @@ struct PomodoroDashboard: View {
             } }
             .chartYAxis { AxisMarks(position: .leading, values: .automatic(desiredCount: 4)) { value in AxisGridLine().foregroundStyle(.indigo.opacity(0.07)); AxisValueLabel { if let minutes = value.as(Double.self) { Text("\(Int(minutes))m").font(.caption2) } } } }
             .frame(height: 170).padding(.top, 8)
-            if breaks { HStack(spacing: 16) { Label("Focus", systemImage: "circle.fill").foregroundStyle(.indigo); Label("Break", systemImage: "circle.fill").foregroundStyle(.cyan) }.font(.caption2) }
+            if breaks { HStack(spacing: 16) { Label("Focus", systemImage: "circle.fill").foregroundStyle(Color.wellnessAccent); Label("Break", systemImage: "circle.fill").foregroundStyle(.cyan) }.font(.caption2) }
         }.animation(reduceMotion ? nil : .easeInOut(duration: 0.25), value: stats.period)
     }
     private func axisLabel(_ date: Date, period: PomodoroPeriod) -> String {
@@ -260,7 +260,7 @@ struct PomodoroDashboard: View {
 
 private extension View {
     func dashboardCard() -> some View {
-        padding(16).background(.white.opacity(0.92), in: RoundedRectangle(cornerRadius: 20))
+        padding(16).background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 20))
             .overlay { RoundedRectangle(cornerRadius: 20).stroke(.indigo.opacity(0.06), lineWidth: 1) }
             .shadow(color: .blue.opacity(0.06), radius: 10, y: 4)
     }

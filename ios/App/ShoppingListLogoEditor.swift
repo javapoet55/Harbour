@@ -8,6 +8,7 @@ struct ShoppingListLogoEditor: View {
     let storeName: String
     let website: String?
     @Binding var imageData: String?
+    var automaticLookup = true
     @Environment(\.openURL) private var openURL
     @State private var editing = false
     @State private var photo: PhotosPickerItem?
@@ -21,7 +22,7 @@ struct ShoppingListLogoEditor: View {
     }
     var body: some View {
         Button { editing = true } label: {
-            StoreBrandLogo(api: api, listID: listID, identity: identity, customImageData: imageData, size: 48)
+            StoreBrandLogo(api: api, listID: listID, identity: identity, customImageData: imageData, automaticLookup: automaticLookup, size: 48)
                 .overlay(alignment: .bottomTrailing) {
                     Image(systemName: "pencil.circle.fill").foregroundStyle(.white, Color.nexdoIndigo).font(.body)
                 }
@@ -35,7 +36,7 @@ struct ShoppingListLogoEditor: View {
                     Section {
                         HStack {
                             Spacer()
-                            StoreBrandLogo(api: api, listID: listID, identity: identity, customImageData: imageData, size: 100)
+                            StoreBrandLogo(api: api, listID: listID, identity: identity, customImageData: imageData, automaticLookup: automaticLookup, size: 100)
                             Spacer()
                         }
                         Text(storeName.isEmpty ? "Store logo" : storeName).frame(maxWidth: .infinity)

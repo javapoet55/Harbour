@@ -19,7 +19,7 @@ struct PomodoroView: View {
     /// there is no Tasks to go back to, so it is "Done" and only closes Pomodoro.
     private let onTasks: (() -> Void)?
     private let clock = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
-    private let ink = Color(red: 0.05, green: 0.04, blue: 0.25)
+    private let ink = Color.nexdoInk
     private let gradient = LinearGradient(colors: [.purple, .indigo, .blue], startPoint: .leading, endPoint: .trailing)
 
     init(api: APIClient, owner: String, preview: Bool = false, onTasks: (() -> Void)? = nil) {
@@ -37,7 +37,7 @@ struct PomodoroView: View {
         } else {
         GeometryReader { geometry in
         ZStack {
-            LinearGradient(colors: [Color.purple.opacity(0.05), .white, Color.blue.opacity(0.06)], startPoint: .topLeading, endPoint: .bottomTrailing).ignoresSafeArea()
+            LinearGradient(colors: [Color.purple.opacity(0.05), Color(uiColor: .systemBackground), Color.blue.opacity(0.06)], startPoint: .topLeading, endPoint: .bottomTrailing).background(Color(uiColor: .systemBackground)).ignoresSafeArea()
             ScrollView {
                 VStack(spacing: 14) {
                     HStack {
@@ -59,7 +59,7 @@ struct PomodoroView: View {
         }
         }
         }
-        .foregroundStyle(ink).tint(.indigo)
+        .foregroundStyle(ink).tint(.wellnessAccent)
         .onAppear { PomodoroNotificationRoute.shared.pomodoroAppeared() }
         .task { visible = true; await store.restore(); updateAwake() }
         .onReceive(clock) { _ in store.tick() }
@@ -96,12 +96,12 @@ struct PomodoroView: View {
                         }.padding(5).background(item == category ? Color.purple.opacity(0.09) : .clear, in: RoundedRectangle(cornerRadius: 12)).contentShape(Rectangle())
                     }.buttonStyle(.plain).accessibilityIdentifier("pomodoro-category-" + item.rawValue).accessibilityAddTraits(item == category ? .isSelected : [])
                 }
-            }.padding(3).background(.white, in: RoundedRectangle(cornerRadius: 18)).shadow(color: .indigo.opacity(0.08), radius: 8, y: 3)
+            }.padding(3).background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 18)).shadow(color: .indigo.opacity(0.08), radius: 8, y: 3)
             VStack(alignment: .leading, spacing: 8) {
                 Text("+ Session name")
                 TextField("What will you focus on?", text: $name)
                     .padding(12)
-                    .background(.white, in: RoundedRectangle(cornerRadius: 14))
+                    .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 14))
                     .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(Color.nexdoIndigo.opacity(0.5), lineWidth: 1.5).allowsHitTesting(false))
                     .onChange(of: name) { _, value in let limited = PomodoroSession.limitName(value); if limited != value { name = limited } }
                     .accessibilityLabel("Session name (optional)").accessibilityIdentifier("pomodoro-name")
@@ -112,7 +112,7 @@ struct PomodoroView: View {
                     Button { minutes = max(5, minutes - 5) } label: { Image(systemName: "minus.circle").font(.title2).frame(width: 44, height: 44) }.disabled(minutes <= 5).accessibilityLabel("Decrease focus duration by 5 minutes")
                     Spacer(); Text("\(minutes) min").font(.headline).monospacedDigit(); Spacer()
                     Button { minutes = min(120, minutes + 5) } label: { Image(systemName: "plus.circle").font(.title2).frame(width: 44, height: 44) }.disabled(minutes == 120).accessibilityLabel("Increase focus duration by 5 minutes")
-                }.background(.white, in: RoundedRectangle(cornerRadius: 14))
+                }.background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 14))
             }
             Toggle(isOn: $autoBreak) { VStack(alignment: .leading, spacing: 4) { Text("Auto Start Break"); Text("Start a 5-minute break automatically after focus.").font(.caption).foregroundStyle(.secondary) } }
             Toggle("Play Sound", isOn: $sound)
@@ -171,7 +171,7 @@ struct PomodoroView: View {
                 statistic("☕", time: duration(session.breakSeconds), label: "Break time")
                 Divider().frame(height: 60)
                 statistic("📅", time: session.phase == .completed ? "1" : "0", label: "Completed")
-            }.padding(16).background(.white, in: RoundedRectangle(cornerRadius: 20)).shadow(color: .indigo.opacity(0.06), radius: 10, y: 4)
+            }.padding(16).background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 20)).shadow(color: .indigo.opacity(0.06), radius: 10, y: 4)
             HStack(spacing: 14) { Image(systemName: session.category.icon).font(.title2).foregroundStyle(.purple); VStack(alignment: .leading, spacing: 5) { Text(session.category.title).bold(); if !session.name.isEmpty { Text(session.name).font(.subheadline) } }; Spacer() }.padding(18).background(.purple.opacity(0.07), in: RoundedRectangle(cornerRadius: 18))
             primary("Start Another Session") { store.newSession() }
             Button(onTasks == nil ? "Done" : "Back to Tasks") { onTasks?(); dismiss() }.font(.headline).frame(maxWidth: .infinity).padding(16).background(.purple.opacity(0.07), in: RoundedRectangle(cornerRadius: 16))

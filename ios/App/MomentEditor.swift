@@ -100,7 +100,7 @@ struct MomentEditor: View {
 
         }
         .disabled(store.busy)
-        .navigationTitle(moment == nil ? "Create Moment" : "Edit Moment").navigationBarTitleDisplayMode(.inline)
+        .navigationTitle(moment == nil ? "Create Moment" : "Edit Moment").navigationBarTitleDisplayMode(.inline).tint(.wellnessAccent)
         .onSubmit { focusedField = nil }
         .scrollDismissesKeyboard(.interactively)
         .onChange(of: input.firstName) { old, new in
@@ -230,7 +230,7 @@ struct MomentSettingsView: View {
             }
             Section("Privacy") { Button("Delete all Important Moments data", role: .destructive) { delete = true }; Text("Deletes moments, drafts, delivery history and the connected email credentials. An email already submitted cannot be recalled.").font(.caption) }
             if let error = store.error { Text(error).foregroundStyle(.red) }
-        }.navigationTitle("Moments Settings").navigationBarTitleDisplayMode(.inline)
+        }.navigationTitle("Moments Settings").navigationBarTitleDisplayMode(.inline).tint(.wellnessAccent)
         .task { await store.prepareDefaultReminders() }
         .alert("Select one contact", isPresented: $explainContacts) { Button("Choose contact") { contacts = true }; Button("Cancel", role: .cancel) {} } message: { Text("Nexdo will show the selected birthday, first name, phone and email for you to review. Only the details you save will be sent to your Nexdo account.") }
         .sheet(isPresented: $contacts) { MomentContactPicker { input in contacts = false; selectedContact = MomentImport(input: input) } }
@@ -352,7 +352,7 @@ struct MomentFestivalView: View {
         }
         .foregroundStyle(Color.nexdoInk)
         .navigationTitle("Choose Festivals")
-        .navigationBarTitleDisplayMode(.inline)
+        .navigationBarTitleDisplayMode(.inline).tint(.wellnessAccent)
         .tint(accent)
     }
 

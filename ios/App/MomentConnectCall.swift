@@ -200,7 +200,7 @@ struct MomentConnectSection: View {
         .task { await model.load(momentIDs: moments.map(\.id)) }
         .onChange(of: moments.map(\.id)) { _, ids in Task { await model.load(momentIDs: ids) } }
         .sheet(isPresented: $verifying) { CallerIDVerificationSheet(model: model) }
-        .sheet(isPresented: $showingHowItWorks) { MomentCallingGuide().presentationBackground(.white) }
+        .sheet(isPresented: $showingHowItWorks) { MomentCallingGuide().presentationBackground(Color(uiColor: .systemBackground)) }
         .alert("Connect me on the day", isPresented: Binding(get: { model.error != nil || model.notice != nil }, set: { if !$0 { model.error = nil; model.notice = nil } })) {
             Button("OK", role: .cancel) { model.error = nil; model.notice = nil }
         } message: { Text(model.error ?? model.notice ?? "") }
@@ -386,7 +386,7 @@ struct CallerIDVerificationSheet: View {
 private struct MomentCallingGuide: View {
     @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.dismiss) private var dismiss
-    private let ink = Color(red:0.07,green:0.05,blue:0.24)
+    private let ink = Color.nexdoInk
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -425,19 +425,19 @@ private struct MomentCallingGuide: View {
                 }.padding(20)
             }
             .foregroundStyle(ink)
-            .background(LinearGradient(colors:[Color.blue.opacity(0.13),Color.purple.opacity(0.09),Color.white],startPoint:.topLeading,endPoint:.bottomTrailing).ignoresSafeArea())
+            .background(LinearGradient(colors:[Color.blue.opacity(0.13),Color.purple.opacity(0.09),Color(uiColor: .systemBackground)],startPoint:.topLeading,endPoint:.bottomTrailing).background(Color(uiColor: .systemBackground)).ignoresSafeArea())
             .navigationTitle("How It Works").navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement:.cancellationAction) {
                 Button("Back",systemImage:"chevron.left") { dismiss() }
             } }
-        }.tint(.nexdoIndigo)
+        }.tint(.wellnessAccent)
             // A fixed light design (dark ink, white step cards, artwork drawn for white), like the Wellness guides; in dark
             // mode its header and intro were dark ink on a dark sheet.
             .environment(\.colorScheme, .light)
     }
     private func step(_ number:Int,title:String,text:String,rect:CGRect) -> some View {
         HStack(alignment:.top,spacing:10) {
-            Text("\(number)").font(.title3.bold()).foregroundStyle(Color.nexdoIndigo)
+            Text("\(number)").font(.title3.bold()).foregroundStyle(Color.wellnessAccent)
                 .frame(width:32,height:32).background(Color.nexdoIndigo.opacity(0.09),in:Circle())
             let layout = typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment:.leading,spacing:12)) : AnyLayout(HStackLayout(alignment:.center,spacing:12))
             layout {
@@ -447,7 +447,7 @@ private struct MomentCallingGuide: View {
                 }.frame(maxWidth:.infinity,alignment:.leading)
                 MomentCallingArtwork(rect:rect).frame(width:typeSize.isAccessibilitySize ? 180:100,height:120)
             }.padding(18).frame(maxWidth:.infinity,alignment:.leading)
-                .background(.white.opacity(0.9),in:RoundedRectangle(cornerRadius:24))
+                .background(Color(uiColor: .secondarySystemGroupedBackground),in:RoundedRectangle(cornerRadius:24))
         }
     }
 }

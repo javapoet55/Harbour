@@ -1,9 +1,15 @@
 import XCTest
 
 @MainActor final class CalorieTrackerUITests: XCTestCase {
+    func testDarkSetupDashboardAndLocalFoodLog() {
+        runSetup(dark: true)
+    }
     func testSetupDashboardAndLocalFoodLog() {
+        runSetup(dark: false)
+    }
+    private func runSetup(dark: Bool) {
         let app = XCUIApplication()
-        app.launchArguments = ["-calorie-design-preview"]
+        app.launchArguments = ["-calorie-design-preview", "-nexdo.appearance", dark ? "night" : "day"]
         app.launch()
         XCTAssertTrue(app.buttons["Set Up Agent"].waitForExistence(timeout: 10))
         capture(app, "Calorie intro")

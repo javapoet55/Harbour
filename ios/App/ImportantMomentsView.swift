@@ -152,7 +152,7 @@ private struct FestivalGroupCard: View {
                         .overlay(alignment:.topTrailing) {
                             Button(action:onManage) {
                                 Image(systemName:"gearshape").font(.title3).frame(width:44,height:44)
-                            }.buttonStyle(.plain).foregroundStyle(Color.nexdoIndigo)
+                            }.buttonStyle(.plain).foregroundStyle(Color.wellnessAccent)
                                 .accessibilityLabel("Manage \(moment.title)")
                                 .accessibilityIdentifier("festival-manage-\(moment.id)")
                         }
@@ -203,7 +203,7 @@ private struct FestivalRecipientsView: View {
                 }.padding(18)
             }
         }.navigationTitle(group.moments.first?.title ?? "Festival")
-            .navigationBarTitleDisplayMode(.inline)
+            .navigationBarTitleDisplayMode(.inline).tint(.wellnessAccent)
     }
 }
 struct ImportantMomentsView: View {
@@ -246,7 +246,7 @@ struct ImportantMomentsView: View {
                                 Button { creatingMoment = true } label: {
                                     Text("Create New").frame(minHeight:44)
                                 }.accessibilityIdentifier("moments-create-new")
-                            }.font(.system(size:summaryActionFontSize,weight:.semibold)).foregroundStyle(Color.nexdoIndigo)
+                            }.font(.system(size:summaryActionFontSize,weight:.semibold)).foregroundStyle(Color.wellnessAccent)
                                 .lineLimit(1)
 
                         }
@@ -258,7 +258,7 @@ struct ImportantMomentsView: View {
                         ForEach(MomentUpcomingFilter.allCases,id:\.self) { period in
                             Button { upcomingFilter=period } label: {
                                 Text("\(period.rawValue) (\(MomentDisplayGroup.groups(displayed.filter { period.includes(day:$0.nextOccurrence,zone:$0.timeZoneID) }).count))").font(.subheadline.bold()).padding(.horizontal,16).frame(minHeight:44)
-                                    .foregroundStyle(upcomingFilter == period ? .white : Color.nexdoIndigo)
+                                    .foregroundStyle(upcomingFilter == period ? .white : Color.wellnessAccent)
                                     .background {
                                         Capsule().fill(upcomingFilter == period ? Color.nexdoIndigo : Color.nexdoIndigo.opacity(0.08))
                                     }
@@ -296,7 +296,7 @@ struct ImportantMomentsView: View {
                             MomentIconTile(type: moment?.type ?? "custom", title: moment?.title ?? plan.subject)
                             VStack(alignment: .leading, spacing: 8) {
                                 Text(plan.subject).font(.headline)
-                                Text(plan.statusLabel).foregroundStyle(Color.nexdoIndigo)
+                                Text(plan.statusLabel).foregroundStyle(Color.wellnessAccent)
                                 Text(plan.body).lineLimit(2)
                                 Text("\(plan.channel.capitalized) · \(MomentDates.label(plan.date, zone: plan.timeZoneID))").font(.caption)
                             }.frame(maxWidth: .infinity, alignment: .leading)
@@ -318,7 +318,7 @@ struct ImportantMomentsView: View {
         .navigationDestination(isPresented:Binding(get:{managingFestival != nil},set:{if !$0{managingFestival=nil}})) {
             if let group=managingFestival {ManageFestivalView(group:group,store:store,onDone:{managingFestival=nil})}
         }
-        .navigationTitle("Important Moments").navigationBarTitleDisplayMode(.inline)
+        .navigationTitle("Important Moments").navigationBarTitleDisplayMode(.inline).tint(.wellnessAccent)
         .toolbar { NavigationLink { MomentSettingsView() } label: { Image(systemName: "gearshape") }.accessibilityLabel("Important Moments settings") }
         .task { await store.prepareDefaultReminders(); await store.refresh() }.refreshable { await store.refresh() }
     }
@@ -375,7 +375,7 @@ struct ReviewWishView: View {
                 } }
             }.disabled(store.busy || draft == nil || bodyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || bodyText.count > 500)
         }.padding(18) } }
-        .navigationTitle("Review Wish").navigationBarTitleDisplayMode(.inline)
+        .navigationTitle("Review Wish").navigationBarTitleDisplayMode(.inline).tint(.wellnessAccent)
         .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Cancel") { dismiss() } } }
         .navigationDestination(isPresented: $next) { if let draft { WishDeliveryView(moment: moment, draft: draft) } }
         .task { if draft == nil { if let latest = moment.latest, latest.status != "PLANNED" { draft = latest; bodyText = latest.body; tone = latest.tone; personalContext = latest.personalContext } else { generate() } } }
@@ -410,7 +410,7 @@ struct WishDeliveryView: View {
             Text("Send with").font(.largeTitle.bold())
             ForEach([("messages","Messages","message.fill"),("email","Email","envelope.fill"),("copy","Copy","doc.on.doc"),("share","Share","square.and.arrow.up")], id: \.0) { item in
                 Button { channel = item.0; recipient = channel == "email" ? moment.email : moment.phone } label: {
-                    MomentCard { HStack { Image(systemName: item.2).font(.title).foregroundStyle(Color.nexdoIndigo); Text(item.1).font(.title3.bold()); Spacer(); Image(systemName: channel == item.0 ? "checkmark.circle.fill" : "circle") } }
+                    MomentCard { HStack { Image(systemName: item.2).font(.title).foregroundStyle(Color.wellnessAccent); Text(item.1).font(.title3.bold()); Spacer(); Image(systemName: channel == item.0 ? "checkmark.circle.fill" : "circle") } }
                 }.buttonStyle(.plain)
             }
             if ["messages","email"].contains(channel) {
@@ -430,7 +430,7 @@ struct WishDeliveryView: View {
             }
             if let plan, !showComposer && !showShare { NavigationLink("View delivery status") { WishPlanView(plan: plan) } }
         }.padding(18) } }
-        .navigationTitle("Choose Delivery").navigationBarTitleDisplayMode(.inline)
+        .navigationTitle("Choose Delivery").navigationBarTitleDisplayMode(.inline).tint(.wellnessAccent)
         .onAppear { if recipient.isEmpty { recipient = moment.phone } }
         .sheet(isPresented: $confirmEmail) {
             WishEmailConfirmation(account: store.snapshot?.emailAccount?.email ?? "No connected account", recipient: recipient, subject: moment.emailSubject ?? moment.title, message: draft.body) { confirmEmail = false; send() }
@@ -511,7 +511,7 @@ struct ScheduleWishView: View {
             }.disabled(store.busy || saved != nil || date <= now)
         }.padding(18) } }
         .onReceive(Timer.publish(every:1,on:.main,in:.common).autoconnect()) { now=$0 }
-        .navigationTitle("Schedule Wish").navigationBarTitleDisplayMode(.inline)
+        .navigationTitle("Schedule Wish").navigationBarTitleDisplayMode(.inline).tint(.wellnessAccent)
         .onAppear { zone = moment.timeZoneID }
         .navigationDestination(isPresented: $next) { if let saved { WishPlanView(plan: saved, confirmation: true) } }
     }
@@ -529,7 +529,7 @@ struct WishPlanView: View {
     private var current: WishDeliveryPlan { store.plans.first { $0.id == plan.id } ?? plan }
     var body: some View {
         ZStack { TodayBackdrop(); ScrollView { VStack(spacing: 20) {
-            Image(systemName: confirmation ? "calendar.badge.checkmark" : "gift.fill").font(.system(size: 76)).foregroundStyle(Color.nexdoIndigo).padding(20)
+            Image(systemName: confirmation ? "calendar.badge.checkmark" : "gift.fill").font(.system(size: 76)).foregroundStyle(Color.wellnessAccent).padding(20)
             Text(confirmation && ["SCHEDULED", "AWAITING_CONFIRMATION"].contains(current.status) ? "Wish scheduled" : current.statusLabel).font(.largeTitle.bold())
             Text(current.status == "SENT" ? "Your wish was submitted successfully." : current.status == "CANCELLED" ? "This wish will not be sent." : current.automaticDelivery && current.status == "SCHEDULED" ? "Approved email will send automatically at the scheduled time." : current.status == "AWAITING_CONFIRMATION" && current.channel == "messages" ? "Your wish and schedule are saved. Open Messages and tap Send when you are ready; Messages wishes are not sent automatically." : "Review the delivery status below.").multilineTextAlignment(.center)
             MomentCard {
@@ -566,7 +566,7 @@ struct WishPlanView: View {
             if let error = store.error { Text(error).foregroundStyle(.red) }
             MomentPrimary(title: "Done") { dismiss() }
         }.padding(18) } }
-        .navigationTitle("Wish details").navigationBarTitleDisplayMode(.inline)
+        .navigationTitle("Wish details").navigationBarTitleDisplayMode(.inline).tint(.wellnessAccent)
         .sheet(isPresented: $sendEmailNow) {
             WishEmailConfirmation(account: store.snapshot?.emailAccount?.email ?? "No connected account", recipient: current.recipient, subject: current.subject, message: current.body) {
                 sendEmailNow = false
@@ -645,7 +645,7 @@ struct WishEmailConfirmation: View {
                 Text(message)
                 MomentPrimary(title: "Send email", action: confirm)
             }.padding(24) }
-            .navigationTitle("Confirm email").navigationBarTitleDisplayMode(.inline)
+            .navigationTitle("Confirm email").navigationBarTitleDisplayMode(.inline).tint(.wellnessAccent)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }
         }
     }
@@ -667,7 +667,7 @@ struct MomentSegments: View {
         HStack(spacing: 4) {
             ForEach(options, id: \.self) { option in
                 Button { selection = option } label: {
-                    Text(option).font(.subheadline.weight(.medium)).foregroundStyle(selection == option ? .white : Color.nexdoIndigo)
+                    Text(option).font(.subheadline.weight(.medium)).foregroundStyle(selection == option ? .white : Color.wellnessAccent)
                         .frame(maxWidth: .infinity, minHeight: 42)
                         .background { if selection == option { RoundedRectangle(cornerRadius: 15).fill(NexdoTheme.gradient) } }
                 }.buttonStyle(.plain).accessibilityAddTraits(selection == option ? .isSelected : [])
