@@ -29,6 +29,10 @@ struct CalendarView: View {
     @State private var appleRangeID: String?
     @State private var dataOwner: String?
     @State private var showingAppleCalendars = false
+    @State private var showingConnectionPrompt = false
+    @State private var openConnectionSettings = false
+    @State private var navigateAfterPrompt = false
+    @State private var promptedAccount: String?
     @State private var data: Agenda?
     @State private var dataRevision = UUID()
     @State private var dayIndex = CalendarDayIndex()
@@ -197,6 +201,21 @@ struct CalendarView: View {
                 }
                 #endif
             }
+            .task(id: model.profile?.id) { await offerCalendarConnection() }
+            .navigationDestination(isPresented: $openConnectionSettings) {
+                ProfileSettingsView(openCalendarSettings: true)
+                    .toolbar(.visible, for: .navigationBar)
+            }
+            .sheet(isPresented: $showingConnectionPrompt, onDismiss: {
+                if navigateAfterPrompt {
+                    navigateAfterPrompt = false
+                    openConnectionSettings = true
+                }
+            }) {
+                calendarConnectionPrompt
+                    .presentationDetents([.medium, .large])
+                    .presentationDragIndicator(.visible)
+            }
             .task(id: requestID) { await load() }
             .task(id: indexRequestID) { await rebuildDayIndex() }
             .task {
@@ -228,6 +247,59 @@ struct CalendarView: View {
                 }
             }
         }
+    }
+
+    /// Only prompt after a successful status refresh. Empty events or an offline
+    /// response do not mean that the user has never connected a calendar.
+    @MainActor private func offerCalendarConnection() async {
+        guard let owner = model.profile?.id, promptedAccount != owner else { return }
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("-calendar-design-preview") { return }
+        #endif
+        guard await model.loadCalendarConnections(), !Task.isCancelled,
+              model.profile?.id == owner else { return }
+        guard model.calendarConnections.isEmpty,
+              EKEventStore.authorizationStatus(for: .event) != .fullAccess else { return }
+        // Do not repeatedly interrupt this visit after Not now or a swipe dismissal.
+        promptedAccount = owner
+        showingConnectionPrompt = true
+    }
+
+    private var calendarConnectionPrompt: some View {
+        ScrollView {
+            VStack(spacing: 18) {
+                Image(systemName: "calendar.badge.plus")
+                    .font(.system(size: 42)).foregroundStyle(calendarAccent)
+                    .padding(18).background(calendarAccent.opacity(0.12), in: Circle())
+                    .accessibilityHidden(true)
+                Text("Connect your calendar")
+                    .font(.title2.bold()).accessibilityAddTraits(.isHeader)
+                Text("Connect your Google, Apple or Outlook calendar to sync your tasks and calendar events.")
+                    .font(.body).foregroundStyle(Color.nexdoSecondary)
+                Text("Apple Calendar displays your selected events in NexDo. Google and Outlook sync options are available in Settings.")
+                    .font(.footnote).foregroundStyle(Color.nexdoSecondary)
+            }
+            .multilineTextAlignment(.center).frame(maxWidth: .infinity).padding(24)
+        }
+        .safeAreaInset(edge: .bottom) {
+            VStack(spacing: 8) {
+                Button {
+                    navigateAfterPrompt = true
+                    showingConnectionPrompt = false
+                } label: {
+                    Text("Yes, connect calendar").font(.headline)
+                        .frame(maxWidth: .infinity, minHeight: 50)
+                }
+                .buttonStyle(.borderedProminent).tint(Color.nexdoIndigo)
+                .accessibilityIdentifier("calendar-connect-prompt-yes")
+                Button("Not now") { showingConnectionPrompt = false }
+                    .frame(maxWidth: .infinity, minHeight: 44)
+                    .accessibilityIdentifier("calendar-connect-prompt-dismiss")
+            }.padding(.horizontal, 24).padding(.bottom, 12).background(.background)
+        }
+        .foregroundStyle(Color.nexdoInk)
+        .background(.background)
+        .accessibilityIdentifier("calendar-connect-prompt")
     }
 
     private var calendarHeader: some View {
