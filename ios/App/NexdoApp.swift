@@ -15,6 +15,11 @@ enum AppEnvironment {
 @main
 struct NexdoApp: App {
     init() {
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("-reset-install-introduction") {
+            UserDefaults.standard.removeObject(forKey: "nexdo.installIntroductionCompleted")
+        }
+        #endif
         NexdoAnalytics.configureIfAvailable()
         NexdoCrashReporting.configure()
     }
