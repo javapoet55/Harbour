@@ -13,6 +13,8 @@ struct RootView: View {
     @ObservedObject private var momentRoutes = MomentNotificationRoute.shared
     @ObservedObject private var taskActions = TaskActionCoordinator.shared
     @Environment(\.scenePhase) private var phase
+    @AppStorage("nexdo.installIntroductionCompleted") private var introductionCompleted = false
+    @State private var startWithSignUp = false
     @State private var selectedTab: NexdoTab = .today
     var body: some View {
         Group {
@@ -84,11 +86,11 @@ struct RootView: View {
                 NavigationStack { EmailVerificationView(pending: PendingEmailVerification(email: "preview@example.com", reason: .codeSent), showsCancel: true) }
             } else if model.profile != nil {
                 authenticatedTabs
-            } else { SignInView() }
+            } else { entryFlow }
             #else
             if model.profile != nil {
                 authenticatedTabs
-            } else { SignInView() }
+            } else { entryFlow }
             #endif
         }
         .environmentObject(model)
@@ -120,6 +122,17 @@ struct RootView: View {
             BugReportCoordinator.shared.configure(model: model, active: value == .active)
             if value == .active && model.profile != nil { model.refreshNextAction(); Task { await model.refresh(); await moments.refresh() } }
             else if value != .active { model.invalidateNextAction() }
+        }
+    }
+
+    @ViewBuilder private var entryFlow: some View {
+        if introductionCompleted {
+            SignInView(startWithSignUp: startWithSignUp)
+        } else {
+            InstallIntroductionView { signUp in
+                startWithSignUp = signUp
+                introductionCompleted = true
+            }
         }
     }
 
@@ -364,6 +377,10 @@ private struct SignInView: View {
     @State private var showsPasswordReset = false
     @State private var appleNonce = ""
     @FocusState private var focusedField: Field?
+
+    init(startWithSignUp: Bool = false) {
+        _showsSignUp = State(initialValue: startWithSignUp)
+    }
 
     private enum Field { case email, password }
 
