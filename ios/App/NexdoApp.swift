@@ -15,6 +15,7 @@ enum AppEnvironment {
 @main
 struct NexdoApp: App {
     init() {
+        AppReviewPromptStore.shared.recordFirstLaunch()
         #if DEBUG
         if ProcessInfo.processInfo.arguments.contains("-reset-install-introduction") {
             UserDefaults.standard.removeObject(forKey: "nexdo.installIntroductionCompleted")
