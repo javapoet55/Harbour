@@ -21,7 +21,7 @@ struct InstallIntroductionView: View {
         VStack(spacing: 0) {
             HStack {
                 Spacer()
-                Button("Skip") { finish(false) }
+                Button("Skip") { finish(true) }
                     .font(.body.weight(.medium)).padding(.horizontal, 24)
                     .frame(minHeight: 44).accessibilityIdentifier("intro.skip")
             }
