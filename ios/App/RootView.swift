@@ -670,7 +670,7 @@ private struct SignUpView: View {
                         .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 28))
                         .overlay(RoundedRectangle(cornerRadius: 28).stroke(Color.nexdoIndigo.opacity(0.10), lineWidth: 1))
                         .shadow(color: .black.opacity(0.04), radius: 16, y: 6)
-                        Label("Your password is encrypted in transit and stored as a one-way hash.", systemImage: "lock.shield")
+                        Label("We protect your password and never store a readable copy.", systemImage: "lock.shield")
                             .font(.footnote).foregroundStyle(Color.nexdoSecondary)
                             .fixedSize(horizontal: false, vertical: true)
                         if let localError {
