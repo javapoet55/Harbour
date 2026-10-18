@@ -288,9 +288,19 @@ struct CalendarView: View {
                     showingConnectionPrompt = false
                 } label: {
                     Text("Yes, connect calendar").font(.headline)
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 16).padding(.vertical, 14)
                         .frame(maxWidth: .infinity, minHeight: 50)
+                        .background(
+                            // Deeper brand blue and red keep white text readable in both appearances.
+                            LinearGradient(colors: [Color(red: 0.02, green: 0.43, blue: 0.78),
+                                                    .nexdoIndigo,
+                                                    Color(red: 0.78, green: 0.08, blue: 0.20)],
+                                           startPoint: .leading, endPoint: .trailing),
+                            in: Capsule()
+                        )
                 }
-                .buttonStyle(.borderedProminent).tint(Color.nexdoIndigo)
+                .buttonStyle(.plain)
                 .accessibilityIdentifier("calendar-connect-prompt-yes")
                 Button("Not now") { showingConnectionPrompt = false }
                     .frame(maxWidth: .infinity, minHeight: 44)

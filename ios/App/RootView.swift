@@ -1581,6 +1581,7 @@ private struct TodayIntelligenceCard: View {
     let onAsk: () -> Void
     let onCalendar: () -> Void
 
+    @State private var showingTaskCreator = false
     @State private var scheduleExpanded = false
     @State private var showingSearch = false
     @State private var searchText = ""
@@ -1687,13 +1688,15 @@ private struct TodayIntelligenceCard: View {
                 }
 
                 if visibleSchedule.isEmpty {
-                    VStack(spacing: 9) {
-                        Image(systemName: "calendar.badge.checkmark").font(.title2).foregroundStyle(Color.nexdoIndigo)
-                        Text(searching ? "No matching tasks" : "Your schedule is clear").font(.headline).foregroundStyle(Color.nexdoInk)
-                        Text(searching ? "Try different keywords or select a wider date range." : "Add a task or enjoy the open space.").font(.subheadline).foregroundStyle(Color.nexdoSecondary)
+                    if searching {
+                        emptySchedule
+                    } else {
+                        Button { showingTaskCreator = true } label: { emptySchedule }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("Your schedule is clear. Create a task")
+                            .accessibilityHint("Opens the manual task creation screen")
+                            .accessibilityIdentifier("today-empty-schedule-create-task")
                     }
-                    .frame(maxWidth: .infinity).padding(.vertical, 28)
-                    .accessibilityElement(children: .combine)
                 } else {
                     ForEach(Array(visibleSchedule.enumerated()), id: \.element.id) { index, item in
                         if index > 0 { Divider().opacity(0.55) }
@@ -1725,7 +1728,21 @@ private struct TodayIntelligenceCard: View {
         .shadow(color: Color.nexdoIndigo.opacity(0.09), radius: 24, y: 10)
         .accessibilityElement(children: .contain)
         .onChange(of: range) { _, _ in scheduleExpanded = false }
+        .sheet(isPresented: $showingTaskCreator) {
+            NavigationStack { TaskEditor(task: nil) }
+        }
     }
+    private var emptySchedule: some View {
+        VStack(spacing: 9) {
+            Image(systemName: "calendar.badge.checkmark").font(.title2).foregroundStyle(Color.nexdoIndigo)
+            Text(searching ? "No matching tasks" : "Your schedule is clear").font(.headline).foregroundStyle(Color.nexdoInk)
+            Text(searching ? "Try different keywords or select a wider date range." : "Add a task or enjoy the open space.").font(.subheadline).foregroundStyle(Color.nexdoSecondary)
+        }
+        .frame(maxWidth: .infinity).padding(.vertical, 28)
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
+    }
+
 }
 
 private struct TodayScheduleRow: View {
