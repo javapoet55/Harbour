@@ -24,7 +24,7 @@ describe('transactional email template', () => {
     expect(email.text).toContain('Your code is 042917.');
     expect(email.html).toContain(`Expires in ${expiry} &middot; single use`);
     expect(email.text).toContain(`Expires in ${expiry} · single use`);
-    expect(email.html).toContain(`<img src="${LOGO}" width="206" height="48" alt="Nexdo"`);
+    expect(email.html).toContain(_name === 'verify email' ? '/email/welcome-v2/nexdo-logo-official.png' : LOGO);
     expect(email.html).toContain('mailto:support@nexdo.test');
     expect(email.html).toMatchSnapshot('html');
     expect(email.text).toMatchSnapshot('text');
@@ -92,9 +92,13 @@ describe('transactional email template', () => {
     expect(email.html).toContain('Welcome to <span');
     expect(email.html).toContain('>913570</div>');
     expect(email.html).not.toContain('042917');
-    expect(email.html).toContain('>Open NexDo</a>');
-    expect(email.html).toContain('href="https://app.nexdo.test/"');
-    expect(email.text).toContain('Pro tips to get the most out of NexDo');
+    expect(email.html).toContain('>Open NexDo App &rarr;</a>');
+    expect(email.html).toContain('href="https://apps.apple.com/us/app/nexdo-ai-planner/id6812225981"');
+    expect(email.text).toContain('Top 10 Ways NexDo Makes Life Easier');
+    expect(email.html).toContain('/email/welcome-v2/ai-robot-recreated.png');
+    expect(email.html).toContain('/email/welcome-v2/10-sync-devices-recreated.png');
+    expect(email.html).not.toContain('{{OTP');
+    expect(Buffer.byteLength(email.html)).toBeLessThan(100_000);
     const escaped = verifyEmailMessage('<img src=x>', '<script>');
     expect(escaped.html).not.toContain('<img src=x>');
     expect(escaped.html).not.toContain('<script>');
