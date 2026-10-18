@@ -625,80 +625,108 @@ private struct SignUpView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                Color(uiColor: .systemBackground).ignoresSafeArea()
-                SignInBackdrop()
-
+                Color(uiColor: .systemGroupedBackground).ignoresSafeArea()
+                LinearGradient(colors: [.nexdoBlue.opacity(0.07), .clear, .nexdoPurple.opacity(0.06)], startPoint: .topLeading, endPoint: .bottomTrailing)
+                    .ignoresSafeArea().accessibilityHidden(true)
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 0) {
-                        Text("Create your account")
-                            .font(.system(size: 34, weight: .bold, design: .rounded))
-                            .foregroundStyle(Color.nexdoInk)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                        Text("Make your day easier with an AI-powered to-do app that turns a busy mind into a clear plan.")
-                            .font(.body)
-                            .foregroundStyle(Color.nexdoSecondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                            .padding(.top, 8)
-
-                        VStack(spacing: 0) {
-                            HStack(spacing: 14) {
-                                SignInFieldIcon(systemName: "person")
-                                TextField("Full name", text: $name).textContentType(.name).accessibilityLabel("Full name")
-                            }.padding(.horizontal, 18).frame(minHeight: 68)
-                            Divider().padding(.leading, 78)
-                            HStack(spacing: 14) {
-                                SignInFieldIcon(systemName: "envelope")
-                                TextField("Email address", text: $email)
-                                    .textContentType(.username).keyboardType(.emailAddress).textInputAutocapitalization(.never).autocorrectionDisabled().accessibilityLabel("Email address")
-                            }.padding(.horizontal, 18).frame(minHeight: 68)
-                            Divider().padding(.leading, 78)
-                            HStack(spacing: 14) {
-                                SignInFieldIcon(systemName: "lock")
+                    VStack(spacing: 24) {
+                        VStack(spacing: 12) {
+                            HStack(spacing: 12) {
+                                NexdoLogoMark().frame(width: 64, height: 54).accessibilityHidden(true)
+                                Text("NexDo").font(.largeTitle.bold()).foregroundStyle(Color.nexdoInk)
+                            }.accessibilityElement(children: .combine).accessibilityLabel("NexDo")
+                            Text("Less on your mind. More done in your day.")
+                                .font(.subheadline).foregroundStyle(Color.nexdoSecondary)
+                                .multilineTextAlignment(.center)
+                        }
+                        VStack(spacing: 8) {
+                            Text("Create your account")
+                                .font(.title.bold()).foregroundStyle(Color.nexdoInk)
+                                .accessibilityAddTraits(.isHeader)
+                            Text("Your tasks, plans, and everyday life — together.")
+                                .font(.body).foregroundStyle(Color.nexdoSecondary)
+                        }.multilineTextAlignment(.center)
+                        VStack(spacing: 18) {
+                            signupField("Full name", icon: "person") {
+                                TextField("Your name", text: $name).textContentType(.name).accessibilityLabel("Full name")
+                            }
+                            signupField("Email address", icon: "envelope") {
+                                TextField("you@example.com", text: $email)
+                                    .textContentType(.username).keyboardType(.emailAddress)
+                                    .textInputAutocapitalization(.never).autocorrectionDisabled().accessibilityLabel("Email address")
+                            }
+                            signupField("Password", icon: "lock") {
                                 RevealablePasswordField(title: "Password", text: $password)
-                            }.padding(.horizontal, 18).frame(minHeight: 68)
-                            Divider().padding(.leading, 78)
-                            HStack(spacing: 14) {
-                                SignInFieldIcon(systemName: "checkmark.shield")
+                            }
+                            signupField("Confirm password", icon: "checkmark.shield") {
                                 RevealablePasswordField(title: "Confirm password", text: $confirmation)
-                            }.padding(.horizontal, 18).frame(minHeight: 68)
+                            }
                         }
-                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 26, style: .continuous))
-                        .overlay(RoundedRectangle(cornerRadius: 26, style: .continuous).stroke(Color.white.opacity(0.8)))
-                        .shadow(color: Color.purple.opacity(0.09), radius: 25, y: 12)
-                        .padding(.top, 28)
-
-                        Text("Your password is sent securely to Nexdo and stored only as a one-way hash.")
-                            .font(.footnote)
-                            .foregroundStyle(Color.nexdoSecondary)
+                        .padding(20)
+                        .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 28))
+                        .overlay(RoundedRectangle(cornerRadius: 28).stroke(Color.nexdoIndigo.opacity(0.10), lineWidth: 1))
+                        .shadow(color: .black.opacity(0.04), radius: 16, y: 6)
+                        Label("Your password is encrypted in transit and stored as a one-way hash.", systemImage: "lock.shield")
+                            .font(.footnote).foregroundStyle(Color.nexdoSecondary)
                             .fixedSize(horizontal: false, vertical: true)
-                            .padding(.top, 12)
                         if let localError {
-                            Text(localError).font(.footnote).foregroundStyle(.red).padding(.top, 8)
+                            Text(localError).font(.footnote).foregroundStyle(.red)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .accessibilityAddTraits(.updatesFrequently)
                         }
-                        Button { create() } label: {
-                            Text(model.busy ? "Creating Account…" : "Create Account")
-                                .font(.title3.bold()).foregroundStyle(.white)
-                                .frame(maxWidth: .infinity, minHeight: 60)
-                                .background(LinearGradient(colors: [.nexdoMagenta, .nexdoIndigo, .nexdoBlue], startPoint: .leading, endPoint: .trailing), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-                        }
-                        .buttonStyle(.plain)
-                        .disabled(!canCreate)
-                        .opacity(canCreate ? 1 : 0.55)
-                        .padding(.top, 20)
-                        Text("Nexdo captures tasks in your own words, finds the right next step, and helps you protect time for what matters.")
-                            .font(.footnote).foregroundStyle(Color.nexdoSecondary).multilineTextAlignment(.leading).padding(.top, 18)
                     }
-                    .padding(.horizontal, 28).padding(.vertical, 28).frame(maxWidth: 560)
-                    .frame(maxWidth: .infinity)
-                }
+                    .padding(.horizontal, 24).padding(.top, 12).padding(.bottom, 24)
+                    .frame(maxWidth: 560).frame(maxWidth: .infinity)
+                }.scrollDismissesKeyboard(.interactively)
             }
-            .navigationTitle("Create your account")
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                VStack(spacing: 8) {
+                    Button { create() } label: {
+                        HStack(spacing: 10) {
+                            if model.busy || checkingSignup { ProgressView().tint(.white) }
+                            Text(model.busy || checkingSignup ? "Creating Account…" : "Create Account")
+                            if !model.busy && !checkingSignup { Image(systemName: "arrow.right") }
+                        }
+                        .font(.headline)
+                        .foregroundStyle(canCreate || model.busy || checkingSignup ? Color.white : Color.nexdoSecondary)
+                        .frame(maxWidth: .infinity, minHeight: 56)
+                        .background {
+                            if canCreate || model.busy || checkingSignup {
+                                LinearGradient(colors: [.nexdoBlue, .nexdoIndigo, .nexdoPurple], startPoint: .leading, endPoint: .trailing)
+                            } else { Color(uiColor: .tertiarySystemFill) }
+                        }
+                        .clipShape(RoundedRectangle(cornerRadius: 18))
+                    }
+                    .buttonStyle(.plain).disabled(!canCreate)
+                    .accessibilityIdentifier("signup.create")
+                    Button { closeSignUp() } label: {
+                        (Text("Already have an account? ").foregroundColor(.nexdoSecondary) + Text("Sign In").foregroundColor(.nexdoIndigo))
+                            .font(.subheadline).frame(minHeight: 44)
+                    }.disabled(model.busy || checkingSignup)
+                }
+                .padding(.horizontal, 24).padding(.top, 14).padding(.bottom, 8)
+                .frame(maxWidth: 560).frame(maxWidth: .infinity)
+                .background(.regularMaterial)
+            }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { closeSignUp() } } }
             .navigationDestination(item: $verification) { pending in EmailVerificationView(pending: pending) }
         }
         .onChange(of: model.profile?.id) { _, id in if id != nil { dismiss() } }
         .presentationDetents([.large])
+    }
+
+    private func signupField<Content: View>(_ title: String, icon: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title).font(.subheadline.weight(.semibold)).foregroundStyle(Color.nexdoInk).accessibilityHidden(true)
+            HStack(spacing: 12) {
+                Image(systemName: icon).foregroundStyle(Color.nexdoIndigo).frame(width: 24).accessibilityHidden(true)
+                content().font(.body)
+            }
+            .padding(.horizontal, 14).padding(.vertical, 14)
+            .background(Color(uiColor: .tertiarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 14))
+            .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.nexdoSecondary.opacity(0.15), lineWidth: 1))
+        }
     }
     @State private var verification: PendingEmailVerification?
     private var canCreate: Bool {
