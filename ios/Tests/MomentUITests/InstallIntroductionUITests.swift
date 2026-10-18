@@ -29,6 +29,8 @@ import XCTest
     func testSkipPersistsAndFreshInstallResets() {
         let app = freshApp()
         app.buttons["intro.skip"].tap()
+        XCTAssertTrue(app.staticTexts["Create your account"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["signup.create"].exists)
         XCTAssertTrue(app.textFields["Email address"].waitForExistence(timeout: 5))
         app.terminate(); app.launchArguments = []; app.launch()
         XCTAssertTrue(app.textFields["Email address"].waitForExistence(timeout: 10))
@@ -36,6 +38,17 @@ import XCTest
         app.terminate()
         app.launchArguments = ["-reset-install-introduction"]; app.launch()
         XCTAssertTrue(app.buttons["intro.next"].waitForExistence(timeout: 10))
+    }
+
+    func testSkipFromEveryLaterPageOpensSignup() {
+        for page in 2...4 {
+            let app = freshApp()
+            app.buttons["Page \(page) of 4"].tap()
+            app.buttons["intro.skip"].tap()
+            XCTAssertTrue(app.staticTexts["Create your account"].waitForExistence(timeout: 5))
+            XCTAssertTrue(app.buttons["signup.create"].exists)
+            app.terminate()
+        }
     }
 
     func testSwipePaginationAndSignIn() {

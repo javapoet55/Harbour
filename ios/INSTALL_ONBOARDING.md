@@ -3,8 +3,8 @@
 `InstallIntroductionView` presents the four supplied designs in screen-number order before authentication. Headings, descriptions, feature cards, page indicators, and actions are native SwiftUI. The original supplied artwork is retained in `first-launch-1` through `first-launch-5`; illustration regions are laid out separately from the mockups' status bars and controls.
 
 - Next, horizontal swipe, and accessible page buttons navigate the introduction.
-- Skip and Sign In finish the introduction and open existing sign-in.
-- Get Started finishes the introduction and opens existing account creation.
+- Skip and Get Started finish the introduction and open the redesigned Create Account screen.
+- The explicit Sign In link finishes the introduction and opens existing sign-in.
 - `nexdo.installIntroductionCompleted` is stored in app-container UserDefaults, not Keychain or account settings. Relaunch/sign-out does not reset it. Deleting the app and installing fresh clears it; restoring app data from a backup or offloading the app can retain it.
 - Copy uses Dynamic Type and each page scrolls independently. Actions stay outside the scroll area above the safe area. The supplied light artwork uses a light presentation for readable status-bar and control colors in either app appearance setting.
 - No permissions, network requests, or account creation are initiated by the introduction itself.
