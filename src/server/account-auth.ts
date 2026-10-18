@@ -18,7 +18,7 @@ const MAX_SENDS_PER_WINDOW = 3;
 type CodePurpose = keyof typeof CODE_TTL_MINUTES;
 
 export function validatePassword(value: string) {
-  if (value.length < 12 || Buffer.byteLength(value, 'utf8') > 72) {
+  if (value.length === 0 || Buffer.byteLength(value, 'utf8') > 72) {
     throw new Error('PASSWORD_POLICY');
   }
   return value;

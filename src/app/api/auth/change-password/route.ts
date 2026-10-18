@@ -8,12 +8,12 @@ import { validatePassword } from '@/server/account-auth';
 import { healthRoute } from '@/server/health/telemetry';
 import { jsonError } from '@/lib/http';
 
-const input = z.object({ currentPassword: z.string().min(1).max(72), newPassword: z.string().min(12).max(72), confirmPassword: z.string().min(12).max(72) });
+const input = z.object({ currentPassword: z.string().min(1).max(72), newPassword: z.string().min(1).max(72), confirmPassword: z.string().min(1).max(72) });
 async function changePassword(req: Request) {
   try {
     const user = await requireUser();
     const parsed = input.safeParse(await req.json().catch(() => null));
-    if (!parsed.success) return NextResponse.json({ error: 'Enter your current password and a new password of at least 12 characters.' }, { status: 400 });
+    if (!parsed.success) return NextResponse.json({ error: 'Enter your current password and a new password.' }, { status: 400 });
     const { currentPassword, newPassword, confirmPassword } = parsed.data;
     if (newPassword !== confirmPassword) return NextResponse.json({ error: 'The new passwords do not match.' }, { status: 400 });
     validatePassword(newPassword);

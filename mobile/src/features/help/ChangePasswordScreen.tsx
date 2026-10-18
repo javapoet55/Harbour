@@ -26,9 +26,9 @@ export function utf8Length(value: string): number {
   return bytes;
 }
 
-/** `valid` (:158-160): a current password, a new one of 12+ characters and ≤ 72 bytes, confirmed, and different. */
+/** `valid` (:158-160): a current password, a non-empty new one and ≤ 72 bytes, confirmed, and different. */
 export function passwordChangeValid(current: string, next: string, confirmation: string): boolean {
-  return current !== '' && Array.from(next).length >= 12 && utf8Length(next) <= 72 && next === confirmation && next !== current;
+  return current !== '' && next !== '' && utf8Length(next) <= 72 && next === confirmation && next !== current;
 }
 
 export function ChangePasswordScreen({ onBack, onForgotPassword }: { onBack: () => void; onForgotPassword: () => void }) {
@@ -72,7 +72,7 @@ export function ChangePasswordScreen({ onBack, onForgotPassword }: { onBack: () 
     <SafeAreaView edges={['top', 'left', 'right']} style={[styles.fill, { backgroundColor: theme.colors.groupedBackground }]} testID="change-password-screen">
       <InlineNavBar backHidden={saving} onBack={onBack} testID="change-password-nav" title="Change password" />
       <FormScroll>
-        <FormSection disabled={saving} footer="Use at least 12 characters (72 bytes maximum). You’ll need to sign in again after changing your password.">
+        <FormSection disabled={saving} footer="Choose a password (72 bytes maximum). You’ll need to sign in again after changing your password.">
           <FormRow>
             <FormField autoCapitalize="none" autoComplete="current-password" autoCorrect={false} onChangeText={setCurrent} placeholder="Current password" secureTextEntry testID="change-password-current" textContentType="password" value={current} />
           </FormRow>

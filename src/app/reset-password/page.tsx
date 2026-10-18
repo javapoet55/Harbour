@@ -54,8 +54,8 @@ export default function ResetPasswordPage() {
       <label className="block text-sm font-medium">Email address<input className="harbor-input mt-1" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" /></label>
       {sent && <>
         <label className="block text-sm font-medium">Verification code<input className="harbor-input mt-1" inputMode="numeric" pattern="[0-9]{6}" maxLength={6} autoComplete="one-time-code" required value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))} /></label>
-        <label className="block text-sm font-medium">New password<PasswordInput minLength={12} required value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" /></label>
-        <label className="block text-sm font-medium">Confirm new password<PasswordInput minLength={12} required value={confirmation} onChange={(e) => setConfirmation(e.target.value)} autoComplete="new-password" /></label>
+        <label className="block text-sm font-medium">New password<PasswordInput minLength={1} required value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" /></label>
+        <label className="block text-sm font-medium">Confirm new password<PasswordInput minLength={1} required value={confirmation} onChange={(e) => setConfirmation(e.target.value)} autoComplete="new-password" /></label>
       </>}
       {message && <p className="text-sm text-[var(--ok)]" role="status">{message}</p>}
       {error && <p className="text-sm text-[var(--danger)]" role="alert">{error}</p>}

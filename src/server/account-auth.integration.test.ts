@@ -32,15 +32,18 @@ describe('native account authentication', () => {
   });
 
   it('enforces the password policy', () => {
-    expect(() => validatePassword('short')).toThrow('PASSWORD_POLICY');
+    expect(() => validatePassword('')).toThrow('PASSWORD_POLICY');
+    for (const value of ['a', '123', 'password', ' ', '🔒', 'a'.repeat(72)]) expect(validatePassword(value)).toBe(value);
+    expect(() => validatePassword('a'.repeat(73))).toThrow('PASSWORD_POLICY');
+    expect(() => validatePassword('🔒'.repeat(19))).toThrow('PASSWORD_POLICY');
     expect(validatePassword('correct horse battery staple')).toBe('correct horse battery staple');
   });
 
   it('creates a database-backed account and prevents duplicates', async () => {
-    const user = await registerAccount({ name: 'Native User', email: `  ${email.split('@')[0]}@NEXDO.TEST `, password: 'initial-password-123' });
+    const user = await registerAccount({ name: 'Native User', email: `  ${email.split('@')[0]}@NEXDO.TEST `, password: '123' });
     userId = user.id;
     expect(user.email).toBe(email);
-    expect(await login(email, 'initial-password-123')).toMatchObject({ id: user.id });
+    expect(await login(email, '123')).toMatchObject({ id: user.id });
     await expect(registerAccount({ name: 'Duplicate', email, password: 'another-password-123' })).rejects.toThrow('ACCOUNT_EXISTS');
   });
 
@@ -50,11 +53,11 @@ describe('native account authentication', () => {
     expect(request.developmentCode).toMatch(/^\d{6}$/);
     const token = await prisma.passwordResetToken.findFirstOrThrow({ where: { userId, usedAt: null } });
     expectCodeLifetime(token.expiresAt, CODE_TTL_MINUTES.reset);
-    await expect(resetPassword({ email, code: wrongCode(request.developmentCode!), password: 'replacement-password-123' })).rejects.toThrow('INVALID_RESET_CODE');
-    await resetPassword({ email, code: request.developmentCode!, password: 'replacement-password-123' });
+    await expect(resetPassword({ email, code: wrongCode(request.developmentCode!), password: 'a' })).rejects.toThrow('INVALID_RESET_CODE');
+    await resetPassword({ email, code: request.developmentCode!, password: 'a' });
     await expect(resetPassword({ email, code: request.developmentCode!, password: 'other-password-123' })).rejects.toThrow('INVALID_RESET_CODE');
-    expect(await login(email, 'initial-password-123')).toBeNull();
-    expect(await login(email, 'replacement-password-123')).toMatchObject({ id: userId });
+    expect(await login(email, '123')).toBeNull();
+    expect(await login(email, 'a')).toMatchObject({ id: userId });
     expect((await prisma.user.findUniqueOrThrow({ where: { id: userId } })).emailVerifiedAt).toBeInstanceOf(Date);
   });
 
@@ -76,7 +79,7 @@ describe('native account authentication', () => {
     createdIds.push(user.id);
     const { developmentCode } = await createPasswordReset(user.email);
     await prisma.passwordResetToken.updateMany({ where: { userId: user.id }, data: { expiresAt: new Date(Date.now() - 1000) } });
-    await expect(resetPassword({ email: user.email, code: developmentCode!, password: 'replacement-password-123' })).rejects.toThrow('INVALID_RESET_CODE');
+    await expect(resetPassword({ email: user.email, code: developmentCode!, password: 'a' })).rejects.toThrow('INVALID_RESET_CODE');
     expect(await login(user.email, 'original-password-123')).toMatchObject({ id: user.id });
   });
 
@@ -84,19 +87,19 @@ describe('native account authentication', () => {
     const user = await registerAccount({ name: 'Concurrent Reset', email: `concurrent-${crypto.randomUUID()}@nexdo.test`, password: 'original-password-123' });
     createdIds.push(user.id);
     const { developmentCode } = await createPasswordReset(user.email);
-    const results = await Promise.allSettled(['replacement-password-123', 'replacement-password-456'].map(password => resetPassword({ email: user.email, code: developmentCode!, password })));
+    const results = await Promise.allSettled(['a', 'replacement-password-456'].map(password => resetPassword({ email: user.email, code: developmentCode!, password })));
     expect(results.filter(result => result.status === 'fulfilled')).toHaveLength(1);
     expect(results.filter(result => result.status === 'rejected')).toHaveLength(1);
     expect(await login(user.email, 'original-password-123')).toBeNull();
   });
 
-  it('rejects weak passwords without consuming a valid recovery code', async () => {
+  it('rejects empty passwords without consuming a valid recovery code', async () => {
     const user = await registerAccount({ name: 'Reset Policy', email: `policy-${crypto.randomUUID()}@nexdo.test`, password: 'original-password-123' });
     createdIds.push(user.id);
     const { developmentCode } = await createPasswordReset(user.email);
-    await expect(resetPassword({ email: user.email, code: developmentCode!, password: 'short' })).rejects.toThrow('PASSWORD_POLICY');
-    await resetPassword({ email: user.email, code: developmentCode!, password: 'replacement-password-123' });
-    expect(await login(user.email, 'replacement-password-123')).toMatchObject({ id: user.id });
+    await expect(resetPassword({ email: user.email, code: developmentCode!, password: '' })).rejects.toThrow('PASSWORD_POLICY');
+    await resetPassword({ email: user.email, code: developmentCode!, password: 'a' });
+    expect(await login(user.email, 'a')).toMatchObject({ id: user.id });
   });
 
   it('verifies a new account with a 24-hour one-time code and invalidates older codes', async () => {

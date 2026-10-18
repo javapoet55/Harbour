@@ -178,7 +178,7 @@ private struct ChangePasswordView: View {
     @State private var saving = false
     @State private var failure: String?
     private var valid: Bool {
-        !current.isEmpty && new.count >= 12 && new.utf8.count <= 72 && new == confirmation && new != current
+        !current.isEmpty && !new.isEmpty && new.utf8.count <= 72 && new == confirmation && new != current
     }
     var body: some View {
         Form {
@@ -187,7 +187,7 @@ private struct ChangePasswordView: View {
                 SecureField("New password", text: $new).textContentType(.newPassword)
                 SecureField("Confirm new password", text: $confirmation).textContentType(.newPassword)
             } footer: {
-                Text("Use at least 12 characters (72 bytes maximum). You’ll need to sign in again after changing your password.")
+                Text("Choose a password (72 bytes maximum). You’ll need to sign in again after changing your password.")
             }
             Section {
                 Button("Forgot password?") { showsPasswordReset = true }

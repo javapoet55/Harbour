@@ -667,7 +667,7 @@ private struct SignUpView: View {
                         .shadow(color: Color.purple.opacity(0.09), radius: 25, y: 12)
                         .padding(.top, 28)
 
-                        Text("Use at least 12 characters. Your password is sent securely to Nexdo and stored only as a one-way hash.")
+                        Text("Your password is sent securely to Nexdo and stored only as a one-way hash.")
                             .font(.footnote)
                             .foregroundStyle(Color.nexdoSecondary)
                             .fixedSize(horizontal: false, vertical: true)
@@ -702,7 +702,7 @@ private struct SignUpView: View {
     }
     @State private var verification: PendingEmailVerification?
     private var canCreate: Bool {
-        !model.busy && !checkingSignup && !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && email.contains("@") && password.count >= 12 && confirmation.count >= 12
+        !model.busy && !checkingSignup && !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && email.contains("@") && !password.isEmpty && password.utf8.count <= 72 && password == confirmation
     }
     private func closeSignUp() {
         dismiss()
@@ -760,7 +760,7 @@ struct PasswordResetView: View {
                 Section {
                     if codeSent {
                         Button(model.busy ? "Updating…" : "Update Password") { confirm() }
-                            .disabled(model.busy || code.count != 6 || password.count < 12)
+                            .disabled(model.busy || code.count != 6 || password.isEmpty || password.utf8.count > 72)
                         Button("Send a new code") { requestCode() }.disabled(model.busy)
                     } else {
                         Button(model.busy ? "Sending…" : "Send Verification Code") { requestCode() }

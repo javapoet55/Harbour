@@ -15,7 +15,7 @@ export function jsonError(err: unknown) {
   if (err instanceof Error && ['INVALID_LOCAL_TIME', 'INVALID_TASK'].includes(err.message)) return NextResponse.json({ error: err.message === 'INVALID_LOCAL_TIME' ? 'That local time does not exist. Choose a valid time outside the daylight-saving clock change.' : 'Enter a valid task title, date, and positive duration.' }, { status: 400 });
   if (err instanceof Error && err.message === 'SESSION_CONFIGURATION_REQUIRED') return NextResponse.json({ error: 'Sign-in is unavailable until the server security configuration is completed.' }, { status: 503 });
   if (err instanceof Error && err.message === 'INVALID_ACCOUNT_INPUT') return NextResponse.json({ error: 'Enter a valid name and email address.' }, { status: 400 });
-  if (err instanceof Error && err.message === 'PASSWORD_POLICY') return NextResponse.json({ error: 'Use a password with at least 12 characters (72 bytes maximum).' }, { status: 400 });
+  if (err instanceof Error && err.message === 'PASSWORD_POLICY') return NextResponse.json({ error: 'Enter a password (72 bytes maximum).' }, { status: 400 });
   if (err instanceof Error && err.message === 'ACCOUNT_EXISTS') return NextResponse.json({ error: 'An account with this email already exists. Sign in or reset your password.' }, { status: 409 });
   if (err instanceof Error && err.message === 'INVALID_VERIFICATION_CONTEXT') return NextResponse.json({ error: 'Please sign in with your password to continue verification, or reset your password.' }, { status: 400 });
   if (err instanceof Error && err.message === 'INVALID_RESET_CODE') return NextResponse.json({ error: 'That verification code is invalid, expired, or already used.' }, { status: 400 });
