@@ -616,6 +616,10 @@ private struct SignUpView: View {
     @Environment(\.dismiss) private var dismiss
     @StateObject private var signupChallenge = SignupChallengeCoordinator()
     @State private var checkingSignup = false
+    @State private var existingEmail: String?
+    @State private var showsExistingAccount = false
+    @State private var showsPasswordReset = false
+    @FocusState private var emailFocused: Bool
     @State private var name = ""
     @State private var email = ""
     @State private var password = ""
@@ -653,7 +657,7 @@ private struct SignUpView: View {
                             signupField("Email address", icon: "envelope") {
                                 TextField("you@example.com", text: $email)
                                     .textContentType(.username).keyboardType(.emailAddress)
-                                    .textInputAutocapitalization(.never).autocorrectionDisabled().accessibilityLabel("Email address")
+                                    .textInputAutocapitalization(.never).autocorrectionDisabled().accessibilityLabel("Email address").focused($emailFocused)
                             }
                             signupField("Password", icon: "lock") {
                                 RevealablePasswordField(title: "Password", text: $password)
@@ -713,6 +717,17 @@ private struct SignUpView: View {
             .navigationDestination(item: $verification) { pending in EmailVerificationView(pending: pending) }
         }
         .onChange(of: model.profile?.id) { _, id in if id != nil { dismiss() } }
+        .onChange(of: emailFocused) { _, focused in
+            if !focused { checkEmail() }
+        }
+        .alert("Account already exists", isPresented: $showsExistingAccount) {
+            Button("Yes, reset password") {
+                password = ""; confirmation = ""
+                showsPasswordReset = true
+            }
+            Button("No", role: .cancel) {}
+        } message: { Text("We already have an account with this email address. Do you want to reset the password?") }
+        .sheet(isPresented: $showsPasswordReset) { PasswordResetView(initialEmail: existingEmail ?? email) }
         .presentationDetents([.large])
     }
 
@@ -736,6 +751,18 @@ private struct SignUpView: View {
         dismiss()
     }
 
+    private func checkEmail() {
+        let submittedEmail = email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard submittedEmail.contains("@"), !checkingSignup else { return }
+        Task {
+            do {
+                let exists = try await model.signupAccountExists(email: submittedEmail)
+                guard email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == submittedEmail else { return }
+                if exists { existingEmail = submittedEmail; showsExistingAccount = true }
+            } catch { /* Creation retries the check and presents actionable errors. */ }
+        }
+    }
+
     private func create() {
         guard password == confirmation else { localError = "The passwords do not match."; return }
         localError = nil
@@ -743,12 +770,22 @@ private struct SignUpView: View {
         Task {
             defer { checkingSignup = false }
             do {
+                if try await model.signupAccountExists(email: email) {
+                    existingEmail = email; showsExistingAccount = true
+                    return
+                }
                 let state = UUID().uuidString
                 let url = try await model.signupChallengeURL(state: state)
                 var token: String?
                 if let url { token = try await signupChallenge.run(url: url, state: state) }
-                if let pending = await model.register(name: name, email: email, password: password, turnstileToken: token) { verification = pending }
-            } catch { localError = "Please complete the security check and try again." }
+                if let pending = try await model.register(name: name, email: email, password: password, turnstileToken: token) { verification = pending }
+            } catch is CancellationError {
+                localError = "Security check cancelled. Tap Create Account to try again."
+            } catch APIError.server(409, _) {
+                existingEmail = email; showsExistingAccount = true
+            } catch {
+                localError = error.localizedDescription
+            }
         }
     }
 }
