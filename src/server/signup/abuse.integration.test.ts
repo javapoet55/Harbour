@@ -7,6 +7,7 @@ const session = vi.hoisted(() => ({ id: '' }));
 vi.mock('@/server/session', () => ({ readUserId: async () => session.id || null, writeSession: vi.fn() }));
 vi.mock('./email-risk', async original => ({ ...await original<typeof import('./email-risk')>(), checkEmail: async (email: string) => ({ normalizedEmail: email, decision: 'ALLOW', reasonCodes: [] }) }));
 import { requireUser } from '@/server/auth';
+import { POST as accountExistsPOST } from '@/app/api/auth/account-exists/route';
 import { POST as registerPOST } from '@/app/api/auth/register/route';
 const ids: string[] = [];
 const unique = () => crypto.randomUUID();
@@ -81,12 +82,23 @@ describe('durable signup abuse protection', () => {
     const spy = vi.spyOn(console,'info').mockImplementation(()=>{}); const email='private-person@company.com'; securityEvent('signup_started',email);
     const output=JSON.stringify(spy.mock.calls); expect(output).not.toContain(email); expect(output).toContain('accountRef'); spy.mockRestore();
   });
-  it('duplicate signup has the same public response and creates only one account', async () => {
+  it('checks normalized email existence without returning account details', async () => {
+    const user = await account();
+    const check = (email: string) => accountExistsPOST(new Request('https://app.test/api/auth/account-exists', { method: 'POST', body: JSON.stringify({ email }) }));
+    const response = await check(` ${user.email.toUpperCase()} `);
+    expect(await response.json()).toEqual({ exists: true });
+    expect(response.headers.get('Cache-Control')).toBe('no-store');
+    expect(await (await check(`${unique()}@company.com`)).json()).toEqual({ exists: false });
+    expect((await check('invalid')).status).toBe(400);
+  });
+  it('duplicate signup returns conflict without replacing the original account', async () => {
     const email = `${unique()}@company.com`; const body={name:'User',email,password:'a-long-password-123'};
     const post=()=>registerPOST(new Request('https://app.test/api/auth/register',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}));
-    const first=await post(); expect(first.status, JSON.stringify(await first.clone().json())).toBe(201); const user=await prisma.user.findUniqueOrThrow({where:{email}});ids.push(user.id);await expireCooldown(email);
-    const second=await post();const a=await first.json();const b=await second.json();delete a.developmentCode;delete b.developmentCode; expect(a.verificationProof).toHaveLength(64);expect(b.verificationProof).toHaveLength(64);delete a.verificationProof;delete b.verificationProof;
-    expect(first.status).toBe(201);expect(second.status).toBe(201);expect(a).toEqual(b);expect(a).not.toHaveProperty('id');
+    const first=await post(); expect(first.status, JSON.stringify(await first.clone().json())).toBe(201);
+    const user=await prisma.user.findUniqueOrThrow({where:{email}});ids.push(user.id);await expireCooldown(email);
+    const second=await post(); expect(second.status).toBe(409);
+    expect(await second.json()).toEqual({ error: 'An account with this email already exists. Sign in or reset your password.' });
     expect(await prisma.user.count({where:{email}})).toBe(1);
+    expect((await prisma.user.findUniqueOrThrow({where:{email}})).passwordHash).toBe(user.passwordHash);
   });
 });
