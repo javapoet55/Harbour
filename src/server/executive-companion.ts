@@ -152,7 +152,7 @@ export async function handleExecutiveTurn(userId: string, transcript: string, co
 export async function proactiveNextAction(userId: string, now = new Date()) {
   const context = await loadScheduleContext(userId, now);
   const quietStart = context.user.preference?.quietStart ?? '21:00';
-  const quietEnd = context.user.preference?.quietEnd ?? '07:00';
+  const quietEnd = context.user.preference?.quietEnd ?? '06:00';
   const today = tzToday(context.timeZone, now);
   const boundaries = [...context.events.flatMap((event) => [+event.startAt - (event.allDay ? 0 : context.bufferMinutes * 60000), +event.endAt + (event.allDay ? 0 : context.bufferMinutes * 60000)]),
     ...context.tasks.filter((task) => !['COMPLETED', 'CANCELLED'].includes(task.status)).flatMap((task) => [task.startAt ? +task.startAt : 0, task.startAt ? +task.startAt + task.durationMin * 60000 : 0, ...[0, 8, 24, 72].map((hours) => task.dueAt ? +task.dueAt - hours * 3600000 : 0)]),

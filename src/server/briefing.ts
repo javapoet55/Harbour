@@ -31,7 +31,7 @@ export async function buildCompleteBriefing(userId: string, days = 5, now = new 
   const completion = new Map(insights?.enabled ? insights.completion.predictions.map((item) => [item.taskId, item.probability]) : []);
   const replan = buildReplan({
     tasks: tasks.map((task) => ({ ...task, durationMin: predictedDurations.get(task.id) ?? task.durationMin, dependsOnIds: task.dependencies.filter((edge) => edge.dependsOn.status !== 'COMPLETED').map((edge) => edge.dependsOnId) })),
-    events, timeZone: user.timeZone, workingDays: user.preference?.workingDays ?? '1,2,3,4,5', workStart: user.preference?.workStart ?? '09:00', workEnd: user.preference?.workEnd ?? '17:00', horizonDays: days, now,
+    events, timeZone: user.timeZone, workingDays: user.preference?.workingDays ?? '0,1,2,3,4,5,6', workStart: user.preference?.workStart ?? '06:00', workEnd: user.preference?.workEnd ?? '21:00', horizonDays: days, now,
   });
   const conflictIds = new Set(replan.moves.filter((move) => move.reason === 'meeting_conflict').map((move) => move.taskId));
   const candidates = tasks.filter((task) => !task.dueAt || task.dueAt <= end || Boolean(task.startAt && task.startAt <= end));
@@ -48,7 +48,7 @@ export async function buildCompleteBriefing(userId: string, days = 5, now = new 
   }).sort((a, b) => +(a.lifeReminderType ? a.reminderAt ?? a.dueAt : a.dueAt)! - +(b.lifeReminderType ? b.reminderAt ?? b.dueAt : b.dueAt)!);
   const conflicts = replan.moves.filter((move) => move.reason === 'meeting_conflict');
   const risks = replan.risks;
-  const intelligence = analyzeSchedule({ events, tasks: tasks.map((task) => ({ ...task, dependencyBlocked: task.dependencies.some((edge) => edge.dependsOn.status !== 'COMPLETED') })), timeZone: user.timeZone, workingDays: user.preference?.workingDays ?? '1,2,3,4,5', workStart: user.preference?.workStart ?? '09:00', workEnd: user.preference?.workEnd ?? '17:00', now });
+  const intelligence = analyzeSchedule({ events, tasks: tasks.map((task) => ({ ...task, dependencyBlocked: task.dependencies.some((edge) => edge.dependsOn.status !== 'COMPLETED') })), timeZone: user.timeZone, workingDays: user.preference?.workingDays ?? '0,1,2,3,4,5,6', workStart: user.preference?.workStart ?? '06:00', workEnd: user.preference?.workEnd ?? '21:00', now });
   const deadlineText = deadlines.length ? deadlines.slice(0, 4).map((task) => {
     const target = task.lifeReminderType ? task.dueAt ?? task.reminderAt! : task.dueAt!;
     const context = task.lifeReminderType ? lifeReminderBriefLabel(task.lifeReminderType as Parameters<typeof lifeReminderBriefLabel>[0], target, now) : `${formatDay(target, user.timeZone)} at ${formatTime(target, user.timeZone)}`;

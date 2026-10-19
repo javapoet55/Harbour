@@ -215,7 +215,7 @@ struct AskNexdoView: View {
                             }
                         } else {
                             AskAILandingView(prompt: $prompt, busy: blocked, sendEnabled: validPrompt,
-                                ask: { request($0) }, voice: { stopSpeech(); showingVoice = true },
+                                ask: { request($0) }, voice: { openVoice() },
                                 close: { requestTask?.cancel(); stopSpeech(); dismiss() }, typing: $composerFocused)
                                 .frame(minHeight: max(0, viewport.size.height - 4))
 
@@ -233,7 +233,7 @@ struct AskNexdoView: View {
                                 model.turn = nil
                                 model.lastAssistantPrompt = nil
                             },
-                            ask: { request($0) }, voice: { stopSpeech(); showingVoice = true },
+                            ask: { request($0) }, voice: { openVoice() },
                             read: { index, text in
                                 if readingSection == index { stopSpeech() }
                                 else { speakAnswer(text: text, section: index) }
@@ -389,7 +389,7 @@ struct AskNexdoView: View {
                 .background(AskStyle.blue, in: RoundedRectangle(cornerRadius: 13)).foregroundStyle(.white)
         }.disabled(!validPrompt || blocked).opacity(validPrompt && !blocked ? 1 : 0.55).accessibilityLabel(shoppingContext == nil ? "Ask Nexdo":"Get shopping recommendations")
         if !textPage {
-            Button { composerFocused = false; stopSpeech(); showingVoice = true } label: {
+            Button { openVoice() } label: {
                 Image(systemName: playback.isPlaying ? "speaker.wave.2.fill" : "mic").frame(width: 44, height: 44)
                     .background(AskStyle.blue, in: Circle()).foregroundStyle(.white)
             }.disabled(blocked).accessibilityLabel("Start voice input").accessibilityHint("Record a question or create a task with OpenAI voice")
@@ -449,6 +449,12 @@ struct AskNexdoView: View {
             } else { failedQuery = query }
             submitting = false
         }
+    }
+
+    private func openVoice() {
+        composerFocused = false
+        stopSpeech()
+        showingVoice = true
     }
 
     private func stopSpeech() {

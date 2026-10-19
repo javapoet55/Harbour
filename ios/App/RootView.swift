@@ -1113,6 +1113,8 @@ extension Color {
     static let nexdoSecondary = Color(uiColor: UIColor { $0.userInterfaceStyle == .dark ? .secondaryLabel : UIColor(red: 0.34, green: 0.36, blue: 0.50, alpha: 1) })
     static let nexdoScheduleBlue = Color(uiColor: UIColor { $0.userInterfaceStyle == .dark ? UIColor(red: 0.48, green: 0.73, blue: 1, alpha: 1) : UIColor(red: 0.15, green: 0.34, blue: 0.56, alpha: 1) })
     static let nexdoBlue = Color(red: 0.02, green: 0.58, blue: 0.96)
+    /// Readable foreground for actions on light and dark surfaces.
+    static let nexdoActionForeground = Color(uiColor: UIColor { $0.userInterfaceStyle == .dark ? .white : UIColor(red: 0.24, green: 0.16, blue: 0.94, alpha: 1) })
     static let nexdoIndigo = Color(red: 0.24, green: 0.16, blue: 0.94)
     static let nexdoPurple = Color(red: 0.52, green: 0.08, blue: 0.96)
     static let nexdoMagenta = Color(red: 0.94, green: 0.08, blue: 0.78)
@@ -2233,6 +2235,7 @@ struct TaskEditor: View {
     @State private var dateExplicitlyChosen = false
     @State private var customDate = Date()
     @State private var showingDatePicker = false
+    @State private var showingVoice = false
     @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @FocusState private var focusedField: Field?
@@ -2342,11 +2345,21 @@ struct TaskEditor: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .cancellationAction) { Button("Close") { closeTaskEditor() }.tint(TaskCreationStyle.accent).foregroundStyle(TaskCreationStyle.accent).disabled(model.busy) }
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    focusedField = nil
+                    showingVoice = true
+                } label: { Image(systemName: "mic.fill") }
+                .accessibilityLabel("Add task by voice")
+                .accessibilityIdentifier("task-editor-voice")
+                .disabled(model.busy || checkingAvailability)
+            }
             ToolbarItemGroup(placement: .keyboard) { Spacer(); Button("Done") { focusedField = nil } }
         }
         .onDisappear { focusedField = nil }
         .interactiveDismissDisabled(model.busy || checkingAvailability)
         .disabled(checkingAvailability)
+        .fullScreenCover(isPresented: $showingVoice) { AddTaskByVoiceView() }
         .sheet(isPresented: $showingDatePicker) {
             NavigationStack {
                 DatePicker("Task date", selection: $customDate, displayedComponents: .date)

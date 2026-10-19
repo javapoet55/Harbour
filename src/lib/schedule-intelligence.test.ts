@@ -113,7 +113,9 @@ describe('Today snapshot', () => {
     const empty = analyzeSchedule({ ...morning, tasks: [], events: [] });
     expect(empty.today).toMatchObject({ commitments: 0, availableMinutes: 480, attention: [] });
     const weekend = analyzeSchedule({ ...morning, now: new Date('2026-09-05T14:30:00Z'), tasks: [], events: [] });
-    expect(weekend.today).toMatchObject({ workingToday: false, availableMinutes: 0 });
+    expect(weekend.today).toMatchObject({ workingToday: true, availableMinutes: 480 });
+    const weekdaysOnly = analyzeSchedule({ ...morning, workingDays: '1,2,3,4,5', now: new Date('2026-09-05T14:30:00Z'), tasks: [], events: [] });
+    expect(weekdaysOnly.today).toMatchObject({ workingToday: false, availableMinutes: 0 });
     expect(analyzeSchedule({ ...morning, now: at('20:00'), tasks: [], events: [] }).availableMinutes).toBe(0);
   });
 

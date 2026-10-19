@@ -57,11 +57,13 @@ struct AskAILandingView: View {
                             waveform
                         }
                         Text("Ask by Voice").font(.headline)
-                        Text("Tap and speak naturally. I’m listening…").font(.caption).foregroundStyle(Color.nexdoSecondary)
-                    }.frame(maxWidth: .infinity).contentShape(Rectangle())
+                        Text("Tap to start a voice conversation").font(.caption).foregroundStyle(Color.nexdoSecondary)
+                    }.frame(maxWidth: .infinity, minHeight: 160).contentShape(Rectangle())
                 }.buttonStyle(.plain).disabled(busy).accessibilityIdentifier("ask-voice")
                 HStack(spacing: 8) {
-                    Image(systemName: "keyboard").font(.title3).padding(10).background(Color.nexdoIndigo.opacity(0.05), in: Circle())
+                    Button { typing = true } label: {
+                        Image(systemName: "keyboard").font(.title3).padding(10).background(Color.nexdoIndigo.opacity(0.05), in: Circle())
+                    }.buttonStyle(.plain).accessibilityLabel("Type your request")
                     TextField("Or type your request…", text: $prompt, axis: .vertical).font(.subheadline).lineLimit(1...4).focused($typing).accessibilityLabel("Type your request")
                     Button { typing = false; ask(prompt) } label: {
                         Image(systemName: "arrow.up").font(.title3.bold()).foregroundStyle(.white).frame(width: 42, height: 42).background(Color.nexdoIndigo.opacity(sendEnabled ? 1 : 0.45), in: Circle())

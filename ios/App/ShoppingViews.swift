@@ -403,7 +403,7 @@ struct ShoppingDetail:View {
             Button{recommendations=true}label:{
                 Label("Recommendations",systemImage:"sparkles")
                     .font(.subheadline.weight(.semibold)).lineLimit(2).minimumScaleFactor(0.78)
-                    .foregroundStyle(Color.nexdoIndigo).frame(maxWidth:.infinity,minHeight:52)
+                    .foregroundStyle(Color.nexdoActionForeground).frame(maxWidth:.infinity,minHeight:52)
                     .background(Color(uiColor:.secondarySystemGroupedBackground),in:RoundedRectangle(cornerRadius:17,style:.continuous))
                     .overlay(RoundedRectangle(cornerRadius:17,style:.continuous).stroke(Color.nexdoIndigo.opacity(0.22),lineWidth:1))
             }.buttonStyle(.plain).disabled(store.busy)
