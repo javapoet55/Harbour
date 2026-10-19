@@ -102,6 +102,14 @@ struct AddTaskByVoiceView: View {
                             }
                             .buttonStyle(.borderedProminent)
                         }
+                        if voice.phase == .idle && !starting && !microphoneDenied && startupError == nil {
+                            Button("Start listening") {
+                                if model.aiConsent && model.voiceConsent { Task { await start() } }
+                                else { consent = true }
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .accessibilityIdentifier("voice-start-listening")
+                        }
                         if voice.phase == .paused {
                             Button("Resume") { Task { await voice.resumeAfterAudioInterruption() } }
                                 .buttonStyle(.borderedProminent)
@@ -184,6 +192,10 @@ struct AddTaskByVoiceView: View {
             Button("Not now", role: .cancel) { dismiss() }
         } message: { Text(foodContext != nil ? "Your voice and these two product names are shared with OpenAI. Food lookups use USDA and Open Food Facts. This conversation does not change your shopping list." : "Your voice and relevant task, calendar, and recommendation details are shared with OpenAI during this conversation. Clear task requests are saved automatically. Calls and emails still require your approval.") }
         .task {
+            // Establish visibility in the same lifecycle callback that starts
+            // voice. onAppear and task ordering must not decide whether the
+            // microphone session starts or silently stays idle.
+            isVisible = true
             #if DEBUG
             if ProcessInfo.processInfo.arguments.contains("-ask-voice-design-preview") || ProcessInfo.processInfo.arguments.contains("-calendar-voice-preview") { return }
             #endif
@@ -218,7 +230,6 @@ struct AddTaskByVoiceView: View {
                 beginAutomaticRecovery(resetAttempts: true)
             }
         }
-        .onAppear { isVisible = true }
         .onDisappear { isVisible = false; recoveryTask?.cancel(); readyBell?.stop(); voice.close(); executor.clear(); endBackgroundTask() }
         .onChange(of: scenePhase) { _, phase in
             // Permission setup has no live session to suspend (including trips to Settings).
@@ -279,6 +290,7 @@ struct AddTaskByVoiceView: View {
         executor.attach(model)
         do {
             try await VoicePermissionGate.authorize { await AVAudioApplication.requestRecordPermission() }
+            try Task.checkCancellation()
             guard isVisible else { return }
             let credential = try await model.voiceTaskSession(calendarOnly: calendarOnly, foodContext: foodContext)
             try Task.checkCancellation()
@@ -288,7 +300,9 @@ struct AddTaskByVoiceView: View {
             microphoneDenied = true
             startupError = VoicePermissionGate.Failure.microphoneDenied.localizedDescription
         } catch is CancellationError {
-            // Dismissing the screen cancels startup; it is not a connection failure.
+            // If the view remains open, provide an actionable retry instead of
+            // leaving the idle “Ready” screen without a live microphone.
+            if isVisible { startupError = "Voice setup was interrupted. Try again to start listening." }
         } catch {
             startupError = error.localizedDescription
         }
