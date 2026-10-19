@@ -7,8 +7,8 @@ import { NexdoLogo } from '@/components/nexdo-logo';
 export default function OnboardingPage() {
   const router = useRouter();
   const [timeZone, setTimeZone] = useState(() => Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/Los_Angeles');
-  const [workStart, setWorkStart] = useState('09:00');
-  const [workEnd, setWorkEnd] = useState('17:00');
+  const [workStart, setWorkStart] = useState('06:00');
+  const [workEnd, setWorkEnd] = useState('21:00');
   const [reminders, setReminders] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');

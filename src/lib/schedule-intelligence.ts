@@ -114,7 +114,7 @@ export function analyzeSchedule(input: {
   const today = ymd(tzToday(input.timeZone, now));
   const midnight = startOfLocalDay(today, input.timeZone).getTime();
   const dayEnd = endOfLocalDay(today, input.timeZone).getTime();
-  const workingToday = (input.workingDays ?? '1,2,3,4,5').split(',').map(Number).includes(tzToday(input.timeZone, now).getUTCDay());
+  const workingToday = (input.workingDays ?? '0,1,2,3,4,5,6').split(',').map(Number).includes(tzToday(input.timeZone, now).getUTCDay());
   const dayStart = Math.max(now.getTime(), zonedDateTime(today, input.workStart, input.timeZone).getTime());
   const workEnd = zonedDateTime(today, input.workEnd, input.timeZone).getTime();
   const time = (value: Date | number) => formatTime(new Date(value), input.timeZone);

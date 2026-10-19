@@ -95,8 +95,8 @@ export async function generateReplanProposal(userId: string, now = new Date()) {
     tasks: tasks.map((task) => ({ ...task, durationMin: protectedIds.includes(task.id) ? task.durationMin : predictedDurations.get(task.id) ?? task.durationMin, dependsOnIds: task.dependencies.filter((dependency) => dependency.dependsOn.status !== 'COMPLETED').map((dependency) => dependency.dependsOnId) })),
     events: events.filter((event) => !event.externalId || !tasks.some((task) => task.externalEventId === event.externalId)),
     timeZone: user.timeZone,
-    workingDays: preference?.workingDays ?? '1,2,3,4,5',
-    workStart: preference?.workStart ?? '09:00', workEnd: preference?.workEnd ?? '17:00',
+    workingDays: preference?.workingDays ?? '0,1,2,3,4,5,6',
+    workStart: preference?.workStart ?? '06:00', workEnd: preference?.workEnd ?? '21:00',
     horizonDays, now, bufferMinutes: normalizedBuffer(bufferMemory?.value),
   });
   const payload: ReplanPayload = { version: 1, kind: INTENT, generatedAt: plan.generatedAt, moves: plan.moves, risks: plan.risks };

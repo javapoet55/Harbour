@@ -5,6 +5,7 @@ import SwiftUI
 final class VoicePlayback: NSObject, ObservableObject, AVAudioPlayerDelegate {
     @Published private(set) var isPlaying = false
     @Published private(set) var error: String?
+    private var ownsAudioSession = false
     private var player: AVAudioPlayer?
     private var completion: ((Bool) -> Void)?
     private var voiceVolumeObserver: NSObjectProtocol?
@@ -25,6 +26,7 @@ final class VoicePlayback: NSObject, ObservableObject, AVAudioPlayerDelegate {
             let session = AVAudioSession.sharedInstance()
             try session.setCategory(.playback, mode: .spokenAudio)
             try session.setActive(true)
+            ownsAudioSession = true
             let next = try AVAudioPlayer(data: data)
             next.delegate = self
             next.volume = Float(AppVoice.volume)
@@ -37,11 +39,17 @@ final class VoicePlayback: NSObject, ObservableObject, AVAudioPlayerDelegate {
             // assignment to the caught Error value.
             self.error = "Nexdo could not play the voice response."
             isPlaying = false
-            try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+            releaseAudioSession()
             let callback = completion; completion = nil; callback?(false)
         }
     }
-    func stop() { completion = nil; player?.delegate = nil; player?.stop(); player = nil; isPlaying = false; error = nil; try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation) }
+    func stop() { completion = nil; player?.delegate = nil; player?.stop(); player = nil; isPlaying = false; error = nil; releaseAudioSession() }
+    private func releaseAudioSession() {
+        // An idle playback object must not deactivate a live WebRTC microphone.
+        guard ownsAudioSession else { return }
+        ownsAudioSession = false
+        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+    }
     nonisolated func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
         let identity = ObjectIdentifier(player)
         Task { @MainActor in

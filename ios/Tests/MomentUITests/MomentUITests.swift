@@ -154,6 +154,24 @@ import XCTest
         XCTAssertGreaterThanOrEqual(app.buttons["ask-card-0"].frame.height, 120)
         XCTAssertTrue(app.buttons["ask-voice"].exists)
     }
+    func testAskKeyboardShortcutFocusesComposer() {
+        app.terminate(); app.launchArguments = ["-ask-design-preview"]; app.launch()
+        let keyboard = app.buttons["Type your request"]
+        XCTAssertTrue(keyboard.waitForExistence(timeout: 10))
+        keyboard.tap()
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5))
+        app.typeText("Plan my day")
+        XCTAssertTrue(app.buttons["Send request"].isEnabled)
+    }
+
+    func testCreateTaskOffersVoiceShortcut() {
+        app.terminate(); app.launchArguments = ["-task-design-preview", "-task-editor-preview"]; app.launch()
+        let microphone = app.buttons["task-editor-voice"]
+        XCTAssertTrue(microphone.waitForExistence(timeout: 10))
+        microphone.tap()
+        XCTAssertTrue(app.staticTexts["Speak your task"].waitForExistence(timeout: 5))
+    }
+
     func testTodayCompactAttentionOpensOnDemand() {
         app.terminate()
         app.launchArguments = ["-today-design-preview"]

@@ -66,8 +66,8 @@ export async function loadScheduleContext(userId: string, now = new Date(), days
     nextActionEnabled: memory.get('preference:next_action_enabled') === 'true',
     switchingThreshold: Number.isFinite(threshold) ? Math.max(0, Math.min(50, threshold)) : NEXT_ACTION_POLICY.switchingThreshold,
     contextWarnings: [...(staleCalendars ? [`${staleCalendars} connected calendar(s) have stale or unavailable sync data. Synchronize before relying on this schedule.`] : []), ...(drifted.size ? [`${drifted.size} task calendar link(s) changed outside Nexdo. Their current calendar blocks are protected; review the linked tasks before scheduling them.`] : [])],
-    timeZone: user.timeZone, workingDays: user.preference?.workingDays ?? '1,2,3,4,5',
-    workStart: user.preference?.workStart ?? '09:00', workEnd: user.preference?.workEnd ?? '17:00', bufferMinutes,
+    timeZone: user.timeZone, workingDays: user.preference?.workingDays ?? '0,1,2,3,4,5,6',
+    workStart: user.preference?.workStart ?? '06:00', workEnd: user.preference?.workEnd ?? '21:00', bufferMinutes,
   };
 }
 
@@ -95,9 +95,9 @@ export async function getScheduleIntelligence(userId: string, now = new Date(), 
     events,
     tasks: tasks.map((task) => ({ ...task, status: task.deletedAt ? 'CANCELLED' : task.status, dependencyBlocked: task.dependencies.some((edge) => edge.dependsOn.status !== 'COMPLETED' && !edge.dependsOn.deletedAt), blocksCount: task.dependents.length, preferenceScore: preferenceById.get(task.id) })),
     timeZone: user.timeZone,
-    workStart: user.preference?.workStart ?? '09:00',
-    workEnd: user.preference?.workEnd ?? '17:00',
-    workingDays: user.preference?.workingDays ?? '1,2,3,4,5',
+    workStart: user.preference?.workStart ?? '06:00',
+    workEnd: user.preference?.workEnd ?? '21:00',
+    workingDays: user.preference?.workingDays ?? '0,1,2,3,4,5,6',
     bufferMinutes: normalizedBuffer(options.bufferMinutes ?? bufferMemory?.value),
     now,
   });

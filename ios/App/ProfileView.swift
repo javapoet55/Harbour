@@ -102,7 +102,7 @@ struct AccountView: View {
                 try? await model.reloadProfile()
                 await model.refreshVoiceUsage()
             }
-        }.tint(.nexdoIndigo).bugReportScreen("settings")
+        }.tint(.nexdoActionForeground).bugReportScreen("settings")
     }
 
     private var voiceUsageCard:some View {
@@ -119,7 +119,7 @@ struct AccountView: View {
                     Text("Monthly usage").font(.caption).foregroundStyle(Color.nexdoSecondary)
                 }
                 Spacer()
-                Text(voiceMinutes(used)).font(.title3.bold()).foregroundStyle(Color.nexdoIndigo).monospacedDigit()
+                Text(voiceMinutes(used)).font(.title3.bold()).foregroundStyle(Color.nexdoActionForeground).monospacedDigit()
             }
             ProgressView(value:usage?.progress ?? 0)
                 .tint(.nexdoBlue).scaleEffect(x:1,y:1.8,anchor:.center)
@@ -156,7 +156,7 @@ struct AccountView: View {
 
     private func menuRow(_ title: String, _ icon: String, web: Bool = false) -> some View {
         HStack(spacing: 14) {
-            Image(systemName: icon).frame(width: 24).foregroundStyle(Color.nexdoIndigo)
+            Image(systemName: icon).frame(width: 24).foregroundStyle(Color.nexdoActionForeground)
             Text(title).foregroundStyle(Color.nexdoInk)
             Spacer()
             Image(systemName: web ? "arrow.up.right" : "chevron.right").font(.caption).foregroundStyle(Color.nexdoSecondary)
@@ -308,7 +308,7 @@ struct ProfileSettingsView: View {
                     }
                     Text("Choose a photo from your library. Your picture is saved to your Nexdo account.").font(.caption).foregroundStyle(Color.nexdoSecondary)
                     if savingPhoto { ProgressView("Saving profile photo…") }
-                    if let photoMessage { Text(photoMessage).font(.caption).foregroundStyle(Color.nexdoIndigo).accessibilityAddTraits(.updatesFrequently) }
+                    if let photoMessage { Text(photoMessage).font(.caption).foregroundStyle(Color.nexdoActionForeground).accessibilityAddTraits(.updatesFrequently) }
                 }
                 if loading { ProgressView("Loading settings…").frame(maxWidth: .infinity) }
                 else if preferences != nil {
@@ -317,7 +317,7 @@ struct ProfileSettingsView: View {
                         VStack(alignment: .leading, spacing: 8) {
                             LabeledContent("Time zone (Automatic)", value: TimeZone.autoupdatingCurrent.identifier.replacingOccurrences(of: "_", with: " "))
                         }
-                        WorkingDaysField(value: Binding(get: { preferences?.workingDays ?? "1,2,3,4,5" }, set: { preferences?.workingDays = $0 }))
+                        WorkingDaysField(value: Binding(get: { preferences?.workingDays ?? "0,1,2,3,4,5,6" }, set: { preferences?.workingDays = $0 }))
                         hours("Working hours", start: pref(\.workStart), end: pref(\.workEnd))
                         hours("Quiet hours", start: pref(\.quietStart), end: pref(\.quietEnd))
                     }
@@ -372,7 +372,7 @@ struct ProfileSettingsView: View {
                     }.foregroundStyle(.white).background(NexdoTheme.saveGradient, in: Capsule())
                 } else { Button("Retry loading settings") { Task { await load() } } }
                 if let failure { Text(failure).foregroundStyle(.red).accessibilityAddTraits(.updatesFrequently) }
-                if let message { Label(message, systemImage: "checkmark.circle").foregroundStyle(Color.nexdoIndigo).accessibilityAddTraits(.updatesFrequently) }
+                if let message { Label(message, systemImage: "checkmark.circle").foregroundStyle(Color.nexdoActionForeground).accessibilityAddTraits(.updatesFrequently) }
             }.padding(20).disabled(saving || connecting || deletingAccount)
         }
         .onChange(of: loading) { _, isLoading in
@@ -380,6 +380,7 @@ struct ProfileSettingsView: View {
         }
         }
         .toggleStyle(SwitchToggleStyle(tint: .green))
+        .tint(.nexdoActionForeground)
         .background(ProfileBackground()).navigationTitle("Settings").navigationBarTitleDisplayMode(.large)
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
@@ -391,6 +392,12 @@ struct ProfileSettingsView: View {
             }
         }
         .task { if loading { await load() } }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.NSSystemTimeZoneDidChange)) { _ in
+            Task {
+                do { try await model.synchronizeDeviceTimeZone() }
+                catch { failure = error.localizedDescription }
+            }
+        }
         .task(id: model.profile?.id) { await refreshAppleCalendarStatus() }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { Task { await refreshAppleCalendarStatus() } }
@@ -588,12 +595,12 @@ struct ProfileSettingsView: View {
         #if DEBUG
         if ProcessInfo.processInfo.arguments.contains("-profile-design-preview") {
             name = model.profile?.name ?? "Preview"; zone = "America/Los_Angeles"
-            preferences = try? JSONDecoder().decode(ProfilePreferences.self, from: Data(#"{"workStart":"08:00","workEnd":"17:00","quietStart":"21:00","quietEnd":"07:00","confirmationLevel":"CHANGES_AND_DELETES","voiceEnabled":true,"personalizationEnabled":false,"pushEnabled":true,"emailEnabled":true,"smsEnabled":false,"morningSummary":true,"eveningSummary":true}"#.utf8))
+            preferences = try? JSONDecoder().decode(ProfilePreferences.self, from: Data(#"{"workingDays":"0,1,2,3,4,5,6","workStart":"06:00","workEnd":"21:00","quietStart":"21:00","quietEnd":"06:00","confirmationLevel":"CHANGES_AND_DELETES","voiceEnabled":true,"personalizationEnabled":false,"pushEnabled":true,"emailEnabled":true,"smsEnabled":false,"morningSummary":true,"eveningSummary":true}"#.utf8))
             return
         }
         #endif
         await model.loadCalendarConnections()
-        do { try await model.reloadProfile(); name = model.profile?.name ?? ""; zone = model.profile?.timeZone ?? ""; preferences = model.profile?.preference; next = model.profile?.nextAction ?? next
+        do { try await model.synchronizeDeviceTimeZone(); try await model.reloadProfile(); name = model.profile?.name ?? ""; zone = model.profile?.timeZone ?? ""; preferences = model.profile?.preference; next = model.profile?.nextAction ?? next
             if preferences == nil { failure = "Settings are unavailable. Please retry." }
         } catch { failure = error.localizedDescription }
     }
