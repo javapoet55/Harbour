@@ -68,9 +68,19 @@ struct WellnessChooserView: View {
         ZStack(alignment: .topLeading) {
             LinearGradient(colors: [.pink.opacity(0.05), .blue.opacity(0.10), .purple.opacity(0.07)], startPoint: .topLeading, endPoint: .bottomTrailing)
             if isDark {
-                Image(systemName: "moon.stars.fill")
-                    .font(.system(size: 75 * scale, weight: .light))
-                    .foregroundStyle(Color(red: 0.72, green: 0.65, blue: 1).opacity(0.28))
+                ZStack(alignment: .topTrailing) {
+                    Image(systemName: "moon.fill")
+                        .font(.system(size: 62 * scale, weight: .light))
+                        .foregroundStyle(Color(red: 1, green: 0.78, blue: 0.25))
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+                    Image(systemName: "sparkle")
+                        .font(.system(size: 18 * scale)).foregroundStyle(.white)
+                        .offset(x: -17 * scale, y: -2 * scale)
+                    Image(systemName: "sparkle")
+                        .font(.system(size: 27 * scale)).foregroundStyle(.white)
+                        .offset(x: 4 * scale, y: 16 * scale)
+                }
+                    .frame(width: 75 * scale, height: 75 * scale)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
                     .padding(20 * scale).accessibilityHidden(true)
             } else {
