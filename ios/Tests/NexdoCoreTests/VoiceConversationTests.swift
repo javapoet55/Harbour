@@ -360,3 +360,21 @@ import Testing
     #expect(receipts.count == 1)
     #expect(receipts.first?.totalTokens == 12)
 }
+
+@Test @MainActor func completedVoiceSessionCanStartAnotherConversation() async {
+    let h = VoiceHarness()
+    await h.ready()
+    h.session.finish()
+    h.audioResponse()
+    #expect(h.session.phase == .disconnected)
+    h.session.restart(credential: h.credential())
+    await Task.yield()
+    h.send(["type": "session.created"])
+    #expect(h.session.phase == .listening)
+    #expect(!h.session.muted)
+    h.send(["type": "input_audio_buffer.speech_started"])
+    #expect(h.session.phase == .userSpeaking)
+    h.send(["type": "input_audio_buffer.speech_stopped"])
+    h.send(["type": "input_audio_buffer.committed", "item_id": "second-conversation"])
+    #expect(h.session.phase == .processing)
+}

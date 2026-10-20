@@ -69,6 +69,7 @@ struct AskNexdoView: View {
     @State private var pendingQuery: String?
     @State private var showConsent = false
     @State private var showingVoice = false
+    @State private var voicePresentationID = UUID()
     @State private var voiceError: String?
     @State private var preparingSpeech = false
     @State private var readingSection: Int?
@@ -301,7 +302,7 @@ struct AskNexdoView: View {
         .sheet(isPresented: $showConsent, onDismiss: { pendingQuery = nil }) {
             consentView.presentationDetents([.medium, .large])
         }
-        .fullScreenCover(isPresented: $showingVoice) { AddTaskByVoiceView(askMode: true) }
+        .fullScreenCover(isPresented: $showingVoice) { AddTaskByVoiceView(askMode: true).id(voicePresentationID) }
         .onAppear {
             if startWithVoice && !openedInitialVoice { openedInitialVoice = true; showingVoice = true }
         }
@@ -454,6 +455,7 @@ struct AskNexdoView: View {
     private func openVoice() {
         composerFocused = false
         stopSpeech()
+        voicePresentationID = UUID()
         showingVoice = true
     }
 
