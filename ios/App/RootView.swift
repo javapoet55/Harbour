@@ -1804,6 +1804,7 @@ struct TasksView: View {
     @State private var account = false
     @State private var filters = false
     @State private var voice = false
+    @State private var voicePresentationID = UUID()
     @State private var searching = false
     @FocusState private var searchFocused: Bool
     @State private var editing: NexdoTask?
@@ -1903,7 +1904,7 @@ struct TasksView: View {
             }
             .toolbar(.hidden, for: .navigationBar)
             .sheet(isPresented: $adding) { NavigationStack { TaskEditor(task: nil) } }
-            .fullScreenCover(isPresented: $voice) { AddTaskByVoiceView() }
+            .fullScreenCover(isPresented: $voice) { AddTaskByVoiceView().id(voicePresentationID) }
             .sheet(isPresented: $account) { AccountView() }
             .sheet(item: $editing) { task in
                 NavigationStack { TaskEditor(task: task) }
@@ -1983,7 +1984,7 @@ struct TasksView: View {
     private var creationActions: some View {
         let layout = typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(spacing: 12)) : AnyLayout(HStackLayout(spacing: 12))
         return layout {
-            creationCard(title: "Add by Voice", subtitle: "Tap and speak", icon: "mic.fill", isVoice: true) { voice = true }
+            creationCard(title: "Add by Voice", subtitle: "Tap and speak", icon: "mic.fill", isVoice: true) { voicePresentationID = UUID(); voice = true }
             creationCard(title: "Add Manually", subtitle: "Type a task", icon: "plus", isVoice: false) { adding = true }
         }
     }
@@ -2239,6 +2240,7 @@ struct TaskEditor: View {
     @State private var customDate = Date()
     @State private var showingDatePicker = false
     @State private var showingVoice = false
+    @State private var voicePresentationID = UUID()
     @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @FocusState private var focusedField: Field?
@@ -2351,6 +2353,7 @@ struct TaskEditor: View {
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
                     focusedField = nil
+                    voicePresentationID = UUID()
                     showingVoice = true
                 } label: { Image(systemName: "mic.fill") }
                 .accessibilityLabel("Add task by voice")
@@ -2362,7 +2365,7 @@ struct TaskEditor: View {
         .onDisappear { focusedField = nil }
         .interactiveDismissDisabled(model.busy || checkingAvailability)
         .disabled(checkingAvailability)
-        .fullScreenCover(isPresented: $showingVoice) { AddTaskByVoiceView() }
+        .fullScreenCover(isPresented: $showingVoice) { AddTaskByVoiceView().id(voicePresentationID) }
         .sheet(isPresented: $showingDatePicker) {
             NavigationStack {
                 DatePicker("Task date", selection: $customDate, displayedComponents: .date)
