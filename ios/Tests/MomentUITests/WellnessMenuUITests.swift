@@ -32,6 +32,23 @@ import XCTest
         app.buttons["Back"].firstMatch.tap()
         XCTAssertTrue(app.buttons["wellness.calories"].waitForExistence(timeout: 5))
     }
+    func testCalorieGuideContinueIsFullyVisibleWithoutScrolling() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-wellness-design-preview"]
+        app.launch()
+        openModule("calories", in: app)
+        XCTAssertTrue(app.navigationBars["How It Works"].waitForExistence(timeout: 5))
+        let button = app.buttons["module-guide-continue"]
+        XCTAssertTrue(button.isHittable)
+        XCTAssertTrue(app.windows.firstMatch.frame.contains(button.frame))
+        let originalFrame = button.frame
+        app.scrollViews.firstMatch.swipeUp()
+        XCTAssertTrue(button.isHittable)
+        XCTAssertEqual(button.frame.minY, originalFrame.minY, accuracy: 1)
+        button.tap()
+        assertModuleHome("calories", in: app)
+    }
+
     private func continueFromGuide(_ app:XCUIApplication) {
         XCTAssertTrue(app.navigationBars["How It Works"].waitForExistence(timeout:5))
         let button=app.buttons["module-guide-continue"]
