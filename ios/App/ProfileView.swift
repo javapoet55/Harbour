@@ -266,112 +266,20 @@ struct ProfileSettingsView: View {
     @State private var deletionError: String?
     @StateObject private var calendarOAuth = CalendarOAuthCoordinator()
 
-    var body: some View {
+    private var settingsPage: some View {
         ScrollViewReader { scrollProxy in
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
-                card("Appearance") {
-                    Picker("Appearance", selection: $appearance) {
-                        ForEach(AppAppearance.allCases) { choice in
-                            Text(choice.title).tag(choice)
-                        }
-                    }.pickerStyle(.segmented)
-                    Text("Day uses a light view. Night uses a dark view. System follows your phone. Changes apply immediately and are saved on this device.")
-                        .font(.caption).foregroundStyle(Color.nexdoSecondary)
-                }
-                card("App Voice") {
-                    HStack {
-                        Label("AI speaking volume", systemImage: "speaker.wave.2")
-                        Spacer()
-                        Text("\(Int((appVoiceVolume * 100).rounded()))%")
-                            .foregroundStyle(Color.nexdoSecondary).monospacedDigit()
-                    }
-                    Slider(value: $appVoiceVolume, in: 0...1, step: 0.05) {
-                        Text("AI speaking volume")
-                    } minimumValueLabel: {
-                        Image(systemName: "speaker.fill")
-                    } maximumValueLabel: {
-                        Image(systemName: "speaker.wave.3.fill")
-                    }
-                    .accessibilityValue("\(Int((appVoiceVolume * 100).rounded())) percent")
-                    Text("Adjusts Nexdo’s spoken responses immediately. This setting is saved on this device.")
-                        .font(.caption).foregroundStyle(Color.nexdoSecondary)
-                }
-                card("Profile picture") {
-                    HStack(spacing: 18) {
-                        ProfileAvatar(name: name)
-                        VStack(alignment: .leading, spacing: 12) {
-                            PhotosPicker(selection: $selectedPhoto, matching: .images, preferredItemEncoding: .compatible) { Label("Change photo", systemImage: "photo") }
-                                .disabled(loading)
-                            if model.profile?.photo != nil { Button("Remove photo", role: .destructive) { run { try await model.saveProfilePhoto(nil); message = "Profile picture removed." } } }
-                        }
-                    }
-                    Text("Choose a photo from your library. Your picture is saved to your Nexdo account.").font(.caption).foregroundStyle(Color.nexdoSecondary)
-                    if savingPhoto { ProgressView("Saving profile photo…") }
-                    if let photoMessage { Text(photoMessage).font(.caption).foregroundStyle(Color.nexdoActionForeground).accessibilityAddTraits(.updatesFrequently) }
-                }
+                    appearanceSettingsCard
+                    appVoiceSettingsCard
+                    profilePictureSettingsCard
                 if loading { ProgressView("Loading settings…").frame(maxWidth: .infinity) }
                 else if preferences != nil {
-                    card("Profile and time") {
-                        field("Display name", text: $name)
-                        VStack(alignment: .leading, spacing: 8) {
-                            LabeledContent("Time zone (Automatic)", value: TimeZone.autoupdatingCurrent.identifier.replacingOccurrences(of: "_", with: " "))
-                        }
-                        WorkingDaysField(value: Binding(get: { preferences?.workingDays ?? "0,1,2,3,4,5,6" }, set: { preferences?.workingDays = $0 }))
-                        hours("Working hours", start: pref(\.workStart), end: pref(\.workEnd))
-                        hours("Quiet hours", start: pref(\.quietStart), end: pref(\.quietEnd))
-                    }
-                    card("Voice and confirmation") {
-                        Picker("AI confirmation", selection: pref(\.confirmationLevel)) {
-                            Text("Always confirm").tag("ALWAYS")
-                            Text("Confirm changes and deletions").tag("CHANGES_AND_DELETES")
-                            Text("Execute routine actions").tag("ROUTINE_AUTO")
-                        }.pickerStyle(.menu).tint(.nexdoActionForeground).foregroundStyle(Color.nexdoActionForeground)
-                        Toggle("Enable spoken replies", isOn: pref(\.voiceEnabled))
-                        Divider()
-                        Toggle("Personalized predictions", isOn: pref(\.personalizationEnabled))
-                        Text("Learn from task timing, completion, postponements, and reminder outcomes. Off by default.").font(.caption).foregroundStyle(Color.nexdoSecondary)
-                    }
-                    card("Notifications and focus") {
-                        Toggle("Suggest my next action", isOn: $next.enabled)
-                        Picker("Protect my current focus", selection: $next.switchingThreshold) {
-                            Text("Flexible").tag(5); Text("Balanced").tag(10); Text("Strong").tag(25)
-                        }
-                        Text("Suggestions respect your working hours, quiet hours, and active focus.").font(.caption).foregroundStyle(Color.nexdoSecondary)
-                        Toggle("Push notifications", isOn: pref(\.pushEnabled))
-                        Toggle("Email notifications", isOn: pref(\.emailEnabled))
-                        Toggle("Daily morning email · 6:00 a.m.", isOn: pref(\.morningSummary))
-                        Text(morningEmailExplanation).font(.caption).foregroundStyle(Color.nexdoSecondary)
-                        Toggle("Evening summary", isOn: pref(\.eveningSummary))
-                        Text("Manage delivery permissions and send tests in Notification Center.").font(.caption).foregroundStyle(Color.nexdoSecondary)
-                        Button("Open Notification Center") { website("/notifications") }
-                            .foregroundStyle(Color.nexdoActionForeground)
-                    }
-                    card("Calendars & Privacy") {
-                        Text("Connect your calendar to keep your plans and important moments together.").font(.subheadline).foregroundStyle(Color.nexdoSecondary)
-                        connectionList
-                        if appleCalendarAccess { appleCalendarCard }
-                        if let error = model.calendarConnectionsError {
-                            Text(error).font(.caption).foregroundStyle(.red)
-                            Button("Retry connection status") { Task { await model.loadCalendarConnections() } }
-                        }
-                        NavigationLink { CalendarConnectionView() } label: {
-                            Label("Connect Calendar", systemImage: "calendar.badge.plus")
-                        }.foregroundStyle(Color.nexdoActionForeground).accessibilityIdentifier("settings-connect-calendar")
-                        Button("Synchronize now", systemImage: "arrow.triangle.2.circlepath") { run { message = try await model.syncProfileCalendars() } }
-                            .foregroundStyle(Color.nexdoActionForeground)
-                        Divider()
-                        Text(model.aiConsent ? "OpenAI sharing is allowed for this session." : "OpenAI sharing is off.").font(.caption)
-                        if model.aiConsent { Button("Withdraw AI permission") { model.withdrawConsent() }.foregroundStyle(Color.nexdoActionForeground) }
-                        Link(destination: LegalLinks.privacyPolicy) { Label(LegalLinks.privacyPolicyTitle, systemImage: "hand.raised") }
-                            .foregroundStyle(Color.nexdoActionForeground).accessibilityIdentifier("settings-privacy-policy")
-                        Link(destination: LegalLinks.termsOfService) { Label(LegalLinks.termsOfServiceTitle, systemImage: "doc.text") }
-                            .foregroundStyle(Color.nexdoActionForeground).accessibilityIdentifier("settings-terms-of-service")
-                        Button("Delete account", role: .destructive) { confirmsDeletion = true }
-                    }.id("calendar-settings")
-                    Button { save() } label: {
-                        HStack { if saving { ProgressView().tint(.white) }; Text(saving ? "Saving…" : "Save settings").bold() }.frame(maxWidth: .infinity, minHeight: 50)
-                    }.foregroundStyle(.white).background(NexdoTheme.saveGradient, in: Capsule())
+                    profileTimeSettingsCard
+                    voiceSettingsCard
+                    notificationSettingsCard
+                    calendarPrivacyCard
+                    saveSettingsButton
                 } else { Button("Retry loading settings") { Task { await load() } } }
                 if let failure { Text(failure).foregroundStyle(.red).accessibilityAddTraits(.updatesFrequently) }
                 if let message { Label(message, systemImage: "checkmark.circle").foregroundStyle(Color.nexdoActionForeground).accessibilityAddTraits(.updatesFrequently) }
@@ -393,6 +301,11 @@ struct ProfileSettingsView: View {
                 .disabled(loading || saving || connecting || deletingAccount)
             }
         }
+
+    }
+
+    private var settingsWithLifecycle: some View {
+        settingsPage
         .task { if loading { await load() } }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.NSSystemTimeZoneDidChange)) { _ in
             Task {
@@ -412,6 +325,11 @@ struct ProfileSettingsView: View {
         }
         .interactiveDismissDisabled(saving || connecting)
         .navigationBarBackButtonHidden(true)
+
+    }
+
+    var body: some View {
+        settingsWithLifecycle
         .alert("Could not update profile", isPresented: Binding(get: { failure != nil }, set: { if !$0 { failure = nil } })) {
             Button("OK", role: .cancel) { failure = nil }
         } message: { Text(failure ?? "") }
@@ -574,6 +492,130 @@ struct ProfileSettingsView: View {
             } catch { failure = error.localizedDescription }
         }
     }
+    private var appearanceSettingsCard: some View {
+        card("Appearance") {
+            Picker("Appearance", selection: $appearance) {
+                ForEach(AppAppearance.allCases) { choice in
+                    Text(choice.title).tag(choice)
+                }
+            }.pickerStyle(.segmented)
+            Text("Day uses a light view. Night uses a dark view. System follows your phone. Changes apply immediately and are saved on this device.")
+                .font(.caption).foregroundStyle(Color.nexdoSecondary)
+        }
+    }
+
+    private var appVoiceSettingsCard: some View {
+        card("App Voice") {
+            HStack {
+                Label("AI speaking volume", systemImage: "speaker.wave.2")
+                Spacer()
+                Text("\(Int((appVoiceVolume * 100).rounded()))%")
+                    .foregroundStyle(Color.nexdoSecondary).monospacedDigit()
+            }
+            Slider(value: $appVoiceVolume, in: 0...1, step: 0.05) {
+                Text("AI speaking volume")
+            } minimumValueLabel: {
+                Image(systemName: "speaker.fill")
+            } maximumValueLabel: {
+                Image(systemName: "speaker.wave.3.fill")
+            }
+            .accessibilityValue("\(Int((appVoiceVolume * 100).rounded())) percent")
+            Text("Adjusts Nexdo’s spoken responses immediately. This setting is saved on this device.")
+                .font(.caption).foregroundStyle(Color.nexdoSecondary)
+        }
+    }
+
+    private var profilePictureSettingsCard: some View {
+        card("Profile picture") {
+            HStack(spacing: 18) {
+                ProfileAvatar(name: name)
+                VStack(alignment: .leading, spacing: 12) {
+                    PhotosPicker(selection: $selectedPhoto, matching: .images, preferredItemEncoding: .compatible) { Label("Change photo", systemImage: "photo") }
+                        .disabled(loading)
+                    if model.profile?.photo != nil { Button("Remove photo", role: .destructive) { run { try await model.saveProfilePhoto(nil); message = "Profile picture removed." } } }
+                }
+            }
+            Text("Choose a photo from your library. Your picture is saved to your Nexdo account.").font(.caption).foregroundStyle(Color.nexdoSecondary)
+            if savingPhoto { ProgressView("Saving profile photo…") }
+            if let photoMessage { Text(photoMessage).font(.caption).foregroundStyle(Color.nexdoActionForeground).accessibilityAddTraits(.updatesFrequently) }
+        }
+    }
+
+    private var profileTimeSettingsCard: some View {
+        card("Profile and time") {
+            field("Display name", text: $name)
+            VStack(alignment: .leading, spacing: 8) {
+                LabeledContent("Time zone (Automatic)", value: TimeZone.autoupdatingCurrent.identifier.replacingOccurrences(of: "_", with: " "))
+            }
+            WorkingDaysField(value: Binding(get: { preferences?.workingDays ?? "0,1,2,3,4,5,6" }, set: { preferences?.workingDays = $0 }))
+            hours("Working hours", start: pref(\.workStart), end: pref(\.workEnd))
+            hours("Quiet hours", start: pref(\.quietStart), end: pref(\.quietEnd))
+        }
+    }
+
+    private var saveSettingsButton: some View {
+        Button { save() } label: {
+            HStack { if saving { ProgressView().tint(.white) }; Text(saving ? "Saving…" : "Save settings").bold() }.frame(maxWidth: .infinity, minHeight: 50)
+        }.foregroundStyle(.white).background(NexdoTheme.saveGradient, in: Capsule())
+    }
+
+    private var voiceSettingsCard: some View {
+        card("Voice and confirmation") {
+            Picker("AI confirmation", selection: pref(\.confirmationLevel)) {
+                Text("Always confirm").tag("ALWAYS")
+                Text("Confirm changes and deletions").tag("CHANGES_AND_DELETES")
+                Text("Execute routine actions").tag("ROUTINE_AUTO")
+            }.pickerStyle(.menu).tint(.nexdoActionForeground).foregroundStyle(Color.nexdoActionForeground)
+            Toggle("Enable spoken replies", isOn: pref(\.voiceEnabled))
+            Divider()
+            Toggle("Personalized predictions", isOn: pref(\.personalizationEnabled))
+            Text("Learn from task timing, completion, postponements, and reminder outcomes. Off by default.").font(.caption).foregroundStyle(Color.nexdoSecondary)
+        }
+    }
+
+    private var notificationSettingsCard: some View {
+        card("Notifications and focus") {
+            Toggle("Suggest my next action", isOn: $next.enabled)
+            Picker("Protect my current focus", selection: $next.switchingThreshold) {
+                Text("Flexible").tag(5); Text("Balanced").tag(10); Text("Strong").tag(25)
+            }
+            Text("Suggestions respect your working hours, quiet hours, and active focus.").font(.caption).foregroundStyle(Color.nexdoSecondary)
+            Toggle("Push notifications", isOn: pref(\.pushEnabled))
+            Toggle("Email notifications", isOn: pref(\.emailEnabled))
+            Toggle("Daily morning email · 6:00 a.m.", isOn: pref(\.morningSummary))
+            Text(morningEmailExplanation).font(.caption).foregroundStyle(Color.nexdoSecondary)
+            Toggle("Evening summary", isOn: pref(\.eveningSummary))
+            Text("Manage delivery permissions and send tests in Notification Center.").font(.caption).foregroundStyle(Color.nexdoSecondary)
+            Button("Open Notification Center") { website("/notifications") }
+                .foregroundStyle(Color.nexdoActionForeground)
+        }
+    }
+
+    private var calendarPrivacyCard: some View {
+        card("Calendars & Privacy") {
+            Text("Connect your calendar to keep your plans and important moments together.").font(.subheadline).foregroundStyle(Color.nexdoSecondary)
+            connectionList
+            if appleCalendarAccess { appleCalendarCard }
+            if let error = model.calendarConnectionsError {
+                Text(error).font(.caption).foregroundStyle(.red)
+                Button("Retry connection status") { Task { await model.loadCalendarConnections() } }
+            }
+            NavigationLink { CalendarConnectionView() } label: {
+                Label("Connect Calendar", systemImage: "calendar.badge.plus")
+            }.foregroundStyle(Color.nexdoActionForeground).accessibilityIdentifier("settings-connect-calendar")
+            Button("Synchronize now", systemImage: "arrow.triangle.2.circlepath") { run { message = try await model.syncProfileCalendars() } }
+                .foregroundStyle(Color.nexdoActionForeground)
+            Divider()
+            Text(model.aiConsent ? "OpenAI sharing is allowed for this session." : "OpenAI sharing is off.").font(.caption)
+            if model.aiConsent { Button("Withdraw AI permission") { model.withdrawConsent() }.foregroundStyle(Color.nexdoActionForeground) }
+            Link(destination: LegalLinks.privacyPolicy) { Label(LegalLinks.privacyPolicyTitle, systemImage: "hand.raised") }
+                .foregroundStyle(Color.nexdoActionForeground).accessibilityIdentifier("settings-privacy-policy")
+            Link(destination: LegalLinks.termsOfService) { Label(LegalLinks.termsOfServiceTitle, systemImage: "doc.text") }
+                .foregroundStyle(Color.nexdoActionForeground).accessibilityIdentifier("settings-terms-of-service")
+            Button("Delete account", role: .destructive) { confirmsDeletion = true }
+        }.id("calendar-settings")
+    }
+
     private func card<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 16) { Text(title).font(.headline); content() }.frame(maxWidth: .infinity, alignment: .leading).padding(18).profileCard()
     }
