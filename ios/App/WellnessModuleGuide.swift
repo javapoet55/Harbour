@@ -82,6 +82,11 @@ struct WellnessModuleGuide: View {
                         }
                     }.padding(18).frame(maxWidth:.infinity,alignment:.leading)
                         .background(kind.color.opacity(0.06),in:RoundedRectangle(cornerRadius:22))
+
+                }.padding(18).frame(maxWidth:650).frame(maxWidth:.infinity)
+            }
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                VStack(spacing: 4) {
                     Button(action:onContinue) {
                         Text("Got it!").font(.headline).foregroundStyle(.white)
                             .frame(maxWidth:.infinity,minHeight:54)
@@ -89,7 +94,10 @@ struct WellnessModuleGuide: View {
                     }.buttonStyle(.plain).accessibilityIdentifier("module-guide-continue")
                     Button("Back to Home",action:onHome).font(.headline)
                         .frame(maxWidth:.infinity,minHeight:44).accessibilityIdentifier("module-guide-home")
-                }.padding(18).frame(maxWidth:650).frame(maxWidth:.infinity)
+                }
+                .padding(.horizontal, 18).padding(.top, 12).padding(.bottom, 8)
+                .frame(maxWidth: 650).frame(maxWidth: .infinity)
+                .background(.regularMaterial)
             }
             .foregroundStyle(ink)
             .background(LinearGradient(colors:[kind.color.opacity(0.13),Color.white,kind.color.opacity(0.05)],startPoint:.topLeading,endPoint:.bottomTrailing).ignoresSafeArea())
