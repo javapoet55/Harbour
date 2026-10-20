@@ -47,6 +47,12 @@ describe('native account authentication', () => {
     await expect(registerAccount({ name: 'Duplicate', email, password: 'another-password-123' })).rejects.toThrow('ACCOUNT_EXISTS');
   });
 
+  it('rejects reset requests for unknown emails without creating a reset token', async () => {
+    const before = await prisma.passwordResetToken.count();
+    await expect(createPasswordReset(`missing-${crypto.randomUUID()}@nexdo.test`)).rejects.toThrow('RESET_ACCOUNT_NOT_FOUND');
+    expect(await prisma.passwordResetToken.count()).toBe(before);
+  });
+
   it('uses a one-time 15-minute reset code and updates only the intended account', async () => {
     const request = await createPasswordReset(email);
     expect(request.delivered).toBe(true);

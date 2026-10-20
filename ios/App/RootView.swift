@@ -814,7 +814,7 @@ struct PasswordResetView: View {
                 Section {
                     TextField("Email address", text: $email)
                         .textContentType(.username).keyboardType(.emailAddress).textInputAutocapitalization(.never).autocorrectionDisabled()
-                } footer: { Text("We’ll email a six-digit code if an account exists. Codes expire after 15 minutes.") }
+                } footer: { Text("Enter your account’s email address. We’ll send a six-digit code that expires after 15 minutes.") }
                 if codeSent {
                     Section("Verification") {
                         TextField("6-digit code", text: $code).keyboardType(.numberPad).textContentType(.oneTimeCode)

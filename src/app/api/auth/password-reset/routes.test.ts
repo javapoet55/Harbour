@@ -22,7 +22,7 @@ beforeEach(() => {
 });
 
 describe('password recovery API boundaries', () => {
-  it('requests a code without requiring a session and returns the generic acknowledgement', async () => {
+  it('requests a code without requiring a session and confirms delivery for an existing account', async () => {
     const req = request({ email: credentials.email });
     const response = await requestCode(req);
     expect(limitAuthRequest).toHaveBeenCalledWith(req, 'send');
@@ -30,7 +30,17 @@ describe('password recovery API boundaries', () => {
     expect(createPasswordReset).toHaveBeenCalledWith(credentials.email);
     expect(vi.mocked(limitAuthRequest).mock.invocationCallOrder[0]).toBeLessThan(vi.mocked(createPasswordReset).mock.invocationCallOrder[0]);
     expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({ message: 'If that account exists, a six-digit code has been sent.', delivered: true });
+    expect(await response.json()).toEqual({ message: 'A six-digit verification code has been sent to your email.', delivered: true });
+  });
+
+  it('shows an account-not-found error instead of reporting that a code was sent', async () => {
+    vi.mocked(createPasswordReset).mockRejectedValue(new Error('RESET_ACCOUNT_NOT_FOUND'));
+    const response = await requestCode(request({ email: 'missing@example.com' }));
+    expect(response.status).toBe(404);
+    const body = await response.json();
+    expect(body.error).toContain('don’t have an account');
+    expect(body).not.toHaveProperty('delivered');
+    expect(body).not.toHaveProperty('developmentCode');
   });
 
   it('passes a leading-zero code intact and does not issue a session after resetting', async () => {
