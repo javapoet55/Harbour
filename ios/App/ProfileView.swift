@@ -326,7 +326,7 @@ struct ProfileSettingsView: View {
                             Text("Always confirm").tag("ALWAYS")
                             Text("Confirm changes and deletions").tag("CHANGES_AND_DELETES")
                             Text("Execute routine actions").tag("ROUTINE_AUTO")
-                        }.pickerStyle(.menu)
+                        }.pickerStyle(.menu).tint(.nexdoActionForeground).foregroundStyle(Color.nexdoActionForeground)
                         Toggle("Enable spoken replies", isOn: pref(\.voiceEnabled))
                         Divider()
                         Toggle("Personalized predictions", isOn: pref(\.personalizationEnabled))
@@ -345,6 +345,7 @@ struct ProfileSettingsView: View {
                         Toggle("Evening summary", isOn: pref(\.eveningSummary))
                         Text("Manage delivery permissions and send tests in Notification Center.").font(.caption).foregroundStyle(Color.nexdoSecondary)
                         Button("Open Notification Center") { website("/notifications") }
+                            .foregroundStyle(Color.nexdoActionForeground)
                     }
                     card("Calendars & Privacy") {
                         Text("Connect your calendar to keep your plans and important moments together.").font(.subheadline).foregroundStyle(Color.nexdoSecondary)
@@ -356,15 +357,16 @@ struct ProfileSettingsView: View {
                         }
                         NavigationLink { CalendarConnectionView() } label: {
                             Label("Connect Calendar", systemImage: "calendar.badge.plus")
-                        }.accessibilityIdentifier("settings-connect-calendar")
+                        }.foregroundStyle(Color.nexdoActionForeground).accessibilityIdentifier("settings-connect-calendar")
                         Button("Synchronize now", systemImage: "arrow.triangle.2.circlepath") { run { message = try await model.syncProfileCalendars() } }
+                            .foregroundStyle(Color.nexdoActionForeground)
                         Divider()
                         Text(model.aiConsent ? "OpenAI sharing is allowed for this session." : "OpenAI sharing is off.").font(.caption)
-                        if model.aiConsent { Button("Withdraw AI permission") { model.withdrawConsent() } }
+                        if model.aiConsent { Button("Withdraw AI permission") { model.withdrawConsent() }.foregroundStyle(Color.nexdoActionForeground) }
                         Link(destination: LegalLinks.privacyPolicy) { Label(LegalLinks.privacyPolicyTitle, systemImage: "hand.raised") }
-                            .accessibilityIdentifier("settings-privacy-policy")
+                            .foregroundStyle(Color.nexdoActionForeground).accessibilityIdentifier("settings-privacy-policy")
                         Link(destination: LegalLinks.termsOfService) { Label(LegalLinks.termsOfServiceTitle, systemImage: "doc.text") }
-                            .accessibilityIdentifier("settings-terms-of-service")
+                            .foregroundStyle(Color.nexdoActionForeground).accessibilityIdentifier("settings-terms-of-service")
                         Button("Delete account", role: .destructive) { confirmsDeletion = true }
                     }.id("calendar-settings")
                     Button { save() } label: {
@@ -385,7 +387,7 @@ struct ProfileSettingsView: View {
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
                 Button { saveAndDismiss() } label: {
-                    Image(systemName: "chevron.backward")
+                    Image(systemName: "chevron.backward").foregroundStyle(Color.nexdoActionForeground)
                 }
                 .accessibilityLabel("Save settings and go back")
                 .disabled(loading || saving || connecting || deletingAccount)
