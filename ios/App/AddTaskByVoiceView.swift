@@ -31,15 +31,52 @@ private final class VoiceNetworkMonitor: ObservableObject {
     deinit { monitor.cancel() }
 }
 
+/// Keep the session and its dependencies in the same SwiftUI lifetime. Creating
+/// them separately in a View initializer can pair retained state with new objects.
+@MainActor
+private final class VoiceSessionResources: ObservableObject {
+    let executor: VoiceToolExecutor
+    let transport: VoiceWebRTCTransport
+    let session: VoiceConversationSession
+
+    init(calendarOnly: Bool, foodOnly: Bool) {
+        let executor = VoiceToolExecutor()
+        executor.calendarOnly = calendarOnly
+        executor.foodOnly = foodOnly
+        let transport = VoiceWebRTCTransport()
+        self.executor = executor
+        self.transport = transport
+        self.session = VoiceConversationSession(transport: transport, executor: executor)
+    }
+}
+
 struct AddTaskByVoiceView: View {
+    @StateObject private var resources: VoiceSessionResources
+    private let askMode: Bool
+    private let calendarOnly: Bool
+    private let foodContext: FoodVoiceContext?
+
+    init(askMode: Bool = false, calendarOnly: Bool = false, foodContext: FoodVoiceContext? = nil) {
+        self.askMode = askMode
+        self.calendarOnly = calendarOnly
+        self.foodContext = foodContext
+        _resources = StateObject(wrappedValue: VoiceSessionResources(calendarOnly: calendarOnly, foodOnly: foodContext != nil))
+    }
+
+    var body: some View {
+        VoiceConversationView(resources: resources, askMode: askMode, calendarOnly: calendarOnly, foodContext: foodContext)
+    }
+}
+
+private struct VoiceConversationView: View {
     @EnvironmentObject private var model: AppModel
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @StateObject private var voice: VoiceConversationSession
+    @ObservedObject private var voice: VoiceConversationSession
     @StateObject private var connectivity = VoiceNetworkMonitor()
-    @State private var executor: VoiceToolExecutor
-    @State private var transport: VoiceWebRTCTransport
+    private let executor: VoiceToolExecutor
+    private let transport: VoiceWebRTCTransport
     @AppStorage(AppVoice.volumeStorageKey) private var voiceLevel = AppVoice.defaultVolume
     @State private var showingSpeaker = false
     @State private var routingSpeaker = false
@@ -63,14 +100,13 @@ struct AddTaskByVoiceView: View {
     private let askMode: Bool
     private let calendarOnly: Bool
     private let foodContext: FoodVoiceContext?
-    init(askMode: Bool = false, calendarOnly: Bool = false, foodContext: FoodVoiceContext? = nil) {
+    init(resources: VoiceSessionResources, askMode: Bool, calendarOnly: Bool, foodContext: FoodVoiceContext?) {
         self.foodContext = foodContext
         self.askMode = askMode
         self.calendarOnly = calendarOnly
-        let executor = VoiceToolExecutor(); executor.calendarOnly = calendarOnly; executor.foodOnly = foodContext != nil; _executor = State(initialValue: executor)
-        let transport = VoiceWebRTCTransport()
-        _transport = State(initialValue: transport)
-        _voice = StateObject(wrappedValue: VoiceConversationSession(transport: transport, executor: executor))
+        self.executor = resources.executor
+        self.transport = resources.transport
+        _voice = ObservedObject(wrappedValue: resources.session)
     }
     var body: some View {
         ZStack {
