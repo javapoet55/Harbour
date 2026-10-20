@@ -44,6 +44,10 @@ import XCTest
         assertGuideContinueIsFullyVisible("pomodoro")
     }
 
+    func testMomentsGuideContinueIsFullyVisibleWithoutScrolling() {
+        assertGuideContinueIsFullyVisible("moments")
+    }
+
     private func assertGuideContinueIsFullyVisible(_ module: String) {
         let app = XCUIApplication()
         app.launchArguments = ["-wellness-design-preview"]
