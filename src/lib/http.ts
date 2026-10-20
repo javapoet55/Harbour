@@ -18,6 +18,7 @@ export function jsonError(err: unknown) {
   if (err instanceof Error && err.message === 'PASSWORD_POLICY') return NextResponse.json({ error: 'Enter a password (72 bytes maximum).' }, { status: 400 });
   if (err instanceof Error && err.message === 'ACCOUNT_EXISTS') return NextResponse.json({ error: 'An account with this email already exists. Sign in or reset your password.' }, { status: 409 });
   if (err instanceof Error && err.message === 'INVALID_VERIFICATION_CONTEXT') return NextResponse.json({ error: 'Please sign in with your password to continue verification, or reset your password.' }, { status: 400 });
+  if (err instanceof Error && err.message === 'RESET_ACCOUNT_NOT_FOUND') return NextResponse.json({ error: 'We don’t have an account with this email address. Check the address or create an account.' }, { status: 404 });
   if (err instanceof Error && err.message === 'INVALID_RESET_CODE') return NextResponse.json({ error: 'That verification code is invalid, expired, or already used.' }, { status: 400 });
   if (err instanceof Error && err.message === 'INVALID_VERIFICATION_CODE') return NextResponse.json({ error: 'That verification code is invalid, expired, or already used. Send a new code and try again.' }, { status: 400 });
   if (err instanceof Error && err.message === 'EMAIL_UNAVAILABLE') return NextResponse.json({ error: 'We couldn’t send the email right now. Please try again in a few minutes.' }, { status: 503 });

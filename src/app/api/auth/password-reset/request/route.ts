@@ -9,7 +9,7 @@ async function healthHandlerPOST(req: Request) {
     await limitAuthRequest(req, 'send');
     const body = await req.json().catch(() => ({}));
     const result = await createPasswordReset(String(body.email ?? ''));
-    return NextResponse.json({ message: 'If that account exists, a six-digit code has been sent.', ...result });
+    return NextResponse.json({ message: 'A six-digit verification code has been sent to your email.', ...result });
   } catch (error) {
     return jsonError(error);
   }

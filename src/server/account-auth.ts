@@ -141,11 +141,7 @@ export async function createPasswordReset(emailValue: string): Promise<CodeDeliv
   const email = normalizeEmail(emailValue);
   await limitCodeSend(email, 'reset');
   const user = await prisma.user.findFirst({ where: { OR: [{ email }, { email: email.toLowerCase() }], deletedAt: null } });
-  if (!user) {
-    // Keep the response timing closer to the real-account path to reduce account enumeration signals.
-    await bcrypt.hash('000000', 10);
-    return { delivered: true };
-  }
+  if (!user) throw new Error('RESET_ACCOUNT_NOT_FOUND');
 
   const recent = await prisma.passwordResetToken.count({
     where: { userId: user.id, createdAt: { gte: new Date(Date.now() - SEND_WINDOW_MINUTES * 60_000) } },
