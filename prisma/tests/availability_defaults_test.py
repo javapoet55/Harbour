@@ -20,7 +20,7 @@ class AvailabilityDefaultsTest(unittest.TestCase):
                 db.execute('INSERT INTO UserPreference (id,userId,updatedAt) VALUES (?,?,CURRENT_TIMESTAMP)', (name, name))
             db.execute("UPDATE UserPreference SET workingDays='1,3,5', workStart='10:00', quietEnd='08:00' WHERE id='custom'")
             db.commit()
-            db.executescript((ROOT / 'sqlite/migrations/20261019000000_availability_defaults/migration.sql').read_text())
+            db.executescript((ROOT / 'sqlite/migrations/z_20261019000000_availability_defaults/migration.sql').read_text())
             db.execute("INSERT INTO UserPreference (id,userId,updatedAt) VALUES ('new','new',CURRENT_TIMESTAMP)")
             rows = dict((row[0], row[1:]) for row in db.execute(
                 'SELECT id,workingDays,workStart,workEnd,quietStart,quietEnd FROM UserPreference'))
