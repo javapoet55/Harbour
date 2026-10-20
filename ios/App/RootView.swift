@@ -606,6 +606,9 @@ private final class SignupChallengeCoordinator: NSObject, ObservableObject, ASWe
                     continuation.resume(returning: token)
                 }
             }
+            // This bot check needs no browser login cookies. A private session
+            // avoids the system's app/website sign-in sharing consent prompt.
+            session?.prefersEphemeralWebBrowserSession = true
             session?.presentationContextProvider = self
             if session?.start() != true { session = nil; continuation.resume(throwing: CancellationError()) }
         }
