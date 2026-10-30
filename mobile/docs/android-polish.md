@@ -2627,3 +2627,25 @@ every cold launch.
   copy and spacing, now in a `Pressable` (the `EmptySchedule` helper).
 - Tests: `TodayIntelligenceCard.test.tsx` "the empty schedule" (the button with its label and hint calls
   `onCreateTask`; static while searching).
+
+## 59. Phase 14 / C2: Create New Task gets the voice button (2026-10-30)
+
+§24 "Tasks and task editor: voice entry" (61788dc, fb29e95; RootView.swift:2242-2243, :2353-2362), capture
+`task-editor-v4-from-today`, `-dark`.
+
+- `app/task/new.tsx` puts a microphone (`mic.fill` → Ionicons `mic`, in `link`) in the header's trailing slot
+  through `<Stack.Screen options={{ headerRight }}>`. It's `TaskEditorVoiceButton`: label "Add task by voice",
+  id `task-editor-voice`, 44 pt target. A press dismisses the keyboard (`focusedField = nil`) and pushes
+  `/task/voice-capture`, Add by Voice in task mode, over the editor. It's disabled (40% opacity) while the task is
+  being created (`model.busy`).
+- **"A new presentation id every time":** each press pushes a new voice screen, so every open is a new session.
+  The Tasks screen's Add by Voice already pushes the same way.
+- **Swift bug 13 doesn't apply:** in Swift the mic also appears when *editing* a task and opens a new-task session
+  over unsaved edits. RN's `/task/new` only creates tasks (existing ones are edited in Task Details), so the mic is
+  only ever on Create New Task.
+- iOS 26 draws the mic in a glass circle. Android and RN iOS draw a plain header icon in `link`, like the header's
+  "Close".
+- **Not checked on a device** (see §51).
+- Tests: `task-editor.test.tsx` "Create New Task: Add task by voice" (label; dismisses the keyboard; each press
+  pushes a fresh voice screen; disabled while creating). Four other editor tests gained `Stack.Screen` in their
+  `expo-router` mocks.

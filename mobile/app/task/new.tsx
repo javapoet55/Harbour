@@ -1,7 +1,7 @@
 import { LinearGradient } from 'expo-linear-gradient';
-import { router, useLocalSearchParams } from 'expo-router';
+import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { ActivityIndicator, Alert, Modal, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, Keyboard, Modal, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 
 import { KeyboardAvoidingView, KeyboardAwareScrollView, NexdoTaskBackdrop, StickyFooter, TaskSymbol, Text } from '../../src/components';
 import { MonthCalendar } from '../../src/components/MonthCalendar';
@@ -140,6 +140,8 @@ export default function NewTask() {
     // is needed on Android too, not just iOS; without it the footer and any field below the fold sit
     // behind the keyboard with no way to reach them.
     <KeyboardAvoidingView behavior="padding" style={styles.fill}>
+      {/* 61788dc / fb29e95: the toolbar microphone (RootView.swift:2353-2362). */}
+      <Stack.Screen options={{ headerRight: () => <TaskEditorVoiceButton disabled={busy} /> }} />
       <NexdoTaskBackdrop />
       <KeyboardAwareScrollView keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive" contentContainerStyle={styles.scroll}>
         <View style={[styles.card, { backgroundColor: theme.colors.surface, borderColor: theme.colors.separator }]}>
@@ -382,6 +384,32 @@ type EditorIcon = 'checklist' | 'text.alignleft' | 'folder' | 'calendar' | 'cloc
  * `TaskEditorLabel` (RootView.swift:2207-2217). Android draws the one shared field label instead
  * (`androidLabel`, docs/android-polish.md §4): the tint read as dim on the dark card.
  */
+/**
+ * `ToolbarItem(placement: .topBarTrailing)` `mic.fill` (RootView.swift:2353-2362): drop focus and open a fresh
+ * Add by Voice over the editor. Each press pushes a new voice screen, which is Swift's new `voicePresentationID`
+ * — a new session every time. Disabled while the task is being created.
+ */
+export function TaskEditorVoiceButton({ disabled }: { disabled: boolean }) {
+  const theme = useTheme();
+  return (
+    <Pressable
+      accessibilityLabel="Add task by voice"
+      accessibilityRole="button"
+      accessibilityState={{ disabled }}
+      disabled={disabled}
+      hitSlop={8}
+      onPress={() => {
+        Keyboard.dismiss();
+        router.push('/task/voice-capture');
+      }}
+      style={[styles.voiceButton, disabled && styles.voiceDisabled]}
+      testID="task-editor-voice"
+    >
+      <TaskSymbol color={theme.colors.link} name="mic.fill" size={20} />
+    </Pressable>
+  );
+}
+
 function EditorLabel({ title, icon }: { title: string; icon: EditorIcon }) {
   const theme = useTheme();
   const android = isAndroid();
@@ -475,6 +503,8 @@ function ChoiceButton({ label, selected, onPress, testID }: { label: string; sel
 const SELECTED_GRADIENT = ['#91198A', '#5930BF', '#144DAD'] as const;
 
 const styles = StyleSheet.create({
+  voiceButton: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
+  voiceDisabled: { opacity: 0.4 },
   fill: { flex: 1 },
   caption: { fontSize: 12, lineHeight: 16 },
   scroll: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 20 },
