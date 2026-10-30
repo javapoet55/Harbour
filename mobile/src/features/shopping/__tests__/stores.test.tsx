@@ -26,12 +26,12 @@ jest.mock('../../../api/shopping', () => ({
   shoppingOffersApi: { offers: jest.fn(), choose: jest.fn(), storeHours: (...args: unknown[]) => mockHours(...args) },
 }));
 
-import type { GroceryList } from '../../../api/shopping';
+import type { GroceryList, ShoppingStoreSuggestion } from '../../../api/shopping';
 import { useSession } from '../../../store/session';
 import MyLists from '../../../../app/wellness/shopping/index';
 import { ListSettingsSheet, settingsSavable, withAddress, withStore } from '../ListSettings';
 import { shoppingStore } from '../store';
-import { clearStoreBrandCache, safeLogoUrl, StoreBrandLogo } from '../StoreBrandLogo';
+import { clearStoreBrandCache, safeLogoUrl, StoreBrandLogo, suppliedLogo } from '../StoreBrandLogo';
 import { distanceLabel, storeSearchBody } from '../StorePages';
 
 /**
@@ -364,5 +364,48 @@ describe('List Settings', () => {
     expect(storeSearchBody('', '', null)).toBeNull();
     expect(distanceLabel(0.5)).toBe('0.50 km');
     expect(withStore(list(), SAFEWAY)).toMatchObject({ storePlaceId: 'place-1', storeAddress: SAFEWAY.address });
+  });
+});
+
+/**
+ * ce6d20a: `POST /api/shopping/stores` gives each store a `brand`, which the finder hands to the logo as
+ * `suppliedBrand` with `automaticLookup: false` (ShoppingViews.swift:754-756). No lookup either way; a
+ * missing brand or logo keeps the cart.
+ */
+describe('Store search brand logos', () => {
+  const BRAND = { displayName: 'Safeway', logoUrl: 'https://cdn.brandfetch.io/safeway/logo.png?c=1' };
+
+  it('reads the brand from the search row, or nothing', () => {
+    expect(suppliedLogo(BRAND)).toEqual({ uri: BRAND.logoUrl, label: 'Safeway' });
+    expect(suppliedLogo({ displayName: 'Safeway', logoUrl: null })).toBeNull();
+    expect(suppliedLogo({ displayName: 'Shop', logoUrl: 'https://tracker.example/x.png' })).toBeNull();
+    expect(suppliedLogo(null)).toBeNull();
+    expect(suppliedLogo(undefined)).toBeNull();
+  });
+
+  it('accepts a search row with or without brand', () => {
+    const withBrand: ShoppingStoreSuggestion = { ...SAFEWAY, brand: BRAND };
+    const without: ShoppingStoreSuggestion = SAFEWAY;
+    expect(withBrand.brand?.displayName).toBe('Safeway');
+    expect(without.brand).toBeUndefined();
+  });
+
+  it('draws the supplied logo without calling store-brand', async () => {
+    await render(<StoreBrandLogo automaticLookup={false} identity="Safeway|https://www.safeway.com" listId="search-place-1" suppliedBrand={BRAND} />);
+    const image = screen.getByTestId('store-brand-image');
+    expect(image.props.source.uri).toBe(BRAND.logoUrl);
+    await fireEvent(image, 'load');
+    expect(screen.getByLabelText('Safeway logo')).toBeTruthy();
+    expect(mockBrand).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['no brand', undefined],
+    ['a brand with no logo', { displayName: 'Safeway', logoUrl: null }],
+  ])('keeps the cart for %s, with no lookup', async (_, suppliedBrand) => {
+    await render(<StoreBrandLogo automaticLookup={false} identity="Safeway|" listId="search-place-2" suppliedBrand={suppliedBrand} />);
+    expect(screen.queryByTestId('store-brand-image')).toBeNull();
+    expect(screen.getByLabelText('Shopping list')).toBeTruthy();
+    expect(mockBrand).not.toHaveBeenCalled();
   });
 });

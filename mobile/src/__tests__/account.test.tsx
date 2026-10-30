@@ -472,22 +472,22 @@ describe('the Settings screen', () => {
   });
 
   /** `WorkingDaysField` (ProfileView.swift, d568989). */
-  it('lists the working days Sunday first, and saves Saturday added', async () => {
+  it('lists the working days Sunday first, and saves Saturday removed', async () => {
     mockUpdateSettings.mockResolvedValue({ ok: true });
     await show(<Settings />);
     await waitFor(() => expect(screen.getByTestId('settings-working-days')).toBeTruthy());
     expect(screen.getByText('Working days')).toBeTruthy();
     expect(screen.getByText('Choose at least one day. Find my next task uses these days and your working hours.')).toBeTruthy();
-    // Unset on the server reads as Monday to Friday.
+    // Unset on the server reads as every day, the Phase 14 default (`?? "0,1,2,3,4,5,6"`, ProfileView.swift:550).
     const on = [0, 1, 2, 3, 4, 5, 6].map((day) => screen.getByTestId(`settings-working-day-${day}`).props.accessibilityState?.checked);
-    expect(on).toEqual([false, true, true, true, true, true, false]);
+    expect(on).toEqual([true, true, true, true, true, true, true]);
 
-    fireEvent(screen.getByTestId('settings-working-day-6'), 'valueChange', true);
-    await waitFor(() => expect(screen.getByTestId('settings-working-day-6').props.accessibilityState).toMatchObject({ checked: true }));
+    fireEvent(screen.getByTestId('settings-working-day-6'), 'valueChange', false);
+    await waitFor(() => expect(screen.getByTestId('settings-working-day-6').props.accessibilityState).toMatchObject({ checked: false }));
     fireEvent.press(screen.getByTestId('settings-save'));
 
     await waitFor(() => expect(mockUpdateSettings).toHaveBeenCalledTimes(1));
-    expect(mockUpdateSettings.mock.calls[0][0].preference).toEqual({ ...PREFERENCES, workingDays: '1,2,3,4,5,6' });
+    expect(mockUpdateSettings.mock.calls[0][0].preference).toEqual({ ...PREFERENCES, workingDays: '0,1,2,3,4,5' });
   });
 
   it('keeps the last working day on', async () => {

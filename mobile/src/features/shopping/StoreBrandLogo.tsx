@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { Image, Modal, Platform, Pressable, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { shoppingStoresApi } from '../../api/shopping';
+import { shoppingStoresApi, type StoreBrandMetadata } from '../../api/shopping';
 import { withAlpha } from '../../components/SignInBackdrop';
 import { Text } from '../../components/Text';
 import { useTheme } from '../../theme';
@@ -59,10 +59,21 @@ function cached(key: string): Entry | null {
   return entry;
 }
 
+/**
+ * The logo a store search row already carries (ce6d20a, `suppliedBrand`, StoreBrandLogo.swift:18, :86-88),
+ * or `null` for the cart: no brand (an older server), no logo URL, or one that breaks the URL rules.
+ */
+export function suppliedLogo(brand: StoreBrandMetadata | null | undefined): { uri: string; label: string } | null {
+  const uri = safeLogoUrl(brand?.logoUrl);
+  return brand && uri ? { uri, label: brand.displayName } : null;
+}
+
 export function StoreBrandLogo({
   listId,
   identity,
   customImageData,
+  automaticLookup = true,
+  suppliedBrand,
   size = 56,
   expandsOnTap = false,
 }: {
@@ -70,6 +81,10 @@ export function StoreBrandLogo({
   identity: string;
   /** The list's own logo: bare JPEG base64 (`storeLogoData`). */
   customImageData?: string | null;
+  /** `automaticLookup` (:17): `false` never calls `store-brand`, so only `suppliedBrand` can draw a logo. */
+  automaticLookup?: boolean;
+  /** `suppliedBrand` (:18): used instead of the lookup, with no retry. */
+  suppliedBrand?: StoreBrandMetadata | null;
   size?: number;
   expandsOnTap?: boolean;
 }) {
@@ -86,10 +101,16 @@ export function StoreBrandLogo({
   const [expanded, setExpanded] = useState(false);
   if (state.key !== key) setState({ key, uri: cached(key)?.uri ?? null, label: cached(key)?.label ?? 'Shopping list' });
 
-  // `.task(id: "\(listID)|\(identity)|\(customImageData ?? "")") { await load() }`
+  // A supplied brand replaces the lookup (`if let suppliedBrand { result = Result(brand: suppliedBrand) }`,
+  // :86-87), so it is read straight from the prop and never fetched or retried.
+  const supplied = suppliedBrand != null;
+  const fromSearch = supplied && identity.replaceAll('|', '') !== '' ? suppliedLogo(suppliedBrand) : null;
+
+  // `.task(id: "\(cacheKey)|\(customImageData ?? "")|\(automaticLookup)|\(suppliedBrand?.logoUrl ?? "")") { await load() }`
   useEffect(() => {
     let cancelled = false;
-    if (usingCustom || cached(key) || identity.replaceAll('|', '') === '') return;
+    // `guard automaticLookup || suppliedBrand != nil else { image = nil; return }` (:66).
+    if (usingCustom || supplied || !automaticLookup || cached(key) || identity.replaceAll('|', '') === '') return;
     shoppingStoresApi
       .brand(listId)
       .then(({ brand }) => {
@@ -105,12 +126,12 @@ export function StoreBrandLogo({
     return () => {
       cancelled = true;
     };
-  }, [key, listId, identity, usingCustom]);
+  }, [key, listId, identity, usingCustom, automaticLookup, supplied]);
 
-  const uri = usingCustom ? custom : state.uri;
+  const uri = usingCustom ? custom : supplied ? (fromSearch?.uri ?? null) : state.uri;
   // `identity.components(separatedBy: "|").first ?? "Store"`: a list with a custom logo and no store
   // name would read " logo", so the name falls back to "Store" as Swift's `??` intends.
-  const label = usingCustom ? identity.split('|')[0] || 'Store' : state.label;
+  const label = usingCustom ? identity.split('|')[0] || 'Store' : supplied ? (fromSearch?.label ?? 'Shopping list') : state.label;
   const showing = uri !== null && loaded === uri;
   const avatar = (
     <View

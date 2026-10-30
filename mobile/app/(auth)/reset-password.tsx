@@ -53,7 +53,7 @@ export default function ResetPassword() {
     request.mutate(
       { email },
       // Inline, never a global alert: the sheet stays, with the message under the fields.
-      { onSuccess: () => setCodeSent(true), onError: (error) => setLocalError(resetFailure(error, RESET_CODE_FAILED)) },
+      { onSuccess: (result) => (result.kind === 'sent' ? setCodeSent(true) : setLocalError(result.message)), onError: (error) => setLocalError(resetFailure(error, RESET_CODE_FAILED)) },
     );
   };
 

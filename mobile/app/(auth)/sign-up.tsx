@@ -77,9 +77,14 @@ export default function SignUp() {
     await signUp.mutateAsync(
       { name: values.name, email: values.email, password: values.password, turnstileToken },
       {
-        onSuccess: (pending) => {
+        onSuccess: (result) => {
           // A server without email verification signs in at registration; the gate takes over.
-          if (!pending) return;
+          if (result.kind === 'signedIn') return;
+          if (result.kind === 'accountExists') {
+            setError('root', { message: result.message });
+            return;
+          }
+          const { pending } = result;
           router.push({ pathname: '/verify-email', params: { email: pending.email, reason: pending.reason, ...(pending.verificationProof ? { verificationProof: pending.verificationProof } : {}) } });
         },
         // Whatever the server said, in the one inline slot Swift has.

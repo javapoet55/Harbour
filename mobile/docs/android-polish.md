@@ -2246,6 +2246,154 @@ screen's `statusBarStyle`.
 
 Tests: `ask.test.tsx` "the Ask AI status bar": dark while Ask is focused, none while it is not, none on a themed page.
 
+## 44. Phase 14 / 1: Auth client — account-exists, register 409, reset 404 (2026-10-30)
+
+Plumbing only, from §24 "Server endpoints" (8592a0a, 60212f3). No screen changes yet; Run A builds the alert.
+
+- `endpoints.accountExists(email)` posts `{ email }` to `POST /api/auth/account-exists` and reads `{ exists }`, with
+  `signedOutOn401: false` like the other auth calls (`AppModel.signupAccountExists`, NexdoApp.swift:197-201).
+  `accountExists(email)` in `src/query/useAuth.ts` is the boolean wrapper the screen will call; like Swift it throws.
+- Register's existing-email **409** is now a result, not an error: `useSignUp` resolves to
+  `{ kind: 'accountExists', email, message }` (alongside `signedIn` and `verify`). Swift's `create()` catches
+  `APIError.server(409, _)` and shows the "Account already exists" alert (RootView.swift:790-791).
+- The reset request's unknown-email **404** is now `{ kind: 'unknownEmail', message }` from `useRequestPasswordReset`
+  (`sent` otherwise). Other failures still throw and still show inline.
+- The classifiers (`accountExistsConflict`, `unknownResetEmail` in `src/api/index.ts`) use the server's text. **Decision:**
+  if the body has no `error`, they fall back to the server's own wording (`ACCOUNT_EXISTS_MESSAGE`,
+  `RESET_UNKNOWN_EMAIL_MESSAGE`). Otherwise the client's generic 409 text ("Your schedule changed…") would reach the
+  sign-up screen. A 409 that carries a `code` (`SCHEDULE_WARNING`) is never read as an existing account.
+- Until Run A, the sign-up screen puts the 409 message in its inline error slot (today's behaviour), and the reset
+  screen shows the 404 message in red where it already showed the server text.
+- Tests: `src/api/accountAuth.test.ts` (wire shape, 401 not a sign-out, 409/404 through the real client, fallbacks,
+  other statuses are null) and `src/query/signupRecovery.test.tsx` (the hooks' typed results).
+
+## 45. Phase 14 / 2: Store search brand logo in the model (2026-10-30)
+
+From §24 "Shopping: store logos" and "Server endpoints" → Store search (ce6d20a).
+
+- `ShoppingStoreSuggestion` gains `brand?: StoreBrandMetadata | null` (`{ displayName, logoUrl | null }`), as
+  `POST /api/shopping/stores` now sends for each store (src/server/shopping/search-brands.ts). It is optional, as in
+  Swift (`let brand: StoreBrandMetadata?`, ShoppingViews.swift:642): an older server sends none.
+- `StoreBrandLogo` gains Swift's `automaticLookup` and `suppliedBrand` props (StoreBrandLogo.swift:17-18, :66,
+  :86-88). A supplied brand is used in place of `GET /api/shopping/store-brand`, with no retry. The **fallback** is the
+  green cart, used when the brand is missing, `logoUrl` is null, or the URL breaks the `cdn.brandfetch.io` rules
+  (`suppliedLogo`, which uses `safeLogoUrl`). `automaticLookup={false}` with no brand never calls the server.
+- **Not done here (a screen change):** the Stores Near You rows (`StorePages.tsx`) still draw the indigo storefront
+  tile. Swift passes `suppliedBrand: suggestion.brand` with `automaticLookup: false` at 48 pt (ShoppingViews.swift:754-756).
+  Run A's list doesn't include it, so it is left for a later run. The 1 s / 2 s retry of an empty lookup and List
+  Settings' "draft store matches saved" rule (same §24 row) are also not ported yet.
+- Tests: `stores.test.tsx` "Store search brand logos": `suppliedLogo`, the optional field, a supplied logo drawn
+  with no lookup, and the cart for no brand or no logo.
+
+## 46. Phase 14 / 3: Working days default to every day (2026-10-30)
+
+From §24 "Server endpoints" → Availability defaults (migration `20261019000000_availability_defaults`): new rows get
+`workingDays` `'0,1,2,3,4,5,6'`, `workStart` 06:00, `workEnd` 21:00 and `quietEnd` 06:00.
+
+- `DEFAULT_WORKING_DAYS` (`src/features/tasks/workingDays.ts`) is now `'0,1,2,3,4,5,6'`, which matches Swift's
+  `preferences?.workingDays ?? "0,1,2,3,4,5,6"` (ProfileView.swift:550). This was the only default the client held:
+  `workingDaySet` and `toggleWorkingDay` use it for an unset value, so Settings now shows all seven toggles on.
+- **Hours: nothing to change.** A sweep of `app/` and `src/` found no client fallback for `workStart`, `workEnd`,
+  `quietStart` or `quietEnd`. They are required in `ProfilePreferences` and always come from `/api/me`. The
+  planner, briefing and Do Now defaults live on the server (§24 lists them). The 09:00–17:00 values in the test
+  fixtures (`account.test.tsx`, `phase12Nulls.test.ts`) stand for a stored account's own settings, not a default,
+  so they stay.
+- Still not ported from the same §24 row: Settings calling `synchronizeDeviceTimeZone` on load and when the zone
+  changes. That isn't a default and is outside Part 1.
+- Tests: `ordering.test.ts` (the constant, and unset reading as every day) and `account.test.tsx` (an unset value
+  shows all seven on; turning Saturday off saves `'0,1,2,3,4,5'`).
+
+## 47. Phase 14 / 4: expo-store-review and the review schedule (2026-10-30)
+
+From §24 "App Store review request" and "Native requirements" (bfa5b73). Module and rule only; Run A hooks it up.
+
+- **New native module:** `expo-store-review` `~57.0.3`, added with `npx expo install`. It has no config plugin and
+  needs no permission, but it **does need a new native build** (dev client and release). On Android it is the Play
+  In-App Review API. Google limits how often it shows, it gives no callback, and it shows nothing on internal test
+  tracks, so QA won't see a sheet from an internal-track build.
+- `src/features/review/reviewSchedule.ts` is a pure port of `AppReviewSchedule` (ios/Sources/NexdoCore/AppReviewSchedule.swift):
+  - **When:** a device-local **Friday at or after 17:00**, and no earlier than first launch + 7 calendar days at the
+    same wall-clock time. That is Swift's `calendar.date(byAdding: .day, value: 7)`, so a Friday-evening install
+    waits until 7 p.m. the next Friday.
+  - **How often:** at most once per week, and only in Friday weeks 0–4. Week 0 is the first Friday on or after
+    the 7-day day, and weeks are counted in calendar days. A missed Friday expires and is never caught up.
+  - **Time zone:** the device zone, read on each check (`Intl…resolvedOptions().timeZone`, standing in for
+    `TimeZone.autoupdatingCurrent`). Swift's `Calendar` math is done here with `Intl` wall-clock parts, which the
+    app already uses on Hermes (Moments, Pomodoro, Calorie Tracker).
+- `src/features/review/reviewPrompt.ts` ports `AppReviewPromptStore` under Swift's key `nexdo.appReviewSchedule.v1`.
+  `recordFirstLaunch` writes only once, so an update never resets the clock. `consumeReviewOpportunity` **writes the
+  week before** returning `true`, as Swift stores it before `requestReview()`.
+  **Decision:** if that write fails, RN returns `false` and makes no request. Swift's `defaults.set` cannot fail,
+  and asking without the week saved could repeat the request.
+- **Decision:** `requestStoreReview` calls `requestReview()` only when `isAvailableAsync()` is true. Without that
+  check, expo-store-review falls back to opening a store URL, which Swift never does. Errors are swallowed, because
+  StoreKit reports nothing either.
+- **Storage format:** `{ firstLaunch: <epoch ms>, lastRequestedWeek? }` in AsyncStorage. Swift's `JSONEncoder` dates
+  are seconds since 2001, but the two apps never share storage, so this is not a compatibility issue.
+- Tests: `src/features/review/__tests__/reviewSchedule.test.ts`. It has Swift's six `AppReviewScheduleTests` one for
+  one (same instants and zones), plus three new cases: 17:00 is inclusive, the wall-clock anniversary holds across
+  the November DST change, and stored values parse. It also covers storage: recorded once, written before yes,
+  once a week, no on a failed write, and the store called only when available.
+
+## 48. Phase 14 / 5: First-install introduction flag; Android ahead of Swift bug 8 (2026-10-30)
+
+From §24 "First-install introduction" and "Native requirements" → First-install flag (35b40f2, 530f1bd).
+
+- `src/store/introduction.ts` (`useIntroduction`) is a device-local flag like the appearance store, stored in
+  AsyncStorage under Swift's key `nexdo.installIntroductionCompleted` (`@AppStorage`, RootView.swift:16) as
+  `'true'`. `completed` is `undefined` until it is read. `complete()` is what Skip, Get Started and Sign In will call
+  (`introductionCompleted = true`, RootView.swift:133).
+- **ANDROID AHEAD — Swift bug fixed on Android (§24 Swift bug 8, "Upgraders see the first-install introduction").**
+  Swift's flag defaults to false for every existing install, so anyone who is signed out after updating sees the
+  four pages. On Android the introduction shows **only on a true first install**. If the flag is unset but the
+  device already holds Nexdo data, `hydrate()` treats it as seen and writes the flag, so the answer stays the same
+  on later launches. "Nexdo data" means any of `nexdo.lastSignedInFirstName` (written on every sign-in and kept after
+  sign-out, so it covers every signed-out returning user), `nexdo.appearance`, `nexdo.appVoiceVolume` or
+  `nexdo.taskDisplayOrders`.
+  - **Decision:** the check uses this fixed list, not every stored key. This version writes the review schedule
+    (`nexdo.appReviewSchedule.v1`) at launch, before the introduction can show, so a key scan would race it and hide
+    the pages from real first installs. The review schedule is explicitly not counted.
+  - **Decision:** if storage cannot be read, the pages are **not** shown. A failed read proves nothing about a first
+    install, and the instruction is to show them only when it is certain.
+  - **Note:** with `allowBackup`, a restored backup brings `nexdo.lastSignedInFirstName` with it, so a restored
+    device also skips the pages. iOS behaves the same way when UserDefaults are restored (§24 Native requirements).
+- Not wired up yet. Run A hydrates the store at launch and gates `app/index.tsx` on it.
+- Tests: `src/store/introduction.test.ts`: true first install, completion survives a relaunch, a signed-out
+  install with a remembered name skips the pages and writes the flag, each existing-data key counts, the review
+  schedule doesn't, and unreadable storage doesn't show the pages.
+
+## 49. Phase 14 / 6: When the Calendar connect offer shows (2026-10-30)
+
+From §24 "Calendar: connect offer (sheet)" (fbce45b, 9acb39a; `offerCalendarConnection()`, CalendarView.swift:263-277).
+State and condition only; Run A builds and mounts the sheet.
+
+- `offersCalendarConnection(connections, deviceCalendarsReadable)` (`src/features/calendar/connectOffer.ts`) is
+  Swift's condition. It is true when there is **no server calendar connection** (`model.calendarConnections.isEmpty`)
+  **and** the phone's own calendars can't be read (`EKEventStore.authorizationStatus(for: .event) != .fullAccess`).
+  On Android that means the calendar permission isn't granted (`hasDeviceCalendarAccess()`).
+- `useCalendarConnectOffer()` returns `{ visible, close }` for the Calendar tab:
+  - **Only after a successful status refresh.** It makes a fresh `GET /api/calendar/connections`
+    (`refreshCalendarConnections`, `fetchQuery` with `staleTime: 0`), never the cached list. A failed refresh shows
+    nothing ("Empty events or an offline response do not mean that the user has never connected a calendar").
+  - **When it runs:** each time the tab comes into focus, as Swift's `.task(id: model.profile?.id)` runs again
+    on every appearance and is cancelled on disappearance. If the tab loses focus mid-check, or the account
+    changes, the answer is dropped (`!Task.isCancelled, model.profile?.id == owner`).
+  - **How often:** at most once per signed-in account while the tab stays mounted (`promptedAccount`, a ref). After
+    Not now or a swipe it doesn't come back on that visit or later ones, and a different account is asked afresh.
+- **Swift bug 14 kept (not fixed):** "Not now" isn't stored, so the offer comes back on each cold launch, as on
+  iOS. The brief only lists bug 8 as Android-ahead.
+- Tests: `src/features/calendar/__tests__/connectOffer.test.tsx`: the condition table; shown after a successful
+  empty refresh; a cached list is refreshed first; hidden when connected, when the phone's calendars are readable,
+  when the refresh fails, or when signed out; a stale answer after an account switch is dropped; once per account
+  across visits; a new account is asked; leaving mid-refresh asks again on the next visit.
+
+## 50. Phase 14: An Event Details test that expired on 20 Oct 2026 (2026-10-30)
+
+Found by Part 1's full jest run, and not caused by it (it fails on `9fce7d3` too). `eventDetailsScreen.test.tsx`
+"Event Details for a device event › shows the phone’s copy…" expects the status "Upcoming" for `DEVICE`, which
+is fixed at 2026-10-20 06:30 UTC. Since that date passed it reads "Past". Only that test changes: it now opens
+`DEVICE` moved to a day after `Date.now()`. The other device tests don't check the status. No app code changed.
+
 ## 60. Phase 14 Run B (Mac): Wellness (2026-10-30)
 
 The §24 Wellness rows of `docs/IOS_TO_REACT_NATIVE.md` (Phase 14 status), built from the Swift source and the
