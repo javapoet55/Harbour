@@ -2334,3 +2334,30 @@ From §24 "App Store review request" and "Native requirements" (bfa5b73). Module
   one (same instants and zones), plus three new cases: 17:00 is inclusive, the wall-clock anniversary holds across
   the November DST change, and stored values parse. It also covers storage: recorded once, written before yes,
   once a week, no on a failed write, and the store called only when available.
+
+## 48. Phase 14 / 5: First-install introduction flag; Android ahead of Swift bug 8 (2026-10-30)
+
+From §24 "First-install introduction" and "Native requirements" → First-install flag (35b40f2, 530f1bd).
+
+- `src/store/introduction.ts` (`useIntroduction`) is a device-local flag like the appearance store, stored in
+  AsyncStorage under Swift's key `nexdo.installIntroductionCompleted` (`@AppStorage`, RootView.swift:16) as
+  `'true'`. `completed` is `undefined` until it is read. `complete()` is what Skip, Get Started and Sign In will call
+  (`introductionCompleted = true`, RootView.swift:133).
+- **ANDROID AHEAD — Swift bug fixed on Android (§24 Swift bug 8, "Upgraders see the first-install introduction").**
+  Swift's flag defaults to false for every existing install, so anyone who is signed out after updating sees the
+  four pages. On Android the introduction shows **only on a true first install**. If the flag is unset but the
+  device already holds Nexdo data, `hydrate()` treats it as seen and writes the flag, so the answer stays the same
+  on later launches. "Nexdo data" means any of `nexdo.lastSignedInFirstName` (written on every sign-in and kept after
+  sign-out, so it covers every signed-out returning user), `nexdo.appearance`, `nexdo.appVoiceVolume` or
+  `nexdo.taskDisplayOrders`.
+  - **Decision:** the check uses this fixed list, not every stored key. This version writes the review schedule
+    (`nexdo.appReviewSchedule.v1`) at launch, before the introduction can show, so a key scan would race it and hide
+    the pages from real first installs. The review schedule is explicitly not counted.
+  - **Decision:** if storage cannot be read, the pages are **not** shown. A failed read proves nothing about a first
+    install, and the instruction is to show them only when it is certain.
+  - **Note:** with `allowBackup`, a restored backup brings `nexdo.lastSignedInFirstName` with it, so a restored
+    device also skips the pages. iOS behaves the same way when UserDefaults are restored (§24 Native requirements).
+- Not wired up yet. Run A hydrates the store at launch and gates `app/index.tsx` on it.
+- Tests: `src/store/introduction.test.ts`: true first install, completion survives a relaunch, a signed-out
+  install with a remembered name skips the pages and writes the flag, each existing-data key counts, the review
+  schedule doesn't, and unreadable storage doesn't show the pages.
