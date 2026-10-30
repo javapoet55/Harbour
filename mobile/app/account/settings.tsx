@@ -368,7 +368,7 @@ function SettingsScreen({
             value={appearance.appearance}
           />
           <SettingsCaption>
-            Day uses a light view. Night uses a dark view. System follows your iPhone. Changes apply immediately and are
+            Day uses a light view. Night uses a dark view. System follows your phone’s setting. Changes apply immediately and are
             saved on this device.
           </SettingsCaption>
         </SettingsCard>

@@ -548,6 +548,12 @@ describe('the Settings screen', () => {
     expect(mockUpdateSettings).not.toHaveBeenCalled();
   });
 
+  it('says System follows the phone’s setting, not the iPhone (QA M-03)', async () => {
+    await show(<Settings />);
+    await waitFor(() => expect(screen.getByText(/System follows your phone’s setting\./)).toBeTruthy());
+    expect(screen.queryByText(/iPhone/)).toBeNull();
+  });
+
   it('shows the App Voice volume as a percentage', async () => {
     useAppearance.setState({ appearance: 'system', voiceVolume: 0.5 });
     await show(<Settings />);

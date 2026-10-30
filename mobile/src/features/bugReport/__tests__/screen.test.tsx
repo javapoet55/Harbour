@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import * as Clipboard from 'expo-clipboard';
-import { Alert, Linking } from 'react-native';
+import { Alert, Linking, Platform } from 'react-native';
 
 import { ApiError } from '../../../api/client';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -79,6 +79,26 @@ describe('introduction (`bug-report-intro`)', () => {
     expect(screen.queryByTestId('bug.back')).toBeNull();
     await fireEvent.press(screen.getByTestId('bug.close'));
     expect(onDone).toHaveBeenCalled();
+  });
+});
+
+describe('on Android (QA M-03)', () => {
+  beforeEach(() => jest.replaceProperty(Platform, 'OS', 'android'));
+  afterEach(() => jest.restoreAllMocks());
+
+  it('says phone, not iPhone, on the shake toggle', async () => {
+    await show();
+    expect(screen.getByText('Shake phone to report a bug')).toBeTruthy();
+    expect(screen.getByLabelText('Shake phone to report a bug')).toBeTruthy();
+    expect(screen.queryByText(/iPhone/)).toBeNull();
+  });
+
+  it('lists the Android version, not the iOS version', async () => {
+    await show();
+    await toForm();
+    await fireEvent.press(screen.getByTestId('bug.include'));
+    expect(screen.getByText('Android version')).toBeTruthy();
+    expect(screen.queryByText('iOS version')).toBeNull();
   });
 });
 

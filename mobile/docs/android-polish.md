@@ -2215,3 +2215,16 @@ caption in `danger` now sits under the Ends row: "The end time must be after the
   a fixed-light sheet. Add / Save stays disabled as before.
 - Tests: `calorieTracker.test.tsx` (the new wording; -500, 6000, abc, 5000 and empty in the editor) and
   `route.test.tsx` (`caloriesOutOfRange`).
+
+## 42. QA M-03: No "iPhone" or "iOS" in Android copy (2026-10-30)
+
+- Settings → Appearance caption: "System follows your iPhone." is now "System follows your phone’s setting."
+  (`app/account/settings.tsx`), on both platforms. The apostrophe is the curly ’ the rest of the app's copy uses.
+- A sweep of `app/` and `src/` for user-facing "iPhone"/"iOS" found two more strings Android was showing, both in
+  Report a bug (`src/features/bugReport/BugReportScreen.tsx`). On Android they now read **Shake phone to report a
+  bug** (label and accessibility label) and **Android version** (in "What we’ll include"; the value was already the
+  Android release). iOS keeps "Shake iPhone to report a bug" and "iOS version".
+- Everything else the sweep found is a code comment, or copy already branched by platform so Android never sees it
+  (`deviceCalendarCopy.ts`, `calendarProviders.ts`, `eventDetails.ts`).
+- Tests: `account.test.tsx` (the caption), `bugReport/__tests__/screen.test.tsx` (Android: shake label and Android
+  version; the existing iOS tests keep the iPhone/iOS copy).
