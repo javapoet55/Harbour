@@ -75,6 +75,7 @@ import ScheduleWish from '../../../../app/wellness/moments/schedule-wish';
 import ReviewWish from '../../../../app/wellness/moments/review';
 import ManageMomentsList from '../../../../app/wellness/moments/manage-list';
 import { useAppearance } from '../../../store/appearance';
+import { useTheme, WellnessTint } from '../../../theme';
 
 function load(moments: ImportantMoment[], extra: Partial<MomentsSnapshot> = {}) {
   const snapshot: MomentsSnapshot = { moments, emailAccount: null, emailConfigured: false, automaticEmailEnabled: false, ...extra };
@@ -1935,6 +1936,32 @@ describe('Phase 14: the Wellness tint and one review count', () => {
     expect(flatColor((await view.findAllByText('Manage'))[0])).toBe('#BAABFF');
     // The gear is a toolbar item: `useTheme({ toolbar: true })` keeps Android's dark `link`.
     expect(iconColor(view.toJSON(), 'settings-outline')).toBe('#6BB8FF');
+  });
+
+  it('Android, Night: Moments Settings links are lilac (`moments-settings-v4-dark`)', async () => {
+    Platform.OS = 'android';
+    useAppearance.setState({ appearance: 'night' });
+    load([]);
+    const view = await render(<MomentSettings />);
+    expect(flatColor(await view.findByText('Choose a contact birthday'))).toBe('#BAABFF');
+  });
+
+  it('Android, Night: inside WellnessTint, content resolves lilac and a toolbar item keeps the Ask blue', async () => {
+    Platform.OS = 'android';
+    useAppearance.setState({ appearance: 'night' });
+    const seen: Record<string, string> = {};
+    function Probe() {
+      seen.content = useTheme().colors.link;
+      seen.toolbar = useTheme({ toolbar: true }).colors.link;
+      seen.switchOn = useTheme().colors.switchOn;
+      return null;
+    }
+    await render(
+      <WellnessTint>
+        <Probe />
+      </WellnessTint>,
+    );
+    expect(seen).toEqual({ content: '#BAABFF', toolbar: '#6BB8FF', switchOn: 'rgba(186, 171, 255, 0.85)' });
   });
 
   it('Day: content and toolbar are both the brand indigo, as before', async () => {
