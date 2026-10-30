@@ -2361,3 +2361,28 @@ From §24 "First-install introduction" and "Native requirements" → First-insta
 - Tests: `src/store/introduction.test.ts`: true first install, completion survives a relaunch, a signed-out
   install with a remembered name skips the pages and writes the flag, each existing-data key counts, the review
   schedule doesn't, and unreadable storage doesn't show the pages.
+
+## 49. Phase 14 / 6: When the Calendar connect offer shows (2026-10-30)
+
+From §24 "Calendar: connect offer (sheet)" (fbce45b, 9acb39a; `offerCalendarConnection()`, CalendarView.swift:263-277).
+State and condition only; Run A builds and mounts the sheet.
+
+- `offersCalendarConnection(connections, deviceCalendarsReadable)` (`src/features/calendar/connectOffer.ts`) is
+  Swift's condition. It is true when there is **no server calendar connection** (`model.calendarConnections.isEmpty`)
+  **and** the phone's own calendars can't be read (`EKEventStore.authorizationStatus(for: .event) != .fullAccess`).
+  On Android that means the calendar permission isn't granted (`hasDeviceCalendarAccess()`).
+- `useCalendarConnectOffer()` returns `{ visible, close }` for the Calendar tab:
+  - **Only after a successful status refresh.** It makes a fresh `GET /api/calendar/connections`
+    (`refreshCalendarConnections`, `fetchQuery` with `staleTime: 0`), never the cached list. A failed refresh shows
+    nothing ("Empty events or an offline response do not mean that the user has never connected a calendar").
+  - **When it runs:** each time the tab comes into focus, as Swift's `.task(id: model.profile?.id)` runs again
+    on every appearance and is cancelled on disappearance. If the tab loses focus mid-check, or the account
+    changes, the answer is dropped (`!Task.isCancelled, model.profile?.id == owner`).
+  - **How often:** at most once per signed-in account while the tab stays mounted (`promptedAccount`, a ref). After
+    Not now or a swipe it doesn't come back on that visit or later ones, and a different account is asked afresh.
+- **Swift bug 14 kept (not fixed):** "Not now" isn't stored, so the offer comes back on each cold launch, as on
+  iOS. The brief only lists bug 8 as Android-ahead.
+- Tests: `src/features/calendar/__tests__/connectOffer.test.tsx`: the condition table; shown after a successful
+  empty refresh; a cached list is refreshed first; hidden when connected, when the phone's calendars are readable,
+  when the refresh fails, or when signed out; a stale answer after an account switch is dropped; once per account
+  across visits; a new account is asked; leaving mid-refresh asks again on the next visit.
