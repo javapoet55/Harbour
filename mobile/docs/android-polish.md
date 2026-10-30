@@ -2774,3 +2774,26 @@ didn't call `synchronizeDeviceTimeZone` at all (§24: "Not ported").
   quiet; nothing signed out; re-sync only on a change; a failed re-sync is reported; stops on close) and
   `account.test.tsx` (Settings mounts it for the account. The other Settings tests mock it, because its PATCH would
   land in front of the saves they count).
+
+## 66. Phase 14: phone check on the OnePlus (CPH2691), dark mode (2026-10-30)
+
+A debug build from `5dceb7f` on a OnePlus CPH2691 (Android, 1080×2376), system dark mode, against app-dev, with the
+account signed in. Then the app was reinstalled for a true first install. Nothing was saved, sent, called, paused or
+deleted: Pause daily calls → **Cancel**; List Settings → **Cancel**; "Account already exists" → **No**; Settings was
+left with hardware Back, which doesn't save. No account was created; the existing-account check is read-only.
+
+- **Fixed — introduction artwork cropped about 2×.** With `width` plus `aspectRatio`, the `Image` kept the bundled
+  JPEG's own height (1135 px read as dp), so `resizeMode="cover"` cut each page's art down to its middle (page 1
+  showed only the calendar and the check card). Each page's art now gets an explicit `height: width / aspect`, and
+  the feature icons `85 / aspect`. After the fix, all four pages match `install-intro-1`…`-4`. Test:
+  `introduction.test.tsx` "sizes each page’s artwork…".
+- **Passed, no change:** introduction pages 1–4 and Get Started → Create Account; Create Account in dark; "Account
+  already exists" on leaving the email field (No keeps the form); Today's clear schedule opens Create New Task;
+  the editor's mic in the header; the dark Wellness chooser's gold moon; the Calorie Tracker and Shopping guides
+  (fixed light, pinned buttons); Calorie Tracker in dark and Pause → "Pause daily calls?" → Cancel (still "Daily
+  call at 8:00 PM"); List Settings' Cancel; the Ask AI landing in dark (light status-bar icons, the new caption,
+  the keyboard glyph opens the keyboard); My Page and Settings with white actions.
+- **Not an app issue:** the gear circle seen over the top-right of several screens (over the editor's mic and over
+  Skip) is the Expo dev client's floating tools button. It isn't in release builds.
+- **Install note:** `pm clear` is refused over adb on this OnePlus, so the first-install state came from uninstalling
+  and reinstalling the debug APK. The phone asks to confirm a USB install the first time.

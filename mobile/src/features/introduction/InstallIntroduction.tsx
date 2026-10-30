@@ -119,7 +119,9 @@ export function InstallIntroduction({ onFinish }: { onFinish: (signUp: boolean) 
             </View>
             <Text style={[textStyles.title3, styles.centered, styles.description, { color: colors.body }]}>{item.description}</Text>
             {index === 2 ? <Features width={width} /> : null}
-            <Image accessibilityLabel={item.artworkLabel} accessible resizeMode="cover" source={item.artwork} style={{ width, aspectRatio: item.aspect }} testID={`intro.artwork.${index + 1}`} />
+            {/* An explicit height, not `aspectRatio`: on Android the image kept its bundled height (1135 px read
+                as dp), so `cover` cropped it to about twice the size (phone check, docs/android-polish.md §66). */}
+            <Image accessibilityLabel={item.artworkLabel} accessible resizeMode="cover" source={item.artwork} style={{ width, height: width / item.aspect }} testID={`intro.artwork.${index + 1}`} />
           </ScrollView>
         ))}
       </ScrollView>
@@ -179,7 +181,7 @@ function Features({ width }: { width: number }) {
     <View style={styles.features} testID="intro.features">
       {FEATURES.map((feature, index) => (
         <View key={feature.title} style={[styles.feature, { width: cardWidth, backgroundColor: colors.featureFills[index] }]}>
-          <Image accessible={false} resizeMode="contain" source={feature.icon} style={{ width: 85, aspectRatio: feature.aspect }} />
+          <Image accessible={false} resizeMode="contain" source={feature.icon} style={{ width: 85, height: 85 / feature.aspect }} />
           <Text style={[styles.headline, styles.centered, { color: colors.ink }]}>{feature.title}</Text>
           <Text style={[textStyles.subheadline, styles.centered, { color: colors.secondary }]}>{feature.detail}</Text>
         </View>

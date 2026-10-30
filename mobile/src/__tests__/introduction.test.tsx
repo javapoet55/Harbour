@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { StyleSheet } from 'react-native';
 
 const mockReplace = jest.fn();
 jest.mock('expo-router', () => ({
@@ -93,4 +94,15 @@ describe('the introduction route', () => {
     await fireEvent.press(screen.getByTestId('intro.signIn'));
     expect(mockReplace).toHaveBeenCalledWith('/sign-in');
   });
+});
+
+// Phone check (docs/android-polish.md §66): with only `aspectRatio`, Android kept the bundled image's own height
+// and `cover` cropped the art to about twice the size. Each page sets the height itself.
+it('sizes each page’s artwork from the window width and the crop’s aspect', async () => {
+  await render(<InstallIntroduction onFinish={jest.fn()} />);
+  const width = 750; // the jest window
+  const style = (page: number) => StyleSheet.flatten(screen.getByTestId(`intro.artwork.${page}`).props.style);
+  expect(style(1)).toEqual({ width, height: (width * 1135) / 784 });
+  expect(style(3)).toEqual({ width, height: (width * 565) / 784 });
+  expect(style(1).aspectRatio).toBeUndefined();
 });
