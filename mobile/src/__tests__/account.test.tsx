@@ -5,7 +5,7 @@ import { Alert, Linking, Platform, StyleSheet } from 'react-native';
 import type { Profile } from '../api';
 import { deviceCalendarSelection } from '../features/calendar/deviceCalendarSelection';
 import { deliverOAuthCallback, redirectOAuthCallback, resetOAuthCallbacks } from '../lib/oauthCallbacks';
-import { deviceTimeZone } from '../lib/profileSettings';
+import { deviceTimeZone, LEGAL_LINKS } from '../lib/profileSettings';
 import { addDays, startOfDay } from '../lib/taskQuery';
 import { queryKeys } from '../query/keys';
 import { useAppearance } from '../store/appearance';
@@ -1410,14 +1410,24 @@ describe('the Settings screen on Android', () => {
     expect(flat('settings-time-zone').borderWidth).toBeUndefined();
   });
 
-  it('draws its links in the Ask blue in dark, and keeps Delete account red (§6)', async () => {
+  // Phase 14 (61788dc, `.tint(.nexdoActionForeground)`, ProfileView.swift:293): Swift draws Settings' actions
+  // WHITE in dark. That supersedes §6's Ask blue for this screen (docs/android-polish.md §63).
+  it('draws its actions in white in dark, as Swift does, and keeps Delete account red', async () => {
     useAppearance.setState({ appearance: 'night', voiceVolume: 1 });
     await showAndroid();
     const dark = palettes.dark;
-    for (const link of ['Open Notification Center', 'Synchronize now', 'Change photo']) {
-      expect(textStyle(link).color).toBe(dark.askBlue);
+    for (const link of ['Open Notification Center', 'Synchronize now', 'Change photo', 'Connect Calendar', LEGAL_LINKS.privacyPolicyTitle, LEGAL_LINKS.termsOfServiceTitle]) {
+      expect(textStyle(link).color).toBe('#FFFFFF');
     }
+    expect(StyleSheet.flatten(screen.getByTestId('settings-confirmation-value').props.style).color).toBe(dark.actionForeground);
     expect(textStyle('Delete account').color).toBe(dark.danger);
+    useAppearance.setState({ appearance: 'system', voiceVolume: 1 });
+  });
+
+  it('keeps them in the brand indigo in light', async () => {
+    await showAndroid();
+    for (const link of ['Open Notification Center', 'Synchronize now', 'Connect Calendar']) expect(textStyle(link).color).toBe(light.actionForeground);
+    expect(light.actionForeground).toBe('#3D29F0');
   });
 
   it('marks the selected appearance with the accent tint and accent text', async () => {
@@ -1444,3 +1454,18 @@ describe('the Settings screen on iOS', () => {
   });
 });
 
+
+/** Phase 14 (61788dc): My Page is tinted `nexdoActionForeground` — white in dark, indigo in light (`account-v4-dark`). */
+describe('My Page night foregrounds', () => {
+  afterEach(() => useAppearance.setState({ appearance: 'system', voiceVolume: 1 }));
+
+  it.each([
+    ['night', '#FFFFFF'],
+    ['day', '#3D29F0'],
+  ] as const)('draws the voice minutes in the action foreground (%s)', async (appearance, color) => {
+    useAppearance.setState({ appearance, voiceVolume: 1 });
+    await show(<Account />);
+    await waitFor(() => expect(screen.getByTestId('voice-usage-total')).toBeTruthy());
+    expect(StyleSheet.flatten(screen.getByTestId('voice-usage-total').props.style).color).toBe(color);
+  });
+});

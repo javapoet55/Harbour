@@ -165,6 +165,12 @@ export type Palette = {
   /** `tertiarySystemFill`: a disabled prominent button (Create Account, RootView.swift:705). */
   tertiaryFill: string;
   /**
+   * `Color.nexdoActionForeground` (RootView.swift:1120, 61788dc): the brand indigo in light, WHITE in dark. Account
+   * and Settings tint with it wholesale, and Shopping's Recommendations label uses it. Unlike Android's `link`,
+   * which turns to the Ask blue in dark (§6), Swift picked white for these on purpose (docs/android-polish.md §63).
+   */
+  actionForeground: string;
+  /**
    * `Color.wellnessAccent` (WellnessAppearance.swift, ce6d20a): text, controls and tints in the
    * Wellness modules (Calorie Tracker, Pomodoro, Moments). The brand indigo in light; a light lilac,
    * (0.73, 0.67, 1), in dark. Solid branded buttons keep their own fill.
@@ -225,6 +231,7 @@ export const palettes: Record<ColorScheme, Palette> = {
     tertiaryGrouped: '#F2F2F7',
     tertiaryGroupedElevated: '#F2F2F7',
     tertiaryFill: 'rgba(118, 118, 128, 0.12)',
+    actionForeground: brand.nexdoIndigo, // (0.24, 0.16, 0.94)
     wellnessAccent: brand.nexdoIndigo, // WellnessAppearance.swift: (0.24, 0.16, 0.94)
   },
   dark: {
@@ -283,6 +290,7 @@ export const palettes: Record<ColorScheme, Palette> = {
     tertiaryGrouped: '#2C2C2E',
     tertiaryGroupedElevated: '#3A3A3C',
     tertiaryFill: 'rgba(118, 118, 128, 0.24)',
+    actionForeground: '#FFFFFF',
     wellnessAccent: '#BAABFF', // WellnessAppearance.swift dark: (0.73, 0.67, 1)
   },
 };

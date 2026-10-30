@@ -2711,3 +2711,25 @@ AddTaskByVoiceView.swift:34-69, :105-112, :315-341; VoicePlayback.swift).
   one start for two taps and none over a live session; start again from idle clears the error) and
   `voice-screens.test.tsx` "Start listening" (starts; hidden while listening or starting, after an error, or
   with the microphone refused; the interrupted text in red; asks for consent again).
+
+## 63. Phase 14 / C5: Account and Settings — `actionForeground`, white in dark (2026-10-30)
+
+§24 "Account menu and Settings: night foregrounds" (61788c, d05a379; ProfileView.swift:105, :122, :159, :285, :293, :298,
+:540, :568, :590, :605-614; RootView.swift:1120), captures `account-v4`, `-dark`, `settings-v4-dark`, `-scrolled-1…4-dark`.
+
+- **New palette token `actionForeground`:** the brand indigo `#3D29F0` in light, `#FFFFFF` in dark
+  (`Color.nexdoActionForeground`).
+- **My Page** (`.tint(.nexdoActionForeground)` on the whole view): the close xmark, the menu-row icons
+  (`AccountMenuRow`) and the voice-minutes total (`VoiceUsageCard`).
+- **Settings** (`.tint` on the whole view, plus explicit uses): every action that used `link` now uses
+  `actionForeground`. That covers the back chevron, Change photo and its message, the two pickers' values and
+  chevrons (`SettingsPicker` gained an optional `tint`), Open Notification Center, Connect Calendar, Synchronize
+  now, Withdraw AI permission, the privacy and terms links, "Settings saved.", the retry and reconnect buttons,
+  Manage calendars and the spinners. Delete account stays red; the toggles stay green.
+- **Decision (supersedes §6 on these two screens):** on Android in dark, `link` is the Ask blue (§6/§7). Swift
+  chose white here on purpose, so Account and Settings follow Swift; other screens keep the §6 rule. The
+  `settings` Android test that pinned the Ask blue now pins white.
+- Shopping's Recommendations label (Run B, `c2a78f9`) had its own local copy of this colour; it now reads the token.
+- **Not checked on a device** (see §51).
+- Tests: `account.test.tsx` — Settings actions white in dark and indigo in light (text and picker value), Delete
+  account still red; My Page's voice minutes in white and indigo.

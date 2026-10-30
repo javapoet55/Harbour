@@ -334,9 +334,8 @@ export function StickyActionBar({ children, onHeight, style, testID }: { childre
 export function ShoppingActionBar({ busy, onComplete, onRecommendations, onHeight }: { busy: boolean; onComplete: () => void; onRecommendations: () => void; onHeight?: (height: number) => void }) {
   const theme = useTheme();
   // `Color.nexdoActionForeground` (61788dc): white in dark, the brand indigo in light, for the Recommendations
-  // label and its sparkles (`shopping-list-detail-v4-dark`). Resolved here: the shared token belongs to the
-  // Account row, another run's.
-  const actionForeground = theme.scheme === 'dark' ? '#FFFFFF' : brand.nexdoIndigo;
+  // label and its sparkles (`shopping-list-detail-v4-dark`). The shared token since Run C (§63).
+  const actionForeground = theme.colors.actionForeground;
   return (
     <StickyActionBar onHeight={onHeight} style={styles.actionBar} testID="shopping-actions">
       <Pressable
