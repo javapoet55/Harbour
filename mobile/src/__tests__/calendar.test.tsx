@@ -447,6 +447,25 @@ describe('Calendar event editor', () => {
     await waitFor(() => expect(screen.getByTestId('event-create').props.accessibilityState.disabled).toBe(false));
   });
 
+  it('says why Create Event is disabled when Ends is before Starts', async () => {
+    await wrap(<NewCalendarEvent />);
+    await fireEvent.changeText(screen.getByTestId('event-title'), 'Dentist');
+    expect(screen.queryByText('The end time must be after the start time.')).toBeNull();
+
+    // Midnight on the start's day, hours before the default start.
+    await fireEvent.press(screen.getByTestId('event-end'));
+    await fireEvent.press(screen.getByTestId('event-time-0'));
+
+    await waitFor(() => expect(screen.getByTestId('event-end-error')).toBeTruthy());
+    expect(screen.getByText('The end time must be after the start time.')).toBeTruthy();
+    expect(screen.getByTestId('event-create').props.accessibilityState.disabled).toBe(true);
+
+    // A later end clears it.
+    await fireEvent.press(screen.getByTestId('event-time-47'));
+    await waitFor(() => expect(screen.queryByTestId('event-end-error')).toBeNull());
+    expect(screen.getByTestId('event-create').props.accessibilityState.disabled).toBe(false);
+  });
+
   it('submits the exact body the route accepts, with no repeat key', async () => {
     mockCreateEvent.mockResolvedValue({ success: true });
     await wrap(<NewCalendarEvent />);

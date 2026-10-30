@@ -3,6 +3,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import type { NutritionEntry, NutritionMeal } from '../../api/nutrition';
 import { Text } from '../../components/Text';
+import { palettes } from '../../theme/colors';
 import { MenuPicker } from '../moments/form';
 import { MEALS } from './model';
 import { INK, SECONDARY, TINT } from './parts';
@@ -20,6 +21,12 @@ export function editorValid(draft: Pick<FoodDraft, 'name' | 'calories'>): boolea
   if (!/^\d+$/.test(draft.calories)) return false;
   const calories = Number.parseInt(draft.calories, 10);
   return draft.name.trim() !== '' && calories >= 0 && calories <= 5000;
+}
+
+/** Calories typed but not a whole number from 0 to 5,000 (QA M-02). Nothing is said while the field is empty. */
+export function caloriesOutOfRange(calories: string): boolean {
+  if (calories.trim() === '') return false;
+  return !/^\d+$/.test(calories) || Number.parseInt(calories, 10) > 5000;
 }
 
 export function FoodEditor({
@@ -41,6 +48,7 @@ export function FoodEditor({
 }) {
   const insets = useSafeAreaInsets();
   const valid = draft !== null && editorValid(draft);
+  const caloriesError = draft !== null && caloriesOutOfRange(draft.calories);
   const date = new Intl.DateTimeFormat('en-US', { timeZone: zone, month: 'short', day: 'numeric', year: 'numeric' }).format(new Date(selectedDate));
   return (
     <Modal animationType="slide" onRequestClose={onCancel} presentationStyle="pageSheet" visible={draft !== null}>
@@ -84,12 +92,17 @@ export function FoodEditor({
                 testID="calorie-editor-calories"
                 value={draft.calories}
               />
+              {caloriesError ? (
+                <Text accessibilityLiveRegion="polite" style={[styles.error, styles.separator]} testID="calorie-editor-calories-error">
+                  Enter calories from 0 to 5,000.
+                </Text>
+              ) : null}
               <View style={styles.pickerRow}>
                 <MenuPicker label="Meal" onChange={(meal) => onChange({ ...draft, meal })} options={MEALS.map((meal) => ({ value: meal.key, title: meal.title }))} testID="calorie-editor-meal" value={draft.meal} />
               </View>
             </View>
             <View style={styles.group}>
-              <Text style={[styles.body, styles.note, { color: SECONDARY }]}>{live ? `Saved to your food log for ${date}.` : 'This entry changes the preview only.'}</Text>
+              <Text style={[styles.body, styles.note, { color: SECONDARY }]}>{live ? `This will be saved to your food log for ${date}.` : 'This entry changes the preview only.'}</Text>
             </View>
           </ScrollView>
         </View>
@@ -115,4 +128,5 @@ const styles = StyleSheet.create({
   separator: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: 'rgba(60, 60, 67, 0.29)' },
   pickerRow: { minHeight: 44, paddingHorizontal: 16, justifyContent: 'center' },
   note: { padding: 16 },
+  error: { paddingHorizontal: 16, paddingVertical: 8, fontSize: 13, lineHeight: 18, color: palettes.light.danger },
 });

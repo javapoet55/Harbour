@@ -2197,3 +2197,51 @@ manifest. Rebuilt with the same route (prebuild, `assembleDebug`, arm64), reinst
   covers this app. The legacy import will itself go away in a later Expo; moving to the object API is a separate change.
 - The Phone calendars list wraps a long account name a letter at a time ("karpagamsures / hkumar@gmail / .com") when
   the calendar's title is the address; iOS would do the same with a long enough name.
+
+## 40. QA M-01: New Event explains an end before the start (2026-10-30)
+
+When Ends is at or before Starts, Create Event was only greyed out with no reason given. It stays disabled, and a
+caption in `danger` now sits under the Ends row: "The end time must be after the start time." (`event-end-error`,
+`app/calendar/event/new.tsx`). It goes away as soon as the end is moved after the start. Test: `calendar.test.tsx`
+"says why Create Event is disabled when Ends is before Starts".
+
+## 41. QA M-02: Add Food wording and the calories range message (2026-10-30)
+
+- The note under the form now reads "This will be saved to your food log for <date>." (was "Saved to your food log
+  for <date>."), since nothing is saved until Add / Save is tapped (`src/features/nutrition/FoodEditor.tsx`).
+- Calories that are typed but not a whole number from 0 to 5,000 (e.g. -500, 6000, 1.5) now show "Enter calories
+  from 0 to 5,000." in red under the Calories field (`caloriesOutOfRange`, `calorie-editor-calories-error`). Nothing
+  is shown while the field is empty. The red is the light `danger` token (`palettes.light.danger`), as the editor is
+  a fixed-light sheet. Add / Save stays disabled as before.
+- Tests: `calorieTracker.test.tsx` (the new wording; -500, 6000, abc, 5000 and empty in the editor) and
+  `route.test.tsx` (`caloriesOutOfRange`).
+
+## 42. QA M-03: No "iPhone" or "iOS" in Android copy (2026-10-30)
+
+- Settings → Appearance caption: "System follows your iPhone." is now "System follows your phone’s setting."
+  (`app/account/settings.tsx`), on both platforms. The apostrophe is the curly ’ the rest of the app's copy uses.
+- A sweep of `app/` and `src/` for user-facing "iPhone"/"iOS" found two more strings Android was showing, both in
+  Report a bug (`src/features/bugReport/BugReportScreen.tsx`). On Android they now read **Shake phone to report a
+  bug** (label and accessibility label) and **Android version** (in "What we’ll include"; the value was already the
+  Android release). iOS keeps "Shake iPhone to report a bug" and "iOS version".
+- Everything else the sweep found is a code comment, or copy already branched by platform so Android never sees it
+  (`deviceCalendarCopy.ts`, `calendarProviders.ts`, `eventDetails.ts`).
+- Tests: `account.test.tsx` (the caption), `bugReport/__tests__/screen.test.tsx` (Android: shake label and Android
+  version; the existing iOS tests keep the iPhone/iOS copy).
+
+## 43. QA M-04: Night mode status bar icons stay dark after Ask AI (2026-10-30)
+
+In night mode the clock and battery stayed dark on Settings, Today and elsewhere once Ask AI had been opened.
+`AskNexdoView` drew `<StatusBar style="dark" />` on its fixed-light landing and Daily Brief with no focus check.
+`expo-status-bar` lets the last-mounted bar win, so an Ask screen left mounted under another one kept overriding the
+root bar (`app/_layout.tsx`, light content in dark mode). Ask now uses `FixedLightStatusBar`, which draws the dark bar
+only while its screen is focused, as Wellness and Connect calendar already do. The landing still gets dark icons
+while it is in front.
+
+Audit of every `<StatusBar` in `mobile/`: the only one outside `app/_layout.tsx` is inside `FixedLightStatusBar`
+(`src/features/wellness/FixedLightStatusBar.tsx`), which is focus-gated. It is used by Ask, `app/wellness/calories.tsx`,
+`app/wellness/guide/[kind].tsx`, `app/wellness/pomodoro.tsx` and `src/features/calendar/ConnectSurface.tsx`.
+`StatusBarScrim` (Today, Calendar) only draws a backdrop and sets no style. No code calls `setStatusBarStyle` or sets a
+screen's `statusBarStyle`.
+
+Tests: `ask.test.tsx` "the Ask AI status bar": dark while Ask is focused, none while it is not, none on a themed page.

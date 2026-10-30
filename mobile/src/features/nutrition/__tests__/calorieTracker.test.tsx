@@ -264,6 +264,35 @@ describe('the design preview (not live)', () => {
     // 1,430 − 105 (banana) + 95 (apple) + 40 (salmon) = 1,460.
     expect(within(screen.getByTestId('calorie-log-total')).getByText('1,460 / 2,000 kcal')).toBeTruthy();
   });
+
+  it('the editor says "Enter calories from 0 to 5,000." for -500 and 6000, never while empty', async () => {
+    const message = 'Enter calories from 0 to 5,000.';
+    await open(false);
+    await press('calorie-to-dashboard');
+    await press('calorie-view-log');
+    await press('calorie-add-food');
+    await fireEvent.changeText(screen.getByTestId('calorie-editor-name'), 'Apple');
+    expect(screen.getByTestId('calorie-editor-calories').props.value).toBe('');
+    expect(screen.queryByText(message)).toBeNull();
+
+    await fireEvent.changeText(screen.getByTestId('calorie-editor-calories'), '-500');
+    expect(screen.getByText(message)).toBeTruthy();
+    expect(screen.getByTestId('calorie-editor-save').props.accessibilityState).toEqual({ disabled: true });
+
+    await fireEvent.changeText(screen.getByTestId('calorie-editor-calories'), '6000');
+    expect(screen.getByText(message)).toBeTruthy();
+    expect(screen.getByTestId('calorie-editor-save').props.accessibilityState).toEqual({ disabled: true });
+
+    await fireEvent.changeText(screen.getByTestId('calorie-editor-calories'), 'abc');
+    expect(screen.getByText(message)).toBeTruthy();
+
+    await fireEvent.changeText(screen.getByTestId('calorie-editor-calories'), '5000');
+    expect(screen.queryByText(message)).toBeNull();
+    expect(screen.getByTestId('calorie-editor-save').props.accessibilityState).toEqual({ disabled: false });
+
+    await fireEvent.changeText(screen.getByTestId('calorie-editor-calories'), '');
+    expect(screen.queryByText(message)).toBeNull();
+  });
 });
 
 describe('live', () => {
@@ -465,7 +494,7 @@ describe('live', () => {
 
     await press('calorie-edit-e2');
     expect(screen.getByText('Food')).toBeTruthy();
-    expect(screen.getByText('Saved to your food log for Oct 5, 2026.')).toBeTruthy();
+    expect(screen.getByText('This will be saved to your food log for Oct 5, 2026.')).toBeTruthy();
     await fireEvent.changeText(screen.getByTestId('calorie-editor-calories'), '190');
     await press('calorie-editor-save');
     await waitFor(() => expect(mockApi.updateEntry).toHaveBeenLastCalledWith('e2', { meal: 'SNACKS', description: 'Granola bar', kcal: 190 }));
