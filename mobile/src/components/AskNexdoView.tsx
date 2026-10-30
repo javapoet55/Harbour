@@ -384,20 +384,18 @@ export function AskNexdoView({ textPage, initialPrompt = '', shoppingContext, on
   const showsBriefing = brief !== null;
   // `if !showsBriefing && (textPage || model.turn != nil)` (:203): the landing and the brief draw their own.
   const showsHeader = !showsBriefing && (textPage || turn !== null);
-  // The landing keeps its light values in both modes (docs/android-polish.md §24), so it must sit on white:
-  // over the dark theme background its translucent gradient turned dark and hid its ink text.
-  const showsLanding = !showsBriefing && turn === null && !textPage;
 
   return (
     // A sheet's top edge sits below the status bar already, so only a route needs the top inset.
     <SafeAreaView
       edges={presentedAsSheet ? ['left', 'right', 'bottom'] : ['top', 'left', 'right', 'bottom']}
-      style={[styles.fill, { backgroundColor: showsBriefing || showsLanding ? '#FFFFFF' : theme.colors.background }]}
+      style={[styles.fill, { backgroundColor: showsBriefing ? '#FFFFFF' : theme.colors.background }]}
     >
-      {/* Fixed light screens keep a dark clock in dark mode (as Wellness's, docs/android-polish.md §23), but
-          only while Ask is in front: an unfocused Ask left mounted under another screen kept the clock dark
-          over the night theme everywhere else (QA M-04, docs/android-polish.md §43). */}
-      {showsLanding || showsBriefing ? <FixedLightStatusBar /> : null}
+      {/* The fixed-light Daily Brief keeps a dark clock in dark mode (as Wellness's, docs/android-polish.md §23),
+          but only while Ask is in front: an unfocused Ask left mounted under another screen kept the clock dark
+          over the night theme everywhere else (QA M-04, §43). The landing follows the theme since Phase 14
+          (§61), so the root bar serves it. */}
+      {showsBriefing ? <FixedLightStatusBar /> : null}
       {/* The brief's backdrop (`:305-309`): fixed light, under the safe areas too. */}
       {showsBriefing ? (
         <LinearGradient

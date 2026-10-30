@@ -2649,3 +2649,30 @@ every cold launch.
 - Tests: `task-editor.test.tsx` "Create New Task: Add task by voice" (label; dismisses the keyboard; each press
   pushes a fresh voice screen; disabled while creating). Four other editor tests gained `Stack.Screen` in their
   `expo-router` mocks.
+
+## 61. Phase 14 / C3: Ask AI landing — follows the theme, new caption, keyboard button (2026-10-30)
+
+§24 "Ask AI landing" (61788dc; AskAILandingView.swift:59-67), captures `ask-ai-landing-v4`, `-dark` and
+`-keyboard-focus-dark`. File `src/features/ask/AskLanding.tsx`.
+
+- **Dark mode follows the theme now. This reverses §24 (Phase 12)'s "fixed light" landing.** It was fixed because
+  Swift's landing faded to `.white` under `nexdoInk`, which is white on white in dark. The `-dark` capture shows
+  Swift now draws a proper dark landing, so RN uses the theme: the base and the gradient's last stop are
+  `background`; ink, secondary and placeholder come from the theme; the close circle is `surface` at 80%
+  (`secondarySystemGroupedBackground.opacity(0.8)`); and the field row is `surface`. The pastel cards, the voice
+  panel, the mic gradient, the orb and the indigo send button are unchanged, as in Swift. "Powered by Nexdo AI"
+  gets its 65% as view opacity, because the dark secondary is already translucent.
+- **Status bar:** the landing no longer draws the fixed dark bar, so the root bar follows the theme there (light
+  icons in dark). The Daily Brief is still fixed light (§24 lists no change to it) and keeps the focus-gated dark
+  bar from QA M-04 (§43). `AskNexdoView` draws the white base only behind the brief.
+- **Copy:** the voice caption is "Tap to start a voice conversation" (was "Tap and speak naturally. I’m
+  listening…").
+- **Voice card:** at least 160 pt tall, content centred.
+- **Keyboard glyph:** now a button (label "Type your request", the hint "Puts the cursor in the request field",
+  id `ask-landing-keyboard`) that focuses the field, as Swift's `typing = true`. Swift gives the button and the
+  field the same label (§24 "Duplicate accessibility label"). RN keeps the label and adds the hint so TalkBack
+  can tell them apart.
+- **Not checked on a device** (see §51), in light or dark.
+- Tests: `ask.test.tsx` (the new caption; the keyboard glyph focuses the field; the 160 voice card; dark ink,
+  base and placeholder; the theme base in light; the status bar is left to the root on the landing and dark on
+  the brief only while focused).
