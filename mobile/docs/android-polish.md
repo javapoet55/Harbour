@@ -2540,3 +2540,32 @@ compared with an iPhone render, or with an Android device (see §51).
 - Tests: `calendar.test.tsx` "Calendar connect offer": shown with nothing connected; Yes goes to Settings at the
   calendars card; Not now closes it; hidden when connected; copy on iOS and on Android; a tap outside closes it on
   Android.
+
+## 56. Phase 14 / A6: Review prompt hook-up (2026-10-30)
+
+`AppReviewPromptModifier` and `recordFirstLaunch` (AppReviewPrompt.swift:27-58, NexdoApp.swift:18, RootView.swift:139-142;
+bfa5b73) on top of §47's schedule. There is no capture: it's system UI and needs a Friday after 17:00.
+
+- **First launch:** the root layout calls `recordFirstLaunch()` once at launch, alongside the other device stores.
+  It writes only if nothing is stored, so updates never reset it.
+- **The check:** `useReviewPrompt()` (`src/features/review/useReviewPrompt.ts`) runs in `app/(tabs)/_layout.tsx`,
+  so only signed-in. While the app is active and the tabs are the focused root screen, every 30 seconds (the first
+  check after 30 s, as Swift's `sleep` comes first) it calls `consumeReviewOpportunity()`. If that says yes, it
+  calls `requestStoreReview()` (Play In-App Review on Android). The week is already stored by then. The loop starts
+  over whenever the app becomes active or the tabs regain focus, as Swift's `.task(id:)` does.
+- **Swift's "nothing over the tabs, no busy state" mapped to RN:**
+  - `presentedViewController == nil` becomes the tabs having focus in the root stack. Ask, a reminder action
+    (Swift's `taskActions.route`), Account, the wellness covers and the root sheets all take that focus away.
+    Pushes inside a tab's own stack don't, as in Swift.
+  - The keyboard check is `Keyboard.isVisible()`.
+  - **Deviation:** `model.busy` and `model.error` have no single RN equivalent (requests are per-screen queries
+    and errors are inline), so they aren't checked.
+  - Only one check runs at a time.
+- **Android behaviour to know:** Play limits how often the sheet shows and doesn't report whether it did, so a
+  "yes" week may show nothing. It never shows on internal test tracks. The week is used either way, as on iOS.
+- `jest.setup.js` mocks `expo-store-review` globally (unavailable, so no request).
+- **Needs the new native build** from §47. Not checked on a device: this machine can't run the emulator, and the
+  sheet needs a Play-installed build on a Friday evening.
+- Tests: `src/features/review/__tests__/useReviewPrompt.test.tsx`: the first request at 30 s and not before, the
+  week stored, once per week, waiting while something is over the tabs, while the keyboard is up or while the app
+  is in the background, and nothing outside Friday evening. `tabs-layout.test.tsx` mocks the hook.

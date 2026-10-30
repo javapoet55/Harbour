@@ -22,6 +22,7 @@ import { tasksQueryOptions } from '../src/query/useTasks';
 import { synchronizeDeviceTimeZone, TIME_ZONE_SYNC_ERROR } from '../src/query/useProfile';
 import { useAppearance } from '../src/store/appearance';
 import { useLastSignedIn } from '../src/store/lastSignedIn';
+import { recordFirstLaunch } from '../src/features/review/reviewPrompt';
 import { useIntroduction } from '../src/store/introduction';
 import { useSession } from '../src/store/session';
 import { useTheme } from '../src/theme';
@@ -92,6 +93,8 @@ export default function RootLayout() {
     void useAppearance.getState().hydrate();
     // Whether the first-install introduction was seen (RootView.swift:16); app/index.tsx waits for it.
     void useIntroduction.getState().hydrate();
+    // `AppReviewPromptStore.shared.recordFirstLaunch()` in `NexdoApp.init` (bfa5b73): once, ever.
+    void recordFirstLaunch();
   }, []);
 
   return (

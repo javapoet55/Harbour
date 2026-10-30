@@ -207,6 +207,12 @@ jest.mock('expo-clipboard', () => ({
   setStringAsync: jest.fn(async () => true),
 }));
 
+// Phase 14: the Play / App Store review sheet (src/features/review). Never shown in tests.
+jest.mock('expo-store-review', () => ({
+  isAvailableAsync: jest.fn(async () => false),
+  requestReview: jest.fn(async () => undefined),
+}));
+
 jest.mock('expo-sharing', () => ({
   isAvailableAsync: jest.fn(async () => true),
   shareAsync: jest.fn(async () => undefined),
