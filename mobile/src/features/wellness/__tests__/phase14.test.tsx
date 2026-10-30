@@ -1,9 +1,10 @@
-import { render } from '@testing-library/react-native';
+import { fireEvent, render, within } from '@testing-library/react-native';
 import { StyleSheet } from 'react-native';
 
 import { palettes } from '../../../theme';
 import { useAppearance } from '../../../store/appearance';
 import { WellnessChooser } from '../WellnessChooser';
+import { WellnessModuleGuide } from '../WellnessModuleGuide';
 
 jest.mock('react-native/Libraries/Utilities/useWindowDimensions', () => ({
   __esModule: true,
@@ -40,5 +41,28 @@ describe('Wellness chooser hero in dark (1a9a89a)', () => {
     const view = await render(<WellnessChooser onModule={jest.fn()} onExit={jest.fn()} />);
     expect(view.queryByTestId('wellness-hero-moon')).toBeNull();
     expect(JSON.stringify(view.toJSON())).not.toContain('#FFC740');
+  });
+});
+
+describe('Module guides pin Got it! and Back to Home (897f14d)', () => {
+  it.each(['calories', 'pomodoro', 'moments', 'shopping'] as const)('the %s guide keeps both buttons outside the scrolling steps', async (kind) => {
+    const view = await render(<WellnessModuleGuide kind={kind} onContinue={jest.fn()} onHome={jest.fn()} />);
+    const scroll = view.getByTestId('module-guide-scroll');
+    const bar = view.getByTestId('module-guide-bar');
+    for (const id of ['module-guide-continue', 'module-guide-home']) {
+      expect(within(bar).getByTestId(id)).toBeTruthy();
+      expect(within(scroll).queryByTestId(id)).toBeNull();
+    }
+    expect(within(scroll).getByTestId('module-guide-step-3')).toBeTruthy();
+  });
+
+  it('still calls through from the pinned bar', async () => {
+    const onContinue = jest.fn();
+    const onHome = jest.fn();
+    const view = await render(<WellnessModuleGuide kind="shopping" onContinue={onContinue} onHome={onHome} />);
+    await fireEvent.press(view.getByTestId('module-guide-continue'));
+    await fireEvent.press(view.getByText('Back to Home'));
+    expect(onContinue).toHaveBeenCalledTimes(1);
+    expect(onHome).toHaveBeenCalledTimes(1);
   });
 });

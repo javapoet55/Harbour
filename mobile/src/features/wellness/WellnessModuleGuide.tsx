@@ -97,7 +97,7 @@ export function WellnessModuleGuide({ kind, onContinue, onHome }: { kind: Wellne
         </Text>
         <View style={styles.barSpacer} />
       </View>
-      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: 18 + insets.bottom }]}>
+      <ScrollView contentContainerStyle={styles.content} testID="module-guide-scroll">
         <View style={styles.header}>
           <Image accessible={false} source={art.header} style={styles.headerArt} />
           <View style={styles.grow}>
@@ -129,15 +129,23 @@ export function WellnessModuleGuide({ kind, onContinue, onHome }: { kind: Wellne
             <Text style={[styles.subheadline, { color: nexdoSecondary }]}>{guide.benefit.text}</Text>
           </View>
         </View>
-        <Pressable accessibilityLabel="Got it!" accessibilityRole="button" onPress={onContinue} testID="module-guide-continue">
-          <LinearGradient colors={[withAlpha(guide.color, 0.75), guide.color]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.primary}>
-            <Text style={styles.primaryText}>Got it!</Text>
-          </LinearGradient>
-        </Pressable>
-        <Pressable accessibilityRole="button" onPress={onHome} style={styles.home} testID="module-guide-home">
-          <Text style={[styles.headline, { color: INK }]}>Back to Home</Text>
-        </Pressable>
       </ScrollView>
+      {/*
+        `.safeAreaInset(edge: .bottom)` (897f14d): Got it! and Back to Home stay pinned on a
+        `.regularMaterial` bar while the steps scroll under it. The material is the guide's fixed light one.
+      */}
+      <View style={[styles.pinned, { paddingBottom: 8 + insets.bottom }]} testID="module-guide-bar">
+        <View style={styles.pinnedContent}>
+          <Pressable accessibilityLabel="Got it!" accessibilityRole="button" onPress={onContinue} testID="module-guide-continue">
+            <LinearGradient colors={[withAlpha(guide.color, 0.75), guide.color]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.primary}>
+              <Text style={styles.primaryText}>Got it!</Text>
+            </LinearGradient>
+          </Pressable>
+          <Pressable accessibilityRole="button" onPress={onHome} style={styles.home} testID="module-guide-home">
+            <Text style={[styles.headline, { color: INK }]}>Back to Home</Text>
+          </Pressable>
+        </View>
+      </View>
     </View>
   );
 }
@@ -169,4 +177,7 @@ const styles = StyleSheet.create({
   primary: { minHeight: 54, borderRadius: 999, alignItems: 'center', justifyContent: 'center' },
   primaryText: { color: '#FFFFFF', fontSize: 17, lineHeight: 22, fontWeight: '600' },
   home: { minHeight: 44, alignItems: 'center', justifyContent: 'center' },
+  // `.regularMaterial` in light, as `module-guide-*-v4` show it: a near-opaque pale grey over the steps.
+  pinned: { paddingHorizontal: 18, paddingTop: 12, backgroundColor: 'rgba(246, 246, 246, 0.94)' },
+  pinnedContent: { width: '100%', maxWidth: 650, alignSelf: 'center', gap: 4 },
 });
