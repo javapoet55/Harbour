@@ -2245,3 +2245,555 @@ Audit of every `<StatusBar` in `mobile/`: the only one outside `app/_layout.tsx`
 screen's `statusBarStyle`.
 
 Tests: `ask.test.tsx` "the Ask AI status bar": dark while Ask is focused, none while it is not, none on a themed page.
+
+## 44. Phase 14 / 1: Auth client — account-exists, register 409, reset 404 (2026-10-30)
+
+Plumbing only, from §24 "Server endpoints" (8592a0a, 60212f3). No screen changes yet; Run A builds the alert.
+
+- `endpoints.accountExists(email)` posts `{ email }` to `POST /api/auth/account-exists` and reads `{ exists }`, with
+  `signedOutOn401: false` like the other auth calls (`AppModel.signupAccountExists`, NexdoApp.swift:197-201).
+  `accountExists(email)` in `src/query/useAuth.ts` is the boolean wrapper the screen will call; like Swift it throws.
+- Register's existing-email **409** is now a result, not an error: `useSignUp` resolves to
+  `{ kind: 'accountExists', email, message }` (alongside `signedIn` and `verify`). Swift's `create()` catches
+  `APIError.server(409, _)` and shows the "Account already exists" alert (RootView.swift:790-791).
+- The reset request's unknown-email **404** is now `{ kind: 'unknownEmail', message }` from `useRequestPasswordReset`
+  (`sent` otherwise). Other failures still throw and still show inline.
+- The classifiers (`accountExistsConflict`, `unknownResetEmail` in `src/api/index.ts`) use the server's text. **Decision:**
+  if the body has no `error`, they fall back to the server's own wording (`ACCOUNT_EXISTS_MESSAGE`,
+  `RESET_UNKNOWN_EMAIL_MESSAGE`). Otherwise the client's generic 409 text ("Your schedule changed…") would reach the
+  sign-up screen. A 409 that carries a `code` (`SCHEDULE_WARNING`) is never read as an existing account.
+- Until Run A, the sign-up screen puts the 409 message in its inline error slot (today's behaviour), and the reset
+  screen shows the 404 message in red where it already showed the server text.
+- Tests: `src/api/accountAuth.test.ts` (wire shape, 401 not a sign-out, 409/404 through the real client, fallbacks,
+  other statuses are null) and `src/query/signupRecovery.test.tsx` (the hooks' typed results).
+
+## 45. Phase 14 / 2: Store search brand logo in the model (2026-10-30)
+
+From §24 "Shopping: store logos" and "Server endpoints" → Store search (ce6d20a).
+
+- `ShoppingStoreSuggestion` gains `brand?: StoreBrandMetadata | null` (`{ displayName, logoUrl | null }`), as
+  `POST /api/shopping/stores` now sends for each store (src/server/shopping/search-brands.ts). It is optional, as in
+  Swift (`let brand: StoreBrandMetadata?`, ShoppingViews.swift:642): an older server sends none.
+- `StoreBrandLogo` gains Swift's `automaticLookup` and `suppliedBrand` props (StoreBrandLogo.swift:17-18, :66,
+  :86-88). A supplied brand is used in place of `GET /api/shopping/store-brand`, with no retry. The **fallback** is the
+  green cart, used when the brand is missing, `logoUrl` is null, or the URL breaks the `cdn.brandfetch.io` rules
+  (`suppliedLogo`, which uses `safeLogoUrl`). `automaticLookup={false}` with no brand never calls the server.
+- **Not done here (a screen change):** the Stores Near You rows (`StorePages.tsx`) still draw the indigo storefront
+  tile. Swift passes `suppliedBrand: suggestion.brand` with `automaticLookup: false` at 48 pt (ShoppingViews.swift:754-756).
+  Run A's list doesn't include it, so it is left for a later run. The 1 s / 2 s retry of an empty lookup and List
+  Settings' "draft store matches saved" rule (same §24 row) are also not ported yet.
+- Tests: `stores.test.tsx` "Store search brand logos": `suppliedLogo`, the optional field, a supplied logo drawn
+  with no lookup, and the cart for no brand or no logo.
+
+## 46. Phase 14 / 3: Working days default to every day (2026-10-30)
+
+From §24 "Server endpoints" → Availability defaults (migration `20261019000000_availability_defaults`): new rows get
+`workingDays` `'0,1,2,3,4,5,6'`, `workStart` 06:00, `workEnd` 21:00 and `quietEnd` 06:00.
+
+- `DEFAULT_WORKING_DAYS` (`src/features/tasks/workingDays.ts`) is now `'0,1,2,3,4,5,6'`, which matches Swift's
+  `preferences?.workingDays ?? "0,1,2,3,4,5,6"` (ProfileView.swift:550). This was the only default the client held:
+  `workingDaySet` and `toggleWorkingDay` use it for an unset value, so Settings now shows all seven toggles on.
+- **Hours: nothing to change.** A sweep of `app/` and `src/` found no client fallback for `workStart`, `workEnd`,
+  `quietStart` or `quietEnd`. They are required in `ProfilePreferences` and always come from `/api/me`. The
+  planner, briefing and Do Now defaults live on the server (§24 lists them). The 09:00–17:00 values in the test
+  fixtures (`account.test.tsx`, `phase12Nulls.test.ts`) stand for a stored account's own settings, not a default,
+  so they stay.
+- Still not ported from the same §24 row: Settings calling `synchronizeDeviceTimeZone` on load and when the zone
+  changes. That isn't a default and is outside Part 1.
+- Tests: `ordering.test.ts` (the constant, and unset reading as every day) and `account.test.tsx` (an unset value
+  shows all seven on; turning Saturday off saves `'0,1,2,3,4,5'`).
+
+## 47. Phase 14 / 4: expo-store-review and the review schedule (2026-10-30)
+
+From §24 "App Store review request" and "Native requirements" (bfa5b73). Module and rule only; Run A hooks it up.
+
+- **New native module:** `expo-store-review` `~57.0.3`, added with `npx expo install`. It has no config plugin and
+  needs no permission, but it **does need a new native build** (dev client and release). On Android it is the Play
+  In-App Review API. Google limits how often it shows, it gives no callback, and it shows nothing on internal test
+  tracks, so QA won't see a sheet from an internal-track build.
+- `src/features/review/reviewSchedule.ts` is a pure port of `AppReviewSchedule` (ios/Sources/NexdoCore/AppReviewSchedule.swift):
+  - **When:** a device-local **Friday at or after 17:00**, and no earlier than first launch + 7 calendar days at the
+    same wall-clock time. That is Swift's `calendar.date(byAdding: .day, value: 7)`, so a Friday-evening install
+    waits until 7 p.m. the next Friday.
+  - **How often:** at most once per week, and only in Friday weeks 0–4. Week 0 is the first Friday on or after
+    the 7-day day, and weeks are counted in calendar days. A missed Friday expires and is never caught up.
+  - **Time zone:** the device zone, read on each check (`Intl…resolvedOptions().timeZone`, standing in for
+    `TimeZone.autoupdatingCurrent`). Swift's `Calendar` math is done here with `Intl` wall-clock parts, which the
+    app already uses on Hermes (Moments, Pomodoro, Calorie Tracker).
+- `src/features/review/reviewPrompt.ts` ports `AppReviewPromptStore` under Swift's key `nexdo.appReviewSchedule.v1`.
+  `recordFirstLaunch` writes only once, so an update never resets the clock. `consumeReviewOpportunity` **writes the
+  week before** returning `true`, as Swift stores it before `requestReview()`.
+  **Decision:** if that write fails, RN returns `false` and makes no request. Swift's `defaults.set` cannot fail,
+  and asking without the week saved could repeat the request.
+- **Decision:** `requestStoreReview` calls `requestReview()` only when `isAvailableAsync()` is true. Without that
+  check, expo-store-review falls back to opening a store URL, which Swift never does. Errors are swallowed, because
+  StoreKit reports nothing either.
+- **Storage format:** `{ firstLaunch: <epoch ms>, lastRequestedWeek? }` in AsyncStorage. Swift's `JSONEncoder` dates
+  are seconds since 2001, but the two apps never share storage, so this is not a compatibility issue.
+- Tests: `src/features/review/__tests__/reviewSchedule.test.ts`. It has Swift's six `AppReviewScheduleTests` one for
+  one (same instants and zones), plus three new cases: 17:00 is inclusive, the wall-clock anniversary holds across
+  the November DST change, and stored values parse. It also covers storage: recorded once, written before yes,
+  once a week, no on a failed write, and the store called only when available.
+
+## 48. Phase 14 / 5: First-install introduction flag; Android ahead of Swift bug 8 (2026-10-30)
+
+From §24 "First-install introduction" and "Native requirements" → First-install flag (35b40f2, 530f1bd).
+
+- `src/store/introduction.ts` (`useIntroduction`) is a device-local flag like the appearance store, stored in
+  AsyncStorage under Swift's key `nexdo.installIntroductionCompleted` (`@AppStorage`, RootView.swift:16) as
+  `'true'`. `completed` is `undefined` until it is read. `complete()` is what Skip, Get Started and Sign In will call
+  (`introductionCompleted = true`, RootView.swift:133).
+- **ANDROID AHEAD — Swift bug fixed on Android (§24 Swift bug 8, "Upgraders see the first-install introduction").**
+  Swift's flag defaults to false for every existing install, so anyone who is signed out after updating sees the
+  four pages. On Android the introduction shows **only on a true first install**. If the flag is unset but the
+  device already holds Nexdo data, `hydrate()` treats it as seen and writes the flag, so the answer stays the same
+  on later launches. "Nexdo data" means any of `nexdo.lastSignedInFirstName` (written on every sign-in and kept after
+  sign-out, so it covers every signed-out returning user), `nexdo.appearance`, `nexdo.appVoiceVolume` or
+  `nexdo.taskDisplayOrders`.
+  - **Decision:** the check uses this fixed list, not every stored key. This version writes the review schedule
+    (`nexdo.appReviewSchedule.v1`) at launch, before the introduction can show, so a key scan would race it and hide
+    the pages from real first installs. The review schedule is explicitly not counted.
+  - **Decision:** if storage cannot be read, the pages are **not** shown. A failed read proves nothing about a first
+    install, and the instruction is to show them only when it is certain.
+  - **Note:** with `allowBackup`, a restored backup brings `nexdo.lastSignedInFirstName` with it, so a restored
+    device also skips the pages. iOS behaves the same way when UserDefaults are restored (§24 Native requirements).
+- Not wired up yet. Run A hydrates the store at launch and gates `app/index.tsx` on it.
+- Tests: `src/store/introduction.test.ts`: true first install, completion survives a relaunch, a signed-out
+  install with a remembered name skips the pages and writes the flag, each existing-data key counts, the review
+  schedule doesn't, and unreadable storage doesn't show the pages.
+
+## 49. Phase 14 / 6: When the Calendar connect offer shows (2026-10-30)
+
+From §24 "Calendar: connect offer (sheet)" (fbce45b, 9acb39a; `offerCalendarConnection()`, CalendarView.swift:263-277).
+State and condition only; Run A builds and mounts the sheet.
+
+- `offersCalendarConnection(connections, deviceCalendarsReadable)` (`src/features/calendar/connectOffer.ts`) is
+  Swift's condition. It is true when there is **no server calendar connection** (`model.calendarConnections.isEmpty`)
+  **and** the phone's own calendars can't be read (`EKEventStore.authorizationStatus(for: .event) != .fullAccess`).
+  On Android that means the calendar permission isn't granted (`hasDeviceCalendarAccess()`).
+- `useCalendarConnectOffer()` returns `{ visible, close }` for the Calendar tab:
+  - **Only after a successful status refresh.** It makes a fresh `GET /api/calendar/connections`
+    (`refreshCalendarConnections`, `fetchQuery` with `staleTime: 0`), never the cached list. A failed refresh shows
+    nothing ("Empty events or an offline response do not mean that the user has never connected a calendar").
+  - **When it runs:** each time the tab comes into focus, as Swift's `.task(id: model.profile?.id)` runs again
+    on every appearance and is cancelled on disappearance. If the tab loses focus mid-check, or the account
+    changes, the answer is dropped (`!Task.isCancelled, model.profile?.id == owner`).
+  - **How often:** at most once per signed-in account while the tab stays mounted (`promptedAccount`, a ref). After
+    Not now or a swipe it doesn't come back on that visit or later ones, and a different account is asked afresh.
+- **Swift bug 14 kept (not fixed):** "Not now" isn't stored, so the offer comes back on each cold launch, as on
+  iOS. The brief only lists bug 8 as Android-ahead.
+- Tests: `src/features/calendar/__tests__/connectOffer.test.tsx`: the condition table; shown after a successful
+  empty refresh; a cached list is refreshed first; hidden when connected, when the phone's calendars are readable,
+  when the refresh fails, or when signed out; a stale answer after an account switch is dropped; once per account
+  across visits; a new account is asked; leaving mid-refresh asks again on the next visit.
+
+## 50. Phase 14: An Event Details test that expired on 20 Oct 2026 (2026-10-30)
+
+Found by Part 1's full jest run, and not caused by it (it fails on `9fce7d3` too). `eventDetailsScreen.test.tsx`
+"Event Details for a device event › shows the phone’s copy…" expects the status "Upcoming" for `DEVICE`, which
+is fixed at 2026-10-20 06:30 UTC. Since that date passed it reads "Past". Only that test changes: it now opens
+`DEVICE` moved to a day after `Date.now()`. The other device tests don't check the status. No app code changed.
+
+## 51. Phase 14 / A1: First-install introduction, pages 1–4 (2026-10-30)
+
+Port of `InstallIntroductionView` (35b40f2, 530f1bd) against `install-intro-1`…`-4`. Route `app/(auth)/introduction.tsx`, view
+`src/features/introduction/InstallIntroduction.tsx`.
+
+- **Gate:** `app/index.tsx`. A signed-out app goes to `/introduction` until `useIntroduction.completed` is true
+  (§48), and shows the splash while the flag is still being read. The root layout hydrates it with the appearance
+  store. **Android ahead:** a signed-in session also marks it seen, so a signed-in upgrader with no stored first
+  name never meets it after signing out.
+- **Finishing:** Skip and Get Started mark it seen and *replace* it with sign-in, passing `signUp=1`. Sign-in
+  opens Create Account once and clears the param (`SignInView(startWithSignUp:)`). "Already have an account?
+  Sign In" opens sign-in alone. **Swift bug 7 doesn't happen on Android:** the request lives in that one navigation
+  and can't reopen the sheet after a later sign-out.
+- **Layout as Swift:** top-right Skip; paged horizontally, each page scrolling on its own; the ink heading over a
+  blue→purple gradient line (`GradientText`); title3 body copy; the 2×2 feature grid on page 3 (adaptive at
+  145 pt, so more columns on a tablet); four dots and Next → on pages 1–3; Get Started → and the Sign In line on
+  page 4. Reduce Motion turns off the paging animation. Always light, with dark status-bar icons while it's in
+  front (`FixedLightStatusBar`).
+- **Colours:** the view's own fixed light colours are a new `introduction` token group in `src/theme/colors.ts`
+  (blue `#0D52FF`, ink `#080A33`, body `#4A5980`, and the four card fills at 7%). Nothing is hard-coded in the
+  view.
+- **Artwork:** pre-cropped once, with Swift's crop rectangles, into `assets/introduction/`: `page-1…4.jpg` (784 px
+  wide, JPEG q88) and four `feature-*.png` icons. That is 512 KB in total, against 7.9 MB of source PNGs that Swift
+  crops at runtime. **This needs a new build** (bundled assets).
+- **Deviation:** the "NexDo" mark on page 1 uses the ✦ glyph in the intro blue. SF `sparkle` is a single
+  four-point star and Ionicons only has the three-star `sparkles`. Swift's subtle `blue.gradient` on the star
+  isn't reproduced.
+- **Not checked on a device:** this Windows machine can't run the Android emulator (no hypervisor driver), and no
+  phone was attached, so the pages haven't been compared on screen with the captures. Dark mode isn't relevant:
+  the screen is always light, as in Swift.
+- Tests: `src/__tests__/introduction.test.tsx` (copy, paging by Next, dots and swipe, the three ways out, the route
+  marking it seen); `session-gate.test.tsx` (introduction vs sign-in, the splash while reading, a signed-in session
+  marks it seen); `sign-in.test.tsx` (Create Account opens once from the param).
+
+## 52. Phase 14 / A2: Create Account redesign and its security check (2026-10-30)
+
+`SignUpView` as of `35c86e3` (RootView.swift:618-797; 8e171aa, afe0430, a80c206, 8592a0a, 310f1ab), against `sign-up-v4`,
+`-scrolled`, `-keyboard`, `-filled` and `-passwords-mismatch`. File `app/(auth)/sign-up.tsx`.
+
+- **Layout as Swift:** no navigation title, only Cancel (`(auth)/_layout.tsx` title `''`). On the grouped background
+  with the 7%/6% blue→purple wash: `NexdoLogoMark` 64×54 + "NexDo", then "Less on your mind. More done in your day.",
+  "Create your account" (title, bold) and "Your tasks, plans, and everyday life — together.". The card (radius 28,
+  indigo 10% hairline, padding 20) holds four captioned fields: Full name / "Your name", Email address /
+  "you@example.com", Password, Confirm password. Each is a radius-14 box on `tertiarySystemGroupedBackground` with
+  its icon. Under the card: "We protect your password and never store a readable copy." and the red error line.
+- **Pinned bar:** Create Account → (56 pt, radius 18, blue→indigo→purple) above "Already have an account? Sign In",
+  in a bar that rides above the keyboard (`sign-up-v4-keyboard`). When disabled it is `tertiarySystemFill` with
+  secondary text. While working it shows a spinner and "Creating Account…". **Phase 14 change:** that now covers the
+  whole of `checkingSignup` (account check, security check and register), not only the register call. The Sign In
+  line is disabled while working.
+- **Gate:** name, an "@", a password of 1–72 UTF-8 bytes, equal to the confirmation (`canCreate`). A mismatch only
+  keeps the button grey, with no message, as in `sign-up-v4-passwords-mismatch`.
+- **Security check (`src/lib/signupChallenge.ts`):** it no longer turns every failure into "Please complete the
+  security check…":
+  - A challenge that doesn't come back (cancel, browser won't open, wrong state, no token) shows "Security check
+    cancelled. Tap Create Account to try again.". Swift does the same for all of these (§24 bug 10, kept).
+  - A `signup-config` failure shows the server's text, including the new 503.
+  - `preferEphemeralSession: true` (iOS only; Android Custom Tabs have no consent prompt).
+  - **Swift bug 11 fixed on Android:** a required check with no site key shows "Account security checks are
+    temporarily unavailable. Please try again shortly.", not Swift's calendar-connection message.
+- **New tokens:** `tertiaryGrouped` (elevated in a sheet) and `tertiaryFill`, in both palettes.
+- **Android polish (decisions):**
+  - The field icons and the focused field's border use `accent`: indigo in light, and the readable blue in dark
+    (§6/§7). Swift keeps `nexdoIndigo` in dark, which is about 2:1 on the dark field.
+  - The bar is `barSurface` with the Android top hairline (`androidBar`), standing in for `.regularMaterial`, and is
+    padded by the navigation bar's inset.
+  - The card gets elevation 1 in place of the iOS shadow.
+  - On iOS the email placeholder is drawn as a blue link (a data-detector quirk in the captures). Android draws it
+    in the normal placeholder colour.
+- **Removed:** the old intro line, "Your password is sent securely…", the closing "Nexdo captures tasks…" copy, and
+  the field-icon tiles (§11), all gone from Swift.
+- **Not checked on a device** (see §51), in light or dark. There's no dark capture of this screen either. Dark
+  uses the elevated palette tokens.
+- Tests: `sign-up.test.tsx` (rewritten: copy, gate, grey/gradient button, mismatch quiet, 72 bytes, the Android
+  focus border, the create order, "Creating Account…", cancel and server text), `android-auth.test.tsx` (the bar's
+  inset and surface), `signupChallenge.test.ts` (the three error kinds, ephemeral session).
+
+## 53. Phase 14 / A3: "Account already exists" and the reset sheet from it (2026-10-30)
+
+`sign-up-existing-account-alert`, `password-reset-from-sign-up` (RootView.swift:728-737, :759-769, :778-791).
+
+- **When it asks:** on leaving the email field (`checkEmail`: trimmed, lowercased, has "@", not while creating,
+  only if the field still holds that address, silent on failure), when `create()`'s `account-exists` says yes
+  (before the security check or registering), and on register's 409 (§44). An existing account never shows the
+  red error line.
+- **Alert:** "Account already exists" / "We already have an account with this email address. Do you want to reset
+  the password?", with **Yes, reset password** and **No** (cancel). Yes clears both password fields and opens
+  Reset password over Create Account with the address filled in (`PasswordResetView(initialEmail:)`). No changes
+  nothing.
+- **Android-specific:** at most one of these alerts is up at a time. Android stacks dialogs, where SwiftUI's one
+  `isPresented` flag can't, so a blur check and `create()` landing together would otherwise show two.
+- **Commit note:** this ships in the same commit as §52, because it is `create()`'s flow in the same file. The reset
+  sheet's own changes (footer, gate, 404) are §54.
+- Tests: `sign-up.test.tsx` "Account already exists" (account-exists yes, 409, Yes and No, the blur check and its
+  three quiet cases, a changed address, no stacking).
+
+## 54. Phase 14 / A4: Reset password — the unregistered-email message (404), footer and gate (2026-10-30)
+
+`PasswordResetView` (RootView.swift:798-870; 60212f3, a80c206), against `password-reset-v4` and `password-reset-from-sign-up`.
+File `app/(auth)/reset-password.tsx` (also the signed-in route `app/account/reset-password.tsx`).
+
+- **404:** "We don’t have an account with this email address. Check the address or create an account." (the
+  server's text, §44's `unknownEmail`) shows in red in the error row under the email, and the screen stays on its
+  first step. A later send that works clears it.
+  **Swift bug 9 doesn't happen on Android:** Swift also puts the same text in the root "Unable to complete request"
+  alert, so it can appear twice. RN has no root alert for the reset calls, so the text appears once.
+- **Footer** (both platforms): "Enter your account’s email address. We’ll send a six-digit code that expires after
+  15 minutes." It no longer says "if an account exists".
+- **Gate:** Update Password needs six digits and a password of 1–72 UTF-8 bytes (`utf8Length`, as sign-up uses).
+  The stale "at least twelve characters" comment is gone.
+- **Opened from "Account already exists"** (§53): the address comes in through the route's `email` param, as from
+  Sign in's "Forgot password?". The sheet opens over Create Account.
+- The §12 Android look (gradient buttons, field row with the envelope tile) is unchanged.
+- **Not checked on a device** (see §51).
+- Tests: `reset-password.test.tsx` "Reset password, Phase 14": the address filled in and the new footer on both
+  platforms; the 404 in `danger`, once, staying on step one and clearing on success; the 72-byte gate on both
+  platforms.
+
+## 55. Phase 14 / A5: Calendar "Connect your calendar" sheet — built from Swift source, no capture (2026-10-30)
+
+`calendarConnectionPrompt` (CalendarView.swift:215-324; fbce45b, 9acb39a). **There is no capture of this sheet:** the
+capture account has Google connected (§24 inventory). The layout comes from the Swift source alone and has not been
+compared with an iPhone render, or with an Android device (see §51).
+
+- `src/features/calendar/ConnectCalendarPrompt.tsx`, mounted at the end of `app/(tabs)/calendar.tsx`. When it shows
+  is §49's `useCalendarConnectOffer`.
+- **Content as Swift:** `calendar.badge.plus` at 42 pt in the calendar accent, in a 12% circle (an Ionicons
+  calendar with a small add badge); "Connect your calendar" (title2, bold); the body copy; the footnote; then a
+  bottom area with **Yes, connect calendar** (a capsule at least 50 pt high, white headline, on the deep
+  blue→indigo→red gradient that Swift picked to read in both appearances) and **Not now**. Ids
+  `calendar-connect-prompt`, `-yes` and `-dismiss`, as Swift.
+- **Yes** closes the sheet and opens Settings scrolled to the calendars card, the same route as the Calendar gear
+  (`/account/settings?calendars=1`, `ProfileSettingsView(openCalendarSettings: true)`). **Not now**, Back, or a tap
+  outside just close it, and §49 keeps it closed for that account.
+- **Copy (Android):** Swift's "Google, Apple or Outlook" and "Apple Calendar displays…" become "Google, phone or
+  Outlook" and "Phone calendar displays…", following the existing platform copy (`deviceCalendarCopy`, §33, §37,
+  §42). iOS keeps Swift's words. **Confirmed (2026-10-30):** it matches the existing Android "Phone calendar"
+  label, so there is nothing for Sri.
+- **Presentation:** Swift uses a `[.medium, .large]` sheet with a drag indicator. On Android it is a bottom sheet
+  sized to its content (radius 28, a grabber, the 35% scrim used by the other Android sheets) that closes on a tap
+  outside. iOS uses a page sheet, because RN's `Modal` has no medium detent.
+- **Tokens:** the capsule's two Swift colours are `calendarConnectGradient` in `src/theme/colors.ts`. Everything else
+  uses the palette, and dark uses the elevated palette. Swift's dark accent for the badge comes from
+  `calendarAccent`, as on the tab.
+- Tests: `calendar.test.tsx` "Calendar connect offer": shown with nothing connected; Yes goes to Settings at the
+  calendars card; Not now closes it; hidden when connected; copy on iOS and on Android; a tap outside closes it on
+  Android.
+
+## 56. Phase 14 / A6: Review prompt hook-up (2026-10-30)
+
+`AppReviewPromptModifier` and `recordFirstLaunch` (AppReviewPrompt.swift:27-58, NexdoApp.swift:18, RootView.swift:139-142;
+bfa5b73) on top of §47's schedule. There is no capture: it's system UI and needs a Friday after 17:00.
+
+- **First launch:** the root layout calls `recordFirstLaunch()` once at launch, alongside the other device stores.
+  It writes only if nothing is stored, so updates never reset it.
+- **The check:** `useReviewPrompt()` (`src/features/review/useReviewPrompt.ts`) runs in `app/(tabs)/_layout.tsx`,
+  so only signed-in. While the app is active and the tabs are the focused root screen, every 30 seconds (the first
+  check after 30 s, as Swift's `sleep` comes first) it calls `consumeReviewOpportunity()`. If that says yes, it
+  calls `requestStoreReview()` (Play In-App Review on Android). The week is already stored by then. The loop starts
+  over whenever the app becomes active or the tabs regain focus, as Swift's `.task(id:)` does.
+- **Swift's "nothing over the tabs, no busy state" mapped to RN:**
+  - `presentedViewController == nil` becomes the tabs having focus in the root stack. Ask, a reminder action
+    (Swift's `taskActions.route`), Account, the wellness covers and the root sheets all take that focus away.
+    Pushes inside a tab's own stack don't, as in Swift.
+  - The keyboard check is `Keyboard.isVisible()`.
+  - **Deviation:** `model.busy` and `model.error` have no single RN equivalent (requests are per-screen queries
+    and errors are inline), so they aren't checked.
+  - Only one check runs at a time.
+- **Android behaviour to know:** Play limits how often the sheet shows and doesn't report whether it did, so a
+  "yes" week may show nothing. It never shows on internal test tracks. The week is used either way, as on iOS.
+- `jest.setup.js` mocks `expo-store-review` globally (unavailable, so no request).
+- **Needs the new native build** from §47. Not checked on a device: this machine can't run the emulator, and the
+  sheet needs a Play-installed build on a Friday evening.
+- Tests: `src/features/review/__tests__/useReviewPrompt.test.tsx`: the first request at 30 s and not before, the
+  week stored, once per week, waiting while something is over the tabs, while the keyboard is up or while the app
+  is in the background, and nothing outside Friday evening. `tabs-layout.test.tsx` mocks the hook.
+
+## 60. Phase 14 Run B (Mac): Wellness (2026-10-30)
+
+The §24 Wellness rows of `docs/IOS_TO_REACT_NATIVE.md` (Phase 14 status), built from the Swift source and the
+Phase 14 captures (`mobile/docs/reference/ios/*-v4*`) on `rn-phase-14-mac`, in light and dark. Sections from §60
+up are the Mac's in this phase, so they do not clash with the Windows run's. One commit per row; the rows'
+"Built" boxes in `docs/IOS_TO_REACT_NATIVE.md` are outside `mobile/` and were left for the merge. Nothing was
+saved, sent, called or paused on app-dev. Tests: `src/features/wellness/__tests__/phase14.test.tsx` unless a
+row says otherwise.
+
+| §24 row | Swift source | Built | Deliberate Android difference |
+|---|---|---|---|
+| `Color.wellnessAccent` | WellnessAppearance.swift:1-10 | Theme token `wellnessAccent`: #3D29F0 light, #BAABFF dark, for the Wellness modules' text, controls and tints. `src/theme/colors.ts` | None. |
+| Wellness chooser: dark hero | WellnessChooserView.swift:70-87 (1a9a89a) | Dark only: a gold moon (#FFC740, Swift's (1, 0.78, 0.25)) at 62 in a 75 box, bottom-trailing 20 in, with two white sparkles (18 at (-17, -2) and 27 at (4, 16) from its top trailing corner), replacing the lilac `moon.stars.fill`. Light is unchanged. `WellnessChooser.tsx` | Ionicons' `moon` stands in for `moon.fill` and MaterialCommunityIcons' `star-four-points` for `sparkle` (closest glyphs). Checked against `wellness-chooser-v4-dark`. |
+| Module guides: pinned buttons | WellnessModuleGuide.swift:86-101 (897f14d) | **Got it!** and **Back to Home** leave the scroll view for a bar pinned at the bottom (12 above, 8 + the safe area below, 18 either side, 4 apart, 650 wide at most); the steps scroll under it. Still fixed light. `WellnessModuleGuide.tsx` | `.regularMaterial` is a fixed near-opaque pale grey, rgba(246, 246, 246, 0.94), with no blur: the guides are fixed light, so a themed or blurred material would break §23's "identical in Day and Night" check. Checked against `module-guide-calories-v4-scrolled`. |
+| Calorie Tracker: dark mode | CalorieTrackerView.swift:293-294, :365, :437, :472-478, :499, :512-522, :530, :561, :830 (ce6d20a) | The tracker and its food editor follow the theme. Ink `nexdoInk` (also a shade darker in light, #080F2E for #0F1247), page `systemBackground` under Swift's purple/blue wash, cards `secondarySystemGroupedBackground`, system fills for the segmented control, stepper and date pill. `wellnessAccent` on the unfilled step numbers, the radio checks, both switches and the insight's **Add to …** button. The dark intro art is a purple clipboard with a blue heart. The status bar is the root's (the forced-light one is gone). **Pause daily calls** asks "Pause daily calls?" with **Cancel** / **Pause**; only Pause saves. `parts.tsx` (`useCalorieColors`), `CalorieTracker.tsx`, `FoodEditor.tsx`, `app/wellness/calories.tsx`. Tests: `calorieTracker.test.tsx` | **Android ahead of iOS (2):** the Pause confirmation (§24 bug 1: Swift saves on one tap), and the **Confirm** page draws the same dark art as the intro (§24 bug 6: Swift's is a white box, `calorie-setup-confirm-v4-dark`). `heart.text.clipboard.fill` has no Ionicons or MaterialCommunityIcons glyph, so it is MCI `clipboard-text` (purple) with an Ionicons `heart` (blue) over it. The insight button's label is black on the lilac in dark (white is about 2:1 there). The food editor is a sheet, so it takes the raised sheet colours and `link` for Cancel / Add. |
+| Pomodoro setup and dashboard: dark mode | PomodoroView.swift:22, :40, :62, :99, :104, :115, :174; PomodoroDashboard.swift:18, :29, :57, :103, :129, :164, :263 (ce6d20a) | Timer, setup, completion, dashboard, history, insights and session details follow the theme (Swift dropped `.preferredColorScheme(.light)`). Ink `nexdoInk`; page `systemBackground` under the purple/blue wash; cards, the category list, the name field and the stepper `secondarySystemGroupedBackground`; metric tiles stroked with `separator` at 35% (was white); the stopwatch, the Focus legend, the switches, the menu icons, Done and Return to Timer in `wellnessAccent`; iOS's `.purple`, `.indigo`, `.blue`, `.pink` take their dark values. The forced-light status bar is gone. `colors.ts` (`usePomodoroColors`), `PomodoroView.tsx`, `PomodoroDashboard.tsx`, `charts.tsx`, `app/wellness/pomodoro.tsx`. Tests: `pomodoro/__tests__/screens.test.tsx`, `wellness/__tests__/statusBar.test.tsx` | The setup's − / + are the ink in dark, as `pomodoro-setup-v4-dark` draws them, and keep the indigo in light. The session-details sheet takes the raised sheet colours. Checked against `pomodoro-dashboard-v4-empty-dark`, `-month-dark`, `pomodoro-setup-v4-dark`. |
+| Important Moments and wishes: dark tint | ImportantMomentsView.swift:155, :206, :249, :261, :299, :321, :378, :413, :433, :514, :532, :569, :648, :670 (ce6d20a) | New `WellnessTint` (`src/theme/scheme.tsx`): inside it `useTheme` resolves `link`, `accent` (tint, border) and `switchOn` to `wellnessAccent`, so every Moments screen's tappables, filter capsules, status and delivery icons are lilac in dark and indigo in light, as Swift's `.tint(.wellnessAccent)`. Each `app/wellness/moments/*` route is wrapped (`withWellnessTint`); this commit wraps the list and the wish flow (`index`, `review`, `delivery`, `schedule-wish`, `wish`) and `manage-list` (for the shared count below). **Toolbar items** (the gear, Close, Cancel) ask `useTheme({ toolbar: true })` and keep the app's `link`: Ask blue (#6BB8FF) on Android in dark. **Need review count:** the Upcoming card and Manage Moments' Need Review tab both use `needReviewCount` (`domain.ts`): the groups Manage lists under Need Review, among the moments the card shows. Tests: `moments/__tests__/screens.test.tsx` "Phase 14" | **Android ahead of iOS (2).** §24 bug 4: Swift's back chevron and gear stay dark indigo on near-black; here the toolbar takes `link`. §24 bug 3 was **client-side**, not the server: Swift's card counts recipients (`displayed.filter(\.needsWishReview)`), leaves out paused moments, and Manage counts groups including paused ones, so one multi-recipient group read "11 … need review" beside "Need Review (10)". Both now count groups the Manage way; the card still narrows by search and type. Selected chips, the brand-gradient tab and other solid fills keep their indigo, as Swift's do. |
+| Manage Moments / Manage Moment / schedule review | ManageFestivalView.swift:35, :72, :86, :119, :165, :198, :268, :318, :390, :396-398, :495, :501, :531, :598, :648-650 (ce6d20a) | `manage` is wrapped in `WellnessTint` (Manage Moments was in the row above): the Details / Contacts / Wish Message / Schedule tabs' unselected labels, the recipient checks and the tag capsules are `wellnessAccent`; the selected tab keeps its indigo fill. Manage Moment's custom Back and "…" are toolbar items and keep `link`. **Review schedule, Edit recipient, Edit date & time and Schedule confirmed** drop `FixedScheme light`: `useScheduleDesign` gives `nexdoInk`, `nexdoSecondary`, `systemGroupedBackground`, `secondarySystemGroupedBackground` rows, `systemBackground` sheets (raised in dark) and fields one step above them. `manage.tsx`, `ManageMomentView.tsx`, `ScheduleReview.tsx`. Tests: `scheduleReview.test.tsx` "ScheduleDesign follows the theme" | Light changes slightly with Swift: the page is #F2F2F7 (was #F7FAFF), the ink #080F2E (was #0F1729), the secondary #575C80 (was #63738C). Checked against `manage-moments-v4-scheduled-empty-dark`, `-need-review-dark`, `manage-moment-v4-contacts-dark`, `-message-dark`, `-schedule-dark`. |
+| Moment editor, Moments settings, festivals | MomentEditor.swift:103, :233, :355 (ce6d20a) | `editor`, `import-editor`, `settings`, `festivals` and `calendar-import` are wrapped in `WellnessTint`, Swift's `.tint(.wellnessAccent)`: "Choose a contact birthday", "Connect / Reconnect Gmail", the Type / Date pickers and the festival checks are lilac in dark (`moments-settings-v4-dark`, `moment-editor-v4-create-dark`). The editor's Save and the import sheet's Close are toolbar items and keep `link`. Tests: `screens.test.tsx` "Phase 14" (settings in Night; the content-vs-toolbar resolution) | None beyond the toolbar rule of the rows above. |
+| Moments "Connect me on the day" guide | MomentConnectCall.swift:203, :386-450 (ce6d20a) | **Nothing to build.** Swift's new dark-aware colours sit inside a view still forced light (`:436`), so it looks the same; the RN guide (`MomentConnectSection.tsx`) is already fixed light. Logged here, no commit of its own. | — |
+| Shopping: store logos (finder, list settings, logo editor); List Settings | StoreBrandLogo.swift:17-18, :66, :86-95; ShoppingListLogoEditor.swift:11, :25, :39; ShoppingViews.swift:516-531, :642, :672-675, :700, :754-756 (ce6d20a) | Built on Windows' §45 (`brand` on `ShoppingStoreSuggestion`, `StoreBrandLogo`'s `suppliedBrand` / `automaticLookup`, merged in at `d2db2ef`). **Stores Near You** rows draw `StoreBrandLogo` at 48 with the row's `brand` and `automaticLookup={false}` (id `search-<place>`), the green cart without one, in place of the indigo storefront tile. **Retry:** an automatic lookup that answers with no logo asks again after 1 s and 2 s (`lookUp`), and stops if the view is gone. **List Settings** looks the logo up only while the draft store (name, website, place) is the saved one (`logoLookupAllowed`), on the button and in the Store Logo page. **Save on the detail screen** shows a store change only once the server has it (`storeChanged`). **Cancel** on the settings page closes and discards the draft. In dark, Save, Directions, Store Hours and Add New Store use `link` and Repeat weekly uses `switchOn` (Android's dark colours). `StorePages.tsx`, `StoreBrandLogo.tsx`, `ListSettings.tsx`, `LogoEditor.tsx`, `app/wellness/shopping/[id].tsx`. Tests: `stores.test.tsx` "Phase 14" | **Android ahead of iOS (2):** Cancel (§24 bug 2: Swift has only Save and the sheet cannot be swiped away), and Android's dark `link` / `switchOn` where Swift keeps dark indigo (§24 bug 5). Swift's save also puts the original list back when the save fails; Android keeps the edit with **Retry Save** / **Discard** (the existing list error bar), so that part is not ported. The Store Logo editor in dark was not captured (§24); it already follows the theme. |
+| Shopping list: Recommendations label | ShoppingViews.swift:404-406 (61788dc) | The Recommendations label and its sparkles take `nexdoActionForeground`: white in dark, the brand indigo in light (`shopping-list-detail-v4-dark`). `components.tsx` (`ShoppingActionBar`). Tests: `actionBar.test.tsx` "Recommendations label colour" | Resolved in place rather than as a theme token, since `nexdoActionForeground` belongs to the Account and Settings row of another run; it can move to the theme when that lands. |
+
+**Not built in this run:** the rest of §24 (outside the Wellness rows). **Tests**, after merging `origin/rn-phase-14`
+(`d2db2ef`, which needs `npm install` for `expo-store-review`): `npx jest` 196 suites, 2,828 tests, all passing;
+`npx tsc --noEmit` clean; ESLint clean on every file touched. Nothing was saved, sent, called or paused on app-dev.
+
+## 57. Phase 14 / C0: The calendar offer stays answered — ANDROID AHEAD of Swift bug 14 (2026-10-30)
+
+Decision on Run A, 2026-10-30. §24 Swift bug 14: "Not now" lives in view state only, so the offer comes back on
+every cold launch.
+
+- **ANDROID AHEAD — Swift bug fixed on Android.** Once the offer is answered, it isn't shown again on that device for
+  that account. "Answered" covers every way out of the sheet: Not now, Back, a tap outside, and Yes, connect
+  calendar. Yes counts because it opens Settings, which is a response. Stored in AsyncStorage as
+  `nexdo.calendarConnectOffer.answered.<user id>` = `'true'` (`calendarOfferAnswered`,
+  `rememberCalendarOfferAnswered` in `connectOffer.ts`).
+- **Never answered** (the app closed with the sheet up, or the check never got to show it): nothing is stored, so
+  it's offered again on the next launch, as before.
+- An answered account skips the connections refresh too. Other accounts on the same device are unaffected.
+- §49's in-session rule (once per account while the tab stays mounted) still applies.
+- Tests: `connectOffer.test.tsx` "the offer after a relaunch" (answered: no offer and no request after a relaunch;
+  unanswered: offered again; stored per account), and `calendar.test.tsx` (Yes is remembered as an answer).
+
+## 58. Phase 14 / C1: Today — the clear schedule creates a task (2026-10-30)
+
+§24 "Today: empty schedule creates a task" (9acb39a; RootView.swift:1697-1707, :1738-1752), captures `today-v4-empty-schedule`, `-dark`.
+
+- "Your schedule is clear / Add a task or enjoy the open space." is now a button: `today-empty-schedule-create-task`,
+  with label "Your schedule is clear. Create a task" and hint "Opens the manual task creation screen". It opens
+  Create New Task (`/task/new`, the RN `TaskEditor(task: nil)`) from `app/(tabs)/(today)/today/index.tsx` through
+  the card's new `onCreateTask`. It dims while pressed, standing in for SwiftUI's plain button highlight.
+- The search's "No matching tasks" stays static, as in Swift. The look is unchanged in light and dark: same icon,
+  copy and spacing, now in a `Pressable` (the `EmptySchedule` helper).
+- Tests: `TodayIntelligenceCard.test.tsx` "the empty schedule" (the button with its label and hint calls
+  `onCreateTask`; static while searching).
+
+## 59. Phase 14 / C2: Create New Task gets the voice button (2026-10-30)
+
+§24 "Tasks and task editor: voice entry" (61788dc, fb29e95; RootView.swift:2242-2243, :2353-2362), capture
+`task-editor-v4-from-today`, `-dark`.
+
+- `app/task/new.tsx` puts a microphone (`mic.fill` → Ionicons `mic`, in `link`) in the header's trailing slot
+  through `<Stack.Screen options={{ headerRight }}>`. It's `TaskEditorVoiceButton`: label "Add task by voice",
+  id `task-editor-voice`, 44 pt target. A press dismisses the keyboard (`focusedField = nil`) and pushes
+  `/task/voice-capture`, Add by Voice in task mode, over the editor. It's disabled (40% opacity) while the task is
+  being created (`model.busy`).
+- **"A new presentation id every time":** each press pushes a new voice screen, so every open is a new session.
+  The Tasks screen's Add by Voice already pushes the same way.
+- **Swift bug 13 doesn't apply:** in Swift the mic also appears when *editing* a task and opens a new-task session
+  over unsaved edits. RN's `/task/new` only creates tasks (existing ones are edited in Task Details), so the mic is
+  only ever on Create New Task.
+- iOS 26 draws the mic in a glass circle. Android and RN iOS draw a plain header icon in `link`, like the header's
+  "Close".
+- **Not checked on a device** (see §51).
+- Tests: `task-editor.test.tsx` "Create New Task: Add task by voice" (label; dismisses the keyboard; each press
+  pushes a fresh voice screen; disabled while creating). Four other editor tests gained `Stack.Screen` in their
+  `expo-router` mocks.
+
+## 61. Phase 14 / C3: Ask AI landing — follows the theme, new caption, keyboard button (2026-10-30)
+
+§24 "Ask AI landing" (61788dc; AskAILandingView.swift:59-67), captures `ask-ai-landing-v4`, `-dark` and
+`-keyboard-focus-dark`. File `src/features/ask/AskLanding.tsx`.
+
+- **Dark mode follows the theme now. This reverses §24 (Phase 12)'s "fixed light" landing.** It was fixed because
+  Swift's landing faded to `.white` under `nexdoInk`, which is white on white in dark. The `-dark` capture shows
+  Swift now draws a proper dark landing, so RN uses the theme: the base and the gradient's last stop are
+  `background`; ink, secondary and placeholder come from the theme; the close circle is `surface` at 80%
+  (`secondarySystemGroupedBackground.opacity(0.8)`); and the field row is `surface`. The pastel cards, the voice
+  panel, the mic gradient, the orb and the indigo send button are unchanged, as in Swift. "Powered by Nexdo AI"
+  gets its 65% as view opacity, because the dark secondary is already translucent.
+- **Status bar:** the landing no longer draws the fixed dark bar, so the root bar follows the theme there (light
+  icons in dark). The Daily Brief is still fixed light (§24 lists no change to it) and keeps the focus-gated dark
+  bar from QA M-04 (§43). `AskNexdoView` draws the white base only behind the brief.
+- **Copy:** the voice caption is "Tap to start a voice conversation" (was "Tap and speak naturally. I’m
+  listening…").
+- **Voice card:** at least 160 pt tall, content centred.
+- **Keyboard glyph:** now a button (label "Type your request", the hint "Puts the cursor in the request field",
+  id `ask-landing-keyboard`) that focuses the field, as Swift's `typing = true`. Swift gives the button and the
+  field the same label (§24 "Duplicate accessibility label"). RN keeps the label and adds the hint so TalkBack
+  can tell them apart.
+- **Not checked on a device** (see §51), in light or dark.
+- Tests: `ask.test.tsx` (the new caption; the keyboard glyph focuses the field; the 160 voice card; dark ink,
+  base and placeholder; the theme base in light; the status bar is left to the root on the landing and dark on
+  the brief only while focused).
+
+## 62. Phase 14 / C4: Voice sessions — fresh opens, Start listening, the visibility guard (2026-10-30)
+
+§24 "Ask Nexdo: voice reopen", "Add / Ask by Voice: session lifetime" and "VoicePlayback" (61788dc, dc6445c, 7b37ab1).
+**No captures exist** (each starts a live, paid session). Built from the Swift source alone (AskNexdoView.swift:455-460;
+AddTaskByVoiceView.swift:34-69, :105-112, :315-341; VoicePlayback.swift).
+
+- **Ask's `openVoice()`:** every voice entry now drops focus (`Keyboard.dismiss()`), stops read-aloud, and pushes
+  `/ask/voice`. A push is a new screen and a new session each time, which is Swift's new `voicePresentationID`.
+  There is one entry point (`openVoice`), used by the landing card and the composer mic.
+- **One lifetime for the session's parts (7b37ab1, `VoiceSessionResources`): already true in RN.**
+  `useVoiceSession` builds the conversation, transport, executor and usage meter in one effect and tears them
+  down together. Nothing to change.
+- **`start()` is restartable and guarded** (`src/voice/useVoiceSession.ts`): `guard !starting, voice.phase ==
+  .idle`, so repeated taps open one session and never a second over a live one. It clears the last error first.
+  The hook returns it as `start`.
+- **`guard isVisible` (dc6445c) — a real fix on Android too:** RN used to call `conversation.start(credential)`
+  even if the screen had closed while the credential loaded, which opened a microphone session behind the user's
+  back. It now stops if the screen has gone, after the time-zone sync and after the credential.
+- **Start listening** (`voice-start-listening`) shows when the session is idle, not starting, the microphone isn't
+  refused and there's no startup error. A press runs `start()`, or asks for consent again if it was never given
+  (`else { consent = true }`). It's a filled `tint` button, as Open Settings is.
+- **"Voice setup was interrupted. Try again to start listening."** (`START_INTERRUPTED`) is shown in red when
+  startup is cancelled while the screen is still open. **Note:** in RN a cancel only comes from the screen closing
+  (`PermissionCancelled`), so this can't currently appear. It's kept as Swift's guard, in case another
+  cancellation path is added later.
+- **VoicePlayback: nothing to port.** Swift's fix stops an idle player from deactivating the shared
+  `AVAudioSession` under a live WebRTC microphone. RN never activates or deactivates the audio session itself
+  (no `setAudioModeAsync` or `setIsAudioActiveAsync` calls); expo-audio's player manages its own. So the bug has
+  no RN counterpart.
+- **Not checked on a device** (see §51).
+- Tests: `useVoiceSession.test.tsx` "useVoiceSession start" (no session after the screen closes mid-credential;
+  one start for two taps and none over a live session; start again from idle clears the error) and
+  `voice-screens.test.tsx` "Start listening" (starts; hidden while listening or starting, after an error, or
+  with the microphone refused; the interrupted text in red; asks for consent again).
+
+## 63. Phase 14 / C5: Account and Settings — `actionForeground`, white in dark (2026-10-30)
+
+§24 "Account menu and Settings: night foregrounds" (61788dc, d05a379; ProfileView.swift:105, :122, :159, :285, :293, :298,
+:540, :568, :590, :605-614; RootView.swift:1120), captures `account-v4`, `-dark`, `settings-v4-dark`, `-scrolled-1…4-dark`.
+
+- **New palette token `actionForeground`:** the brand indigo `#3D29F0` in light, `#FFFFFF` in dark
+  (`Color.nexdoActionForeground`).
+- **My Page** (`.tint(.nexdoActionForeground)` on the whole view): the close xmark, the menu-row icons
+  (`AccountMenuRow`) and the voice-minutes total (`VoiceUsageCard`).
+- **Settings** (`.tint` on the whole view, plus explicit uses): every action that used `link` now uses
+  `actionForeground`. That covers the back chevron, Change photo and its message, the two pickers' values and
+  chevrons (`SettingsPicker` gained an optional `tint`), Open Notification Center, Connect Calendar, Synchronize
+  now, Withdraw AI permission, the privacy and terms links, "Settings saved.", the retry and reconnect buttons,
+  Manage calendars and the spinners. Delete account stays red; the toggles stay green.
+- **Decision (supersedes §6 on these two screens):** on Android in dark, `link` is the Ask blue (§6/§7). Swift
+  chose white here on purpose, so Account and Settings follow Swift; other screens keep the §6 rule. The
+  `settings` Android test that pinned the Ask blue now pins white.
+- Shopping's Recommendations label (Run B, `c2a78f9`) had its own local copy of this colour; it now reads the token.
+- **Not checked on a device** (see §51).
+- Tests: `account.test.tsx` — Settings actions white in dark and indigo in light (text and picker value), Delete
+  account still red; My Page's voice minutes in white and indigo.
+
+## 64. Phase 14 / C6: Change password — confirmed, and My Page's tint (2026-10-30)
+
+§24 "Change password" (a80c206), capture `change-password-v4`. §24 already had this ticked.
+
+- **Confirmed against Swift and the capture:** the footer "Choose a password (72 bytes maximum). You’ll need to sign
+  in again after changing your password.", no 12-character minimum, and the gate (`passwordChangeValid`: a current
+  password, a new one of 1–72 UTF-8 bytes, confirmed, and different) were already right. No change.
+- **New in Run C:** Change password is pushed inside My Page's `NavigationStack`, which has
+  `.tint(.nexdoActionForeground)` (61788dc), so its default-tinted controls are white in dark. "Forgot password?"
+  (`FormButton` gained an optional `tint`, so Moments is untouched) and the back chevron now use `actionForeground`.
+  The back chevron is `InlineNavBar`, used only by the three screens pushed from My Page, so Help and Feedback's
+  back chevrons follow too, as in Swift.
+- **Not changed:** the rest of Help's own links (eight `link` uses in `HelpScreen.tsx`). §24 doesn't list Help, and
+  there's no Phase 14 dark capture of it, so they keep §6's colour until Help is re-captured.
+- Tests: `changePassword.test.tsx` "Change password, Phase 14" (footer and 72-byte gate; "Forgot password?" and the
+  back chevron in white at night and indigo by day).
+
+## 65. Phase 14 / C7: Settings' time-zone sync — ANDROID AHEAD of Swift bug 12 (2026-10-30)
+
+§24 "Account menu and Settings" (5def56e, d05a379; ProfileView.swift:310-315, :645-647) and Swift bug 12. RN Settings
+didn't call `synchronizeDeviceTimeZone` at all (§24: "Not ported").
+`src/features/account/useSettingsTimeZoneSync.ts`, mounted in `app/account/settings.tsx`.
+
+- **On open:** syncs the device zone (`synchronizeDeviceTimeZone`: PATCH `{ timeZone }` only when the account's zone
+  differs, then reload `/api/me`), as Swift's `load()` does first.
+- **ANDROID AHEAD — Swift bug 12 fixed on Android:** Swift runs the sync in the same `do` as the profile load, so a
+  failed PATCH leaves Settings on "Retry loading settings", and every retry repeats it. On Android the sync runs
+  beside the load and **never blocks or fails it**. Settings shows the profile it already has, and a failure on
+  open is silent there. **Decision (why silent):** the root layout already reports a failed sync ("Couldn’t
+  synchronize your device time zone…") each time the app returns to the foreground, and Settings' Save sends the
+  device zone anyway, so another alert on open would only repeat it.
+- **Re-sync on a zone change while Settings is open** (Swift's `NSSystemTimeZoneDidChange`): React Native has no
+  zone-change event, so Settings compares the device zone once a minute and syncs again when it changes. A failure
+  there goes to Settings' "Could not update profile" alert with the error's text, as Swift's
+  `failure = error.localizedDescription` does. A change made while the app was in the background is already synced
+  by the root layout on return. It stops when Settings closes, and does nothing signed out.
+- Tests: `src/features/account/__tests__/useSettingsTimeZoneSync.test.tsx` (sync on open; a failed first sync stays
+  quiet; nothing signed out; re-sync only on a change; a failed re-sync is reported; stops on close) and
+  `account.test.tsx` (Settings mounts it for the account. The other Settings tests mock it, because its PATCH would
+  land in front of the saves they count).
+
+## 66. Phase 14: phone check on the OnePlus (CPH2691), dark mode (2026-10-30)
+
+A debug build from `5dceb7f` on a OnePlus CPH2691 (Android, 1080×2376), system dark mode, against app-dev, with the
+account signed in. Then the app was reinstalled for a true first install. Nothing was saved, sent, called, paused or
+deleted: Pause daily calls → **Cancel**; List Settings → **Cancel**; "Account already exists" → **No**; Settings was
+left with hardware Back, which doesn't save. No account was created; the existing-account check is read-only.
+
+- **Fixed — introduction artwork cropped about 2×.** With `width` plus `aspectRatio`, the `Image` kept the bundled
+  JPEG's own height (1135 px read as dp), so `resizeMode="cover"` cut each page's art down to its middle (page 1
+  showed only the calendar and the check card). Each page's art now gets an explicit `height: width / aspect`, and
+  the feature icons `85 / aspect`. After the fix, all four pages match `install-intro-1`…`-4`. Test:
+  `introduction.test.tsx` "sizes each page’s artwork…".
+- **Passed, no change:** introduction pages 1–4 and Get Started → Create Account; Create Account in dark; "Account
+  already exists" on leaving the email field (No keeps the form); Today's clear schedule opens Create New Task;
+  the editor's mic in the header; the dark Wellness chooser's gold moon; the Calorie Tracker and Shopping guides
+  (fixed light, pinned buttons); Calorie Tracker in dark and Pause → "Pause daily calls?" → Cancel (still "Daily
+  call at 8:00 PM"); List Settings' Cancel; the Ask AI landing in dark (light status-bar icons, the new caption,
+  the keyboard glyph opens the keyboard); My Page and Settings with white actions.
+- **Not an app issue:** the gear circle seen over the top-right of several screens (over the editor's mic and over
+  Skip) is the Expo dev client's floating tools button. It isn't in release builds.
+- **Install note:** `pm clear` is refused over adb on this OnePlus, so the first-install state came from uninstalling
+  and reinstalling the debug APK. The phone asks to confirm a USB install the first time.

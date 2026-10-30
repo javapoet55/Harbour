@@ -1,5 +1,5 @@
 import { getApiUrl } from '../config';
-import { createApiClient, type ApiClient } from './client';
+import { createApiClient, isApiError, messages, type ApiClient, type ApiError } from './client';
 import type {
   AppleAuthResponse,
   AssistantRequest,
@@ -58,6 +58,35 @@ export function resetApi(): void {
   signedOutHandler = undefined;
 }
 
+/** The register 409's own text (`ACCOUNT_EXISTS`, src/lib/http.ts), for a 409 that arrives without it. */
+export const ACCOUNT_EXISTS_MESSAGE = 'An account with this email already exists. Sign in or reset your password.';
+/** The reset request's 404 text (`RESET_ACCOUNT_NOT_FOUND`, src/lib/http.ts), for a 404 without it. */
+export const RESET_UNKNOWN_EMAIL_MESSAGE = 'We don’t have an account with this email address. Check the address or create an account.';
+
+/** The server's own message, unless the client fell back to its generic text for this status. */
+function serverText(error: ApiError, fallback: string): string {
+  return error.message.trim() === '' || error.message === messages.response(error.status) ? fallback : error.message;
+}
+
+/**
+ * Register's existing-email answer (8592a0a: a 409, where it used to be a fake 201), as a typed result
+ * rather than an error. `create()` catches `APIError.server(409, _)` and shows "Account already exists"
+ * (RootView.swift:790-791). `null` for every other failure.
+ */
+export function accountExistsConflict(error: unknown): { message: string } | null {
+  if (!isApiError(error) || error.status !== 409 || error.code !== undefined) return null;
+  return { message: serverText(error, ACCOUNT_EXISTS_MESSAGE) };
+}
+
+/**
+ * The reset request's unknown-email answer (60212f3: a 404 with `RESET_ACCOUNT_NOT_FOUND`), as a typed
+ * result. `null` for every other failure.
+ */
+export function unknownResetEmail(error: unknown): { message: string } | null {
+  if (!isApiError(error) || error.status !== 404 || error.code !== undefined) return null;
+  return { message: serverText(error, RESET_UNKNOWN_EMAIL_MESSAGE) };
+}
+
 /**
  * The auth endpoints, matching `AppModel` (ios/App/NexdoApp.swift:156–216). Every one of them passes
  * `signedOutOn401: false`: on these routes a 401 means the credentials were wrong, not that a session
@@ -66,6 +95,13 @@ export function resetApi(): void {
 export const endpoints = {
   login: (email: string, password: string, client: ApiClient = getApi()) =>
     client.post<LoginResponse>('/api/auth/login', { email, password }, { signedOutOn401: false }),
+
+  /**
+   * `AppModel.signupAccountExists` (NexdoApp.swift:197-201, 8592a0a): no session and no Turnstile. The
+   * server answers only `{ exists }` (src/app/api/auth/account-exists/route.ts:7-15).
+   */
+  accountExists: (email: string, client: ApiClient = getApi()) =>
+    client.post<{ exists: boolean }>('/api/auth/account-exists', { email }, { signedOutOn401: false }),
 
   register: (name: string, email: string, password: string, client: ApiClient = getApi(), turnstileToken?: string) =>
     client.post<RegistrationResponse>('/api/auth/register', { name, email, password, ...(turnstileToken ? { turnstileToken } : {}) }, { signedOutOn401: false }),

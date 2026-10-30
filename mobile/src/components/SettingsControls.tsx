@@ -265,14 +265,18 @@ export function SettingsPicker<T extends string | number>({
   value,
   onChange,
   testID,
+  tint,
 }: {
   label: string;
   options: readonly { value: T; title: string }[];
   value: T;
   onChange: (next: T) => void;
   testID: string;
+  /** The value's colour (`.tint(...)` on the picker or the screen). `link` unless the screen says otherwise. */
+  tint?: string;
 }) {
   const theme = useTheme();
+  const valueColor = tint ?? theme.colors.link;
   const [open, setOpen] = useState(false);
   const current = options.find((option) => option.value === value);
 
@@ -292,12 +296,12 @@ export function SettingsPicker<T extends string | number>({
         <Text style={[theme.typography.body, styles.grow, { color: theme.colors.ink }, isAndroid() && styles.androidRowLabel]}>{label}</Text>
         <Text
           numberOfLines={isAndroid() ? 1 : undefined}
-          style={[theme.typography.body, { color: theme.colors.link }, isAndroid() && styles.androidRowValue]}
+          style={[theme.typography.body, { color: valueColor }, isAndroid() && styles.androidRowValue]}
           testID={`${testID}-value`}
         >
           {current?.title ?? ''}
         </Text>
-        <TaskSymbol color={theme.colors.link} name="chevron.up.chevron.down" size={13} />
+        <TaskSymbol color={valueColor} name="chevron.up.chevron.down" size={13} />
       </Pressable>
 
       <Modal animationType="fade" onRequestClose={() => setOpen(false)} transparent visible={open}>

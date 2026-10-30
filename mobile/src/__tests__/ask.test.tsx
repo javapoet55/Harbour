@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
-import { StyleSheet } from 'react-native';
+import { StyleSheet, TextInput } from 'react-native';
 
 import type { AssistantTurn, NexdoTask } from '../api';
 import { useAssistantStore } from '../store/assistant';
@@ -38,6 +38,8 @@ jest.mock('../api', () => ({
 import Ask from '../../app/ask/index';
 import { AskNexdoView } from '../components/AskNexdoView';
 import { briefHandlers } from '../features/ask/briefHandlers';
+import { useAppearance } from '../store/appearance';
+import { palettes } from '../theme';
 
 const BRIEFING = 'Give me my full day briefing for today: priorities, deadlines, conflicts, and my next move.';
 const TOP_THREE = 'Pick my top 3 focus tasks, ranked by urgency, estimated effort, and impact.';
@@ -100,19 +102,30 @@ beforeEach(() => {
 });
 
 /**
- * QA M-04: the landing's dark status bar must not outlive Ask's focus. Left mounted under another screen,
- * it overrode the root bar and kept the clock and battery dark over the night theme.
+ * QA M-04: the Daily Brief's dark status bar must not outlive Ask's focus. Left mounted under another screen,
+ * it overrode the root bar and kept the clock and battery dark over the night theme. Since Phase 14 the
+ * landing follows the theme (§61), so it leaves the bar to the root layout.
  */
 describe('the Ask AI status bar', () => {
-  it('asks for dark status-bar content on the fixed-light landing while Ask is in front', async () => {
+  it('leaves the landing to the root bar, which follows the theme', async () => {
     await show(<Ask />);
-    expect(mockStatusBar).toHaveBeenCalledWith({ style: 'dark' });
+    expect(screen.getByText('How can I help you today?')).toBeTruthy();
+    expect(mockStatusBar).not.toHaveBeenCalled();
+  });
+
+  it('asks for dark status-bar content on the fixed-light Daily Brief while Ask is in front', async () => {
+    mockAssistant.mockResolvedValue(turn());
+    await show(<Ask />);
+    await fireEvent.press(screen.getByTestId('ask-card-0'));
+    await waitFor(() => expect(mockStatusBar).toHaveBeenCalledWith({ style: 'dark' }));
   });
 
   it('draws no status bar while Ask is not focused, so the root bar follows the theme', async () => {
     mockFocused.mockReturnValue(false);
+    mockAssistant.mockResolvedValue(turn());
     await show(<Ask />);
-    expect(screen.getByText('How can I help you today?')).toBeTruthy();
+    await fireEvent.press(screen.getByTestId('ask-card-0'));
+    await waitFor(() => expect(mockAssistant).toHaveBeenCalled());
     expect(mockStatusBar).not.toHaveBeenCalled();
   });
 
@@ -135,7 +148,9 @@ describe('the Ask AI landing', () => {
     expect(['My Daily Brief', 'Top 3 Tasks', 'Due & Risks', 'Find Time'].map((title) => screen.getByText(title))).toHaveLength(4);
     expect(screen.getByText('Due in the\nnext 5 days')).toBeTruthy();
     expect(screen.queryByTestId('ask-card-4')).toBeNull();
-    expect(screen.getByText('Tap and speak naturally. I’m listening…')).toBeTruthy();
+    // 61788dc: the new caption.
+    expect(screen.getByText('Tap to start a voice conversation')).toBeTruthy();
+    expect(screen.queryByText('Tap and speak naturally. I’m listening…')).toBeNull();
     expect(screen.getByTestId('ask-landing-field').props.placeholder).toBe('Or type your request…');
     expect(screen.getByText('Powered by Nexdo AI')).toBeTruthy();
     // The old page is gone: no "Ask Nexdo" header, tagline, intent list or entry cards.
@@ -154,15 +169,43 @@ describe('the Ask AI landing', () => {
     expect(screen.getByText('Powered by Nexdo AI')).toBeTruthy();
   });
 
-  it('lays the cards out two to a row with room for the gap, on a white base whatever the theme', async () => {
+  it('lays the cards out two to a row with room for the gap, on the theme’s base', async () => {
     const dimensions = jest.spyOn(require('react-native'), 'useWindowDimensions').mockReturnValue({ width: 360, height: 792, scale: 3, fontScale: 1 });
     await show(<Ask />);
     // 48.8% + 8 + 48.8% overflowed on a 360 dp phone and wrapped the grid to one column.
     const card = StyleSheet.flatten(screen.getByTestId('ask-card-0').props.style);
     expect(card.width).toBe('45%');
     expect(card.flexGrow).toBe(1);
-    expect(StyleSheet.flatten(screen.getByTestId('ask-landing').props.style).backgroundColor).toBe('#FFFFFF');
+    expect(StyleSheet.flatten(screen.getByTestId('ask-landing').props.style).backgroundColor).toBe(palettes.light.background);
     dimensions.mockRestore();
+  });
+
+  /** 61788dc (AskAILandingView.swift:59-67; `ask-ai-landing-v4-keyboard-focus-dark`). */
+  it('focuses the request field from the keyboard glyph', async () => {
+    await show(<Ask />);
+    const focus = jest.spyOn(TextInput.prototype, 'focus').mockImplementation(() => undefined);
+    const glyph = screen.getByTestId('ask-landing-keyboard');
+    expect(glyph.props.accessibilityLabel).toBe('Type your request');
+    await fireEvent.press(glyph);
+    expect(focus).toHaveBeenCalled();
+    focus.mockRestore();
+  });
+
+  it('gives the voice card at least 160 points', async () => {
+    await show(<Ask />);
+    expect(StyleSheet.flatten(screen.getByTestId('ask-voice').props.style)).toMatchObject({ minHeight: 160 });
+  });
+
+  /** `ask-ai-landing-v4-dark`: dark ink, the dark field and the dark base, not Phase 12's fixed light. */
+  it('follows the dark theme', async () => {
+    useAppearance.setState({ appearance: 'night' });
+    await show(<Ask />);
+    const dark = palettes.dark;
+    expect(StyleSheet.flatten(screen.getByTestId('ask-landing').props.style).backgroundColor).toBe(dark.background);
+    expect(StyleSheet.flatten(screen.getByText('How can I help you today?').props.style).color).toBe(dark.ink);
+    expect(StyleSheet.flatten(screen.getByText('Tap to start a voice conversation').props.style).color).toBe(dark.secondary);
+    expect(screen.getByTestId('ask-landing-field').props.placeholderTextColor).toBe(dark.placeholder);
+    useAppearance.setState({ appearance: 'system' });
   });
 
   it('says "there" when the profile has no name', async () => {

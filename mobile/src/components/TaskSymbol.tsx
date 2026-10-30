@@ -77,6 +77,8 @@ export const taskIcons = {
   'sun.max': 'sunny-outline',
   // The Wellness chooser's hero in dark mode (WellnessChooserView.swift, 4185501).
   'moon.stars.fill': 'moon',
+  // …and its gold moon since 1a9a89a.
+  'moon.fill': 'moon',
   // Bug reports (BugReportView.swift, ProfileView.swift:88; d511fef).
   ladybug: 'bug-outline',
   // "Prepare and follow up" (TaskActionView.swift:162, 6f079c0).

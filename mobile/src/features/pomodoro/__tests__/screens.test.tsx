@@ -8,6 +8,7 @@ import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { advance, newPomodoroSession, stop, type PomodoroSession } from '../model';
 import { PomodoroView } from '../PomodoroView';
 import { createPomodoroStore, type PomodoroCache, type PomodoroDeps } from '../store';
+import { useAppearance } from '../../../store/appearance';
 
 /**
  * `PomodoroView` (ios/App/PomodoroView.swift) and `PomodoroDashboard` (PomodoroDashboard.swift), on the
@@ -214,8 +215,8 @@ describe('the timer', () => {
     expect(screen.getByText('Your focus time has been saved.')).toBeTruthy();
     expect(within(screen.getByTestId('pomodoro-completion')).getByText('0')).toBeTruthy();
 
-    // A plain Button under `.foregroundStyle(ink).tint(.indigo)` draws in the ink (`pomodoro-complete`).
-    expect(StyleSheet.flatten(screen.getByText('Back to Tasks').props.style).color).toBe('#0D0A40');
+    // A plain Button under `.foregroundStyle(ink)` draws in the ink (`pomodoro-complete`): `nexdoInk` since ce6d20a.
+    expect(StyleSheet.flatten(screen.getByText('Back to Tasks').props.style).color).toBe('#080F2E');
     await fireEvent.press(screen.getByTestId('pomodoro-back-to-tasks'));
     expect(harness.onTasks).toHaveBeenCalled();
     await fireEvent.press(screen.getByTestId('pomodoro-another'));
@@ -276,5 +277,38 @@ describe('the timer', () => {
     await waitFor(() => expect(screen.getByText('Saved on this device. Connect to sync your sessions.')).toBeTruthy());
     await fireEvent.press(screen.getByTestId('pomodoro-retry-sync'));
     expect(harness.deps.page).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('dark mode (ce6d20a)', () => {
+  afterEach(() => useAppearance.setState({ appearance: 'system' }));
+  const flat = (id: string) => StyleSheet.flatten(screen.getByTestId(id).props.style);
+
+  it('Night: the dashboard is black with dark cards, a separator stroke on the metrics and a lilac Focus legend', async () => {
+    useAppearance.setState({ appearance: 'night' });
+    await open(setup({ sessions: [finished(3 * 3_600_000, 'reading')], currentID: null, synced: {} }));
+    expect(flat('pomodoro-dashboard').backgroundColor).toBe('#000000');
+    expect(flat('pomodoro-metric-sessions').borderColor).toBe('rgba(84, 84, 88, 0.21)');
+    expect(StyleSheet.flatten(screen.getByText('Focus').props.style).color).toBe('#BAABFF');
+    expect(StyleSheet.flatten(screen.getByText('Pomodoro').props.style).color).toBe('#FFFFFF');
+  });
+
+  it('Night: setup has dark cards, lilac switches and ink steppers', async () => {
+    useAppearance.setState({ appearance: 'night' });
+    await open(setup());
+    await fireEvent.press(screen.getByTestId('pomodoro-dashboard-start'));
+    expect(flat('pomodoro-timer').backgroundColor).toBe('#000000');
+    expect(flat('pomodoro-name').backgroundColor).toBe('#1C1C1E');
+    // The switch is on, so its track is drawn in the tint.
+    expect(StyleSheet.flatten(screen.getByTestId('pomodoro-auto-break-track').props.style).backgroundColor).toBe('rgba(186, 171, 255, 1)'); // #BAABFF
+    expect(StyleSheet.flatten(screen.getByText('Focus Category').props.style).color).toBe('#FFFFFF');
+  });
+
+  it('Day: white page and the nexdoInk ink, as before but for the ink', async () => {
+    useAppearance.setState({ appearance: 'day' });
+    await open(setup());
+    expect(flat('pomodoro-dashboard').backgroundColor).toBe('#FFFFFF');
+    expect(flat('pomodoro-metric-sessions').borderColor).toBe('rgba(60, 60, 67, 0.1)');
+    expect(StyleSheet.flatten(screen.getByText('Pomodoro').props.style).color).toBe('#080F2E');
   });
 });

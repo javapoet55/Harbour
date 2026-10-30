@@ -3433,3 +3433,210 @@ needs `expo-sensors`. Open points it raises for the screens run: the "Apple Cale
 | `LiveTranscriptionChecks` (changed) | compiled with `swiftc -swift-version 6 -parse-as-library -target arm64-apple-macos14.0` against the macOS SDK per its README, then run | **passed** ("partial/final text, turn ordering, cancellation, manual commit, empty text, permission denial") |
 | `AppModelChecks/EmailVerificationChecks` (changed) | `bash ios/scripts/check-email-verification.sh` | **did not compile** (see For the team); 0 run |
 | `MomentUITests`: `BugReportUITests` (3, new), `CalendarConnectionUITests` (2, new), `CalendarMonthUITests` (1, new), `WellnessMenuUITests` (changed) | `xcodebuild test-without-building` on the iPhone 17 Pro simulator, iOS 26.5 | **9 run, 7 passed, 2 failed.** `BugReportUITests` 3/3, `CalendarConnectionUITests` 2/2, `CalendarMonthUITests` 1/1, `WellnessMenuUITests` 1/3: `testModuleGuidesAreIndependentAndSkippedAfterReturningHome` and `testModuleGuidesAreSkippedAfterContinuing` (both added in `2edb3f0`) fail at `WellnessMenuUITests.swift:65` tapping "Close dashboard" (see For the team) |
+
+## 24. Phase 14 status
+
+Phase 14 runs on `rn-phase-14` (cut from `origin/develop` at `35c86e3`, after develop, stage and main were
+synced to the same commit). This is the Mac's capture and inventory pass and builds **no React Native
+screens**. Scope: `git log 3b7e5c2..origin/develop -- ios/` (Android shipped from `main` at `3b7e5c2`). That
+is 32 non-merge commits, 23 after removing the dev/prod duplicates (`ceb63ad`=`35b40f2`, `8d13ddd`=`a80c206`,
+`1b2a357`=`8e171aa`, `e683b0c`=`530f1bd`, `db9b6f6`=`fbce45b`, `175602e`=`afe0430`, `ae67dc3`=`9acb39a`,
+`b613ba7`=`bfa5b73`). Every changed Swift file was read. Line numbers are as of `35c86e3`. Paths are
+relative to `ios/App/` unless they start with `Sources/`, `Tests/`, `src/`, `prisma/` or `mobile/`. The
+captures are in `mobile/docs/reference/ios/` and indexed in `mobile/docs/reference/README.md`, "Phase 14".
+
+**Totals: 25 inventory rows (3 new screens, 20 changed screens, 2 with no screen), 56 captures, 9
+unmounted/no-op entries, 15 Swift bugs plus 6 server issues, 1 new native module (`expo-store-review`).**
+
+**How the captures were taken.** iPhone 17 Pro simulator (`3E8DBBD7-…`, iOS 26.5), Debug build against
+`https://app-dev.nexdoapp.com`, account visakan (signed in once and never relaunched). The signed-out
+screens came first: a scratch XCUITest driver (not committed) launched with `-reset-install-introduction`.
+The signed-in screens were then driven by screen coordinates through the same driver attached with
+`activate()`, with a screenshot checked before every tap. The full-screen covers (Calorie Tracker, Pomodoro,
+Moments, Shopping, Settings) are invisible to the UI-test element tree, so tapping by label finds elements on
+the hidden screen underneath. Dark variants use `xcrun simctl ui … appearance dark`, since the app's Appearance
+is System. Nothing was saved, sent or called during the pass except the one repair under "Account state" below.
+
+### Navigation changes
+
+1. **First install** (`RootView.swift:16-17`, `:89`, `:93`, `:128-137`): a signed-out app whose
+   `nexdo.installIntroductionCompleted` flag is false shows the four-page **InstallIntroductionView** before
+   sign-in. **Skip** and **Get Started** open sign-in with the Create Account sheet already up; **Sign In**
+   opens sign-in alone.
+2. **Create Account → Account already exists** (`RootView.swift:728-737`): the alert's **Yes, reset password**
+   presents `PasswordResetView` over the sign-up sheet, prefilled with the email.
+3. **Calendar tab → Connect your calendar** (`CalendarView.swift:263-324`): a medium sheet for accounts with no
+   calendar connection. **Yes, connect calendar** pushes `ProfileSettingsView(openCalendarSettings: true)`.
+4. **Today → "Your schedule is clear"** (`RootView.swift:1697-1707`, `:1742-1752`) is now a button that
+   presents `TaskEditor(task: nil)` ("Create New Task") in a sheet.
+5. **Task editor → microphone** (`RootView.swift:2353-2362`): a toolbar button presents a fresh
+   `AddTaskByVoiceView` full screen. It appears on new and existing tasks.
+6. **Ask AI landing → keyboard glyph** (`AskAILandingView.swift:59-67`) is now a button that focuses the
+   composer.
+7. **App Store review** (`AppReviewPrompt.swift`): StoreKit's system rating sheet can appear over the signed-in
+   tabs on up to five Friday evenings, starting at least seven days after first launch.
+
+### Screen inventory
+
+Tick the box when the RN screen lands, with the commit that built it. "RN owner" is the file that owns the
+screen today, or **new** with a proposed path. "Partly" means part of the change is already in `mobile/`
+(`a80c206` and `8592a0a` touched it).
+
+| Built | Screen | Swift file:line | New / changed | What is new or changed | RN owner | Captures | Endpoints |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| [x] `06ed0e4`, `bd8fde1` | First-install introduction (4 pages) | `InstallIntroductionView.swift:1-151` (body `:20-59`, footer `:61-97`, art `:103-115`, feature grid `:117-133`); gate `RootView.swift:16-17`, `:128-137`; `NexdoApp.swift:19-23` | **new** (`35b40f2`, `530f1bd`) | Paged `TabView`, each page scrolls on its own, top-right **Skip**. Headings are ink, then a blue→purple gradient line: "Less on your mind." / "More done in your day."; "Just Ask." / "NexDo Takes Action."; "One App." / "So Many Ways to Make Life Easier." (2×2 grid: Smart To-Do’s, Calendar & Reminders, Shopping Lists, Everyday Essentials); "More Time for" / "What Matters.". Pages 1–3 have four dots plus **Next →**; page 4 has **Get Started →** and "Already have an account? Sign In". Always light. The art is cropped at runtime from `first-launch-1…5` (784×2007 mockups and a 1536×1024 icon sheet, about 7.9 MB in total; pre-crop it for RN). Completion is stored in `UserDefaults` | **new** `mobile/app/(auth)/introduction.tsx`, flag in AsyncStorage checked by `mobile/app/index.tsx` | `install-intro-1`…`-4` | none |
+| [x] `be0aab5` | Create Account (redesign) | `RootView.swift:618-797` (layout `:633-726`, `signupField` `:739-750`, `canCreate` `:752-754`) | **changed** (`8e171aa`, `afe0430`, `a80c206`) | No navigation title; header `NexdoLogoMark` + "NexDo", "Less on your mind. More done in your day.", "Create your account", "Your tasks, plans, and everyday life — together.". The card holds captioned fields with indigo icons (Full name / "Your name", Email address / "you@example.com", Password, Confirm password). Below it: "We protect your password and never store a readable copy." and the red error. **Create Account →** is pinned in a `.regularMaterial` bar (56 pt, blue→indigo→purple; grey when disabled; spinner + "Creating Account…" while busy) above "Already have an account? Sign In". The gate is: name not empty, email contains "@", password not empty, ≤ 72 UTF-8 bytes and equal to the confirmation | `mobile/app/(auth)/sign-up.tsx`. **Partly** ported: the gate yes, the layout and the wording no | `sign-up-v4`, `-scrolled`, `-keyboard`, `-filled`, `-passwords-mismatch` | — |
+| [x] `a2f9b9c`, `be0aab5` | Sign-up security check and existing account | `RootView.swift:591-616`, `:728-737`, `:759-769` (`checkEmail`), `:771-796` (`create`); `NexdoApp.swift:187-210` | **changed** (`8592a0a`, `310f1ab`) | Leaving the email field calls `account-exists`. If the account exists, alert **Account already exists**: "We already have an account with this email address. Do you want to reset the password?" with **Yes, reset password** / **No**. `create()` runs account-exists → signup-config → Turnstile in an **ephemeral** `ASWebAuthenticationSession` (no "wants to use … to sign in" prompt) → register. A 409 gives the same alert; a cancel gives "Security check cancelled. Tap Create Account to try again."; any other error shows the server text | same file plus `mobile/src/lib/signupChallenge.ts`. **Not ported**: no account-exists call, every failure becomes `SECURITY_CHECK_MESSAGE`, and `openAuthSessionAsync` lacks `preferEphemeralSession: true` | `sign-up-existing-account-alert`, `password-reset-from-sign-up` | `POST /api/auth/account-exists` (**new**), `GET /api/auth/signup-config` (503 added), `POST /api/auth/register` (409 added) |
+| [x] `a2f9b9c`, `225786c` | Password reset | `RootView.swift:798-870`; footer `:817`; gate `:833`; `NexdoApp.swift:221-228` | **changed** (`60212f3`, `a80c206`) | Footer "Enter your account’s email address. We’ll send a six-digit code that expires after 15 minutes.". An unknown email now gets 404 "We don’t have an account with this email address. Check the address or create an account." in red. **Update Password** needs a 6-digit code and a non-empty password of ≤ 72 bytes | `mobile/app/(auth)/reset-password.tsx`, `app/account/reset-password.tsx`. **Partly**: the old footer remains and there is no 72-byte check | `password-reset-v4`, `password-reset-from-sign-up` | `POST /api/auth/password-reset/request` (404 added), `/confirm` |
+| [x] `8246c21` (tint) | Change password | `ProfileView.swift:171-226` (`valid` `:181`, footer `:190`) | **changed** (`a80c206`) | Footer "Choose a password (72 bytes maximum). You’ll need to sign in again after changing your password."; no 12-character minimum | `mobile/src/features/help/ChangePasswordScreen.tsx`, already ported | `change-password-v4` | `POST /api/auth/change-password` |
+| [x] `39620c6`, `503818a`, `4a946d1` | Calendar: connect offer (sheet) | `CalendarView.swift:43-46`, `:215-230`, `:263-277`, `:279-324` | **new** (`fbce45b`, `9acb39a`) | After a successful connections load with **zero** server connections and EventKit not at full access, once per view lifetime: `calendar.badge.plus`, "Connect your calendar", "Connect your Google, Apple or Outlook calendar to sync your tasks and calendar events.", footnote "Apple Calendar displays your selected events in NexDo. Google and Outlook sync options are available in Settings.", **Yes, connect calendar** (blue→indigo→red capsule) and **Not now**. Ids `calendar-connect-prompt`, `-yes`, `-dismiss` | **new** `mobile/src/features/calendar/ConnectCalendarPrompt.tsx`, mounted from `app/(tabs)/calendar.tsx` | not captured (the account has Google connected) | `GET /api/calendar/connections` |
+| [x] `1099cc6` | Today: empty schedule creates a task | `RootView.swift:1591`, `:1697-1707`, `:1738-1752` | **changed** (`9acb39a`) | The "Your schedule is clear / Add a task or enjoy the open space." block is a button (`today-empty-schedule-create-task`, hint "Opens the manual task creation screen") that presents "Create New Task". The search-empty state stays static | `mobile/src/components/TodayIntelligenceCard.tsx:197-205`, not ported (route to `/task/new`) | `today-v4-empty-schedule`, `-dark`, `task-editor-v4-from-today`, `-dark` | `POST /api/tasks` on save |
+| [x] `14728e0`, `349eb0a` | App Store review request (system sheet) | `AppReviewPrompt.swift:1-58`; `Sources/NexdoCore/AppReviewSchedule.swift:1-33`; `NexdoApp.swift:18`; `RootView.swift:139-142` | **new** (`bfa5b73`) | First launch is recorded once in `nexdo.appReviewSchedule.v1`. A request is eligible on a local **Friday at or after 17:00**, at least 7 days after first launch, in Friday weeks 0–4 counted from the first Friday after that, once per week and with no catch-up. It runs only on the signed-in tabs, checks every 30 s, and only with no sheet, no keyboard, no busy state and no error. The week is stored **before** `requestReview()` | **new** `mobile/src/features/review/useReviewPrompt.ts` in `app/(tabs)/_layout.tsx` | not captured (system UI; needs Friday after 17:00 and a relaunch) | none |
+| [x] `9eddcf8` | Wellness chooser: dark hero | `WellnessChooserView.swift:70-87` | **changed** (`1a9a89a`) | Dark only: a gold `moon.fill` `(1, 0.78, 0.25)` with two white `sparkle`s replaces the lilac `moon.stars.fill` | `mobile/src/features/wellness/WellnessChooser.tsx:105-135`, not ported | `wellness-chooser-v4`, `-dark` | — |
+| [x] `ea834a7` | Module guides ("How It Works"): pinned buttons | `WellnessModuleGuide.swift:86-101` | **changed** (`897f14d`) | **Got it!** (`module-guide-continue`) and **Back to Home** move into a `.regularMaterial` bottom inset, so they stay visible while the steps scroll. Still forced light | `mobile/src/features/wellness/WellnessModuleGuide.tsx:100-140`, not ported | `module-guide-calories-v4`, `-scrolled`, `module-guide-pomodoro-v4`, `module-guide-moments-v4`, `module-guide-shopping-v4` | — |
+| [x] `a1cc8ed` | Calorie Tracker: dark mode | `CalorieTrackerView.swift:293-294`, `:365`, `:437`, `:472-478`, `:499`, `:512-522`, `:530`, `:561`, `:830` | **changed** (`ce6d20a`) | Ink is `nexdoInk`; backgrounds `systemBackground` / `secondarySystemGroupedBackground` (were white); the dark intro art is SF `heart.text.clipboard.fill`; step numbers and tints use `wellnessAccent` | `mobile/src/features/nutrition/CalorieTracker.tsx` | `calorie-dashboard-v4`, `-dark`, `-scrolled-dark`, `calorie-setup-confirm-v4-dark` | — |
+| [x] `a7a2827` | Important Moments and wishes: dark tint | `ImportantMomentsView.swift:155`, `:206`, `:249`, `:261`, `:299`, `:321`, `:378`, `:413`, `:433`, `:514`, `:532`, `:569`, `:648`, `:670` | **changed** (`ce6d20a`) | `nexdoIndigo` → `wellnessAccent` on the gear, "Create New", filter capsules, status and delivery icons; `.tint(.wellnessAccent)` on the wish flow | `mobile/app/wellness/moments/*`, `src/features/moments/components.tsx` | `moments-v4-dark`, `moments-settings-v4`, `-dark`, `-scrolled-dark` | — |
+| [x] `8c9ed93` | Manage Moments / Manage Moment / schedule review | `ManageFestivalView.swift:35`, `:72`, `:86`, `:119`, `:165`, `:198`, `:268`, `:318`, `:390`, `:396-398`, `:495`, `:501`, `:531`, `:598`, `:648-650` | **changed** (`ce6d20a`) | Tabs, recipient checks and capsules use `wellnessAccent`; `ScheduleDesign` uses system ink, secondary and grouped backgrounds; editor sheets use `presentationBackground(systemBackground)` | `src/features/moments/ManageMomentView.tsx`, `ScheduleReview.tsx`, `RecipientSheet.tsx` | `manage-moments-v4-scheduled-empty-dark`, `-need-review-dark`, `manage-moment-v4-contacts-dark`, `-message-dark`, `-schedule-dark` | — |
+| [x] `a896ffd` | Moment editor, Moments settings, festivals | `MomentEditor.swift:103`, `:233`, `:355` | **changed** (`ce6d20a`) | `.tint(.wellnessAccent)` | `src/features/moments/MomentEditorView.tsx`, `app/wellness/moments/settings.tsx`, `festivals.tsx` | `moment-editor-v4-create-dark` | — |
+| [x] nothing to build (android-polish §60) | Moments "Connect me on the day" guide | `MomentConnectCall.swift:203`, `:386-450` | **changed** (`ce6d20a`), **no visible change** | Dark-aware colours inside a view that is still forced light (`:436`); see Unmounted | `src/features/moments/MomentConnectSection.tsx` | — | — |
+| [x] `bcb9195` | Pomodoro setup and dashboard: dark mode | `PomodoroView.swift:22`, `:40`, `:62`, `:99`, `:104`, `:115`, `:174`; `PomodoroDashboard.swift:18`, `:29`, `:57`, `:103`, `:129`, `:164`, `:263` | **changed** (`ce6d20a`) | The dashboard **no longer forces light**. Ink is `nexdoInk`; cards are `secondarySystemGroupedBackground`; stat strokes are `separator`; tints and the "Focus" legend use `wellnessAccent` | `src/features/pomodoro/PomodoroView.tsx`, `PomodoroDashboard.tsx` | `pomodoro-dashboard-v4-empty-dark`, `-month-dark`, `pomodoro-setup-v4-dark` | — |
+| [x] `1a35ef2`, `9d220f4` | Shopping: store logos (finder, list settings, logo editor) | `StoreBrandLogo.swift:17-18`, `:24`, `:36-41`, `:75`, `:86-95`, `:129`, `:143`; `ShoppingListLogoEditor.swift:11`, `:25`, `:39`; `ShoppingViews.swift:516-531`, `:642`, `:680-686`, `:754-756`, `:819` | **changed** (`ce6d20a`) | Store finder rows show the server's `brand` logo (no lookup), falling back to the cart glyph. In List Settings the logo looks itself up only when the draft store matches the saved one. `save()` keeps the old list until the server confirms a store change. A logo lookup retries an empty result after 1 s and 2 s | `src/features/shopping/StoreBrandLogo.tsx`, `ListSettings.tsx`, `LogoEditor.tsx`, `StorePages.tsx`. **Not ported**: `ShoppingStoreSuggestion` has no `brand` | `shopping-store-finder-v4-logos-dark`, `shopping-list-settings-v4-dark`, `shopping-lists-v4-dark` | `POST /api/shopping/stores` (adds `brand`), `GET /api/shopping/store-brand` |
+| [x] `c2a78f9`, `1ea1b5e` | Shopping list: Recommendations label | `ShoppingViews.swift:404-406` | **changed** (`61788dc`) | Uses `nexdoActionForeground`: white in dark, indigo in light | `src/features/shopping/components.tsx` | `shopping-list-detail-v4-dark` | — |
+| [x] `691a5de` | Ask AI landing | `AskAILandingView.swift:59-67` | **changed** (`61788dc`) | Caption "Tap to start a voice conversation" (was "Tap and speak naturally. I’m listening…"); voice card min height 160; the keyboard glyph is a button ("Type your request") that focuses the composer | `src/features/ask/AskLanding.tsx:158-162`, not ported | `ask-ai-landing-v4`, `-dark`, `-keyboard-focus-dark` | — |
+| [x] `5ee51ab` | Ask Nexdo: voice reopen | `AskNexdoView.swift:72`, `:219`, `:237`, `:305`, `:393`, `:455-460` | **changed** (`61788dc`, `7b37ab1`) | Every voice entry calls `openVoice()`: unfocus, stop speech, new presentation id, so each open is a fresh session | `app/ask/index.tsx` → `app/ask/voice.tsx` | not captured (starts a live session) | `POST /api/realtime/task-session` |
+| [x] `5ee51ab` | Add / Ask by Voice: session lifetime | `AddTaskByVoiceView.swift:34-69`, `:71-110`, `:141-148`, `:232-243`, `:323-345` | **changed** (`dc6445c`, `7b37ab1`) | Executor, transport and session live in one `@StateObject`. A new **Start listening** button (`voice-start-listening`) shows when idle with no error. A cancel while visible gives "Voice setup was interrupted. Try again to start listening." | `src/components/AddTaskByVoiceView.tsx`, `src/voice/useVoiceSession.ts`, not ported | not captured (starts a live session) | `POST /api/realtime/task-session` |
+| [x] `f0eb777` | Tasks and task editor: voice entry | `RootView.swift:1807`, `:1907`, `:1987`; `:2242-2243`, `:2353-2362`, `:2368` | **changed** (`61788dc`, `fb29e95`) | Every "Add by Voice" gets a new presentation id. The task editor gains a toolbar `mic.fill` ("Add task by voice", `task-editor-voice`, disabled while busy) | `mobile/app/task/new.tsx`, `app/task/voice-capture.tsx`, not ported | `task-editor-v4-from-today`, `-dark` (the mic is in the toolbar) | — |
+| [x] `5d45cd7`, `1ea1b5e`, `bf6bca4` | Account menu and Settings: night foregrounds | `RootView.swift:1119-1120`; `ProfileView.swift:105`, `:122`, `:159`, `:285`, `:293`, `:298`, `:540`, `:568`, `:590`, `:605-614`; split `:269-335`, `:495-616` | **changed** (`61788dc`, `d05a379`, `5def56e`) | New token `nexdoActionForeground` (white in dark, `(0.24, 0.16, 0.94)` in light) on the account tint, voice minutes, menu icons, Settings back chevron, "Settings saved.", the AI confirmation picker, Open Notification Center, Connect Calendar, Synchronize now, Withdraw AI permission and the policy links. Settings `load()` first syncs the device time zone, and a time-zone change syncs again (`:310-315`). The working-days fallback is `"0,1,2,3,4,5,6"`. `5def56e` only splits the body | `mobile/app/account/index.tsx`, `app/account/settings.tsx`. **Not ported**: `DEFAULT_WORKING_DAYS = '1,2,3,4,5'` (`src/features/tasks/workingDays.ts:12`); Settings does not call `synchronizeDeviceTimeZone` | `account-v4`, `-dark`, `settings-v4-dark`, `settings-v4-scrolled-1-dark`…`-4-dark`, `settings-v4-scrolled-4` | `PATCH /api/settings` `{ timeZone }`; `GET /api/me` |
+| [x] `0980b5d` | `Color.wellnessAccent` (token) | `WellnessAppearance.swift:1-10` | **new**, no screen (`ce6d20a`) | Light `(0.24, 0.16, 0.94)`, dark `(0.73, 0.67, 1)`; for text, controls and tints only | proposed in `mobile/src/theme` | — | — |
+| [x] nothing to port (android-polish §62) | VoicePlayback | `VoicePlayback.swift:8`, `:29`, `:42-52` | **changed**, no screen (`61788dc`) | Deactivates the audio session only if it activated it, so idle read-aloud no longer cuts a live microphone | `src/voice/*` (`expo-audio`) | — | — |
+
+**All 25 rows are built** (2026-10-30): Windows Part 1 and Runs A and C, the Mac's Run B. Each row's box names the
+commit(s); the decisions and deviations are in `mobile/docs/android-polish.md` §44-§65. Android is ahead of Swift on
+bugs 1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 12 and 14; bug 10 is kept, bugs 13 and 15 do not arise in RN. The "Not ported" /
+"Partly" notes in the rows describe the state before Phase 14 was built.
+
+Commits with no screen: `eadaed3`, `e9bda12`, `0acb191` (UI tests only), `3cc78b5` (build 1.3 / 11),
+`5def56e` (refactor). Version: `MARKETING_VERSION` 1.0.1 → 1.2 → 1.3, build 7 → 10 → 11; RN is still
+`1.0.0-rc.1` (`mobile/app.config.ts:28`).
+
+### Server endpoints
+
+New or changed in `3b7e5c2..35c86e3` (`src/`, `prisma/`, `public/`). `jsonError` (`src/lib/http.ts:5-36`) adds
+`RESET_ACCOUNT_NOT_FOUND` → 404 and rewords `PASSWORD_POLICY` to "Enter a password (72 bytes maximum).".
+
+| Feature | Method + path | Request | Response and errors | Server | Swift | RN |
+| --- | --- | --- | --- | --- | --- | --- |
+| Account exists (**new**) | `POST /api/auth/account-exists` | `{ email }`; no session, no Turnstile | 200 `{ exists }`, `no-store`; 400 "Enter a valid name and email address."; 429 (30 per IP per 15 min); 503 "Account security checks are temporarily unavailable. Please try again shortly." | `src/app/api/auth/account-exists/route.ts:7-15` | `NexdoApp.swift:197-201`; `RootView.swift:759-768`, `:778-781` | **missing** |
+| Signup config | `GET /api/auth/signup-config` | — | adds 503 (same text) when Turnstile is required but not configured | `src/app/api/auth/signup-config/route.ts:2-9` | `NexdoApp.swift:187-196` | `signupChallenge.ts:66` hides the text |
+| Register | `POST /api/auth/register` | `{ name, email, password (1…72 bytes), turnstileToken? }` | existing email → **409** "An account with this email already exists. Sign in or reset your password." (was a fake 201) | `src/app/api/auth/register/route.ts:8-31`; `src/server/account-auth.ts:60`, `:66` | `NexdoApp.swift:202-210`; `RootView.swift:790-791` | shows the text inline, no recovery |
+| Password reset request | `POST /api/auth/password-reset/request` | `{ email }` | unknown email → **404** (text above); success "A six-digit verification code has been sent to your email." | `src/app/api/auth/password-reset/request/route.ts:7-16`; `account-auth.ts:140-160` | `NexdoApp.swift:221-228` | matches |
+| Password policy | register, reset confirm, change password | non-empty, ≤ 72 UTF-8 bytes | 400 `PASSWORD_POLICY` | `account-auth.ts:20-25`; `src/app/api/auth/change-password/route.ts:11-27` | `RootView.swift:752-754`, `:833`; `ProfileView.swift:181` | matches (`mobile/src/schemas/auth.ts:29`) |
+| Task list | `GET /api/tasks` | — | errors now JSON through `withUser`: 401 "Sign in required.", 500 "Request failed." | `src/app/api/tasks/route.ts:282` | unchanged | matches |
+| Store search | `POST /api/shopping/stores` | unchanged | each store adds `brand: { displayName, logoUrl \| null }` (Brandfetch, cached 29 days on a hit, 1 day on a miss) | `src/app/api/shopping/stores/route.ts:15`; `src/server/shopping/search-brands.ts:5-18` | `ShoppingViews.swift:641-650`, `:756` | **missing** (`mobile/src/api/shopping.ts:286`) |
+| Availability defaults | migration `20261019000000_availability_defaults` (Postgres; SQLite as `z_20261019000000_…`) | — | `UserPreference` defaults: `workingDays` `'1,2,3,4,5'` → `'0,1,2,3,4,5,6'`, `workStart` 09:00 → 06:00, `workEnd` 17:00 → 21:00, `quietEnd` 07:00 → 06:00. Rows still on all old defaults are rewritten; customised rows are untouched (visakan's Mon–Fri 00:00–17:00 stayed). The planner, replanner, briefing, schedule intelligence and Do Now fallbacks follow | `prisma/schema.prisma:114-118`; `src/server/planner.ts:23-29`; `replanner.ts:98-99`; `briefing.ts:34`, `:51`; `schedule-intelligence.ts:69-70`, `:98-100` | `ProfileView.swift:550` | **stale**: `workingDays.ts:12` |
+| Welcome email v2 | sent by register and verify-email resend | — | a new 680-px HTML layout loading `public/email/welcome-v2/*.png` (19 images); subject unchanged | `src/server/email/welcome.ts` | — | — |
+
+### Native requirements
+
+| Need | Swift | RN today | Action |
+| --- | --- | --- | --- |
+| **In-app review** | SwiftUI `requestReview()` (StoreKit) | **not installed** | **Add `expo-store-review`, which needs a native rebuild.** On Android it uses the Play In-App Review API: quota-limited, no callback, not shown on internal test tracks. Port `AppReviewSchedule` as pure TS with the AsyncStorage key `nexdo.appReviewSchedule.v1`. The "no sheet, no keyboard" check maps to router state plus `Keyboard.isVisible()` |
+| Sign-up security check without the consent prompt | `prefersEphemeralWebBrowserSession = true` | `expo-web-browser` | pass `{ preferEphemeralSession: true }` (iOS only; Android Custom Tabs have no such prompt). No rebuild |
+| First-install flag | `UserDefaults` | AsyncStorage | none new. `allowBackup` decides whether it survives a restore, as on iOS |
+| Calendar offer permission status | `EKEventStore.authorizationStatus` | `expo-calendar` | `getCalendarPermissionsAsync`; none new |
+| Time-zone change | `NSSystemTimeZoneDidChange` | — | `AppState` "active" plus `Intl.DateTimeFormat().resolvedOptions().timeZone`; none new |
+| Introduction artwork | five asset-catalog images (about 7.9 MB) | — | pre-crop into `mobile/assets/introduction/`; bundled assets need a new build but no native module |
+
+**No new permission, Info.plist key or entitlement** was added in this range.
+
+### Unmounted, DEBUG-only and no-op code (not to be built)
+
+| Item | Where | Why |
+| --- | --- | --- |
+| `-reset-install-introduction` | `NexdoApp.swift:19-23` | DEBUG launch argument; clears only the introduction flag |
+| Calendar offer under `-calendar-design-preview` | `CalendarView.swift:267-269` | DEBUG early return; the sheet cannot appear in the preview |
+| Voice previews skip startup | `AddTaskByVoiceView.swift:235-237` | `-ask-voice-design-preview` / `-calendar-voice-preview` return before `start()`, so they always show **Start listening** |
+| `ProfileSettingsView.zone` | `ProfileView.swift:251` (written `:641`, `:647`) | Written, never read; `:375` shadows it with a local |
+| `.tint(accent)` | `MomentEditor.swift:356` | Overridden by the `.tint(.wellnessAccent)` added at `:355` (same colour) |
+| MomentCallingGuide dark colours | `MomentConnectCall.swift:389-450` | The view is still forced `.light` (`:436`), so every new colour resolves to its light value |
+| Module guide dark readiness | `WellnessModuleGuide.swift:103`, `:110` | The new bottom bar is inside a view that is still forced light; the guides have no dark design (captures confirm) |
+| Duplicate accessibility label | `AskAILandingView.swift:66-67` | The keyboard button and the text field are both "Type your request" |
+| Carried over from §23, still true at `35c86e3` | see §23 | `WeatherForecastView`, `AskShoppingDestination`, `NutritionPackArtwork`, the Today `adding` sheet, the bug-report and calendar preview harnesses |
+
+### Swift bugs (not fixed)
+
+1. **Pause daily calls is one tap with no confirmation.** On the Nutrition dashboard, "Pause daily calls"
+   (`CalorieTrackerView.swift:807-811`) sits right under "Manage daily check-in" and saves `enabled: false`
+   immediately. During this pass a mis-tap turned visakan's 8:00 PM call off. It was restored the same day
+   (see Account state).
+2. **Shopping List Settings has no Cancel and cannot be swiped away** (`ShoppingViews.swift:700`). The only
+   toolbar button is Save; a downward swipe from the form scrolls it. The user must Save or find the sheet's
+   top edge.
+3. **Moments counts disagree.** The Upcoming card says "11 wishes need review" (`moments-v4-dark`) while
+   Manage Moments shows "Need Review (10)" (`manage-moments-v4-need-review-dark`) for the same account at the
+   same minute.
+4. **Low-contrast dark toolbar buttons in Moments and Shopping.** The back chevron and gear on Important
+   Moments and the Shopping back button keep dark indigo on near-black (`moments-v4-dark`,
+   `shopping-lists-v4-dark`). `wellnessAccent` was not applied to them.
+5. **Shopping List Settings still uses dark indigo in dark mode** for Save, the Repeat weekly toggle,
+   Directions and Store Hours (`shopping-list-settings-v4-dark`); `ShoppingViews.swift` was not moved to
+   `wellnessAccent`.
+6. **The Calorie confirm art is a light box in dark mode** (`calorie-setup-confirm-v4-dark`):
+   `CaloriePackArt()` at `CalorieTrackerView.swift:638` is not switched in dark the way the intro art is
+   (`:472-478`).
+7. **The Create Account sheet reopens after sign-out.** `startWithSignUp` (`RootView.swift:17`) is never reset,
+   so a first-install user who skipped the introduction, then signed in and out in the same process, gets
+   the sign-up sheet over sign-in again (`:128-136`, `:382-384`).
+8. **Upgraders see the "first-install" introduction.** The flag defaults to false for every existing install
+   (`RootView.swift:16`), so anyone signed out after updating sees the four pages.
+9. **The reset error can show twice.** `requestPasswordReset` stores the new 404 text in `model.error`
+   (`NexdoApp.swift:221-227` via `perform`), `localError` copies it (`RootView.swift:854-859`), and the root
+   alert "Unable to complete request" (`:118-120`) is bound to the same, never-cleared `model.error`. The same
+   is true for confirm failures (`:862-868`). This is §23's bug, now on the common path.
+10. **"Security check cancelled" covers non-cancel failures** (`RootView.swift:602-605`, `:614`, `:787-788`).
+    A state mismatch, a missing token or a failed `session.start()` also throws `CancellationError`.
+11. **Wrong error text when Turnstile has no site key** (`NexdoApp.swift:190-191` → `RootView.swift:791-792`):
+    "Nexdo could not start the calendar connection. Please try again." Only against a server older than
+    `8592a0a`.
+12. **Settings cannot load if the time-zone sync fails** (`ProfileView.swift:647`; `NexdoApp.swift:257-265`).
+    `synchronizeDeviceTimeZone()` now runs first in the same `do`. A PATCH failure leaves `preferences == nil`
+    ("Retry loading settings"), and every retry repeats the sync.
+13. **The voice microphone appears while editing an existing task** (`RootView.swift:2353-2362`). It opens a
+    *new-task* voice session over unsaved edits (Task Details, overdue list, shopping pushes).
+14. **The calendar offer returns on every cold launch** (`CalendarView.swift:265-277`). "Not now" lives in view
+    state only, and **Yes** lands in Settings, whose back button saves (PATCH) even when nothing changed.
+15. **Email case is inconsistent in sign-up.** The blur check lowercases the email (`RootView.swift:760`) but
+    `create()` sends it as typed (`:778`, `:786`). The server lowercases only the domain, so `Foo@x.com` and
+    `foo@x.com` can be two accounts (see Server issues 6).
+
+### Server issues (not fixed)
+
+1. `src/server/account-auth.ts:142` — `limitCodeSend` runs before the account lookup, so retrying a reset for an
+   unregistered email within 60 s gives 429 "Too many attempts…" instead of the 404.
+2. `src/app/api/auth/register/route.ts:18` — the verify-send budget is spent (and the password hashed,
+   `account-auth.ts:59-60`) before the existence check. Repeating sign-up with an existing email gives 429, not
+   409, and anyone can burn the owner's three verify sends per 15 minutes.
+3. `register/route.ts:26` — the success copy still says "If your account needs verification, check your
+   inbox…"; the `if (user)` at `:21` is dead now that existing accounts get 409.
+4. `account-exists/route.ts:12` and `account-auth.ts:60` ignore `deletedAt`, but reset filters on it (`:143`).
+   This is latent: nothing sets `User.deletedAt` today.
+5. `signup-config` can return 200 with a test-pattern secret that `verifyBot` rejects
+   (`src/server/signup/abuse.ts:65`), so register then fails with 503 after the challenge has run.
+6. `src/lib/email-risk.ts:7-13` lowercases only the domain; the lookup `OR [email, email.toLowerCase()]` misses a
+   stored `Foo@x.com` typed as `foo@x.com`.
+
+### Account state after the pass
+
+- **Daily food call:** turned off by a mis-tap (bug 1); restored through Manage daily check-in → Next → Next →
+  **Turn On Daily Calls** with the same 8:00 PM, India Standard Time, every day, voice Marin, goals 2,000 kcal
+  / 150 / 250 / 67 g, phone unchanged and verified. The dashboard reads "Daily call at 8:00 PM" again,
+  checked at the start of the restore, right after it, and at the end of the pass.
+- **Settings** (re-opened at the end): Asia/Kolkata; Monday–Friday; working 12:00 AM–5:00 PM; quiet 9:00 PM–7:00
+  AM; email, morning email (6:00 a.m.) and evening summary on; Google Calendar visakan@apzzo.com connected with
+  task sync on; Apple Calendar with 3 calendars; OpenAI sharing off. The same as at the start. The Settings back
+  button saves unchanged values (bug 14), so two no-op saves happened.
+- **Moments settings** (re-opened at the end): Gmail visakan@apzzo.com connected; wish reminders enabled.
+  Unchanged.
+- **Nothing else was saved, sent or called.** No new "Parity …" items were needed. List Settings for "Parity
+  Weekly Groceries" was closed without saving (still 0 added · 7 items). The module guides now count as seen
+  for this sign-in, which is local only. The app is still signed in on the simulator.

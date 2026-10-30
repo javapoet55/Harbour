@@ -56,6 +56,8 @@ function voiceSession(overrides: Record<string, unknown> = {}) {
     state: { phase: 'listening', muted: false, transcript: '', reply: '', error: null, sessionCreatedTasks: [] },
     starting: false,
     startupError: null,
+    microphoneDenied: false,
+    start: jest.fn(),
     toggleMute: jest.fn(),
     finish: jest.fn(),
     close: jest.fn(),
@@ -487,5 +489,51 @@ describe('the last two Today sections', () => {
     await waitFor(() =>
       expect(Alert.alert).toHaveBeenCalledWith('Unable to complete request', 'Your tasks changed. Refresh Tasks and try again.'),
     );
+  });
+});
+
+/**
+ * dc6445c (AddTaskByVoiceView.swift:105-112): **Start listening** on an idle screen with nothing wrong — not while
+ * starting, not after an error, not with the microphone refused, and never over a live session.
+ */
+describe('Start listening', () => {
+  const idle = (overrides: Record<string, unknown> = {}) =>
+    voiceSession({ state: { phase: 'idle', muted: false, transcript: '', reply: '', error: null, sessionCreatedTasks: [] }, ...overrides });
+
+  it('starts the session again', async () => {
+    const session = idle();
+    mockUseVoiceSession.mockReturnValue(session);
+    await show(<AddTaskByVoiceView />);
+    await fireEvent.press(screen.getByTestId('voice-start-listening'));
+    expect(session.start).toHaveBeenCalledTimes(1);
+    expect(screen.getByText('Start listening')).toBeTruthy();
+  });
+
+  it.each([
+    ['while listening', voiceSession()],
+    ['while starting', idle({ starting: true })],
+    ['after a startup error', idle({ startupError: 'Voice setup was interrupted. Try again to start listening.' })],
+    ['with the microphone refused', idle({ microphoneDenied: true, startupError: 'Microphone access is off.' })],
+  ])('is not offered %s', async (_, session) => {
+    mockUseVoiceSession.mockReturnValue(session);
+    await show(<AddTaskByVoiceView />);
+    expect(screen.queryByTestId('voice-start-listening')).toBeNull();
+  });
+
+  it('shows the interrupted setup in red', async () => {
+    mockUseVoiceSession.mockReturnValue(idle({ startupError: 'Voice setup was interrupted. Try again to start listening.' }));
+    await show(<AddTaskByVoiceView />);
+    expect(screen.getByTestId('voice-error')).toHaveTextContent('Voice setup was interrupted. Try again to start listening.');
+  });
+
+  it('asks for consent again when it was never given', async () => {
+    useConsent.setState({ ai: false, voice: false });
+    const session = idle();
+    mockUseVoiceSession.mockReturnValue(session);
+    await show(<AddTaskByVoiceView />);
+    await waitFor(() => expect(Alert.alert).toHaveBeenCalledTimes(1));
+    await fireEvent.press(screen.getByTestId('voice-start-listening'));
+    await waitFor(() => expect(Alert.alert).toHaveBeenCalledTimes(2));
+    expect(session.start).not.toHaveBeenCalled();
   });
 });

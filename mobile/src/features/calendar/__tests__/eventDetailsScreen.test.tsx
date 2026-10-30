@@ -223,7 +223,9 @@ describe('Event Details', () => {
 /** Phase 13 Calendar run (§37 item 5): a device event is read-only (CalendarEventDetailsView.swift:21, :43-55, :93-100, :112). */
 describe('Event Details for a device event', () => {
   it('shows the phone’s copy without a fetch, the note instead of actions, and no menu or Edit', async () => {
-    await openDevice();
+    // "Upcoming" is relative to now, so the event is a day ahead rather than DEVICE's fixed 20 Oct 2026.
+    const start = Date.now() + 86_400_000;
+    await openDevice({ ...DEVICE, startAt: new Date(start).toISOString(), endAt: new Date(start + 1_800_000).toISOString() });
     expect(mockApi.get).not.toHaveBeenCalled();
     expect(screen.getByTestId('event-details-device-note')).toHaveTextContent('On this iPhone · Edit this event in Apple Calendar.');
     expect(screen.getAllByText('Apple Calendar')).toHaveLength(2);

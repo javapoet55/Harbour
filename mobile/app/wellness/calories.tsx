@@ -1,7 +1,6 @@
 import { router, useLocalSearchParams } from 'expo-router';
 
 import { CalorieTracker } from '../../src/features/nutrition/CalorieTracker';
-import { FixedLightStatusBar } from '../../src/features/wellness/FixedLightStatusBar';
 import { useSession } from '../../src/store/session';
 
 /**
@@ -13,11 +12,6 @@ export default function CalorieTrackerScreen() {
   const { preview } = useLocalSearchParams<{ preview?: string }>();
   const signedIn = useSession((state) => state.profile != null);
   const live = signedIn && !(__DEV__ && preview === '1');
-  return (
-    <>
-      {/* Drawn light in both modes (an explicit ink on a white gradient), so the clock stays dark. */}
-      <FixedLightStatusBar />
-      <CalorieTracker live={live} onClose={() => router.back()} />
-    </>
-  );
+  // Follows the phone's theme since ce6d20a, so the root layout's status bar is the right one.
+  return <CalorieTracker live={live} onClose={() => router.back()} />;
 }

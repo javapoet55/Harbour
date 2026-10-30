@@ -21,7 +21,7 @@ import type { ImportantMoment, MomentsSnapshot, WishDeliveryPlan } from '../../.
 import { useAppearance } from '../../../store/appearance';
 import { FixedScheme, useTheme } from '../../../theme';
 import { momentLabel } from '../dates';
-import { MESSAGES_UNAVAILABLE, messagesUnavailableFor, ScheduleSuccess, sendNowNotice } from '../ScheduleReview';
+import { MESSAGES_UNAVAILABLE, messagesUnavailableFor, ScheduleSuccess, ScheduleWishCard, sendNowNotice } from '../ScheduleReview';
 import { momentsStore } from '../store';
 import { draft, moment, plan, settings } from '../testFixtures';
 
@@ -333,5 +333,21 @@ describe('FixedScheme', () => {
       await render(<Probe />);
     });
     expect(screen.getByTestId('probe').props.children).toBe('dark');
+  });
+});
+
+describe('ScheduleDesign follows the theme (ce6d20a)', () => {
+  afterEach(() => useAppearance.setState({ appearance: 'system' }));
+
+  it('draws the wish card in white ink in Night and nexdoInk in Day', async () => {
+    for (const [appearance, ink] of [
+      ['night', '#FFFFFF'],
+      ['day', '#080F2E'],
+    ] as const) {
+      useAppearance.setState({ appearance });
+      const view = await render(<ScheduleWishCard heading="Happy birthday" message="Have a great day" occasion="birthday" />);
+      expect(StyleSheet.flatten(view.getByTestId('schedule-wish-heading').props.style).color).toBe(ink);
+      view.unmount();
+    }
   });
 });

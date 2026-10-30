@@ -5,7 +5,7 @@ import { Alert, Pressable, StyleSheet, TextInput, View } from 'react-native';
 
 import { AuthFieldRow, GradientButton, KeyboardAvoidingView, KeyboardAwareScrollView, RevealablePasswordField, Text } from '../../src/components';
 import { RESET_CODE_FAILED, RESET_PASSWORD_FAILED, resetFailure, useConfirmPasswordReset, useRequestPasswordReset } from '../../src/query/useAuth';
-import { sanitizeCode } from '../../src/schemas/auth';
+import { MAX_PASSWORD_BYTES, sanitizeCode, utf8Length } from '../../src/schemas/auth';
 import { androidGroup, androidLabel, inputText, isAndroid, textStyles, useTheme } from '../../src/theme';
 import { closePresentedScreens, replaceWithSignIn } from '../../src/lib/sessionNavigation';
 import { useSession } from '../../src/store/session';
@@ -20,6 +20,9 @@ import { useSecureScreen } from '../../src/features/bugReport/coordinator';
  * Unlike the other three auth screens this is a SwiftUI `Form`, not a glass card over `SignInBackdrop`
  * — so it is a plain inset-grouped list on the grouped background, and it deliberately looks different.
  */
+/** RootView.swift:817 (60212f3). */
+export const RESET_FOOTER = 'Enter your account’s email address. We’ll send a six-digit code that expires after 15 minutes.';
+
 export default function ResetPassword() {
   // `presentation: 'modal'`, so the dark backgrounds elevate (see useTheme).
   const theme = useTheme({ elevated: true });
@@ -45,6 +48,8 @@ export default function ResetPassword() {
   const request = useRequestPasswordReset();
   const confirm = useConfirmPasswordReset(signedIn ? { beforeSessionEnds: closePresentedScreens } : {});
   const busy = request.isPending || confirm.isPending;
+  // RootView.swift:833: six digits and a password of 1–72 UTF-8 bytes (a80c206 dropped the 12-character minimum).
+  const canUpdate = !busy && code.length === 6 && password.length > 0 && utf8Length(password) <= MAX_PASSWORD_BYTES;
 
   const close = () => router.back();
 
@@ -53,7 +58,10 @@ export default function ResetPassword() {
     request.mutate(
       { email },
       // Inline, never a global alert: the sheet stays, with the message under the fields.
-      { onSuccess: () => setCodeSent(true), onError: (error) => setLocalError(resetFailure(error, RESET_CODE_FAILED)) },
+      // 60212f3: an unregistered address is a 404, "We don’t have an account with this email address. Check the
+      // address or create an account.", shown in red here and nowhere else (Swift also raises it in the root
+      // alert, §24 bug 9; RN has no root alert for it).
+      { onSuccess: (result) => (result.kind === 'sent' ? setCodeSent(true) : setLocalError(result.message)), onError: (error) => setLocalError(resetFailure(error, RESET_CODE_FAILED)) },
     );
   };
 
@@ -85,7 +93,8 @@ export default function ResetPassword() {
     <View style={[styles.fill, { backgroundColor: theme.colors.groupedBackground }]}>
       <KeyboardAvoidingView style={styles.fill} behavior="padding">
         <KeyboardAwareScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.form}>
-          <FormSection footer="We’ll email a six-digit code if an account exists. Codes expire after 15 minutes.">
+          {/* 60212f3: the footer no longer hedges "if an account exists"; an unknown address is a 404 now. */}
+          <FormSection footer={RESET_FOOTER}>
             {/* Android (docs/android-polish.md §12): the auth screens' field row — the envelope tile,
                 bordered in the focus accent while editing. */}
             <EmailRow android={android} focused={emailFocused}>
@@ -170,8 +179,7 @@ export default function ResetPassword() {
                 <GradientButton
                   title={confirm.isPending ? 'Updating…' : 'Update Password'}
                   onPress={updatePassword}
-                  // RootView.swift:620: six digits and at least twelve characters.
-                  disabled={busy || code.length !== 6 || password.length === 0}
+                  disabled={!canUpdate}
                   minHeight={52}
                   style={styles.androidPrimary}
                   testID="reset-update"
@@ -206,8 +214,7 @@ export default function ResetPassword() {
                   <FormButton
                     title={confirm.isPending ? 'Updating…' : 'Update Password'}
                     onPress={updatePassword}
-                    // RootView.swift:620: six digits and at least twelve characters.
-                    disabled={busy || code.length !== 6 || password.length === 0}
+                    disabled={!canUpdate}
                     testID="reset-update"
                   />
                   <FormButton title="Send a new code" onPress={requestCode} disabled={busy} last />

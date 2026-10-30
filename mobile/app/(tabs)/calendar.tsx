@@ -30,6 +30,8 @@ import {
 import { calendarRows } from '../../src/lib/calendarRows';
 import { durationLabel } from '../../src/lib/focusClock';
 import { isDone, parseServerDate } from '../../src/lib/taskQuery';
+import { ConnectCalendarPrompt } from '../../src/features/calendar/ConnectCalendarPrompt';
+import { useCalendarConnectOffer } from '../../src/features/calendar/connectOffer';
 import { buildCalendarDayIndex, EMPTY_DAY_INDEX } from '../../src/features/calendar/dayIndex';
 import { deviceCalendarCopy } from '../../src/features/calendar/deviceCalendarCopy';
 import { intelligenceHeading, reviewableConflicts } from '../../src/features/calendar/eventDetails';
@@ -82,6 +84,8 @@ export default function Calendar() {
   // inset by the safe area. React Native insets nothing, so the wordmark drew under the status bar.
   const insets = useSafeAreaInsets();
   const profile = useSession((state) => state.profile);
+  // Phase 14: offer to connect a calendar to an account with none (connectOffer.ts).
+  const connectOffer = useCalendarConnectOffer();
 
   const [mode, setMode] = useState<CalendarMode>('Schedule');
   const [range, setRange] = useState<CalendarRange>('Next 3 days');
@@ -686,6 +690,16 @@ export default function Calendar() {
         </View>
       ) : null}
 
+      {/* "Connect your calendar" (CalendarView.swift:217-229): **Yes** closes the sheet, then opens Settings at
+          the calendars card, as the gear does (`ProfileSettingsView(openCalendarSettings: true)`). */}
+      <ConnectCalendarPrompt
+        onClose={connectOffer.close}
+        onConnect={() => {
+          connectOffer.close();
+          router.push({ pathname: '/account/settings', params: { calendars: '1' } });
+        }}
+        visible={connectOffer.visible}
+      />
     </View>
   );
 

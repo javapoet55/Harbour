@@ -13,6 +13,7 @@ const mockParams = jest.fn(() => ({}) as Record<string, string>);
 jest.mock('expo-router', () => ({
   router: { push: jest.fn(), replace: jest.fn(), back: (...args: unknown[]) => mockBack(...args) },
   useLocalSearchParams: () => mockParams(),
+  Stack: { Screen: () => null },
 }));
 
 const mockTasks = jest.fn();

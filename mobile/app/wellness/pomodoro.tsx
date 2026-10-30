@@ -2,7 +2,6 @@ import { router, useLocalSearchParams } from 'expo-router';
 
 import { PomodoroView } from '../../src/features/pomodoro/PomodoroView';
 import { pomodoroStore } from '../../src/features/pomodoro/device';
-import { FixedLightStatusBar } from '../../src/features/wellness/FixedLightStatusBar';
 import { closePresentedScreens } from '../../src/lib/sessionNavigation';
 import { useSession } from '../../src/store/session';
 
@@ -23,11 +22,6 @@ export default function PomodoroScreen() {
     await closePresentedScreens();
     router.navigate('/tasks');
   };
-  return (
-    <>
-      {/* Fixed light in both modes (`.preferredColorScheme(.light)`), so the clock stays dark. */}
-      <FixedLightStatusBar />
-      <PomodoroView onClose={() => router.back()} onTasks={from === 'notification' ? () => void toTasks() : undefined} owner={owner} store={pomodoroStore} />
-    </>
-  );
+  // Follows the phone's theme since ce6d20a, so the root layout's status bar is the right one.
+  return <PomodoroView onClose={() => router.back()} onTasks={from === 'notification' ? () => void toTasks() : undefined} owner={owner} store={pomodoroStore} />;
 }

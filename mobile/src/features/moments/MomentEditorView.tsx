@@ -73,6 +73,8 @@ function useNow(): number {
 
 export function MomentEditorView({ moment, imported, onDone, dismiss }: { moment?: ImportantMoment; imported?: MomentInput; onDone?: () => void; dismiss: () => void }) {
   const theme = useTheme();
+  // Toolbar items keep the app's `link`, readable in dark on Android (§24 bug 4), not the Wellness tint.
+  const toolbarLink = useTheme({ toolbar: true }).colors.link;
   const moments = useMomentList();
   const busy = useMoments((state) => state.busy);
   const error = useMoments((state) => state.error);
@@ -323,7 +325,7 @@ export function MomentEditorView({ moment, imported, onDone, dismiss }: { moment
           headerRight: () => (
             <Pressable accessibilityRole="button" accessibilityState={{ disabled: saveDisabled }} disabled={saveDisabled} onPress={save} hitSlop={6} testID="moment-save-top">
               <GlassCapsule>
-                <Text style={{ fontSize: 17, lineHeight: 22, color: saveDisabled ? theme.colors.placeholder : theme.colors.link }}>Save</Text>
+                <Text style={{ fontSize: 17, lineHeight: 22, color: saveDisabled ? theme.colors.placeholder : toolbarLink }}>Save</Text>
               </GlassCapsule>
             </Pressable>
           ),

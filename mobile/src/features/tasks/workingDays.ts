@@ -3,13 +3,15 @@ import type { DoNowNext } from '../../api/types';
 /**
  * Working days (d568989): `ProfilePreferences.workingDays` (ios/Sources/NexdoCore/ProfileSettings.swift)
  * and Settings' `WorkingDaysField` (ios/App/ProfileView.swift). "Find my next task" uses these days
- * with the working hours; the server's own default is Monday to Friday.
+ * with the working hours. The server's default is every day, 06:00–21:00 (migration
+ * `20261019000000_availability_defaults`), and an unset value reads the same (`?? "0,1,2,3,4,5,6"`,
+ * ProfileView.swift:550). Hours have no client fallback: `/api/me` always sends them.
  *
  * On the wire it is a comma list of weekday numbers, 0 = Sunday, which the server checks against
  * `^[0-6](?:,[0-6])*$` (src/app/api/settings/route.ts:29). It is not nullable there: omit it, never null.
  */
 
-export const DEFAULT_WORKING_DAYS = '1,2,3,4,5';
+export const DEFAULT_WORKING_DAYS = '0,1,2,3,4,5,6';
 
 /** The toggles' labels, Sunday first, in the order Swift lists them. */
 export const WORKING_DAY_LABELS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'] as const;

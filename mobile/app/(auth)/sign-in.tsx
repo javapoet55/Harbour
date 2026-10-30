@@ -1,6 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { router } from 'expo-router';
-import { useState } from 'react';
+import { router, useLocalSearchParams } from 'expo-router';
+import { useEffect, useState } from 'react';
 import { Controller, useForm, useWatch } from 'react-hook-form';
 import { Alert, Keyboard, Pressable, StyleSheet, TextInput, View } from 'react-native';
 
@@ -44,6 +44,15 @@ export default function SignIn() {
   const [focusedField, setFocusedField] = useState<string | null>(null);
   const blurField = (name: string) => setFocusedField((current) => (current === name ? null : current));
   const appleAvailable = useAppleSignInAvailable();
+
+  // `SignInView(startWithSignUp:)` (RootView.swift:382-384): after Skip or Get Started on the introduction,
+  // Create Account opens over sign-in. Once: the param is cleared so a remount cannot reopen it.
+  const { signUp: startWithSignUp } = useLocalSearchParams<{ signUp?: string }>();
+  useEffect(() => {
+    if (startWithSignUp !== '1') return;
+    router.setParams({ signUp: undefined });
+    router.push('/sign-up');
+  }, [startWithSignUp]);
 
   const { control, handleSubmit, setValue } = useForm<SignInValues>({
     resolver: zodResolver(signInSchema),

@@ -15,6 +15,7 @@ jest.mock('expo-router', () => {
   Tabs.Screen = Screen;
   return { Tabs, router: { push: jest.fn() } };
 });
+jest.mock('../features/review/useReviewPrompt', () => ({ useReviewPrompt: jest.fn() }));
 jest.mock('../features/pomodoro/usePomodoroNotificationRoute', () => ({ usePomodoroNotificationRoute: jest.fn() }));
 
 import TabsLayout from '../../app/(tabs)/_layout';

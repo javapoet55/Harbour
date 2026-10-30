@@ -310,6 +310,14 @@ export function useCalendarConnections() {
 }
 
 /**
+ * `await model.loadCalendarConnections()` as a fresh request whose success can be awaited: never the cached
+ * list. Throws when the refresh fails, which the Calendar connect offer reads as "do not ask".
+ */
+export function refreshCalendarConnections(queryClient: QueryClient): Promise<CalendarConnection[]> {
+  return queryClient.fetchQuery({ queryKey: queryKeys.calendar.connections(), queryFn: loadCalendarConnections, retry: false, staleTime: 0 });
+}
+
+/**
  * The card's state from the query: the accounts (kept through a failed refresh), whether a load has
  * ever succeeded (`calendarConnectionsLoaded`), and the refresh error (`calendarConnectionsError`).
  */

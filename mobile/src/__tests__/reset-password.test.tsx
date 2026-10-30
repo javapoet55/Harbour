@@ -3,6 +3,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react-nativ
 import { Platform, StyleSheet } from 'react-native';
 
 import { ANDROID_DISABLED_GRADIENT_OPACITY } from '../components/GradientButton';
+import { ApiError } from '../api/client';
 import { palettes } from '../theme';
 
 jest.mock('expo-router', () => ({
@@ -55,7 +56,7 @@ describe('Reset password on Android', () => {
   it('draws the email as the auth field row, keeping its helper text', async () => {
     await wrap();
     expect(screen.getByTestId('field-icon-envelope', { includeHiddenElements: true })).toBeTruthy();
-    expect(screen.getByText('We’ll email a six-digit code if an account exists. Codes expire after 15 minutes.')).toBeTruthy();
+    expect(screen.getByText('Enter your account’s email address. We’ll send a six-digit code that expires after 15 minutes.')).toBeTruthy();
     await fireEvent(screen.getByTestId('reset-email'), 'focus');
     expect(flat('field-icon-envelope')).toMatchObject({ borderColor: light.accent });
   });
@@ -160,5 +161,48 @@ describe('Reset password failures', () => {
     await fireEvent.changeText(screen.getByLabelText('Confirm new password'), 'correct horse battery');
     await fireEvent.press(screen.getByTestId('reset-update'));
     await waitFor(() => expect(screen.getByTestId('reset-error')).toHaveTextContent('Could not reset the password. Please try again.'));
+  });
+});
+
+/**
+ * Phase 14 (60212f3, a80c206; captures `password-reset-v4`, `password-reset-from-sign-up`): the new footer, the
+ * 72-byte gate, and an unregistered address answered with a 404 in red.
+ */
+describe('Reset password, Phase 14', () => {
+  it.each(['ios', 'android'] as const)('fills in the address it was opened with and says the new footer (%s)', async (os) => {
+    jest.replaceProperty(Platform, 'OS', os);
+    await wrap();
+    expect(screen.getByTestId('reset-email').props.value).toBe('person@example.com');
+    expect(screen.getByText('Enter your account’s email address. We’ll send a six-digit code that expires after 15 minutes.')).toBeTruthy();
+    expect(screen.queryByText(/if an account exists/)).toBeNull();
+  });
+
+  it('says in red that there is no account for an unregistered address, and stays on the first step', async () => {
+    const message = 'We don’t have an account with this email address. Check the address or create an account.';
+    mockRequest.mockRejectedValue(new ApiError({ status: 404, message }));
+    await wrap();
+    await fireEvent.press(screen.getByTestId('reset-request'));
+
+    await waitFor(() => expect(screen.getByTestId('reset-error')).toHaveTextContent(message));
+    expect(StyleSheet.flatten(screen.getByTestId('reset-error').props.style).color).toBe(light.danger);
+    expect(screen.queryByTestId('reset-code')).toBeNull();
+    expect(screen.getAllByText(message)).toHaveLength(1);
+
+    // A second try with a known address clears it and moves on.
+    mockRequest.mockResolvedValue({ message: 'A six-digit verification code has been sent to your email.', delivered: true });
+    await fireEvent.press(screen.getByTestId('reset-request'));
+    await waitFor(() => expect(screen.getByTestId('reset-code')).toBeTruthy());
+    expect(screen.queryByTestId('reset-error')).toBeNull();
+  });
+
+  it.each(['ios', 'android'] as const)('keeps Update Password off for a password over 72 bytes (%s)', async (os) => {
+    jest.replaceProperty(Platform, 'OS', os);
+    await wrap();
+    await sendCode();
+    await fireEvent.changeText(screen.getByTestId('reset-code'), '123456');
+    await fireEvent.changeText(screen.getByLabelText('New password'), 'é'.repeat(37));
+    expect(screen.getByTestId('reset-update').props.accessibilityState.disabled).toBe(true);
+    await fireEvent.changeText(screen.getByLabelText('New password'), 'é'.repeat(36));
+    expect(screen.getByTestId('reset-update').props.accessibilityState.disabled).toBe(false);
   });
 });

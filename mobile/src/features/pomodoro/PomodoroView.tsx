@@ -11,6 +11,7 @@ import { withAlpha } from '../../components/SignInBackdrop';
 import { Text } from '../../components/Text';
 import { POMODORO_TOMATO } from '../wellness/art';
 import { Confetti, ProgressRing } from './charts';
+import { usePomodoroColors } from './colors';
 import { CATEGORY_ICONS, completionDuration, countdown, TIMER_TINTS } from './format';
 import { isActive, POMODORO_CATEGORIES, POMODORO_CATEGORY_TITLES, progress, remaining, setKeepAwake, stop, togglePause, type PomodoroCategory, type PomodoroSession } from './model';
 import { PomodoroDashboard } from './PomodoroDashboard';
@@ -20,16 +21,9 @@ import { currentSession, type PomodoroStoreApi } from './store';
  * `PomodoroView` (ios/App/PomodoroView.swift): opens on the dashboard; "Start Focus Session" shows the
  * timer — setup, the running focus or break, or the completion card. The timer runs on the phone in the
  * part 1 store; this screen ticks it every second while it is shown, restores and syncs on open and on
- * return to the foreground, and keeps the screen awake during an unpaused focus when asked.
+ * return to the foreground, and keeps the screen awake during an unpaused focus when asked. Follows the
+ * phone's theme since ce6d20a (`usePomodoroColors`).
  */
-
-const INK = '#0D0A40'; // Color(red: 0.05, green: 0.04, blue: 0.25)
-const INDIGO = '#5856D6'; // `.tint(.indigo)`
-const PURPLE = '#AF52DE';
-const PINK = '#FF2D55';
-const BLUE = '#007AFF';
-const SECONDARY = 'rgba(60, 60, 67, 0.6)';
-const GRADIENT = [PURPLE, INDIGO, BLUE] as const;
 
 /** `UIApplication.shared.isIdleTimerDisabled` — one tag, so leaving always releases it. */
 export const KEEP_AWAKE_TAG = 'pomodoro-focus';
@@ -50,6 +44,7 @@ export type PomodoroViewProps = {
 export function PomodoroView({ store, owner, onTasks, onClose, now = Date.now }: PomodoroViewProps) {
   const insets = useSafeAreaInsets();
   const { height } = useWindowDimensions();
+  const colors = usePomodoroColors();
   const state = useStore(store);
   const current = currentSession(state);
   const [showingDashboard, setShowingDashboard] = useState(true);
@@ -115,18 +110,18 @@ export function PomodoroView({ store, owner, onTasks, onClose, now = Date.now }:
     ]);
 
   return (
-    <View style={styles.fill} testID="pomodoro-timer">
-      <LinearGradient colors={[withAlpha(PURPLE, 0.05), '#FFFFFF', withAlpha(BLUE, 0.06)]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
+    <View style={[styles.fill, { backgroundColor: colors.background }]} testID="pomodoro-timer">
+      <LinearGradient colors={[withAlpha(colors.purple, 0.05), colors.background, withAlpha(colors.blue, 0.06)]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
       <ScrollView contentContainerStyle={[styles.content, { paddingTop: 16 + insets.top, paddingBottom: 16 + insets.bottom }]} keyboardShouldPersistTaps="handled">
         <View style={styles.header}>
-          <Pressable accessibilityLabel="Pomodoro dashboard" accessibilityRole="button" onPress={() => setShowingDashboard(true)} style={styles.circleButton} testID="pomodoro-open-dashboard">
-            <Ionicons color={INK} name="chevron-back" size={20} />
+          <Pressable accessibilityLabel="Pomodoro dashboard" accessibilityRole="button" onPress={() => setShowingDashboard(true)} style={[styles.circleButton, { backgroundColor: withAlpha(colors.purple, 0.07) }]} testID="pomodoro-open-dashboard">
+            <Ionicons color={colors.ink} name="chevron-back" size={20} />
           </Pressable>
           <Text accessibilityRole="header" style={styles.title2}>
             {current ? '' : 'Pomodoro'}
           </Text>
-          <Pressable accessibilityLabel="Session history" accessibilityRole="button" onPress={() => setHistory(true)} style={styles.circleButton} testID="pomodoro-open-history">
-            <Ionicons color={INK} name="time-outline" size={20} />
+          <Pressable accessibilityLabel="Session history" accessibilityRole="button" onPress={() => setHistory(true)} style={[styles.circleButton, { backgroundColor: withAlpha(colors.purple, 0.07) }]} testID="pomodoro-open-history">
+            <Ionicons color={colors.ink} name="time-outline" size={20} />
           </Pressable>
         </View>
         {current ? (
@@ -140,9 +135,9 @@ export function PomodoroView({ store, owner, onTasks, onClose, now = Date.now }:
         )}
         {state.syncMessage ? (
           <View style={styles.sync}>
-            <Text style={[styles.caption, { color: SECONDARY }]}>{state.syncMessage}</Text>
+            <Text style={[styles.caption, { color: colors.secondary }]}>{state.syncMessage}</Text>
             <Pressable accessibilityRole="button" disabled={state.syncing} onPress={() => void store.getState().restore()} testID="pomodoro-retry-sync">
-              <Text style={[styles.body, { color: INK, opacity: state.syncing ? 0.4 : 1 }]}>Retry sync</Text>
+              <Text style={[styles.body, { color: colors.ink, opacity: state.syncing ? 0.4 : 1 }]}>Retry sync</Text>
             </Pressable>
           </View>
         ) : null}
@@ -173,11 +168,14 @@ function Setup({ onStart }: { onStart: (input: { category: PomodoroCategory; nam
   const [minutes, setMinutes] = useState(25);
   const [autoBreak, setAutoBreak] = useState(true);
   const [sound, setSound] = useState(true);
+  const colors = usePomodoroColors();
+  // The − / + buttons: the indigo of the light capture; in dark the ink, as `pomodoro-setup-v4-dark` draws them.
+  const stepColor = colors.dark ? colors.ink : colors.indigo;
   return (
     <View style={styles.setup} testID="pomodoro-setup">
-      <Text style={[styles.body, styles.centered, { color: SECONDARY }]}>Choose a focus type and set your timer.</Text>
+      <Text style={[styles.body, styles.centered, { color: colors.secondary }]}>Choose a focus type and set your timer.</Text>
       <Text style={styles.headline}>Focus Category</Text>
-      <View style={styles.categories}>
+      <View style={[styles.categories, { backgroundColor: colors.card, shadowColor: colors.indigo }]}>
         {POMODORO_CATEGORIES.map((item) => {
           const on = item === category;
           return (
@@ -187,14 +185,14 @@ function Setup({ onStart }: { onStart: (input: { category: PomodoroCategory; nam
               accessibilityState={{ selected: on }}
               key={item}
               onPress={() => setCategory(item)}
-              style={[styles.categoryRow, on && { backgroundColor: withAlpha(PURPLE, 0.09) }]}
+              style={[styles.categoryRow, on && { backgroundColor: withAlpha(colors.purple, 0.09) }]}
               testID={`pomodoro-category-${item}`}
             >
               <View style={[styles.categoryIcon, { backgroundColor: TIMER_TINTS[item] }]}>
                 <Ionicons color="#FFFFFF" name={CATEGORY_ICONS[item]} size={16} />
               </View>
               <Text style={[styles.body, styles.medium, styles.grow]}>{POMODORO_CATEGORY_TITLES[item]}</Text>
-              <Ionicons color={on ? PURPLE : withAlpha(INDIGO, 0.4)} name={on ? 'checkmark-circle' : 'ellipse-outline'} size={22} />
+              <Ionicons color={on ? colors.purple : withAlpha(colors.indigo, 0.4)} name={on ? 'checkmark-circle' : 'ellipse-outline'} size={22} />
             </Pressable>
           );
         })}
@@ -206,15 +204,15 @@ function Setup({ onStart }: { onStart: (input: { category: PomodoroCategory; nam
           maxLength={120}
           onChangeText={setName}
           placeholder="What will you focus on?"
-          placeholderTextColor="rgba(60, 60, 67, 0.3)"
-          style={styles.nameInput}
+          placeholderTextColor={colors.placeholder}
+          style={[styles.nameInput, { backgroundColor: colors.card, color: colors.ink }]}
           testID="pomodoro-name"
           value={name}
         />
       </View>
       <View style={styles.field}>
         <Text style={styles.body}>Focus Duration</Text>
-        <View style={styles.stepper}>
+        <View style={[styles.stepper, { backgroundColor: colors.card }]}>
           <Pressable
             accessibilityLabel="Decrease focus duration by 5 minutes"
             accessibilityRole="button"
@@ -224,7 +222,7 @@ function Setup({ onStart }: { onStart: (input: { category: PomodoroCategory; nam
             style={styles.stepButton}
             testID="pomodoro-minutes-down"
           >
-            <Ionicons color={minutes <= 5 ? 'rgba(60, 60, 67, 0.3)' : INDIGO} name="remove-circle-outline" size={26} />
+            <Ionicons color={minutes <= 5 ? colors.placeholder : stepColor} name="remove-circle-outline" size={26} />
           </Pressable>
           <Text style={[styles.headline, styles.grow, styles.centered]} testID="pomodoro-minutes">{`${minutes} min`}</Text>
           <Pressable
@@ -236,20 +234,20 @@ function Setup({ onStart }: { onStart: (input: { category: PomodoroCategory; nam
             style={styles.stepButton}
             testID="pomodoro-minutes-up"
           >
-            <Ionicons color={minutes === 120 ? 'rgba(60, 60, 67, 0.3)' : INDIGO} name="add-circle-outline" size={26} />
+            <Ionicons color={minutes === 120 ? colors.placeholder : stepColor} name="add-circle-outline" size={26} />
           </Pressable>
         </View>
       </View>
       <View style={styles.toggleRow}>
         <View style={styles.grow}>
           <Text style={styles.body}>Auto Start Break</Text>
-          <Text style={[styles.caption, { color: SECONDARY }]}>Start a 5-minute break automatically after focus.</Text>
+          <Text style={[styles.caption, { color: colors.secondary }]}>Start a 5-minute break automatically after focus.</Text>
         </View>
-        <IOSSwitch accessibilityLabel="Auto Start Break" onValueChange={setAutoBreak} testID="pomodoro-auto-break" tint={INDIGO} value={autoBreak} />
+        <IOSSwitch accessibilityLabel="Auto Start Break" onValueChange={setAutoBreak} testID="pomodoro-auto-break" tint={colors.accent} value={autoBreak} />
       </View>
       <View style={styles.toggleRow}>
         <Text style={[styles.body, styles.grow]}>Play Sound</Text>
-        <IOSSwitch accessibilityLabel="Play Sound" onValueChange={setSound} testID="pomodoro-sound" tint={INDIGO} value={sound} />
+        <IOSSwitch accessibilityLabel="Play Sound" onValueChange={setSound} testID="pomodoro-sound" tint={colors.accent} value={sound} />
       </View>
       <View style={styles.startSpacing}>
         <Primary
@@ -268,7 +266,8 @@ function Setup({ onStart }: { onStart: (input: { category: PomodoroCategory; nam
 /** `timer(_:compact:)` (:123-163). */
 function Timer({ session, compact, now, store, onStop }: { session: PomodoroSession; compact: boolean; now: number; store: PomodoroStoreApi; onStop: () => void }) {
   const isBreak = session.phase === 'shortBreak';
-  const color = isBreak ? BLUE : PURPLE;
+  const colors = usePomodoroColors();
+  const color = isBreak ? colors.blue : colors.purple;
   const left = remaining(session, now);
   const ring = compact ? 240 : 300;
   return (
@@ -278,7 +277,7 @@ function Timer({ session, compact, now, store, onStop }: { session: PomodoroSess
         <Text style={[styles.subheadline, styles.semibold, { color }]}>{isBreak ? 'Short Break' : POMODORO_CATEGORY_TITLES[session.category]}</Text>
       </View>
       <Text style={[styles.title2, styles.centered]}>{isBreak ? 'Time for a short break!' : session.name === '' ? 'Time to focus' : session.name}</Text>
-      {isBreak ? <Text style={[styles.body, { color: SECONDARY }]}>You’ve earned it! ☕</Text> : null}
+      {isBreak ? <Text style={[styles.body, { color: colors.secondary }]}>You’ve earned it! ☕</Text> : null}
       <View style={styles.ringWrap}>
         <ProgressRing fraction={1 - progress(session, now)} isBreak={isBreak} size={ring}>
           <View style={[styles.ringContent, { padding: compact ? 15 : 30 }]}>
@@ -300,28 +299,28 @@ function Timer({ session, compact, now, store, onStop }: { session: PomodoroSess
       <View style={[styles.controls, { paddingVertical: compact ? 0 : 8 }]}>
         {isBreak ? (
           <>
-            <Control color={BLUE} icon="play-skip-forward" onPress={() => store.getState().mutate((value, time) => stop(value, time))} title="Skip" />
-            <Control color={BLUE} icon="stop" onPress={() => store.getState().mutate((value, time) => stop(value, time))} title="End Break" />
+            <Control color={colors.blue} icon="play-skip-forward" onPress={() => store.getState().mutate((value, time) => stop(value, time))} title="Skip" />
+            <Control color={colors.blue} icon="stop" onPress={() => store.getState().mutate((value, time) => stop(value, time))} title="End Break" />
           </>
         ) : (
           <>
-            <Control color={PINK} icon={session.paused ? 'play' : 'pause'} onPress={() => store.getState().mutate((value, time) => togglePause(value, time))} title={session.paused ? 'Resume' : 'Pause'} />
-            <Control color={PINK} icon="stop" onPress={onStop} title="Stop" />
+            <Control color={colors.pink} icon={session.paused ? 'play' : 'pause'} onPress={() => store.getState().mutate((value, time) => togglePause(value, time))} title={session.paused ? 'Resume' : 'Pause'} />
+            <Control color={colors.pink} icon="stop" onPress={onStop} title="Stop" />
           </>
         )}
       </View>
       {!isBreak ? (
-        <View style={[styles.awake, { backgroundColor: withAlpha(PURPLE, 0.06) }]}>
-          <Ionicons color={PURPLE} name="moon" size={20} />
+        <View style={[styles.awake, { backgroundColor: withAlpha(colors.purple, 0.06) }]}>
+          <Ionicons color={colors.purple} name="moon" size={20} />
           <View style={styles.grow}>
             <Text style={[styles.subheadline, styles.semibold]}>Distraction-free mode</Text>
-            <Text style={[styles.caption, { color: SECONDARY }]}>Keep this focus screen awake.</Text>
+            <Text style={[styles.caption, { color: colors.secondary }]}>Keep this focus screen awake.</Text>
           </View>
           <IOSSwitch
             accessibilityLabel="Distraction-free mode"
             onValueChange={(value) => store.getState().mutate((item, time) => setKeepAwake(item, value, time))}
             testID="pomodoro-keep-awake"
-            tint={INDIGO}
+            tint={colors.accent}
             value={session.keepAwake}
           />
         </View>
@@ -333,27 +332,28 @@ function Timer({ session, compact, now, store, onStop }: { session: PomodoroSess
 /** `completion(_:)` (:164-177). */
 function Completion({ session, onAnother, onTasks, onDone }: { session: PomodoroSession; onAnother: () => void; onTasks?: () => void; onDone: () => void }) {
   const completed = session.phase === 'completed';
+  const colors = usePomodoroColors();
   return (
     <View style={styles.completion} testID="pomodoro-completion">
       <View style={styles.celebration}>
         {completed ? <Confetti /> : null}
-        <LinearGradient colors={GRADIENT} start={{ x: 0, y: 0.5 }} end={{ x: 1, y: 0.5 }} style={styles.badge}>
+        <LinearGradient colors={colors.gradient} start={{ x: 0, y: 0.5 }} end={{ x: 1, y: 0.5 }} style={[styles.badge, { shadowColor: colors.purple }]}>
           <Ionicons color="#FFFFFF" name={completed ? 'checkmark' : 'stop'} size={46} />
         </LinearGradient>
       </View>
       <View style={styles.completionText}>
         <Text style={styles.largeTitle}>{completed ? 'Great job!' : 'Session stopped'}</Text>
-        <Text style={[styles.body, { color: SECONDARY }]}>{completed ? 'Focus session completed.' : 'Your focus time has been saved.'}</Text>
+        <Text style={[styles.body, { color: colors.secondary }]}>{completed ? 'Focus session completed.' : 'Your focus time has been saved.'}</Text>
       </View>
-      <View style={styles.statistics}>
+      <View style={[styles.statistics, { backgroundColor: colors.card, shadowColor: colors.indigo }]}>
         <Statistic emoji="🍅" label="Focus time" time={completionDuration(session.focusSeconds)} />
-        <View style={styles.vertical} />
+        <View style={[styles.vertical, { backgroundColor: colors.separator }]} />
         <Statistic emoji="☕" label="Break time" time={completionDuration(session.breakSeconds)} />
-        <View style={styles.vertical} />
+        <View style={[styles.vertical, { backgroundColor: colors.separator }]} />
         <Statistic emoji="📅" label="Completed" time={completed ? '1' : '0'} />
       </View>
-      <View style={[styles.summary, { backgroundColor: withAlpha(PURPLE, 0.07) }]}>
-        <Ionicons color={PURPLE} name={CATEGORY_ICONS[session.category]} size={24} />
+      <View style={[styles.summary, { backgroundColor: withAlpha(colors.purple, 0.07) }]}>
+        <Ionicons color={colors.purple} name={CATEGORY_ICONS[session.category]} size={24} />
         <View style={styles.grow}>
           <Text style={[styles.body, styles.bold]}>{POMODORO_CATEGORY_TITLES[session.category]}</Text>
           {session.name !== '' ? <Text style={styles.subheadline}>{session.name}</Text> : null}
@@ -363,10 +363,10 @@ function Completion({ session, onAnother, onTasks, onDone }: { session: Pomodoro
       <Pressable
         accessibilityRole="button"
         onPress={onTasks ?? onDone}
-        style={[styles.secondary, { backgroundColor: withAlpha(PURPLE, 0.07) }]}
+        style={[styles.secondary, { backgroundColor: withAlpha(colors.purple, 0.07) }]}
         testID={onTasks ? 'pomodoro-back-to-tasks' : 'pomodoro-done'}
       >
-        <Text style={[styles.headline, { color: INK }]}>{onTasks ? 'Back to Tasks' : 'Done'}</Text>
+        <Text style={[styles.headline, { color: colors.ink }]}>{onTasks ? 'Back to Tasks' : 'Done'}</Text>
       </Pressable>
     </View>
   );
@@ -383,9 +383,10 @@ function Statistic({ emoji, time, label }: { emoji: string; time: string; label:
 }
 
 function Primary({ title, onPress, testID }: { title: string; onPress: () => void; testID: string }) {
+  const colors = usePomodoroColors();
   return (
     <Pressable accessibilityRole="button" onPress={onPress} testID={testID}>
-      <LinearGradient colors={GRADIENT} start={{ x: 0, y: 0.5 }} end={{ x: 1, y: 0.5 }} style={styles.primary}>
+      <LinearGradient colors={colors.gradient} start={{ x: 0, y: 0.5 }} end={{ x: 1, y: 0.5 }} style={styles.primary}>
         <Text style={styles.primaryText}>{title}</Text>
       </LinearGradient>
     </Pressable>
@@ -404,18 +405,18 @@ function Control({ title, icon, color, onPress }: { title: string; icon: 'play-s
 }
 
 const styles = StyleSheet.create({
-  fill: { flex: 1, backgroundColor: '#FFFFFF' },
+  fill: { flex: 1 },
   grow: { flex: 1 },
   content: { paddingHorizontal: 16, gap: 14, width: '100%', maxWidth: 620, alignSelf: 'center' },
   header: { flexDirection: 'row', alignItems: 'center' },
-  circleButton: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: withAlpha(PURPLE, 0.07) },
-  largeTitle: { fontSize: 34, lineHeight: 41, fontWeight: '700', color: INK, textAlign: 'center' },
-  title2: { flex: 1, fontSize: 22, lineHeight: 28, fontWeight: '700', color: INK, textAlign: 'center' },
-  title3: { fontSize: 20, lineHeight: 25, color: INK },
-  headline: { fontSize: 17, lineHeight: 22, fontWeight: '600', color: INK },
-  body: { fontSize: 17, lineHeight: 22, color: INK },
-  subheadline: { fontSize: 15, lineHeight: 20, color: INK },
-  caption: { fontSize: 12, lineHeight: 16, color: INK },
+  circleButton: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
+  largeTitle: { fontSize: 34, lineHeight: 41, fontWeight: '700', textAlign: 'center' },
+  title2: { flex: 1, fontSize: 22, lineHeight: 28, fontWeight: '700', textAlign: 'center' },
+  title3: { fontSize: 20, lineHeight: 25 },
+  headline: { fontSize: 17, lineHeight: 22, fontWeight: '600' },
+  body: { fontSize: 17, lineHeight: 22 },
+  subheadline: { fontSize: 15, lineHeight: 20 },
+  caption: { fontSize: 12, lineHeight: 16 },
   emoji: { fontSize: 28, lineHeight: 34 },
   bold: { fontWeight: '700' },
   semibold: { fontWeight: '600' },
@@ -428,8 +429,6 @@ const styles = StyleSheet.create({
     gap: 2,
     padding: 3,
     borderRadius: 18,
-    backgroundColor: '#FFFFFF',
-    shadowColor: INDIGO,
     shadowOpacity: 0.08,
     shadowRadius: 8,
     shadowOffset: { width: 0, height: 3 },
@@ -438,8 +437,8 @@ const styles = StyleSheet.create({
   categoryRow: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 5, borderRadius: 12 },
   categoryIcon: { width: 30, height: 30, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   field: { gap: 8 },
-  nameInput: { padding: 12, borderRadius: 14, backgroundColor: '#FFFFFF', borderWidth: 1.5, borderColor: 'rgba(61, 41, 240, 0.5)', fontSize: 17, color: INK },
-  stepper: { flexDirection: 'row', alignItems: 'center', borderRadius: 14, backgroundColor: '#FFFFFF' },
+  nameInput: { padding: 12, borderRadius: 14, borderWidth: 1.5, borderColor: 'rgba(61, 41, 240, 0.5)', fontSize: 17 },
+  stepper: { flexDirection: 'row', alignItems: 'center', borderRadius: 14 },
   stepButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   toggleRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   // `.padding(.top, max(0, startButtonSpacing - 12))`, `@ScaledMetric startButtonSpacing = 60`.
@@ -450,7 +449,7 @@ const styles = StyleSheet.create({
   phasePill: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 18, paddingVertical: 10, borderRadius: 999 },
   ringWrap: { padding: 8, alignSelf: 'stretch', alignItems: 'center' },
   ringContent: { alignItems: 'center', gap: 8 },
-  countdown: { fontWeight: '700', color: INK, fontVariant: ['tabular-nums'] },
+  countdown: { fontWeight: '700', fontVariant: ['tabular-nums'] },
   quote: { alignSelf: 'stretch', padding: 16, borderRadius: 16 },
   controls: { flexDirection: 'row', gap: 40 },
   control: { alignItems: 'center', gap: 10 },
@@ -464,7 +463,6 @@ const styles = StyleSheet.create({
     borderRadius: 55,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: PURPLE,
     shadowOpacity: 0.2,
     shadowRadius: 16,
     shadowOffset: { width: 0, height: 8 },
@@ -476,15 +474,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 16,
     borderRadius: 20,
-    backgroundColor: '#FFFFFF',
-    shadowColor: INDIGO,
     shadowOpacity: 0.06,
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 4 },
     elevation: 2,
   },
   statistic: { flex: 1, alignItems: 'center', gap: 8 },
-  vertical: { width: StyleSheet.hairlineWidth, height: 60, backgroundColor: 'rgba(60, 60, 67, 0.29)' },
+  vertical: { width: StyleSheet.hairlineWidth, height: 60 },
   summary: { flexDirection: 'row', alignItems: 'center', gap: 14, padding: 18, borderRadius: 18 },
   secondary: { padding: 16, borderRadius: 16, alignItems: 'center' },
 });

@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { Image, Modal, Platform, Pressable, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { shoppingStoresApi } from '../../api/shopping';
+import { shoppingStoresApi, type StoreBrandMetadata } from '../../api/shopping';
 import { withAlpha } from '../../components/SignInBackdrop';
 import { Text } from '../../components/Text';
 import { useTheme } from '../../theme';
@@ -59,10 +59,37 @@ function cached(key: string): Entry | null {
   return entry;
 }
 
+/**
+ * The logo a store search row already carries (ce6d20a, `suppliedBrand`, StoreBrandLogo.swift:18, :86-88),
+ * or `null` for the cart: no brand (an older server), no logo URL, or one that breaks the URL rules.
+ */
+export function suppliedLogo(brand: StoreBrandMetadata | null | undefined): { uri: string; label: string } | null {
+  const uri = safeLogoUrl(brand?.logoUrl);
+  return brand && uri ? { uri, label: brand.displayName } : null;
+}
+
+/**
+ * `GET /api/shopping/store-brand`, retried after 1 s and then 2 s while it answers with no logo (ce6d20a,
+ * StoreBrandLogo.swift:89-93): another view may be resolving the same brand under the server's cache lease.
+ * Stops as soon as the view is gone.
+ */
+export async function lookUp(listId: string, cancelled: () => boolean, wait: (ms: number) => Promise<void> = (ms) => new Promise((done) => setTimeout(done, ms))): Promise<StoreBrandMetadata | null> {
+  let { brand } = await shoppingStoresApi.brand(listId);
+  for (const delay of [1000, 2000]) {
+    if (brand.logoUrl != null) break;
+    await wait(delay);
+    if (cancelled()) return null;
+    ({ brand } = await shoppingStoresApi.brand(listId));
+  }
+  return cancelled() ? null : brand;
+}
+
 export function StoreBrandLogo({
   listId,
   identity,
   customImageData,
+  automaticLookup = true,
+  suppliedBrand,
   size = 56,
   expandsOnTap = false,
 }: {
@@ -70,6 +97,10 @@ export function StoreBrandLogo({
   identity: string;
   /** The list's own logo: bare JPEG base64 (`storeLogoData`). */
   customImageData?: string | null;
+  /** `automaticLookup` (:17): `false` never calls `store-brand`, so only `suppliedBrand` can draw a logo. */
+  automaticLookup?: boolean;
+  /** `suppliedBrand` (:18): used instead of the lookup, with no retry. */
+  suppliedBrand?: StoreBrandMetadata | null;
   size?: number;
   expandsOnTap?: boolean;
 }) {
@@ -86,14 +117,19 @@ export function StoreBrandLogo({
   const [expanded, setExpanded] = useState(false);
   if (state.key !== key) setState({ key, uri: cached(key)?.uri ?? null, label: cached(key)?.label ?? 'Shopping list' });
 
-  // `.task(id: "\(listID)|\(identity)|\(customImageData ?? "")") { await load() }`
+  // A supplied brand replaces the lookup (`if let suppliedBrand { result = Result(brand: suppliedBrand) }`,
+  // :86-87), so it is read straight from the prop and never fetched or retried.
+  const supplied = suppliedBrand != null;
+  const fromSearch = supplied && identity.replaceAll('|', '') !== '' ? suppliedLogo(suppliedBrand) : null;
+
+  // `.task(id: "\(cacheKey)|\(customImageData ?? "")|\(automaticLookup)|\(suppliedBrand?.logoUrl ?? "")") { await load() }`
   useEffect(() => {
     let cancelled = false;
-    if (usingCustom || cached(key) || identity.replaceAll('|', '') === '') return;
-    shoppingStoresApi
-      .brand(listId)
-      .then(({ brand }) => {
-        if (cancelled) return;
+    // `guard automaticLookup || suppliedBrand != nil else { image = nil; return }` (:66).
+    if (usingCustom || supplied || !automaticLookup || cached(key) || identity.replaceAll('|', '') === '') return;
+    lookUp(listId, () => cancelled)
+      .then((brand) => {
+        if (cancelled || !brand) return;
         const uri = safeLogoUrl(brand.logoUrl);
         if (!uri) return;
         if (cache.size >= CACHE_LIMIT) cache.clear();
@@ -105,12 +141,12 @@ export function StoreBrandLogo({
     return () => {
       cancelled = true;
     };
-  }, [key, listId, identity, usingCustom]);
+  }, [key, listId, identity, usingCustom, automaticLookup, supplied]);
 
-  const uri = usingCustom ? custom : state.uri;
+  const uri = usingCustom ? custom : supplied ? (fromSearch?.uri ?? null) : state.uri;
   // `identity.components(separatedBy: "|").first ?? "Store"`: a list with a custom logo and no store
   // name would read " logo", so the name falls back to "Store" as Swift's `??` intends.
-  const label = usingCustom ? identity.split('|')[0] || 'Store' : state.label;
+  const label = usingCustom ? identity.split('|')[0] || 'Store' : supplied ? (fromSearch?.label ?? 'Shopping list') : state.label;
   const showing = uri !== null && loaded === uri;
   const avatar = (
     <View

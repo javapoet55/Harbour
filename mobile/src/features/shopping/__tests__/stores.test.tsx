@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
 import * as Location from 'expo-location';
-import { Linking, StyleSheet } from 'react-native';
+import { Linking, Platform, StyleSheet } from 'react-native';
 
 const mockPush = jest.fn();
 jest.mock('expo-router', () => ({
@@ -26,12 +26,13 @@ jest.mock('../../../api/shopping', () => ({
   shoppingOffersApi: { offers: jest.fn(), choose: jest.fn(), storeHours: (...args: unknown[]) => mockHours(...args) },
 }));
 
-import type { GroceryList } from '../../../api/shopping';
+import type { GroceryList, ShoppingStoreSuggestion } from '../../../api/shopping';
+import { useAppearance } from '../../../store/appearance';
 import { useSession } from '../../../store/session';
 import MyLists from '../../../../app/wellness/shopping/index';
-import { ListSettingsSheet, settingsSavable, withAddress, withStore } from '../ListSettings';
+import { ListSettingsSheet, logoLookupAllowed, settingsSavable, storeChanged, withAddress, withStore } from '../ListSettings';
 import { shoppingStore } from '../store';
-import { clearStoreBrandCache, safeLogoUrl, StoreBrandLogo } from '../StoreBrandLogo';
+import { clearStoreBrandCache, lookUp, safeLogoUrl, StoreBrandLogo, suppliedLogo } from '../StoreBrandLogo';
 import { distanceLabel, storeSearchBody } from '../StorePages';
 
 /**
@@ -364,5 +365,143 @@ describe('List Settings', () => {
     expect(storeSearchBody('', '', null)).toBeNull();
     expect(distanceLabel(0.5)).toBe('0.50 km');
     expect(withStore(list(), SAFEWAY)).toMatchObject({ storePlaceId: 'place-1', storeAddress: SAFEWAY.address });
+  });
+});
+
+/**
+ * ce6d20a: `POST /api/shopping/stores` gives each store a `brand`, which the finder hands to the logo as
+ * `suppliedBrand` with `automaticLookup: false` (ShoppingViews.swift:754-756). No lookup either way; a
+ * missing brand or logo keeps the cart.
+ */
+describe('Store search brand logos', () => {
+  const BRAND = { displayName: 'Safeway', logoUrl: 'https://cdn.brandfetch.io/safeway/logo.png?c=1' };
+
+  it('reads the brand from the search row, or nothing', () => {
+    expect(suppliedLogo(BRAND)).toEqual({ uri: BRAND.logoUrl, label: 'Safeway' });
+    expect(suppliedLogo({ displayName: 'Safeway', logoUrl: null })).toBeNull();
+    expect(suppliedLogo({ displayName: 'Shop', logoUrl: 'https://tracker.example/x.png' })).toBeNull();
+    expect(suppliedLogo(null)).toBeNull();
+    expect(suppliedLogo(undefined)).toBeNull();
+  });
+
+  it('accepts a search row with or without brand', () => {
+    const withBrand: ShoppingStoreSuggestion = { ...SAFEWAY, brand: BRAND };
+    const without: ShoppingStoreSuggestion = SAFEWAY;
+    expect(withBrand.brand?.displayName).toBe('Safeway');
+    expect(without.brand).toBeUndefined();
+  });
+
+  it('draws the supplied logo without calling store-brand', async () => {
+    await render(<StoreBrandLogo automaticLookup={false} identity="Safeway|https://www.safeway.com" listId="search-place-1" suppliedBrand={BRAND} />);
+    const image = screen.getByTestId('store-brand-image');
+    expect(image.props.source.uri).toBe(BRAND.logoUrl);
+    await fireEvent(image, 'load');
+    expect(screen.getByLabelText('Safeway logo')).toBeTruthy();
+    expect(mockBrand).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['no brand', undefined],
+    ['a brand with no logo', { displayName: 'Safeway', logoUrl: null }],
+  ])('keeps the cart for %s, with no lookup', async (_, suppliedBrand) => {
+    await render(<StoreBrandLogo automaticLookup={false} identity="Safeway|" listId="search-place-2" suppliedBrand={suppliedBrand} />);
+    expect(screen.queryByTestId('store-brand-image')).toBeNull();
+    expect(screen.getByLabelText('Shopping list')).toBeTruthy();
+    expect(mockBrand).not.toHaveBeenCalled();
+  });
+});
+
+/** Phase 14 Run B (android-polish.md §60): the rest of the §24 "Shopping: store logos" row, and List Settings. */
+describe('Phase 14: store logos and List Settings', () => {
+  const LOGO = { displayName: 'Safeway', logoUrl: 'https://cdn.brandfetch.io/safeway/logo.png?c=1' };
+  const os = Platform.OS;
+  afterEach(() => {
+    useAppearance.setState({ appearance: 'system' });
+    Platform.OS = os;
+    jest.useRealTimers();
+  });
+  async function openSettings(initial = list()) {
+    const onSave = jest.fn();
+    const onClose = jest.fn();
+    await wrap(<ListSettingsSheet list={initial} onClose={onClose} onSave={onSave} visible />);
+    return { onSave, onClose };
+  }
+
+  it('Stores Near You rows draw the server’s brand logo with no lookup, and the cart without one', async () => {
+    jest.useFakeTimers();
+    mockSearch.mockResolvedValue({ stores: [{ ...SAFEWAY, brand: LOGO }, { ...SAFEWAY, id: 'place-2', name: 'Corner Shop', brand: null }] });
+    await openSettings(list({ storeZip: '94109' }));
+    await fireEvent.press(screen.getByTestId('shopping-add-store'));
+    await fireEvent.changeText(screen.getByTestId('stores-name'), 'Safeway');
+    await act(async () => {
+      jest.advanceTimersByTime(600);
+    });
+    await waitFor(() => expect(screen.getByTestId('store-place-1')).toBeTruthy());
+    expect(within(screen.getByTestId('store-place-1')).getByTestId('store-brand-image').props.source.uri).toBe(LOGO.logoUrl);
+    expect(within(screen.getByTestId('store-place-2')).queryByTestId('store-brand-image')).toBeNull();
+    expect(mockBrand).not.toHaveBeenCalled();
+  });
+
+  it('looks the List Settings logo up only while the draft store is the saved one', () => {
+    const saved = list({ storeName: 'Safeway', storeWebsite: 'https://www.safeway.com', storePlaceId: 'place-1' });
+    expect(logoLookupAllowed(saved, saved)).toBe(true);
+    expect(logoLookupAllowed(saved, { ...saved, title: 'Renamed', storeLogoData: 'abc' })).toBe(true);
+    expect(logoLookupAllowed(saved, withStore(saved, { ...SAFEWAY, id: 'place-9', name: 'Trader Joe’s' }))).toBe(false);
+    expect(logoLookupAllowed(saved, { ...saved, storeName: 'Safeway Market', storePlaceId: null, storeWebsite: null })).toBe(false);
+    // The detail screen holds a store change back until the server has it.
+    expect(storeChanged(saved, { ...saved, title: 'Renamed' })).toBe(false);
+    expect(storeChanged(saved, { ...saved, storeLogoData: 'abc' })).toBe(true);
+    expect(storeChanged(saved, { ...saved, storePlaceId: 'place-2' })).toBe(true);
+  });
+
+  it('a newly typed store keeps the cart in List Settings: no store-brand call for an unsaved store', async () => {
+    mockBrand.mockResolvedValue({ brand: LOGO });
+    await openSettings(list({ storeName: 'Safeway', storeWebsite: 'https://www.safeway.com', storePlaceId: 'place-1' }));
+    await waitFor(() => expect(mockBrand).toHaveBeenCalledTimes(1));
+    await fireEvent.changeText(screen.getByTestId('list-settings-store-name'), 'Trader Joe’s');
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(mockBrand).toHaveBeenCalledTimes(1);
+    expect(screen.queryByTestId('store-brand-image')).toBeNull();
+  });
+
+  it('retries an empty store-brand answer after 1 s and 2 s, then stops', async () => {
+    mockBrand.mockResolvedValueOnce({ brand: { displayName: 'Safeway', logoUrl: null } }).mockResolvedValueOnce({ brand: { displayName: 'Safeway', logoUrl: null } }).mockResolvedValueOnce({ brand: LOGO });
+    const waits: number[] = [];
+    const brand = await lookUp('l1', () => false, async (ms) => void waits.push(ms));
+    expect(waits).toEqual([1000, 2000]);
+    expect(brand).toEqual(LOGO);
+    expect(mockBrand).toHaveBeenCalledTimes(3);
+
+    mockBrand.mockReset().mockResolvedValue({ brand: { displayName: 'Safeway', logoUrl: null } });
+    expect(await lookUp('l1', () => false, async () => undefined)).toEqual({ displayName: 'Safeway', logoUrl: null });
+    expect(mockBrand).toHaveBeenCalledTimes(3);
+    // A logo on the first answer is never retried, and a view that is gone stops waiting.
+    mockBrand.mockReset().mockResolvedValue({ brand: LOGO });
+    await lookUp('l1', () => false, async () => undefined);
+    expect(mockBrand).toHaveBeenCalledTimes(1);
+    mockBrand.mockReset().mockResolvedValue({ brand: { displayName: 'Safeway', logoUrl: null } });
+    expect(await lookUp('l1', () => true, async () => undefined)).toBeNull();
+    expect(mockBrand).toHaveBeenCalledTimes(1);
+  });
+
+  it('Cancel closes List Settings and discards the changes (Android ahead of iOS, §24 bug 2)', async () => {
+    const initial = list();
+    const { onSave, onClose } = await openSettings(initial);
+    await fireEvent.changeText(screen.getByTestId('list-settings-name'), 'Changed');
+    await fireEvent.press(screen.getByTestId('list-settings-cancel'));
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
+  it('Android, Night: Save, Directions and the Repeat weekly switch use Android’s dark colours, not the dark indigo', async () => {
+    Platform.OS = 'android';
+    useAppearance.setState({ appearance: 'night' });
+    await openSettings(list({ storeName: 'Safeway', storeAddress: SAFEWAY.address, storeZip: '94111', storePlaceId: 'place-1' }));
+    expect(StyleSheet.flatten(within(screen.getByTestId('list-settings-save')).getByText('Save').props.style).color).toBe('#6BB8FF');
+    expect(StyleSheet.flatten(within(screen.getByTestId('list-settings-directions')).getByText('Directions').props.style).color).toBe('#6BB8FF');
+    // `switchOn` in dark: the brand indigo at 85% (§6), not Swift's full-strength dark indigo.
+    expect(StyleSheet.flatten(screen.getByTestId('list-settings-weekly-track').props.style).backgroundColor).toMatch(/^rgba\(61, 41, 240, 0\.85/);
   });
 });

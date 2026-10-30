@@ -6,8 +6,10 @@ import { ApiError } from '../api/client';
 import { useSession } from '../store/session';
 
 const mockPush = jest.fn();
+let mockParams: Record<string, string> = {};
 jest.mock('expo-router', () => ({
-  router: { push: (...args: unknown[]) => mockPush(...args), replace: jest.fn(), back: jest.fn() },
+  router: { push: (...args: unknown[]) => mockPush(...args), replace: jest.fn(), back: jest.fn(), setParams: jest.fn() },
+  useLocalSearchParams: () => mockParams,
 }));
 
 const mockLogin = jest.fn();
@@ -131,5 +133,32 @@ describe('sign-in screen', () => {
     await renderSignIn();
     await fireEvent.press(screen.getByLabelText('Create account'));
     expect(mockPush).toHaveBeenCalledWith('/sign-up');
+  });
+});
+
+/**
+ * `SignInView(startWithSignUp:)` (RootView.swift:382-384): Skip and Get Started on the introduction open
+ * sign-in with Create Account up. Once — §24 Swift bug 7 is that it comes back after a later sign-out.
+ */
+describe('sign-in after the introduction', () => {
+  const { router } = jest.requireMock('expo-router') as { router: { setParams: jest.Mock } };
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockParams = {};
+  });
+  afterAll(() => {
+    mockParams = {};
+  });
+
+  it('opens Create Account, and clears the request so it cannot reopen', async () => {
+    mockParams = { signUp: '1' };
+    await renderSignIn();
+    expect(mockPush).toHaveBeenCalledWith('/sign-up');
+    expect(router.setParams).toHaveBeenCalledWith({ signUp: undefined });
+  });
+
+  it('opens sign-in alone otherwise', async () => {
+    await renderSignIn();
+    expect(mockPush).not.toHaveBeenCalled();
   });
 });
