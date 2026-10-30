@@ -2360,3 +2360,10 @@ closed-testing build from `fix/qa-oct31` (§70 there).
   should go to Swift as well.
 - Tests: `chooser.test.tsx` checks the new spelling.
 - **Phone check:** open Wellness. The quote card ends with "— Nexdo".
+
+## 47. An Event Details test that expired on 20 Oct 2026 (2026-11-02)
+
+Cherry-picked from develop's `eb8364a` (§50 there), so the closed-testing branch's jest run passes. Test only, no
+app code. `eventDetailsScreen.test.tsx` "Event Details for a device event › shows the phone’s copy…" expects the
+status "Upcoming" for `DEVICE`, which is fixed at 2026-10-20 06:30 UTC. Since that date passed it reads "Past". It
+now opens `DEVICE` moved to a day after `Date.now()`. The other device tests don't check the status.
