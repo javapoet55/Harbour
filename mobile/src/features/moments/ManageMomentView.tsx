@@ -155,6 +155,8 @@ function CardHeading({ title, children }: { title: string; children: ReactNode }
 
 export function ManageMomentView({ group, onDone }: { group: MomentDisplayGroup; onDone: () => void }) {
   const theme = useTheme();
+  // Toolbar items keep the app's `link`, readable in dark on Android (§24 bug 4), not the Wellness tint.
+  const toolbarLink = useTheme({ toolbar: true }).colors.link;
   const model = useManageModel(group);
   const state = useStore(model);
   // Android (docs/android-polish.md §14-15): while a wish is being written the tab holds its wish
@@ -430,14 +432,14 @@ export function ManageMomentView({ group, onDone }: { group: MomentDisplayGroup;
             <Pressable accessibilityRole="button" accessibilityLabel="Back" onPress={back} hitSlop={6} testID="festival-back">
               {/* A custom back (it auto-saves first), so SwiftUI draws it as a tinted glass capsule. */}
               <GlassCapsule>
-                <Ionicons name="chevron-back" size={24} color={theme.colors.link} />
+                <Ionicons name="chevron-back" size={24} color={toolbarLink} />
               </GlassCapsule>
             </Pressable>
           ),
           headerRight: () => (
             <Pressable accessibilityRole="button" accessibilityLabel="Moment options" collapsable={false} onPress={optionsMenu.open} hitSlop={6} ref={optionsAnchor} testID="festival-options">
               <GlassCapsule>
-                <Ionicons name="ellipsis-horizontal" size={22} color={theme.colors.link} />
+                <Ionicons name="ellipsis-horizontal" size={22} color={toolbarLink} />
               </GlassCapsule>
             </Pressable>
           ),
