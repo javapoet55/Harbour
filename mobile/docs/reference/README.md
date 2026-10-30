@@ -22,6 +22,10 @@ connection onboarding and Apple (device) calendars, Moments in Calendar and Task
 preparation, Settings, Today, Tasks, the dark Wellness chooser and small Shopping changes. See
 [Phase 13](#phase-13-bug-reports-calendar-connection-device-calendars-today-tasks-and-shopping).
 
+A **sixth pass** (Phase 14) covers `3b7e5c2..35c86e3`: the first-install introduction, the redesigned
+sign-up, the dark Wellness modules, Ask AI, Account and Settings. See
+[Phase 14](#phase-14-install-introduction-sign-up-dark-wellness-ask-ai-and-settings).
+
 ## How they were taken
 
 These settings are the same as the first pass:
@@ -584,3 +588,55 @@ The first run created nothing (one `POST /api/auth/password-reset/request` for `
 - The Moments, shopping list and calendar data are Phase 12's (`Parity Birthday` on 6 Oct, `Parity Sunday`,
   `Parity Birth Year` on 20 Oct, the `Parity Weekly Groceries` Safeway list). Safari was opened once by a link
   on the Store Hours page and left in the background. The session is still signed in.
+
+## Phase 14: install introduction, sign-up, dark Wellness, Ask AI and Settings
+
+The sixth capture pass. It covers the iPhone screens new or changed in `git log 3b7e5c2..origin/develop -- ios/`
+(branch `rn-phase-14` at `35c86e3`). The inventory, endpoints, native requirements, unmounted views and Swift
+bugs are in `docs/IOS_TO_REACT_NATIVE.md` §24. **Line numbers are as of `35c86e3`.**
+
+### How they were taken
+
+- The iPhone 17 Pro simulator (`3E8DBBD7-…`, iOS 26.5), a Debug build against `https://app-dev.nexdoapp.com`,
+  and the visakan account, signed in once and never relaunched.
+- **Signed out:** a scratch XCUITest driver (not committed) launched with `-reset-install-introduction` for
+  the introduction, sign-up and reset sheets.
+- **Signed in:** the driver attached with `activate()` and tapped by screen coordinates, with a screenshot
+  checked before every tap. Calorie Tracker, Pomodoro, Moments, Shopping and Settings are full-screen covers
+  that the UI-test tree does not see, so tapping by label hits the hidden screen underneath. That is how the
+  daily call was paused by mistake (restored; see §24 "Account state").
+- **Dark:** `xcrun simctl ui … appearance dark` (the app's Appearance is System).
+- **Resizing:** `sips --resampleWidth 720`. All 56 captures are under 500 KB.
+
+### Captures
+
+| Area | Captures |
+| --- | --- |
+| Install introduction | `install-intro-1`…`-4` (forced light) |
+| Sign-up and reset | `sign-up-v4`, `-scrolled`, `-keyboard`, `-filled`, `-passwords-mismatch`, `sign-up-existing-account-alert`, `password-reset-from-sign-up`, `password-reset-v4` |
+| Today and task editor | `today-v4-empty-schedule`, `-dark`, `task-editor-v4-from-today`, `-dark` |
+| Wellness and guides | `wellness-chooser-v4`, `-dark`, `module-guide-calories-v4`, `-scrolled`, `module-guide-pomodoro-v4`, `module-guide-moments-v4`, `module-guide-shopping-v4` |
+| Calorie Tracker | `calorie-dashboard-v4`, `-dark`, `-scrolled-dark`, `calorie-setup-confirm-v4-dark` |
+| Pomodoro | `pomodoro-dashboard-v4-empty-dark`, `-month-dark`, `pomodoro-setup-v4-dark` |
+| Moments | `moments-v4-dark`, `moments-settings-v4`, `-dark`, `-scrolled-dark`, `manage-moments-v4-scheduled-empty-dark`, `-need-review-dark`, `manage-moment-v4-contacts-dark`, `-message-dark`, `-schedule-dark`, `moment-editor-v4-create-dark` |
+| Shopping | `shopping-lists-v4-dark`, `shopping-list-detail-v4-dark`, `shopping-list-settings-v4-dark`, `shopping-store-finder-v4-logos-dark` |
+| Ask AI | `ask-ai-landing-v4`, `-dark`, `-keyboard-focus-dark` |
+| Account and Settings | `account-v4`, `-dark`, `change-password-v4`, `settings-v4-dark`, `settings-v4-scrolled-1-dark`…`-4-dark`, `settings-v4-scrolled-4` |
+
+### Not captured
+
+| Screen or state | Why |
+| --- | --- |
+| Calendar: Connect your calendar sheet | Shows only with zero calendar connections; the account has Google connected and was not disconnected |
+| App Store review sheet | System UI; needs a Friday after 17:00 local time, a seeded schedule and a relaunch (which signs out) |
+| Add / Ask by Voice: Start listening, interrupted, fresh reopen | Opening voice starts a live realtime session; not done under the no-call rule |
+| Password reset: unregistered-email error | Dropped when the pass was narrowed to signed-in screens; the 404 text is in §24 |
+| Sign-up and introduction in dark | Signed-out only; the simulator was kept signed in. The introduction is forced light |
+| Shopping Store Logo editor in dark | Opening it from List Settings risked a save; the light editor is in Phase 13 |
+| Moments "Connect me on the day" guide | No visible change (still forced light) |
+
+### Test data
+
+Nothing was created. The existing Phase 12/13 items were used (`Parity Birthday`, `Parity Sunday`, `Parity
+Birth Year`, `Parity Weekly Groceries`). One account change happened by mistake and was reverted (§24,
+"Account state"): the daily food call was paused and turned back on at 8:00 PM with the same phone.
