@@ -135,33 +135,17 @@ describe('Sign in on Android', () => {
   });
 });
 
+/**
+ * Create account was redesigned in Phase 14 (docs/android-polish.md §52): the pinned bar clears the
+ * navigation bar by its inset, and the focused field's box takes the accent (sign-up.test.tsx).
+ */
 describe('Create account on Android', () => {
   beforeEach(() => onPlatform('android'));
 
-  it('pads the scroll by the navigation bar and leaves 24 under the closing copy', async () => {
+  it('lifts the pinned bar clear of the navigation bar', async () => {
     await wrap(<SignUp />);
-    // The test safe-area mock reports a 34pt bottom inset.
-    expect(StyleSheet.flatten(screen.getByTestId('auth-scroll').props.contentContainerStyle)).toMatchObject({ paddingBottom: 34 });
-    expect(flat('sign-up-bottom')).toMatchObject({ height: 24 });
-    expect(screen.getByText('Nexdo captures tasks in your own words, finds the right next step, and helps you protect time for what matters.')).toBeTruthy();
-  });
-
-  it('borders the focused row’s tile in the accent', async () => {
-    await wrap(<SignUp />);
-    await fireEvent(screen.getByLabelText('Full name'), 'focus');
-    expect(flat('field-icon-person')).toMatchObject({ borderColor: light.accent });
-    await fireEvent(screen.getByLabelText('Confirm password'), 'focus');
-    expect(flat('field-icon-checkmark.shield')).toMatchObject({ borderColor: light.accent });
-  });
-});
-
-describe('Create account on iOS', () => {
-  it('keeps the Swift spacing and no focus border', async () => {
-    onPlatform('ios');
-    await wrap(<SignUp />);
-    expect(flat('sign-up-bottom')).toMatchObject({ height: 28 });
-    expect(StyleSheet.flatten(screen.getByTestId('auth-scroll').props.contentContainerStyle)).toMatchObject({ paddingBottom: 0 });
-    expect(flat('field-icon-person').borderWidth).toBeUndefined();
+    // The test safe-area mock reports a 34pt bottom inset; Swift's own bottom padding is 8.
+    expect(flat('sign-up-bar')).toMatchObject({ paddingBottom: 42, backgroundColor: light.barSurface, borderTopWidth: 1 });
   });
 });
 

@@ -2427,3 +2427,65 @@ Port of `InstallIntroductionView` (35b40f2, 530f1bd) against `install-intro-1`�
 - Tests: `src/__tests__/introduction.test.tsx` (copy, paging by Next, dots and swipe, the three ways out, the route
   marking it seen); `session-gate.test.tsx` (introduction vs sign-in, the splash while reading, a signed-in session
   marks it seen); `sign-in.test.tsx` (Create Account opens once from the param).
+
+## 52. Phase 14 / A2: Create Account redesign and its security check (2026-10-30)
+
+`SignUpView` as of `35c86e3` (RootView.swift:618-797; 8e171aa, afe0430, a80c206, 8592a0a, 310f1ab), against `sign-up-v4`,
+`-scrolled`, `-keyboard`, `-filled` and `-passwords-mismatch`. File `app/(auth)/sign-up.tsx`.
+
+- **Layout as Swift:** no navigation title, only Cancel (`(auth)/_layout.tsx` title `''`). On the grouped background
+  with the 7%/6% blue→purple wash: `NexdoLogoMark` 64×54 + "NexDo", then "Less on your mind. More done in your day.",
+  "Create your account" (title, bold) and "Your tasks, plans, and everyday life — together.". The card (radius 28,
+  indigo 10% hairline, padding 20) holds four captioned fields: Full name / "Your name", Email address /
+  "you@example.com", Password, Confirm password. Each is a radius-14 box on `tertiarySystemGroupedBackground` with
+  its icon. Under the card: "We protect your password and never store a readable copy." and the red error line.
+- **Pinned bar:** Create Account → (56 pt, radius 18, blue→indigo→purple) above "Already have an account? Sign In",
+  in a bar that rides above the keyboard (`sign-up-v4-keyboard`). When disabled it is `tertiarySystemFill` with
+  secondary text. While working it shows a spinner and "Creating Account…". **Phase 14 change:** that now covers the
+  whole of `checkingSignup` (account check, security check and register), not only the register call. The Sign In
+  line is disabled while working.
+- **Gate:** name, an "@", a password of 1–72 UTF-8 bytes, equal to the confirmation (`canCreate`). A mismatch only
+  keeps the button grey, with no message, as in `sign-up-v4-passwords-mismatch`.
+- **Security check (`src/lib/signupChallenge.ts`):** it no longer turns every failure into "Please complete the
+  security check…":
+  - A challenge that doesn't come back (cancel, browser won't open, wrong state, no token) shows "Security check
+    cancelled. Tap Create Account to try again.". Swift does the same for all of these (§24 bug 10, kept).
+  - A `signup-config` failure shows the server's text, including the new 503.
+  - `preferEphemeralSession: true` (iOS only; Android Custom Tabs have no consent prompt).
+  - **Swift bug 11 fixed on Android:** a required check with no site key shows "Account security checks are
+    temporarily unavailable. Please try again shortly.", not Swift's calendar-connection message.
+- **New tokens:** `tertiaryGrouped` (elevated in a sheet) and `tertiaryFill`, in both palettes.
+- **Android polish (decisions):**
+  - The field icons and the focused field's border use `accent`: indigo in light, and the readable blue in dark
+    (§6/§7). Swift keeps `nexdoIndigo` in dark, which is about 2:1 on the dark field.
+  - The bar is `barSurface` with the Android top hairline (`androidBar`), standing in for `.regularMaterial`, and is
+    padded by the navigation bar's inset.
+  - The card gets elevation 1 in place of the iOS shadow.
+  - On iOS the email placeholder is drawn as a blue link (a data-detector quirk in the captures). Android draws it
+    in the normal placeholder colour.
+- **Removed:** the old intro line, "Your password is sent securely…", the closing "Nexdo captures tasks…" copy, and
+  the field-icon tiles (§11), all gone from Swift.
+- **Not checked on a device** (see §51), in light or dark. There's no dark capture of this screen either. Dark
+  uses the elevated palette tokens.
+- Tests: `sign-up.test.tsx` (rewritten: copy, gate, grey/gradient button, mismatch quiet, 72 bytes, the Android
+  focus border, the create order, "Creating Account…", cancel and server text), `android-auth.test.tsx` (the bar's
+  inset and surface), `signupChallenge.test.ts` (the three error kinds, ephemeral session).
+
+## 53. Phase 14 / A3: "Account already exists" and the reset sheet from it (2026-10-30)
+
+`sign-up-existing-account-alert`, `password-reset-from-sign-up` (RootView.swift:728-737, :759-769, :778-791).
+
+- **When it asks:** on leaving the email field (`checkEmail`: trimmed, lowercased, has "@", not while creating,
+  only if the field still holds that address, silent on failure), when `create()`'s `account-exists` says yes
+  (before the security check or registering), and on register's 409 (§44). An existing account never shows the
+  red error line.
+- **Alert:** "Account already exists" / "We already have an account with this email address. Do you want to reset
+  the password?", with **Yes, reset password** and **No** (cancel). Yes clears both password fields and opens
+  Reset password over Create Account with the address filled in (`PasswordResetView(initialEmail:)`). No changes
+  nothing.
+- **Android-specific:** at most one of these alerts is up at a time. Android stacks dialogs, where SwiftUI's one
+  `isPresented` flag can't, so a blur check and `create()` landing together would otherwise show two.
+- **Commit note:** this ships in the same commit as §52, because it is `create()`'s flow in the same file. The reset
+  sheet's own changes (footer, gate, 404) are §54.
+- Tests: `sign-up.test.tsx` "Account already exists" (account-exists yes, 409, Yes and No, the blur check and its
+  three quiet cases, a changed address, no stacking).

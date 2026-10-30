@@ -47,6 +47,7 @@ export function useTheme(options?: { elevated?: boolean }): Theme {
         surface: palette.surfaceElevated,
         fieldSurface: palette.fieldSurfaceElevated,
         fieldOnGroup: palette.fieldOnGroupElevated,
+        tertiaryGrouped: palette.tertiaryGroupedElevated,
       }
     : palette;
   // Android, dark: tappable text and icons take the Ask screen's blue (`askBlue`, Swift's

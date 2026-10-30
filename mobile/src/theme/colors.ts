@@ -150,6 +150,14 @@ export type Palette = {
    * iOS draws `success`, the system green itself (docs/android-polish.md §36).
    */
   switchOnGreen: string;
+  /**
+   * `tertiarySystemGroupedBackground`: a field inside a `secondarySystemGroupedBackground` card, as on the
+   * Phase 14 Create Account card (RootView.swift:746). `useTheme` swaps in the elevated one in a sheet.
+   */
+  tertiaryGrouped: string;
+  tertiaryGroupedElevated: string;
+  /** `tertiarySystemFill`: a disabled prominent button (Create Account, RootView.swift:705). */
+  tertiaryFill: string;
 };
 
 export type ColorScheme = 'light' | 'dark';
@@ -202,6 +210,9 @@ export const palettes: Record<ColorScheme, Palette> = {
     switchOn: brand.nexdoIndigo,
     switchOff: 'rgba(120, 120, 128, 0.5)',
     switchOnGreen: '#34C759',
+    tertiaryGrouped: '#F2F2F7',
+    tertiaryGroupedElevated: '#F2F2F7',
+    tertiaryFill: 'rgba(118, 118, 128, 0.12)',
   },
   dark: {
     // TODO(phase1-decision): the Swift dark variant is the dynamic system `.label`; this is its standard dark value.
@@ -256,5 +267,8 @@ export const palettes: Record<ColorScheme, Palette> = {
     switchOn: 'rgba(61, 41, 240, 0.85)',
     switchOff: '#48484A',
     switchOnGreen: 'rgba(48, 209, 88, 0.85)',
+    tertiaryGrouped: '#2C2C2E',
+    tertiaryGroupedElevated: '#3A3A3C',
+    tertiaryFill: 'rgba(118, 118, 128, 0.24)',
   },
 };

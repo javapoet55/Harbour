@@ -9,9 +9,9 @@ import { openAuthSessionAsync } from 'expo-web-browser';
 
 import { ApiError } from '../api/client';
 import { deliverOAuthCallback, resetOAuthCallbacks } from './oauthCallbacks';
-import { signupChallenge } from './signupChallenge';
+import { SECURITY_CHECK_CANCELLED, SECURITY_CHECK_UNAVAILABLE, signupChallenge, SignupChallengeCancelled } from './signupChallenge';
 
-/** `AppModel.signupChallengeURL` (NexdoApp.swift:174-183) and `SignUpView.create()` (RootView.swift:676-693). */
+/** `AppModel.signupChallengeURL` (NexdoApp.swift:187-196) and `SignUpView.create()` (RootView.swift:771-796). */
 
 const fetchMock = jest.fn();
 const originalFetch = global.fetch;
@@ -35,12 +35,13 @@ it('returns a token only from the matching signup callback', async () => {
 
 it.each(['nexdo://signup-challenge?state=wrong&token=token', 'nexdo://wrong?state=state-1234567890123456&token=token'])('rejects a mismatched callback %s', async (url) => {
   (openAuthSessionAsync as jest.Mock).mockResolvedValue({ type: 'success', url });
-  await expect(signupChallenge()).rejects.toThrow('security check');
+  await expect(signupChallenge()).rejects.toThrow(SignupChallengeCancelled);
 });
 
+// Swift says "Nexdo could not start the calendar connection." here (§24 bug 11); Android names the check.
 it('fails closed on missing configuration', async () => {
   mockGet.mockResolvedValue({ required: true, siteKey: '' });
-  await expect(signupChallenge()).rejects.toThrow('security check');
+  await expect(signupChallenge()).rejects.toThrow(SECURITY_CHECK_UNAVAILABLE);
   expect(openAuthSessionAsync).not.toHaveBeenCalled();
 });
 
@@ -49,15 +50,27 @@ it('allows only server-configured local development without a challenge', async 
   expect(await signupChallenge()).toBeUndefined();
 });
 
-// Swift catches every challenge failure and shows one message (RootView.swift:687-693).
+// Phase 14 (RootView.swift:785-793): a config failure shows the server's own text, as
+// `error.localizedDescription` does — including the new 503.
 it.each([
-  ['a config request that fails', () => mockGet.mockRejectedValue(new ApiError({ status: 0, code: 'NETWORK', message: 'offline' }))],
-  ['an insecure API origin', () => mockGet.mockRejectedValue(new ApiError({ status: 0, code: 'INSECURE_URL', message: 'insecure' }))],
-  ['a missing site key', () => mockGet.mockResolvedValue({ required: true })],
-  ['a browser that will not open', () => (openAuthSessionAsync as jest.Mock).mockRejectedValue(new Error('No browser'))],
-])("shows Swift's one message for %s", async (_name, arrange) => {
-  arrange();
-  await expect(signupChallenge()).rejects.toThrow(/^Please complete the security check and try again\.$/);
+  ['a 503', new ApiError({ status: 503, message: 'Account security checks are temporarily unavailable. Please try again shortly.' })],
+  ['a network failure', new ApiError({ status: 0, code: 'NETWORK', message: 'offline' })],
+  ['an insecure API origin', new ApiError({ status: 0, code: 'INSECURE_URL', message: 'insecure' })],
+])('passes on the config request’s own error for %s', async (_name, error) => {
+  mockGet.mockRejectedValue(error);
+  await expect(signupChallenge()).rejects.toBe(error);
+  expect(openAuthSessionAsync).not.toHaveBeenCalled();
+});
+
+it('fails closed on a missing site key', async () => {
+  mockGet.mockResolvedValue({ required: true });
+  await expect(signupChallenge()).rejects.toThrow(SECURITY_CHECK_UNAVAILABLE);
+});
+
+// `session?.start() != true` → `CancellationError` → "Security check cancelled…" (§24 bug 10, kept).
+it('reads a browser that will not open as a cancel', async () => {
+  (openAuthSessionAsync as jest.Mock).mockRejectedValue(new Error('No browser'));
+  await expect(signupChallenge()).rejects.toThrow(SECURITY_CHECK_CANCELLED);
 });
 
 // `api.request("/api/auth/signup-config", treatUnauthorizedAsSignedOut: false)` (NexdoApp.swift:176): the
@@ -73,7 +86,8 @@ it('asks for the config through the API client, not a bare fetch', async () => {
 it('opens the challenge page on the API origin, whatever the configured URL looks like', async () => {
   (openAuthSessionAsync as jest.Mock).mockResolvedValue({ type: 'success', url: 'nexdo://signup-challenge?state=state-1234567890123456&token=token' });
   await signupChallenge();
-  expect(openAuthSessionAsync).toHaveBeenCalledWith('https://app.nexdo.test/signup-challenge?state=state-1234567890123456', 'nexdo://signup-challenge');
+  // 310f1ab: `prefersEphemeralWebBrowserSession = true` — no "wants to use … to sign in" prompt on iOS.
+  expect(openAuthSessionAsync).toHaveBeenCalledWith('https://app.nexdo.test/signup-challenge?state=state-1234567890123456', 'nexdo://signup-challenge', { preferEphemeralSession: true });
 });
 
 // `URLComponents.queryItems` (RootView.swift:570-572) percent-decodes but keeps '+'; WHATWG `URL`'s
@@ -89,7 +103,7 @@ it.each([
   ['a broken escape', 'nexdo://signup-challenge?state=state-1234567890123456&token=%E0%A4%A'],
 ])('rejects a callback with %s', async (_name, url) => {
   (openAuthSessionAsync as jest.Mock).mockResolvedValue({ type: 'success', url });
-  await expect(signupChallenge()).rejects.toThrow('security check');
+  await expect(signupChallenge()).rejects.toThrow(SECURITY_CHECK_CANCELLED);
 });
 
 /**
@@ -114,6 +128,6 @@ describe('a redirect that arrives after the browser reports dismiss', () => {
     (openAuthSessionAsync as jest.Mock).mockResolvedValue({ type: 'dismiss' });
     const outcome = signupChallenge().then((token) => ({ token }), (error: Error) => ({ error: error.message }));
     await jest.advanceTimersByTimeAsync(2000);
-    expect(await outcome).toEqual({ error: 'Please complete the security check and try again.' });
+    expect(await outcome).toEqual({ error: 'Security check cancelled. Tap Create Account to try again.' });
   });
 });

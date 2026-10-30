@@ -47,7 +47,8 @@ export default function AuthLayout() {
         options={{
           presentation: 'modal',
           headerShown: true,
-          title: 'Create your account',
+          // Phase 14 (8e171aa): no navigation title, only Cancel; "Create your account" is in the page.
+          title: '',
           headerLeft: cancelButton,
           contentStyle: { backgroundColor: sheet.colors.background },
           headerStyle: { backgroundColor: sheet.colors.background },
