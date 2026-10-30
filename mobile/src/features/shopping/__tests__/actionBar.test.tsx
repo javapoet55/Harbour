@@ -2,6 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react-native';
 import { StyleSheet } from 'react-native';
 
 import { fittedScale } from '../../../components/AskParts';
+import { useAppearance } from '../../../store/appearance';
 import { ShoppingActionBar } from '../components';
 
 /**
@@ -62,5 +63,18 @@ describe('fittedScale', () => {
   it('scales by the ratio, clamped at the minimum', () => {
     expect(fittedScale(100, 125, 0.78)).toBeCloseTo(0.8);
     expect(fittedScale(50, 125, 0.78)).toBe(0.78);
+  });
+});
+
+/** 61788dc: the Recommendations label is `nexdoActionForeground`, white in dark and indigo in light. */
+describe('Recommendations label colour', () => {
+  afterEach(() => useAppearance.setState({ appearance: 'system' }));
+  it.each([
+    ['night', '#FFFFFF'],
+    ['day', '#3D29F0'],
+  ] as const)('%s: %s', async (appearance, color) => {
+    useAppearance.setState({ appearance });
+    await render(<ShoppingActionBar busy={false} onComplete={jest.fn()} onRecommendations={jest.fn()} />);
+    expect(StyleSheet.flatten(screen.getByText('Recommendations').props.style).color).toBe(color);
   });
 });
