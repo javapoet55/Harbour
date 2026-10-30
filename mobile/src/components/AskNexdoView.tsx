@@ -249,7 +249,10 @@ export function AskNexdoView({ textPage, initialPrompt = '', shoppingContext, on
     return null;
   };
 
+  // `openVoice()` (AskNexdoView.swift:455-460, 61788dc): every voice entry drops focus, stops read-aloud and opens
+  // a fresh voice screen (Swift's new `voicePresentationID`; a push here is a new session every time).
   const openVoice = () => {
+    Keyboard.dismiss();
     stopSpeech();
     router.push('/ask/voice');
   };

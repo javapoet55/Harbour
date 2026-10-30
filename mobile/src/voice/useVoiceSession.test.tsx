@@ -24,20 +24,21 @@ jest.mock('./nativeDriver', () => ({ isWebRtcAvailable: () => true, createNative
 jest.mock('./transport', () => ({ WebRtcTransport: jest.fn().mockImplementation(() => ({ applyVolume: jest.fn() })) }));
 jest.mock('./toolExecutor', () => ({ VoiceToolExecutor: jest.fn().mockImplementation(() => ({ clear: jest.fn() })) }));
 
-type FakeConversation = { options: ConversationOptions; phase: VoicePhase; closed: boolean };
+type FakeConversation = { options: ConversationOptions; phase: VoicePhase; closed: boolean; starts: number };
 const mockConversations: FakeConversation[] = [];
 jest.mock('./conversation', () => {
   const actual = jest.requireActual('./conversation');
   class VoiceConversation {
     private readonly fake: FakeConversation;
     constructor(options: ConversationOptions) {
-      this.fake = { options, phase: 'idle', closed: false };
+      this.fake = { options, phase: 'idle', closed: false, starts: 0 };
       mockConversations.push(this.fake);
     }
     get snapshot() {
       return { ...actual.INITIAL_STATE, phase: this.fake.phase };
     }
     start() {
+      this.fake.starts += 1;
       this.fake.phase = 'connecting';
     }
     tick() {}
@@ -170,5 +171,70 @@ describe('useVoiceSession microphone gate', () => {
     expect(mockRequest).not.toHaveBeenCalled();
     expect(result.current?.startupError).toBe(MICROPHONE_DENIED);
     expect(result.current?.microphoneDenied).toBe(true);
+  });
+});
+
+/** dc6445c / 7b37ab1 (AddTaskByVoiceView.swift:315-341): `start()` is guarded and can be run again. */
+describe('useVoiceSession start', () => {
+  async function capture() {
+    const resultRef: { current?: UseVoiceSession } = {};
+    function Capture({ onResult }: { onResult: (value: UseVoiceSession) => void }) {
+      onResult(useVoiceSession({ scope: 'tasks' as never, enabled: true, onClose: () => undefined }));
+      return null;
+    }
+    const view = await render(
+      <QueryClientProvider client={new QueryClient()}>
+        <Capture onResult={(value) => (resultRef.current = value)} />
+      </QueryClientProvider>,
+    );
+    return { view, result: resultRef };
+  }
+
+  async function settle() {
+    await act(async () => {
+      for (let step = 0; step < 6; step += 1) await Promise.resolve();
+    });
+  }
+
+  it('does not open a session if the screen closed while the credential loaded (`guard isVisible`)', async () => {
+    let answer: (value: unknown) => void = () => undefined;
+    mockRequest.mockImplementationOnce(() => new Promise((resolve) => (answer = resolve)) as never);
+    const { view } = await capture();
+    await settle();
+    const conversation = mockConversations[0];
+    await act(async () => view.unmount());
+    await act(async () => answer({ value: 'ek', expiresAt: 9e9, model: 'm' }));
+    await settle();
+    expect(conversation.starts).toBe(0);
+  });
+
+  it('starts once however often Start listening is pressed, and not over a live session', async () => {
+    mockRequest.mockClear();
+    const { result } = await capture();
+    await act(async () => {
+      result.current?.start();
+      result.current?.start();
+    });
+    await settle();
+    expect(mockConversations[0].starts).toBe(1);
+    expect(mockRequest).toHaveBeenCalledTimes(1);
+
+    await act(async () => result.current?.start());
+    await settle();
+    expect(mockConversations[0].starts).toBe(1);
+  });
+
+  it('runs start() again from idle, clearing the last error', async () => {
+    mockRequest.mockClear();
+    mockRequest.mockRejectedValueOnce(new Error('offline') as never);
+    const { result } = await capture();
+    await settle();
+    expect(result.current?.startupError).toBe('Couldn’t start voice. Close this screen and try again.');
+    expect(mockConversations[0].starts).toBe(0);
+
+    await act(async () => result.current?.start());
+    await settle();
+    expect(result.current?.startupError).toBeNull();
+    expect(mockConversations[0].starts).toBe(1);
   });
 });

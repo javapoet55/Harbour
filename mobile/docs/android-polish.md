@@ -2676,3 +2676,38 @@ every cold launch.
 - Tests: `ask.test.tsx` (the new caption; the keyboard glyph focuses the field; the 160 voice card; dark ink,
   base and placeholder; the theme base in light; the status bar is left to the root on the landing and dark on
   the brief only while focused).
+
+## 62. Phase 14 / C4: Voice sessions — fresh opens, Start listening, the visibility guard (2026-10-30)
+
+§24 "Ask Nexdo: voice reopen", "Add / Ask by Voice: session lifetime" and "VoicePlayback" (61788dc, dc6445c, 7b37ab1).
+**No captures exist** (each starts a live, paid session). Built from the Swift source alone (AskNexdoView.swift:455-460;
+AddTaskByVoiceView.swift:34-69, :105-112, :315-341; VoicePlayback.swift).
+
+- **Ask's `openVoice()`:** every voice entry now drops focus (`Keyboard.dismiss()`), stops read-aloud, and pushes
+  `/ask/voice`. A push is a new screen and a new session each time, which is Swift's new `voicePresentationID`.
+  There is one entry point (`openVoice`), used by the landing card and the composer mic.
+- **One lifetime for the session's parts (7b37ab1, `VoiceSessionResources`): already true in RN.**
+  `useVoiceSession` builds the conversation, transport, executor and usage meter in one effect and tears them
+  down together. Nothing to change.
+- **`start()` is restartable and guarded** (`src/voice/useVoiceSession.ts`): `guard !starting, voice.phase ==
+  .idle`, so repeated taps open one session and never a second over a live one. It clears the last error first.
+  The hook returns it as `start`.
+- **`guard isVisible` (dc6445c) — a real fix on Android too:** RN used to call `conversation.start(credential)`
+  even if the screen had closed while the credential loaded, which opened a microphone session behind the user's
+  back. It now stops if the screen has gone, after the time-zone sync and after the credential.
+- **Start listening** (`voice-start-listening`) shows when the session is idle, not starting, the microphone isn't
+  refused and there's no startup error. A press runs `start()`, or asks for consent again if it was never given
+  (`else { consent = true }`). It's a filled `tint` button, as Open Settings is.
+- **"Voice setup was interrupted. Try again to start listening."** (`START_INTERRUPTED`) is shown in red when
+  startup is cancelled while the screen is still open. **Note:** in RN a cancel only comes from the screen closing
+  (`PermissionCancelled`), so this can't currently appear. It's kept as Swift's guard, in case another
+  cancellation path is added later.
+- **VoicePlayback: nothing to port.** Swift's fix stops an idle player from deactivating the shared
+  `AVAudioSession` under a live WebRTC microphone. RN never activates or deactivates the audio session itself
+  (no `setAudioModeAsync` or `setIsAudioActiveAsync` calls); expo-audio's player manages its own. So the bug has
+  no RN counterpart.
+- **Not checked on a device** (see §51).
+- Tests: `useVoiceSession.test.tsx` "useVoiceSession start" (no session after the screen closes mid-credential;
+  one start for two taps and none over a live session; start again from idle clears the error) and
+  `voice-screens.test.tsx` "Start listening" (starts; hidden while listening or starting, after an error, or
+  with the microphone refused; the interrupted text in red; asks for consent again).

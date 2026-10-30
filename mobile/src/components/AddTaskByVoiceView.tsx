@@ -185,6 +185,23 @@ export function AddTaskByVoiceView({ askMode = false, calendarOnly = false, food
           </Pressable>
         ) : null}
 
+        {/* dc6445c (AddTaskByVoiceView.swift:105-112): an idle screen with no live microphone and nothing wrong
+            offers to start; without consent it asks again first (`else { consent = true }`). */}
+        {voice.state.phase === 'idle' && !voice.starting && !voice.microphoneDenied && voice.startupError === null ? (
+          <Pressable
+            accessibilityLabel="Start listening"
+            accessibilityRole="button"
+            onPress={() => {
+              if (allowed) voice.start();
+              else setAsked(false);
+            }}
+            style={[styles.openSettings, { backgroundColor: theme.colors.tint }]}
+            testID="voice-start-listening"
+          >
+            <Text style={[theme.typography.body, { color: theme.colors.onTint }]}>Start listening</Text>
+          </Pressable>
+        ) : null}
+
         {/* Where a voice-created event went (the server's `calendarPush`), and any warnings. */}
         <CalendarPushNote />
 

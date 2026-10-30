@@ -36,6 +36,12 @@ export const START_FAILED = 'Couldn’t start voice. Close this screen and try a
  * 292-294), so the monthly limit (94da063) reads as the server wrote it — "You have used your 100
  * minutes of voice this month. …" — while every other failure keeps this screen's own line.
  */
+/**
+ * dc6445c (AddTaskByVoiceView.swift:337-340): startup was cancelled while the screen is still open, so offer
+ * a retry rather than an idle "Ready" with no live microphone.
+ */
+export const START_INTERRUPTED = 'Voice setup was interrupted. Try again to start listening.';
+
 export function startupErrorFor(error: unknown): string {
   if (error instanceof MicrophoneDenied) return MICROPHONE_DENIED;
   return isVoiceLimitReached(error) ? error.message : START_FAILED;
@@ -47,6 +53,8 @@ export type UseVoiceSession = {
   startupError: string | null;
   /** b61801c: the microphone was refused, so the screen offers "Open Settings" (AddTaskByVoiceView.swift:97-104). */
   microphoneDenied: boolean;
+  /** `start()` again, for **Start listening** (dc6445c). A no-op while starting or once a session is live. */
+  start: () => void;
   toggleMute: () => void;
   finish: () => void;
   close: () => void;
@@ -79,6 +87,8 @@ export function useVoiceSession({
   const transport = useRef<WebRtcTransport | null>(null);
   const meter = useRef<VoiceUsageMeter | null>(null);
   const food = useRef(foodContext);
+  // `start()` for the session the effect below owns; replaced each time it builds one.
+  const starter = useRef<() => void>(() => undefined);
   const closer = useRef(onClose);
   useEffect(() => {
     closer.current = onClose;
@@ -125,13 +135,18 @@ export function useVoiceSession({
     transport.current = peer;
     session.current = conversation;
 
-    // `start()` (AddTaskByVoiceView.swift:276-295): the microphone first (b61801c), then sync the zone,
-    // ask for a credential and connect. Deferred by a microtask so the flag is not written during this
-    // effect's own commit.
+    // `start()` (AddTaskByVoiceView.swift:315-341): the microphone first (b61801c), then sync the zone,
+    // ask for a credential and connect. `guard !starting, voice.phase == .idle`, so a second tap of Start
+    // listening cannot open a second session. Deferred by a microtask so the flags are not written during
+    // this effect's own commit.
     let unmounted = false;
-    void (async () => {
+    let startingNow = false;
+    const start = async () => {
       await Promise.resolve();
+      if (unmounted || startingNow || conversation.snapshot.phase !== 'idle') return;
+      startingNow = true;
       setStarting(true);
+      setStartupError(null);
       setMicrophoneDenied(false);
       try {
         // `VoicePermissionGate.authorize` — before any paid session exists, and abandoned if the screen
@@ -139,24 +154,36 @@ export function useVoiceSession({
         await authorizeMicrophone(async () => (await requestRecordingPermissionsAsync()).granted, () => unmounted);
         // The THIRD `synchronizeDeviceTimeZone()` call site (NexdoApp.swift:472), left open in Phase 7.
         await synchronizeDeviceTimeZone(queryClient);
+        if (unmounted) return;
         const credential = await getApi().request<VoiceCredential>(TASK_SESSION_PATH, {
           method: 'POST',
           body: { consent: true, scope, ...(scope === 'food' && food.current ? { foodContext: food.current } : {}) },
           timeoutMs: 25_000,
         });
+        // dc6445c `guard isVisible else { return }`: a screen closed while the credential loaded must not
+        // open a microphone session behind the user's back.
+        if (unmounted) return;
         conversation.start(credential);
       } catch (error) {
-        // Dismissing the screen cancels startup; it is not a connection failure.
-        if (error instanceof PermissionCancelled) return;
+        if (error instanceof PermissionCancelled) {
+          // Dismissing the screen cancels startup; it is not a connection failure. Still open, it is the
+          // interrupted setup Swift offers to retry (`if isVisible { startupError = … }`).
+          if (!unmounted) setStartupError(START_INTERRUPTED);
+          return;
+        }
         if (error instanceof MicrophoneDenied) setMicrophoneDenied(true);
-        setStartupError(startupErrorFor(error));
+        if (!unmounted) setStartupError(startupErrorFor(error));
       } finally {
-        setStarting(false);
+        startingNow = false;
+        if (!unmounted) setStarting(false);
       }
-    })();
+    };
+    starter.current = () => void start();
+    void start();
 
     return () => {
       unmounted = true;
+      starter.current = () => undefined;
       conversation.close();
       tools.clear();
       session.current = null;
@@ -217,6 +244,7 @@ export function useVoiceSession({
     starting,
     startupError,
     microphoneDenied,
+    start: () => starter.current(),
     toggleMute: () => session.current?.toggleMute(),
     finish: () => session.current?.finish(),
     close: () => session.current?.close(),
