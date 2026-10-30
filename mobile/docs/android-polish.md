@@ -2714,7 +2714,7 @@ AddTaskByVoiceView.swift:34-69, :105-112, :315-341; VoicePlayback.swift).
 
 ## 63. Phase 14 / C5: Account and Settings — `actionForeground`, white in dark (2026-10-30)
 
-§24 "Account menu and Settings: night foregrounds" (61788c, d05a379; ProfileView.swift:105, :122, :159, :285, :293, :298,
+§24 "Account menu and Settings: night foregrounds" (61788dc, d05a379; ProfileView.swift:105, :122, :159, :285, :293, :298,
 :540, :568, :590, :605-614; RootView.swift:1120), captures `account-v4`, `-dark`, `settings-v4-dark`, `-scrolled-1…4-dark`.
 
 - **New palette token `actionForeground`:** the brand indigo `#3D29F0` in light, `#FFFFFF` in dark
@@ -2733,3 +2733,20 @@ AddTaskByVoiceView.swift:34-69, :105-112, :315-341; VoicePlayback.swift).
 - **Not checked on a device** (see §51).
 - Tests: `account.test.tsx` — Settings actions white in dark and indigo in light (text and picker value), Delete
   account still red; My Page's voice minutes in white and indigo.
+
+## 64. Phase 14 / C6: Change password — confirmed, and My Page's tint (2026-10-30)
+
+§24 "Change password" (a80c206), capture `change-password-v4`. §24 already had this ticked.
+
+- **Confirmed against Swift and the capture:** the footer "Choose a password (72 bytes maximum). You’ll need to sign
+  in again after changing your password.", no 12-character minimum, and the gate (`passwordChangeValid`: a current
+  password, a new one of 1–72 UTF-8 bytes, confirmed, and different) were already right. No change.
+- **New in Run C:** Change password is pushed inside My Page's `NavigationStack`, which has
+  `.tint(.nexdoActionForeground)` (61788dc), so its default-tinted controls are white in dark. "Forgot password?"
+  (`FormButton` gained an optional `tint`, so Moments is untouched) and the back chevron now use `actionForeground`.
+  The back chevron is `InlineNavBar`, used only by the three screens pushed from My Page, so Help and Feedback's
+  back chevrons follow too, as in Swift.
+- **Not changed:** the rest of Help's own links (eight `link` uses in `HelpScreen.tsx`). §24 doesn't list Help, and
+  there's no Phase 14 dark capture of it, so they keep §6's colour until Help is re-captured.
+- Tests: `changePassword.test.tsx` "Change password, Phase 14" (footer and 72-byte gate; "Forgot password?" and the
+  back chevron in white at night and indigo by day).

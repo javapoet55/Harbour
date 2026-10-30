@@ -7,7 +7,8 @@ import { Text } from './Text';
 /**
  * `.navigationTitle(title).navigationBarTitleDisplayMode(.inline)` on a screen PUSHED inside the Account
  * sheet's `NavigationStack` (Help, Feedback, Change password): the back chevron in the tint, the title
- * centred. `backHidden` is `.navigationBarBackButtonHidden(saving)`.
+ * centred. `backHidden` is `.navigationBarBackButtonHidden(saving)`. The tint is My Page's
+ * `.tint(.nexdoActionForeground)` (ProfileView.swift:105, 61788dc): indigo in light, white in dark.
  */
 export function InlineNavBar({ title, onBack, backHidden = false, testID }: { title: string; onBack: () => void; backHidden?: boolean; testID?: string }) {
   const theme = useTheme();
@@ -16,7 +17,7 @@ export function InlineNavBar({ title, onBack, backHidden = false, testID }: { ti
       <View style={styles.side}>
         {backHidden ? null : (
           <Pressable accessibilityLabel="Back" accessibilityRole="button" hitSlop={8} onPress={onBack} style={styles.back} testID={testID ? `${testID}-back` : 'nav-back'}>
-            <TaskSymbol color={theme.colors.link} name="chevron.backward" size={22} />
+            <TaskSymbol color={theme.colors.actionForeground} name="chevron.backward" size={22} />
           </Pressable>
         )}
       </View>
