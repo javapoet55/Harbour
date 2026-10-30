@@ -104,11 +104,14 @@ describe('TaskCreationSpacing', () => {
 
 describe('working days', () => {
   it('toggles a day, sorted, and never turns the last one off', () => {
-    expect(toggleWorkingDay(DEFAULT_WORKING_DAYS, 6, true)).toBe('1,2,3,4,5,6');
+    expect(DEFAULT_WORKING_DAYS).toBe('0,1,2,3,4,5,6');
+    expect(toggleWorkingDay('1,2,3,4,5', 6, true)).toBe('1,2,3,4,5,6');
+    expect(toggleWorkingDay(DEFAULT_WORKING_DAYS, 6, false)).toBe('0,1,2,3,4,5');
     expect(toggleWorkingDay('6,0', 3, true)).toBe('0,3,6');
     expect(toggleWorkingDay('1,2', 2, false)).toBe('1');
     expect(toggleWorkingDay('1', 1, false)).toBe('1');
-    expect(toggleWorkingDay(undefined, 0, true)).toBe('0,1,2,3,4,5');
+    // Unset reads as the server's default, every day (Phase 14).
+    expect(toggleWorkingDay(undefined, 0, false)).toBe('1,2,3,4,5,6');
     expect(workingDayLocked('1', 1)).toBe(true);
     expect(workingDayLocked('1,2', 1)).toBe(false);
   });

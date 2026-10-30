@@ -734,8 +734,8 @@ function SettingsScreen({
 
 /**
  * `WorkingDaysField` (ProfileView.swift, d568989): "Working days" over one toggle per weekday, Sunday
- * first, and the caption. The last day left on cannot be turned off. An unset value reads as Monday to
- * Friday (`preferences?.workingDays ?? "1,2,3,4,5"`, `:320`).
+ * first, and the caption. The last day left on cannot be turned off. An unset value reads as every day
+ * (`preferences?.workingDays ?? "0,1,2,3,4,5,6"`, `:550`), the server's default since Phase 14.
  */
 function WorkingDaysField({ value, onChange }: { value: string | undefined; onChange: (next: string) => void }) {
   const theme = useTheme();

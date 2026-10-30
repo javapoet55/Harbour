@@ -2284,3 +2284,21 @@ From §24 "Shopping: store logos" and "Server endpoints" → Store search (ce6d2
   Settings' "draft store matches saved" rule (same §24 row) are also not ported yet.
 - Tests: `stores.test.tsx` "Store search brand logos": `suppliedLogo`, the optional field, a supplied logo drawn
   with no lookup, and the cart for no brand or no logo.
+
+## 46. Phase 14 / 3: Working days default to every day (2026-10-30)
+
+From §24 "Server endpoints" → Availability defaults (migration `20261019000000_availability_defaults`): new rows get
+`workingDays` `'0,1,2,3,4,5,6'`, `workStart` 06:00, `workEnd` 21:00 and `quietEnd` 06:00.
+
+- `DEFAULT_WORKING_DAYS` (`src/features/tasks/workingDays.ts`) is now `'0,1,2,3,4,5,6'`, which matches Swift's
+  `preferences?.workingDays ?? "0,1,2,3,4,5,6"` (ProfileView.swift:550). This was the only default the client held:
+  `workingDaySet` and `toggleWorkingDay` use it for an unset value, so Settings now shows all seven toggles on.
+- **Hours: nothing to change.** A sweep of `app/` and `src/` found no client fallback for `workStart`, `workEnd`,
+  `quietStart` or `quietEnd`. They are required in `ProfilePreferences` and always come from `/api/me`. The
+  planner, briefing and Do Now defaults live on the server (§24 lists them). The 09:00–17:00 values in the test
+  fixtures (`account.test.tsx`, `phase12Nulls.test.ts`) stand for a stored account's own settings, not a default,
+  so they stay.
+- Still not ported from the same §24 row: Settings calling `synchronizeDeviceTimeZone` on load and when the zone
+  changes. That isn't a default and is outside Part 1.
+- Tests: `ordering.test.ts` (the constant, and unset reading as every day) and `account.test.tsx` (an unset value
+  shows all seven on; turning Saturday off saves `'0,1,2,3,4,5'`).
