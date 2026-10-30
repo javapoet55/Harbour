@@ -2,7 +2,7 @@ import { router, Stack } from 'expo-router';
 import { Pressable } from 'react-native';
 
 import { Text } from '../../src/components';
-import { textStyles, useTheme } from '../../src/theme';
+import { introduction, textStyles, useTheme } from '../../src/theme';
 
 /**
  * Presentation matches the Swift app (ios/App/RootView.swift):
@@ -39,6 +39,8 @@ export default function AuthLayout() {
         headerTitleAlign: 'center',
       }}
     >
+      {/* The first-install introduction (35b40f2): before sign-in, no bar, always light. */}
+      <Stack.Screen name="introduction" options={{ contentStyle: { backgroundColor: introduction.background } }} />
       <Stack.Screen name="sign-in" />
       <Stack.Screen
         name="sign-up"

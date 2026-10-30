@@ -9,6 +9,22 @@ export const brand = {
 } as const;
 
 /**
+ * The first-install introduction's own colours (InstallIntroductionView.swift:8-9). It is always light
+ * (`.preferredColorScheme(.light)`: "Artwork is supplied on a light canvas"), so these have no dark values.
+ */
+export const introduction = {
+  blue: '#0D52FF', // :8 Color(red: 0.05, green: 0.32, blue: 1), also the `.tint`
+  purple: '#AF52DE', // `.purple`, the gradient's end
+  ink: '#080A33', // :9 Color(red: 0.03, green: 0.04, blue: 0.20)
+  body: '#4A5980', // :47 Color(red: 0.29, green: 0.35, blue: 0.50)
+  secondary: 'rgba(60, 60, 67, 0.6)', // `.secondary` in light
+  dot: 'rgba(142, 142, 147, 0.35)', // `Color.gray.opacity(0.35)`
+  background: '#FFFFFF',
+  // The feature cards: `[.blue, .pink, .green, .purple][index].opacity(0.07)` (:131).
+  featureFills: ['rgba(0, 122, 255, 0.07)', 'rgba(255, 45, 85, 0.07)', 'rgba(52, 199, 89, 0.07)', 'rgba(175, 82, 222, 0.07)'],
+} as const;
+
+/**
  * `AskStyle.blue` in dark (AskNexdoView.swift:46: UIColor(red: 0.42, green: 0.72, blue: 1.00)). It is
  * `askBlue` on the Ask screen and, on Android in dark, the ONE accent for anything tappable or active:
  * `link` and `accent` (docs/android-polish.md §6, §7). Filled controls stay the brand indigo.

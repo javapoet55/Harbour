@@ -2393,3 +2393,37 @@ Found by Part 1's full jest run, and not caused by it (it fails on `9fce7d3` too
 "Event Details for a device event › shows the phone’s copy…" expects the status "Upcoming" for `DEVICE`, which
 is fixed at 2026-10-20 06:30 UTC. Since that date passed it reads "Past". Only that test changes: it now opens
 `DEVICE` moved to a day after `Date.now()`. The other device tests don't check the status. No app code changed.
+
+## 51. Phase 14 / A1: First-install introduction, pages 1–4 (2026-10-30)
+
+Port of `InstallIntroductionView` (35b40f2, 530f1bd) against `install-intro-1`…`-4`. Route `app/(auth)/introduction.tsx`, view
+`src/features/introduction/InstallIntroduction.tsx`.
+
+- **Gate:** `app/index.tsx`. A signed-out app goes to `/introduction` until `useIntroduction.completed` is true
+  (§48), and shows the splash while the flag is still being read. The root layout hydrates it with the appearance
+  store. **Android ahead:** a signed-in session also marks it seen, so a signed-in upgrader with no stored first
+  name never meets it after signing out.
+- **Finishing:** Skip and Get Started mark it seen and *replace* it with sign-in, passing `signUp=1`. Sign-in
+  opens Create Account once and clears the param (`SignInView(startWithSignUp:)`). "Already have an account?
+  Sign In" opens sign-in alone. **Swift bug 7 doesn't happen on Android:** the request lives in that one navigation
+  and can't reopen the sheet after a later sign-out.
+- **Layout as Swift:** top-right Skip; paged horizontally, each page scrolling on its own; the ink heading over a
+  blue→purple gradient line (`GradientText`); title3 body copy; the 2×2 feature grid on page 3 (adaptive at
+  145 pt, so more columns on a tablet); four dots and Next → on pages 1–3; Get Started → and the Sign In line on
+  page 4. Reduce Motion turns off the paging animation. Always light, with dark status-bar icons while it's in
+  front (`FixedLightStatusBar`).
+- **Colours:** the view's own fixed light colours are a new `introduction` token group in `src/theme/colors.ts`
+  (blue `#0D52FF`, ink `#080A33`, body `#4A5980`, and the four card fills at 7%). Nothing is hard-coded in the
+  view.
+- **Artwork:** pre-cropped once, with Swift's crop rectangles, into `assets/introduction/`: `page-1…4.jpg` (784 px
+  wide, JPEG q88) and four `feature-*.png` icons. That is 512 KB in total, against 7.9 MB of source PNGs that Swift
+  crops at runtime. **This needs a new build** (bundled assets).
+- **Deviation:** the "NexDo" mark on page 1 uses the ✦ glyph in the intro blue. SF `sparkle` is a single
+  four-point star and Ionicons only has the three-star `sparkles`. Swift's subtle `blue.gradient` on the star
+  isn't reproduced.
+- **Not checked on a device:** this Windows machine can't run the Android emulator (no hypervisor driver), and no
+  phone was attached, so the pages haven't been compared on screen with the captures. Dark mode isn't relevant:
+  the screen is always light, as in Swift.
+- Tests: `src/__tests__/introduction.test.tsx` (copy, paging by Next, dots and swipe, the three ways out, the route
+  marking it seen); `session-gate.test.tsx` (introduction vs sign-in, the splash while reading, a signed-in session
+  marks it seen); `sign-in.test.tsx` (Create Account opens once from the param).
