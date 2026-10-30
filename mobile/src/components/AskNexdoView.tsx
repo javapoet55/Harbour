@@ -4,11 +4,11 @@ import { router } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Keyboard, Linking, Modal, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { StatusBar } from 'expo-status-bar';
 
 import { AskLanding } from '../features/ask/AskLanding';
 import { setBriefHandlers } from '../features/ask/briefHandlers';
 import { DailyBrief } from '../features/ask/DailyBrief';
+import { FixedLightStatusBar } from '../features/wellness/FixedLightStatusBar';
 import { ASK_MAX_LENGTH, ASK_TEXT_EXAMPLES } from '../lib/askIntents';
 import { blockedTurn, policyGuardRefusal } from '../lib/assistantPolicy';
 import { displaySections, spokenText } from '../lib/assistantPresentation';
@@ -394,8 +394,10 @@ export function AskNexdoView({ textPage, initialPrompt = '', shoppingContext, on
       edges={presentedAsSheet ? ['left', 'right', 'bottom'] : ['top', 'left', 'right', 'bottom']}
       style={[styles.fill, { backgroundColor: showsBriefing || showsLanding ? '#FFFFFF' : theme.colors.background }]}
     >
-      {/* Fixed light screens keep a dark clock in dark mode (as Wellness's, docs/android-polish.md §23). */}
-      {showsLanding || showsBriefing ? <StatusBar style="dark" /> : null}
+      {/* Fixed light screens keep a dark clock in dark mode (as Wellness's, docs/android-polish.md §23), but
+          only while Ask is in front: an unfocused Ask left mounted under another screen kept the clock dark
+          over the night theme everywhere else (QA M-04, docs/android-polish.md §43). */}
+      {showsLanding || showsBriefing ? <FixedLightStatusBar /> : null}
       {/* The brief's backdrop (`:305-309`): fixed light, under the safe areas too. */}
       {showsBriefing ? (
         <LinearGradient

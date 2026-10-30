@@ -42,6 +42,8 @@ export const CONSENT = {
   message: 'Capture the app screen behind this report. Review the preview for private information. It will only be uploaded when you tap Send. Never include passwords, keys or tokens.',
 };
 export const PRESERVED = 'Your report is preserved. Retry sends the same report safely.';
+/** Android says "phone", not "iPhone" (QA M-03); iOS is unchanged. */
+const SHAKE_LABEL = () => (isAndroid() ? 'Shake phone to report a bug' : 'Shake iPhone to report a bug');
 /** The pasteboard item expires after 120 seconds (:173). */
 export const COPY_EXPIRY_MS = 120_000;
 
@@ -301,7 +303,7 @@ export function BugReportScreen({ session, onDone }: { session: BugReportSession
                     <View style={styles.diagnostics} testID="bug.diagnostics">
                       <Diagnostic label="App version and build" value={`${diagnostics.appVersion} (${diagnostics.buildNumber})`} />
                       <Diagnostic label="Device model" value={diagnostics.deviceModel} />
-                      <Diagnostic label="iOS version" value={diagnostics.iosVersion} />
+                      <Diagnostic label={isAndroid() ? 'Android version' : 'iOS version'} value={diagnostics.iosVersion} />
                       <Diagnostic label="Current app screen" value={diagnostics.screen} />
                       <Diagnostic label="Timestamp" value={diagnostics.timestamp} />
                       <Diagnostic label="Anonymous correlation ID" value={diagnostics.correlationID} />
@@ -347,8 +349,8 @@ export function BugReportScreen({ session, onDone }: { session: BugReportSession
                 </Text>
                 <View style={[styles.card, styles.toggleRow, { backgroundColor: theme.colors.background }]}>
                   <TaskSymbol color={theme.colors.label} name="iphone.gen3.radiowaves.left.and.right" size={20} />
-                  <Text style={[styles.body, styles.grow, { color: theme.colors.label }]}>Shake iPhone to report a bug</Text>
-                  <IOSSwitch accessibilityLabel="Shake iPhone to report a bug" onValueChange={(on) => void setShakeEnabled(on)} testID="bug.shake" value={shakeEnabled} />
+                  <Text style={[styles.body, styles.grow, { color: theme.colors.label }]}>{SHAKE_LABEL()}</Text>
+                  <IOSSwitch accessibilityLabel={SHAKE_LABEL()} onValueChange={(on) => void setShakeEnabled(on)} testID="bug.shake" value={shakeEnabled} />
                 </View>
                 <View style={[styles.card, styles.label, { backgroundColor: withAlpha(BUG_ACCENT, 0.09) }]}>
                   <TaskSymbol color={theme.colors.label} name="heart.fill" size={18} />

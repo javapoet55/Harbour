@@ -170,6 +170,12 @@ export default function NewCalendarEvent() {
             <FieldRow label="Starts" value={dateTimeLabel(start)} fill={inputFill} capsule={capsule} onPress={() => setPicking('start')} testID="event-start" />
           </LabeledField>
           <FieldRow label="Ends" value={dateTimeLabel(end)} fill={inputFill} capsule={capsule} onPress={() => setPicking('end')} testID="event-end" />
+          {/* Says why Create Event is disabled when the end isn't after the start (QA M-01). */}
+          {end <= start ? (
+            <Text accessibilityLiveRegion="polite" style={[styles.caption, { color: theme.colors.danger }]} testID="event-end-error">
+              The end time must be after the start time.
+            </Text>
+          ) : null}
           <Text style={[styles.caption, { color: theme.colors.secondary }]}>{zone}</Text>
 
           <Divider />
