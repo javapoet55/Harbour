@@ -2245,3 +2245,24 @@ Audit of every `<StatusBar` in `mobile/`: the only one outside `app/_layout.tsx`
 screen's `statusBarStyle`.
 
 Tests: `ask.test.tsx` "the Ask AI status bar": dark while Ask is focused, none while it is not, none on a themed page.
+
+## 44. Phase 14 / 1: Auth client — account-exists, register 409, reset 404 (2026-10-30)
+
+Plumbing only, from §24 "Server endpoints" (8592a0a, 60212f3). No screen changes yet; Run A builds the alert.
+
+- `endpoints.accountExists(email)` posts `{ email }` to `POST /api/auth/account-exists` and reads `{ exists }`, with
+  `signedOutOn401: false` like the other auth calls (`AppModel.signupAccountExists`, NexdoApp.swift:197-201).
+  `accountExists(email)` in `src/query/useAuth.ts` is the boolean wrapper the screen will call; like Swift it throws.
+- Register's existing-email **409** is now a result, not an error: `useSignUp` resolves to
+  `{ kind: 'accountExists', email, message }` (alongside `signedIn` and `verify`). Swift's `create()` catches
+  `APIError.server(409, _)` and shows the "Account already exists" alert (RootView.swift:790-791).
+- The reset request's unknown-email **404** is now `{ kind: 'unknownEmail', message }` from `useRequestPasswordReset`
+  (`sent` otherwise). Other failures still throw and still show inline.
+- The classifiers (`accountExistsConflict`, `unknownResetEmail` in `src/api/index.ts`) use the server's text. **Decision:**
+  if the body has no `error`, they fall back to the server's own wording (`ACCOUNT_EXISTS_MESSAGE`,
+  `RESET_UNKNOWN_EMAIL_MESSAGE`). Otherwise the client's generic 409 text ("Your schedule changed…") would reach the
+  sign-up screen. A 409 that carries a `code` (`SCHEDULE_WARNING`) is never read as an existing account.
+- Until Run A, the sign-up screen puts the 409 message in its inline error slot (today's behaviour), and the reset
+  screen shows the 404 message in red where it already showed the server text.
+- Tests: `src/api/accountAuth.test.ts` (wire shape, 401 not a sign-out, 409/404 through the real client, fallbacks,
+  other statuses are null) and `src/query/signupRecovery.test.tsx` (the hooks' typed results).
