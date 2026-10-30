@@ -73,6 +73,8 @@ import WishDetails from '../../../../app/wellness/moments/wish';
 import ChooseFestivals from '../../../../app/wellness/moments/festivals';
 import ScheduleWish from '../../../../app/wellness/moments/schedule-wish';
 import ReviewWish from '../../../../app/wellness/moments/review';
+import ManageMomentsList from '../../../../app/wellness/moments/manage-list';
+import { useAppearance } from '../../../store/appearance';
 
 function load(moments: ImportantMoment[], extra: Partial<MomentsSnapshot> = {}) {
   const snapshot: MomentsSnapshot = { moments, emailAccount: null, emailConfigured: false, automaticEmailEnabled: false, ...extra };
@@ -1881,5 +1883,64 @@ describe('Manage Moment, the Schedule step', () => {
     await fireEvent.press(screen.getByTestId('festival-save'));
     await waitFor(() => expect(screen.getByText('Wish Message')).toBeTruthy());
     expect(screen.getByTestId('festival-tab-Message').props.accessibilityState).toEqual({ selected: true });
+  });
+});
+
+describe('Phase 14: the Wellness tint and one review count', () => {
+  const flatColor = (node: { props: Record<string, unknown> }) => (StyleSheet.flatten(node.props.style as never) as { color?: string } | undefined)?.color;
+  /** The colour of the first icon with this name (the Ionicons mock is a `View` that keeps its props). */
+  type Node = { props?: { name?: string; color?: string }; children?: unknown[] | null } | Node[] | string | null;
+  const iconColor = (node: Node, name: string): string | undefined => {
+    if (node == null || typeof node === 'string') return undefined;
+    if (Array.isArray(node)) return node.map((child) => iconColor(child, name)).find(Boolean);
+    if (node.props?.name === name) return node.props.color;
+    return (node.children ?? []).map((child) => iconColor(child as Node, name)).find(Boolean);
+  };
+  const os = Platform.OS;
+  afterEach(() => {
+    useAppearance.setState({ appearance: 'system' });
+    Platform.OS = os;
+  });
+
+  /** Three recipients of one greeting-card group need review, and one paused birthday does too. */
+  const reviewing = () => {
+    const encoded = settings({ groupID: 'family' });
+    load([
+      moment({ id: 'a', type: 'festival', title: 'Diwali', firstName: 'A', occurrenceDate: future(3), nextOccurrence: future(3), festivalSettings: encoded }),
+      moment({ id: 'b', type: 'festival', title: 'Diwali', firstName: 'B', occurrenceDate: future(3), nextOccurrence: future(3), festivalSettings: encoded }),
+      moment({ id: 'c', type: 'festival', title: 'Diwali', firstName: 'C', occurrenceDate: future(3), nextOccurrence: future(3), festivalSettings: encoded }),
+      moment({ id: 'p', title: 'Paused birthday', enabled: false, occurrenceDate: future(5), nextOccurrence: future(5) }),
+    ]);
+  };
+
+  // The same account in both: one group counted once, plus the paused moment (§24 bug 3).
+  it('the Upcoming card counts the groups Manage Moments lists under Need Review', async () => {
+    reviewing();
+    const view = await render(<ImportantMoments />);
+    // Swift says "3 wishes need review" here (three recipients, not the paused one) beside "Need Review (2)".
+    expect(await view.findByText('2 wishes need review')).toBeTruthy();
+  });
+
+  it('Manage Moments shows the same Need Review count', async () => {
+    reviewing();
+    const view = await render(<ManageMomentsList />);
+    expect(await view.findByText('Need Review (2)')).toBeTruthy();
+  });
+
+  it('Android, Night: content takes the lilac wellnessAccent, the gear keeps the readable Ask blue', async () => {
+    Platform.OS = 'android';
+    useAppearance.setState({ appearance: 'night' });
+    load([moment({ id: 'c', type: 'custom', title: 'Team lunch', occurrenceDate: future(1), nextOccurrence: future(1) })]);
+    const view = await render(<ImportantMoments />);
+    expect(flatColor((await view.findAllByText('Manage'))[0])).toBe('#BAABFF');
+    // The gear is a toolbar item: `useTheme({ toolbar: true })` keeps Android's dark `link`.
+    expect(iconColor(view.toJSON(), 'settings-outline')).toBe('#6BB8FF');
+  });
+
+  it('Day: content and toolbar are both the brand indigo, as before', async () => {
+    useAppearance.setState({ appearance: 'day' });
+    load([moment({ id: 'c', type: 'custom', title: 'Team lunch', occurrenceDate: future(1), nextOccurrence: future(1) })]);
+    const view = await render(<ImportantMoments />);
+    expect(flatColor((await view.findAllByText('Manage'))[0])).toBe('#3D29F0');
   });
 });
