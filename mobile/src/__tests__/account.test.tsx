@@ -74,6 +74,10 @@ jest.mock('../photo/encodePhoto', () => ({
 
 const mockMe = jest.fn();
 const mockUpdateSettings = jest.fn();
+// Settings' time-zone sync PATCHes on open; it has its own tests (useSettingsTimeZoneSync.test.tsx), and here it
+// would land in front of every save these tests count.
+const mockZoneSync = jest.fn();
+jest.mock('../features/account/useSettingsTimeZoneSync', () => ({ useSettingsTimeZoneSync: (...args: unknown[]) => mockZoneSync(...args) }));
 const mockUpdatePhoto = jest.fn();
 const mockSync = jest.fn();
 const mockDelete = jest.fn();
@@ -1468,4 +1472,10 @@ describe('My Page night foregrounds', () => {
     await waitFor(() => expect(screen.getByTestId('voice-usage-total')).toBeTruthy());
     expect(StyleSheet.flatten(screen.getByTestId('voice-usage-total').props.style).color).toBe(color);
   });
+});
+
+/** Phase 14: Settings mounts the device time-zone sync for the signed-in account (§65). */
+it('runs the device time-zone sync from Settings, reporting into its failure alert', async () => {
+  await show(<Settings />);
+  await waitFor(() => expect(mockZoneSync).toHaveBeenCalledWith('u1', expect.any(Function)));
 });

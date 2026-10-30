@@ -69,6 +69,7 @@ import { useConsent } from '../../src/store/consent';
 import { brand, ElevatedSurface, useTheme } from '../../src/theme';
 import { androidLabel } from '../../src/theme/androidForm';
 import { toggleWorkingDay, WORKING_DAY_LABELS, WORKING_DAYS_FOOTNOTE, workingDayLocked, workingDaySet } from '../../src/features/tasks/workingDays';
+import { useSettingsTimeZoneSync } from '../../src/features/account/useSettingsTimeZoneSync';
 
 /**
  * `ProfileSettingsView` (ios/App/ProfileView.swift:126), **body `:146-270`**, read top to bottom.
@@ -163,6 +164,9 @@ function SettingsScreen({
   const [message, setMessage] = useState<string | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
   const [photoMessage, setPhotoMessage] = useState<string | null>(null);
+  // Phase 14: sync the device zone on open without letting a failure stop Settings loading (ANDROID AHEAD,
+  // §24 bug 12), and again when the zone changes while Settings is open.
+  useSettingsTimeZoneSync(profile?.id ?? null, setFailure);
 
   const saving =
     update.isPending || uploadPhoto.isPending || syncNow.isPending || setWrites.isPending || disconnect.isPending || deleteAccount.isPending;

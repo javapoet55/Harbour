@@ -2750,3 +2750,27 @@ AddTaskByVoiceView.swift:34-69, :105-112, :315-341; VoicePlayback.swift).
   there's no Phase 14 dark capture of it, so they keep §6's colour until Help is re-captured.
 - Tests: `changePassword.test.tsx` "Change password, Phase 14" (footer and 72-byte gate; "Forgot password?" and the
   back chevron in white at night and indigo by day).
+
+## 65. Phase 14 / C7: Settings' time-zone sync — ANDROID AHEAD of Swift bug 12 (2026-10-30)
+
+§24 "Account menu and Settings" (5def56e, d05a379; ProfileView.swift:310-315, :645-647) and Swift bug 12. RN Settings
+didn't call `synchronizeDeviceTimeZone` at all (§24: "Not ported").
+`src/features/account/useSettingsTimeZoneSync.ts`, mounted in `app/account/settings.tsx`.
+
+- **On open:** syncs the device zone (`synchronizeDeviceTimeZone`: PATCH `{ timeZone }` only when the account's zone
+  differs, then reload `/api/me`), as Swift's `load()` does first.
+- **ANDROID AHEAD — Swift bug 12 fixed on Android:** Swift runs the sync in the same `do` as the profile load, so a
+  failed PATCH leaves Settings on "Retry loading settings", and every retry repeats it. On Android the sync runs
+  beside the load and **never blocks or fails it**. Settings shows the profile it already has, and a failure on
+  open is silent there. **Decision (why silent):** the root layout already reports a failed sync ("Couldn’t
+  synchronize your device time zone…") each time the app returns to the foreground, and Settings' Save sends the
+  device zone anyway, so another alert on open would only repeat it.
+- **Re-sync on a zone change while Settings is open** (Swift's `NSSystemTimeZoneDidChange`): React Native has no
+  zone-change event, so Settings compares the device zone once a minute and syncs again when it changes. A failure
+  there goes to Settings' "Could not update profile" alert with the error's text, as Swift's
+  `failure = error.localizedDescription` does. A change made while the app was in the background is already synced
+  by the root layout on return. It stops when Settings closes, and does nothing signed out.
+- Tests: `src/features/account/__tests__/useSettingsTimeZoneSync.test.tsx` (sync on open; a failed first sync stays
+  quiet; nothing signed out; re-sync only on a change; a failed re-sync is reported; stops on close) and
+  `account.test.tsx` (Settings mounts it for the account. The other Settings tests mock it, because its PATCH would
+  land in front of the saves they count).
