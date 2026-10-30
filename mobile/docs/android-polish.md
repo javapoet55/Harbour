@@ -2386,3 +2386,10 @@ State and condition only; Run A builds and mounts the sheet.
   empty refresh; a cached list is refreshed first; hidden when connected, when the phone's calendars are readable,
   when the refresh fails, or when signed out; a stale answer after an account switch is dropped; once per account
   across visits; a new account is asked; leaving mid-refresh asks again on the next visit.
+
+## 50. Phase 14: An Event Details test that expired on 20 Oct 2026 (2026-10-30)
+
+Found by Part 1's full jest run, and not caused by it (it fails on `9fce7d3` too). `eventDetailsScreen.test.tsx`
+"Event Details for a device event › shows the phone’s copy…" expects the status "Upcoming" for `DEVICE`, which
+is fixed at 2026-10-20 06:30 UTC. Since that date passed it reads "Past". Only that test changes: it now opens
+`DEVICE` moved to a day after `Date.now()`. The other device tests don't check the status. No app code changed.
