@@ -2302,3 +2302,35 @@ From §24 "Server endpoints" → Availability defaults (migration `2026101900000
   changes. That isn't a default and is outside Part 1.
 - Tests: `ordering.test.ts` (the constant, and unset reading as every day) and `account.test.tsx` (an unset value
   shows all seven on; turning Saturday off saves `'0,1,2,3,4,5'`).
+
+## 47. Phase 14 / 4: expo-store-review and the review schedule (2026-10-30)
+
+From §24 "App Store review request" and "Native requirements" (bfa5b73). Module and rule only; Run A hooks it up.
+
+- **New native module:** `expo-store-review` `~57.0.3`, added with `npx expo install`. It has no config plugin and
+  needs no permission, but it **does need a new native build** (dev client and release). On Android it is the Play
+  In-App Review API. Google limits how often it shows, it gives no callback, and it shows nothing on internal test
+  tracks, so QA won't see a sheet from an internal-track build.
+- `src/features/review/reviewSchedule.ts` is a pure port of `AppReviewSchedule` (ios/Sources/NexdoCore/AppReviewSchedule.swift):
+  - **When:** a device-local **Friday at or after 17:00**, and no earlier than first launch + 7 calendar days at the
+    same wall-clock time. That is Swift's `calendar.date(byAdding: .day, value: 7)`, so a Friday-evening install
+    waits until 7 p.m. the next Friday.
+  - **How often:** at most once per week, and only in Friday weeks 0–4. Week 0 is the first Friday on or after
+    the 7-day day, and weeks are counted in calendar days. A missed Friday expires and is never caught up.
+  - **Time zone:** the device zone, read on each check (`Intl…resolvedOptions().timeZone`, standing in for
+    `TimeZone.autoupdatingCurrent`). Swift's `Calendar` math is done here with `Intl` wall-clock parts, which the
+    app already uses on Hermes (Moments, Pomodoro, Calorie Tracker).
+- `src/features/review/reviewPrompt.ts` ports `AppReviewPromptStore` under Swift's key `nexdo.appReviewSchedule.v1`.
+  `recordFirstLaunch` writes only once, so an update never resets the clock. `consumeReviewOpportunity` **writes the
+  week before** returning `true`, as Swift stores it before `requestReview()`.
+  **Decision:** if that write fails, RN returns `false` and makes no request. Swift's `defaults.set` cannot fail,
+  and asking without the week saved could repeat the request.
+- **Decision:** `requestStoreReview` calls `requestReview()` only when `isAvailableAsync()` is true. Without that
+  check, expo-store-review falls back to opening a store URL, which Swift never does. Errors are swallowed, because
+  StoreKit reports nothing either.
+- **Storage format:** `{ firstLaunch: <epoch ms>, lastRequestedWeek? }` in AsyncStorage. Swift's `JSONEncoder` dates
+  are seconds since 2001, but the two apps never share storage, so this is not a compatibility issue.
+- Tests: `src/features/review/__tests__/reviewSchedule.test.ts`. It has Swift's six `AppReviewScheduleTests` one for
+  one (same instants and zones), plus three new cases: 17:00 is inclusive, the wall-clock anniversary holds across
+  the November DST change, and stored values parse. It also covers storage: recorded once, written before yes,
+  once a week, no on a failed write, and the store called only when available.
