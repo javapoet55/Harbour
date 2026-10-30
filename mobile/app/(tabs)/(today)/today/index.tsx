@@ -205,6 +205,7 @@ export default function Today() {
           onOpenTask={(task) => router.push(`/task/${task.id}`)}
           onAttention={() => router.push('/attention')}
           onCalendar={() => router.push('/calendar')}
+          onCreateTask={() => router.push('/task/new')}
         />
 
         {/* Section 7: `TodayActionsView` (RootView.swift:1098-1100), Today only. Renders nothing when the

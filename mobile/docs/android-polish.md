@@ -2614,3 +2614,16 @@ every cold launch.
 - §49's in-session rule (once per account while the tab stays mounted) still applies.
 - Tests: `connectOffer.test.tsx` "the offer after a relaunch" (answered: no offer and no request after a relaunch;
   unanswered: offered again; stored per account), and `calendar.test.tsx` (Yes is remembered as an answer).
+
+## 58. Phase 14 / C1: Today — the clear schedule creates a task (2026-10-30)
+
+§24 "Today: empty schedule creates a task" (9acb39a; RootView.swift:1697-1707, :1738-1752), captures `today-v4-empty-schedule`, `-dark`.
+
+- "Your schedule is clear / Add a task or enjoy the open space." is now a button: `today-empty-schedule-create-task`,
+  with label "Your schedule is clear. Create a task" and hint "Opens the manual task creation screen". It opens
+  Create New Task (`/task/new`, the RN `TaskEditor(task: nil)`) from `app/(tabs)/(today)/today/index.tsx` through
+  the card's new `onCreateTask`. It dims while pressed, standing in for SwiftUI's plain button highlight.
+- The search's "No matching tasks" stays static, as in Swift. The look is unchanged in light and dark: same icon,
+  copy and spacing, now in a `Pressable` (the `EmptySchedule` helper).
+- Tests: `TodayIntelligenceCard.test.tsx` "the empty schedule" (the button with its label and hint calls
+  `onCreateTask`; static while searching).

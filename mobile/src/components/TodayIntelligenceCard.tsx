@@ -38,6 +38,7 @@ export function TodayIntelligenceCard({
   onOpenTask,
   onAttention,
   onCalendar,
+  onCreateTask,
 }: {
   range: TodayRange;
   appointments: number;
@@ -55,6 +56,8 @@ export function TodayIntelligenceCard({
   onOpenTask: (task: NexdoTask) => void;
   onAttention: () => void;
   onCalendar: () => void;
+  /** 9acb39a: the empty schedule opens "Create New Task" (`TaskEditor(task: nil)` in a sheet, RootView.swift:1738-1740). */
+  onCreateTask?: () => void;
 }) {
   const theme = useTheme();
   const [showingSearch, setShowingSearch] = useState(false);
@@ -194,15 +197,24 @@ export function TodayIntelligenceCard({
         ) : null}
 
         {visibleSchedule.length === 0 ? (
-          <View accessible style={styles.empty} testID="today-schedule-empty">
-            <TaskSymbol name="calendar" size={22} color={theme.colors.link} />
-            <Text style={[styles.heading, { color: theme.colors.ink }]}>
-              {searching ? 'No matching tasks' : 'Your schedule is clear'}
-            </Text>
-            <Text style={[styles.subheadline, styles.centred, { color: theme.colors.secondary }]}>
-              {searching ? 'Try different keywords or select a wider date range.' : 'Add a task or enjoy the open space.'}
-            </Text>
-          </View>
+          // 9acb39a (RootView.swift:1697-1707): the clear schedule is a button that creates a task; the search's
+          // "No matching tasks" stays static.
+          searching || !onCreateTask ? (
+            <View accessible style={styles.empty} testID="today-schedule-empty">
+              <EmptySchedule searching={searching} />
+            </View>
+          ) : (
+            <Pressable
+              accessibilityHint="Opens the manual task creation screen"
+              accessibilityLabel="Your schedule is clear. Create a task"
+              accessibilityRole="button"
+              onPress={onCreateTask}
+              style={({ pressed }) => [styles.empty, pressed && styles.pressed]}
+              testID="today-empty-schedule-create-task"
+            >
+              <EmptySchedule searching={false} />
+            </Pressable>
+          )
         ) : (
           <>
             {visibleSchedule.map((item, index) => (
@@ -277,6 +289,20 @@ function withAlpha(color: string, alpha: number): string {
   return `rgba(${(int >> 16) & 255}, ${(int >> 8) & 255}, ${int & 255}, ${alpha})`;
 }
 
+/** `emptySchedule` (RootView.swift:1743-1752). */
+function EmptySchedule({ searching }: { searching: boolean }) {
+  const theme = useTheme();
+  return (
+    <>
+      <TaskSymbol name="calendar" size={22} color={theme.colors.link} />
+      <Text style={[styles.heading, { color: theme.colors.ink }]}>{searching ? 'No matching tasks' : 'Your schedule is clear'}</Text>
+      <Text style={[styles.subheadline, styles.centred, { color: theme.colors.secondary }]}>
+        {searching ? 'Try different keywords or select a wider date range.' : 'Add a task or enjoy the open space.'}
+      </Text>
+    </>
+  );
+}
+
 const styles = StyleSheet.create({
   // `VStack(spacing: 12)`.
   stack: { gap: 12 },
@@ -303,6 +329,7 @@ const styles = StyleSheet.create({
   caption: { fontSize: 12, lineHeight: 16 },
   searchField: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 10, borderRadius: 10, marginBottom: 12 },
   empty: { alignItems: 'center', gap: 9, paddingVertical: 28 },
+  pressed: { opacity: 0.6 },
   centred: { textAlign: 'center' },
   divider: { height: StyleSheet.hairlineWidth, opacity: 0.55 },
   // `.padding(.vertical, 12)`
