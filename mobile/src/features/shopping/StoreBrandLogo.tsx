@@ -68,6 +68,22 @@ export function suppliedLogo(brand: StoreBrandMetadata | null | undefined): { ur
   return brand && uri ? { uri, label: brand.displayName } : null;
 }
 
+/**
+ * `GET /api/shopping/store-brand`, retried after 1 s and then 2 s while it answers with no logo (ce6d20a,
+ * StoreBrandLogo.swift:89-93): another view may be resolving the same brand under the server's cache lease.
+ * Stops as soon as the view is gone.
+ */
+export async function lookUp(listId: string, cancelled: () => boolean, wait: (ms: number) => Promise<void> = (ms) => new Promise((done) => setTimeout(done, ms))): Promise<StoreBrandMetadata | null> {
+  let { brand } = await shoppingStoresApi.brand(listId);
+  for (const delay of [1000, 2000]) {
+    if (brand.logoUrl != null) break;
+    await wait(delay);
+    if (cancelled()) return null;
+    ({ brand } = await shoppingStoresApi.brand(listId));
+  }
+  return cancelled() ? null : brand;
+}
+
 export function StoreBrandLogo({
   listId,
   identity,
@@ -111,10 +127,9 @@ export function StoreBrandLogo({
     let cancelled = false;
     // `guard automaticLookup || suppliedBrand != nil else { image = nil; return }` (:66).
     if (usingCustom || supplied || !automaticLookup || cached(key) || identity.replaceAll('|', '') === '') return;
-    shoppingStoresApi
-      .brand(listId)
-      .then(({ brand }) => {
-        if (cancelled) return;
+    lookUp(listId, () => cancelled)
+      .then((brand) => {
+        if (cancelled || !brand) return;
         const uri = safeLogoUrl(brand.logoUrl);
         if (!uri) return;
         if (cache.size >= CACHE_LIMIT) cache.clear();
