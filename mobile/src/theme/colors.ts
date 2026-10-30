@@ -9,6 +9,12 @@ export const brand = {
 } as const;
 
 /**
+ * The Calendar tab's **Yes, connect calendar** capsule (CalendarView.swift:302-307): "Deeper brand blue and
+ * red keep white text readable in both appearances", so one set for light and dark.
+ */
+export const calendarConnectGradient = ['#056EC7', brand.nexdoIndigo, '#C71433'] as const; // (0.02, 0.43, 0.78) → indigo → (0.78, 0.08, 0.20)
+
+/**
  * The first-install introduction's own colours (InstallIntroductionView.swift:8-9). It is always light
  * (`.preferredColorScheme(.light)`: "Artwork is supplied on a light canvas"), so these have no dark values.
  */

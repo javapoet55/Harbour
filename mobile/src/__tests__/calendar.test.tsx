@@ -43,6 +43,7 @@ const mockTasks = jest.fn();
 const mockAgenda = jest.fn();
 const mockIntelligence = jest.fn();
 const mockCreateEvent = jest.fn();
+const mockConnections = jest.fn();
 jest.mock('../api', () => ({
   ...jest.requireActual('../api'),
   endpoints: {
@@ -50,6 +51,7 @@ jest.mock('../api', () => ({
     agenda: (...args: unknown[]) => mockAgenda(...args),
     scheduleIntelligence: (...args: unknown[]) => mockIntelligence(...args),
     createCalendarEvent: (...args: unknown[]) => mockCreateEvent(...args),
+    calendarConnections: (...args: unknown[]) => mockConnections(...args),
   },
 }));
 
@@ -107,6 +109,8 @@ beforeEach(() => {
   mockTasks.mockResolvedValue({ tasks: AGENDA.tasks, timeZone: ZONE });
   mockAgenda.mockResolvedValue(AGENDA);
   mockIntelligence.mockRejectedValue(new Error('unavailable'));
+  // Google is connected unless a test says otherwise, so the connect offer stays away.
+  mockConnections.mockResolvedValue({ connections: [{ id: 'g', provider: 'google', status: 'active', writeEnabled: true }] });
   mockCalendarPermissions.mockReset().mockResolvedValue({ status: 'undetermined', canAskAgain: true, granted: false });
   mockDeviceCalendars.mockReset().mockResolvedValue([]);
   mockDeviceEvents.mockReset().mockResolvedValue([]);
@@ -886,5 +890,63 @@ describe('Calendar tab, Phase 13', () => {
     } finally {
       platform.restore();
     }
+  });
+});
+
+/**
+ * "Connect your calendar" (CalendarView.swift:215-324, fbce45b). No capture exists; this follows the source.
+ * When it shows is pinned in features/calendar/__tests__/connectOffer.test.tsx.
+ */
+describe('Calendar connect offer', () => {
+  beforeEach(() => mockConnections.mockResolvedValue({ connections: [] }));
+
+  it('offers to connect when nothing is connected and the phone calendars are not readable', async () => {
+    await renderCalendar();
+    await waitFor(() => expect(screen.getByTestId('calendar-connect-prompt')).toBeTruthy());
+    expect(screen.getByText('Connect your calendar')).toBeTruthy();
+  });
+
+  it('opens Settings at the calendars card from Yes, connect calendar', async () => {
+    await renderCalendar();
+    await waitFor(() => expect(screen.getByTestId('calendar-connect-prompt-yes')).toBeTruthy());
+    await fireEvent.press(screen.getByTestId('calendar-connect-prompt-yes'));
+    expect(mockPush).toHaveBeenCalledWith({ pathname: '/account/settings', params: { calendars: '1' } });
+    expect(screen.queryByTestId('calendar-connect-prompt')).toBeNull();
+  });
+
+  it('closes on Not now, without going anywhere', async () => {
+    await renderCalendar();
+    await waitFor(() => expect(screen.getByTestId('calendar-connect-prompt-dismiss')).toBeTruthy());
+    await fireEvent.press(screen.getByTestId('calendar-connect-prompt-dismiss'));
+    expect(screen.queryByTestId('calendar-connect-prompt')).toBeNull();
+    expect(mockPush).not.toHaveBeenCalled();
+  });
+
+  it('stays away when a calendar is connected', async () => {
+    mockConnections.mockResolvedValue({ connections: [{ id: 'g', provider: 'google', status: 'active', writeEnabled: true }] });
+    await renderCalendar();
+    await waitFor(() => expect(mockConnections).toHaveBeenCalled());
+    expect(screen.queryByTestId('calendar-connect-prompt')).toBeNull();
+  });
+
+  it.each([
+    ['ios', 'Connect your Google, Apple or Outlook calendar to sync your tasks and calendar events.', 'Apple Calendar displays your selected events in NexDo. Google and Outlook sync options are available in Settings.'],
+    ['android', 'Connect your Google, phone or Outlook calendar to sync your tasks and calendar events.', 'Phone calendar displays your selected events in NexDo. Google and Outlook sync options are available in Settings.'],
+  ] as const)('says Swift’s copy on %s, with the phone calendar named for the platform', async (os, body, footnote) => {
+    jest.replaceProperty(Platform, 'OS', os);
+    await renderCalendar();
+    await waitFor(() => expect(screen.getByText(body)).toBeTruthy());
+    expect(screen.getByText(footnote)).toBeTruthy();
+    expect(screen.getByText('Not now')).toBeTruthy();
+    jest.restoreAllMocks();
+  });
+
+  it('closes on a tap outside on Android', async () => {
+    jest.replaceProperty(Platform, 'OS', 'android');
+    await renderCalendar();
+    await waitFor(() => expect(screen.getByTestId('calendar-connect-prompt-scrim', { includeHiddenElements: true })).toBeTruthy());
+    await fireEvent.press(screen.getByTestId('calendar-connect-prompt-scrim', { includeHiddenElements: true }));
+    expect(screen.queryByTestId('calendar-connect-prompt')).toBeNull();
+    jest.restoreAllMocks();
   });
 });

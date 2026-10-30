@@ -2511,3 +2511,32 @@ File `app/(auth)/reset-password.tsx` (also the signed-in route `app/account/rese
 - Tests: `reset-password.test.tsx` "Reset password, Phase 14": the address filled in and the new footer on both
   platforms; the 404 in `danger`, once, staying on step one and clearing on success; the 72-byte gate on both
   platforms.
+
+## 55. Phase 14 / A5: Calendar "Connect your calendar" sheet — built from Swift source, no capture (2026-10-30)
+
+`calendarConnectionPrompt` (CalendarView.swift:215-324; fbce45b, 9acb39a). **There is no capture of this sheet:** the
+capture account has Google connected (§24 inventory). The layout comes from the Swift source alone and has not been
+compared with an iPhone render, or with an Android device (see §51).
+
+- `src/features/calendar/ConnectCalendarPrompt.tsx`, mounted at the end of `app/(tabs)/calendar.tsx`. When it shows
+  is §49's `useCalendarConnectOffer`.
+- **Content as Swift:** `calendar.badge.plus` at 42 pt in the calendar accent, in a 12% circle (an Ionicons
+  calendar with a small add badge); "Connect your calendar" (title2, bold); the body copy; the footnote; then a
+  bottom area with **Yes, connect calendar** (a capsule at least 50 pt high, white headline, on the deep
+  blue→indigo→red gradient that Swift picked to read in both appearances) and **Not now**. Ids
+  `calendar-connect-prompt`, `-yes` and `-dismiss`, as Swift.
+- **Yes** closes the sheet and opens Settings scrolled to the calendars card, the same route as the Calendar gear
+  (`/account/settings?calendars=1`, `ProfileSettingsView(openCalendarSettings: true)`). **Not now**, Back, or a tap
+  outside just close it, and §49 keeps it closed for that account.
+- **Copy (Android):** Swift's "Google, Apple or Outlook" and "Apple Calendar displays…" become "Google, phone or
+  Outlook" and "Phone calendar displays…", following the existing platform copy (`deviceCalendarCopy`, §33, §37,
+  §42). iOS keeps Swift's words. **For Sri:** please confirm the Android wording.
+- **Presentation:** Swift uses a `[.medium, .large]` sheet with a drag indicator. On Android it is a bottom sheet
+  sized to its content (radius 28, a grabber, the 35% scrim used by the other Android sheets) that closes on a tap
+  outside. iOS uses a page sheet, because RN's `Modal` has no medium detent.
+- **Tokens:** the capsule's two Swift colours are `calendarConnectGradient` in `src/theme/colors.ts`. Everything else
+  uses the palette, and dark uses the elevated palette. Swift's dark accent for the badge comes from
+  `calendarAccent`, as on the tab.
+- Tests: `calendar.test.tsx` "Calendar connect offer": shown with nothing connected; Yes goes to Settings at the
+  calendars card; Not now closes it; hidden when connected; copy on iOS and on Android; a tap outside closes it on
+  Android.

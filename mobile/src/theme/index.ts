@@ -1,5 +1,5 @@
 export { linearGradientStops, linearOpacity } from './compositing';
-export { brand, introduction, palettes, type ColorScheme, type Palette } from './colors';
+export { brand, calendarConnectGradient, introduction, palettes, type ColorScheme, type Palette } from './colors';
 export { radii } from './radii';
 export { spacing } from './spacing';
 export { typography, textStyles, systemText, inputText, type TextVariant } from './typography';

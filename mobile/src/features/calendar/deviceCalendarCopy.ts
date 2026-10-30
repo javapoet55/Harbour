@@ -42,6 +42,13 @@ export function deviceCalendarCopy(platform: DevicePlatform = devicePlatform()) 
       : 'Selected events appear in NexDo. Manage calendar access in your phone’s Settings. NexDo does not add tasks or events to Phone calendar.',
     /** The Calendar filters menu entry (`Button("Apple calendars…")`, CalendarView.swift:406). */
     filtersMenu: ios ? 'Apple calendars…' : 'Phone calendars…',
+    /** The Calendar tab's "Connect your calendar" sheet (CalendarView.swift:287-290, fbce45b). */
+    connectOfferBody: ios
+      ? 'Connect your Google, Apple or Outlook calendar to sync your tasks and calendar events.'
+      : 'Connect your Google, phone or Outlook calendar to sync your tasks and calendar events.',
+    connectOfferFootnote: ios
+      ? 'Apple Calendar displays your selected events in NexDo. Google and Outlook sync options are available in Settings.'
+      : 'Phone calendar displays your selected events in NexDo. Google and Outlook sync options are available in Settings.',
   };
 }
 
