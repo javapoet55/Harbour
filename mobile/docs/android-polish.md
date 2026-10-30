@@ -2245,3 +2245,16 @@ Audit of every `<StatusBar` in `mobile/`: the only one outside `app/_layout.tsx`
 screen's `statusBarStyle`.
 
 Tests: `ask.test.tsx` "the Ask AI status bar": dark while Ask is focused, none while it is not, none on a themed page.
+
+## 60. Phase 14 Run B (Mac): Wellness (2026-10-30)
+
+The §24 Wellness rows of `docs/IOS_TO_REACT_NATIVE.md` (Phase 14 status), built from the Swift source and the
+Phase 14 captures (`mobile/docs/reference/ios/*-v4*`) on `rn-phase-14-mac`, in light and dark. Sections from §60
+up are the Mac's in this phase, so they do not clash with the Windows run's. One commit per row; the rows'
+"Built" boxes in `docs/IOS_TO_REACT_NATIVE.md` are outside `mobile/` and were left for the merge. Nothing was
+saved, sent, called or paused on app-dev. Tests: `src/features/wellness/__tests__/phase14.test.tsx` unless a
+row says otherwise.
+
+| §24 row | Swift source | Built | Deliberate Android difference |
+|---|---|---|---|
+| `Color.wellnessAccent` | WellnessAppearance.swift:1-10 | Theme token `wellnessAccent`: #3D29F0 light, #BAABFF dark, for the Wellness modules' text, controls and tints. `src/theme/colors.ts` | None. |

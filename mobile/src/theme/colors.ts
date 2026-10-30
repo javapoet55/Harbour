@@ -134,6 +134,12 @@ export type Palette = {
    * iOS draws `success`, the system green itself (docs/android-polish.md §36).
    */
   switchOnGreen: string;
+  /**
+   * `Color.wellnessAccent` (WellnessAppearance.swift, ce6d20a): text, controls and tints in the
+   * Wellness modules (Calorie Tracker, Pomodoro, Moments). The brand indigo in light; a light lilac,
+   * (0.73, 0.67, 1), in dark. Solid branded buttons keep their own fill.
+   */
+  wellnessAccent: string;
 };
 
 export type ColorScheme = 'light' | 'dark';
@@ -186,6 +192,7 @@ export const palettes: Record<ColorScheme, Palette> = {
     switchOn: brand.nexdoIndigo,
     switchOff: 'rgba(120, 120, 128, 0.5)',
     switchOnGreen: '#34C759',
+    wellnessAccent: brand.nexdoIndigo, // WellnessAppearance.swift: (0.24, 0.16, 0.94)
   },
   dark: {
     // TODO(phase1-decision): the Swift dark variant is the dynamic system `.label`; this is its standard dark value.
@@ -240,5 +247,6 @@ export const palettes: Record<ColorScheme, Palette> = {
     switchOn: 'rgba(61, 41, 240, 0.85)',
     switchOff: '#48484A',
     switchOnGreen: 'rgba(48, 209, 88, 0.85)',
+    wellnessAccent: '#BAABFF', // WellnessAppearance.swift dark: (0.73, 0.67, 1)
   },
 };
