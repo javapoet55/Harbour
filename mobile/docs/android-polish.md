@@ -2489,3 +2489,25 @@ Port of `InstallIntroductionView` (35b40f2, 530f1bd) against `install-intro-1`�
   sheet's own changes (footer, gate, 404) are §54.
 - Tests: `sign-up.test.tsx` "Account already exists" (account-exists yes, 409, Yes and No, the blur check and its
   three quiet cases, a changed address, no stacking).
+
+## 54. Phase 14 / A4: Reset password — the unregistered-email message (404), footer and gate (2026-10-30)
+
+`PasswordResetView` (RootView.swift:798-870; 60212f3, a80c206), against `password-reset-v4` and `password-reset-from-sign-up`.
+File `app/(auth)/reset-password.tsx` (also the signed-in route `app/account/reset-password.tsx`).
+
+- **404:** "We don’t have an account with this email address. Check the address or create an account." (the
+  server's text, §44's `unknownEmail`) shows in red in the error row under the email, and the screen stays on its
+  first step. A later send that works clears it.
+  **Swift bug 9 doesn't happen on Android:** Swift also puts the same text in the root "Unable to complete request"
+  alert, so it can appear twice. RN has no root alert for the reset calls, so the text appears once.
+- **Footer** (both platforms): "Enter your account’s email address. We’ll send a six-digit code that expires after
+  15 minutes." It no longer says "if an account exists".
+- **Gate:** Update Password needs six digits and a password of 1–72 UTF-8 bytes (`utf8Length`, as sign-up uses).
+  The stale "at least twelve characters" comment is gone.
+- **Opened from "Account already exists"** (§53): the address comes in through the route's `email` param, as from
+  Sign in's "Forgot password?". The sheet opens over Create Account.
+- The §12 Android look (gradient buttons, field row with the envelope tile) is unchanged.
+- **Not checked on a device** (see §51).
+- Tests: `reset-password.test.tsx` "Reset password, Phase 14": the address filled in and the new footer on both
+  platforms; the 404 in `danger`, once, staying on step one and clearing on success; the 72-byte gate on both
+  platforms.
