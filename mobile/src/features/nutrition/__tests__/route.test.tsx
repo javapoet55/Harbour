@@ -15,7 +15,7 @@ jest.mock('../../../api/nutrition', () => ({
 jest.mock('../../shopping/store', () => ({ shoppingStore: { getState: () => ({ refresh: jest.fn() }) } }));
 
 import CalorieTrackerScreen from '../../../../app/wellness/calories';
-import { editorValid } from '../FoodEditor';
+import { caloriesOutOfRange, editorValid } from '../FoodEditor';
 
 /** The chooser's Calorie Tracker card → its guide → "Got it!" opens this route (navigation.test.ts). */
 
@@ -54,4 +54,14 @@ test('the editor accepts a name and 0 to 5,000 whole calories (`editorValid`)', 
   expect(editorValid({ name: 'Tea', calories: '' })).toBe(false);
   expect(editorValid({ name: 'Tea', calories: '1.5' })).toBe(false);
   expect(editorValid({ name: '   ', calories: '10' })).toBe(false);
+});
+
+test('the calories message shows for anything typed outside 0 to 5,000, never for an empty field (`caloriesOutOfRange`)', () => {
+  expect(caloriesOutOfRange('')).toBe(false);
+  expect(caloriesOutOfRange('0')).toBe(false);
+  expect(caloriesOutOfRange('5000')).toBe(false);
+  expect(caloriesOutOfRange('-500')).toBe(true);
+  expect(caloriesOutOfRange('6000')).toBe(true);
+  expect(caloriesOutOfRange('1.5')).toBe(true);
+  expect(caloriesOutOfRange('abc')).toBe(true);
 });

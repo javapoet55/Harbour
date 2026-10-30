@@ -2204,3 +2204,14 @@ When Ends is at or before Starts, Create Event was only greyed out with no reaso
 caption in `danger` now sits under the Ends row: "The end time must be after the start time." (`event-end-error`,
 `app/calendar/event/new.tsx`). It goes away as soon as the end is moved after the start. Test: `calendar.test.tsx`
 "says why Create Event is disabled when Ends is before Starts".
+
+## 41. QA M-02: Add Food wording and the calories range message (2026-10-30)
+
+- The note under the form now reads "This will be saved to your food log for <date>." (was "Saved to your food log
+  for <date>."), since nothing is saved until Add / Save is tapped (`src/features/nutrition/FoodEditor.tsx`).
+- Calories that are typed but not a whole number from 0 to 5,000 (e.g. -500, 6000, 1.5) now show "Enter calories
+  from 0 to 5,000." in red under the Calories field (`caloriesOutOfRange`, `calorie-editor-calories-error`). Nothing
+  is shown while the field is empty. The red is the light `danger` token (`palettes.light.danger`), as the editor is
+  a fixed-light sheet. Add / Save stays disabled as before.
+- Tests: `calorieTracker.test.tsx` (the new wording; -500, 6000, abc, 5000 and empty in the editor) and
+  `route.test.tsx` (`caloriesOutOfRange`).
