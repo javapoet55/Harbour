@@ -2197,3 +2197,10 @@ manifest. Rebuilt with the same route (prebuild, `assembleDebug`, arm64), reinst
   covers this app. The legacy import will itself go away in a later Expo; moving to the object API is a separate change.
 - The Phone calendars list wraps a long account name a letter at a time ("karpagamsures / hkumar@gmail / .com") when
   the calendar's title is the address; iOS would do the same with a long enough name.
+
+## 40. QA M-01: New Event explains an end before the start (2026-10-30)
+
+When Ends is at or before Starts, Create Event was only greyed out with no reason given. It stays disabled, and a
+caption in `danger` now sits under the Ends row: "The end time must be after the start time." (`event-end-error`,
+`app/calendar/event/new.tsx`). It goes away as soon as the end is moved after the start. Test: `calendar.test.tsx`
+"says why Create Event is disabled when Ends is before Starts".
