@@ -1,3 +1,4 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useQueryClient } from '@tanstack/react-query';
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
@@ -25,10 +26,26 @@ export function offersCalendarConnection(connections: readonly CalendarConnectio
 }
 
 /**
+ * ANDROID AHEAD (docs/android-polish.md §57; §24 Swift bug 14): Swift keeps "Not now" in view state only, so the
+ * offer returns on every cold launch. Here an answer — Not now, Back, a tap outside, or Yes — is remembered on
+ * this device for that account, and the offer never comes back for it. An offer left unanswered (the app
+ * closed under it) is not an answer, so it is offered again.
+ */
+export const CALENDAR_OFFER_ANSWERED_PREFIX = 'nexdo.calendarConnectOffer.answered.';
+
+export async function calendarOfferAnswered(owner: string): Promise<boolean> {
+  return (await AsyncStorage.getItem(CALENDAR_OFFER_ANSWERED_PREFIX + owner).catch(() => null)) === 'true';
+}
+
+export async function rememberCalendarOfferAnswered(owner: string): Promise<void> {
+  await AsyncStorage.setItem(CALENDAR_OFFER_ANSWERED_PREFIX + owner, 'true').catch(() => undefined);
+}
+
+/**
  * The offer's state for the Calendar tab. It runs each time the tab comes into focus, as Swift's
  * `.task(id: model.profile?.id)` reruns on every appearance. It shows at most once per signed-in account
  * for as long as the tab stays mounted (`promptedAccount`): "Do not repeatedly interrupt this visit after
- * Not now or a swipe dismissal."
+ * Not now or a swipe dismissal." Once answered, never again on this device for that account (above).
  *
  * A failed refresh, a sign-out or account switch mid-check, or the tab losing focus first shows nothing
  * and leaves the account un-prompted, so the next visit asks again.
@@ -45,6 +62,12 @@ export function useCalendarConnectOffer(): { visible: boolean; close: () => void
       if (owner === null || promptedAccount.current === owner) return;
       let cancelled = false;
       void (async () => {
+        // Answered before on this device: no refresh, no offer.
+        if (await calendarOfferAnswered(owner)) {
+          promptedAccount.current = owner;
+          return;
+        }
+        if (cancelled) return;
         let connections: CalendarConnection[];
         try {
           connections = await refreshCalendarConnections(queryClient);
@@ -64,5 +87,10 @@ export function useCalendarConnectOffer(): { visible: boolean; close: () => void
     }, [owner, queryClient]),
   );
 
-  return { visible, close: useCallback(() => setVisible(false), []) };
+  // Every way out of the sheet is an answer, so each one is remembered for the account it was shown to.
+  const close = useCallback(() => {
+    setVisible(false);
+    if (promptedAccount.current !== null) void rememberCalendarOfferAnswered(promptedAccount.current);
+  }, []);
+  return { visible, close };
 }

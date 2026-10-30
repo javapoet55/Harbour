@@ -1,3 +1,4 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import { Pressable, Text } from 'react-native';
@@ -36,7 +37,7 @@ jest.mock('../../../api', () => ({
 const mockReadable = jest.fn();
 jest.mock('../deviceCalendars', () => ({ hasDeviceCalendarAccess: () => mockReadable() }));
 
-import { offersCalendarConnection, useCalendarConnectOffer } from '../connectOffer';
+import { CALENDAR_OFFER_ANSWERED_PREFIX, offersCalendarConnection, useCalendarConnectOffer } from '../connectOffer';
 
 /**
  * `offerCalendarConnection()` (ios/App/CalendarView.swift:263-277, fbce45b): only after a successful status
@@ -63,7 +64,8 @@ async function show(node: React.ReactElement) {
   return { ...screen, queryClient };
 }
 
-beforeEach(() => {
+beforeEach(async () => {
+  await AsyncStorage.clear();
   mockConnections.mockReset().mockResolvedValue({ connections: [] });
   mockReadable.mockReset().mockResolvedValue(false);
   useSession.setState({ status: 'signedIn', profile: profile('u1') });
@@ -173,4 +175,47 @@ it('asks again on the next visit if the tab lost focus mid-refresh', async () =>
   });
   // The new visit's check (sharing the request still in flight) is the one that shows it.
   await waitFor(() => expect(screen.getByText('offer')).toBeTruthy());
+});
+
+/**
+ * ANDROID AHEAD (§24 Swift bug 14; docs/android-polish.md §57): an answer is remembered on this device for
+ * that account, across launches. An offer nobody answered comes back. A relaunch is a fresh hook instance
+ * (a new `key`) over the same device storage.
+ */
+describe('the offer after a relaunch', () => {
+  const relaunch = async (screen: Awaited<ReturnType<typeof show>>, launch: string) => {
+    await screen.rerender(
+      <QueryClientProvider client={screen.queryClient}>
+        <Probe key={launch} />
+      </QueryClientProvider>,
+    );
+  };
+
+  it('never comes back for an account that answered it, and asks nothing', async () => {
+    const screen = await show(<Probe key="first" />);
+    await waitFor(() => expect(screen.getByText('offer')).toBeTruthy());
+    await fireEvent.press(screen.getByLabelText('Not now'));
+    await waitFor(async () => expect(await AsyncStorage.getItem(`${CALENDAR_OFFER_ANSWERED_PREFIX}u1`)).toBe('true'));
+    mockConnections.mockClear();
+
+    await relaunch(screen, 'second');
+    await act(async () => undefined);
+    expect(screen.getByText('none')).toBeTruthy();
+    expect(mockConnections).not.toHaveBeenCalled();
+  });
+
+  it('comes back after a relaunch if nobody answered it', async () => {
+    const screen = await show(<Probe key="first" />);
+    await waitFor(() => expect(screen.getByText('offer')).toBeTruthy());
+
+    await relaunch(screen, 'second');
+    await waitFor(() => expect(mockConnections).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.getByText('offer')).toBeTruthy());
+  });
+
+  it('is remembered per account', async () => {
+    await AsyncStorage.setItem(`${CALENDAR_OFFER_ANSWERED_PREFIX}u2`, 'true');
+    const screen = await show(<Probe />);
+    await waitFor(() => expect(screen.getByText('offer')).toBeTruthy());
+  });
 });

@@ -2530,7 +2530,8 @@ compared with an iPhone render, or with an Android device (see §51).
   outside just close it, and §49 keeps it closed for that account.
 - **Copy (Android):** Swift's "Google, Apple or Outlook" and "Apple Calendar displays…" become "Google, phone or
   Outlook" and "Phone calendar displays…", following the existing platform copy (`deviceCalendarCopy`, §33, §37,
-  §42). iOS keeps Swift's words. **For Sri:** please confirm the Android wording.
+  §42). iOS keeps Swift's words. **Confirmed (2026-10-30):** it matches the existing Android "Phone calendar"
+  label, so there is nothing for Sri.
 - **Presentation:** Swift uses a `[.medium, .large]` sheet with a drag indicator. On Android it is a bottom sheet
   sized to its content (radius 28, a grabber, the 35% scrim used by the other Android sheets) that closes on a tap
   outside. iOS uses a page sheet, because RN's `Modal` has no medium detent.
@@ -2596,3 +2597,20 @@ row says otherwise.
 **Not built in this run:** the rest of §24 (outside the Wellness rows). **Tests**, after merging `origin/rn-phase-14`
 (`d2db2ef`, which needs `npm install` for `expo-store-review`): `npx jest` 196 suites, 2,828 tests, all passing;
 `npx tsc --noEmit` clean; ESLint clean on every file touched. Nothing was saved, sent, called or paused on app-dev.
+
+## 57. Phase 14 / C0: The calendar offer stays answered — ANDROID AHEAD of Swift bug 14 (2026-10-30)
+
+Decision on Run A, 2026-10-30. §24 Swift bug 14: "Not now" lives in view state only, so the offer comes back on
+every cold launch.
+
+- **ANDROID AHEAD — Swift bug fixed on Android.** Once the offer is answered, it isn't shown again on that device for
+  that account. "Answered" covers every way out of the sheet: Not now, Back, a tap outside, and Yes, connect
+  calendar. Yes counts because it opens Settings, which is a response. Stored in AsyncStorage as
+  `nexdo.calendarConnectOffer.answered.<user id>` = `'true'` (`calendarOfferAnswered`,
+  `rememberCalendarOfferAnswered` in `connectOffer.ts`).
+- **Never answered** (the app closed with the sheet up, or the check never got to show it): nothing is stored, so
+  it's offered again on the next launch, as before.
+- An answered account skips the connections refresh too. Other accounts on the same device are unaffected.
+- §49's in-session rule (once per account while the tab stays mounted) still applies.
+- Tests: `connectOffer.test.tsx` "the offer after a relaunch" (answered: no offer and no request after a relaunch;
+  unanswered: offered again; stored per account), and `calendar.test.tsx` (Yes is remembered as an answer).

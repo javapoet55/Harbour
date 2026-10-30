@@ -1,3 +1,4 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { Alert, Platform, StyleSheet } from 'react-native';
@@ -898,7 +899,10 @@ describe('Calendar tab, Phase 13', () => {
  * When it shows is pinned in features/calendar/__tests__/connectOffer.test.tsx.
  */
 describe('Calendar connect offer', () => {
-  beforeEach(() => mockConnections.mockResolvedValue({ connections: [] }));
+  beforeEach(async () => {
+    await AsyncStorage.clear();
+    mockConnections.mockResolvedValue({ connections: [] });
+  });
 
   it('offers to connect when nothing is connected and the phone calendars are not readable', async () => {
     await renderCalendar();
@@ -949,4 +953,13 @@ describe('Calendar connect offer', () => {
     expect(screen.queryByTestId('calendar-connect-prompt')).toBeNull();
     jest.restoreAllMocks();
   });
+});
+
+it('remembers Yes, connect calendar as an answer, so the offer does not return (§57)', async () => {
+  await AsyncStorage.clear();
+  mockConnections.mockResolvedValue({ connections: [] });
+  await renderCalendar();
+  await waitFor(() => expect(screen.getByTestId('calendar-connect-prompt-yes')).toBeTruthy());
+  await fireEvent.press(screen.getByTestId('calendar-connect-prompt-yes'));
+  await waitFor(async () => expect(await AsyncStorage.getItem('nexdo.calendarConnectOffer.answered.u1')).toBe('true'));
 });
