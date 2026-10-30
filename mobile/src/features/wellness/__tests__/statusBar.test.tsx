@@ -29,9 +29,9 @@ describe('FixedLightStatusBar', () => {
     expect(mockStatusBar).not.toHaveBeenCalled();
   });
 
-  it('is on Pomodoro too, which Swift keeps light (`.preferredColorScheme(.light)`)', async () => {
+  it('is not on Pomodoro, which follows the theme since ce6d20a', async () => {
     mockFocused.mockReturnValue(true);
     await render(<PomodoroScreen />);
-    expect(mockStatusBar).toHaveBeenCalledWith({ style: 'dark' });
+    expect(mockStatusBar).not.toHaveBeenCalled();
   });
 });
