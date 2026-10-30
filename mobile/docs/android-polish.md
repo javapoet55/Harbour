@@ -2228,3 +2228,20 @@ caption in `danger` now sits under the Ends row: "The end time must be after the
   (`deviceCalendarCopy.ts`, `calendarProviders.ts`, `eventDetails.ts`).
 - Tests: `account.test.tsx` (the caption), `bugReport/__tests__/screen.test.tsx` (Android: shake label and Android
   version; the existing iOS tests keep the iPhone/iOS copy).
+
+## 43. QA M-04: Night mode status bar icons stay dark after Ask AI (2026-10-30)
+
+In night mode the clock and battery stayed dark on Settings, Today and elsewhere once Ask AI had been opened.
+`AskNexdoView` drew `<StatusBar style="dark" />` on its fixed-light landing and Daily Brief with no focus check.
+`expo-status-bar` lets the last-mounted bar win, so an Ask screen left mounted under another one kept overriding the
+root bar (`app/_layout.tsx`, light content in dark mode). Ask now uses `FixedLightStatusBar`, which draws the dark bar
+only while its screen is focused, as Wellness and Connect calendar already do. The landing still gets dark icons
+while it is in front.
+
+Audit of every `<StatusBar` in `mobile/`: the only one outside `app/_layout.tsx` is inside `FixedLightStatusBar`
+(`src/features/wellness/FixedLightStatusBar.tsx`), which is focus-gated. It is used by Ask, `app/wellness/calories.tsx`,
+`app/wellness/guide/[kind].tsx`, `app/wellness/pomodoro.tsx` and `src/features/calendar/ConnectSurface.tsx`.
+`StatusBarScrim` (Today, Calendar) only draws a backdrop and sets no style. No code calls `setStatusBarStyle` or sets a
+screen's `statusBarStyle`.
+
+Tests: `ask.test.tsx` "the Ask AI status bar": dark while Ask is focused, none while it is not, none on a themed page.

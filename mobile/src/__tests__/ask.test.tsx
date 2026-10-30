@@ -10,11 +10,15 @@ import { useSession } from '../store/session';
 const mockPush = jest.fn();
 const mockBack = jest.fn();
 let mockParams: Record<string, string> = {};
+const mockFocused = jest.fn(() => true);
 jest.mock('expo-router', () => ({
   router: { push: (...args: unknown[]) => mockPush(...args), replace: jest.fn(), back: (...args: unknown[]) => mockBack(...args) },
   useLocalSearchParams: () => mockParams,
+  useIsFocused: () => mockFocused(),
   Redirect: () => null,
 }));
+const mockStatusBar = jest.fn((_props: { style: string }) => null);
+jest.mock('expo-status-bar', () => ({ StatusBar: (props: { style: string }) => mockStatusBar(props) }));
 
 const mockAssistant = jest.fn();
 const mockTasks = jest.fn();
@@ -82,6 +86,8 @@ async function askTyped(text: string) {
 
 beforeEach(() => {
   mockParams = {};
+  mockFocused.mockReturnValue(true);
+  mockStatusBar.mockClear();
   mockPush.mockClear();
   mockBack.mockClear();
   mockAssistant.mockReset();
@@ -91,6 +97,29 @@ beforeEach(() => {
   useAssistantStore.getState().reset();
   useConsent.setState({ ai: true, voice: false });
   useSession.setState({ status: 'signedIn', profile: { id: 'u1', name: 'Ada Lovelace', email: 'ada@example.com', timeZone: 'UTC' } });
+});
+
+/**
+ * QA M-04: the landing's dark status bar must not outlive Ask's focus. Left mounted under another screen,
+ * it overrode the root bar and kept the clock and battery dark over the night theme.
+ */
+describe('the Ask AI status bar', () => {
+  it('asks for dark status-bar content on the fixed-light landing while Ask is in front', async () => {
+    await show(<Ask />);
+    expect(mockStatusBar).toHaveBeenCalledWith({ style: 'dark' });
+  });
+
+  it('draws no status bar while Ask is not focused, so the root bar follows the theme', async () => {
+    mockFocused.mockReturnValue(false);
+    await show(<Ask />);
+    expect(screen.getByText('How can I help you today?')).toBeTruthy();
+    expect(mockStatusBar).not.toHaveBeenCalled();
+  });
+
+  it('draws none on a themed page (Shopping Recommendations)', async () => {
+    await show(<AskNexdoView textPage shoppingContext={{ listName: 'Groceries', itemNames: ['Milk'] }} onClose={jest.fn()} />);
+    expect(mockStatusBar).not.toHaveBeenCalled();
+  });
 });
 
 /** `AskAILandingView` (ios/App/AskAILandingView.swift), Ask's first page. */
