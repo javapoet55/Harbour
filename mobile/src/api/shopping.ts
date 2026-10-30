@@ -282,8 +282,12 @@ export const shoppingOffersApi = {
 // ---------------------------------------------------------------------------------------------
 // Phase 12 Run F: stores, store brand, photo identification, recommendations
 
-/** `ShoppingStoreSuggestion` (ShoppingViews.swift:633-641; src/server/shopping/stores.ts:52). */
-export type ShoppingStoreSuggestion = { id: string; name: string; address: string; zip: string; website?: string | null; attributions: string[]; distanceKm?: number | null };
+/**
+ * `ShoppingStoreSuggestion` (ShoppingViews.swift:641-650; src/server/shopping/stores.ts:52). `brand` is
+ * new in ce6d20a (src/server/shopping/search-brands.ts): the server's logo for the row, so the finder
+ * draws it without a lookup. Optional, as in Swift: an older server sends none, and the row keeps the cart.
+ */
+export type ShoppingStoreSuggestion = { id: string; name: string; address: string; zip: string; website?: string | null; attributions: string[]; distanceKm?: number | null; brand?: StoreBrandMetadata | null };
 
 /** `StoreBrandMetadata` (StoreBrandLogo.swift:4-7). */
 export type StoreBrandMetadata = { displayName: string; logoUrl?: string | null };

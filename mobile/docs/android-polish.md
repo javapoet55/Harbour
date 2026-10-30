@@ -2266,3 +2266,21 @@ Plumbing only, from §24 "Server endpoints" (8592a0a, 60212f3). No screen change
   screen shows the 404 message in red where it already showed the server text.
 - Tests: `src/api/accountAuth.test.ts` (wire shape, 401 not a sign-out, 409/404 through the real client, fallbacks,
   other statuses are null) and `src/query/signupRecovery.test.tsx` (the hooks' typed results).
+
+## 45. Phase 14 / 2: Store search brand logo in the model (2026-10-30)
+
+From §24 "Shopping: store logos" and "Server endpoints" → Store search (ce6d20a).
+
+- `ShoppingStoreSuggestion` gains `brand?: StoreBrandMetadata | null` (`{ displayName, logoUrl | null }`), as
+  `POST /api/shopping/stores` now sends for each store (src/server/shopping/search-brands.ts). It is optional, as in
+  Swift (`let brand: StoreBrandMetadata?`, ShoppingViews.swift:642): an older server sends none.
+- `StoreBrandLogo` gains Swift's `automaticLookup` and `suppliedBrand` props (StoreBrandLogo.swift:17-18, :66,
+  :86-88). A supplied brand is used in place of `GET /api/shopping/store-brand`, with no retry. The **fallback** is the
+  green cart, used when the brand is missing, `logoUrl` is null, or the URL breaks the `cdn.brandfetch.io` rules
+  (`suppliedLogo`, which uses `safeLogoUrl`). `automaticLookup={false}` with no brand never calls the server.
+- **Not done here (a screen change):** the Stores Near You rows (`StorePages.tsx`) still draw the indigo storefront
+  tile. Swift passes `suppliedBrand: suggestion.brand` with `automaticLookup: false` at 48 pt (ShoppingViews.swift:754-756).
+  Run A's list doesn't include it, so it is left for a later run. The 1 s / 2 s retry of an empty lookup and List
+  Settings' "draft store matches saved" rule (same §24 row) are also not ported yet.
+- Tests: `stores.test.tsx` "Store search brand logos": `suppliedLogo`, the optional field, a supplied logo drawn
+  with no lookup, and the cart for no brand or no logo.
