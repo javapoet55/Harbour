@@ -2258,3 +2258,4 @@ row says otherwise.
 | §24 row | Swift source | Built | Deliberate Android difference |
 |---|---|---|---|
 | `Color.wellnessAccent` | WellnessAppearance.swift:1-10 | Theme token `wellnessAccent`: #3D29F0 light, #BAABFF dark, for the Wellness modules' text, controls and tints. `src/theme/colors.ts` | None. |
+| Wellness chooser: dark hero | WellnessChooserView.swift:70-87 (1a9a89a) | Dark only: a gold moon (#FFC740, Swift's (1, 0.78, 0.25)) at 62 in a 75 box, bottom-trailing 20 in, with two white sparkles (18 at (-17, -2) and 27 at (4, 16) from its top trailing corner), replacing the lilac `moon.stars.fill`. Light is unchanged. `WellnessChooser.tsx` | Ionicons' `moon` stands in for `moon.fill` and MaterialCommunityIcons' `star-four-points` for `sparkle` (closest glyphs). Checked against `wellness-chooser-v4-dark`. |

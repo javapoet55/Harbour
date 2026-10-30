@@ -18,8 +18,8 @@ import { fixedLightIndigo, nexdoSecondary, swiftColors } from './style';
  * 4185501 gave Swift's chooser a real dark mode — it used to be forced light — and this follows it
  * exactly: `isDark` swaps the ink to `.primary`, the backgrounds to near-black gradients and system
  * surfaces, each module colour to its lighter `darkAccent`, and drops the pack art (it is drawn with
- * `.multiply` on white) for a moon in the hero. Light mode is unchanged. The module guides stay fixed
- * light, as Swift's still are (WellnessModuleGuide.swift:102).
+ * `.multiply` on white) for a gold moon and two sparkles in the hero (1a9a89a). Light mode is
+ * unchanged. The module guides stay fixed light, as Swift's still are (WellnessModuleGuide.swift:102).
  *
  * Swift mounts two more destinations (`insights`, `profile`) that no card opens; they are not built.
  */
@@ -34,7 +34,7 @@ const DARK_ACCENT: Record<WellnessModule, string> = {
   moments: '#FF7AB3', // (1, 0.48, 0.70)
 };
 
-/** The quote mark and the hero moon in dark mode: (0.72, 0.65, 1). */
+/** The quote mark in dark mode: (0.72, 0.65, 1). */
 const DARK_LILAC = '#B8A6FF';
 
 /** What changes with the scheme: `isDark`, `ink`, `surface` and `Color.nexdoSecondary`. */
@@ -102,24 +102,32 @@ export function WellnessChooser({ onModule, onExit }: WellnessChooserProps) {
 
 type ChooserColors = ReturnType<typeof chooserColors>;
 
-/** `hero(scale:)` (:63-82). */
+/** The dark hero's moon: `moon.fill` in gold, (1, 0.78, 0.25), with two white sparkles (1a9a89a). */
+const DARK_MOON_GOLD = '#FFC740';
+
 /**
- * SF Symbols' `moon.stars.fill`: a crescent with two four-point stars at its upper right
- * (`wellness-chooser-v3-dark`). Ionicons' `moon` has no stars, so the stars are drawn beside it
- * (parity pass 4).
+ * The dark hero's art (WellnessChooserView.swift:70-84): a 75-pt box, the moon (62 pt) at its bottom
+ * leading corner, and two white `sparkle`s at its top trailing corner, 18 pt nudged (-17, -2) and 27 pt
+ * nudged (4, 16). Ionicons' `moon` is the filled crescent; `star-four-points` is the nearest `sparkle`.
  */
-function MoonStars({ size, color }: { size: number; color: string }) {
+function GoldMoon({ scale }: { scale: number }) {
+  const box = 75 * scale;
   return (
-    <View style={{ width: size, height: size }}>
+    <View style={{ width: box, height: box }}>
       <View style={{ position: 'absolute', left: 0, bottom: 0 }}>
-        <TaskSymbol color={color} name="moon.stars.fill" size={size * 0.82} />
+        <TaskSymbol color={DARK_MOON_GOLD} name="moon.fill" size={62 * scale} />
       </View>
-      <MaterialCommunityIcons color={color} name="star-four-points" size={size * 0.3} style={{ position: 'absolute', right: 0, top: 0 }} />
-      <MaterialCommunityIcons color={color} name="star-four-points" size={size * 0.2} style={{ position: 'absolute', right: size * 0.08, top: size * 0.36 }} />
+      <View style={{ position: 'absolute', right: 17 * scale, top: -2 * scale }} testID="wellness-hero-sparkle-small">
+        <MaterialCommunityIcons color="#FFFFFF" name="star-four-points" size={18 * scale} />
+      </View>
+      <View style={{ position: 'absolute', right: -4 * scale, top: 16 * scale }} testID="wellness-hero-sparkle-large">
+        <MaterialCommunityIcons color="#FFFFFF" name="star-four-points" size={27 * scale} />
+      </View>
     </View>
   );
 }
 
+/** `hero(scale:)` (:66-92). */
 function Hero({ scale, colors }: { scale: number; colors: ChooserColors }) {
   return (
     <View style={{ height: 192 * scale, overflow: 'hidden' }}>
@@ -130,9 +138,9 @@ function Hero({ scale, colors }: { scale: number; colors: ChooserColors }) {
         style={StyleSheet.absoluteFill}
       />
       {colors.isDark ? (
-        // `Image(systemName: "moon.stars.fill")`, 75pt light, lilac at 0.28, bottom-trailing, 20 in.
+        // The 75-pt moon box, bottom-trailing, 20 in, hidden from accessibility.
         <View accessible={false} importantForAccessibility="no-hide-descendants" pointerEvents="none" style={[StyleSheet.absoluteFill, styles.moon, { padding: 20 * scale }]} testID="wellness-hero-moon">
-          <MoonStars color={withAlpha(DARK_LILAC, 0.28)} size={75 * scale} />
+          <GoldMoon scale={scale} />
         </View>
       ) : (
         <>
