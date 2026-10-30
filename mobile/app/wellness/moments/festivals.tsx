@@ -9,7 +9,7 @@ import { Text } from '../../../src/components/Text';
 import { TodayBackdrop } from '../../../src/components/TodayShell';
 import { FESTIVAL_REGIONS, festivalMomentInput } from '../../../src/features/moments/device';
 import { useAccessibilityTextSize } from '../../../src/features/wellness/useAccessibilityTextSize';
-import { brand, textStyles, useTheme, type Theme } from '../../../src/theme';
+import { brand, textStyles, type Theme, useTheme, withWellnessTint } from '../../../src/theme';
 
 /**
  * `MomentFestivalView` (ios/App/MomentEditor.swift:306-535), redesigned in Phase 12: a hero, "Explore by
@@ -69,7 +69,7 @@ function accentColor(theme: Theme): string {
   return Platform.OS === 'android' ? theme.colors.link : '#BAABFF';
 }
 
-export default function ChooseFestivalsScreen() {
+function ChooseFestivalsScreen() {
   const theme = useTheme();
   const large = useAccessibilityTextSize();
   const [region, setRegion] = useState<string | null>(null);
@@ -225,3 +225,6 @@ const styles = StyleSheet.create({
   divider: { height: StyleSheet.hairlineWidth, marginLeft: 78, marginRight: 16 },
   note: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, padding: 16, borderRadius: 18 },
 });
+
+// ce6d20a: `.tint(.wellnessAccent)` on every Important Moments screen.
+export default withWellnessTint(ChooseFestivalsScreen);

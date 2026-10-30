@@ -17,3 +17,32 @@ export function FixedScheme({ scheme, children }: { scheme: ColorScheme; childre
 export function useFixedScheme(): ColorScheme | null {
   return useContext(SchemeContext);
 }
+
+/**
+ * A subtree whose tappable and active colour is `Color.wellnessAccent`: Swift's `.tint(.wellnessAccent)` on
+ * the Important Moments screens (ce6d20a). Inside it `useTheme` resolves `link`, `accent` (with its tint and
+ * border) and `switchOn` to the Wellness accent; a toolbar item asks `useTheme({ toolbar: true })` to keep
+ * the app's own `link` (§24 bug 4: the toolbar icons stay readable in dark on Android).
+ */
+const WellnessTintContext = createContext(false);
+
+export function WellnessTint({ children }: { children: React.ReactNode }) {
+  return <WellnessTintContext.Provider value>{children}</WellnessTintContext.Provider>;
+}
+
+export function useWellnessTint(): boolean {
+  return useContext(WellnessTintContext);
+}
+
+/** A route's default export, drawn inside `WellnessTint`. */
+export function withWellnessTint<P extends object>(Screen: React.ComponentType<P>): React.ComponentType<P> {
+  function Tinted(props: P) {
+    return (
+      <WellnessTint>
+        <Screen {...props} />
+      </WellnessTint>
+    );
+  }
+  Tinted.displayName = `WellnessTint(${Screen.displayName ?? Screen.name})`;
+  return Tinted;
+}

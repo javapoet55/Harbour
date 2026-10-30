@@ -4,6 +4,7 @@ import { useState } from 'react';
 import type { MomentInput } from '../../../src/api/moments';
 import { MomentEditorView } from '../../../src/features/moments/MomentEditorView';
 import { momentsStore } from '../../../src/features/moments/store';
+import { withWellnessTint } from '../../../src/theme';
 
 /**
  * Create / Edit Moment, pushed (ImportantMomentsView.swift:295, :115; ManageFestivalView.swift:23;
@@ -12,7 +13,7 @@ import { momentsStore } from '../../../src/features/moments/store';
  * `id` edits a saved moment; `imported` is an import's `MomentInput` as JSON; `done=list` is the
  * `onDone` "Create New" and "Add Moment" pass, which returns to Important Moments.
  */
-export default function MomentEditorScreen() {
+function MomentEditorScreen() {
   const params = useLocalSearchParams<{ id?: string; imported?: string; done?: string }>();
   const [moment] = useState(() => (params.id ? momentsStore.getState().snapshot?.moments.find((item) => item.id === params.id) : undefined));
   const [imported] = useState<MomentInput | undefined>(() => {
@@ -32,3 +33,6 @@ export default function MomentEditorScreen() {
     />
   );
 }
+
+// ce6d20a: `.tint(.wellnessAccent)` on every Important Moments screen.
+export default withWellnessTint(MomentEditorScreen);

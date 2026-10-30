@@ -16,11 +16,24 @@ import { StoreBrandLogo } from './StoreBrandLogo';
  */
 
 /** The 48-point logo with `pencil.circle.fill` in the corner (:23-31). */
-export function LogoEditButton({ listId, identity, imageData, onPress }: { listId: string; identity: string; imageData: string | null | undefined; onPress: () => void }) {
+export function LogoEditButton({
+  listId,
+  identity,
+  imageData,
+  automaticLookup = true,
+  onPress,
+}: {
+  listId: string;
+  identity: string;
+  imageData: string | null | undefined;
+  /** `automaticLookup` (ShoppingListLogoEditor.swift, ce6d20a): off while the draft store is not the saved one. */
+  automaticLookup?: boolean;
+  onPress: () => void;
+}) {
   const theme = useTheme();
   return (
     <Pressable accessibilityLabel="Change store logo" accessibilityRole="button" hitSlop={4} onPress={onPress} testID="shopping-edit-store-logo">
-      <StoreBrandLogo customImageData={imageData} identity={identity} listId={listId} size={48} />
+      <StoreBrandLogo automaticLookup={automaticLookup} customImageData={imageData} identity={identity} listId={listId} size={48} />
       <View pointerEvents="none" style={[styles.badge, { backgroundColor: theme.colors.link }]}>
         <Ionicons color="#FFFFFF" name="pencil" size={11} />
       </View>
@@ -68,6 +81,7 @@ export function LogoEditorPage({
   failure,
   setLoading,
   setFailure,
+  automaticLookup = true,
   deps = deviceLogoEditor,
 }: {
   listId: string;
@@ -79,6 +93,7 @@ export function LogoEditorPage({
   failure: string | null;
   setLoading: (loading: boolean) => void;
   setFailure: (failure: string | null) => void;
+  automaticLookup?: boolean;
   deps?: LogoEditorDeps;
 }) {
   const theme = useTheme();
@@ -122,7 +137,7 @@ export function LogoEditorPage({
       <FormSection disabled={loading}>
         <FormRow>
           <View style={styles.preview}>
-            <StoreBrandLogo customImageData={imageData} identity={identity} listId={listId} size={100} />
+            <StoreBrandLogo automaticLookup={automaticLookup} customImageData={imageData} identity={identity} listId={listId} size={100} />
           </View>
         </FormRow>
         <FormRow last>

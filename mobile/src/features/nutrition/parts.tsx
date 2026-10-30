@@ -8,27 +8,55 @@ import { withAlpha } from '../../components/SignInBackdrop';
 import { Text } from '../../components/Text';
 import { addDays, dayKey, startOfDay } from '../../lib/taskQuery';
 import { Segment } from '../pomodoro/charts';
-import { fixedLightIndigo } from '../wellness/style';
+import { useTheme } from '../../theme';
 
 /**
  * The Calorie Tracker's building blocks (ios/App/CalorieTrackerView.swift:421-455, `:653-661`,
- * `:932-950`). Fixed light colours, as Swift draws the screen on a white gradient with an explicit ink.
+ * `:932-950`). Since ce6d20a Swift follows the phone's theme: the ink is `nexdoInk`, the page
+ * `systemBackground`, the cards `secondarySystemGroupedBackground`, and the controls `wellnessAccent`.
  */
 
-export const INK = '#0F1247'; // Color(red: 0.06, green: 0.07, blue: 0.28)
-export const SECONDARY = 'rgba(60, 60, 67, 0.6)';
-/** `.tint(.indigo)` on the toggles and pickers. */
+/** iOS `.indigo` (light), the filled step, the ring track and the chart bars. */
 export const SYSTEM_INDIGO = '#5856D6';
-/** The app tint (`RootView.swift:90`, `.tint(.nexdoIndigo)`) every plain button takes. */
-export const TINT = fixedLightIndigo;
 export const GRADIENT = ['#AF52DE', SYSTEM_INDIGO, '#007AFF'] as const;
+
+/** The tracker's colours in the current scheme. Text without a colour takes the theme's ink. */
+export function useCalorieColors() {
+  const { scheme, colors } = useTheme();
+  const dark = scheme === 'dark';
+  return {
+    dark,
+    /** `Color.nexdoInk`. */
+    ink: colors.ink,
+    /** `.secondary`. */
+    secondary: colors.secondaryLabel,
+    placeholder: colors.placeholder,
+    separator: colors.separator,
+    danger: colors.danger,
+    /** `Color.wellnessAccent`: switches, the radio checks, the unfilled step numbers, the insight's button. */
+    accent: colors.wellnessAccent,
+    /** The app tint on a plain button (the food editor's Cancel and Add); the dark-mode `link` on Android. */
+    link: colors.link,
+    /** `systemBackground`. */
+    background: dark ? '#000000' : '#FFFFFF',
+    /** `secondarySystemGroupedBackground`: cards, fields and the date sheet. */
+    card: dark ? '#1C1C1E' : '#FFFFFF',
+    /** A system fill: the segmented track, the stepper and the date pill. */
+    fill: dark ? 'rgba(118, 118, 128, 0.24)' : 'rgba(118, 118, 128, 0.12)',
+    segmentOn: dark ? '#636366' : '#FFFFFF',
+    disabledIcon: colors.placeholder,
+  };
+}
+
+export type CalorieColors = ReturnType<typeof useCalorieColors>;
 
 export type IconName = keyof typeof Ionicons.glyphMap;
 
-/** `card(_:)`: 16 padding, 14 spacing, white at 90% on a 22 radius, a faint indigo stroke and shadow. */
+/** `card(_:)`: 16 padding, 14 spacing, `secondarySystemGroupedBackground` on a 22 radius, a faint indigo stroke and shadow. */
 export function Card({ children, testID }: { children: ReactNode; testID?: string }) {
+  const colors = useCalorieColors();
   return (
-    <View style={styles.card} testID={testID}>
+    <View style={[styles.card, { backgroundColor: colors.card }]} testID={testID}>
       {children}
     </View>
   );
@@ -65,6 +93,7 @@ export function TextButton({
   small?: boolean;
   testID?: string;
 }) {
+  const colors = useCalorieColors();
   return (
     <Pressable
       accessibilityRole="button"
@@ -79,7 +108,7 @@ export function TextButton({
         style={[
           small ? styles.captionBold : styles.body,
           bold && styles.bold,
-          { color: destructive ? '#FF3B30' : INK },
+          { color: destructive ? colors.danger : colors.ink },
           disabled && styles.disabledText,
         ]}
       >
@@ -109,19 +138,21 @@ export function IconTile({ name, color }: { name: IconName | number; color: stri
 
 /** `feature(_:_:_:_:)`: the icon tile beside a headline and a secondary line. */
 export function Feature({ icon, color, title, detail, testID }: { icon: IconName | number; color: string; title: string; detail: string; testID?: string }) {
+  const colors = useCalorieColors();
   return (
     <View style={styles.feature} testID={testID}>
       <IconTile color={color} name={icon} />
       <View style={[styles.grow, styles.featureText]}>
         <Text style={styles.headline}>{title}</Text>
-        <Text style={[styles.subheadline, { color: SECONDARY }]}>{detail}</Text>
+        <Text style={[styles.subheadline, { color: colors.secondary }]}>{detail}</Text>
       </View>
     </View>
   );
 }
 
-/** `steps(_:)`: Time, Goals, Confirm, the current one filled. */
+/** `steps(_:)`: Time, Goals, Confirm, the current one filled; the others' numbers in `wellnessAccent`. */
 export function Steps({ current }: { current: number }) {
+  const colors = useCalorieColors();
   return (
     <View style={styles.steps} testID="calorie-steps">
       {['Time', 'Goals', 'Confirm'].map((title, index) => {
@@ -129,7 +160,7 @@ export function Steps({ current }: { current: number }) {
         return (
           <View accessibilityState={{ selected: on }} key={title} style={styles.step}>
             <View style={[styles.stepNumber, { backgroundColor: on ? SYSTEM_INDIGO : withAlpha(SYSTEM_INDIGO, 0.08) }]}>
-              <Text style={[styles.headline, { color: on ? '#FFFFFF' : SYSTEM_INDIGO }]}>{String(index + 1)}</Text>
+              <Text style={[styles.headline, { color: on ? '#FFFFFF' : colors.accent }]}>{String(index + 1)}</Text>
             </View>
             <Text style={styles.caption}>{title}</Text>
           </View>
@@ -141,8 +172,9 @@ export function Steps({ current }: { current: number }) {
 
 /** `Picker(…).pickerStyle(.segmented)`. */
 export function Segmented<T extends string>({ options, value, onChange, testID }: { options: readonly { value: T; title: string }[]; value: T; onChange: (next: T) => void; testID: string }) {
+  const colors = useCalorieColors();
   return (
-    <View style={styles.segmented} testID={testID}>
+    <View style={[styles.segmented, { backgroundColor: colors.fill }]} testID={testID}>
       {options.map((option) => {
         const on = option.value === value;
         return (
@@ -151,7 +183,7 @@ export function Segmented<T extends string>({ options, value, onChange, testID }
             accessibilityState={{ selected: on }}
             key={option.value}
             onPress={() => onChange(option.value)}
-            style={[styles.segment, on && styles.segmentOn]}
+            style={[styles.segment, on && [styles.segmentOn, { backgroundColor: colors.segmentOn }]]}
             testID={`${testID}-${option.value}`}
           >
             <Text style={[styles.segmentText, on && styles.semibold]}>{option.title}</Text>
@@ -166,10 +198,11 @@ export function Segmented<T extends string>({ options, value, onChange, testID }
 export function Stepper({ label, value, min, max, step, onChange, testID }: { label: string; value: number; min: number; max: number; step: number; onChange: (next: number) => void; testID: string }) {
   const atMin = value <= min;
   const atMax = value >= max;
+  const colors = useCalorieColors();
   return (
     <View style={styles.stepperRow}>
       <Text style={[styles.body, styles.grow]}>{label}</Text>
-      <View style={styles.stepper}>
+      <View style={[styles.stepper, { backgroundColor: colors.fill }]}>
         <Pressable
           accessibilityLabel={`${label}, decrement`}
           accessibilityRole="button"
@@ -179,9 +212,9 @@ export function Stepper({ label, value, min, max, step, onChange, testID }: { la
           style={styles.stepperButton}
           testID={`${testID}-decrement`}
         >
-          <Ionicons color={atMin ? 'rgba(60, 60, 67, 0.3)' : INK} name="remove" size={20} />
+          <Ionicons color={atMin ? colors.disabledIcon : colors.ink} name="remove" size={20} />
         </Pressable>
-        <View style={styles.stepperDivider} />
+        <View style={[styles.stepperDivider, { backgroundColor: colors.separator }]} />
         <Pressable
           accessibilityLabel={`${label}, increment`}
           accessibilityRole="button"
@@ -191,7 +224,7 @@ export function Stepper({ label, value, min, max, step, onChange, testID }: { la
           style={styles.stepperButton}
           testID={`${testID}-increment`}
         >
-          <Ionicons color={atMax ? 'rgba(60, 60, 67, 0.3)' : INK} name="add" size={20} />
+          <Ionicons color={atMax ? colors.disabledIcon : colors.ink} name="add" size={20} />
         </Pressable>
       </View>
     </View>
@@ -279,12 +312,13 @@ export function DateSelector({ at, zone, onChange, now }: { at: number; zone: st
   const [open, setOpen] = useState(false);
   const label = new Intl.DateTimeFormat('en-US', { timeZone: zone, month: 'short', day: 'numeric', year: 'numeric' }).format(new Date(at));
   const clamp = (next: number) => (dayKey(next, zone) > dayKey(now, zone) ? now : next);
+  const colors = useCalorieColors();
   return (
     <View style={styles.dateRow}>
       <Pressable accessibilityLabel="Previous day" accessibilityRole="button" onPress={() => onChange(addDays(at, -1, zone) + (at - startOfDay(at, zone)))} style={styles.dateArrow} testID="calorie-previous-day">
-        <Ionicons color={INK} name="chevron-back" size={20} />
+        <Ionicons color={colors.ink} name="chevron-back" size={20} />
       </Pressable>
-      <Pressable accessibilityLabel={`Date, ${label}`} accessibilityRole="button" onPress={() => setOpen(true)} style={styles.datePill} testID="calorie-date">
+      <Pressable accessibilityLabel={`Date, ${label}`} accessibilityRole="button" onPress={() => setOpen(true)} style={[styles.datePill, { backgroundColor: colors.fill }]} testID="calorie-date">
         <Text style={styles.body}>{label}</Text>
       </Pressable>
       <Pressable
@@ -294,11 +328,11 @@ export function DateSelector({ at, zone, onChange, now }: { at: number; zone: st
         style={styles.dateArrow}
         testID="calorie-next-day"
       >
-        <Ionicons color={INK} name="chevron-forward" size={20} />
+        <Ionicons color={colors.ink} name="chevron-forward" size={20} />
       </Pressable>
       <Modal animationType="fade" onRequestClose={() => setOpen(false)} transparent visible={open}>
         <Pressable onPress={() => setOpen(false)} style={styles.scrim}>
-          <View style={styles.calendar}>
+          <View style={[styles.calendar, { backgroundColor: colors.card }]}>
             <MonthCalendar
               now={now}
               onSelect={(next) => {
@@ -323,7 +357,6 @@ export const styles = StyleSheet.create({
     gap: 14,
     padding: 16,
     borderRadius: 22,
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
     borderWidth: 1,
     borderColor: withAlpha(SYSTEM_INDIGO, 0.08),
     shadowColor: SYSTEM_INDIGO,
@@ -338,14 +371,14 @@ export const styles = StyleSheet.create({
   disabled: { opacity: 0.45 },
   disabledText: { opacity: 0.35 },
   wideButton: { alignSelf: 'stretch', alignItems: 'center', paddingVertical: 4 },
-  largeTitle: { fontSize: 34, lineHeight: 41, fontWeight: '700', color: INK },
-  title2: { fontSize: 22, lineHeight: 28, fontWeight: '700', color: INK },
-  title3: { fontSize: 20, lineHeight: 25, fontWeight: '700', color: INK },
-  headline: { fontSize: 17, lineHeight: 22, fontWeight: '600', color: INK },
-  body: { fontSize: 17, lineHeight: 22, color: INK },
-  subheadline: { fontSize: 15, lineHeight: 20, color: INK },
-  caption: { fontSize: 12, lineHeight: 16, color: INK },
-  captionBold: { fontSize: 12, lineHeight: 16, fontWeight: '700', color: INK },
+  largeTitle: { fontSize: 34, lineHeight: 41, fontWeight: '700' },
+  title2: { fontSize: 22, lineHeight: 28, fontWeight: '700' },
+  title3: { fontSize: 20, lineHeight: 25, fontWeight: '700' },
+  headline: { fontSize: 17, lineHeight: 22, fontWeight: '600' },
+  body: { fontSize: 17, lineHeight: 22 },
+  subheadline: { fontSize: 15, lineHeight: 20 },
+  caption: { fontSize: 12, lineHeight: 16 },
+  captionBold: { fontSize: 12, lineHeight: 16, fontWeight: '700' },
   bold: { fontWeight: '700' },
   semibold: { fontWeight: '600' },
   iconTile: { width: 46, height: 46, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
@@ -357,22 +390,21 @@ export const styles = StyleSheet.create({
   steps: { flexDirection: 'row', padding: 14, borderRadius: 18, backgroundColor: withAlpha(SYSTEM_INDIGO, 0.04) },
   step: { flex: 1, alignItems: 'center', gap: 6 },
   stepNumber: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
-  segmented: { flexDirection: 'row', padding: 2, borderRadius: 9, backgroundColor: 'rgba(118, 118, 128, 0.12)' },
+  segmented: { flexDirection: 'row', padding: 2, borderRadius: 9 },
   segment: { flex: 1, alignItems: 'center', paddingVertical: 6, borderRadius: 7 },
   segmentOn: {
-    backgroundColor: '#FFFFFF',
     shadowColor: '#000000',
     shadowOpacity: 0.12,
     shadowRadius: 4,
     shadowOffset: { width: 0, height: 2 },
     elevation: 2,
   },
-  segmentText: { fontSize: 13, lineHeight: 18, color: INK },
+  segmentText: { fontSize: 13, lineHeight: 18 },
   stepperRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   // iOS 26's Stepper is a capsule (`calorie-setup-goals`).
-  stepper: { flexDirection: 'row', alignItems: 'center', borderRadius: 999, backgroundColor: 'rgba(118, 118, 128, 0.12)' },
+  stepper: { flexDirection: 'row', alignItems: 'center', borderRadius: 999 },
   stepperButton: { width: 47, height: 32, alignItems: 'center', justifyContent: 'center' },
-  stepperDivider: { width: StyleSheet.hairlineWidth, height: 18, backgroundColor: 'rgba(60, 60, 67, 0.29)' },
+  stepperDivider: { width: StyleSheet.hairlineWidth, height: 18 },
   track: { height: 4, borderRadius: 2, backgroundColor: 'rgba(118, 118, 128, 0.2)', overflow: 'hidden' },
   fill: { height: '100%', borderRadius: 2 },
   // `HStack(alignment: .bottom).frame(height: 155)`: the row is as tall as its tallest column and the
@@ -383,7 +415,7 @@ export const styles = StyleSheet.create({
   bar: { alignSelf: 'stretch', borderRadius: 5 },
   dateRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   dateArrow: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
-  datePill: { borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6, backgroundColor: 'rgba(118, 118, 128, 0.12)' },
+  datePill: { borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6 },
   scrim: { flex: 1, justifyContent: 'center', padding: 16, backgroundColor: 'rgba(0, 0, 0, 0.2)' },
-  calendar: { borderRadius: 16, padding: 12, backgroundColor: '#FFFFFF' },
+  calendar: { borderRadius: 16, padding: 12 },
 });

@@ -5,6 +5,7 @@ import { ActivityIndicator, View } from 'react-native';
 import { ManageMomentView } from '../../../src/features/moments/ManageMomentView';
 import type { MomentDisplayGroup } from '../../../src/features/moments/domain';
 import { momentsStore } from '../../../src/features/moments/store';
+import { withWellnessTint } from '../../../src/theme';
 
 /**
  * Manage Moment for a group of recipients (`ManageFestivalView(group:store:onDone:)`,
@@ -15,7 +16,7 @@ import { momentsStore } from '../../../src/features/moments/store';
  * `managingFestival = nil`, Manage Moments' `managingMoments = false`, the notification's
  * `showingDetail = false`), so Done does the same.
  */
-export default function ManageMomentScreen() {
+function ManageMomentScreen() {
   const { ids } = useLocalSearchParams<{ ids?: string }>();
   const [group] = useState<MomentDisplayGroup | null>(() => {
     const wanted = (ids ?? '').split(',').filter(Boolean);
@@ -32,3 +33,6 @@ export default function ManageMomentScreen() {
   }
   return <ManageMomentView group={group} onDone={() => router.dismissTo('/wellness/moments')} />;
 }
+
+// ce6d20a: `.tint(.wellnessAccent)` on every Important Moments screen.
+export default withWellnessTint(ManageMomentScreen);

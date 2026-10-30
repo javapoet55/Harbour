@@ -13,7 +13,7 @@ import { DateField, FormButton, FormRow, FormScroll, FormSection, FormText, Labe
 import { findPlan } from '../../../src/features/moments/handoff';
 import { momentsStore, useMomentList, useMoments } from '../../../src/features/moments/store';
 import { WishEmailConfirmation } from '../../../src/features/moments/WishEmailConfirmation';
-import { textStyles, useTheme } from '../../../src/theme';
+import { textStyles, useTheme, withWellnessTint } from '../../../src/theme';
 
 /**
  * `WishPlanView` (ios/App/ImportantMomentsView.swift:519-583): one wish's delivery, always read back
@@ -24,7 +24,7 @@ import { textStyles, useTheme } from '../../../src/theme';
  *
  * `confirmation` is the form Schedule Wish pushes: "Wish scheduled" and the calendar tick.
  */
-export default function WishDetailsScreen() {
+function WishDetailsScreen() {
   const theme = useTheme();
   const { planId, confirmation } = useLocalSearchParams<{ planId?: string; confirmation?: string }>();
   const moments = useMomentList();
@@ -231,3 +231,6 @@ const styles = StyleSheet.create({
   // Just under the sheet's bar (FormScroll's top padding is 3 since UI-parity pass 2).
   sheetTitle: { marginHorizontal: 16, marginTop: 4 },
 });
+
+// ce6d20a: `.tint(.wellnessAccent)` on every Important Moments screen.
+export default withWellnessTint(WishDetailsScreen);

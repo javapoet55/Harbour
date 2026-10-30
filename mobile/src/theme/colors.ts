@@ -164,6 +164,12 @@ export type Palette = {
   tertiaryGroupedElevated: string;
   /** `tertiarySystemFill`: a disabled prominent button (Create Account, RootView.swift:705). */
   tertiaryFill: string;
+  /**
+   * `Color.wellnessAccent` (WellnessAppearance.swift, ce6d20a): text, controls and tints in the
+   * Wellness modules (Calorie Tracker, Pomodoro, Moments). The brand indigo in light; a light lilac,
+   * (0.73, 0.67, 1), in dark. Solid branded buttons keep their own fill.
+   */
+  wellnessAccent: string;
 };
 
 export type ColorScheme = 'light' | 'dark';
@@ -219,6 +225,7 @@ export const palettes: Record<ColorScheme, Palette> = {
     tertiaryGrouped: '#F2F2F7',
     tertiaryGroupedElevated: '#F2F2F7',
     tertiaryFill: 'rgba(118, 118, 128, 0.12)',
+    wellnessAccent: brand.nexdoIndigo, // WellnessAppearance.swift: (0.24, 0.16, 0.94)
   },
   dark: {
     // TODO(phase1-decision): the Swift dark variant is the dynamic system `.label`; this is its standard dark value.
@@ -276,5 +283,6 @@ export const palettes: Record<ColorScheme, Palette> = {
     tertiaryGrouped: '#2C2C2E',
     tertiaryGroupedElevated: '#3A3A3C',
     tertiaryFill: 'rgba(118, 118, 128, 0.24)',
+    wellnessAccent: '#BAABFF', // WellnessAppearance.swift dark: (0.73, 0.67, 1)
   },
 };

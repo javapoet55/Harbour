@@ -2,7 +2,7 @@ import { Platform, useColorScheme } from 'react-native';
 
 import { useAppearance } from '../store/appearance';
 import { useElevated } from './elevation';
-import { useFixedScheme } from './scheme';
+import { useFixedScheme, useWellnessTint } from './scheme';
 import { palettes, type ColorScheme, type Palette } from './colors';
 import { radii } from './radii';
 import { spacing } from './spacing';
@@ -31,7 +31,7 @@ export type Theme = {
  * a shared component cannot know it is inside a sheet, and several were resolving the base palette
  * while the screen around them used the elevated one.
  */
-export function useTheme(options?: { elevated?: boolean }): Theme {
+export function useTheme(options?: { elevated?: boolean; toolbar?: boolean }): Theme {
   const appearance = useAppearance((state) => state.appearance);
   const system: ColorScheme = useColorScheme() === 'dark' ? 'dark' : 'light';
   // A `FixedScheme` subtree keeps its design's scheme (scheme.tsx); everything else follows Appearance.
@@ -54,7 +54,24 @@ export function useTheme(options?: { elevated?: boolean }): Theme {
   // `AskStyle.blue`) in place of the brand indigo (docs/android-polish.md §6). Light keeps the brand
   // indigo, and iOS keeps `link` equal to `tint` in both. Read at render time so a test can switch
   // `Platform.OS`.
-  const colors: Palette =
+  const linked: Palette =
     Platform.OS === 'android' && scheme === 'dark' ? { ...levelled, link: levelled.askBlue } : levelled;
+  // Inside `WellnessTint` (the Moments screens) the accent is `wellnessAccent`, except on a toolbar item.
+  const wellness = useWellnessTint() && !options?.toolbar;
+  const colors: Palette = wellness ? wellnessTinted(linked, scheme) : linked;
   return { scheme, colors, spacing, radii, typography, textStyles };
+}
+
+function wellnessTinted(palette: Palette, scheme: ColorScheme): Palette {
+  const accent = palette.wellnessAccent;
+  // #3D29F0 in light, #BAABFF in dark; the tint and border at 10% and 45%, and the switch at 85% in dark (§6).
+  const rgb = scheme === 'dark' ? '186, 171, 255' : '61, 41, 240';
+  return {
+    ...palette,
+    link: accent,
+    accent,
+    accentTint: `rgba(${rgb}, 0.10)`,
+    accentBorder: `rgba(${rgb}, 0.45)`,
+    switchOn: scheme === 'dark' ? `rgba(${rgb}, 0.85)` : accent,
+  };
 }
