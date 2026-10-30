@@ -13,12 +13,13 @@ import {
   managementDateLabels,
   managementFilterIncludes,
   managementGroups,
+  needReviewCount,
   supportsGreetingCard,
   typeLabel,
   type ManagementFilter,
 } from '../../../src/features/moments/domain';
 import { useMomentList } from '../../../src/features/moments/store';
-import { brand, textStyles, useTheme } from '../../../src/theme';
+import { brand, textStyles, useTheme, withWellnessTint } from '../../../src/theme';
 
 /**
  * `MomentsManagementEntry` (ios/App/ManageFestivalView.swift:4-88): the Scheduled / Need Review / Ready
@@ -27,7 +28,7 @@ import { brand, textStyles, useTheme } from '../../../src/theme';
  * stages shows under each of its tabs. A greeting-card occasion opens Manage Moment; a Custom one
  * opens the editor. Manage Moment's "Done" returns to Important Moments.
  */
-export default function ManageMomentsScreen() {
+function ManageMomentsScreen() {
   const theme = useTheme();
   const moments = useMomentList();
   const [filter, setFilter] = useState<ManagementFilter>('Scheduled');
@@ -41,7 +42,8 @@ export default function ManageMomentsScreen() {
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabs} testID="manage-filters">
           {MANAGEMENT_FILTERS.map((tab) => {
             const active = filter === tab;
-            const count = groups.filter((group) => managementFilterIncludes(tab, group)).length;
+            // Need Review shares its count with the Upcoming card (`needReviewCount`, §24 bug 3).
+            const count = tab === 'Need Review' ? needReviewCount(moments) : groups.filter((group) => managementFilterIncludes(tab, group)).length;
             return (
               <Pressable
                 key={tab}
@@ -122,3 +124,6 @@ const styles = StyleSheet.create({
   bold: { fontWeight: '700' },
   center: { textAlign: 'center' },
 });
+
+// ce6d20a: `.tint(.wellnessAccent)` on every Important Moments screen.
+export default withWellnessTint(ManageMomentsScreen);
