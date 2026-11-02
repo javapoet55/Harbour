@@ -10,7 +10,6 @@ const light = palettes.light;
 const flat = (testID: string) => StyleSheet.flatten(screen.getByTestId(testID).props.style);
 const onPlatform = (os: 'ios' | 'android') => jest.replaceProperty(Platform, 'OS', os);
 
-const ZONE = 'Asia/Kolkata';
 const NOW = Date.parse('2026-09-16T03:30:00.000Z');
 
 function row(overrides: Partial<CalendarRow> = {}): CalendarRow {
@@ -33,14 +32,14 @@ describe('CalendarTimelineRow on Android', () => {
   beforeEach(() => onPlatform('android'));
 
   it('centres every column on the row, with 12 of padding and the chevron 16 from the right', async () => {
-    await render(<CalendarTimelineRow row={row()} timeZone={ZONE} completedOnly={false} now={NOW} onPress={jest.fn()} />);
+    await render(<CalendarTimelineRow row={row()} completedOnly={false} now={NOW} onPress={jest.fn()} />);
     expect(flat('calendar-row-r1')).toMatchObject({ flexDirection: 'row', alignItems: 'center', paddingVertical: 12, paddingRight: 16 });
     expect(flat('calendar-row-r1-chevron')).toMatchObject({ alignSelf: 'center' });
   });
 
   it('gives the row a pressed fill and keeps the whole row the target', async () => {
     const onPress = jest.fn();
-    await render(<CalendarTimelineRow row={row()} timeZone={ZONE} completedOnly={false} now={NOW} onPress={onPress} />);
+    await render(<CalendarTimelineRow row={row()} completedOnly={false} now={NOW} onPress={onPress} />);
     expect(flat('calendar-row-r1').backgroundColor).toBeUndefined();
     await fireEvent(screen.getByTestId('calendar-row-r1'), 'pressIn');
     expect(flat('calendar-row-r1')).toMatchObject({ backgroundColor: light.fieldSurface });
@@ -50,7 +49,7 @@ describe('CalendarTimelineRow on Android', () => {
   });
 
   it('draws a 44pt tile on the field surface, a 72pt left-aligned time, and 17/14 text', async () => {
-    await render(<CalendarTimelineRow row={row()} timeZone={ZONE} completedOnly={false} now={NOW} onPress={jest.fn()} />);
+    await render(<CalendarTimelineRow row={row()} completedOnly={false} now={NOW} onPress={jest.fn()} />);
     expect(flat('calendar-row-r1-glyph')).toMatchObject({
       width: 44,
       height: 44,
@@ -64,13 +63,13 @@ describe('CalendarTimelineRow on Android', () => {
   });
 
   it('runs the 1px separator from the text column to the row’s right edge', async () => {
-    await render(<CalendarTimelineRow row={row()} timeZone={ZONE} completedOnly={false} now={NOW} onPress={jest.fn()} />);
+    await render(<CalendarTimelineRow row={row()} completedOnly={false} now={NOW} onPress={jest.fn()} />);
     expect(ANDROID_TEXT_INSET).toBe(72 + 8 + 44 + 10 * 3);
     expect(flat('calendar-row-r1-separator')).toMatchObject({ position: 'absolute', left: ANDROID_TEXT_INSET, right: 0, bottom: 0, height: 1, backgroundColor: light.fieldBorder });
   });
 
   it('keeps the Deadline chip', async () => {
-    await render(<CalendarTimelineRow row={row({ deadline: true })} timeZone={ZONE} completedOnly={false} now={NOW} onPress={jest.fn()} />);
+    await render(<CalendarTimelineRow row={row({ deadline: true })} completedOnly={false} now={NOW} onPress={jest.fn()} />);
     expect(screen.getByText('Deadline')).toBeTruthy();
   });
 });
@@ -79,7 +78,7 @@ describe('CalendarTimelineRow on iOS', () => {
   beforeEach(() => onPlatform('ios'));
 
   it('keeps the Swift layout: top-aligned, the divider under the text, no row separator', async () => {
-    await render(<CalendarTimelineRow row={row()} timeZone={ZONE} completedOnly={false} now={NOW} onPress={jest.fn()} />);
+    await render(<CalendarTimelineRow row={row()} completedOnly={false} now={NOW} onPress={jest.fn()} />);
     expect(flat('calendar-row-r1')).toMatchObject({ alignItems: 'flex-start' });
     expect(screen.queryByTestId('calendar-row-r1-separator')).toBeNull();
     expect(StyleSheet.flatten(screen.getByText('9:30 AM').props.style)).toMatchObject({ width: 64 });

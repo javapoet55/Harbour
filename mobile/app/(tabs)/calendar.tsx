@@ -2,7 +2,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useQueryClient } from '@tanstack/react-query';
 import { router } from 'expo-router';
-import { useMemo, useState, type ComponentProps } from 'react';
+import { useEffect, useMemo, useState, type ComponentProps } from 'react';
 import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -90,7 +90,13 @@ export default function Calendar() {
   const [mode, setMode] = useState<CalendarMode>('Schedule');
   const [range, setRange] = useState<CalendarRange>('Next 3 days');
   const [selected, setSelected] = useState(() => Date.now());
-  const [now] = useState(() => Date.now());
+  // The overdue rule compares against the moment (§67), so `now` ticks once a minute as Today's
+  // `queueNow` does, rather than staying at the time the tab first mounted.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 60_000);
+    return () => clearInterval(timer);
+  }, []);
   const android = isAndroid();
   // Android: the creation row's width and each creation title's width at the base size, to decide
   // whether "Add by Voice" and "Add Manually" fit two-up on one line each (docs/android-polish.md §10).
@@ -188,7 +194,7 @@ export default function Calendar() {
   /** `openTasks` and `backlog` (CalendarView.swift:45, 63). */
   const openTasks = (tasks.data?.tasks ?? []).filter((task) => !isDone(task) && task.status !== 'CANCELLED');
   const backlog = openTasks.filter(
-    (task) => taskMatches(task) && (!task.startAt || calendarOverdue(task, zone, now)),
+    (task) => taskMatches(task) && (!task.startAt || calendarOverdue(task, now)),
   );
 
   const label = (at: number, options: Intl.DateTimeFormatOptions) =>
@@ -292,7 +298,6 @@ export default function Calendar() {
             <CalendarTimelineRow
               key={row.id}
               row={row}
-              timeZone={zone}
               completedOnly={completedOnly}
               now={now}
               glyph={eventGlyph(row.event)}
@@ -480,7 +485,7 @@ export default function Calendar() {
                         {eventsFor(day).length > 0 || dayTasks.some((task) => taskScheduledOn(task, key, zone)) ? (
                           <View style={[styles.dot, { backgroundColor: '#007AFF' }]} />
                         ) : null}
-                        {dayTasks.some((task) => calendarOverdue(task, zone, now)) ? (
+                        {dayTasks.some((task) => calendarOverdue(task, now)) ? (
                           <View style={[styles.dot, { backgroundColor: '#FF9500' }]} />
                         ) : null}
                         {dayTasks.some((task) => task.critical === true || task.priority === 'CRITICAL') ? (
@@ -607,7 +612,7 @@ export default function Calendar() {
                           testID={`calendar-backlog-${task.id}`}
                         >
                           <Text style={[styles.subheadline, styles.grow, { color: theme.colors.ink }]}>{task.title}</Text>
-                          {calendarOverdue(task, zone, now) ? (
+                          {calendarOverdue(task, now) ? (
                             <View style={[styles.badge, { backgroundColor: withAlpha('#FF9500', 0.12) }]}>
                               <Text style={[styles.badgeText, { color: '#FF9500' }]}>Overdue</Text>
                             </View>
@@ -723,7 +728,7 @@ export default function Calendar() {
           .map((task) => task.id),
       ),
     );
-    const overdueCount = openTasks.filter((task) => calendarOverdue(task, zone, now)).length;
+    const overdueCount = openTasks.filter((task) => calendarOverdue(task, now)).length;
     const includesToday = days.some((day) => calendarKey(day, zone) === calendarKey(now, zone));
     return (
       <CalendarSummaryCard

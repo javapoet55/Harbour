@@ -2797,3 +2797,32 @@ left with hardware Back, which doesn't save. No account was created; the existin
   Skip) is the Expo dev client's floating tools button. It isn't in release builds.
 - **Install note:** `pm clear` is refused over adb on this OnePlus, so the first-install state came from uninstalling
   and reinstalling the debug APK. The phone asks to confirm a USB install the first time.
+
+## 67. QA M-01: Calendar's overdue count matches Today — ANDROID AHEAD (2026-11-02)
+
+QA report 2026-10-31 (build 15), M-01: Today's Needs attention and Calendar's "N overdue tasks overall" gave
+different counts for the same account.
+
+- **What was wrong:** two rules. Today, Needs attention, the Overdue list and Reschedule all use `overdueResults`
+  (`src/lib/overdueTasks.ts`, Swift's `OverdueTasks`): an unfinished, uncancelled task whose `startAt ?? dueAt` is
+  before **now**. Calendar used `calendarOverdue` (`src/lib/calendarDates.ts`, Swift's `CalendarView.overdue(_:)`,
+  CalendarView.swift:96-99): the `dueAt` **day** is before today, and `startAt` is ignored. So a task today at
+  5:31 AM was overdue on Today at 6:00 AM but not on Calendar, and a task due yesterday that starts tonight was the
+  other way round. Calendar's `now` was also fixed at the time the tab first mounted, so even a matching rule would
+  have gone stale while the tab stayed open.
+- **ANDROID AHEAD — iOS has the same mismatch (for the team list):** `calendarOverdue` now calls the shared
+  `isOverdue` (`overdueTasks.ts`), the same rule `overdueResults` uses, and drops its time-zone argument. Swift's
+  `CalendarView.overdue(_:)` still uses the due day, so iOS Calendar and Today can still disagree.
+- **Everything on Calendar follows**, since it all goes through `calendarOverdue`: the summary's "N overdue tasks
+  overall", the timeline row's tone, document glyph and **Overdue** tag (`rowTone`/`rowSymbol`, which drop their
+  unused time-zone argument, as does `CalendarTimelineRow`), the backlog's Overdue badge, and the month grid's
+  amber dot.
+- **Calendar's clock ticks once a minute**, as Today's `queueNow` does, so a task turns overdue while the tab is
+  open.
+- Tests: `calendarDates.test.ts` (5:31 AM overdue at 6:00 AM and 11 PM not, by `startAt` or `dueAt`; Calendar and
+  `overdueResults` pick the same tasks, including the two the old rule got wrong; the row's tone and glyph at
+  6:00 AM); `weeklySummary.test.ts` (`overdueResults` at 6:00 AM); `calendar.test.tsx` (the summary goes from 0 to
+  1 overdue when the clock passes 6:00 AM, with the Overdue tag on the 5:31 row only).
+- **Phone check:** make a task for today a few minutes from now. After that time passes, Today's Needs attention
+  and Calendar's "N overdue tasks overall" go up by one together, without leaving the Calendar tab, and the task's
+  Calendar row shows **Overdue**. A task later today counts on neither.

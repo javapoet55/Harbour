@@ -160,14 +160,12 @@ export function CalendarSegments<T extends string>({
  */
 export function CalendarTimelineRow({
   row,
-  timeZone,
   completedOnly,
   now,
   onPress,
   glyph,
 }: {
   row: CalendarRow;
-  timeZone: string;
   completedOnly: boolean;
   now: number;
   onPress: () => void;
@@ -177,7 +175,7 @@ export function CalendarTimelineRow({
   const theme = useTheme();
   // Android's pressed fill, held here so it follows the finger (onPressIn / onPressOut).
   const [pressed, setPressed] = useState(false);
-  const tone = rowTone(row, timeZone, now);
+  const tone = rowTone(row, now);
   const colour = tone === 'critical' ? '#FF3B30' : tone === 'late' ? '#FF9500' : calendarAccent(theme);
   const rail = calendarSeparator(theme);
   const late = tone === 'late';
@@ -216,7 +214,7 @@ export function CalendarTimelineRow({
           style={[styles.androidGlyph, { backgroundColor: theme.colors.fieldSurface, borderColor: theme.colors.fieldBorder }]}
           testID={`calendar-row-${row.id}-glyph`}
         >
-          {glyph ?? <TaskSymbol name={rowSymbol(row, timeZone, now)} size={22} color={colour} />}
+          {glyph ?? <TaskSymbol name={rowSymbol(row, now)} size={22} color={colour} />}
         </View>
         <View style={styles.androidText}>
           <Text style={[styles.androidTitle, { color: theme.colors.ink }]}>{row.title}</Text>
@@ -254,7 +252,7 @@ export function CalendarTimelineRow({
         </View>
       ) : (
         <View style={[styles.glyph, { backgroundColor: withAlpha(colour, theme.scheme === 'dark' ? 0.18 : 0.11) }]} testID={`calendar-row-${row.id}-glyph`}>
-          <TaskSymbol name={rowSymbol(row, timeZone, now)} size={20} color={colour} />
+          <TaskSymbol name={rowSymbol(row, now)} size={20} color={colour} />
         </View>
       )}
       <View style={styles.rowText}>

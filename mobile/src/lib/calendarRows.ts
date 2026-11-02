@@ -89,14 +89,14 @@ export function calendarRows({
 }
 
 /** `timeline(_:)`'s colour choice (CalendarView.swift:436-439). */
-export function rowTone(row: CalendarRow, timeZone: string, now: number = Date.now()): 'critical' | 'late' | 'normal' {
+export function rowTone(row: CalendarRow, now: number = Date.now()): 'critical' | 'late' | 'normal' {
   if (row.task && (row.task.critical === true || row.task.priority === 'CRITICAL')) return 'critical';
-  if (row.task && calendarOverdue(row.task, timeZone, now)) return 'late';
+  if (row.task && calendarOverdue(row.task, now)) return 'late';
   return 'normal';
 }
 
 /** The glyph `timeline(_:)` draws (CalendarView.swift:445). */
-export function rowSymbol(row: CalendarRow, timeZone: string, now: number = Date.now()): 'calendar' | 'doc.text' | 'checkmark.square' {
+export function rowSymbol(row: CalendarRow, now: number = Date.now()): 'calendar' | 'doc.text' | 'checkmark.square' {
   if (row.event !== null) return 'calendar';
-  return row.task && calendarOverdue(row.task, timeZone, now) ? 'doc.text' : 'checkmark.square';
+  return row.task && calendarOverdue(row.task, now) ? 'doc.text' : 'checkmark.square';
 }

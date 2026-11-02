@@ -162,6 +162,16 @@ describe('overdueResults', () => {
   it('excludes a task due exactly now', () => {
     expect(overdueResults([task({ id: 'a', startAt: new Date(NOW).toISOString() })], NOW)).toHaveLength(0);
   });
+
+  it('counts a task today at 5:31 AM at 6:00 AM, and not one at 11 PM (QA M-01, §67)', () => {
+    // 2026-09-16 in Asia/Kolkata: 05:31 is 00:01Z, 06:00 is 00:30Z and 23:00 is 17:30Z.
+    const sixAm = Date.parse('2026-09-16T00:30:00.000Z');
+    const tasks = [
+      task({ id: 'early', startAt: '2026-09-16T00:01:00.000Z' }),
+      task({ id: 'night', startAt: '2026-09-16T17:30:00.000Z' }),
+    ];
+    expect(overdueResults(tasks, sixAm).map((each) => each.id)).toEqual(['early']);
+  });
 });
 
 describe('overdueDeadlineLabel', () => {
