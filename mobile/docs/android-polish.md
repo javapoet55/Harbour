@@ -2922,3 +2922,16 @@ since the merge `d4a9392`, was meant to fix both.
 - **Phone check:** app on Night, with the phone in Light and then in Dark. Open Ask AI from the tab bar: a dark
   landing (the Daily Brief stays white, with dark status-bar icons, §68). Open Wellness → Pomodoro: no white flash
   while it slides in, then a dark timer. Open its dashboard: dark too.
+
+## 70. QA S-01: "Nexdo" in the Wellness quote (2026-11-02)
+
+QA report 2026-10-31 (build 15), S-01. The Wellness chooser's quote now reads "“A more organized you, a brighter
+tomorrow.” — **Nexdo**" (was "NexDo"), in `src/features/wellness/WellnessChooser.tsx`.
+
+- **iOS differs:** Swift still says "— NexDo" (WellnessChooserView.swift:32).
+- **For the team, not changed:** "NexDo" is still the spelling in about 40 other strings, including the sign-up
+  and introduction headers, the bug report, Calendar connect, the Calorie Tracker and Moments' calling guide.
+  S-01 named only the quote. If the brand spelling is now "Nexdo" everywhere, that's a separate copy pass, and it
+  should go to Swift as well.
+- Tests: `chooser.test.tsx` checks the new spelling.
+- **Phone check:** open Wellness. The quote card ends with "— Nexdo".

@@ -91,7 +91,7 @@ export function WellnessChooser({ onModule, onExit }: WellnessChooserProps) {
             style={[styles.quote, { padding: 22 * scale }]}
           >
             <Text style={{ fontSize: 58 * scale, lineHeight: 64 * scale, fontWeight: '700', color: colors.isDark ? DARK_LILAC : withAlpha(swiftColors.indigo, 0.75) }}>“</Text>
-            <Text style={[styles.quoteText, { fontSize: 15 * scale, lineHeight: 20 * scale, color: colors.ink }]}>{'“A more organized you,\na brighter tomorrow.” — NexDo'}</Text>
+            <Text style={[styles.quoteText, { fontSize: 15 * scale, lineHeight: 20 * scale, color: colors.ink }]}>{'“A more organized you,\na brighter tomorrow.” — Nexdo'}</Text>
           </LinearGradient>
         </View>
       </ScrollView>
